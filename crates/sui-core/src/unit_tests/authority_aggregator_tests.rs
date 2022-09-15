@@ -1,13 +1,12 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use std::collections::BTreeMap;
-use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
-
 use move_core_types::{account_address::AccountAddress, ident_str};
 use move_package::BuildConfig;
 use signature::Signer;
-
+use std::collections::BTreeMap;
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
+use sui_config::gateway::GatewayConfig;
 use sui_config::genesis::Genesis;
 use sui_config::ValidatorInfo;
 use sui_types::crypto::{
@@ -15,18 +14,51 @@ use sui_types::crypto::{
     AuthorityPublicKeyBytes, NetworkKeyPair, SuiKeyPair,
 };
 use sui_types::crypto::{KeypairTraits, Signature};
+use test_utils::authority::SuiNode;
 
 use sui_types::messages::*;
 use sui_types::object::{Object, GAS_VALUE_FOR_TESTING};
+use test_utils::authority::{spawn_test_authorities, test_and_configure_authority_configs};
 
 use super::*;
 use crate::authority::AuthorityState;
 use crate::authority_client::{
     AuthorityAPI, BatchInfoResponseItemStream, LocalAuthorityClient,
-    LocalAuthorityClientFaultConfig,
+    LocalAuthorityClientFaultConfig, NetworkAuthorityClient, NetworkAuthorityClientMetrics,
 };
+use crate::gateway_state::GatewayState;
 
 use tokio::time::Instant;
+
+pub async fn init_network_authorities(
+    committee_size: usize,
+    genesis_objects: Vec<Object>,
+) -> AuthorityAggregator<NetworkAuthorityClient> {
+    let configs = test_and_configure_authority_configs(committee_size);
+    let _nodes: Vec<SuiNode> = spawn_test_authorities(genesis_objects, &configs).await;
+    let gateway_config = GatewayConfig {
+        epoch: 0,
+        validator_set: configs.validator_set().to_vec(),
+        send_timeout: Duration::from_secs(4),
+        recv_timeout: Duration::from_secs(4),
+        buffer_size: 650000,
+        db_folder_path: PathBuf::from("/tmp/client_db"),
+    };
+    let committee = GatewayState::make_committee(&gateway_config).unwrap();
+    let epoch_store = Arc::new(EpochStore::new_for_testing(&committee));
+    let auth_clients = GatewayState::make_authority_clients(
+        &gateway_config,
+        NetworkAuthorityClientMetrics::new_for_tests(),
+    );
+    let registry = prometheus::Registry::new();
+    AuthorityAggregator::new(
+        committee,
+        epoch_store,
+        auth_clients,
+        AuthAggMetrics::new(&registry),
+        SafeClientMetrics::new(&registry),
+    )
+}
 
 pub async fn init_local_authorities(
     committee_size: usize,
@@ -394,6 +426,53 @@ async fn execute_transaction_with_fault_configs(
 
     authorities.process_certificate(cert).await?;
     Ok(())
+}
+
+/// The intent of this is to test whether client side timeouts
+/// have any impact on the server execution. Turns out because
+/// we spawn a tokio task on the server, client timing out and
+/// terminating the connection does not stop server from completing
+/// execution on its side
+#[tokio::test]
+async fn test_quorum_map_and_reduce_timeout() {
+    let build_config = BuildConfig::default();
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.push("src/unit_tests/data/object_basics");
+    let modules = sui_framework::build_move_package(&path, build_config).unwrap();
+    let pkg = Object::new_package(modules, TransactionDigest::genesis());
+    let pkg_ref = pkg.compute_object_reference();
+    let (addr1, key1): (_, AccountKeyPair) = get_key_pair();
+    let gas_object1 = Object::with_owner_for_testing(addr1);
+    let gas_ref_1 = gas_object1.compute_object_reference();
+    let genesis_objects = vec![pkg, gas_object1];
+    let mut authorities = init_network_authorities(4, genesis_objects).await;
+    let tx = crate_object_move_transaction(addr1, &key1, addr1, 100, pkg_ref, gas_ref_1);
+    let certified_tx = authorities.process_transaction(tx.clone()).await;
+    assert!(certified_tx.is_ok());
+    let certificate = certified_tx.unwrap();
+    // Send request with a very small timeout to trigger timeout error
+    authorities.timeouts.pre_quorum_timeout = Duration::from_millis(1);
+    authorities.timeouts.post_quorum_timeout = Duration::from_millis(1);
+    let certified_effects = authorities.process_certificate(certificate.clone()).await;
+    // Ensure it is an error
+    assert!(certified_effects.is_err());
+    assert!(matches!(
+        certified_effects,
+        Err(SuiError::QuorumFailedToExecuteCertificate { .. })
+    ));
+    tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+    let tx_info = TransactionInfoRequest {
+        transaction_digest: *tx.digest(),
+    };
+    for (_, client) in authorities.authority_clients.iter() {
+        let resp = client
+            .handle_transaction_info_request(tx_info.clone())
+            .await;
+        // Server should return a signed effect even though previous calls
+        // failed due to timeout
+        assert!(resp.is_ok());
+        assert!(resp.unwrap().signed_effects.is_some());
+    }
 }
 
 #[tokio::test]
@@ -773,8 +852,8 @@ async fn test_process_certificate() {
     // Test: process the certificate, including bring up to date authority 3.
     //       which is 2 certs behind.
     authorities.process_certificate(cert2).await.unwrap();
-
-    // As a result, we have 2 gas objects and 1 created object.
+    // Give authority 3 enough time to process the certificate
+    tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
     let owned_object = get_owned_objects(&authorities, addr1).await;
     assert_eq!(3, owned_object.len());
     // Check this is the latest version.
@@ -818,7 +897,7 @@ async fn test_execute_cert_to_true_effects() {
             count += 1;
         }
     }
-    assert_eq!(count, 2);
+    assert!(count >= 2);
 }
 
 #[tokio::test]

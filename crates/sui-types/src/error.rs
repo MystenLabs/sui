@@ -90,6 +90,8 @@ pub enum SuiError {
     WrongEpoch { expected_epoch: EpochId },
     #[error("Signatures in a certificate must form a quorum")]
     CertificateRequiresQuorum,
+    #[error("Authority {authority_name:?} could not sync certificate: {err:?}")]
+    CertificateSyncError { authority_name: String, err: String },
     #[error(
         "The given sequence number ({given_sequence:?}) must match the next expected sequence ({expected_sequence:?}) number of the object ({object_id:?})"
     )]

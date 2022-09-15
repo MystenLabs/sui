@@ -338,19 +338,12 @@ impl AuthorityAPI for LocalAuthorityClient {
         &self,
         certificate: CertifiedTransaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
-        if self.fault_config.fail_before_handle_confirmation {
-            return Err(SuiError::GenericAuthorityError {
-                error: "Mock error before handle_confirmation_transaction".to_owned(),
-            });
-        }
         let state = self.state.clone();
-        let result = state.handle_certificate(certificate).await;
-        if self.fault_config.fail_after_handle_confirmation {
-            return Err(SuiError::GenericAuthorityError {
-                error: "Mock error after handle_confirmation_transaction".to_owned(),
-            });
-        }
-        result
+        let cert = certificate.clone();
+        let fault_config = self.fault_config;
+        tokio::spawn(async move { Self::handle_certificate(state, cert, fault_config).await })
+            .await
+            .unwrap()
     }
 
     async fn handle_account_info_request(
@@ -445,6 +438,25 @@ impl LocalAuthorityClient {
             state,
             fault_config: LocalAuthorityClientFaultConfig::default(),
         }
+    }
+
+    async fn handle_certificate(
+        state: Arc<AuthorityState>,
+        certificate: CertifiedTransaction,
+        fault_config: LocalAuthorityClientFaultConfig,
+    ) -> Result<TransactionInfoResponse, SuiError> {
+        if fault_config.fail_before_handle_confirmation {
+            return Err(SuiError::GenericAuthorityError {
+                error: "Mock error before handle_confirmation_transaction".to_owned(),
+            });
+        }
+        let result = state.handle_certificate(certificate).await;
+        if fault_config.fail_after_handle_confirmation {
+            return Err(SuiError::GenericAuthorityError {
+                error: "Mock error after handle_confirmation_transaction".to_owned(),
+            });
+        }
+        result
     }
 }
 
