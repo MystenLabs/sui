@@ -134,4 +134,4 @@ The Sui Wallet Browser Extension lets you:
 ## Contribute
 
 If you want to experiment with and contribute to the Sui Wallet Browser Extension, you can find its source and README at:
-https://github.com/MystenLabs/sui/tree/main/wallet 
+https://github.com/MystenLabs/sui/tree/main/apps/wallet

@@ -16,7 +16,7 @@ jobs:
     if: needs.diff.outputs.isWalletExt == 'true'
     runs-on: [ubuntu-latest]
     env:
-      working-directory: ./wallet
+      working-directory: ./apps/wallet
     steps:
       - name: Checkout
         uses: actions/checkout@v3

@@ -2,4 +2,4 @@
 "Type: Documentation":
 - doc/**/*
 "sui-explorer":
-- explorer/**/*
+- apps/explorer/**/*

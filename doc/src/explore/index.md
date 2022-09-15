@@ -33,7 +33,7 @@ View projects built by third parties demonstrating the power of Sui.
 
 [Panzerdogs x Sui](../explore/panzerdogs.md) - an example of how the Sui infrastructure delivers a more integrated feedback loop between gameplay and NFT ownership.
 <section class="sui-dev-video">
- 
+
 <iframe id="ytplayer" type="text/html" src="https://www.youtube.com/embed/Nx7hTb8dOb4?autoplay=0" frameborder="0"></iframe>
 </section>
 
@@ -48,5 +48,5 @@ View projects built by third parties demonstrating the power of Sui.
 
 ## Sui Explorer
 
-Navigate the [Sui Explorer](https://explorer.devnet.sui.io/) to see the latest transactions and objects. Read the [Sui Explorer README](https://github.com/MystenLabs/sui/tree/main/explorer/client#readme) for instructions on how to run the Explorer locally.
+Navigate the [Sui Explorer](https://explorer.devnet.sui.io/) to see the latest transactions and objects. Read the [Sui Explorer README](https://github.com/MystenLabs/sui/tree/main/apps/explorer#readme) for instructions on how to run the Explorer locally.
 https://explorer.devnet.sui.io/
