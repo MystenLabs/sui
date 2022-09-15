@@ -27,6 +27,7 @@ use sui_types::crypto::{
     AccountKeyPair, AuthorityKeyPair, Ed25519SuiSignature, KeypairTraits, Secp256k1SuiSignature,
     SignatureScheme, SuiKeyPair, SuiSignatureInner,
 };
+use sui_types::intent::ChainId;
 use sui_types::{base_types::ObjectID, crypto::get_key_pair, gas_coin::GasCoin};
 use sui_types::{sui_framework_address_concat_string, SUI_FRAMEWORK_ADDRESS};
 use test_utils::network::{setup_network_and_wallet, start_test_network};
@@ -86,7 +87,15 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
         panic!()
     }
 
-    assert_eq!(5, wallet_conf.keystore.init().unwrap().addresses().len());
+    assert_eq!(
+        5,
+        wallet_conf
+            .keystore
+            .init_for_testing()
+            .unwrap()
+            .addresses()
+            .len()
+    );
 
     // Genesis 2nd time should fail
     let result = SuiCommand::Genesis {
@@ -134,6 +143,7 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
             ..Default::default()
         }),
         active_address: None,
+        chain_id: ChainId::Testing,
     };
     let wallet_conf_path = working_dir.join(SUI_CLIENT_CONFIG);
     let wallet_config = wallet_config.persisted(&wallet_conf_path);

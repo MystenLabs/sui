@@ -52,7 +52,7 @@ async fn test_public_transfer_object() -> Result<(), anyhow::Error> {
         .await?;
 
     let keystore_path = test_network.network.dir().join(SUI_KEYSTORE_FILENAME);
-    let keystore = KeystoreType::File(keystore_path).init()?;
+    let keystore = KeystoreType::File(keystore_path).init_for_testing()?;
 
     let signature = keystore.sign(address, &transaction_bytes.tx_bytes.to_vec()?)?;
     let tx = Transaction::new(transaction_bytes.to_data().unwrap(), signature);
@@ -91,7 +91,7 @@ async fn test_publish() -> Result<(), anyhow::Error> {
         .await?;
 
     let keystore_path = test_network.network.dir().join(SUI_KEYSTORE_FILENAME);
-    let keystore = KeystoreType::File(keystore_path).init()?;
+    let keystore = KeystoreType::File(keystore_path).init_for_testing()?;
     let signature = keystore.sign(address, &transaction_bytes.tx_bytes.to_vec()?)?;
 
     let tx = Transaction::new(transaction_bytes.to_data().unwrap(), signature);
@@ -139,7 +139,7 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
         .await?;
 
     let keystore_path = test_network.network.dir().join(SUI_KEYSTORE_FILENAME);
-    let keystore = KeystoreType::File(keystore_path).init()?;
+    let keystore = KeystoreType::File(keystore_path).init_for_testing()?;
 
     let signature = keystore.sign(address, &transaction_bytes.tx_bytes.to_vec()?)?;
 
@@ -192,7 +192,7 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
             .await?;
 
         let keystore_path = test_network.network.dir().join(SUI_KEYSTORE_FILENAME);
-        let keystore = KeystoreType::File(keystore_path).init()?;
+        let keystore = KeystoreType::File(keystore_path).init_for_testing()?;
 
         let signature = keystore.sign(address, &transaction_bytes.tx_bytes.to_vec()?)?;
 

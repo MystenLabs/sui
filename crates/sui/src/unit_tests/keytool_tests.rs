@@ -25,7 +25,7 @@ use tempfile::TempDir;
 #[test]
 fn test_addresses_command() -> Result<(), anyhow::Error> {
     // Add 3 Ed25519 KeyPairs as default
-    let mut keystore = KeystoreType::InMem(3).init().unwrap();
+    let mut keystore = KeystoreType::InMem(3).init_for_testing().unwrap();
 
     // Add another 3 Secp256k1 KeyPairs
     for _ in 0..3 {
@@ -39,7 +39,7 @@ fn test_addresses_command() -> Result<(), anyhow::Error> {
 
 #[test]
 fn test_flag_in_signature_and_keypair() -> Result<(), anyhow::Error> {
-    let mut keystore = KeystoreType::InMem(0).init().unwrap();
+    let mut keystore = KeystoreType::InMem(0).init_for_testing().unwrap();
 
     keystore.add_key(SuiKeyPair::Secp256k1SuiKeyPair(get_key_pair().1))?;
     keystore.add_key(SuiKeyPair::Ed25519SuiKeyPair(get_key_pair().1))?;
@@ -141,5 +141,5 @@ fn test_load_keystore_err() {
     assert!(res.is_ok());
 
     // cannot load keypair due to missing flag
-    assert!(KeystoreType::File(path2).init().is_err());
+    assert!(KeystoreType::File(path2).init_for_testing().is_err());
 }

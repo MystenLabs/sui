@@ -10077,6 +10077,7 @@ dependencies = [
  "serde_derive",
  "serde_derive_internals",
  "serde_json",
+ "serde_repr",
  "serde_test",
  "serde_urlencoded",
  "serde_with 1.14.0",

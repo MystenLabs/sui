@@ -1,8 +1,12 @@
+use std::str::FromStr;
+
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use serde::{Deserialize, Serialize};
 use serde_repr::Deserialize_repr;
 use serde_repr::Serialize_repr;
+
+use crate::error::SuiError;
 
 #[cfg(test)]
 #[path = "unit_tests/intent_tests.rs"]
@@ -20,6 +24,13 @@ pub enum ChainId {
     Testing = 0,
 }
 
+impl FromStr for ChainId {
+    type Err = SuiError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        s.parse::<ChainId>()
+    }
+}
 pub trait SecureIntent: Serialize + private::SealedIntent {}
 
 #[derive(Serialize_repr, Deserialize_repr, Copy, Clone, PartialEq, Eq, Debug)]
@@ -55,8 +66,27 @@ impl Intent {
             scope,
         }
     }
+
+    pub fn with_chain_id(mut self, chain_id: ChainId) -> Self {
+        self.chain_id = chain_id;
+        self
+    }
+
+    pub fn with_scope(mut self, scope: IntentScope) -> Self {
+        self.scope = scope;
+        self
+    }
 }
 
+impl Default for Intent {
+    fn default() -> Self {
+        Self {
+            version: IntentVersion::V0,
+            chain_id: ChainId::Testing,
+            scope: IntentScope::TransactionData,
+        }
+    }
+}
 #[derive(Debug, PartialEq, Eq, Serialize)]
 pub struct IntentMessage<'a, T> {
     intent: Intent,

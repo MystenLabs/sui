@@ -10,6 +10,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::committee::StakeUnit;
 use sui_types::crypto::{get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair, SuiKeyPair};
+use sui_types::intent::ChainId;
 use sui_types::object::Object;
 use sui_types::sui_serde::KeyPairBase64;
 use tracing::info;
@@ -24,6 +25,7 @@ pub struct GenesisConfig {
     pub grpc_load_shed: Option<bool>,
     pub grpc_concurrency_limit: Option<usize>,
     pub accounts: Vec<AccountConfig>,
+    pub chain_id: ChainId,
 }
 
 impl Config for GenesisConfig {}
@@ -248,6 +250,7 @@ impl Default for GenesisConfig {
             grpc_load_shed: None,
             grpc_concurrency_limit: Some(DEFAULT_GRPC_CONCURRENCY_LIMIT),
             accounts: vec![],
+            chain_id: ChainId::Testing,
         }
     }
 }
