@@ -168,4 +168,8 @@ where
             }
         }
     }
+
+    pub fn quorum_driver(&self) -> &Arc<QuorumDriver<A>> {
+        &self.quorum_driver
+    }
 }

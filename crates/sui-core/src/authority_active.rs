@@ -170,7 +170,7 @@ impl<A> ActiveAuthority<A> {
         })
     }
 
-    fn net(&self) -> Arc<AuthorityAggregator<A>> {
+    pub fn net(&self) -> Arc<AuthorityAggregator<A>> {
         self.net.load().clone()
     }
 
@@ -404,17 +404,16 @@ where
         *lock_guard = Some(NodeSyncProcessHandle(join_handle, cancel_sender));
     }
 
-    #[cfg(test)]
-    pub async fn cancel_node_sync_process(&self) {
-        let mut lock_guard = self.node_sync_process.lock().await;
-        Self::cancel_node_sync_process_impl(&mut lock_guard).await;
-    }
-
     /// Spawn pending certificate execution process
     pub async fn spawn_execute_process(self: Arc<Self>) -> JoinHandle<()> {
         tokio::task::spawn(async move {
             execution_process(self).await;
         })
+    }
+
+    pub async fn cancel_node_sync_process_for_tests(&self) {
+        let mut lock_guard = self.node_sync_process.lock().await;
+        Self::cancel_node_sync_process_impl(&mut lock_guard).await;
     }
 }
 

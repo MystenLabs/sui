@@ -180,14 +180,14 @@ impl SuiNode {
             None
         };
 
-        let pending_store = Arc::new(NodeSyncStore::open_tables_read_write(
+        let node_sync_store = Arc::new(NodeSyncStore::open_tables_read_write(
             config.db_path().join("node_sync_db"),
             None,
             None,
         ));
         let active_authority = Arc::new(ActiveAuthority::new(
             state.clone(),
-            pending_store,
+            node_sync_store,
             net,
             GossipMetrics::new(&prometheus_registry),
             network_metrics.clone(),
