@@ -14,6 +14,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::runtime::Handle;
 use tokio::sync::mpsc;
+use tokio::sync::mpsc::error::TrySendError;
 use tokio::time::Instant;
 use tracing::error;
 
@@ -23,7 +24,7 @@ type HistogramMessage = (HistogramLabels, Point);
 #[derive(Clone)]
 pub struct Histogram {
     labels: HistogramLabels,
-    channel: mpsc::UnboundedSender<HistogramMessage>,
+    channel: mpsc::Sender<HistogramMessage>,
 }
 
 pub struct HistogramTimerGuard<'a> {
@@ -33,12 +34,12 @@ pub struct HistogramTimerGuard<'a> {
 
 #[derive(Clone)]
 pub struct HistogramVec {
-    channel: mpsc::UnboundedSender<HistogramMessage>,
+    channel: mpsc::Sender<HistogramMessage>,
 }
 
 struct HistogramCollector {
     reporter: Arc<Mutex<HistogramReporter>>,
-    channel: mpsc::UnboundedReceiver<HistogramMessage>,
+    channel: mpsc::Receiver<HistogramMessage>,
 }
 
 struct HistogramReporter {
@@ -118,11 +119,7 @@ impl HistogramVec {
         count: IntCounterVec,
         percentiles: Vec<usize>,
     ) -> Self {
-        // The processing task is very fast and should not have realistic scenario where this channel overflows
-        // If the channel is growing too fast you will start seeing error! from the
-        // data points being dropped way before it will produce any measurable memory pressure
-        #[allow(clippy::disallowed_methods)]
-        let (sender, receiver) = mpsc::unbounded_channel();
+        let (sender, receiver) = mpsc::channel(1000);
         let reporter = HistogramReporter {
             gauge,
             sum,
@@ -175,8 +172,12 @@ impl Hash for HistogramLabelsInner {
 
 impl Histogram {
     pub fn report(&self, v: Point) {
-        if self.channel.send((self.labels.clone(), v)).is_err() {
-            unreachable!("Histogram reporting task do not stop when Histogram instance exists");
+        match self.channel.try_send((self.labels.clone(), v)) {
+            Ok(()) => {}
+            Err(TrySendError::Closed(_)) => {
+                unreachable!("Histogram reporting task do not stop when Histogram instance exists")
+            }
+            Err(TrySendError::Full(_)) => error!("Histogram channel is full, dropping data"),
         }
     }
 
@@ -202,13 +203,19 @@ impl HistogramCollector {
 
     async fn cycle(&mut self, deadline: Instant) -> Result<(), ()> {
         let mut labeled_data: HashMap<HistogramLabels, Vec<Point>> = HashMap::new();
+        let mut count = 0usize;
         let mut timeout = tokio::time::sleep_until(deadline).boxed();
+        const MAX_POINTS: usize = 100_000;
         loop {
             tokio::select! {
              _ = &mut timeout => {
                 break;
             },
                 point = self.channel.recv() => {
+                    count += 1;
+                    if count > MAX_POINTS {
+                        continue;
+                    }
                     if let Some((label, point)) = point {
                         let values = labeled_data.entry(label).or_default();
                         values.push(point);
@@ -218,6 +225,12 @@ impl HistogramCollector {
                     }
                 }
                 }
+        }
+        if count > MAX_POINTS {
+            error!(
+                "Too many data points for histogram, dropping {} points",
+                count - MAX_POINTS
+            );
         }
         if Arc::strong_count(&self.reporter) != 1 {
             error!("Histogram data overflow - we receive histogram data faster then can process. Some histogram data is dropped");
