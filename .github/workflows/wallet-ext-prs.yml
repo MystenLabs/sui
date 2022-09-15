@@ -46,7 +46,7 @@ jobs:
         if: always()
         with:
           name: wallet-extension
-          path: wallet/web-ext-artifacts/*
+          path: apps/wallet/web-ext-artifacts/*
           if-no-files-found: error
           retention-days: 7
       - name: Comment PR
