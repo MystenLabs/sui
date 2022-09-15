@@ -171,13 +171,13 @@ override this setting by providing a path to the directory where
 this file is stored:
 
 ```shell
-$ sui start --config /path/to/sui/network/config/file
+$ sui start --network.config /path/to/sui/network/config/file
 ```
 
 For example:
 
 ```shell
-$ sui start --config /Users/name/tmp/network.yaml
+$ sui start --network.config /Users/name/tmp/network.yaml
 ```
 
 Executing any of these two commands in a terminal window will result
@@ -197,6 +197,7 @@ Now start a new terminal since you have the Sui network running in the first ter
 
 The following commands are supported by the Sui client:
 
+```
     active-address        Default address used for commands when none specified
     addresses             Obtain the Addresses managed by the client
     call                  Call Move function
@@ -209,17 +210,19 @@ The following commands are supported by the Sui client:
     help                  Print this message or the help of the given subcommand(s)
     history               Print history
     merge-coin            Merge two coin objects into one coin
-    new-address           Generate new address and keypair
-    object                Get obj info
+    new-address           Generate new address and keypair with keypair scheme flag {ed25519
+                              | secp256k1}
+    object                Get object info
     objects               Obtain all objects owned by the address
     publish               Publish Move modules
     split-coin            Split a coin object into multiple coins
-    switch                Switch active address and network (e.g., Devnet, local RPC server)
+    switch                Switch active address and network(e.g., devnet, local rpc server)
     sync                  Synchronize client state with authorities
     transfer              Transfer object
     transfer-sui          Transfer SUI, and pay gas with the same SUI coin object. If amount is
                               specified, only the amount is transferred; otherwise the entire object
                               is transferred
+```
 
 > **Note:** The `clear`, `echo`, `env` and `exit` commands exist only in the interactive shell.
 
@@ -245,8 +248,12 @@ override this setting by providing a path to the directory where this
 file is stored:
 
 ```shell
-$ sui console --config /path/to/client/config/file
+$ sui console --client.config /path/to/client/config/file
 ```
+
+Within the console, running a command such as `addresses` returns the output of
+`sui client addresses`, for the currently defined client configuration. This is
+particularly helpful if you have a custom config directory.
 
 The Sui interactive client console supports the following shell functionality:
 
@@ -563,27 +570,17 @@ sui-client-transfer
 Transfer object
 
 USAGE:
-    sui client transfer [OPTIONS] --to <TO> --coin-object-id <COIN_OBJECT_ID> --gas-budget <GAS_BUDGET>
+    sui client transfer [OPTIONS] --to <TO> --object-id <OBJECT_ID> --gas-budget <GAS_BUDGET>
 
 OPTIONS:
-        --coin-object-id <COIN_OBJECT_ID>
-            Coin to transfer, in 20 bytes Hex string
-
-        --gas <GAS>
-            ID of the gas object for gas payment, in 20 bytes Hex string If not provided, a gas
-            object with at least gas_budget value will be selected
-
-        --gas-budget <GAS_BUDGET>
-            Gas budget for this transfer
-
-    -h, --help
-            Print help information
-
-        --json
-            Return command outputs in json format
-
-        --to <TO>
-            Recipient address
+        --gas <GAS>                  ID of the gas object for gas payment, in 20 bytes Hex string If
+                                     not provided, a gas object with at least gas_budget value will
+                                     be selected
+        --gas-budget <GAS_BUDGET>    Gas budget for this transfer
+    -h, --help                       Print help information
+        --json                       Return command outputs in json format
+        --object-id <OBJECT_ID>      Object to transfer, in 20 bytes Hex string
+        --to <TO>                    Recipient address
 ```
 
 To transfer a coin object to a recipient, you will need the recipient's address,
@@ -596,7 +593,7 @@ mechanisms. For now, just set something large enough.
 Here is an example transfer of an object to account `0xf456ebef195e4a231488df56b762ac90695be2dd`:
 
 ```shell
-$ sui client transfer --to 0xf456ebef195e4a231488df56b762ac90695be2dd --coin-object-id 0x66eaa38c8ea99673a92a076a00101ab9b3a06b55 --gas-budget 100
+$ sui client transfer --to 0xf456ebef195e4a231488df56b762ac90695be2dd --object-id 0x66eaa38c8ea99673a92a076a00101ab9b3a06b55 --gas-budget 100
 ```
 
 With output like:
@@ -1125,10 +1122,10 @@ publishing was updated as well.
 ## Customize genesis
 
 The genesis process can be customized by providing a genesis configuration
-file using the `--config` flag.
+file using the `--from-config` flag.
 
 ```shell
-$ sui genesis --config <Path to genesis config file>
+$ sui genesis --from-config <Path to genesis config file>
 ```
 
 Example `genesis.yaml`:
