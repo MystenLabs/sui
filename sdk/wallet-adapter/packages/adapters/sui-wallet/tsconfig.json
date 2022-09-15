@@ -7,6 +7,6 @@
   },
   "references": [
     { "path": "../base-adapter" },
-    { "path": "../../../../sdk/typescript" }
+    { "path": "../../../../typescript" }
   ]
 }

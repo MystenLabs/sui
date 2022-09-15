@@ -7,6 +7,6 @@
   },
   "references": [
     { "path": "../react-providers" },
-    { "path": "../../../sdk/typescript" }
+    { "path": "../../../typescript" }
   ]
 }

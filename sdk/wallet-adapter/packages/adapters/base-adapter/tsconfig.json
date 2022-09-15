@@ -6,5 +6,5 @@
     "rootDir": "src",
     "baseUrl": "."
   },
-  "references": [{ "path": "../../../../sdk/typescript" }]
+  "references": [{ "path": "../../../../typescript" }]
 }
