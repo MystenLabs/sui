@@ -78,12 +78,12 @@ module defi::flash_lender {
         AdminCap { id: object::new(ctx), flash_lender_id }
     }
 
-    /// Same as `new`, but transfer `WithdrawCap` to the transaction sender
+    /// Same as `new`, but transfer `AdminCap` to the transaction sender
     public entry fun create<T>(to_lend: Coin<T>, fee: u64, ctx: &mut TxContext) {
         let balance = coin::into_balance(to_lend);
-        let withdraw_cap = new(balance, fee, ctx);
+        let admin_cap = new(balance, fee, ctx);
 
-        transfer::transfer(withdraw_cap, tx_context::sender(ctx))
+        transfer::transfer(admin_cap, tx_context::sender(ctx))
     }
 
     // === Core functionality: requesting a loan and repaying it ===
