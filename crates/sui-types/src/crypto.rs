@@ -33,6 +33,7 @@ use signature::Signer;
 use crate::base_types::{AuthorityName, SuiAddress};
 use crate::committee::{Committee, EpochId};
 use crate::error::{SuiError, SuiResult};
+use crate::intent::{ChainId, Intent, IntentMessage, IntentScope, IntentVersion};
 use crate::sui_serde::{Base64, Readable, SuiBitmap};
 pub use enum_dispatch::enum_dispatch;
 
@@ -392,6 +393,19 @@ pub trait SuiAuthoritySignature {
     fn verify<T>(&self, value: &T, author: AuthorityPublicKeyBytes) -> Result<(), SuiError>
     where
         T: Signable<Vec<u8>>;
+
+    fn verify_secure<T>(
+        &self,
+        value: &T,
+        intent: Intent,
+        author: AuthorityPublicKeyBytes,
+    ) -> Result<(), SuiError>
+    where
+        T: Serialize;
+
+    fn new_secure<T>(value: &T, intent: Intent, secret: &dyn signature::Signer<Self>) -> Self
+    where
+        T: Serialize;
 }
 
 impl SuiAuthoritySignature for AuthoritySignature {
@@ -423,6 +437,39 @@ impl SuiAuthoritySignature for AuthoritySignature {
             .verify(&message, self)
             .map_err(|error| SuiError::InvalidSignature {
                 error: error.to_string(),
+            })
+    }
+
+    fn new_secure<T>(value: &T, intent: Intent, secret: &dyn signature::Signer<Self>) -> Self
+    where
+        T: Serialize,
+    {
+        secret.sign(
+            &bcs::to_bytes(&IntentMessage::new(intent, value))
+                .expect("Message serialization should not fail"),
+        )
+    }
+
+    fn verify_secure<T>(
+        &self,
+        value: &T,
+        intent: Intent,
+        author: AuthorityPublicKeyBytes,
+    ) -> Result<(), SuiError>
+    where
+        T: Serialize,
+    {
+        let message = bcs::to_bytes(&IntentMessage::new(intent, value))
+            .expect("Message serialization should not fail");
+        let public_key = AuthorityPublicKey::try_from(author).map_err(|_| {
+            SuiError::KeyConversionError(
+                "Failed to serialize public key bytes to valid public key".to_string(),
+            )
+        })?;
+        public_key
+            .verify(&message[..], self)
+            .map_err(|e| SuiError::InvalidSignature {
+                error: format!("{}", e),
             })
     }
 }
@@ -574,13 +621,40 @@ impl<'de> Deserialize<'de> for Signature {
 
 // Can refactor this with a library
 impl Signature {
-    pub fn new<T>(value: &T, secret: &dyn signature::Signer<Signature>) -> Signature
+    pub fn new_legacy<T>(value: &T, secret: &dyn signature::Signer<Signature>) -> Signature
     where
         T: Signable<Vec<u8>>,
     {
         let mut message = Vec::new();
         value.write(&mut message);
         secret.sign(&message)
+    }
+
+    /// Testing only
+    pub fn new<T>(value: &T, secret: &dyn signature::Signer<Signature>) -> Self
+    where
+        T: Serialize,
+    {
+        let intent = Intent::new(
+            IntentVersion::V0,
+            ChainId::Testing,
+            IntentScope::TransactionData,
+        );
+        Self::new_secure(value, intent, secret)
+    }
+
+    pub fn new_secure<T>(
+        value: &T,
+        intent: Intent,
+        secret: &dyn signature::Signer<Signature>,
+    ) -> Self
+    where
+        T: Serialize,
+    {
+        secret.sign(
+            &bcs::to_bytes(&IntentMessage::new(intent, value))
+                .expect("Message serialization should not fail"),
+        )
     }
 }
 
@@ -796,6 +870,10 @@ pub trait SuiSignature: Sized + signature::Signature {
     where
         T: Signable<Vec<u8>>;
 
+    fn verify_secure<T>(&self, value: &T, intent: Intent, author: SuiAddress) -> SuiResult<()>
+    where
+        T: Serialize;
+
     fn add_to_verification_obligation_or_verify(
         &self,
         author: SuiAddress,
@@ -814,8 +892,26 @@ impl<S: SuiSignatureInner + Sized> SuiSignature for S {
         let mut message = Vec::new();
         value.write(&mut message);
         pk.verify(&message[..], sig)
-            .map_err(|_| SuiError::InvalidSignature {
-                error: "hello".to_string(),
+            .map_err(|e| SuiError::InvalidSignature {
+                error: format!("{}", e),
+            })
+    }
+
+    fn verify_secure<T>(
+        &self,
+        value: &T,
+        intent: Intent,
+        author: SuiAddress,
+    ) -> Result<(), SuiError>
+    where
+        T: Serialize,
+    {
+        let message = bcs::to_bytes(&IntentMessage::new(intent, value))
+            .expect("Message serialization should not fail");
+        let (sig, pk) = &self.get_verification_inputs(author)?;
+        pk.verify(&message[..], sig)
+            .map_err(|e| SuiError::InvalidSignature {
+                error: format!("{}", e),
             })
     }
 

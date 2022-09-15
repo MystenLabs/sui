@@ -227,7 +227,7 @@ impl SignatureSeed {
     {
         let keypair: K = SignatureSeed::new_deterministic_keypair(self, id, domain)
             .map_err(|_| signature::Error::new())?;
-        Ok(Signature::new(value, &keypair))
+        Ok(Signature::new_legacy(value, &keypair))
     }
 
     // Deterministically generate an ed25519 public key via HKDF.
