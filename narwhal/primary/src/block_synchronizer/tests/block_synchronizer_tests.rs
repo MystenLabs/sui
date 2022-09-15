@@ -530,7 +530,7 @@ async fn test_multiple_overlapping_requests() {
     }
 
     // AND that the request is pending for all the block_ids
-    let request_id: RequestID = block_ids.iter().collect();
+    let request_id: RequestID = block_ids.clone().into_iter().collect();
 
     assert!(
         block_synchronizer
@@ -557,7 +557,7 @@ async fn test_multiple_overlapping_requests() {
         2
     );
 
-    let request_id: RequestID = vec![extra_certificate_id].iter().collect();
+    let request_id: RequestID = vec![extra_certificate_id].into_iter().collect();
     assert!(
         block_synchronizer
             .map_certificate_responses_senders

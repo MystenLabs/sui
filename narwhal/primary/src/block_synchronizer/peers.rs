@@ -355,10 +355,7 @@ mod tests {
                 );
 
                 for c in peer.assigned_values() {
-                    let found = peer_certs
-                        .clone()
-                        .into_iter()
-                        .any(|c| c.digest().eq(&c.digest()));
+                    let found = peer_certs.iter().any(|c| c.digest().eq(&c.digest()));
 
                     assert!(found, "Assigned certificate not in set of expected");
                     assert!(

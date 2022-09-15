@@ -21,14 +21,14 @@ impl RequestID {
     }
 }
 
-impl<'a> FromIterator<&'a CertificateDigest> for RequestID {
-    fn from_iter<T: IntoIterator<Item = &'a CertificateDigest>>(ids: T) -> Self {
-        let mut ids_sorted: Vec<&CertificateDigest> = ids.into_iter().collect();
+impl FromIterator<CertificateDigest> for RequestID {
+    fn from_iter<T: IntoIterator<Item = CertificateDigest>>(ids: T) -> Self {
+        let mut ids_sorted: Vec<CertificateDigest> = ids.into_iter().collect();
         ids_sorted.sort();
 
         let result: Vec<u8> = ids_sorted
             .into_iter()
-            .flat_map(|d| Digest::from(*d).to_vec())
+            .flat_map(|d| Digest::from(d).to_vec())
             .collect();
 
         RequestID::new(&result)
@@ -37,9 +37,7 @@ impl<'a> FromIterator<&'a CertificateDigest> for RequestID {
 
 impl<'a> FromIterator<&'a Certificate> for RequestID {
     fn from_iter<T: IntoIterator<Item = &'a Certificate>>(certificates: T) -> Self {
-        let ids: Vec<CertificateDigest> = certificates.into_iter().map(|c| c.digest()).collect();
-
-        ids.iter().collect()
+        certificates.into_iter().map(|c| c.digest()).collect()
     }
 }
 
@@ -57,9 +55,7 @@ pub struct PayloadAvailabilityResponse {
 
 impl PayloadAvailabilityResponse {
     pub fn request_id(&self) -> RequestID {
-        let ids: Vec<CertificateDigest> = self.block_ids.iter().map(|entry| entry.0).collect();
-
-        ids.iter().collect()
+        self.block_ids.iter().map(|entry| entry.0).collect()
     }
 
     pub fn available_block_ids(&self) -> Vec<CertificateDigest> {
@@ -78,9 +74,7 @@ pub struct CertificatesResponse {
 
 impl CertificatesResponse {
     pub fn request_id(&self) -> RequestID {
-        let ids: Vec<CertificateDigest> = self.certificates.iter().map(|entry| entry.0).collect();
-
-        ids.iter().collect()
+        self.certificates.iter().map(|entry| entry.0).collect()
     }
 
     /// This method does two things:

@@ -430,7 +430,7 @@ impl BlockRemover {
         // Now output all the removed certificates
         for certificate in certificates.clone() {
             self.tx_removed_certificates
-                .send(certificate.clone())
+                .send(certificate)
                 .await
                 .expect("Couldn't forward removed certificates to channel");
         }
@@ -480,20 +480,17 @@ impl BlockRemover {
                 // find the blocks in certificates store
                 match self.certificate_store.read_all(ids.clone()) {
                     Ok(certificates) => {
-                        let non_found_certificates: Vec<(Option<Certificate>, CertificateDigest)> =
-                            certificates
-                                .clone()
-                                .into_iter()
-                                .zip(ids.clone())
-                                .filter(|(c, _digest)| c.is_none())
-                                .collect();
+                        let non_found_digests: Vec<CertificateDigest> = certificates
+                            .iter()
+                            .zip(ids.clone())
+                            .filter_map(|(c, digest)| if c.is_none() { Some(digest) } else { None })
+                            .collect();
 
-                        if !non_found_certificates.is_empty() {
-                            let c: Vec<CertificateDigest> = non_found_certificates
-                                .into_iter()
-                                .map(|(_c, d)| d)
-                                .collect();
-                            warn!("Some certificates are missing, will ignore them {:?}", c);
+                        if !non_found_digests.is_empty() {
+                            warn!(
+                                "Some certificates are missing, will ignore them {:?}",
+                                non_found_digests
+                            );
                         }
 
                         // ensure that we store only the found certificates

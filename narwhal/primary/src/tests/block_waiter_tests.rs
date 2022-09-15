@@ -422,8 +422,8 @@ async fn test_one_pending_request_for_block_at_time() {
         rx_reconfigure,
         rx_batch_receiver: rx_batch_messages,
         tx_pending_batch: HashMap::new(),
-        tx_get_block_map: HashMap::new(),
-        tx_get_blocks_map: HashMap::new(),
+        get_block_map_requesters: HashMap::new(),
+        get_blocks_map_requesters: HashMap::new(),
         block_synchronizer_handler: Arc::new(mock_handler),
     };
 
@@ -505,8 +505,8 @@ async fn test_unlocking_pending_get_block_request_after_response() {
         rx_reconfigure,
         rx_batch_receiver: rx_batch_messages,
         tx_pending_batch: HashMap::new(),
-        tx_get_block_map: HashMap::new(),
-        tx_get_blocks_map: HashMap::new(),
+        get_block_map_requesters: HashMap::new(),
+        get_blocks_map_requesters: HashMap::new(),
         block_synchronizer_handler: Arc::new(mock_handler),
     };
 
@@ -532,7 +532,7 @@ async fn test_unlocking_pending_get_block_request_after_response() {
 
     // THEN
     assert!(!waiter.pending_get_block.contains_key(&block_id));
-    assert!(!waiter.tx_get_block_map.contains_key(&block_id));
+    assert!(!waiter.get_block_map_requesters.contains_key(&block_id));
 }
 
 #[tokio::test]
