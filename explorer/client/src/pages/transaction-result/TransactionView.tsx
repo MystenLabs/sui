@@ -283,14 +283,30 @@ function TransactionView({ txdata }: { txdata: DataType }) {
         ],
     };
 
-    const validatorSignatureData = {
-        title: 'Validator Signatures',
-        content: txdata.authSignInfo.signature.map((validatorSign, index) => ({
-            label: `Signature #${index + 1}`,
-            value: validatorSign,
-            monotypeClass: true,
-        })),
-    };
+    let validatorSignatureData;
+    if (Array.isArray(txdata.authSignInfo.signature)) {
+        validatorSignatureData = {
+            title: 'Validator Signatures',
+            content: txdata.authSignInfo.signature.map(
+                (validatorSign, index) => ({
+                    label: `Signature #${index + 1}`,
+                    value: validatorSign,
+                    monotypeClass: true,
+                })
+            ),
+        };
+    } else {
+        validatorSignatureData = {
+            title: 'Aggregated Validator Signature',
+            content: [
+                {
+                    label: `Signature`,
+                    value: txdata.authSignInfo.signature,
+                    monotypeClass: true,
+                },
+            ],
+        };
+    }
 
     const createdMutateData = generateMutatedCreated(txdata);
 

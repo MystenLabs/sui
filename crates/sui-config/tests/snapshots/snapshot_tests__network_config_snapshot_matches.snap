@@ -3,7 +3,7 @@ source: crates/sui-config/tests/snapshot_tests.rs
 expression: network_config
 ---
 validator_configs:
-  - protocol-key-pair: m/SaagdV+VOBH84SXyaD1QQpw7tJ4HQUfgCJpS6uFV+5xu4WMO8+cRFEpkjbBruyKE9ydM++5T/87lA8waSSAA==
+  - protocol-key-pair: Jm+XCP2NO0YrEM2/VJgHbAIes6z91Hyx/vZHln/hlPuMZtwsHqnlPwmFwXtOevGZErbTxA4MWSCloSUJtOs2GfXgfsVup38LMGKbocxy11sTlGB4Kl8OL4n7TEK0uKX649JgECIg5j0HVOfhhG3u/TmI6t5O038ThUN9Gd4aFhg=
     worker-key-pair: BWT4edJ648As6Cg0rPqMeTpinyyg3mkZYQvoL0ETJr6u8/SkuOyh38NDNhv45Da9Qt6SWcBLgxTrjiBU3W6Cqw==
     account-key-pair: AIpXYuIawc2zhwRCx3tMOvWMfO24d50CcObU8eL3Nn10C9WIQSA+dP6G/HEzjOAXPcYo67cZvcvMFRWFIUzAibQ=
     network-key-pair: QiWNzaFM8RHGAriXG4zIQ+keRsqQUVHAJ0SmsBfmkxbMYjMuNLstXNafYO+7KjbLkWx+tFgwHqNmNsTbsBK9iA==
@@ -46,7 +46,7 @@ validator_configs:
     grpc-concurrency-limit: 20000000000
     genesis:
       genesis: "[fake genesis]"
-  - protocol-key-pair: sgzWfEvezFOOi+mQwbZCXWi/06b+l2k+SEY1FZbMqKsjjttu6akf3I5xvlDAo/s88pLZAk3brAKqpwkJawqp2g==
+  - protocol-key-pair: LqPR5IijTDFVFUq2rCvOsiIO8dIRuXSAldAP+DYC1me2tykqD8b9TR5r1KXG1tk5NzsUp1pV97mzqOf4RZiHOuHRbC/7MTIsXXZZqIJo6WQCoJQf//aqfEwxf5hNpYWpnuGovtGTaPGU7tq29e9O7GmsMIAVjtZZHy3ribwbBb8=
     worker-key-pair: 9Z/d0Lf1LcwMYKRIy/lRFhCwp0Lx5NI4p6RcrgVOwhydR2FqGN8gOTB/BkIiYCWItSpqrqp7b+jGtNnrqKeHsQ==
     account-key-pair: AOo/znbuELOmRfswQFEd+rTJzWBY9BkpAU0WRm9eOywq4BB+FmG6xjjQpGNs/bv21foY4nMY2jMCltCjhxgNbIw=
     network-key-pair: 0gL1Yotsq+ENWrgyROSyMO/U3MzvxGNYktNenctyJd+vtJBelVDPRiqCAHgkoFXZda6TRHDEd9ndu20rJkw2+g==
@@ -89,7 +89,7 @@ validator_configs:
     grpc-concurrency-limit: 20000000000
     genesis:
       genesis: "[fake genesis]"
-  - protocol-key-pair: 9Lcs30s8QZpYQnBLH+55QCOl6uAiOVb7LEcBbhB7hE6X5+2EP6saQs6cISlDUh7CKgJWh0fMADuIH70n9wvf4A==
+  - protocol-key-pair: Hiq/0Ct6fmLhv1nBMiPqovOB6sOCfo5729qmN08q5xqmoXf1i/SZl1hJgzwzhR0tHh1rEBWcoC23JZIvZTv5l61M6Do8FX6cWWirPwYkXz0JpmyKSWt+uTVCq3nJc6q7GWTWC0H8eafBj9shurYTrgUf8CSXw6dc8Pwr8R2ywIw=
     worker-key-pair: kYP0d2s+pZoXgeVko+rpZ2k5e4q0NbJd2kGJ4QPQMc9cR/734xE9wBxW701He/5RV6/DOWmgFPi7VTfhjM7GTA==
     account-key-pair: AIM52ZwzO7Oid/63gLjUbKwwzc2QUNviNfuMxnuRwbBqnZTXHAccZRpZcVXhUvvQe7WAB32Ak1vyNmNCX/Kl8ak=
     network-key-pair: pzzqy7X725Nhn+RxRHmPNmU97IGS14ftQFbEczxPAHaGQZf0zFyrbI7dS3nEhe+5pVVxi3W2A+LouY9V7A3iZw==
@@ -132,7 +132,7 @@ validator_configs:
     grpc-concurrency-limit: 20000000000
     genesis:
       genesis: "[fake genesis]"
-  - protocol-key-pair: ZyDgEy8FWgoN24poviNcDhIx9n6fKOuCHqxbHTnJPg+9UN97gnKsq+V1YAwCB2p5S8AIWrDXl7g9SiPgHI58JA==
+  - protocol-key-pair: GzzrEigjxChf2XnG0nSJuAfP6tSQo4A7/63k4hAOjOeL0OmML+RlsN3ntyxKDupYUwXe5MQI7aMEPczkE5dTxPsB5tOsw770PkhudQjw3uUWGaMSIoWHBQ6UUZvHWOR0/bXY9H9e+drIfENom4yTK3EAIGeyGL1OttmJk/XS2os=
     worker-key-pair: EQwhVD8hX7efjIVAYfuALmRyfmPqQ4ebKA5PameIh5D6gqrtUVPSkBC+OW8S2LZhTDl8dcRhP9uzbU/3BOUAqw==
     account-key-pair: ABbIisgBp4THAoTQX/i9gfBB1+pjLqfKKifGyv/WUZMM+K6cRt6kc+jMcFpq8yJS6MNJtJTF3O/XGG0atPFaJY0=
     network-key-pair: RuBQj94iWraVKHboVHWawvBtJms/9hWcJ38WR6jgPck7oQxlS+QUbas9bauAs84kzjfbfHRcKyUyBdYvlnsAsw==
@@ -175,7 +175,7 @@ validator_configs:
     grpc-concurrency-limit: 20000000000
     genesis:
       genesis: "[fake genesis]"
-  - protocol-key-pair: PfZvwVtLB44RZJaahQ4x3/MIjSqeJ7+3cZ5iHO/Lu9p23j+getiVNaF2azeYdXyKs671vofe4W6eEG3YtQlyng==
+  - protocol-key-pair: NsLWImHeTmGIB9KvW1EAu3X+tW7Q/KkI5gk3COXONCmm1yzKunhYP2XGQ4HKxwLtN5RUod5uTWXZX7P1wdIn2g5MbKFtB3Rj74n7dbqnia8Oqz14vEoSNUoxrh+6xLgU9IDbBhMKOlyOcHFrDQVkXoV75fge2er7vrS7f8/5wCw=
     worker-key-pair: Neqo634LMrcrpZYZ2dT5jOG8wyg5tK6nYrRGYFGa4WGWuKxioRp0flyAuGxPURbmrq5UrHAJctMlA7eSVqFTLw==
     account-key-pair: AFWsiGMz7Iq6Fa2OHopRFFSgjPy3zXDFjdhCyqBwjRq/a7tE8gojj/hBeXcgQGHOCDL2HfJ2KPJ4Q1ggrXvO/+Y=
     network-key-pair: JfcI7/BU6ez/pZl1vtJqtInUc598clMt9PH7zXa0JpAq32ZGW4WQG6fB+rZVERBsFe5JgY6wWj3lsD88iu9WFw==
@@ -218,7 +218,7 @@ validator_configs:
     grpc-concurrency-limit: 20000000000
     genesis:
       genesis: "[fake genesis]"
-  - protocol-key-pair: wLPaTXduKbN+3+E0nSv8HiQl8vlvWvap8+WWhpfrxhySbqu6KEzD8Zidc5KCnKQO1lurPtgYY6lq2z5rPf9fpA==
+  - protocol-key-pair: CsRQrECMM8bjsounq/lp4HpZ78DfTEQ+8JZ8ep9Uwd2oUEn0LWkMFMIY2sZlOweOIHI1PV/hKGf74V8tdqFj1X3vaDCy7xCKXUrHW4MK4I8CQSs29yb3X//ssrVtkq3DHEUgHSiJu9bxRDABWZt1BPRnAJom/Ta3blmSnDSP0rE=
     worker-key-pair: SmwxHcV2gQzxKoBcs5t39VDlpi6qn4CTFlvWdcQ2bo98EQEujhdX27EEV3Z86OoMCQvPAkniwEgO0RrLK3A7sA==
     account-key-pair: AIuFbz7FC0IUpvvkfoabM2nORDi5yW4dNjQDEnD/+Pi9LskdaKDI6rfXAXjiEd/Ot3tQDPgwFi2lyCfU68jIPj8=
     network-key-pair: Q9L5PWy1M9rnj1FyqfjKGyV3jMVL8RAzMJw9OdIifHVyx5W5GuC+jT9DRonmv0ccpDJ/8SX6AXiamavFW0KA5g==
@@ -261,7 +261,7 @@ validator_configs:
     grpc-concurrency-limit: 20000000000
     genesis:
       genesis: "[fake genesis]"
-  - protocol-key-pair: UzKENORv6NhWOakmfPhCH8ohVHr6Ydy2XxsoQzbtSf7RwP29fVH7wkswAtz/hkGYwp98tdl70TwMB75z9G9NRw==
+  - protocol-key-pair: ATtFYSC+WduPcjkDb5W/0qmeY8rJakh27PTldLq+nuaoaYghGPn/1BWEWXhXazXPUQf8cN4uOBzwlLo6iPuLQNcbp2Pg5RHFiVKZxrNDM6wNbuWCIMktDH6wzEJFDLBAb6alikZSqgMsGoi5ZpmIdqI0p+jHsU8TyXZ5wHORhWA=
     worker-key-pair: zqXFxYQpWyrIZx3ICuKRy6ie+Wm8m95nm9W63uaig36qOKjHsxwR6y1zCu5mSIno9fisAX34MT7/Vna0Cbrs4A==
     account-key-pair: AN0bN3jLSY/+7Ujz2rArJBe/aA5PpUqd4MeiL6JNiqBkTuESCA04r/Za9cqm5666CpZ6hHuIcdT0QtKnD3S1qNE=
     network-key-pair: rluAU/PE8mYAzlBmWs/OduYKF1tza4rUOBKiTAneX0uVtcCSUf0L9WbbXik1BSA6O6BxA6TAOJ7rw9XQ2/qyZw==

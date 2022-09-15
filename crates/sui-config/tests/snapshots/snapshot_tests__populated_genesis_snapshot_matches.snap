@@ -4,7 +4,7 @@ expression: genesis.validator_set()
 ---
 - name: "0"
   account-key: ALnG7hYw7z5xEUSmSNsGu7IoT3J0z77lP/zuUDzBpJIA
-  protocol-key: ucbuFjDvPnERRKZI2wa7sihPcnTPvuU//O5QPMGkkgA=
+  protocol-key: jGbcLB6p5T8JhcF7TnrxmRK208QODFkgpaElCbTrNhn14H7Fbqd/CzBim6HMctdbE5RgeCpfDi+J+0xCtLil+uPSYBAiIOY9B1Tn4YRt7v05iOreTtN/E4VDfRneGhYY
   worker-key: ucbuFjDvPnERRKZI2wa7sihPcnTPvuU//O5QPMGkkgA=
   network-key: ucbuFjDvPnERRKZI2wa7sihPcnTPvuU//O5QPMGkkgA=
   stake: 1

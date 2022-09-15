@@ -263,7 +263,7 @@
               "certificate": {
                 "authSignInfo": {
                   "epoch": 0,
-                  "signature": [],
+                  "signature": "",
                   "signers_map": [
                     58,
                     48,
@@ -1695,7 +1695,7 @@
               "certificate": {
                 "authSignInfo": {
                   "epoch": 0,
-                  "signature": [],
+                  "signature": "",
                   "signers_map": [
                     58,
                     48,

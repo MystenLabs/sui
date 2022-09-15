@@ -34,7 +34,15 @@ AuthoritySignInfo:
     - authority:
         TYPENAME: AuthorityPublicKeyBytes
     - signature:
-        TYPENAME: Ed25519Signature
+        TYPENAME: BLS12381Signature
+BLS12381KeyPair:
+  STRUCT:
+    - type: STR
+    - name: STR
+    - secret: STR
+BLS12381Signature:
+  STRUCT:
+    - sig: BYTES
 CallArg:
   ENUM:
     0:
@@ -86,9 +94,6 @@ Ed25519KeyPair:
         TYPENAME: Ed25519PublicKey
 Ed25519PublicKey:
   NEWTYPESTRUCT: STR
-Ed25519Signature:
-  STRUCT:
-    - raw: BYTES
 EntryArgumentError:
   STRUCT:
     - argument_idx: U8

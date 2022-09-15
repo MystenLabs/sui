@@ -7,11 +7,11 @@ use std::str::FromStr;
 use anyhow::{anyhow, Error};
 use base64ct::Encoding;
 use digest::Digest;
-use fastcrypto::bls12381::BLS12381PublicKey;
-use fastcrypto::ed25519::{
-    Ed25519AggregateSignature, Ed25519KeyPair, Ed25519PrivateKey, Ed25519PublicKey,
-    Ed25519Signature,
+use fastcrypto::bls12381::{
+    BLS12381AggregateSignature, BLS12381KeyPair, BLS12381PrivateKey, BLS12381PublicKey,
+    BLS12381Signature,
 };
+use fastcrypto::ed25519::{Ed25519KeyPair, Ed25519PrivateKey, Ed25519PublicKey, Ed25519Signature};
 use fastcrypto::secp256k1::{
     Secp256k1KeyPair, Secp256k1PrivateKey, Secp256k1PublicKey, Secp256k1Signature,
 };
@@ -33,15 +33,15 @@ use signature::Signer;
 use crate::base_types::{AuthorityName, SuiAddress};
 use crate::committee::{Committee, EpochId};
 use crate::error::{SuiError, SuiResult};
-use crate::sui_serde::{Base64, Readable, SuiBitmap};
+use crate::sui_serde::{AggrAuthSignature, Base64, Readable, SuiBitmap};
 pub use enum_dispatch::enum_dispatch;
 
 // Authority Objects
-pub type AuthorityKeyPair = Ed25519KeyPair;
-pub type AuthorityPublicKey = Ed25519PublicKey;
-pub type AuthorityPrivateKey = Ed25519PrivateKey;
-pub type AuthoritySignature = Ed25519Signature;
-pub type AggregateAuthoritySignature = Ed25519AggregateSignature;
+pub type AuthorityKeyPair = BLS12381KeyPair;
+pub type AuthorityPublicKey = BLS12381PublicKey;
+pub type AuthorityPrivateKey = BLS12381PrivateKey;
+pub type AuthoritySignature = BLS12381Signature;
+pub type AggregateAuthoritySignature = BLS12381AggregateSignature;
 
 // TODO(joyqvq): prefix these types with Default, DefaultAccountKeyPair etc
 pub type AccountKeyPair = Ed25519KeyPair;
@@ -973,6 +973,7 @@ impl PartialEq for AuthoritySignInfo {
 pub struct AuthorityQuorumSignInfo<const STRONG_THRESHOLD: bool> {
     pub epoch: EpochId,
     #[schemars(with = "Base64")]
+    #[serde_as(as = "AggrAuthSignature")]
     pub signature: AggregateAuthoritySignature,
     #[schemars(with = "Base64")]
     #[serde_as(as = "SuiBitmap")]
@@ -1240,7 +1241,7 @@ impl ToObligationSignature for AuthoritySignature {
 // Careful, the implementation may be overlapping with the AuthoritySignature implementation. Be sure to fix it if it does:
 // TODO: Change all these into macros.
 impl ToObligationSignature for Secp256k1Signature {}
-// impl ToObligationSignature for Ed25519Signature {}
+impl ToObligationSignature for Ed25519Signature {}
 
 #[derive(Default)]
 pub struct VerificationObligation {
