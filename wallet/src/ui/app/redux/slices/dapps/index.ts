@@ -42,7 +42,7 @@ export const getCuratedApps = createAsyncThunk<
         throw new Error('No data returned from SUI Apps API');
     }
 
-    return [];
+    return data as DappApiResponse[];
 });
 
 const slice = createSlice({

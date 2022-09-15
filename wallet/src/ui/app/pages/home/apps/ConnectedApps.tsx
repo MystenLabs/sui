@@ -2,20 +2,20 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Content } from '_app/shared/bottom-menu-layout';
-import AppsPlayGround from '_components/sui-apps';
+import { ConnectedAppsCard } from '_components/sui-apps';
 
 import st from './AppsPage.module.scss';
 
-function AppsPage() {
+function SuiConnectedAppsPage() {
     return (
         <div className={st.container}>
             <Content>
                 <section>
-                    <AppsPlayGround />
+                    <ConnectedAppsCard />
                 </section>
             </Content>
         </div>
     );
 }
 
-export default AppsPage;
+export default SuiConnectedAppsPage;

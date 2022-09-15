@@ -5,6 +5,7 @@ import cl from 'classnames';
 import { useEffect } from 'react';
 
 import SuiApp, { SuiAppEmpty } from './SuiApp';
+import AppFilters from './filters';
 import { useAppSelector } from '_hooks';
 import { thunkExtras } from '_store/thunk-extras';
 
@@ -36,6 +37,7 @@ function ConnectedDapps() {
                     icon: appData?.favIcon,
                     link: appData.origin,
                     description: '',
+                    id: appData.id,
                     accounts: appData.accounts,
                     permissions: appData.permissions,
                     createdDate: appData.createdDate,
@@ -46,6 +48,7 @@ function ConnectedDapps() {
 
     return (
         <div className={cl(st.container)}>
+            <AppFilters />
             <div className={st.desc}>
                 <div className={st.title}>
                     {formattedApps.length

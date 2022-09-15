@@ -7,19 +7,51 @@
     flex-flow: row nowrap;
     background-color: v.use(v.$colors-nav-background-color);
     backdrop-filter: v.use(v.$colors-nav-background-filter);
-    height: values.$sizing-nav-height;
+    min-height: values.$sizing-nav-height;
+    height: auto;
     position: absolute;
     bottom: 0;
     width: 100%;
     align-items: center;
     justify-content: stretch;
-    padding: 5px 10px;
+    padding: 8px 10px;
     padding-bottom: 0;
     overflow: hidden;
     border-top-left-radius: 20px;
     border-top-right-radius: 20px;
     transition: transform 300ms ease-in-out;
     opacity: 1;
+    flex-direction: column;
+}
+
+.nav-menu {
+    display: flex;
+    flex-flow: row nowrap;
+    align-items: center;
+    justify-content: stretch;
+    width: 100%;
+}
+
+.filter-tags {
+    display: flex;
+    gap: 8px;
+
+    .filter {
+        height: 25px;
+        background: colors.$white;
+        color: colors.$sui-steel-blue;
+        padding: 6px 10px;
+        border: 1px solid colors.$gray-60;
+        border-radius: 16px;
+        text-decoration: none;
+        display: flex;
+        align-items: center;
+
+        &.active {
+            background: v.use(v.$colors-nav-item-highlighted-color);
+            color: colors.$white;
+        }
+    }
 }
 
 .link {

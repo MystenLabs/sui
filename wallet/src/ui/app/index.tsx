@@ -18,6 +18,8 @@ import HomePage, {
     ReceiptPage,
     CoinsSelectorPage,
     AppsPage,
+    SuiConnectedAppsPage,
+    DisconnectAppPage,
 } from '_pages/home';
 import InitializePage from '_pages/initialize';
 import BackupPage from '_pages/initialize/backup';
@@ -27,7 +29,7 @@ import SelectPage from '_pages/initialize/select';
 import SiteConnectPage from '_pages/site-connect';
 import WelcomePage from '_pages/welcome';
 import { loadAccountFromStorage } from '_redux/slices/account';
-import { setNavVisibility } from '_redux/slices/app';
+import { setNavVisibility, setNavFilterTag } from '_redux/slices/app';
 
 const HIDDEN_MENU_PATHS = [
     '/stake',
@@ -35,6 +37,7 @@ const HIDDEN_MENU_PATHS = [
     '/receipt',
     '/send',
     '/send/select',
+    '/apps/disconnectapp',
 ];
 
 const App = () => {
@@ -51,6 +54,7 @@ const App = () => {
     const location = useLocation();
     useEffect(() => {
         const menuVisible = !HIDDEN_MENU_PATHS.includes(location.pathname);
+        dispatch(setNavFilterTag([]));
         dispatch(setNavVisibility(menuVisible));
     }, [location, dispatch]);
     return (
@@ -59,6 +63,14 @@ const App = () => {
                 <Route path="tokens" element={<TokensPage />} />
                 <Route path="nfts" element={<NftsPage />} />
                 <Route path="apps" element={<AppsPage />} />
+                <Route
+                    path="apps/connected"
+                    element={<SuiConnectedAppsPage />}
+                />
+                <Route
+                    path="apps/disconnectapp"
+                    element={<DisconnectAppPage />}
+                />
                 <Route path="nft-details" element={<NFTDetailsPage />} />
                 <Route path="transactions" element={<TransactionsPage />} />
                 <Route path="send" element={<TransferCoinPage />} />

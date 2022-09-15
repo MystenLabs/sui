@@ -6,7 +6,7 @@ import AppsPlayGround from '_components/sui-apps';
 
 import st from './AppsPage.module.scss';
 
-function AppsPage() {
+function DisconnectAppPage() {
     return (
         <div className={st.container}>
             <Content>
@@ -18,4 +18,4 @@ function AppsPage() {
     );
 }
 
-export default AppsPage;
+export default DisconnectAppPage;
