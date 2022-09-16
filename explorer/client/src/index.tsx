@@ -12,7 +12,7 @@ import { CURRENT_ENV } from './utils/envUtil';
 
 import './index.css';
 
-if (import.meta.env.DEV) {
+if (import.meta.env.PROD) {
     Sentry.init({
         dsn: 'https://e4251274d1b141d7ba272103fa0f8d83@o1314142.ingest.sentry.io/6564988',
         integrations: [new BrowserTracing()],
