@@ -43,9 +43,9 @@ export const respondToPermissionRequest = createAsyncThunk<
     }
 );
 
-// Todo: revoke permission from the wallet adapter
+// Todo: move this to the wallet adapter
 // Get all permissions from from storage
-// remove the permission with the given id
+// remove the permission for a given origin
 // set the new permissions in storage
 export const revokeAppPermissionByOrigin = createAsyncThunk<
     void,
@@ -56,6 +56,7 @@ export const revokeAppPermissionByOrigin = createAsyncThunk<
     if (connectedApps.permissions[origin]) {
         const appId = connectedApps.permissions[origin].id;
         delete connectedApps.permissions[origin];
+        // remove app from state store
         dispatch(revokeAppPermission(appId));
         await Browser.storage.local.set({
             permissions: connectedApps.permissions,
