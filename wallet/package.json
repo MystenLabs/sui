@@ -36,7 +36,7 @@
     "devDependencies": {
         "@types/dotenv-webpack": "^7.0.3",
         "@types/node": "^18.0.6",
-        "@types/react": "^18.0.15",
+        "@types/react": "^18.0.20",
         "@types/react-dom": "^18.0.6",
         "@types/uuid": "^8.3.4",
         "@types/webextension-polyfill": "^0.9.0",
