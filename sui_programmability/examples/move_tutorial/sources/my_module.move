@@ -5,7 +5,7 @@ module my_first_package::my_module {
     // Part 1: imports
     use sui::object::{Self, UID};
     use sui::transfer;
-    use sui::tx_context::TxContext;
+    use sui::tx_context::{Self, TxContext};
 
     // Part 2: struct definitions
     struct Sword has key, store {
@@ -21,8 +21,6 @@ module my_first_package::my_module {
 
     // Part 3: module initializer to be executed when this module is published
     fun init(ctx: &mut TxContext) {
-        use sui::transfer;
-        use sui::tx_context;
         let admin = Forge {
             id: object::new(ctx),
             swords_created: 0,
@@ -129,8 +127,6 @@ module my_first_package::my_module {
 
     #[test]
     public fun test_sword_create() {
-        use sui::tx_context;
-
         // create a dummy TxContext for testing
         let ctx = tx_context::dummy();
 
