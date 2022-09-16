@@ -81,7 +81,7 @@ impl SuiJsonValue {
     }
 
     fn handle_inner_struct_layout(
-        inner: &[MoveTypeLayout],
+        inner_vec: &[MoveTypeLayout],
         val: &JsonValue,
         ty: &MoveTypeLayout,
         s: &String,
@@ -89,16 +89,33 @@ impl SuiJsonValue {
         // delegate MoveValue construction to the case when JsonValue::String and
         // MoveTypeLayout::Vector are handled to get an address (with 0x string
         // prefix) or a vector of u8s (no prefix)
-        if !inner.len() == 1 {
+        debug_assert!(matches!(val, JsonValue::String(_)));
+
+        if inner_vec.len() != 1 {
             bail!(
-                "Cannot convert string arg {s} to {ty} \
-                                                which is expected to be a struct \
-                                                with one field of address or u8 type"
+                "Cannot convert string arg {s} to {ty} which is expected \
+                 to be a struct with one field"
             );
         }
-        Ok(MoveValue::Struct(MoveStruct::Runtime(vec![
-            Self::to_move_value(val, &MoveTypeLayout::Vector(Box::new(inner[0].clone())))?,
-        ])))
+
+        match &inner_vec[0] {
+            MoveTypeLayout::Vector(inner) => match **inner {
+                MoveTypeLayout::U8 | MoveTypeLayout::Address => {
+                    Ok(MoveValue::Struct(MoveStruct::Runtime(vec![
+                        Self::to_move_value(val, &inner_vec[0].clone())?,
+                    ])))
+                }
+                _ => bail!(
+                    "Cannot convert string arg {s} to {ty} \
+                             which is expected to be a struct \
+                             with one field of address or u8 vector type"
+                ),
+            },
+            _ => bail!(
+                "Cannot convert string arg {s} to {ty} which is expected \
+                 to be a struct with one field of a vector type"
+            ),
+        }
     }
 
     fn to_move_value(val: &JsonValue, ty: &MoveTypeLayout) -> Result<MoveValue, anyhow::Error> {
