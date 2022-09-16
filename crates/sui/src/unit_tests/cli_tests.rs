@@ -1016,7 +1016,7 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
         gas_budget: 1000,
         coin_id: coin,
         amounts: Some(vec![1000, 10]),
-        count: 0,
+        count: None,
     }
     .execute(&mut context)
     .await?;
@@ -1059,7 +1059,7 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
         gas_budget: 1000,
         coin_id: coin,
         amounts: None,
-        count: 3,
+        count: Some(3),
     }
     .execute(&mut context)
     .await?;
@@ -1105,7 +1105,7 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
         gas_budget: 1000,
         coin_id: coin,
         amounts: Some(vec![1000, 10]),
-        count: 0,
+        count: None,
     }
     .execute(&mut context)
     .await?;
