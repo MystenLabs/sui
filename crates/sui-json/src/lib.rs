@@ -478,7 +478,11 @@ fn resolve_call_arg(
     // in terms of non-primitives we only currently support objects and "flat" (depth == 1) vectors
     // of objects (but not, for example, vectors of references)
     match param {
-        SignatureToken::Struct(_) => Ok(SuiJsonCallArg::Object(resolve_object_arg(
+        SignatureToken::Struct(_)
+        | SignatureToken::StructInstantiation(_, _)
+        | SignatureToken::TypeParameter(_)
+        | SignatureToken::Reference(_)
+        | SignatureToken::MutableReference(_) => Ok(SuiJsonCallArg::Object(resolve_object_arg(
             idx,
             &arg.to_json_value(),
         )?)),
