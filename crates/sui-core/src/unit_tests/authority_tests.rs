@@ -2152,7 +2152,7 @@ pub async fn create_move_object(
         "create",
         vec![],
         vec![
-            TestCallArg::Pure(bcs::to_bytes(&(16 as u64)).unwrap()),
+            TestCallArg::Pure(bcs::to_bytes(&(16_u64)).unwrap()),
             TestCallArg::Pure(bcs::to_bytes(sender).unwrap()),
         ],
     )
