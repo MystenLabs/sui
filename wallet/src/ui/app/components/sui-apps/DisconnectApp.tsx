@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import cl from 'classnames';
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 
 import { Content } from '_app/shared/bottom-menu-layout';
 import Button from '_app/shared/button';
@@ -11,6 +11,8 @@ import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
 import ExternalLink from '_components/external-link';
 import Icon, { SuiIcons } from '_components/icon';
 import Overlay from '_components/overlay';
+import { useAppDispatch } from '_hooks';
+import { revokeAppPermissionByOrigin } from '_redux/slices/permissions';
 
 import type { SuiAddress } from '@mysten/sui.js';
 
@@ -36,10 +38,21 @@ function DisconnectApp({
     address,
     linkLabel,
     account,
+    id,
     permissions,
     setShowDisconnectApp,
 }: DisconnectAppProps) {
     const [showModal] = useState(true);
+    const dispatch = useAppDispatch();
+
+    // TODO: add loading state since this is async
+    const revokeApp = useCallback(
+        (e: React.MouseEvent<HTMLElement>) => {
+            dispatch(revokeAppPermissionByOrigin({ origin: link }));
+            setShowDisconnectApp(false);
+        },
+        [dispatch, link, setShowDisconnectApp]
+    );
     return (
         <Overlay
             showModal={showModal}
@@ -104,7 +117,10 @@ function DisconnectApp({
                     </div>
                 </div>
                 <div className={st.cta}>
-                    <Button className={cl('btn', st.ctaBtn, st.disconnectApp)}>
+                    <Button
+                        className={cl('btn', st.ctaBtn, st.disconnectApp)}
+                        onClick={revokeApp}
+                    >
                         <div className={st.disconnect}>
                             <Icon icon={SuiIcons.Close} />
                         </div>

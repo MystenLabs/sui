@@ -5,18 +5,15 @@ import cl from 'classnames';
 import { useEffect } from 'react';
 
 import SuiApp, { SuiAppEmpty } from './SuiApp';
+import { notEmpty } from '_helpers';
 import { useAppSelector } from '_hooks';
 import { thunkExtras } from '_store/thunk-extras';
 
 import st from './Playground.module.scss';
 
-function notEmpty<TValue>(value: TValue | null | undefined): value is TValue {
-    if (value === null || value === undefined) return false;
-    return true;
-}
-
 function ConnectedDapps() {
     useEffect(() => {
+        //TODO - move to action
         thunkExtras.background.sendGetPermissionRequests();
     }, []);
 
