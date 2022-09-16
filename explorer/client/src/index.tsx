@@ -4,13 +4,18 @@
 import * as Sentry from '@sentry/react';
 import { BrowserTracing } from '@sentry/tracing';
 import React from 'react';
-import ReactDOM from 'react-dom';
+import ReactDOM from 'react-dom/client';
 import { BrowserRouter as Router } from 'react-router-dom';
 
 import App from './app/App';
 import { CURRENT_ENV } from './utils/envUtil';
+import { plausible } from './utils/plausible';
 
 import './index.css';
+
+// NOTE: The plausible tracker ensures it doesn't run on localhost, so we don't
+// need to gate this call.
+plausible.enableAutoPageviews();
 
 if (import.meta.env.PROD) {
     Sentry.init({
@@ -24,11 +29,10 @@ if (import.meta.env.PROD) {
     });
 }
 
-ReactDOM.render(
+ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>
         <Router>
             <App />
         </Router>
-    </React.StrictMode>,
-    document.getElementById('root')
+    </React.StrictMode>
 );
