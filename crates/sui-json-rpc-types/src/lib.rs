@@ -366,6 +366,9 @@ pub enum SuiExecuteTransactionResponse {
     EffectsCert {
         certificate: SuiCertifiedTransaction,
         effects: SuiCertifiedTransactionEffects,
+        // If the transaction is confirmed to be executed locally
+        // before this reponse.
+        confirmed_local_execution: bool,
     },
 }
 
@@ -385,13 +388,14 @@ impl SuiExecuteTransactionResponse {
                 }
             }
             ExecuteTransactionResponse::EffectsCert(cert) => {
-                let (certificate, effects) = *cert;
+                let (certificate, effects, is_executed_locally) = *cert;
                 let certificate: SuiCertifiedTransaction = certificate.try_into()?;
                 let effects: SuiCertifiedTransactionEffects =
                     SuiCertifiedTransactionEffects::try_from(effects, resolver)?;
                 SuiExecuteTransactionResponse::EffectsCert {
                     certificate,
                     effects,
+                    confirmed_local_execution: is_executed_locally,
                 }
             }
         })

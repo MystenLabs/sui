@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /*
-    FIXME
+Transaction Orchestrator is a Quorum Driver wrapper that proactively
+execute finalzied transactions locally by leveraging the NodeSyncState.
 */
 
 use std::sync::Arc;
@@ -16,7 +17,8 @@ use prometheus::Registry;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{
     CertifiedTransaction, CertifiedTransactionEffects, ExecuteTransactionRequest,
-    ExecuteTransactionResponse,
+    ExecuteTransactionRequestType, ExecuteTransactionResponse, QuorumDriverRequest,
+    QuorumDriverRequestType, QuorumDriverResponse,
 };
 use tap::TapFallible;
 use tokio::sync::broadcast::error::RecvError;
@@ -25,20 +27,12 @@ use tokio::task::JoinHandle;
 use tokio::time::timeout;
 use tracing::{debug, error, warn};
 
-/// When requested to execute a transaction with WaitForEffectsCert,
-/// TransactionOrchestrator attemps to execute this transaction locally
-/// after it is finalized.
-/// Some(true) => executed locally
-/// Some(false) => not executed locally, due to timeout or other errors
-/// None => did not attempt to execute locally (not with WaitForEffectsCert request type)
-pub type IsTransactionExecutedLocally = Option<bool>;
-
 // How long to wait for local execution (including parents) before a timeout
 // is returned to client.
 const LOCAL_EXECUTION_TIMEOUT: Duration = Duration::from_secs(5);
 
 pub struct TransactiondOrchestrator<A> {
-    _quorum_driver_handler: QuorumDriverHandler<A>,
+    quorum_driver_handler: QuorumDriverHandler<A>,
     quorum_driver: Arc<QuorumDriver<A>>,
     node_sync_state: Arc<NodeSyncState<A>>,
     _local_executor_handle: JoinHandle<()>,
@@ -64,7 +58,7 @@ where
             })
         };
         Self {
-            _quorum_driver_handler: quorum_driver_handler,
+            quorum_driver_handler,
             quorum_driver,
             node_sync_state,
             _local_executor_handle,
@@ -74,36 +68,73 @@ where
     pub async fn execute_transaction(
         &self,
         request: ExecuteTransactionRequest,
-    ) -> SuiResult<(ExecuteTransactionResponse, IsTransactionExecutedLocally)> {
+    ) -> SuiResult<ExecuteTransactionResponse> {
         // TODO check if tx is already executed on this node.
         // Note: since EffectsCert is not stored today, we need to gather that from validators
         // (and maybe store it for caching purposes)
-
+        let wait_for_local_execution = matches!(
+            request.request_type,
+            ExecuteTransactionRequestType::WaitForLocalExecution
+        );
+        let transaction = request.transaction;
+        let request_type = match request.request_type {
+            ExecuteTransactionRequestType::ImmediateReturn => {
+                QuorumDriverRequestType::ImmediateReturn
+            }
+            ExecuteTransactionRequestType::WaitForTxCert => QuorumDriverRequestType::WaitForTxCert,
+            ExecuteTransactionRequestType::WaitForEffectsCert
+            | ExecuteTransactionRequestType::WaitForLocalExecution => {
+                QuorumDriverRequestType::WaitForEffectsCert
+            }
+        };
         let execution_result = self
             .quorum_driver
-            .execute_transaction(request)
+            .execute_transaction(QuorumDriverRequest {
+                transaction,
+                request_type,
+            })
             .await
             .tap_err(|err| debug!("Failed to execute transction via Quorum Driver: {:?}", err))?;
 
-        match &execution_result {
-            ExecuteTransactionResponse::EffectsCert(result) => {
-                let (tx_cert, effects_cert) = result.as_ref();
-                match Self::execute_finalized_tx_locally(
+        match execution_result {
+            QuorumDriverResponse::ImmediateReturn => {
+                Ok(ExecuteTransactionResponse::ImmediateReturn)
+            }
+            QuorumDriverResponse::TxCert(result) => {
+                Ok(ExecuteTransactionResponse::TxCert(Box::new(*result)))
+            }
+            QuorumDriverResponse::EffectsCert(result) => {
+                let (tx_cert, effects_cert) = *result;
+                if !wait_for_local_execution {
+                    return Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
+                        tx_cert,
+                        effects_cert,
+                        false,
+                    ))));
+                }
+                match Self::execute_finalized_tx_locally_with_timeout(
                     &self.node_sync_state,
-                    tx_cert,
-                    effects_cert,
+                    &tx_cert,
+                    &effects_cert,
                 )
                 .await
                 {
-                    Ok(_) => Ok((execution_result, Some(true))),
-                    Err(_) => Ok((execution_result, Some(false))),
+                    Ok(_) => Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
+                        tx_cert,
+                        effects_cert,
+                        true,
+                    )))),
+                    Err(_) => Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
+                        tx_cert,
+                        effects_cert,
+                        false,
+                    )))),
                 }
             }
-            _ => Ok((execution_result, None)),
         }
     }
 
-    async fn execute_finalized_tx_locally(
+    async fn execute_finalized_tx_locally_with_timeout(
         node_sync_state: &Arc<NodeSyncState<A>>,
         tx_cert: &CertifiedTransaction,
         effects_cert: &CertifiedTransactionEffects,
@@ -155,8 +186,12 @@ where
         loop {
             match effects_receiver.recv().await {
                 Ok((tx_cert, effects_cert)) => {
-                    Self::execute_finalized_tx_locally(&node_sync_state, &tx_cert, &effects_cert)
-                        .await;
+                    let _ = Self::execute_finalized_tx_locally_with_timeout(
+                        &node_sync_state,
+                        &tx_cert,
+                        &effects_cert,
+                    )
+                    .await;
                 }
                 Err(RecvError::Closed) => {
                     error!("Sender of effects subscriber queue has been dropped!");
@@ -171,5 +206,11 @@ where
 
     pub fn quorum_driver(&self) -> &Arc<QuorumDriver<A>> {
         &self.quorum_driver
+    }
+
+    pub fn subscribe_to_effects_queue(
+        &self,
+    ) -> tokio::sync::broadcast::Receiver<(CertifiedTransaction, CertifiedTransactionEffects)> {
+        self.quorum_driver_handler.subscribe()
     }
 }

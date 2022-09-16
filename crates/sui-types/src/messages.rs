@@ -2013,6 +2013,7 @@ pub enum ExecuteTransactionRequestType {
     ImmediateReturn,
     WaitForTxCert,
     WaitForEffectsCert,
+    WaitForLocalExecution,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -2021,8 +2022,41 @@ pub struct ExecuteTransactionRequest {
     pub request_type: ExecuteTransactionRequestType,
 }
 
+/// When requested to execute a transaction with WaitForLocalExecution,
+/// TransactionOrchestrator attemps to execute this transaction locally
+/// after it is finalized. This value represents whether the transaction
+/// is confirmed to be executed on this node before the response returns.
+pub type IsTransactionExecutedLocally = bool;
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum ExecuteTransactionResponse {
+    ImmediateReturn,
+    TxCert(Box<CertifiedTransaction>),
+    // TODO: Change to CertifiedTransactionEffects eventually.
+    EffectsCert(
+        Box<(
+            CertifiedTransaction,
+            CertifiedTransactionEffects,
+            IsTransactionExecutedLocally,
+        )>,
+    ),
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, schemars::JsonSchema)]
+pub enum QuorumDriverRequestType {
+    ImmediateReturn,
+    WaitForTxCert,
+    WaitForEffectsCert,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct QuorumDriverRequest {
+    pub transaction: Transaction,
+    pub request_type: QuorumDriverRequestType,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum QuorumDriverResponse {
     ImmediateReturn,
     TxCert(Box<CertifiedTransaction>),
     // TODO: Change to CertifiedTransactionEffects eventually.
