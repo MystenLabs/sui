@@ -26,6 +26,7 @@ validator_configs:
         batch_size: 500000
         max_batch_delay: 100ms
         block_synchronizer:
+          range_synchronize_timeout: 30000ms
           certificates_synchronize_timeout: 30000ms
           payload_synchronize_timeout: 30000ms
           payload_availability_timeout: 30000ms
@@ -68,6 +69,7 @@ validator_configs:
         batch_size: 500000
         max_batch_delay: 100ms
         block_synchronizer:
+          range_synchronize_timeout: 30000ms
           certificates_synchronize_timeout: 30000ms
           payload_synchronize_timeout: 30000ms
           payload_availability_timeout: 30000ms
@@ -110,6 +112,7 @@ validator_configs:
         batch_size: 500000
         max_batch_delay: 100ms
         block_synchronizer:
+          range_synchronize_timeout: 30000ms
           certificates_synchronize_timeout: 30000ms
           payload_synchronize_timeout: 30000ms
           payload_availability_timeout: 30000ms
@@ -152,6 +155,7 @@ validator_configs:
         batch_size: 500000
         max_batch_delay: 100ms
         block_synchronizer:
+          range_synchronize_timeout: 30000ms
           certificates_synchronize_timeout: 30000ms
           payload_synchronize_timeout: 30000ms
           payload_availability_timeout: 30000ms
@@ -194,6 +198,7 @@ validator_configs:
         batch_size: 500000
         max_batch_delay: 100ms
         block_synchronizer:
+          range_synchronize_timeout: 30000ms
           certificates_synchronize_timeout: 30000ms
           payload_synchronize_timeout: 30000ms
           payload_availability_timeout: 30000ms
@@ -236,6 +241,7 @@ validator_configs:
         batch_size: 500000
         max_batch_delay: 100ms
         block_synchronizer:
+          range_synchronize_timeout: 30000ms
           certificates_synchronize_timeout: 30000ms
           payload_synchronize_timeout: 30000ms
           payload_availability_timeout: 30000ms
@@ -278,6 +284,7 @@ validator_configs:
         batch_size: 500000
         max_batch_delay: 100ms
         block_synchronizer:
+          range_synchronize_timeout: 30000ms
           certificates_synchronize_timeout: 30000ms
           payload_synchronize_timeout: 30000ms
           payload_availability_timeout: 30000ms
