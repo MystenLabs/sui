@@ -106,7 +106,8 @@ module sui::object {
     // `UID`. The implementation of this function emits a deleted
     // system event so Sui knows to process the object deletion
     public fun delete(id: UID) {
-        delete_impl(id)
+        let UID { id: ID { bytes } } = id;
+        delete_impl(bytes)
     }
 
     /// Get the underlying `ID` of `obj`
@@ -148,8 +149,7 @@ module sui::object {
     // === internal functions ===
 
     // helper for delete
-    // generic is used to pass type information to the runtime
-    native fun delete_impl<UID>(id: UID);
+    native fun delete_impl(id: address);
 
     // Cost calibration functions
     #[test_only]

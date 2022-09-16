@@ -26,6 +26,7 @@ pub mod event;
 pub mod gas;
 pub mod gas_coin;
 pub mod id;
+pub mod in_memory_storage;
 pub mod intent;
 pub mod message_envelope;
 pub mod messages;
@@ -36,6 +37,7 @@ pub mod signature_seed;
 pub mod storage;
 pub mod sui_serde;
 pub mod sui_system_state;
+pub mod temporary_store;
 pub mod waypoint;
 
 pub mod filter;

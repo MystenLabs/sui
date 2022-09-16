@@ -15,7 +15,8 @@ module sui::test_coin {
 
     #[test]
     fun type_morphing() {
-        let test = &mut test_scenario::begin(&@0x1);
+        let scenario = test_scenario::begin(@0x1);
+        let test = &mut scenario;
 
         let balance = balance::zero<SUI>();
         let coin = coin::from_balance(balance, ctx(test));
@@ -37,6 +38,7 @@ module sui::test_coin {
 
         let coin = coin::from_balance(balance, ctx(test));
         coin::keep(coin, ctx(test));
+        test_scenario::end(scenario);
     }
 
     const TEST_SENDER_ADDR: address = @0xA11CE;
@@ -44,84 +46,94 @@ module sui::test_coin {
 
     #[test]
     public entry fun test_locked_coin_valid() {
-        let scenario = &mut test_scenario::begin(&TEST_SENDER_ADDR);
+        let scenario_val = test_scenario::begin(TEST_SENDER_ADDR);
+        let scenario = &mut scenario_val;
         let ctx = test_scenario::ctx(scenario);
         let coin = coin::mint_for_testing<SUI>(42, ctx);
 
-        test_scenario::next_tx(scenario, &TEST_SENDER_ADDR);
+        test_scenario::next_tx(scenario, TEST_SENDER_ADDR);
         // Lock up the coin until epoch 2.
         locked_coin::lock_coin(coin, TEST_RECIPIENT_ADDR, 2, test_scenario::ctx(scenario));
 
         // Advance the epoch by 2.
-        test_scenario::next_epoch(scenario);
-        test_scenario::next_epoch(scenario);
+        test_scenario::next_epoch(scenario, TEST_SENDER_ADDR);
+        test_scenario::next_epoch(scenario, TEST_SENDER_ADDR);
         assert!(tx_context::epoch(test_scenario::ctx(scenario)) == 2, 1);
 
-        test_scenario::next_tx(scenario, &TEST_RECIPIENT_ADDR);
-        let locked_coin = test_scenario::take_owned<LockedCoin<SUI>>(scenario);
+        test_scenario::next_tx(scenario, TEST_RECIPIENT_ADDR);
+        let locked_coin = test_scenario::take_from_sender<LockedCoin<SUI>>(scenario);
         // The unlock should go through since epoch requirement is met.
         locked_coin::unlock_coin(locked_coin, test_scenario::ctx(scenario));
 
-        test_scenario::next_tx(scenario, &TEST_RECIPIENT_ADDR);
-        let unlocked_coin = test_scenario::take_owned<Coin<SUI>>(scenario);
+        test_scenario::next_tx(scenario, TEST_RECIPIENT_ADDR);
+        let unlocked_coin = test_scenario::take_from_sender<Coin<SUI>>(scenario);
         assert!(coin::value(&unlocked_coin) == 42, 2);
         coin::destroy_for_testing(unlocked_coin);
+        test_scenario::end(scenario_val);
     }
 
     #[test]
     #[expected_failure(abort_code = 1)]
     public entry fun test_locked_coin_invalid() {
-        let scenario = &mut test_scenario::begin(&TEST_SENDER_ADDR);
+        let scenario_val = test_scenario::begin(TEST_SENDER_ADDR);
+        let scenario = &mut scenario_val;
         let ctx = test_scenario::ctx(scenario);
         let coin = coin::mint_for_testing<SUI>(42, ctx);
 
-        test_scenario::next_tx(scenario, &TEST_SENDER_ADDR);
+        test_scenario::next_tx(scenario, TEST_SENDER_ADDR);
         // Lock up the coin until epoch 2.
         locked_coin::lock_coin(coin, TEST_RECIPIENT_ADDR, 2, test_scenario::ctx(scenario));
 
         // Advance the epoch by 1.
-        test_scenario::next_epoch(scenario);
+        test_scenario::next_epoch(scenario, TEST_SENDER_ADDR);
         assert!(tx_context::epoch(test_scenario::ctx(scenario)) == 1, 1);
 
-        test_scenario::next_tx(scenario, &TEST_RECIPIENT_ADDR);
-        let locked_coin = test_scenario::take_owned<LockedCoin<SUI>>(scenario);
+        test_scenario::next_tx(scenario, TEST_RECIPIENT_ADDR);
+        let locked_coin = test_scenario::take_from_sender<LockedCoin<SUI>>(scenario);
         // The unlock should fail.
         locked_coin::unlock_coin(locked_coin, test_scenario::ctx(scenario));
+        test_scenario::end(scenario_val);
     }
 
     #[test]
     public entry fun test_coin_split_n() {
-        let scenario = &mut test_scenario::begin(&TEST_SENDER_ADDR);
+        let scenario_val = test_scenario::begin(TEST_SENDER_ADDR);
+        let scenario = &mut scenario_val;
         let ctx = test_scenario::ctx(scenario);
         let coin = coin::mint_for_testing<SUI>(10, ctx);
 
-        test_scenario::next_tx(scenario, &TEST_SENDER_ADDR);
+        test_scenario::next_tx(scenario, TEST_SENDER_ADDR);
         coin::split_n(&mut coin, 3, test_scenario::ctx(scenario));
 
-        test_scenario::next_tx(scenario, &TEST_SENDER_ADDR);
-        let coin1 = test_scenario::take_last_created_owned<Coin<SUI>>(scenario);
+        test_scenario::next_tx(scenario, TEST_SENDER_ADDR);
+        let coin1 = test_scenario::take_from_sender<Coin<SUI>>(scenario);
 
-        test_scenario::next_tx(scenario, &TEST_SENDER_ADDR);
-        let coin2 = test_scenario::take_last_created_owned<Coin<SUI>>(scenario);
+        test_scenario::next_tx(scenario, TEST_SENDER_ADDR);
+        let coin2 = test_scenario::take_from_sender<Coin<SUI>>(scenario);
 
-        test_scenario::next_tx(scenario, &TEST_SENDER_ADDR);
+        test_scenario::next_tx(scenario, TEST_SENDER_ADDR);
         assert!(coin::value(&coin1) == 3, 0);
         assert!(coin::value(&coin2) == 3, 0);
         assert!(coin::value(&coin) == 4, 0);
-        assert!(test_scenario::can_take_owned<Coin<SUI>>(scenario) == false, 1);
+        assert!(
+            !test_scenario::has_most_recent_for_sender<Coin<SUI>>(scenario),
+            1
+        );
 
         coin::destroy_for_testing(coin);
         coin::destroy_for_testing(coin1);
         coin::destroy_for_testing(coin2);
+        test_scenario::end(scenario_val);
     }
 
     #[test]
     public entry fun test_coin_split_n_to_vec() {
-        let scenario = &mut test_scenario::begin(&TEST_SENDER_ADDR);
+        let scenario_val = test_scenario::begin(TEST_SENDER_ADDR);
+        let scenario = &mut scenario_val;
         let ctx = test_scenario::ctx(scenario);
         let coin = coin::mint_for_testing<SUI>(10, ctx);
 
-        test_scenario::next_tx(scenario, &TEST_SENDER_ADDR);
+        test_scenario::next_tx(scenario, TEST_SENDER_ADDR);
         let split_coins = coin::split_n_to_vec(&mut coin, 3, test_scenario::ctx(scenario));
 
         assert!(vector::length(&split_coins) == 2, 0);
@@ -135,5 +147,6 @@ module sui::test_coin {
         coin::destroy_for_testing(coin);
         coin::destroy_for_testing(coin1);
         coin::destroy_for_testing(coin2);
+        test_scenario::end(scenario_val);
     }
 }

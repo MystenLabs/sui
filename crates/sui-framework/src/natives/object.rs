@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{legacy_create_signer_cost, legacy_emit_cost, EventType};
+use crate::{legacy_create_signer_cost, legacy_emit_cost, natives::object_runtime::ObjectRuntime};
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::account_address::AccountAddress;
 use move_vm_runtime::native_functions::NativeContext;
@@ -16,6 +16,7 @@ use std::collections::VecDeque;
 
 const E_ADDRESS_PARSE_ERROR: u64 = 0;
 
+// native fun address_from_bytes(bytes: vector<u8>): address;
 pub fn address_from_bytes(
     _context: &mut NativeContext,
     ty_args: Vec<Type>,
@@ -36,6 +37,7 @@ pub fn address_from_bytes(
     })
 }
 
+// native fun borrow_uid<T: key>(obj: &T): &UID;
 pub fn borrow_uid(
     _context: &mut NativeContext,
     ty_args: Vec<Type>,
@@ -53,24 +55,22 @@ pub fn borrow_uid(
     Ok(NativeResult::ok(cost, smallvec![id_field]))
 }
 
+// native fun delete_impl(id: address);
 pub fn delete_impl(
     context: &mut NativeContext,
-    mut ty_args: Vec<Type>,
+    ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.len() == 1);
+    debug_assert!(ty_args.is_empty());
     debug_assert!(args.len() == 1);
 
     // unwrap safe because the interface of native function guarantees it.
-    let ty = ty_args.pop().unwrap();
-    let info = args.pop_back().unwrap();
+    let uid_bytes = pop_arg!(args, AccountAddress);
 
     // TODO: what should the cost of this be?
     let cost = legacy_emit_cost();
 
-    if !context.save_event(vec![], EventType::DeleteObjectID as u64, ty, info)? {
-        return Ok(NativeResult::err(cost, 0));
-    }
-
+    let obj_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
+    obj_runtime.delete_id(uid_bytes.into());
     Ok(NativeResult::ok(cost, smallvec![]))
 }

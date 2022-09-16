@@ -6,7 +6,6 @@ mod event;
 mod object;
 pub mod object_runtime;
 mod test_scenario;
-mod test_scenario_wip;
 mod transfer;
 mod tx_context;
 mod types;
@@ -89,38 +88,53 @@ pub fn all_natives(
         ),
         (
             "test_scenario",
-            "drop_object_for_testing",
-            make_native!(test_scenario::drop_object_for_testing),
+            "take_from_address_by_id",
+            make_native!(test_scenario::take_from_address_by_id),
         ),
         (
             "test_scenario",
-            "emit_wrapped_object_events",
-            make_native!(test_scenario::emit_wrapped_object_events),
+            "most_recent_id_for_address",
+            make_native!(test_scenario::most_recent_id_for_address),
         ),
         (
             "test_scenario",
-            "get_account_owned_inventory",
-            make_native!(test_scenario::get_account_owned_inventory),
+            "was_taken_from_address",
+            make_native!(test_scenario::was_taken_from_address),
         ),
         (
             "test_scenario",
-            "get_object_owned_inventory",
-            make_native!(test_scenario::get_object_owned_inventory),
+            "take_immutable_by_id",
+            make_native!(test_scenario::take_immutable_by_id),
         ),
         (
             "test_scenario",
-            "get_unowned_inventory",
-            make_native!(test_scenario::get_unowned_inventory),
+            "most_recent_immutable_id",
+            make_native!(test_scenario::most_recent_immutable_id),
         ),
         (
             "test_scenario",
-            "num_events",
-            make_native!(test_scenario::num_events),
+            "was_taken_immutable",
+            make_native!(test_scenario::was_taken_immutable),
         ),
         (
             "test_scenario",
-            "update_object",
-            make_native!(test_scenario::update_object),
+            "take_shared_by_id",
+            make_native!(test_scenario::take_shared_by_id),
+        ),
+        (
+            "test_scenario",
+            "most_recent_id_shared",
+            make_native!(test_scenario::most_recent_id_shared),
+        ),
+        (
+            "test_scenario",
+            "was_taken_shared",
+            make_native!(test_scenario::was_taken_shared),
+        ),
+        (
+            "test_scenario",
+            "end_transaction",
+            make_native!(test_scenario::end_transaction),
         ),
         (
             "transfer",
