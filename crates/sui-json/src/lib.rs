@@ -299,68 +299,94 @@ fn is_homogeneous_rec(curr_q: &mut VecDeque<&JsonValue>) -> bool {
     is_homogeneous_rec(&mut next_q)
 }
 
-fn resolve_primitive_arg(
-    view: &BinaryIndexedView,
-    arg: &SuiJsonValue,
-    param: &SignatureToken,
-) -> Result<Vec<u8>, anyhow::Error> {
-    let move_type_layout = make_prim_move_type_layout(view, param)?;
-    // Check that the args are what we expect or can be converted
-    // Then return the serialized bcs value
-    arg.to_bcs_bytes(&move_type_layout).map_err(|e| {
-        anyhow!(
-            "Unable to parse arg at type {}. Got error: {:?}",
-            move_type_layout,
-            e
-        )
-    })
+fn is_primitive_type_tag(t: &TypeTag) -> bool {
+    match t {
+        TypeTag::Bool | TypeTag::U8 | TypeTag::U64 | TypeTag::U128 | TypeTag::Address => true,
+        TypeTag::Vector(inner) => is_primitive_type_tag(inner),
+        TypeTag::Struct(StructTag {
+            address,
+            module,
+            name,
+            type_params: type_args,
+        }) => {
+            let resolved_struct = (address, module.as_ident_str(), name.as_ident_str());
+            // is id or..
+            if resolved_struct == RESOLVED_SUI_ID {
+                return true;
+            }
+            // is option of a primitive
+            resolved_struct == RESOLVED_STD_OPTION
+                && type_args.len() == 1
+                && is_primitive_type_tag(&type_args[0])
+        }
+        TypeTag::Signer => false,
+    }
 }
 
-pub fn make_prim_move_type_layout(
+pub fn primitive_type(
     view: &BinaryIndexedView,
+    type_args: &[TypeTag],
     param: &SignatureToken,
-) -> Result<MoveTypeLayout, anyhow::Error> {
-    Ok(match param {
-        SignatureToken::Bool => MoveTypeLayout::Bool,
-        SignatureToken::U8 => MoveTypeLayout::U8,
-        SignatureToken::U64 => MoveTypeLayout::U64,
-        SignatureToken::U128 => MoveTypeLayout::U128,
-        SignatureToken::Address => MoveTypeLayout::Address,
-        SignatureToken::Signer => MoveTypeLayout::Signer,
+) -> (bool, Option<MoveTypeLayout>) {
+    match param {
+        SignatureToken::Bool => (true, Some(MoveTypeLayout::Bool)),
+        SignatureToken::U8 => (true, Some(MoveTypeLayout::U8)),
+        SignatureToken::U64 => (true, Some(MoveTypeLayout::U64)),
+        SignatureToken::U128 => (true, Some(MoveTypeLayout::U128)),
+        SignatureToken::Address => (true, Some(MoveTypeLayout::Address)),
         SignatureToken::Vector(inner) => {
-            MoveTypeLayout::Vector(Box::new(make_prim_move_type_layout(view, inner)?))
+            let (is_primitive, inner_layout_opt) = primitive_type(view, type_args, inner);
+            match inner_layout_opt {
+                Some(inner_layout) => (is_primitive, Some(inner_layout)),
+                None => (is_primitive, None),
+            }
         }
         SignatureToken::Struct(struct_handle_idx) => {
             let resolved_struct = sui_verifier::resolve_struct(view, *struct_handle_idx);
             if resolved_struct == RESOLVED_ASCII_STR || resolved_struct == RESOLVED_UTF8_STR {
                 // both structs structs representing strings have one field - a vector of type u8
-                MoveTypeLayout::Struct(MoveStructLayout::Runtime(vec![MoveTypeLayout::Vector(
-                    Box::new(MoveTypeLayout::U8),
-                )]))
-            } else if resolved_struct == RESOLVED_SUI_ID {
-                MoveTypeLayout::Struct(MoveStructLayout::Runtime(vec![MoveTypeLayout::Vector(
-                    Box::new(MoveTypeLayout::Address),
-                )]))
-            } else {
-                bail!(
-                    "Could not serialize argument of struct type {:?} \
-                       (only the following structs are currently supported: \
-                       object::ID, ascii::String and staring::String)",
-                    param
+                (
+                    true,
+                    Some(MoveTypeLayout::Struct(MoveStructLayout::Runtime(vec![
+                        MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8)),
+                    ]))),
                 )
+            } else if resolved_struct == RESOLVED_SUI_ID {
+                (
+                    true,
+                    Some(MoveTypeLayout::Struct(MoveStructLayout::Runtime(vec![
+                        MoveTypeLayout::Vector(Box::new(MoveTypeLayout::Address)),
+                    ]))),
+                )
+            } else {
+                (false, None)
             }
         }
-        SignatureToken::StructInstantiation(_, _)
-        | SignatureToken::Reference(_)
-        | SignatureToken::MutableReference(_)
-        | SignatureToken::TypeParameter(_) => {
-            debug_assert!(
-                false,
-                "Should be unreachable. Args should be primitive types only"
-            );
-            bail!("Could not serialize argument of type {:?}", param)
+        SignatureToken::StructInstantiation(idx, targs) => {
+            let resolved_struct = sui_verifier::resolve_struct(view, *idx);
+            // is option of a primitive
+            if resolved_struct == RESOLVED_STD_OPTION && targs.len() == 1 {
+                // there is no MoveLayout for this so while we can still report whether a type
+                // is primitive or not, we can't return the layout
+                let (is_primitive, _) = primitive_type(view, type_args, &targs[0]);
+                (is_primitive, None)
+            } else {
+                (false, None)
+            }
         }
-    })
+
+        SignatureToken::TypeParameter(idx) => (
+            type_args
+                .get(*idx as usize)
+                .map(is_primitive_type_tag)
+                .unwrap_or(false),
+            None,
+        ),
+
+        SignatureToken::Signer
+        | SignatureToken::Reference(_)
+        | SignatureToken::MutableReference(_) => (false, None),
+    }
 }
 
 fn resolve_object_arg(idx: usize, arg: &JsonValue) -> Result<ObjectID, anyhow::Error> {
@@ -403,66 +429,6 @@ fn resolve_object_vec_arg(idx: usize, arg: &SuiJsonValue) -> Result<Vec<ObjectID
     }
 }
 
-fn is_primitive_type_tag(t: &TypeTag) -> bool {
-    match t {
-        TypeTag::Bool | TypeTag::U8 | TypeTag::U64 | TypeTag::U128 | TypeTag::Address => true,
-        TypeTag::Vector(inner) => is_primitive_type_tag(inner),
-        TypeTag::Struct(StructTag {
-            address,
-            module,
-            name,
-            type_params: type_args,
-        }) => {
-            let resolved_struct = (address, module.as_ident_str(), name.as_ident_str());
-            // is id or..
-            if resolved_struct == RESOLVED_SUI_ID {
-                return true;
-            }
-            // is option of a primitive
-            resolved_struct == RESOLVED_STD_OPTION
-                && type_args.len() == 1
-                && is_primitive_type_tag(&type_args[0])
-        }
-        TypeTag::Signer => false,
-    }
-}
-
-pub fn is_primitive(view: &BinaryIndexedView, type_args: &[TypeTag], t: &SignatureToken) -> bool {
-    match t {
-        SignatureToken::Bool
-        | SignatureToken::U8
-        | SignatureToken::U64
-        | SignatureToken::U128
-        | SignatureToken::Address => true,
-
-        SignatureToken::Struct(idx) => {
-            let resolved_struct = sui_verifier::resolve_struct(view, *idx);
-            // is ID
-            resolved_struct == RESOLVED_SUI_ID
-                || resolved_struct == RESOLVED_ASCII_STR
-                || resolved_struct == RESOLVED_UTF8_STR
-        }
-
-        SignatureToken::StructInstantiation(idx, targs) => {
-            let resolved_struct = sui_verifier::resolve_struct(view, *idx);
-            // is option of a primitive
-            resolved_struct == RESOLVED_STD_OPTION
-                && targs.len() == 1
-                && is_primitive(view, type_args, &targs[0])
-        }
-        SignatureToken::Vector(inner) => is_primitive(view, type_args, inner),
-
-        SignatureToken::TypeParameter(idx) => type_args
-            .get(*idx as usize)
-            .map(is_primitive_type_tag)
-            .unwrap_or(false),
-
-        SignatureToken::Signer
-        | SignatureToken::Reference(_)
-        | SignatureToken::MutableReference(_) => false,
-    }
-}
-
 fn resolve_call_arg(
     view: &BinaryIndexedView,
     type_args: &[TypeTag],
@@ -470,11 +436,37 @@ fn resolve_call_arg(
     arg: &SuiJsonValue,
     param: &SignatureToken,
 ) -> Result<SuiJsonCallArg, anyhow::Error> {
-    if is_primitive(view, type_args, param) {
-        return Ok(SuiJsonCallArg::Pure(resolve_primitive_arg(
-            view, arg, param,
-        )?));
+    let (is_primitive, layout_opt) = primitive_type(view, type_args, param);
+    if is_primitive {
+        match layout_opt {
+            Some(layout) => {
+                return Ok(SuiJsonCallArg::Pure(arg.to_bcs_bytes(&layout).map_err(
+                    |e| {
+                        anyhow!(
+                        "Could not serialize argument of type {:?} at {} into {}. Got error: {:?}",
+                        param,
+                        idx,
+                        layout,
+                        e
+                    )
+                    },
+                )?))
+            }
+            None => {
+                debug_assert!(
+                    false,
+                    "Should be unreachable. All primitive type function args \
+                     should have a corresponding MoveLayout"
+                );
+                bail!(
+                    "Could not serialize argument of type {:?} at {}",
+                    param,
+                    idx
+                );
+            }
+        }
     }
+
     // in terms of non-primitives we only currently support objects and "flat" (depth == 1) vectors
     // of objects (but not, for example, vectors of references)
     match param {

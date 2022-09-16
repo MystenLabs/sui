@@ -21,13 +21,13 @@ use move_core_types::{
     identifier::{IdentStr, Identifier},
     language_storage::{ModuleId, StructTag, TypeTag},
     resolver::{ModuleResolver, ResourceResolver},
-    value::{MoveStruct, MoveValue},
+    value::{MoveStruct, MoveTypeLayout, MoveValue},
 };
 pub use move_vm_runtime::move_vm::MoveVM;
 use move_vm_runtime::{native_functions::NativeFunctionTable, session::SerializedReturnValues};
 
 use sui_framework::EventType;
-use sui_json::{is_primitive, make_prim_move_type_layout};
+use sui_json::primitive_type;
 use sui_types::{
     base_types::*,
     coin::Coin,
@@ -1005,7 +1005,9 @@ pub fn resolve_and_type_check(
             let idx = idx as LocalIndex;
             let object_arg = match arg {
                 CallArg::Pure(arg) => {
-                    if !is_primitive(view, type_args, param_type) {
+                    let (is_primitive, type_layout_opt) =
+                        primitive_type(view, type_args, param_type);
+                    if !is_primitive {
                         let msg = format!(
                             "Non-primitive argument at index {}. If it is an object, it must be \
                             populated by an object ID",
@@ -1019,7 +1021,7 @@ pub fn resolve_and_type_check(
                             msg,
                         ));
                     }
-                    validate_primitive_arg(&arg, idx, param_type, view)?;
+                    validate_primitive_arg(view, &arg, idx, param_type, type_layout_opt)?;
                     return Ok(arg);
                 }
                 CallArg::Object(ObjectArg::ImmOrOwnedObject(ref_)) => {
@@ -1106,25 +1108,21 @@ pub fn resolve_and_type_check(
 
 // Validates a primitive argument
 fn validate_primitive_arg(
+    view: &BinaryIndexedView,
     arg: &[u8],
     idx: LocalIndex,
     param_type: &SignatureToken,
-    view: &BinaryIndexedView,
+    type_layout: Option<MoveTypeLayout>,
 ) -> Result<(), ExecutionError> {
     // at this point we only check validity of string arguments (ascii and utf8)
     let string_arg_opt = string_arg(param_type, view, 0);
     if string_arg_opt.is_none() {
         return Ok(());
     }
-
     let string_struct = string_arg_opt.unwrap();
 
-    let string_struct_layout = make_prim_move_type_layout(view, param_type).map_err(|err| {
-        ExecutionError::new_with_source(
-            ExecutionErrorKind::entry_argument_error(idx, EntryArgumentErrorKind::TypeMismatch),
-            err,
-        )
-    })?;
+    // we already checked the type above and struct layout for this type is guaranteed to exist
+    let string_struct_layout = type_layout.unwrap();
 
     let string_move_value =
         MoveValue::simple_deserialize(arg, &string_struct_layout).map_err(|_| {
