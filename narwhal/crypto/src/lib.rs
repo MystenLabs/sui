@@ -8,7 +8,7 @@
     rust_2021_compatibility
 )]
 
-use fastcrypto::ed25519;
+use fastcrypto::{bls12381, ed25519};
 
 // This re-export allows using the trait-defined APIs
 pub use fastcrypto::traits;
@@ -25,11 +25,13 @@ pub use fastcrypto::traits;
 // Beware: if you change those aliases to point to another scheme implementation, you will have
 // to change all four aliases to point to concrete types that work with each other. Failure to do
 // so will result in a ton of compilation errors, and worse: it will not make sense!
-pub type PublicKey = ed25519::Ed25519PublicKey;
-pub type Signature = ed25519::Ed25519Signature;
-pub type AggregateSignature = ed25519::Ed25519AggregateSignature;
-pub type PrivateKey = ed25519::Ed25519PrivateKey;
-pub type KeyPair = ed25519::Ed25519KeyPair;
+
+pub type PublicKey = bls12381::BLS12381PublicKey;
+pub type Signature = bls12381::BLS12381Signature;
+pub type AggregateSignature = bls12381::BLS12381AggregateSignature;
+pub type PrivateKey = bls12381::BLS12381PrivateKey;
+pub type KeyPair = bls12381::BLS12381KeyPair;
+
 // Example to use BLS12-377 instead:
 // #[cfg(feature = "celo")]
 // pub type PublicKey = bls12377::BLS12377PublicKey;
