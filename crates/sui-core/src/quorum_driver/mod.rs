@@ -10,7 +10,7 @@ use std::sync::Arc;
 use tokio::sync::mpsc::{self, Receiver, Sender};
 use tokio::task::JoinHandle;
 use tracing::Instrument;
-use tracing::{debug, error, warn};
+use tracing::{debug, warn};
 
 use crate::authority_aggregator::AuthorityAggregator;
 use crate::authority_client::AuthorityAPI;
@@ -190,7 +190,7 @@ where
         // An error to send the result to subscribers should not block returning the result.
         if let Err(err) = self.effects_subscribe_sender.send(response.clone()) {
             // TODO: We could potentially retry sending if we want.
-            error!("{}", err);
+            debug!("No subscriber found for effects: {}", err);
         }
         Ok(response)
     }
