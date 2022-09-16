@@ -3,7 +3,7 @@
 
 import { useState, useCallback, useEffect } from 'react';
 
-import { ReactComponent as BrokenImage } from '../../assets/SVGIcons/broken-image.svg';
+import { ReactComponent as BrokenImage } from '../../assets/SVGIcons/24px/NFTTypeImage.svg';
 import {
     FALLBACK_IMAGE,
     ImageModClient,
@@ -12,7 +12,44 @@ import { transformURL, genFileTypeMsg } from '../../utils/stringUtils';
 
 import styles from './DisplayBox.module.css';
 
+function ShowBrokenImage({ onClick }: { onClick?: () => void }) {
+    return (
+        <div
+            className={`${styles.imagebox} ${styles.brokenimage}`}
+            id="noImage"
+            onClick={onClick}
+        >
+            <div>
+                <BrokenImage />
+            </div>
+        </div>
+    );
+}
+
 function DisplayBox({
+    display,
+    caption,
+    fileInfo,
+    modalImage,
+}: {
+    display: string | undefined;
+    caption?: string;
+    fileInfo?: string;
+    modalImage?: [boolean, (hasClickedImage: boolean) => void];
+}) {
+    if (!display) return <ShowBrokenImage />;
+
+    return (
+        <DisplayBoxWString
+            display={display}
+            caption={caption}
+            fileInfo={fileInfo}
+            modalImage={modalImage}
+        />
+    );
+}
+
+function DisplayBoxWString({
     display,
     caption,
     fileInfo,
@@ -142,12 +179,16 @@ function DisplayBox({
                         <div className={styles.modal}>
                             <figure className={styles.fig}>
                                 <div className={styles.imageandcross}>
-                                    <img
-                                        id="loadedImage"
-                                        className={styles.largeimage}
-                                        alt="NFT"
-                                        src={transformURL(display)}
-                                    />
+                                    {hasFailedToLoad ? (
+                                        <ShowBrokenImage />
+                                    ) : (
+                                        <img
+                                            id="loadedImage"
+                                            className={styles.largeimage}
+                                            alt="NFT"
+                                            src={transformURL(display)}
+                                        />
+                                    )}
                                     <span className={styles.desktopcross}>
                                         <span className={styles.cross}>
                                             &times;
@@ -185,9 +226,7 @@ function DisplayBox({
                         </div>
                     )}
                     {hasFailedToLoad && (
-                        <div className={styles.imagebox} id="noImage">
-                            <BrokenImage />
-                        </div>
+                        <ShowBrokenImage onClick={handleImageClick} />
                     )}
                     {!hasFailedToLoad && (
                         <img

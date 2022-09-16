@@ -89,3 +89,7 @@ div.detailsbg {
     margin-top: 2rem;
     word-wrap: normal;
 }
+
+.brokenimage {
+    @apply stroke-sui-grey-65 bg-sui-grey-45 rounded-[6px];
+}

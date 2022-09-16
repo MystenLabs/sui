@@ -84,6 +84,11 @@ div.display > div > img {
     @apply max-h-[120px] w-full sm:max-w-[120px] ml-auto;
 }
 
+div.display > div > div > div,
+div.display > div > div > figure > div > div {
+    @apply w-[120px] h-[120px] flex justify-center items-center;
+}
+
 table.description {
     @apply w-full sm:w-[866px] mb-[3.75rem] 2xl:mb-0;
 }
