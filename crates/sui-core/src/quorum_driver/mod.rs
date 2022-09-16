@@ -16,8 +16,8 @@ use crate::authority_aggregator::AuthorityAggregator;
 use crate::authority_client::AuthorityAPI;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{
-    CertifiedTransaction, CertifiedTransactionEffects, ExecuteTransactionRequest,
-    ExecuteTransactionRequestType, ExecuteTransactionResponse, Transaction,
+    CertifiedTransaction, CertifiedTransactionEffects, QuorumDriverRequest,
+    QuorumDriverRequestType, QuorumDriverResponse, Transaction,
 };
 pub enum QuorumTask<A> {
     ProcessTransaction(Transaction),
@@ -73,8 +73,8 @@ where
 {
     pub async fn execute_transaction(
         &self,
-        request: ExecuteTransactionRequest,
-    ) -> SuiResult<ExecuteTransactionResponse> {
+        request: QuorumDriverRequest,
+    ) -> SuiResult<QuorumDriverResponse> {
         let tx_digest = request.transaction.digest();
         debug!(?tx_digest, "Receive tranasction execution request");
         self.metrics.current_requests_in_flight.inc();
@@ -82,12 +82,12 @@ where
             metrics.current_requests_in_flight.dec();
         });
 
-        let ExecuteTransactionRequest {
+        let QuorumDriverRequest {
             transaction,
             request_type,
         } = request;
         let (ok_metric, result) = match request_type {
-            ExecuteTransactionRequestType::ImmediateReturn => {
+            QuorumDriverRequestType::ImmediateReturn => {
                 self.metrics.total_requests_immediate_return.inc();
                 let _timer = self.metrics.latency_sec_immediate_return.start_timer();
 
@@ -95,7 +95,7 @@ where
 
                 (&self.metrics.total_ok_responses_immediate_return, res)
             }
-            ExecuteTransactionRequestType::WaitForTxCert => {
+            QuorumDriverRequestType::WaitForTxCert => {
                 self.metrics.total_requests_wait_for_tx_cert.inc();
                 let _timer = self.metrics.latency_sec_wait_for_tx_cert.start_timer();
 
@@ -103,7 +103,7 @@ where
 
                 (&self.metrics.total_ok_responses_wait_for_tx_cert, res)
             }
-            ExecuteTransactionRequestType::WaitForEffectsCert => {
+            QuorumDriverRequestType::WaitForEffectsCert => {
                 self.metrics.total_requests_wait_for_effects_cert.inc();
                 let _timer = self.metrics.latency_sec_wait_for_effects_cert.start_timer();
 
@@ -123,20 +123,20 @@ where
     async fn execute_transaction_immediate_return(
         &self,
         transaction: Transaction,
-    ) -> SuiResult<ExecuteTransactionResponse> {
+    ) -> SuiResult<QuorumDriverResponse> {
         self.task_sender
             .send(QuorumTask::ProcessTransaction(transaction))
             .await
             .map_err(|err| SuiError::QuorumDriverCommunicationError {
                 error: err.to_string(),
             })?;
-        Ok(ExecuteTransactionResponse::ImmediateReturn)
+        Ok(QuorumDriverResponse::ImmediateReturn)
     }
 
     async fn execute_transaction_wait_for_tx_cert(
         &self,
         transaction: Transaction,
-    ) -> SuiResult<ExecuteTransactionResponse> {
+    ) -> SuiResult<QuorumDriverResponse> {
         let certificate = self
             .process_transaction(transaction)
             .instrument(tracing::debug_span!("process_tx"))
@@ -147,13 +147,13 @@ where
             .map_err(|err| SuiError::QuorumDriverCommunicationError {
                 error: err.to_string(),
             })?;
-        Ok(ExecuteTransactionResponse::TxCert(Box::new(certificate)))
+        Ok(QuorumDriverResponse::TxCert(Box::new(certificate)))
     }
 
     async fn execute_transaction_wait_for_effects_cert(
         &self,
         transaction: Transaction,
-    ) -> SuiResult<ExecuteTransactionResponse> {
+    ) -> SuiResult<QuorumDriverResponse> {
         let certificate = self
             .process_transaction(transaction)
             .instrument(tracing::debug_span!("process_tx"))
@@ -162,7 +162,7 @@ where
             .process_certificate(certificate)
             .instrument(tracing::debug_span!("process_cert"))
             .await?;
-        Ok(ExecuteTransactionResponse::EffectsCert(Box::new(response)))
+        Ok(QuorumDriverResponse::EffectsCert(Box::new(response)))
     }
 
     pub async fn process_transaction(

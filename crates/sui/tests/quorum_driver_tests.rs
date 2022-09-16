@@ -8,8 +8,7 @@ use sui_core::quorum_driver::{QuorumDriverHandler, QuorumDriverMetrics};
 use sui_node::SuiNode;
 use sui_types::base_types::SuiAddress;
 use sui_types::messages::{
-    ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
-    Transaction,
+    QuorumDriverRequest, QuorumDriverRequestType, QuorumDriverResponse, Transaction,
 };
 use test_utils::authority::{
     spawn_test_authorities, test_authority_aggregator, test_authority_configs,
@@ -53,13 +52,13 @@ async fn test_execute_transaction_immediate() {
     });
     assert!(matches!(
         quorum_driver
-            .execute_transaction(ExecuteTransactionRequest {
+            .execute_transaction(QuorumDriverRequest {
                 transaction: tx,
-                request_type: ExecuteTransactionRequestType::ImmediateReturn,
+                request_type: QuorumDriverRequestType::ImmediateReturn,
             })
             .await
             .unwrap(),
-        ExecuteTransactionResponse::ImmediateReturn
+        QuorumDriverResponse::ImmediateReturn
     ));
 
     handle.await.unwrap();
@@ -78,10 +77,10 @@ async fn test_execute_transaction_wait_for_cert() {
         assert_eq!(*cert.digest(), digest);
         assert_eq!(effects.effects.transaction_digest, digest);
     });
-    if let ExecuteTransactionResponse::TxCert(cert) = quorum_driver
-        .execute_transaction(ExecuteTransactionRequest {
+    if let QuorumDriverResponse::TxCert(cert) = quorum_driver
+        .execute_transaction(QuorumDriverRequest {
             transaction: tx,
-            request_type: ExecuteTransactionRequestType::WaitForTxCert,
+            request_type: QuorumDriverRequestType::WaitForTxCert,
         })
         .await
         .unwrap()
@@ -107,10 +106,10 @@ async fn test_execute_transaction_wait_for_effects() {
         assert_eq!(*cert.digest(), digest);
         assert_eq!(effects.effects.transaction_digest, digest);
     });
-    if let ExecuteTransactionResponse::EffectsCert(result) = quorum_driver
-        .execute_transaction(ExecuteTransactionRequest {
+    if let QuorumDriverResponse::EffectsCert(result) = quorum_driver
+        .execute_transaction(QuorumDriverRequest {
             transaction: tx,
-            request_type: ExecuteTransactionRequestType::WaitForEffectsCert,
+            request_type: QuorumDriverRequestType::WaitForEffectsCert,
         })
         .await
         .unwrap()
@@ -136,9 +135,9 @@ async fn test_update_validators() {
         tokio::time::sleep(Duration::from_secs(3)).await;
 
         let result = quorum_driver
-            .execute_transaction(ExecuteTransactionRequest {
+            .execute_transaction(QuorumDriverRequest {
                 transaction: tx,
-                request_type: ExecuteTransactionRequestType::WaitForEffectsCert,
+                request_type: QuorumDriverRequestType::WaitForEffectsCert,
             })
             .await;
         // This now will fail due to epoch mismatch.
