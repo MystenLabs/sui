@@ -37,9 +37,43 @@ function AppsPlayGround() {
         };
     }, [dispatch, mintStatus]);
 
-    const curatedDapps = useAppSelector(
+    // Get connected apps
+    const connectedApps = useAppSelector(({ permissions }) => permissions);
+
+    // Get curated apps
+    const curatedApps = useAppSelector(
         ({ curatedApps }) => curatedApps.curatedApps
     );
+
+    // flag curated apps that are connected
+    const curatedDapps = curatedApps.map((app) => {
+        const connectedApp = connectedApps.entities
+            ? Object.values(connectedApps.entities)
+            : [];
+
+        const isConnected = connectedApp.find((connectedItem) => {
+            return (
+                connectedItem &&
+                new URL(connectedItem.origin).hostname ===
+                    new URL(app.link).hostname
+            );
+        });
+
+        return {
+            ...app,
+            permissions: isConnected?.permissions || [],
+            ...(isConnected
+                ? {
+                      disconnect: true,
+                      id: isConnected.id,
+                      // use the favicon from the connected app if it exists
+                      icon: isConnected.favIcon || app.icon,
+                      // instance where the origin has a trailing slash and the app.link does not
+                      link: isConnected.origin,
+                  }
+                : {}),
+        };
+    });
 
     const handleMint = useCallback(async () => {
         setMintInProgress(true);
@@ -121,12 +155,7 @@ function AppsPlayGround() {
 
                     <div className={st.apps}>
                         {curatedDapps.map((app, index) => (
-                            <SuiApp
-                                key={index}
-                                {...app}
-                                displaytype="full"
-                                permissions={[]}
-                            />
+                            <SuiApp key={index} {...app} displaytype="full" />
                         ))}
                     </div>
                 </>

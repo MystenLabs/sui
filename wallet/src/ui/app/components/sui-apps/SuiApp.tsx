@@ -24,7 +24,7 @@ type SuiAppProps = {
     account?: string;
     id?: string;
     permissions: string[];
-    disconnect?: true;
+    disconnect?: boolean;
 };
 
 function SuiAppEmpty({ displaytype }: Displaytype) {
