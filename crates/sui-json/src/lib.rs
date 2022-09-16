@@ -323,6 +323,11 @@ fn is_primitive_type_tag(t: &TypeTag) -> bool {
     }
 }
 
+/// Checks if a give SignatureToken represents a primitive type and, if so, returns MoveTypeLayout
+/// for this type (if available). The reason we need to return both information about whether a
+/// SignatureToken represents a primitive and an Option representing MoveTypeLayout is that there
+/// can be signature tokens that represent primitives but that do not have corresponding
+/// MoveTypeLayout (e.g., SignatureToken::StructInstantiation).
 pub fn primitive_type(
     view: &BinaryIndexedView,
     type_args: &[TypeTag],
@@ -337,7 +342,10 @@ pub fn primitive_type(
         SignatureToken::Vector(inner) => {
             let (is_primitive, inner_layout_opt) = primitive_type(view, type_args, inner);
             match inner_layout_opt {
-                Some(inner_layout) => (is_primitive, Some(inner_layout)),
+                Some(inner_layout) => (
+                    is_primitive,
+                    Some(MoveTypeLayout::Vector(Box::new(inner_layout))),
+                ),
                 None => (is_primitive, None),
             }
         }
