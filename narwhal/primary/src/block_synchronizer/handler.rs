@@ -262,7 +262,7 @@ impl Handler for BlockSynchronizerHandler {
         results
     }
 
-    #[instrument(level = "trace", skip_all)]
+    #[instrument(level = "trace", skip_all, fields(num_certificates = certificates.len()))]
     async fn synchronize_block_payloads(
         &self,
         certificates: Vec<Certificate>,

@@ -136,7 +136,7 @@ impl Helper {
     /// certificate & batch data for each certificate digest in digests,
     /// and reports on each fully available item in the request in a
     /// PayloadAvailabilityResponse.
-    #[instrument(level="debug", skip_all, fields(num_certificate_ids = digests.len()), err)]
+    #[instrument(level="debug", skip_all, fields(origin = ?origin, num_certificate_ids = digests.len()), err)]
     async fn process_payload_availability(
         &mut self,
         digests: Vec<CertificateDigest>,
@@ -201,7 +201,7 @@ impl Helper {
         Ok(())
     }
 
-    #[instrument(level="debug", skip_all, fields(num_certificate_ids = digests.len(), mode = batch_mode), err)]
+    #[instrument(level="debug", skip_all, fields(origin = ?origin, num_certificate_ids = digests.len(), mode = batch_mode), err)]
     async fn process_certificates(
         &mut self,
         digests: Vec<CertificateDigest>,

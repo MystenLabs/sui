@@ -756,7 +756,7 @@ impl BlockSynchronizer {
     /// a reply is immediately sent to the consumer via the provided respond_to
     /// channel. For the ones that haven't been found, are returned back on the
     /// returned vector.
-    #[instrument(level = "trace", skip_all)]
+    #[instrument(level = "trace", skip_all, fields(num_certificates = certificates.len()))]
     async fn reply_with_payload_already_in_storage(
         &self,
         certificates: Vec<Certificate>,
@@ -878,7 +878,7 @@ impl BlockSynchronizer {
     ///
     /// * `primary_peer_name` - The primary from which we are looking to sync the batches.
     /// * `certificates` - The certificates for which we want to sync their batches.
-    #[instrument(level = "trace", skip_all)]
+    #[instrument(level = "trace", skip_all, fields(peer_name = ?primary_peer_name, num_certificates = certificates.len()))]
     async fn send_synchronize_payload_requests(
         &mut self,
         primary_peer_name: PublicKey,
