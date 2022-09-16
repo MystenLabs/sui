@@ -10,6 +10,11 @@ import { thunkExtras } from '_store/thunk-extras';
 
 import st from './Playground.module.scss';
 
+function notEmpty<TValue>(value: TValue | null | undefined): value is TValue {
+    if (value === null || value === undefined) return false;
+    return true;
+}
+
 function ConnectedDapps() {
     useEffect(() => {
         thunkExtras.background.sendGetPermissionRequests();
@@ -17,64 +22,70 @@ function ConnectedDapps() {
 
     const connectedApps = useAppSelector(({ permissions }) => permissions);
 
-    const formattedApps =
-        connectedApps?.ids
-            .map((id) => {
-                const appData = connectedApps.entities[id];
-                // if the app is not allowed, don't show it
-                if (!appData || !appData?.allowed) return null;
+    const filteredApps =
+        (connectedApps.initialized &&
+            connectedApps?.ids
+                .map((id) => {
+                    const appData = connectedApps?.entities[id];
+                    // if the app is not allowed, don't show it
+                    if (!appData || appData.allowed !== true) return null;
 
-                //TODO: add a name and descriptions field to the app data
-                // use the app name if it exists, otherwise use the origin
-                // use the first part of the domain name
-                const origin = new URL(appData.origin).hostname
-                    .replace('www.', '')
-                    .split('.')[0];
-                const name = appData?.name || origin;
-                return {
-                    name,
-                    icon: appData?.favIcon,
-                    link: appData.origin.replace('https://', ''),
-                    description: '',
-                    id: appData.id,
-                    accounts: appData.accounts,
-                    permissions: appData.permissions,
-                    createdDate: appData.createdDate,
-                    responseDate: appData.responseDate,
-                };
-            })
-            .filter((app) => app) || [];
+                    //TODO: add a name and descriptions field to the app data
+                    // use the app name if it exists, otherwise use the origin
+                    // use the first part of the domain name
+                    const origin = new URL(appData.origin).hostname
+                        .replace('www.', '')
+                        .split('.')[0];
+                    const name = appData?.name || origin;
+                    return {
+                        name: name,
+                        icon: appData?.favIcon,
+                        link: appData.origin,
+                        linkLabel: appData.origin.replace('https://', ''),
+                        description: '',
+                        id: appData.id,
+                        accounts: appData.accounts,
+                        permissions: appData.permissions || [],
+                        createdDate: appData.createdDate,
+                        responseDate: appData.responseDate,
+                    };
+                })
+                .filter(notEmpty)) ||
+        [] ||
+        [];
 
     return (
-        <div className={cl(st.container)}>
-            <div className={st.desc}>
-                <div className={st.title}>
-                    {formattedApps.length
-                        ? `Connected apps (${formattedApps.length})`
-                        : 'No APPS connected'}
+        <>
+            <div className={cl(st.container)}>
+                <div className={st.desc}>
+                    <div className={st.title}>
+                        {filteredApps.length
+                            ? `Connected apps (${filteredApps.length})`
+                            : 'No APPS connected'}
+                    </div>
+                    Apps you connect to through the SUI wallet in this browser
+                    will show up here.
                 </div>
-                Apps you connect to through the SUI wallet in this browser will
-                show up here.
-            </div>
 
-            <div className={cl(st.apps, st.appCards)}>
-                {formattedApps.length ? (
-                    formattedApps.map((app, index) => (
-                        <SuiApp
-                            key={index}
-                            {...app}
-                            displaytype="card"
-                            link={app?.link || ''}
-                        />
-                    ))
-                ) : (
-                    <>
-                        <SuiAppEmpty displaytype="card" />
-                        <SuiAppEmpty displaytype="card" />
-                    </>
-                )}
+                <div className={cl(st.apps, st.appCards)}>
+                    {filteredApps.length ? (
+                        filteredApps.map((app, index) => (
+                            <SuiApp
+                                key={index}
+                                {...app}
+                                displaytype="card"
+                                disconnect={true}
+                            />
+                        ))
+                    ) : (
+                        <>
+                            <SuiAppEmpty displaytype="card" />
+                            <SuiAppEmpty displaytype="card" />
+                        </>
+                    )}
+                </div>
             </div>
-        </div>
+        </>
     );
 }
 

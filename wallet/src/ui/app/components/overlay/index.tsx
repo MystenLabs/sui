@@ -1,0 +1,52 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+import cl from 'classnames';
+import { useCallback } from 'react';
+
+import Icon, { SuiIcons } from '_components/icon';
+
+import type { ReactNode } from 'react';
+
+import st from './Overlay.module.scss';
+
+type OverlayProps = {
+    title: string;
+    className?: string;
+    children: ReactNode | ReactNode[];
+    showModal: boolean;
+    setShowModal: (showModal: boolean) => void;
+};
+
+function Overlay({
+    title,
+    className,
+    children,
+    showModal,
+    setShowModal,
+}: OverlayProps) {
+    const closeModal = useCallback(
+        (e: React.MouseEvent<HTMLElement>) => {
+            setShowModal(false);
+        },
+        [setShowModal]
+    );
+
+    return (
+        <>
+            {showModal ? (
+                <div className={cl(st.container, className)}>
+                    <div className={st.header}>
+                        <div className={st.headerContent}>{title}</div>
+                    </div>
+                    <div className={st.content}>{children}</div>
+                    <button className={st.closeOverlay} onClick={closeModal}>
+                        <Icon icon={SuiIcons.Close} className={cl(st.close)} />
+                    </button>
+                </div>
+            ) : null}
+        </>
+    );
+}
+
+export default Overlay;

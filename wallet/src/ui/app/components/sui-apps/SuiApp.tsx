@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import cl from 'classnames';
-import { memo } from 'react';
+import { memo, useState, useCallback } from 'react';
 
+import DisconnectApp from './DisconnectApp';
 import ExternalLink from '_components/external-link';
 import Icon, { SuiIcons } from '_components/icon';
 
@@ -22,8 +23,8 @@ type SuiAppProps = {
     link: string;
     account?: string;
     id?: string;
-    permissions?: string[];
-    disconnect?: boolean;
+    permissions: string[];
+    disconnect?: true;
 };
 
 function SuiAppEmpty({ displaytype }: Displaytype) {
@@ -50,67 +51,101 @@ function SuiApp({
     displaytype,
     link,
     tags,
+    id,
     account,
     permissions,
+    disconnect,
 }: SuiAppProps) {
-    return (
-        <ExternalLink
-            href={link}
-            title={name}
-            className={st.ecosystemApp}
-            showIcon={false}
-        >
-            <div className={cl(st.suiApp, st[displaytype])}>
-                <div className={st.icon}>
-                    {icon ? (
-                        <img src={icon} className={st.icon} alt={name} />
-                    ) : (
-                        <div className={st.defaultImg}></div>
-                    )}
-                    {displaytype === 'card' && (
+    const [showDisconnectApp, setShowDisconnectApp] = useState(false);
+    const appData = {
+        name: name || 'Unknown App',
+        icon,
+        link,
+        id,
+        permissions,
+    };
+    const AppDetails = (
+        <div className={cl(st.suiApp, st[displaytype])}>
+            <div className={st.icon}>
+                {icon ? (
+                    <img src={icon} className={st.icon} alt={name} />
+                ) : (
+                    <div className={st.defaultImg}></div>
+                )}
+                {displaytype === 'card' && (
+                    <Icon
+                        icon={SuiIcons.ArrowRight}
+                        className={cl(
+                            st.arrowActionIcon,
+                            st.angledArrow,
+                            st.externalLinkIcon
+                        )}
+                    />
+                )}
+            </div>
+            <div className={st.info}>
+                <div className={st.title}>
+                    {name}{' '}
+                    {displaytype === 'full' && (
                         <Icon
                             icon={SuiIcons.ArrowRight}
-                            className={cl(
-                                st.arrowActionIcon,
-                                st.angledArrow,
-                                st.externalLinkIcon
-                            )}
+                            className={cl(st.arrowActionIcon, st.angledArrow)}
                         />
                     )}
                 </div>
-                <div className={st.info}>
-                    <div className={st.title}>
-                        {name}{' '}
-                        {displaytype === 'full' && (
-                            <Icon
-                                icon={SuiIcons.ArrowRight}
-                                className={cl(
-                                    st.arrowActionIcon,
-                                    st.angledArrow
-                                )}
-                            />
-                        )}
+                {displaytype === 'full' && (
+                    <div className={st.description}>{description}</div>
+                )}
+
+                {displaytype === 'card' && (
+                    <div className={st.link}>{link}</div>
+                )}
+
+                {displaytype === 'full' && tags?.length && (
+                    <div className={st.tags}>
+                        {tags?.map((tag) => (
+                            <div className={st.tag} key={tag}>
+                                {tag}
+                            </div>
+                        ))}
                     </div>
-                    {displaytype === 'full' && (
-                        <div className={st.description}>{description}</div>
-                    )}
-
-                    {displaytype === 'card' && (
-                        <div className={st.link}>{link}</div>
-                    )}
-
-                    {displaytype === 'full' && tags?.length && (
-                        <div className={st.tags}>
-                            {tags?.map((tag) => (
-                                <div className={st.tag} key={tag}>
-                                    {tag}
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
+                )}
             </div>
-        </ExternalLink>
+        </div>
+    );
+
+    const openApp = useCallback(
+        (e: React.MouseEvent<HTMLElement>) => {
+            setShowDisconnectApp(true);
+        },
+        [setShowDisconnectApp]
+    );
+
+    return (
+        <>
+            {showDisconnectApp && (
+                <DisconnectApp
+                    {...appData}
+                    setShowDisconnectApp={setShowDisconnectApp}
+                />
+            )}
+            {disconnect ? (
+                <>
+                    <div className={st.ecosystemApp} onClick={openApp}>
+                        {AppDetails}
+                    </div>
+                </>
+            ) : (
+                <ExternalLink
+                    href={link}
+                    title={name}
+                    className={st.ecosystemApp}
+                    showIcon={false}
+                >
+                    {AppDetails}
+                </ExternalLink>
+            )}
+        </>
     );
 }
 

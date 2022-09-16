@@ -121,7 +121,12 @@ function AppsPlayGround() {
 
                     <div className={st.apps}>
                         {curatedDapps.map((app, index) => (
-                            <SuiApp key={index} {...app} displaytype="full" />
+                            <SuiApp
+                                key={index}
+                                {...app}
+                                displaytype="full"
+                                permissions={[]}
+                            />
                         ))}
                     </div>
                 </>
