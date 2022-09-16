@@ -14,6 +14,7 @@ use std::time::Duration;
 use strum_macros::EnumString;
 use sui_benchmark::drivers::bench_driver::BenchDriver;
 use sui_benchmark::drivers::driver::Driver;
+use sui_benchmark::drivers::Interval;
 use sui_benchmark::workloads::shared_counter::SharedCounterWorkload;
 use sui_benchmark::workloads::transfer_object::TransferObjectWorkload;
 use sui_benchmark::workloads::workload::get_latest;
@@ -113,6 +114,17 @@ struct Opts {
     /// one (or some) is slow.
     #[clap(long, parse(try_from_str), default_value = "true", global = true)]
     pub disjoint_mode: bool,
+    /// Number of transactions or duration to
+    /// run the benchmark for. Default set to
+    /// "unbounded" i.e. benchmark runs forever
+    /// until terminated with a ctrl-c. However,
+    /// if we wanted to run the test for
+    /// 60 seconds, this could be set as "60s".
+    /// And if we wanted to run the test for
+    /// 10,000 transactions we could set it to
+    /// "10000"
+    #[clap(long, global = true, default_value = "unbounded")]
+    pub run_duration: Interval,
 }
 
 #[derive(Debug, Clone, Parser, Eq, PartialEq, EnumString)]
@@ -571,8 +583,16 @@ async fn main() -> Result<()> {
                         }
                         workloads
                     };
+                    let interval = opts.run_duration;
+                    // We only show the progress in stderr
+                    // if benchmark is running in unbounded mode,
+                    // otherwise summarized benchmark results are
+                    // published in the end
+                    let show_progress = interval.is_unbounded();
                     let driver = BenchDriver::new(stat_collection_interval);
-                    driver.run(workloads, aggregator, &registry).await
+                    driver
+                        .run(workloads, aggregator, &registry, show_progress, interval)
+                        .await
                 }
             }
         })
