@@ -92,13 +92,9 @@ module sui::validator {
         let address_bytes = bcs::to_bytes(&sui_address);
         vector::append(&mut signed_bytes, address_bytes);
         assert!(
-            crypto::ed25519_verify_with_domain(proof_of_possession, pubkey_bytes, signed_bytes, PROOF_OF_POSSESSION_DOMAIN) == true,
+            crypto::bls12381_verify_with_domain(proof_of_possession, pubkey_bytes, signed_bytes, PROOF_OF_POSSESSION_DOMAIN) == true,
             0
         );
-        // assert!(
-        //     crypto::bls12381_verify_with_domain(proof_of_possession, pubkey_bytes, signed_bytes, PROOF_OF_POSSESSION_DOMAIN) == true,
-        //     0
-        // );
     }
 
     public(friend) fun new(

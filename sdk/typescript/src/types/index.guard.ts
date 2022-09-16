@@ -713,10 +713,10 @@ export function isAuthorityQuorumSignInfo(obj: any, _argumentName?: string): obj
             typeof obj === "object" ||
             typeof obj === "function") &&
         isSuiMoveTypeParameterIndex(obj.epoch) as boolean &&
-        Array.isArray(obj.signature) &&
+        ((Array.isArray(obj.signature) &&
         obj.signature.every((e: any) =>
             isTransactionDigest(e) as boolean
-        )
+        )) || isTransactionDigest(obj.signature) as boolean)
     )
 }
 
