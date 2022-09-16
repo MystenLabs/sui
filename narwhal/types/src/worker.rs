@@ -27,7 +27,7 @@ pub struct ClientBatchRequest(pub Vec<BatchDigest>);
 /// Hashes a serialized batch message without deserializing it into a batch.
 ///
 /// See the test `test_batch_and_serialized`, which guarantees that the output of this
-/// function remains the same as the [`Hash::digest`] result you would get from [`Batch`].
+/// function remains the same as the [`fastcrypto::Hash::digest`] result you would get from [`Batch`].
 /// See also the micro-benchmark `batch_digest`, which checks the performance of this is
 /// identical to hashing a serialized batch.
 ///

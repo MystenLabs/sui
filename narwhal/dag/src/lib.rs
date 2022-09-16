@@ -276,7 +276,7 @@ impl<T: Sync + Send + std::fmt::Debug> Node<T> {
 }
 
 /// Returns a Breadth-first search of the DAG, as an iterator of [`NodeRef`]
-/// This is expected to be used in conjunction with a [`NodeDag<T>`], walking the graph from one of its heads.
+/// This is expected to be used in conjunction with a [`node_dag::NodeDag<T>`], walking the graph from one of its heads.
 ///
 pub fn bfs<T: Sync + Send + std::fmt::Debug>(
     initial: NodeRef<T>,

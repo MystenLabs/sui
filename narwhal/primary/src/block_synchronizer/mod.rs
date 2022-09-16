@@ -93,8 +93,8 @@ pub enum Command {
     /// order to know which batches to ask from the peers
     /// to sync and from which workers.
     /// TODO: We expect to change how batches are stored and
-    /// represended (see https://github.com/MystenLabs/narwhal/issues/54
-    /// and https://github.com/MystenLabs/narwhal/issues/150 )
+    /// represended (see <https://github.com/MystenLabs/narwhal/issues/54>
+    /// and <https://github.com/MystenLabs/narwhal/issues/150> )
     /// and this might relax the requirement to need certificates here.
     ///
     /// This component does NOT check whether the

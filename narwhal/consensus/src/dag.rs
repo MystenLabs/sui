@@ -29,7 +29,7 @@ use crate::{metrics::ConsensusMetrics, DEFAULT_CHANNEL_SIZE};
 pub mod dag_tests;
 
 /// Dag represents the Direct Acyclic Graph that is constructed by the certificate of each round without any
-/// consensus running on top of it. This is a [`VerifyingKey`], [`Certificate`] and [`Round`]-aware
+/// consensus running on top of it. This is a [`fastcrypto::traits::VerifyingKey`], [`Certificate`] and [`Round`]-aware
 ///  variant of the Dag, with a secondary index to link a (pubkey, round) pair to the possible
 /// certified collection by that authority at that round.
 ///
@@ -57,7 +57,7 @@ pub struct Dag {
     tx_commands: Sender<DagCommand>,
 }
 
-/// Represents the errors that can be encountered in this concrete, [`VerifyingKey`],
+/// Represents the errors that can be encountered in this concrete, [`fastcrypto::traits::VerifyingKey`],
 /// [`Certificate`] and [`Round`]-aware variant of the Dag.
 #[derive(Debug, Error)]
 pub enum ValidatorDagError {

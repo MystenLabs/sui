@@ -7,10 +7,10 @@
 //! * seconds
 //!
 //! To identify miliseconds then a string of the following format should be
-//! provided: [number]ms , for example "20ms", or "2_000ms".
+//! provided: <number>ms , for example "20ms", or "2_000ms".
 //!
 //! To identify seconds, then the following format should be used:
-//! [number]s, for example "20s", or "10_000s".
+//! <number>s, for example "20s", or "10_000s".
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::time::Duration;
 
