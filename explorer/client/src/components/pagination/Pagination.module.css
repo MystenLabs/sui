@@ -4,7 +4,7 @@
     .basecontainer {
         @apply h-[2.3rem] inline-block
         rounded border-[1px] border-solid border-sui-grey-50
-        font-sans items-center 
+        font-sans items-center
         text-sui-grey-75 stroke-sui-grey-75 bg-inherit;
 
         box-shadow: 0 1px 2px rgba(16 24 40 / 5%);

@@ -16,7 +16,6 @@ import TableCard from '../../components/table/TableCard';
 import TabFooter from '../../components/tabs/TabFooter';
 import Tabs from '../../components/tabs/Tabs';
 import { STATE_DEFAULT } from '../../components/top-validators-card/TopValidatorsCard';
-import styles from '../../components/top-validators-card/TopValidatorsCard.module.css';
 import { NetworkContext } from '../../context';
 import theme from '../../styles/theme.module.css';
 import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
@@ -210,7 +209,7 @@ function ValidatorsPage({ state }: { state: ValidatorState }): JSX.Element {
     };
 
     return (
-        <div className={styles.validators}>
+        <div>
             <Tabs selected={0}>
                 <div title="Validators">
                     <TableCard tabledata={tableData} />

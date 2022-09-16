@@ -10,6 +10,9 @@ type Props = {
     selected?: number;
 };
 
+/**
+ * @deprecated Use the ~/ui/Tabs components instead.
+ */
 function Tabs({ children, selected }: Props) {
     const [activeTab, setActivetab] = useState(selected || 0);
     const selectActiveTab = useCallback((e: React.MouseEvent<HTMLElement>) => {
