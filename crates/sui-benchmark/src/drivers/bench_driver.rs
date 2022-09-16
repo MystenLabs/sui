@@ -30,8 +30,7 @@ use sui_core::authority_client::NetworkAuthorityClient;
 use sui_core::quorum_driver::{QuorumDriverHandler, QuorumDriverMetrics};
 use sui_types::crypto::EmptySignInfo;
 use sui_types::messages::{
-    ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
-    TransactionEnvelope,
+    QuorumDriverRequest, QuorumDriverRequestType, QuorumDriverResponse, TransactionEnvelope,
 };
 use tokio::sync::Barrier;
 use tokio::time;
@@ -293,13 +292,13 @@ impl Driver<BenchmarkStats> for BenchDriver {
                                 let metrics_cloned = metrics_cloned.clone();
                                 let start = Instant::now();
                                 let res = qd
-                                    .execute_transaction(ExecuteTransactionRequest {
+                                    .execute_transaction(QuorumDriverRequest {
                                         transaction: b.0.clone(),
-                                        request_type: ExecuteTransactionRequestType::WaitForEffectsCert,
+                                        request_type: QuorumDriverRequestType::WaitForEffectsCert,
                                     })
                                     .map(move |res| {
                                         match res {
-                                            Ok(ExecuteTransactionResponse::EffectsCert(result)) => {
+                                            Ok(QuorumDriverResponse::EffectsCert(result)) => {
                                                 let (_, effects) = *result;
                                                 let new_version = effects.effects.mutated.iter().find(|(object_ref, _)| {
                                                     object_ref.0 == b.1.get_object_id()
@@ -343,13 +342,13 @@ impl Driver<BenchmarkStats> for BenchDriver {
                                 let start = Instant::now();
                                 let metrics_cloned = metrics_cloned.clone();
                                 let res = qd
-                                    .execute_transaction(ExecuteTransactionRequest {
+                                    .execute_transaction(QuorumDriverRequest {
                                         transaction: tx.clone(),
-                                    request_type: ExecuteTransactionRequestType::WaitForEffectsCert,
+                                    request_type: QuorumDriverRequestType::WaitForEffectsCert,
                                 })
                                 .map(move |res| {
                                     match res {
-                                        Ok(ExecuteTransactionResponse::EffectsCert(result)) => {
+                                        Ok(QuorumDriverResponse::EffectsCert(result)) => {
                                             let (_, effects) = *result;
                                             let new_version = effects.effects.mutated.iter().find(|(object_ref, _)| {
                                                 object_ref.0 == payload.get_object_id()

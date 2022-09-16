@@ -25,16 +25,15 @@ use sui_json_rpc_types::{
     GetObjectDataResponse, SuiExecuteTransactionResponse, SuiObjectInfo, SuiParsedObject,
     SuiTransactionResponse,
 };
-use sui_json_rpc_types::{GetRawObjectDataResponse, SuiData, SuiObjectRead, SuiRawData};
+use sui_json_rpc_types::{GetRawObjectDataResponse, SuiData};
 use sui_json_rpc_types::{SuiCertifiedTransaction, SuiExecutionStatus, SuiTransactionEffects};
 use sui_sdk::crypto::SuiKeystore;
 use sui_sdk::{ClientType, SuiClient};
+use sui_types::crypto::SignatureScheme;
 use sui_types::sui_serde::{Base64, Encoding};
-use sui_types::{base_types::ObjectRef, crypto::SignatureScheme};
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     gas_coin::GasCoin,
-    messages::ExecuteTransactionRequestType,
     messages::Transaction,
     object::Owner,
     parse_sui_type_tag, SUI_FRAMEWORK_ADDRESS,
@@ -706,13 +705,15 @@ impl WalletContext {
                 .quorum_driver()
                 .execute_transaction_by_fullnode(
                     tx,
-                    ExecuteTransactionRequestType::WaitForEffectsCert,
+                    sui_types::messages::ExecuteTransactionRequestType::WaitForLocalExecution,
                 )
                 .await;
             match result {
+                // TODO: if confirmed_local_execution is false, poll fullnode until it's confirmed
                 Ok(SuiExecuteTransactionResponse::EffectsCert {
                     certificate,
                     effects,
+                    confirmed_local_execution: _,
                 }) => Ok(SuiTransactionResponse {
                     certificate,
                     effects: effects.effects,

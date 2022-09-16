@@ -18,10 +18,7 @@ use futures::FutureExt;
 use sui_types::{
     base_types::SuiAddress,
     crypto::AccountKeyPair,
-    messages::{
-        ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
-        Transaction,
-    },
+    messages::{QuorumDriverRequest, QuorumDriverRequestType, QuorumDriverResponse, Transaction},
 };
 use test_utils::messages::make_transfer_sui_transaction;
 use tracing::log::error;
@@ -54,12 +51,12 @@ pub async fn transfer_sui_for_testing(
     let quorum_driver_handler =
         QuorumDriverHandler::new(client.clone(), QuorumDriverMetrics::new_for_tests());
     let qd = quorum_driver_handler.clone_quorum_driver();
-    qd.execute_transaction(ExecuteTransactionRequest {
+    qd.execute_transaction(QuorumDriverRequest {
         transaction: tx.clone(),
-        request_type: ExecuteTransactionRequestType::WaitForEffectsCert,
+        request_type: QuorumDriverRequestType::WaitForEffectsCert,
     })
     .map(move |res| match res {
-        Ok(ExecuteTransactionResponse::EffectsCert(result)) => {
+        Ok(QuorumDriverResponse::EffectsCert(result)) => {
             let (_, effects) = *result;
             let minted = effects.effects.created.get(0).unwrap().0;
             let updated = effects
@@ -99,11 +96,11 @@ pub async fn submit_transaction(
     aggregator: &AuthorityAggregator<NetworkAuthorityClient>,
 ) -> Option<TransactionEffects> {
     let qd = QuorumDriverHandler::new(aggregator.clone(), QuorumDriverMetrics::new_for_tests());
-    if let ExecuteTransactionResponse::EffectsCert(result) = qd
+    if let QuorumDriverResponse::EffectsCert(result) = qd
         .clone_quorum_driver()
-        .execute_transaction(ExecuteTransactionRequest {
+        .execute_transaction(QuorumDriverRequest {
             transaction,
-            request_type: ExecuteTransactionRequestType::WaitForEffectsCert,
+            request_type: QuorumDriverRequestType::WaitForEffectsCert,
         })
         .await
         .unwrap()

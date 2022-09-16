@@ -496,7 +496,7 @@ pub trait EventReadApi {
     ) -> RpcResult<Vec<SuiEventEnvelope>>;
 }
 
-#[open_rpc(namespace = "sui", tag = "Quorum Driver APIs to execute transactions.")]
+#[open_rpc(namespace = "sui", tag = "APIs to execute transactions.")]
 #[rpc(server, client, namespace = "sui")]
 pub trait QuorumDriverApi {
     /// Execute the transaction and wait for results if desired
