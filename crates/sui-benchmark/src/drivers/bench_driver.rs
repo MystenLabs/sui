@@ -8,6 +8,7 @@ use futures::future::BoxFuture;
 use futures::FutureExt;
 use futures::{stream::FuturesUnordered, StreamExt};
 use indicatif::ProgressBar;
+use indicatif::ProgressStyle;
 use prometheus::register_gauge_vec_with_registry;
 use prometheus::register_histogram_vec_with_registry;
 use prometheus::register_int_counter_vec_with_registry;
@@ -19,6 +20,7 @@ use sui_core::authority_aggregator::AuthorityAggregator;
 use tokio::sync::OnceCell;
 
 use crate::drivers::driver::Driver;
+use crate::drivers::HistogramWrapper;
 use crate::workloads::workload::Payload;
 use crate::workloads::workload::WorkloadInfo;
 use std::collections::{BTreeMap, VecDeque};
@@ -36,6 +38,7 @@ use tokio::time;
 use tokio::time::Instant;
 use tracing::{debug, error};
 
+use super::BenchmarkStats;
 use super::Interval;
 pub struct BenchMetrics {
     pub num_success: IntCounterVec,
@@ -94,14 +97,10 @@ impl BenchMetrics {
 
 struct Stats {
     pub id: usize,
-    pub num_success: u64,
-    pub num_error: u64,
     pub num_no_gas: u64,
     pub num_submitted: u64,
     pub num_in_flight: u64,
-    pub min_latency: Duration,
-    pub max_latency: Duration,
-    pub duration: Duration,
+    pub bench_stats: BenchmarkStats,
 }
 
 type RetryType = Box<(TransactionEnvelope<EmptySignInfo>, Box<dyn Payload>)>;
@@ -110,10 +109,9 @@ enum NextOp {
     Retry(RetryType),
 }
 
-async fn start_benchmark(pb: Arc<ProgressBar>) -> &'static Instant {
+async fn print_and_start_benchmark() -> &'static Instant {
     static ONCE: OnceCell<Instant> = OnceCell::const_new();
     ONCE.get_or_init(|| async move {
-        pb.finish();
         eprintln!("Starting benchmark!");
         Instant::now()
     })
@@ -147,7 +145,7 @@ impl BenchDriver {
             Interval::Count(count) => {
                 progress_bar.inc(1);
                 if progress_bar.position() >= count {
-                    progress_bar.finish();
+                    progress_bar.finish_and_clear();
                 }
             }
             Interval::Time(Duration::MAX) => progress_bar.inc(1),
@@ -155,7 +153,7 @@ impl BenchDriver {
                 let elapsed_secs = (Instant::now() - start_time).as_secs();
                 progress_bar.set_position(std::cmp::min(duration.as_secs(), elapsed_secs));
                 if progress_bar.position() >= duration.as_secs() {
-                    progress_bar.finish();
+                    progress_bar.finish_and_clear();
                 }
             }
         }
@@ -189,7 +187,7 @@ impl BenchDriver {
 }
 
 #[async_trait]
-impl Driver<()> for BenchDriver {
+impl Driver<BenchmarkStats> for BenchDriver {
     async fn run(
         &self,
         workloads: Vec<WorkloadInfo>,
@@ -197,7 +195,7 @@ impl Driver<()> for BenchDriver {
         registry: &Registry,
         show_progress: bool,
         run_duration: Interval,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<BenchmarkStats, anyhow::Error> {
         let mut tasks = Vec::new();
         let (tx, mut rx) = tokio::sync::mpsc::channel(100);
         let mut bench_workers = vec![];
@@ -211,18 +209,24 @@ impl Driver<()> for BenchDriver {
         let stat_delay_micros = 1_000_000 * self.stat_collection_interval;
         let metrics = Arc::new(BenchMetrics::new(registry));
         let barrier = Arc::new(Barrier::new(num_workers as usize));
-        let pb = Arc::new(ProgressBar::new(num_workers));
         eprintln!("Setting up workers...");
         let progress = Arc::new(match run_duration {
-            Interval::Count(count) => ProgressBar::new(count),
+            Interval::Count(count) => ProgressBar::new(count)
+                .with_prefix("Running benchmark(count):")
+                .with_style(
+                    ProgressStyle::with_template("{prefix}: {wide_bar} {pos}/{len}").unwrap(),
+                ),
             Interval::Time(Duration::MAX) => ProgressBar::hidden(),
-            Interval::Time(duration) => ProgressBar::new(duration.as_secs()),
+            Interval::Time(duration) => ProgressBar::new(duration.as_secs())
+                .with_prefix("Running benchmark(duration):")
+                .with_style(
+                    ProgressStyle::with_template("{prefix}: {wide_bar} {pos}/{len}").unwrap(),
+                ),
         });
         for (i, worker) in bench_workers.into_iter().enumerate() {
             let request_delay_micros = 1_000_000 / worker.target_qps;
             let mut free_pool = worker.payload;
             let progress = progress.clone();
-            let pb = pb.clone();
             let tx_cloned = tx.clone();
             let cloned_barrier = barrier.clone();
             let metrics_cloned = metrics.clone();
@@ -231,16 +235,15 @@ impl Driver<()> for BenchDriver {
                 QuorumDriverHandler::new(aggregator.clone(), QuorumDriverMetrics::new_for_tests());
             let qd = quorum_driver_handler.clone_quorum_driver();
             let runner = tokio::spawn(async move {
-                pb.inc(1);
                 cloned_barrier.wait().await;
-                let start_time = start_benchmark(pb).await;
+                let start_time = print_and_start_benchmark().await;
                 let mut num_success = 0;
                 let mut num_error = 0;
-                let mut min_latency = Duration::MAX;
-                let mut max_latency = Duration::ZERO;
                 let mut num_no_gas = 0;
                 let mut num_in_flight: u64 = 0;
                 let mut num_submitted = 0;
+                let mut latency_histogram =
+                    hdrhistogram::Histogram::<u64>::new_with_max(100000, 2).unwrap();
                 let mut request_interval =
                     time::interval(Duration::from_micros(request_delay_micros));
                 request_interval.set_missed_tick_behavior(time::MissedTickBehavior::Delay);
@@ -248,21 +251,25 @@ impl Driver<()> for BenchDriver {
                 let mut futures: FuturesUnordered<BoxFuture<NextOp>> = FuturesUnordered::new();
 
                 let mut retry_queue: VecDeque<RetryType> = VecDeque::new();
-
+                let mut stat_start_time: Instant = Instant::now();
                 loop {
                     tokio::select! {
+                            _ = tokio::signal::ctrl_c() => {
+                                break;
+                            }
                             _ = stat_interval.tick() => {
                                 if tx_cloned
                                     .try_send(Stats {
                                         id: i as usize,
-                                        num_success,
-                                        num_error,
-                                        min_latency,
-                                        max_latency,
                                         num_no_gas,
                                         num_in_flight,
                                         num_submitted,
-                                        duration: Duration::from_micros(stat_delay_micros),
+                                        bench_stats: BenchmarkStats {
+                                            duration: stat_start_time.elapsed(),
+                                            num_error,
+                                            num_success,
+                                            latency_ms: HistogramWrapper {histogram: latency_histogram.clone()},
+                                        },
                                     })
                                     .is_err()
                                 {
@@ -272,8 +279,8 @@ impl Driver<()> for BenchDriver {
                                 num_error = 0;
                                 num_no_gas = 0;
                                 num_submitted = 0;
-                                min_latency = Duration::MAX;
-                                max_latency = Duration::ZERO;
+                                stat_start_time = Instant::now();
+                                latency_histogram.reset();
                         }
                         _ = request_interval.tick() => {
 
@@ -384,12 +391,7 @@ impl Driver<()> for BenchDriver {
                                     num_success += 1;
                                     num_in_flight -= 1;
                                     free_pool.push(new_payload);
-                                    if latency > max_latency {
-                                        max_latency = latency;
-                                    }
-                                    if latency < min_latency {
-                                        min_latency = latency;
-                                    }
+                                    latency_histogram.record(latency.as_millis().try_into().unwrap()).unwrap();
                                     BenchDriver::update_progress(*start_time, run_duration, progress.clone());
                                     if progress.is_finished() {
                                         break;
@@ -403,51 +405,74 @@ impl Driver<()> for BenchDriver {
                         }
                     }
                 }
+                // send stats one last time
+                if tx_cloned
+                    .try_send(Stats {
+                        id: i as usize,
+                        num_no_gas,
+                        num_in_flight,
+                        num_submitted,
+                        bench_stats: BenchmarkStats {
+                            duration: stat_start_time.elapsed(),
+                            num_error,
+                            num_success,
+                            latency_ms: HistogramWrapper {
+                                histogram: latency_histogram,
+                            },
+                        },
+                    })
+                    .is_err()
+                {
+                    debug!("Failed to update stat!");
+                }
             });
             tasks.push(runner);
         }
 
-        tasks.push(tokio::spawn(async move {
+        let stat_task = tokio::spawn(async move {
+            let mut benchmark_stat = BenchmarkStats {
+                duration: Duration::ZERO,
+                num_error: 0,
+                num_success: 0,
+                latency_ms: HistogramWrapper {
+                    histogram: hdrhistogram::Histogram::<u64>::new_with_max(100000, 2).unwrap(),
+                },
+            };
             let mut stat_collection: BTreeMap<usize, Stats> = BTreeMap::new();
             let mut counter = 0;
-            let mut stat = "".to_string();
-            while let Some(s @ Stats {
-                id,
-                num_success: _,
-                num_error: _,
-                min_latency: _,
-                max_latency: _,
-                num_no_gas: _,
-                num_in_flight: _,
-                num_submitted: _,
-                duration
-            }) = rx.recv().await {
-                stat_collection.insert(id, s);
+            let mut stat;
+            let start = Instant::now();
+            while let Some(
+                sample_stat @ Stats {
+                    id,
+                    num_no_gas: _,
+                    num_in_flight: _,
+                    num_submitted: _,
+                    bench_stats: _,
+                },
+            ) = rx.recv().await
+            {
+                benchmark_stat.update(start.elapsed(), &sample_stat.bench_stats);
+                stat_collection.insert(id, sample_stat);
                 let mut total_qps: f32 = 0.0;
                 let mut num_success: u64 = 0;
                 let mut num_error: u64 = 0;
-                let mut min_latency: Duration = Duration::MAX;
-                let mut max_latency: Duration = Duration::ZERO;
+                let mut latency_histogram =
+                    hdrhistogram::Histogram::<u64>::new_with_max(100000, 2).unwrap();
                 let mut num_in_flight: u64 = 0;
                 let mut num_submitted: u64 = 0;
                 let mut num_no_gas = 0;
                 for (_, v) in stat_collection.iter() {
-                    total_qps += v.num_success as f32 / duration.as_secs() as f32;
-                    num_success += v.num_success;
-                    num_error += v.num_error;
+                    total_qps +=
+                        v.bench_stats.num_success as f32 / v.bench_stats.duration.as_secs() as f32;
+                    num_success += v.bench_stats.num_success;
+                    num_error += v.bench_stats.num_error;
                     num_no_gas += v.num_no_gas;
                     num_submitted += v.num_submitted;
                     num_in_flight += v.num_in_flight;
-                    min_latency = if v.min_latency < min_latency {
-                        v.min_latency
-                    } else {
-                        min_latency
-                    };
-                    max_latency = if v.max_latency > max_latency {
-                        v.max_latency
-                    } else {
-                        max_latency
-                    };
+                    latency_histogram
+                        .add(&v.bench_stats.latency_ms.histogram)
+                        .unwrap();
                 }
                 let denom = num_success + num_error;
                 let _error_rate = if denom > 0 {
@@ -457,16 +482,17 @@ impl Driver<()> for BenchDriver {
                 };
                 counter += 1;
                 if counter % num_workers == 0 {
-                    stat = format!("Throughput = {}, min_latency_ms = {}, max_latency_ms = {}, num_success = {}, num_error = {}, no_gas = {}, submitted = {}, in_flight = {}", total_qps, min_latency.as_millis(), max_latency.as_millis(), num_success, num_error, num_no_gas, num_submitted, num_in_flight);
+                    stat = format!("Throughput = {}, latency_ms(min/p50/p99/max) = {}/{}/{}/{}, num_success = {}, num_error = {}, no_gas = {}, submitted = {}, in_flight = {}", total_qps, latency_histogram.min(), latency_histogram.value_at_quantile(0.5), latency_histogram.value_at_quantile(0.99), latency_histogram.max(), num_success, num_error, num_no_gas, num_submitted, num_in_flight);
                     if show_progress {
                         eprintln!("{}", stat);
                     }
                 }
             }
-            eprintln!("{}", stat);
-        }));
+            benchmark_stat
+        });
         drop(tx);
         let _res: Vec<_> = try_join_all(tasks).await.unwrap().into_iter().collect();
-        Ok(())
+        let benchmark_stat = stat_task.await.unwrap();
+        Ok(benchmark_stat)
     }
 }

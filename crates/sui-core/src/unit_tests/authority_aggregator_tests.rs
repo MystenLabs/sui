@@ -433,7 +433,7 @@ async fn execute_transaction_with_fault_configs(
 /// we spawn a tokio task on the server, client timing out and
 /// terminating the connection does not stop server from completing
 /// execution on its side
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 6)]
 async fn test_quorum_map_and_reduce_timeout() {
     let build_config = BuildConfig::default();
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -460,7 +460,7 @@ async fn test_quorum_map_and_reduce_timeout() {
         certified_effects,
         Err(SuiError::QuorumFailedToExecuteCertificate { .. })
     ));
-    tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+    tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
     let tx_info = TransactionInfoRequest {
         transaction_digest: *tx.digest(),
     };
