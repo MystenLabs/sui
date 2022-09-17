@@ -24,11 +24,26 @@ pub struct SystemParameters {
     pub storage_gas_price: u64,
 }
 
-/// Rust version of the Move Std::Option::Option type.
+/// Rust version of the Move std::option::Option type.
 /// Putting it in this file because it's only used here.
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct MoveOption<T> {
     pub vec: Vec<T>,
+}
+
+/// Rust version of the Move sui::vec_map::VecMap type.
+/// Putting it in this file because it's only used here.
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+pub struct VecMap<K, V> {
+    pub contents: Vec<VecMapEntry<K, V>>,
+}
+
+/// Rust version of the Move sui::vec_map::Entry type.
+/// Putting it in this file because it's only used here.
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+pub struct VecMapEntry<K, V> {
+    pub key: K,
+    pub value: V,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
@@ -49,15 +64,22 @@ pub struct ValidatorMetadata {
 pub struct Validator {
     pub metadata: ValidatorMetadata,
     pub stake_amount: u64,
-    pub delegation: u64,
     pub pending_stake: u64,
     pub pending_withdraw: u64,
-    pub pending_delegation: u64,
-    pub pending_delegation_withdraw: u64,
-    pub delegator_count: u64,
-    pub pending_delegator_count: u64,
-    pub pending_delegator_withdraw_count: u64,
     pub gas_price: u64,
+    pub delegation_staking_pool: StakingPool,
+}
+
+/// Rust version of the Move sui::staking_pool::StakingPool type
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+pub struct StakingPool {
+    pub validator_address: AccountAddress,
+    pub starting_epoch: u64,
+    pub epoch_starting_sui_balance: u64,
+    pub sui_balance: u64,
+    pub rewards_pool: Balance,
+    pub delegation_token_supply: Supply,
+    pub pending_delegations: VecMap<AccountAddress, u64>,
 }
 
 /// Rust version of the Move sui::validator_set::ValidatorSet type
@@ -81,7 +103,6 @@ pub struct SuiSystemState {
     pub treasury_cap: Supply,
     pub storage_fund: Balance,
     pub parameters: SystemParameters,
-    pub delegation_reward: Balance,
     pub reference_gas_price: u64,
     // TODO: Use getters instead of all pub.
 }

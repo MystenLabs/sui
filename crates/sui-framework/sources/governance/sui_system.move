@@ -49,9 +49,6 @@ module sui::sui_system {
         storage_fund: Balance<SUI>,
         /// A list of system config parameters.
         parameters: SystemParameters,
-        /// The delegation reward pool. All delegation reward goes into this.
-        /// Delegation reward claims withdraw from this.
-        delegation_reward: Balance<SUI>,
         /// The reference gas price for the current epoch.
         reference_gas_price: u64,
     }
@@ -82,7 +79,6 @@ module sui::sui_system {
                 max_validator_candidate_count,
                 storage_gas_price
             },
-            delegation_reward: balance::zero(),
             reference_gas_price,
         };
         transfer::share_object(state);
