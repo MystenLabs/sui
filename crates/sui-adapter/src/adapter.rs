@@ -1198,7 +1198,7 @@ fn validate_string(bytes: &[u8], idx: LocalIndex, module: &IdentStr) -> Result<(
                         idx,
                         EntryArgumentErrorKind::TypeMismatch,
                     ),
-                    format!("Unexpected non-ASCII value in argument {}", idx),
+                    format!("Unexpected non-ASCII value (outside of ASCII character range) in argument {}", idx),
                 ));
             }
         }
@@ -1207,7 +1207,10 @@ fn validate_string(bytes: &[u8], idx: LocalIndex, module: &IdentStr) -> Result<(
         if str::from_utf8(bytes).is_err() {
             return Err(ExecutionError::new_with_source(
                 ExecutionErrorKind::entry_argument_error(idx, EntryArgumentErrorKind::TypeMismatch),
-                format!("Unexpected non-UTF8 value in argument {}", idx),
+                format!(
+                    "Unexpected non-UTF8 value (outside of UTF8 character range) in argument {}",
+                    idx
+                ),
             ));
         }
     }
