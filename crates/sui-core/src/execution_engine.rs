@@ -152,7 +152,7 @@ fn execute_transaction<S: BackingPackageStore + ParentSync>(
                     arguments,
                 }) => {
                     let module_id = ModuleId::new(package.0.into(), module);
-                    adapter::execute(
+                    let res = adapter::execute(
                         move_vm,
                         temporary_store,
                         module_id,
@@ -161,7 +161,9 @@ fn execute_transaction<S: BackingPackageStore + ParentSync>(
                         arguments,
                         &mut gas_status,
                         tx_ctx,
-                    )
+                    );
+                    println!("@@@@@@@@@@@@@@@@@@@@@@ {:?}", res);
+                    res
                 }
                 SingleTransactionKind::Publish(MoveModulePublish { modules }) => adapter::publish(
                     temporary_store,

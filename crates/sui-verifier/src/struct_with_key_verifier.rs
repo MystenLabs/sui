@@ -44,6 +44,7 @@ fn verify_key_structs(module: &CompiledModule) -> Result<(), ExecutionError> {
             }
         };
         let first_field_name = view.identifier_at(first_field.name).as_str();
+        // FIXME!!
         if first_field_name != "id" {
             return Err(verification_failure(format!(
                 "First field of struct {} must be 'id', {} found",

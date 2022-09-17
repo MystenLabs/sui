@@ -63,6 +63,7 @@ module nfts::shared_auction_tests {
                 id: object::new(ctx),
                 value: 42,
             };
+            // std::debug::print(&to_sell);
             shared_auction::create_auction(to_sell, ctx);
         };
 
