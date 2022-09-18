@@ -225,7 +225,7 @@ impl TransferObjectEventChecker {
             assert_eq_if_present!(self.object_id, object_id, "object_id");
             assert_eq_if_present!(self.version, version, "version");
             assert_eq_if_present!(self.type_, type_, "type_");
-            assert_eq!(self.amount, *amount);
+            assert_eq_if_present!(self.amount, amount.as_ref().unwrap(), "amount");
         } else {
             panic!("event {:?} is not TransferObject Event", event);
         }
