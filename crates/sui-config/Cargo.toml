@@ -25,8 +25,8 @@ move-binary-format = { git = "https://github.com/move-language/move", rev = "e1e
 move-package = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e" }
 move-core-types = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e", features = ["address20"] }
 move-vm-runtime = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e" }
-narwhal-config = { git = "https://github.com/MystenLabs/narwhal", rev = "aa0cc2d693572d197531a1054e0e3e417d2b7404", package = "config" }
-narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "aa0cc2d693572d197531a1054e0e3e417d2b7404", package = "crypto" }
+narwhal-config = { git = "https://github.com/MystenLabs/narwhal", rev = "06979c219558bda7dbcdd11ead4a7245647ca776", package = "config" }
+narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "06979c219558bda7dbcdd11ead4a7245647ca776", package = "crypto" }
 
 sui-framework = { path = "../sui-framework" }
 sui-adapter = { path = "../sui-adapter" }
