@@ -15,6 +15,8 @@ type OverlayProps = {
     className?: string;
     children: ReactNode | ReactNode[];
     showModal: boolean;
+    closeOverlay?: () => void;
+    closeIcon?: SuiIcons;
     setShowModal: (showModal: boolean) => void;
 };
 
@@ -23,13 +25,16 @@ function Overlay({
     className,
     children,
     showModal,
+    closeOverlay,
     setShowModal,
+    closeIcon = SuiIcons.Close,
 }: OverlayProps) {
     const closeModal = useCallback(
         (e: React.MouseEvent<HTMLElement>) => {
+            closeOverlay && closeOverlay();
             setShowModal(false);
         },
-        [setShowModal]
+        [closeOverlay, setShowModal]
     );
 
     return (
@@ -41,7 +46,10 @@ function Overlay({
                     </div>
                     <div className={st.content}>{children}</div>
                     <button className={st.closeOverlay} onClick={closeModal}>
-                        <Icon icon={SuiIcons.Close} className={cl(st.close)} />
+                        <Icon
+                            icon={closeIcon}
+                            className={cl(st.close, st[closeIcon])}
+                        />
                     </button>
                 </div>
             ) : null}
