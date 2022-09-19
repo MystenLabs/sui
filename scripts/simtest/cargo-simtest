@@ -85,6 +85,9 @@ if [ "$1" = "build" ]; then
   CARGO_COMMAND=(build --profile simulator)
 fi
 
+# Must supply a new temp dir - the test is deterministic and can't choose one randomly itself.
+export TMPDIR=$(mktemp -d)
+
 cargo ${CARGO_COMMAND[@]} \
   --config "build.rustflags = [$RUST_FLAGS]" \
   "${cargo_patch_args[@]}" \
