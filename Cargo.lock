@@ -4619,7 +4619,7 @@ dependencies = [
  "once_cell",
  "parking_lot 0.10.2",
  "thiserror",
- "widestring 0.4.3",
+ "widestring",
  "winapi",
 ]
 
@@ -9492,12 +9492,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c168940144dd21fd8046987c16a46a33d5fc84eec29ef9dcddc2ac9e31526b7c"
 
 [[package]]
-name = "widestring"
-version = "1.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "653f141f39ec16bba3c5abe400a0c60da7468261cc2cbf36805022876bc721a8"
-
-[[package]]
 name = "winapi"
 version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10405,7 +10399,7 @@ dependencies = [
  "webpki-roots",
  "which",
  "whoami",
- "widestring 1.0.2",
+ "widestring",
  "winapi",
  "winapi-util",
  "windows-sys 0.30.0",
