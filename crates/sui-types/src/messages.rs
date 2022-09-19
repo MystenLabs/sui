@@ -1668,16 +1668,6 @@ impl CertifiedTransactionEffects {
             auth_signature: EmptySignInfo {},
         }
     }
-
-    // pub fn to_signed_effects(self) -> SignedTransactionEffects {
-    //     let sigs = self.auth_signature.signature.0.get(0).unwrap();
-    //     self.auth_signature
-    //     SignedTransactionEffects {
-    //         transaction_effects_digest: self.transaction_effects_digest,
-    //         effects: self.effects,
-    //         auth_signature: AuthoritySignInfo {},
-    //     }
-    // }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -2023,7 +2013,7 @@ pub struct ExecuteTransactionRequest {
 }
 
 /// When requested to execute a transaction with WaitForLocalExecution,
-/// TransactionOrchestrator attemps to execute this transaction locally
+/// TransactionOrchestrator attempts to execute this transaction locally
 /// after it is finalized. This value represents whether the transaction
 /// is confirmed to be executed on this node before the response returns.
 pub type IsTransactionExecutedLocally = bool;

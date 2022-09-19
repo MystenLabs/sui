@@ -523,32 +523,30 @@ impl AuthorityState {
     #[instrument(level = "trace", skip_all)]
     pub async fn handle_certificate_with_effects(
         &self,
-        certificate: &CertifiedTransaction,
-        // NOTE: the caller of this (node_sync) must promise to wait until it
-        // knows for sure this tx is finalized, namely, it has seen a
-        // CertifiedTransactionEffects or at least f+1 identifical effects
-        // digests matching this TransactionEffectsEnvelope, before calling
-        // this function, in order to prevent a byzantine validator from
-        // giving us incorrect effects.
-        // TODO: allow CertifiedTransactionEffects only
-        effects: &TransactionEffectsEnvelope<S>,
+        certificate: CertifiedTransaction,
+        // Signed effects is signed by only one validator, it is not a
+        // CertifiedTransactionEffects. The caller of this (node_sync) must promise to
+        // wait until it has seen at least f+1 identifical effects digests matching this
+        // SignedTransactionEffects before calling this function, in order to prevent a
+        // byzantine validator from giving us incorrect effects.
+        signed_effects: SignedTransactionEffects,
     ) -> SuiResult {
         let _metrics_guard = start_timer(self.metrics.handle_node_sync_certificate_latency.clone());
         let digest = *certificate.digest();
         debug!(?digest, "handle_certificate_with_effects");
         fp_ensure!(
-            effects.effects.transaction_digest == tx_digest,
+            signed_effects.effects.transaction_digest == digest,
             SuiError::ErrorWhileProcessingConfirmationTransaction {
                 err: "effects/tx digest mismatch".to_string()
             }
         );
 
-        let tx_guard = self.database.acquire_tx_guard(certificate).await?;
+        let tx_guard = self.database.acquire_tx_guard(&certificate).await?;
 
         if certificate.contains_shared_object() {
             self.database.acquire_shared_locks_from_effects(
-                certificate,
-                &effects.effects,
+                &certificate,
+                &signed_effects.effects,
                 &tx_guard,
             )?;
         }
@@ -556,15 +554,15 @@ impl AuthorityState {
         let resp = self
             .process_certificate(tx_guard, &certificate, true)
             .await
-            .tap_err(|e| debug!(?tx_digest, "process_certificate failed: {}", e))?;
+            .tap_err(|e| debug!(?digest, "process_certificate failed: {}", e))?;
 
-        let expected_effects_digest = effects.digest();
+        let expected_effects_digest = signed_effects.digest();
         let observed_effects_digest = resp.signed_effects.as_ref().map(|e| e.digest());
         if observed_effects_digest != Some(expected_effects_digest) {
             error!(
                 ?expected_effects_digest,
                 ?observed_effects_digest,
-                ?effects.effects,
+                ?signed_effects,
                 ?resp.signed_effects,
                 input_objects = ?certificate.signed_data.data.input_objects(),
                 "Locally executed effects do not match canonical effects!");

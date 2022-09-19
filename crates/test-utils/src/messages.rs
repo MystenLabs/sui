@@ -176,28 +176,6 @@ pub async fn make_counter_increment_transaction_with_wallet_context(
     Transaction::new(data, signature)
 }
 
-// pub async fn make_counter_create_transaction_with_wallet_context(
-//     context: &mut WalletContext,
-// ) -> Transaction {
-//     let sender = context.active_address().unwrap();
-//     let package_object_ref = genesis::get_framework_object_ref();
-//     let gas_object_ref = get_gas_object_with_wallet_context(context, &sender)
-//         .await
-//         .unwrap();
-//     let data = TransactionData::new_move_call(
-//         sender,
-//         package_object_ref,
-//         "counter".parse().unwrap(),
-//         "create".parse().unwrap(),
-//         Vec::new(),
-//         gas_object_ref,
-//         vec![],
-//         MAX_GAS,
-//     );
-//     let signature = context.keystore.sign(&sender, &data.to_bytes()).unwrap();
-//     Transaction::new(data, signature)
-// }
-
 /// Make a few different single-writer test transactions owned by specific addresses.
 pub fn make_transactions_with_pre_genesis_objects(
     keys: SuiKeystore,
@@ -376,7 +354,6 @@ pub fn make_counter_increment_transaction(
     counter_id: ObjectID,
     sender: SuiAddress,
     keypair: &AccountKeyPair,
-    // keypair: &dyn Signer<Signature>,
 ) -> Transaction {
     let data = TransactionData::new_move_call(
         sender,
@@ -400,8 +377,6 @@ pub fn move_transaction(
     package_ref: ObjectRef,
     arguments: Vec<CallArg>,
 ) -> Transaction {
-    // The key pair of the sender of the transaction.
-
     move_transaction_with_type_tags(gas_object, module, function, package_ref, &[], arguments)
 }
 
