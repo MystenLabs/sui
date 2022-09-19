@@ -14,6 +14,7 @@ import { isTransactionRequestResponse } from '_payloads/transactions/ui/Transact
 import Permissions from '_src/background/Permissions';
 import Tabs from '_src/background/Tabs';
 import Transactions from '_src/background/Transactions';
+import { isDisconnectApp } from '_src/shared/messaging/messages/payloads/permissions/DisconnectApp';
 
 import type { Message } from '_messages';
 import type { PortChannelName } from '_messaging/PortChannelName';
@@ -68,6 +69,9 @@ export class UiConnection extends Connection {
                 Object.values(await Transactions.getTransactionRequests()),
                 id
             );
+        } else if (isDisconnectApp(payload)) {
+            await Permissions.delete(payload.origin);
+            this.send(createMessage({ type: 'done' }, id));
         }
     }
 

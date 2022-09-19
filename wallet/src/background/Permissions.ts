@@ -224,6 +224,16 @@ class Permissions {
         );
     }
 
+    public async delete(origin: string) {
+        const allPermissions = await this.getPermissions();
+        if (origin in allPermissions) {
+            delete allPermissions[origin];
+            await Browser.storage.local.set({
+                [PERMISSIONS_STORAGE_KEY]: allPermissions,
+            });
+        }
+    }
+
     private async createPermissionRequest(
         origin: string,
         permissionTypes: readonly PermissionType[],
