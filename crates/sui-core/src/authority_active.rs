@@ -177,7 +177,7 @@ impl<A> ActiveAuthority<A> {
         })
     }
 
-    pub fn net(&self) -> Arc<AuthorityAggregator<A>> {
+    pub fn agg_aggregator(&self) -> Arc<AuthorityAggregator<A>> {
         self.net.load().clone()
     }
 
@@ -312,7 +312,7 @@ where
         // TODO: potentially move get_latest_proposal_and_checkpoint_from_all and
         // sync_to_checkpoint out of checkpoint_driver
         let checkpoint_summary = get_latest_checkpoint_from_all(
-            self.net(),
+            self.agg_aggregator(),
             checkpoint_process_control.extra_time_after_quorum,
             checkpoint_process_control.timeout_until_quorum,
         )
@@ -387,28 +387,9 @@ where
     ) {
         info!(epoch = ?self.state.committee.load().epoch, "respawn_node_sync_process");
         Self::cancel_node_sync_process_impl(&mut lock_guard).await;
-        // if let Some(NodeSyncProcessHandle(join_handle, cancel_sender)) = lock_guard.take() {
-        //     info!("sending cancel request to node sync task");
-        //     let _ = cancel_sender
-        //         .send(())
-        //         .tap_err(|_| warn!("failed to request cancellation of node sync task"));
-
-        //     pin_mut!(join_handle);
-
-        //     // try to join the task, then kill it if it doesn't cancel on its own.
-        //     info!("waiting node sync task to exit");
-        //     if timeout(Duration::from_secs(1), &mut join_handle)
-        //         .await
-        //         .is_err()
-        //     {
-        //         error!("node sync task did not terminate on its own. aborting.");
-        //         join_handle.abort();
-        //         let _ = join_handle.await;
-        //     }
-        // }
 
         let (cancel_sender, cancel_receiver) = oneshot::channel();
-        let aggregator = self.net();
+        let aggregator = self.agg_aggregator();
 
         let node_sync_handle = self.node_sync_handle();
         let node_sync_state = self.node_sync_state.clone();

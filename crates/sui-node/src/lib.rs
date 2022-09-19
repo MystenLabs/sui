@@ -185,10 +185,11 @@ impl SuiNode {
             network_metrics.clone(),
         )?);
 
+        let arc_net = active_authority.agg_aggregator();
+
         let transaction_orchestrator = if is_full_node {
             Some(Arc::new(TransactiondOrchestrator::new(
-                // FIXME
-                net.clone(),
+                arc_net,
                 active_authority.node_sync_state.clone(),
                 &prometheus_registry,
             )))
@@ -324,12 +325,6 @@ impl SuiNode {
     pub fn active(&self) -> &Arc<ActiveAuthority<NetworkAuthorityClient>> {
         &self.active
     }
-
-    // pub fn quorum_driver(&self) -> Option<Arc<QuorumDriver<NetworkAuthorityClient>>> {
-    //     self.transaction_orchestrator
-    //         .as_ref()
-    //         .map(|to| to.quorum_driver().clone())
-    // }
 
     pub fn transaction_orchestrator(
         &self,
