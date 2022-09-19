@@ -5117,7 +5117,7 @@ version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fbeff60e3e37407a80ead3e9458145b456e978c4068cddbfea6afb48572962ca"
 dependencies = [
- "ouroboros_macro 0.9.5",
+ "ouroboros_macro",
  "stable_deref_trait",
 ]
 
@@ -5126,19 +5126,6 @@ name = "ouroboros_macro"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "03f2cb802b5bdfdf52f1ffa0b54ce105e4d346e91990dd571f86c91321ad49e2"
-dependencies = [
- "Inflector",
- "proc-macro-error",
- "proc-macro2 1.0.43",
- "quote 1.0.21",
- "syn 1.0.99",
-]
-
-[[package]]
-name = "ouroboros_macro"
-version = "0.15.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4a0d9d1a6191c4f391f87219d1ea42b23f09ee84d64763cd05ee6ea88d9f384d"
 dependencies = [
  "Inflector",
  "proc-macro-error",
@@ -10095,7 +10082,7 @@ dependencies = [
  "ordered-float 2.10.0",
  "os_str_bytes",
  "ouroboros",
- "ouroboros_macro 0.15.5",
+ "ouroboros_macro",
  "output_vt100",
  "owo-colors",
  "parking_lot 0.10.2",
