@@ -4,7 +4,7 @@
 import cn from 'classnames';
 import { memo, useMemo } from 'react';
 
-import Icon from '_components/icon';
+import Icon, { SuiIcons } from '_components/icon';
 import { useAppSelector } from '_hooks';
 import { createDappStatusSelector } from '_redux/slices/permissions';
 
@@ -32,6 +32,9 @@ function DappStatus() {
                     ? new URL(activeOrigin).hostname
                     : 'Not connected'}
             </span>
+            {isConnected ? (
+                <Icon icon={SuiIcons.ChevronDown} className={st.chevron} />
+            ) : null}
         </Component>
     );
 }
