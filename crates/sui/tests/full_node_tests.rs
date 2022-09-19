@@ -39,7 +39,9 @@ use sui_json_rpc_types::{
 };
 use sui_node::SuiNode;
 use sui_swarm::memory::Swarm;
-use sui_types::messages::{QuorumDriverRequest, QuorumDriverRequestType, QuorumDriverResponse};
+use sui_types::messages::{
+    ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
+};
 use sui_types::{
     base_types::{ObjectID, SuiAddress, TransactionDigest},
     messages::TransactionInfoRequest,
@@ -722,42 +724,79 @@ async fn test_full_node_event_read_api_ok() -> Result<(), anyhow::Error> {
 }
 
 #[sui_test]
-async fn test_full_node_quorum_driver_basic() -> Result<(), anyhow::Error> {
+async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::Error> {
     let (swarm, mut context, _address) = setup_network_and_wallet().await.unwrap();
     let config = swarm.config().generate_fullnode_config();
     let node = SuiNode::start(&config, Registry::new()).await?;
 
-    let quorum_driver = node
-        .quorum_driver()
-        .expect("Fullnode should have quorum driver toggled on.");
+    let transaction_orchestrator = node
+        .transaction_orchestrator()
+        .expect("Fullnode should have transaction orchestrator toggled on.");
     let mut rx = node
-        .subscribe_to_quorum_driver_effects()
-        .expect("Fullnode should have quorum driver toggled on.");
+        .subscribe_to_transaction_orchestrator_effects()
+        .expect("Fullnode should have transaction orchestrator toggled on.");
 
-    let mut txns = make_transactions_with_wallet_context(&mut context, 3).await;
+    let txn_count = 4;
+    let mut txns = make_transactions_with_wallet_context(&mut context, txn_count).await;
     assert!(
-        txns.len() >= 3,
-        "Expect at least 3 txns. Do we generate enough gas objects during genesis?"
+        txns.len() >= txn_count,
+        "Expect at least {} txns. Do we generate enough gas objects during genesis?",
+        txn_count,
     );
 
-    // Test WaitForEffectsCert
+    // Test WaitForLocalExecution
     let txn = txns.swap_remove(0);
     let digest = *txn.digest();
-    let res = quorum_driver
-        .execute_transaction(QuorumDriverRequest {
+    let res = transaction_orchestrator
+        .execute_transaction(ExecuteTransactionRequest {
             transaction: txn,
-            request_type: QuorumDriverRequestType::WaitForEffectsCert,
+            request_type: ExecuteTransactionRequestType::WaitForLocalExecution,
         })
         .await
         .unwrap_or_else(|e| panic!("Failed to execute transaction {:?}: {:?}", digest, e));
 
     match res {
-        QuorumDriverResponse::EffectsCert(res) => {
+        ExecuteTransactionResponse::EffectsCert(res) => {
             let (certified_txn, certified_txn_effects) = rx.recv().await.unwrap();
-            let (ct, cte) = *res;
+            let (ct, cte, is_executed_locally) = *res;
             assert_eq!(*ct.digest(), digest);
             assert_eq!(*certified_txn.digest(), digest);
             assert_eq!(*cte.digest(), *certified_txn_effects.digest());
+            assert!(is_executed_locally);
+            // verify that the node has sequenced and executed the txn
+            node.state().get_transaction(digest).await
+                .unwrap_or_else(|e| panic!("Fullnode does not know about the txn {:?} that was executed with WaitForLocalExecution: {:?}", digest, e));
+        }
+        other => {
+            panic!(
+                "WaitForLocalExecution should get EffectCerts, but got: {:?}",
+                other
+            );
+        }
+    };
+
+    // Test WaitForEffectsCert
+    let txn = txns.swap_remove(0);
+    let digest = *txn.digest();
+    let res = transaction_orchestrator
+        .execute_transaction(ExecuteTransactionRequest {
+            transaction: txn,
+            request_type: ExecuteTransactionRequestType::WaitForEffectsCert,
+        })
+        .await
+        .unwrap_or_else(|e| panic!("Failed to execute transaction {:?}: {:?}", digest, e));
+
+    match res {
+        ExecuteTransactionResponse::EffectsCert(res) => {
+            let (certified_txn, certified_txn_effects) = rx.recv().await.unwrap();
+            let (ct, cte, is_executed_locally) = *res;
+            assert_eq!(*ct.digest(), digest);
+            assert_eq!(*certified_txn.digest(), digest);
+            assert_eq!(*cte.digest(), *certified_txn_effects.digest());
+            assert!(!is_executed_locally);
+            wait_for_tx(digest, node.state().clone()).await;
+            node.state().get_transaction(digest).await
+                .unwrap_or_else(|e| panic!("Fullnode does not know about the txn {:?} that was executed with WaitForEffectsCert: {:?}", digest, e));
         }
         other => {
             panic!(
@@ -770,20 +809,23 @@ async fn test_full_node_quorum_driver_basic() -> Result<(), anyhow::Error> {
     // Test WaitForTxCert
     let txn = txns.swap_remove(0);
     let digest = *txn.digest();
-    let res = quorum_driver
-        .execute_transaction(QuorumDriverRequest {
+    let res = transaction_orchestrator
+        .execute_transaction(ExecuteTransactionRequest {
             transaction: txn,
-            request_type: QuorumDriverRequestType::WaitForTxCert,
+            request_type: ExecuteTransactionRequestType::WaitForTxCert,
         })
         .await
         .unwrap_or_else(|e| panic!("Failed to execute transaction {:?}: {:?}", digest, e));
 
     match res {
-        QuorumDriverResponse::TxCert(res) => {
+        ExecuteTransactionResponse::TxCert(res) => {
             let (certified_txn, _certified_txn_effects) = rx.recv().await.unwrap();
             let ct = *res;
             assert_eq!(*ct.digest(), digest);
             assert_eq!(*certified_txn.digest(), digest);
+            wait_for_tx(digest, node.state().clone()).await;
+            node.state().get_transaction(digest).await
+                .unwrap_or_else(|e| panic!("Fullnode does not know about the txn {:?} that was executed with WaitForTxCert: {:?}", digest, e));
         }
         other => {
             panic!("WaitForTxCert should get TxCert, but got: {:?}", other);
@@ -793,18 +835,22 @@ async fn test_full_node_quorum_driver_basic() -> Result<(), anyhow::Error> {
     // Test ImmediateReturn
     let txn = txns.swap_remove(0);
     let digest = *txn.digest();
-    let res = quorum_driver
-        .execute_transaction(QuorumDriverRequest {
+    let res = transaction_orchestrator
+        .execute_transaction(ExecuteTransactionRequest {
             transaction: txn,
-            request_type: QuorumDriverRequestType::ImmediateReturn,
+            request_type: ExecuteTransactionRequestType::ImmediateReturn,
         })
         .await
         .unwrap_or_else(|e| panic!("Failed to execute transaction {:?}: {:?}", digest, e));
 
     match res {
-        QuorumDriverResponse::ImmediateReturn => {
+        ExecuteTransactionResponse::ImmediateReturn => {
             let (certified_txn, _certified_txn_effects) = rx.recv().await.unwrap();
             assert_eq!(*certified_txn.digest(), digest);
+
+            wait_for_tx(digest, node.state().clone()).await;
+            node.state().get_transaction(digest).await
+                .unwrap_or_else(|e| panic!("Fullnode does not know about the txn {:?} that was executed with ImmediateReturn: {:?}", digest, e));
         }
         other => {
             panic!(
@@ -813,29 +859,26 @@ async fn test_full_node_quorum_driver_basic() -> Result<(), anyhow::Error> {
             );
         }
     };
-    wait_for_tx(digest, node.state().clone()).await;
-
-    // verify that the node has seen the transaction
-    node.state().get_transaction(digest).await
-        .unwrap_or_else(|e| panic!("Fullnode does not know about the txn {:?} that was executed with ImmediateReturn: {:?}", digest, e));
 
     Ok(())
 }
 
-/// Test a validator node does not have quorum driver
+/// Test a validator node does not have transaction orchestrator
 #[tokio::test]
-async fn test_validator_node_has_no_quorum_driver() {
+async fn test_validator_node_has_no_transaction_orchestrator() {
     let configs = test_and_configure_authority_configs(1);
     let validator_config = &configs.validator_configs()[0];
     let node = SuiNode::start(validator_config, Registry::new())
         .await
         .unwrap();
-    assert!(node.quorum_driver().is_none());
-    assert!(node.subscribe_to_quorum_driver_effects().is_err());
+    assert!(node.transaction_orchestrator().is_none());
+    assert!(node
+        .subscribe_to_transaction_orchestrator_effects()
+        .is_err());
 }
 
 #[tokio::test]
-async fn test_full_node_quorum_driver_rpc_ok() -> Result<(), anyhow::Error> {
+async fn test_full_node_transaction_orchestrator_rpc_ok() -> Result<(), anyhow::Error> {
     let (swarm, mut context, _address) = setup_network_and_wallet().await?;
     let (_node, jsonrpc_client, _) = set_up_jsonrpc(&swarm, None).await?;
 
@@ -848,14 +891,14 @@ async fn test_full_node_quorum_driver_rpc_ok() -> Result<(), anyhow::Error> {
     let txn = txns.swap_remove(0);
     let tx_digest = txn.digest();
 
-    // Test request with QuorumDriverRequestType::WaitForEffectsCert
+    // Test request with ExecuteTransactionRequestType::WaitForLocalExecution
     let (tx_bytes, flag, signature, pub_key) = txn.to_network_data_for_execution();
     let params = rpc_params![
         tx_bytes,
         flag,
         signature,
         pub_key,
-        QuorumDriverRequestType::WaitForEffectsCert
+        ExecuteTransactionRequestType::WaitForLocalExecution
     ];
     let response: SuiExecuteTransactionResponse = jsonrpc_client
         .request("sui_executeTransaction", params)
@@ -865,15 +908,47 @@ async fn test_full_node_quorum_driver_rpc_ok() -> Result<(), anyhow::Error> {
     if let SuiExecuteTransactionResponse::EffectsCert {
         certificate,
         effects: _,
-        confirmed_local_execution: _,
+        confirmed_local_execution,
     } = response
     {
         assert_eq!(&certificate.transaction_digest, tx_digest);
+        assert!(confirmed_local_execution);
     } else {
         panic!("Expect EffectsCert but got {:?}", response);
     }
 
-    // Test request with QuorumDriverRequestType::WaitForTxCert
+    let _response: SuiTransactionResponse = jsonrpc_client
+        .request("sui_getTransaction", rpc_params![*tx_digest])
+        .await
+        .unwrap();
+
+    // Test request with ExecuteTransactionRequestType::WaitForEffectsCert
+    let (tx_bytes, flag, signature, pub_key) = txn.to_network_data_for_execution();
+    let params = rpc_params![
+        tx_bytes,
+        flag,
+        signature,
+        pub_key,
+        ExecuteTransactionRequestType::WaitForEffectsCert
+    ];
+    let response: SuiExecuteTransactionResponse = jsonrpc_client
+        .request("sui_executeTransaction", params)
+        .await
+        .unwrap();
+
+    if let SuiExecuteTransactionResponse::EffectsCert {
+        certificate,
+        effects: _,
+        confirmed_local_execution,
+    } = response
+    {
+        assert_eq!(&certificate.transaction_digest, tx_digest);
+        assert!(!confirmed_local_execution);
+    } else {
+        panic!("Expect EffectsCert but got {:?}", response);
+    }
+
+    // Test request with ExecuteTransactionRequestType::WaitForTxCert
     let txn = txns.swap_remove(0);
     let tx_digest = txn.digest();
     let (tx_bytes, flag, signature, pub_key) = txn.to_network_data_for_execution();
@@ -882,7 +957,7 @@ async fn test_full_node_quorum_driver_rpc_ok() -> Result<(), anyhow::Error> {
         flag,
         signature,
         pub_key,
-        QuorumDriverRequestType::WaitForTxCert
+        ExecuteTransactionRequestType::WaitForTxCert
     ];
     let response: SuiExecuteTransactionResponse = jsonrpc_client
         .request("sui_executeTransaction", params)
@@ -895,7 +970,7 @@ async fn test_full_node_quorum_driver_rpc_ok() -> Result<(), anyhow::Error> {
         panic!("Expect TxCert but got {:?}", response);
     }
 
-    // Test request with QuorumDriverRequestType::ImmediateReturn
+    // Test request with ExecuteTransactionRequestType::ImmediateReturn
     let txn = txns.swap_remove(0);
     let tx_digest = txn.digest();
     let (tx_bytes, flag, signature, pub_key) = txn.to_network_data_for_execution();
@@ -904,7 +979,7 @@ async fn test_full_node_quorum_driver_rpc_ok() -> Result<(), anyhow::Error> {
         flag,
         signature,
         pub_key,
-        QuorumDriverRequestType::ImmediateReturn
+        ExecuteTransactionRequestType::ImmediateReturn
     ];
     let response: SuiExecuteTransactionResponse = jsonrpc_client
         .request("sui_executeTransaction", params)

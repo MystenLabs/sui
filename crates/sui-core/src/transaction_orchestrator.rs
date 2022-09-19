@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /*
-Transaction Orchestrator is a Quorum Driver wrapper that proactively
-execute finalzied transactions locally by leveraging the NodeSyncState.
+Transaction Orchestrator is a Node component that utilizes Quorum Driver to
+move transactions forward in validators and proactively executes finalized
+transactions locally by leveraging the NodeSyncState.
 */
 
 use std::sync::Arc;
@@ -140,14 +141,14 @@ where
         effects_cert: &CertifiedTransactionEffects,
     ) -> SuiResult {
         // TODO: attempt a finalized tx at most once per request.
-        // Every WaitForEffectsCert request will be attempted to execute twice,
-        // one from the subscriber queue, one from the proactively execution
-        // before returning results to clients. This is not insanely bad because
+        // Every WaitForLocalExecution request will be attempted to execute twice,
+        // one from the subscriber queue, one from the proactive execution before
+        // returning results to clients. This is not insanely bad because:
         // 1. it's possible that one attempt finishes before the other, so there's
-        //      zero extra work
+        //      zero extra work except DB checks
         // 2. an up-to-date fullnode should have minimal overhead to sync parents
         //      (for one extra time)
-        // 3. the tx will be executed at most once per lock guard.
+        // 3. at the end of day, the tx will be executed at most once per lock guard.
         let tx_digest = tx_cert.digest();
         if node_sync_state.is_tx_finalized_and_executed_locally(tx_digest)? {
             return Ok(());

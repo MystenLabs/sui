@@ -25,20 +25,17 @@ use sui_types::{
 };
 
 pub struct FullNodeQuorumDriverApi {
-    // pub quorum_driver: Arc<QuorumDriver<NetworkAuthorityClient>>,
-    pub quorum_driver: Arc<TransactiondOrchestrator<NetworkAuthorityClient>>,
+    pub transaction_orchestrator: Arc<TransactiondOrchestrator<NetworkAuthorityClient>>,
     pub module_cache: Arc<SyncModuleCache<ResolverWrapper<AuthorityStore>>>,
 }
 
 impl FullNodeQuorumDriverApi {
     pub fn new(
-        // quorum_driver: Arc<QuorumDriver<NetworkAuthorityClient>>,
-        // FIXME
-        quorum_driver: Arc<TransactiondOrchestrator<NetworkAuthorityClient>>,
+        transaction_orchestrator: Arc<TransactiondOrchestrator<NetworkAuthorityClient>>,
         module_cache: Arc<SyncModuleCache<ResolverWrapper<AuthorityStore>>>,
     ) -> Self {
         Self {
-            quorum_driver,
+            transaction_orchestrator,
             module_cache,
         }
     }
@@ -64,7 +61,7 @@ impl QuorumDriverApiServer for FullNodeQuorumDriverApi {
         let txn_digest = *txn.digest();
 
         let response = self
-            .quorum_driver
+            .transaction_orchestrator
             .execute_transaction(ExecuteTransactionRequest {
                 transaction: txn,
                 request_type,

@@ -15,7 +15,6 @@ use sui_config::NodeConfig;
 use sui_core::authority_active::checkpoint_driver::CheckpointMetrics;
 use sui_core::authority_aggregator::{AuthAggMetrics, AuthorityAggregator};
 use sui_core::authority_server::ValidatorService;
-use sui_core::quorum_driver::QuorumDriver;
 use sui_core::safe_client::SafeClientMetrics;
 use sui_core::transaction_orchestrator::TransactiondOrchestrator;
 use sui_core::transaction_streamer::TransactionStreamer;
@@ -326,22 +325,26 @@ impl SuiNode {
         &self.active
     }
 
-    pub fn quorum_driver(&self) -> Option<Arc<QuorumDriver<NetworkAuthorityClient>>> {
-        self.transaction_orchestrator
-            .as_ref()
-            .map(|to| to.quorum_driver().clone())
+    // pub fn quorum_driver(&self) -> Option<Arc<QuorumDriver<NetworkAuthorityClient>>> {
+    //     self.transaction_orchestrator
+    //         .as_ref()
+    //         .map(|to| to.quorum_driver().clone())
+    // }
+
+    pub fn transaction_orchestrator(
+        &self,
+    ) -> Option<Arc<TransactiondOrchestrator<NetworkAuthorityClient>>> {
+        self.transaction_orchestrator.clone()
     }
 
-    pub fn subscribe_to_quorum_driver_effects(
+    pub fn subscribe_to_transaction_orchestrator_effects(
         &self,
     ) -> Result<tokio::sync::broadcast::Receiver<(CertifiedTransaction, CertifiedTransactionEffects)>>
     {
         self.transaction_orchestrator
             .as_ref()
             .map(|to| to.subscribe_to_effects_queue())
-            .ok_or(anyhow::anyhow!(
-                "Quorum Driver is not enabled in this node."
-            ))
+            .ok_or_else(|| anyhow::anyhow!("Transaction Orchestrator is not enabled in this node."))
     }
 
     //TODO watch/wait on all the components
@@ -354,7 +357,6 @@ impl SuiNode {
 
 pub async fn build_http_servers(
     state: Arc<AuthorityState>,
-    // quorum_driver_handler: &Option<QuorumDriverHandler<NetworkAuthorityClient>>,
     transaction_orchestrator: &Option<Arc<TransactiondOrchestrator<NetworkAuthorityClient>>>,
     config: &NodeConfig,
     prometheus_registry: &Registry,

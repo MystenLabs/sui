@@ -59,7 +59,12 @@ async fn test_blocking_execution() -> Result<(), anyhow::Error> {
     let txn = txns.swap_remove(0);
     let digest = *txn.digest();
 
-    let res = execute_with_orchestrator(&orchestrator, txn,  ExecuteTransactionRequestType::WaitForLocalExecution).await;
+    let res = execute_with_orchestrator(
+        &orchestrator,
+        txn,
+        ExecuteTransactionRequestType::WaitForLocalExecution,
+    )
+    .await;
 
     if let ExecuteTransactionResponse::EffectsCert(result) = res {
         let (_, _, executed_locally) = *result;
@@ -97,16 +102,31 @@ async fn test_non_blocking_execution() -> Result<(), anyhow::Error> {
     // Test ImmediateReturn and WaitForTxCert eventually are executed too
     let txn = txns.swap_remove(0);
     let digest1 = *txn.digest();
- 
-    execute_with_orchestrator(&orchestrator, txn,  ExecuteTransactionRequestType::ImmediateReturn).await;
+
+    execute_with_orchestrator(
+        &orchestrator,
+        txn,
+        ExecuteTransactionRequestType::ImmediateReturn,
+    )
+    .await;
 
     let txn = txns.swap_remove(0);
     let digest2 = *txn.digest();
-    execute_with_orchestrator(&orchestrator, txn,  ExecuteTransactionRequestType::WaitForTxCert).await;
+    execute_with_orchestrator(
+        &orchestrator,
+        txn,
+        ExecuteTransactionRequestType::WaitForTxCert,
+    )
+    .await;
 
     let txn = txns.swap_remove(0);
     let digest3 = *txn.digest();
-    execute_with_orchestrator(&orchestrator, txn,  ExecuteTransactionRequestType::WaitForEffectsCert).await;
+    execute_with_orchestrator(
+        &orchestrator,
+        txn,
+        ExecuteTransactionRequestType::WaitForEffectsCert,
+    )
+    .await;
 
     let digests = vec![digest1, digest2, digest3];
     wait_for_all_txes(digests.clone(), node.state().clone()).await;
@@ -161,7 +181,12 @@ async fn test_local_execution_with_missing_parents() -> Result<(), anyhow::Error
         make_counter_increment_transaction_with_wallet_context(&context, signer, counter_id, None)
             .await;
     let digest2 = *tx2.digest();
-    let res = execute_with_orchestrator(&orchestrator, tx2,  ExecuteTransactionRequestType::WaitForLocalExecution).await;
+    let res = execute_with_orchestrator(
+        &orchestrator,
+        tx2,
+        ExecuteTransactionRequestType::WaitForLocalExecution,
+    )
+    .await;
 
     if let ExecuteTransactionResponse::EffectsCert(result) = res {
         let (_, _, executed_locally) = *result;
@@ -181,7 +206,12 @@ async fn test_local_execution_with_missing_parents() -> Result<(), anyhow::Error
             .await;
     let digest4 = *tx4.digest();
     // ImmediateReturn asynchronuously executes all previous txns
-    execute_with_orchestrator(&orchestrator, tx4,  ExecuteTransactionRequestType::ImmediateReturn).await;
+    execute_with_orchestrator(
+        &orchestrator,
+        tx4,
+        ExecuteTransactionRequestType::ImmediateReturn,
+    )
+    .await;
 
     // Wait for the async execution to finish
     wait_for_tx(digest4, node.state().clone()).await;
@@ -220,12 +250,16 @@ async fn node_does_not_know_txes(node: &SuiNode, digests: &Vec<TransactionDigest
     }
 }
 
-async fn execute_with_orchestrator(orchestrator: &TransactiondOrchestrator<NetworkAuthorityClient>, txn: Transaction, request_type: ExecuteTransactionRequestType) -> ExecuteTransactionResponse {
+async fn execute_with_orchestrator(
+    orchestrator: &TransactiondOrchestrator<NetworkAuthorityClient>,
+    txn: Transaction,
+    request_type: ExecuteTransactionRequestType,
+) -> ExecuteTransactionResponse {
     let digest = *txn.digest();
     orchestrator
         .execute_transaction(ExecuteTransactionRequest {
             transaction: txn,
-            request_type: request_type,
+            request_type,
         })
         .await
         .unwrap_or_else(|e| panic!("Failed to execute transaction {:?}: {:?}", digest, e))
