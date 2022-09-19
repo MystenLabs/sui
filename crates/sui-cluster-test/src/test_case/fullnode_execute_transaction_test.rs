@@ -5,7 +5,7 @@ use crate::{TestCaseImpl, TestContext};
 use async_trait::async_trait;
 use sui_json_rpc_types::{SuiExecuteTransactionResponse, SuiExecutionStatus};
 use sui_sdk::SuiClient;
-use sui_types::{messages::ExecuteTransactionRequestType, base_types::TransactionDigest};
+use sui_types::{base_types::TransactionDigest, messages::ExecuteTransactionRequestType};
 use tracing::info;
 
 pub struct FullNodeExecuteTransactionTest;
@@ -13,15 +13,15 @@ pub struct FullNodeExecuteTransactionTest;
 impl FullNodeExecuteTransactionTest {
     async fn verify_transaction(fullnode: &SuiClient, tx_digest: TransactionDigest) {
         fullnode
-        .read_api()
-        .get_transaction(tx_digest)
-        .await
-        .unwrap_or_else(|e| {
-            panic!(
-                "Failed get transaction {:?} from fullnode: {:?}",
-                tx_digest, e
-            )
-        });
+            .read_api()
+            .get_transaction(tx_digest)
+            .await
+            .unwrap_or_else(|e| {
+                panic!(
+                    "Failed get transaction {:?} from fullnode: {:?}",
+                    tx_digest, e
+                )
+            });
     }
 }
 
@@ -64,7 +64,6 @@ impl TestCaseImpl for FullNodeExecuteTransactionTest {
             // Verify fullnode observes the txn
             ctx.let_fullnode_sync().await;
             Self::verify_transaction(fullnode, tx_digest).await;
-
         } else {
             panic!("Expect ImmediateReturn but got {:?}", response);
         }
@@ -90,17 +89,13 @@ impl TestCaseImpl for FullNodeExecuteTransactionTest {
             panic!("Expect TxCert but got {:?}", response);
         }
 
-
         info!("Test execution with WaitForEffectsCert");
         let txn = txns.swap_remove(0);
         let txn_digest = *txn.digest();
 
         let response = fullnode
             .quorum_driver()
-            .execute_transaction_by_fullnode(
-                txn,
-                ExecuteTransactionRequestType::WaitForEffectsCert,
-            )
+            .execute_transaction_by_fullnode(txn, ExecuteTransactionRequestType::WaitForEffectsCert)
             .await?;
         if let SuiExecuteTransactionResponse::EffectsCert {
             certificate,
@@ -119,7 +114,6 @@ impl TestCaseImpl for FullNodeExecuteTransactionTest {
             // Verify fullnode observes the txn
             ctx.let_fullnode_sync().await;
             Self::verify_transaction(fullnode, txn_digest).await;
-
         } else {
             panic!("Expect EffectsCert but got {:?}", response);
         }
