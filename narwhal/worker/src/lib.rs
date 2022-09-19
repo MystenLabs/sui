@@ -9,7 +9,6 @@
 )]
 
 mod batch_maker;
-mod helper;
 pub mod metrics;
 mod primary_connector;
 mod processor;

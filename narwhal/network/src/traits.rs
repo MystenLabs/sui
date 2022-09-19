@@ -7,20 +7,22 @@ use rand::prelude::{SliceRandom, SmallRng};
 use tokio::task::JoinHandle;
 
 #[async_trait]
-pub trait UnreliableNetwork<Message: Clone + Send + Sync> {
+pub trait UnreliableNetwork<Request: Clone + Send + Sync> {
+    type Response: Clone + Send + Sync;
+
     async fn unreliable_send(
         &mut self,
         peer: NetworkPublicKey,
-        message: &Message,
-    ) -> JoinHandle<()>;
+        message: &Request,
+    ) -> JoinHandle<anyhow::Result<anemo::Response<Self::Response>>>;
 
     /// Broadcasts a message to all `peers` passed as an argument.
     /// The attempts to send individual messages are best effort and will not be retried.
     async fn unreliable_broadcast(
         &mut self,
         peers: Vec<NetworkPublicKey>,
-        message: &Message,
-    ) -> Vec<JoinHandle<()>> {
+        message: &Request,
+    ) -> Vec<JoinHandle<anyhow::Result<anemo::Response<Self::Response>>>> {
         let mut handlers = Vec::new();
         for peer in peers {
             let handle = { self.unreliable_send(peer, message).await };
@@ -35,15 +37,16 @@ pub trait Lucky {
 }
 
 #[async_trait]
-pub trait LuckyNetwork<Message> {
+pub trait LuckyNetwork<Request> {
+    type Response: Clone + Send + Sync;
     /// Pick a few addresses at random (specified by `nodes`) and try (best-effort) to send the
     /// message only to them. This is useful to pick nodes with whom to sync.
     async fn lucky_broadcast(
         &mut self,
         mut peers: Vec<NetworkPublicKey>,
-        message: &Message,
+        message: &Request,
         num_nodes: usize,
-    ) -> Vec<JoinHandle<()>>;
+    ) -> Vec<JoinHandle<anyhow::Result<anemo::Response<Self::Response>>>>;
 }
 
 #[async_trait]
@@ -53,12 +56,13 @@ where
     T: UnreliableNetwork<M> + Send,
     T: Lucky,
 {
+    type Response = T::Response;
     async fn lucky_broadcast(
         &mut self,
         mut peers: Vec<NetworkPublicKey>,
         message: &M,
         nodes: usize,
-    ) -> Vec<JoinHandle<()>> {
+    ) -> Vec<JoinHandle<anyhow::Result<anemo::Response<Self::Response>>>> {
         peers.shuffle(self.rng());
         peers.truncate(nodes);
         self.unreliable_broadcast(peers, message).await
@@ -66,18 +70,20 @@ where
 }
 
 #[async_trait]
-pub trait ReliableNetwork<Message: Clone + Send + Sync> {
+pub trait ReliableNetwork<Request: Clone + Send + Sync> {
+    type Response: Clone + Send + Sync;
+
     async fn send(
         &mut self,
         peer: NetworkPublicKey,
-        message: &Message,
-    ) -> CancelOnDropHandler<anyhow::Result<anemo::Response<()>>>;
+        message: &Request,
+    ) -> CancelOnDropHandler<anyhow::Result<anemo::Response<Self::Response>>>;
 
     async fn broadcast(
         &mut self,
         peers: Vec<NetworkPublicKey>,
-        message: &Message,
-    ) -> Vec<CancelOnDropHandler<anyhow::Result<anemo::Response<()>>>> {
+        message: &Request,
+    ) -> Vec<CancelOnDropHandler<anyhow::Result<anemo::Response<Self::Response>>>> {
         let mut handlers = Vec::new();
         for peer in peers {
             let handle = self.send(peer, message).await;

@@ -3,7 +3,7 @@
 
 use crate::{Batch, BatchDigest};
 use blake2::digest::Update;
-use crypto::PublicKey;
+
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -11,18 +11,25 @@ use thiserror::Error;
 #[path = "tests/batch_serde.rs"]
 mod batch_serde;
 
-/// The message exchanged between workers.
+/// Unsolicited messages exchanged between workers.
 #[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum WorkerMessage {
-    /// Used by workers to send a new batch or to reply to a batch request.
+    /// Used by workers to send a new batch.
     Batch(Batch),
-    /// Used by workers to request batches.
-    BatchRequest(Vec<BatchDigest>, /* origin */ PublicKey),
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ClientBatchRequest(pub Vec<BatchDigest>);
+/// Used by workers to request batches from other workers.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct WorkerBatchRequest {
+    pub digests: Vec<BatchDigest>,
+}
+
+/// Used by workers to provide batches to other workers.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct WorkerBatchResponse {
+    pub batches: Vec<Batch>,
+}
 
 /// Hashes a serialized batch message without deserializing it into a batch.
 ///

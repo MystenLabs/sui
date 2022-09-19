@@ -2,9 +2,8 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
-    batch_maker::BatchMaker, helper::Helper, metrics::WorkerChannelMetrics,
-    primary_connector::PrimaryConnector, processor::Processor, quorum_waiter::QuorumWaiter,
-    synchronizer::Synchronizer,
+    batch_maker::BatchMaker, metrics::WorkerChannelMetrics, primary_connector::PrimaryConnector,
+    processor::Processor, quorum_waiter::QuorumWaiter, synchronizer::Synchronizer,
 };
 use anemo::{types::PeerInfo, PeerId};
 use async_trait::async_trait;
@@ -87,16 +86,14 @@ impl Worker {
         let (tx_reconfigure, rx_reconfigure) =
             watch::channel(ReconfigureNotification::NewEpoch(initial_committee));
 
-        let (tx_worker_helper, rx_worker_helper) =
-            channel(CHANNEL_CAPACITY, &channel_metrics.tx_worker_helper);
         let (tx_worker_processor, rx_worker_processor) =
             channel(CHANNEL_CAPACITY, &channel_metrics.tx_worker_processor);
         let (tx_synchronizer, rx_synchronizer) =
             channel(CHANNEL_CAPACITY, &channel_metrics.tx_synchronizer);
 
         let worker_service = WorkerToWorkerServer::new(WorkerReceiverHandler {
-            tx_worker_helper,
-            tx_processor: tx_worker_processor,
+            tx_processor: tx_worker_processor.clone(),
+            store: worker.store.clone(),
         });
         let primary_service =
             PrimaryToWorkerServer::new(PrimaryReceiverHandler { tx_synchronizer });
@@ -183,14 +180,13 @@ impl Worker {
         let worker_flow_handles = worker.handle_workers_messages(
             &tx_reconfigure,
             tx_primary.clone(),
-            rx_worker_helper,
             rx_worker_processor,
-            network.clone(),
         );
         let primary_flow_handles = worker.handle_primary_messages(
             rx_synchronizer,
             tx_reconfigure,
             tx_primary,
+            tx_worker_processor,
             node_metrics,
             network,
         );
@@ -220,6 +216,7 @@ impl Worker {
         rx_synchronizer: Receiver<PrimaryWorkerMessage>,
         tx_reconfigure: watch::Sender<ReconfigureNotification>,
         tx_primary: Sender<WorkerPrimaryMessage>,
+        tx_batch_processor: Sender<Batch>,
         node_metrics: Arc<WorkerMetrics>,
         network: anemo::Network,
     ) -> Vec<JoinHandle<()>> {
@@ -237,6 +234,7 @@ impl Worker {
             /* rx_message */ rx_synchronizer,
             tx_reconfigure,
             tx_primary,
+            tx_batch_processor,
             node_metrics,
             P2pNetwork::new(network),
         );
@@ -332,21 +330,8 @@ impl Worker {
         &self,
         tx_reconfigure: &watch::Sender<ReconfigureNotification>,
         tx_primary: Sender<WorkerPrimaryMessage>,
-        rx_worker_request: types::metered_channel::Receiver<(Vec<BatchDigest>, PublicKey)>,
         rx_worker_processor: types::metered_channel::Receiver<Batch>,
-        network: anemo::Network,
     ) -> Vec<JoinHandle<()>> {
-        // The `Helper` is dedicated to reply to batch requests from other workers.
-        let helper_handle = Helper::spawn(
-            self.id,
-            (*(*(*self.committee).load()).clone()).clone(),
-            self.worker_cache.clone(),
-            self.store.clone(),
-            tx_reconfigure.subscribe(),
-            rx_worker_request,
-            P2pNetwork::new(network),
-        );
-
         // This `Processor` hashes and stores the batches we receive from the other workers. It then forwards the
         // batch's digest to the `PrimaryConnector` that will send it to our primary.
         let processor_handle = Processor::spawn(
@@ -358,7 +343,7 @@ impl Worker {
             /* own_batch */ false,
         );
 
-        vec![helper_handle, processor_handle]
+        vec![processor_handle]
     }
 }
 
@@ -440,8 +425,8 @@ impl Transactions for TxReceiverHandler {
 /// Defines how the network receiver handles incoming workers messages.
 #[derive(Clone)]
 struct WorkerReceiverHandler {
-    tx_worker_helper: Sender<(Vec<BatchDigest>, PublicKey)>,
     tx_processor: Sender<Batch>,
+    store: Store<BatchDigest, Batch>,
 }
 
 #[async_trait]
@@ -457,15 +442,26 @@ impl WorkerToWorker for WorkerReceiverHandler {
                 .send(batch)
                 .await
                 .map_err(|_| DagError::ShuttingDown),
-
-            WorkerMessage::BatchRequest(missing, requestor) => self
-                .tx_worker_helper
-                .send((missing, requestor))
-                .await
-                .map_err(|_| DagError::ShuttingDown),
         }
         .map(|_| anemo::Response::new(()))
         .map_err(|e| anemo::rpc::Status::internal(e.to_string()))
+    }
+    async fn request_batches(
+        &self,
+        request: anemo::Request<types::WorkerBatchRequest>,
+    ) -> Result<anemo::Response<types::WorkerBatchResponse>, anemo::rpc::Status> {
+        let message = request.into_body();
+        // TODO [issue #7]: Do some accounting to prevent bad actors from monopolizing our resources
+        // TODO: Add a limit on number of requested batches
+        let batches: Vec<Batch> = self
+            .store
+            .read_all(message.digests)
+            .await
+            .map_err(|e| anemo::rpc::Status::from_error(Box::new(e)))?
+            .into_iter()
+            .flatten()
+            .collect();
+        Ok(anemo::Response::new(types::WorkerBatchResponse { batches }))
     }
 }
 

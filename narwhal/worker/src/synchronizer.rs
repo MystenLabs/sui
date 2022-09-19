@@ -4,6 +4,7 @@
 use crate::metrics::WorkerMetrics;
 use config::{SharedCommittee, SharedWorkerCache, WorkerCache, WorkerId, WorkerIndex};
 use crypto::PublicKey;
+use fastcrypto::Hash;
 use futures::stream::{futures_unordered::FuturesUnordered, StreamExt as _};
 use network::{LuckyNetwork, P2pNetwork, UnreliableNetwork};
 use primary::PrimaryWorkerMessage;
@@ -12,18 +13,18 @@ use std::{
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
 };
-use store::{Store, StoreError};
+use store::Store;
 use tap::{TapFallible, TapOptional};
 use tokio::{
-    sync::{mpsc, watch},
+    sync::watch,
     task::JoinHandle,
     time::{sleep, Duration, Instant},
 };
-use tracing::{debug, error, trace, warn};
+use tracing::{debug, error, info, trace, warn};
 use types::{
     error::DagError,
     metered_channel::{Receiver, Sender},
-    Batch, BatchDigest, ReconfigureNotification, Round, WorkerMessage, WorkerPrimaryError,
+    Batch, BatchDigest, ReconfigureNotification, Round, WorkerBatchRequest, WorkerPrimaryError,
     WorkerPrimaryMessage,
 };
 
@@ -62,11 +63,13 @@ pub struct Synchronizer {
     /// Keeps the digests (of batches) that are waiting to be processed by the primary. Their
     /// processing will resume when we get the missing batches in the store or we no longer need them.
     /// It also keeps the round number and a time stamp (`u128`) of each request we sent.
-    pending: HashMap<BatchDigest, (Round, mpsc::Sender<()>, u128)>,
+    pending: HashMap<BatchDigest, (Round, u128)>,
     /// Send reconfiguration update to other tasks.
     tx_reconfigure: watch::Sender<ReconfigureNotification>,
     /// Output channel to send out the batch requests.
     tx_primary: Sender<WorkerPrimaryMessage>,
+    /// Output channel to process received batches.
+    tx_batch_processor: Sender<Batch>,
     /// Metrics handler
     metrics: Arc<WorkerMetrics>,
 }
@@ -85,6 +88,7 @@ impl Synchronizer {
         rx_message: Receiver<PrimaryWorkerMessage>,
         tx_reconfigure: watch::Sender<ReconfigureNotification>,
         tx_primary: Sender<WorkerPrimaryMessage>,
+        tx_batch_processor: Sender<Batch>,
         metrics: Arc<WorkerMetrics>,
         network: P2pNetwork,
     ) -> JoinHandle<()> {
@@ -104,27 +108,12 @@ impl Synchronizer {
                 pending: HashMap::new(),
                 tx_reconfigure,
                 tx_primary,
+                tx_batch_processor,
                 metrics,
             }
             .run()
             .await;
         })
-    }
-
-    /// Helper function. It waits for a batch to become available in the storage
-    /// and then delivers its digest.
-    async fn waiter(
-        missing: BatchDigest,
-        store: Store<BatchDigest, Batch>,
-        deliver: BatchDigest,
-        mut handler: mpsc::Receiver<()>,
-    ) -> Result<Option<BatchDigest>, StoreError> {
-        tokio::select! {
-            result = store.notify_read(missing) => {
-                result.map(|_| Some(deliver))
-            }
-            _ = handler.recv() => Ok(None),
-        }
     }
 
     /// Main loop listening to the primary's messages.
@@ -143,7 +132,7 @@ impl Synchronizer {
                         let mut available = HashSet::new();
 
                         for digest in digests.iter() {
-                            // Ensure we do not send twice the same sync request.
+                            // Ensure we do not send the same sync request twice.
                             if self.pending.contains_key(digest) {
                                 continue;
                             }
@@ -188,12 +177,7 @@ impl Synchronizer {
 
                             // now add all requests as pending
                             for digest in missing.iter() {
-                                // Add the digest to the waiter.
-                                let deliver = *digest;
-                                let (tx_cancel, rx_cancel) = mpsc::channel(1);
-                                let fut = Self::waiter(*digest, self.store.clone(), deliver, rx_cancel);
-                                waiting.push(fut);
-                                self.pending.insert(*digest, (self.round, tx_cancel, now));
+                                self.pending.insert(*digest, (self.round, now));
                             }
 
                             // Send sync request to a single node. If this fails, we will send it
@@ -206,10 +190,12 @@ impl Synchronizer {
                                 }
                             };
 
-                            debug!("Sending BatchRequest message to {} for missing batches {:?}", worker_name, missing.clone());
+                            debug!("Sending WorkerBatchRequest message to {} for missing batches {:?}", worker_name, missing.clone());
 
-                            let message = WorkerMessage::BatchRequest(missing.into_iter().collect::<Vec<_>>(), self.name.clone());
-                            self.network.unreliable_send(worker_name, &message).await;
+                            // TODO: restore ability to cancel these requests when primary->worker RPCs are
+                            // made synchronous and this one becomes a child of those.
+                            let message = WorkerBatchRequest{digests: missing.into_iter().collect::<Vec<_>>() };
+                            waiting.push(self.network.unreliable_send(worker_name, &message).await);
                         } else {
                             debug!("All batches are already available {:?} nothing to request from peers", digests);
                         }
@@ -224,12 +210,7 @@ impl Synchronizer {
                         }
 
                         let mut gc_round = self.round - self.gc_depth;
-                        for (r, handler, _) in self.pending.values() {
-                            if r <= &gc_round {
-                                let _ = handler.send(()).await;
-                            }
-                        }
-                        self.pending.retain(|_, (r, _, _)| r > &mut gc_round);
+                        self.pending.retain(|_, (r, _)| r > &mut gc_round);
                     },
                     PrimaryWorkerMessage::Reconfigure(message) => {
                         // Reconfigure this task and update the shared committee.
@@ -309,14 +290,22 @@ impl Synchronizer {
 
                 // Stream out the futures of the `FuturesUnordered` that completed.
                 Some(result) = waiting.next() => match result {
-                    Ok(Some(digest)) => {
-                        // We got the batch, remove it from the pending list.
-                        self.pending.remove(&digest);
+                    Ok(Ok(response)) => {
+                        for batch in response.into_body().batches {
+                            // TODO: remove duplicate hashing of batch after primary-to-worker
+                            // communication is refactored to be synchronous.
+                            if self.pending.remove(&batch.digest()).is_some() {
+                                // Only send batch to processor if we haven't received it already
+                                // from another source.
+                                if self.tx_batch_processor.send(batch).await.is_err() {
+                                    // Assume error sending to processor means we're shutting down.
+                                    break
+                                }
+                            }
+                        }
                     },
-                    Ok(None) => {
-                        // The sync request for this batch has been canceled.
-                    },
-                    Err(e) => error!("{e}")
+                    Ok(Err(e)) => info!("{e}"),  // occasional RPC errors are expected
+                    Err(e) => error!("{e}"),
                 },
 
                 // Triggers on timer's expiration.
@@ -330,7 +319,7 @@ impl Synchronizer {
                         .as_millis();
 
                     let mut retry = Vec::new();
-                    for (digest, (_, _, timestamp)) in self.pending.iter_mut() {
+                    for (digest, (_, timestamp)) in self.pending.iter_mut() {
                         if *timestamp + self.sync_retry_delay.as_millis() < now {
                             debug!("Requesting sync for batch {digest} (retry)");
                             retry.push(*digest);
@@ -344,10 +333,12 @@ impl Synchronizer {
                             .into_iter()
                             .map(|(_, info)| info.name)
                             .collect();
-                        let message = WorkerMessage::BatchRequest(retry, self.name.clone());
-                        self.network
+                        let message = WorkerBatchRequest{digests: retry};
+                        for fut in self.network
                             .lucky_broadcast(names, &message, self.sync_retry_nodes)
-                            .await;
+                            .await {
+                            waiting.push(fut);
+                        }
                     }
 
                     // Reschedule the timer.

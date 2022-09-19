@@ -14,6 +14,7 @@ use tokio::time::timeout;
 async fn synchronize() {
     let (tx_message, rx_message) = test_utils::test_channel!(1);
     let (tx_primary, _) = test_utils::test_channel!(1);
+    let (tx_batch_processor, _) = test_utils::test_channel!(1);
 
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
@@ -45,6 +46,7 @@ async fn synchronize() {
         rx_message,
         tx_reconfiguration,
         tx_primary,
+        tx_batch_processor,
         metrics,
         P2pNetwork::new(network.clone()),
     );
@@ -54,8 +56,10 @@ async fn synchronize() {
     let target_worker = target_primary.worker(id);
     let target = target_primary.public_key();
     let missing = vec![batch().digest()];
-    let expected = WorkerMessage::BatchRequest(missing.clone(), my_primary.public_key());
-    let (mut handle, _network) = WorkerToWorkerMockServer::spawn(
+    let expected = WorkerBatchRequest {
+        digests: missing.clone(),
+    };
+    let (_, mut rx_worker_batch_request, _network) = WorkerToWorkerMockServer::spawn(
         target_worker.keypair(),
         target_worker.info().worker_address.clone(),
     );
@@ -71,13 +75,14 @@ async fn synchronize() {
     tx_message.send(message).await.unwrap();
 
     // Ensure the target receives the sync request.
-    assert_eq!(handle.recv().await.unwrap(), expected);
+    assert_eq!(rx_worker_batch_request.recv().await.unwrap(), expected);
 }
 
 #[tokio::test]
 async fn synchronize_when_batch_exists() {
     let (tx_message, rx_message) = test_utils::test_channel!(1);
     let (tx_primary, mut rx_primary) = test_utils::test_channel!(1);
+    let (tx_batch_processor, _) = test_utils::test_channel!(1);
 
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
@@ -109,6 +114,7 @@ async fn synchronize_when_batch_exists() {
         rx_message,
         tx_reconfiguration,
         tx_primary,
+        tx_batch_processor,
         metrics,
         P2pNetwork::new(network.clone()),
     );
@@ -117,7 +123,7 @@ async fn synchronize_when_batch_exists() {
     let target_primary = fixture.authorities().nth(1).unwrap();
     let target_worker = target_primary.worker(id);
     let target = target_primary.public_key();
-    let (mut handle, _network) = WorkerToWorkerMockServer::spawn(
+    let (mut handle, _, _network) = WorkerToWorkerMockServer::spawn(
         target_worker.keypair(),
         target_worker.info().worker_address.clone(),
     );
@@ -159,6 +165,7 @@ async fn synchronize_when_batch_exists() {
 async fn test_successful_request_batch() {
     let (tx_message, rx_message) = test_utils::test_channel!(1);
     let (tx_primary, mut rx_primary) = test_utils::test_channel!(1);
+    let (tx_batch_processor, _) = test_utils::test_channel!(1);
 
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
@@ -190,6 +197,7 @@ async fn test_successful_request_batch() {
         rx_message,
         tx_reconfiguration,
         tx_primary,
+        tx_batch_processor,
         metrics,
         P2pNetwork::new(network),
     );
@@ -225,6 +233,7 @@ async fn test_successful_request_batch() {
 async fn test_request_batch_not_found() {
     let (tx_message, rx_message) = test_utils::test_channel!(1);
     let (tx_primary, mut rx_primary) = test_utils::test_channel!(1);
+    let (tx_batch_processor, _) = test_utils::test_channel!(1);
 
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
@@ -256,6 +265,7 @@ async fn test_request_batch_not_found() {
         rx_message,
         tx_reconfiguration,
         tx_primary,
+        tx_batch_processor,
         metrics,
         P2pNetwork::new(network),
     );
@@ -291,6 +301,7 @@ async fn test_request_batch_not_found() {
 async fn test_successful_batch_delete() {
     let (tx_message, rx_message) = test_utils::test_channel!(1);
     let (tx_primary, mut rx_primary) = test_utils::test_channel!(1);
+    let (tx_batch_processor, _) = test_utils::test_channel!(1);
 
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
@@ -322,6 +333,7 @@ async fn test_successful_batch_delete() {
         rx_message,
         tx_reconfiguration,
         tx_primary,
+        tx_batch_processor,
         metrics,
         P2pNetwork::new(network),
     );
