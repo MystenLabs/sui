@@ -4,6 +4,7 @@ use blake2::digest::Update;
 use config::{Committee, SharedWorkerCache};
 use crypto::PublicKey;
 use fastcrypto::{Digest, Hash};
+use std::fmt::Debug;
 use std::{
     collections::BTreeMap,
     fmt::{Display, Formatter},
@@ -14,13 +15,19 @@ use types::{Certificate, CertificateDigest, Round};
 
 // RequestID helps us identify an incoming request and
 // all the consequent network requests associated with it.
-#[derive(Clone, Debug, Copy, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Clone, Copy, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct RequestID(pub [u8; fastcrypto::DIGEST_LEN]);
 
 impl RequestID {
     // Create a request key (deterministically) from arbitrary data.
     pub fn new(data: &[u8]) -> Self {
         RequestID(fastcrypto::blake2b_256(|hasher| hasher.update(data)))
+    }
+}
+
+impl Debug for RequestID {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(f, "{}", base64::encode(self.0))
     }
 }
 

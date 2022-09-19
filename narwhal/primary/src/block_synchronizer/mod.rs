@@ -390,6 +390,7 @@ impl BlockSynchronizer {
         }
     }
 
+    #[instrument(level = "trace", skip_all)]
     async fn handle_synchronize_range_command<'a>(
         &mut self,
         respond_to: Sender<CertificateIDsByRounds>,
@@ -433,6 +434,7 @@ impl BlockSynchronizer {
         )
     }
 
+    #[instrument(level = "trace", skip_all)]
     async fn handle_digest_response(&mut self, certificate_digests: CertificateDigestsResponse) {
         let CertificateDigestsResponse {
             certificate_ids,
@@ -530,6 +532,7 @@ impl BlockSynchronizer {
         State::RangeSynchronized { certificate_ids }
     }
 
+    #[instrument(level = "trace", skip_all)]
     async fn notify_requestors_for_result(
         &mut self,
         request: PendingIdentifier,
@@ -644,6 +647,7 @@ impl BlockSynchronizer {
     /// back to the consumer. The method returns a future that is running the
     /// process of waiting to gather the node responses and emits the result as
     /// the next State to be executed.
+    #[instrument(level = "trace", skip_all)]
     async fn handle_synchronize_block_headers_command<'a>(
         &mut self,
         block_ids: Vec<CertificateDigest>,
@@ -905,6 +909,7 @@ impl BlockSynchronizer {
         }
     }
 
+    #[instrument(level = "trace", skip_all, fields(request_id, certificate=?certificate.header.id))]
     async fn wait_for_block_payload<'a>(
         payload_synchronize_timeout: Duration,
         request_id: RequestID,
