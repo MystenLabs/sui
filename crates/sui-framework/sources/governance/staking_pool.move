@@ -11,7 +11,7 @@ module sui::staking_pool {
     use sui::object::{Self, UID};
     use sui::locked_coin;
     use sui::coin;
-    use sui::vec_map::{Self, VecMap};
+    use std::vector;
 
     friend sui::validator;
     friend sui::validator_set;
@@ -43,7 +43,7 @@ module sui::staking_pool {
         /// Delegations requested during the current epoch. We will activate these delegation at the end of current epoch
         /// and distribute staking pool tokens at the end-of-epoch exchange rate after the rewards for the current epoch
         /// have been deposited.
-        pending_delegations: VecMap<address, u64>,
+        pending_delegations: vector<PendingDelegationEntry>,
     }
 
     /// An inactive staking pool associated with an inactive validator.
@@ -55,6 +55,12 @@ module sui::staking_pool {
 
     /// The staking pool token.
     struct DelegationToken has drop {}
+
+    /// Struct representing a pending delegation.
+    struct PendingDelegationEntry has store, drop {
+        delegator: address, 
+        sui_amount: u64,
+    }
 
     /// A self-custodial delegation object, serving as evidence that the delegator
     /// has delegated to a staking pool.
@@ -90,7 +96,7 @@ module sui::staking_pool {
             sui_balance: 0,
             rewards_pool: balance::zero(),
             delegation_token_supply: balance::create_supply(DelegationToken {}),
-            pending_delegations: vec_map::empty(),
+            pending_delegations: vector::empty(),
         }
     }
 
@@ -100,9 +106,9 @@ module sui::staking_pool {
         balance::join(&mut pool.rewards_pool, rewards);
         
         // distribute pool tokens at new exchange rate.
-        while (!vec_map::is_empty(&pool.pending_delegations)) {
-            let (delegator, sui_amount) = vec_map::pop(&mut pool.pending_delegations);
-            distribute_delegation_tokens(pool, delegator, sui_amount, ctx);
+        while (!vector::is_empty(&pool.pending_delegations)) {
+            let PendingDelegationEntry { delegator, sui_amount } = vector::pop_back(&mut pool.pending_delegations);
+            mint_delegation_tokens_to_delegator(pool, delegator, sui_amount, ctx);
             pool.sui_balance = pool.sui_balance + sui_amount
         };
 
@@ -110,6 +116,7 @@ module sui::staking_pool {
         pool.epoch_starting_sui_balance = pool.sui_balance;
     }
 
+    // TODO: implement rate limiting new delegations per epoch.
     /// Request to delegate to a staking pool. The delegation gets counted at the beginning of the next epoch,
     /// when the delegation object containing the pool tokens is distributed to the delegator.
     public(friend) fun request_add_delegation(
@@ -121,15 +128,8 @@ module sui::staking_pool {
         let sui_amount = balance::value(&stake);
         assert!(sui_amount > 0, 0);
         let delegator = tx_context::sender(ctx);
-        // insert delegation info into the vec map. 
-        let idx_opt = vec_map::get_idx_opt(&pool.pending_delegations, &delegator);
-        if (option::is_some(&idx_opt)) {
-            let (_, entry_mut_ref) = 
-                vec_map::get_entry_by_idx_mut(&mut pool.pending_delegations, option::extract(&mut idx_opt));
-            *entry_mut_ref = *entry_mut_ref + sui_amount;
-        } else {
-            vec_map::insert(&mut pool.pending_delegations, delegator, sui_amount);
-        };
+        // insert delegation info into the pendng_delegations vector.         
+        vector::push_back(&mut pool.pending_delegations, PendingDelegationEntry { delegator, sui_amount });
         let staked_sui = StakedSui {
             id: object::new(ctx),
             principal: stake,
@@ -142,7 +142,7 @@ module sui::staking_pool {
     /// `pool_tokens` field of the delegation object.
     /// After activation, the delegation officially counts toward the staking power of the validator.
     /// Aborts if the pool mismatches, the delegation is already activated, or the delegation cannot be activated yet. 
-    public(friend) fun distribute_delegation_tokens(
+    public(friend) fun mint_delegation_tokens_to_delegator(
         pool: &mut StakingPool, 
         delegator: address, 
         sui_amount: u64, 

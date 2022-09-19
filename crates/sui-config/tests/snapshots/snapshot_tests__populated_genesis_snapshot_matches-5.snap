@@ -222,8 +222,7 @@ validators:
           value: 0
         delegation_token_supply:
           value: 0
-        pending_delegations:
-          contents: []
+        pending_delegations: []
   pending_validators: []
   pending_removals: []
   next_epoch_validators:

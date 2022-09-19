@@ -31,21 +31,6 @@ pub struct MoveOption<T> {
     pub vec: Vec<T>,
 }
 
-/// Rust version of the Move sui::vec_map::VecMap type.
-/// Putting it in this file because it's only used here.
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
-pub struct VecMap<K, V> {
-    pub contents: Vec<VecMapEntry<K, V>>,
-}
-
-/// Rust version of the Move sui::vec_map::Entry type.
-/// Putting it in this file because it's only used here.
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
-pub struct VecMapEntry<K, V> {
-    pub key: K,
-    pub value: V,
-}
-
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct ValidatorMetadata {
     pub sui_address: AccountAddress,
@@ -70,6 +55,13 @@ pub struct Validator {
     pub delegation_staking_pool: StakingPool,
 }
 
+/// Rust version of the Move sui::staking_pool::PendingDelegationEntry type.
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+pub struct PendingDelegationEntry {
+    pub delegator: AccountAddress,
+    pub sui_amount: u64,
+}
+
 /// Rust version of the Move sui::staking_pool::StakingPool type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct StakingPool {
@@ -79,7 +71,7 @@ pub struct StakingPool {
     pub sui_balance: u64,
     pub rewards_pool: Balance,
     pub delegation_token_supply: Supply,
-    pub pending_delegations: VecMap<AccountAddress, u64>,
+    pub pending_delegations: Vec<PendingDelegationEntry>,
 }
 
 /// Rust version of the Move sui::validator_set::ValidatorSet type
