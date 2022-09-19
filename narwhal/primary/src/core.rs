@@ -21,11 +21,12 @@ use storage::CertificateStore;
 use store::Store;
 use tokio::{sync::watch, task::JoinHandle};
 use tracing::{debug, error, info, instrument, warn};
+use types::error::DagError::StoreError;
 use types::{
     ensure,
     error::{DagError, DagResult},
     metered_channel::{Receiver, Sender},
-    Certificate, Header, HeaderDigest, ReconfigureNotification, Round, Vote,
+    Certificate, Header, HeaderDigest, ReconfigureNotification, Round, RoundVoteDigestPair, Vote,
 };
 
 #[cfg(test)]
@@ -69,12 +70,12 @@ pub struct Core {
 
     /// The last garbage collected round.
     gc_round: Round,
-    /// The authors of the last voted headers.
-    last_voted: HashMap<Round, HashSet<PublicKey>>,
     /// The set of headers we are currently processing.
     processing: HashMap<Round, HashSet<HeaderDigest>>,
     /// The last header we proposed (for which we are waiting votes).
     current_header: Header,
+    /// The store to persist the last voted round per authority, used to ensure idempotence.
+    vote_digest_store: Store<PublicKey, RoundVoteDigestPair>,
     /// Aggregates votes into a certificate.
     votes_aggregator: VotesAggregator,
     /// Aggregates certificates to use as parents for new headers.
@@ -96,6 +97,7 @@ impl Core {
         worker_cache: SharedWorkerCache,
         header_store: Store<HeaderDigest, Header>,
         certificate_store: CertificateStore,
+        vote_digest_store: Store<PublicKey, RoundVoteDigestPair>,
         synchronizer: Synchronizer,
         signature_service: SignatureService<Signature>,
         rx_consensus_round_updates: watch::Receiver<u64>,
@@ -129,9 +131,9 @@ impl Core {
                 tx_consensus,
                 tx_proposer,
                 gc_round: 0,
-                last_voted: HashMap::with_capacity(2 * gc_depth as usize),
                 processing: HashMap::with_capacity(2 * gc_depth as usize),
                 current_header: Header::default(),
+                vote_digest_store,
                 votes_aggregator: VotesAggregator::new(),
                 certificates_aggregators: HashMap::with_capacity(2 * gc_depth as usize),
                 network: primary_network,
@@ -151,7 +153,7 @@ impl Core {
         }
 
         // Update the committee now if the proposer already did so.
-        self.try_update_committee();
+        self.try_update_committee().await;
 
         // Reset the votes aggregator.
         self.current_header = header.clone();
@@ -263,41 +265,92 @@ impl Core {
             .inc();
 
         // Check if we can vote for this header.
-        // TODO: compute from a persisted last_voted (issue #488)
-        if self
-            .last_voted
-            .entry(header.round)
-            .or_insert_with(HashSet::new)
-            .insert(header.author.clone())
-        {
-            // Make a vote and send it to the header's creator.
-            let vote = Vote::new(header, &self.name, &mut self.signature_service).await;
-            debug!(
-                "Created vote {vote:?} for {header} at round {}",
-                header.round
-            );
-            if vote.origin == self.name {
-                // This used to be a panic, but this may fail if we're processing a late-received
-                // header where we were already are part of the signers (as a restart could have blown our `last_voted`)
-                // TODO: change this back to a panic-on-error once we have persisted last_voted (issue #488)
-                let res = self.process_vote(vote).await;
-                if let Err(e) = res {
-                    error!("Failed to process our own vote: {}", e.to_string());
+        // Send the vote when:
+        // 1. when there is no existing vote for this publicKey & round
+        //    (for this publicKey the last voted round in the votes store < header.round)
+        // 2. when there is a vote for this publicKey & round,
+        //    (for this publicKey the last voted round in the votes store = header.round)
+        //    and the hash also corresponding to the vote we already sent matches the hash of
+        //    the vote we create for this header we received
+        // Taking the inverse of these two, the only time we don't want to vote is when:
+        // there is a digest for the publicKey & round, and it does not match the digest of the
+        // vote we create for this header.
+        // Also when the header round is less than the latest round we have already voted for,
+        // then it is useless to vote, so we don't.
+
+        let result = self
+            .vote_digest_store
+            .read(header.author.clone())
+            .await
+            .map_err(StoreError)?;
+
+        if let Some(round_digest_pair) = result {
+            if header.round < round_digest_pair.round {
+                return Ok(());
+            }
+            if header.round == round_digest_pair.round {
+                // check the hash first
+                let temp_vote = Vote::new(header, &self.name, &mut self.signature_service).await;
+                if temp_vote.digest() != round_digest_pair.vote_digest {
+                    // we already sent a vote for a different header to the authority for this round
+                    // don't equivocate by sending a different vote for the same round
+                    warn!(
+                        "Authority {} submitted duplicate header for votes at round {}",
+                        header.author, header.round
+                    );
+                    self.metrics
+                        .votes_dropped_equivocation_protection
+                        .with_label_values(&[&header.epoch.to_string(), header_source])
+                        .inc();
+                    return Ok(());
                 }
-            } else {
-                let handler = self
-                    .network
-                    .send(
-                        self.committee.network_key(&header.author).unwrap(),
-                        &PrimaryMessage::Vote(vote),
-                    )
-                    .await;
-                self.cancel_handlers
-                    .entry(header.round)
-                    .or_insert_with(Vec::new)
-                    .push(handler);
             }
         }
+        self.send_vote(header).await
+    }
+
+    #[instrument(level = "debug", skip_all)]
+    async fn send_vote(&mut self, header: &Header) -> DagResult<()> {
+        // Make a vote and send it to the header's creator.
+        let vote = Vote::new(header, &self.name, &mut self.signature_service).await;
+        debug!(
+            "Created vote {vote:?} for {header} at round {}",
+            header.round
+        );
+        let vote_digest = vote.digest();
+
+        if vote.origin == self.name {
+            if let Err(e) = self.process_vote(vote).await {
+                error!("Failed to process our own vote: {}", e.to_string());
+            }
+        } else {
+            let handler = self
+                .network
+                .send(
+                    self.committee.network_key(&header.author).unwrap(),
+                    &PrimaryMessage::Vote(vote),
+                )
+                .await;
+            self.cancel_handlers
+                .entry(header.round)
+                .or_insert_with(Vec::new)
+                .push(handler);
+        }
+
+        // Update the vote digest store with the vote we just sent.
+        // We don't need to store the vote itself, since it can be reconstructed using the headers
+        // that are stored in the header store. This strategy can be used to re-deliver votes to
+        // ensure progress / liveness.
+        self.vote_digest_store
+            .write(
+                header.author.clone(),
+                RoundVoteDigestPair {
+                    round: header.round,
+                    vote_digest,
+                },
+            )
+            .await;
+
         Ok(())
     }
 
@@ -441,9 +494,9 @@ impl Core {
         Ok(())
     }
 
-    fn sanitize_header(&mut self, header: &Header) -> DagResult<()> {
+    async fn sanitize_header(&mut self, header: &Header) -> DagResult<()> {
         if header.epoch > self.committee.epoch() {
-            self.try_update_committee();
+            self.try_update_committee().await;
         }
         ensure!(
             self.committee.epoch() == header.epoch,
@@ -465,9 +518,9 @@ impl Core {
         Ok(())
     }
 
-    fn sanitize_vote(&mut self, vote: &Vote) -> DagResult<()> {
+    async fn sanitize_vote(&mut self, vote: &Vote) -> DagResult<()> {
         if vote.epoch > self.committee.epoch() {
-            self.try_update_committee();
+            self.try_update_committee().await;
         }
         ensure!(
             self.committee.epoch() == vote.epoch,
@@ -493,9 +546,9 @@ impl Core {
         vote.verify(&self.committee).map_err(DagError::from)
     }
 
-    fn sanitize_certificate(&mut self, certificate: &Certificate) -> DagResult<()> {
+    async fn sanitize_certificate(&mut self, certificate: &Certificate) -> DagResult<()> {
         if certificate.epoch() > self.committee.epoch() {
-            self.try_update_committee();
+            self.try_update_committee().await;
         }
         ensure!(
             self.committee.epoch() == certificate.epoch(),
@@ -520,7 +573,7 @@ impl Core {
     }
 
     /// If a new committee is available, update our internal state.
-    fn try_update_committee(&mut self) {
+    async fn try_update_committee(&mut self) {
         if self
             .rx_reconfigure
             .has_changed()
@@ -528,7 +581,7 @@ impl Core {
         {
             let message = self.rx_reconfigure.borrow().clone();
             if let ReconfigureNotification::NewEpoch(new_committee) = message {
-                self.change_epoch(new_committee);
+                self.change_epoch(new_committee).await;
                 // Mark the value as seen.
                 let _ = self.rx_reconfigure.borrow_and_update();
             }
@@ -536,13 +589,16 @@ impl Core {
     }
 
     /// Update the committee and cleanup internal state.
-    fn change_epoch(&mut self, committee: Committee) {
+    async fn change_epoch(&mut self, committee: Committee) {
         // Cleanup the network.
         self.network
             .cleanup(self.committee.network_diff(&committee));
 
         // Cleanup internal state.
-        self.last_voted.clear();
+        let keys = self.vote_digest_store.iter(None).await.into_keys();
+        if let Err(e) = self.vote_digest_store.remove_all(keys).await {
+            error!("Error in change epoch when clearing vote store {}", e);
+        }
         self.processing.clear();
         self.certificates_aggregators.clear();
         self.cancel_handlers.clear();
@@ -563,19 +619,19 @@ impl Core {
                 Some(message) = self.rx_primaries.recv() => {
                     match message {
                         PrimaryMessage::Header(header) => {
-                            match self.sanitize_header(&header) {
+                            match self.sanitize_header(&header).await {
                                 Ok(()) => self.process_header(&header).await,
                                 error => error
                             }
                         },
                         PrimaryMessage::Vote(vote) => {
-                            match self.sanitize_vote(&vote) {
+                            match self.sanitize_vote(&vote).await {
                                 Ok(()) => self.process_vote(vote).await,
                                 error => error
                             }
                         },
                         PrimaryMessage::Certificate(certificate) => {
-                            match self.sanitize_certificate(&certificate) {
+                            match self.sanitize_certificate(&certificate).await {
                                 Ok(()) =>  self.process_certificate(certificate).await,
                                 error => error
                             }
@@ -602,7 +658,7 @@ impl Core {
                     let message = self.rx_reconfigure.borrow().clone();
                     match message {
                         ReconfigureNotification::NewEpoch(new_committee) => {
-                            self.change_epoch(new_committee);
+                            self.change_epoch(new_committee).await;
                         },
                         ReconfigureNotification::UpdateCommittee(new_committee) => {
                             // Cleanup the network.
@@ -624,7 +680,6 @@ impl Core {
                         let now = Instant::now();
 
                         let gc_round = round - self.gc_depth;
-                        self.last_voted.retain(|k, _| k > &gc_round);
                         self.processing.retain(|k, _| k > &gc_round);
                         self.certificates_aggregators.retain(|k, _| k > &gc_round);
                         self.cancel_handlers.retain(|k, _| k > &gc_round);

@@ -295,6 +295,8 @@ pub struct PrimaryMetrics {
     pub pending_elements_certificate_waiter: IntGaugeVec,
     /// Number of elements in the waiting (ready-to-deliver) list of certificate_waiter
     pub waiting_elements_certificate_waiter: IntGaugeVec,
+    /// Number of votes that were requested but not sent due to previously having voted differently
+    pub votes_dropped_equivocation_protection: IntCounterVec,
 }
 
 impl PrimaryMetrics {
@@ -409,6 +411,13 @@ impl PrimaryMetrics {
                 "waiting_elements_certificate_waiter",
                 "Number of waiting elements in certificate waiter",
                 &["epoch"],
+                registry
+            )
+            .unwrap(),
+            votes_dropped_equivocation_protection: register_int_counter_vec_with_registry!(
+                "votes_dropped_equivocation_protection",
+                "Number of votes that were requested but not sent due to previously having voted differently",
+                &["epoch", "source"],
                 registry
             )
             .unwrap(),

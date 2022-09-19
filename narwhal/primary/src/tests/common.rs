@@ -9,12 +9,15 @@ use storage::CertificateStore;
 use store::{reopen, rocks, rocks::DBMap, Store};
 use test_utils::{
     temp_dir, PrimaryToWorkerMockServer, CERTIFICATES_CF, CERTIFICATE_ID_BY_ROUND_CF, HEADERS_CF,
-    PAYLOAD_CF,
+    PAYLOAD_CF, VOTES_CF,
 };
-use tokio::{task::JoinHandle, time::timeout};
 use types::{
     BatchDigest, Certificate, CertificateDigest, Header, HeaderDigest, PrimaryWorkerMessage, Round,
+    RoundVoteDigestPair,
 };
+
+use crypto::PublicKey;
+use tokio::{task::JoinHandle, time::timeout};
 
 pub fn create_db_stores() -> (
     Store<HeaderDigest, Header>,
@@ -45,6 +48,13 @@ pub fn create_db_stores() -> (
         CertificateStore::new(certificate_map, certificate_id_by_round_map),
         Store::new(payload_map),
     )
+}
+
+pub fn create_test_vote_store() -> Store<PublicKey, RoundVoteDigestPair> {
+    // Create a new test store.
+    let rocksdb = rocks::open_cf(temp_dir(), None, &[VOTES_CF]).expect("Failed creating database");
+    let votes_map = reopen!(&rocksdb, VOTES_CF;<PublicKey, RoundVoteDigestPair>);
+    Store::new(votes_map)
 }
 
 #[must_use]

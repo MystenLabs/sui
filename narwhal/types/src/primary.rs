@@ -802,3 +802,11 @@ pub struct WorkerInfoResponse {
     /// Map of workers' id and their network addresses.
     pub workers: BTreeMap<WorkerId, WorkerInfo>,
 }
+
+#[derive(Clone, Serialize, Deserialize, Eq, PartialEq, Debug)]
+pub struct RoundVoteDigestPair {
+    /// The latest round for which a vote was sent to given authority
+    pub round: Round,
+    /// The hash of the vote used to ensure equality
+    pub vote_digest: VoteDigest,
+}

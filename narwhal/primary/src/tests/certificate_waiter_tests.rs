@@ -1,5 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use crate::common::create_test_vote_store;
 use crate::{
     certificate_waiter::{CertificateWaiter, GC_RESOLUTION},
     common::create_db_stores,
@@ -109,6 +110,7 @@ async fn process_certificate_missing_parents_in_reverse() {
         worker_cache,
         header_store.clone(),
         certificates_store.clone(),
+        create_test_vote_store(),
         synchronizer,
         signature_service,
         rx_consensus_round_updates,
@@ -262,6 +264,7 @@ async fn process_certificate_check_gc_fires() {
         worker_cache.clone(),
         header_store.clone(),
         certificates_store.clone(),
+        create_test_vote_store(),
         synchronizer,
         signature_service,
         rx_consensus_round_updates,

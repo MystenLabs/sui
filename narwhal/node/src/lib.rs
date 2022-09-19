@@ -31,7 +31,7 @@ use tokio::{
 use tracing::{debug, info};
 use types::{
     metered_channel, Batch, BatchDigest, Certificate, CertificateDigest, ConsensusStore, Header,
-    HeaderDigest, ReconfigureNotification, Round, SequenceNumber,
+    HeaderDigest, ReconfigureNotification, Round, RoundVoteDigestPair, SequenceNumber,
 };
 use worker::{metrics::initialise_metrics, Worker};
 
@@ -41,6 +41,7 @@ pub mod restarter;
 
 /// All the data stores of the node.
 pub struct NodeStorage {
+    pub vote_digest_store: Store<PublicKey, RoundVoteDigestPair>,
     pub header_store: Store<HeaderDigest, Header>,
     pub certificate_store: CertificateStore,
     pub payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
@@ -51,6 +52,7 @@ pub struct NodeStorage {
 
 impl NodeStorage {
     /// The datastore column family names.
+    const VOTES_CF: &'static str = "votes";
     const HEADERS_CF: &'static str = "headers";
     const CERTIFICATES_CF: &'static str = "certificates";
     const CERTIFICATE_ID_BY_ROUND_CF: &'static str = "certificate_id_by_round";
@@ -66,6 +68,7 @@ impl NodeStorage {
             store_path,
             None,
             &[
+                Self::VOTES_CF,
                 Self::HEADERS_CF,
                 Self::CERTIFICATES_CF,
                 Self::CERTIFICATE_ID_BY_ROUND_CF,
@@ -79,6 +82,7 @@ impl NodeStorage {
         .expect("Cannot open database");
 
         let (
+            votes_map,
             header_map,
             certificate_map,
             certificate_id_by_round_map,
@@ -88,6 +92,7 @@ impl NodeStorage {
             sequence_map,
             temp_batch_map,
         ) = reopen!(&rocksdb,
+            Self::VOTES_CF;<PublicKey, RoundVoteDigestPair>,
             Self::HEADERS_CF;<HeaderDigest, Header>,
             Self::CERTIFICATES_CF;<CertificateDigest, Certificate>,
             Self::CERTIFICATE_ID_BY_ROUND_CF;<(Round, CertificateDigest), CertificateToken>,
@@ -98,6 +103,7 @@ impl NodeStorage {
             Self::TEMP_BATCH_CF;<(CertificateDigest, BatchDigest), Batch>
         );
 
+        let vote_digest_store = Store::new(votes_map);
         let header_store = Store::new(header_map);
         let certificate_store = CertificateStore::new(certificate_map, certificate_id_by_round_map);
         let payload_store = Store::new(payload_map);
@@ -106,6 +112,7 @@ impl NodeStorage {
         let temp_batch_store = Store::new(temp_batch_map);
 
         Self {
+            vote_digest_store,
             header_store,
             certificate_store,
             payload_store,
@@ -240,6 +247,7 @@ impl Node {
             store.header_store.clone(),
             store.certificate_store.clone(),
             store.payload_store.clone(),
+            store.vote_digest_store.clone(),
             tx_new_certificates,
             /* rx_consensus */ rx_consensus,
             tx_get_block_commands,
