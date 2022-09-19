@@ -1,7 +1,19 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { fromEventPattern, map, mergeWith, share, Subject } from 'rxjs';
+import {
+    BehaviorSubject,
+    distinctUntilChanged,
+    filter,
+    from,
+    fromEventPattern,
+    map,
+    merge,
+    mergeWith,
+    share,
+    Subject,
+    switchMap,
+} from 'rxjs';
 import Browser from 'webextension-polyfill';
 
 import type { Tabs as BrowserTabs } from 'webextension-polyfill';
@@ -25,15 +37,32 @@ const onUpdatedStream = fromEventPattern<
     (handler) => Browser.tabs.onUpdated.removeListener(handler)
 ).pipe(share());
 
+const onTabActivated = fromEventPattern<BrowserTabs.OnActivatedActiveInfoType>(
+    (handler) => Browser.tabs.onActivated.addListener(handler),
+    (handler) => Browser.tabs.onActivated.removeListener(handler)
+).pipe(share());
+
+const onWindowFocusChanged = fromEventPattern<number>(
+    (handler) => Browser.windows.onFocusChanged.addListener(handler),
+    (handler) => Browser.windows.onFocusChanged.removeListener(handler)
+).pipe(share());
+
 type TabInfo = {
     id: number;
     url: string | null;
     closed?: boolean;
 };
 
+type ActiveOriginInfo = {
+    origin: string | null;
+    favIcon: string | null;
+};
+
 class Tabs {
     private tabs: Map<number, TabInfo> = new Map();
     private _onRemoved: Subject<TabInfo> = new Subject();
+    private _onActiveOrigin: BehaviorSubject<ActiveOriginInfo> =
+        new BehaviorSubject<ActiveOriginInfo>({ origin: null, favIcon: null });
 
     constructor() {
         Browser.tabs.query({}).then((tabs) => {
@@ -75,6 +104,42 @@ class Tabs {
             this.tabs.delete(tabID);
             this._onRemoved.next(tabInfo);
         });
+        merge(
+            onWindowFocusChanged.pipe(
+                switchMap((windowId) =>
+                    Browser.tabs.query({ active: true, windowId })
+                ),
+                map((tabs) => tabs[0])
+            ),
+            from(
+                Browser.tabs.query({ active: true, lastFocusedWindow: true })
+            ).pipe(map((tabs) => tabs[0])),
+            onTabActivated.pipe(
+                switchMap((info) =>
+                    merge(
+                        Browser.tabs.get(info.tabId),
+                        onUpdatedStream.pipe(
+                            filter(([tabID]) => info.tabId === tabID),
+                            map(([_1, _2, tab]) => tab)
+                        )
+                    )
+                )
+            )
+        )
+            .pipe(
+                map((tab) => ({
+                    origin: tab.url ? new URL(tab.url).origin : null,
+                    favIcon: tab.favIconUrl || null,
+                })),
+                distinctUntilChanged(
+                    (prev, current) =>
+                        prev.origin === current.origin &&
+                        prev.favIcon === current.favIcon
+                )
+            )
+            .subscribe((activeOrigin) => {
+                this._onActiveOrigin.next(activeOrigin);
+            });
     }
 
     /**
@@ -82,6 +147,10 @@ class Tabs {
      */
     public get onRemoved() {
         return this._onRemoved.asObservable();
+    }
+
+    public get activeOrigin() {
+        return this._onActiveOrigin.asObservable();
     }
 
     public async highlight(option: { url: string } | { tabID: number }) {

@@ -18,12 +18,16 @@ type AppState = {
     appType: AppType;
     apiEnv: API_ENV;
     navVisible: boolean;
+    activeOrigin: string | null;
+    activeOriginFavIcon: string | null;
 };
 
 const initialState: AppState = {
     appType: AppType.unknown,
     apiEnv: DEFAULT_API_ENV,
     navVisible: true,
+    activeOrigin: null,
+    activeOriginFavIcon: null,
 };
 
 // On network change, set setNewJsonRpcProvider, fetch all owned objects, and fetch all transactions
@@ -68,11 +72,21 @@ const slice = createSlice({
         ) => {
             state.navVisible = isVisible;
         },
+        setActiveOrigin: (
+            state,
+            {
+                payload,
+            }: PayloadAction<{ origin: string | null; favIcon: string | null }>
+        ) => {
+            state.activeOrigin = payload.origin;
+            state.activeOriginFavIcon = payload.favIcon;
+        },
     },
     initialState,
 });
 
-export const { initAppType, setApiEnv, setNavVisibility } = slice.actions;
+export const { initAppType, setApiEnv, setNavVisibility, setActiveOrigin } =
+    slice.actions;
 export const getNavIsVisible = ({ app }: RootState) => app.navVisible;
 
 export default slice.reducer;

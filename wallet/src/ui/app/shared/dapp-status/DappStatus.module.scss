@@ -1,0 +1,52 @@
+@use '_values/colors';
+@use '_utils';
+
+.container {
+    display: flex;
+    flex-flow: row;
+    align-items: center;
+    background: transparent;
+    outline: none;
+    color: colors.$issue;
+    border: 1px solid colors.$gray-55;
+    border-radius: 20px;
+    padding: 4px 8px;
+    cursor: default;
+    overflow: hidden;
+    flex: 0 1 auto;
+
+    @include utils.typography('Primary/BodySmall-M');
+
+    &.connected {
+        background-color: colors.$sui-blue-light;
+        color: colors.$cta-blue;
+        border: none;
+        cursor: pointer;
+
+        &:hover,
+        &:focus {
+            border: 1px solid colors.$sui-blue;
+        }
+
+        &:active,
+        &.acive {
+            color: colors.$sui-blue;
+            border: none;
+        }
+    }
+}
+
+.icon {
+    margin-right: 4px;
+    font-size: 6px;
+
+    &.connected {
+        color: colors.$success;
+    }
+}
+
+.label {
+    white-space: nowrap;
+
+    @include utils.overflow-ellipsis;
+}
