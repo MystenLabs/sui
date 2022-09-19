@@ -731,7 +731,7 @@ dependencies = [
  "env_logger",
  "hex",
  "log",
- "lru 0.7.8",
+ "lru",
  "once_cell",
  "rand 0.7.3",
  "rand_chacha 0.3.1",
@@ -1724,7 +1724,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "907076dfda823b0b36d2a1bb5f90c96660a5bbcd7729e10727f07858f22c4edc"
 dependencies = [
  "cfg-if 1.0.0",
- "hashbrown 0.12.3",
+ "hashbrown",
  "lock_api 0.4.8",
  "once_cell",
  "parking_lot_core 0.9.3",
@@ -2786,15 +2786,6 @@ checksum = "eabb4a44450da02c90444cf74558da904edde8fb4e9035a9a6a4e15445af0bd7"
 
 [[package]]
 name = "hashbrown"
-version = "0.11.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab5ef0d4909ef3724cc8cce6ccc8572c5c817592e9285f5464f8e86f8bd3726e"
-dependencies = [
- "ahash",
-]
-
-[[package]]
-name = "hashbrown"
 version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a9ee70c43aaf417c914396645a0fa852624801b24ebb7ae78fe8272889ac888"
@@ -2808,7 +2799,7 @@ version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d452c155cb93fecdfb02a73dd57b5d8e442c2063bd7aac72f1bc5e4263a43086"
 dependencies = [
- "hashbrown 0.12.3",
+ "hashbrown",
 ]
 
 [[package]]
@@ -3125,7 +3116,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "10a35a97730320ffe8e2d410b5d3b69279b98d2c14bdb8b70ea89ecf7888d41e"
 dependencies = [
  "autocfg",
- "hashbrown 0.12.3",
+ "hashbrown",
  "serde 1.0.144",
 ]
 
@@ -3179,7 +3170,7 @@ checksum = "6ab388864246d58a276e60e7569a833d9cc4cd75c66e5ca77c177dad38e59996"
 dependencies = [
  "ahash",
  "dashmap",
- "hashbrown 0.12.3",
+ "hashbrown",
  "once_cell",
  "parking_lot 0.12.1",
 ]
@@ -3639,16 +3630,7 @@ version = "0.7.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e999beba7b6e8345721bd280141ed958096a2e4abdf74f67ff4ce49b4b54e47a"
 dependencies = [
- "hashbrown 0.12.3",
-]
-
-[[package]]
-name = "lru"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "936d98d2ddd79c18641c6709e7bb09981449694e402d1a0f0f657ea8d61f4a51"
-dependencies = [
- "hashbrown 0.12.3",
+ "hashbrown",
 ]
 
 [[package]]
@@ -4582,7 +4564,7 @@ dependencies = [
  "cfg-if 1.0.0",
  "ed25519-consensus",
  "fastcrypto",
- "hashbrown 0.12.3",
+ "hashbrown",
  "impl-trait-for-tuples",
  "indexmap",
  "mysten-util-mem-derive",
@@ -8610,7 +8592,7 @@ dependencies = [
  "futures-io",
  "futures-sink",
  "futures-util",
- "hashbrown 0.12.3",
+ "hashbrown",
  "pin-project-lite",
  "real_tokio",
  "slab",
@@ -9911,8 +9893,7 @@ dependencies = [
  "h2",
  "hakari",
  "half",
- "hashbrown 0.11.2",
- "hashbrown 0.12.3",
+ "hashbrown",
  "hashlink",
  "hdrhistogram",
  "heck 0.3.3",
@@ -9991,7 +9972,7 @@ dependencies = [
  "lock_api 0.3.4",
  "lock_api 0.4.8",
  "log",
- "lru 0.8.0",
+ "lru",
  "match_opt",
  "matchers",
  "matchit",
@@ -10576,7 +10557,7 @@ dependencies = [
  "group",
  "h2",
  "half",
- "hashbrown 0.12.3",
+ "hashbrown",
  "hdrhistogram",
  "heck 0.3.3",
  "heck 0.4.0",
@@ -10616,7 +10597,7 @@ dependencies = [
  "linked-hash-map",
  "lock_api 0.4.8",
  "log",
- "lru 0.7.8",
+ "lru",
  "match_opt",
  "matchers",
  "matchit",

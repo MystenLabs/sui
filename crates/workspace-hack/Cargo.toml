@@ -216,8 +216,7 @@ guppy-workspace-hack = { version = "0.1", default-features = false }
 h2 = { version = "0.3", default-features = false }
 hakari = { version = "0.10", default-features = false, features = ["cli-support", "include_dir", "owo-colors", "serde", "tabular", "toml"] }
 half = { version = "1", default-features = false }
-hashbrown-a6292c17cd707f01 = { package = "hashbrown", version = "0.11", features = ["ahash", "inline-more"] }
-hashbrown-5ef9efb8ec2df382 = { package = "hashbrown", version = "0.12", features = ["ahash", "inline-more", "raw"] }
+hashbrown = { version = "0.12", features = ["ahash", "inline-more", "raw"] }
 hashlink = { version = "0.8", default-features = false }
 hdrhistogram = { version = "7", features = ["base64", "crossbeam-channel", "flate2", "nom", "serialization", "sync"] }
 heck-468e82937335b1c9 = { package = "heck", version = "0.3", default-features = false }
@@ -278,7 +277,7 @@ linked-hash-map = { version = "0.5", default-features = false }
 lock_api-468e82937335b1c9 = { package = "lock_api", version = "0.3", default-features = false }
 lock_api-9fbad63c4bcf4a8f = { package = "lock_api", version = "0.4", default-features = false }
 log = { version = "0.4", default-features = false, features = ["serde", "std"] }
-lru = { version = "0.8", features = ["hashbrown"] }
+lru = { version = "0.7", features = ["hashbrown"] }
 match_opt = { version = "0.1", default-features = false }
 matchers = { version = "0.1", default-features = false }
 matchit = { version = "0.5" }
@@ -845,8 +844,7 @@ guppy-workspace-hack = { version = "0.1", default-features = false }
 h2 = { version = "0.3", default-features = false }
 hakari = { version = "0.10", default-features = false, features = ["cli-support", "include_dir", "owo-colors", "serde", "tabular", "toml"] }
 half = { version = "1", default-features = false }
-hashbrown-a6292c17cd707f01 = { package = "hashbrown", version = "0.11", features = ["ahash", "inline-more"] }
-hashbrown-5ef9efb8ec2df382 = { package = "hashbrown", version = "0.12", features = ["ahash", "inline-more", "raw"] }
+hashbrown = { version = "0.12", features = ["ahash", "inline-more", "raw"] }
 hashlink = { version = "0.8", default-features = false }
 hdrhistogram = { version = "7", features = ["base64", "crossbeam-channel", "flate2", "nom", "serialization", "sync"] }
 heck-468e82937335b1c9 = { package = "heck", version = "0.3", default-features = false }
@@ -918,7 +916,7 @@ linked-hash-map = { version = "0.5", default-features = false }
 lock_api-468e82937335b1c9 = { package = "lock_api", version = "0.3", default-features = false }
 lock_api-9fbad63c4bcf4a8f = { package = "lock_api", version = "0.4", default-features = false }
 log = { version = "0.4", default-features = false, features = ["serde", "std"] }
-lru = { version = "0.8", features = ["hashbrown"] }
+lru = { version = "0.7", features = ["hashbrown"] }
 match_opt = { version = "0.1", default-features = false }
 matchers = { version = "0.1", default-features = false }
 matchit = { version = "0.5" }
