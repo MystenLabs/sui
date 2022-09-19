@@ -9,7 +9,7 @@ use node::NodeStorage;
 use primary::{NetworkModel, Primary, CHANNEL_CAPACITY};
 use prometheus::Registry;
 use std::{sync::Arc, time::Duration};
-use test_utils::{random_network, temp_dir, CommitteeFixture};
+use test_utils::{ensure_test_environment, random_network, temp_dir, CommitteeFixture};
 use tokio::sync::watch;
 use types::{ReconfigureNotification, WorkerPrimaryMessage};
 
@@ -20,6 +20,7 @@ async fn test_simple_epoch_change() {
         header_size: 32, // One batch digest
         ..Parameters::default()
     };
+    ensure_test_environment();
 
     // The configuration of epoch 0.
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
@@ -142,6 +143,7 @@ async fn test_simple_epoch_change() {
 #[tokio::test]
 async fn test_partial_committee_change() {
     telemetry_subscribers::init_for_testing();
+    ensure_test_environment();
     let parameters = Parameters {
         header_size: 32, // One batch digest
         ..Parameters::default()
@@ -303,6 +305,7 @@ async fn test_partial_committee_change() {
 #[tokio::test]
 async fn test_restart_with_new_committee_change() {
     telemetry_subscribers::init_for_testing();
+    ensure_test_environment();
 
     let parameters = Parameters {
         header_size: 32, // One batch digest
@@ -486,6 +489,7 @@ async fn test_restart_with_new_committee_change() {
 /// Update the committee without changing the epoch.
 #[tokio::test]
 async fn test_simple_committee_update() {
+    ensure_test_environment();
     let parameters = Parameters {
         header_size: 32, // One batch digest
         ..Parameters::default()
