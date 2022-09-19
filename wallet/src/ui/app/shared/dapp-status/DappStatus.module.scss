@@ -14,6 +14,7 @@
     cursor: default;
     overflow: hidden;
     flex: 0 1 auto;
+    transition: all 150ms ease-in-out;
 
     @include utils.typography('Primary/BodySmall-M');
 
@@ -49,4 +50,9 @@
     white-space: nowrap;
 
     @include utils.overflow-ellipsis;
+}
+
+.chevron {
+    margin-left: 6px;
+    font-size: 11px;
 }
