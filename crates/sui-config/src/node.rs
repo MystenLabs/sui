@@ -67,6 +67,10 @@ pub struct NodeConfig {
     #[serde(default)]
     pub enable_gossip: bool,
 
+    /// The number of peers to concurrently gossip with
+    #[serde(default = "default_gossip_degree")]
+    pub gossip_degree: usize,
+
     #[serde(default = "bool_true")]
     pub enable_checkpoint: bool,
 
@@ -80,6 +84,10 @@ pub struct NodeConfig {
     pub grpc_concurrency_limit: Option<usize>,
 
     pub genesis: Genesis,
+}
+
+fn default_gossip_degree() -> usize {
+    20
 }
 
 fn default_key_pair() -> Arc<AuthorityKeyPair> {

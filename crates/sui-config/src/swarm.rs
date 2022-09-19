@@ -108,6 +108,7 @@ impl NetworkConfig {
             consensus_config: None,
             enable_event_processing,
             enable_gossip: true,
+            gossip_degree: validator_config.gossip_degree,
             enable_checkpoint: true,
             enable_reconfig: false,
             genesis: validator_config.genesis.clone(),

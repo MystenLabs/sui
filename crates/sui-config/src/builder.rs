@@ -230,7 +230,7 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
             .initial_accounts_config
             .unwrap_or_else(GenesisConfig::for_local_testing);
         let (account_keys, objects) = initial_accounts_config.generate_accounts(&mut rng).unwrap();
-
+        let validator_num = validator_set.len();
         let genesis = {
             let mut builder = genesis::Builder::new().add_objects(objects);
 
@@ -276,6 +276,7 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
                     consensus_config: Some(consensus_config),
                     enable_event_processing: false,
                     enable_gossip: true,
+                    gossip_degree: validator_num - 1,
                     enable_checkpoint: true,
                     enable_reconfig: false,
                     genesis: crate::node::Genesis::new(genesis.clone()),

@@ -213,8 +213,7 @@ impl SuiNode {
             active_authority.clone().spawn_node_sync_process().await;
             None
         } else if config.enable_gossip {
-            // TODO: get degree from config file.
-            let degree = 4;
+            let degree = config.gossip_degree;
             Some(active_authority.clone().spawn_gossip_process(degree).await)
         } else {
             None

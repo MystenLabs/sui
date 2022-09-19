@@ -40,6 +40,7 @@ validator_configs:
           socket_addr: /ip4/127.0.0.1/tcp/1234
     enable-event-processing: false
     enable-gossip: true
+    gossip-degree: 6
     enable-checkpoint: true
     enable-reconfig: false
     grpc-load-shed: ~
@@ -83,6 +84,7 @@ validator_configs:
           socket_addr: /ip4/127.0.0.1/tcp/1234
     enable-event-processing: false
     enable-gossip: true
+    gossip-degree: 6
     enable-checkpoint: true
     enable-reconfig: false
     grpc-load-shed: ~
@@ -126,6 +128,7 @@ validator_configs:
           socket_addr: /ip4/127.0.0.1/tcp/1234
     enable-event-processing: false
     enable-gossip: true
+    gossip-degree: 6
     enable-checkpoint: true
     enable-reconfig: false
     grpc-load-shed: ~
@@ -169,6 +172,7 @@ validator_configs:
           socket_addr: /ip4/127.0.0.1/tcp/1234
     enable-event-processing: false
     enable-gossip: true
+    gossip-degree: 6
     enable-checkpoint: true
     enable-reconfig: false
     grpc-load-shed: ~
@@ -212,6 +216,7 @@ validator_configs:
           socket_addr: /ip4/127.0.0.1/tcp/1234
     enable-event-processing: false
     enable-gossip: true
+    gossip-degree: 6
     enable-checkpoint: true
     enable-reconfig: false
     grpc-load-shed: ~
@@ -255,6 +260,7 @@ validator_configs:
           socket_addr: /ip4/127.0.0.1/tcp/1234
     enable-event-processing: false
     enable-gossip: true
+    gossip-degree: 6
     enable-checkpoint: true
     enable-reconfig: false
     grpc-load-shed: ~
@@ -298,6 +304,7 @@ validator_configs:
           socket_addr: /ip4/127.0.0.1/tcp/1234
     enable-event-processing: false
     enable-gossip: true
+    gossip-degree: 6
     enable-checkpoint: true
     enable-reconfig: false
     grpc-load-shed: ~

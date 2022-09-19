@@ -335,7 +335,6 @@ where
         // (validators do not follow themselves for gossip)
         let committee = self.state.committee.load().deref().clone();
         let target_num_tasks = usize::min(committee.num_members() - 1, degree);
-
         tokio::task::spawn(async move {
             gossip_process(&self, target_num_tasks).await;
         })
