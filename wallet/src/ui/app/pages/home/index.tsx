@@ -14,6 +14,7 @@ import Navigation from '_components/navigation';
 import { useInitializedGuard, useAppDispatch } from '_hooks';
 import PageLayout from '_pages/layout';
 import { fetchAllOwnedAndRequiredObjects } from '_redux/slices/sui-objects';
+import { usePageView } from '_shared/utils';
 
 import st from './Home.module.scss';
 
@@ -41,6 +42,7 @@ const HomePage = ({ disableNavigation, limitToPopUpSize = true }: Props) => {
         return () => sub.unsubscribe();
     }, [guardChecking, dispatch]);
 
+    usePageView();
     return (
         <PageLayout limitToPopUpSize={limitToPopUpSize}>
             <Loading loading={guardChecking}>
