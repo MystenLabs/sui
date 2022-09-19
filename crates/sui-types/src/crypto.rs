@@ -3,7 +3,6 @@
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::str::FromStr;
-// use std::sync::Arc;
 
 use anyhow::{anyhow, Error};
 use base64ct::Encoding;
@@ -1502,12 +1501,3 @@ impl ToString for SignatureScheme {
         }
     }
 }
-
-// impl Signer<Ed25519Signature> for Arc<Ed25519KeyPair> {
-//     fn try_sign(&self, msg: &[u8]) -> Result<Ed25519Signature, signature::Error> {
-//         Ok(Ed25519Signature {
-//             sig: self.secret.0.sign(msg),
-//             bytes: once_cell::sync::OnceCell::new(),
-//         })
-//     }
-// }
