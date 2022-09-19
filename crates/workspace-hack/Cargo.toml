@@ -54,11 +54,10 @@ beef = { version = "0.5", features = ["impl_serde", "serde"] }
 better_any = { version = "0.1", default-features = false }
 bimap = { version = "0.6", features = ["std"] }
 bincode = { version = "1", default-features = false }
-bip39 = { git = "https://github.com/patrickkuo/rust-bip39.git", rev = "a76fe8310416555e6383b42b8acc4eb93c7bcc89", features = ["rand", "serde", "std", "unicode-normalization"] }
+bip32 = { version = "0.4", features = ["alloc", "bip39", "k256", "mnemonic", "once_cell", "pbkdf2", "secp256k1", "std"] }
 bit-set = { version = "0.5", features = ["std"] }
 bit-vec = { version = "0.6", default-features = false, features = ["std"] }
-bitcoin_hashes-a6292c17cd707f01 = { package = "bitcoin_hashes", version = "0.11", default-features = false }
-bitcoin_hashes-274715c4dabd11b0 = { package = "bitcoin_hashes", version = "0.9", features = ["std"] }
+bitcoin_hashes = { version = "0.11", default-features = false }
 bitflags = { version = "1" }
 bitmaps = { version = "2", features = ["std"] }
 bitvec = { version = "0.19", default-features = false, features = ["alloc", "std"] }
@@ -69,7 +68,7 @@ block-buffer-274715c4dabd11b0 = { package = "block-buffer", version = "0.9", def
 block-padding = { version = "0.2", default-features = false }
 bls-crypto = { git = "https://github.com/huitseeker/celo-bls-snark-rs", branch = "updates-2", features = ["compat"] }
 blst = { version = "0.3" }
-bs58 = { version = "0.4", features = ["alloc", "std"] }
+bs58 = { version = "0.4", features = ["alloc", "check", "sha2", "std"] }
 bstr = { version = "0.2", features = ["lazy_static", "regex-automata", "serde", "serde1", "serde1-nostd", "std", "unicode"] }
 bulletproofs = { version = "4", features = ["rand", "std", "thiserror"] }
 bytecode-interpreter-crypto = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e", features = ["fiat"] }
@@ -225,6 +224,7 @@ heck-468e82937335b1c9 = { package = "heck", version = "0.3", default-features = 
 hex = { version = "0.4", features = ["alloc", "std"] }
 hkdf = { version = "0.12", default-features = false, features = ["std"] }
 hmac = { version = "0.12", default-features = false, features = ["reset", "std"] }
+hmac-sha512 = { version = "0.1", features = ["sha384"] }
 http = { version = "0.2", default-features = false }
 http-body = { version = "0.4", default-features = false }
 http-range-header = { version = "0.3", default-features = false }
@@ -372,6 +372,7 @@ parking_lot_core-ca01ad9e24f5d932 = { package = "parking_lot_core", version = "0
 parking_lot_core-c38e5c1d305a1b54 = { package = "parking_lot_core", version = "0.8", default-features = false }
 parking_lot_core-274715c4dabd11b0 = { package = "parking_lot_core", version = "0.9", default-features = false }
 pathdiff = { version = "0.2", default-features = false, features = ["camino"] }
+pbkdf2 = { version = "0.11", default-features = false }
 pem = { version = "1", default-features = false }
 percent-encoding = { version = "2", features = ["alloc"] }
 pest = { version = "2", features = ["std", "thiserror"] }
@@ -408,23 +409,13 @@ quinn-udp = { version = "0.1", default-features = false }
 quote-dff4ba8e3ae991db = { package = "quote", version = "1", features = ["proc-macro"] }
 radium = { version = "0.5", default-features = false }
 radix_trie = { version = "0.2", default-features = false }
-rand-3b31131e45eafb45 = { package = "rand", version = "0.6", features = ["alloc", "rand_os", "std"] }
 rand-ca01ad9e24f5d932 = { package = "rand", version = "0.7", features = ["alloc", "getrandom", "getrandom_package", "libc", "std"] }
 rand-c38e5c1d305a1b54 = { package = "rand", version = "0.8", features = ["alloc", "getrandom", "libc", "rand_chacha", "small_rng", "std", "std_rng"] }
-rand_chacha-c65f7effa3be6d31 = { package = "rand_chacha", version = "0.1", default-features = false }
 rand_chacha-468e82937335b1c9 = { package = "rand_chacha", version = "0.3", features = ["std"] }
-rand_core-468e82937335b1c9 = { package = "rand_core", version = "0.3", default-features = false }
-rand_core-9fbad63c4bcf4a8f = { package = "rand_core", version = "0.4", default-features = false, features = ["alloc", "std"] }
 rand_core-d8f496e17d97b5cb = { package = "rand_core", version = "0.5", default-features = false, features = ["alloc", "getrandom", "std"] }
 rand_core-3b31131e45eafb45 = { package = "rand_core", version = "0.6", default-features = false, features = ["alloc", "getrandom", "std"] }
 rand_distr = { version = "0.4", features = ["alloc", "std"] }
-rand_hc = { version = "0.1", default-features = false }
-rand_isaac = { version = "0.1", default-features = false }
-rand_jitter = { version = "0.1", default-features = false, features = ["std"] }
-rand_os = { version = "0.1", default-features = false }
-rand_pcg = { version = "0.1", default-features = false }
-rand_xorshift-c65f7effa3be6d31 = { package = "rand_xorshift", version = "0.1", default-features = false }
-rand_xorshift-468e82937335b1c9 = { package = "rand_xorshift", version = "0.3", default-features = false }
+rand_xorshift = { version = "0.3", default-features = false }
 rand_xoshiro = { version = "0.6", default-features = false }
 rayon = { version = "1", default-features = false }
 rayon-core = { version = "1", default-features = false }
@@ -440,6 +431,7 @@ reqwest = { version = "0.11", features = ["__tls", "blocking", "default-tls", "h
 retain_mut = { version = "0.1", default-features = false }
 rfc6979 = { version = "0.3", default-features = false }
 ring = { version = "0.16", features = ["alloc", "dev_urandom_fallback", "once_cell"] }
+ripemd = { version = "0.1", default-features = false }
 roaring = { version = "0.10", default-features = false }
 rocksdb = { version = "0.19", features = ["bzip2", "lz4", "multi-threaded-cf", "snappy", "zlib", "zstd"] }
 rust-ini = { version = "0.13", default-features = false }
@@ -491,6 +483,7 @@ simplelog = { version = "0.9", features = ["termcolor"] }
 siphasher = { version = "0.3", features = ["std"] }
 sized-chunks = { version = "0.6", features = ["std"] }
 slab = { version = "0.4", features = ["std"] }
+slip10_ed25519 = { version = "0.1", default-features = false }
 slug = { version = "0.1", default-features = false }
 smallvec = { version = "1", default-features = false }
 smawk = { version = "0.3", default-features = false }
@@ -537,6 +530,7 @@ thrift = { version = "0.15", default-features = false }
 time-c65f7effa3be6d31 = { package = "time", version = "0.1", default-features = false }
 time-468e82937335b1c9 = { package = "time", version = "0.3", features = ["alloc", "formatting", "itoa", "macros", "parsing", "std", "time-macros"] }
 tint = { version = "1", default-features = false }
+tiny-bip39 = { version = "1", features = ["chinese-simplified", "chinese-traditional", "french", "italian", "japanese", "korean", "spanish"] }
 tinytemplate = { version = "1", default-features = false }
 tinyvec = { version = "1", features = ["alloc", "tinyvec_macros"] }
 tinyvec_macros = { version = "0.1", default-features = false }
@@ -654,8 +648,7 @@ async-trait = { version = "0.1", default-features = false }
 atoi = { version = "1", default-features = false }
 atomicwrites = { version = "0.3", default-features = false }
 atty = { version = "0.2", default-features = false }
-autocfg-c65f7effa3be6d31 = { package = "autocfg", version = "0.1", default-features = false }
-autocfg-dff4ba8e3ae991db = { package = "autocfg", version = "1", default-features = false }
+autocfg = { version = "1", default-features = false }
 axum = { version = "0.5", features = ["form", "http1", "json", "matched-path", "original-uri", "query", "serde_json", "serde_urlencoded", "tower-log"] }
 axum-core = { version = "0.2", default-features = false }
 backoff = { version = "0.4", features = ["futures", "futures-core", "pin-project-lite", "tokio", "tokio_1"] }
@@ -670,11 +663,10 @@ better_typeid_derive = { version = "0.1", default-features = false }
 bimap = { version = "0.6", features = ["std"] }
 bincode = { version = "1", default-features = false }
 bindgen = { version = "0.60", default-features = false, features = ["runtime"] }
-bip39 = { git = "https://github.com/patrickkuo/rust-bip39.git", rev = "a76fe8310416555e6383b42b8acc4eb93c7bcc89", features = ["rand", "serde", "std", "unicode-normalization"] }
+bip32 = { version = "0.4", features = ["alloc", "bip39", "k256", "mnemonic", "once_cell", "pbkdf2", "secp256k1", "std"] }
 bit-set = { version = "0.5", features = ["std"] }
 bit-vec = { version = "0.6", default-features = false, features = ["std"] }
-bitcoin_hashes-a6292c17cd707f01 = { package = "bitcoin_hashes", version = "0.11", default-features = false }
-bitcoin_hashes-274715c4dabd11b0 = { package = "bitcoin_hashes", version = "0.9", features = ["std"] }
+bitcoin_hashes = { version = "0.11", default-features = false }
 bitflags = { version = "1" }
 bitmaps = { version = "2", features = ["std"] }
 bitvec = { version = "0.19", default-features = false, features = ["alloc", "std"] }
@@ -685,7 +677,7 @@ block-buffer-274715c4dabd11b0 = { package = "block-buffer", version = "0.9", def
 block-padding = { version = "0.2", default-features = false }
 bls-crypto = { git = "https://github.com/huitseeker/celo-bls-snark-rs", branch = "updates-2", features = ["compat"] }
 blst = { version = "0.3" }
-bs58 = { version = "0.4", features = ["alloc", "std"] }
+bs58 = { version = "0.4", features = ["alloc", "check", "sha2", "std"] }
 bstr = { version = "0.2", features = ["lazy_static", "regex-automata", "serde", "serde1", "serde1-nostd", "std", "unicode"] }
 bulletproofs = { version = "4", features = ["rand", "std", "thiserror"] }
 bumpalo = { version = "3" }
@@ -863,6 +855,7 @@ hex = { version = "0.4", features = ["alloc", "std"] }
 hex-literal = { version = "0.3", default-features = false }
 hkdf = { version = "0.12", default-features = false, features = ["std"] }
 hmac = { version = "0.12", default-features = false, features = ["reset", "std"] }
+hmac-sha512 = { version = "0.1", features = ["sha384"] }
 home = { version = "0.5", default-features = false }
 http = { version = "0.2", default-features = false }
 http-body = { version = "0.4", default-features = false }
@@ -1028,6 +1021,7 @@ parking_lot_core-274715c4dabd11b0 = { package = "parking_lot_core", version = "0
 parse-zoneinfo = { version = "0.3", default-features = false }
 paste = { version = "1", default-features = false }
 pathdiff = { version = "0.2", default-features = false, features = ["camino"] }
+pbkdf2 = { version = "0.11", default-features = false }
 peeking_take_while = { version = "0.1", default-features = false }
 pem = { version = "1", default-features = false }
 percent-encoding = { version = "2", features = ["alloc"] }
@@ -1084,23 +1078,13 @@ quote-3b31131e45eafb45 = { package = "quote", version = "0.6", features = ["proc
 quote-dff4ba8e3ae991db = { package = "quote", version = "1", features = ["proc-macro"] }
 radium = { version = "0.5", default-features = false }
 radix_trie = { version = "0.2", default-features = false }
-rand-3b31131e45eafb45 = { package = "rand", version = "0.6", features = ["alloc", "rand_os", "std"] }
 rand-ca01ad9e24f5d932 = { package = "rand", version = "0.7", features = ["alloc", "getrandom", "getrandom_package", "libc", "std"] }
 rand-c38e5c1d305a1b54 = { package = "rand", version = "0.8", features = ["alloc", "getrandom", "libc", "rand_chacha", "small_rng", "std", "std_rng"] }
-rand_chacha-c65f7effa3be6d31 = { package = "rand_chacha", version = "0.1", default-features = false }
 rand_chacha-468e82937335b1c9 = { package = "rand_chacha", version = "0.3", features = ["std"] }
-rand_core-468e82937335b1c9 = { package = "rand_core", version = "0.3", default-features = false }
-rand_core-9fbad63c4bcf4a8f = { package = "rand_core", version = "0.4", default-features = false, features = ["alloc", "std"] }
 rand_core-d8f496e17d97b5cb = { package = "rand_core", version = "0.5", default-features = false, features = ["alloc", "getrandom", "std"] }
 rand_core-3b31131e45eafb45 = { package = "rand_core", version = "0.6", default-features = false, features = ["alloc", "getrandom", "std"] }
 rand_distr = { version = "0.4", features = ["alloc", "std"] }
-rand_hc = { version = "0.1", default-features = false }
-rand_isaac = { version = "0.1", default-features = false }
-rand_jitter = { version = "0.1", default-features = false, features = ["std"] }
-rand_os = { version = "0.1", default-features = false }
-rand_pcg = { version = "0.1", default-features = false }
-rand_xorshift-c65f7effa3be6d31 = { package = "rand_xorshift", version = "0.1", default-features = false }
-rand_xorshift-468e82937335b1c9 = { package = "rand_xorshift", version = "0.3", default-features = false }
+rand_xorshift = { version = "0.3", default-features = false }
 rand_xoshiro = { version = "0.6", default-features = false }
 rayon = { version = "1", default-features = false }
 rayon-core = { version = "1", default-features = false }
@@ -1118,6 +1102,7 @@ reqwest = { version = "0.11", features = ["__tls", "blocking", "default-tls", "h
 retain_mut = { version = "0.1", default-features = false }
 rfc6979 = { version = "0.3", default-features = false }
 ring = { version = "0.16", features = ["alloc", "dev_urandom_fallback", "once_cell"] }
+ripemd = { version = "0.1", default-features = false }
 roaring = { version = "0.10", default-features = false }
 rocksdb = { version = "0.19", features = ["bzip2", "lz4", "multi-threaded-cf", "snappy", "zlib", "zstd"] }
 rust-ini = { version = "0.13", default-features = false }
@@ -1184,6 +1169,7 @@ simplelog = { version = "0.9", features = ["termcolor"] }
 siphasher = { version = "0.3", features = ["std"] }
 sized-chunks = { version = "0.6", features = ["std"] }
 slab = { version = "0.4", features = ["std"] }
+slip10_ed25519 = { version = "0.1", default-features = false }
 slug = { version = "0.1", default-features = false }
 smallvec = { version = "1", default-features = false }
 smawk = { version = "0.3", default-features = false }
@@ -1240,6 +1226,7 @@ time-c65f7effa3be6d31 = { package = "time", version = "0.1", default-features = 
 time-468e82937335b1c9 = { package = "time", version = "0.3", features = ["alloc", "formatting", "itoa", "macros", "parsing", "std", "time-macros"] }
 time-macros = { version = "0.2", default-features = false }
 tint = { version = "1", default-features = false }
+tiny-bip39 = { version = "1", features = ["chinese-simplified", "chinese-traditional", "french", "italian", "japanese", "korean", "spanish"] }
 tinytemplate = { version = "1", default-features = false }
 tinyvec = { version = "1", features = ["alloc", "tinyvec_macros"] }
 tinyvec_macros = { version = "0.1", default-features = false }
