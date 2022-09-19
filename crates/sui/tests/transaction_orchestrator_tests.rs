@@ -30,15 +30,16 @@ async fn test_blocking_execution() -> Result<(), anyhow::Error> {
     // Disable node sync process
     active.cancel_node_sync_process_for_tests().await;
 
-    // FIXME the clone?
-    let net = (*active.net()).clone();
+    let net = active.agg_aggregator();
     let node_sync_state = active.node_sync_state.clone();
     let orchestrator = TransactiondOrchestrator::new(net, node_sync_state, &Registry::new());
 
-    let mut txns = make_transactions_with_wallet_context(&mut context, 4).await;
+    let txn_count = 4;
+    let mut txns = make_transactions_with_wallet_context(&mut context, txn_count).await;
     assert!(
-        txns.len() >= 4,
-        "Expect at least 4 txns. Do we generate enough gas objects during genesis?"
+        txns.len() >= txn_count,
+        "Expect at least {} txns. Do we generate enough gas objects during genesis?",
+        txn_count,
     );
 
     // Quorum driver does not execute txn locally
@@ -88,15 +89,16 @@ async fn test_non_blocking_execution() -> Result<(), anyhow::Error> {
     // Disable node sync process
     active.cancel_node_sync_process_for_tests().await;
 
-    // FIXME the clone?
-    let net = (*active.net()).clone();
+    let net = active.agg_aggregator();
     let node_sync_state = active.node_sync_state.clone();
     let orchestrator = TransactiondOrchestrator::new(net, node_sync_state, &Registry::new());
 
-    let mut txns = make_transactions_with_wallet_context(&mut context, 4).await;
+    let txn_count = 4;
+    let mut txns = make_transactions_with_wallet_context(&mut context, txn_count).await;
     assert!(
-        txns.len() >= 4,
-        "Expect at least 4 txns. Do we generate enough gas objects during genesis?"
+        txns.len() >= txn_count,
+        "Expect at least {} txns. Do we generate enough gas objects during genesis?",
+        txn_count,
     );
 
     // Test ImmediateReturn and WaitForTxCert eventually are executed too
@@ -146,8 +148,7 @@ async fn test_local_execution_with_missing_parents() -> Result<(), anyhow::Error
     // Disable node sync process
     active.cancel_node_sync_process_for_tests().await;
 
-    // FIXME the clone?
-    let net = (*active.net()).clone();
+    let net = active.agg_aggregator();
     let node_sync_state = active.node_sync_state.clone();
     let orchestrator = TransactiondOrchestrator::new(net, node_sync_state, &Registry::new());
 

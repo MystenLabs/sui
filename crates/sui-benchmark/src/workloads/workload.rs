@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
+use std::sync::Arc;
 use std::{collections::HashMap, fmt};
 use sui_core::quorum_driver::{QuorumDriverHandler, QuorumDriverMetrics};
 use sui_core::{
@@ -39,7 +40,7 @@ pub async fn transfer_sui_for_testing(
     keypair: &AccountKeyPair,
     value: u64,
     address: SuiAddress,
-    client: &AuthorityAggregator<NetworkAuthorityClient>,
+    aggregator: Arc<AuthorityAggregator<NetworkAuthorityClient>>,
 ) -> Option<UpdatedAndNewlyMinted> {
     let tx = make_transfer_sui_transaction(
         gas.0,
@@ -49,7 +50,7 @@ pub async fn transfer_sui_for_testing(
         keypair,
     );
     let quorum_driver_handler =
-        QuorumDriverHandler::new(client.clone(), QuorumDriverMetrics::new_for_tests());
+        QuorumDriverHandler::new(aggregator.clone(), QuorumDriverMetrics::new_for_tests());
     let qd = quorum_driver_handler.clone_quorum_driver();
     qd.execute_transaction(QuorumDriverRequest {
         transaction: tx.clone(),
@@ -82,7 +83,7 @@ pub async fn transfer_sui_for_testing(
 
 pub async fn get_latest(
     object_id: ObjectID,
-    aggregator: &AuthorityAggregator<NetworkAuthorityClient>,
+    aggregator: Arc<AuthorityAggregator<NetworkAuthorityClient>>,
 ) -> Option<Object> {
     // Return the latest object version
     match aggregator.get_object_info_execute(object_id).await.unwrap() {
@@ -93,7 +94,7 @@ pub async fn get_latest(
 
 pub async fn submit_transaction(
     transaction: Transaction,
-    aggregator: &AuthorityAggregator<NetworkAuthorityClient>,
+    aggregator: Arc<AuthorityAggregator<NetworkAuthorityClient>>,
 ) -> Option<TransactionEffects> {
     let qd = QuorumDriverHandler::new(aggregator.clone(), QuorumDriverMetrics::new_for_tests());
     if let QuorumDriverResponse::EffectsCert(result) = qd
@@ -187,11 +188,11 @@ impl fmt::Display for WorkloadType {
 
 #[async_trait]
 pub trait Workload<T: Payload + ?Sized>: Send + Sync {
-    async fn init(&mut self, aggregator: &AuthorityAggregator<NetworkAuthorityClient>);
+    async fn init(&mut self, aggregator: Arc<AuthorityAggregator<NetworkAuthorityClient>>);
     async fn make_test_payloads(
         &self,
         count: u64,
-        client: &AuthorityAggregator<NetworkAuthorityClient>,
+        client: Arc<AuthorityAggregator<NetworkAuthorityClient>>,
     ) -> Vec<Box<T>>;
 }
 
@@ -202,20 +203,20 @@ pub struct CombinationWorkload {
 
 #[async_trait]
 impl Workload<dyn Payload> for CombinationWorkload {
-    async fn init(&mut self, aggregator: &AuthorityAggregator<NetworkAuthorityClient>) {
+    async fn init(&mut self, aggregator: Arc<AuthorityAggregator<NetworkAuthorityClient>>) {
         for (_, (_, workload)) in self.workloads.iter_mut() {
-            workload.init(aggregator).await;
+            workload.init(aggregator.clone()).await;
         }
     }
     async fn make_test_payloads(
         &self,
         count: u64,
-        aggregator: &AuthorityAggregator<NetworkAuthorityClient>,
+        aggregator: Arc<AuthorityAggregator<NetworkAuthorityClient>>,
     ) -> Vec<Box<dyn Payload>> {
         let mut workloads: HashMap<WorkloadType, (u32, Vec<Box<dyn Payload>>)> = HashMap::new();
         for (workload_type, (weight, workload)) in self.workloads.iter() {
             let payloads: Vec<Box<dyn Payload>> =
-                workload.make_test_payloads(count, aggregator).await;
+                workload.make_test_payloads(count, aggregator.clone()).await;
             assert_eq!(payloads.len() as u64, count);
             workloads
                 .entry(*workload_type)

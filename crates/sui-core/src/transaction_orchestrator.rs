@@ -44,7 +44,7 @@ where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
     pub fn new(
-        validators: AuthorityAggregator<A>,
+        validators: Arc<AuthorityAggregator<A>>,
         node_sync_state: Arc<NodeSyncState<A>>,
         prometheus_registry: &Registry,
     ) -> Self {

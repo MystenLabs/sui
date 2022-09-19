@@ -160,7 +160,7 @@ impl BenchDriver {
     pub async fn make_workers(
         &self,
         workload_info: &WorkloadInfo,
-        aggregator: &AuthorityAggregator<NetworkAuthorityClient>,
+        aggregator: Arc<AuthorityAggregator<NetworkAuthorityClient>>,
     ) -> Vec<BenchWorker> {
         let mut num_requests = workload_info.max_in_flight_ops / workload_info.num_workers;
         let mut target_qps = workload_info.target_qps / workload_info.num_workers;
@@ -176,7 +176,7 @@ impl BenchDriver {
                     target_qps,
                     payload: workload_info
                         .workload
-                        .make_test_payloads(num_requests, aggregator)
+                        .make_test_payloads(num_requests, aggregator.clone())
                         .await,
                 });
             }
@@ -190,7 +190,7 @@ impl Driver<BenchmarkStats> for BenchDriver {
     async fn run(
         &self,
         workloads: Vec<WorkloadInfo>,
-        aggregator: AuthorityAggregator<NetworkAuthorityClient>,
+        aggregator: Arc<AuthorityAggregator<NetworkAuthorityClient>>,
         registry: &Registry,
         show_progress: bool,
         run_duration: Interval,
@@ -199,7 +199,7 @@ impl Driver<BenchmarkStats> for BenchDriver {
         let (tx, mut rx) = tokio::sync::mpsc::channel(100);
         let mut bench_workers = vec![];
         for workload in workloads.iter() {
-            bench_workers.extend(self.make_workers(workload, &aggregator).await);
+            bench_workers.extend(self.make_workers(workload, aggregator.clone()).await);
         }
         let num_workers = bench_workers.len() as u64;
         if num_workers == 0 {
