@@ -26,24 +26,15 @@ function AppsPlayGround() {
 
     useEffect(() => {
         dispatch(getCuratedApps()).unwrap();
-        let timeout: number;
-        if (mintStatus !== null) {
-            timeout = window.setTimeout(() => setMintStatus(null), 3000);
-        }
-        return () => {
-            if (timeout) {
-                clearTimeout(timeout);
-            }
-        };
     }, [dispatch, mintStatus]);
 
     // Get connected apps
     const connectedApps = useAppSelector(({ permissions }) => permissions);
 
     // Get curated apps
-    const curatedApps = useAppSelector(
-        ({ curatedApps }) => curatedApps.curatedApps
-    );
+    const connectedAppResp = useAppSelector(({ curatedApps }) => curatedApps);
+
+    const curatedApps = connectedAppResp.curatedApps;
 
     // flag curated apps that are connected
     const curatedDapps = curatedApps.map((app) => {
@@ -79,8 +70,8 @@ function AppsPlayGround() {
         setMintInProgress(true);
         setMintError(null);
         try {
+            //TODO: add notification on success
             await dispatch(mintDemoNFT()).unwrap();
-            setMintStatus(true);
         } catch (e) {
             setMintStatus(false);
             setMintError((e as SerializedError).message || null);
@@ -165,7 +156,7 @@ function AppsPlayGround() {
                         <div className={st.title}>
                             Builders in sui ecosystem
                         </div>
-                        Something went wrong
+                        {connectedAppResp.error && 'Something went wrong'}
                     </div>
 
                     <SuiAppEmpty displaytype="full" />

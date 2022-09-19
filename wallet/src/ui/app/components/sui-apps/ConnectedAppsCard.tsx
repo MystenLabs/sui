@@ -33,6 +33,7 @@ function ConnectedDapps() {
                     const origin = new URL(appData.origin).hostname
                         .replace('www.', '')
                         .split('.')[0];
+
                     const name = appData?.name || origin;
                     return {
                         name: name,

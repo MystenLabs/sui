@@ -2,11 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import cl from 'classnames';
-import { useState, useCallback } from 'react';
+import { memo, useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import { NavLink } from 'react-router-dom';
-
-import { useMutationObserver } from '_hooks';
 
 import st from './Filters.module.scss';
 
@@ -27,27 +25,16 @@ type Tags = {
 };
 
 function FiltersPortal({ tags }: Tags) {
-    const [ready, setReady] = useState(false);
-    const content = document.querySelector(ELEMENT_ID) as HTMLElement;
+    const [element, setElement] = useState<HTMLElement | null>(null);
 
-    const handleMutations = useCallback(
-        (mutations: { type: MutationRecordType }[]) => {
-            mutations.forEach(({ type }: { type: MutationRecordType }) => {
-                if (type === 'childList') setReady(true);
-            });
-        },
-        []
-    );
-
-    useMutationObserver({
-        target: content,
-        options: { childList: true, subtree: true },
-        callback: handleMutations,
-    });
+    useEffect(() => {
+        const content = document.querySelector(ELEMENT_ID) as HTMLElement;
+        if (content) setElement(content);
+    }, []);
 
     return (
         <>
-            {ready
+            {element
                 ? ReactDOM.createPortal(
                       <div className={st.filterTags}>
                           {tags.map((tag) => (
@@ -62,11 +49,11 @@ function FiltersPortal({ tags }: Tags) {
                               </NavLink>
                           ))}
                       </div>,
-                      content
+                      element
                   )
                 : null}
         </>
     );
 }
 
-export default FiltersPortal;
+export default memo(FiltersPortal);

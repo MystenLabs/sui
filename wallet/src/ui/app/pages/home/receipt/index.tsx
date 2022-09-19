@@ -51,8 +51,8 @@ function ReceiptPage() {
     //TODO : add more transfer types and messages
     const transfersTxt = {
         Call: {
-            sender: 'Minted Successfully',
-            receiver: 'Received Successfully',
+            sender: 'Mint Successfully',
+            receiver: '',
         },
         TransferObject: {
             sender: 'Successfully Sent!',
