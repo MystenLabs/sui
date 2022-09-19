@@ -45,9 +45,9 @@ use sui_core::epoch::epoch_store::EpochStore;
 use sui_json_rpc::event_api::EventReadApiImpl;
 use sui_json_rpc::event_api::EventStreamingApiImpl;
 use sui_json_rpc::http_server::HttpServerHandle;
-use sui_json_rpc::quorum_driver_api::FullNodeQuorumDriverApi;
 use sui_json_rpc::read_api::FullNodeApi;
 use sui_json_rpc::read_api::ReadApi;
+use sui_json_rpc::transaction_execution_api::FullNodeTransactionExecutionApi;
 use sui_json_rpc::ws_server::WsServerHandle;
 use sui_json_rpc::JsonRpcServerBuilder;
 use sui_types::crypto::KeypairTraits;
@@ -66,7 +66,6 @@ pub struct SuiNode {
     _checkpoint_process_handle: Option<tokio::task::JoinHandle<()>>,
     state: Arc<AuthorityState>,
     active: Arc<ActiveAuthority<NetworkAuthorityClient>>,
-    // quorum_driver_handler: Option<QuorumDriverHandler<NetworkAuthorityClient>>,
     transaction_orchestrator: Option<Arc<TransactiondOrchestrator<NetworkAuthorityClient>>>,
     _prometheus_registry: Registry,
 }
@@ -375,7 +374,7 @@ pub async fn build_http_servers(
     server.register_module(BcsApiImpl::new(state.clone()))?;
 
     if let Some(transaction_orchestrator) = transaction_orchestrator {
-        server.register_module(FullNodeQuorumDriverApi::new(
+        server.register_module(FullNodeTransactionExecutionApi::new(
             transaction_orchestrator.clone(),
             state.module_cache.clone(),
         ))?;
