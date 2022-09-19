@@ -7386,8 +7386,10 @@ dependencies = [
  "sui-config",
  "sui-core",
  "sui-json-rpc-types",
+ "sui-macros",
  "sui-node",
  "sui-sdk",
+ "sui-simulator",
  "sui-types",
  "telemetry-subscribers",
  "tempfile",
@@ -7869,6 +7871,8 @@ name = "sui-simulator"
 version = "0.7.0"
 dependencies = [
  "msim",
+ "sui-framework",
+ "telemetry-subscribers",
  "workspace-hack 0.1.0",
 ]
 
