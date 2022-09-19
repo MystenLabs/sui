@@ -16,20 +16,19 @@ function activeTagsFilter({ isActive }: { isActive: boolean }) {
     return cl({ [st.active]: isActive }, st.filter);
 }
 
-function AppFiltersPortal() {
+// TODO: extend this interface to include params and functions for the filter tags
+interface Props {
+    name: string;
+    link: string;
+}
+
+type Tags = {
+    tags: Props[];
+};
+
+function FiltersPortal({ tags }: Tags) {
     const [ready, setReady] = useState(false);
     const content = document.querySelector(ELEMENT_ID) as HTMLElement;
-
-    const filterTags = [
-        {
-            name: 'Playground',
-            link: 'apps',
-        },
-        {
-            name: 'Active Connections',
-            link: 'apps/connected',
-        },
-    ];
 
     const handleMutations = useCallback(
         (mutations: { type: MutationRecordType }[]) => {
@@ -51,7 +50,7 @@ function AppFiltersPortal() {
             {ready
                 ? ReactDOM.createPortal(
                       <div className={st.filterTags}>
-                          {filterTags.map((tag) => (
+                          {tags.map((tag) => (
                               <NavLink
                                   key={tag.link}
                                   to={`/${tag.link}`}
@@ -70,4 +69,4 @@ function AppFiltersPortal() {
     );
 }
 
-export default AppFiltersPortal;
+export default FiltersPortal;

@@ -4,19 +4,28 @@
 import { Route, Routes } from 'react-router-dom';
 
 import { Content } from '_app/shared/bottom-menu-layout';
-import AppsPlayGround, {
-    ConnectedAppsCard,
-    AppFiltersPortal,
-} from '_components/sui-apps';
+import FiltersPortal from '_components/filters-tags';
+import AppsPlayGround, { ConnectedAppsCard } from '_components/sui-apps';
 
 import st from './AppsPage.module.scss';
 
 function AppsPage() {
+    const filterTags = [
+        {
+            name: 'Playground',
+            link: 'apps',
+        },
+        {
+            name: 'Active Connections',
+            link: 'apps/connected',
+        },
+    ];
+
     return (
         <div className={st.container}>
             <Content>
                 <section>
-                    <AppFiltersPortal />
+                    <FiltersPortal tags={filterTags} />
                     <Routes>
                         <Route path="/" element={<AppsPlayGround />} />
                         <Route
