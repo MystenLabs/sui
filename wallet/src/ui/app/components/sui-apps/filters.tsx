@@ -2,13 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import cl from 'classnames';
-import { useEffect, useState } from 'react';
+import { useState, useCallback } from 'react';
 import ReactDOM from 'react-dom';
 import { NavLink } from 'react-router-dom';
+
+import { useMutationObserver } from '_hooks';
 
 import st from './Filters.module.scss';
 
 const ELEMENT_ID = '#sui-apps-filters';
+
 function activeTagsFilter({ isActive }: { isActive: boolean }) {
     return cl({ [st.active]: isActive }, st.filter);
 }
@@ -28,11 +31,20 @@ function AppFiltersPortal() {
         },
     ];
 
-    useEffect(() => {
-        // TODO - Remove this hack
-        const content = document.querySelector(ELEMENT_ID) as HTMLElement;
-        if (content) setReady(true);
-    }, [content]);
+    const handleMutations = useCallback(
+        (mutations: { type: MutationRecordType }[]) => {
+            mutations.forEach(({ type }: { type: MutationRecordType }) => {
+                if (type === 'childList') setReady(true);
+            });
+        },
+        []
+    );
+
+    useMutationObserver({
+        target: content,
+        options: { childList: true, subtree: true },
+        callback: handleMutations,
+    });
 
     return (
         <>
