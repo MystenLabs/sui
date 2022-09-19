@@ -1060,8 +1060,12 @@ pub enum ExecutionFailureStatus {
     //
     // Errors from the Move VM
     //
-    // TODO module id + func def + offset?
-    MovePrimitiveRuntimeError,
+    // TODO func def + offset?
+    MovePrimitiveRuntimeError {
+        sub_status: Option<u64>,
+        module_id: Option<ModuleId>,
+        message: Option<String>,
+    },
     /// Indicates and `abort` from inside Move code. Contains the location of the abort and the
     /// abort code
     MoveAbort(ModuleId, u64), // TODO func def + offset?
@@ -1229,10 +1233,14 @@ impl std::fmt::Display for ExecutionFailureStatus {
                 "Sui Move Bytecode Verification Error. \
                 Please run the Sui Move Verifier for more information."
             ),
-            ExecutionFailureStatus::MovePrimitiveRuntimeError => write!(
+            ExecutionFailureStatus::MovePrimitiveRuntimeError {
+                module_id,
+                sub_status,
+                message,
+            } => write!(
                 f,
-                "Move Primitive Runtime Error. \
-                Arithmetic error, stack overflow, max value depth, etc."
+                "Move Primitive Runtime Error. sub_status: {:?}, module_id: {:?}, message: {:?}.",
+                sub_status, module_id, message,
             ),
             ExecutionFailureStatus::MoveAbort(m, c) => {
                 write!(f, "Move Runtime Abort. Module: {}, Status Code: {}", m, c)

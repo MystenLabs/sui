@@ -565,7 +565,14 @@ impl From<VMError> for ExecutionError {
             }
             (StatusCode::OUT_OF_GAS, _, _) => ExecutionFailureStatus::InsufficientGas,
             _ => match error.major_status().status_type() {
-                StatusType::Execution => ExecutionFailureStatus::MovePrimitiveRuntimeError,
+                StatusType::Execution => ExecutionFailureStatus::MovePrimitiveRuntimeError {
+                    sub_status: error.sub_status(),
+                    module_id: match error.location() {
+                        Location::Module(module_id) => Some(module_id.clone()),
+                        _ => None,
+                    },
+                    message: error.message().cloned(),
+                },
                 StatusType::Validation
                 | StatusType::Verification
                 | StatusType::Deserialization

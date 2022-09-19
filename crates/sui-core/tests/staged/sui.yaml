@@ -198,7 +198,15 @@ ExecutionFailureStatus:
     23:
       SuiMoveVerificationError: UNIT
     24:
-      MovePrimitiveRuntimeError: UNIT
+      MovePrimitiveRuntimeError:
+        STRUCT:
+          - sub_status:
+              OPTION: U64
+          - module_id:
+              OPTION:
+                TYPENAME: ModuleId
+          - message:
+              OPTION: STR
     25:
       MoveAbort:
         TUPLE:
