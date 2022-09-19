@@ -668,6 +668,9 @@ where
         }
     }
 
+    /// Transaction initialized by Node Sync passes in a Semaphore for
+    /// concurrency controlling while Transaction initialized by the write path
+    /// (TransactionOrchestrator) does not.
     async fn wait_for_parents<S>(
         &self,
         permit: Option<OwnedSemaphorePermit>,
