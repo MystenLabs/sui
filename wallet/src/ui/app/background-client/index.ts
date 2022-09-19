@@ -6,7 +6,9 @@ import { lastValueFrom, take } from 'rxjs';
 import { createMessage } from '_messages';
 import { PortStream } from '_messaging/PortStream';
 import { isPermissionRequests } from '_payloads/permissions';
+import { isUpdateActiveOrigin } from '_payloads/tabs/updateActiveOrigin';
 import { isGetTransactionRequestsResponse } from '_payloads/transactions/ui/GetTransactionRequestsResponse';
+import { setActiveOrigin } from '_redux/slices/app';
 import { setPermissions } from '_redux/slices/permissions';
 import { setTransactionRequests } from '_redux/slices/transaction-requests';
 
@@ -99,10 +101,16 @@ export class BackgroundClient {
             );
         }
         const { payload } = msg;
+        let action;
         if (isPermissionRequests(payload)) {
-            this._dispatch(setPermissions(payload.permissions));
+            action = setPermissions(payload.permissions);
         } else if (isGetTransactionRequestsResponse(payload)) {
-            this._dispatch(setTransactionRequests(payload.txRequests));
+            action = setTransactionRequests(payload.txRequests);
+        } else if (isUpdateActiveOrigin(payload)) {
+            action = setActiveOrigin(payload);
+        }
+        if (action) {
+            this._dispatch(action);
         }
     }
 

@@ -6,6 +6,7 @@ import { useEffect } from 'react';
 import { Link, Outlet } from 'react-router-dom';
 import { of, filter, switchMap, from, defer, repeat } from 'rxjs';
 
+import DappStatus from '_app/shared/dapp-status';
 import Loading from '_components/loading';
 import Logo from '_components/logo';
 import { MenuButton, MenuContent } from '_components/menu';
@@ -44,15 +45,19 @@ const HomePage = ({ disableNavigation, limitToPopUpSize = true }: Props) => {
         <PageLayout limitToPopUpSize={limitToPopUpSize}>
             <Loading loading={guardChecking}>
                 <div className={st.container}>
-                    <div className={st.header}>
-                        <span />
+                    <div
+                        className={cl(st.header, {
+                            [st.center]: disableNavigation,
+                        })}
+                    >
                         <Link to="/tokens" className={st.logoLink}>
                             <Logo className={st.logo} txt={true} />
                         </Link>
-                        {disableNavigation ? (
-                            <span />
-                        ) : (
-                            <MenuButton className={st.menuButton} />
+                        {disableNavigation ? null : (
+                            <>
+                                <DappStatus />
+                                <MenuButton className={st.menuButton} />
+                            </>
                         )}
                     </div>
                     <div className={st.content}>

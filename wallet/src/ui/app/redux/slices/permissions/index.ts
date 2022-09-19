@@ -4,8 +4,11 @@
 import {
     createAsyncThunk,
     createEntityAdapter,
+    createSelector,
     createSlice,
 } from '@reduxjs/toolkit';
+
+import { activeAccountSelector } from '../account';
 
 import type { SuiAddress } from '@mysten/sui.js';
 import type { PayloadAction } from '@reduxjs/toolkit';
@@ -73,3 +76,26 @@ export const { setPermissions } = slice.actions;
 export const permissionsSelectors = permissionsAdapter.getSelectors(
     (state: RootState) => state.permissions
 );
+
+export function createDappStatusSelector(origin: string | null) {
+    if (!origin) {
+        return () => false;
+    }
+    return createSelector(
+        permissionsSelectors.selectAll,
+        activeAccountSelector,
+        (permissions, activeAccount) => {
+            const originPermission = permissions.find(
+                (aPermission) => aPermission.origin === origin
+            );
+            if (!originPermission) {
+                return false;
+            }
+            return (
+                originPermission.allowed &&
+                activeAccount &&
+                originPermission.accounts.includes(activeAccount)
+            );
+        }
+    );
+}

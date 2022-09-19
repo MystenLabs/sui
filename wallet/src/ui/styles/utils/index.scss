@@ -156,5 +156,10 @@ $main-extra-space: sizing.$main-bottom-space;
         padding: 0 16px;
         line-height: 16px;
         letter-spacing: 0;
+    } @else if $type == 'Primary/BodySmall-M' {
+        font-size: 13px;
+        font-weight: 500;
+        line-height: 13px;
+        letter-spacing: 0;
     }
 }

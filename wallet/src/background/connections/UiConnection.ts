@@ -1,6 +1,8 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { BehaviorSubject, filter, switchMap, takeUntil } from 'rxjs';
+
 import { Connection } from './Connection';
 import { createMessage } from '_messages';
 import {
@@ -10,16 +12,41 @@ import {
 import { isGetTransactionRequests } from '_payloads/transactions/ui/GetTransactionRequests';
 import { isTransactionRequestResponse } from '_payloads/transactions/ui/TransactionRequestResponse';
 import Permissions from '_src/background/Permissions';
+import Tabs from '_src/background/Tabs';
 import Transactions from '_src/background/Transactions';
 
 import type { Message } from '_messages';
 import type { PortChannelName } from '_messaging/PortChannelName';
 import type { Permission, PermissionRequests } from '_payloads/permissions';
+import type { UpdateActiveOrigin } from '_payloads/tabs/updateActiveOrigin';
 import type { TransactionRequest } from '_payloads/transactions';
 import type { GetTransactionRequestsResponse } from '_payloads/transactions/ui/GetTransactionRequestsResponse';
+import type { Runtime } from 'webextension-polyfill';
 
 export class UiConnection extends Connection {
     public static readonly CHANNEL: PortChannelName = 'sui_ui<->background';
+    private uiAppInitialized: BehaviorSubject<boolean> = new BehaviorSubject(
+        false
+    );
+
+    constructor(port: Runtime.Port) {
+        super(port);
+        this.uiAppInitialized
+            .pipe(
+                filter((init) => init),
+                switchMap(() => Tabs.activeOrigin),
+                takeUntil(this.onDisconnect)
+            )
+            .subscribe(({ origin, favIcon }) => {
+                this.send(
+                    createMessage<UpdateActiveOrigin>({
+                        type: 'update-active-origin',
+                        origin,
+                        favIcon,
+                    })
+                );
+            });
+    }
 
     protected async handleMessage(msg: Message) {
         const { payload, id } = msg;
@@ -28,6 +55,10 @@ export class UiConnection extends Connection {
                 Object.values(await Permissions.getPermissions()),
                 id
             );
+            // TODO: we should depend on a better message to know if app is initialized
+            if (!this.uiAppInitialized.value) {
+                this.uiAppInitialized.next(true);
+            }
         } else if (isPermissionResponse(payload)) {
             Permissions.handlePermissionResponse(payload);
         } else if (isTransactionRequestResponse(payload)) {

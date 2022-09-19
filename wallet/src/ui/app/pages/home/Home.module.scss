@@ -19,6 +19,10 @@
     padding: 0 15px;
     justify-content: space-between;
     min-height: 52px;
+
+    &.center {
+        justify-content: center;
+    }
 }
 
 .menu-button {
