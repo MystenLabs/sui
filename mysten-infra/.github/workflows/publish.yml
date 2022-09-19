@@ -42,8 +42,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-        with:
-          persist-credentials: false
       - name: Check semver
         uses: obi1kenobi/cargo-semver-checks-action@v1
         with:
@@ -72,8 +70,8 @@ jobs:
           git push origin "${{ matrix.package}}-v$CURRENT_VERSION"
       - uses: actions-rs/toolchain@v1
         if: steps.check.outputs.is_new_version == 'yes'
-      - name: Publish
+      - name: Publish packages
         if: steps.check.outputs.is_new_version == 'yes'
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        run: cargo publish
+        run: cargo publish -p ${{ matrix.package }}
