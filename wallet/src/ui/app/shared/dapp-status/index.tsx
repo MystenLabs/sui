@@ -74,6 +74,9 @@ function DappStatus() {
             setDisconnecting(false);
         }
     }, [disconnecting, isConnected, activeOriginUrl, dispatch]);
+    if (!isConnected) {
+        return null;
+    }
     return (
         <div className={st.wrapper} ref={wrapperRef}>
             <Component
