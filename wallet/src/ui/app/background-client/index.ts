@@ -18,6 +18,7 @@ import type {
     GetPermissionRequests,
     PermissionResponse,
 } from '_payloads/permissions';
+import type { DisconnectApp } from '_payloads/permissions/DisconnectApp';
 import type { GetTransactionRequests } from '_payloads/transactions/ui/GetTransactionRequests';
 import type { TransactionRequestResponse } from '_payloads/transactions/ui/TransactionRequestResponse';
 import type { AppDispatch } from '_store';
@@ -90,6 +91,14 @@ export class BackgroundClient {
                 createMessage<GetTransactionRequests>({
                     type: 'get-transaction-requests',
                 })
+            ).pipe(take(1))
+        );
+    }
+
+    public async disconnectApp(origin: string) {
+        await lastValueFrom(
+            this.sendMessage(
+                createMessage<DisconnectApp>({ type: 'disconnect-app', origin })
             ).pipe(take(1))
         );
     }

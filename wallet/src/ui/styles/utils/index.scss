@@ -161,5 +161,14 @@ $main-extra-space: sizing.$main-bottom-space;
         font-weight: 500;
         line-height: 13px;
         letter-spacing: 0;
+    } @else if $type == 'Primary/SubtitleSmall-M' {
+        font-size: 11px;
+        font-weight: 500;
+        line-height: 11px;
+        letter-spacing: 0;
+    } @else if $type == 'Primary/BodySmall-SB' {
+        font-size: 13px;
+        font-weight: 600;
+        line-height: 13px;
     }
 }
