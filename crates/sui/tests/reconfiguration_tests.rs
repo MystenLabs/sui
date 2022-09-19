@@ -21,7 +21,7 @@ use sui_types::error::SuiResult;
 use sui_types::messages::{CallArg, ExecutionStatus, ObjectArg, TransactionEffects};
 use sui_types::messages_checkpoint::AuthenticatedCheckpoint;
 use sui_types::object::Object;
-use sui_types::SUI_SYSTEM_STATE_OBJECT_ID;
+use sui_types::{SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION};
 use test_utils::authority::{get_object, start_node, test_authority_configs};
 use test_utils::messages::{make_transfer_sui_transaction, move_transaction};
 use test_utils::objects::{generate_gas_object_with_balance, test_gas_objects};
@@ -123,11 +123,12 @@ async fn reconfig_end_to_end_tests() {
     );
     let effects = submit_single_owner_transaction(publish_tx, validator_info).await;
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
-    let ((counter_id, _, _), _) = effects.created[0];
+    let ((counter_id, counter_initial_shared_version, _), _) = effects.created[0];
     increment_counter(
         gas_objects.pop().unwrap(),
         package_ref,
         counter_id,
+        counter_initial_shared_version,
         validator_info,
         &orig_committee,
     )
@@ -212,6 +213,7 @@ async fn reconfig_end_to_end_tests() {
         gas_objects.pop().unwrap(),
         package_ref,
         counter_id,
+        counter_initial_shared_version,
         validator_info,
         &new_committee,
     )
@@ -338,7 +340,10 @@ async fn create_and_register_new_validator(
         "request_add_validator",
         framework_pkg,
         vec![
-            CallArg::Object(ObjectArg::SharedObject(SUI_SYSTEM_STATE_OBJECT_ID)),
+            CallArg::Object(ObjectArg::SharedObject {
+                id: SUI_SYSTEM_STATE_OBJECT_ID,
+                initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+            }),
             CallArg::Pure(bcs::to_bytes(&new_validator.protocol_key()).unwrap()),
             CallArg::Pure(bcs::to_bytes(&new_validator.network_key()).unwrap()),
             CallArg::Pure(bcs::to_bytes(&new_validator_pop.as_ref()).unwrap()),
@@ -459,6 +464,7 @@ async fn increment_counter(
     gas_object: Object,
     package_ref: ObjectRef,
     counter_id: ObjectID,
+    initial_shared_version: SequenceNumber,
     validator_info: &[ValidatorInfo],
     committee: &Committee,
 ) {
@@ -468,7 +474,10 @@ async fn increment_counter(
         "counter",
         "increment",
         package_ref,
-        vec![CallArg::Object(ObjectArg::SharedObject(counter_id))],
+        vec![CallArg::Object(ObjectArg::SharedObject {
+            id: counter_id,
+            initial_shared_version,
+        })],
     );
     let effects =
         submit_shared_object_transaction_with_committee(transaction, validator_info, committee)
