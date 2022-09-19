@@ -44,7 +44,7 @@ typed-store = "0.1.0"
 typed-store-derive = "0.1.0"
 
 tempfile = "3.3.0"
-narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "06979c219558bda7dbcdd11ead4a7245647ca776", package = "executor" }
+narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "9d667b47056808dea86e3e9874a9e2fcb3f6629a", package = "executor" }
 
 move-core-types = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e", features = ["address20"] }
 move-prover = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e" }
