@@ -9,6 +9,15 @@ import { hmac } from '@noble/hashes/hmac';
 import { sha256 } from '@noble/hashes/sha256';
 import { Secp256k1PublicKey } from './secp256k1-publickey';
 import { Signature } from '@noble/secp256k1';
+import {
+  isValidBIP32Path,
+  normalizeMnemonics,
+  validateMnemonics,
+} from './mnemonics';
+import { HDKey } from '@scure/bip32';
+import bip39 from 'bip39-light';
+
+export const DEFAULT_SECP256K1_DERIVATION_PATH = "m/54'/784'/0'/0/0";
 
 secp.utils.hmacSha256Sync = (key: Uint8Array, ...msgs: Uint8Array[]) => {
   const h = hmac.create(sha256, key);
@@ -124,5 +133,29 @@ export class Secp256k1Keypair implements Keypair {
     recoverable_sig.set(Signature.fromDER(sig).toCompactRawBytes());
     recoverable_sig.set([rec_id], 64);
     return new Base64DataBuffer(recoverable_sig);
+  }
+
+  /**
+   * Derive Secp256k1 keypair from mnemonics and path.
+   * The path must be compliant to BIP-32 in form m/54'/784'/{account_index}'/{change_index}/{address_index}
+   */
+  static deriveKeypair(path: string, mnemonics: string): Secp256k1Keypair {
+    if (!isValidBIP32Path(path)) {
+      throw new Error('Invalid derivation path');
+    }
+    const normalized = normalizeMnemonics(mnemonics);
+    if (!validateMnemonics(normalized)) {
+      throw new Error('Invalid mnemonics');
+    }
+    const key = HDKey.fromMasterSeed(bip39.mnemonicToSeed(normalized)).derive(
+      path
+    );
+    if (key.publicKey == null || key.privateKey == null) {
+      throw new Error('Invalid key');
+    }
+    return new Secp256k1Keypair({
+      publicKey: key.publicKey,
+      secretKey: key.privateKey,
+    });
   }
 }

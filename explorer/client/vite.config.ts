@@ -22,4 +22,7 @@ export default defineConfig({
             '@mysten/bcs': path.resolve(__dirname, '../../sdk/bcs/src/'),
         },
     },
+    define: {
+        global: 'globalThis',
+    },
 });

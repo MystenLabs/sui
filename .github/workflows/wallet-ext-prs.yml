@@ -33,9 +33,6 @@ jobs:
       - name: Lint
         working-directory: ${{env.working-directory}}
         run: pnpm lint
-      - name: Test
-        working-directory: ${{env.working-directory}}
-        run: pnpm test
       - name: Build
         working-directory: ${{env.working-directory}}
         run: pnpm build:prod

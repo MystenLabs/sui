@@ -6,6 +6,15 @@ import { Base64DataBuffer } from '../serialization/base64';
 import { Keypair } from './keypair';
 import { Ed25519PublicKey } from './ed25519-publickey';
 import { SignatureScheme } from './publickey';
+import {
+  isValidHardenedPath,
+  normalizeMnemonics,
+  validateMnemonics,
+} from './mnemonics';
+import { derivePath, getPublicKey } from 'ed25519-hd-key';
+import bip39 from 'bip39-light';
+
+export const DEFAULT_ED25519_DERIVATION_PATH = "m/44'/784'/0'/0'/0'";
 
 /**
  * Ed25519 Keypair data
@@ -34,7 +43,7 @@ export class Ed25519Keypair implements Keypair {
       this.keypair = nacl.sign.keyPair();
     }
   }
-  
+
   /**
    * Get the key scheme of the keypair ED25519
    */
@@ -99,5 +108,21 @@ export class Ed25519Keypair implements Keypair {
     return new Base64DataBuffer(
       nacl.sign.detached(data.getData(), this.keypair.secretKey)
     );
+  }
+
+  /**
+   * Derive Ed25519 keypair from mnemonics and path.
+   * The path must be compliant to SLIP-0010 in form m/44'/784'/{account_index}'/{change_index}'/{address_index}'
+   */
+  static deriveKeypair(path: string, mnemonics: string): Ed25519Keypair {
+    if (!isValidHardenedPath(path)) {
+      throw new Error('Invalid derivation path');
+    }
+    const normalized = normalizeMnemonics(mnemonics);
+    if (!validateMnemonics(normalized)) {
+      throw new Error('Invalid mnemonics');
+    }
+    const { key } = derivePath(path, bip39.mnemonicToSeedHex(normalized));
+    return new Ed25519Keypair({ publicKey: getPublicKey(key), secretKey: key });
   }
 }

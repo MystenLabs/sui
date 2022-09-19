@@ -140,7 +140,7 @@ fn test_load_keystore_err() {
 
 #[test]
 fn test_mnemonics_ed25519() -> Result<(), anyhow::Error> {
-    // Test case matches with /sui/wallet/src/shared/cryptography/mnemonics.test.ts
+    // Test case matches with /mysten/sui/sdk/typescript/test/unit/cryptography/ed25519-keypair.test.ts
     let mut keystore = KeystoreType::InMem(0).init().unwrap();
     let phrase = "result crisp session latin must fruit genuine question prevent start coconut brave speak student dismiss";
     KeyToolCommand::Import {

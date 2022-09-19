@@ -1,7 +1,11 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Base64DataBuffer, Secp256k1Keypair } from '../../../src';
+import {
+  Base64DataBuffer,
+  DEFAULT_SECP256K1_DERIVATION_PATH,
+  Secp256k1Keypair,
+} from '../../../src';
 import { describe, it, expect } from 'vitest';
 import * as secp from '@noble/secp256k1';
 import { Signature } from '@noble/secp256k1';
@@ -75,5 +79,44 @@ describe('secp256k1-keypair', () => {
     expect(Buffer.from(pubkey).toString('base64')).toEqual(
       keypair.getPublicKey().toBase64()
     );
+  });
+
+  it('invalid mnemonics to derive secp256k1 keypair', () => {
+    expect(() => {
+      Secp256k1Keypair.deriveKeypair(DEFAULT_SECP256K1_DERIVATION_PATH, 'aaa');
+    }).toThrow('Invalid mnemonics');
+  });
+
+  it('derive secp256k1 keypair from path and mnemonics', () => {
+    // Test case generated against rust: /sui/crates/sui/src/unit_tests/keytool_tests.rs#L149
+    const keypair = Secp256k1Keypair.deriveKeypair(
+      DEFAULT_SECP256K1_DERIVATION_PATH,
+      'result crisp session latin must fruit genuine question prevent start coconut brave speak student dismiss'
+    );
+
+    expect(keypair.getPublicKey().toBase64()).toEqual(
+      'A+NxdDVYKrM9LjFdIem8ThlQCh/EyM3HOhU2WJF3SxMf'
+    );
+    expect(keypair.getPublicKey().toSuiAddress()).toEqual(
+      'ed17b3f435c03ff69c2cdc6d394932e68375f20f'
+    );
+  });
+
+  it('incorrect purpose node for secp256k1 derivation path', () => {
+    expect(() => {
+      Secp256k1Keypair.deriveKeypair(
+        `m/44'/784'/0'/0'/0'`,
+        'result crisp session latin must fruit genuine question prevent start coconut brave speak student dismiss'
+      );
+    }).toThrow('Invalid derivation path');
+  });
+
+  it('incorrect hardened path for secp256k1 key derivation', () => {
+    expect(() => {
+      Secp256k1Keypair.deriveKeypair(
+        `m/54'/784'/0'/0'/0'`,
+        'result crisp session latin must fruit genuine question prevent start coconut brave speak student dismiss'
+      );
+    }).toThrow('Invalid derivation path');
   });
 });

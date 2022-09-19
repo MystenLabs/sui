@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { normalizeMnemonics, validateMnemonics } from '@mysten/sui.js';
 import { useFormik } from 'formik';
 import { useCallback } from 'react';
 import * as Yup from 'yup';
@@ -9,10 +10,6 @@ import Button from '_app/shared/button';
 import Icon, { SuiIcons } from '_components/icon';
 import { useAppDispatch, useAppSelector } from '_hooks';
 import { createMnemonic, setMnemonic } from '_redux/slices/account';
-import {
-    normalizeMnemonics,
-    validateMnemonics,
-} from '_shared/cryptography/mnemonics';
 
 import type { FocusEventHandler } from 'react';
 

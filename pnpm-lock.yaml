@@ -151,12 +151,15 @@ importers:
       '@mysten/sui-open-rpc': file:../../crates/sui-open-rpc
       '@noble/hashes': ^1.1.2
       '@noble/secp256k1': ^1.6.3
+      '@scure/bip32': ^1.1.0
       '@size-limit/preset-small-lib': ^7.0.8
       '@types/bn.js': ^5.1.0
       '@types/lossless-json': ^1.0.1
+      bip39-light: ^1.0.7
       bn.js: ^5.2.0
       buffer: ^6.0.3
       cross-fetch: ^3.1.5
+      ed25519-hd-key: ^1.3.0
       eslint: ^8.23.0
       eslint-config-prettier: ^8.5.0
       eslint-config-react-app: ^7.0.1
@@ -182,9 +185,12 @@ importers:
       '@mysten/bcs': link:../bcs
       '@noble/hashes': 1.1.2
       '@noble/secp256k1': 1.6.3
+      '@scure/bip32': 1.1.0
+      bip39-light: 1.0.7
       bn.js: 5.2.1
       buffer: 6.0.3
       cross-fetch: 3.1.5
+      ed25519-hd-key: 1.3.0
       jayson: 3.7.0
       js-sha3: 0.8.0
       lossless-json: 1.0.5
@@ -19805,7 +19811,7 @@ packages:
       schema-utils: 3.1.1
       serialize-javascript: 6.0.0
       terser: 5.14.2
-      webpack: 5.74.0
+      webpack: 5.74.0_webpack-cli@4.10.0
     dev: true
 
   /terser/4.8.1:

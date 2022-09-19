@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { generateMnemonic } from '@mysten/sui.js';
 import {
     createAsyncThunk,
     createSelector,
@@ -10,7 +11,6 @@ import Browser from 'webextension-polyfill';
 
 import { suiObjectsAdapterSelectors } from '_redux/slices/sui-objects';
 import { Coin } from '_redux/slices/sui-objects/Coin';
-import { generateMnemonic } from '_shared/cryptography/mnemonics';
 
 import type { SuiAddress, SuiMoveObject } from '@mysten/sui.js';
 import type { PayloadAction } from '@reduxjs/toolkit';

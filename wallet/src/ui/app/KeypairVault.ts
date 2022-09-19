@@ -1,15 +1,19 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Ed25519Keypair } from '@mysten/sui.js';
-
-import { getKeypairFromMnemonics } from '_shared/cryptography/mnemonics';
+import {
+    DEFAULT_ED25519_DERIVATION_PATH,
+    Ed25519Keypair,
+} from '@mysten/sui.js';
 
 export default class KeypairVault {
     private _keypair: Ed25519Keypair | null = null;
 
     public set mnemonic(mnemonic: string) {
-        this._keypair = new Ed25519Keypair(getKeypairFromMnemonics(mnemonic));
+        this._keypair = Ed25519Keypair.deriveKeypair(
+            DEFAULT_ED25519_DERIVATION_PATH,
+            mnemonic
+        );
     }
 
     public getAccount(): string | null {
