@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::api::QuorumDriverApiServer;
+use crate::api::TransactionExecutionApiServer;
 use crate::SuiRpcModule;
 use anyhow::anyhow;
 use async_trait::async_trait;
@@ -24,12 +24,12 @@ use sui_types::{
     messages::{Transaction, TransactionData},
 };
 
-pub struct FullNodeQuorumDriverApi {
+pub struct FullNodeTransactionExecutionApi {
     pub transaction_orchestrator: Arc<TransactiondOrchestrator<NetworkAuthorityClient>>,
     pub module_cache: Arc<SyncModuleCache<ResolverWrapper<AuthorityStore>>>,
 }
 
-impl FullNodeQuorumDriverApi {
+impl FullNodeTransactionExecutionApi {
     pub fn new(
         transaction_orchestrator: Arc<TransactiondOrchestrator<NetworkAuthorityClient>>,
         module_cache: Arc<SyncModuleCache<ResolverWrapper<AuthorityStore>>>,
@@ -42,7 +42,7 @@ impl FullNodeQuorumDriverApi {
 }
 
 #[async_trait]
-impl QuorumDriverApiServer for FullNodeQuorumDriverApi {
+impl TransactionExecutionApiServer for FullNodeTransactionExecutionApi {
     async fn execute_transaction(
         &self,
         tx_bytes: Base64,
@@ -77,12 +77,12 @@ impl QuorumDriverApiServer for FullNodeQuorumDriverApi {
     }
 }
 
-impl SuiRpcModule for FullNodeQuorumDriverApi {
+impl SuiRpcModule for FullNodeTransactionExecutionApi {
     fn rpc(self) -> RpcModule<Self> {
         self.into_rpc()
     }
 
     fn rpc_doc_module() -> Module {
-        crate::api::QuorumDriverApiOpenRpc::module_doc()
+        crate::api::TransactionExecutionApiOpenRpc::module_doc()
     }
 }

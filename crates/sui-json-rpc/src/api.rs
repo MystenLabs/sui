@@ -498,8 +498,20 @@ pub trait EventReadApi {
 
 #[open_rpc(namespace = "sui", tag = "APIs to execute transactions.")]
 #[rpc(server, client, namespace = "sui")]
-pub trait QuorumDriverApi {
-    /// Execute the transaction and wait for results if desired
+pub trait TransactionExecutionApi {
+    /// Execute the transaction and wait for results if desired.
+    /// Request types:
+    /// 1. ImmediateReturn: immediate return to client without waiting for any results
+    ///     Note the transaction may fail without being noticed by client in this mode.
+    ///     After getting the response, client use poll the node to check transaction's result
+    /// 2. WaitForTxCert: wait for TransactionCertificate and then return to client.
+    /// 3. WaitForEffectsCert: wait for TransactionEffectsCert and then return to client.
+    ///     This mode is a proxy for transaction finality.
+    /// 4. WaitForLocalExecution: wait for TransactionEffectsCert and make sure the node has
+    ///     executed the transaction locally before returning the client. The local execution
+    ///     makes sure this node is aware of this transaction when client fires subsequent queries.
+    ///     However if the node fails to execute the transaction locally in a timely manner,
+    ///     a bool type in the response is set to false to indicated the case.
     #[method(name = "executeTransaction")]
     async fn execute_transaction(
         &self,
