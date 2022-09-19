@@ -278,7 +278,7 @@ linked-hash-map = { version = "0.5", default-features = false }
 lock_api-468e82937335b1c9 = { package = "lock_api", version = "0.3", default-features = false }
 lock_api-9fbad63c4bcf4a8f = { package = "lock_api", version = "0.4", default-features = false }
 log = { version = "0.4", default-features = false, features = ["serde", "std"] }
-lru = { version = "0.7", features = ["hashbrown"] }
+lru = { version = "0.8", features = ["hashbrown"] }
 match_opt = { version = "0.1", default-features = false }
 matchers = { version = "0.1", default-features = false }
 matchit = { version = "0.5" }
@@ -918,7 +918,7 @@ linked-hash-map = { version = "0.5", default-features = false }
 lock_api-468e82937335b1c9 = { package = "lock_api", version = "0.3", default-features = false }
 lock_api-9fbad63c4bcf4a8f = { package = "lock_api", version = "0.4", default-features = false }
 log = { version = "0.4", default-features = false, features = ["serde", "std"] }
-lru = { version = "0.7", features = ["hashbrown"] }
+lru = { version = "0.8", features = ["hashbrown"] }
 match_opt = { version = "0.1", default-features = false }
 matchers = { version = "0.1", default-features = false }
 matchit = { version = "0.5" }
