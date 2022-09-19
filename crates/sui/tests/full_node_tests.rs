@@ -882,12 +882,14 @@ async fn test_full_node_transaction_orchestrator_rpc_ok() -> Result<(), anyhow::
     let (swarm, mut context, _address) = setup_network_and_wallet().await?;
     let (_node, jsonrpc_client, _) = set_up_jsonrpc(&swarm, None).await?;
 
-    let mut txns = make_transactions_with_wallet_context(&mut context, 3).await;
+    let txn_count = 4;
+    let mut txns = make_transactions_with_wallet_context(&mut context, txn_count).await;
     assert!(
-        txns.len() >= 3,
-        "Expect at least 3 txns but only got {}. Do we generate enough gas objects during genesis?",
-        txns.len(),
+        txns.len() >= txn_count,
+        "Expect at least {} txns. Do we generate enough gas objects during genesis?",
+        txn_count,
     );
+
     let txn = txns.swap_remove(0);
     let tx_digest = txn.digest();
 
@@ -1063,7 +1065,7 @@ async fn test_get_objects_read() -> Result<(), anyhow::Error> {
         recipient,
     );
     context.execute_transaction(nft_transfer_tx).await.unwrap();
-    sleep(Duration::from_millis(500)).await;
+    sleep(Duration::from_millis(1000)).await;
     let (object_ref_v2, object_v2, _) = get_obj_read_from_node(&node, object_id, None).await?;
     assert_ne!(object_ref_v2, object_ref_v1);
 

@@ -170,7 +170,7 @@ impl<A> ActiveAuthority<A> {
         })
     }
 
-    pub fn net(&self) -> Arc<AuthorityAggregator<A>> {
+    pub fn agg_aggregator(&self) -> Arc<AuthorityAggregator<A>> {
         self.net.load().clone()
     }
 
@@ -308,7 +308,7 @@ where
         // TODO: potentially move get_latest_proposal_and_checkpoint_from_all and
         // sync_to_checkpoint out of checkpoint_driver
         let checkpoint_summary = get_latest_checkpoint_from_all(
-            self.net(),
+            self.agg_aggregator(),
             checkpoint_process_control.extra_time_after_quorum,
             checkpoint_process_control.timeout_until_quorum,
         )
@@ -387,7 +387,7 @@ where
         Self::cancel_node_sync_process_impl(&mut lock_guard).await;
 
         let (cancel_sender, cancel_receiver) = oneshot::channel();
-        let aggregator = self.net();
+        let aggregator = self.agg_aggregator();
 
         let node_sync_handle = self.clone().node_sync_handle();
         let node_sync_store = self.node_sync_store.clone();

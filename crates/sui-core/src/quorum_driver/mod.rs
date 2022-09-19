@@ -22,7 +22,7 @@ use sui_types::messages::{
 pub enum QuorumTask<A> {
     ProcessTransaction(Transaction),
     ProcessCertificate(CertifiedTransaction),
-    UpdateCommittee(AuthorityAggregator<A>),
+    UpdateCommittee(Arc<AuthorityAggregator<A>>),
 }
 
 /// A handler to wrap around QuorumDriver. This handler should be owned by the node with exclusive
@@ -50,7 +50,7 @@ pub struct QuorumDriver<A> {
 
 impl<A> QuorumDriver<A> {
     pub fn new(
-        validators: AuthorityAggregator<A>,
+        validators: Arc<AuthorityAggregator<A>>,
         task_sender: Sender<QuorumTask<A>>,
         effects_subscribe_sender: tokio::sync::broadcast::Sender<(
             CertifiedTransaction,
@@ -59,7 +59,7 @@ impl<A> QuorumDriver<A> {
         metrics: QuorumDriverMetrics,
     ) -> Self {
         Self {
-            validators: ArcSwap::from(Arc::new(validators)),
+            validators: ArcSwap::from(validators),
             task_sender,
             effects_subscribe_sender,
             metrics,
@@ -200,7 +200,7 @@ impl<A> QuorumDriverHandler<A>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
-    pub fn new(validators: AuthorityAggregator<A>, metrics: QuorumDriverMetrics) -> Self {
+    pub fn new(validators: Arc<AuthorityAggregator<A>>, metrics: QuorumDriverMetrics) -> Self {
         let (task_tx, task_rx) = mpsc::channel::<QuorumTask<A>>(5000);
         let (subscriber_tx, subscriber_rx) = tokio::sync::broadcast::channel::<_>(100);
         let quorum_driver = Arc::new(QuorumDriver::new(
@@ -232,7 +232,10 @@ where
         self.effects_subscriber.resubscribe()
     }
 
-    pub async fn update_validators(&self, new_validators: AuthorityAggregator<A>) -> SuiResult {
+    pub async fn update_validators(
+        &self,
+        new_validators: Arc<AuthorityAggregator<A>>,
+    ) -> SuiResult {
         self.quorum_driver
             .task_sender
             .send(QuorumTask::UpdateCommittee(new_validators))
@@ -285,7 +288,7 @@ where
                         }
                     }
                     QuorumTask::UpdateCommittee(new_validators) => {
-                        quorum_driver.validators.store(Arc::new(new_validators));
+                        quorum_driver.validators.store(new_validators);
                     }
                 }
             }

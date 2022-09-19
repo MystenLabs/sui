@@ -360,7 +360,7 @@ async fn main() -> Result<()> {
         let offset = ObjectID::from_hex_literal(&opts.primary_gas_id)?;
         let ids = ObjectID::in_range(offset, opts.primary_gas_objects)?;
         let primary_gas_id = ids.choose(&mut rand::thread_rng()).unwrap();
-        let primary_gas = get_latest(*primary_gas_id, &aggregator)
+        let primary_gas = get_latest(*primary_gas_id, Arc::new(aggregator))
             .await
             .ok_or_else(|| {
                 anyhow!(format!(
@@ -418,6 +418,7 @@ async fn main() -> Result<()> {
                 AuthAggMetrics::new(&registry),
                 SafeClientMetrics::new(&registry),
             );
+            let arc_agg = Arc::new(aggregator);
             match opts.run_spec {
                 RunSpec::Bench {
                     target_qps,
@@ -440,7 +441,7 @@ async fn main() -> Result<()> {
                             shared_counter,
                             transfer_object,
                         );
-                        combination_workload.workload.init(&aggregator).await;
+                        combination_workload.workload.init(arc_agg.clone()).await;
                         vec![combination_workload]
                     } else {
                         let mut workloads = vec![];
@@ -458,7 +459,7 @@ async fn main() -> Result<()> {
                             owner,
                             keypair.clone(),
                         ) {
-                            shared_counter_workload.workload.init(&aggregator).await;
+                            shared_counter_workload.workload.init(arc_agg.clone()).await;
                             workloads.push(shared_counter_workload);
                         }
                         let transfer_object_weight = 1.0 - shared_counter_weight;
@@ -476,7 +477,10 @@ async fn main() -> Result<()> {
                             owner,
                             keypair,
                         ) {
-                            transfer_object_workload.workload.init(&aggregator).await;
+                            transfer_object_workload
+                                .workload
+                                .init(arc_agg.clone())
+                                .await;
                             workloads.push(transfer_object_workload);
                         }
                         workloads
@@ -489,7 +493,7 @@ async fn main() -> Result<()> {
                     let show_progress = interval.is_unbounded();
                     let driver = BenchDriver::new(stat_collection_interval);
                     driver
-                        .run(workloads, aggregator, &registry, show_progress, interval)
+                        .run(workloads, arc_agg, &registry, show_progress, interval)
                         .await
                 }
             }
