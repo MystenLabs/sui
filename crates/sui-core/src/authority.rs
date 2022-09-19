@@ -37,7 +37,7 @@ use std::{
     collections::{HashMap, VecDeque},
     pin::Pin,
     sync::{
-        atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
+        atomic::{AtomicBool, AtomicUsize, Ordering},
         Arc,
     },
 };
@@ -409,9 +409,6 @@ pub struct AuthorityState {
     pub consensus_guardrail: AtomicUsize,
 
     pub metrics: Arc<AuthorityMetrics>,
-
-    // Cache the latest checkpoint number to avoid expensive locking to access checkpoint store
-    latest_checkpoint_num: AtomicU64,
 
     /// A channel to tell consensus to reconfigure.
     tx_reconfigure_consensus: Sender<ReconfigConsensusMessage>,
@@ -1251,7 +1248,6 @@ impl AuthorityState {
             ),
             consensus_guardrail: AtomicUsize::new(0),
             metrics: Arc::new(AuthorityMetrics::new(prometheus_registry)),
-            latest_checkpoint_num: AtomicU64::new(0),
             tx_reconfigure_consensus,
         };
 
@@ -2009,10 +2005,6 @@ impl ExecutionState for AuthorityState {
                     // NOTE: The method `handle_internal_fragment` is idempotent, so we don't need
                     // to persist the consensus index. If the validator crashes, this transaction
                     // may be resent to the checkpoint logic that will simply ignore it.
-
-                    // Cache the next checkpoint number if it changes.
-                    self.latest_checkpoint_num
-                        .store(checkpoint.next_checkpoint(), Ordering::Relaxed);
 
                     // TODO: At this point we should know whether we want to change epoch. If we do,
                     // we should have (i) the new committee and (ii) the new keypair of this authority.
