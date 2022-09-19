@@ -201,6 +201,22 @@ export class JsonRpcProvider extends Provider {
     return objects.filter((obj: SuiObjectInfo) => Coin.isSUI(obj));
   }
 
+  async getCoinBalancesOwnedByAddress(
+    address: string,
+    typeArg?: string
+  ): Promise<GetObjectDataResponse[]> {
+    const objects = await this.getObjectsOwnedByAddress(address);
+    const coinIds = objects
+      .filter(
+        (obj: SuiObjectInfo) =>
+          Coin.isCoin(obj) &&
+          (typeArg === undefined || typeArg === Coin.getCoinTypeArg(obj))
+      )
+      .map((c) => c.objectId);
+
+    return await this.getObjectBatch(coinIds);
+  }
+
   async getObjectsOwnedByObject(objectId: string): Promise<SuiObjectInfo[]> {
     try {
       return await this.client.requestWithType(

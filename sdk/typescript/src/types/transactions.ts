@@ -307,21 +307,26 @@ export function getTransactionKindName(
 /* ----------------------------- ExecutionStatus ---------------------------- */
 
 export function getExecutionStatusType(
-  data: SuiTransactionResponse
-): ExecutionStatusType {
-  return getExecutionStatus(data).status;
+  data: SuiTransactionResponse | SuiExecuteTransactionResponse
+): ExecutionStatusType | undefined {
+  return getExecutionStatus(data)?.status;
 }
 
 export function getExecutionStatus(
-  data: SuiTransactionResponse
-): ExecutionStatus {
-  return data.effects.status;
+  data: SuiTransactionResponse | SuiExecuteTransactionResponse
+): ExecutionStatus | undefined {
+  if ('effects' in data) {
+    return data.effects.status;
+  } else if ('EffectsCert' in data) {
+    return data.EffectsCert.effects.effects.status;
+  }
+  return undefined;
 }
 
 export function getExecutionStatusError(
   data: SuiTransactionResponse
 ): string | undefined {
-  return getExecutionStatus(data).error;
+  return getExecutionStatus(data)?.error;
 }
 
 export function getExecutionStatusGasSummary(

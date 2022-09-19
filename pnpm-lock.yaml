@@ -303,6 +303,7 @@ importers:
       '@size-limit/preset-small-lib': ^7.0.8
       '@types/bn.js': ^5.1.0
       '@types/lossless-json': ^1.0.1
+      axios: ^0.27.2
       bn.js: ^5.2.0
       buffer: ^6.0.3
       cross-fetch: ^3.1.5
@@ -346,6 +347,7 @@ importers:
       '@size-limit/preset-small-lib': 7.0.8_size-limit@7.0.8
       '@types/bn.js': 5.1.0
       '@types/lossless-json': 1.0.1
+      axios: 0.27.2
       eslint: 8.23.0
       eslint-config-prettier: 8.5.0_eslint@8.23.0
       eslint-config-react-app: 7.0.1_itqs5654cmlnjraw6gjzqacppi
@@ -8487,10 +8489,6 @@ packages:
       readable-stream: 3.6.0
       safe-buffer: 5.2.1
     dev: true
-
-  /browserify-unibabel/3.0.0:
-    resolution: {integrity: sha512-j3MX0k2dC1/DEo9jSUyj7zpv5wLd1+klpFwYlM0E5mr7MX6LblQOWb+jkBEKV2iRszmhJuLHAtNuqranlGnpNQ==}
-    dev: false
 
   /browserify-zlib/0.2.0:
     resolution: {integrity: sha512-Z942RysHXmJrhqk88FmKBVq/v5tqmSkDz7p54G/MGyjMnCFFnC79XWNbg+Vta8W6Wb2qtSZTSxIGkJrRpCFEiA==}
@@ -19799,7 +19797,7 @@ packages:
       schema-utils: 3.1.1
       serialize-javascript: 6.0.0
       terser: 5.14.2
-      webpack: 5.74.0_webpack-cli@4.10.0
+      webpack: 5.74.0
     dev: true
 
   /terser/4.8.1:
