@@ -244,7 +244,7 @@ pub struct BlockWaiter<SynchronizerHandler: Handler + Send + Sync + 'static> {
     /// as we might need to deliver the batch result for requests from multiple
     /// certificates (although not really probable its still possible for batches of
     /// same id to be included in multiple headers).
-    tx_pending_batch:
+    pending_batch_by_digest:
         HashMap<BatchDigest, HashMap<CertificateDigest, oneshot::Sender<BatchResult>>>,
 
     /// A map that holds the channels we should notify with the
@@ -286,7 +286,7 @@ impl<SynchronizerHandler: Handler + Send + Sync + 'static> BlockWaiter<Synchroni
                 worker_network,
                 rx_reconfigure,
                 rx_batch_receiver: batch_receiver,
-                tx_pending_batch: HashMap::new(),
+                pending_batch_by_digest: HashMap::new(),
                 get_block_map_requesters: HashMap::new(),
                 get_blocks_map_requesters: HashMap::new(),
                 block_synchronizer_handler,
@@ -691,13 +691,13 @@ impl<SynchronizerHandler: Handler + Send + Sync + 'static> BlockWaiter<Synchroni
                     // Although we expect the entries to have been cleaned up by the moment
                     // they have been delivered (or error) still adding this here to ensure
                     // we don't miss any edge case and introduce memory leaks.
-                    if let Some(senders) = self.tx_pending_batch.get_mut(&digest) {
+                    if let Some(senders) = self.pending_batch_by_digest.get_mut(&digest) {
                         senders.remove(&block_id);
 
                         // if no more senders in the map then remove entirely
                         // the map for the digest
                         if senders.is_empty() {
-                            self.tx_pending_batch.remove(&digest);
+                            self.pending_batch_by_digest.remove(&digest);
                         }
                     }
                 }
@@ -731,7 +731,7 @@ impl<SynchronizerHandler: Handler + Send + Sync + 'static> BlockWaiter<Synchroni
             // still a possibility and this component should be prepared for it.
             let (tx, rx) = oneshot::channel();
 
-            if let Some(map) = self.tx_pending_batch.get_mut(&digest) {
+            if let Some(map) = self.pending_batch_by_digest.get_mut(&digest) {
                 debug!(
                     "Skip sending request for batch {} to worker id {}, already pending",
                     digest.clone(),
@@ -740,7 +740,7 @@ impl<SynchronizerHandler: Handler + Send + Sync + 'static> BlockWaiter<Synchroni
 
                 map.insert(block_id, tx);
             } else {
-                self.tx_pending_batch
+                self.pending_batch_by_digest
                     .entry(digest)
                     .or_default()
                     .insert(block_id, tx);
@@ -775,7 +775,7 @@ impl<SynchronizerHandler: Handler + Send + Sync + 'static> BlockWaiter<Synchroni
     async fn handle_batch_message(&mut self, result: BatchResult) {
         let batch_id: BatchDigest = result.clone().map_or_else(|e| e.id, |r| r.id);
 
-        match self.tx_pending_batch.remove(&batch_id) {
+        match self.pending_batch_by_digest.remove(&batch_id) {
             Some(respond_to) => {
                 for (id, s) in respond_to {
                     let _ = s.send(result.clone())
