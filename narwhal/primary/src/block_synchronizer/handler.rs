@@ -249,16 +249,9 @@ impl Handler for BlockSynchronizerHandler {
         let mut results = Vec::new();
 
         // We want to block and wait until we get all the results back.
-        loop {
-            match rx.recv().await {
-                None => {
-                    trace!("Channel closed when getting certificates, no more messages to get");
-                    break;
-                }
-                Some(result) => results.push(result),
-            }
+        while let Some(result) = rx.recv().await {
+            results.push(result)
         }
-
         results
     }
 
@@ -286,30 +279,22 @@ impl Handler for BlockSynchronizerHandler {
         let mut results = Vec::new();
 
         // We want to block and wait until we get all the results back.
-        loop {
-            match rx.recv().await {
-                None => {
-                    trace!("Channel closed when getting results, no more messages to get");
-                    break;
-                }
-                Some(result) => {
-                    let r = result
-                        .map(|h| h.certificate)
-                        .map_err(|e| Error::PayloadSyncError {
-                            block_id: e.block_id(),
-                            error: e,
-                        });
+        while let Some(result) = rx.recv().await {
+            let r = result
+                .map(|h| h.certificate)
+                .map_err(|e| Error::PayloadSyncError {
+                    block_id: e.block_id(),
+                    error: e,
+                });
 
-                    if let Err(err) = r {
-                        error!(
-                            "Error for payload synchronization with block id {}, error: {err}",
-                            err.block_id()
-                        );
-                    }
-
-                    results.push(r)
-                }
+            if let Err(err) = r {
+                error!(
+                    "Error for payload synchronization with block id {}, error: {err}",
+                    err.block_id()
+                );
             }
+
+            results.push(r)
         }
 
         results
