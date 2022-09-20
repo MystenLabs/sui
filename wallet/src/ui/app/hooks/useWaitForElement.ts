@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 
 interface Props {
     target: Element | null;
@@ -9,9 +9,7 @@ interface Props {
 }
 
 export const useWaitForElement = ({ target, callback }: Props): void => {
-    const [observer, setObserver] = useState<MutationObserver | null>(null);
-
-    useEffect(() => setObserver(new MutationObserver(callback)), [callback]);
+    const observer = useMemo(() => new MutationObserver(callback), [callback]);
 
     useEffect(() => {
         if (observer && target) {
