@@ -17,6 +17,9 @@ module sui::vec_map {
     /// Trying to access an element of the map at an invalid index
     const EIndexOutOfBounds: u64 = 3;
 
+    /// Trying to pop from a map that is empty
+    const EMapEmpty: u64 = 4;
+
     /// A map data structure backed by a vector. The map is guaranteed not to contain duplicate keys, but entries
     /// are *not* sorted by key--entries are included in insertion order.
     /// All operations are O(N) in the size of the map--the intention of this data structure is only to provide
@@ -49,6 +52,13 @@ module sui::vec_map {
     public fun remove<K: copy, V>(self: &mut VecMap<K,V>, key: &K): (K, V) {
         let idx = get_idx(self, key);
         let Entry { key, value } = vector::remove(&mut self.contents, idx);
+        (key, value)
+    }
+
+    /// Pop the most recently inserted entry from the map. Aborts if the map is empty.
+    public fun pop<K: copy, V>(self: &mut VecMap<K,V>): (K, V) {
+        assert!(!vector::is_empty(&self.contents), EMapEmpty);
+        let Entry { key, value } = vector::pop_back(&mut self.contents);        
         (key, value)
     }
 
