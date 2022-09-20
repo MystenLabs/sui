@@ -207,11 +207,16 @@ impl Primary {
         let routes = anemo::Router::new()
             .add_rpc_service(primary_service)
             .add_rpc_service(worker_service);
-        let network = anemo::Network::bind(addr)
+        let network = anemo::Network::bind(addr.clone())
             .server_name("narwhal")
             .private_key(network_signer.copy().private().0.to_bytes())
             .start(routes)
-            .unwrap();
+            .unwrap_or_else(|_| {
+                panic!(
+                    "Address {} should be available for the primary Narwhal service",
+                    addr
+                )
+            });
         info!("Primary {} listening on {}", name.encode_base64(), address);
 
         let primaries = committee

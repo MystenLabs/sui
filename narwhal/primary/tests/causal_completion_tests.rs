@@ -65,8 +65,8 @@ async fn test_restore_from_disk() {
     // Now stop node 0
     cluster.stop_node(0).await;
 
-    // Let other primaries advance
-    tokio::time::sleep(Duration::from_secs(2)).await;
+    // Let other primaries advance and primary 0 releases its port.
+    tokio::time::sleep(Duration::from_secs(10)).await;
 
     // Now start the node 0 again
     cluster.start_node(0, true, Some(1)).await;
@@ -129,7 +129,7 @@ async fn test_read_causal_signed_certificates() {
     // Now stop node 0
     cluster.stop_node(0).await;
 
-    // Let other primaries advance
+    // Let other primaries advance and primary 0 releases its port.
     tokio::time::sleep(Duration::from_secs(10)).await;
 
     // Now start the validator 0 again
