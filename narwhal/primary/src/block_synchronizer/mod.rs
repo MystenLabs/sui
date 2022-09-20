@@ -441,28 +441,28 @@ impl BlockSynchronizer {
             from,
         } = certificate_digests;
         if !self.sync_range_state.running {
-            trace!("dropping range sync request since range sync is active");
+            trace!("dropping range sync response since range sync is not active");
             return;
         }
         if from == self.name {
-            trace!("dropping range sync request from the same authority");
+            trace!("dropping range sync response from own authority");
             return;
         }
         if self.committee.primary(&from).is_err() {
-            trace!("dropping range sync request from an origin that is not in the committe");
+            warn!("dropping range sync response from an origin that is not in the committe");
             return;
         }
         let state = &mut self.sync_range_state;
         if !state.responded_peers.insert(from.clone()) {
             trace!(
-                "dropping range sync request from a peer we already heard from: {}",
+                "dropping range sync response from a peer we already heard from: {}",
                 from.clone()
             );
             return;
         }
         if certificate_ids.len() > self.range_request_max_rounds as usize {
             // Skip response containing too many rounds.
-            trace!(
+            warn!(
                 "dropping range sync response from {} containing too many rounds: {} > {}",
                 from,
                 certificate_ids.len(),
@@ -472,7 +472,7 @@ impl BlockSynchronizer {
         }
         for cert_ids in certificate_ids.values() {
             if cert_ids.len() > self.committee.size() {
-                trace!("dropping range sync request from {} with one round containing too digests: {} > {}", from, cert_ids.len(), self.committee.size());
+                warn!("dropping range sync response from {} with one round containing too many digests: {} > {}", from, cert_ids.len(), self.committee.size());
                 return;
             }
         }
