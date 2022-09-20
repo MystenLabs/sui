@@ -1,6 +1,6 @@
 {
     "name": "sui-wallet",
-    "version": "0.0.6",
+    "version": "0.1.0",
     "description": "A wallet for Sui",
     "main": "./dist/ui.js",
     "scripts": {
