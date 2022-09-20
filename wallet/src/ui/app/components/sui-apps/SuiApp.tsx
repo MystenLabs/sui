@@ -128,7 +128,7 @@ function SuiApp({
                 props: { name: name || link, source: 'AppPage' },
             });
         }
-    }, []);
+    }, [name, link]);
 
     return (
         <>
