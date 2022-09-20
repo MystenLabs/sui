@@ -17,7 +17,6 @@ import st from './MenuList.module.scss';
 function MenuList() {
     const accountUrl = useNextMenuUrl(true, '/account');
     const networkUrl = useNextMenuUrl(true, '/network');
-    const playgroundUrl = useNextMenuUrl(true, '/playground');
     const address = useAppSelector(({ account }) => account.address);
     const shortenAddress = useMiddleEllipsis(address, 10, 7);
     const apiEnv = useAppSelector((state) => state.app.apiEnv);
@@ -39,13 +38,6 @@ function MenuList() {
                     icon={SuiIcons.Globe}
                     title="Network"
                     subtitle={networkName}
-                    indicator={SuiIcons.SuiChevronRight}
-                />
-            </Link>
-            <Link to={playgroundUrl} className={st.item}>
-                <Item
-                    icon="joystick"
-                    title="Playground"
                     indicator={SuiIcons.SuiChevronRight}
                 />
             </Link>

@@ -25,6 +25,13 @@
         color: colors.$gray-85;
     }
 
+    &.outline {
+        background: none;
+        color: colors.$cta-blue;
+        border: 1px solid colors.$sui-steel-blue;
+        border-radius: 12px;
+    }
+
     &.primary {
         background: colors.$cta-blue;
         color: colors.$white;

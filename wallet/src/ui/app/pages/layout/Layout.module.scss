@@ -6,7 +6,7 @@
     display: flex;
     align-items: center;
     flex-flow: column nowrap;
-    background-color: colors.$white;
+    background-color: v.use(v.$colors-main-content-background);
 
     @include v.set(v.$sizing-nav-height-placeholder, val.$sizing-nav-height);
 

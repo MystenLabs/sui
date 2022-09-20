@@ -15,7 +15,7 @@ import st from './Button.module.scss';
 
 export type ButtonProps = {
     className?: string;
-    mode?: 'neutral' | 'primary';
+    mode?: 'neutral' | 'primary' | 'outline';
     size?: 'small' | 'large';
     children: ReactNode | ReactNode[];
     disabled?: boolean;

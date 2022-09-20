@@ -1,0 +1,45 @@
+[
+    {
+        "name": "Sui NFT Mint",
+        "description": "Mint your NFTs on the Sui Network",
+        "link": "https://sui-wallet-demo.sui.io/",
+        "icon": "https://sui.io/img/sui-social.jpg",
+        "tags": ["NFT"]
+    },
+    {
+        "name": "Ethos 2048: An NFT Game",
+        "description": "Ethos 2048: An NFT Game",
+        "link": "https://ethoswallet.github.io/2048-demo/",
+        "icon": "https://ethoswallet.github.io/2048-demo/meta/apple-touch-icon.png",
+        "tags": ["Game"]
+    },
+    {
+        "name": "Goblinsuinft",
+        "description": "Mint a random warrior NFT. Then head over to the Inventory section to mint weapon NFTs that you can equip/unequip to boost your chances of winning battles.",
+        "link": "https://goblinsuinft.web.app/",
+        "icon": "https://goblinsuinft.web.app/assets/img/goblin2.png",
+        "tags": ["Game"]
+    },
+
+    {
+        "name": "Keepsake",
+        "description": "The Marketplace for SUI collections and Non Fungible Tokens",
+        "link": "https://keepsake.gg/",
+        "icon": "https://keepsake.gg/assets/icon/Favicon.png",
+        "tags": ["Marketplace"]
+    },
+    {
+        "name": "Sui Name Service",
+        "description": "Decentralized Digital Identities for Sui Ecosystem",
+        "link": "https://sui-names.com/",
+        "icon": "https://sui-names.com/static/media/logo_white.036f90a89d49832dbef3.png",
+        "tags": ["Infra"]
+    },
+    {
+        "name": "Bluemove",
+        "description": "NFT Marketplace on blockchain Sui",
+        "link": "https://sui.bluemove.net/",
+        "icon": "https://sui.bluemove.net/BlueMove_main_logo_RGB-Blue_250.png",
+        "tags": ["Marketplace"]
+    }
+]
