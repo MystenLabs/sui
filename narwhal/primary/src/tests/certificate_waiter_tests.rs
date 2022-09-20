@@ -1,9 +1,8 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::common::create_test_vote_store;
 use crate::{
     certificate_waiter::{CertificateWaiter, GC_RESOLUTION},
-    common::create_db_stores,
+    common::{create_db_stores, create_test_vote_store},
     core::Core,
     header_waiter::HeaderWaiter,
     metrics::PrimaryMetrics,

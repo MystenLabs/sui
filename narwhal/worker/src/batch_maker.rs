@@ -2,7 +2,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::metrics::WorkerMetrics;
-#[cfg(feature = "benchmark")]
+#[cfg(feature = "trace_transaction")]
 use byteorder::{BigEndian, ReadBytesExt};
 use config::Committee;
 #[cfg(feature = "benchmark")]

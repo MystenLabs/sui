@@ -4,10 +4,9 @@ use blake2::digest::Update;
 use config::{Committee, SharedWorkerCache};
 use crypto::PublicKey;
 use fastcrypto::{Digest, Hash};
-use std::fmt::Debug;
 use std::{
     collections::BTreeMap,
-    fmt::{Display, Formatter},
+    fmt::{Debug, Display, Formatter},
 };
 use thiserror::Error;
 use tracing::{error, warn};

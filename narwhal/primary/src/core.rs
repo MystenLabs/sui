@@ -21,10 +21,9 @@ use storage::CertificateStore;
 use store::Store;
 use tokio::{sync::watch, task::JoinHandle};
 use tracing::{debug, error, info, instrument, warn};
-use types::error::DagError::StoreError;
 use types::{
     ensure,
-    error::{DagError, DagResult},
+    error::{DagError, DagError::StoreError, DagResult},
     metered_channel::{Receiver, Sender},
     Certificate, Header, HeaderDigest, ReconfigureNotification, Round, RoundVoteDigestPair, Vote,
 };
