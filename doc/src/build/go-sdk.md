@@ -33,7 +33,7 @@ import (
 func main() {
 
 	payload := strings.NewReader(`{
-    	"jsonrpc": "2.0", 
+    		"jsonrpc": "2.0", 
 		"id": 1, 
 		"method": "sui_getObjectsOwnedByAddress", 
 		"params": ["0x10b5d7b81c796c807a73d1af4b38e8b519b86106"]
