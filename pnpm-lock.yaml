@@ -245,6 +245,8 @@ importers:
       '@mysten/sui.js': workspace:*
       '@reduxjs/toolkit': ^1.8.3
       '@scure/bip32': ^1.1.0
+      '@sentry/react': ^7.13.0
+      '@sentry/tracing': ^7.13.0
       '@types/dotenv-webpack': ^7.0.3
       '@types/node': ^18.0.6
       '@types/react': ^18.0.20
@@ -308,6 +310,8 @@ importers:
       '@mysten/sui.js': link:../sdk/typescript
       '@reduxjs/toolkit': 1.8.5_kkwg4cbsojnjnupd3btipussee
       '@scure/bip32': 1.1.0
+      '@sentry/react': 7.13.0_react@18.2.0
+      '@sentry/tracing': 7.13.0
       bip39-light: 1.0.7
       bootstrap-icons: 1.9.1
       buffer: 6.0.3
@@ -3637,6 +3641,16 @@ packages:
       tslib: 1.14.1
     dev: false
 
+  /@sentry/browser/7.13.0:
+    resolution: {integrity: sha512-WbgClHPYe8TKsdVVbuzd6alxwh3maFQNuljMkSTnYvPx2P+NT0wHljTs37D39FGfSmAwaqn7D/1ZHAtC+6mWxA==}
+    engines: {node: '>=8'}
+    dependencies:
+      '@sentry/core': 7.13.0
+      '@sentry/types': 7.13.0
+      '@sentry/utils': 7.13.0
+      tslib: 1.14.1
+    dev: false
+
   /@sentry/core/7.11.1:
     resolution: {integrity: sha512-kaDSZ6VNuO4ZZdqUOOX6XM6x+kjo2bMnDQ3IJG51FPvVjr8lXYhXj1Ccxcot3pBYAIWPPby2+vNDOXllmXqoBA==}
     engines: {node: '>=8'}
@@ -3647,12 +3661,31 @@ packages:
       tslib: 1.14.1
     dev: false
 
+  /@sentry/core/7.13.0:
+    resolution: {integrity: sha512-hB46fklmKrSDMEvZOF8qBHhys7PONBFyxQtbNDZUlv/kabs4gF3VEg1ftCaXnjx4lLNlsUl/ScFdM6194RvISg==}
+    engines: {node: '>=8'}
+    dependencies:
+      '@sentry/hub': 7.13.0
+      '@sentry/types': 7.13.0
+      '@sentry/utils': 7.13.0
+      tslib: 1.14.1
+    dev: false
+
   /@sentry/hub/7.11.1:
     resolution: {integrity: sha512-M6ClgdXdptS0lUBKB5KpXXe2qMQhsoiEN2pEGRI6+auqhfHCUQB1ZXsfjiOYexKC9fwx7TyFyZ9Jcaf2DTxEhw==}
     engines: {node: '>=8'}
     dependencies:
       '@sentry/types': 7.11.1
       '@sentry/utils': 7.11.1
+      tslib: 1.14.1
+    dev: false
+
+  /@sentry/hub/7.13.0:
+    resolution: {integrity: sha512-88/GsD1BoyrBwRKJCmVHZtSH5rizOsImUHWEXc1AOa1aR8nanfn56JdAbd6tC55pA+nT4R4H4vN/PrUaomTbtg==}
+    engines: {node: '>=8'}
+    dependencies:
+      '@sentry/types': 7.13.0
+      '@sentry/utils': 7.13.0
       tslib: 1.14.1
     dev: false
 
@@ -3670,6 +3703,20 @@ packages:
       tslib: 1.14.1
     dev: false
 
+  /@sentry/react/7.13.0_react@18.2.0:
+    resolution: {integrity: sha512-ulvBmMiwt+4RXwnDkP9qNr7rMJIFE4QXuNxho5pIqWEU9q2656CoL5kau9f2TQQEBxNc9dR4QmUdGyzuEaYPIQ==}
+    engines: {node: '>=8'}
+    peerDependencies:
+      react: 15.x || 16.x || 17.x || 18.x
+    dependencies:
+      '@sentry/browser': 7.13.0
+      '@sentry/types': 7.13.0
+      '@sentry/utils': 7.13.0
+      hoist-non-react-statics: 3.3.2
+      react: 18.2.0
+      tslib: 1.14.1
+    dev: false
+
   /@sentry/tracing/7.11.1:
     resolution: {integrity: sha512-ilgnHfpdYUWKG/5yAXIfIbPVsCfrC4ONFBR/wN25/hdAyVfXMa3AJx7NCCXxZBOPDWH3hMW8rl4La5yuDbXofg==}
     engines: {node: '>=8'}
@@ -3680,8 +3727,23 @@ packages:
       tslib: 1.14.1
     dev: false
 
+  /@sentry/tracing/7.13.0:
+    resolution: {integrity: sha512-/MKSd25rGv6Pc0FPBLXJifkfvSaYVPA8XUOLzVeDN0gl07h8AXli4qG9amTh/4Wb5h4dFpbcscOvW2VC+pxkIA==}
+    engines: {node: '>=8'}
+    dependencies:
+      '@sentry/hub': 7.13.0
+      '@sentry/types': 7.13.0
+      '@sentry/utils': 7.13.0
+      tslib: 1.14.1
+    dev: false
+
   /@sentry/types/7.11.1:
     resolution: {integrity: sha512-gIEhOPxC2cjrxQ0+K2SFJ1P6e/an5osSxVc9OOtekN28eHtVsXFCLB8XVWeNQnS7N2VkrVrkqORMBz1kvIcvVQ==}
+    engines: {node: '>=8'}
+    dev: false
+
+  /@sentry/types/7.13.0:
+    resolution: {integrity: sha512-ttckM1XaeyHRLMdr79wmGA5PFbTGx2jio9DCD/mkEpSfk6OGfqfC7gpwy7BNstDH/VKyQj/lDCJPnwvWqARMoQ==}
     engines: {node: '>=8'}
     dev: false
 
@@ -3690,6 +3752,14 @@ packages:
     engines: {node: '>=8'}
     dependencies:
       '@sentry/types': 7.11.1
+      tslib: 1.14.1
+    dev: false
+
+  /@sentry/utils/7.13.0:
+    resolution: {integrity: sha512-jnR85LgRLSk7IQe2OhKOPMY4fasJCNQNW0iCXsH+S2R1qnsF+N4ksNkQ+7JyyM9E7F03YpI2qd76bKY0VIn5iA==}
+    engines: {node: '>=8'}
+    dependencies:
+      '@sentry/types': 7.13.0
       tslib: 1.14.1
     dev: false
 

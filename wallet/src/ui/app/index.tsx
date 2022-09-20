@@ -1,8 +1,18 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import * as Sentry from '@sentry/react';
+import { BrowserTracing } from '@sentry/tracing';
 import { useEffect } from 'react';
-import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import {
+    Navigate,
+    Route,
+    Routes,
+    useLocation,
+    useNavigationType,
+    createRoutesFromChildren,
+    matchRoutes,
+} from 'react-router-dom';
 
 import { AppType } from './redux/slices/app/AppType';
 import { routes as stakeRoutes } from './staking';
@@ -36,6 +46,23 @@ const HIDDEN_MENU_PATHS = [
     '/send/select',
 ];
 
+Sentry.init({
+    integrations: [
+        new BrowserTracing({
+            routingInstrumentation: Sentry.reactRouterV6Instrumentation(
+                useEffect,
+                useLocation,
+                useNavigationType,
+                createRoutesFromChildren,
+                matchRoutes
+            ),
+        }),
+    ],
+    tracesSampleRate: 1.0,
+});
+
+const SentryRoutes = Sentry.withSentryReactRouterV6Routing(Routes);
+
 const App = () => {
     const dispatch = useAppDispatch();
     useEffect(() => {
@@ -53,7 +80,7 @@ const App = () => {
         dispatch(setNavVisibility(menuVisible));
     }, [location, dispatch]);
     return (
-        <Routes>
+        <SentryRoutes>
             <Route path="/*" element={<HomePage />}>
                 <Route path="tokens" element={<TokensPage />} />
                 <Route path="nfts" element={<NftsPage />} />
@@ -96,8 +123,8 @@ const App = () => {
                 <Route path="import" element={<ImportPage />} />
                 <Route path="backup" element={<BackupPage />} />
             </Route>
-        </Routes>
+        </SentryRoutes>
     );
 };
 
-export default App;
+export default Sentry.withProfiler(App);

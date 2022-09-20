@@ -78,6 +78,8 @@
     "dependencies": {
         "@mysten/sui.js": "workspace:*",
         "@reduxjs/toolkit": "^1.8.3",
+        "@sentry/react": "^7.13.0",
+        "@sentry/tracing": "^7.13.0",
         "@scure/bip32": "^1.1.0",
         "bip39-light": "^1.0.7",
         "bootstrap-icons": "^1.9.1",
