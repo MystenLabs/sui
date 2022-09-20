@@ -367,12 +367,12 @@ impl<SynchronizerHandler: Handler + Send + Sync + 'static> BlockWaiter<Synchroni
     }
 
     async fn handle_get_blocks_waiting_result(&mut self, result: BlocksResult) {
-        let ids = result.clone().map_or_else(
-            |err| err.ids,
+        let ids = result.as_ref().map_or_else(
+            |err| err.ids.clone(),
             |ok| {
                 ok.blocks
-                    .into_iter()
-                    .map(|res| res.map_or_else(|e| e.id, |r| r.id))
+                    .iter()
+                    .map(|res| res.as_ref().map_or_else(|e| e.id, |r| r.id))
                     .collect()
             },
         );
@@ -593,13 +593,13 @@ impl<SynchronizerHandler: Handler + Send + Sync + 'static> BlockWaiter<Synchroni
         sender: oneshot::Sender<BlockResult<GetBlockResponse>>,
     ) -> Option<BoxFuture<'a, BlockResult<GetBlockResponse>>> {
         // If similar request is already under processing, don't start a new one
-        if self.pending_get_block.contains_key(&id.clone()) {
+        if self.pending_get_block.contains_key(&id) {
             self.get_block_map_requesters
                 .entry(id)
                 .or_insert_with(Vec::new)
                 .push(sender);
 
-            trace!("Block with id {} already has a pending request", id.clone());
+            trace!("Block with id {} already has a pending request", id);
             return None;
         }
 
@@ -663,23 +663,20 @@ impl<SynchronizerHandler: Handler + Send + Sync + 'static> BlockWaiter<Synchroni
     }
 
     async fn handle_batch_waiting_result(&mut self, result: BlockResult<GetBlockResponse>) {
-        let block_id = result.clone().map_or_else(|e| e.id, |r| r.id);
+        let block_id = result.as_ref().map_or_else(|e| e.id, |r| r.id);
 
         match self.get_block_map_requesters.remove(&block_id) {
             Some(senders) => {
                 for sender in senders {
                     if sender.send(result.clone()).is_err() {
-                        error!(
-                            "Couldn't forward results for block {} to sender",
-                            block_id.clone()
-                        )
+                        error!("Couldn't forward results for block {} to sender", block_id)
                     }
                 }
             }
             None => {
                 error!(
                     "We should expect to find channels to respond for {}",
-                    block_id.clone()
+                    block_id
                 );
             }
         }
@@ -734,8 +731,7 @@ impl<SynchronizerHandler: Handler + Send + Sync + 'static> BlockWaiter<Synchroni
             if let Some(map) = self.pending_batch_by_digest.get_mut(&digest) {
                 debug!(
                     "Skip sending request for batch {} to worker id {}, already pending",
-                    digest.clone(),
-                    worker_id
+                    digest, worker_id
                 );
 
                 map.insert(block_id, tx);
@@ -747,8 +743,7 @@ impl<SynchronizerHandler: Handler + Send + Sync + 'static> BlockWaiter<Synchroni
 
                 debug!(
                     "Sending batch {} request to worker id {}",
-                    digest.clone(),
-                    worker_id
+                    digest, worker_id
                 );
 
                 let worker_name = self
@@ -773,7 +768,7 @@ impl<SynchronizerHandler: Handler + Send + Sync + 'static> BlockWaiter<Synchroni
     }
 
     async fn handle_batch_message(&mut self, result: BatchResult) {
-        let batch_id: BatchDigest = result.clone().map_or_else(|e| e.id, |r| r.id);
+        let batch_id: BatchDigest = result.as_ref().map_or_else(|e| e.id, |r| r.id);
 
         match self.pending_batch_by_digest.remove(&batch_id) {
             Some(respond_to) => {
