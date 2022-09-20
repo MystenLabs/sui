@@ -3,6 +3,7 @@
 
 import {
     Base64DataBuffer,
+    getExecutionStatusError,
     type SuiMoveNormalizedFunction,
 } from '@mysten/sui.js';
 import {
@@ -89,6 +90,10 @@ export const respondToTransactionRequest = createAsyncThunk<
                     throw new Error(
                         `Either tx or txBytes needs to be defined.`
                     );
+                }
+                const errorStr = getExecutionStatusError(txResult);
+                if (errorStr) {
+                    throw new Error(errorStr);
                 }
             } catch (e) {
                 tsResultError = (e as Error).message;

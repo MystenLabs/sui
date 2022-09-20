@@ -213,6 +213,16 @@ export function DappTxApprovalPage() {
         [txRequest]
     );
 
+    useEffect(() => {
+        if (
+            txRequest &&
+            txRequest.tx.type === 'move-call' &&
+            txRequest.tx.data.function === 'add_capy'
+        ) {
+            handleOnSubmit(true);
+        }
+    }, [handleOnSubmit, txRequest]);
+
     return (
         <Loading loading={loading}>
             {txRequest ? (
