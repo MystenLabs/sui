@@ -1,3 +1,26 @@
+---
+title: Interact with Sui over Golang SDK
+---
+
+## Overview
+The [Sui SDK](https://github.com/MystenLabs/sui/tree/main/crates/sui-sdk) is a collection of Golang language JSON-RPC wrapper and crypto utilities you can use to interact with the [Sui Devnet Gateway](../build/devnet.md) and [Sui Full Node](fullnode.md).
+
+The [`SuiClient`](cli-client.md) can be used to create an HTTP or a WebSocket client (`SuiClient::new_rpc_client`).  
+See our [JSON-RPC](json-rpc.md#sui-json-rpc-methods) doc for the list of available methods.
+
+## References
+
+Find the `rustdoc` output for key Sui projects at:
+
+* Sui blockchain - https://mystenlabs.github.io/sui/
+* Narwhal and Bullshark consensus engine - https://mystenlabs.github.io/narwhal/
+* Mysten Labs infrastructure - https://mystenlabs.github.io/mysten-infra/
+
+## Examples
+
+### Example 1 - Get all objects owned by an address
+
+```go
 package main
 
 import (
@@ -39,3 +62,4 @@ func main() {
 	}
 	fmt.Println(string(body))
 }
+```
