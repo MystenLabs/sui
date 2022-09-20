@@ -20,6 +20,8 @@ Find the `rustdoc` output for key Sui projects at:
 
 ### Example 1 - Get all objects owned by an address
 
+This will print a list of object summaries owned by the address `"0x10b5d7b81c796c807a73d1af4b38e8b519b86106"`:
+
 ```go
 package main
 
@@ -63,3 +65,6 @@ func main() {
 	fmt.Println(string(body))
 }
 ```
+
+You can verify the result with the [Sui Explorer](https://explorer.devnet.sui.io/) if you are using the Sui Devnet Gateway.
+
