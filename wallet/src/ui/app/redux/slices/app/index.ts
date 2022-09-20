@@ -85,12 +85,8 @@ const slice = createSlice({
     initialState,
 });
 
-export const {
-    initAppType,
-    setApiEnv,
-    setNavVisibility,
-    setActiveOrigin,
-} = slice.actions;
+export const { initAppType, setApiEnv, setNavVisibility, setActiveOrigin } =
+    slice.actions;
 export const getNavIsVisible = ({ app }: RootState) => app.navVisible;
 
 export default slice.reducer;

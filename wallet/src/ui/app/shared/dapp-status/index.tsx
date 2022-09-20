@@ -10,6 +10,7 @@ import Icon, { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
 import { useAppDispatch, useAppSelector, useOnClickOutside } from '_hooks';
 import { createDappStatusSelector } from '_redux/slices/permissions';
+import { plausible } from '_src/shared/constants';
 
 import st from './DappStatus.module.scss';
 
@@ -68,6 +69,11 @@ function DappStatus() {
     useOnClickOutside(wrapperRef, onHandleClickOutside);
     const onHandleDisconnect = useCallback(async () => {
         if (!disconnecting && isConnected && activeOriginUrl) {
+            if (process.env.NODE_ENV !== 'development') {
+                plausible.trackEvent('AppDisconnect', {
+                    props: { source: 'Header' },
+                });
+            }
             setDisconnecting(true);
             await dispatch(appDisconnect({ origin: activeOriginUrl })).unwrap();
             setVisible(false);

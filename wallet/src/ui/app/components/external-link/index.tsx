@@ -13,6 +13,7 @@ export type ExternalLinkProps = {
     children: ReactNode;
     title?: string;
     showIcon?: boolean;
+    onClick?(): void;
 };
 
 function ExternalLink({
@@ -21,6 +22,7 @@ function ExternalLink({
     children,
     title,
     showIcon = true,
+    onClick,
 }: ExternalLinkProps) {
     return (
         <a
@@ -29,6 +31,7 @@ function ExternalLink({
             className={className}
             rel="noreferrer"
             title={title}
+            onClick={onClick}
         >
             {children}
             {showIcon ? <Icon icon="link-45deg" /> : null}

@@ -47,14 +47,15 @@ const HomePage = ({ disableNavigation, limitToPopUpSize = true }: Props) => {
         <PageLayout limitToPopUpSize={limitToPopUpSize}>
             <Loading loading={guardChecking}>
                 <div className={st.container}>
-                    <div className={st.header}>
+                    <div
+                        className={cl(st.header, {
+                            [st.center]: disableNavigation,
+                        })}
+                    >
                         <Link to="/tokens" className={st.logoLink}>
                             <Logo className={st.logo} txt={true} />
                         </Link>
-                        <span />
-                        {disableNavigation ? (
-                            null
-                        ) : (
+                        {disableNavigation ? null : (
                             <>
                                 <DappStatus />
                                 <MenuButton className={st.menuButton} />
