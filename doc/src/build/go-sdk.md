@@ -32,15 +32,15 @@ import (
 
 func main() {
 
-	url := "https://gateway.devnet.sui.io:443"
-	method := "POST"
-
 	payload := strings.NewReader(`{
-    "jsonrpc": "2.0", "id": 1, "method": "sui_getObjectsOwnedByAddress", "params": ["0x10b5d7b81c796c807a73d1af4b38e8b519b86106"]}
-	`)
+    	"jsonrpc": "2.0", 
+		"id": 1, 
+		"method": "sui_getObjectsOwnedByAddress", 
+		"params": ["0x10b5d7b81c796c807a73d1af4b38e8b519b86106"]
+	}`)
 
 	client := &http.Client{}
-	req, err := http.NewRequest(method, url, payload)
+	req, err := http.NewRequest("POST", "https://gateway.devnet.sui.io:443", payload)
 
 	if err != nil {
 		fmt.Println(err)
