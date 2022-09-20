@@ -86,7 +86,7 @@ function TokensPage() {
                         })
                     ) : (
                         <div className={st.empty}>
-                            No coins have added. When you have multiple coins in
+                            No coins have been added. When you have multiple coins in
                             your wallet, they will be listed here.
                         </div>
                     )}
