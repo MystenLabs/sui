@@ -12,12 +12,12 @@ To test more advanced features that are not supported in Sui Wallet, see [Sui CL
 
 You can use the Sui Wallet to:
 
-   * Mint NFTs
-   * Transfer coins and NFTs to another address
-   * View your coins, tokens, and NFTs
-   * View recent transactions
-   * Auto split/merge coins to the exact transfer amount
-   * Easily access transaction history in the [Sui Explorer](https://explorer.devnet.sui.io/)
+* Mint NFTs
+* Transfer coins and NFTs to another address
+* View your coins, tokens, and NFTs
+* View recent transactions
+* Auto split/merge coins to the exact transfer amount
+* Easily access transaction history in the [Sui Explorer](https://explorer.devnet.sui.io/)
 
 ## Install the Sui Wallet Chrome Browser Extension
 
@@ -31,7 +31,7 @@ The Sui Wallet is provided as a Chrome browser extension. You can use the extens
 
 If you don't yet have a Sui Wallet, create a new one. To import an existing wallet, see [Import an existing Sui Wallet](#import-an-existing-sui-wallet).
 
-   1. Open the Sui Wallet extension in your browser, and then click **Get Started**.
+   1. Open the Sui Wallet extension in your browser then click **Get Started**.
    1. Click **Create new wallet**.
    1. Click the checkbox to accept the Terms of Service.
    1. Click **Create Wallet Now**.
@@ -44,10 +44,9 @@ If you lose access to your wallet, you can recover it only with the recovery pas
 
 You can use your Sui Wallet on multiple devices and browsers. After you create your first Sui Wallet, use the 12-word recovery passphrase to import your wallet to a new browser or device. 
 
-   1. Open the Sui Wallet extension in your browser, and then click **Get Started**.
+   1. Open the Sui Wallet extension in your browser then click **Get Started**.
    1. Click **Import a wallet**.
-   1. Enter your 12-word recovery passphrase.
-   1. Click **Import Wallet Now**.
+   1. Enter your 12-word recovery passphrase then click **Import Wallet Now**.
 
 ## Add Sui tokens to your Sui Wallet
 
@@ -63,32 +62,41 @@ When you first open the wallet you have no coins in it. You can add tokens to yo
 After you use the command a message that "5 test SUI objects are heading to your wallet" displays. You can then see 250,000 SUI tokens in your wallet.
 
 ## View your account balance
-To view your account balance, click **Coins**. Your balance is displayed near the top of the wallet.
+To view your account balance, click **Coins**. The wallet shows your SUI balance and lists the other coins in your wallet, if any.
 
 ## Send coins
 You can send coins from your wallet to another wallet or account address.
 
    1. Open the Sui Wallet extension in your browser.
    1. Click **Coins** and then click **Send**.
-   1. In the **Amount** field, enter the number of SUI tokens to send.
-   1. Click **Continue**.
-   1. Enter the address to send the SUI tokens to. Make sure to use the correct address.
+   1. In the **Amount** field, enter the number of SUI tokens to send then click **Continue**.
+   1. Enter the recipient address to send to. Make sure to use the correct address.
    1. Click **Send Coins Now**.
 
+## View recent transactions
+
+The wallet displays the recent transaction to and from your wallet address. You can view all transactions in [Sui Explorer](https://explorer.devnet.sui.io/).
+
+
+## Mint an NFT
+You can mint your own NFTs directly from the Sui Wallet.
+
+   1. 
+
+
+## Transfer an NFT
 
 
 
-   * Transfer NFTs by clicking **Send** on the _NFT_ tab:
-   * View _recent transactions_ by clicking the **Arrow** icon at the top:
-   * Sign transactions through a framework connecting Sui wallet to other DApps.
-   * Go to the [Sui Explorer](https://explorer.devnet.sui.io/) to view of the current transaction by clicking the external link icon at the bottom right.
-
-
+## View transaction details in Sui Explorer
 
 
 
 ## Connected apps
 
 You can view the apps you connected your wallet to on the ---need more info---
+
+## Wallet playground
+
 
 
