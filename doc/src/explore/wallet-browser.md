@@ -19,6 +19,8 @@ You can use the Sui Wallet to:
 * Auto split/merge coins to the exact transfer amount
 * Easily access transaction history in the [Sui Explorer](https://explorer.devnet.sui.io/)
 
+Note that in the current release, the wallet includes buttons to **Buy**, **Swap**, and **Stake & Earn SUI**. These are placeholders for functionality included in future versions of the Sui Wallet. 
+
 ## Install the Sui Wallet Chrome Browser Extension
 
 To use the Sui Wallet you must install a Chrome browser extension. You can use the extension with any browser that supports Chrome extensions from the Google Chrome Store. 
