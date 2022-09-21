@@ -12,9 +12,9 @@ anyhow = { version = "1.0.58", features = ["backtrace"] }
 bcs = "0.1.3"
 once_cell = "1.13.1"
 
-move-binary-format = { path = "../../../move/language/move-binary-format" }
-move-core-types = { path = "../../../move/language/move-core/types", features = ["address20"] }
-move-vm-runtime = { path = "../../../move/language/move-vm/runtime" }
+move-binary-format = { path = "/move/language/move-binary-format" }
+move-core-types = { path = "/move/language/move-core/types", features = ["address20"] }
+move-vm-runtime = { path = "/move/language/move-vm/runtime" }
 
 sui-framework = { path = "../sui-framework" }
 sui-verifier = { path = "../sui-verifier" }
@@ -22,4 +22,4 @@ sui-types = { path = "../sui-types" }
 workspace-hack = { path = "../workspace-hack"}
 
 [dev-dependencies]
-move-package = { path = "../../../move/language/tools/move-package" }
+move-package = { path = "/move/language/tools/move-package" }

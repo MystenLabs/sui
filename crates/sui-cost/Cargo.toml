@@ -21,6 +21,6 @@ serde_json = "1.0.83"
 insta = { version = "1.17.1", features = ["redactions", "json"] }
 test-utils = { path = "../test-utils" }
 sui-config = {path = "../sui-config"}
-move-cli = { path = "../../../move/language/tools/move-cli" }
-move-disassembler = { path = "../../../move/language/tools/move-disassembler" }
-move-package = { path = "../../../move/language/tools/move-package" }
+move-cli = { path = "/move/language/tools/move-cli" }
+move-disassembler = { path = "/move/language/tools/move-disassembler" }
+move-package = { path = "/move/language/tools/move-package" }

@@ -29,8 +29,8 @@ sui-config = { path = "../sui-config" }
 test-utils = { path = "../test-utils" }
 rand = "0.8.5"
 
-move-package = { path = "../../../move/language/tools/move-package" }
-move-core-types = { path = "../../../move/language/move-core/types", features = ["address20"] }
+move-package = { path = "/move/language/tools/move-package" }
+move-core-types = { path = "/move/language/move-core/types", features = ["address20"] }
 
 [[example]]
 name = "generate-json-rpc-spec"

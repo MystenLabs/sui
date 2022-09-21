@@ -23,4 +23,4 @@ sui-faucet = { path = "../sui-faucet" }
 sui-cluster-test = { path = "../sui-cluster-test" }
 sui-types = { path = "../sui-types" }
 
-move-package = { path = "../../../move/language/tools/move-package" }
+move-package = { path = "/move/language/tools/move-package" }

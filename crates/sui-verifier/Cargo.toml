@@ -8,9 +8,9 @@ license = "Apache-2.0"
 publish = false
 
 [dependencies]
-move-binary-format = { path = "../../../move/language/move-binary-format" }
-move-bytecode-verifier = { path = "../../../move/language/move-bytecode-verifier" }
-move-core-types = { path = "../../../move/language/move-core/types", features = ["address20"] }
+move-binary-format = { path = "/move/language/move-binary-format" }
+move-bytecode-verifier = { path = "/move/language/move-bytecode-verifier" }
+move-core-types = { path = "/move/language/move-core/types", features = ["address20"] }
 
 sui-types = { path = "../sui-types" }
 workspace-hack = { path = "../workspace-hack"}

@@ -21,27 +21,27 @@ sui-types = { path = "../sui-types" }
 sui-framework-build = { path = "../sui-framework-build" }
 sui-verifier = { path = "../../crates/sui-verifier" }
 
-move-binary-format = { path = "../../../move/language/move-binary-format" }
-move-bytecode-utils = { path = "../../../move/language/tools/move-bytecode-utils" }
-move-bytecode-verifier = { path = "../../../move/language/move-bytecode-verifier" }
-move-cli = { path = "../../../move/language/tools/move-cli" }
-move-compiler = { path = "../../../move/language/move-compiler" }
-move-core-types = { path = "../../../move/language/move-core/types", features = ["address20"] }
-move-package = { path = "../../../move/language/tools/move-package" }
-move-stdlib = { path = "../../../move/language/move-stdlib" }
-move-unit-test = { path = "../../../move/language/tools/move-unit-test" }
-move-vm-runtime = { path = "../../../move/language/move-vm/runtime" }
-move-vm-types = { path = "../../../move/language/move-vm/types" }
+move-binary-format = { path = "/move/language/move-binary-format" }
+move-bytecode-utils = { path = "/move/language/tools/move-bytecode-utils" }
+move-bytecode-verifier = { path = "/move/language/move-bytecode-verifier" }
+move-cli = { path = "/move/language/tools/move-cli" }
+move-compiler = { path = "/move/language/move-compiler" }
+move-core-types = { path = "/move/language/move-core/types", features = ["address20"] }
+move-package = { path = "/move/language/tools/move-package" }
+move-stdlib = { path = "/move/language/move-stdlib" }
+move-unit-test = { path = "/move/language/tools/move-unit-test" }
+move-vm-runtime = { path = "/move/language/move-vm/runtime" }
+move-vm-types = { path = "/move/language/move-vm/types" }
 fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c022a2ae23ca7cc2778293fd3b1db42e8cd02d3b" }
 workspace-hack = { path = "../workspace-hack"}
-move-vm-test-utils = { path = "../../../move/language/move-vm/test-utils" }
+move-vm-test-utils = { path = "/move/language/move-vm/test-utils" }
 
 [build-dependencies]
 anyhow = { version = "1.0.58", features = ["backtrace"] }
 bcs = "0.1.3"
 sui-framework-build = { path = "../sui-framework-build" }
-move-binary-format = { path = "../../../move/language/move-binary-format" }
-move-package = { path = "../../../move/language/tools/move-package" }
+move-binary-format = { path = "/move/language/move-binary-format" }
+move-package = { path = "/move/language/tools/move-package" }
 
 [package.metadata.cargo-udeps.ignore]
 normal = ["move-cli", "move-unit-test"]

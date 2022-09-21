@@ -19,9 +19,9 @@ itertools = "0.10.3"
 tracing = "0.1.36"
 bcs = "0.1.3"
 
-move-binary-format = { path = "../../../move/language/move-binary-format" }
-move-core-types = { path = "../../../move/language/move-core/types", features = ["address20"] }
-move-bytecode-utils = { path = "../../../move/language/tools/move-bytecode-utils" }
+move-binary-format = { path = "/move/language/move-binary-format" }
+move-core-types = { path = "/move/language/move-core/types", features = ["address20"] }
+move-bytecode-utils = { path = "/move/language/tools/move-bytecode-utils" }
 
 sui-types = { path = "../sui-types" }
 sui-json = { path = "../sui-json" }
