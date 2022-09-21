@@ -38,14 +38,14 @@ If you don't yet have a Sui Wallet, create a new one. To import an existing wall
 1. Copy the Recovery passphrase and store it in a safe location.
 1. Click **Done**.
 
-If you lose access to your wallet, you can recover it only with the recovery passphrase. If you lose the passphrase, you lose access to your wallet and any funds or NFTs stored in it.
+If you lose access to your wallet, you can recover it only with the recovery passphrase. If you lose the passphrase, you lose access to your wallet and any coins or NFTs stored in it.
 
 ## Import an existing Sui Wallet
 
 You can use your Sui Wallet on multiple devices and browsers. After you create a Sui Wallet, use the 12-word recovery passphrase to import your wallet to a new browser or device. 
 
-1. Open the Sui Wallet extension in your browser.
-1. Click **Get Started**, then click **Import a wallet**.
+1. Open the Sui Wallet extension in your browser and then click **Get Started**.
+1. Click **Import a wallet**.
 1. Enter your 12-word recovery passphrase, and then click **Import Wallet Now**.
 
 ## Add Sui tokens to your Sui Wallet
@@ -98,6 +98,11 @@ You can mint your own NFTs directly from the Sui Wallet.
 Click **Apps**, then click **Mint NFT**. In the current version you can mint only example NFTs.
 
 
+## View your NFTs
+
+Click the **NFTs** tab to view all of the NFTS that you mint, purchase, or receive in your wallet. This includes any NFTs that you obtain from connected apps.  Click on an NFT to view additional details about it, view a larger NFT image, or send the NFT to another address.
+
+
 ## Send an NFT
 
 You can use Sui Wallet to send an NFT to another address.
@@ -108,16 +113,28 @@ You can use Sui Wallet to send an NFT to another address.
 1. Click **Done** to return to the wallet.
 
 
+## Wallet Playground
+
+You can view and try out some apps that already support the Sui Wallet from the Playground on the Apps tab. The apps displayed let you connect your Sui Wallet and use SUI tokens to interact with them, perform transactions, and obtain NFTs that go directly to your connected wallet.
+
+Click on an app to open the site for the app. Follow the guidance on the site to connect your wallet. After you connect your wallet to an app you can view the app on the **Active Connections** view.
+
+
 ## View connected apps
 
-You can view the apps you connected your wallet to on the ---need more info---
+To view the apps with active connections to your wallet, click Apps. By default, the Playground view displays. Click Active Connections to view the connected apps.
+
+To open the site associated with the app, click on the app and then click View.
 
 
 ## Disconnect from an app
 
+You can easily disconnect your wallet from a connected app. 
+1. Click Apps and then click Active Connections.
+1. Click the app to disconnect from your wallet, then click Disconnect.
 
+Your wallet immediately disconnects from the app and returns to the **Apps** tab.
 
-## Wallet playground
 
 
 
