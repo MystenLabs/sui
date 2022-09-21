@@ -1154,12 +1154,6 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         // - now it's possible to run a new tx against old versions of the shared objects.
         let _tx_lock = self.acquire_tx_lock(&transaction_digest).await;
 
-        // Schedule the certificate for execution
-        self.add_pending_certificates(vec![(transaction_digest, Some(certificate.clone()))])?;
-
-        // Note: if we crash here we are not in an inconsistent state since
-        //       it is ok to just update the pending list without updating the sequence.
-
         // Atomically store all elements.
         let mut write_batch = self.tables.assigned_object_versions.batch();
 
@@ -1191,9 +1185,12 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             write_batch.insert_batch(&self.tables.last_consensus_index, index_to_write)?;
         write_batch = write_batch.insert_batch(
             &self.tables.consensus_message_processed,
-            std::iter::once((transaction_digest, true)),
+            iter::once((transaction_digest, true)),
         )?;
-        write_batch.write().map_err(SuiError::from)
+        write_batch.write()?;
+
+        // Schedule the certificate for execution
+        self.add_pending_certificates(vec![(transaction_digest, Some(certificate.clone()))])
     }
 
     pub fn transactions_in_seq_range(
