@@ -100,10 +100,11 @@ sui keytool sign --address <owner_address> --data <tx_bytes>
 The signing tool will create and print out the signature and public key information.
 You will see output resembling:
 ```shell
-2022-04-25T18:50:06.031722Z  INFO sui::sui_commands: Data to sign : VHJhbnNhY3Rpb25EYXRhOjoAAFHe8jecgzoGWyGlZ1sJ2KBFN8aZF7NIkDsM+3X8mrVCa7adg9HnVqUBAAAAAAAAACDOlrjlT0A18D0DqJLTU28ChUfRFtgHprmuOGCHYdv8YVHe8jecgzoGWyGlZ1sJ2KBFN8aZdZnY6h3kyWFtB38Wyg6zjN7KzAcBAAAAAAAAACDxI+LSHrFUxU0G8bPMXhF+46hpchJ22IHlpPv4FgNvGOgDAAAAAAAA
-2022-04-25T18:50:06.031765Z  INFO sui::sui_commands: Address : 0x51def2379c833a065b21a5675b09d8a04537c699
-2022-04-25T18:50:06.031911Z  INFO sui::sui_commands: Public Key Base64: H82FDLUZN1u0+6UdZilxu9HDT5rPd3khKo2UJoCPJFo=
-2022-04-25T18:50:06.031925Z  INFO sui::sui_commands: Signature : 6vc+ku0RsMKdky8DRfoy/hw6eCQ3YsadH6rZ9WUCwGTAumuWER3TOJRw7u7F4QaHkqUsIPfJN9GRraSX+N8ADQ==
+2022-09-21T14:41:02.425370Z  INFO sui::keytool: Data to sign : VHJhbnNhY3Rpb25EYXRhOjoAAEOR05HIrpacG7hZj6vKC22xh37UHjeYhDk6FDq8m0CCBmspfuHACGoBAAAAAAAAACBOl9wXQgjPZEdeF8oGoyELLGqOxWDoeB0AJ1+0WzvdjysDvFvcGK+QLWPLwtbG8t8I72FuLY7NwZ/bAk5h06IiJaKTgRxuCMkBAAAAAAAAACAGCgT1OIkEbmuGkqAFY9oZiDVXFMdUlt3K73cccWWskAEAAAAAAAAA6AMAAAAAAAA=
+2022-09-21T14:41:02.425407Z  INFO sui::keytool: Address : 0x2b03bc5bdc18af902d63cbc2d6c6f2df08ef616e
+2022-09-21T14:41:02.425536Z  INFO sui::keytool: Flag Base64: AA==
+2022-09-21T14:41:02.425546Z  INFO sui::keytool: Public Key Base64: bC2rEVlU/IKdIYcWKLGOtKUHiBo6nWCUJ9Y7qIsgYfE=
+2022-09-21T14:41:02.425551Z  INFO sui::keytool: Signature : KUlF0kMJtyBWV3ZaHfgHXcGQOPSjLGAmVbMCmPMdo6/MrHAImBCQD09sU84DBliUF6FlfojiAZ0P2XlMKMKWBA==
 ```
 
 #### 3, Execute the transaction using the transaction data, signature and public key
@@ -112,10 +113,11 @@ curl --location --request POST $SUI_RPC_HOST \
 --header 'Content-Type: application/json' \
 --data-raw '{ "jsonrpc":"2.0",
               "method":"sui_executeTransaction",
-              "params":[{
+              "params":{
                   "tx_bytes" : "{{tx_bytes}}",
+                  "sig_scheme" : "{{keypair scheme flag ED25519 | secp256k1}}",
                   "signature" : "{{signature}}",
-                  "pub_key" : "{{pub_key}}"}],
+                  "pub_key" : "{{pub_key}}"},
               "id":1}' | json_pp
 ```
 
