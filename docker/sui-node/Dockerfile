@@ -11,11 +11,11 @@ RUN apt-get update && apt-get install -y cmake clang
 #      crate, from the workspace Cargo.toml file.
 #   3. Update the lockfile in order to reflect the changes to the
 #      root Cargo.toml file.
-FROM chef AS planner
-COPY Cargo.toml Cargo.lock ./
-COPY crates/workspace-hack crates/workspace-hack
-RUN sed -i '/crates\/workspace-hack/b; /crates/d' Cargo.toml \
-    && cargo metadata -q >/dev/null
+# FROM chef AS planner
+# COPY Cargo.toml Cargo.lock ./
+# COPY crates/workspace-hack crates/workspace-hack
+# RUN sed -i '/crates\/workspace-hack/b; /crates/d' Cargo.toml \
+#    && cargo metadata -q >/dev/null
 
 # Build and cache all dependencies.
 #
@@ -24,10 +24,10 @@ RUN sed -i '/crates\/workspace-hack/b; /crates/d' Cargo.toml \
 # with all dependencies built.
 FROM chef AS builder 
 ARG PROFILE=release
-COPY --from=planner /sui/Cargo.toml Cargo.toml
-COPY --from=planner /sui/Cargo.lock Cargo.lock
-COPY --from=planner /sui/crates/workspace-hack crates/workspace-hack
-RUN cargo build --profile $PROFILE
+# COPY --from=planner /sui/Cargo.toml Cargo.toml
+# COPY --from=planner /sui/Cargo.lock Cargo.lock
+# COPY --from=planner /sui/crates/workspace-hack crates/workspace-hack
+# RUN cargo build --profile $PROFILE
 
 # Build application
 #
@@ -36,6 +36,7 @@ RUN cargo build --profile $PROFILE
 # built as they were built and cached by the previous layer.
 COPY Cargo.toml Cargo.lock ./
 COPY crates crates
+COPY move move ./
 RUN cargo build --profile $PROFILE --bin sui-node
 # RUN apt-get update && apt-get install -y binutils
 # RUN strip --debug-only -w -K sui* -K narwhal* -K hyper* -K typed_store* "/sui/target/$PROFILE/sui-node"
