@@ -69,7 +69,7 @@ blst = { version = "0.3" }
 bs58 = { version = "0.4", features = ["alloc", "std"] }
 bstr = { version = "0.2", features = ["lazy_static", "regex-automata", "serde", "serde1", "serde1-nostd", "std", "unicode"] }
 bulletproofs = { version = "4", features = ["rand", "std", "thiserror"] }
-bytecode-interpreter-crypto = { path = "../../../move/language/bytecode-interpreter-crypto", features = ["fiat"] }
+bytecode-interpreter-crypto = { path = "../../../move/language/move-prover/interpreter/crypto", features = ["fiat"] }
 bytemuck = { version = "1", default-features = false }
 byteorder = { version = "1", features = ["i128", "std"] }
 bytes = { version = "1", features = ["std"] }
@@ -656,7 +656,7 @@ bs58 = { version = "0.4", features = ["alloc", "std"] }
 bstr = { version = "0.2", features = ["lazy_static", "regex-automata", "serde", "serde1", "serde1-nostd", "std", "unicode"] }
 bulletproofs = { version = "4", features = ["rand", "std", "thiserror"] }
 bumpalo = { version = "3" }
-bytecode-interpreter-crypto = { path = "../../../move/language/bytecode-interpreter-crypto", features = ["fiat"] }
+bytecode-interpreter-crypto = { path = "../../../move/language/move-prover/interpreter/crypto", features = ["fiat"] }
 bytemuck = { version = "1", default-features = false }
 byteorder = { version = "1", features = ["i128", "std"] }
 bytes = { version = "1", features = ["std"] }
