@@ -4,9 +4,9 @@ title: Sui Wallet
 
 This topic describes how to install and use the [Sui Wallet Browser Extension](https://chrome.google.com/webstore/detail/sui-wallet/opcgpfmipidbgpenhmajoajpbobppdil). You can use the Sui Wallet to create an address and complete transactions, mint NFTs, view and manage assets on the Sui network, and connect with blockchain dApps on Web3.
 
-The early versions of the Sui Wallet let you experiment with the Sui network for testing. The Sui network is still in development, and the tokens have no real value. Accounts are reset with each deployment of a new version of the network. View the [devnet-updates](https://discord.com/channels/916379725201563759/1004638487078772736) channel in Discord for updates about the network.
+The early versions of the Sui Wallet let you experiment with the Sui network for testing. The Sui network is still in development, and the tokens have no real value. Accounts reset with each deployment of a new version of the network. View the [devnet-updates](https://discord.com/channels/916379725201563759/1004638487078772736) channel in Discord for updates about the network.
 
-To test more advanced features that are not supported in Sui Wallet, see [Sui CLI client](../build/cli-client.md).
+To test more advanced features not available in Sui Wallet, see [Sui CLI client](../build/cli-client.md).
 
 ## Sui Wallet features
 
@@ -21,80 +21,101 @@ You can use the Sui Wallet to:
 
 ## Install the Sui Wallet Chrome Browser Extension
 
-The Sui Wallet is provided as a Chrome browser extension. You can use the extension with any Chrome-based browser.
+To use the Sui Wallet you must install a Chrome browser extension. You can use the extension with any browser that supports Chrome extensions from the Google Chrome Store. 
 
-   1. Open the [Sui Wallet](https://chrome.google.com/webstore/detail/sui-wallet/opcgpfmipidbgpenhmajoajpbobppdil) page on the Google Chrome Store.
-   1. Click **Add to Chrome**.
-   1. Acknowledge the message about permissions for the extension, and then click **Add Extension**.
+1. Open the [Sui Wallet](https://chrome.google.com/webstore/detail/sui-wallet/opcgpfmipidbgpenhmajoajpbobppdil) page on the Google Chrome Store.
+1. Click **Add to Chrome**.
+1. Acknowledge the message about permissions for the extension, and then click **Add Extension**.
 
 ## Create a new wallet
 
 If you don't yet have a Sui Wallet, create a new one. To import an existing wallet, see [Import an existing Sui Wallet](#import-an-existing-sui-wallet).
 
-   1. Open the Sui Wallet extension in your browser then click **Get Started**.
-   1. Click **Create new wallet**.
-   1. Click the checkbox to accept the Terms of Service.
-   1. Click **Create Wallet Now**.
-   1. Copy the Recovery passphrase and store it in a safe location.
-   1. Click **Done**.
+1. Open the Sui Wallet extension in your browser and then click **Get Started**.
+1. Click **Create new wallet**.
+1. Click the checkbox to accept the Terms of Service.
+1. Click **Create Wallet Now**.
+1. Copy the Recovery passphrase and store it in a safe location.
+1. Click **Done**.
 
 If you lose access to your wallet, you can recover it only with the recovery passphrase. If you lose the passphrase, you lose access to your wallet and any funds or NFTs stored in it.
 
 ## Import an existing Sui Wallet
 
-You can use your Sui Wallet on multiple devices and browsers. After you create your first Sui Wallet, use the 12-word recovery passphrase to import your wallet to a new browser or device. 
+You can use your Sui Wallet on multiple devices and browsers. After you create a Sui Wallet, use the 12-word recovery passphrase to import your wallet to a new browser or device. 
 
-   1. Open the Sui Wallet extension in your browser then click **Get Started**.
-   1. Click **Import a wallet**.
-   1. Enter your 12-word recovery passphrase then click **Import Wallet Now**.
+1. Open the Sui Wallet extension in your browser.
+1. Click **Get Started**, then click **Import a wallet**.
+1. Enter your 12-word recovery passphrase, and then click **Import Wallet Now**.
 
 ## Add Sui tokens to your Sui Wallet
 
 When you first open the wallet you have no coins in it. You can add tokens to your wallet through Discord. You need an active Discord account to access the Sui channels.
 
-   1. Open the Sui Wallet extension in your browser.
-   1. Click the small clipboard icon next to your address to copy it. It's displayed near the top and starts with 0x.
-   1. Open the [devnet-faucet](https://discord.com/channels/916379725201563759/971488439931392130) channel in Discord.
-   1. Use the !faucet command with your wallet address to request tokens for your wallet:
+1. Click **Coins**.
+1. Click the small clipboard icon next to your address to copy it. 
+It's near the top of the wallet and starts with 0x.
+1. Open the Sui [devnet-faucet](https://discord.com/channels/916379725201563759/971488439931392130) channel in Discord.
+1. Use the `!faucet` command with your wallet address to request tokens:
    `!faucet 0x6c04ed5110554acf59ff1b535129548dd9a0c741`
    Replace the address in the command with your wallet address.
 
-After you use the command a message that "5 test SUI objects are heading to your wallet" displays. You can then see 250,000 SUI tokens in your wallet.
+The channel bot displays a message that "5 test SUI objects are heading to your wallet". You can then see 250,000 SUI tokens in your wallet, nice!
 
 ## View your account balance
+
 To view your account balance, click **Coins**. The wallet shows your SUI balance and lists the other coins in your wallet, if any.
 
+
 ## Send coins
-You can send coins from your wallet to another wallet or account address.
 
-   1. Open the Sui Wallet extension in your browser.
-   1. Click **Coins** and then click **Send**.
-   1. In the **Amount** field, enter the number of SUI tokens to send then click **Continue**.
-   1. Enter the recipient address to send to. Make sure to use the correct address.
-   1. Click **Send Coins Now**.
+You can send coins from your wallet to another address.
 
-## View recent transactions
+1. Open the Sui Wallet extension in your browser.
+1. Click **Coins** and then click **Send**.
+1. In the **Amount** field, enter the number of SUI tokens to send, and then click **Continue**.
+1. Enter the recipient's address, then click **Send Coins Now**.
 
-The wallet displays the recent transaction to and from your wallet address. You can view all transactions in [Sui Explorer](https://explorer.devnet.sui.io/).
+
+## View recent transaction details
+
+The wallet displays the recent transactions to and from your wallet on the **Activity** tab. Click on any transaction to view transaction details.
+
+
+## View all transactions in Sui Explorer
+
+You can view all transactions for your address in [Sui Explorer](https://explorer.devnet.sui.io/).
+
+To view all of the transactions for your address, click **Apps** and then click **View account on Sui Explorer**.
+
+Sui Explorer opens with the details for your wallet address displayed.
 
 
 ## Mint an NFT
+
 You can mint your own NFTs directly from the Sui Wallet.
 
-   1. 
+Click **Apps**, then click **Mint NFT**. In the current version you can mint only example NFTs.
 
 
-## Transfer an NFT
+## Send an NFT
+
+You can use Sui Wallet to send an NFT to another address.
+
+1. Click **NFTs**.
+1. Click on the NFT to send, and then click **Send NFT**.
+1. Enter the recipient address then click **Send NFT Now**.
+1. Click **Done** to return to the wallet.
 
 
-
-## View transaction details in Sui Explorer
-
-
-
-## Connected apps
+## View connected apps
 
 You can view the apps you connected your wallet to on the ---need more info---
+
+
+## Disconnect from an app
+
+
 
 ## Wallet playground
 
