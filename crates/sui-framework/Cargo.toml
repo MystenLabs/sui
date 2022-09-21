@@ -34,7 +34,7 @@ move-vm-runtime = { path = "../../../move/language/move-vm/runtime" }
 move-vm-types = { path = "../../../move/language/move-vm/types" }
 fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c022a2ae23ca7cc2778293fd3b1db42e8cd02d3b" }
 workspace-hack = { path = "../workspace-hack"}
-move-vm-test-utils = { path = "../../../move/language/move-vm-test-utils" }
+move-vm-test-utils = { path = "../../../move/language/move-vm/test-utils" }
 
 [build-dependencies]
 anyhow = { version = "1.0.58", features = ["backtrace"] }

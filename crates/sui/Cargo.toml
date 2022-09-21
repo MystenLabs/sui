@@ -43,7 +43,7 @@ narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "842a6
 
 move-core-types = { path = "../../../move/language/move-core/types", features = ["address20"] }
 move-prover = { path = "../../../move/language/move-prover" }
-move-prover-boogie-backend = { path = "../../../move/language/move-prover-boogie-backend" }
+move-prover-boogie-backend = { path = "../../../move/language/move-prover/boogie-backend" }
 move-unit-test = { path = "../../../move/language/tools/move-unit-test" }
 move-cli = { path = "../../../move/language/tools/move-cli" }
 move-package = { path = "../../../move/language/tools/move-package" }
