@@ -2,7 +2,7 @@
     {
         "name": "Sui NFT Mint",
         "description": "Mint your NFTs on the Sui Network",
-        "link": "https://sui-wallet-demo.sui.io/",
+        "link": "http://sui-wallet-demo.s3-website-us-east-1.amazonaws.com/",
         "icon": "https://sui.io/img/sui-social.jpg",
         "tags": ["NFT"]
     },
