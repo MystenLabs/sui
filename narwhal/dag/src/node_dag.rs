@@ -40,7 +40,7 @@ pub trait Affiliated: fastcrypto::Hash {
 ///
 /// /!\ Warning /!\: do not drop the heads of the graph without having given them new antecedents,
 /// as this will transitively drop all the nodes they point to and may cause loss of data.
-///   
+///
 #[derive(Debug)]
 pub struct NodeDag<T: Affiliated> {
     // Not that we should need to ever serialize this (we'd rather rebuild the Dag from a persistent store)
@@ -269,13 +269,13 @@ mod tests {
 
     impl fmt::Debug for TestDigest {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-            write!(f, "{}", hex::encode(&self.0).get(0..16).unwrap())
+            write!(f, "{}", hex::encode(self.0).get(0..16).unwrap())
         }
     }
 
     impl fmt::Display for TestDigest {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-            write!(f, "{}", hex::encode(&self.0).get(0..16).unwrap())
+            write!(f, "{}", hex::encode(self.0).get(0..16).unwrap())
         }
     }
 
