@@ -17,12 +17,12 @@ schemars = "0.8.10"
 sui-types = { path = "../sui-types" }
 sui-verifier = { path = "../sui-verifier" }
 
-move-binary-format = { path = "/move/language/move-binary-format" }
-move-core-types = { path = "/move/language/move-core/types", features = ["address20"] }
+move-binary-format = { path = "/sui/move/language/move-binary-format" }
+move-core-types = { path = "/sui/move/language/move-core/types", features = ["address20"] }
 
 [dev-dependencies]
 test-fuzz = "3.0.4"
-move-package = { path = "/move/language/tools/move-package" }
+move-package = { path = "/sui/move/language/tools/move-package" }
 workspace-hack = { path = "../workspace-hack"}
 
 sui-adapter = { path = "../sui-adapter" }

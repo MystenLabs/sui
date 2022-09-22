@@ -41,10 +41,10 @@ sui-config = { path = "../sui-config" }
 sui-json = { path = "../sui-json" }
 sui-json-rpc-types = { path = "../sui-json-rpc-types" }
 
-move-binary-format = { path = "/move/language/move-binary-format" }
-move-bytecode-utils = { path = "/move/language/tools/move-bytecode-utils" }
-move-core-types = { path = "/move/language/move-core/types", features = ["address20"] }
-move-vm-runtime = { path = "/move/language/move-vm/runtime" }
+move-binary-format = { path = "/sui/move/language/move-binary-format" }
+move-bytecode-utils = { path = "/sui/move/language/tools/move-bytecode-utils" }
+move-core-types = { path = "/sui/move/language/move-core/types", features = ["address20"] }
+move-vm-runtime = { path = "/sui/move/language/move-vm/runtime" }
 
 typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "0a2956d113d29369a8c05bd492c51ca0ff3423e8"}
 typed-store-macros = { git = "https://github.com/MystenLabs/mysten-infra", rev = "0a2956d113d29369a8c05bd492c51ca0ff3423e8"}
@@ -64,7 +64,7 @@ eyre = "0.6.8"
 [dev-dependencies]
 clap = { version = "3.2.17", features = ["derive"] }
 rand = "0.8.5"
-move-package = { path = "/move/language/tools/move-package" }
+move-package = { path = "/sui/move/language/tools/move-package" }
 
 serde-reflection = "0.3.6"
 serde_yaml = "0.8.26"

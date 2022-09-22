@@ -36,7 +36,7 @@ ARG PROFILE=release
 # built as they were built and cached by the previous layer.
 COPY Cargo.toml Cargo.lock ./
 COPY crates crates
-COPY move move ./
+COPY move move
 RUN cargo build --profile $PROFILE --bin sui-node
 # RUN apt-get update && apt-get install -y binutils
 # RUN strip --debug-only -w -K sui* -K narwhal* -K hyper* -K typed_store* "/sui/target/$PROFILE/sui-node"

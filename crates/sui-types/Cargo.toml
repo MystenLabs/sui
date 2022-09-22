@@ -42,13 +42,13 @@ eyre = "0.6.8"
 name-variant = { git = "https://github.com/MystenLabs/mysten-infra", rev = "0a2956d113d29369a8c05bd492c51ca0ff3423e8" }
 typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "0a2956d113d29369a8c05bd492c51ca0ff3423e8" }
 
-move-binary-format = { path = "/move/language/move-binary-format" }
-move-bytecode-utils = { path = "/move/language/tools/move-bytecode-utils" }
-move-command-line-common = { path = "/move/language/move-command-line-common" }
-move-core-types = { path = "/move/language/move-core/types", features = ["address20"] }
-move-disassembler = { path = "/move/language/tools/move-disassembler" }
-move-ir-types = { path = "/move/language/move-ir/types" }
-move-vm-types = { path = "/move/language/move-vm/types" }
+move-binary-format = { path = "/sui/move/language/move-binary-format" }
+move-bytecode-utils = { path = "/sui/move/language/tools/move-bytecode-utils" }
+move-command-line-common = { path = "/sui/move/language/move-command-line-common" }
+move-core-types = { path = "/sui/move/language/move-core/types", features = ["address20"] }
+move-disassembler = { path = "/sui/move/language/tools/move-disassembler" }
+move-ir-types = { path = "/sui/move/language/move-ir/types" }
+move-vm-types = { path = "/sui/move/language/move-vm/types" }
 
 narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "842a611a0a58dd378a904d85f79b4edbbbc7b137", package = "executor" }
 

@@ -29,9 +29,9 @@ sui-core = { path = "../sui-core" }
 sui-config = { path = "../sui-config" }
 sui-adapter =  { path = "../sui-adapter" }
 
-move-core-types = { path = "/move/language/move-core/types", features = ["address20"] }
-move-bytecode-utils = { path = "/move/language/tools/move-bytecode-utils" }
-move-binary-format = { path = "/move/language/move-binary-format" }
+move-core-types = { path = "/sui/move/language/move-core/types", features = ["address20"] }
+move-bytecode-utils = { path = "/sui/move/language/tools/move-bytecode-utils" }
+move-binary-format = { path = "/sui/move/language/move-binary-format" }
 
 workspace-hack = { path = "../workspace-hack"}
 

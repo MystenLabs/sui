@@ -26,7 +26,7 @@ sui-json-rpc-types= { path = "../sui-json-rpc-types" }
 sui-node = { path = "../sui-node" }
 
 mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "0a2956d113d29369a8c05bd492c51ca0ff3423e8" }
-move-package = { path = "/move/language/tools/move-package" }
+move-package = { path = "/sui/move/language/tools/move-package" }
 workspace-hack = { path = "../workspace-hack"}
 
 [dev-dependencies]

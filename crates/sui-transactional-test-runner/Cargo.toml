@@ -14,14 +14,14 @@ clap = { version = "3.1.8", features = ["derive"] }
 once_cell = "1.13.1"
 rand = "0.8.5"
 
-move-binary-format = { path = "/move/language/move-binary-format" }
-move-bytecode-utils = { path = "/move/language/tools/move-bytecode-utils" }
-move-command-line-common = { path = "/move/language/move-command-line-common" }
-move-compiler = { path = "/move/language/move-compiler" }
-move-core-types = { path = "/move/language/move-core/types", features = ["address20"] }
-move-stdlib = { path = "/move/language/move-stdlib" }
-move-transactional-test-runner = { path = "/move/language/testing-infra/transactional-test-runner" }
-move-vm-runtime = { path = "/move/language/move-vm/runtime" }
+move-binary-format = { path = "/sui/move/language/move-binary-format" }
+move-bytecode-utils = { path = "/sui/move/language/tools/move-bytecode-utils" }
+move-command-line-common = { path = "/sui/move/language/move-command-line-common" }
+move-compiler = { path = "/sui/move/language/move-compiler" }
+move-core-types = { path = "/sui/move/language/move-core/types", features = ["address20"] }
+move-stdlib = { path = "/sui/move/language/move-stdlib" }
+move-transactional-test-runner = { path = "/sui/move/language/testing-infra/transactional-test-runner" }
+move-vm-runtime = { path = "/sui/move/language/move-vm/runtime" }
 
 sui-framework = { path = "../sui-framework" }
 sui-types = { path = "../sui-types" }

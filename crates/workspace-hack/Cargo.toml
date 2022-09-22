@@ -69,7 +69,7 @@ blst = { version = "0.3" }
 bs58 = { version = "0.4", features = ["alloc", "std"] }
 bstr = { version = "0.2", features = ["lazy_static", "regex-automata", "serde", "serde1", "serde1-nostd", "std", "unicode"] }
 bulletproofs = { version = "4", features = ["rand", "std", "thiserror"] }
-bytecode-interpreter-crypto = { path = "/move/language/move-prover/interpreter/crypto", features = ["fiat"] }
+bytecode-interpreter-crypto = { path = "/sui/move/language/move-prover/interpreter/crypto", features = ["fiat"] }
 bytemuck = { version = "1", default-features = false }
 byteorder = { version = "1", features = ["i128", "std"] }
 bytes = { version = "1", features = ["std"] }
@@ -277,41 +277,41 @@ minimal-lexical = { version = "0.2", default-features = false, features = ["std"
 miniz_oxide = { version = "0.5", default-features = false }
 mio = { version = "0.8", features = ["net", "os-ext", "os-poll"] }
 mockall = { version = "0.11", default-features = false }
-move-abigen = { path = "/move/language/move-prover/move-abigen", default-features = false }
-move-binary-format = { path = "/move/language/move-binary-format" }
-move-borrow-graph = { path = "/move/language/move-borrow-graph", default-features = false }
-move-bytecode-source-map = { path = "/move/language/move-ir-compiler/move-bytecode-source-map" }
-move-bytecode-utils = { path = "/move/language/tools/move-bytecode-utils", default-features = false }
-move-bytecode-verifier = { path = "/move/language/move-bytecode-verifier" }
-move-bytecode-viewer = { path = "/move/language/tools/move-bytecode-viewer" }
-move-cli = { path = "/move/language/tools/move-cli", default-features = false }
-move-command-line-common = { path = "/move/language/move-command-line-common", default-features = false }
-move-compiler = { path = "/move/language/move-compiler", default-features = false }
-move-core-types = { path = "/move/language/move-core/types", features = ["address20"] }
-move-coverage = { path = "/move/language/tools/move-coverage" }
-move-disassembler = { path = "/move/language/tools/move-disassembler" }
-move-docgen = { path = "/move/language/move-prover/move-docgen", default-features = false }
-move-errmapgen = { path = "/move/language/move-prover/move-errmapgen", default-features = false }
-move-ir-compiler = { path = "/move/language/move-ir-compiler" }
-move-ir-to-bytecode = { path = "/move/language/move-ir-compiler/move-ir-to-bytecode" }
-move-ir-to-bytecode-syntax = { path = "/move/language/move-ir-compiler/move-ir-to-bytecode/syntax" }
-move-ir-types = { path = "/move/language/move-ir/types", default-features = false }
-move-model = { path = "/move/language/move-model", default-features = false }
-move-package = { path = "/move/language/tools/move-package", default-features = false }
-move-prover = { path = "/move/language/move-prover", default-features = false }
-move-prover-boogie-backend = { path = "/move/language/move-prover/boogie-backend", default-features = false }
-move-read-write-set-types = { path = "/move/language/tools/read-write-set/types", default-features = false }
-move-resource-viewer = { path = "/move/language/tools/move-resource-viewer", default-features = false }
-move-stackless-bytecode = { path = "/move/language/move-prover/bytecode", default-features = false }
-move-stackless-bytecode-interpreter = { path = "/move/language/move-prover/interpreter", default-features = false }
-move-stdlib = { path = "/move/language/move-stdlib", default-features = false, features = ["testing"] }
-move-symbol-pool = { path = "/move/language/move-symbol-pool" }
-move-table-extension = { path = "/move/language/extensions/move-table-extension", default-features = false }
-move-transactional-test-runner = { path = "/move/language/testing-infra/transactional-test-runner", default-features = false }
-move-unit-test = { path = "/move/language/tools/move-unit-test", default-features = false }
-move-vm-runtime = { path = "/move/language/move-vm/runtime", features = ["debugging", "testing"] }
-move-vm-test-utils = { path = "/move/language/move-vm/test-utils" }
-move-vm-types = { path = "/move/language/move-vm/types" }
+move-abigen = { path = "/sui/move/language/move-prover/move-abigen", default-features = false }
+move-binary-format = { path = "/sui/move/language/move-binary-format" }
+move-borrow-graph = { path = "/sui/move/language/move-borrow-graph", default-features = false }
+move-bytecode-source-map = { path = "/sui/move/language/move-ir-compiler/move-bytecode-source-map" }
+move-bytecode-utils = { path = "/sui/move/language/tools/move-bytecode-utils", default-features = false }
+move-bytecode-verifier = { path = "/sui/move/language/move-bytecode-verifier" }
+move-bytecode-viewer = { path = "/sui/move/language/tools/move-bytecode-viewer" }
+move-cli = { path = "/sui/move/language/tools/move-cli", default-features = false }
+move-command-line-common = { path = "/sui/move/language/move-command-line-common", default-features = false }
+move-compiler = { path = "/sui/move/language/move-compiler", default-features = false }
+move-core-types = { path = "/sui/move/language/move-core/types", features = ["address20"] }
+move-coverage = { path = "/sui/move/language/tools/move-coverage" }
+move-disassembler = { path = "/sui/move/language/tools/move-disassembler" }
+move-docgen = { path = "/sui/move/language/move-prover/move-docgen", default-features = false }
+move-errmapgen = { path = "/sui/move/language/move-prover/move-errmapgen", default-features = false }
+move-ir-compiler = { path = "/sui/move/language/move-ir-compiler" }
+move-ir-to-bytecode = { path = "/sui/move/language/move-ir-compiler/move-ir-to-bytecode" }
+move-ir-to-bytecode-syntax = { path = "/sui/move/language/move-ir-compiler/move-ir-to-bytecode/syntax" }
+move-ir-types = { path = "/sui/move/language/move-ir/types", default-features = false }
+move-model = { path = "/sui/move/language/move-model", default-features = false }
+move-package = { path = "/sui/move/language/tools/move-package", default-features = false }
+move-prover = { path = "/sui/move/language/move-prover", default-features = false }
+move-prover-boogie-backend = { path = "/sui/move/language/move-prover/boogie-backend", default-features = false }
+move-read-write-set-types = { path = "/sui/move/language/tools/read-write-set/types", default-features = false }
+move-resource-viewer = { path = "/sui/move/language/tools/move-resource-viewer", default-features = false }
+move-stackless-bytecode = { path = "/sui/move/language/move-prover/bytecode", default-features = false }
+move-stackless-bytecode-interpreter = { path = "/sui/move/language/move-prover/interpreter", default-features = false }
+move-stdlib = { path = "/sui/move/language/move-stdlib", default-features = false, features = ["testing"] }
+move-symbol-pool = { path = "/sui/move/language/move-symbol-pool" }
+move-table-extension = { path = "/sui/move/language/extensions/move-table-extension", default-features = false }
+move-transactional-test-runner = { path = "/sui/move/language/testing-infra/transactional-test-runner", default-features = false }
+move-unit-test = { path = "/sui/move/language/tools/move-unit-test", default-features = false }
+move-vm-runtime = { path = "/sui/move/language/move-vm/runtime", features = ["debugging", "testing"] }
+move-vm-test-utils = { path = "/sui/move/language/move-vm/test-utils" }
+move-vm-types = { path = "/sui/move/language/move-vm/types" }
 multiaddr = { version = "0.14", features = ["url"] }
 multihash = { version = "0.16", default-features = false, features = ["alloc", "derive", "identity", "multihash-derive", "multihash-impl", "std"] }
 mysten-network-9c0a49ddb6ebb128 = { package = "mysten-network", git = "https://github.com/MystenLabs/mysten-infra", rev = "0a2956d113d29369a8c05bd492c51ca0ff3423e8", default-features = false }
@@ -406,8 +406,8 @@ rand_xorshift-468e82937335b1c9 = { package = "rand_xorshift", version = "0.3", d
 rand_xoshiro = { version = "0.6", default-features = false }
 rayon = { version = "1", default-features = false }
 rayon-core = { version = "1", default-features = false }
-read-write-set = { path = "/move/language/tools/read-write-set", default-features = false }
-read-write-set-dynamic = { path = "/move/language/tools/read-write-set/dynamic", default-features = false }
+read-write-set = { path = "/sui/move/language/tools/read-write-set", default-features = false }
+read-write-set-dynamic = { path = "/sui/move/language/tools/read-write-set/dynamic", default-features = false }
 ref-cast = { version = "1", default-features = false }
 regex = { version = "1", features = ["aho-corasick", "memchr", "perf", "perf-cache", "perf-dfa", "perf-inline", "perf-literal", "std", "unicode", "unicode-age", "unicode-bool", "unicode-case", "unicode-gencat", "unicode-perl", "unicode-script", "unicode-segment"] }
 regex-automata = { version = "0.1", features = ["regex-syntax", "std"] }
@@ -656,7 +656,7 @@ bs58 = { version = "0.4", features = ["alloc", "std"] }
 bstr = { version = "0.2", features = ["lazy_static", "regex-automata", "serde", "serde1", "serde1-nostd", "std", "unicode"] }
 bulletproofs = { version = "4", features = ["rand", "std", "thiserror"] }
 bumpalo = { version = "3" }
-bytecode-interpreter-crypto = { path = "/move/language/move-prover/interpreter/crypto", features = ["fiat"] }
+bytecode-interpreter-crypto = { path = "/sui/move/language/move-prover/interpreter/crypto", features = ["fiat"] }
 bytemuck = { version = "1", default-features = false }
 byteorder = { version = "1", features = ["i128", "std"] }
 bytes = { version = "1", features = ["std"] }
@@ -893,41 +893,41 @@ miniz_oxide = { version = "0.5", default-features = false }
 mio = { version = "0.8", features = ["net", "os-ext", "os-poll"] }
 mockall = { version = "0.11", default-features = false }
 mockall_derive = { version = "0.11", default-features = false }
-move-abigen = { path = "/move/language/move-prover/move-abigen", default-features = false }
-move-binary-format = { path = "/move/language/move-binary-format" }
-move-borrow-graph = { path = "/move/language/move-borrow-graph", default-features = false }
-move-bytecode-source-map = { path = "/move/language/move-ir-compiler/move-bytecode-source-map" }
-move-bytecode-utils = { path = "/move/language/tools/move-bytecode-utils", default-features = false }
-move-bytecode-verifier = { path = "/move/language/move-bytecode-verifier" }
-move-bytecode-viewer = { path = "/move/language/tools/move-bytecode-viewer" }
-move-cli = { path = "/move/language/tools/move-cli", default-features = false }
-move-command-line-common = { path = "/move/language/move-command-line-common", default-features = false }
-move-compiler = { path = "/move/language/move-compiler", default-features = false }
-move-core-types = { path = "/move/language/move-core/types", features = ["address20"] }
-move-coverage = { path = "/move/language/tools/move-coverage" }
-move-disassembler = { path = "/move/language/tools/move-disassembler" }
-move-docgen = { path = "/move/language/move-prover/move-docgen", default-features = false }
-move-errmapgen = { path = "/move/language/move-prover/move-errmapgen", default-features = false }
-move-ir-compiler = { path = "/move/language/move-ir-compiler" }
-move-ir-to-bytecode = { path = "/move/language/move-ir-compiler/move-ir-to-bytecode" }
-move-ir-to-bytecode-syntax = { path = "/move/language/move-ir-compiler/move-ir-to-bytecode/syntax" }
-move-ir-types = { path = "/move/language/move-ir/types", default-features = false }
-move-model = { path = "/move/language/move-model", default-features = false }
-move-package = { path = "/move/language/tools/move-package", default-features = false }
-move-prover = { path = "/move/language/move-prover", default-features = false }
-move-prover-boogie-backend = { path = "/move/language/move-prover/boogie-backend", default-features = false }
-move-read-write-set-types = { path = "/move/language/tools/read-write-set/types", default-features = false }
-move-resource-viewer = { path = "/move/language/tools/move-resource-viewer", default-features = false }
-move-stackless-bytecode = { path = "/move/language/move-prover/bytecode", default-features = false }
-move-stackless-bytecode-interpreter = { path = "/move/language/move-prover/interpreter", default-features = false }
-move-stdlib = { path = "/move/language/move-stdlib", default-features = false, features = ["testing"] }
-move-symbol-pool = { path = "/move/language/move-symbol-pool" }
-move-table-extension = { path = "/move/language/extensions/move-table-extension", default-features = false }
-move-transactional-test-runner = { path = "/move/language/testing-infra/transactional-test-runner", default-features = false }
-move-unit-test = { path = "/move/language/tools/move-unit-test", default-features = false }
-move-vm-runtime = { path = "/move/language/move-vm/runtime", features = ["debugging", "testing"] }
-move-vm-test-utils = { path = "/move/language/move-vm/test-utils" }
-move-vm-types = { path = "/move/language/move-vm/types" }
+move-abigen = { path = "/sui/move/language/move-prover/move-abigen", default-features = false }
+move-binary-format = { path = "/sui/move/language/move-binary-format" }
+move-borrow-graph = { path = "/sui/move/language/move-borrow-graph", default-features = false }
+move-bytecode-source-map = { path = "/sui/move/language/move-ir-compiler/move-bytecode-source-map" }
+move-bytecode-utils = { path = "/sui/move/language/tools/move-bytecode-utils", default-features = false }
+move-bytecode-verifier = { path = "/sui/move/language/move-bytecode-verifier" }
+move-bytecode-viewer = { path = "/sui/move/language/tools/move-bytecode-viewer" }
+move-cli = { path = "/sui/move/language/tools/move-cli", default-features = false }
+move-command-line-common = { path = "/sui/move/language/move-command-line-common", default-features = false }
+move-compiler = { path = "/sui/move/language/move-compiler", default-features = false }
+move-core-types = { path = "/sui/move/language/move-core/types", features = ["address20"] }
+move-coverage = { path = "/sui/move/language/tools/move-coverage" }
+move-disassembler = { path = "/sui/move/language/tools/move-disassembler" }
+move-docgen = { path = "/sui/move/language/move-prover/move-docgen", default-features = false }
+move-errmapgen = { path = "/sui/move/language/move-prover/move-errmapgen", default-features = false }
+move-ir-compiler = { path = "/sui/move/language/move-ir-compiler" }
+move-ir-to-bytecode = { path = "/sui/move/language/move-ir-compiler/move-ir-to-bytecode" }
+move-ir-to-bytecode-syntax = { path = "/sui/move/language/move-ir-compiler/move-ir-to-bytecode/syntax" }
+move-ir-types = { path = "/sui/move/language/move-ir/types", default-features = false }
+move-model = { path = "/sui/move/language/move-model", default-features = false }
+move-package = { path = "/sui/move/language/tools/move-package", default-features = false }
+move-prover = { path = "/sui/move/language/move-prover", default-features = false }
+move-prover-boogie-backend = { path = "/sui/move/language/move-prover/boogie-backend", default-features = false }
+move-read-write-set-types = { path = "/sui/move/language/tools/read-write-set/types", default-features = false }
+move-resource-viewer = { path = "/sui/move/language/tools/move-resource-viewer", default-features = false }
+move-stackless-bytecode = { path = "/sui/move/language/move-prover/bytecode", default-features = false }
+move-stackless-bytecode-interpreter = { path = "/sui/move/language/move-prover/interpreter", default-features = false }
+move-stdlib = { path = "/sui/move/language/move-stdlib", default-features = false, features = ["testing"] }
+move-symbol-pool = { path = "/sui/move/language/move-symbol-pool" }
+move-table-extension = { path = "/sui/move/language/extensions/move-table-extension", default-features = false }
+move-transactional-test-runner = { path = "/sui/move/language/testing-infra/transactional-test-runner", default-features = false }
+move-unit-test = { path = "/sui/move/language/tools/move-unit-test", default-features = false }
+move-vm-runtime = { path = "/sui/move/language/move-vm/runtime", features = ["debugging", "testing"] }
+move-vm-test-utils = { path = "/sui/move/language/move-vm/test-utils" }
+move-vm-types = { path = "/sui/move/language/move-vm/types" }
 multiaddr = { version = "0.14", features = ["url"] }
 multihash = { version = "0.16", default-features = false, features = ["alloc", "derive", "identity", "multihash-derive", "multihash-impl", "std"] }
 multihash-derive = { version = "0.8", default-features = false, features = ["std"] }
@@ -1049,8 +1049,8 @@ rand_xorshift-468e82937335b1c9 = { package = "rand_xorshift", version = "0.3", d
 rand_xoshiro = { version = "0.6", default-features = false }
 rayon = { version = "1", default-features = false }
 rayon-core = { version = "1", default-features = false }
-read-write-set = { path = "/move/language/tools/read-write-set", default-features = false }
-read-write-set-dynamic = { path = "/move/language/tools/read-write-set/dynamic", default-features = false }
+read-write-set = { path = "/sui/move/language/tools/read-write-set", default-features = false }
+read-write-set-dynamic = { path = "/sui/move/language/tools/read-write-set/dynamic", default-features = false }
 readonly = { version = "0.2", default-features = false }
 ref-cast = { version = "1", default-features = false }
 ref-cast-impl = { version = "1", default-features = false }
