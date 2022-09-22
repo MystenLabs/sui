@@ -91,9 +91,11 @@ mod test {
         let interval = Interval::Time(test_duration);
 
         let show_progress = interval.is_unbounded();
-        driver
+        let stats = driver
             .run(workloads, aggregator, &registry, show_progress, interval)
             .await
             .unwrap();
+
+        assert_eq!(stats.num_error, 0);
     }
 }
