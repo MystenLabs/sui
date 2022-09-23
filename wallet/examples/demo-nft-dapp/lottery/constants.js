@@ -9,3 +9,5 @@ export const STATUS_TO_TXT = {
     [STATUS_RUNNING]: 'Running',
     [STATUS_ENDED]: 'Ended',
 };
+export const capyBoostEvent =
+    '0x7e03e23a451db32eb70b094a38c447f7d3058788::lucky_capy::CapyBoostEvent';

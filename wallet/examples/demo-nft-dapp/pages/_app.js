@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { getObjectExistsResponse, JsonRpcProvider } from '@mysten/sui.js';
+import { getObjectExistsResponse, JsonRpcProvider, bcs } from '@mysten/sui.js';
 import { APIContext } from '../shared/api-context';
 import Head from 'next/head';
 import { useCallback, useEffect, useState, useMemo, useRef } from 'react';
@@ -13,9 +13,21 @@ import '../styles/globals.css';
 import { AccountContext } from '../shared/account-context';
 import { ObjectsStoreContext } from '../shared/objects-store-context';
 import Link from 'next/link';
-import { MODULE, PACKAGE_ID } from '../lottery/constants';
+import { capyBoostEvent, MODULE, PACKAGE_ID } from '../lottery/constants';
+import { EventsStoreContext } from '../shared/events-store-context';
 
 const OBJECTS_POLL_INTERVAL = 2 * 1e3;
+
+bcs.registerStructType(capyBoostEvent, {
+    lottery_id: 'ObjectID',
+    round: bcs.U8,
+    boost_value: bcs.U64,
+    capy_name: 'utf8string',
+    capy_no: bcs.U64,
+    new_score: bcs.U128,
+    boost_value_combined: bcs.U128,
+    capy_roller: 'utf8string',
+});
 
 // eslint-disable-next-line react/prop-types
 function MyApp({ Component, pageProps }) {
@@ -93,7 +105,6 @@ function MyApp({ Component, pageProps }) {
                     }
                     const dataJSON = JSON.stringify(allSuiObjects);
                     if (!prevData.current || prevData.current !== dataJSON) {
-                        console.log(allSuiObjects);
                         setSuiObjects(allSuiObjects);
                     }
                     prevData.current = dataJSON;
@@ -116,12 +127,35 @@ function MyApp({ Component, pageProps }) {
     const clear = useCallback(() => {
         setSuiObjects({});
     }, []);
+    const prevEvents = useRef();
+    const [events, setEvents] = useState([]);
     useEffect(() => {
         let timeout;
         const load = async () => {
             try {
-                const events = await api.getEventsByModule(PACKAGE_ID, MODULE);
-                console.log(events);
+                const events = (
+                    await api.getEventsByModule(PACKAGE_ID, MODULE)
+                ).sort(
+                    (a, b) =>
+                        a.timestamp - b.timestamp ||
+                        a.txDigest.localeCompare(b.txDigest)
+                );
+                const eventsJSON = JSON.stringify(events);
+                if (!prevEvents.current || prevEvents.current !== eventsJSON) {
+                    setEvents(
+                        events.map((e) => {
+                            if (e.event.moveEvent.type === capyBoostEvent) {
+                                e.event.moveEvent.de = bcs.de(
+                                    capyBoostEvent,
+                                    e.event.moveEvent.bcs,
+                                    'base64'
+                                );
+                            }
+                            return e;
+                        })
+                    );
+                }
+                prevEvents.current = eventsJSON;
                 // TODO:
                 timeout = setTimeout(load, OBJECTS_POLL_INTERVAL);
             } catch (e) {
@@ -154,7 +188,11 @@ function MyApp({ Component, pageProps }) {
                                             clear,
                                         }}
                                     >
-                                        <Component {...pageProps} />
+                                        <EventsStoreContext.Provider
+                                            value={events}
+                                        >
+                                            <Component {...pageProps} />
+                                        </EventsStoreContext.Provider>
                                     </ObjectsStoreContext.Provider>
                                 </AccountContext.Provider>
                             </APIContext.Provider>
