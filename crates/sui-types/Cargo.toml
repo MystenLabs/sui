@@ -57,7 +57,7 @@ narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "9d667
 fastcrypto = { version = "0.1.2", features = ["copy_key"] }
 
 sui-cost-tables = { path = "../sui-cost-tables"}
-workspace-hack = { path = "../workspace-hack"}
+workspace-hack = { path = "../../workspace-hack"}
 
 [dev-dependencies]
 bincode = "1.3.3"

@@ -14,8 +14,8 @@ RUN apt-get update && apt-get install -y cmake clang
 #      root Cargo.toml file.
 FROM chef AS planner
 COPY Cargo.toml Cargo.lock ./
-COPY crates/workspace-hack crates/workspace-hack
-RUN sed -i '/crates\/workspace-hack/b; /crates/d' Cargo.toml \
+COPY workspace-hack workspace-hack
+RUN sed -i '/workspace-hack/b; /crates/d' Cargo.toml \
     && cargo metadata -q >/dev/null
 
 # Build and cache all dependencies.
@@ -26,7 +26,7 @@ RUN sed -i '/crates\/workspace-hack/b; /crates/d' Cargo.toml \
 FROM chef AS builder 
 COPY --from=planner /sui/Cargo.toml Cargo.toml
 COPY --from=planner /sui/Cargo.lock Cargo.lock
-COPY --from=planner /sui/crates/workspace-hack crates/workspace-hack
+COPY --from=planner /sui/workspace-hack workspace-hack
 RUN cargo build --release
 
 # Build application

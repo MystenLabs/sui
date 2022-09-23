@@ -34,8 +34,8 @@ move-unit-test = { git = "https://github.com/move-language/move", rev = "e1e647b
 move-vm-runtime = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e" }
 move-vm-types = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e" }
 fastcrypto = "0.1.2"
-workspace-hack = { path = "../workspace-hack"}
 move-vm-test-utils = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e" }
+workspace-hack = { path = "../../workspace-hack"}
 
 [build-dependencies]
 anyhow = { version = "1.0.64", features = ["backtrace"] }

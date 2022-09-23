@@ -25,4 +25,4 @@ move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "e1
 
 sui-types = { path = "../sui-types" }
 sui-json = { path = "../sui-json" }
-workspace-hack = { path = "../workspace-hack"}
+workspace-hack = { path = "../../workspace-hack"}

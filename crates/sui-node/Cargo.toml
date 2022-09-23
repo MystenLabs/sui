@@ -29,7 +29,7 @@ sui-types = { path = "../sui-types" }
 
 telemetry-subscribers = "0.1.0"
 mysten-network = "0.1.0"
-workspace-hack = { path = "../workspace-hack"}
+workspace-hack = { path = "../../workspace-hack"}
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemallocator = { version = "^0.5", features = ["profiling"] }

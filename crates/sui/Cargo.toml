@@ -51,10 +51,9 @@ move-prover-boogie-backend = { git = "https://github.com/move-language/move", re
 move-unit-test = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e" }
 move-cli = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e" }
 move-package = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e" }
-
-workspace-hack = { path = "../workspace-hack" }
 multiaddr = "0.14.0"
 hex = "0.4.3"
+workspace-hack = { path = "../../workspace-hack"}
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemallocator = { version = "^0.5", features = ["profiling"] }

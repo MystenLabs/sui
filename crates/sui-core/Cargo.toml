@@ -57,9 +57,9 @@ narwhal-types = { git = "https://github.com/MystenLabs/narwhal", rev = "9d667b47
 narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "9d667b47056808dea86e3e9874a9e2fcb3f6629a", package = "node", features = ["trace_transaction"] }
 
 fastcrypto = "0.1.2"
-workspace-hack = { path = "../workspace-hack"}
 thiserror = "1.0.34"
 eyre = "0.6.8"
+workspace-hack = { path = "../../workspace-hack"}
 
 [dev-dependencies]
 clap = { version = "3.2.17", features = ["derive"] }
