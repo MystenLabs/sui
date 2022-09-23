@@ -10,9 +10,9 @@ edition = "2021"
 jsonrpsee = { version = "0.15.1", features = ["full"] }
 jsonrpsee-core = "0.15.1"
 jsonrpsee-proc-macros = "0.15.1"
-move-binary-format = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e" }
-move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e" }
-move-core-types = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e", features = ["address20"] }
+move-binary-format.workspace = true
+move-bytecode-utils.workspace = true
+move-core-types.workspace = true
 prometheus = "0.13.2"
 anyhow = "1.0.64"
 tracing = "0.1.36"

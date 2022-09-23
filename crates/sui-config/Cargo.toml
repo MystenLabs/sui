@@ -21,10 +21,10 @@ once_cell = "1.14.0"
 tracing = "0.1.36"
 
 fastcrypto = "0.1.2"
-move-binary-format = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e" }
-move-package = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e" }
-move-core-types = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e", features = ["address20"] }
-move-vm-runtime = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e" }
+move-binary-format.workspace = true
+move-package.workspace = true
+move-core-types.workspace = true
+move-vm-runtime.workspace = true
 narwhal-config = { git = "https://github.com/MystenLabs/narwhal", rev = "9d667b47056808dea86e3e9874a9e2fcb3f6629a", package = "config" }
 narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "9d667b47056808dea86e3e9874a9e2fcb3f6629a", package = "crypto" }
 
