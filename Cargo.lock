@@ -4458,7 +4458,7 @@ dependencies = [
 [[package]]
 name = "msim"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=e0355e2836fd3a6df7952b6aaca2c178d6055197#e0355e2836fd3a6df7952b6aaca2c178d6055197"
+source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=dad61af1709543ec31529a78c489bc4b9c973375#dad61af1709543ec31529a78c489bc4b9c973375"
 dependencies = [
  "ahash",
  "async-task",
@@ -4485,7 +4485,7 @@ dependencies = [
 [[package]]
 name = "msim-macros"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=e0355e2836fd3a6df7952b6aaca2c178d6055197#e0355e2836fd3a6df7952b6aaca2c178d6055197"
+source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=dad61af1709543ec31529a78c489bc4b9c973375#dad61af1709543ec31529a78c489bc4b9c973375"
 dependencies = [
  "darling 0.14.1",
  "proc-macro2 1.0.43",
@@ -7386,8 +7386,10 @@ dependencies = [
  "sui-config",
  "sui-core",
  "sui-json-rpc-types",
+ "sui-macros",
  "sui-node",
  "sui-sdk",
+ "sui-simulator",
  "sui-types",
  "telemetry-subscribers",
  "tempfile",
@@ -7869,6 +7871,9 @@ name = "sui-simulator"
 version = "0.7.0"
 dependencies = [
  "msim",
+ "sui-framework",
+ "telemetry-subscribers",
+ "tracing",
  "workspace-hack 0.1.0",
 ]
 

@@ -48,5 +48,9 @@ narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "9d667b470
 workspace-hack = { path = "../workspace-hack"}
 test-utils = { path = "../test-utils" }
 
+[target.'cfg(msim)'.dependencies]
+sui-macros = { path = "../sui-macros" }
+sui-simulator = { path = "../sui-simulator" }
+
 [features]
 benchmark = ["narwhal-node/benchmark"]

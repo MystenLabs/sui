@@ -58,7 +58,7 @@ if [ -n "$LOCAL_MSIM_PATH" ]; then
 else
   cargo_patch_args+=(
     --config 'patch.crates-io.tokio.git = "https://github.com/MystenLabs/mysten-sim.git"'
-    --config 'patch.crates-io.tokio.rev = "e0355e2836fd3a6df7952b6aaca2c178d6055197"'
+    --config 'patch.crates-io.tokio.rev = "dad61af1709543ec31529a78c489bc4b9c973375"'
   )
 fi
 
@@ -84,6 +84,9 @@ if [ "$1" = "build" ]; then
   shift
   CARGO_COMMAND=(build --profile simulator)
 fi
+
+# Must supply a new temp dir - the test is deterministic and can't choose one randomly itself.
+export TMPDIR=$(mktemp -d)
 
 cargo ${CARGO_COMMAND[@]} \
   --config "build.rustflags = [$RUST_FLAGS]" \

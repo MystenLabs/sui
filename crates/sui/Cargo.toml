@@ -60,9 +60,6 @@ hex = "0.4.3"
 jemallocator = { version = "^0.5", features = ["profiling"] }
 jemalloc-ctl = "^0.5"
 
-[target.'cfg(msim)'.dependencies]
-sui-simulator = { path = "../sui-simulator" }
-
 [dev-dependencies]
 tempfile = "3.3.0"
 futures = "0.3.23"
@@ -78,6 +75,7 @@ move-package = { git = "https://github.com/move-language/move", rev = "e1e647b73
 sui-core = { path = "../sui-core" }
 sui-node = { path = "../sui-node" }
 sui-macros = { path = "../sui-macros" }
+sui-simulator = { path = "../sui-simulator" }
 
 [package.metadata.cargo-udeps.ignore]
 normal = ["jemallocator", "jemalloc-ctl"]

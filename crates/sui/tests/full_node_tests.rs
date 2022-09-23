@@ -211,7 +211,7 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
         object_id: transferred_object,
         version: SequenceNumber::from_u64(1),
         type_: TransferType::Coin,
-        amount: Some(100000000),
+        amount: Some(100000000000000),
     };
 
     // query all events
@@ -614,7 +614,7 @@ async fn test_full_node_event_read_api_ok() -> Result<(), anyhow::Error> {
         object_id: transferred_object,
         version: SequenceNumber::from_u64(1),
         type_: TransferType::Coin,
-        amount: Some(100000000),
+        amount: Some(100000000000000),
     };
 
     // query by sender

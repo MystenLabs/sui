@@ -24,7 +24,7 @@ use sui_types::{
     },
 };
 use test_utils::messages::make_transfer_sui_transaction;
-use tracing::log::error;
+use tracing::error;
 
 use rand::{prelude::*, rngs::OsRng};
 use rand_distr::WeightedAliasIndex;

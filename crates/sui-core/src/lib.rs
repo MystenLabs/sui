@@ -20,7 +20,6 @@ pub mod streamer;
 pub mod transaction_input_checker;
 pub mod transaction_streamer;
 
-#[cfg(test)]
 pub mod test_utils;
 
 mod histogram;
