@@ -430,8 +430,6 @@ impl std::fmt::Display for GetCollectionsResponse {
                     );
                 }
                 RetrievalResult::Error(error) => {
-                    //let certificate_id = base64::encode(&error.id.unwrap().digest);
-
                     result = format!(
                         "{}\n\tError for certificate id {}, error: {}",
                         result,
