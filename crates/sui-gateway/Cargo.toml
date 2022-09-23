@@ -27,7 +27,7 @@ sui-node = { path = "../sui-node" }
 
 
 mysten-network = "0.1.0"
-move-package = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e" }
+move-package.workspace = true
 workspace-hack = { path = "../workspace-hack"}
 
 [dev-dependencies]

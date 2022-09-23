@@ -29,9 +29,9 @@ sui-core = { path = "../sui-core" }
 sui-config = { path = "../sui-config" }
 sui-adapter =  { path = "../sui-adapter" }
 
-move-core-types = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e", features = ["address20"] }
-move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e" }
-move-binary-format = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e" }
+move-core-types.workspace = true
+move-bytecode-utils.workspace = true
+move-binary-format.workspace = true
 
 workspace-hack = { path = "../workspace-hack"}
 

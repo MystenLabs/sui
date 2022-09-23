@@ -45,12 +45,12 @@ typed-store-derive = "0.1.0"
 tempfile = "3.3.0"
 narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "9d667b47056808dea86e3e9874a9e2fcb3f6629a", package = "executor" }
 
-move-core-types = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e", features = ["address20"] }
-move-prover = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e" }
-move-prover-boogie-backend = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e" }
-move-unit-test = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e" }
-move-cli = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e" }
-move-package = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e" }
+move-core-types.workspace = true
+move-prover.workspace = true
+move-prover-boogie-backend.workspace = true
+move-unit-test.workspace = true
+move-cli.workspace = true
+move-package.workspace = true
 
 workspace-hack = { path = "../workspace-hack" }
 multiaddr = "0.14.0"
@@ -71,7 +71,7 @@ jsonrpsee = { version = "0.15.1", features = ["full"] }
 
 test-utils = { path = "../test-utils" }
 rand = "0.8.5"
-move-package = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e" }
+move-package.workspace = true
 sui-core = { path = "../sui-core" }
 sui-node = { path = "../sui-node" }
 sui-macros = { path = "../sui-macros" }
