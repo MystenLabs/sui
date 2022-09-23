@@ -1,17 +1,18 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import * as secp from "@noble/secp256k1";
+import * as secp from '@noble/secp256k1';
 import { Base64DataBuffer } from '../serialization/base64';
 import { Keypair } from './keypair';
 import { PublicKey, SignatureScheme } from './publickey';
 import { hmac } from '@noble/hashes/hmac';
-import { sha256 } from "@noble/hashes/sha256";
-import { Secp256k1PublicKey } from "./secp256k1-publickey";
+import { sha256 } from '@noble/hashes/sha256';
+import { Secp256k1PublicKey } from './secp256k1-publickey';
+import { Signature } from '@noble/secp256k1';
 
 secp.utils.hmacSha256Sync = (key: Uint8Array, ...msgs: Uint8Array[]) => {
   const h = hmac.create(sha256, key);
-  msgs.forEach(msg => h.update(msg));
+  msgs.forEach((msg) => h.update(msg));
   return h.digest();
 };
 
@@ -42,10 +43,10 @@ export class Secp256k1Keypair implements Keypair {
       const secretKey: Uint8Array = secp.utils.randomPrivateKey();
       const publicKey: Uint8Array = secp.getPublicKey(secretKey, true);
 
-      this.keypair = {publicKey, secretKey};
+      this.keypair = { publicKey, secretKey };
     }
   }
-  
+
   /**
    * Get the key scheme of the keypair Secp256k1
    */
@@ -60,7 +61,7 @@ export class Secp256k1Keypair implements Keypair {
     const secretKey = secp.utils.randomPrivateKey();
     const publicKey = secp.getPublicKey(secretKey, true);
 
-    return new Secp256k1Keypair({publicKey, secretKey});
+    return new Secp256k1Keypair({ publicKey, secretKey });
   }
 
   /**
@@ -76,7 +77,6 @@ export class Secp256k1Keypair implements Keypair {
    * @param options: skip secret key validation
    */
 
-  
   static fromSecretKey(
     secretKey: Uint8Array,
     options?: { skipValidation?: boolean }
@@ -87,11 +87,11 @@ export class Secp256k1Keypair implements Keypair {
       const signData = encoder.encode('sui validation');
       const msgHash = sha256(signData);
       const signature = secp.signSync(msgHash, secretKey);
-      if (!secp.verify(signature, msgHash, publicKey)) {
+      if (!secp.verify(signature, msgHash, publicKey, { strict: true })) {
         throw new Error('Provided secretKey is invalid');
       }
     }
-    return new Secp256k1Keypair({publicKey, secretKey});
+    return new Secp256k1Keypair({ publicKey, secretKey });
   }
 
   /**
@@ -101,7 +101,7 @@ export class Secp256k1Keypair implements Keypair {
    */
   static fromSeed(seed: Uint8Array): Secp256k1Keypair {
     let publicKey = secp.getPublicKey(seed, true);
-    return new Secp256k1Keypair({publicKey, secretKey: seed});
+    return new Secp256k1Keypair({ publicKey, secretKey: seed });
   }
 
   /**
@@ -116,8 +116,13 @@ export class Secp256k1Keypair implements Keypair {
    */
   signData(data: Base64DataBuffer): Base64DataBuffer {
     const msgHash = sha256(data.getData());
-    return new Base64DataBuffer(
-      secp.signSync(msgHash, this.keypair.secretKey)
-    );
+    const [sig, rec_id] = secp.signSync(msgHash, this.keypair.secretKey, {
+      canonical: true,
+      recovered: true,
+    });
+    var recoverable_sig = new Uint8Array(65);
+    recoverable_sig.set(Signature.fromDER(sig).toCompactRawBytes());
+    recoverable_sig.set([rec_id], 64);
+    return new Base64DataBuffer(recoverable_sig);
   }
 }
