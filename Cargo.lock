@@ -7498,6 +7498,7 @@ dependencies = [
  "strum_macros",
  "sui-adapter",
  "sui-config",
+ "sui-core",
  "sui-cost-tables",
  "sui-types",
  "test-utils",
