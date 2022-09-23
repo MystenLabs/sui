@@ -45,7 +45,7 @@ jobs:
       # These are considered the end-to-end "slow" tests for us
       - name: cargo nextest
         run: |
-          cargo nextest run -E 'kind(test) + package(primary)' --profile ignored --run-ignored ignored-only
+          cargo nextest run -E 'kind(test) + package(narwhal-primary)' --profile ignored --run-ignored ignored-only
 
   beta:
     name: Run test on the beta channel
