@@ -272,7 +272,7 @@ where
 
                 return (
                     tokio::spawn(async move {
-                        let _ = state.receiver.lock().await;
+                        let _guard = state.receiver.lock().await;
                     }),
                     sender,
                 );

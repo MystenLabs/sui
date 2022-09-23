@@ -156,15 +156,15 @@ The above code does the swap: it sends `object1` to the original owner of `objec
 
 ```rust
 let service_address = tx_context::sender(ctx);
-Balance::join(&mut fee1, fee2);
+balance::join(&mut fee1, fee2);
 transfer::transfer(coin::from_balance(fee1, ctx), service_address);
 ```
 
 `fee2` is merged into `fee1`, turned into a `Coin` and sent to the `service_address`. Finally, we signal Sui that we have deleted both wrapper objects:
 
 ```rust
-id::delete(id1);
-id::delete(id2);
+object::delete(id1);
+object::delete(id2);
 ```
 
 At the end of this call, the two objects have been swapped (sent to the opposite owner) and the service provider takes the service fee.

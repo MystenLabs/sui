@@ -9,7 +9,6 @@ module sui::locked_coin {
     use sui::tx_context::{Self, TxContext};
     use sui::epoch_time_lock::{Self, EpochTimeLock};
 
-    friend sui::delegation;
     friend sui::sui_system;
 
     /// A coin of type `T` locked until `locked_until_epoch`.

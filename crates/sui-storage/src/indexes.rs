@@ -186,8 +186,8 @@ impl IndexStore {
             .iter()
             .skip_to(&(
                 package,
-                module.clone().unwrap_or_else(|| "".to_string()),
-                function.clone().unwrap_or_else(|| "".to_string()),
+                module.clone().unwrap_or_default(),
+                function.clone().unwrap_or_default(),
                 TxSequenceNumber::MIN,
             ))?
             .take_while(|((id, m, f, _), _)| {

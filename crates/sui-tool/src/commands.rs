@@ -21,6 +21,9 @@ use futures::stream::StreamExt;
 
 use clap::*;
 use sui_core::authority::MAX_ITEMS_LIMIT;
+use sui_types::messages_checkpoint::{
+    CheckpointRequest, CheckpointResponse, CheckpointSequenceNumber,
+};
 use sui_types::object::ObjectFormatOptions;
 
 #[derive(Parser)]
@@ -122,15 +125,25 @@ pub enum ToolCommand {
         #[clap(long = "genesis")]
         genesis: PathBuf,
     },
+    /// Fetch authenticated checkpoint information at a specific sequence number.
+    /// If sequence number is not specified, get the latest authenticated checkpoint.
+    #[clap(name = "fetch-checkpoint")]
+    FetchAuthenticatedCheckpoint {
+        #[clap(long = "genesis")]
+        genesis: PathBuf,
+        #[clap(
+            long,
+            help = "Fetch authenticated checkpoint at a specific sequence number"
+        )]
+        sequence_number: Option<CheckpointSequenceNumber>,
+    },
 }
 
-fn make_clients(genesis: PathBuf) -> Result<BTreeMap<AuthorityName, NetworkAuthorityClient>> {
+fn make_clients(genesis: &Genesis) -> Result<BTreeMap<AuthorityName, NetworkAuthorityClient>> {
     let mut net_config = mysten_network::config::Config::new();
     net_config.connect_timeout = Some(Duration::from_secs(5));
     net_config.request_timeout = Some(Duration::from_secs(5));
     net_config.http2_keepalive_interval = Some(Duration::from_secs(5));
-
-    let genesis = Genesis::load(genesis)?;
 
     let mut authority_clients = BTreeMap::new();
 
@@ -401,7 +414,8 @@ impl ToolCommand {
                 genesis,
                 len,
             } => {
-                let clients = make_clients(genesis)?;
+                let genesis = Genesis::load(genesis)?;
+                let clients = make_clients(&genesis)?;
 
                 let clients: Vec<_> = clients
                     .iter()
@@ -445,7 +459,8 @@ impl ToolCommand {
                 concise,
                 no_header,
             } => {
-                let clients = make_clients(genesis)?;
+                let genesis = Genesis::load(genesis)?;
+                let clients = make_clients(&genesis)?;
 
                 let responses = join_all(
                     clients
@@ -479,7 +494,8 @@ impl ToolCommand {
                 }
             }
             ToolCommand::FetchTransaction { genesis, digest } => {
-                let clients = make_clients(genesis)?;
+                let genesis = Genesis::load(genesis)?;
+                let clients = make_clients(&genesis)?;
 
                 let responses = join_all(clients.iter().map(|(name, client)| async {
                     let result = client
@@ -499,15 +515,42 @@ impl ToolCommand {
                     None => print_db_all_tables(path)?,
                 }
             }
-
             ToolCommand::DumpValidators { genesis } => {
-                let genesis = Genesis::load(genesis).unwrap();
+                let genesis = Genesis::load(genesis)?;
                 println!("{:#?}", genesis.validator_set());
             }
-
             ToolCommand::DumpGenesis { genesis } => {
-                let genesis = Genesis::load(genesis).unwrap();
+                let genesis = Genesis::load(genesis)?;
                 println!("{:#?}", genesis);
+            }
+            ToolCommand::FetchAuthenticatedCheckpoint {
+                genesis,
+                sequence_number,
+            } => {
+                let genesis = Genesis::load(genesis)?;
+                let clients = make_clients(&genesis)?;
+                let committee = genesis.committee()?;
+
+                for (name, client) in clients {
+                    let resp = client
+                        .handle_checkpoint(CheckpointRequest::authenticated(sequence_number, true))
+                        .await
+                        .unwrap();
+                    println!("Validator: {:?}\n", name);
+                    match resp {
+                        CheckpointResponse::AuthenticatedCheckpoint {
+                            checkpoint,
+                            contents,
+                        } => {
+                            println!("Checkpoint: {:?}\n", checkpoint);
+                            println!("Content: {:?}\n", contents);
+                            if let Some(c) = checkpoint {
+                                c.verify(&committee, contents.as_ref())?;
+                            }
+                        }
+                        _ => unreachable!(),
+                    }
+                }
             }
         };
         Ok(())

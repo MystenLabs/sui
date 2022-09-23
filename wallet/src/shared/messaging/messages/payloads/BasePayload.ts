@@ -17,7 +17,10 @@ export type PayloadType =
     | 'execute-transaction-response'
     | 'get-transaction-requests'
     | 'get-transaction-requests-response'
-    | 'transaction-request-response';
+    | 'transaction-request-response'
+    | 'update-active-origin'
+    | 'disconnect-app'
+    | 'done';
 
 export interface BasePayload {
     type: PayloadType;

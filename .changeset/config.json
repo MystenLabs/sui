@@ -7,5 +7,5 @@
   "access": "public",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
-  "ignore": ["sui-explorer", "sui-dapp-sdk", "demo-nft-dapp"]
+  "ignore": ["sui-explorer", "demo-nft-dapp"]
 }

@@ -3,7 +3,7 @@ source: crates/sui-config/tests/snapshot_tests.rs
 expression: genesis.narwhal_committee()
 ---
 authorities:
-  ucbuFjDvPnERRKZI2wa7sihPcnTPvuU//O5QPMGkkgA=:
+  jGbcLB6p5T8JhcF7TnrxmRK208QODFkgpaElCbTrNhn14H7Fbqd/CzBim6HMctdbE5RgeCpfDi+J+0xCtLil+uPSYBAiIOY9B1Tn4YRt7v05iOreTtN/E4VDfRneGhYY:
     stake: 1
     primary_address: ""
     network_key: ucbuFjDvPnERRKZI2wa7sihPcnTPvuU//O5QPMGkkgA=

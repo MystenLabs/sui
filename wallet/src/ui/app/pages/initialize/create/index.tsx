@@ -36,7 +36,7 @@ const CreatePage = () => {
         <>
             <section className={st.content}>
                 <div>
-                    <h1 className={st.headerTitle}>Create new wallet</h1>
+                    <h1 className={st.headerTitle}>Create New wallet</h1>
                     <div className={st.desc}>
                         Creating a wallet generates new recovery passphrase.
                         Using it you can backup and restore your wallet.

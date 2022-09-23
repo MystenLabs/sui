@@ -7,6 +7,7 @@ import { ContentScriptConnection } from './ContentScriptConnection';
 import { UiConnection } from './UiConnection';
 
 import type { Connection } from './Connection';
+import type { Permission } from '_payloads/permissions';
 
 export class Connections {
     private _connections: Connection[] = [];
@@ -39,5 +40,16 @@ export class Connections {
                 port.disconnect();
             }
         });
+    }
+
+    notifyForPermissionReply(permission: Permission) {
+        for (const aConnection of this._connections) {
+            if (
+                aConnection instanceof ContentScriptConnection &&
+                aConnection.origin === permission.origin
+            ) {
+                aConnection.permissionReply(permission);
+            }
+        }
     }
 }

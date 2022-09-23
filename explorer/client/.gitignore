@@ -8,6 +8,7 @@
 
 # production
 /build
+/storybook-static
 
 # misc
 .env.local

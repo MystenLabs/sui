@@ -6,7 +6,9 @@ import { lastValueFrom, take } from 'rxjs';
 import { createMessage } from '_messages';
 import { PortStream } from '_messaging/PortStream';
 import { isPermissionRequests } from '_payloads/permissions';
+import { isUpdateActiveOrigin } from '_payloads/tabs/updateActiveOrigin';
 import { isGetTransactionRequestsResponse } from '_payloads/transactions/ui/GetTransactionRequestsResponse';
+import { setActiveOrigin } from '_redux/slices/app';
 import { setPermissions } from '_redux/slices/permissions';
 import { setTransactionRequests } from '_redux/slices/transaction-requests';
 
@@ -16,6 +18,7 @@ import type {
     GetPermissionRequests,
     PermissionResponse,
 } from '_payloads/permissions';
+import type { DisconnectApp } from '_payloads/permissions/DisconnectApp';
 import type { GetTransactionRequests } from '_payloads/transactions/ui/GetTransactionRequests';
 import type { TransactionRequestResponse } from '_payloads/transactions/ui/TransactionRequestResponse';
 import type { AppDispatch } from '_store';
@@ -92,6 +95,14 @@ export class BackgroundClient {
         );
     }
 
+    public async disconnectApp(origin: string) {
+        await lastValueFrom(
+            this.sendMessage(
+                createMessage<DisconnectApp>({ type: 'disconnect-app', origin })
+            ).pipe(take(1))
+        );
+    }
+
     private handleIncomingMessage(msg: Message) {
         if (!this._initialized || !this._dispatch) {
             throw new Error(
@@ -99,10 +110,16 @@ export class BackgroundClient {
             );
         }
         const { payload } = msg;
+        let action;
         if (isPermissionRequests(payload)) {
-            this._dispatch(setPermissions(payload.permissions));
+            action = setPermissions(payload.permissions);
         } else if (isGetTransactionRequestsResponse(payload)) {
-            this._dispatch(setTransactionRequests(payload.txRequests));
+            action = setTransactionRequests(payload.txRequests);
+        } else if (isUpdateActiveOrigin(payload)) {
+            action = setActiveOrigin(payload);
+        }
+        if (action) {
+            this._dispatch(action);
         }
     }
 

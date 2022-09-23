@@ -1,9 +1,25 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-export const IS_STATIC_ENV = import.meta.env.VITE_NETWORK === 'static';
-export const IS_LOCAL_ENV = import.meta.env.VITE_NETWORK === 'local';
-export const IS_STAGING_ENV = import.meta.env.VITE_NETWORK === 'staging';
-export const IS_PROD_ENV = import.meta.env.VITE_NETWORK === 'prod';
+import { Network } from './api/rpcSetting';
 
-export const CURRENT_ENV = import.meta.env.VITE_NETWORK;
+const HOST_TO_NETWORK: Record<string, Network> = {
+    ci: Network.CI,
+    staging: Network.Staging,
+    devnet: Network.Devnet,
+    static: Network.Static,
+};
+
+export let CURRENT_ENV: Network = Network.Local;
+if (import.meta.env.VITE_NETWORK) {
+    CURRENT_ENV = HOST_TO_NETWORK[import.meta.env.VITE_NETWORK];
+} else if (
+    typeof window !== 'undefined' &&
+    window.location.hostname.includes('.sui.io')
+) {
+    const host = window.location.hostname.split('.').at(-3) || 'devnet';
+    CURRENT_ENV = HOST_TO_NETWORK[host] || Network.Devnet;
+}
+
+export const IS_STATIC_ENV = CURRENT_ENV === Network.Static;
+export const IS_STAGING_ENV = CURRENT_ENV === Network.Staging;

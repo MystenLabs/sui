@@ -6,7 +6,8 @@
   "license": "Apache-2.0",
   "files": [
     "dist",
-    "src"
+    "src",
+    "CHANGELOG.md"
   ],
   "engines": {
     "node": ">=16"

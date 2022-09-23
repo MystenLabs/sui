@@ -4,8 +4,12 @@
 import {
     createAsyncThunk,
     createEntityAdapter,
+    createSelector,
     createSlice,
 } from '@reduxjs/toolkit';
+import Browser from 'webextension-polyfill';
+
+import { activeAccountSelector } from '../account';
 
 import type { SuiAddress } from '@mysten/sui.js';
 import type { PayloadAction } from '@reduxjs/toolkit';
@@ -39,6 +43,29 @@ export const respondToPermissionRequest = createAsyncThunk<
     }
 );
 
+// Todo: move this to the wallet adapter
+// Get all permissions from from storage
+// remove the permission for a given origin
+// set the new permissions in storage
+export const revokeAppPermissionByOrigin = createAsyncThunk<
+    void,
+    { origin: string },
+    AppThunkConfig
+>('revoke-app-permission', async ({ origin }, { dispatch }) => {
+    const connectedApps = await Browser.storage.local.get('permissions');
+    if (connectedApps.permissions[origin]) {
+        const appId = connectedApps.permissions[origin].id;
+        delete connectedApps.permissions[origin];
+        // remove app from state store
+        dispatch(revokeAppPermission(appId));
+        await Browser.storage.local.set({
+            permissions: connectedApps.permissions,
+        });
+        return;
+    }
+    return;
+});
+
 const slice = createSlice({
     name: 'permissions',
     initialState: permissionsAdapter.getInitialState({ initialized: false }),
@@ -46,6 +73,9 @@ const slice = createSlice({
         setPermissions: (state, { payload }: PayloadAction<Permission[]>) => {
             permissionsAdapter.setAll(state, payload);
             state.initialized = true;
+        },
+        revokeAppPermission: (state, { payload }: PayloadAction<string>) => {
+            permissionsAdapter.removeOne(state, payload);
         },
     },
     extraReducers: (build) => {
@@ -68,8 +98,31 @@ const slice = createSlice({
 
 export default slice.reducer;
 
-export const { setPermissions } = slice.actions;
+export const { setPermissions, revokeAppPermission } = slice.actions;
 
 export const permissionsSelectors = permissionsAdapter.getSelectors(
     (state: RootState) => state.permissions
 );
+
+export function createDappStatusSelector(origin: string | null) {
+    if (!origin) {
+        return () => false;
+    }
+    return createSelector(
+        permissionsSelectors.selectAll,
+        activeAccountSelector,
+        (permissions, activeAccount) => {
+            const originPermission = permissions.find(
+                (aPermission) => aPermission.origin === origin
+            );
+            if (!originPermission) {
+                return false;
+            }
+            return (
+                originPermission.allowed &&
+                activeAccount &&
+                originPermission.accounts.includes(activeAccount)
+            );
+        }
+    );
+}

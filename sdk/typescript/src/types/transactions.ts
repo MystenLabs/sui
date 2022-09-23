@@ -48,10 +48,11 @@ export type SuiTransactionData = {
 
 // TODO: support u64
 export type EpochId = number;
+export type GenericAuthoritySignature = AuthoritySignature[] | AuthoritySignature;
 
 export type AuthorityQuorumSignInfo = {
   epoch: EpochId;
-  signature: AuthoritySignature[];
+  signature: GenericAuthoritySignature;
 };
 
 export type CertifiedTransaction = {

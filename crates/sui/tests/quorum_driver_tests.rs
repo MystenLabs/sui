@@ -4,8 +4,8 @@
 use std::time::Duration;
 use sui_core::authority_aggregator::AuthorityAggregator;
 use sui_core::authority_client::NetworkAuthorityClient;
+use sui_core::quorum_driver::{QuorumDriverHandler, QuorumDriverMetrics};
 use sui_node::SuiNode;
-use sui_quorum_driver::{QuorumDriverHandler, QuorumDriverMetrics};
 use sui_types::base_types::SuiAddress;
 use sui_types::messages::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,

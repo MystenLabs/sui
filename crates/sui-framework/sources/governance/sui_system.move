@@ -4,8 +4,7 @@
 module sui::sui_system {
     use sui::balance::{Self, Balance, Supply};
     use sui::coin::{Self, Coin};
-    use sui::delegation::{Self, Delegation};
-    use sui::epoch_reward_record::{Self, EpochRewardRecord};
+    use sui::staking_pool::{Delegation, StakedSui};
     use sui::object::{Self, UID};
     use sui::locked_coin::{Self, LockedCoin};
     use sui::sui::SUI;
@@ -50,9 +49,6 @@ module sui::sui_system {
         storage_fund: Balance<SUI>,
         /// A list of system config parameters.
         parameters: SystemParameters,
-        /// The delegation reward pool. All delegation reward goes into this.
-        /// Delegation reward claims withdraw from this.
-        delegation_reward: Balance<SUI>,
         /// The reference gas price for the current epoch.
         reference_gas_price: u64,
     }
@@ -83,7 +79,6 @@ module sui::sui_system {
                 max_validator_candidate_count,
                 storage_gas_price
             },
-            delegation_reward: balance::zero(),
             reference_gas_price,
         };
         transfer::share_object(state);
@@ -216,12 +211,13 @@ module sui::sui_system {
         validator_address: address,
         ctx: &mut TxContext,
     ) {
-        let amount = coin::value(&delegate_stake);
-        validator_set::request_add_delegation(&mut self.validators, validator_address, amount);
-
-        // Delegation starts from the next epoch.
-        let starting_epoch = self.epoch + 1;
-        delegation::create(starting_epoch, validator_address, delegate_stake, ctx);
+        validator_set::request_add_delegation(
+            &mut self.validators, 
+            validator_address, 
+            coin::into_balance(delegate_stake),
+            option::none(),
+            ctx,
+        );
     }
 
     public entry fun request_add_delegation_with_locked_coin(
@@ -230,59 +226,35 @@ module sui::sui_system {
         validator_address: address,
         ctx: &mut TxContext,
     ) {
-        let amount = locked_coin::value(&delegate_stake);
-        validator_set::request_add_delegation(&mut self.validators, validator_address, amount);
-
-        // Delegation starts from the next epoch.
-        let starting_epoch = self.epoch + 1;
-        delegation::create_from_locked_coin(starting_epoch, validator_address, delegate_stake, ctx);
+        let (balance, lock) = locked_coin::into_balance(delegate_stake);
+        validator_set::request_add_delegation(&mut self.validators, validator_address, balance, option::some(lock), ctx);
     }
 
-    public entry fun request_remove_delegation(
+    public entry fun request_withdraw_delegation(
         self: &mut SuiSystemState,
         delegation: &mut Delegation,
+        staked_sui: &mut StakedSui,
+        withdraw_amount: u64,
         ctx: &mut TxContext,
     ) {
-        validator_set::request_remove_delegation(
+        validator_set::request_withdraw_delegation(
             &mut self.validators,
-            delegation::validator(delegation),
-            delegation::delegate_amount(delegation),
+            delegation,
+            staked_sui,
+            withdraw_amount,
+            ctx,
         );
-        delegation::undelegate(delegation, self.epoch, ctx)
     }
 
     // Switch delegation from the current validator to a new one.
     public entry fun request_switch_delegation(
         self: &mut SuiSystemState,
-        delegation: &mut Delegation,
+        delegation: Delegation,
+        staked_sui: &mut StakedSui,
         new_validator_address: address,
         ctx: &mut TxContext,
     ) {
-        let old_validator_address = delegation::validator(delegation);
-        let amount = delegation::delegate_amount(delegation);
-        validator_set::request_remove_delegation(&mut self.validators, old_validator_address, amount);
-        validator_set::request_add_delegation(&mut self.validators, new_validator_address, amount);
-        delegation::switch_delegation(delegation, new_validator_address, ctx);
-    }
-
-    // TODO: Once we support passing vector of object references as arguments,
-    // we should support passing a vector of &mut EpochRewardRecord,
-    // which will allow delegators to claim all their reward in one transaction.
-    public entry fun claim_delegation_reward(
-        self: &mut SuiSystemState,
-        delegation: &mut Delegation,
-        epoch_reward_record: &mut EpochRewardRecord,
-        ctx: &mut TxContext,
-    ) {
-        let epoch = epoch_reward_record::epoch(epoch_reward_record);
-        let validator = epoch_reward_record::validator(epoch_reward_record);
-        assert!(delegation::can_claim_reward(delegation, epoch, validator), 0);
-        let reward_amount = epoch_reward_record::claim_reward(
-            epoch_reward_record,
-            delegation::delegate_amount(delegation),
-        );
-        let reward = balance::split(&mut self.delegation_reward, reward_amount);
-        delegation::claim_reward(delegation, reward, ctx);
+        validator_set::request_switch_delegation(&mut self.validators, delegation, staked_sui, new_validator_address, ctx);
     }
 
     /// This function should be called at the end of an epoch, and advances the system to the next epoch.
@@ -312,15 +284,6 @@ module sui::sui_system {
         let delegator_reward_amount = delegation_stake * computation_charge / total_stake;
         let delegator_reward = balance::split(&mut computation_reward, delegator_reward_amount);
         balance::join(&mut self.storage_fund, storage_reward);
-        balance::join(&mut self.delegation_reward, delegator_reward);
-
-        validator_set::create_epoch_records(
-            &self.validators,
-            self.epoch,
-            computation_charge,
-            total_stake,
-            ctx,
-        );
 
         self.epoch = self.epoch + 1;
         // Sanity check to make sure we are advancing to the right epoch.
@@ -328,12 +291,15 @@ module sui::sui_system {
         validator_set::advance_epoch(
             &mut self.validators,
             &mut computation_reward,
+            &mut delegator_reward,
             ctx,
         );
         // Derive the reference gas price for the new epoch
         self.reference_gas_price = validator_set::derive_reference_gas_price(&self.validators);
         // Because of precision issues with integer divisions, we expect that there will be some
-        // remaining balance in `computation_reward`. All of these go to the storage fund.
+        // remaining balance in `delegator_reward` and `computation_reward`. All of these go to 
+        // the storage fund.
+        balance::join(&mut self.storage_fund, delegator_reward);
         balance::join(&mut self.storage_fund, computation_reward);
     }
 
@@ -347,12 +313,6 @@ module sui::sui_system {
     /// Aborts if `validator_addr` is not an active validator.
     public fun validator_delegate_amount(self: &SuiSystemState, validator_addr: address): u64 {
         validator_set::validator_delegate_amount(&self.validators, validator_addr)
-    }
-
-    /// Returns the amount of delegators who have delegated to `validator_addr`.
-    /// Aborts if `validator_addr` is not an active validator.
-    public fun validator_delegator_count(self: &SuiSystemState, validator_addr: address): u64 {
-        validator_set::validator_delegator_count(&self.validators, validator_addr)
     }
 
     #[test_only]

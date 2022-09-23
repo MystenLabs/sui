@@ -15,6 +15,7 @@ use sui_config::NodeConfig;
 use sui_core::authority_active::checkpoint_driver::CheckpointMetrics;
 use sui_core::authority_aggregator::{AuthAggMetrics, AuthorityAggregator};
 use sui_core::authority_server::ValidatorService;
+use sui_core::quorum_driver::{QuorumDriver, QuorumDriverHandler, QuorumDriverMetrics};
 use sui_core::safe_client::SafeClientMetrics;
 use sui_core::transaction_streamer::TransactionStreamer;
 use sui_core::{
@@ -29,8 +30,6 @@ use sui_core::{
 use sui_json_rpc::bcs_api::BcsApiImpl;
 use sui_json_rpc::streaming_api::TransactionStreamingApiImpl;
 use sui_network::api::ValidatorServer;
-use sui_quorum_driver::QuorumDriverMetrics;
-use sui_quorum_driver::{QuorumDriver, QuorumDriverHandler};
 use sui_storage::{
     event_store::{EventStoreType, SqlEventStore},
     node_sync_store::NodeSyncStore,

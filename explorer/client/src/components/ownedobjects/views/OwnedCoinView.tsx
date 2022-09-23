@@ -41,7 +41,9 @@ function SingleCoinView({
                 <div className={isOpen ? styles.openicon : styles.closedicon}>
                     <ContentIcon />
                 </div>
-                <div>{handleCoinType(coinLabel)}</div>
+                <div className={`${styles.oneline} ${styles.cointype}`}>
+                    {handleCoinType(coinLabel)}
+                </div>
                 <div>{subObjList.length}</div>
                 <div>
                     {subObjList[0]._isCoin &&
@@ -61,7 +63,7 @@ function SingleCoinView({
                             <div className={styles.objectid}>
                                 <div />
                                 <div>Object ID</div>
-                                <div>
+                                <div className={styles.oneline}>
                                     <Longtext
                                         text={subObj.id}
                                         category="objects"

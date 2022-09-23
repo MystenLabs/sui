@@ -6,12 +6,13 @@ use std::str::FromStr;
 
 use anyhow::{anyhow, Error};
 use base64ct::Encoding;
+use bip32::{ChildNumber, DerivationPath, XPrv};
 use digest::Digest;
-use fastcrypto::bls12381::BLS12381PublicKey;
-use fastcrypto::ed25519::{
-    Ed25519AggregateSignature, Ed25519KeyPair, Ed25519PrivateKey, Ed25519PublicKey,
-    Ed25519Signature,
+use fastcrypto::bls12381::{
+    BLS12381AggregateSignature, BLS12381KeyPair, BLS12381PrivateKey, BLS12381PublicKey,
+    BLS12381Signature,
 };
+use fastcrypto::ed25519::{Ed25519KeyPair, Ed25519PrivateKey, Ed25519PublicKey, Ed25519Signature};
 use fastcrypto::secp256k1::{
     Secp256k1KeyPair, Secp256k1PrivateKey, Secp256k1PublicKey, Secp256k1Signature,
 };
@@ -29,19 +30,20 @@ use serde::{Deserialize, Deserializer, Serialize};
 use serde_with::{serde_as, Bytes};
 use sha3::Sha3_256;
 use signature::Signer;
+use slip10_ed25519::derive_ed25519_private_key;
 
 use crate::base_types::{AuthorityName, SuiAddress};
 use crate::committee::{Committee, EpochId};
 use crate::error::{SuiError, SuiResult};
-use crate::sui_serde::{Base64, Readable, SuiBitmap};
+use crate::sui_serde::{AggrAuthSignature, Base64, Readable, SuiBitmap};
 pub use enum_dispatch::enum_dispatch;
 
 // Authority Objects
-pub type AuthorityKeyPair = Ed25519KeyPair;
-pub type AuthorityPublicKey = Ed25519PublicKey;
-pub type AuthorityPrivateKey = Ed25519PrivateKey;
-pub type AuthoritySignature = Ed25519Signature;
-pub type AggregateAuthoritySignature = Ed25519AggregateSignature;
+pub type AuthorityKeyPair = BLS12381KeyPair;
+pub type AuthorityPublicKey = BLS12381PublicKey;
+pub type AuthorityPrivateKey = BLS12381PrivateKey;
+pub type AuthoritySignature = BLS12381Signature;
+pub type AggregateAuthoritySignature = BLS12381AggregateSignature;
 
 // TODO(joyqvq): prefix these types with Default, DefaultAccountKeyPair etc
 pub type AccountKeyPair = Ed25519KeyPair;
@@ -54,6 +56,9 @@ pub type NetworkPublicKey = Ed25519PublicKey;
 pub type NetworkPrivateKey = Ed25519PrivateKey;
 
 pub const PROOF_OF_POSSESSION_DOMAIN: &[u8] = b"kosk";
+pub const DERIVATION_PATH_COIN_TYPE: u32 = 784;
+pub const DERVIATION_PATH_PURPOSE_ED25519: u32 = 44;
+pub const DERVIATION_PATH_PURPOSE_SECP256K1: u32 = 54;
 
 // Creates a proof that the keypair is possesed, as well as binds this proof to a specific SuiAddress.
 pub fn generate_proof_of_possession<K: KeypairTraits>(
@@ -487,6 +492,106 @@ where
 {
     let kp = KP::generate(csprng);
     (kp.public().into(), kp)
+}
+
+/// Ed25519 follows SLIP-0010 using hardened path: m/44'/784'/0'/0'/{index}'
+/// Secp256k1 follows BIP-32 using path where the first 3 levels are hardened: m/54'/784'/0'/0/{index}
+/// Note that the purpose for Secp256k1 is registered as 54, to differentiate from Ed25519 with purpose 44.
+pub fn derive_key_pair_from_path(
+    seed: &[u8],
+    derivation_path: Option<DerivationPath>,
+    key_scheme: &SignatureScheme,
+) -> Result<(SuiAddress, SuiKeyPair), SuiError> {
+    let path = validate_path(key_scheme, derivation_path)?;
+    match key_scheme {
+        SignatureScheme::ED25519 => {
+            let indexes = path.into_iter().map(|i| i.into()).collect::<Vec<_>>();
+            let derived = derive_ed25519_private_key(seed, &indexes);
+            let sk = Ed25519PrivateKey::from_bytes(&derived)
+                .map_err(|e| SuiError::SignatureKeyGenError(e.to_string()))?;
+            let kp = Ed25519KeyPair::from(sk);
+            Ok((kp.public().into(), SuiKeyPair::Ed25519SuiKeyPair(kp)))
+        }
+        SignatureScheme::Secp256k1 => {
+            let child_xprv = XPrv::derive_from_path(&seed, &path)
+                .map_err(|e| SuiError::SignatureKeyGenError(e.to_string()))?;
+            let kp = Secp256k1KeyPair::from(
+                Secp256k1PrivateKey::from_bytes(child_xprv.private_key().to_bytes().as_slice())
+                    .unwrap(),
+            );
+            Ok((kp.public().into(), SuiKeyPair::Secp256k1SuiKeyPair(kp)))
+        }
+        SignatureScheme::BLS12381 => Err(SuiError::UnsupportedFeatureError {
+            error: "BLS is not supported for user key derivation".to_string(),
+        }),
+    }
+}
+
+pub fn validate_path(
+    key_scheme: &SignatureScheme,
+    path: Option<DerivationPath>,
+) -> Result<DerivationPath, SuiError> {
+    match key_scheme {
+        SignatureScheme::ED25519 => {
+            match path {
+                Some(p) => {
+                    // The derivation path must be hardened at all levels with purpose = 44, coin_type = 784
+                    if let &[purpose, coin_type, account, change, address] = p.as_ref() {
+                        if purpose
+                            == ChildNumber::new(DERVIATION_PATH_PURPOSE_ED25519, true).unwrap()
+                            && coin_type
+                                == ChildNumber::new(DERIVATION_PATH_COIN_TYPE, true).unwrap()
+                            && account.is_hardened()
+                            && change.is_hardened()
+                            && address.is_hardened()
+                        {
+                            Ok(p)
+                        } else {
+                            Err(SuiError::SignatureKeyGenError("Invalid path".to_string()))
+                        }
+                    } else {
+                        Err(SuiError::SignatureKeyGenError("Invalid path".to_string()))
+                    }
+                }
+                None => Ok(format!(
+                    "m/{DERVIATION_PATH_PURPOSE_ED25519}'/{DERIVATION_PATH_COIN_TYPE}'/0'/0'/0'"
+                )
+                .parse()
+                .unwrap()),
+            }
+        }
+        SignatureScheme::Secp256k1 => {
+            match path {
+                Some(p) => {
+                    // The derivation path must be hardened at first 3 levels with purpose = 54, coin_type = 784
+                    if let &[purpose, coin_type, account, change, address] = p.as_ref() {
+                        if purpose
+                            == ChildNumber::new(DERVIATION_PATH_PURPOSE_SECP256K1, true).unwrap()
+                            && coin_type
+                                == ChildNumber::new(DERIVATION_PATH_COIN_TYPE, true).unwrap()
+                            && account.is_hardened()
+                            && !change.is_hardened()
+                            && !address.is_hardened()
+                        {
+                            Ok(p)
+                        } else {
+                            Err(SuiError::SignatureKeyGenError("Invalid path".to_string()))
+                        }
+                    } else {
+                        Err(SuiError::SignatureKeyGenError("Invalid path".to_string()))
+                    }
+                }
+                None => Ok(format!(
+                    "m/{DERVIATION_PATH_PURPOSE_SECP256K1}'/{DERIVATION_PATH_COIN_TYPE}'/0'/0/0"
+                )
+                .parse()
+                .unwrap()),
+            }
+        }
+        SignatureScheme::BLS12381 => Err(SuiError::UnsupportedFeatureError {
+            error: "BLS is not supported for user key derivation".to_string(),
+        }),
+    }
 }
 
 /// Wrapper function to return SuiKeypair based on key scheme string with seedable rng.
@@ -973,6 +1078,7 @@ impl PartialEq for AuthoritySignInfo {
 pub struct AuthorityQuorumSignInfo<const STRONG_THRESHOLD: bool> {
     pub epoch: EpochId,
     #[schemars(with = "Base64")]
+    #[serde_as(as = "AggrAuthSignature")]
     pub signature: AggregateAuthoritySignature,
     #[schemars(with = "Base64")]
     #[serde_as(as = "SuiBitmap")]
@@ -1240,7 +1346,7 @@ impl ToObligationSignature for AuthoritySignature {
 // Careful, the implementation may be overlapping with the AuthoritySignature implementation. Be sure to fix it if it does:
 // TODO: Change all these into macros.
 impl ToObligationSignature for Secp256k1Signature {}
-// impl ToObligationSignature for Ed25519Signature {}
+impl ToObligationSignature for Ed25519Signature {}
 
 #[derive(Default)]
 pub struct VerificationObligation {

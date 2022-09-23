@@ -195,7 +195,7 @@ pub fn run(cmd: Ceremony) -> Result<()> {
             let signature_dir = dir.join(GENESIS_BUILDER_SIGNATURE_DIR);
             std::fs::create_dir_all(&signature_dir)?;
 
-            let hex_name = encode_bytes_hex(&AuthorityPublicKeyBytes::from(keypair.public()));
+            let hex_name = encode_bytes_hex(AuthorityPublicKeyBytes::from(keypair.public()));
             fs::write(signature_dir.join(hex_name), signature)?;
 
             println!("Successfully verified {SUI_GENESIS_FILENAME}");

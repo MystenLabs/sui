@@ -671,14 +671,15 @@ impl CheckpointConsensusAdapter {
                     let other = fragment.other.auth_signature.authority;
                     let transaction = ConsensusTransaction::new_checkpoint_message(fragment);
                     let tracking_id = transaction.get_tracking_id();
+                    let serialized = bincode::serialize(&transaction).expect("Serialize consensus transaction cannot fail");
                     debug!(
                         ?tracking_id,
                         ?cp_seq,
+                        size=?serialized.len(),
                         "Checkpoint fragment consensus message created. Proposer: {}, Other: {}",
                         proposer,
                         other,
                     );
-                    let serialized = bincode::serialize(&transaction).expect("Serialize consensus transaction cannot fail");
                     self.buffer.push_front((serialized, sequence_number));
                 },
 

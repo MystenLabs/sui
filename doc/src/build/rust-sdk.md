@@ -109,7 +109,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
 ### Example 3 - Event subscription
 
-Use the the WebSocket client to [subscribe to events](pubsub.md).
+Use the WebSocket client to [subscribe to events](pubsub.md).
 
 ```rust
 use futures::StreamExt;

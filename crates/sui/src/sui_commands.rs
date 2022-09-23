@@ -1,6 +1,13 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::client_commands::{SuiClientCommands, WalletContext};
+use crate::config::SuiClientConfig;
+use crate::console::start_console;
+use crate::genesis_ceremony::{run, Ceremony};
+use crate::keytool::KeyToolCommand;
+use crate::sui_move::{self, execute_move_command};
+use move_package::BuildConfig;
 use std::io::{stderr, stdout, Write};
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
@@ -8,7 +15,6 @@ use std::{fs, io};
 
 use anyhow::{anyhow, bail};
 use clap::*;
-use move_package::BuildConfig;
 use tracing::info;
 
 use sui_config::gateway::GatewayConfig;
@@ -22,13 +28,6 @@ use sui_sdk::crypto::KeystoreType;
 use sui_sdk::ClientType;
 use sui_swarm::memory::Swarm;
 use sui_types::crypto::{KeypairTraits, SignatureScheme, SuiKeyPair};
-
-use crate::client_commands::{SuiClientCommands, WalletContext};
-use crate::config::SuiClientConfig;
-use crate::console::start_console;
-use crate::genesis_ceremony::{run, Ceremony};
-use crate::keytool::KeyToolCommand;
-use crate::sui_move::{self, execute_move_command};
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Parser)]
@@ -413,7 +412,8 @@ async fn prompt_if_no_config(wallet_conf_path: &Path) -> Result<(), anyhow::Erro
                 Ok(s) => s,
                 Err(e) => return Err(anyhow!("{e}")),
             };
-            let (new_address, phrase, scheme) = keystore.init()?.generate_new_key(key_scheme)?;
+            let (new_address, phrase, scheme) =
+                keystore.init()?.generate_new_key(key_scheme, None)?;
             println!(
                 "Generated new keypair for address with scheme {:?} [{new_address}]",
                 scheme.to_string()
