@@ -15,24 +15,33 @@ jobs:
       github.event.workflow_run.event == 'pull_request' &&
       github.event.workflow_run.conclusion == 'success'
     steps:
-      - name: 'Download artifact'
-        uses: actions/github-script@v3.1.0
+      - name: "Download artifact"
+        uses: actions/github-script@v6
+        id: get-artifact
         with:
+          result-encoding: string
           script: |
-            var artifacts = await github.actions.listWorkflowRunArtifacts({
+            let allArtifacts = await github.rest.actions.listWorkflowRunArtifacts({
                owner: context.repo.owner,
                repo: context.repo.repo,
-               run_id: ${{github.event.workflow_run.id }},
+               run_id: context.payload.workflow_run.id,
             });
 
-            var matchArtifact = artifacts.data.artifacts.filter((artifact) => {
+            let matchArtifact = allArtifacts.data.artifacts.filter((artifact) => {
               return artifact.name == "wallet-extension"
             })[0];
 
+            if (!matchArtifact) {
+              return '';
+            }
+
+            return matchArtifact.archive_download_url;
+
       - name: Comment PR
         uses: thollander/actions-comment-pull-request@v1
+        if: steps.get-artifact.outputs.result != ''
         with:
           comment_includes: "💳 Wallet Extension"
           message: |
-            💳 Wallet Extension has been built, you can download the packaged extension here: https://github.com/MystenLabs/sui/actions/runs/${{ github.run_id }}#artifacts
+            💳 Wallet Extension has been built, you can download the packaged extension here: ${{steps.get-artifact.outputs.result}}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

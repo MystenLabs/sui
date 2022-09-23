@@ -44,7 +44,6 @@ jobs:
         working-directory: ${{env.working-directory}}
         run: pnpm pack:zip
       - uses: actions/upload-artifact@v2
-        if: always()
         with:
           name: wallet-extension
           path: wallet/web-ext-artifacts/*
