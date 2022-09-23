@@ -10,7 +10,6 @@ edition = "2021"
 proc-macro = true
 
 [dependencies]
-darling = "0.14"
 proc-macro2 = "1"
 quote = "1"
 syn = "1"
