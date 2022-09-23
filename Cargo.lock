@@ -7369,8 +7369,6 @@ dependencies = [
  "futures",
  "hdrhistogram",
  "indicatif",
- "jemalloc-ctl",
- "jemallocator",
  "move-core-types",
  "multiaddr",
  "node",
@@ -7745,7 +7743,6 @@ dependencies = [
 name = "sui-macros"
 version = "0.7.0"
 dependencies = [
- "darling 0.14.1",
  "msim-macros",
  "proc-macro2 1.0.43",
  "quote 1.0.21",

@@ -27,7 +27,6 @@ sui-framework = { path = "../sui-framework" }
 sui-config = { path = "../sui-config" }
 sui-types = { path = "../sui-types" }
 sui-json = { path = "../sui-json" }
-sui-simulator = { path = "../sui-simulator" }
 sui-swarm = { path = "../sui-swarm" }
 sui-json-rpc-types = { path = "../sui-json-rpc-types" }
 sui-sdk = { path = "../sui-sdk" }
@@ -60,6 +59,9 @@ hex = "0.4.3"
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemallocator = { version = "^0.5", features = ["profiling"] }
 jemalloc-ctl = "^0.5"
+
+[target.'cfg(msim)'.dependencies]
+sui-simulator = { path = "../sui-simulator" }
 
 [dev-dependencies]
 tempfile = "3.3.0"

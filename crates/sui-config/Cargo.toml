@@ -30,11 +30,13 @@ narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "9d667b4
 
 sui-framework = { path = "../sui-framework" }
 sui-adapter = { path = "../sui-adapter" }
-sui-simulator = { path = "../sui-simulator" }
 sui-types = { path = "../sui-types" }
 workspace-hack = { path = "../workspace-hack"}
 sha3 = "0.10.4"
 digest = "0.10.3"
+
+[target.'cfg(msim)'.dependencies]
+sui-simulator = { path = "../sui-simulator" }
 
 [dev-dependencies]
 insta = { version = "1.19.1", features = ["redactions", "yaml"] }
