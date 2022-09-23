@@ -832,9 +832,7 @@ impl BlockSynchronizer {
             .map(|(name, _address, network_key)| (name, network_key))
             .unzip();
 
-        self.network
-            .unreliable_broadcast(network_keys.clone(), &message)
-            .await;
+        self.network.unreliable_broadcast(network_keys, &message);
 
         keys
     }
@@ -900,7 +898,7 @@ impl BlockSynchronizer {
 
             let message =
                 PrimaryWorkerMessage::Synchronize(batch_ids.clone(), primary_peer_name.clone());
-            let _ = self.network.unreliable_send(worker_name, &message).await;
+            let _ = self.network.unreliable_send(worker_name, &message);
 
             debug!(
                 "Sent request for batch ids {:?} to worker id {}",

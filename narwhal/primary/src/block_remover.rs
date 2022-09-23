@@ -559,8 +559,7 @@ impl BlockRemover {
             // send the request
             let _ = self
                 .worker_network
-                .unreliable_send(worker_name.clone(), &message)
-                .await;
+                .unreliable_send(worker_name.clone(), &message);
 
             debug!(
                 "Sending DeleteBatches request for batch ids {:?} to worker {}",

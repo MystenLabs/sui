@@ -232,7 +232,7 @@ impl HeaderWaiter {
 
                                 // TODO [issue #423]: This network transmission needs to be reliable: the worker may crash-recover.
                                 let message = PrimaryWorkerMessage::Synchronize(digests, author.clone());
-                                let _ = self.network.unreliable_send(worker_name, &message).await;
+                                let _ = self.network.unreliable_send(worker_name, &message);
                             }
                         }
 
@@ -272,7 +272,7 @@ impl HeaderWaiter {
                             }
                             if !requires_sync.is_empty() {
                                 let message = PrimaryMessage::CertificatesRequest(requires_sync, self.name.clone());
-                                let _ = self.network.unreliable_send(self.committee.network_key(&author).unwrap(), &message).await;
+                                let _ = self.network.unreliable_send(self.committee.network_key(&author).unwrap(), &message);
                             }
                         }
                     }
@@ -316,7 +316,7 @@ impl HeaderWaiter {
                             .map(|(_, _, network_key)| network_key)
                             .collect();
                         let message = PrimaryMessage::CertificatesRequest(retry, self.name.clone());
-                        self.network.lucky_broadcast(network_keys, &message, self.sync_retry_nodes).await;
+                        self.network.lucky_broadcast(network_keys, &message, self.sync_retry_nodes);
                     }
                     // Reschedule the timer.
                     timer.as_mut().reset(Instant::now() + Duration::from_millis(TIMER_RESOLUTION));

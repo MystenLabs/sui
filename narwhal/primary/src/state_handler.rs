@@ -82,7 +82,7 @@ impl StateHandler {
                 .map(|x| x.name)
                 .collect();
             let message = PrimaryWorkerMessage::Cleanup(round);
-            self.network.unreliable_broadcast(addresses, &message).await;
+            self.network.unreliable_broadcast(addresses, &message);
         }
     }
 

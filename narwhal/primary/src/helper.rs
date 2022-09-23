@@ -158,8 +158,7 @@ impl Helper {
                 };
                 let _ = self
                     .primary_network
-                    .unreliable_send(self.committee.network_key(&origin).unwrap(), &message)
-                    .await;
+                    .unreliable_send(self.committee.network_key(&origin).unwrap(), &message);
 
                 return Err(HelperError::StoreError(err));
             }
@@ -197,8 +196,7 @@ impl Helper {
         };
         let _ = self
             .primary_network
-            .unreliable_send(self.committee.network_key(&origin).unwrap(), &message)
-            .await;
+            .unreliable_send(self.committee.network_key(&origin).unwrap(), &message);
 
         Ok(())
     }
@@ -247,16 +245,14 @@ impl Helper {
 
             let _ = self
                 .primary_network
-                .unreliable_send(self.committee.network_key(&origin).unwrap(), &message)
-                .await;
+                .unreliable_send(self.committee.network_key(&origin).unwrap(), &message);
         } else {
             for certificate in certificates.into_iter().flatten() {
                 // TODO: Remove this deserialization-serialization in the critical path.
                 let message = PrimaryMessage::Certificate(certificate);
                 let _ = self
                     .primary_network
-                    .unreliable_send(self.committee.network_key(&origin).unwrap(), &message)
-                    .await;
+                    .unreliable_send(self.committee.network_key(&origin).unwrap(), &message);
             }
         }
 

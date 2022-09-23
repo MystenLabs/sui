@@ -81,7 +81,7 @@ impl P2pNetwork {
         Self::new(network)
     }
 
-    async fn unreliable_send<F, R, Fut>(
+    fn unreliable_send<F, R, Fut>(
         &mut self,
         peer: NetworkPublicKey,
         f: F,
@@ -165,10 +165,9 @@ impl Lucky for P2pNetwork {
 // Primary-to-Primary
 //
 
-#[async_trait]
 impl UnreliableNetwork<PrimaryMessage> for P2pNetwork {
     type Response = ();
-    async fn unreliable_send(
+    fn unreliable_send(
         &mut self,
         peer: NetworkPublicKey,
         message: &PrimaryMessage,
@@ -179,7 +178,7 @@ impl UnreliableNetwork<PrimaryMessage> for P2pNetwork {
                 .send_message(message)
                 .await
         };
-        self.unreliable_send(peer, f).await
+        self.unreliable_send(peer, f)
     }
 }
 
@@ -209,10 +208,9 @@ impl ReliableNetwork<PrimaryMessage> for P2pNetwork {
 // Primary-to-Worker
 //
 
-#[async_trait]
 impl UnreliableNetwork<PrimaryWorkerMessage> for P2pNetwork {
     type Response = ();
-    async fn unreliable_send(
+    fn unreliable_send(
         &mut self,
         peer: NetworkPublicKey,
         message: &PrimaryWorkerMessage,
@@ -220,7 +218,7 @@ impl UnreliableNetwork<PrimaryWorkerMessage> for P2pNetwork {
         let message = message.to_owned();
         let f =
             move |peer| async move { PrimaryToWorkerClient::new(peer).send_message(message).await };
-        self.unreliable_send(peer, f).await
+        self.unreliable_send(peer, f)
     }
 }
 
@@ -246,10 +244,9 @@ impl ReliableNetwork<PrimaryWorkerMessage> for P2pNetwork {
 // Worker-to-Primary
 //
 
-#[async_trait]
 impl UnreliableNetwork<WorkerPrimaryMessage> for P2pNetwork {
     type Response = ();
-    async fn unreliable_send(
+    fn unreliable_send(
         &mut self,
         peer: NetworkPublicKey,
         message: &WorkerPrimaryMessage,
@@ -257,7 +254,7 @@ impl UnreliableNetwork<WorkerPrimaryMessage> for P2pNetwork {
         let message = message.to_owned();
         let f =
             move |peer| async move { WorkerToPrimaryClient::new(peer).send_message(message).await };
-        self.unreliable_send(peer, f).await
+        self.unreliable_send(peer, f)
     }
 }
 
@@ -283,10 +280,9 @@ impl ReliableNetwork<WorkerPrimaryMessage> for P2pNetwork {
 // Worker-to-Worker
 //
 
-#[async_trait]
 impl UnreliableNetwork<WorkerMessage> for P2pNetwork {
     type Response = ();
-    async fn unreliable_send(
+    fn unreliable_send(
         &mut self,
         peer: NetworkPublicKey,
         message: &WorkerMessage,
@@ -294,7 +290,7 @@ impl UnreliableNetwork<WorkerMessage> for P2pNetwork {
         let message = message.to_owned();
         let f =
             move |peer| async move { WorkerToWorkerClient::new(peer).send_message(message).await };
-        self.unreliable_send(peer, f).await
+        self.unreliable_send(peer, f)
     }
 }
 
@@ -316,10 +312,9 @@ impl ReliableNetwork<WorkerMessage> for P2pNetwork {
     }
 }
 
-#[async_trait]
 impl UnreliableNetwork<WorkerBatchRequest> for P2pNetwork {
     type Response = WorkerBatchResponse;
-    async fn unreliable_send(
+    fn unreliable_send(
         &mut self,
         peer: NetworkPublicKey,
         message: &WorkerBatchRequest,
@@ -330,7 +325,7 @@ impl UnreliableNetwork<WorkerBatchRequest> for P2pNetwork {
                 .request_batches(message)
                 .await
         };
-        self.unreliable_send(peer, f).await
+        self.unreliable_send(peer, f)
     }
 }
 
