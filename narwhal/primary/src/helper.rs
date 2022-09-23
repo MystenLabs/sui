@@ -156,7 +156,8 @@ impl Helper {
                     payload_availability: result,
                     from: self.name.clone(),
                 };
-                self.primary_network
+                let _ = self
+                    .primary_network
                     .unreliable_send(self.committee.network_key(&origin).unwrap(), &message)
                     .await;
 
@@ -194,7 +195,8 @@ impl Helper {
             payload_availability: result,
             from: self.name.clone(),
         };
-        self.primary_network
+        let _ = self
+            .primary_network
             .unreliable_send(self.committee.network_key(&origin).unwrap(), &message)
             .await;
 
@@ -243,14 +245,16 @@ impl Helper {
                 from: self.name.clone(),
             };
 
-            self.primary_network
+            let _ = self
+                .primary_network
                 .unreliable_send(self.committee.network_key(&origin).unwrap(), &message)
                 .await;
         } else {
             for certificate in certificates.into_iter().flatten() {
                 // TODO: Remove this deserialization-serialization in the critical path.
                 let message = PrimaryMessage::Certificate(certificate);
-                self.primary_network
+                let _ = self
+                    .primary_network
                     .unreliable_send(self.committee.network_key(&origin).unwrap(), &message)
                     .await;
             }

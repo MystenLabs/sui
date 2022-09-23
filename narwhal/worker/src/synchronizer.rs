@@ -195,7 +195,9 @@ impl Synchronizer {
                             // TODO: restore ability to cancel these requests when primary->worker RPCs are
                             // made synchronous and this one becomes a child of those.
                             let message = WorkerBatchRequest{digests: missing.into_iter().collect::<Vec<_>>() };
-                            waiting.push(self.network.unreliable_send(worker_name, &message).await);
+                            if let Ok(request) = self.network.unreliable_send(worker_name, &message).await {
+                                waiting.push(request);
+                            }
                         } else {
                             debug!("All batches are already available {:?} nothing to request from peers", digests);
                         }
@@ -336,7 +338,7 @@ impl Synchronizer {
                         let message = WorkerBatchRequest{digests: retry};
                         for fut in self.network
                             .lucky_broadcast(names, &message, self.sync_retry_nodes)
-                            .await {
+                            .await.into_iter().flatten() {
                             waiting.push(fut);
                         }
                     }

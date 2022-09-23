@@ -557,7 +557,8 @@ impl BlockRemover {
             let message = PrimaryWorkerMessage::DeleteBatches(batch_ids.clone());
 
             // send the request
-            self.worker_network
+            let _ = self
+                .worker_network
                 .unreliable_send(worker_name.clone(), &message)
                 .await;
 

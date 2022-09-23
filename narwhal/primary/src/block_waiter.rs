@@ -755,7 +755,8 @@ impl<SynchronizerHandler: Handler + Send + Sync + 'static> BlockWaiter<Synchroni
 
                 let message = PrimaryWorkerMessage::RequestBatch(digest);
 
-                self.worker_network
+                let _ = self
+                    .worker_network
                     .unreliable_send(worker_name, &message)
                     .await;
             }

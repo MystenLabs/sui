@@ -900,7 +900,7 @@ impl BlockSynchronizer {
 
             let message =
                 PrimaryWorkerMessage::Synchronize(batch_ids.clone(), primary_peer_name.clone());
-            self.network.unreliable_send(worker_name, &message).await;
+            let _ = self.network.unreliable_send(worker_name, &message).await;
 
             debug!(
                 "Sent request for batch ids {:?} to worker id {}",

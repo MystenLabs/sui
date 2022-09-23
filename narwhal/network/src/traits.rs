@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::CancelOnDropHandler;
+use anyhow::Result;
 use async_trait::async_trait;
 use crypto::NetworkPublicKey;
 use rand::prelude::{SliceRandom, SmallRng};
@@ -14,7 +15,7 @@ pub trait UnreliableNetwork<Request: Clone + Send + Sync> {
         &mut self,
         peer: NetworkPublicKey,
         message: &Request,
-    ) -> JoinHandle<anyhow::Result<anemo::Response<Self::Response>>>;
+    ) -> Result<JoinHandle<Result<anemo::Response<Self::Response>>>>;
 
     /// Broadcasts a message to all `peers` passed as an argument.
     /// The attempts to send individual messages are best effort and will not be retried.
@@ -22,7 +23,7 @@ pub trait UnreliableNetwork<Request: Clone + Send + Sync> {
         &mut self,
         peers: Vec<NetworkPublicKey>,
         message: &Request,
-    ) -> Vec<JoinHandle<anyhow::Result<anemo::Response<Self::Response>>>> {
+    ) -> Vec<Result<JoinHandle<Result<anemo::Response<Self::Response>>>>> {
         let mut handlers = Vec::new();
         for peer in peers {
             let handle = { self.unreliable_send(peer, message).await };
@@ -46,7 +47,7 @@ pub trait LuckyNetwork<Request> {
         mut peers: Vec<NetworkPublicKey>,
         message: &Request,
         num_nodes: usize,
-    ) -> Vec<JoinHandle<anyhow::Result<anemo::Response<Self::Response>>>>;
+    ) -> Vec<Result<JoinHandle<anyhow::Result<anemo::Response<Self::Response>>>>>;
 }
 
 #[async_trait]
@@ -62,7 +63,7 @@ where
         mut peers: Vec<NetworkPublicKey>,
         message: &M,
         nodes: usize,
-    ) -> Vec<JoinHandle<anyhow::Result<anemo::Response<Self::Response>>>> {
+    ) -> Vec<Result<JoinHandle<Result<anemo::Response<Self::Response>>>>> {
         peers.shuffle(self.rng());
         peers.truncate(nodes);
         self.unreliable_broadcast(peers, message).await
