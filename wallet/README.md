@@ -1,5 +1,6 @@
 # Sui Wallet
 
+
 A Chrome (v88+) extension wallet for [Sui](https://sui.io).
 
 # Set Up
