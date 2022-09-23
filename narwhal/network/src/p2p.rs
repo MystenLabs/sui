@@ -91,24 +91,20 @@ impl P2pNetwork {
         R: Send + Sync + 'static + Clone,
         Fut: std::future::Future<Output = Result<anemo::Response<R>, anemo::rpc::Status>> + Send,
     {
-        let network = self.network.clone();
         let peer_id = PeerId(peer.0.to_bytes());
-        Ok(self
-            .executors
+        let peer = self.network.peer(peer_id).ok_or_else(|| {
+            anemo::Error::msg(format!("Network has no connection with peer {peer_id}"))
+        })?;
+
+        self.executors
             .entry(peer_id)
             .or_insert_with(default_executor)
-            .spawn(async move {
-                if let Some(peer) = network.peer(peer_id) {
-                    f(peer)
-                        .await
-                        .map_err(|e| anyhow::anyhow!("RPC error: {e:?}"))
-                } else {
-                    Err(anemo::Error::msg(format!(
-                        "Network has no connection with peer {peer_id}"
-                    )))
-                }
+            .try_spawn(async move {
+                f(peer)
+                    .await
+                    .map_err(|e| anyhow::anyhow!("RPC error: {e:?}"))
             })
-            .await)
+            .map_err(|e| anemo::Error::msg(e.to_string()))
     }
 
     async fn send<F, R, Fut>(
