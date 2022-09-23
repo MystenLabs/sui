@@ -283,7 +283,7 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                     enable_event_processing: false,
                     enable_gossip: true,
                     enable_checkpoint: true,
-                    enable_reconfig: false,
+                    enable_reconfig: true,
                     genesis: crate::node::Genesis::new(genesis.clone()),
                     grpc_load_shed: initial_accounts_config.grpc_load_shed,
                     grpc_concurrency_limit: initial_accounts_config.grpc_concurrency_limit,
