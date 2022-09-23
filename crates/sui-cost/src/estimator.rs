@@ -6,11 +6,19 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fs;
 use std::str::FromStr;
+use std::sync::Arc;
 use strum_macros::Display;
 use strum_macros::EnumString;
 use sui_adapter::temporary_store::TemporaryStore;
+use sui_core::authority::AuthorityState;
+use sui_core::transaction_input_checker;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SequenceNumber;
+use sui_types::base_types::TransactionDigest;
+use sui_types::crypto::get_key_pair;
+use sui_types::crypto::AccountKeyPair;
+use sui_types::crypto::Signature as SuiSignature;
+use sui_types::crypto::ToFromBytes;
 use sui_types::error::SuiResult;
 use sui_types::gas::start_gas_metering;
 use sui_types::gas::GasCostSummary;
@@ -18,6 +26,8 @@ use sui_types::gas::SuiGas;
 use sui_types::gas::MAX_GAS_BUDGET;
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::SingleTransactionKind;
+use sui_types::messages::Transaction;
+use sui_types::messages::TransactionData;
 use sui_types::messages::TransactionKind;
 
 pub const ESTIMATE_FILE: &str = "tests/snapshots/empirical_transaction_cost__good_snapshot.snap";
@@ -89,7 +99,7 @@ pub fn read_estimate_file(
 // Step 4: if package publish, charge for it per size of modules : can be computed precisely
 // Step 5: charge VM flat fee if uses VM : can be computed precisely
 // Step 6: charge for mutations, deletions, rebates: cannot be computed precisely, will approx
-pub fn estimate_transaction_inner<S>(
+fn estimate_transaction_inner<S>(
     tx: TransactionKind,
     computation_gas_unit_price: u64,
     storage_gas_unit_price: u64,
@@ -146,4 +156,36 @@ pub fn estimate_transaction_inner<S>(
     )?;
 
     Ok(gas_status.summary(true))
+}
+
+pub async fn estimate_transaction_computation_cost(
+    tx_data: TransactionData,
+    state: Arc<AuthorityState>,
+    computation_gas_unit_price: u64,
+    storage_gas_unit_price: u64,
+    mutated_object_sizes_before: usize,
+    mutated_object_sizes_after: usize,
+    storage_rebate: u64,
+) -> anyhow::Result<GasCostSummary> {
+    // Make a dummy transaction
+    let (_, keypair): (_, AccountKeyPair) = get_key_pair();
+    let dummy_sig = SuiSignature::new(&tx_data, &keypair);
+    let tx = Transaction::new(tx_data, dummy_sig);
+
+    let (_gas_status, input_objects) =
+        transaction_input_checker::check_transaction_input(&state.db(), &tx).await?;
+
+    let in_mem_temporary_store =
+        TemporaryStore::new(state.db(), input_objects, TransactionDigest::random());
+
+    estimate_transaction_inner(
+        tx.signed_data.data.kind,
+        computation_gas_unit_price,
+        storage_gas_unit_price,
+        mutated_object_sizes_before,
+        mutated_object_sizes_after,
+        SuiGas::new(storage_rebate),
+        &in_mem_temporary_store,
+    )
+    .map_err(|e| anyhow!("{e}"))
 }

@@ -305,10 +305,24 @@ async fn split_n(
     gas: &Object,
     validator_info: &[ValidatorInfo],
 ) -> GasCostSummary {
+    let split_tx = split_n_tx(n, coin, gas, validator_info).await;
+
+    submit_single_owner_transaction(split_tx, validator_info)
+        .await
+        .gas_cost_summary()
+        .clone()
+}
+
+async fn split_n_tx(
+    n: u64,
+    coin: &Object,
+    gas: &Object,
+    validator_info: &[ValidatorInfo],
+) -> Transaction {
     let split_amounts = vec![10u64; n as usize];
     let type_args = vec![coin.get_move_template_type().unwrap()];
 
-    let split_tx = move_transaction_with_type_tags(
+    move_transaction_with_type_tags(
         gas.clone(),
         COIN_MODULE_NAME.as_str(),
         COIN_SPLIT_VEC_FUNC_NAME.as_str(),
@@ -320,10 +334,7 @@ async fn split_n(
             CallArg::Object(ObjectArg::ImmOrOwnedObject(coin.compute_object_reference())),
             CallArg::Pure(bcs::to_bytes(&split_amounts).unwrap()),
         ],
-    );
-
-    submit_single_owner_transaction(split_tx, validator_info)
-        .await
-        .gas_cost_summary()
-        .clone()
+    )
 }
+
+
