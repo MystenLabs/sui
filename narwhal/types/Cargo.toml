@@ -1,5 +1,5 @@
 [package]
-name = "types"
+name = "narwhal-types"
 version = "0.1.0"
 edition = "2021"
 license = "Apache-2.0"
@@ -32,10 +32,10 @@ tokio-util = { version = "0.7.4", features = ["codec"] }
 tonic = { version = "0.7.2", features = ["tls"] }
 tracing = "0.1.36"
 
-config = { path = "../config" }
+config = { path = "../config", package = "narwhal-config" }
 fastcrypto = "0.1.2"
-crypto = { path = "../crypto"}
-dag = { path = "../dag" }
+crypto = { path = "../crypto", package = "narwhal-crypto" }
+dag = { path = "../dag", package = "narwhal-dag" }
 anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "6278d0fa78147a49ff2cb9dd2e45e763886be0a0" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
@@ -43,7 +43,7 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 criterion = "0.3.6"
 hex = "0.4.3"
 serde_test = "1.0.144"
-test_utils = { path = "../test_utils" }
+test_utils = { path = "../test_utils", package = "narwhal-test-utils" }
 
 [build-dependencies]
 prost-build = "0.10.4"

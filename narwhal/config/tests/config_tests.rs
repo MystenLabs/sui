@@ -22,6 +22,7 @@ use config::{ConsensusAPIGrpcParameters, Import, Parameters, PrometheusMetricsPa
 use crypto::PublicKey;
 use insta::assert_json_snapshot;
 use multiaddr::Multiaddr;
+use narwhal_config as config;
 use rand::{rngs::StdRng, seq::SliceRandom, SeedableRng};
 use std::{
     collections::{BTreeMap, HashMap},

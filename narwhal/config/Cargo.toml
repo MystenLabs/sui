@@ -1,5 +1,5 @@
 [package]
-name = "config"
+name = "narwhal-config"
 version = "0.1.0"
 license = "Apache-2.0"
 authors = ["Mysten Labs <build@mystenlabs.com>"]
@@ -16,7 +16,7 @@ tracing = "0.1.36"
 arc-swap = { version = "1.5.1", features = ["serde"] }
 
 fastcrypto = "0.1.2"
-crypto = { path = "../crypto" }
+crypto = { path = "../crypto", package = "narwhal-crypto" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 rand = "0.8.5"
 
@@ -26,4 +26,4 @@ rand = "0.8.5"
 tempfile = "3.3.0"
 tracing-test = "0.2.3"
 
-test_utils = { path = "../test_utils" }
+test_utils = { path = "../test_utils", package = "narwhal-test-utils" }

@@ -4,6 +4,7 @@ use arc_swap::ArcSwap;
 use config::{Committee, Parameters};
 use fastcrypto::traits::KeyPair;
 use futures::future::join_all;
+use narwhal_primary as primary;
 use network::{CancelOnDropHandler, P2pNetwork, ReliableNetwork};
 use node::NodeStorage;
 use primary::{NetworkModel, Primary, CHANNEL_CAPACITY};

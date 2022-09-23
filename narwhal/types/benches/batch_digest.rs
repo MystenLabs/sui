@@ -4,6 +4,7 @@ use criterion::{
     criterion_group, criterion_main, BenchmarkId, Criterion, SamplingMode, Throughput,
 };
 use fastcrypto::Hash;
+use narwhal_types as types;
 use rand::Rng;
 use types::{serialized_batch_digest, Batch, WorkerMessage};
 

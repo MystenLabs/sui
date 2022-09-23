@@ -1,5 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
 use arc_swap::ArcSwap;
 use bytes::Bytes;
 use config::{Epoch, Parameters};
@@ -9,6 +10,7 @@ use fastcrypto::{
     traits::{KeyPair as _, ToFromBytes},
     Hash,
 };
+use narwhal_primary as primary;
 use node::NodeStorage;
 use primary::{NetworkModel, Primary, CHANNEL_CAPACITY};
 use prometheus::Registry;

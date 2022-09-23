@@ -20,7 +20,7 @@ use std::collections::{BTreeSet, VecDeque};
 /// # Example
 ///
 /// ```
-/// use dag::bft::Bft;
+/// use narwhal_dag::bft::Bft;
 ///
 /// #[derive(PartialEq, Eq, Hash)]
 /// struct Node(&'static str, &'static [Node]);

@@ -1,5 +1,5 @@
 [package]
-name = "executor"
+name = "narwhal-executor"
 version = "0.1.0"
 edition = "2021"
 license = "Apache-2.0"
@@ -10,12 +10,12 @@ async-trait = "0.1.57"
 bincode = "1.3.3"
 blake2 = "0.9"
 bytes = "1.2.1"
-config = { path = "../config" }
-consensus = { path = "../consensus" }
+config = { path = "../config", package = "narwhal-config" }
+consensus = { path = "../consensus", package = "narwhal-consensus" }
 fastcrypto = "0.1.2"
 futures = "0.3.24"
 multiaddr = "0.14.0"
-primary = { path = "../primary" }
+primary = { path = "../primary", package = "narwhal-primary" }
 serde = { version = "1.0.144", features = ["derive"] }
 thiserror = "1.0.35"
 tokio = { version = "1.20.1", features = ["sync"] }
@@ -24,10 +24,10 @@ tonic = "0.7.2"
 tracing = "0.1.36"
 prometheus = "0.13.2"
 backoff = { version = "0.4.0", features = ["tokio"] }
-storage = { path = "../storage" }
+storage = { path = "../storage", package = "narwhal-storage" }
 itertools = "0.10.4"
 
-types = { path = "../types" }
+types = { path = "../types", package = "narwhal-types" }
 mysten-network = "0.1.0"
 
 store = { version = "0.1.0", package = "typed-store" }
@@ -38,7 +38,7 @@ match_opt = "0.1.2"
 indexmap = { version = "1.9.1", features = ["serde"] }
 rand = "0.8.5"
 tempfile = "3.3.0"
-primary = { path = "../primary" }
-test_utils = { path = "../test_utils" }
-types = { path = "../types" }
+primary = { path = "../primary", package = "narwhal-primary" }
+test_utils = { path = "../test_utils", package = "narwhal-test-utils" }
+types = { path = "../types", package = "narwhal-types" }
 telemetry-subscribers = "0.1.0"

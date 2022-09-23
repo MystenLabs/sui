@@ -1,5 +1,5 @@
 [package]
-name = "worker"
+name = "narwhal-worker"
 version = "0.1.0"
 license = "Apache-2.0"
 authors = ["Mysten Labs <build@mystenlabs.com>"]
@@ -22,12 +22,12 @@ tonic = "0.7.2"
 tower = "0.4.13"
 tracing = "0.1.36"
 
-config = { path = "../config" }
+config = { path = "../config", package = "narwhal-config" }
 fastcrypto = "0.1.2"
-crypto = { path = "../crypto" }
-network = { path = "../network" }
-primary = { path = "../primary" }
-types = { path = "../types" }
+crypto = { path = "../crypto", package = "narwhal-crypto" }
+network = { path = "../network", package = "narwhal-network" }
+primary = { path = "../primary", package = "narwhal-primary" }
+types = { path = "../types", package = "narwhal-types" }
 mysten-network = "0.1.0"
 prometheus = "0.13.2"
 
@@ -40,7 +40,7 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 arc-swap = { version = "1.5.1", features = ["serde"] }
 rand = "0.8.5"
 tempfile = "3.3.0"
-test_utils = { path = "../test_utils" }
+test_utils = { path = "../test_utils", package = "narwhal-test-utils" }
 
 [features]
 benchmark = []

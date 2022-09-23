@@ -1,11 +1,12 @@
-use arc_swap::ArcSwap;
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use arc_swap::ArcSwap;
 use config::{BlockSynchronizerParameters, Committee, Parameters, WorkerId};
 use consensus::{dag::Dag, metrics::ConsensusMetrics};
 use crypto::PublicKey;
 use fastcrypto::{traits::KeyPair as _, Hash};
 use indexmap::IndexMap;
+use narwhal_primary as primary;
 use network::metrics::WorkerNetworkMetrics;
 use node::NodeStorage;
 use primary::{NetworkModel, PayloadToken, Primary, CHANNEL_CAPACITY};

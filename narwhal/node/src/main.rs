@@ -16,6 +16,7 @@ use executor::{SerializedTransaction, SubscriberResult};
 use eyre::Context;
 use fastcrypto::{generate_production_keypair, traits::KeyPair as _};
 use futures::future::join_all;
+use narwhal_node as node;
 use node::{
     execution_state::SimpleExecutionState,
     metrics::{primary_metrics_registry, start_prometheus_server, worker_metrics_registry},

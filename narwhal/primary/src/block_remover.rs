@@ -85,12 +85,12 @@ pub struct DeleteBatchMessage {
 /// # use config::{Committee, WorkerCache, SharedWorkerCache};
 /// # use consensus::dag::Dag;
 /// # use futures::future::join_all;
+/// # use narwhal_primary::{BlockRemover, BlockRemoverCommand, DeleteBatchMessage, PayloadToken};
 /// # use std::collections::BTreeMap;
 /// # use std::sync::Arc;
 /// # use types::ReconfigureNotification;
 /// # use config::WorkerId;
 /// # use tempfile::tempdir;
-/// # use primary::{BlockRemover, BlockRemoverCommand, DeleteBatchMessage, PayloadToken};
 /// # use test_utils::test_channel;
 /// # use types::{Round, BatchDigest, Certificate, CertificateDigest, HeaderDigest, Header};
 /// # use prometheus::Registry;

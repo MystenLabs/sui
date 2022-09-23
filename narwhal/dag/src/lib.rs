@@ -69,7 +69,7 @@ impl<T> NodeRef<T> {
     /// # Example
     ///
     /// ```
-    /// use dag::{ Node, NodeRef };
+    /// use narwhal_dag::{ Node, NodeRef };
     ///
     /// let node = Node::new_leaf(1, false);
     /// // Note the 2 derefs: one for the newtype, one for the Arc
@@ -111,7 +111,7 @@ impl<T> Node<T> {
     /// # Example
     ///
     /// ```
-    /// use dag::{ Node, NodeRef };
+    /// use narwhal_dag::{ Node, NodeRef };
     ///
     /// let node = Node::new_leaf(1, false);
     /// ```
@@ -140,7 +140,7 @@ impl<T> Node<T> {
     /// # Example
     ///
     /// ```
-    /// use dag::Node;
+    /// use narwhal_dag::Node;
     ///
     /// let node = Node::new_leaf(1, false);
     /// assert_eq!(*node.value(), 1);
@@ -154,7 +154,7 @@ impl<T> Node<T> {
     /// # Examples
     ///
     /// ```
-    /// use dag::Node;
+    /// use narwhal_dag::Node;
     ///
     /// let node = Node::new_leaf(1, false);
     /// assert_eq!(node.is_leaf(), true);
@@ -168,7 +168,7 @@ impl<T> Node<T> {
     /// # Examples
     ///
     /// ```
-    /// use dag::Node;
+    /// use narwhal_dag::Node;
     ///
     /// let node = Node::new_leaf(1, true);
     /// assert_eq!(node.is_compressible(), true);
@@ -185,7 +185,7 @@ impl<T> Node<T> {
     /// # Examples
     ///
     /// ```
-    /// use dag::Node;
+    /// use narwhal_dag::Node;
     ///
     /// let node = Node::new_leaf(1, false);
     /// assert_eq!(node.make_compressible(), true);
