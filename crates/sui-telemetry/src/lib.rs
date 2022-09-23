@@ -73,7 +73,7 @@ pub async fn send_telemetry_event(is_validator: bool) {
 
 fn get_git_rev() -> String {
     let output_res = Command::new("git")
-        .args(&["describe", "--always", "--dirty"])
+        .args(["describe", "--always", "--dirty"])
         .output();
     if let Ok(output) = output_res {
         if output.status.success() {

@@ -13,4 +13,8 @@ declare module 'bip39-light' {
     ): string;
     export function mnemonicToSeed(mnemonic: string, password?: string): Buffer;
     export function validateMnemonic(mnemonic: string): boolean;
+    export function mnemonicToSeedHex(
+        mnemonic: string,
+        password?: string
+    ): string;
 }

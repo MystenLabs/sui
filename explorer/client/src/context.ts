@@ -11,8 +11,9 @@ import {
 } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
-import { Network } from './utils/api/DefaultRpcClient';
-import { IS_LOCAL_ENV, IS_STAGING_ENV, CURRENT_ENV } from './utils/envUtil';
+import { CURRENT_ENV } from './utils/envUtil';
+
+import type { Network } from './utils/api/DefaultRpcClient';
 
 const LOCALSTORE_RPC_KEY = CURRENT_ENV + 'sui-explorer-rpc';
 const LOCALSTORE_RPC_TIME_KEY = CURRENT_ENV + 'sui-explorer-rpc-lastset';
@@ -47,11 +48,9 @@ export function useNetwork(): [
 ] {
     const [searchParams] = useSearchParams();
     const [network, setNetwork] = useState<Network | string>(() => {
-        // If running pnpm dev:local, ignore what is in storage and use Local network:
-        if (IS_LOCAL_ENV) return Network.Local;
         const storedNetwork = window.localStorage.getItem(LOCALSTORE_RPC_KEY);
         if (!storedNetwork || wasNetworkSetLongTimeAgo()) {
-            return IS_STAGING_ENV ? Network.Staging : Network.Devnet;
+            return CURRENT_ENV;
         }
         return storedNetwork;
     });

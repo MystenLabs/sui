@@ -1,3 +1,12 @@
+.oneline,
+.oneline div {
+    @apply truncate min-w-0;
+}
+
+.cointype {
+    @apply pr-[15px];
+}
+
 .groupview {
     @apply text-left;
 }

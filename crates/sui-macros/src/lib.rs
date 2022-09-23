@@ -27,9 +27,9 @@ pub fn init_static_initializers(_args: TokenStream, item: TokenStream) -> TokenS
             // be very important for being able to reproduce a failure that occurs in the Nth
             // iteration of a multi-iteration test run.
             std::thread::spawn(|| {
-                ::telemetry_subscribers::init_for_testing();
-                ::sui_framework::get_move_stdlib();
-                ::sui_framework::get_sui_framework();
+                ::sui_simulator::telemetry_subscribers::init_for_testing();
+                ::sui_simulator::sui_framework::get_move_stdlib();
+                ::sui_simulator::sui_framework::get_sui_framework();
             }).join().unwrap();
 
             #body
@@ -56,13 +56,13 @@ pub fn sui_test(args: TokenStream, item: TokenStream) -> TokenStream {
     let header = if cfg!(msim) {
         quote! {
             #[::sui_simulator::sim_test(crate = "sui_simulator", #(#args)*)]
-            #[init_static_initializers]
+            #[::sui_macros::init_static_initializers]
         }
     } else {
         quote! {
             #[::tokio::test(#(#args)*)]
             // though this is not required for tokio, we do it to get logs as well.
-            #[init_static_initializers]
+            #[::sui_macros::init_static_initializers]
         }
     };
 
@@ -88,7 +88,7 @@ pub fn sim_test(args: TokenStream, item: TokenStream) -> TokenStream {
     let result = if cfg!(msim) {
         quote! {
             #[::sui_simulator::sim_test(crate = "sui_simulator", #(#args)*)]
-            #[init_static_initializers]
+            #[::sui_macros::init_static_initializers]
             #input
         }
     } else {

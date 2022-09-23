@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use super::workload::{submit_transaction, Gas, Payload, Workload, WorkloadType};
 use crate::workloads::workload::{get_latest, transfer_sui_for_testing, MAX_GAS_FOR_TESTING};
 use async_trait::async_trait;
 use futures::future::join_all;
@@ -18,8 +19,6 @@ use test_utils::messages::{make_counter_create_transaction, make_counter_increme
 use test_utils::{
     messages::create_publish_move_package_transaction, transaction::parse_package_ref,
 };
-
-use super::workload::{submit_transaction, Gas, Payload, Workload, WorkloadType};
 
 pub struct SharedCounterTestPayload {
     package_ref: ObjectRef,

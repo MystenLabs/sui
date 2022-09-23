@@ -148,7 +148,7 @@ test_scenario::next_tx(scenario, &owner);
     transfer::transfer(object, recipient, ctx);
 };
 ```
-Note that in the second transaction, the sender of the transaction should still be `owner`, because only the `owner` can transfer the object that it owns. After the tranfser, we can verify that `owner` no longer owns the object, while `recipient` now owns it:
+Note that in the second transaction, the sender of the transaction should still be `owner`, because only the `owner` can transfer the object that it owns. After the transfer, we can verify that `owner` no longer owns the object, while `recipient` now owns it:
 ```rust
 // Check that owner no longer owns the object.
 test_scenario::next_tx(scenario, &owner);

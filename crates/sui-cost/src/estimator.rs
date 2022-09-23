@@ -50,8 +50,8 @@ pub fn estimate_computational_costs_for_transaction(
             }
             .unwrap()
             .clone()),
-
             SingleTransactionKind::TransferObject(_) => unsupported_tx_kind,
+            SingleTransactionKind::Pay(_) => unsupported_tx_kind,
             SingleTransactionKind::Publish(_) => unsupported_tx_kind,
             SingleTransactionKind::Call(_) => unsupported_tx_kind,
             SingleTransactionKind::ChangeEpoch(_) => unsupported_tx_kind,
@@ -62,7 +62,7 @@ pub fn estimate_computational_costs_for_transaction(
 
 pub fn read_estimate_file(
 ) -> Result<BTreeMap<CommonTransactionCosts, GasCostSummary>, anyhow::Error> {
-    let json_str = fs::read_to_string(&ESTIMATE_FILE).unwrap();
+    let json_str = fs::read_to_string(ESTIMATE_FILE).unwrap();
 
     // Remove the metadata: first 4 lines form snapshot tests
     let json_str = json_str

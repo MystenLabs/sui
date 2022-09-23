@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { filter, fromEvent, map } from 'rxjs';
+import { filter, fromEvent, map, share } from 'rxjs';
 
 import type { Message } from '_messages';
 import type { Observable } from 'rxjs';
@@ -35,7 +35,8 @@ export class WindowMessageStream {
                     message.source === window &&
                     message.data.target === this._name
             ),
-            map((message) => message.data.payload)
+            map((message) => message.data.payload),
+            share()
         );
     }
 

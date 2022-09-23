@@ -8,7 +8,6 @@ import { Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 import Account from './account';
 import MenuList from './menu-list';
 import Network from './network';
-import Playground from './playground';
 import {
     useMenuIsOpen,
     useMenuUrl,
@@ -49,7 +48,6 @@ function MenuContent() {
                 <Routes location={menuUrl || ''}>
                     <Route path="/" element={<MenuList />} />
                     <Route path="/account" element={<Account />} />
-                    <Route path="/playground" element={<Playground />} />
                     <Route path="/network" element={<Network />} />
                     <Route
                         path="*"

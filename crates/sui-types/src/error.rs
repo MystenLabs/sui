@@ -90,6 +90,8 @@ pub enum SuiError {
     WrongEpoch { expected_epoch: EpochId },
     #[error("Signatures in a certificate must form a quorum")]
     CertificateRequiresQuorum,
+    #[error("Authority {authority_name:?} could not sync certificate: {err:?}")]
+    CertificateSyncError { authority_name: String, err: String },
     #[error(
         "The given sequence number ({given_sequence:?}) must match the next expected sequence ({expected_sequence:?}) number of the object ({object_id:?})"
     )]
@@ -377,8 +379,8 @@ pub enum SuiError {
     ConsensusConnectionBroken(String),
     #[error("Failed to hear back from consensus: {0}")]
     FailedToHearBackFromConsensus(String),
-    #[error("Failed to lock shared objects: {0}")]
-    SharedObjectLockingFailure(String),
+    #[error("Failed to execute handle_consensus_transaction on Sui: {0}")]
+    HandleConsensusTransactionFailure(String),
     #[error("Consensus listener is out of capacity")]
     ListenerCapacityExceeded,
     #[error("Failed to serialize/deserialize Narwhal message: {0}")]
@@ -458,7 +460,7 @@ impl std::convert::From<VMError> for SuiError {
 
 impl std::convert::From<SubscriberError> for SuiError {
     fn from(error: SubscriberError) -> Self {
-        SuiError::SharedObjectLockingFailure(error.to_string())
+        SuiError::HandleConsensusTransactionFailure(error.to_string())
     }
 }
 

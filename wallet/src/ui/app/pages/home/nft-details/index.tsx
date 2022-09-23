@@ -44,29 +44,51 @@ function NFTdetailsContent({
 
     const NFTDetails = (
         <div className={st.nftDetails}>
-            <div className={st.nftItemDetail}>
-                <div className={st.label}>Object ID</div>
-                <div className={st.value}>
-                    <ExplorerLink
-                        type={ExplorerLinkType.object}
-                        objectID={nftObjectID}
-                        title="View on Sui Explorer"
-                        className={st.explorerLink}
-                        showIcon={false}
-                    >
-                        {shortAddress}
-                    </ExplorerLink>
-                </div>
-            </div>
-
-            {fileExtentionType.name !== '' && (
+            <div className={st.nftDetailsInner}>
                 <div className={st.nftItemDetail}>
-                    <div className={st.label}>Media Type</div>
+                    <div className={st.label}>Object ID</div>
                     <div className={st.value}>
-                        {fileExtentionType?.name} {fileExtentionType.type}
+                        <ExplorerLink
+                            type={ExplorerLinkType.object}
+                            objectID={nftObjectID}
+                            title="View on Sui Explorer"
+                            className={st.explorerLink}
+                            showIcon={false}
+                        >
+                            {shortAddress}
+                        </ExplorerLink>
                     </div>
                 </div>
-            )}
+
+                {fileExtentionType.name !== '' && (
+                    <div className={st.nftItemDetail}>
+                        <div className={st.label}>Media Type</div>
+                        <div className={st.value}>
+                            {fileExtentionType?.name} {fileExtentionType.type}
+                        </div>
+                    </div>
+                )}
+                {!!nftFields?.metadata?.fields?.attributes && (
+                    <>
+                        {nftFields.metadata.fields.attributes.fields.keys.map(
+                            (key: string, idx: number) => (
+                                <div
+                                    key={`nft_attribute_${key}`}
+                                    className={st.nftItemDetail}
+                                >
+                                    <div className={st.label}>{key}</div>
+                                    <div className={st.value}>
+                                        {
+                                            nftFields.metadata.fields.attributes
+                                                .fields.values[idx]
+                                        }
+                                    </div>
+                                </div>
+                            )
+                        )}
+                    </>
+                )}
+            </div>
         </div>
     );
 

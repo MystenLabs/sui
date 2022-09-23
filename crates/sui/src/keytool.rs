@@ -6,8 +6,10 @@ use std::path::{Path, PathBuf};
 
 use anyhow::anyhow;
 use base64ct::Encoding as _;
+use bip32::{DerivationPath, Mnemonic};
 use clap::*;
 use fastcrypto::traits::{ToFromBytes, VerifyingKey};
+use signature::rand_core::OsRng;
 use tracing::info;
 
 use fastcrypto::ed25519::{Ed25519KeyPair, Ed25519PrivateKey, Ed25519PublicKey};
@@ -15,7 +17,7 @@ use sui_sdk::crypto::SuiKeystore;
 use sui_types::base_types::SuiAddress;
 use sui_types::base_types::{decode_bytes_hex, encode_bytes_hex};
 use sui_types::crypto::{
-    get_key_pair, random_key_pair_by_type, AuthorityKeyPair, Ed25519SuiSignature,
+    derive_key_pair_from_path, get_key_pair, AuthorityKeyPair, Ed25519SuiSignature,
     EncodeDecodeBase64, NetworkKeyPair, SignatureScheme, SuiKeyPair, SuiSignatureInner,
 };
 use sui_types::sui_serde::{Base64, Encoding};
@@ -28,9 +30,12 @@ mod keytool_tests;
 #[derive(Subcommand)]
 #[clap(rename_all = "kebab-case")]
 pub enum KeyToolCommand {
-    /// Generate a new keypair with keypair scheme flag {ed25519 | secp256k1}. Output file to current dir (to generate keypair to sui.keystore, use `sui client new-address`)
+    /// Generate a new keypair with keypair scheme flag {ed25519 | secp256k1}
+    /// with optional derivation path, default to m/44'/784'/0'/0'/0' for ed25519 or m/54'/784'/0'/0/0 for secp256k1.
+    /// And output file to current dir (to generate keypair and add to sui.keystore, use `sui client new-address`)
     Generate {
         key_scheme: SignatureScheme,
+        derivation_path: Option<DerivationPath>,
     },
     Show {
         file: PathBuf,
@@ -48,10 +53,12 @@ pub enum KeyToolCommand {
         #[clap(long)]
         data: String,
     },
-    /// Import mnemonic phrase and generate keypair based on key scheme flag {ed25519 | secp256k1}.
+    /// Import mnemonic phrase and generate keypair based on key scheme flag {ed25519 | secp256k1}
+    /// with optional derivation path, default to m/44'/784'/0'/0'/0' for ed25519 or m/54'/784'/0'/0/0 for secp256k1.
     Import {
         mnemonic_phrase: String,
         key_scheme: SignatureScheme,
+        derivation_path: Option<DerivationPath>,
     },
     /// This is a temporary helper function to ensure that testnet genesis does not break while
     /// we transition towards BLS signatures.
@@ -63,26 +70,28 @@ pub enum KeyToolCommand {
 impl KeyToolCommand {
     pub fn execute(self, keystore: &mut SuiKeystore) -> Result<(), anyhow::Error> {
         match self {
-            KeyToolCommand::Generate { key_scheme } => {
+            KeyToolCommand::Generate {
+                key_scheme,
+                derivation_path,
+            } => {
                 let k = key_scheme.to_string();
                 if "bls12381" == key_scheme.to_string() {
                     let (address, keypair): (_, AuthorityKeyPair) = get_key_pair();
                     let file_name = format!("bls-{address}.key");
                     write_authority_keypair_to_file(&keypair, &file_name)?;
                 } else {
-                    match random_key_pair_by_type(key_scheme) {
-                        Ok((address, keypair)) => {
+                    let mnemonic = Mnemonic::random(&mut OsRng, Default::default());
+                    let seed = mnemonic.to_seed("");
+                    match derive_key_pair_from_path(seed.as_bytes(), derivation_path, &key_scheme) {
+                        Ok((address, kp)) => {
                             let file_name = format!("{address}.key");
-                            write_keypair_to_file(&keypair, &file_name)?;
+                            write_keypair_to_file(&kp, &file_name)?;
                             println!("{:?} key generated and saved to '{file_name}'", k);
                         }
-                        Err(e) => {
-                            println!("Failed to generate keypair: {:?}", e)
-                        }
+                        Err(e) => println!("Failed to generate keypair: {:?}", e),
                     }
                 }
             }
-
             KeyToolCommand::Show { file } => {
                 let res: Result<SuiKeyPair, anyhow::Error> = read_keypair_from_file(&file);
                 match res {
@@ -138,8 +147,10 @@ impl KeyToolCommand {
             KeyToolCommand::Import {
                 mnemonic_phrase,
                 key_scheme,
+                derivation_path,
             } => {
-                let address = keystore.import_from_mnemonic(&mnemonic_phrase, key_scheme)?;
+                let address =
+                    keystore.import_from_mnemonic(&mnemonic_phrase, key_scheme, derivation_path)?;
                 info!("Key imported for address [{address}]");
             }
 

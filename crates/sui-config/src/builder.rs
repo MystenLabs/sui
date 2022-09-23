@@ -131,12 +131,7 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
                 .map(
                     |(i, (key_pair, worker_key_pair, account_key_pair, network_key_pair)): (
                         _,
-                        (
-                            AuthorityKeyPair,
-                            AuthorityKeyPair,
-                            SuiKeyPair,
-                            AuthorityKeyPair,
-                        ),
+                        (AuthorityKeyPair, NetworkKeyPair, SuiKeyPair, NetworkKeyPair),
                     )| {
                         self.build_validator(
                             i,

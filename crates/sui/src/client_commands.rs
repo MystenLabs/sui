@@ -10,6 +10,7 @@ use std::{
 };
 
 use anyhow::anyhow;
+use bip32::DerivationPath;
 use clap::*;
 use colored::Colorize;
 use move_core_types::language_storage::TypeTag;
@@ -190,9 +191,13 @@ pub enum SuiClientCommands {
     #[clap(name = "addresses")]
     Addresses,
 
-    /// Generate new address and keypair with keypair scheme flag {ed25519 | secp256k1}.
+    /// Generate new address and keypair with keypair scheme flag {ed25519 | secp256k1}
+    /// with optional derivation path, default to m/44'/784'/0'/0'/0' for ed25519 or m/54'/784'/0'/0/0 for secp256k1.
     #[clap(name = "new-address")]
-    NewAddress { key_scheme: SignatureScheme },
+    NewAddress {
+        key_scheme: SignatureScheme,
+        derivation_path: Option<DerivationPath>,
+    },
 
     /// Obtain all objects owned by the address.
     #[clap(name = "objects")]
@@ -409,8 +414,13 @@ impl SuiClientCommands {
 
                 SuiClientCommandResult::SyncClientState
             }
-            SuiClientCommands::NewAddress { key_scheme } => {
-                let (address, phrase, scheme) = context.keystore.generate_new_key(key_scheme)?;
+            SuiClientCommands::NewAddress {
+                key_scheme,
+                derivation_path,
+            } => {
+                let (address, phrase, scheme) = context
+                    .keystore
+                    .generate_new_key(key_scheme, derivation_path)?;
                 SuiClientCommandResult::NewAddress((address, phrase, scheme))
             }
             SuiClientCommands::Gas { address } => {

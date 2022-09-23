@@ -19,11 +19,13 @@ prometheus = "0.13.2"
 
 sui-config = { path = "../sui-config" }
 sui-node = { path = "../sui-node" }
-sui-simulator = { path = "../sui-simulator" }
 sui-types = { path = "../sui-types" }
 
 mysten-network = "0.1.0"
 workspace-hack = { path = "../workspace-hack"}
+
+[target.'cfg(msim)'.dependencies]
+sui-simulator = { path = "../sui-simulator" }
 
 [dev-dependencies]
 telemetry-subscribers = "0.1.0"

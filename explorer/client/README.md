@@ -14,33 +14,9 @@ $ pnpm install
 
 # How to Switch Environment
 
-## Connecting to the DevNet Remote Gateway Server
+By default, the Sui Explorer attempts to connect to a local RPC server. For more information about using a local RPC server, see [Local RPC Server & JSON-RPC API Quick Start](../../doc/src/build/json-rpc.md).
 
-The Sui Explorer frontend will use the DevNet Gateway server by default: https://gateway.devnet.sui.io:443
-
-```bash
-pnpm dev
-```
-
-## Connecting to a Local RPC Server
-
-Refer to [Local RPC Server & JSON-RPC API Quick Start](../../doc/src/build/json-rpc.md) on setting up a Local RPC Server. If we wish to locally run the website using a Local RPC Server, then run the following:
-
-```bash
-pnpm dev:local
-```
-
-Alternatively, having run `pnpm dev`, click the green button at the top of the page and select the option 'Local'.
-
-## Connecting to a Custom RPC URL
-
-First run the following:
-
-```bash
-pnpm dev
-```
-
-Then, click the green button at the top and select the option 'Custom RPC URL'. Type the Custom RPC URL into the input box that emerges.
+If you want to use the explorer with another network, you can select your preferred network in the header of the explorer.
 
 ## Connecting to the Static Data
 

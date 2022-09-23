@@ -54,13 +54,13 @@ beef = { version = "0.5", features = ["impl_serde", "serde"] }
 better_any = { version = "0.1", default-features = false }
 bimap = { version = "0.6", features = ["std"] }
 bincode = { version = "1", default-features = false }
-bip39 = { git = "https://github.com/patrickkuo/rust-bip39.git", rev = "a76fe8310416555e6383b42b8acc4eb93c7bcc89", features = ["rand", "serde", "std", "unicode-normalization"] }
+bip32 = { version = "0.4", features = ["alloc", "bip39", "k256", "mnemonic", "once_cell", "pbkdf2", "secp256k1", "std"] }
 bit-set = { version = "0.5", features = ["std"] }
 bit-vec = { version = "0.6", default-features = false, features = ["std"] }
-bitcoin_hashes-a6292c17cd707f01 = { package = "bitcoin_hashes", version = "0.11", default-features = false }
-bitcoin_hashes-274715c4dabd11b0 = { package = "bitcoin_hashes", version = "0.9", features = ["std"] }
+bitcoin_hashes = { version = "0.11", default-features = false }
 bitflags = { version = "1" }
 bitmaps = { version = "2", features = ["std"] }
+bitvec = { version = "0.19", default-features = false, features = ["alloc", "std"] }
 blake2 = { version = "0.9", features = ["std"] }
 blake2s_simd = { version = "1", features = ["std"] }
 block-buffer-93f6ce9d446188ac = { package = "block-buffer", version = "0.10", default-features = false }
@@ -68,7 +68,7 @@ block-buffer-274715c4dabd11b0 = { package = "block-buffer", version = "0.9", def
 block-padding = { version = "0.2", default-features = false }
 bls-crypto = { git = "https://github.com/huitseeker/celo-bls-snark-rs", branch = "updates-2", features = ["compat"] }
 blst = { version = "0.3" }
-bs58 = { version = "0.4", features = ["alloc", "std"] }
+bs58 = { version = "0.4", features = ["alloc", "check", "sha2", "std"] }
 bstr = { version = "0.2", features = ["lazy_static", "regex-automata", "serde", "serde1", "serde1-nostd", "std", "unicode"] }
 bulletproofs = { version = "4", features = ["rand", "std", "thiserror"] }
 bytecode-interpreter-crypto = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e", features = ["fiat"] }
@@ -81,7 +81,8 @@ cargo-platform = { version = "0.1", default-features = false }
 cargo_metadata-582f2526e08bb6a0 = { package = "cargo_metadata", version = "0.14" }
 cargo_metadata-3575ec1268b04181 = { package = "cargo_metadata", version = "0.15" }
 cassowary = { version = "0.3", default-features = false }
-cast = { version = "0.3", default-features = false }
+cast-6f8ce4dd05d13bba = { package = "cast", version = "0.2", features = ["std"] }
+cast-468e82937335b1c9 = { package = "cast", version = "0.3", default-features = false }
 cfg-expr = { version = "0.10", features = ["target-lexicon", "targets"] }
 cfg-if-c65f7effa3be6d31 = { package = "cfg-if", version = "0.1", default-features = false }
 cfg-if-dff4ba8e3ae991db = { package = "cfg-if", version = "1", default-features = false }
@@ -97,15 +98,15 @@ collectable = { version = "0.0.2", default-features = false }
 colored = { version = "2", default-features = false }
 colored-diff = { version = "0.2", default-features = false }
 combine = { version = "4", features = ["alloc", "bytes", "std"] }
-config-5f890c5b0f7b20d5 = { package = "config", git = "https://github.com/MystenLabs/narwhal", rev = "aaa8a56efb5917e6b003285abe2a9a079ae90290", default-features = false }
-config-a6292c17cd707f01 = { package = "config", version = "0.11", features = ["hjson", "ini", "json", "rust-ini", "serde-hjson", "serde_json", "toml", "yaml", "yaml-rust"] }
-consensus = { git = "https://github.com/MystenLabs/narwhal", rev = "aaa8a56efb5917e6b003285abe2a9a079ae90290", features = ["benchmark", "rand"] }
-console = { version = "0.15", default-features = false }
+comfy-table = { version = "6", features = ["crossterm", "tty"] }
+config = { version = "0.11", features = ["hjson", "ini", "json", "rust-ini", "serde-hjson", "serde_json", "toml", "yaml", "yaml-rust"] }
+console = { version = "0.15", default-features = false, features = ["ansi-parsing", "unicode-width"] }
 const-oid = { version = "0.9", default-features = false }
 constant_time_eq = { version = "0.1", default-features = false }
 core2 = { version = "0.4", default-features = false, features = ["alloc"] }
 crc = { version = "3", default-features = false }
 crc-catalog = { version = "2", default-features = false }
+crc32fast = { version = "1", features = ["std"] }
 criterion = { version = "0.3", features = ["cargo_bench_support"] }
 criterion-plot = { version = "0.4", default-features = false }
 crossbeam = { version = "0.8", features = ["alloc", "crossbeam-channel", "crossbeam-deque", "crossbeam-epoch", "crossbeam-queue", "std"] }
@@ -118,7 +119,6 @@ crossterm-647d43efb71741da = { package = "crossterm", version = "0.21" }
 crossterm-3c51e837cfc5589a = { package = "crossterm", version = "0.22" }
 crossterm-2b5c6dc72f624058 = { package = "crossterm", version = "0.23" }
 crossterm-2ffb4c3fe830441c = { package = "crossterm", version = "0.25", features = ["bracketed-paste"] }
-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "aaa8a56efb5917e6b003285abe2a9a079ae90290" }
 crypto-bigint = { version = "0.4", default-features = false, features = ["generic-array", "rand_core", "zeroize"] }
 crypto-common = { version = "0.1", default-features = false, features = ["std"] }
 crypto-mac = { version = "0.8", default-features = false, features = ["std"] }
@@ -127,7 +127,6 @@ csv-core = { version = "0.1" }
 curve25519-dalek = { version = "3", default-features = false, features = ["serde", "u64_backend"] }
 curve25519-dalek-fiat = { version = "0.1", default-features = false, features = ["alloc", "fiat-crypto", "fiat_u64_backend", "std"] }
 curve25519-dalek-ng = { version = "4", features = ["alloc", "serde", "std", "u64_backend"] }
-dag = { git = "https://github.com/MystenLabs/narwhal", rev = "aaa8a56efb5917e6b003285abe2a9a079ae90290", default-features = false }
 dashmap = { version = "5", default-features = false }
 data-encoding = { version = "2", features = ["alloc", "std"] }
 datatest-stable = { version = "0.1", default-features = false }
@@ -153,6 +152,7 @@ dirs-sys-next = { version = "0.1", default-features = false }
 dissimilar = { version = "1", default-features = false }
 dotenvy = { version = "0.15", default-features = false }
 downcast = { version = "0.11", features = ["std"] }
+duration-str = { version = "0.4", features = ["chrono", "serde", "time"] }
 dyn-clone = { version = "1", default-features = false }
 ecdsa = { version = "0.14", default-features = false, features = ["alloc", "arithmetic", "der", "digest", "hazmat", "pkcs8", "rfc6979", "sign", "std", "verify"] }
 ed25519 = { version = "1", features = ["alloc", "pkcs8", "serde", "std", "zeroize"] }
@@ -164,7 +164,6 @@ endian-type = { version = "0.1", default-features = false }
 env_logger = { version = "0.9", features = ["atty", "humantime", "regex", "termcolor"] }
 ethnum = { version = "1", default-features = false }
 event-listener = { version = "2", default-features = false }
-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "aaa8a56efb5917e6b003285abe2a9a079ae90290", default-features = false }
 eyre = { version = "0.6", features = ["auto-install", "track-caller"] }
 fail = { version = "0.4", default-features = false }
 fastcrypto = { version = "0.1", features = ["copy_key"] }
@@ -175,12 +174,14 @@ ff = { version = "0.12", default-features = false }
 fiat-crypto = { version = "0.1", features = ["std"] }
 fixedbitset-6f8ce4dd05d13bba = { package = "fixedbitset", version = "0.2", default-features = false }
 fixedbitset-9fbad63c4bcf4a8f = { package = "fixedbitset", version = "0.4", default-features = false }
+flate2 = { version = "1", features = ["miniz_oxide", "rust_backend"] }
 flexstr = { version = "0.9", features = ["std"] }
 float-cmp = { version = "0.9", features = ["num-traits", "ratio"] }
 flume = { version = "0.10", default-features = false, features = ["async", "futures-core", "futures-sink", "pin-project"] }
 fnv = { version = "1", features = ["std"] }
 form_urlencoded = { version = "1", default-features = false }
 fragile = { version = "1", default-features = false }
+funty = { version = "1", default-features = false }
 futures = { version = "0.3", features = ["alloc", "async-await", "bilock", "executor", "futures-executor", "std", "unstable"] }
 futures-channel = { version = "0.3", features = ["alloc", "futures-sink", "sink", "std", "unstable"] }
 futures-core = { version = "0.3", features = ["alloc", "std", "unstable"] }
@@ -210,13 +211,15 @@ guppy-workspace-hack = { version = "0.1", default-features = false }
 h2 = { version = "0.3", default-features = false }
 hakari = { version = "0.10", default-features = false, features = ["cli-support", "include_dir", "owo-colors", "serde", "tabular", "toml"] }
 half = { version = "1", default-features = false }
-hashbrown = { version = "0.12", features = ["ahash", "inline-more", "raw"] }
+hashbrown-a6292c17cd707f01 = { package = "hashbrown", version = "0.11", features = ["ahash", "inline-more"] }
+hashbrown-5ef9efb8ec2df382 = { package = "hashbrown", version = "0.12", features = ["ahash", "inline-more", "raw"] }
 hashlink = { version = "0.8", default-features = false }
-hdrhistogram = { version = "7", default-features = false }
+hdrhistogram = { version = "7", features = ["base64", "crossbeam-channel", "flate2", "nom", "serialization", "sync"] }
 heck-468e82937335b1c9 = { package = "heck", version = "0.3", default-features = false }
 hex = { version = "0.4", features = ["alloc", "std"] }
 hkdf = { version = "0.12", default-features = false, features = ["std"] }
 hmac = { version = "0.12", default-features = false, features = ["reset", "std"] }
+hmac-sha512 = { version = "0.1", features = ["sha384"] }
 http = { version = "0.2", default-features = false }
 http-body = { version = "0.4", default-features = false }
 http-range-header = { version = "0.3", default-features = false }
@@ -234,6 +237,7 @@ im = { version = "15", default-features = false }
 include_dir = { version = "0.7", features = ["glob"] }
 indenter = { version = "0.3" }
 indexmap = { version = "1", default-features = false, features = ["serde", "std"] }
+indicatif = { version = "0.17", features = ["unicode-width"] }
 insta = { version = "1", features = ["colors", "console", "json", "pest", "pest_derive", "redactions", "serde", "yaml"] }
 instant = { version = "0.1", default-features = false }
 integer-encoding = { version = "3", default-features = false }
@@ -263,7 +267,7 @@ libc = { version = "0.2", features = ["std"] }
 libm = { version = "0.2" }
 librocksdb-sys = { version = "0.8", features = ["bzip2", "bzip2-sys", "libz-sys", "lz4", "snappy", "static", "zlib", "zstd", "zstd-sys"] }
 libsqlite3-sys = { version = "0.24", default-features = false, features = ["bundled", "bundled_bindings", "cc", "pkg-config", "unlock_notify", "vcpkg"] }
-libtest-mimic = { version = "0.5", default-features = false }
+libtest-mimic = { version = "0.4", default-features = false }
 libz-sys = { version = "1", default-features = false, features = ["static"] }
 linked-hash-map = { version = "0.5", default-features = false }
 lock_api-468e82937335b1c9 = { package = "lock_api", version = "0.3", default-features = false }
@@ -321,13 +325,23 @@ multihash = { version = "0.16", default-features = false, features = ["alloc", "
 mysten-network = { version = "0.1", default-features = false }
 mysten-util-mem = { git = "https://github.com/MystenLabs/mysten-infra", features = ["estimate-heapsize", "hashbrown", "parking_lot", "smallvec", "std"] }
 named-lock = { version = "0.1", default-features = false }
+narwhal-config = { git = "https://github.com/MystenLabs/narwhal", rev = "5f4b7d3f4edb1fd2e1a2789a2b7167fffe2ff28d", default-features = false }
+narwhal-consensus = { git = "https://github.com/MystenLabs/narwhal", rev = "5f4b7d3f4edb1fd2e1a2789a2b7167fffe2ff28d", features = ["benchmark", "rand"] }
+narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "5f4b7d3f4edb1fd2e1a2789a2b7167fffe2ff28d" }
+narwhal-dag = { git = "https://github.com/MystenLabs/narwhal", rev = "5f4b7d3f4edb1fd2e1a2789a2b7167fffe2ff28d", default-features = false }
+narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "5f4b7d3f4edb1fd2e1a2789a2b7167fffe2ff28d", default-features = false }
+narwhal-network = { git = "https://github.com/MystenLabs/narwhal", rev = "5f4b7d3f4edb1fd2e1a2789a2b7167fffe2ff28d", default-features = false }
+narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "5f4b7d3f4edb1fd2e1a2789a2b7167fffe2ff28d", default-features = false, features = ["benchmark", "trace_transaction"] }
+narwhal-primary = { git = "https://github.com/MystenLabs/narwhal", rev = "5f4b7d3f4edb1fd2e1a2789a2b7167fffe2ff28d", default-features = false, features = ["benchmark"] }
+narwhal-storage = { git = "https://github.com/MystenLabs/narwhal", rev = "5f4b7d3f4edb1fd2e1a2789a2b7167fffe2ff28d", default-features = false }
+narwhal-types = { git = "https://github.com/MystenLabs/narwhal", rev = "5f4b7d3f4edb1fd2e1a2789a2b7167fffe2ff28d" }
+narwhal-worker = { git = "https://github.com/MystenLabs/narwhal", rev = "5f4b7d3f4edb1fd2e1a2789a2b7167fffe2ff28d", default-features = false, features = ["benchmark", "trace_transaction"] }
 nested = { version = "0.1", default-features = false }
-network = { git = "https://github.com/MystenLabs/narwhal", rev = "aaa8a56efb5917e6b003285abe2a9a079ae90290", default-features = false }
 nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "bff03c566c9e22b1f4e67f516d0fd592a5a88f20", default-features = false }
 nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "bff03c566c9e22b1f4e67f516d0fd592a5a88f20", default-features = false }
 nibble_vec = { version = "0.1", default-features = false }
-node = { git = "https://github.com/MystenLabs/narwhal", rev = "aaa8a56efb5917e6b003285abe2a9a079ae90290", default-features = false, features = ["benchmark"] }
 nom-cdf1610d3e1514e9 = { package = "nom", version = "5", features = ["alloc", "lexical", "lexical-core", "std"] }
+nom-a490c3000a992113 = { package = "nom", version = "6", features = ["alloc", "bitvec", "funty", "lexical", "lexical-core", "std"] }
 nom-15128469a54ed75a = { package = "nom", version = "7", features = ["alloc", "std"] }
 normalize-line-endings = { version = "0.3", default-features = false }
 num = { version = "0.4", features = ["num-bigint", "std"] }
@@ -340,7 +354,9 @@ num-traits-c65f7effa3be6d31 = { package = "num-traits", version = "0.1", default
 num-traits-6f8ce4dd05d13bba = { package = "num-traits", version = "0.2", features = ["i128", "libm", "std"] }
 num_cpus = { version = "1", default-features = false }
 num_enum = { version = "0.5", features = ["std"] }
-object = { version = "0.29", default-features = false, features = ["archive", "coff", "elf", "macho", "pe", "read_core", "unaligned"] }
+number_prefix = { version = "0.4", features = ["std"] }
+object-1f5adca70f036a62 = { package = "object", version = "0.28", default-features = false, features = ["archive", "coff", "elf", "macho", "pe", "read_core", "unaligned"] }
+object-b73a96c0a5f6a7d9 = { package = "object", version = "0.29", default-features = false, features = ["archive", "coff", "elf", "macho", "pe", "read_core", "unaligned"] }
 oid-registry = { version = "0.6", features = ["crypto", "kdf", "nist_algs", "pkcs1", "pkcs12", "pkcs7", "pkcs9", "registry", "x509", "x962"] }
 once_cell = { version = "1", features = ["alloc", "race", "std"] }
 oorandom = { version = "11", default-features = false }
@@ -360,6 +376,7 @@ parking_lot_core-ca01ad9e24f5d932 = { package = "parking_lot_core", version = "0
 parking_lot_core-c38e5c1d305a1b54 = { package = "parking_lot_core", version = "0.8", default-features = false }
 parking_lot_core-274715c4dabd11b0 = { package = "parking_lot_core", version = "0.9", default-features = false }
 pathdiff = { version = "0.2", default-features = false, features = ["camino"] }
+pbkdf2 = { version = "0.11", default-features = false }
 pem = { version = "1", default-features = false }
 percent-encoding = { version = "2", features = ["alloc"] }
 pest = { version = "2", features = ["std", "thiserror"] }
@@ -381,7 +398,6 @@ predicates-core = { version = "1", default-features = false }
 predicates-tree = { version = "1", default-features = false }
 pretty = { version = "0.10", default-features = false }
 pretty_assertions = { version = "1", features = ["std"] }
-primary = { git = "https://github.com/MystenLabs/narwhal", rev = "aaa8a56efb5917e6b003285abe2a9a079ae90290", default-features = false, features = ["benchmark"] }
 proc-macro2-dff4ba8e3ae991db = { package = "proc-macro2", version = "1", features = ["proc-macro", "span-locations"] }
 prometheus = { version = "0.13", features = ["protobuf"] }
 proptest = { version = "1", features = ["bit-set", "break-dead-code", "fork", "lazy_static", "quick-error", "regex-syntax", "rusty-fork", "std", "tempfile", "timeout"] }
@@ -394,24 +410,15 @@ quinn = { version = "0.8", default-features = false, features = ["rustls", "tls-
 quinn-proto = { version = "0.8", default-features = false, features = ["ring", "rustls", "rustls-pemfile", "tls-rustls", "webpki"] }
 quinn-udp = { version = "0.1", default-features = false }
 quote-dff4ba8e3ae991db = { package = "quote", version = "1", features = ["proc-macro"] }
+radium = { version = "0.5", default-features = false }
 radix_trie = { version = "0.2", default-features = false }
-rand-3b31131e45eafb45 = { package = "rand", version = "0.6", features = ["alloc", "rand_os", "std"] }
 rand-ca01ad9e24f5d932 = { package = "rand", version = "0.7", features = ["alloc", "getrandom", "getrandom_package", "libc", "std"] }
 rand-c38e5c1d305a1b54 = { package = "rand", version = "0.8", features = ["alloc", "getrandom", "libc", "rand_chacha", "small_rng", "std", "std_rng"] }
-rand_chacha-c65f7effa3be6d31 = { package = "rand_chacha", version = "0.1", default-features = false }
 rand_chacha-468e82937335b1c9 = { package = "rand_chacha", version = "0.3", features = ["std"] }
-rand_core-468e82937335b1c9 = { package = "rand_core", version = "0.3", default-features = false }
-rand_core-9fbad63c4bcf4a8f = { package = "rand_core", version = "0.4", default-features = false, features = ["alloc", "std"] }
 rand_core-d8f496e17d97b5cb = { package = "rand_core", version = "0.5", default-features = false, features = ["alloc", "getrandom", "std"] }
 rand_core-3b31131e45eafb45 = { package = "rand_core", version = "0.6", default-features = false, features = ["alloc", "getrandom", "std"] }
 rand_distr = { version = "0.4", features = ["alloc", "std"] }
-rand_hc = { version = "0.1", default-features = false }
-rand_isaac = { version = "0.1", default-features = false }
-rand_jitter = { version = "0.1", default-features = false, features = ["std"] }
-rand_os = { version = "0.1", default-features = false }
-rand_pcg = { version = "0.1", default-features = false }
-rand_xorshift-c65f7effa3be6d31 = { package = "rand_xorshift", version = "0.1", default-features = false }
-rand_xorshift-468e82937335b1c9 = { package = "rand_xorshift", version = "0.3", default-features = false }
+rand_xorshift = { version = "0.3", default-features = false }
 rand_xoshiro = { version = "0.6", default-features = false }
 rayon = { version = "1", default-features = false }
 rayon-core = { version = "1", default-features = false }
@@ -427,9 +434,11 @@ reqwest = { version = "0.11", features = ["__tls", "blocking", "default-tls", "h
 retain_mut = { version = "0.1", default-features = false }
 rfc6979 = { version = "0.3", default-features = false }
 ring = { version = "0.16", features = ["alloc", "dev_urandom_fallback", "once_cell"] }
+ripemd = { version = "0.1", default-features = false }
 roaring = { version = "0.10", default-features = false }
 rocksdb = { version = "0.19", features = ["bzip2", "lz4", "multi-threaded-cf", "snappy", "zlib", "zstd"] }
 rust-ini = { version = "0.13", default-features = false }
+rust_decimal = { version = "1", default-features = false }
 rustc-demangle = { version = "0.1", default-features = false }
 rustc-hash = { version = "1", features = ["std"] }
 rusticata-macros = { version = "4", default-features = false }
@@ -477,6 +486,7 @@ simplelog = { version = "0.9", features = ["termcolor"] }
 siphasher = { version = "0.3", features = ["std"] }
 sized-chunks = { version = "0.6", features = ["std"] }
 slab = { version = "0.4", features = ["std"] }
+slip10_ed25519 = { version = "0.1", default-features = false }
 slug = { version = "0.1", default-features = false }
 smallvec = { version = "1", default-features = false }
 smawk = { version = "0.3", default-features = false }
@@ -490,7 +500,6 @@ sqlx-core = { version = "0.6", default-features = false, features = ["_rt-tokio"
 sqlx-rt = { version = "0.6", default-features = false, features = ["_rt-tokio", "_tls-rustls", "once_cell", "runtime-tokio-rustls", "tokio", "tokio-rustls"] }
 stable_deref_trait = { version = "1", features = ["alloc", "std"] }
 static_assertions = { version = "1", default-features = false }
-storage = { git = "https://github.com/MystenLabs/narwhal", rev = "aaa8a56efb5917e6b003285abe2a9a079ae90290", default-features = false }
 stringprep = { version = "0.1", default-features = false }
 strip-ansi-escapes = { version = "0.1", default-features = false }
 strsim-93f6ce9d446188ac = { package = "strsim", version = "0.10", default-features = false }
@@ -523,6 +532,7 @@ thrift = { version = "0.15", default-features = false }
 time-c65f7effa3be6d31 = { package = "time", version = "0.1", default-features = false }
 time-468e82937335b1c9 = { package = "time", version = "0.3", features = ["alloc", "formatting", "itoa", "macros", "parsing", "std", "time-macros"] }
 tint = { version = "1", default-features = false }
+tiny-bip39 = { version = "1", features = ["chinese-simplified", "chinese-traditional", "french", "italian", "japanese", "korean", "spanish"] }
 tinytemplate = { version = "1", default-features = false }
 tinyvec = { version = "1", features = ["alloc", "tinyvec_macros"] }
 tinyvec_macros = { version = "0.1", default-features = false }
@@ -558,7 +568,6 @@ twox-hash = { version = "1", default-features = false }
 typed-arena = { version = "2", features = ["std"] }
 typed-store = { version = "0.1", default-features = false }
 typenum = { version = "1", default-features = false }
-types = { git = "https://github.com/MystenLabs/narwhal", rev = "aaa8a56efb5917e6b003285abe2a9a079ae90290" }
 ucd-trie = { version = "0.1", default-features = false, features = ["std"] }
 uncased = { version = "0.9", default-features = false }
 unescape = { version = "0.1", default-features = false }
@@ -592,8 +601,8 @@ web-sys = { version = "0.3", default-features = false, features = ["BinaryType",
 webpki = { version = "0.22", default-features = false, features = ["alloc", "std"] }
 webpki-roots = { version = "0.22", default-features = false }
 whoami = { version = "1" }
-worker = { git = "https://github.com/MystenLabs/narwhal", rev = "aaa8a56efb5917e6b003285abe2a9a079ae90290", default-features = false, features = ["benchmark"] }
-workspace-hack = { git = "https://github.com/MystenLabs/narwhal", rev = "aaa8a56efb5917e6b003285abe2a9a079ae90290", default-features = false }
+workspace-hack = { git = "https://github.com/MystenLabs/narwhal", rev = "5f4b7d3f4edb1fd2e1a2789a2b7167fffe2ff28d", default-features = false }
+wyz = { version = "0.2", default-features = false, features = ["alloc"] }
 x509-parser = { version = "0.14" }
 yaml-rust = { version = "0.4", default-features = false }
 yansi = { version = "0.5", default-features = false }
@@ -639,8 +648,7 @@ async-trait = { version = "0.1", default-features = false }
 atoi = { version = "1", default-features = false }
 atomicwrites = { version = "0.3", default-features = false }
 atty = { version = "0.2", default-features = false }
-autocfg-c65f7effa3be6d31 = { package = "autocfg", version = "0.1", default-features = false }
-autocfg-dff4ba8e3ae991db = { package = "autocfg", version = "1", default-features = false }
+autocfg = { version = "1", default-features = false }
 axum = { version = "0.5", features = ["form", "http1", "json", "matched-path", "original-uri", "query", "serde_json", "serde_urlencoded", "tower-log"] }
 axum-core = { version = "0.2", default-features = false }
 backoff = { version = "0.4", features = ["futures", "futures-core", "pin-project-lite", "tokio", "tokio_1"] }
@@ -655,13 +663,13 @@ better_typeid_derive = { version = "0.1", default-features = false }
 bimap = { version = "0.6", features = ["std"] }
 bincode = { version = "1", default-features = false }
 bindgen = { version = "0.60", default-features = false, features = ["runtime"] }
-bip39 = { git = "https://github.com/patrickkuo/rust-bip39.git", rev = "a76fe8310416555e6383b42b8acc4eb93c7bcc89", features = ["rand", "serde", "std", "unicode-normalization"] }
+bip32 = { version = "0.4", features = ["alloc", "bip39", "k256", "mnemonic", "once_cell", "pbkdf2", "secp256k1", "std"] }
 bit-set = { version = "0.5", features = ["std"] }
 bit-vec = { version = "0.6", default-features = false, features = ["std"] }
-bitcoin_hashes-a6292c17cd707f01 = { package = "bitcoin_hashes", version = "0.11", default-features = false }
-bitcoin_hashes-274715c4dabd11b0 = { package = "bitcoin_hashes", version = "0.9", features = ["std"] }
+bitcoin_hashes = { version = "0.11", default-features = false }
 bitflags = { version = "1" }
 bitmaps = { version = "2", features = ["std"] }
+bitvec = { version = "0.19", default-features = false, features = ["alloc", "std"] }
 blake2 = { version = "0.9", features = ["std"] }
 blake2s_simd = { version = "1", features = ["std"] }
 block-buffer-93f6ce9d446188ac = { package = "block-buffer", version = "0.10", default-features = false }
@@ -669,7 +677,7 @@ block-buffer-274715c4dabd11b0 = { package = "block-buffer", version = "0.9", def
 block-padding = { version = "0.2", default-features = false }
 bls-crypto = { git = "https://github.com/huitseeker/celo-bls-snark-rs", branch = "updates-2", features = ["compat"] }
 blst = { version = "0.3" }
-bs58 = { version = "0.4", features = ["alloc", "std"] }
+bs58 = { version = "0.4", features = ["alloc", "check", "sha2", "std"] }
 bstr = { version = "0.2", features = ["lazy_static", "regex-automata", "serde", "serde1", "serde1-nostd", "std", "unicode"] }
 bulletproofs = { version = "4", features = ["rand", "std", "thiserror"] }
 bumpalo = { version = "3" }
@@ -683,7 +691,8 @@ cargo-platform = { version = "0.1", default-features = false }
 cargo_metadata-582f2526e08bb6a0 = { package = "cargo_metadata", version = "0.14" }
 cargo_metadata-3575ec1268b04181 = { package = "cargo_metadata", version = "0.15" }
 cassowary = { version = "0.3", default-features = false }
-cast = { version = "0.3", default-features = false }
+cast-6f8ce4dd05d13bba = { package = "cast", version = "0.2", features = ["std"] }
+cast-468e82937335b1c9 = { package = "cast", version = "0.3", default-features = false }
 cc = { version = "1", default-features = false, features = ["jobserver", "parallel"] }
 cexpr = { version = "0.6", default-features = false }
 cfg-expr = { version = "0.10", features = ["target-lexicon", "targets"] }
@@ -705,15 +714,15 @@ collectable = { version = "0.0.2", default-features = false }
 colored = { version = "2", default-features = false }
 colored-diff = { version = "0.2", default-features = false }
 combine = { version = "4", features = ["alloc", "bytes", "std"] }
-config-5f890c5b0f7b20d5 = { package = "config", git = "https://github.com/MystenLabs/narwhal", rev = "aaa8a56efb5917e6b003285abe2a9a079ae90290", default-features = false }
-config-a6292c17cd707f01 = { package = "config", version = "0.11", features = ["hjson", "ini", "json", "rust-ini", "serde-hjson", "serde_json", "toml", "yaml", "yaml-rust"] }
-consensus = { git = "https://github.com/MystenLabs/narwhal", rev = "aaa8a56efb5917e6b003285abe2a9a079ae90290", features = ["benchmark", "rand"] }
-console = { version = "0.15", default-features = false }
+comfy-table = { version = "6", features = ["crossterm", "tty"] }
+config = { version = "0.11", features = ["hjson", "ini", "json", "rust-ini", "serde-hjson", "serde_json", "toml", "yaml", "yaml-rust"] }
+console = { version = "0.15", default-features = false, features = ["ansi-parsing", "unicode-width"] }
 const-oid = { version = "0.9", default-features = false }
 constant_time_eq = { version = "0.1", default-features = false }
 core2 = { version = "0.4", default-features = false, features = ["alloc"] }
 crc = { version = "3", default-features = false }
 crc-catalog = { version = "2", default-features = false }
+crc32fast = { version = "1", features = ["std"] }
 criterion = { version = "0.3", features = ["cargo_bench_support"] }
 criterion-plot = { version = "0.4", default-features = false }
 crossbeam = { version = "0.8", features = ["alloc", "crossbeam-channel", "crossbeam-deque", "crossbeam-epoch", "crossbeam-queue", "std"] }
@@ -726,7 +735,6 @@ crossterm-647d43efb71741da = { package = "crossterm", version = "0.21" }
 crossterm-3c51e837cfc5589a = { package = "crossterm", version = "0.22" }
 crossterm-2b5c6dc72f624058 = { package = "crossterm", version = "0.23" }
 crossterm-2ffb4c3fe830441c = { package = "crossterm", version = "0.25", features = ["bracketed-paste"] }
-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "aaa8a56efb5917e6b003285abe2a9a079ae90290" }
 crypto-bigint = { version = "0.4", default-features = false, features = ["generic-array", "rand_core", "zeroize"] }
 crypto-common = { version = "0.1", default-features = false, features = ["std"] }
 crypto-mac = { version = "0.8", default-features = false, features = ["std"] }
@@ -735,7 +743,6 @@ csv-core = { version = "0.1" }
 curve25519-dalek = { version = "3", default-features = false, features = ["serde", "u64_backend"] }
 curve25519-dalek-fiat = { version = "0.1", default-features = false, features = ["alloc", "fiat-crypto", "fiat_u64_backend", "std"] }
 curve25519-dalek-ng = { version = "4", features = ["alloc", "serde", "std", "u64_backend"] }
-dag = { git = "https://github.com/MystenLabs/narwhal", rev = "aaa8a56efb5917e6b003285abe2a9a079ae90290", default-features = false }
 darling-594e8ee84c453af0 = { package = "darling", version = "0.13", features = ["suggestions"] }
 darling-582f2526e08bb6a0 = { package = "darling", version = "0.14", features = ["suggestions"] }
 darling_core-594e8ee84c453af0 = { package = "darling_core", version = "0.13", default-features = false, features = ["strsim", "suggestions"] }
@@ -772,6 +779,7 @@ displaydoc = { version = "0.2", features = ["std"] }
 dissimilar = { version = "1", default-features = false }
 dotenvy = { version = "0.15", default-features = false }
 downcast = { version = "0.11", features = ["std"] }
+duration-str = { version = "0.4", features = ["chrono", "serde", "time"] }
 dyn-clone = { version = "1", default-features = false }
 ecdsa = { version = "0.14", default-features = false, features = ["alloc", "arithmetic", "der", "digest", "hazmat", "pkcs8", "rfc6979", "sign", "std", "verify"] }
 ed25519 = { version = "1", features = ["alloc", "pkcs8", "serde", "std", "zeroize"] }
@@ -784,7 +792,6 @@ enum_dispatch = { version = "0.3", default-features = false }
 env_logger = { version = "0.9", features = ["atty", "humantime", "regex", "termcolor"] }
 ethnum = { version = "1", default-features = false }
 event-listener = { version = "2", default-features = false }
-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "aaa8a56efb5917e6b003285abe2a9a079ae90290", default-features = false }
 eyre = { version = "0.6", features = ["auto-install", "track-caller"] }
 fail = { version = "0.4", default-features = false }
 fastcrypto = { version = "0.1", features = ["copy_key"] }
@@ -795,12 +802,14 @@ ff = { version = "0.12", default-features = false }
 fiat-crypto = { version = "0.1", features = ["std"] }
 fixedbitset-6f8ce4dd05d13bba = { package = "fixedbitset", version = "0.2", default-features = false }
 fixedbitset-9fbad63c4bcf4a8f = { package = "fixedbitset", version = "0.4", default-features = false }
+flate2 = { version = "1", features = ["miniz_oxide", "rust_backend"] }
 flexstr = { version = "0.9", features = ["std"] }
 float-cmp = { version = "0.9", features = ["num-traits", "ratio"] }
 flume = { version = "0.10", default-features = false, features = ["async", "futures-core", "futures-sink", "pin-project"] }
 fnv = { version = "1", features = ["std"] }
 form_urlencoded = { version = "1", default-features = false }
 fragile = { version = "1", default-features = false }
+funty = { version = "1", default-features = false }
 futures = { version = "0.3", features = ["alloc", "async-await", "bilock", "executor", "futures-executor", "std", "unstable"] }
 futures-channel = { version = "0.3", features = ["alloc", "futures-sink", "sink", "std", "unstable"] }
 futures-core = { version = "0.3", features = ["alloc", "std", "unstable"] }
@@ -831,15 +840,17 @@ guppy-workspace-hack = { version = "0.1", default-features = false }
 h2 = { version = "0.3", default-features = false }
 hakari = { version = "0.10", default-features = false, features = ["cli-support", "include_dir", "owo-colors", "serde", "tabular", "toml"] }
 half = { version = "1", default-features = false }
-hashbrown = { version = "0.12", features = ["ahash", "inline-more", "raw"] }
+hashbrown-a6292c17cd707f01 = { package = "hashbrown", version = "0.11", features = ["ahash", "inline-more"] }
+hashbrown-5ef9efb8ec2df382 = { package = "hashbrown", version = "0.12", features = ["ahash", "inline-more", "raw"] }
 hashlink = { version = "0.8", default-features = false }
-hdrhistogram = { version = "7", default-features = false }
+hdrhistogram = { version = "7", features = ["base64", "crossbeam-channel", "flate2", "nom", "serialization", "sync"] }
 heck-468e82937335b1c9 = { package = "heck", version = "0.3", default-features = false }
 heck-9fbad63c4bcf4a8f = { package = "heck", version = "0.4", features = ["unicode", "unicode-segmentation"] }
 hex = { version = "0.4", features = ["alloc", "std"] }
 hex-literal = { version = "0.3", default-features = false }
 hkdf = { version = "0.12", default-features = false, features = ["std"] }
 hmac = { version = "0.12", default-features = false, features = ["reset", "std"] }
+hmac-sha512 = { version = "0.1", features = ["sha384"] }
 home = { version = "0.5", default-features = false }
 http = { version = "0.2", default-features = false }
 http-body = { version = "0.4", default-features = false }
@@ -862,6 +873,7 @@ include_dir = { version = "0.7", features = ["glob"] }
 include_dir_macros = { version = "0.7", default-features = false }
 indenter = { version = "0.3" }
 indexmap = { version = "1", default-features = false, features = ["serde", "std"] }
+indicatif = { version = "0.17", features = ["unicode-width"] }
 insta = { version = "1", features = ["colors", "console", "json", "pest", "pest_derive", "redactions", "serde", "yaml"] }
 instant = { version = "0.1", default-features = false }
 integer-encoding = { version = "3", default-features = false }
@@ -895,7 +907,7 @@ libloading = { version = "0.7", default-features = false }
 libm = { version = "0.2" }
 librocksdb-sys = { version = "0.8", features = ["bzip2", "bzip2-sys", "libz-sys", "lz4", "snappy", "static", "zlib", "zstd", "zstd-sys"] }
 libsqlite3-sys = { version = "0.24", default-features = false, features = ["bundled", "bundled_bindings", "cc", "pkg-config", "unlock_notify", "vcpkg"] }
-libtest-mimic = { version = "0.5", default-features = false }
+libtest-mimic = { version = "0.4", default-features = false }
 libz-sys = { version = "1", default-features = false, features = ["static"] }
 linked-hash-map = { version = "0.5", default-features = false }
 lock_api-468e82937335b1c9 = { package = "lock_api", version = "0.3", default-features = false }
@@ -958,13 +970,23 @@ mysten-util-mem = { git = "https://github.com/MystenLabs/mysten-infra", features
 mysten-util-mem-derive = { git = "https://github.com/MystenLabs/mysten-infra", default-features = false }
 name-variant = { version = "0.1", default-features = false }
 named-lock = { version = "0.1", default-features = false }
+narwhal-config = { git = "https://github.com/MystenLabs/narwhal", rev = "5f4b7d3f4edb1fd2e1a2789a2b7167fffe2ff28d", default-features = false }
+narwhal-consensus = { git = "https://github.com/MystenLabs/narwhal", rev = "5f4b7d3f4edb1fd2e1a2789a2b7167fffe2ff28d", features = ["benchmark", "rand"] }
+narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "5f4b7d3f4edb1fd2e1a2789a2b7167fffe2ff28d" }
+narwhal-dag = { git = "https://github.com/MystenLabs/narwhal", rev = "5f4b7d3f4edb1fd2e1a2789a2b7167fffe2ff28d", default-features = false }
+narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "5f4b7d3f4edb1fd2e1a2789a2b7167fffe2ff28d", default-features = false }
+narwhal-network = { git = "https://github.com/MystenLabs/narwhal", rev = "5f4b7d3f4edb1fd2e1a2789a2b7167fffe2ff28d", default-features = false }
+narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "5f4b7d3f4edb1fd2e1a2789a2b7167fffe2ff28d", default-features = false, features = ["benchmark", "trace_transaction"] }
+narwhal-primary = { git = "https://github.com/MystenLabs/narwhal", rev = "5f4b7d3f4edb1fd2e1a2789a2b7167fffe2ff28d", default-features = false, features = ["benchmark"] }
+narwhal-storage = { git = "https://github.com/MystenLabs/narwhal", rev = "5f4b7d3f4edb1fd2e1a2789a2b7167fffe2ff28d", default-features = false }
+narwhal-types = { git = "https://github.com/MystenLabs/narwhal", rev = "5f4b7d3f4edb1fd2e1a2789a2b7167fffe2ff28d" }
+narwhal-worker = { git = "https://github.com/MystenLabs/narwhal", rev = "5f4b7d3f4edb1fd2e1a2789a2b7167fffe2ff28d", default-features = false, features = ["benchmark", "trace_transaction"] }
 nested = { version = "0.1", default-features = false }
-network = { git = "https://github.com/MystenLabs/narwhal", rev = "aaa8a56efb5917e6b003285abe2a9a079ae90290", default-features = false }
 nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "bff03c566c9e22b1f4e67f516d0fd592a5a88f20", default-features = false }
 nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "bff03c566c9e22b1f4e67f516d0fd592a5a88f20", default-features = false }
 nibble_vec = { version = "0.1", default-features = false }
-node = { git = "https://github.com/MystenLabs/narwhal", rev = "aaa8a56efb5917e6b003285abe2a9a079ae90290", default-features = false, features = ["benchmark"] }
 nom-cdf1610d3e1514e9 = { package = "nom", version = "5", features = ["alloc", "lexical", "lexical-core", "std"] }
+nom-a490c3000a992113 = { package = "nom", version = "6", features = ["alloc", "bitvec", "funty", "lexical", "lexical-core", "std"] }
 nom-15128469a54ed75a = { package = "nom", version = "7", features = ["alloc", "std"] }
 normalize-line-endings = { version = "0.3", default-features = false }
 num = { version = "0.4", features = ["num-bigint", "std"] }
@@ -978,7 +1000,9 @@ num-traits-6f8ce4dd05d13bba = { package = "num-traits", version = "0.2", feature
 num_cpus = { version = "1", default-features = false }
 num_enum = { version = "0.5", features = ["std"] }
 num_enum_derive = { version = "0.5", default-features = false, features = ["proc-macro-crate", "std"] }
-object = { version = "0.29", default-features = false, features = ["archive", "coff", "elf", "macho", "pe", "read_core", "unaligned"] }
+number_prefix = { version = "0.4", features = ["std"] }
+object-1f5adca70f036a62 = { package = "object", version = "0.28", default-features = false, features = ["archive", "coff", "elf", "macho", "pe", "read_core", "unaligned"] }
+object-b73a96c0a5f6a7d9 = { package = "object", version = "0.29", default-features = false, features = ["archive", "coff", "elf", "macho", "pe", "read_core", "unaligned"] }
 oid-registry = { version = "0.6", features = ["crypto", "kdf", "nist_algs", "pkcs1", "pkcs12", "pkcs7", "pkcs9", "registry", "x509", "x962"] }
 once_cell = { version = "1", features = ["alloc", "race", "std"] }
 oorandom = { version = "11", default-features = false }
@@ -1001,6 +1025,7 @@ parking_lot_core-274715c4dabd11b0 = { package = "parking_lot_core", version = "0
 parse-zoneinfo = { version = "0.3", default-features = false }
 paste = { version = "1", default-features = false }
 pathdiff = { version = "0.2", default-features = false, features = ["camino"] }
+pbkdf2 = { version = "0.11", default-features = false }
 peeking_take_while = { version = "0.1", default-features = false }
 pem = { version = "1", default-features = false }
 percent-encoding = { version = "2", features = ["alloc"] }
@@ -1032,7 +1057,6 @@ predicates-tree = { version = "1", default-features = false }
 pretty = { version = "0.10", default-features = false }
 pretty_assertions = { version = "1", features = ["std"] }
 prettyplease = { version = "0.1", default-features = false }
-primary = { git = "https://github.com/MystenLabs/narwhal", rev = "aaa8a56efb5917e6b003285abe2a9a079ae90290", default-features = false, features = ["benchmark"] }
 proc-macro-crate-c65f7effa3be6d31 = { package = "proc-macro-crate", version = "0.1", default-features = false }
 proc-macro-crate-dff4ba8e3ae991db = { package = "proc-macro-crate", version = "1", default-features = false }
 proc-macro-error = { version = "1", features = ["syn", "syn-error"] }
@@ -1055,24 +1079,15 @@ quinn-proto = { version = "0.8", default-features = false, features = ["ring", "
 quinn-udp = { version = "0.1", default-features = false }
 quote-3b31131e45eafb45 = { package = "quote", version = "0.6", features = ["proc-macro"] }
 quote-dff4ba8e3ae991db = { package = "quote", version = "1", features = ["proc-macro"] }
+radium = { version = "0.5", default-features = false }
 radix_trie = { version = "0.2", default-features = false }
-rand-3b31131e45eafb45 = { package = "rand", version = "0.6", features = ["alloc", "rand_os", "std"] }
 rand-ca01ad9e24f5d932 = { package = "rand", version = "0.7", features = ["alloc", "getrandom", "getrandom_package", "libc", "std"] }
 rand-c38e5c1d305a1b54 = { package = "rand", version = "0.8", features = ["alloc", "getrandom", "libc", "rand_chacha", "small_rng", "std", "std_rng"] }
-rand_chacha-c65f7effa3be6d31 = { package = "rand_chacha", version = "0.1", default-features = false }
 rand_chacha-468e82937335b1c9 = { package = "rand_chacha", version = "0.3", features = ["std"] }
-rand_core-468e82937335b1c9 = { package = "rand_core", version = "0.3", default-features = false }
-rand_core-9fbad63c4bcf4a8f = { package = "rand_core", version = "0.4", default-features = false, features = ["alloc", "std"] }
 rand_core-d8f496e17d97b5cb = { package = "rand_core", version = "0.5", default-features = false, features = ["alloc", "getrandom", "std"] }
 rand_core-3b31131e45eafb45 = { package = "rand_core", version = "0.6", default-features = false, features = ["alloc", "getrandom", "std"] }
 rand_distr = { version = "0.4", features = ["alloc", "std"] }
-rand_hc = { version = "0.1", default-features = false }
-rand_isaac = { version = "0.1", default-features = false }
-rand_jitter = { version = "0.1", default-features = false, features = ["std"] }
-rand_os = { version = "0.1", default-features = false }
-rand_pcg = { version = "0.1", default-features = false }
-rand_xorshift-c65f7effa3be6d31 = { package = "rand_xorshift", version = "0.1", default-features = false }
-rand_xorshift-468e82937335b1c9 = { package = "rand_xorshift", version = "0.3", default-features = false }
+rand_xorshift = { version = "0.3", default-features = false }
 rand_xoshiro = { version = "0.6", default-features = false }
 rayon = { version = "1", default-features = false }
 rayon-core = { version = "1", default-features = false }
@@ -1090,13 +1105,16 @@ reqwest = { version = "0.11", features = ["__tls", "blocking", "default-tls", "h
 retain_mut = { version = "0.1", default-features = false }
 rfc6979 = { version = "0.3", default-features = false }
 ring = { version = "0.16", features = ["alloc", "dev_urandom_fallback", "once_cell"] }
+ripemd = { version = "0.1", default-features = false }
 roaring = { version = "0.10", default-features = false }
 rocksdb = { version = "0.19", features = ["bzip2", "lz4", "multi-threaded-cf", "snappy", "zlib", "zstd"] }
 rust-ini = { version = "0.13", default-features = false }
+rust_decimal = { version = "1", default-features = false }
 rustc-demangle = { version = "0.1", default-features = false }
 rustc-hash = { version = "1", features = ["std"] }
 rustc_version-6f8ce4dd05d13bba = { package = "rustc_version", version = "0.2", default-features = false }
 rustc_version-468e82937335b1c9 = { package = "rustc_version", version = "0.3", default-features = false }
+rustc_version-9fbad63c4bcf4a8f = { package = "rustc_version", version = "0.4", default-features = false }
 rusticata-macros = { version = "4", default-features = false }
 rustls = { version = "0.20", features = ["dangerous_configuration", "log", "logging", "quic", "tls12"] }
 rustls-native-certs = { version = "0.6", default-features = false }
@@ -1154,6 +1172,7 @@ simplelog = { version = "0.9", features = ["termcolor"] }
 siphasher = { version = "0.3", features = ["std"] }
 sized-chunks = { version = "0.6", features = ["std"] }
 slab = { version = "0.4", features = ["std"] }
+slip10_ed25519 = { version = "0.1", default-features = false }
 slug = { version = "0.1", default-features = false }
 smallvec = { version = "1", default-features = false }
 smawk = { version = "0.3", default-features = false }
@@ -1168,7 +1187,6 @@ sqlx-macros = { version = "0.6", default-features = false, features = ["_rt-toki
 sqlx-rt = { version = "0.6", default-features = false, features = ["_rt-tokio", "_tls-rustls", "once_cell", "runtime-tokio-rustls", "tokio", "tokio-rustls"] }
 stable_deref_trait = { version = "1", features = ["alloc", "std"] }
 static_assertions = { version = "1", default-features = false }
-storage = { git = "https://github.com/MystenLabs/narwhal", rev = "aaa8a56efb5917e6b003285abe2a9a079ae90290", default-features = false }
 stringprep = { version = "0.1", default-features = false }
 strip-ansi-escapes = { version = "0.1", default-features = false }
 strsim-93f6ce9d446188ac = { package = "strsim", version = "0.10", default-features = false }
@@ -1210,6 +1228,7 @@ time-c65f7effa3be6d31 = { package = "time", version = "0.1", default-features = 
 time-468e82937335b1c9 = { package = "time", version = "0.3", features = ["alloc", "formatting", "itoa", "macros", "parsing", "std", "time-macros"] }
 time-macros = { version = "0.2", default-features = false }
 tint = { version = "1", default-features = false }
+tiny-bip39 = { version = "1", features = ["chinese-simplified", "chinese-traditional", "french", "italian", "japanese", "korean", "spanish"] }
 tinytemplate = { version = "1", default-features = false }
 tinyvec = { version = "1", features = ["alloc", "tinyvec_macros"] }
 tinyvec_macros = { version = "0.1", default-features = false }
@@ -1252,7 +1271,6 @@ typed-arena = { version = "2", features = ["std"] }
 typed-store = { version = "0.1", default-features = false }
 typed-store-derive = { version = "0.1", default-features = false }
 typenum = { version = "1", default-features = false }
-types = { git = "https://github.com/MystenLabs/narwhal", rev = "aaa8a56efb5917e6b003285abe2a9a079ae90290" }
 ucd-trie = { version = "0.1", default-features = false, features = ["std"] }
 uncased = { version = "0.9", default-features = false }
 unescape = { version = "0.1", default-features = false }
@@ -1298,8 +1316,8 @@ webpki = { version = "0.22", default-features = false, features = ["alloc", "std
 webpki-roots = { version = "0.22", default-features = false }
 which = { version = "4", default-features = false }
 whoami = { version = "1" }
-worker = { git = "https://github.com/MystenLabs/narwhal", rev = "aaa8a56efb5917e6b003285abe2a9a079ae90290", default-features = false, features = ["benchmark"] }
-workspace-hack = { git = "https://github.com/MystenLabs/narwhal", rev = "aaa8a56efb5917e6b003285abe2a9a079ae90290", default-features = false }
+workspace-hack = { git = "https://github.com/MystenLabs/narwhal", rev = "5f4b7d3f4edb1fd2e1a2789a2b7167fffe2ff28d", default-features = false }
+wyz = { version = "0.2", default-features = false, features = ["alloc"] }
 x509-parser = { version = "0.14" }
 yaml-rust = { version = "0.4", default-features = false }
 yansi = { version = "0.5", default-features = false }
@@ -1315,7 +1333,7 @@ cpufeatures = { version = "0.2", default-features = false }
 encoding_rs = { version = "0.8", features = ["alloc"] }
 errno = { version = "0.2", default-features = false }
 hyper-tls = { version = "0.5", default-features = false }
-io-lifetimes = { version = "0.7", default-features = false }
+io-lifetimes = { version = "0.6", default-features = false }
 ipnet = { version = "2" }
 jemalloc-ctl = { version = "0.5" }
 jemalloc-sys = { version = "0.5", features = ["background_threads_runtime_support", "profiling"] }
@@ -1326,7 +1344,7 @@ native-tls = { version = "0.2", default-features = false }
 nix = { version = "0.23", default-features = false }
 num_threads = { version = "0.1", default-features = false }
 rand_chacha-6f8ce4dd05d13bba = { package = "rand_chacha", version = "0.2", default-features = false, features = ["std"] }
-rustix = { version = "0.35", features = ["fs", "io-lifetimes", "libc", "std", "use-libc-auxv"] }
+rustix = { version = "0.34", features = ["io-lifetimes", "std"] }
 security-framework = { version = "2", features = ["OSX_10_9"] }
 security-framework-sys = { version = "2", features = ["OSX_10_9"] }
 signal-hook = { version = "0.3", features = ["channel", "iterator"] }
@@ -1344,7 +1362,7 @@ encoding_rs = { version = "0.8", features = ["alloc"] }
 errno = { version = "0.2", default-features = false }
 fs_extra = { version = "1", default-features = false }
 hyper-tls = { version = "0.5", default-features = false }
-io-lifetimes = { version = "0.7", default-features = false }
+io-lifetimes = { version = "0.6", default-features = false }
 ipnet = { version = "2" }
 jemalloc-ctl = { version = "0.5" }
 jemalloc-sys = { version = "0.5", features = ["background_threads_runtime_support", "profiling"] }
@@ -1355,7 +1373,7 @@ native-tls = { version = "0.2", default-features = false }
 nix = { version = "0.23", default-features = false }
 num_threads = { version = "0.1", default-features = false }
 rand_chacha-6f8ce4dd05d13bba = { package = "rand_chacha", version = "0.2", default-features = false, features = ["std"] }
-rustix = { version = "0.35", features = ["fs", "io-lifetimes", "libc", "std", "use-libc-auxv"] }
+rustix = { version = "0.34", features = ["io-lifetimes", "std"] }
 security-framework = { version = "2", features = ["OSX_10_9"] }
 security-framework-sys = { version = "2", features = ["OSX_10_9"] }
 signal-hook = { version = "0.3", features = ["channel", "iterator"] }
@@ -1371,7 +1389,7 @@ encoding_rs = { version = "0.8", features = ["alloc"] }
 foreign-types = { version = "0.3", default-features = false }
 foreign-types-shared = { version = "0.1", default-features = false }
 hyper-tls = { version = "0.5", default-features = false }
-io-lifetimes = { version = "0.7", default-features = false }
+io-lifetimes = { version = "0.6", default-features = false }
 ipnet = { version = "2" }
 jemalloc-ctl = { version = "0.5" }
 jemalloc-sys = { version = "0.5", features = ["background_threads_runtime_support", "profiling"] }
@@ -1386,7 +1404,7 @@ openssl = { version = "0.10", default-features = false }
 openssl-probe = { version = "0.1", default-features = false }
 openssl-sys = { version = "0.9", default-features = false }
 rand_chacha-6f8ce4dd05d13bba = { package = "rand_chacha", version = "0.2", default-features = false, features = ["std"] }
-rustix = { version = "0.35", features = ["fs", "io-lifetimes", "libc", "std", "use-libc-auxv"] }
+rustix = { version = "0.34", features = ["io-lifetimes", "std"] }
 signal-hook = { version = "0.3", features = ["channel", "iterator"] }
 signal-hook-mio = { version = "0.2", default-features = false, features = ["mio-0_7", "mio-0_8", "support-v0_7", "support-v0_8"] }
 signal-hook-registry = { version = "1", default-features = false }
@@ -1402,7 +1420,7 @@ foreign-types = { version = "0.3", default-features = false }
 foreign-types-shared = { version = "0.1", default-features = false }
 fs_extra = { version = "1", default-features = false }
 hyper-tls = { version = "0.5", default-features = false }
-io-lifetimes = { version = "0.7", default-features = false }
+io-lifetimes = { version = "0.6", default-features = false }
 ipnet = { version = "2" }
 jemalloc-ctl = { version = "0.5" }
 jemalloc-sys = { version = "0.5", features = ["background_threads_runtime_support", "profiling"] }
@@ -1418,7 +1436,7 @@ openssl-macros = { version = "0.1", default-features = false }
 openssl-probe = { version = "0.1", default-features = false }
 openssl-sys = { version = "0.9", default-features = false }
 rand_chacha-6f8ce4dd05d13bba = { package = "rand_chacha", version = "0.2", default-features = false, features = ["std"] }
-rustix = { version = "0.35", features = ["fs", "io-lifetimes", "libc", "std", "use-libc-auxv"] }
+rustix = { version = "0.34", features = ["io-lifetimes", "std"] }
 signal-hook = { version = "0.3", features = ["channel", "iterator"] }
 signal-hook-mio = { version = "0.2", default-features = false, features = ["mio-0_7", "mio-0_8", "support-v0_7", "support-v0_8"] }
 signal-hook-registry = { version = "1", default-features = false }
@@ -1450,8 +1468,10 @@ web-sys = { version = "0.3", default-features = false, features = ["Worker"] }
 widestring = { version = "0.4", features = ["alloc", "std"] }
 winapi = { version = "0.3", default-features = false, features = ["accctrl", "aclapi", "activation", "basetsd", "combaseapi", "consoleapi", "errhandlingapi", "fileapi", "handleapi", "impl-debug", "impl-default", "knownfolders", "libloaderapi", "minwinbase", "minwindef", "namedpipeapi", "ntdef", "ntsecapi", "ntstatus", "objbase", "processenv", "processthreadsapi", "profileapi", "roapi", "shellapi", "shlobj", "std", "stringapiset", "synchapi", "sysinfoapi", "threadpoollegacyapiset", "timezoneapi", "winbase", "wincon", "winerror", "winnt", "winreg", "winstring", "winuser", "ws2ipdef", "ws2tcpip", "wtypesbase"] }
 winapi-util = { version = "0.1", default-features = false }
-windows-sys = { version = "0.36", features = ["Win32", "Win32_Foundation", "Win32_Networking", "Win32_Networking_WinSock", "Win32_Security", "Win32_Security_Authentication", "Win32_Security_Authentication_Identity", "Win32_Security_Credentials", "Win32_Security_Cryptography", "Win32_Storage", "Win32_Storage_FileSystem", "Win32_System", "Win32_System_IO", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_Pipes", "Win32_System_SystemServices", "Win32_System_WindowsProgramming"] }
-windows_x86_64_msvc = { version = "0.36", default-features = false }
+windows-sys-fa1f6196edfd7249 = { package = "windows-sys", version = "0.30", features = ["Win32", "Win32_Foundation", "Win32_Storage", "Win32_Storage_FileSystem", "Win32_System", "Win32_System_IO"] }
+windows-sys-4e55305914c60c55 = { package = "windows-sys", version = "0.36", features = ["Win32", "Win32_Foundation", "Win32_Networking", "Win32_Networking_WinSock", "Win32_Security", "Win32_Security_Authentication", "Win32_Security_Authentication_Identity", "Win32_Security_Credentials", "Win32_Security_Cryptography", "Win32_Storage", "Win32_Storage_FileSystem", "Win32_System", "Win32_System_IO", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_Pipes", "Win32_System_SystemServices", "Win32_System_WindowsProgramming"] }
+windows_x86_64_msvc-fa1f6196edfd7249 = { package = "windows_x86_64_msvc", version = "0.30", default-features = false }
+windows_x86_64_msvc-4e55305914c60c55 = { package = "windows_x86_64_msvc", version = "0.36", default-features = false }
 winreg = { version = "0.10", default-features = false }
 
 [target.x86_64-pc-windows-msvc.build-dependencies]
@@ -1478,8 +1498,10 @@ web-sys = { version = "0.3", default-features = false, features = ["Worker"] }
 widestring = { version = "0.4", features = ["alloc", "std"] }
 winapi = { version = "0.3", default-features = false, features = ["accctrl", "aclapi", "activation", "basetsd", "combaseapi", "consoleapi", "errhandlingapi", "fileapi", "handleapi", "impl-debug", "impl-default", "knownfolders", "libloaderapi", "minwinbase", "minwindef", "namedpipeapi", "ntdef", "ntsecapi", "ntstatus", "objbase", "processenv", "processthreadsapi", "profileapi", "roapi", "shellapi", "shlobj", "std", "stringapiset", "synchapi", "sysinfoapi", "threadpoollegacyapiset", "timezoneapi", "winbase", "wincon", "winerror", "winnt", "winreg", "winstring", "winuser", "ws2ipdef", "ws2tcpip", "wtypesbase"] }
 winapi-util = { version = "0.1", default-features = false }
-windows-sys = { version = "0.36", features = ["Win32", "Win32_Foundation", "Win32_Networking", "Win32_Networking_WinSock", "Win32_Security", "Win32_Security_Authentication", "Win32_Security_Authentication_Identity", "Win32_Security_Credentials", "Win32_Security_Cryptography", "Win32_Storage", "Win32_Storage_FileSystem", "Win32_System", "Win32_System_IO", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_Pipes", "Win32_System_SystemServices", "Win32_System_WindowsProgramming"] }
-windows_x86_64_msvc = { version = "0.36", default-features = false }
+windows-sys-fa1f6196edfd7249 = { package = "windows-sys", version = "0.30", features = ["Win32", "Win32_Foundation", "Win32_Storage", "Win32_Storage_FileSystem", "Win32_System", "Win32_System_IO"] }
+windows-sys-4e55305914c60c55 = { package = "windows-sys", version = "0.36", features = ["Win32", "Win32_Foundation", "Win32_Networking", "Win32_Networking_WinSock", "Win32_Security", "Win32_Security_Authentication", "Win32_Security_Authentication_Identity", "Win32_Security_Credentials", "Win32_Security_Cryptography", "Win32_Storage", "Win32_Storage_FileSystem", "Win32_System", "Win32_System_IO", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_Pipes", "Win32_System_SystemServices", "Win32_System_WindowsProgramming"] }
+windows_x86_64_msvc-fa1f6196edfd7249 = { package = "windows_x86_64_msvc", version = "0.30", default-features = false }
+windows_x86_64_msvc-4e55305914c60c55 = { package = "windows_x86_64_msvc", version = "0.36", default-features = false }
 winreg = { version = "0.10", default-features = false }
 
 ### END HAKARI SECTION

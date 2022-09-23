@@ -4,8 +4,11 @@
 use move_core_types::ident_str;
 use move_core_types::identifier::Identifier;
 use std::{collections::BTreeSet, sync::Arc};
+#[cfg(test)]
+use sui_adapter::temporary_store;
 use sui_adapter::temporary_store::InnerTemporaryStore;
-use sui_types::storage::{ParentSync, WriteKind};
+use sui_types::id::UID;
+use sui_types::storage::{DeleteKind, ParentSync, WriteKind};
 
 use crate::authority::TemporaryStore;
 use move_core_types::language_storage::ModuleId;
@@ -13,11 +16,15 @@ use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
 use sui_adapter::adapter;
 use sui_types::coin::Coin;
 use sui_types::committee::EpochId;
-use sui_types::error::ExecutionError;
+use sui_types::error::{ExecutionError, ExecutionErrorKind};
 use sui_types::gas::GasCostSummary;
 use sui_types::gas_coin::GasCoin;
-use sui_types::messages::ObjectArg;
-use sui_types::object::{MoveObject, Owner, OBJECT_START_VERSION};
+#[cfg(test)]
+use sui_types::messages::ExecutionFailureStatus;
+#[cfg(test)]
+use sui_types::messages::InputObjects;
+use sui_types::messages::{ObjectArg, Pay};
+use sui_types::object::{Data, MoveObject, Owner, OBJECT_START_VERSION};
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest, TxContext},
     event::{Event, TransferType},
@@ -128,7 +135,7 @@ fn execute_transaction<S: BackingPackageStore + ParentSync>(
                     recipient,
                     object_ref,
                 }) => {
-                    // unwrap is is safe because we built the object map from the transactions
+                    // unwrap is safe because we built the object map from the transactions
                     let object = temporary_store
                         .objects()
                         .get(&object_ref.0)
@@ -162,6 +169,21 @@ fn execute_transaction<S: BackingPackageStore + ParentSync>(
                         &mut gas_status,
                         tx_ctx,
                     )
+                }
+                SingleTransactionKind::Pay(Pay {
+                    coins,
+                    recipients,
+                    amounts,
+                }) => {
+                    let coin_objects =  // unwrap is is safe because we built the object map from the transaction
+                    coins.iter().map(|c|
+                    temporary_store
+                        .objects()
+                        .get(&c.0)
+                        .unwrap()
+                        .clone()
+                    ).collect();
+                    pay(temporary_store, coin_objects, recipients, amounts, tx_ctx)
                 }
                 SingleTransactionKind::Publish(MoveModulePublish { modules }) => adapter::publish(
                     temporary_store,
@@ -277,6 +299,157 @@ fn transfer_object<S>(
     Ok(())
 }
 
+/// Debit `coins` to pay amount[i] to recipient[i]. The coins are debited from left to right.
+/// A new coin object is created for each recipient.
+fn pay<S>(
+    temporary_store: &mut TemporaryStore<S>,
+    coin_objects: Vec<Object>,
+    recipients: Vec<SuiAddress>,
+    amounts: Vec<u64>,
+    tx_ctx: &mut TxContext,
+) -> Result<(), ExecutionError> {
+    if coin_objects.is_empty() {
+        return Err(ExecutionError::new_with_source(
+            ExecutionErrorKind::EmptyInputCoins,
+            "Pay transaction requires a non-empty list of input coins".to_string(),
+        ));
+    }
+    if recipients.is_empty() {
+        return Err(ExecutionError::new_with_source(
+            ExecutionErrorKind::EmptyRecipients,
+            "Pay transaction requires a non-empty list of recipient addresses".to_string(),
+        ));
+    }
+    if recipients.len() != amounts.len() {
+        return Err(ExecutionError::new_with_source(
+            ExecutionErrorKind::RecipientsAmountsArityMismatch,
+            format!(
+                "Found {:?} recipient addresses, but {:?} recipient amounts",
+                recipients.len(),
+                amounts.len()
+            ),
+        ));
+    }
+
+    // ensure all input objects are coins of the same type
+    let mut coins = Vec::new();
+    let mut coin_type = None;
+    for coin_obj in &coin_objects {
+        match &coin_obj.data {
+            Data::Move(move_obj) => {
+                if !Coin::is_coin(&move_obj.type_) {
+                    return Err(ExecutionError::new_with_source(
+                        ExecutionErrorKind::InvalidCoinObject,
+                        "Provided non-Coin<T> object as input to pay transaction".to_string(),
+                    ));
+                }
+                if let Some(typ) = &coin_type {
+                    if typ != &move_obj.type_ {
+                        return Err(ExecutionError::new_with_source(
+                            ExecutionErrorKind::InvalidCoinObject,
+                            format!("Expected all Coin<T> objects passed as input to pay() to be the same type, but found mismatch: {:?} vs {:}", typ, move_obj.type_),
+                        ));
+                    }
+                } else {
+                    // first iteration of the loop, establish the coin type
+                    coin_type = Some(move_obj.type_.clone())
+                }
+
+                let coin = Coin::from_bcs_bytes(move_obj.contents())
+                    .expect("Deserializing coin object should not fail");
+                coins.push(coin)
+            }
+            _ => {
+                return Err(ExecutionError::new_with_source(
+                    ExecutionErrorKind::InvalidCoinObject,
+                    "Provided non-Coin<T> object as input to pay transaction".to_string(),
+                ))
+            }
+        }
+    }
+    // safe because coin_objects must be non-empty, and coin_type must be set in loop above
+    let coin_type = coin_type.unwrap();
+
+    // make sure the total value of the coins can cover all of the amounts
+    let total_amount: u64 = amounts.iter().sum();
+    let total_coins = coins.iter().fold(0, |acc, c| acc + c.value());
+    if total_amount > total_coins {
+        return Err(ExecutionError::new_with_source(
+            ExecutionErrorKind::InsufficientBalance,
+            format!("Attempting to pay a total amount {:?} that is greater than the sum of input coin values {:?}", total_amount, total_coins),
+        ));
+    }
+
+    // walk through the coins from left to right, debiting as needed to cover each amount to send
+    let mut cur_coin_idx = 0;
+    for (recipient, amount) in recipients.iter().zip(amounts) {
+        let mut remaining_amount = amount;
+        loop {
+            // while remaining_amount != 0
+            // guaranteed to be in-bounds because of the total > total_coins check above
+            let coin = &mut coins[cur_coin_idx];
+            let coin_value = coin.value();
+            if coin_value == 0 {
+                // can't extract any more value from this coin, go to the next one
+                cur_coin_idx += 1;
+                continue;
+            }
+            if coin_value >= remaining_amount {
+                // can get everything we need from this coin
+                coin.balance.withdraw(remaining_amount).unwrap();
+                // create a new coin for the recipient with the original amount
+                let new_coin = Object::new_move(
+                    MoveObject::new_coin(
+                        coin_type.clone(),
+                        OBJECT_START_VERSION,
+                        bcs::to_bytes(&Coin::new(UID::new(tx_ctx.fresh_id()), amount))
+                            .expect("Serializing coin value cannot fail"),
+                    ),
+                    Owner::AddressOwner(*recipient),
+                    tx_ctx.digest(),
+                );
+                temporary_store.write_object(new_coin, WriteKind::Create);
+                break; // done paying this recipieint, on to the next one
+            } else {
+                // need to take all of this coin and some from a subsequent coin
+                coin.balance.withdraw(coin_value).unwrap();
+                remaining_amount -= coin_value;
+            }
+        }
+    }
+
+    #[cfg(debug_assertions)]
+    {
+        // double check that we didn't create or destroy money
+        let new_total_coins = coins.iter().fold(0, |acc, c| acc + c.value());
+        assert_eq!(total_coins - new_total_coins, total_amount)
+    }
+
+    // update the input coins to reflect the decrease in value.
+    // if the input coin has value 0, delete it
+    for (coin_idx, mut coin_object) in coin_objects.into_iter().enumerate() {
+        let coin = &coins[coin_idx];
+        if coin.value() == 0 {
+            temporary_store.delete_object(
+                &coin_object.id(),
+                coin_object.version(),
+                DeleteKind::Normal,
+            )
+        } else {
+            // unwrapped unsafe because we checked that it was a coin object above
+            coin_object
+                .data
+                .try_as_move_mut()
+                .unwrap()
+                .update_contents_and_increment_version(
+                    bcs::to_bytes(&coin).expect("Coin serialization should not fail"),
+                );
+            temporary_store.write_object(coin_object, WriteKind::Mutate);
+        }
+    }
+    Ok(())
+}
+
 /// Transfer the gas object (which is a SUI coin object) with an optional `amount`.
 /// If `amount` is specified, the gas object remains in the original owner, but a new SUI coin
 /// is created with `amount` balance and is transferred to `recipient`;
@@ -344,4 +517,215 @@ fn transfer_sui<S>(
     temporary_store.write_object(object, WriteKind::Mutate);
 
     Ok(())
+}
+
+#[test]
+fn test_pay_empty_coins() {
+    let coin_objects = Vec::new();
+    let recipients = vec![SuiAddress::random_for_testing_only()];
+    let amounts = vec![10];
+    let mut store: TemporaryStore<()> = temporary_store::empty_for_testing();
+    let mut ctx = TxContext::random_for_testing_only();
+
+    assert_eq!(
+        pay(&mut store, coin_objects, recipients, amounts, &mut ctx)
+            .unwrap_err()
+            .to_execution_status(),
+        ExecutionFailureStatus::EmptyInputCoins
+    );
+}
+
+#[test]
+fn test_pay_empty_recipients() {
+    let coin_objects = vec![Object::new_gas_coin_for_testing(
+        10,
+        SuiAddress::random_for_testing_only(),
+    )];
+    let recipients = Vec::new();
+    let amounts = vec![10];
+    let mut store: TemporaryStore<()> = temporary_store::empty_for_testing();
+    let mut ctx = TxContext::random_for_testing_only();
+
+    assert_eq!(
+        pay(&mut store, coin_objects, recipients, amounts, &mut ctx)
+            .unwrap_err()
+            .to_execution_status(),
+        ExecutionFailureStatus::EmptyRecipients
+    );
+}
+
+#[test]
+fn test_pay_empty_amounts() {
+    let coin_objects = vec![Object::new_gas_coin_for_testing(
+        10,
+        SuiAddress::random_for_testing_only(),
+    )];
+    let recipients = vec![SuiAddress::random_for_testing_only()];
+    let amounts = Vec::new();
+    let mut store: TemporaryStore<()> = temporary_store::empty_for_testing();
+    let mut ctx = TxContext::random_for_testing_only();
+
+    assert_eq!(
+        pay(&mut store, coin_objects, recipients, amounts, &mut ctx)
+            .unwrap_err()
+            .to_execution_status(),
+        ExecutionFailureStatus::RecipientsAmountsArityMismatch
+    );
+}
+
+#[test]
+fn test_pay_arity_mismatch() {
+    // different number of recipients and amounts
+    let owner = SuiAddress::random_for_testing_only();
+    let coin_objects = vec![Object::new_gas_coin_for_testing(10, owner)];
+    let recipients = vec![
+        SuiAddress::random_for_testing_only(),
+        SuiAddress::random_for_testing_only(),
+    ];
+    let amounts = vec![5];
+    let mut store: TemporaryStore<()> = temporary_store::empty_for_testing();
+    let mut ctx = TxContext::random_for_testing_only();
+
+    assert_eq!(
+        pay(&mut store, coin_objects, recipients, amounts, &mut ctx)
+            .unwrap_err()
+            .to_execution_status(),
+        ExecutionFailureStatus::RecipientsAmountsArityMismatch
+    );
+}
+
+#[test]
+fn test_pay_insufficient_balance() {
+    let coin_objects = vec![
+        Object::new_gas_coin_for_testing(10, SuiAddress::random_for_testing_only()),
+        Object::new_gas_coin_for_testing(5, SuiAddress::random_for_testing_only()),
+    ];
+    let recipients = vec![
+        SuiAddress::random_for_testing_only(),
+        SuiAddress::random_for_testing_only(),
+    ];
+    let amounts = vec![10, 6];
+    let mut store: TemporaryStore<()> = temporary_store::empty_for_testing();
+    let mut ctx = TxContext::random_for_testing_only();
+
+    assert_eq!(
+        pay(&mut store, coin_objects, recipients, amounts, &mut ctx)
+            .unwrap_err()
+            .to_execution_status(),
+        ExecutionFailureStatus::InsufficientBalance
+    );
+}
+
+#[cfg(test)]
+fn get_coin_balance(store: &InnerTemporaryStore, id: &ObjectID) -> u64 {
+    Coin::extract_balance_if_coin(store.get_written_object(id).unwrap())
+        .unwrap()
+        .unwrap()
+}
+
+#[test]
+fn test_pay_success_without_delete() {
+    // supplied one coin and only needed to use part of it. should
+    // mutate 1 object, create 1 object, and delete no objects
+    let sender = SuiAddress::random_for_testing_only();
+    let coin1 = Object::new_gas_coin_for_testing(10, sender);
+    let coin2 = Object::new_gas_coin_for_testing(5, sender);
+    let coin_objects = vec![coin1, coin2];
+    let recipient1 = SuiAddress::random_for_testing_only();
+    let recipient2 = SuiAddress::random_for_testing_only();
+    let recipients = vec![recipient1, recipient2];
+    let amounts = vec![6, 3];
+    let mut store: TemporaryStore<()> =
+        temporary_store::with_input_objects_for_testing(InputObjects::from(coin_objects.clone()));
+    let mut ctx = TxContext::with_sender_for_testing_only(&sender);
+
+    assert!(pay(&mut store, coin_objects, recipients, amounts, &mut ctx).is_ok());
+    let (store, _events) = store.into_inner();
+
+    assert!(store.deleted.is_empty());
+    assert_eq!(store.created().len(), 2);
+    let recipient1_objs = store.get_written_objects_owned_by(&recipient1);
+    let recipient2_objs = store.get_written_objects_owned_by(&recipient2);
+    assert_eq!(recipient1_objs.len(), 1);
+    assert_eq!(recipient2_objs.len(), 1);
+    assert_eq!(get_coin_balance(&store, &recipient1_objs[0]), 6);
+    assert_eq!(get_coin_balance(&store, &recipient2_objs[0]), 3);
+
+    let owner_objs = store.get_written_objects_owned_by(&sender);
+    assert_eq!(owner_objs.len(), 2);
+    assert_eq!(
+        get_coin_balance(&store, &owner_objs[0]) + get_coin_balance(&store, &owner_objs[1]),
+        6
+    );
+}
+
+#[test]
+fn test_pay_success_delete_one() {
+    // supplied two coins, spent all of the first one and some of the second one
+    let sender = SuiAddress::random_for_testing_only();
+    let coin1 = Object::new_gas_coin_for_testing(10, sender);
+    let coin2 = Object::new_gas_coin_for_testing(5, sender);
+    let input_coin_id1 = coin1.id();
+    let input_coin_id2 = coin2.id();
+    let coin_objects = vec![coin1, coin2];
+    let recipient = SuiAddress::random_for_testing_only();
+    let recipients = vec![recipient];
+    let amounts = vec![11];
+    let mut store: TemporaryStore<()> =
+        temporary_store::with_input_objects_for_testing(InputObjects::from(coin_objects.clone()));
+    let mut ctx = TxContext::random_for_testing_only();
+
+    assert!(pay(&mut store, coin_objects, recipients, amounts, &mut ctx).is_ok());
+    let (store, _events) = store.into_inner();
+
+    assert_eq!(store.deleted.len(), 1);
+    assert!(store.deleted.contains_key(&input_coin_id1));
+
+    assert_eq!(store.written.len(), 2);
+    assert_eq!(store.created().len(), 1);
+    let recipient_objs = store.get_written_objects_owned_by(&recipient);
+    assert_eq!(recipient_objs.len(), 1);
+    assert_eq!(get_coin_balance(&store, &recipient_objs[0]), 11);
+
+    let owner_objs = store.get_written_objects_owned_by(&sender);
+    assert_eq!(owner_objs.len(), 1);
+    assert_eq!(owner_objs[0], input_coin_id2);
+    assert_eq!(get_coin_balance(&store, &owner_objs[0]), 4);
+}
+
+#[test]
+fn test_pay_success_delete_all() {
+    // supplied two coins, spent both of them
+    let sender = SuiAddress::random_for_testing_only();
+    let coin1 = Object::new_gas_coin_for_testing(10, sender);
+    let coin2 = Object::new_gas_coin_for_testing(5, sender);
+    let input_coin_id1 = coin1.id();
+    let input_coin_id2 = coin2.id();
+    let coin_objects = vec![coin1, coin2];
+    let recipient1 = SuiAddress::random_for_testing_only();
+    let recipient2 = SuiAddress::random_for_testing_only();
+    let recipients = vec![recipient1, recipient2];
+    let amounts = vec![4, 11];
+    let mut store: TemporaryStore<()> =
+        temporary_store::with_input_objects_for_testing(InputObjects::from(coin_objects.clone()));
+    let mut ctx = TxContext::with_sender_for_testing_only(&sender);
+
+    assert!(pay(&mut store, coin_objects, recipients, amounts, &mut ctx).is_ok());
+    let (store, _events) = store.into_inner();
+
+    assert_eq!(store.deleted.len(), 2);
+    assert!(store.deleted.contains_key(&input_coin_id1));
+    assert!(store.deleted.contains_key(&input_coin_id2));
+
+    assert_eq!(store.written.len(), 2);
+    assert_eq!(store.created().len(), 2);
+    let recipient1_objs = store.get_written_objects_owned_by(&recipient1);
+    let recipient2_objs = store.get_written_objects_owned_by(&recipient2);
+    assert_eq!(recipient1_objs.len(), 1);
+    assert_eq!(recipient2_objs.len(), 1);
+    assert_eq!(get_coin_balance(&store, &recipient1_objs[0]), 4);
+    assert_eq!(get_coin_balance(&store, &recipient2_objs[0]), 11);
+
+    let owner_objs = store.get_written_objects_owned_by(&sender);
+    assert!(owner_objs.is_empty());
 }

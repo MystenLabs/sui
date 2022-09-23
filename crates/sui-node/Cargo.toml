@@ -26,7 +26,6 @@ sui-network = { path = "../sui-network" }
 sui-json-rpc = { path = "../sui-json-rpc" }
 sui-telemetry = { path = "../sui-telemetry" }
 sui-types = { path = "../sui-types" }
-sui-quorum-driver = { path = "../sui-quorum-driver" }
 
 telemetry-subscribers = "0.1.0"
 mysten-network = "0.1.0"

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::{BTreeMap, BTreeSet, HashSet};
-use std::fmt::{Display, Formatter};
+use std::fmt::{Debug, Display, Formatter};
 use std::slice::Iter;
 
 use crate::base_types::ExecutionDigests;
@@ -217,13 +217,11 @@ pub struct CheckpointSummaryEnvelope<S> {
     pub auth_signature: S,
 }
 
-impl Display for SignedCheckpointSummary {
+impl<S: Debug> Display for CheckpointSummaryEnvelope<S> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        writeln!(
-            f,
-            "SignedCheckpointSummary {{ summary: {}, signature: {} }}",
-            self.summary, self.auth_signature,
-        )
+        writeln!(f, "{}", self.summary)?;
+        writeln!(f, "Signature: {:?}", self.auth_signature)?;
+        Ok(())
     }
 }
 
@@ -301,16 +299,6 @@ impl SignedCheckpointSummary {
 // clients and more efficient sync protocols.
 
 pub type CertifiedCheckpointSummary = CheckpointSummaryEnvelope<AuthorityWeakQuorumSignInfo>;
-
-impl Display for CertifiedCheckpointSummary {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        writeln!(
-            f,
-            "CertifiedCheckpointSummary {{ summary: {}, signature: {} }}",
-            self.summary, self.auth_signature,
-        )
-    }
-}
 
 impl CertifiedCheckpointSummary {
     /// Aggregate many checkpoint signatures to form a checkpoint certificate.

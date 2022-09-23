@@ -109,7 +109,7 @@ module sui::test_scenario {
 
         // create a seed for new transaction digest to ensure that this tx has a different
         // digest (and consequently, different object ID's) than the previous tx
-        let new_tx_digest_seed = (vector::length(&scenario.event_start_indexes) as u8);
+        let new_tx_digest_seed = vector::length(&scenario.event_start_indexes);
         let epoch = tx_context::epoch(&scenario.ctx);
         scenario.ctx = tx_context::new_from_hint(*sender, new_tx_digest_seed, epoch, 0);
     }

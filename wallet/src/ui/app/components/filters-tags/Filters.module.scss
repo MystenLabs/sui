@@ -1,0 +1,25 @@
+@use '_variables' as v;
+@use '_values' as values;
+@use '_values/colors';
+
+.filter-tags {
+    display: flex;
+    gap: 8px;
+
+    .filter {
+        height: 25px;
+        background: colors.$white;
+        color: colors.$sui-steel-blue;
+        padding: 6px 10px;
+        border: 1px solid colors.$gray-60;
+        border-radius: 16px;
+        text-decoration: none;
+        display: flex;
+        align-items: center;
+
+        &.active {
+            background: v.use(v.$colors-nav-item-highlighted-color);
+            color: colors.$white;
+        }
+    }
+}
