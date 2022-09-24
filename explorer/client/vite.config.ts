@@ -19,10 +19,7 @@ export default defineConfig({
                 __dirname,
                 '../../sdk/typescript/src/'
             ),
-            '@mysten/bcs': path.resolve(
-                __dirname,
-                '../../sdk/typescript/bcs/src/'
-            ),
+            '@mysten/bcs': path.resolve(__dirname, '../../sdk/bcs/src/'),
         },
     },
 });

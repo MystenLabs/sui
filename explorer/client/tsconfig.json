@@ -18,7 +18,7 @@
         "baseUrl": ".",
         "paths": {
             "@mysten/sui.js": ["../../sdk/typescript/src/"],
-            "@mysten/bcs": ["../../sdk/typescript/bcs/src/"]
+            "@mysten/bcs": ["../../sdk/bcs/src/"]
         }
     },
     "include": ["src"]
