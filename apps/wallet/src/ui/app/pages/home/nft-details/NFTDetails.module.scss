@@ -19,12 +19,16 @@
         justify-content: center;
         color: colors.$white;
 
-        &:hover {
-            background-color: colors.$sui-blue;
+        &:visited {
             color: colors.$white;
         }
 
-        &:visited {
+        &:disabled {
+            opacity: 0.4;
+        }
+
+        &:hover:not(:disabled) {
+            background-color: colors.$sui-blue;
             color: colors.$white;
         }
     }

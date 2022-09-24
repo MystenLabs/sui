@@ -5,11 +5,14 @@ import cl from 'classnames';
 import ExplorerLink from '_components/explorer-link';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
 import Icon, { SuiIcons } from '_components/icon';
-import { useNFTBasicData } from '_hooks';
+import { useMiddleEllipsis, useNFTBasicData } from '_hooks';
 
 import type { SuiObject as SuiObjectType } from '@mysten/sui.js';
 
 import st from './NFTDisplay.module.scss';
+
+const OBJ_TYPE_MAX_LENGTH = 20;
+const OBJ_TYPE_MAX_PREFIX_LENGTH = 3;
 
 export type NFTsProps = {
     nftobj: SuiObjectType;
@@ -26,14 +29,21 @@ function NFTDisplayCard({
     expandable,
     wideview,
 }: NFTsProps) {
-    const { filePath, nftObjectID, nftFields, fileExtentionType } =
+    const { filePath, nftObjectID, nftFields, fileExtentionType, objType } =
         useNFTBasicData(nftobj);
 
     const name = nftFields?.name || nftFields?.metadata?.fields?.name;
+    const objIDShort = useMiddleEllipsis(nftObjectID);
+    const nftTypeShort = useMiddleEllipsis(
+        objType,
+        OBJ_TYPE_MAX_LENGTH,
+        OBJ_TYPE_MAX_PREFIX_LENGTH
+    );
+    const displayTitle = name || objIDShort;
 
     const wideviewSection = (
         <div className={st.nftfields}>
-            <div className={st.nftName}>{name}</div>
+            <div className={st.nftName}>{displayTitle}</div>
             <div className={st.nftType}>
                 {fileExtentionType?.name} {fileExtentionType.type}
             </div>
@@ -54,20 +64,28 @@ function NFTDisplayCard({
                     </ExplorerLink>
                 </div>
             ) : null}
-            {showlabel && name ? (
-                <div className={st.nftfields}>{name}</div>
+            {showlabel && displayTitle ? (
+                <div className={st.nftfields}>{displayTitle}</div>
             ) : null}
         </>
     );
 
     return (
-        <div className={cl(st.nftimage, wideview && st.wideview, st[size])}>
-            {filePath && (
+        <div
+            className={cl(st.nftimage, wideview && st.wideview, st[size])}
+            title={nftTypeShort}
+        >
+            {filePath ? (
                 <img
                     className={cl(st.img)}
                     src={filePath}
                     alt={fileExtentionType?.name || 'NFT'}
                 />
+            ) : (
+                <div className={st.noMedia}>
+                    <Icon className={st.noMediaIcon} icon="slash-circle" />
+                    <span>No media</span>
+                </div>
             )}
             {wideview ? wideviewSection : defaultSection}
         </div>

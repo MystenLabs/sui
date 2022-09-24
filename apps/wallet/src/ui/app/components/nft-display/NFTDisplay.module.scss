@@ -8,9 +8,32 @@
     width: 100%;
     margin: auto;
 
-    img {
-        width: 100%;
+    .img {
         object-fit: cover;
+    }
+
+    .no-media {
+        background: linear-gradient(165.96deg, #e5f5ff 9.97%, #fbfff0 94.97%);
+        display: flex;
+        flex-flow: column nowrap;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        color: colors.$sui-blue-steel-dark;
+        opacity: 0.6;
+        text-transform: uppercase;
+
+        @include utils.typography('Primary/CAPTIONSMALL-M');
+    }
+
+    .no-media-icon {
+        font-size: 16px;
+        margin-bottom: 4px;
+    }
+
+    .no-media,
+    .img {
+        width: 100%;
         border-radius: 6px;
         height: 100%;
     }
@@ -18,7 +41,8 @@
     &.small {
         width: 98px;
 
-        img {
+        .img,
+        .no-media {
             height: 98px;
         }
     }
@@ -26,7 +50,8 @@
     &.medium {
         width: 150px;
 
-        img {
+        .img,
+        .no-media {
             height: 150px;
         }
     }
@@ -34,7 +59,8 @@
     &.large {
         width: 180px;
 
-        img {
+        .img,
+        .no-media {
             height: 180px;
         }
     }
@@ -83,7 +109,8 @@
         flex-flow: row-reverse;
         gap: 10px;
 
-        .img {
+        .img,
+        .no-media {
             width: 50px;
             height: 50px;
         }
