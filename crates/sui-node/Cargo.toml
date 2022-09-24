@@ -31,12 +31,11 @@ sui-telemetry = { path = "../sui-telemetry" }
 sui-types = { path = "../sui-types" }
 narwhal-network = { path = "../../narwhal/network" }
 
+ying-profiler = { git = "https://github.com/velvia/ying-profiler", features = ["profile-spans"] }
+
 telemetry-subscribers.workspace = true
 mysten-network.workspace = true
 workspace-hack.workspace = true
 
 [target.'cfg(msim)'.dependencies]
 sui-simulator = { path = "../sui-simulator" }
-
-[target.'cfg(not(target_env = "msvc"))'.dependencies]
-jemalloc-ctl = "^0.5"
