@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { getObjectId } from '@mysten/sui.js';
+import { getObjectId, hasPublicTransfer } from '@mysten/sui.js';
 import cl from 'classnames';
 import { useMemo, useState, useCallback } from 'react';
 import { Navigate, useSearchParams } from 'react-router-dom';
@@ -35,6 +35,7 @@ function NFTdetailsContent({
     onClick?: ButtonHTMLAttributes<HTMLButtonElement>['onClick'];
 }) {
     const { nftObjectID, nftFields, fileExtentionType } = useNFTBasicData(nft);
+    const isTransferable = hasPublicTransfer(nft);
 
     const shortAddress = useMiddleEllipsis(
         nftObjectID,
@@ -95,7 +96,7 @@ function NFTdetailsContent({
     return (
         <div className={st.container}>
             <PageTitle
-                title={nftFields?.name}
+                title={nftFields?.name || shortAddress}
                 backLink="/nfts"
                 className={st.pageTitle}
                 hideBackLabel={true}
@@ -120,6 +121,12 @@ function NFTdetailsContent({
                             st.sendNftBtn,
                             'primary'
                         )}
+                        disabled={!isTransferable}
+                        title={
+                            isTransferable
+                                ? undefined
+                                : "Unable to send. NFT doesn't have public transfer method"
+                        }
                     >
                         <Icon
                             icon={SuiIcons.ArrowLeft}

@@ -11,14 +11,18 @@ import type { SuiObject } from '@mysten/sui.js';
 export default function useNFTBasicData(nftObj: SuiObject) {
     const nftObjectID = getObjectId(nftObj.reference);
     const filePath = useMediaUrl(nftObj.data);
-    const nftFields = isSuiMoveObject(nftObj.data)
-        ? getObjectFields(nftObj.data)
-        : null;
+    let objType = null;
+    let nftFields = null;
+    if (isSuiMoveObject(nftObj.data)) {
+        objType = nftObj.data.type;
+        nftFields = getObjectFields(nftObj.data);
+    }
     const fileExtentionType = useFileExtentionType(filePath || '');
     return {
         nftObjectID,
         filePath,
         nftFields,
         fileExtentionType,
+        objType,
     };
 }

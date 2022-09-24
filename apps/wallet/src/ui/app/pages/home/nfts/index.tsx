@@ -1,7 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import { hasPublicTransfer } from '@mysten/sui.js';
-import { useMemo } from 'react';
+
 import { Link } from 'react-router-dom';
 
 import { Content } from '_app/shared/bottom-menu-layout';
@@ -14,22 +13,18 @@ import st from './NFTPage.module.scss';
 
 function NftsPage() {
     const nfts = useAppSelector(accountNftsSelector);
-    const filteredNfts = useMemo(
-        () => nfts.filter((nft) => hasPublicTransfer(nft)),
-        [nfts]
-    );
 
     return (
         <div className={st.container}>
             <PageTitle
                 title="NFTs"
-                stats={`${filteredNfts.length}`}
+                stats={`${nfts.length}`}
                 className={st.pageTitle}
             />
             <Content>
                 <section className={st.nftGalleryContainer}>
                     <section className={st.nftGallery}>
-                        {filteredNfts.map((nft) => (
+                        {nfts.map((nft) => (
                             <Link
                                 to={`/nft-details?${new URLSearchParams({
                                     objectId: nft.reference.objectId,
