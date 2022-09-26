@@ -1,17 +1,17 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
-use std::net::SocketAddr;
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
-
+use crate::genesis;
+use crate::Config;
 use anyhow::Result;
 use multiaddr::Multiaddr;
 use narwhal_config::Parameters as ConsensusParameters;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-
+use std::collections::BTreeMap;
+use std::net::SocketAddr;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use sui_types::base_types::SuiAddress;
 use sui_types::committee::StakeUnit;
 use sui_types::crypto::AccountKeyPair;
@@ -23,9 +23,6 @@ use sui_types::crypto::NetworkPublicKey;
 use sui_types::crypto::PublicKey as AccountsPublicKey;
 use sui_types::crypto::SuiKeyPair;
 use sui_types::sui_serde::KeyPairBase64;
-
-use crate::genesis;
-use crate::Config;
 
 // Default max number of concurrent requests served
 pub const DEFAULT_GRPC_CONCURRENCY_LIMIT: usize = 20000000000;
@@ -321,9 +318,8 @@ enum GenesisLocation {
 
 #[cfg(test)]
 mod tests {
-    use crate::{genesis, NodeConfig};
-
     use super::Genesis;
+    use crate::{genesis, NodeConfig};
 
     #[test]
     fn serialize_genesis_config_from_file() {
