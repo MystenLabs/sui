@@ -7,12 +7,12 @@ export default defineConfig({
     resolve: {
         alias: {
             '@mysten/sui.js': new URL(
-                '../sdk/typescript/src',
+                '../../sdk/typescript/src',
                 import.meta.url
             ).toString(),
 
             '@mysten/bcs': new URL(
-                '../sdk/bcs/src',
+                '../../sdk/bcs/src',
                 import.meta.url
             ).toString(),
         },

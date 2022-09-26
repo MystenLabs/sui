@@ -59,7 +59,7 @@ jobs:
         with:
           install: false
           start: pnpm dev:static
-          working-directory: ./explorer/client
+          working-directory: ./apps/explorer
           spec: cypress/e2e/static/*
   end_to_end_localnet:
     name: End-to-end tests (Localnet)
@@ -87,7 +87,7 @@ jobs:
         with:
           install: false
           start: pnpm dlx concurrently --kill-others 'cargo run --bin sui-test-validator' 'pnpm dev'
-          working-directory: ./explorer/client
+          working-directory: ./apps/explorer
           spec: cypress/e2e/localnet/*
           # Wait on faucet and explorer:
           wait-on: "http://localhost:3000, http://localhost:9123"
