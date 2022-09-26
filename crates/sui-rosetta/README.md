@@ -55,12 +55,18 @@ cd <sui project directory>/crate/sui-rosetta/docker
 cd sui-rosetta-local
 docker-compose up -d
 ```
-Docker compose will start the container together with the Sui network, Rosetta online and offline servers, the ports for both rosetta server (9002, 9003 respectively) will be exposed to the host.  
+Docker compose will start the rosetta-online and rosetta-offline containers, the ports for both rosetta server (9002, 9003 respectively) will be exposed to the host.  
 
 #### 4. Enter the rosetta service shell
 
 ```shell
 docker-compose exec rosetta-online bash
+```
+
+#### 5. use the rosetta-cli to test the api
+```shell
+rosetta-cli --configuration-file rosetta-cli.json check:data
+rosetta-cli --configuration-file rosetta-cli.json check:construction
 ```
 
 ## Supported APIs
