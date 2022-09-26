@@ -2266,7 +2266,7 @@ async fn make_test_transaction(
     unreachable!("couldn't form cert")
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn shared_object() {
     let (sender, keypair): (_, AccountKeyPair) = get_key_pair();
 
@@ -2300,7 +2300,15 @@ async fn shared_object() {
 
     // Sending the certificate now fails since it was not sequenced.
     let result = authority.handle_certificate(certificate.clone()).await;
-    assert!(matches!(result, Err(SuiError::ObjectErrors { .. })));
+    assert!(
+        matches!(
+            result,
+            Err(SuiError::ObjectErrors { ref errors })
+                if errors.len() == 1 && matches!(errors[0], SuiError::SharedObjectLockNotSetError)
+        ),
+        "{:#?}",
+        result
+    );
 
     // Sequence the certificate to assign a sequence number to the shared object.
     send_consensus(&authority, &certificate).await;

@@ -139,7 +139,7 @@ where
 async fn check_objects(
     transaction: &TransactionData,
     input_objects: Vec<InputObjectKind>,
-    objects: Vec<Option<Object>>,
+    objects: Vec<Object>,
 ) -> Result<InputObjects, SuiError> {
     // Constructing the list of objects that could be used to authenticate other
     // objects. Any mutable object (either shared or owned) can be used to
@@ -154,7 +154,7 @@ async fn check_objects(
     // in more than one SingleTransactionKind. We need to ensure that their
     // version number only increases once at the end of the Batch execution.
     let mut owned_object_authenticators: HashSet<SuiAddress> = HashSet::new();
-    for object in objects.iter().flatten() {
+    for object in objects.iter() {
         if !object.is_immutable() {
             fp_ensure!(
                 owned_object_authenticators.insert(object.id().into()),
@@ -181,14 +181,6 @@ async fn check_objects(
         .collect();
 
     for (object_kind, object) in input_objects.into_iter().zip(objects) {
-        // All objects must exist in the DB.
-        let object = match object {
-            Some(object) => object,
-            None => {
-                errors.push(object_kind.object_not_found_error());
-                continue;
-            }
-        };
         if transfer_object_ids.contains(&object.id()) {
             object.ensure_public_transfer_eligible()?;
         }

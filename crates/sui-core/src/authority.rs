@@ -638,7 +638,7 @@ impl AuthorityState {
             .iter()
             .filter_map(|(object_id, version, _)| {
                 if !shared_locks.contains_key(object_id) {
-                    Some(SuiError::SharedObjectLockNotSetObject)
+                    Some(SuiError::SharedObjectLockNotSetError)
                 } else if shared_locks[object_id] != *version {
                     Some(SuiError::UnexpectedSequenceNumber {
                         object_id: *object_id,
