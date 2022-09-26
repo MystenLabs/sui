@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_config::{NetworkConfig, NodeConfig, ValidatorInfo};
-use sui_core::authority_client::NetworkAuthorityClientMetrics;
+use sui_core::authority_client::{AuthorityAPI, NetworkAuthorityClientMetrics};
 use sui_core::epoch::epoch_store::EpochStore;
 use sui_core::{
     authority_active::{
@@ -21,6 +21,8 @@ use sui_core::{
 use sui_types::{committee::Committee, object::Object};
 
 pub use sui_node::SuiNode;
+use sui_types::base_types::ObjectID;
+use sui_types::messages::{ObjectInfoRequest, ObjectInfoRequestKind};
 
 /// The default network buffer size of a test authority.
 pub const NETWORK_BUFFER_SIZE: usize = 65_000;
@@ -139,4 +141,17 @@ pub fn get_client(config: &ValidatorInfo) -> NetworkAuthorityClient {
         Arc::new(NetworkAuthorityClientMetrics::new_for_tests()),
     )
     .unwrap()
+}
+
+pub async fn get_object(config: &ValidatorInfo, object_id: ObjectID) -> Object {
+    get_client(config)
+        .handle_object_info_request(ObjectInfoRequest {
+            object_id,
+            request_kind: ObjectInfoRequestKind::LatestObjectInfo(None),
+        })
+        .await
+        .unwrap()
+        .object()
+        .unwrap()
+        .clone()
 }

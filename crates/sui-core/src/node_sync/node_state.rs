@@ -102,6 +102,13 @@ impl DigestsMessage {
         }
     }
 
+    fn new_for_pending_ckpt(digest: &TransactionDigest, tx: oneshot::Sender<SyncResult>) -> Self {
+        Self {
+            sync_arg: SyncArg::PendingCheckpoint(*digest),
+            tx: Some(tx),
+        }
+    }
+
     fn new_for_exec_driver(digest: &TransactionDigest, tx: oneshot::Sender<SyncResult>) -> Self {
         Self {
             sync_arg: SyncArg::ExecDriver(*digest),
@@ -140,6 +147,13 @@ pub enum SyncArg {
     /// In checkpoint mode, all txes are known to be final.
     Checkpoint(ExecutionDigests),
 
+    /// Transactions in the current checkpoint to be signed/stored.
+    /// We don't have the effect digest since we may not have it when constructing the checkpoint.
+    /// The primary difference between PendingCheckpoint and ExecDriver is that PendingCheckpoint
+    /// sync can by-pass validator halting. This is to ensure that the last checkpoint of the epoch
+    /// can always be formed when there are missing transactions.
+    PendingCheckpoint(TransactionDigest),
+
     /// Used by the execution driver to execute pending certs. No effects digest is provided,
     /// because this mode is used on validators only, who must compute the effects digest
     /// themselves - they cannot trust some other validator's version of the effects because that
@@ -165,7 +179,9 @@ impl SyncArg {
                     effects,
                 },
             ) => (transaction, Some(effects)),
-            SyncArg::Parent(digest) | SyncArg::ExecDriver(digest) => (digest, None),
+            SyncArg::Parent(digest)
+            | SyncArg::ExecDriver(digest)
+            | SyncArg::PendingCheckpoint(digest) => (digest, None),
         }
     }
 }
@@ -417,7 +433,7 @@ where
 
         match self
             .state
-            .handle_node_sync_certificate(cert.clone(), effects.clone())
+            .handle_certificate_with_effects(cert.clone(), effects.clone())
             .await
         {
             Ok(_) => Ok(SyncStatus::CertExecuted),
@@ -429,11 +445,19 @@ where
         &self,
         permit: OwnedSemaphorePermit,
         digest: &TransactionDigest,
+        bypass_validator_halt: bool,
     ) -> SyncResult {
         trace!(?digest, "validator pending execution requested");
         let cert = self.get_cert(digest).await?;
 
-        match self.state.handle_certificate(cert.clone()).await {
+        let result = if bypass_validator_halt {
+            self.state
+                .handle_certificate_bypass_validator_halt(cert.clone())
+                .await
+        } else {
+            self.state.handle_certificate(cert.clone()).await
+        };
+        match result {
             Ok(_) => Ok(SyncStatus::CertExecuted),
             Err(SuiError::ObjectNotFound { .. })
             | Err(SuiError::ObjectErrors { .. })
@@ -451,7 +475,13 @@ where
 
                 // Parents have been executed, so this should now succeed.
                 debug!(?digest, "parents executed, re-attempting cert");
-                self.state.handle_certificate(cert.clone()).await?;
+                if bypass_validator_halt {
+                    self.state
+                        .handle_certificate_bypass_validator_halt(cert.clone())
+                        .await
+                } else {
+                    self.state.handle_certificate(cert.clone()).await
+                }?;
                 Ok(SyncStatus::CertExecuted)
             }
             Err(e) => Err(e),
@@ -490,7 +520,12 @@ where
         // down.
         let (digests, authorities_with_cert) = match arg {
             SyncArg::ExecDriver(digest) => {
-                return self.process_exec_driver_digest(permit, &digest).await;
+                return self
+                    .process_exec_driver_digest(permit, &digest, false)
+                    .await;
+            }
+            SyncArg::PendingCheckpoint(digest) => {
+                return self.process_exec_driver_digest(permit, &digest, true).await;
             }
             SyncArg::Parent(digest) => {
                 // digest is known to be final because it appeared in the dependencies list of a
@@ -566,7 +601,7 @@ where
             .await?;
 
         self.state
-            .handle_node_sync_certificate(cert, effects.clone())
+            .handle_certificate_with_effects(cert, effects.clone())
             .await?;
 
         Ok(SyncStatus::CertExecuted)
@@ -869,7 +904,7 @@ impl NodeSyncHandle {
         let mut futures = FuturesOrdered::new();
         for digests in transactions {
             let (tx, rx) = oneshot::channel();
-            let msg = DigestsMessage::new_for_exec_driver(&digests.transaction, tx);
+            let msg = DigestsMessage::new_for_pending_ckpt(&digests.transaction, tx);
             Self::send_msg_with_tx(self.sender.clone(), msg).await?;
             futures.push_back(Self::map_rx(rx));
         }
