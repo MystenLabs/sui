@@ -13,7 +13,7 @@ use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::coin::{COIN_JOIN_FUNC_NAME, COIN_MODULE_NAME, COIN_SPLIT_VEC_FUNC_NAME};
 use sui_types::event::{Event, TransferType};
 use sui_types::messages::{
-    CallArg, InputObjectKind, MoveCall, ObjectArg, SingleTransactionKind, TransactionData,
+    CallArg, InputObjectKind, MoveCall, ObjectArg, Pay, SingleTransactionKind, TransactionData,
     TransactionEffects,
 };
 use sui_types::move_package::disassemble_modules;
@@ -92,10 +92,7 @@ impl Operation {
             .collect::<Vec<_>>();
 
         operations.push(Operation {
-            operation_identifier: OperationIdentifier {
-                index: counter.next_idx(),
-                network_index: None,
-            },
+            operation_identifier: counter.next_idx().into(),
             related_operations: vec![],
             type_: OperationType::GasSpent,
             status,
@@ -149,10 +146,7 @@ impl Operation {
                         });
                         return Some(vec![
                             Operation {
-                                operation_identifier: OperationIdentifier {
-                                    index: counter.next_idx(),
-                                    network_index: None,
-                                },
+                                operation_identifier: counter.next_idx().into(),
                                 related_operations: vec![],
                                 type_: OperationType::TransferSUI,
                                 status,
@@ -165,10 +159,7 @@ impl Operation {
                                 metadata: None,
                             },
                             Operation {
-                                operation_identifier: OperationIdentifier {
-                                    index: counter.next_idx(),
-                                    network_index: None,
-                                },
+                                operation_identifier: counter.next_idx().into(),
                                 related_operations: vec![],
                                 type_: OperationType::TransferSUI,
                                 status,
@@ -214,10 +205,7 @@ impl Operation {
         sender: SuiAddress,
     ) -> Self {
         Self {
-            operation_identifier: OperationIdentifier {
-                index: counter.next_idx(),
-                network_index: None,
-            },
+            operation_identifier: counter.next_idx().into(),
             related_operations: vec![],
             type_: OperationType::GasBudget,
             status,
@@ -266,10 +254,7 @@ fn parse_operations(
         SingleTransactionKind::Publish(p) => {
             let disassembled = disassemble_modules(p.modules.iter())?;
             vec![Operation {
-                operation_identifier: OperationIdentifier {
-                    index: counter.next_idx(),
-                    network_index: None,
-                },
+                operation_identifier: counter.next_idx().into(),
                 related_operations: vec![],
                 type_: OperationType::Publish,
                 status,
@@ -280,10 +265,7 @@ fn parse_operations(
             }]
         }
         SingleTransactionKind::ChangeEpoch(change) => vec![Operation {
-            operation_identifier: OperationIdentifier {
-                index: counter.next_idx(),
-                network_index: None,
-            },
+            operation_identifier: counter.next_idx().into(),
             related_operations: vec![],
             type_: OperationType::EpochChange,
             status,
@@ -292,6 +274,7 @@ fn parse_operations(
             coin_change: None,
             metadata: Some(json!(change)),
         }],
+        SingleTransactionKind::Pay(pay) => parse_pay(sender, gas, budget, pay, counter, status),
     };
     if !matches!(tx, SingleTransactionKind::TransferSui(..)) {
         if let Some(effects) = effects {
@@ -318,10 +301,7 @@ fn transfer_sui_operations(
 ) -> Vec<Operation> {
     vec![
         Operation {
-            operation_identifier: OperationIdentifier {
-                index: counter.next_idx(),
-                network_index: None,
-            },
+            operation_identifier: counter.next_idx().into(),
             related_operations: vec![],
             type_: OperationType::TransferSUI,
             status,
@@ -339,10 +319,7 @@ fn transfer_sui_operations(
             metadata: None,
         },
         Operation {
-            operation_identifier: OperationIdentifier {
-                index: counter.next_idx(),
-                network_index: None,
-            },
+            operation_identifier: counter.next_idx().into(),
             related_operations: vec![],
             type_: OperationType::TransferSUI,
             status,
@@ -369,10 +346,7 @@ fn transfer_object_operations(
 ) -> Vec<Operation> {
     vec![
         Operation {
-            operation_identifier: OperationIdentifier {
-                index: counter.next_idx(),
-                network_index: None,
-            },
+            operation_identifier: counter.next_idx().into(),
             related_operations: vec![],
             type_: OperationType::TransferObject,
             status,
@@ -382,10 +356,7 @@ fn transfer_object_operations(
             metadata: Some(json!({ "object_id": object_id.0, "version": object_id.1 })),
         },
         Operation {
-            operation_identifier: OperationIdentifier {
-                index: counter.next_idx(),
-                network_index: None,
-            },
+            operation_identifier: counter.next_idx().into(),
             related_operations: vec![],
             type_: OperationType::TransferObject,
             status,
@@ -409,10 +380,7 @@ fn split_coin_operations(
 ) -> Vec<Operation> {
     vec![
         Operation {
-            operation_identifier: OperationIdentifier {
-                index: counter.next_idx(),
-                network_index: None,
-            },
+            operation_identifier: counter.next_idx().into(),
             related_operations: vec![],
             type_: OperationType::SplitCoin,
             status,
@@ -438,10 +406,7 @@ fn merge_coin_operations(
 ) -> Vec<Operation> {
     vec![
         Operation {
-            operation_identifier: OperationIdentifier {
-                index: counter.next_idx(),
-                network_index: None,
-            },
+            operation_identifier: counter.next_idx().into(),
             related_operations: vec![],
             type_: OperationType::MergeCoins,
             status,
@@ -467,10 +432,7 @@ fn move_call_operations(
 ) -> Vec<Operation> {
     vec![
         Operation {
-            operation_identifier: OperationIdentifier {
-                index: counter.next_idx(),
-                network_index: None,
-            },
+            operation_identifier: counter.next_idx().into(),
             related_operations: vec![],
             type_: OperationType::MoveCall,
             status,
@@ -558,6 +520,29 @@ fn parse_move_call(
         counter,
         status,
     ))
+}
+
+fn parse_pay(
+    sender: SuiAddress,
+    gas: ObjectRef,
+    budget: u64,
+    pay: &Pay,
+    counter: &mut IndexCounter,
+    status: Option<OperationStatus>,
+) -> Vec<Operation> {
+    vec![
+        Operation {
+            operation_identifier: counter.next_idx().into(),
+            related_operations: vec![],
+            type_: OperationType::Pay,
+            status,
+            account: Some(AccountIdentifier { address: sender }),
+            amount: None,
+            coin_change: None,
+            metadata: Some(json!(pay)),
+        },
+        Operation::gas(counter, status, gas, budget, sender),
+    ]
 }
 
 fn try_into_object_id(arg: &CallArg) -> Result<ObjectID, anyhow::Error> {
@@ -745,19 +730,6 @@ impl TryInto<SuiAction> for Vec<Operation> {
                         builder.recipient = Some(address);
                     }
                 }
-                OperationType::TransferCoin => {
-                    let account = &op
-                        .account
-                        .ok_or_else(|| Error::missing_input("operation.account"))?;
-                    let address = account.address;
-                    builder.operation_type = Some(op.type_);
-                    if let Some(coin) = op.coin_change.as_ref() {
-                        builder.sender = Some(address);
-                        builder.coin = Some(coin.coin_identifier.identifier.id);
-                    } else {
-                        builder.recipient = Some(address);
-                    }
-                }
                 OperationType::MergeCoins => {
                     let coin = op
                         .coin_change
@@ -804,6 +776,7 @@ impl TryInto<SuiAction> for Vec<Operation> {
                     builder.gas_budget = Some(budget);
                 }
                 OperationType::TransferObject
+                | OperationType::Pay
                 | OperationType::GasSpent
                 | OperationType::Genesis
                 | OperationType::MoveCall
@@ -849,24 +822,6 @@ impl SuiActionBuilder {
                     sender,
                     recipient,
                     amount: self.send_amount,
-                })
-            }
-            OperationType::TransferCoin => {
-                let sender = self.sender.ok_or_else(|| Error::missing_input("sender"))?;
-                let recipient = self
-                    .recipient
-                    .ok_or_else(|| Error::missing_input("recipient"))?;
-                let coin = self.coin.ok_or_else(|| Error::missing_input("coin"))?;
-                let gas = self.gas.ok_or_else(|| Error::missing_input("gas"))?;
-                let budget = self
-                    .gas_budget
-                    .ok_or_else(|| Error::missing_input("gas_budget"))?;
-                Ok(SuiAction::Transfer {
-                    budget,
-                    coin,
-                    gas,
-                    sender,
-                    recipient,
                 })
             }
             OperationType::MergeCoins => {

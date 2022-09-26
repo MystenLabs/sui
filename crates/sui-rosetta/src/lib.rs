@@ -13,7 +13,7 @@ use tracing::info;
 use sui_config::genesis::Genesis;
 use sui_core::authority::AuthorityState;
 use sui_core::authority_client::NetworkAuthorityClient;
-use sui_quorum_driver::QuorumDriver;
+use sui_core::quorum_driver::QuorumDriver;
 
 use crate::errors::{Error, ErrorType};
 use crate::state::{OnlineServerContext, PseudoBlockProvider};

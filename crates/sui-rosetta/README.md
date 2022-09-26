@@ -13,7 +13,7 @@ read and write transactions to the Sui network.
 
 ### Build from source
 #### 0. Checkout and build Sui
-Checkout the [Sui source code](https://github.com/MystenLabs/sui ) and compile using `cargo build --release`, the binaries will be located in `target/release` directory.
+Checkout the [Sui source code](https://github.com/MystenLabs/sui) and compile using `cargo build --release`, the binaries will be located in `target/release` directory.
 
 #### 1. Genesis
 
@@ -36,27 +36,31 @@ default.
 #### 5. Generate configuration with prefunded accounts for rosetta-cli
 
 `./sui-rosetta generate-rosetta-cli-config`
-This will generate the `rosetta-cli.json` and `sui.ros` file to be used by the [Rosetta-CLI]()
+This will generate the `rosetta-cli.json` and `sui.ros` file to be used by the [Rosetta-CLI](https://github.com/coinbase/rosetta-cli)
 
-### Run via Docker
+### Build local test network using Docker
 
 #### 1. CD into the Dockerfile directory
 
 ```shell
-cd <sui project directory>/crate/sui-rosetta/docker/sui-rosetta-local
+cd <sui project directory>/crate/sui-rosetta/docker
 ```   
-
-#### 2. Start the container
+#### 2. Build the image
+```shell
+./build.sh
+```
+#### 3. Start the container
 
 ```shell
+cd sui-rosetta-local
 docker-compose up -d
 ```
 Docker compose will start the container together with the Sui network, Rosetta online and offline servers, the ports for both rosetta server (9002, 9003 respectively) will be exposed to the host.  
 
-#### 3. Enter the rosetta service shell
+#### 4. Enter the rosetta service shell
 
 ```shell
-docker-compose exec rosetta bash
+docker-compose exec rosetta-online bash
 ```
 
 ## Supported APIs

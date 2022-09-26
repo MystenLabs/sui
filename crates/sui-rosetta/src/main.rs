@@ -156,8 +156,10 @@ fn test_read_keystore() {
     let temp_dir = tempfile::tempdir().unwrap();
     let path = temp_dir.path().join("sui.keystore");
     let mut ks = KeystoreType::File(path.clone()).init().unwrap();
-    let key1 = ks.generate_new_key(SignatureScheme::ED25519).unwrap();
-    let key2 = ks.generate_new_key(SignatureScheme::Secp256k1).unwrap();
+    let key1 = ks.generate_new_key(SignatureScheme::ED25519, None).unwrap();
+    let key2 = ks
+        .generate_new_key(SignatureScheme::Secp256k1, None)
+        .unwrap();
 
     let accounts = read_prefunded_account(&path).unwrap();
     let acc_map = accounts

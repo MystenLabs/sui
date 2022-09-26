@@ -4,16 +4,12 @@ transfer(10){
     currency = {"symbol":"SUI", "decimals":9};
     sender = find_balance({
       "minimum_balance":{
-        "value": "1000000",
+        "value": "100000",
         "currency": {{currency}}
       },
       "require_coin": true
     });
-
-    // Set the recipient_amount as some value <= sender.balance-max_fee
-    max_fee = "1000";
-    available_amount = "100000";
-    recipient_amount = random_number({"minimum": "1", "maximum": {{available_amount}}});
+    recipient_amount = random_number({"minimum": "1", "maximum": "100000"});
     print_message({"recipient_amount":{{recipient_amount}}});
 
     // Find recipient and construct operations

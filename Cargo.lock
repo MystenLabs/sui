@@ -502,6 +502,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "axum-macros"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6293dae2ec708e679da6736e857cf8532886ef258e92930f38279c12641628b8"
+dependencies = [
+ "heck 0.4.0",
+ "proc-macro2 1.0.43",
+ "quote 1.0.21",
+ "syn 1.0.99",
+]
+
+[[package]]
 name = "backoff"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7002,6 +7014,7 @@ version = "1.0.85"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e55a28e3aaef9d5ce0506d0a14dbba8054ddc7e499ef522dd8b26859ec9d4a44"
 dependencies = [
+ "indexmap",
  "itoa 1.0.2",
  "ryu",
  "serde 1.0.144",
@@ -8125,6 +8138,42 @@ dependencies = [
  "syn 1.0.99",
  "unescape",
  "workspace-hack",
+]
+
+[[package]]
+name = "sui-rosetta"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "axum",
+ "axum-core",
+ "axum-macros",
+ "bcs",
+ "clap 3.2.17",
+ "hyper",
+ "move-core-types",
+ "once_cell",
+ "serde 1.0.144",
+ "serde_json",
+ "serde_with 1.14.0",
+ "signature",
+ "strum",
+ "strum_macros",
+ "sui-config",
+ "sui-core",
+ "sui-node",
+ "sui-sdk",
+ "sui-types",
+ "telemetry-subscribers",
+ "tempfile",
+ "tokio",
+ "tower",
+ "tower-http",
+ "tracing",
+ "typed-store",
+ "typed-store-derive",
+ "workspace-hack 0.1.0",
 ]
 
 [[package]]
@@ -9943,6 +9992,7 @@ dependencies = [
  "autocfg",
  "axum",
  "axum-core",
+ "axum-macros",
  "backoff",
  "backtrace",
  "base16ct",

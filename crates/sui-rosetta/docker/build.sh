@@ -20,6 +20,7 @@ echo "git revision: \t$GIT_REVISION"
 echo
 
 docker build -f "$DOCKERFILE" "$REPO_ROOT" \
+  -t mysten/sui-rosetta \
 	--build-arg GIT_REVISION="$GIT_REVISION" \
 	--build-arg BUILD_DATE="$BUILD_DATE" \
 	"$@"

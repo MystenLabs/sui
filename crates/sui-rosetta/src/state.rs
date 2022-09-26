@@ -13,7 +13,7 @@ use tracing::{debug, error};
 use sui_config::genesis::Genesis;
 use sui_core::authority::AuthorityState;
 use sui_core::authority_client::NetworkAuthorityClient;
-use sui_quorum_driver::QuorumDriver;
+use sui_core::quorum_driver::QuorumDriver;
 use sui_types::base_types::{
     SequenceNumber, SuiAddress, TransactionDigest, TRANSACTION_DIGEST_LENGTH,
 };
@@ -22,8 +22,8 @@ use sui_types::gas_coin::GasCoin;
 use crate::operations::Operation;
 use crate::types::{
     AccountIdentifier, Amount, Block, BlockHash, BlockIdentifier, BlockResponse, CoinAction,
-    CoinChange, CoinID, CoinIdentifier, OperationIdentifier, OperationStatus, OperationType,
-    SignedValue, Transaction, TransactionIdentifier,
+    CoinChange, CoinID, CoinIdentifier, OperationStatus, OperationType, SignedValue, Transaction,
+    TransactionIdentifier,
 };
 use crate::ErrorType::{BlockNotFound, InternalError};
 use crate::{Error, SUI};
@@ -164,7 +164,7 @@ impl PseudoBlockProvider {
         let block_interval = option_env!("SUI_BLOCK_INTERVAL")
             .map(|i| u64::from_str(i).ok())
             .flatten()
-            .unwrap_or(10000);
+            .unwrap_or(2000);
         let block_interval = Duration::from_millis(block_interval);
 
         let f = blocks.clone();
@@ -289,10 +289,7 @@ fn genesis_block(genesis: &Genesis) -> BlockResponse {
         })
         .enumerate()
         .map(|(index, (address, coin))| Operation {
-            operation_identifier: OperationIdentifier {
-                index: index.try_into().unwrap(),
-                network_index: None,
-            },
+            operation_identifier: u64::try_from(index).unwrap().into(),
             related_operations: vec![],
             type_: OperationType::Genesis,
             status: Some(OperationStatus::Success),

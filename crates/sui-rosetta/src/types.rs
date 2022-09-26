@@ -386,11 +386,11 @@ pub struct ConstructionPayloadsRequest {
 pub enum OperationType {
     GasBudget,
     TransferSUI,
-    TransferCoin,
     MergeCoins,
     SplitCoin,
     // Readonly
     GasSpent,
+    Pay,
     TransferObject,
     Publish,
     MoveCall,
@@ -400,9 +400,18 @@ pub enum OperationType {
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct OperationIdentifier {
-    pub index: u64,
+    index: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub network_index: Option<u64>,
+    network_index: Option<u64>,
+}
+
+impl From<u64> for OperationIdentifier {
+    fn from(index: u64) -> Self {
+        OperationIdentifier {
+            index,
+            network_index: None,
+        }
+    }
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug)]

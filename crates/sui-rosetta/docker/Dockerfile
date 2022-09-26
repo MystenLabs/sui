@@ -1,8 +1,10 @@
-FROM rust:1.64.0 AS chef
+FROM ubuntu:latest AS chef
 WORKDIR sui
 ARG GIT_REVISION
 ENV GIT_REVISION=$GIT_REVISION
-RUN apt-get update && apt-get install -y cmake clang curl
+RUN apt-get update && apt-get install -y build-essential libssl-dev pkg-config curl cmake clang
+RUN curl https://sh.rustup.rs -sSf | bash -s -- -y
+ENV PATH="/root/.cargo/bin:${PATH}"
 
 # Plan out the 3rd-party dependencies that need to be built.
 #
@@ -29,6 +31,7 @@ COPY --from=planner /sui/Cargo.lock Cargo.lock
 COPY --from=planner /sui/crates/workspace-hack crates/workspace-hack
 RUN cargo build --release
 RUN curl -sSfL https://raw.githubusercontent.com/coinbase/rosetta-cli/master/scripts/install.sh | sh -s
+RUN curl -fLJO https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob
 
 # Build application
 #
@@ -45,6 +48,8 @@ WORKDIR sui
 COPY --from=builder /sui/target/release/sui /usr/local/bin
 COPY --from=builder /sui/target/release/sui-rosetta /usr/local/bin
 COPY --from=builder /sui/bin/rosetta-cli /usr/local/bin
+COPY --from=builder /sui/crates/sui-config/data/fullnode-template.yaml /sui/devnet/fullnode.yaml
+COPY --from=builder /sui/genesis.blob /sui/devnet/genesis.blob
 RUN /usr/local/bin/sui genesis
 RUN /usr/local/bin/sui-rosetta generate-rosetta-cli-config
 
