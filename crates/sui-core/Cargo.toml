@@ -46,9 +46,9 @@ move-bytecode-utils.workspace = true
 move-core-types.workspace = true
 move-vm-runtime.workspace = true
 
-typed-store = "0.1.0"
-typed-store-derive = "0.1.0"
-mysten-network = "0.1.0"
+typed-store.workspace = true
+typed-store-derive.workspace = true
+mysten-network.workspace = true
 
 narwhal-config = { git = "https://github.com/MystenLabs/narwhal", rev = "0c7ff6cbeaa2995bb9034ebdbeb1ecd93caf967e" }
 narwhal-consensus = { git = "https://github.com/MystenLabs/narwhal", rev = "0c7ff6cbeaa2995bb9034ebdbeb1ecd93caf967e" }
@@ -69,7 +69,7 @@ move-package.workspace = true
 serde-reflection = "0.3.6"
 serde_yaml = "0.8.26"
 pretty_assertions = "1.2.1"
-telemetry-subscribers = "0.1.0"
+telemetry-subscribers.workspace = true
 
 test-fuzz = "3.0.4"
 test-utils = { path = "../test-utils" }

@@ -41,8 +41,8 @@ eyre = "0.6.8"
 bip32 = "0.4.0"
 slip10_ed25519 = "0.1.3"
 
-name-variant = "0.1.0"
-typed-store = "0.1.0"
+name-variant.workspace = true
+typed-store.workspace = true
 
 move-binary-format.workspace = true
 move-bytecode-utils.workspace = true
