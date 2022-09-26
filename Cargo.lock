@@ -7131,17 +7131,6 @@ dependencies = [
 
 [[package]]
 name = "sqlformat"
-version = "0.1.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b4b7922be017ee70900be125523f38bdd644f4f06a1b16e8fa5a8ee8c34bffd4"
-dependencies = [
- "itertools",
- "nom 7.1.1",
- "unicode_categories",
-]
-
-[[package]]
-name = "sqlformat"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f87e292b4291f154971a43c3774364e2cbcaec599d3f5bf6fa9d122885dbc38a"
@@ -7198,7 +7187,7 @@ dependencies = [
  "rustls-pemfile 1.0.0",
  "sha2 0.10.2",
  "smallvec",
- "sqlformat 0.2.0",
+ "sqlformat",
  "sqlx-rt",
  "stringprep",
  "thiserror",
@@ -10274,7 +10263,7 @@ dependencies = [
  "spin 0.5.2",
  "spin 0.9.4",
  "spki",
- "sqlformat 0.1.8",
+ "sqlformat",
  "sqlx",
  "sqlx-core",
  "sqlx-macros",
