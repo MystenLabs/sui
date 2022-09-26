@@ -25,8 +25,6 @@ import type { ButtonHTMLAttributes } from 'react';
 
 import st from './NFTDetails.module.scss';
 
-const TRUNCATE_MAX_LENGTH = 10;
-const TRUNCATE_PREFIX_LENGTH = 6;
 function NFTdetailsContent({
     nft,
     onClick,
@@ -36,13 +34,7 @@ function NFTdetailsContent({
 }) {
     const { nftObjectID, nftFields, fileExtentionType } = useNFTBasicData(nft);
     const isTransferable = hasPublicTransfer(nft);
-
-    const shortAddress = useMiddleEllipsis(
-        nftObjectID,
-        TRUNCATE_MAX_LENGTH,
-        TRUNCATE_PREFIX_LENGTH
-    );
-
+    const shortAddress = useMiddleEllipsis(nftObjectID);
     const NFTDetails = (
         <div className={st.nftDetails}>
             <div className={st.nftDetailsInner}>
