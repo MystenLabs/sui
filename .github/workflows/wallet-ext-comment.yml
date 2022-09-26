@@ -15,6 +15,13 @@ jobs:
       github.event.workflow_run.event == 'pull_request' &&
       github.event.workflow_run.conclusion == 'success'
     steps:
+      - name: Get workflow run information
+        uses: potiuk/get-workflow-origin@v1_1
+        id: source-run-info
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          sourceRunId: ${{ github.event.workflow_run.id }}
+
       - name: "Download artifact"
         uses: actions/github-script@v6
         id: get-artifact
@@ -41,6 +48,7 @@ jobs:
         uses: thollander/actions-comment-pull-request@v1
         if: steps.get-artifact.outputs.result != ''
         with:
+          pr_number: ${{ steps.source-run-info.outputs.pullRequestNumber }}
           comment_includes: "💳 Wallet Extension"
           message: |
             💳 Wallet Extension has been built, you can download the packaged extension here: ${{steps.get-artifact.outputs.result}}
