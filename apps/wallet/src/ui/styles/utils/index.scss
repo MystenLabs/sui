@@ -178,5 +178,10 @@ $main-extra-space: sizing.$main-bottom-space;
         font-weight: 500;
         line-height: 11px;
         letter-spacing: 0.05em;
+    } @else if $type == 'ParagraphPrimary/P2-R' {
+        font-size: 13px;
+        font-weight: 400;
+        line-height: 17px;
+        letter-spacing: 0;
     }
 }

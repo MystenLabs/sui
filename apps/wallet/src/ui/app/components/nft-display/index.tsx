@@ -40,12 +40,15 @@ function NFTDisplayCard({
         OBJ_TYPE_MAX_PREFIX_LENGTH
     );
     const displayTitle = name || objIDShort;
-
     const wideviewSection = (
         <div className={st.nftfields}>
             <div className={st.nftName}>{displayTitle}</div>
             <div className={st.nftType}>
-                {fileExtentionType?.name} {fileExtentionType.type}
+                {filePath ? (
+                    `${fileExtentionType.name} ${fileExtentionType.type}`
+                ) : (
+                    <span className={st.noMediaTextWideView}>NO MEDIA</span>
+                )}
             </div>
         </div>
     );
@@ -71,20 +74,23 @@ function NFTDisplayCard({
     );
 
     return (
-        <div
-            className={cl(st.nftimage, wideview && st.wideview, st[size])}
-            title={nftTypeShort}
-        >
+        <div className={cl(st.nftimage, wideview && st.wideview, st[size])}>
             {filePath ? (
                 <img
                     className={cl(st.img)}
                     src={filePath}
                     alt={fileExtentionType?.name || 'NFT'}
+                    title={nftTypeShort}
                 />
             ) : (
-                <div className={st.noMedia}>
-                    <Icon className={st.noMediaIcon} icon="slash-circle" />
-                    <span>No media</span>
+                <div className={st.noMedia} title={nftTypeShort}>
+                    <Icon
+                        className={st.noMediaIcon}
+                        icon={SuiIcons.NftTypeImage}
+                    />
+                    {wideview ? null : (
+                        <span className={st.noMediaText}>No media</span>
+                    )}
                 </div>
             )}
             {wideview ? wideviewSection : defaultSection}
