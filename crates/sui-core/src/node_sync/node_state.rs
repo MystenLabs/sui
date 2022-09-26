@@ -433,7 +433,7 @@ where
 
         match self
             .state
-            .handle_finalized_certificate(cert.clone(), effects.clone())
+            .handle_certificate_with_effects(cert.clone(), effects.clone())
             .await
         {
             Ok(_) => Ok(SyncStatus::CertExecuted),
@@ -601,7 +601,7 @@ where
             .await?;
 
         self.state
-            .handle_finalized_certificate(cert, effects.clone())
+            .handle_certificate_with_effects(cert, effects.clone())
             .await?;
 
         Ok(SyncStatus::CertExecuted)

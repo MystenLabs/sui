@@ -513,13 +513,15 @@ impl AuthorityState {
         }
     }
 
-    /// Execute a certificate that's know to have already finalized (i.e. executed by a quorum of
-    /// validators). For such certificate, we don't have to wait for consensus to set shared object
+    /// Execute a certificate that's known to have correct effects.
+    /// For such certificate, we don't have to wait for consensus to set shared object
     /// locks because we already know the shared object versions based on the effects.
     /// This function can be called either by a fullnode after seeing a quorum of signed effects,
     /// or by a validator after seeing the certificate included by a certified checkpoint.
+    /// TODO: down the road, we may want to execute a shared object tx on a validator when f+1
+    /// validators have executed it.
     #[instrument(level = "trace", skip_all)]
-    pub async fn handle_finalized_certificate(
+    pub async fn handle_certificate_with_effects(
         &self,
         certificate: CertifiedTransaction,
         // Signed effects is signed by only one validator, it is not a
@@ -531,7 +533,7 @@ impl AuthorityState {
     ) -> SuiResult {
         let _metrics_guard = start_timer(self.metrics.handle_node_sync_certificate_latency.clone());
         let digest = *certificate.digest();
-        debug!(?digest, "handle_finalized_certificate");
+        debug!(?digest, "handle_certificate_with_effects");
         fp_ensure!(
             signed_effects.effects.transaction_digest == digest,
             SuiError::ErrorWhileProcessingConfirmationTransaction {

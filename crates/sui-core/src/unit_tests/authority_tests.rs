@@ -2425,7 +2425,7 @@ async fn test_consensus_message_processed() {
             handle_cert(&authority2, &certificate).await
         } else {
             authority2
-                .handle_finalized_certificate(certificate.clone(), effects1.clone())
+                .handle_certificate_with_effects(certificate.clone(), effects1.clone())
                 .await
                 .unwrap();
             authority2
