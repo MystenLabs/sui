@@ -17,7 +17,7 @@ jobs:
     if: needs.diff.outputs.isWalletExt == 'true'
     runs-on: ubuntu-latest
     env:
-      working-directory: ./wallet
+      working-directory: ./apps/wallet
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -46,6 +46,6 @@ jobs:
       - uses: actions/upload-artifact@v2
         with:
           name: wallet-extension
-          path: wallet/web-ext-artifacts/*
+          path: apps/wallet/web-ext-artifacts/*
           if-no-files-found: error
           retention-days: 7
