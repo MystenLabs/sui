@@ -4,7 +4,6 @@
 use std::ops::Neg;
 use std::str::FromStr;
 
-use anyhow::anyhow;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -197,7 +196,7 @@ impl Operation {
         action.try_into_data(metadata).await
     }
 
-    pub fn gas(
+    pub fn gas_budget(
         counter: &mut IndexCounter,
         status: Option<OperationStatus>,
         gas: ObjectRef,
@@ -250,7 +249,9 @@ fn parse_operations(
             counter,
             status,
         ),
-        SingleTransactionKind::Call(c) => parse_move_call(sender, gas, budget, c, counter, status)?,
+        SingleTransactionKind::Call(c) => {
+            move_call_operations(sender, gas, budget, c, counter, status)
+        }
         SingleTransactionKind::Publish(p) => {
             let disassembled = disassemble_modules(p.modules.iter())?;
             vec![Operation {
@@ -331,7 +332,7 @@ fn transfer_sui_operations(
             coin_change: None,
             metadata: None,
         },
-        Operation::gas(counter, status, coin, budget, sender),
+        Operation::gas_budget(counter, status, coin, budget, sender),
     ]
 }
 
@@ -365,68 +366,15 @@ fn transfer_object_operations(
             coin_change: None,
             metadata: None,
         },
-        Operation::gas(counter, status, gas, budget, sender),
-    ]
-}
-
-fn split_coin_operations(
-    budget: u64,
-    coin_to_split: ObjectID,
-    split_amount: Vec<u64>,
-    gas: ObjectRef,
-    sender: SuiAddress,
-    counter: &mut IndexCounter,
-    status: Option<OperationStatus>,
-) -> Vec<Operation> {
-    vec![
-        Operation {
-            operation_identifier: counter.next_idx().into(),
-            related_operations: vec![],
-            type_: OperationType::SplitCoin,
-            status,
-            account: Some(AccountIdentifier { address: sender }),
-            amount: None,
-            coin_change: None,
-            metadata: Some(
-                json!({ "budget": budget, "coin_to_split": coin_to_split, "split_amount": split_amount }),
-            ),
-        },
-        Operation::gas(counter, status, gas, budget, sender),
-    ]
-}
-
-fn merge_coin_operations(
-    budget: u64,
-    primary_coin: ObjectID,
-    coin_to_merge: ObjectID,
-    gas: ObjectRef,
-    sender: SuiAddress,
-    counter: &mut IndexCounter,
-    status: Option<OperationStatus>,
-) -> Vec<Operation> {
-    vec![
-        Operation {
-            operation_identifier: counter.next_idx().into(),
-            related_operations: vec![],
-            type_: OperationType::MergeCoins,
-            status,
-            account: Some(AccountIdentifier { address: sender }),
-            amount: None,
-            coin_change: None,
-            metadata: Some(json!({ "primary_coin":primary_coin, "coin_to_merge":coin_to_merge })),
-        },
-        Operation::gas(counter, status, gas, budget, sender),
+        Operation::gas_budget(counter, status, gas, budget, sender),
     ]
 }
 
 fn move_call_operations(
-    budget: u64,
-    gas: ObjectRef,
     sender: SuiAddress,
-    package: ObjectID,
-    module: String,
-    function: String,
-    arguments: Value,
+    gas: ObjectRef,
+    budget: u64,
+    call: &MoveCall,
     counter: &mut IndexCounter,
     status: Option<OperationStatus>,
 ) -> Vec<Operation> {
@@ -439,87 +387,10 @@ fn move_call_operations(
             account: Some(AccountIdentifier { address: sender }),
             amount: None,
             coin_change: None,
-            metadata: Some(json!({
-                "budget": budget,
-                "package": package,
-                "module": module,
-                "function": function,
-                "arguments": arguments,
-            })),
+            metadata: Some(json!(call)),
         },
-        Operation::gas(counter, status, gas, budget, sender),
+        Operation::gas_budget(counter, status, gas, budget, sender),
     ]
-}
-
-fn parse_move_call(
-    sender: SuiAddress,
-    gas: ObjectRef,
-    budget: u64,
-    call: &MoveCall,
-    counter: &mut IndexCounter,
-    status: Option<OperationStatus>,
-) -> Result<Vec<Operation>, anyhow::Error> {
-    if call.package.0 == SUI_FRAMEWORK_OBJECT_ID {
-        if call.function.as_ref() == COIN_SPLIT_VEC_FUNC_NAME {
-            let coin_to_split = call
-                .arguments
-                .first()
-                .map(try_into_object_id)
-                .ok_or_else(|| anyhow!("Error parsing object from split coin move call."))??;
-            let split_amounts = call
-                .arguments
-                .last()
-                .and_then(|v| {
-                    if let CallArg::Pure(p) = v {
-                        bcs::from_bytes(p).ok()
-                    } else {
-                        None
-                    }
-                })
-                .ok_or_else(|| anyhow!("Error parsing amounts from split coin move call."))?;
-            return Ok(split_coin_operations(
-                budget,
-                coin_to_split,
-                split_amounts,
-                gas,
-                sender,
-                counter,
-                status,
-            ));
-        } else if call.function.as_ref() == COIN_JOIN_FUNC_NAME {
-            let coins = call
-                .arguments
-                .iter()
-                .map(try_into_object_id)
-                .collect::<Result<Vec<_>, _>>()?;
-            let primary_coin = *coins.first().ok_or_else(|| {
-                anyhow!("Error parsing [primary_coin] from merge coin move call.")
-            })?;
-            let coin_to_merge = *coins.last().ok_or_else(|| {
-                anyhow!("Error parsing [coin_to_merge] from merge coin move call.")
-            })?;
-            return Ok(merge_coin_operations(
-                budget,
-                primary_coin,
-                coin_to_merge,
-                gas,
-                sender,
-                counter,
-                status,
-            ));
-        }
-    }
-    Ok(move_call_operations(
-        budget,
-        gas,
-        sender,
-        call.package.0,
-        call.module.to_string(),
-        call.function.to_string(),
-        json!(call.arguments),
-        counter,
-        status,
-    ))
 }
 
 fn parse_pay(
@@ -541,18 +412,8 @@ fn parse_pay(
             coin_change: None,
             metadata: Some(json!(pay)),
         },
-        Operation::gas(counter, status, gas, budget, sender),
+        Operation::gas_budget(counter, status, gas, budget, sender),
     ]
-}
-
-fn try_into_object_id(arg: &CallArg) -> Result<ObjectID, anyhow::Error> {
-    if let CallArg::Object(arg) = arg {
-        Ok(*match arg {
-            ObjectArg::ImmOrOwnedObject((o, ..)) | ObjectArg::SharedObject(o) => o,
-        })
-    } else {
-        Err(anyhow!("Arg [{arg:?}] is not an object."))
-    }
 }
 
 #[derive(Debug)]
@@ -730,31 +591,6 @@ impl TryInto<SuiAction> for Vec<Operation> {
                         builder.recipient = Some(address);
                     }
                 }
-                OperationType::MergeCoins => {
-                    let coin = op
-                        .coin_change
-                        .ok_or_else(|| Error::missing_input("coin_change"))?;
-                    if let Some(account) = &op.account {
-                        let address = account.address;
-                        builder.operation_type = Some(op.type_);
-                        builder.sender = Some(address);
-                        builder.coin = Some(coin.coin_identifier.identifier.id);
-                    } else {
-                        builder.coin_to_merge = Some(coin.coin_identifier.identifier.id);
-                    }
-                }
-                OperationType::SplitCoin => {
-                    if let Some(coin_change) = op.coin_change {
-                        let account = &op.account.ok_or_else(|| Error::missing_input("account"))?;
-                        let address = account.address;
-                        builder.operation_type = Some(op.type_);
-                        builder.sender = Some(address);
-                        builder.coin = Some(coin_change.coin_identifier.identifier.id);
-                    } else {
-                        let amount = &op.amount.ok_or_else(|| Error::missing_input("amount"))?;
-                        builder.add_split_amount(amount.value.abs());
-                    }
-                }
                 OperationType::GasBudget => {
                     if let Some(coin) = op.coin_change.as_ref() {
                         builder.gas = Some(coin.coin_identifier.identifier.id);
@@ -794,9 +630,7 @@ struct SuiActionBuilder {
     recipient: Option<SuiAddress>,
     gas: Option<ObjectID>,
     coin: Option<ObjectID>,
-    coin_to_merge: Option<ObjectID>,
     send_amount: Option<u64>,
-    split_amount: Option<Vec<u64>>,
     gas_budget: Option<u64>,
     operation_type: Option<OperationType>,
 }
@@ -824,57 +658,10 @@ impl SuiActionBuilder {
                     amount: self.send_amount,
                 })
             }
-            OperationType::MergeCoins => {
-                let sender = self.sender.ok_or_else(|| Error::missing_input("sender"))?;
-                let primary_coin = self
-                    .coin
-                    .ok_or_else(|| Error::missing_input("primary_coin"))?;
-                let coin_to_merge = self
-                    .coin_to_merge
-                    .ok_or_else(|| Error::missing_input("coin_to_merge"))?;
-                let gas = self.gas.ok_or_else(|| Error::missing_input("gas"))?;
-                let budget = self
-                    .gas_budget
-                    .ok_or_else(|| Error::missing_input("gas_budget"))?;
-
-                Ok(SuiAction::MergeCoin {
-                    budget,
-                    primary_coin,
-                    coin_to_merge,
-                    gas,
-                    sender,
-                })
-            }
-            OperationType::SplitCoin => {
-                let sender = self.sender.ok_or_else(|| Error::missing_input("sender"))?;
-                let coin_to_split = self
-                    .coin
-                    .ok_or_else(|| Error::missing_input("coin_to_split"))?;
-                let gas = self.gas.ok_or_else(|| Error::missing_input("gas"))?;
-                let budget = self
-                    .gas_budget
-                    .ok_or_else(|| Error::missing_input("gas_budget"))?;
-                let split_amount = self
-                    .split_amount
-                    .ok_or_else(|| Error::missing_input("split_amount"))?;
-
-                Ok(SuiAction::SplitCoin {
-                    budget,
-                    coin_to_split,
-                    gas,
-                    sender,
-                    split_amounts: split_amount,
-                })
-            }
             _ => Err(Error::new_with_msg(
                 UnsupportedOperation,
                 format!("Unsupported operation [{type_:?}]").as_str(),
             )),
         }
-    }
-
-    pub fn add_split_amount(&mut self, amount: u64) -> &mut Self {
-        self.split_amount.get_or_insert(vec![]).push(amount);
-        self
     }
 }

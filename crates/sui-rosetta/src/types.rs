@@ -386,8 +386,6 @@ pub struct ConstructionPayloadsRequest {
 pub enum OperationType {
     GasBudget,
     TransferSUI,
-    MergeCoins,
-    SplitCoin,
     // Readonly
     GasSpent,
     Pay,
