@@ -1,8 +1,8 @@
-name: Wallet Extension PR checks
+name: Wallet Extension PR Checks
 on: pull_request
 jobs:
   diff:
-    runs-on: [ubuntu-latest]
+    runs-on: ubuntu-latest
     outputs:
       isWalletExt: ${{ steps.diff.outputs.isWalletExt }}
     steps:
@@ -10,11 +10,12 @@ jobs:
       - name: Detect Changes
         uses: "./.github/actions/pnpm-diffs"
         id: diff
+
   run_checks:
     name: Lint, Test & Build
     needs: diff
     if: needs.diff.outputs.isWalletExt == 'true'
-    runs-on: [ubuntu-latest]
+    runs-on: ubuntu-latest
     env:
       working-directory: ./wallet
     steps:
@@ -43,16 +44,8 @@ jobs:
         working-directory: ${{env.working-directory}}
         run: pnpm pack:zip
       - uses: actions/upload-artifact@v2
-        if: always()
         with:
           name: wallet-extension
           path: wallet/web-ext-artifacts/*
           if-no-files-found: error
           retention-days: 7
-      - name: Comment PR
-        uses: thollander/actions-comment-pull-request@v1
-        with:
-          comment_includes: "💳 Wallet Extension"
-          message: |
-            💳 Wallet Extension has been built, you can download the packaged extension here: https://github.com/MystenLabs/sui/actions/runs/${{ github.run_id }}#artifacts
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
