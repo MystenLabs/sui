@@ -6,7 +6,7 @@ Please do not use the code or derivatives in production without proper diligence
 
 # Sui Wallet
 
-A Chrome extension wallet for [Sui](https://sui.io).
+A Chrome extension wallet for [Sui](https://sui.io)!
 
 # Set Up
 
