@@ -43,7 +43,7 @@ jobs:
       - name: Package
         working-directory: ${{env.working-directory}}
         run: pnpm pack:zip
-      - uses: actions/upload-artifact@v2
+      - uses: actions/upload-artifact@v3
         with:
           name: wallet-extension
           path: apps/wallet/web-ext-artifacts/*

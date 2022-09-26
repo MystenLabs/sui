@@ -63,7 +63,7 @@ jobs:
           echo ::set-output name=BIN_RPC_SERVER::"target/release/rpc-server"
 
       - name: Upload release artifacts
-        uses: actions/upload-artifact@master
+        uses: actions/upload-artifact@v3
         with:
           name: sui-binaries
           path: |
