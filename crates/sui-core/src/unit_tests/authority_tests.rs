@@ -2304,7 +2304,7 @@ async fn shared_object() {
         matches!(
             result,
             Err(SuiError::ObjectErrors { ref errors })
-                if errors.len() == 1 && matches!(errors[0], SuiError::SharedObjectLockNotSetObject)
+                if errors.len() == 1 && matches!(errors[0], SuiError::SharedObjectLockNotSetError)
         ),
         "{:#?}",
         result

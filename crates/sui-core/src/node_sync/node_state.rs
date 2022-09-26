@@ -437,7 +437,7 @@ where
             Ok(_) => Ok(SyncStatus::CertExecuted),
             Err(SuiError::ObjectNotFound { .. })
             | Err(SuiError::ObjectErrors { .. })
-            | Err(SuiError::SharedObjectLockNotSetObject) => {
+            | Err(SuiError::SharedObjectLockNotSetError) => {
                 debug!(?digest, "cert execution failed due to missing parents");
 
                 let effects = self.get_true_effects(&cert).await?;

@@ -377,7 +377,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
                 InputObjectKind::SharedMoveObject(id) => match shared_locks.get(id) {
                     Some(version) => self.get_object_by_key(id, *version)?,
                     None => {
-                        errors.push(SuiError::SharedObjectLockNotSetObject);
+                        errors.push(SuiError::SharedObjectLockNotSetError);
                         continue;
                     }
                 },
