@@ -42,7 +42,7 @@ jobs:
               return '';
             }
 
-            return matchArtifact.archive_download_url;
+            return `https://github.com/MystenLabs/sui/suites/8476270273/artifacts/${matchArtifact.id}`;
 
       - name: Comment PR
         uses: thollander/actions-comment-pull-request@v1
