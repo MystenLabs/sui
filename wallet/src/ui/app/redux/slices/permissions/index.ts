@@ -81,7 +81,7 @@ const slice = createSlice({
 
 export default slice.reducer;
 
-export const { setPermissions, revokeAppPermission } = slice.actions;
+export const { setPermissions } = slice.actions;
 
 export const permissionsSelectors = permissionsAdapter.getSelectors(
     (state: RootState) => state.permissions
