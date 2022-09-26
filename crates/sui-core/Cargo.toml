@@ -50,11 +50,11 @@ typed-store = "0.1.0"
 typed-store-derive = "0.1.0"
 mysten-network = "0.1.0"
 
-narwhal-config = { git = "https://github.com/MystenLabs/narwhal", rev = "5f4b7d3f4edb1fd2e1a2789a2b7167fffe2ff28d" }
-narwhal-consensus = { git = "https://github.com/MystenLabs/narwhal", rev = "5f4b7d3f4edb1fd2e1a2789a2b7167fffe2ff28d" }
-narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "5f4b7d3f4edb1fd2e1a2789a2b7167fffe2ff28d" }
-narwhal-types = { git = "https://github.com/MystenLabs/narwhal", rev = "5f4b7d3f4edb1fd2e1a2789a2b7167fffe2ff28d" }
-narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "5f4b7d3f4edb1fd2e1a2789a2b7167fffe2ff28d", features = ["trace_transaction"] }
+narwhal-config = { git = "https://github.com/MystenLabs/narwhal", rev = "0c7ff6cbeaa2995bb9034ebdbeb1ecd93caf967e" }
+narwhal-consensus = { git = "https://github.com/MystenLabs/narwhal", rev = "0c7ff6cbeaa2995bb9034ebdbeb1ecd93caf967e" }
+narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "0c7ff6cbeaa2995bb9034ebdbeb1ecd93caf967e" }
+narwhal-types = { git = "https://github.com/MystenLabs/narwhal", rev = "0c7ff6cbeaa2995bb9034ebdbeb1ecd93caf967e" }
+narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "0c7ff6cbeaa2995bb9034ebdbeb1ecd93caf967e", features = ["trace_transaction"] }
 
 fastcrypto = "0.1.2"
 workspace-hack = { path = "../workspace-hack"}
