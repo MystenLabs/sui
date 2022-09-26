@@ -3,15 +3,15 @@ processed 4 tasks
 init:
 A: object(100), B: object(101)
 
-task 1 'publish'. lines 8-37:
+task 1 'publish'. lines 9-38:
 created: object(105)
 written: object(104)
 
-task 2 'run'. lines 39-39:
+task 2 'run'. lines 40-40:
 created: object(107)
 written: object(106)
 
-task 3 'run'. lines 41-41:
+task 3 'run'. lines 42-42:
 created: object(109)
 written: object(108)
 deleted: object(107)
