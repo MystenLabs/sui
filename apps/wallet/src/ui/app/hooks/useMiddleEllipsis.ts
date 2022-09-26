@@ -5,8 +5,8 @@ import { useMemo } from 'react';
 
 export default function useMiddleEllipsis(
     txt: string | null,
-    maxLength = 14,
-    maxLengthBeginning?: number
+    maxLength = 10,
+    maxLengthBeginning = 6
 ) {
     return useMemo(() => {
         if (!txt) {
