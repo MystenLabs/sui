@@ -4025,7 +4025,7 @@ dependencies = [
  "move-docgen",
  "move-model",
  "move-symbol-pool",
- "named-lock 0.1.1",
+ "named-lock",
  "once_cell",
  "petgraph 0.5.1",
  "ptree",
@@ -4492,21 +4492,7 @@ dependencies = [
  "once_cell",
  "parking_lot 0.10.2",
  "thiserror",
- "widestring 0.4.3",
- "winapi",
-]
-
-[[package]]
-name = "named-lock"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b4a84f3731e71a5792fca72324356bf700c8959d31a2ac34134b25989f254c3"
-dependencies = [
- "libc",
- "once_cell",
- "parking_lot 0.12.1",
- "thiserror",
- "widestring 1.0.2",
+ "widestring",
  "winapi",
 ]
 
@@ -9540,12 +9526,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c168940144dd21fd8046987c16a46a33d5fc84eec29ef9dcddc2ac9e31526b7c"
 
 [[package]]
-name = "widestring"
-version = "1.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "653f141f39ec16bba3c5abe400a0c60da7468261cc2cbf36805022876bc721a8"
-
-[[package]]
 name = "winapi"
 version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10055,7 +10035,7 @@ dependencies = [
  "mysten-util-mem",
  "mysten-util-mem-derive",
  "name-variant",
- "named-lock 0.3.0",
+ "named-lock",
  "narwhal-config",
  "narwhal-consensus",
  "narwhal-crypto",
@@ -10421,7 +10401,7 @@ dependencies = [
  "webpki-roots",
  "which",
  "whoami",
- "widestring 0.4.3",
+ "widestring",
  "winapi",
  "winapi-util",
  "windows-sys 0.30.0",
