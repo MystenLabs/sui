@@ -494,7 +494,7 @@ socket2 = { version = "0.4", default-features = false }
 soketto = { version = "0.7" }
 spin-274715c4dabd11b0 = { package = "spin", version = "0.9", features = ["barrier", "lazy", "lock_api", "lock_api_crate", "mutex", "once", "rwlock", "spin_mutex"] }
 spki = { version = "0.6", default-features = false, features = ["alloc", "base64ct", "std"] }
-sqlformat = { version = "0.1", default-features = false }
+sqlformat = { version = "0.2", default-features = false }
 sqlx = { version = "0.6", features = ["_rt-tokio", "macros", "migrate", "runtime-tokio-rustls", "sqlite", "sqlx-macros"] }
 sqlx-core = { version = "0.6", default-features = false, features = ["_rt-tokio", "_tls-rustls", "any", "crc", "flume", "futures-executor", "libsqlite3-sys", "migrate", "runtime-tokio-rustls", "rustls", "rustls-pemfile", "sha2", "sqlite", "tokio-stream", "webpki-roots"] }
 sqlx-rt = { version = "0.6", default-features = false, features = ["_rt-tokio", "_tls-rustls", "once_cell", "runtime-tokio-rustls", "tokio", "tokio-rustls"] }
@@ -1180,7 +1180,7 @@ socket2 = { version = "0.4", default-features = false }
 soketto = { version = "0.7" }
 spin-274715c4dabd11b0 = { package = "spin", version = "0.9", features = ["barrier", "lazy", "lock_api", "lock_api_crate", "mutex", "once", "rwlock", "spin_mutex"] }
 spki = { version = "0.6", default-features = false, features = ["alloc", "base64ct", "std"] }
-sqlformat = { version = "0.1", default-features = false }
+sqlformat = { version = "0.2", default-features = false }
 sqlx = { version = "0.6", features = ["_rt-tokio", "macros", "migrate", "runtime-tokio-rustls", "sqlite", "sqlx-macros"] }
 sqlx-core = { version = "0.6", default-features = false, features = ["_rt-tokio", "_tls-rustls", "any", "crc", "flume", "futures-executor", "libsqlite3-sys", "migrate", "runtime-tokio-rustls", "rustls", "rustls-pemfile", "sha2", "sqlite", "tokio-stream", "webpki-roots"] }
 sqlx-macros = { version = "0.6", default-features = false, features = ["_rt-tokio", "migrate", "runtime-tokio-rustls", "sha2", "sqlite"] }
