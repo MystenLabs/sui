@@ -60,27 +60,36 @@ where
     /// Returns an iterator over each value in the map.
     fn values(&'a self) -> Self::Values;
 
-    /// Returns a vector of values corresponding to the keys provided.
-    fn multi_get<J>(
-        &self,
-        keys: impl IntoIterator<Item = J>,
-    ) -> Result<Vec<Option<V>>, Self::Error>
+    /// Returns a vector of values corresponding to the keys provided, non-atomically.
+    fn multi_get<J>(&self, keys: impl IntoIterator<Item = J>) -> Result<Vec<Option<V>>, Self::Error>
     where
-        J: Borrow<K>;
+        J: Borrow<K>,
+    {
+        keys.into_iter().map(|key| self.get(key.borrow())).collect()
+    }
 
-    /// Inserts key-value pairs.
+    /// Inserts key-value pairs, non-atomically.
     fn multi_insert<J, U>(
         &self,
         key_val_pairs: impl IntoIterator<Item = (J, U)>,
     ) -> Result<(), Self::Error>
     where
         J: Borrow<K>,
-        U: Borrow<V>;
+        U: Borrow<V>,
+    {
+        key_val_pairs
+            .into_iter()
+            .try_for_each(|(key, value)| self.insert(key.borrow(), value.borrow()))
+    }
 
-    /// Removes keys.
+    /// Removes keys, non-atomically.
     fn multi_remove<J>(&self, keys: impl IntoIterator<Item = J>) -> Result<(), Self::Error>
     where
-        J: Borrow<K>;
+        J: Borrow<K>,
+    {
+        keys.into_iter()
+            .try_for_each(|key| self.remove(key.borrow()))
+    }
 
     /// Try to catch up with primary when running as secondary
     fn try_catch_up_with_primary(&self) -> Result<(), Self::Error>;
