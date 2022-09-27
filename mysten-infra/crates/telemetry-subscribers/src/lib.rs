@@ -240,7 +240,7 @@ impl TelemetryConfig {
         #[cfg(feature = "jaeger")]
         if config.enable_tracing {
             // Install a tracer to send traces to Jaeger.  Batching for better performance.
-            let tracer = opentelemetry_jaeger::new_pipeline()
+            let tracer = opentelemetry_jaeger::new_agent_pipeline()
                 .with_service_name(&config.service_name)
                 .with_max_packet_size(9216) // Default max UDP packet size on OSX
                 .with_auto_split_batch(true) // Auto split batches so they fit under packet size

@@ -24,7 +24,7 @@ use serde::{
     Deserialize, Deserializer, Serialize,
 };
 use std::collections::BTreeSet;
-use x509_parser::{traits::FromDer, x509::SubjectPublicKeyInfo};
+use x509_parser::{prelude::FromDer, x509::SubjectPublicKeyInfo};
 
 #[cfg(test)]
 #[path = "tests/psk_tests.rs"]
