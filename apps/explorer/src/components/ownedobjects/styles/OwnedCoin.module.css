@@ -32,7 +32,7 @@
 }
 
 .closedgroup {
-    @apply text-sui-grey-90 hover:bg-[#6fbcf014];
+    @apply text-sui-grey-90 hover:bg-sui-light;
 }
 
 .openbody {
@@ -57,7 +57,7 @@
 }
 
 .closedgroup .summary:hover {
-    @apply rounded-md bg-[#6fbcf014];
+    @apply rounded-md bg-sui-light;
 }
 
 .coinname svg path {
