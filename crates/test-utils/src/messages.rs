@@ -159,31 +159,30 @@ pub fn make_transactions_with_pre_genesis_objects(
     // The gas objects and the objects used in the transfer transactions. Evert two
     // consecutive objects must have the same owner for the transaction to be valid.
     let mut addresses_two_by_two = Vec::new();
-    let mut signers = Vec::new(); // Keys are not copiable, move them here.
-    for keypair in keys.keys() {
-        let address = (&keypair).into();
+    for address in keys.addresses() {
         addresses_two_by_two.push(address);
         addresses_two_by_two.push(address);
-        signers.push(keys.signer(address));
     }
     let gas_objects = test_gas_objects_with_owners(addresses_two_by_two);
 
     // Make one transaction for every two gas objects.
     let mut transactions = Vec::new();
-    for (objects, signer) in gas_objects.chunks(2).zip(signers) {
+    for objects in gas_objects.chunks(2) {
         let [o1, o2]: &[Object; 2] = match objects.try_into() {
             Ok(x) => x,
             Err(_) => break,
         };
 
+        // Here we assume the object is owned not shared, so it is safe to unwrap.
+        let sender = o1.owner.get_owner_address().unwrap();
         let data = TransactionData::new_transfer(
             recipient,
             o1.compute_object_reference(),
-            /* sender */ o1.owner.get_owner_address().unwrap(),
+            /* sender */ sender,
             /* gas_object_ref */ o2.compute_object_reference(),
             MAX_GAS,
         );
-        let signature = Signature::new(&data, &signer);
+        let signature = keys.sign(&sender, &data.to_bytes()).unwrap();
         transactions.push(Transaction::new(data, signature));
     }
     (transactions, gas_objects)

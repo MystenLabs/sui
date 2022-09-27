@@ -19,7 +19,6 @@ use sui_sdk::{
     rpc_types::SuiData,
     types::{
         base_types::{ObjectID, SuiAddress},
-        crypto::Signature,
         id::UID,
         messages::Transaction,
     },
@@ -96,11 +95,10 @@ impl TicTacToe {
             )
             .await?;
 
-        // Get signer from keystore
-        let signer = self.keystore.signer(player_x);
-
-        // Sign the transaction
-        let signature = Signature::new(&create_game_call, &signer);
+        // Sign transaction.
+        let signature = self
+            .keystore
+            .sign(&player_x, &create_game_call.to_bytes())?;
 
         // Execute the transaction.
         let response = self
@@ -187,11 +185,10 @@ impl TicTacToe {
                 )
                 .await?;
 
-            // Get signer from keystore
-            let signer = self.keystore.signer(my_identity);
-
-            // Sign the transaction
-            let signature = Signature::new(&place_mark_call, &signer);
+            // Sign transaction.
+            let signature = self
+                .keystore
+                .sign(&my_identity, &place_mark_call.to_bytes())?;
 
             // Execute the transaction.
             let response = self
