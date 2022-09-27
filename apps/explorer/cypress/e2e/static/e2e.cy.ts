@@ -147,30 +147,23 @@ describe('End-to-end Tests', () => {
     describe('Group View', () => {
         it('evaluates balance', () => {
             const address = 'ownsAllAddress';
+            const rowCSSSelector = (row: number) =>
+                `#groupCollection [data-testid=ownedcoinsummary]:nth-child(${row}) `;
+            const label = '[data-testid=ownedcoinlabel]';
+            const count = '[data-testid=ownedcoinobjcount]';
+            const balance = '[data-testid=ownedcoinbalance]';
+
             cy.visit(`/addresses/${address}`);
 
-            // TODO: Add test IDs to make this selection less structural
-            cy.get(
-                '#groupCollection > div:nth-child(2) > div:nth-child(1) > div'
-            )
-                .children()
-                .eq(1)
-                .contains('0x2::USD::USD')
-                .next()
-                .contains('2')
-                .next()
-                .contains('9007199254740993');
+            cy.get(`${rowCSSSelector(1)} ${label}`).contains('0x2::USD::USD');
+            cy.get(`${rowCSSSelector(1)} ${count}`).contains('2');
+            cy.get(`${rowCSSSelector(1)} ${balance}`).contains(
+                '9007199254740993'
+            );
 
-            cy.get(
-                '#groupCollection > div:nth-child(2) > div:nth-child(2) > div'
-            )
-                .children()
-                .eq(1)
-                .contains('SUI')
-                .next()
-                .contains('2')
-                .next()
-                .contains('200');
+            cy.get(`${rowCSSSelector(2)} ${label}`).contains('SUI');
+            cy.get(`${rowCSSSelector(2)} ${count}`).contains('2');
+            cy.get(`${rowCSSSelector(2)} ${balance}`).contains('200');
         });
     });
 

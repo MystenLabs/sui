@@ -3,8 +3,8 @@
     @apply truncate min-w-0;
 }
 
-.cointype {
-    @apply pr-[15px];
+.oneline a {
+    @apply font-mono;
 }
 
 .groupview {
@@ -12,76 +12,63 @@
 }
 
 .firstrow {
-    @apply grid uppercase font-medium text-sui-grey-80 text-[12px] leading-[12px] py-[10px];
+    @apply grid gap-[15px] uppercase font-medium text-sui-grey-80 text-subtitle py-[10px] tracking-wider;
 
     grid-template-columns: 35% 30% 35%;
 }
 
 .body {
-    @apply text-[13px] leading-[12px];
+    @apply text-bodySmall;
 }
 
 .summary {
-    @apply grid py-[10px] cursor-pointer break-words;
+    @apply grid gap-[15px] py-[8px] px-0 cursor-pointer break-words;
 
-    grid-template-columns: 5% 30% 30% 30% 5%;
+    grid-template-columns: 35% 30% 35%;
 }
 
-.summary :nth-child(2) {
-    @apply text-sui-grey-90;
-}
-
-.summary :nth-child(3),
-.summary :nth-child(4) {
-    @apply text-sui-grey-80;
-}
-
-.openedgroup .summary div {
-    @apply pb-[12px];
+.coinname {
+    @apply flex flex-row items-center gap-[4px];
 }
 
 .closedgroup {
-    @apply text-sui-grey-90 hover:bg-[#6fbcf014];
+    @apply text-sui-grey-90 hover:bg-sui-light;
 }
 
 .openbody {
-    @apply max-h-[200px] overflow-auto;
+    @apply max-h-[210px] overflow-auto bg-sui-grey-40 flex flex-col items-start gap-[12px]
+    p-[10px] pl-[15px];
 }
 
-.objectid,
-.balance {
-    @apply text-sui-grey-80 grid break-words;
-
-    grid-template-columns: 5% 30% 60% 5%;
+.singlecoin {
+    @apply flex flex-col items-start p-0 gap-[6px];
 }
 
-.objectid {
-    @apply pb-[10px] pt-0;
+.openrow {
+    @apply flex flex-row items-center p-0;
 }
 
-.balance {
-    @apply pb-[16px];
+.label {
+    @apply w-[80px] text-sui-grey-80;
 }
 
-.balance :nth-child(3) {
-    @apply text-sui-grey-85;
+.value {
+    @apply max-w-[50vw] text-sui-grey-80;
 }
 
 .closedgroup .summary:hover {
-    @apply rounded-md bg-[#6fbcf014];
+    @apply rounded-md bg-sui-light;
 }
 
-.openicon,
-.closedicon {
-    @apply p-0 mx-auto sm:pr-[6px] sm:pl-[12px];
-}
-
-.openicon,
-.closedicon svg path {
+.coinname svg path {
     @apply fill-sui-grey-60;
 }
 
-.openicon svg path {
-    transform: rotate(90deg);
-    transform-origin: 50% 50%;
+.coinname .oneline {
+    @apply text-sui-grey-90;
+}
+
+.objcount,
+.balance {
+    @apply text-sui-grey-80;
 }
