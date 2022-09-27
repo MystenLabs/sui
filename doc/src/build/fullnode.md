@@ -15,15 +15,6 @@ transactions (or a block of transactions), the validator will push that block
 to a fullnode (potentially a number of fullnodes) who will then in turn
 disseminate it to the rest of the network.
 
-**Important**: For [potential validators](https://sui.io/resources-sui/validator-registration-open/),
-running a Sui fullnode is an absolute
-prerequisite. We encourage auditors, bridges, state mirrors and other
-interested parties to join us. At this time, we offer no guarantees on performance
-or stability of our fullnode software. We expect things to evolve and stabilize
-over time, and we're seeking feedback in the form of [Sui Code Bug issues filed in
-GitHub](https://github.com/MystenLabs/sui/issues/new/choose) for any problems
-encountered.
-
 ## Features
 
 Sui fullnodes exist to:

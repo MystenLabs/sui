@@ -4,13 +4,10 @@ title: Connect to Sui Devnet
 
 Welcome to the Sui Devnet. We are hosting a public Devnet for the community to experiment with our tech and help to shape the future of the Sui network. It exists to gain operational experience with the Sui software in a public setting prior to our Mainnet launch.
 
-To instead [contribute](../contribute/index.md) to Sui itself, you may experiment with the advanced [Sui CLI client](../build/cli-client.md) at the command line.
-
-
 The Sui Devnet currently consists of:
 
 * A four-validator network with all nodes operated by Mysten Labs. Clients send transactions and read requests via this endpoint: gateway.devnet.sui.io:443 using [JSON-RPC](../build/json-rpc.md)
-* A public network [Sui Explorer](https://github.com/MystenLabs/sui/tree/main/apps/explorer#readme) for browsing transaction history: https://explorer.devnet.sui.io
+* A public network [Sui Explorer](https://explorer.devnet.sui.io) for browsing transaction history.
 * A [Discord channel](https://discordapp.com/channels/916379725201563759/971488439931392130) for requesting test coins that can be used to pay for gas on the test network. These coins have no financial value and will disappear each time we reset the network.
 
 Many improvements to the Sui Devnet are underway, such as the ability to run full nodes and use a browser-based wallet. See the [Sui Devnet blog post](https://medium.com/mysten-labs/sui-devnet-public-release-a2be304ff36b) announcement for full details on upcoming features. All Devnet usage is subject to our [terms of service](https://sui.io/terms/).
@@ -19,17 +16,16 @@ Many improvements to the Sui Devnet are underway, such as the ability to run ful
 
 We provide the following tools for users to interact with the Sui Devnet:
 
-* The [Sui Wallet command line interface (CLI)](../build/cli-client.md)
+* The [Sui command line interface (CLI)](../build/cli-client.md)
     * create and manage your private keys
     * submit transactions for creating example NFTs
     * call and publish Move modules
-* [Sui Explorer](https://github.com/MystenLabs/sui/tree/main/apps/explorer#readme) - view transactions and objects
+* [Sui Explorer](https://github.com/MystenLabs/sui/blob/main/apps/explorer/README.md) - view transactions and objects
 
-## Prerequisites
 
-### Set up environment
+## Environment set up
 
-You may simply [install Sui](../build/install.md) and then request test tokens as described in the install docs. To use the Sui Devnet, you will need:
+You can [install Sui](../build/install.md) and then request test tokens as described in the install docs. To use the Sui Devnet, you need:
 
 1. Sui [test coins (tokens)](#request-gas-tokens) requested through [Discord](https://discordapp.com/channels/916379725201563759/971488439931392130).
 1. the [`git` command line interface](https://git-scm.com/download/).
@@ -46,7 +42,7 @@ You should see the path to the command. Otherwise, reinstall.
 
 In addition, to conduct advanced work such as publishing a Move module or making a Move call, also obtain the [Sui source code](../build/install.md#source-code); for simplicity, we recommend installing in `~/sui` or using an environment variable.
 
-### Set up Sui CLI client, connect to gateway
+## Configure the Sui client
 
 Now set up your Sui CLI client and connect to Devnet. Note you can manually change the Gateway URL if you have already configured a Sui CLI client.
 
@@ -73,11 +69,11 @@ $ sui client switch --rpc https://gateway.devnet.sui.io:443
 
 > **Tip:** If you run into issues, reset the Sui configuration by removing its directory, by default located at `~/.sui/sui_config`. Then reinstall [Sui binaries](../build/install.md#binaries).
 
-## Basic testing
+## Validating
 
 Note that in the following sections, the object ID's, addresses, and authority signatures used are example values only. Sui generates unique values for each of these, so you see different values when you run the commands.
 
-### Request gas tokens
+## Request gas tokens
 
 1. Join [Discord](https://discord.gg/sui) If you haven’t already.
 1. Find your address by running:
@@ -87,7 +83,7 @@ Note that in the following sections, the object ID's, addresses, and authority s
 1. Request tokens in the [#devnet-faucet](https://discord.com/channels/916379725201563759/971488439931392130)
    channel per the [SUI tokens](../build/install.md#sui-tokens) install documentation.
 
-### Mint an example NFT
+## Mint an example NFT
 
 To create a Non-Fungible Token (NFT), run:
 ```shell
@@ -104,19 +100,19 @@ Owner: Account Address ( 9E9A9D406961E478AA80F4A6B2B167673F3DF8BA )
 Type: 0x2::devnet_nft::DevNetNFT
 ```
 
-The above command created an object with ID `ED883F6812AF447B9B0CE220DA5EA9E0F58012FE`. Note you may use `Sui CLI client` to [view objects owned by the address](../build/cli-client.md#view-objects-owned-by-the-address).
+The preceding command created an object with ID `ED883F6812AF447B9B0CE220DA5EA9E0F58012FE`. Use the `Sui CLI client` to [view objects owned by the address](../build/cli-client.md#view-objects-owned-by-the-address).
 
 Now you can view the created object in the [Sui Explorer](https://explorer.devnet.sui.io) by appending the object ID to:
 https://explorer.devnet.sui.io/objects/
 
 ![Example NFT](../../static/example-nft.png "Example NFT")
 
-Note you may easily customize the name, description, or image of the NFT upon creation, like so:
+The following example command demonstrates how to customize the name, description, or image of the NFT:
 ```shell
 $ sui client create-example-nft --url=https://user-images.githubusercontent.com/76067158/166136286-c60fe70e-b982-4813-932a-0414d0f55cfb.png --description="The greatest chef in the world" --name="Greatest Chef"
 ```
 
-Which results in a new object ID:
+The command returns a new object ID:
 ```shell
 Successfully created an ExampleNFT:
 
@@ -126,28 +122,10 @@ Owner: Account Address ( 9E9A9D406961E478AA80F4A6B2B167673F3DF8BA )
 Type: 0x2::devnet_nft::DevNetNFT
 ```
 
-That you can similarly view at:
+You can view details about the object in Sui Explorer:
 https://explorer.devnet.sui.io/objects/EC97467A40A1305FFDEF7019C3045FBC7AA31E29
 
-![Custom NFT](../../static/custom-nft.png "Custom NFT")
-
-See all transactions on the [home page](https://explorer.devnet.sui.io) and find the transaction hash under *Latest Transactions*:
-
-![Explorer home](../../static/explorer-home.png "Explorer home")
-
-To get to the *Transaction Details* view in Sui Explorer after minting an NFT, click on the *Last Transaction ID* field in the *Object View*.
-
-![Transaction details](../../static/transaction-details.png "Transaction details")
-
-Click on any address to see the objects it owns:
-
-![Owned objects](../../static/owned-objects.png "Owned objects")
-
-See the [Sui Explorer README](https://github.com/MystenLabs/sui/tree/main/apps/explorer#readme) for more details.
-
-## Advanced testing
-
-### Publish a Move module
+## Publish a Move module
 
 Publish a sample Move package containing code developed in the [Sui Move tutorial](../build/move/write-package.md) as follows (assuming you installed the source code in `~sui` as advised in set up):
 ```shell
@@ -179,7 +157,7 @@ Two important things happened as a result of publishing this package:
 
 Specific object IDs displayed above may differ from one Sui installation to the other, so we will use the following placeholders for them (respectively): <PACKAGE_ID> and <FORGE_ID>. Whenever you see these used in the command line, for example when calling Move functions in the next section, *replace them with actual object IDs*.
 
-### Make a Move call
+## Make a Move call
 
 In the previous section, we learned how to publish a Move package; and in this section, we will learn how to call into functions defined in this package. As a result of publishing a package, we obtained the new package object ID (<PACKAGE_ID>) and ID of the `Forge` object (<FORGE_ID>) that can be used to create swords and transfer them to other players.
 

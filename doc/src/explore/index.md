@@ -1,5 +1,5 @@
 ---
-title: Exploring Sui
+title: Explore Sui
 ---
 
 Now that you've [learned](../learn/index.md) about Sui and started [building](../build/index.md) it, use the contents of this section to delve into Sui more deeply.
@@ -11,15 +11,17 @@ Find answers to common questions about our [roadmap](https://github.com/MystenLa
 Experiment with:
 
 * [Sui DevNet](../build/devnet.md) - to gain operational experience with the Sui software in a public setting
-* [Sui Incentivized Testnet](https://sui.io/resources-sui/announcing-sui-incentivized-testnet/) -  will feature a menu of incentives to encourage and reward meaningful participation during the Testnet waves
 
 ## Tutorial
+
 Taking an end-to-end [tutorial](../explore/tutorials.md) from starting a Sui network locally to publishing a TicTacToe game on Sui and playing it.
 
 ## Examples
+
 Try out [examples](../explore/examples.md) supplied by the Sui team to help you understand how objects are structured and manipulated.
 
 ## Prototypes
+
 View projects built by third parties demonstrating the power of Sui.
 
 [Prototypes](../explore/prototypes.md) - pre-alpha game prototypes that showcase the power of NFTs on Sui:
@@ -48,5 +50,4 @@ View projects built by third parties demonstrating the power of Sui.
 
 ## Sui Explorer
 
-Navigate the [Sui Explorer](https://explorer.devnet.sui.io/) to see the latest transactions and objects. Read the [Sui Explorer README](https://github.com/MystenLabs/sui/tree/main/apps/explorer#readme) for instructions on how to run the Explorer locally.
-https://explorer.devnet.sui.io/
+Navigate the [Sui Explorer](https://explorer.devnet.sui.io/) to see transaction and object details. Read the [Sui Explorer README](https://github.com/MystenLabs/sui/tree/main/apps/explorer#readme) for instructions on how to run the Explorer locally.
