@@ -391,7 +391,7 @@ where
 {
     let errors = active_authority
         .node_sync_handle()
-        .sync_pending_checkpoint_transactions(transactions.iter())
+        .sync_pending_checkpoint_transactions(epoch, transactions.iter())
         .await?
         .zip(futures::stream::iter(transactions.iter()))
         .filter_map(|(r, digests)| async move {
@@ -723,9 +723,10 @@ async fn process_new_checkpoint_certificate<A>(
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
+    let epoch = checkpoint_cert.summary.epoch;
     let errors = active_authority
         .node_sync_handle()
-        .sync_checkpoint_cert_transactions(contents)
+        .sync_checkpoint_cert_transactions(epoch, contents)
         .await?
         .zip(futures::stream::iter(contents.iter()))
         .filter_map(|(r, digests)| async move {

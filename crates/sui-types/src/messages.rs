@@ -1927,6 +1927,10 @@ impl CertifiedTransaction {
 
         obligation.verify_all().map(|_| ())
     }
+
+    pub fn epoch(&self) -> EpochId {
+        self.auth_sign_info.epoch
+    }
 }
 
 impl Display for CertifiedTransaction {

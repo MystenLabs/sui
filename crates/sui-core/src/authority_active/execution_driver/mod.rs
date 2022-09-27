@@ -119,10 +119,14 @@ where
         .remove_pending_certificates(indexes_to_delete)?;
 
     // Send them for execution
+    let epoch = active_authority.state.committee.load().epoch;
     let sync_handle = active_authority.node_sync_handle();
     let executed: Vec<_> = sync_handle
         // map to extract digest
-        .handle_execution_request(pending_transactions.iter().map(|(_, digest)| *digest))
+        .handle_execution_request(
+            epoch,
+            pending_transactions.iter().map(|(_, digest)| *digest),
+        )
         .await?
         // zip results back together with seq
         .zip(stream::iter(pending_transactions.iter()))

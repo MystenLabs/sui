@@ -357,7 +357,8 @@ where
         &self,
         mut lock_guard: MutexGuard<'_, Option<NodeSyncProcessHandle>>,
     ) {
-        info!(epoch = ?self.state.committee.load().epoch, "respawn_node_sync_process");
+        let epoch = self.state.committee.load().epoch;
+        info!(?epoch, "respawn_node_sync_process");
 
         if let Some(NodeSyncProcessHandle(join_handle, cancel_sender)) = lock_guard.take() {
             info!("sending cancel request to node sync task");
@@ -389,6 +390,7 @@ where
         let join_handle = tokio::task::spawn(node_sync_process(
             node_sync_handle,
             node_sync_state,
+            epoch,
             aggregator,
             cancel_receiver,
         ));
