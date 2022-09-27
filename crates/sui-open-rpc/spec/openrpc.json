@@ -2402,6 +2402,83 @@
       }
     },
     {
+      "name": "sui_pay",
+      "tags": [
+        {
+          "name": "Transaction Builder API"
+        }
+      ],
+      "params": [
+        {
+          "name": "signer",
+          "description": "the transaction signer's Sui address",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        },
+        {
+          "name": "input_coins",
+          "description": "the Sui coins to be used in this transaction",
+          "required": true,
+          "schema": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ObjectID"
+            }
+          }
+        },
+        {
+          "name": "recipients",
+          "description": "the recipients' addresses, the length of this vector must be the same as amounts.",
+          "required": true,
+          "schema": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SuiAddress"
+            }
+          }
+        },
+        {
+          "name": "amounts",
+          "description": "the amounts to be transferred to recipients, following the same order",
+          "required": true,
+          "schema": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0.0
+            }
+          }
+        },
+        {
+          "name": "gas",
+          "description": "gas object to be used in this transaction, the gateway will pick one from the signer's possession if not provided",
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        },
+        {
+          "name": "gas_budget",
+          "description": "the gas budget, the transaction will fail if the gas cost exceed the budget",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        }
+      ],
+      "result": {
+        "name": "TransactionBytes",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/TransactionBytes"
+        }
+      }
+    },
+    {
       "name": "sui_publish",
       "tags": [
         {
