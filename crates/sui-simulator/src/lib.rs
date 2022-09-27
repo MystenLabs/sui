@@ -8,6 +8,25 @@ pub use msim::*;
 pub use sui_framework;
 pub use telemetry_subscribers;
 
+/// Evaluates an expression in a new thread which will not be subject to interception of
+/// getrandom(), clock_gettime(), etc.
+#[cfg(msim)]
+#[macro_export]
+macro_rules! nondeterministic {
+    ($expr: expr) => {
+        std::thread::spawn(move || $expr).join()
+    };
+}
+
+/// Simply evaluates expr.
+#[cfg(not(msim))]
+#[macro_export]
+macro_rules! nondeterministic {
+    ($expr: expr) => {
+        $expr
+    };
+}
+
 #[cfg(msim)]
 pub mod configs {
     use msim::*;

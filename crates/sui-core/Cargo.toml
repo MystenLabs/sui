@@ -61,7 +61,6 @@ workspace-hack.workspace = true
 thiserror = "1.0.34"
 eyre = "0.6.8"
 
-[target.'cfg(msim)'.dependencies]
 sui-simulator = { path = "../sui-simulator" }
 
 [dev-dependencies]
