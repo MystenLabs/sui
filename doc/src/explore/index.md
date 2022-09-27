@@ -6,11 +6,11 @@ Now that you've [learned](../learn/index.md) about Sui and started [building](..
 
 Find answers to common questions about our [roadmap](https://github.com/MystenLabs/sui/blob/main/ROADMAP.md) and more in our [FAQ](../contribute/faq.md).
 
-## DevNet and Testnet
+## Devnet and Testnet
 
 Experiment with:
 
-* [Sui DevNet](../build/devnet.md) - to gain operational experience with the Sui software in a public setting
+* [Sui Devnet](../build/devnet.md) - to gain operational experience with the Sui software in a public setting
 
 ## Tutorial
 

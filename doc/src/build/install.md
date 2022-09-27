@@ -26,7 +26,7 @@ chmod 755 sui-setup.sh
 
 ## Supported OSes
 
-Sui supportds the following operating systems:
+Sui supports the following operating systems:
 
 * [Linux](#linux-specific) - Ubuntu version 18.04 (Bionic Beaver)
 * [macOS](#macOS-specific) - macOS Monterey
@@ -34,7 +34,7 @@ Sui supportds the following operating systems:
 
 ## Prerequisites
 
-Sui requires the following prerequisites, listed by operating system:
+Sui requires the following prerequisities, listed by operating system:
 
 |Package/OS |Linux  | macOS| Windows 11|
 --- | :---: | :---:| :---:|
@@ -201,7 +201,7 @@ And ensure the `.cargo/bin` directory appears. Access the help for any of these 
 > **Important:** Make sure your entire toolchain stays up-to-date. If you encounter issues building and installing the Sui binaries, update all packages above and re-install.
 
 ## Integrated Development Environment
-For Move development, we recommend the [Visual Studio Code (vscode)](https://code.visualstudio.com/) IDE with the Move Analyzer language server plugin installed:
+For Move development, we recommend the [Visual Studio Code](https://code.visualstudio.com/) IDE with the Move Analyzer language server plugin installed:
 
 ```shell
 $ cargo install --git https://github.com/move-language/move move-analyzer --features "address20"
