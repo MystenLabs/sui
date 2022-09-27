@@ -7398,6 +7398,7 @@ dependencies = [
  "move-vm-runtime",
  "once_cell",
  "sui-framework",
+ "sui-json",
  "sui-types",
  "sui-verifier",
  "workspace-hack 0.1.0",

@@ -39,24 +39,18 @@ use sui_types::{crypto::AuthorityPublicKeyBytes, object::Data};
 use tracing::info;
 
 pub enum TestCallArg {
+    Pure(Vec<u8>),
     Object(ObjectID),
-    U64(u64),
-    Address(SuiAddress),
-    PrimVec(Vec<u64>),
     ObjVec(Vec<ObjectID>),
 }
 
 impl TestCallArg {
     pub async fn to_call_arg(self, state: &AuthorityState) -> CallArg {
         match self {
+            Self::Pure(value) => CallArg::Pure(value),
             Self::Object(object_id) => {
                 CallArg::Object(Self::call_arg_from_id(object_id, state).await)
             }
-            Self::U64(value) => CallArg::Pure(bcs::to_bytes(&value).unwrap()),
-            Self::Address(addr) => {
-                CallArg::Pure(bcs::to_bytes(&AccountAddress::from(addr)).unwrap())
-            }
-            Self::PrimVec(value) => CallArg::Pure(bcs::to_bytes(&value).unwrap()),
             Self::ObjVec(vec) => {
                 let mut refs = vec![];
                 for object_id in vec {
@@ -2210,7 +2204,10 @@ pub async fn create_move_object(
         "object_basics",
         "create",
         vec![],
-        vec![TestCallArg::U64(16), TestCallArg::Address(*sender)],
+        vec![
+            TestCallArg::Pure(bcs::to_bytes(&(16_u64)).unwrap()),
+            TestCallArg::Pure(bcs::to_bytes(sender).unwrap()),
+        ],
     )
     .await
 }
