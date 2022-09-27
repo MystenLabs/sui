@@ -34,7 +34,7 @@ Sui supports the following operating systems:
 
 ## Prerequisites
 
-Sui requires the following prerequisities, listed by operating system:
+Sui requires the following prerequisites, listed by operating system:
 
 |Package/OS |Linux  | macOS| Windows 11|
 --- | :---: | :---:| :---:|
