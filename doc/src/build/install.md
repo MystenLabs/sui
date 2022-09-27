@@ -2,47 +2,39 @@
 title: Install Sui
 ---
 
-Welcome to the Sui development environment! This site is available in two versions in the menu at top left: the default and stable [Devnet](https://docs.sui.io/devnet/learn) branch and the [Latest build](https://docs.sui.io/learn) upstream `main` branch. Use the `devnet` version for app development on top of Sui. Use the Latest build `main` branch for [contributing to the Sui blockchain](../contribute/index.md) itself. Always check and submit fixes to the `main` branch.
+Welcome to the Sui development environment! This site is available in two versions in the menu at top left: the default and stable [Devnet](https://docs.sui.io/devnet/learn) branch and the [Latest build](https://docs.sui.io/learn) upstream `main` branch. Use the `devnet` version for app development on top of Sui. Use the Latest build `main` branch for [contributing to the Sui blockchain](../contribute/index.md). Always check and submit fixes to the `main` branch.
 
 ## Summary
 
-To immediately get started using Sui:
+To get started using Sui:
 
-1. Meet the [prerequisites](#prerequisites).
-1. Install the [binaries](#binaries).
+1. Install [prerequisites](#prerequisites).
+1. Install Sui [binaries](#binaries).
 1. Configure an [Integrated Development Environment (IDE)](#integrated-development-environment).
 1. Request [SUI tokens](#sui-tokens) to evaluate Devnet and Sui Wallet
 1. Optionally, download the [source code](#source-code) to have local
    access to examples and modify Sui itself.
 
-> **Tip:** Assuming you on macOS or Linux, have `curl`, Rust Cargo, the `git` command, and a GitHub account
-> (see [Prerequisites](#prerequisites)), you can download the `sui-setup.sh` script
-> and run it to conduct all of the setup below, **including removal of any existing
-> sui assets**. To use it, run these commands in a terminal:
-> ```shell
-> $ curl https://raw.githubusercontent.com/MystenLabs/sui/main/doc/utils/sui-setup.sh -o sui-setup.sh
-> chmod 755 sui-setup.sh
-> ./sui-setup.sh
-> ```
+## Install with a script
+
+If you're using macOS or Linux and already have `curl`, Rust Cargo, the `git` command, and a GitHub account (see [Prerequisites](#prerequisites)), you can download the `sui-setup.sh` script and run it install Sui, including removal of any existing Sui assets.
+```shell
+$ curl https://raw.githubusercontent.com/MystenLabs/sui/main/doc/utils/sui-setup.sh -o sui-setup.sh
+chmod 755 sui-setup.sh
+./sui-setup.sh
+```
 
 ## Supported OSes
 
-The following operating systems (OSes) have been tested and are supported for
-running Sui:
+Sui supports the following operating systems:
 
 * [Linux](#linux-specific) - Ubuntu version 18.04 (Bionic Beaver)
 * [macOS](#macOS-specific) - macOS Monterey
 * [Microsoft Windows](#microsoft-windows-specific) - Windows 11
 
-First install the [General packages](#general-packages) (plus [Brew](#brew) if on macOS), then install the OS-specific packages.
-
 ## Prerequisites
 
-At a minimum, you should have a machine capable of installing command line tools (namely, a terminal).
-First install the packages outlined this section. Then add the additional dependencies
-below for your operating system.
-
-Here are the packages required by operating system:
+Sui requires the following prerequisities, listed by operating system:
 
 |Package/OS |Linux  | macOS| Windows 11|
 --- | :---: | :---:| :---:|
@@ -209,7 +201,7 @@ And ensure the `.cargo/bin` directory appears. Access the help for any of these 
 > **Important:** Make sure your entire toolchain stays up-to-date. If you encounter issues building and installing the Sui binaries, update all packages above and re-install.
 
 ## Integrated Development Environment
-For Move development, we recommend the [Visual Studio Code (vscode)](https://code.visualstudio.com/) IDE with the Move Analyzer language server plugin installed:
+For Move development, we recommend the [Visual Studio Code](https://code.visualstudio.com/) IDE with the Move Analyzer language server plugin installed:
 
 ```shell
 $ cargo install --git https://github.com/move-language/move move-analyzer --features "address20"
@@ -252,7 +244,7 @@ You can start exploring Sui's source code by looking into the following primary 
 * [sui_programmability](https://github.com/MystenLabs/sui/tree/main/sui_programmability) - Sui's Move language integration also including games and other Move code examples for testing and reuse
 * [sui_core](https://github.com/MystenLabs/sui/tree/main/crates/sui-core) - authority server and Sui Gateway
 * [sui-types](https://github.com/MystenLabs/sui/tree/main/crates/sui-types) - coins, gas, and other object types
-* [explorer](https://github.com/MystenLabs/sui/tree/main/explorer) - object explorer for the Sui network
+* [explorer](https://github.com/MystenLabs/sui/tree/main/apps/explorer) - object explorer for the Sui network
 * [sui-network](https://github.com/MystenLabs/sui/tree/main/crates/sui-network) - networking interfaces
 
 ## Rustdoc
