@@ -1,12 +1,6 @@
 @use '_utils';
 @use '_values/colors';
 
-.title {
-    font-size: 15px;
-    font-weight: 700;
-    color: #404040;
-}
-
 .tx-card {
     text-decoration: none;
 }
@@ -45,7 +39,7 @@
             align-items: center;
             justify-content: center;
             margin: auto;
-            color: #589aea;
+            color: colors.$gradient-blue-start;
             font-size: 12px;
         }
     }
@@ -77,9 +71,10 @@
         }
 
         .transfer-failed {
-            @include utils.typography('Failed/BodySmall-M');
+            @include utils.typography('page-ex-small');
 
             text-align: right;
+            color: colors.$issue;
         }
     }
 
@@ -127,7 +122,7 @@
 
 .failure {
     i {
-        color: #fca5a5;
+        color: colors.$issue;
     }
 }
 
@@ -177,8 +172,7 @@
 }
 
 .tx-type-date {
-    font-size: 11px;
-    line-height: 100%;
+    @include utils.typography('page-ex-small');
 
-    @include utils.typography('table/text-xs');
+    color: colors.$gray-65;
 }

@@ -114,7 +114,7 @@ function TransactionCard({ txn }: { txn: TxResultState }) {
                             {intl.formatNumber(
                                 BigInt(txn?.amount || txn?.txGas || 0),
                                 balanceFormatOptions
-                            )}
+                            )}{' '}
                             <span>{GAS_SYMBOL}</span>
                         </div>
                         {TransferFailed}
