@@ -77,7 +77,8 @@ impl TestCaseImpl for NativeTransferTest {
             .check(&event);
 
         // Verify fullnode observes the txn
-        ctx.let_fullnode_sync().await;
+        ctx.let_fullnode_sync(vec![response.certificate.transaction_digest], 5)
+            .await;
 
         let _ = ObjectChecker::new(*obj_to_transfer.id())
             .owner(Owner::AddressOwner(recipient_addr))

@@ -334,7 +334,8 @@ impl Faucet for SimpleFaucet {
         Ok(FaucetReceipt {
             sent: results
                 .iter()
-                .map(|(_digest, obj_id, amount, _gas_id)| CoinInfo {
+                .map(|(digest, obj_id, amount, _gas_id)| CoinInfo {
+                    transfer_tx_digest: *digest,
                     amount: *amount,
                     id: *obj_id,
                 })
