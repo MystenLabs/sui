@@ -33,7 +33,10 @@ function TransactionCard({ txn }: { txn: TxResultState }) {
 
     const intl = useIntl();
 
-    const transferStatus = txn.status === 'success' ? 'Checkmark' : 'Close';
+    const TransferFailed =
+        txn.status !== 'success' ? (
+            <div className={st.transferFailed}>Failed</div>
+        ) : null;
 
     //TODO update the logic to account for other transfer type
     const TxIcon = txn.isSender ? SuiIcons.ArrowLeft : SuiIcons.Buy;
@@ -49,6 +52,8 @@ function TransactionCard({ txn }: { txn: TxResultState }) {
         ? formatDate(txn.timestampMs, ['month', 'day', 'hour', 'minute'])
         : false;
 
+    const TransferSuiTxn = txn.kind === 'TransferSui' ? <span>SUI</span> : null;
+
     return (
         <Link
             to={`/receipt?${new URLSearchParams({
@@ -63,7 +68,7 @@ function TransactionCard({ txn }: { txn: TxResultState }) {
                 <div className={st.cardContent}>
                     <div className={st.txResult}>
                         <div className={cl(st.txTypeName, st.kind)}>
-                            {transferType}
+                            {transferType} {TransferSuiTxn}
                         </div>
                     </div>
                     <div className={st.txResult}>
@@ -81,9 +86,7 @@ function TransactionCard({ txn }: { txn: TxResultState }) {
                                     st[txn.status.toLowerCase()],
                                     st.txstatus
                                 )}
-                            >
-                                <Icon icon={SuiIcons[transferStatus]} />
-                            </span>
+                            ></span>
                         </div>
                     </div>
                     {txn.url && (
@@ -111,10 +114,10 @@ function TransactionCard({ txn }: { txn: TxResultState }) {
                             {intl.formatNumber(
                                 BigInt(txn?.amount || txn?.txGas || 0),
                                 balanceFormatOptions
-                            )}{' '}
-                            {GAS_SYMBOL}
+                            )}
+                            <span>{GAS_SYMBOL}</span>
                         </div>
-                        <div className={st.txFiatValue}></div>
+                        {TransferFailed}
                     </>
                 </div>
             </div>

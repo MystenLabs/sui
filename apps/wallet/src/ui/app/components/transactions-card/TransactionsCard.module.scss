@@ -14,7 +14,7 @@
 .card {
     display: grid;
     gap: 12px;
-    grid-template-columns: 30px 6fr 2fr;
+    grid-template-columns: 30px 5fr 3fr;
     align-content: center;
     justify-content: space-between;
     border-bottom: 1px solid colors.$gray-45;
@@ -58,14 +58,28 @@
         display: flex;
         flex-flow: column;
         text-align: end;
-        justify-content: center;
+        justify-content: flex-start;
+        gap: 6px;
 
         .tx-amount {
-            @include utils.typography('table/text-sm');
+            @include utils.typography('header/search-text');
 
-            color: colors.$gray-100;
+            color: colors.$gray-90;
             text-align: right;
-            line-height: 120%;
+            line-height: 100%;
+            font-weight: 600;
+
+            span {
+                font-weight: 400;
+                font-size: 12px;
+                line-height: 100%;
+            }
+        }
+
+        .transfer-failed {
+            @include utils.typography('Failed/BodySmall-M');
+
+            text-align: right;
         }
     }
 
@@ -86,6 +100,12 @@
                 color: colors.$gray-90;
                 line-height: 100%;
                 font-weight: 600;
+
+                span {
+                    font-weight: 400;
+                    font-size: 12px;
+                    line-height: 100%;
+                }
             }
 
             .kind {
