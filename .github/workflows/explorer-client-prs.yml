@@ -29,11 +29,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Lint
-        run: pnpm --filter sui-explorer lint
+        run: pnpm explorer lint
       - name: Unit Tests
-        run: pnpm --filter sui-explorer test:unit
+        run: pnpm explorer test:unit
       - name: Build
-        run: pnpm --filter sui-explorer build
+        run: pnpm explorer build
   end_to_end_static:
     name: End-to-end tests (Static)
     needs: diff
@@ -53,7 +53,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Install Cypress
-        run: pnpm --filter sui-explorer exec cypress install
+        run: pnpm explorer exec cypress install
       - name: Run e2e tests
         uses: cypress-io/github-action@v4
         with:
@@ -81,7 +81,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Install Cypress
-        run: pnpm --filter sui-explorer exec cypress install
+        run: pnpm explorer exec cypress install
       - name: Run e2e tests
         uses: cypress-io/github-action@v4
         with:
