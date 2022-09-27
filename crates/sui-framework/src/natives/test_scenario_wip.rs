@@ -408,7 +408,7 @@ fn is_expected_ty(specified_ty: &TypeTag, expected_ty: &StructTag) -> bool {
 }
 
 fn get_specified_ty(context: &mut NativeContext, ty_args: Vec<Type>) -> StructTag {
-    assert!(ty_args.len() == 1);
+    assert_eq!(ty_args.len(), 1);
     match context.type_to_type_tag(&ty_args[0]).unwrap() {
         TypeTag::Struct(s) => s,
         _ => panic!("impossible, must be a struct since it has key"),

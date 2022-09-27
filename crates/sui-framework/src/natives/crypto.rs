@@ -27,9 +27,10 @@ pub const INVALID_RISTRETTO_SCALAR: u64 = 4;
 pub const BULLETPROOFS_VERIFICATION_FAILED: u64 = 5;
 pub const INVALID_PUBKEY: u64 = 6;
 
-pub const BP_DOMAIN: &[u8] = b"mizu";
+/// Using the word "sui" for nothing-up-my-sleeve number guarantees.
+pub const BP_DOMAIN: &[u8] = b"sui";
 
-/// Native implemention of ecrecover in public Move API, see crypto.move for specifications.
+/// Native implementation of ecrecover in public Move API, see crypto.move for specifications.
 pub fn ecrecover(
     _context: &mut NativeContext,
     ty_args: Vec<Type>,
@@ -146,7 +147,7 @@ pub fn secp256k1_verify(
     }
 }
 
-/// Native implemention of bls12381_verify in public Move API, see crypto.move for specifications.
+/// Native implementation of bls12381_verify in public Move API, see crypto.move for specifications.
 /// Note that this function only works for signatures in G1 and public keys in G2.
 pub fn bls12381_verify_g1_sig(
     _context: &mut NativeContext,
@@ -179,7 +180,8 @@ pub fn bls12381_verify_g1_sig(
     }
 }
 
-/// Native implemention of Bulletproofs range proof in public Move API, see crypto.move for specifications.
+/// Native implementation of Bulletproofs range proof in public Move API, see crypto.move for
+/// specifications.
 pub fn verify_range_proof(
     _context: &mut NativeContext,
     ty_args: Vec<Type>,
