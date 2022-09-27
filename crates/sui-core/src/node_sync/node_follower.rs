@@ -328,6 +328,7 @@ mod test {
         node_sync::SyncStatus, test_utils::test_authority_aggregator,
     };
     use std::sync::{Arc, Mutex};
+    use sui_macros::sim_test;
     use sui_types::{
         base_types::ObjectID,
         crypto::get_account_key_pair,
@@ -426,7 +427,7 @@ mod test {
         Arc::new(NodeSyncStore::open_tables_read_write(db_path, None, None))
     }
 
-    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    #[sim_test]
     async fn test_follower() {
         telemetry_subscribers::init_for_testing();
 

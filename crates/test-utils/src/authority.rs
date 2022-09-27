@@ -54,24 +54,65 @@ pub fn test_and_configure_authority_configs(committee_size: usize) -> NetworkCon
     configs
 }
 
-pub async fn start_node(config: &NodeConfig, prom_registry: Registry) -> SuiNode {
-    SuiNode::start(config, prom_registry).await.unwrap()
+#[cfg(not(msim))]
+pub async fn start_node(config: &NodeConfig, prom_registry: Registry) -> SuiNodeHandle {
+    SuiNode::start(config, prom_registry).await.unwrap().into()
+}
+
+/// In the simulator, we call SuiNode::start from inside a newly spawned simulator node.
+/// However, we then immmediately return the SuiNode handle back to the caller. The caller now has
+/// a direct handle to an object that is "running" on a different "machine". By itself, this
+/// doesn't break anything in the simulator, it just allows test code to magically mutate state
+/// that is owned by some other machine.
+///
+/// Most of the time, tests do this just in order to verify some internal state, so this is fine
+/// most of the time.
+#[cfg(msim)]
+pub async fn start_node(config: &NodeConfig, prom_registry: Registry) -> SuiNodeHandle {
+    use std::net::{IpAddr, SocketAddr};
+
+    let config = config.clone();
+    let socket_addr = mysten_network::multiaddr::to_socket_addr(&config.network_address).unwrap();
+    let ip = match socket_addr {
+        SocketAddr::V4(v4) => IpAddr::V4(*v4.ip()),
+        _ => panic!("unsupported protocol"),
+    };
+
+    let handle = sui_simulator::runtime::Handle::current();
+    let builder = handle.create_node();
+    let node = builder
+        .ip(ip)
+        .name(format!("{}", config.protocol_public_key()))
+        .init(|| async {
+            tracing::info!("node restarted");
+        })
+        .build();
+
+    node.spawn(async move { SuiNode::start(&config, prom_registry).await.unwrap() })
+        .await
+        .unwrap()
+        .into()
 }
 
 /// Spawn all authorities in the test committee into a separate tokio task.
-pub async fn spawn_test_authorities<I>(objects: I, config: &NetworkConfig) -> Vec<SuiNode>
+pub async fn spawn_test_authorities<I>(objects: I, config: &NetworkConfig) -> Vec<SuiNodeHandle>
 where
     I: IntoIterator<Item = Object> + Clone,
 {
     let mut handles = Vec::new();
+    let config = config.clone();
     for validator in config.validator_configs() {
         let prom_registry = Registry::new();
         let node = start_node(validator, prom_registry).await;
-        let state = node.state();
+        let objects = objects.clone();
 
-        for o in objects.clone() {
-            state.insert_genesis_object(o).await
-        }
+        node.with_async(|node| async move {
+            let state = node.state();
+            for o in objects {
+                state.insert_genesis_object(o).await
+            }
+        })
+        .await;
 
         handles.push(node);
     }
