@@ -46,7 +46,7 @@ impl TestCaseImpl for FullNodeExecuteTransactionTest {
             assert_eq!(txn_digest, tx_digest);
 
             // Verify fullnode observes the txn
-            ctx.let_fullnode_sync().await;
+            ctx.let_fullnode_sync(vec![tx_digest], 5).await;
 
             fullnode
                 .read_api()
@@ -76,7 +76,7 @@ impl TestCaseImpl for FullNodeExecuteTransactionTest {
             assert_eq!(txn_digest, certificate.transaction_digest);
 
             // Verify fullnode observes the txn
-            ctx.let_fullnode_sync().await;
+            ctx.let_fullnode_sync(vec![txn_digest], 5).await;
 
             fullnode
                 .read_api()
@@ -113,7 +113,7 @@ impl TestCaseImpl for FullNodeExecuteTransactionTest {
                 )
             }
             // Verify fullnode observes the txn
-            ctx.let_fullnode_sync().await;
+            ctx.let_fullnode_sync(vec![txn_digest], 5).await;
 
             fullnode
                 .read_api()
