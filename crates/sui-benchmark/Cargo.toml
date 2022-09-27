@@ -26,7 +26,6 @@ telemetry-subscribers.workspace = true
 clap = { version = "3.1.17", features = ["derive"] }
 prometheus = "0.13.2"
 multiaddr = "0.14.0"
-crossterm = "0.23.2"
 rand = "0.8.5"
 base64 = "0.13.0"
 rand_distr = "0.4.3"
