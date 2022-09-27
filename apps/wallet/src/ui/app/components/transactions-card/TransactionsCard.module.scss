@@ -13,21 +13,22 @@
 
 .card {
     display: grid;
-    gap: 5px;
+    gap: 12px;
     grid-template-columns: 30px 6fr 2fr;
     align-content: center;
     justify-content: space-between;
     border-bottom: 1px solid colors.$gray-45;
-    height: 64px;
+    height: auto;
+    padding: 15px 0;
     cursor: pointer;
 
     .card-icon {
         position: relative;
         display: flex;
         justify-content: center;
-        background-color: colors.$gray-40;
+        background-color: colors.$gray-45;
         align-self: center;
-        border-radius: 50%;
+        border-radius: 10px;
         width: 30px;
         height: 30px;
 
@@ -66,18 +67,6 @@
             text-align: right;
             line-height: 120%;
         }
-
-        .tx-image {
-            display: flex;
-            justify-content: flex-end;
-
-            img {
-                width: 50px;
-                height: 50px;
-                border-radius: 6px;
-                object-fit: cover;
-            }
-        }
     }
 
     .card-content {
@@ -91,30 +80,28 @@
             align-items: center;
             gap: 6px;
 
-            .tx-type-date {
-                font-size: 11px;
-                line-height: 100%;
-
-                @include utils.typography('table/text-xs');
-            }
-
             .tx-type-name {
-                @include utils.typography('table/text-sm');
+                @include utils.typography('page-description');
 
-                color: colors.$gray-65;
+                color: colors.$gray-90;
+                line-height: 100%;
+                font-weight: 600;
             }
 
             .kind {
                 @include utils.typography('table/title-sm');
+
+                color: colors.$gray-90;
+                line-height: 100%;
             }
         }
     }
 
     .tx-address {
-        @include utils.typography('table/text-sm');
+        @include utils.typography('page-description');
 
         font-family: 'Space Mono', ui-monospace, monospace;
-        color: colors.$gray-65;
+        color: colors.$gray-90;
     }
 }
 
@@ -129,4 +116,49 @@
         color: colors.$success;
         font-size: 8px;
     }
+}
+
+.tx-image {
+    display: flex;
+    justify-content: flex-start;
+    gap: 8px;
+
+    img {
+        width: 40px;
+        height: 40px;
+        border-radius: 4px;
+        object-fit: cover;
+    }
+
+    .nft-info {
+        display: flex;
+        flex-direction: column;
+        align-content: center;
+        justify-content: center;
+        gap: 4px;
+
+        .nft-name {
+            @include utils.typography('page-description');
+
+            color: colors.$gray-90;
+            line-height: 100%;
+            font-weight: 600;
+        }
+
+        .nft-description {
+            @include utils.typography('tooltip/label');
+
+            color: colors.$gray-75;
+            line-height: 100%;
+            font-weight: 500;
+            text-transform: none;
+        }
+    }
+}
+
+.tx-type-date {
+    font-size: 11px;
+    line-height: 100%;
+
+    @include utils.typography('table/text-xs');
 }
