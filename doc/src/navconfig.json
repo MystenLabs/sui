@@ -12,13 +12,17 @@
         "external": true
       },
       {
-        "label": "Prototypes",
-        "link": "explore/prototypes"
+        "label": "Doc updates",
+        "link": "learn/sui-doc-updates"
       }
     ]
   },
   "docs": {
     "learn": [
+      {
+        "fileName": "learn/sui-doc-updates",
+        "title": "Sui doc updates"
+      },
       {
         "label": "About Sui",
         "fileName": "learn/about-sui",
