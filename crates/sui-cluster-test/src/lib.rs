@@ -5,9 +5,14 @@ use async_trait::async_trait;
 use clap::*;
 use cluster::{Cluster, ClusterFactory};
 use config::ClusterTestOpt;
+use futures::{stream::FuturesUnordered, StreamExt};
+use helper::ObjectChecker;
 use std::sync::Arc;
 use sui::client_commands::WalletContext;
+use sui_faucet::CoinInfo;
 use sui_json_rpc_types::SuiTransactionResponse;
+use sui_types::base_types::TransactionDigest;
+use sui_types::object::Owner;
 use test_utils::messages::make_transactions_with_wallet_context;
 
 use sui_sdk::SuiClient;
@@ -21,7 +26,7 @@ use test_case::{
     fullnode_execute_transaction_test::FullNodeExecuteTransactionTest,
     native_transfer_test::NativeTransferTest, shared_object_test::SharedCounterTest,
 };
-use tokio::time::{sleep, Duration};
+use tokio::time::{self, Duration};
 use tracing::{error, info};
 use wallet_client::WalletClient;
 
@@ -45,10 +50,30 @@ pub struct TestContext {
 
 impl TestContext {
     async fn get_sui_from_faucet(&self, minimum_coins: Option<usize>) -> Vec<GasCoin> {
-        self.faucet
-            .request_sui_coins(self.get_context(), minimum_coins, None)
-            .await
-            .unwrap_or_else(|e| panic!("Failed to get test SUI coins from faucet, {e}"))
+        let addr = self.get_wallet_address();
+        let faucet_response = self.faucet.request_sui_coins(addr).await;
+
+        let coin_info = faucet_response
+            .transferred_gas_objects
+            .iter()
+            .map(|coin_info| coin_info.transfer_tx_digest)
+            .collect::<Vec<_>>();
+        self.let_fullnode_sync(coin_info, 5).await;
+
+        let gas_coins = self
+            .check_owner_and_into_gas_coin(faucet_response.transferred_gas_objects, addr)
+            .await;
+
+        let minimum_coins = minimum_coins.unwrap_or(5);
+
+        if gas_coins.len() < minimum_coins {
+            panic!(
+                "Expect to get at least {minimum_coins} Sui Coins for address {addr}, but only got {}",
+                gas_coins.len()
+            )
+        }
+
+        gas_coins
     }
 
     fn get_context(&self) -> &WalletClient {
@@ -108,9 +133,71 @@ impl TestContext {
     // TODO: figure out a more efficient way to test a local cluster
     // A potential way to do this is to subscribe to txns from fullnode
     // when the feature is ready
-    pub async fn let_fullnode_sync(&self) {
-        let duration = Duration::from_secs(5);
-        sleep(duration).await;
+    pub async fn let_fullnode_sync(&self, digests: Vec<TransactionDigest>, timeout_sec: u64) {
+        let mut futures = FuturesUnordered::new();
+        for digest in digests.clone() {
+            let task = self.get_tx_with_retry_times(digest, 1);
+            futures.push(Box::pin(task));
+        }
+        let mut sleep = Box::pin(time::sleep(Duration::from_secs(timeout_sec)));
+
+        loop {
+            tokio::select! {
+                _ = &mut sleep => {
+                    panic!("Fullnode does not know all of {:?} after {} secs.", digests, timeout_sec);
+                }
+                res = futures.next() => {
+                    match res {
+                        Some((true, _, _)) => {},
+                        Some((false, digest, retry_times)) => {
+                            let task = self.get_tx_with_retry_times(digest, retry_times);
+                            futures.push(Box::pin(task));
+                        },
+                        None => break, // all txns appear on fullnode, mission completed
+                    }
+                }
+            }
+        }
+    }
+
+    async fn get_tx_with_retry_times(
+        &self,
+        digest: TransactionDigest,
+        retry_times: u64,
+    ) -> (bool, TransactionDigest, u64) {
+        match self
+            .client
+            .get_fullnode()
+            .read_api()
+            .get_transaction(digest)
+            .await
+        {
+            Ok(_) => (true, digest, retry_times),
+            Err(_) => {
+                time::sleep(Duration::from_millis(300 * retry_times)).await;
+                (false, digest, retry_times + 1)
+            }
+        }
+    }
+
+    async fn check_owner_and_into_gas_coin(
+        &self,
+        coin_info: Vec<CoinInfo>,
+        owner: SuiAddress,
+    ) -> Vec<GasCoin> {
+        futures::future::join_all(
+            coin_info
+                .iter()
+                .map(|coin_info| {
+                    ObjectChecker::new(coin_info.id)
+                        .owner(Owner::AddressOwner(owner))
+                        .check_into_gas_coin(self.get_fullnode())
+                })
+                .collect::<Vec<_>>(),
+        )
+        .await
+        .into_iter()
+        .collect::<Vec<_>>()
     }
 }
 

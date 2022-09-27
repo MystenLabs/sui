@@ -138,6 +138,8 @@ pub async fn submit_move_transaction(
 
     let signature = context.keystore.sign(&sender, &data.to_bytes()).unwrap();
     let tx = Transaction::new(data, signature);
+    let tx_digest = tx.digest();
+    debug!(?tx_digest, "submitting move transaction");
 
     context
         .client
