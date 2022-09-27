@@ -95,7 +95,7 @@ Sui Explorer opens with the details for your wallet address displayed.
 
 ## Mint an example NFT
 
-You can mint your own NFTs directly from the Sui Wallet.
+You can mint an example Sui NFT directly from the Sui Wallet.
 
 Click **Apps**, then click **Mint NFT**. In the current version you can mint only example NFTs.
 
