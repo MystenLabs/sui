@@ -14,7 +14,7 @@ export function useObjectsState() {
     const showError =
         !!error && (!lastSync || Date.now() - lastSync > 30 * 1000);
     const syncedOnce = !!lastSync;
-    const loading = objectsLoading && !syncedOnce;
+    const loading = objectsLoading && !syncedOnce && !error;
     return useMemo(
         () => ({
             loading,
