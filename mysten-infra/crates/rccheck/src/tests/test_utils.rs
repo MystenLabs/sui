@@ -3,8 +3,8 @@
 
 use proptest::prelude::*;
 use proptest::strategy::Strategy;
+use x509_parser::prelude::FromDer;
 use x509_parser::prelude::X509Certificate;
-use x509_parser::traits::FromDer;
 
 ///
 /// Proptest Helpers
