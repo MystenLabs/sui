@@ -9,10 +9,7 @@ import Button from '_app/shared/button';
 import Icon, { SuiIcons } from '_components/icon';
 import { useAppDispatch, useAppSelector } from '_hooks';
 import { createMnemonic, setMnemonic } from '_redux/slices/account';
-import {
-    normalizeMnemonics,
-    validateMnemonics,
-} from '_shared/cryptography/mnemonics';
+import { normalizeMnemonics, validateMnemonics } from '_src/shared/utils/bip39';
 
 import type { FocusEventHandler } from 'react';
 

@@ -136,6 +136,7 @@ importers:
       '@popperjs/core': ^2.11.6
       '@reduxjs/toolkit': ^1.8.3
       '@scure/bip32': ^1.1.0
+      '@scure/bip39': ^1.1.0
       '@types/dotenv-webpack': ^7.0.3
       '@types/node': ^18.0.6
       '@types/react': ^18.0.20
@@ -143,7 +144,6 @@ importers:
       '@types/uuid': ^8.3.4
       '@types/webextension-polyfill': ^0.9.0
       '@types/webpack': ^5.28.0
-      bip39-light: ^1.0.7
       bootstrap-icons: ^1.9.1
       buffer: ^6.0.3
       classnames: ^2.3.1
@@ -152,7 +152,6 @@ importers:
       cross-env: ^7.0.3
       css-loader: ^6.7.1
       dotenv-webpack: ^8.0.0
-      ed25519-hd-key: ^1.3.0
       eslint: ^8.20.0
       eslint-config-prettier: ^8.5.0
       eslint-config-react-app: ^7.0.1
@@ -201,11 +200,10 @@ importers:
       '@popperjs/core': 2.11.6
       '@reduxjs/toolkit': 1.8.5_kkwg4cbsojnjnupd3btipussee
       '@scure/bip32': 1.1.0
-      bip39-light: 1.0.7
+      '@scure/bip39': 1.1.0
       bootstrap-icons: 1.9.1
       buffer: 6.0.3
       classnames: 2.3.1
-      ed25519-hd-key: 1.3.0
       formik: 2.2.9_react@18.2.0
       react: 18.2.0
       react-dom: 18.2.0_react@18.2.0
@@ -294,6 +292,8 @@ importers:
       '@mysten/sui-open-rpc': file:../../crates/sui-open-rpc
       '@noble/hashes': ^1.1.2
       '@noble/secp256k1': ^1.6.3
+      '@scure/bip32': ^1.1.0
+      '@scure/bip39': ^1.1.0
       '@size-limit/preset-small-lib': ^7.0.8
       '@types/bn.js': ^5.1.0
       '@types/lossless-json': ^1.0.1
@@ -325,6 +325,8 @@ importers:
       '@mysten/bcs': link:../bcs
       '@noble/hashes': 1.1.2
       '@noble/secp256k1': 1.6.3
+      '@scure/bip32': 1.1.0
+      '@scure/bip39': 1.1.0
       bn.js: 5.2.1
       buffer: 6.0.3
       cross-fetch: 3.1.5
@@ -4514,6 +4516,13 @@ packages:
       '@scure/base': 1.1.1
     dev: false
 
+  /@scure/bip39/1.1.0:
+    resolution: {integrity: sha512-pwrPOS16VeTKg98dYXQyIjJEcWfz7/1YJIwxUEPFfQPtc86Ym/1sVgQ2RLoD43AazMk2l/unK4ITySSpW2+82w==}
+    dependencies:
+      '@noble/hashes': 1.1.2
+      '@scure/base': 1.1.1
+    dev: false
+
   /@sentry/browser/7.11.1:
     resolution: {integrity: sha512-k2XHuzPfnm8VJPK5eWd1+Y5VCgN42sLveb8Qxc3prb5PSL416NWMLZaoB7RMIhy430fKrSFiosnm6QDk2M6pbA==}
     engines: {node: '>=8'}
@@ -8279,13 +8288,6 @@ packages:
       file-uri-to-path: 1.0.0
     dev: true
 
-  /bip39-light/1.0.7:
-    resolution: {integrity: sha512-WDTmLRQUsiioBdTs9BmSEmkJza+8xfJmptsNJjxnoq3EydSa/ZBXT6rm66KoT3PJIRYMnhSKNR7S9YL1l7R40Q==}
-    dependencies:
-      create-hash: 1.2.0
-      pbkdf2: 3.1.2
-    dev: false
-
   /blob-util/2.0.2:
     resolution: {integrity: sha512-T7JQa+zsXXEa6/8ZhHcQEW1UFfVM49Ts65uBkFL6fz2QmrElqmbajIDJvuA0tEhRe5eIjpV9ZF+0RfZR9voJFQ==}
     dev: true
@@ -8972,6 +8974,7 @@ packages:
     dependencies:
       inherits: 2.0.4
       safe-buffer: 5.2.1
+    dev: true
 
   /class-utils/0.3.6:
     resolution: {integrity: sha512-qOhPa/Fj7s6TY8H8esGu5QNpMMQxz79h+urzrNYN6mn+9BnxlDGf5QZ+XeCDsxSjPqsSR56XOZOJmpeurnLMeg==}
@@ -9519,6 +9522,7 @@ packages:
       md5.js: 1.3.5
       ripemd160: 2.0.2
       sha.js: 2.4.11
+    dev: true
 
   /create-hmac/1.1.7:
     resolution: {integrity: sha512-MJG9liiZ+ogc4TzUwuvbER1JRdgvUFSB5+VR/g5h82fGaIRWMWddtKBHi7/sVhfjQZ6SehlyhvQYrcYkaUIpLg==}
@@ -9529,6 +9533,7 @@ packages:
       ripemd160: 2.0.2
       safe-buffer: 5.2.1
       sha.js: 2.4.11
+    dev: true
 
   /create-require/1.1.1:
     resolution: {integrity: sha512-dcKFX3jn0MpIaXjisoRvexIJVEKzaq7z2rZKxf+MSr9TkdmHmsU4m2lcLojrj/FHl8mk5VxMmYA+ftRkP/3oKQ==}
@@ -10369,13 +10374,6 @@ packages:
     dependencies:
       safe-buffer: 5.2.1
     dev: true
-
-  /ed25519-hd-key/1.3.0:
-    resolution: {integrity: sha512-IWwAyiiuJQhgu3L8NaHb68eJxTu2pgCwxIBdgpLJdKpYZM46+AXePSVTr7fkNKaUOfOL4IrjEUaQvyVRIDP7fg==}
-    dependencies:
-      create-hmac: 1.1.7
-      tweetnacl: 1.0.3
-    dev: false
 
   /ee-first/1.1.1:
     resolution: {integrity: sha512-WMwm9LhRUo+WUaRN+vRuETqG89IgZphVSNkdFgeb6sS/E4OrDIN7t48CAewSHXc6C8lefD8KKfr5vY61brQlow==}
@@ -12974,6 +12972,7 @@ packages:
       inherits: 2.0.4
       readable-stream: 3.6.0
       safe-buffer: 5.2.1
+    dev: true
 
   /hash.js/1.1.7:
     resolution: {integrity: sha512-taOaskGt4z4SOANNseOviYDvjEJinIkRgmp7LbKP2YTTmVxWBl87s/uzK9r+44BclBSp2X7K1hqeNfz9JbBeXA==}
@@ -14945,6 +14944,7 @@ packages:
       hash-base: 3.1.0
       inherits: 2.0.4
       safe-buffer: 5.2.1
+    dev: true
 
   /mdast-squeeze-paragraphs/4.0.0:
     resolution: {integrity: sha512-zxdPn69hkQ1rm4J+2Cs2j6wDEv7O17TfXTJ33tl/+JPIoEmtV9t2ZzBM5LPHE8QlHsmVD8t3vPKCyY3oH+H8MQ==}
@@ -16340,6 +16340,7 @@ packages:
       ripemd160: 2.0.2
       safe-buffer: 5.2.1
       sha.js: 2.4.11
+    dev: true
 
   /pend/1.2.0:
     resolution: {integrity: sha512-F3asv42UuXchdzt+xXqfW1OGlVBe+mxa2mqI0pg5yAHZPvFmY3Y6drSf/GQ1A86WgWEN9Kzh/WrgKa6iGcHXLg==}
@@ -18250,6 +18251,7 @@ packages:
     dependencies:
       hash-base: 3.1.0
       inherits: 2.0.4
+    dev: true
 
   /rollup/2.77.3:
     resolution: {integrity: sha512-/qxNTG7FbmefJWoeeYJFbHehJ2HNWnjkAFRKzWN/45eNBBF/r8lo992CwcJXEzyVxs5FmfId+vTSTQDb+bxA+g==}
@@ -18557,6 +18559,7 @@ packages:
     dependencies:
       inherits: 2.0.4
       safe-buffer: 5.2.1
+    dev: true
 
   /shallow-clone/3.0.1:
     resolution: {integrity: sha512-/6KqX+GVUdqPuPPd2LxDDxzX6CAbjJehAAOKlNpqqUpAqPM6HeL8f+o3a+JsyGjn2lv0WY8UsTgUJjU9Ok55NA==}
@@ -19805,7 +19808,7 @@ packages:
       schema-utils: 3.1.1
       serialize-javascript: 6.0.0
       terser: 5.14.2
-      webpack: 5.74.0
+      webpack: 5.74.0_webpack-cli@4.10.0
     dev: true
 
   /terser/4.8.1:
