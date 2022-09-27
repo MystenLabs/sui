@@ -41,14 +41,12 @@ function TransactionCard({ txn }: { txn: TxResultState }) {
         ? cl(st.arrowActionIcon, st.angledArrow)
         : cl(st.arrowActionIcon, st.buyIcon);
 
+    // TODO: update to account for bought, minted, swapped, etc
+    const transferType =
+        txn.kind !== 'Call' && txn.isSender ? 'Sent' : 'Received';
+
     const date = txn?.timestampMs
-        ? formatDate(txn.timestampMs, [
-              'weekday',
-              'month',
-              'day',
-              // 'hour',
-              // 'minute',
-          ])
+        ? formatDate(txn.timestampMs, ['month', 'day', 'hour', 'minute'])
         : false;
 
     return (
@@ -65,9 +63,8 @@ function TransactionCard({ txn }: { txn: TxResultState }) {
                 <div className={st.cardContent}>
                     <div className={st.txResult}>
                         <div className={cl(st.txTypeName, st.kind)}>
-                            {txn.kind}
+                            {transferType}
                         </div>
-                        {date && <div className={st.txTypeDate}>{date}</div>}
                     </div>
                     <div className={st.txResult}>
                         <div className={st.txTypeName}>
@@ -89,20 +86,6 @@ function TransactionCard({ txn }: { txn: TxResultState }) {
                             </span>
                         </div>
                     </div>
-                </div>
-                <div className={st.txTransferred}>
-                    {txn.amount && (
-                        <>
-                            <div className={st.txAmount}>
-                                {intl.formatNumber(
-                                    BigInt(txn.amount || 0),
-                                    balanceFormatOptions
-                                )}{' '}
-                                {GAS_SYMBOL}
-                            </div>
-                            <div className={st.txFiatValue}></div>
-                        </>
-                    )}
                     {txn.url && (
                         <div className={st.txImage}>
                             <img
@@ -110,10 +93,29 @@ function TransactionCard({ txn }: { txn: TxResultState }) {
                                     /^ipfs:\/\//,
                                     'https://ipfs.io/ipfs/'
                                 )}
-                                alt="NFT"
+                                alt={txn?.name || 'NFT'}
                             />
+                            <div className={st.nftInfo}>
+                                <div className={st.nftName}>{txn?.name}</div>
+                                <div className={st.nftDescription}>
+                                    {txn?.description}
+                                </div>
+                            </div>
                         </div>
                     )}
+                    {date && <div className={st.txTypeDate}>{date}</div>}
+                </div>
+                <div className={st.txTransferred}>
+                    <>
+                        <div className={st.txAmount}>
+                            {intl.formatNumber(
+                                BigInt(txn?.amount || txn?.txGas || 0),
+                                balanceFormatOptions
+                            )}{' '}
+                            {GAS_SYMBOL}
+                        </div>
+                        <div className={st.txFiatValue}></div>
+                    </>
                 </div>
             </div>
         </Link>
