@@ -47,7 +47,7 @@ impl PendCertificateForExecution for PendCertificateForExecutionNoop {
 
 /// When a notification that a new pending transaction is received we activate
 /// processing the transaction in a loop.
-pub async fn execution_process<A>(active_authority: &ActiveAuthority<A>)
+pub async fn execution_process<A>(active_authority: Arc<ActiveAuthority<A>>)
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
@@ -68,7 +68,7 @@ where
             tracing::error!("Error processing tx recovery log: {:?}", err);
         }
 
-        match execute_pending(active_authority).await {
+        match execute_pending(active_authority.clone()).await {
             Err(err) => {
                 tracing::error!("Error in pending execution subsystem: {err}");
                 // The above should not return an error if the DB works, and we are connected to
@@ -91,7 +91,7 @@ where
 
 /// Reads all pending transactions as a block and executes them.
 /// Returns whether all pending transactions succeeded.
-async fn execute_pending<A>(active_authority: &ActiveAuthority<A>) -> SuiResult<bool>
+async fn execute_pending<A>(active_authority: Arc<ActiveAuthority<A>>) -> SuiResult<bool>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
@@ -120,7 +120,7 @@ where
 
     // Send them for execution
     let epoch = active_authority.state.committee.load().epoch;
-    let sync_handle = active_authority.node_sync_handle();
+    let sync_handle = active_authority.clone().node_sync_handle();
     let executed: Vec<_> = sync_handle
         // map to extract digest
         .handle_execution_request(

@@ -3,7 +3,8 @@
 
 use crate::{
     authority::AuthorityState, authority_active::gossip::GossipMetrics,
-    authority_aggregator::AuthorityAggregator, authority_client::AuthorityAPI,
+    authority_active::ActiveAuthority, authority_aggregator::AuthorityAggregator,
+    authority_client::AuthorityAPI,
 };
 
 use tokio_stream::{Stream, StreamExt};
@@ -14,7 +15,6 @@ use sui_types::{
     base_types::{
         AuthorityName, EpochId, ExecutionDigests, TransactionDigest, TransactionEffectsDigest,
     },
-    committee::Committee,
     error::{SuiError, SuiResult},
     messages::{
         CertifiedTransaction, SignedTransactionEffects, TransactionEffects, TransactionInfoResponse,
@@ -50,6 +50,23 @@ const PARENT_WAIT_TIMEOUT: Duration = Duration::from_secs(10);
 /// Waiter is used to single-shot concurrent requests and wait for dependencies to finish.
 struct Waiter<Key, ResultT> {
     waiters: Mutex<HashMap<Key, broadcast::Sender<ResultT>>>,
+}
+
+macro_rules! check_epoch {
+    ($expected_epoch: expr, $observed_epoch: expr) => {
+        let expected_epoch = $expected_epoch;
+        let observed_epoch = $observed_epoch;
+
+        // Debug assert ok - execution will not continue with broken invariant in release mode due
+        // to error return below.
+        debug_assert_eq!(expected_epoch, observed_epoch);
+
+        if expected_epoch != observed_epoch {
+            // Most likely indicates a reconfiguration bug.
+            error!(?expected_epoch, ?observed_epoch, "Epoch mis-match");
+            return Err(SuiError::WrongEpoch { expected_epoch });
+        }
+    };
 }
 
 impl<Key, ResultT> Waiter<Key, ResultT>
@@ -230,10 +247,7 @@ impl DownloadRequest {
 /// messages from those handlers, waits for finality of TXes, and then downloads and applies those
 /// TXes locally.
 pub struct NodeSyncState<A> {
-    committee: Arc<Committee>,
-    state: Arc<AuthorityState>,
-    pub(super) node_sync_store: Arc<NodeSyncStore>,
-    aggregator: Arc<AuthorityAggregator<A>>,
+    active_authority: Arc<ActiveAuthority<A>>,
 
     // Used to single-shot multiple concurrent downloads.
     pending_downloads: Arc<Waiter<TransactionDigest, SuiResult>>,
@@ -247,36 +261,27 @@ pub struct NodeSyncState<A> {
     // Channels for enqueuing DigestMessage requests.
     sender: mpsc::Sender<DigestsMessage>,
     receiver: Arc<tokio::sync::Mutex<mpsc::Receiver<DigestsMessage>>>,
-
-    // Gossip Metrics
-    metrics: GossipMetrics,
 }
 
 impl<A> NodeSyncState<A> {
-    pub fn new(
-        state: Arc<AuthorityState>,
-        aggregator: Arc<AuthorityAggregator<A>>,
-        node_sync_store: Arc<NodeSyncStore>,
-        metrics: GossipMetrics,
-    ) -> Self {
+    pub fn new(active_authority: Arc<ActiveAuthority<A>>) -> Self {
         let (sender, receiver) = mpsc::channel(NODE_SYNC_QUEUE_LEN);
-        let committee = state.committee.load().deref().clone();
         Self {
-            committee,
-            state,
-            aggregator,
-            node_sync_store,
+            active_authority,
             pending_downloads: Arc::new(Waiter::new()),
             pending_parents: Waiter::new(),
             pending_txes: Waiter::new(),
             sender,
             receiver: Arc::new(tokio::sync::Mutex::new(receiver)),
-            metrics,
         }
     }
 
     pub fn store(&self) -> Arc<NodeSyncStore> {
-        self.node_sync_store.clone()
+        self.active_authority.node_sync_store.clone()
+    }
+
+    fn state(&self) -> &AuthorityState {
+        &self.active_authority.state
     }
 }
 
@@ -405,6 +410,10 @@ where
         }
     }
 
+    fn aggregator(&self) -> Arc<AuthorityAggregator<A>> {
+        self.active_authority.net.load().deref().clone()
+    }
+
     async fn get_true_effects(
         &self,
         epoch_id: EpochId,
@@ -412,19 +421,14 @@ where
     ) -> SuiResult<SignedTransactionEffects> {
         let digest = cert.digest();
 
-        if epoch_id != cert.epoch() {
-            warn!(?digest, "certificate is from wrong epoch");
-            return Err(SuiError::WrongEpoch {
-                expected_epoch: epoch_id,
-            });
-        }
+        check_epoch!(epoch_id, cert.epoch());
 
-        match self.node_sync_store.get_effects(epoch_id, digest)? {
+        match self.store().get_effects(epoch_id, digest)? {
             Some(effects) => Ok(effects),
             None => {
-                let effects = self.aggregator.execute_cert_to_true_effects(cert).await?;
-                self.node_sync_store
-                    .store_effects(epoch_id, digest, &effects)?;
+                let aggregator = self.aggregator();
+                let effects = aggregator.execute_cert_to_true_effects(cert).await?;
+                self.store().store_effects(epoch_id, digest, &effects)?;
                 Ok(effects)
             }
         }
@@ -435,7 +439,7 @@ where
         epoch_id: EpochId,
         digest: &TransactionDigest,
     ) -> SuiResult<CertifiedTransaction> {
-        if let Some(cert) = self.state.database.read_certificate(digest)? {
+        if let Some(cert) = self.state().database.read_certificate(digest)? {
             if cert.epoch() == epoch_id {
                 return Ok(cert);
             }
@@ -457,7 +461,7 @@ where
     ) -> SuiResult<Vec<TransactionDigest>> {
         let mut missing_parents = Vec::new();
         for parent in effects.dependencies.iter() {
-            if !self.state.database.effects_exists(parent)? {
+            if !self.state().database.effects_exists(parent)? {
                 missing_parents.push(*parent);
             }
         }
@@ -487,7 +491,7 @@ where
             .await?;
 
         match self
-            .state
+            .state()
             .handle_certificate_with_effects(cert.clone(), effects.clone())
             .await
         {
@@ -507,11 +511,11 @@ where
         let cert = self.get_cert(epoch_id, digest).await?;
 
         let result = if bypass_validator_halt {
-            self.state
+            self.state()
                 .handle_certificate_bypass_validator_halt(cert.clone())
                 .await
         } else {
-            self.state.handle_certificate(cert.clone()).await
+            self.state().handle_certificate(cert.clone()).await
         };
         match result {
             Ok(_) => Ok(SyncStatus::CertExecuted),
@@ -532,11 +536,11 @@ where
                 // Parents have been executed, so this should now succeed.
                 debug!(?digest, "parents executed, re-attempting cert");
                 if bypass_validator_halt {
-                    self.state
+                    self.state()
                         .handle_certificate_bypass_validator_halt(cert.clone())
                         .await
                 } else {
-                    self.state.handle_certificate(cert.clone()).await
+                    self.state().handle_certificate(cert.clone()).await
                 }?;
                 Ok(SyncStatus::CertExecuted)
             }
@@ -547,7 +551,7 @@ where
     pub fn cleanup_cert(&self, epoch_id: EpochId, digest: &TransactionDigest) {
         debug!(?digest, "cleaning up temporary sync data");
         let _ = self
-            .node_sync_store
+            .store()
             .cleanup_cert(epoch_id, digest)
             .tap_err(|e| warn!("cleanup_cert failed: {}", e));
     }
@@ -563,7 +567,7 @@ where
         let digest = arg.transaction_digest();
 
         // check if the tx is already locally final
-        if self.state.database.effects_exists(digest)? {
+        if self.state().database.effects_exists(digest)? {
             return Ok(SyncStatus::CertExecuted);
         }
 
@@ -597,17 +601,19 @@ where
             }
             SyncArg::Follow(peer, digests) => {
                 // Check if the tx is final.
-                let stake = self.committee.weight(&peer);
-                let quorum_threshold = self.committee.quorum_threshold();
+                let committee = self.state().committee.load();
+                check_epoch!(committee.epoch, epoch_id);
+                let stake = committee.weight(&peer);
+                let quorum_threshold = committee.quorum_threshold();
 
-                self.node_sync_store.record_effects_vote(
+                self.store().record_effects_vote(
                     epoch_id,
                     peer,
                     digests.transaction,
                     digests.effects,
                     stake,
                 )?;
-                let votes = self.node_sync_store.count_effects_votes(
+                let votes = self.store().count_effects_votes(
                     epoch_id,
                     digests.transaction,
                     digests.effects,
@@ -623,7 +629,7 @@ where
 
                 (
                     digests,
-                    Some(self.node_sync_store.get_voters(
+                    Some(self.store().get_voters(
                         epoch_id,
                         digests.transaction,
                         digests.effects,
@@ -671,7 +677,7 @@ where
         self.process_parents(permit, epoch_id, &digests.transaction, &effects)
             .await?;
 
-        self.state
+        self.state()
             .handle_certificate_with_effects(cert, effects.clone())
             .await?;
 
@@ -738,7 +744,10 @@ where
     ) -> SuiResult {
         debug!(?parents, "attempting to execute parents");
 
-        let handle = NodeSyncHandle::new_from_sender(self.sender.clone(), self.metrics.clone());
+        let handle = NodeSyncHandle::new_from_sender(
+            self.sender.clone(),
+            self.active_authority.gossip_metrics.clone(),
+        );
         let errors: Vec<_> = if is_validator {
             handle
                 .handle_execution_request(epoch_id, parents.iter().cloned())
@@ -778,7 +787,7 @@ where
         for parent in effects.effects.dependencies.iter() {
             let (_, mut rx) = self.pending_parents.wait(parent);
 
-            if self.state.database.effects_exists(parent)? {
+            if self.state().database.effects_exists(parent)? {
                 continue;
             }
 
@@ -795,7 +804,7 @@ where
 
         if cfg!(debug_assertions) {
             for parent in effects.effects.dependencies.iter() {
-                debug_assert!(self.state.database.effects_exists(parent).unwrap());
+                debug_assert!(self.state().database.effects_exists(parent).unwrap());
             }
         }
 
@@ -815,8 +824,7 @@ where
 
         match (
             req,
-            self.node_sync_store
-                .get_cert_and_effects(epoch_id, &tx_digest)?,
+            self.store().get_cert_and_effects(epoch_id, &tx_digest)?,
         ) {
             (DownloadRequest::Node(_), (Some(cert), Some(effects))) => {
                 return Ok((cert, Some(effects)))
@@ -829,10 +837,10 @@ where
         let (first, mut rx) = pending_downloads.wait(&tx_digest);
         // Only start the download if there are no other concurrent downloads.
         if first {
-            let aggregator = self.aggregator.clone();
-            let node_sync_store = self.node_sync_store.clone();
+            let aggregator = self.aggregator();
+            let node_sync_store = self.store();
             let req = req.clone();
-            let metrics = self.metrics.clone();
+            let metrics = self.active_authority.gossip_metrics.clone();
             tokio::task::spawn(async move {
                 let _ = pending_downloads
                     .notify(
@@ -858,7 +866,7 @@ where
             })??;
 
         let cert = self
-            .node_sync_store
+            .store()
             .get_cert(epoch_id, &tx_digest)?
             .ok_or_else(|| SuiError::GenericAuthorityError {
                 error: format!(
@@ -867,7 +875,7 @@ where
                 ),
             })?;
 
-        let effects = self.node_sync_store.get_effects(epoch_id, &tx_digest)?;
+        let effects = self.store().get_effects(epoch_id, &tx_digest)?;
 
         Ok((cert, effects))
     }

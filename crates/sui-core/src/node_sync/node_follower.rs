@@ -20,7 +20,7 @@ use std::sync::Arc;
 use tokio::sync::oneshot;
 use tokio::time::{sleep, timeout, Duration, Instant};
 
-use super::{NodeSyncHandle, NodeSyncState, SyncResult};
+use super::{NodeSyncHandle, SyncResult};
 
 use tap::TapFallible;
 use tracing::{debug, info, trace, warn};
@@ -33,7 +33,7 @@ const DRAIN_RESULTS_TIMEOUT: Duration = Duration::from_secs(1);
 
 pub async fn node_sync_process<A>(
     node_sync_handle: NodeSyncHandle,
-    node_sync_state: Arc<NodeSyncState<A>>,
+    node_sync_store: Arc<NodeSyncStore>,
     epoch_id: EpochId,
     aggregator: Arc<AuthorityAggregator<A>>,
     cancel_receiver: oneshot::Receiver<()>,
@@ -42,7 +42,7 @@ pub async fn node_sync_process<A>(
 {
     follower_process(
         node_sync_handle.clone(),
-        node_sync_state.node_sync_store.clone(),
+        node_sync_store,
         epoch_id,
         aggregator,
         NUM_ITEMS_PER_REQUEST,
