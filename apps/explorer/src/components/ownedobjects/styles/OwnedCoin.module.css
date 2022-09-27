@@ -12,13 +12,13 @@
 }
 
 .firstrow {
-    @apply grid gap-[15px] uppercase font-medium text-sui-grey-80 text-[12px] leading-[12px] py-[10px] tracking-wider;
+    @apply grid gap-[15px] uppercase font-medium text-sui-grey-80 text-subtitle py-[10px] tracking-wider;
 
     grid-template-columns: 35% 30% 35%;
 }
 
 .body {
-    @apply text-[13px] leading-[12px];
+    @apply text-bodySmall;
 }
 
 .summary {
@@ -49,7 +49,7 @@
 }
 
 .label {
-    @apply w-[80px] text-sui-grey-80 text-[13px] leading-[100%];
+    @apply w-[80px] text-sui-grey-80;
 }
 
 .value {
