@@ -19,8 +19,8 @@ import st from './TransactionsCard.module.scss';
 const TRUNCATE_MAX_LENGTH = 8;
 const TRUNCATE_PREFIX_LENGTH = 4;
 
-// Truncatte text after two lines (~ 80 characters)
-const TRUNCATE_MAX_CHAR = 80;
+// Truncatte text after one line (~ 35 characters)
+const TRUNCATE_MAX_CHAR = 35;
 
 function TransactionCard({ txn }: { txn: TxResultState }) {
     const intl = useIntl();
@@ -56,27 +56,28 @@ function TransactionCard({ txn }: { txn: TxResultState }) {
             txName: 'Minted',
             transfer: false,
             address: false,
+            icon: SuiIcons.Buy,
+            iconClassName: cl(st.arrowActionIcon, st.buyIcon),
         },
         Sent: {
             txName: 'Sent',
             transfer: 'To',
             address: toAddrStr,
+            icon: SuiIcons.ArrowLeft,
+            iconClassName: cl(st.arrowActionIcon, st.angledArrow),
         },
         Received: {
             txName: 'Received',
             transfer: 'From',
             address: fromAddrStr,
+            icon: SuiIcons.ArrowLeft,
+            iconClassName: cl(st.arrowActionIcon, st.angledArrow, st.received),
         },
     };
 
     const date = txn?.timestampMs
         ? formatDate(txn.timestampMs, ['month', 'day', 'hour', 'minute'])
         : false;
-
-    const TxIcon = txn.isSender ? SuiIcons.ArrowLeft : SuiIcons.Buy;
-    const iconClassName = txn.isSender
-        ? cl(st.arrowActionIcon, st.angledArrow)
-        : cl(st.arrowActionIcon, st.buyIcon);
 
     const TransferSuiTxn = txn.kind === 'TransferSui' ? <span>SUI</span> : null;
     const TransferFailed =
@@ -104,7 +105,10 @@ function TransactionCard({ txn }: { txn: TxResultState }) {
         >
             <div className={st.card} key={txn.txId}>
                 <div className={st.cardIcon}>
-                    <Icon icon={TxIcon} className={iconClassName} />
+                    <Icon
+                        icon={transferMeta[transferType].icon}
+                        className={transferMeta[transferType].iconClassName}
+                    />
                 </div>
                 <div className={st.cardContent}>
                     <div className={st.txResult}>

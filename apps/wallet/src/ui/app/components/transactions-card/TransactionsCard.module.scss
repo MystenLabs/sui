@@ -41,6 +41,10 @@
             color: colors.$gradient-blue-start;
             font-size: 12px;
         }
+
+        .received {
+            transform: rotate(312deg);
+        }
     }
 
     .txstatus {
@@ -73,7 +77,7 @@
     .card-content {
         display: flex;
         flex-direction: column;
-        gap: 6px;
+        gap: 8px;
         justify-content: center;
 
         .tx-result {
@@ -172,7 +176,7 @@
 
             color: colors.$gray-75;
             line-height: 100%;
-            font-weight: 500;
+            font-weight: 400;
             text-transform: none;
         }
     }
