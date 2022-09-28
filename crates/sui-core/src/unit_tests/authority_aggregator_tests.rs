@@ -15,6 +15,7 @@ use sui_types::crypto::{
 };
 use sui_types::crypto::{KeypairTraits, Signature};
 
+use sui_macros::sim_test;
 use sui_types::messages::*;
 use sui_types::object::{Object, GAS_VALUE_FOR_TESTING};
 use test_utils::authority::{spawn_test_authorities, test_and_configure_authority_configs};
@@ -432,7 +433,7 @@ async fn execute_transaction_with_fault_configs(
 /// we spawn a tokio task on the server, client timing out and
 /// terminating the connection does not stop server from completing
 /// execution on its side
-#[tokio::test(flavor = "multi_thread", worker_threads = 6)]
+#[sim_test]
 async fn test_quorum_map_and_reduce_timeout() {
     let build_config = BuildConfig::default();
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -474,7 +475,7 @@ async fn test_quorum_map_and_reduce_timeout() {
     }
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_map_reducer() {
     let (authorities, _, _) = init_local_authorities(4, vec![]).await;
 
@@ -606,7 +607,7 @@ async fn test_map_reducer() {
     assert!(!res.as_ref().unwrap().contains(&bad_auth));
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_get_all_owned_objects() {
     let (addr1, key1): (_, AccountKeyPair) = get_key_pair();
     let (addr2, _): (_, AccountKeyPair) = get_key_pair();
@@ -692,7 +693,7 @@ async fn test_get_all_owned_objects() {
     assert_eq!(1, owned_object.len());
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_sync_all_owned_objects() {
     let (addr1, key1): (_, AccountKeyPair) = get_key_pair();
     let (addr2, _): (_, AccountKeyPair) = get_key_pair();
@@ -807,7 +808,7 @@ async fn get_owned_objects(
     owned_objects
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_process_certificate() {
     let (addr1, key1): (_, AccountKeyPair) = get_key_pair();
     let gas_object1 = Object::with_owner_for_testing(addr1);
@@ -860,7 +861,7 @@ async fn test_process_certificate() {
     assert_eq!(SequenceNumber::from(2), new_object_version);
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_execute_cert_to_true_effects() {
     let (addr1, key1): (_, AccountKeyPair) = get_key_pair();
     let gas_object1 = Object::with_owner_for_testing(addr1);
@@ -899,7 +900,7 @@ async fn test_execute_cert_to_true_effects() {
     assert!(count >= 2);
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_process_transaction_fault_success() {
     // This test exercises the 4 different possible fauling case when one authority is faulty.
     // A transaction is sent to all authories, however one of them will error out either before or after processing the transaction.
@@ -927,7 +928,7 @@ async fn test_process_transaction_fault_success() {
     }
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_process_transaction_fault_fail() {
     // This test exercises the cases when there are 2 authorities faulty,
     // and hence no quorum could be formed. This is tested on both the
