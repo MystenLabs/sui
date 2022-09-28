@@ -66,7 +66,6 @@ jobs:
       matrix:
         os:
           - [ubuntu-ghcloud]
-          - [windows-ghcloud]
       fail-fast: false
     steps:
       - uses: actions/checkout@v3
@@ -81,6 +80,28 @@ jobs:
       # Ensure there are no uncommitted changes in the repo after running tests
       - run: scripts/changed-files.sh
         shell: bash
+
+  windows-build:
+    needs: diff
+    if: needs.diff.outputs.isRust == 'true'
+    timeout-minutes: 45
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os:
+          - [windows-ghcloud]
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+      - uses: taiki-e/install-action@nextest
+      - name: cargo build
+        run: |
+          cargo build --all-features
+      # Ensure there are no uncommitted changes in the repo after running tests
+      - run: scripts/changed-files.sh
+        shell: bash
+
 
   simtest:
     needs: diff

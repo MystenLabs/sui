@@ -2,6 +2,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use futures::future::join_all;
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::path::Path;
@@ -316,6 +317,17 @@ pub trait GatewayAPI {
         gas_budget: u64,
         recipient: SuiAddress,
         amount: Option<u64>,
+    ) -> Result<TransactionData, anyhow::Error>;
+
+    /// Send SUI coins to a list of addresses, following a list of amounts.
+    async fn pay(
+        &self,
+        signer: SuiAddress,
+        input_coins: Vec<ObjectID>,
+        recipients: Vec<SuiAddress>,
+        amounts: Vec<u64>,
+        gas: Option<ObjectID>,
+        gas_budget: u64,
     ) -> Result<TransactionData, anyhow::Error>;
 
     /// Synchronise account state with a random authorities, updates all object_ids
@@ -1388,6 +1400,37 @@ where
         let object_ref = object.compute_object_reference();
         let data =
             TransactionData::new_transfer_sui(recipient, signer, amount, object_ref, gas_budget);
+        Ok(data)
+    }
+
+    async fn pay(
+        &self,
+        signer: SuiAddress,
+        input_coins: Vec<ObjectID>,
+        recipients: Vec<SuiAddress>,
+        amounts: Vec<u64>,
+        gas: Option<ObjectID>,
+        gas_budget: u64,
+    ) -> Result<TransactionData, anyhow::Error> {
+        let used_coins = BTreeSet::from_iter(input_coins.iter().cloned());
+        if let Some(gas) = gas {
+            if used_coins.contains(&gas) {
+                return Err(anyhow!("Gas coin is in input coins of Pay transaction, use PaySui transaction instead!"));
+            }
+        }
+        let gas = self
+            .choose_gas_for_address(signer, gas_budget, gas, used_coins)
+            .await?;
+        let handles: Vec<_> = input_coins
+            .iter()
+            .map(|id| self.get_object_ref(id))
+            .collect();
+        let coins = join_all(handles)
+            .await
+            .into_iter()
+            .map(|c| c.unwrap())
+            .collect();
+        let data = TransactionData::new_pay(signer, coins, recipients, amounts, gas, gas_budget);
         Ok(data)
     }
 

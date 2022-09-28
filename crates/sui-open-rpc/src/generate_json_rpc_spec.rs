@@ -163,6 +163,7 @@ async fn create_response_sample() -> Result<
     let (hero_package, hero) = create_hero_response(&mut context, &coins).await?;
     let transfer = create_transfer_response(&mut context, address, &coins).await?;
     let transfer_sui = create_transfer_sui_response(&mut context, address, &coins).await?;
+    let pay = create_pay_response(&mut context, address, &coins).await?;
     let coin_split = create_coin_split_response(&mut context, &coins).await?;
     let error = create_error_response(address, hero_package, context, &network).await?;
 
@@ -192,6 +193,7 @@ async fn create_response_sample() -> Result<
         move_call: example_nft_tx,
         transfer,
         transfer_sui,
+        pay,
         coin_split,
         publish,
         error,
@@ -283,6 +285,34 @@ async fn create_transfer_sui_response(
     .execute(context)
     .await?;
     if let SuiClientCommandResult::TransferSui(certificate, effects) = response {
+        Ok(SuiTransactionResponse {
+            certificate,
+            effects,
+            timestamp_ms: None,
+            parsed_data: None,
+        })
+    } else {
+        panic!()
+    }
+}
+
+async fn create_pay_response(
+    context: &mut WalletContext,
+    address: SuiAddress,
+    coins: &[SuiObjectInfo],
+) -> Result<SuiTransactionResponse, anyhow::Error> {
+    let coins = vec![coins.first().unwrap().object_id];
+    let response = SuiClientCommands::Pay {
+        input_coins: coins,
+        recipients: vec![address],
+        amounts: vec![100],
+        gas: None,
+        gas_budget: 1000,
+    }
+    .execute(context)
+    .await?;
+
+    if let SuiClientCommandResult::Pay(certificate, effects) = response {
         Ok(SuiTransactionResponse {
             certificate,
             effects,
@@ -482,6 +512,7 @@ struct TransactionResponseSample {
     pub move_call: SuiTransactionResponse,
     pub transfer: SuiTransactionResponse,
     pub transfer_sui: SuiTransactionResponse,
+    pub pay: SuiTransactionResponse,
     pub coin_split: SuiTransactionResponse,
     pub publish: SuiTransactionResponse,
     pub error: Value,

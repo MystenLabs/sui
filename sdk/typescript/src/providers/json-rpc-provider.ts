@@ -14,7 +14,7 @@ import {
   isSuiMoveNormalizedFunction,
   isSuiMoveNormalizedStruct,
   isSuiExecuteTransactionResponse,
-  isSuiEvents
+  isSuiEvents,
 } from '../types/index.guard';
 import {
   GatewayTxSeqNumber,
@@ -45,11 +45,14 @@ import {
   DEFAULT_END_TIME,
 } from '../types';
 import { SignatureScheme } from '../cryptography/publickey';
-import { DEFAULT_CLIENT_OPTIONS, WebsocketClient, WebsocketClientOptions } from '../rpc/websocket-client';
+import {
+  DEFAULT_CLIENT_OPTIONS,
+  WebsocketClient,
+  WebsocketClientOptions,
+} from '../rpc/websocket-client';
 
 const isNumber = (val: any): val is number => typeof val === 'number';
 const isAny = (_val: any): _val is any => true;
-
 
 export class JsonRpcProvider extends Provider {
   protected client: JsonRpcClient;
@@ -74,7 +77,11 @@ export class JsonRpcProvider extends Provider {
     super();
 
     this.client = new JsonRpcClient(endpoint);
-    this.wsClient = new WebsocketClient(endpoint, skipDataValidation, socketOptions);
+    this.wsClient = new WebsocketClient(
+      endpoint,
+      skipDataValidation,
+      socketOptions
+    );
   }
 
   // Move info

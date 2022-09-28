@@ -1,6 +1,17 @@
 # @mysten/sui.js
 
-## 0.9.0
+## 0.11.0
+
+### Minor Changes
+
+- d343b67e: Re-release packages
+
+### Patch Changes
+
+- Updated dependencies [d343b67e]
+  - @mysten/bcs@0.3.0
+
+## 0.11.0-pre
 
 ### Minor Changes
 
