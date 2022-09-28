@@ -36,7 +36,7 @@ module sui::validator {
         pubkey_bytes: vector<u8>,
         /// The public key bytes corresponding to the private key that the validator
         /// uses to establish TLS connections
-        network_pubkey_bytes: vector<u8>, 
+        network_pubkey_bytes: vector<u8>,
         /// This is a proof that the validator has ownership of the private key
         proof_of_possession: vector<u8>,
         /// A unique human-readable name of this validator.
@@ -63,7 +63,7 @@ module sui::validator {
         pending_withdraw: u64,
         /// Gas price quote, updated only at end of epoch.
         gas_price: u64,
-        /// Staking pool for the stakes delegated to this validator. 
+        /// Staking pool for the stakes delegated to this validator.
         delegation_staking_pool: StakingPool,
     }
 
@@ -81,7 +81,7 @@ module sui::validator {
         let address_bytes = bcs::to_bytes(&sui_address);
         vector::append(&mut signed_bytes, address_bytes);
         assert!(
-            crypto::bls12381_verify_with_domain(proof_of_possession, pubkey_bytes, signed_bytes, PROOF_OF_POSSESSION_DOMAIN) == true,
+            crypto::bls12381_verify_with_domain(&proof_of_possession, &pubkey_bytes, signed_bytes, PROOF_OF_POSSESSION_DOMAIN) == true,
             0
         );
     }
@@ -185,7 +185,7 @@ module sui::validator {
     }
 
     public(friend) fun request_add_delegation(
-        self: &mut Validator, 
+        self: &mut Validator,
         delegated_stake: Balance<SUI>,
         locking_period: Option<EpochTimeLock>,
         ctx: &mut TxContext,
@@ -202,8 +202,8 @@ module sui::validator {
     }
 
     public(friend) fun request_withdraw_delegation(
-        self: &mut Validator, 
-        delegation: &mut Delegation, 
+        self: &mut Validator,
+        delegation: &mut Delegation,
         staked_sui: &mut StakedSui,
         withdraw_pool_token_amount: u64,
         ctx: &mut TxContext,
@@ -230,7 +230,7 @@ module sui::validator {
     public(friend) fun get_staking_pool_mut_ref(self: &mut Validator) : &mut StakingPool {
         &mut self.delegation_staking_pool
     }
- 
+
     public fun metadata(self: &Validator): &ValidatorMetadata {
         &self.metadata
     }
