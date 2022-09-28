@@ -59,7 +59,7 @@ impl CommonTransactionCosts {
 // Step 4: if package publish, charge for it per size of modules : can be computed precisely
 // Step 5: charge VM flat fee if uses VM : can be computed precisely
 // Step 6: charge for mutations, deletions, rebates: cannot be computed precisely, will approx
-pub fn estimate_transaction_inner<S>(
+fn estimate_transaction_inner<S>(
     tx: TransactionKind,
     computation_gas_unit_price: u64,
     storage_gas_unit_price: u64,

@@ -44,14 +44,6 @@ pub fn make_publish_package(gas_object: Object, path: PathBuf) -> Transaction {
     )
 }
 
-pub async fn publish_package_for_effects(
-    gas_object: Object,
-    path: PathBuf,
-    configs: &[ValidatorInfo],
-) -> TransactionEffects {
-    submit_single_owner_transaction(make_publish_package(gas_object, path), configs).await
-}
-
 pub async fn publish_package(
     gas_object: Object,
     path: PathBuf,
@@ -59,6 +51,14 @@ pub async fn publish_package(
 ) -> ObjectRef {
     let effects = publish_package_for_effects(gas_object, path, configs).await;
     parse_package_ref(&effects).unwrap()
+}
+
+pub async fn publish_package_for_effects(
+    gas_object: Object,
+    path: PathBuf,
+    configs: &[ValidatorInfo],
+) -> TransactionEffects {
+    submit_single_owner_transaction(make_publish_package(gas_object, path), configs).await
 }
 
 /// Helper function to publish the move package of a simple shared counter.
