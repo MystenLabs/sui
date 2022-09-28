@@ -1,5 +1,11 @@
 # Change Log
 
+## 0.3.0
+
+### Minor Changes
+
+- d343b67e: Re-release packages
+
 ## 0.2.1
 
 ### Patch Changes
