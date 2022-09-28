@@ -1,201 +1,16 @@
 ---
-title: Use Sui CLI to Start and Manage Network
+title: Sui CLI client
 ---
 
-Welcome to the Sui tutorial on the Sui CLI developed
-to facilitate experimentation with Sui features using a
-command line interface. In this document, we describe how to set up
-the Sui client and execute commands through its command line
-interface, *Sui CLI*.
-
-Note, this is an advanced option and an alternative to simply connecting to our public
-[Devnet](../build/devnet.md). Use Devnet to build upon Sui. Use the Sui CLI here to
-[contribute](../contribute/index.md) to Sui itself.
+Learn how to set up, configure, and use the Sui Command Line Interface.
 
 ## Set up
 
 Follow the instructions to [install Sui binaries](install.md#binaries).
 
-## Genesis
+## Sui CLI client commands
 
-The `genesis` command creates four validators and five user accounts
-each with five gas objects. These are Sui [objects](objects.md) used
-to pay for Sui [transactions](transactions.md#transaction-metadata),
-such other object transfers or smart contract (Move) calls. These
-numbers represent a sample configuration and have been chosen somewhat
-arbitrarily; the process of generating the genesis state can be
-customized with additional accounts, objects, code, etc. as described
-in [Genesis customization](#customize-genesis).
-
-1. Optionally, set `RUST_LOG=debug` for verbose logging.
-1. Initiate `genesis`:
-   ```shell
-   $ sui genesis
-   ```
-
-All of this is contained in configuration and keystore files and an `authorities_db`
-database directory. A `client_db` directory is also created upon running the
-`sui client new-address` command covered later.
-
-The network configuration is stored in `network.yaml` and can be used
-subsequently to start the network. The `client.yaml` and `sui.keystore`
-are also created to be used by the Sui client to manage the newly
-created accounts.
-
-By default, these files are placed in your home directory at
-`~/.sui/sui_config` (created automatically if it does not yet exist). But you
-can override this location by providing an alternative path to the `--working-dir`
-argument. Run the command like so to place the files in the `dir` directory:
-
-```shell
-$ sui genesis --working-dir /path/to/sui/config/dir
-```
-
-> **Note:** That path and directory must already exist and will not be created with the `--working-dir` argument.
-
-### Recreating genesis
-
-To recreate Sui genesis state in the same location, which will remove
-existing configuration files, pass the `--force` option to the `sui
-genesis` command and either run it in the default directory (`~/.sui/sui_config`) or specify
-it once again, using the `--working-dir` argument:
-
-```shell
-$ sui genesis --force --working-dir /path/to/sui/config/dir
-```
-
-## Client configuration
-
-The genesis process creates a configuration file `client.yaml`, and a keystore file `sui.keystore` for the
-Sui client.  The config file contains information of the accounts and
-the Sui Network server. The keystore file contains all the public-private key pairs of the created accounts.
-Sui client uses the network information in `client.yaml` to communicate
-with the Sui network validators  and create transactions using the key
-pairs residing in the keystore file.
-
-Here is an example of `client.yaml` showing the accounts and key pairs
-in the client configuration (with some values omitted):
-
-```yaml
----
-accounts:
-  - b02b5e57fe3572f94ad5ac2a17392bfb3261f7a0
-  - b4f5ed3cbe78c7969e6ac073f9a0c525fd07f05a
-  - 48ff0a932b12976caec91d521265b009ad5b2225
-  - 08da15bee6a3f5b01edbbd402654a75421d81397
-  - 3cbf06e9997b3864e3baad6bc0f0ef8ec423cd75
-keystore:
-  File: /Users/user/.sui/sui_config/sui.keystore
-gateway:
-  embedded:
-    epoch: 0
-    validator_set:
-      - public-key: Ot3ov659M4tl59E9Tq1rUj5SccoXstXrMhQSJX7pFKQ=
-        stake: 1
-        network-address: /dns/localhost/tcp/57468/http
-      - public-key: UGfB4wzJ2Lntn+WJvv+83RSigpuf7Vv2AmCPQR28TVY=
-        stake: 1
-        network-address: /dns/localhost/tcp/57480/http
-      - public-key: 5bO8DUgmA9i1SiUka5BT6VjIclMNQBRnbVww2IXxFqw=
-        stake: 1
-        network-address: /dns/localhost/tcp/57492/http
-      - public-key: 8uV0ml/DPUXG9UbrnlP6v08XaBum9pcIDelRT04NanU=
-        stake: 1
-        network-address: /dns/localhost/tcp/57504/http
-    send_timeout:
-      secs: 4
-      nanos: 0
-    recv_timeout:
-      secs: 4
-      nanos: 0
-    buffer_size: 650000
-    db_folder_path: /Users/user/.sui/sui_config/client_db
-active_address: "0xb02b5e57fe3572f94ad5ac2a17392bfb3261f7a0"
-```
-
-The `accounts` variable contains the account's address that the client manages. The
-`gateway` variable contains the information of the Sui network that the client will
-be connecting to.
-
-The `authorities` variable is part of the embedded gateway configuration. It contains
-the Sui network validator's name, host and port information. It is used to establish connections
-to the Sui network.
-
-Note `send_timeout`, `recv_timeout` and `buffer_size` are the network
-parameters, and `db_folder_path` is the path to the account's client state
-database. This database stores all the transaction data, certificates
-and object data belonging to the account.
-
-### Sui Network Gateway
-
-The Sui Network Gateway (or simply, Sui Gateway) is an abstraction layer that acts as the entry
-point to the Sui network. Different gateway implementations can be used by the application layer
-based on their use cases.
-
-#### Embedded gateway
-
-As the name suggests, embedded gateway embeds the gateway logic into the application;
-all data will be stored locally and the application will make direct
-connection to the validators.
-
-#### RPC gateway
-You can also connect the client to the Sui network via an [RPC Gateway](json-rpc.md#start-local-rpc-server);
-To use the RPC gateway, update `client.yaml`'s `gateway` section to:
-```yaml
-...
-gateway:
-  rpc: "http://localhost:5001"
-...
-```
-
-### Key management
-
-The key pairs are stored in `sui.keystore`. However, this is not secure
-and shouldn't be used in a production environment. We have plans to
-implement more secure key management and support hardware signing in a future release.
-
-:warning: **Do not use in production**: Keys are stored in file!
-
-## Starting the network
-
-Run the following command to start the local Sui network, assuming you
-accepted the default location for configuration:
-
-```shell
-$ sui start
-```
-
-This command will look for the Sui network configuration file
-`network.yaml` in the `~/.sui/sui_config` directory. But you can
-override this setting by providing a path to the directory where
-this file is stored:
-
-```shell
-$ sui start --config /path/to/sui/network/config/file
-```
-
-For example:
-
-```shell
-$ sui start --config /Users/name/tmp/network.yaml
-```
-
-Executing any of these two commands in a terminal window will result
-in no output but the terminal will be "blocked" by the running Sui
-instance (it will not return the command prompt). The command can
-also be run in background.
-
-NOTE: For logs, set `RUST_LOG=debug` before invoking `sui start`.
-
-If you see errors when trying to start Sui network, particularly if you made some custom changes
- (e.g,
-[customized client configuration](#client-configuration)), you should [recreate Sui genesis state](#recreating-genesis).
-
-## Using the Sui client
-
-Now start a new terminal since you have the Sui network running in the first terminal.
-
-The following commands are supported by the Sui client:
+The following commands are supported by the Sui CLI client:
 
     active-address        Default address used for commands when none specified
     addresses             Obtain the Addresses managed by the client
@@ -229,7 +44,7 @@ Use `help <command>` to see more information on each command.
 
 You can start the client in two modes: interactive shell or command line interface.
 
-### Interactive shell
+## Sui interactive shell
 
 To start the interactive shell, execute the following (in a different
 terminal window than one used to execute `sui start`). Assuming you
@@ -250,18 +65,18 @@ $ sui console --config /path/to/client/config/file
 
 The Sui interactive client console supports the following shell functionality:
 
-* *Command history* -
+- _Command history_ -
   The `history` command can be used to print the interactive shell's command history;
   you can also use Up, Down or Ctrl-P, Ctrl-N to navigate previous or next matches from history.
   History search is also supported using Ctrl-R.
-* *Tab completion* -
+- _Tab completion_ -
   Tab completion is supported for all commands using Tab and Ctrl-I keys.
-* *Environment variable substitution* -
+- _Environment variable substitution_ -
   The Sui console will substitute inputs prefixed with `$` with environment variables,
   you can use the `env` command to print out the entire list of variables and
   use `echo` to preview the substitution without invoking any commands.
 
-### Command line mode
+## Command line mode
 
 The client can also be used without the interactive shell, which can be useful if
 you want to pipe the output of the client to another application or invoke client
@@ -299,7 +114,7 @@ and object IDs will be assigned randomly. Consequently, you cannot rely
 on copy-pasting commands that include these values, as they will be different
 between different users/configs.
 
-### Active address
+## Active address
 
 Since a Sui CLI client manages multiple disjointed addresses, one might need to specify
 which address they want to call a command on.
@@ -341,6 +156,7 @@ $ sui client objects
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------
  0x66eaa38c8ea99673a92a076a00101ab9b3a06b55 |     0      | j8qLxVk/Bm9iMdhPf9b7HcIMQIAM+qCd8LfPAwKYrFo= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>
 ```
+
 ```shell
 $ sui client objects --address 0x913cf36f370613ed131868ac6f9da2420166062e
                  Object ID                  |  Version   |                    Digest                    |   Owner Type    |               Object Type
@@ -354,18 +170,12 @@ All commands where `address` is omitted will now use the newly specified active 
 Note that if one calls a command that uses a gas object not owned by the active address,
 the address owned by the gas object is temporarily used for the transaction.
 
-### Paying For transactions with gas objects
+## Gas fees for transactions
 
-All Sui transactions require a gas object for payment, as well as a budget. However, specifying
-the gas object can be cumbersome; so in the CLI, one is allowed to omit the gas object and leave
-the client to pick an object that meets the specified budget. This gas selection logic is currently
-rudimentary as it does not combine/split gas as needed but currently picks the first object it finds
-that meets the budget. Note that one can always specify their own gas if they want to manage the gas
-themselves.
+All Sui transactions require a gas object for payment, as well as a budget. However, specifying the gas object can be cumbersome; so in the CLI, one is allowed to omit the gas object and leave the client to pick an object that meets the specified budget. This gas selection logic is currently rudimentary as it does not combine/split gas as needed but currently picks the first object it finds that meets the budget. Note that one can always specify their own gas if they want to manage the gas themselves.
 
-:warning: A gas object cannot be part of the transaction while also being used to
-pay for the transaction. For example, one cannot try to transfer gas object X while paying for the
-transaction with gas object X. The gas selection logic checks for this and rejects such cases.
+A gas object cannot be part of the transaction while also being used to
+pay for the transaction. For example, one cannot try to transfer gas object X while paying for the transaction with gas object X. The gas selection logic checks for this and rejects such cases.
 
 To see how much gas is in an account, use the `gas` command. Note that this command uses the
 `active-address`, unless otherwise specified.
@@ -400,33 +210,21 @@ $ sui client gas --address 0x562f07cf6369e8d22dbf226a5bfedc6300014837
 
 ```
 
-## Adding accounts to the client
+## Create a new account address
 
-Sui's genesis process will create five accounts by default; if that's
-not enough, there are two ways to add accounts to the Sui CLI client if needed.
-
-### Generating a new account
-
-To create a new account, execute the `new-address` command:
+To create a new account address, execute the `new-address` command:
 
 ```shell
 $ sui client new-address ed25519
 ```
-New address creation requires key scheme flag `{ed25519 | secp256k1}`. 
+
+New address creation requires key scheme flag `{ed25519 | secp256k1}`.
 
 The output shows a confirmation after the account has been created:
 
 ```
 Created new keypair for address with flag 0: [0xc72cf3adcc4d11c03079cef2c8992aea5268677a]
 ```
-
-### Add existing accounts to `client.yaml` manually
-
-If you have an existing key pair from an old client config, you can copy the account
-address manually to the new `client.yaml`'s accounts section, and add the key pair to the keystore file;
-you won't be able to mutate objects if the account key is missing from the keystore.
-
-Restart the Sui console after the modification; the new accounts will appear in the client if you query the addresses.
 
 ## View objects owned by the address
 
@@ -539,9 +337,9 @@ Here is example `json` output:
 }
 ```
 
-## Transferring coins
+## Transfer coins
 
-Coins *are* objects, but they have a specific use case that allows you to use native commands such as `transfer`, `merge-coin`, and `split-coin`. This is different from non-coin objects that you can mutate only using [Move calls](#calling-move-code).
+Coins _are_ objects, but they have a specific use case that allows you to use native commands such as `transfer`, `merge-coin`, and `split-coin`. This is different from non-coin objects that you can mutate only using [Move calls](#calling-move-code).
 
 If you inspect a newly created account, you would expect the account does not own any object. Let us inspect the fresh account we create in the [Generating a new account](#generating-a-new-account) section (`C72CF3ADCC4D11C03079CEF2C8992AEA5268677A`):
 
@@ -628,7 +426,7 @@ $ sui client objects --address 0xc72cf3adcc4d11c03079cef2c8992aea5268677a
  0x66eaa38c8ea99673a92a076a00101ab9b3a06b55 |     1      | j8qLxVk/Bm9iMdhPf9b7HcIMQIAM+qCd8LfPAwKYrFo= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>
 ```
 
-## Creating example NFTs
+## Create example NFTs
 
 You may create an [NFT-like object](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/devnet_nft.move#L16) on Sui using the following command:
 
@@ -656,7 +454,6 @@ url: ipfs://bafkreibngqhl3gaa7daob4i2vccziay2jjlp435cf66vhono7nrvww53ty
 
 The command will invoke the `mint` function in the `devnet_nft` module, which mints a Sui object with three attributes: name, description, and image URL with [default values](https://github.com/MystenLabs/sui/blob/27dff728a4c9cb65cd5d92a574105df20cb51887/sui/src/wallet_commands.rs#L39) and transfers the object to your address. You can also provide custom values using the following instructions:
 
-
 `create-example-nft` command usage:
 
 ```shell
@@ -679,18 +476,9 @@ OPTIONS:
 
 ```
 
+## Merge coins
 
-## Merging and splitting coin objects
-
-Overtime, the account might receive coins from other accounts and will become unmanageable when
-the number of coins grows; contrarily, the account might need to split the coins for payment or
-for transfer to another account.
-
-We can use the `merge-coin` command and `split-coin` command to consolidate or split coins, respectively.
-
-### Merge coins
-
-Usage of `merge-coin`:
+To merge coins, use the `merge-coin` command.
 
 ```shell
 sui-client-merge-coin
@@ -744,6 +532,7 @@ Showing 5 results.
 ```
 
 Then we merge:
+
 ```shell
 $ sui client merge-coin --primary-coin 0x1e90389f5d70d7fa6ce973155460e1c04deae194 --coin-to-merge 0x351f08f03709cebea85dcd20e24b00fbc1851c92 --gas-budget 1000
 ```
@@ -766,9 +555,9 @@ Updated Coin : Coin { id: 0x1e90389f5d70d7fa6ce973155460e1c04deae194, value: 200
 Updated Gas : Coin { id: 0x3c720502f9eabb17a52a999859fbbaeb408b1d14, value: 99444 }
 ```
 
-### Split coins
+## Split coins
 
-Usage of `split-coin`:
+To split coins, use the `split-coin` command.
 
 ```shell
 sui-client-split-coin
@@ -789,8 +578,7 @@ OPTIONS:
         --json                       Return command outputs in json format
 ```
 
-For splitting coins, you will need at least two coins to execute the `split-coin` command,
-one coin to split, one for the gas payment.
+You need at least 2 coins to use the `split-coin` command; 1 to split and 1 to pay gas fees.
 
 Let us examine objects owned by address `0x08da15bee6a3f5b01edbbd402654a75421d81397`:
 
@@ -884,6 +672,7 @@ New Coins : Coin { id: 0x1da8193ac29f94f8207b0222bd5941b7814c1668, value: 33333 
             Coin { id: 0x3653bae7851c36e0e5e827b7c1a2978ef78efd7e, value: 33333 }
 Updated Gas : Coin { id: 0x692c179dc434ceb0eaa51cdd198bb905b5ab27c4, value: 99385 }
 ```
+
 From the result, we can see three coins with values of roughly one-third of 100000.
 
 ## Calling Move code
@@ -927,7 +716,7 @@ but for the sake of this exercise, let's choose the last one on the
 list.
 
 We will perform the transfer by calling the `transfer` function from
-the sui module using the following Sui client command:
+the Sui module using the following Sui client command:
 
 ```shell
 $ sui client call --function transfer --module sui --package 0x2 --args 0x471c8e241d0473c34753461529b70f9c4ed3151b 0x3cbf06e9997b3864e3baad6bc0f0ef8ec423cd75 --gas-budget 1000
@@ -936,21 +725,21 @@ $ sui client call --function transfer --module sui --package 0x2 --args 0x471c8e
 This is a pretty complicated command so let's explain all of its
 parameters one-by-one:
 
-* `--function` - name of the function to be called
-* `--module` - name of the module containing the function
-* `--package` - ID of the package object where the module containing
+- `--function` - name of the function to be called
+- `--module` - name of the module containing the function
+- `--package` - ID of the package object where the module containing
   the function is located. (Remember
   that the ID of the genesis Sui package containing the GAS module is
   defined in its manifest file, and is equal to `0x2`.)
-* `--args` - a list of function arguments formatted as
+- `--args` - a list of function arguments formatted as
   [SuiJSON](sui-json.md) values (hence the preceding `0x` in address
   and object ID):
-  * ID of the gas object representing the `c` parameter of the `transfer`
+  - ID of the gas object representing the `c` parameter of the `transfer`
     function
-  * address of the new gas object owner
-* `--gas` - an optional object containing gas used to pay for this
+  - address of the new gas object owner
+- `--gas` - an optional object containing gas used to pay for this
   function call
-* `--gas-budget` - a decimal value expressing how much gas we are
+- `--gas-budget` - a decimal value expressing how much gas we are
   willing to pay for the `transfer` call to be completed to avoid
   accidental drain of all gas in the gas pay)
 
@@ -959,15 +748,15 @@ Note the third argument to the `transfer` function representing
 is a required argument for all functions callable from Sui and is
 auto-injected by the platform at the point of a function call.
 
-> **Important:** If you use a shell that interprets square brackets ([ ]) as special characters (such as the `zsh` shell), you must enclose the brackets in single quotes. For example, instead of `[7,42]` you must use `'[7,42]'`. 
+> **Important:** If you use a shell that interprets square brackets ([ ]) as special characters (such as the `zsh` shell), you must enclose the brackets in single quotes. For example, instead of `[7,42]` you must use `'[7,42]'`.
 >
-> Additionally, when you specify a vector of object IDs, you must enclose each ID in double quotes. For example, 
+> Additionally, when you specify a vector of object IDs, you must enclose each ID in double quotes. For example,
 > `'["0x471c8e241d0473c34753461529b70f9c4ed3151b","0x53b50e3020a01e1fd6acf832a871feee240183f0"]'`
 
 To gain a deeper view into the object, include the
+
 > `--json` flag in the `sui client` command to see the raw JSON representation
 > of the object.
-
 
 The output of the call command is a bit verbose, but the important
 information that should be printed at the end indicates objects
@@ -1034,7 +823,7 @@ id: 0x471c8e241d0473c34753461529b70f9c4ed3151b[1]
 ## Publish packages
 
 In order for user-written code to be available in Sui, it must be
-*published* to Sui's [distributed ledger](../learn/how-sui-works.md#architecture).
+_published_ to Sui's [distributed ledger](../learn/how-sui-works.md#architecture).
 Please see the [Move developer documentation](move/index.md) for a
 description on how to [write a simple Move code package](move/write-package.md),
 which we can publish using Sui client's `publish` command.
@@ -1122,28 +911,4 @@ publishing was updated as well.
 > [build your package locally](../build/move/build-test.md#building-a-package) (using the `sui move build` command)
 > to get a more verbose error message.
 
-## Customize genesis
 
-The genesis process can be customized by providing a genesis configuration
-file using the `--config` flag.
-
-```shell
-$ sui genesis --config <Path to genesis config file>
-```
-
-Example `genesis.yaml`:
-
-```yaml
----
-validator_genesis_info: ~
-committee_size: 4
-accounts:
-  - gas_objects:
-      - object_id: "0xdbac75c4e5a5064875cb8566a533547957092f93"
-        gas_value: 100000
-    gas_object_ranges: []
-move_packages: ["<Paths to custom move packages>"]
-sui_framework_lib_path: ~
-move_framework_lib_path: ~
-
-```

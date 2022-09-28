@@ -1,0 +1,221 @@
+---
+title: Create a local Sui network
+---
+
+Learn how to create and work with a local Sui network.
+
+## Genesis
+
+The `genesis` command creates four validators and five user accounts
+each with five gas objects. These are Sui [objects](objects.md) used
+to pay for Sui [transactions](transactions.md#transaction-metadata),
+such other object transfers or smart contract (Move) calls. These
+numbers represent a sample configuration and have been chosen somewhat
+arbitrarily; the process of generating the genesis state can be
+customized with additional accounts, objects, code, etc. as described
+in [Genesis customization](#customize-genesis).
+
+1. Optionally, set `RUST_LOG=debug` for verbose logging.
+1. Initiate `genesis`:
+   ```shell
+   $ sui genesis
+   ```
+
+All of this is contained in configuration and keystore files and an `authorities_db`
+database directory. A `client_db` directory is also created upon running the
+`sui client new-address` command covered later.
+
+The network configuration is stored in `network.yaml` and can be used
+subsequently to start the network. The `client.yaml` and `sui.keystore`
+are also created to be used by the Sui client to manage the newly
+created accounts.
+
+By default, these files are placed in your home directory at
+`~/.sui/sui_config` (created automatically if it does not yet exist). But you
+can override this location by providing an alternative path to the `--working-dir`
+argument. Run the command like so to place the files in the `dir` directory:
+
+```shell
+$ sui genesis --working-dir /path/to/sui/config/dir
+```
+
+> **Note:** That path and directory must already exist and will not be created with the `--working-dir` argument.
+
+### Recreating genesis
+
+To recreate Sui genesis state in the same location, which will remove
+existing configuration files, pass the `--force` option to the `sui
+genesis` command and either run it in the default directory (`~/.sui/sui_config`) or specify
+it once again, using the `--working-dir` argument:
+
+```shell
+$ sui genesis --force --working-dir /path/to/sui/config/dir
+```
+
+## Client configuration
+
+The genesis process creates a configuration file `client.yaml`, and a keystore file `sui.keystore` for the
+Sui client.  The config file contains information of the accounts and
+the Sui Network server. The keystore file contains all the public-private key pairs of the created accounts.
+Sui client uses the network information in `client.yaml` to communicate
+with the Sui network validators  and create transactions using the key
+pairs residing in the keystore file.
+
+Here is an example of `client.yaml` showing the accounts and key pairs
+in the client configuration (with some values omitted):
+
+```yaml
+---
+accounts:
+  - b02b5e57fe3572f94ad5ac2a17392bfb3261f7a0
+  - b4f5ed3cbe78c7969e6ac073f9a0c525fd07f05a
+  - 48ff0a932b12976caec91d521265b009ad5b2225
+  - 08da15bee6a3f5b01edbbd402654a75421d81397
+  - 3cbf06e9997b3864e3baad6bc0f0ef8ec423cd75
+keystore:
+  File: /Users/user/.sui/sui_config/sui.keystore
+gateway:
+  embedded:
+    epoch: 0
+    validator_set:
+      - public-key: Ot3ov659M4tl59E9Tq1rUj5SccoXstXrMhQSJX7pFKQ=
+        stake: 1
+        network-address: /dns/localhost/tcp/57468/http
+      - public-key: UGfB4wzJ2Lntn+WJvv+83RSigpuf7Vv2AmCPQR28TVY=
+        stake: 1
+        network-address: /dns/localhost/tcp/57480/http
+      - public-key: 5bO8DUgmA9i1SiUka5BT6VjIclMNQBRnbVww2IXxFqw=
+        stake: 1
+        network-address: /dns/localhost/tcp/57492/http
+      - public-key: 8uV0ml/DPUXG9UbrnlP6v08XaBum9pcIDelRT04NanU=
+        stake: 1
+        network-address: /dns/localhost/tcp/57504/http
+    send_timeout:
+      secs: 4
+      nanos: 0
+    recv_timeout:
+      secs: 4
+      nanos: 0
+    buffer_size: 650000
+    db_folder_path: /Users/user/.sui/sui_config/client_db
+active_address: "0xb02b5e57fe3572f94ad5ac2a17392bfb3261f7a0"
+```
+
+The `accounts` variable contains the account's address that the client manages. The
+`gateway` variable contains the information of the Sui network that the client will
+be connecting to.
+
+The `authorities` variable is part of the embedded gateway configuration. It contains
+the Sui network validator's name, host and port information. It is used to establish connections
+to the Sui network.
+
+Note `send_timeout`, `recv_timeout` and `buffer_size` are the network
+parameters, and `db_folder_path` is the path to the account's client state
+database. This database stores all the transaction data, certificates
+and object data belonging to the account.
+
+### Sui Network Gateway
+
+The Sui Network Gateway (or simply, Sui Gateway) is an abstraction layer that acts as the entry
+point to the Sui network. Different gateway implementations can be used by the application layer
+based on their use cases.
+
+#### Embedded gateway
+
+As the name suggests, embedded gateway embeds the gateway logic into the application;
+all data will be stored locally and the application will make direct
+connection to the validators.
+
+#### RPC gateway
+You can also connect the client to the Sui network via an [RPC Gateway](json-rpc.md#start-local-rpc-server);
+To use the RPC gateway, update `client.yaml`'s `gateway` section to:
+```yaml
+...
+gateway:
+  rpc: "http://localhost:5001"
+...
+```
+
+### Key management
+
+The key pairs are stored in `sui.keystore`. However, this is not secure
+and shouldn't be used in a production environment. We have plans to
+implement more secure key management and support hardware signing in a future release.
+
+:warning: **Do not use in production**: Keys are stored in file!
+
+## Starting the network
+
+Run the following command to start the local Sui network, assuming you
+accepted the default location for configuration:
+
+```shell
+$ sui start
+```
+
+This command will look for the Sui network configuration file
+`network.yaml` in the `~/.sui/sui_config` directory. But you can
+override this setting by providing a path to the directory where
+this file is stored:
+
+```shell
+$ sui start --config /path/to/sui/network/config/file
+```
+
+For example:
+
+```shell
+$ sui start --config /Users/name/tmp/network.yaml
+```
+
+Executing any of these two commands in a terminal window will result
+in no output but the terminal will be "blocked" by the running Sui
+instance (it will not return the command prompt). The command can
+also be run in background.
+
+NOTE: For logs, set `RUST_LOG=debug` before invoking `sui start`.
+
+If you see errors when trying to start Sui network, particularly if you made some custom changes
+ (e.g,
+[customized client configuration](#client-configuration)), you should [recreate Sui genesis state](#recreating-genesis).
+
+
+## Adding accounts to the client
+
+Sui's genesis process will create five accounts by default; if that's
+not enough, there are two ways to add accounts to the Sui CLI client if needed.
+
+## Add existing accounts to `client.yaml` manually
+
+If you have an existing key pair from an old client config, you can copy the account
+address manually to the new `client.yaml`'s accounts section, and add the key pair to the keystore file;
+you won't be able to mutate objects if the account key is missing from the keystore.
+
+Restart the Sui console after the modification; the new accounts will appear in the client if you query the addresses.
+
+
+
+## Customize genesis
+
+The genesis process can be customized by providing a genesis configuration
+file using the `--config` flag.
+
+```shell
+$ sui genesis --config <Path to genesis config file>
+```
+
+Example `genesis.yaml`:
+
+```yaml
+---
+validator_genesis_info: ~
+committee_size: 4
+accounts:
+  - gas_objects:
+      - object_id: "0xdbac75c4e5a5064875cb8566a533547957092f93"
+        gas_value: 100000
+    gas_object_ranges: []
+move_packages: ["<Paths to custom move packages>"]
+sui_framework_lib_path: ~
+move_framework_lib_path: ~
+```
