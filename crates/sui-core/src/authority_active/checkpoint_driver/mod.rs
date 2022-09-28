@@ -153,7 +153,7 @@ pub enum CheckpointStepError {
 }
 
 pub async fn checkpoint_process<A>(
-    active_authority: &ActiveAuthority<A>,
+    active_authority: Arc<ActiveAuthority<A>>,
     timing: &CheckpointProcessControl,
     metrics: CheckpointMetrics,
     enable_reconfig: bool,
@@ -172,7 +172,7 @@ pub async fn checkpoint_process<A>(
     let mut last_cert_time = Instant::now();
 
     loop {
-        let result = checkpoint_process_step(active_authority, timing).await;
+        let result = checkpoint_process_step(active_authority.clone(), timing).await;
         let state_checkpoints = active_authority.state.checkpoints.as_ref().unwrap();
         let next_cp_seq = state_checkpoints.lock().next_checkpoint();
         match result {
@@ -273,7 +273,7 @@ pub async fn checkpoint_process<A>(
 }
 
 pub async fn checkpoint_process_step<A>(
-    active_authority: &ActiveAuthority<A>,
+    active_authority: Arc<ActiveAuthority<A>>,
     timing: &CheckpointProcessControl,
 ) -> Result<CheckpointStepResult, CheckpointStepError>
 where
@@ -319,7 +319,7 @@ where
             );
             // TODO: The sync process only works within an epoch.
             sync_to_checkpoint(
-                active_authority,
+                active_authority.clone(),
                 state_checkpoints.clone(),
                 checkpoint.clone(),
             )
@@ -327,7 +327,7 @@ where
             .map_err(|err| CheckpointStepError::SyncCheckpointFromQuorumFailed(Box::new(err)))?;
         }
 
-        if update_latest_checkpoint(active_authority, state_checkpoints, &checkpoint)
+        if update_latest_checkpoint(active_authority.clone(), state_checkpoints, &checkpoint)
             .await
             .map_err(|err| CheckpointStepError::UpdateLatestCheckpointFailed(Box::new(err)))?
         {
@@ -354,7 +354,7 @@ where
 
     // (4) Now we try to create fragments and get list of transactions for the checkpoint.
     let transactions = match create_fragments(
-        active_authority,
+        active_authority.clone(),
         state_checkpoints.clone(),
         &my_proposal,
         committee,
@@ -381,7 +381,7 @@ where
 }
 
 pub async fn sync_and_sign_new_checkpoint<A>(
-    active_authority: &ActiveAuthority<A>,
+    active_authority: Arc<ActiveAuthority<A>>,
     epoch: EpochId,
     seq: CheckpointSequenceNumber,
     transactions: BTreeSet<ExecutionDigests>,
@@ -390,8 +390,9 @@ where
     A: AuthorityAPI + Send + Sync + 'static + Clone + Reconfigurable,
 {
     let errors = active_authority
+        .clone()
         .node_sync_handle()
-        .sync_pending_checkpoint_transactions(transactions.iter())
+        .sync_pending_checkpoint_transactions(epoch, transactions.iter())
         .await?
         .zip(futures::stream::iter(transactions.iter()))
         .filter_map(|(r, digests)| async move {
@@ -576,7 +577,7 @@ where
 /// Such content can either be obtained locally if there was already a signed checkpoint, or
 /// downloaded from other validators if not available.
 async fn update_latest_checkpoint<A>(
-    active_authority: &ActiveAuthority<A>,
+    active_authority: Arc<ActiveAuthority<A>>,
     state_checkpoints: &Arc<Mutex<CheckpointStore>>,
     checkpoint: &CertifiedCheckpointSummary,
 ) -> SuiResult<bool>
@@ -659,7 +660,7 @@ where
 
 /// Download all checkpoints that are not known to us
 pub async fn sync_to_checkpoint<A>(
-    active_authority: &ActiveAuthority<A>,
+    active_authority: Arc<ActiveAuthority<A>>,
     checkpoint_db: Arc<Mutex<CheckpointStore>>,
     latest_known_checkpoint: CertifiedCheckpointSummary,
 ) -> SuiResult
@@ -701,7 +702,7 @@ where
             get_one_checkpoint_with_contents(net.clone(), seq, &available_authorities).await?;
 
         process_new_checkpoint_certificate(
-            active_authority,
+            active_authority.clone(),
             &checkpoint_db,
             &net.committee,
             &past,
@@ -714,7 +715,7 @@ where
 }
 
 async fn process_new_checkpoint_certificate<A>(
-    active_authority: &ActiveAuthority<A>,
+    active_authority: Arc<ActiveAuthority<A>>,
     checkpoint_db: &Arc<Mutex<CheckpointStore>>,
     committee: &Committee,
     checkpoint_cert: &CertifiedCheckpointSummary,
@@ -723,9 +724,10 @@ async fn process_new_checkpoint_certificate<A>(
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
+    let epoch = checkpoint_cert.summary.epoch;
     let errors = active_authority
         .node_sync_handle()
-        .sync_checkpoint_cert_transactions(contents)
+        .sync_checkpoint_cert_transactions(epoch, contents)
         .await?
         .zip(futures::stream::iter(contents.iter()))
         .filter_map(|(r, digests)| async move {
@@ -790,7 +792,7 @@ where
 /// If it didn't't succeed, pick an authority at random that we haven't seen fragments
 /// with yet, make a new fragment and send to consensus.
 pub async fn create_fragments<A>(
-    active_authority: &ActiveAuthority<A>,
+    active_authority: Arc<ActiveAuthority<A>>,
     checkpoint_db: Arc<Mutex<CheckpointStore>>,
     my_proposal: &CheckpointProposal,
     committee: &Committee,
@@ -892,7 +894,9 @@ where
                 let fragment = my_proposal.fragment_with(&other_proposal);
 
                 // We need to augment the fragment with the missing transactions
-                match augment_fragment_with_diff_transactions(active_authority, fragment).await {
+                match augment_fragment_with_diff_transactions(active_authority.clone(), fragment)
+                    .await
+                {
                     Ok(fragment) => {
                         // On success send the fragment to consensus
                         if let Err(err) = checkpoint_db.lock().submit_local_fragment_to_consensus(
@@ -923,7 +927,7 @@ where
 /// come from the local database, but others will come from downloading them from the other
 /// authority.
 pub async fn augment_fragment_with_diff_transactions<A>(
-    active_authority: &ActiveAuthority<A>,
+    active_authority: Arc<ActiveAuthority<A>>,
     mut fragment: CheckpointFragment,
 ) -> Result<CheckpointFragment, SuiError>
 where

@@ -118,7 +118,7 @@ struct NodeSyncProcessHandle(tokio::task::JoinHandle<()>, oneshot::Sender<()>);
 pub struct ActiveAuthority<A> {
     // The local authority state
     pub state: Arc<AuthorityState>,
-    pub node_sync_state: Arc<NodeSyncState<A>>,
+    pub node_sync_store: Arc<NodeSyncStore>,
 
     // Handle that holds a channel connected to NodeSyncState, used to send sync requests
     // into NodeSyncState.
@@ -153,13 +153,6 @@ impl<A> ActiveAuthority<A> {
 
         let net = Arc::new(net);
 
-        let node_sync_state = Arc::new(NodeSyncState::new(
-            authority.clone(),
-            net.clone(),
-            node_sync_store,
-            gossip_metrics.clone(),
-        ));
-
         Ok(ActiveAuthority {
             health: Arc::new(Mutex::new(
                 committee
@@ -168,7 +161,7 @@ impl<A> ActiveAuthority<A> {
                     .collect(),
             )),
             state: authority,
-            node_sync_state,
+            node_sync_store,
             node_sync_handle: OnceCell::new(),
             node_sync_process: Default::default(),
             net: ArcSwap::from(net),
@@ -265,7 +258,7 @@ impl<A> Clone for ActiveAuthority<A> {
     fn clone(&self) -> Self {
         ActiveAuthority {
             state: self.state.clone(),
-            node_sync_state: self.node_sync_state.clone(),
+            node_sync_store: self.node_sync_store.clone(),
             node_sync_handle: self.node_sync_handle.clone(),
             node_sync_process: self.node_sync_process.clone(),
             net: ArcSwap::from(self.net.load().clone()),
@@ -280,20 +273,23 @@ impl<A> ActiveAuthority<A>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
-    pub fn node_sync_handle(&self) -> NodeSyncHandle {
-        let node_sync_state = self.node_sync_state.clone();
+    pub fn node_sync_handle(self: Arc<Self>) -> NodeSyncHandle {
         self.node_sync_handle
-            .get_or_init(|| NodeSyncHandle::new(node_sync_state, self.gossip_metrics.clone()))
+            .get_or_init(|| {
+                let node_sync_state = Arc::new(NodeSyncState::new(self.clone()));
+
+                NodeSyncHandle::new(node_sync_state, self.gossip_metrics.clone())
+            })
             .clone()
     }
 
-    pub async fn sync_to_latest_checkpoint(&self) -> SuiResult {
+    pub async fn sync_to_latest_checkpoint(self: Arc<Self>) -> SuiResult {
         self.sync_to_latest_checkpoint_with_config(Default::default())
             .await
     }
 
     pub async fn sync_to_latest_checkpoint_with_config(
-        &self,
+        self: Arc<Self>,
         checkpoint_process_control: CheckpointProcessControl,
     ) -> SuiResult {
         let checkpoint_store =
@@ -338,8 +334,9 @@ where
     }
 
     /// Restart the node sync process only if one currently exists.
-    pub async fn respawn_node_sync_process(&self) {
-        let lock_guard = self.node_sync_process.lock().await;
+    pub async fn respawn_node_sync_process(self: Arc<Self>) {
+        let self_lock = self.clone();
+        let lock_guard = self_lock.node_sync_process.lock().await;
         if lock_guard.is_some() {
             self.respawn_node_sync_process_impl(lock_guard).await
         } else {
@@ -348,16 +345,18 @@ where
     }
 
     /// Start the node sync process.
-    pub async fn spawn_node_sync_process(&self) {
-        let lock_guard = self.node_sync_process.lock().await;
+    pub async fn spawn_node_sync_process(self: Arc<Self>) {
+        let self_lock = self.clone();
+        let lock_guard = self_lock.node_sync_process.lock().await;
         self.respawn_node_sync_process_impl(lock_guard).await
     }
 
     async fn respawn_node_sync_process_impl(
-        &self,
+        self: Arc<Self>,
         mut lock_guard: MutexGuard<'_, Option<NodeSyncProcessHandle>>,
     ) {
-        info!(epoch = ?self.state.committee.load().epoch, "respawn_node_sync_process");
+        let epoch = self.state.committee.load().epoch;
+        info!(?epoch, "respawn_node_sync_process");
 
         if let Some(NodeSyncProcessHandle(join_handle, cancel_sender)) = lock_guard.take() {
             info!("sending cancel request to node sync task");
@@ -382,13 +381,14 @@ where
         let (cancel_sender, cancel_receiver) = oneshot::channel();
         let aggregator = self.net();
 
-        let node_sync_handle = self.node_sync_handle();
-        let node_sync_state = self.node_sync_state.clone();
+        let node_sync_handle = self.clone().node_sync_handle();
+        let node_sync_store = self.node_sync_store.clone();
 
         info!("spawning node sync task");
         let join_handle = tokio::task::spawn(node_sync_process(
             node_sync_handle,
-            node_sync_state,
+            node_sync_store,
+            epoch,
             aggregator,
             cancel_receiver,
         ));
@@ -399,7 +399,7 @@ where
     /// Spawn pending certificate execution process
     pub async fn spawn_execute_process(self: Arc<Self>) -> JoinHandle<()> {
         tokio::task::spawn(async move {
-            execution_process(&self).await;
+            execution_process(self).await;
         })
     }
 }
@@ -429,7 +429,7 @@ where
     ) -> JoinHandle<()> {
         // Spawn task to take care of checkpointing
         tokio::task::spawn(async move {
-            checkpoint_process(&self, &checkpoint_process_control, metrics, enable_reconfig).await;
+            checkpoint_process(self, &checkpoint_process_control, metrics, enable_reconfig).await;
         })
     }
 }

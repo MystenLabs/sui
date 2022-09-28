@@ -3,7 +3,8 @@
 
 use crate::{
     authority::AuthorityState, authority_active::gossip::GossipMetrics,
-    authority_aggregator::AuthorityAggregator, authority_client::AuthorityAPI,
+    authority_active::ActiveAuthority, authority_aggregator::AuthorityAggregator,
+    authority_client::AuthorityAPI,
 };
 
 use tokio_stream::{Stream, StreamExt};
@@ -11,8 +12,9 @@ use tokio_stream::{Stream, StreamExt};
 use std::collections::{hash_map, BTreeSet, HashMap};
 use sui_storage::node_sync_store::NodeSyncStore;
 use sui_types::{
-    base_types::{AuthorityName, ExecutionDigests, TransactionDigest, TransactionEffectsDigest},
-    committee::Committee,
+    base_types::{
+        AuthorityName, EpochId, ExecutionDigests, TransactionDigest, TransactionEffectsDigest,
+    },
     error::{SuiError, SuiResult},
     messages::{
         CertifiedTransaction, SignedTransactionEffects, TransactionEffects, TransactionInfoResponse,
@@ -48,6 +50,23 @@ const PARENT_WAIT_TIMEOUT: Duration = Duration::from_secs(10);
 /// Waiter is used to single-shot concurrent requests and wait for dependencies to finish.
 struct Waiter<Key, ResultT> {
     waiters: Mutex<HashMap<Key, broadcast::Sender<ResultT>>>,
+}
+
+macro_rules! check_epoch {
+    ($expected_epoch: expr, $observed_epoch: expr) => {
+        let expected_epoch = $expected_epoch;
+        let observed_epoch = $observed_epoch;
+
+        // Debug assert ok - execution will not continue with broken invariant in release mode due
+        // to error return below.
+        debug_assert_eq!(expected_epoch, observed_epoch);
+
+        if expected_epoch != observed_epoch {
+            // Most likely indicates a reconfiguration bug.
+            error!(?expected_epoch, ?observed_epoch, "Epoch mis-match");
+            return Err(SuiError::WrongEpoch { expected_epoch });
+        }
+    };
 }
 
 impl<Key, ResultT> Waiter<Key, ResultT>
@@ -91,44 +110,67 @@ where
 
 struct DigestsMessage {
     sync_arg: SyncArg,
+    epoch_id: EpochId,
     tx: Option<oneshot::Sender<SyncResult>>,
 }
 
 impl DigestsMessage {
-    fn new_for_ckpt(digests: &ExecutionDigests, tx: oneshot::Sender<SyncResult>) -> Self {
+    fn new_for_ckpt(
+        epoch_id: EpochId,
+        digests: &ExecutionDigests,
+        tx: oneshot::Sender<SyncResult>,
+    ) -> Self {
         Self {
+            epoch_id,
             sync_arg: SyncArg::Checkpoint(*digests),
             tx: Some(tx),
         }
     }
 
-    fn new_for_pending_ckpt(digest: &TransactionDigest, tx: oneshot::Sender<SyncResult>) -> Self {
+    fn new_for_pending_ckpt(
+        epoch_id: EpochId,
+        digest: &TransactionDigest,
+        tx: oneshot::Sender<SyncResult>,
+    ) -> Self {
         Self {
+            epoch_id,
             sync_arg: SyncArg::PendingCheckpoint(*digest),
             tx: Some(tx),
         }
     }
 
-    fn new_for_exec_driver(digest: &TransactionDigest, tx: oneshot::Sender<SyncResult>) -> Self {
+    fn new_for_exec_driver(
+        epoch_id: EpochId,
+        digest: &TransactionDigest,
+        tx: oneshot::Sender<SyncResult>,
+    ) -> Self {
         Self {
+            epoch_id,
             sync_arg: SyncArg::ExecDriver(*digest),
             tx: Some(tx),
         }
     }
 
-    fn new_for_parents(digest: &TransactionDigest, tx: oneshot::Sender<SyncResult>) -> Self {
+    fn new_for_parents(
+        epoch_id: EpochId,
+        digest: &TransactionDigest,
+        tx: oneshot::Sender<SyncResult>,
+    ) -> Self {
         Self {
+            epoch_id,
             sync_arg: SyncArg::Parent(*digest),
             tx: Some(tx),
         }
     }
 
     fn new(
+        epoch_id: EpochId,
         digests: &ExecutionDigests,
         peer: AuthorityName,
         tx: oneshot::Sender<SyncResult>,
     ) -> Self {
         Self {
+            epoch_id,
             sync_arg: SyncArg::Follow(peer, *digests),
             tx: Some(tx),
         }
@@ -205,10 +247,7 @@ impl DownloadRequest {
 /// messages from those handlers, waits for finality of TXes, and then downloads and applies those
 /// TXes locally.
 pub struct NodeSyncState<A> {
-    committee: Arc<Committee>,
-    state: Arc<AuthorityState>,
-    pub(super) node_sync_store: Arc<NodeSyncStore>,
-    aggregator: Arc<AuthorityAggregator<A>>,
+    active_authority: Arc<ActiveAuthority<A>>,
 
     // Used to single-shot multiple concurrent downloads.
     pending_downloads: Arc<Waiter<TransactionDigest, SuiResult>>,
@@ -222,36 +261,27 @@ pub struct NodeSyncState<A> {
     // Channels for enqueuing DigestMessage requests.
     sender: mpsc::Sender<DigestsMessage>,
     receiver: Arc<tokio::sync::Mutex<mpsc::Receiver<DigestsMessage>>>,
-
-    // Gossip Metrics
-    metrics: GossipMetrics,
 }
 
 impl<A> NodeSyncState<A> {
-    pub fn new(
-        state: Arc<AuthorityState>,
-        aggregator: Arc<AuthorityAggregator<A>>,
-        node_sync_store: Arc<NodeSyncStore>,
-        metrics: GossipMetrics,
-    ) -> Self {
+    pub fn new(active_authority: Arc<ActiveAuthority<A>>) -> Self {
         let (sender, receiver) = mpsc::channel(NODE_SYNC_QUEUE_LEN);
-        let committee = state.committee.load().deref().clone();
         Self {
-            committee,
-            state,
-            aggregator,
-            node_sync_store,
+            active_authority,
             pending_downloads: Arc::new(Waiter::new()),
             pending_parents: Waiter::new(),
             pending_txes: Waiter::new(),
             sender,
             receiver: Arc::new(tokio::sync::Mutex::new(receiver)),
-            metrics,
         }
     }
 
     pub fn store(&self) -> Arc<NodeSyncStore> {
-        self.node_sync_store.clone()
+        self.active_authority.node_sync_store.clone()
+    }
+
+    fn state(&self) -> &AuthorityState {
+        &self.active_authority.state
     }
 }
 
@@ -319,7 +349,12 @@ where
         // https://github.com/tokio-rs/tokio/discussions/2648
         let limit = Arc::new(Semaphore::new(MAX_NODE_SYNC_CONCURRENCY));
 
-        while let Some(DigestsMessage { sync_arg, tx }) = receiver.recv().await {
+        while let Some(DigestsMessage {
+            epoch_id,
+            sync_arg,
+            tx,
+        }) = receiver.recv().await
+        {
             let state = self.clone();
             let limit = limit.clone();
 
@@ -330,7 +365,7 @@ where
             tokio::spawn(async move {
                 let res = timeout(
                     MAX_NODE_TASK_LIFETIME,
-                    state.process_digest(sync_arg, permit),
+                    state.process_digest(epoch_id, sync_arg, permit),
                 )
                 .await
                 .map_err(|_| SuiError::TimeoutError);
@@ -346,14 +381,14 @@ where
                     Ok(Ok(res)) => {
                         // Garbage collect data for this tx.
                         if let SyncStatus::CertExecuted = res {
-                            state.cleanup_cert(digest);
+                            state.cleanup_cert(epoch_id, digest);
                         }
                         Ok(res)
                     }
                 };
 
                 // Notify waiters even if tx failed, to avoid leaking resources.
-                trace!(?digest, "notifying parents and waiters");
+                trace!(?epoch_id, ?digest, "notifying parents and waiters");
                 Self::notify(&state.pending_parents, digest, res.clone()).await;
                 Self::notify(&state.pending_txes, digest, res.clone()).await;
 
@@ -366,6 +401,7 @@ where
                         // will be retried.
                         debug!(
                             ?sync_arg,
+                            ?epoch_id,
                             "could not send process_digest response to caller",
                         );
                     }
@@ -374,31 +410,49 @@ where
         }
     }
 
+    fn aggregator(&self) -> Arc<AuthorityAggregator<A>> {
+        self.active_authority.net.load().deref().clone()
+    }
+
     async fn get_true_effects(
         &self,
+        epoch_id: EpochId,
         cert: &CertifiedTransaction,
     ) -> SuiResult<SignedTransactionEffects> {
         let digest = cert.digest();
-        match self.node_sync_store.get_effects(digest)? {
+
+        check_epoch!(epoch_id, cert.epoch());
+
+        match self.store().get_effects(epoch_id, digest)? {
             Some(effects) => Ok(effects),
             None => {
-                let effects = self.aggregator.execute_cert_to_true_effects(cert).await?;
-                self.node_sync_store.store_effects(digest, &effects)?;
+                let aggregator = self.aggregator();
+                let effects = aggregator.execute_cert_to_true_effects(cert).await?;
+                self.store().store_effects(epoch_id, digest, &effects)?;
                 Ok(effects)
             }
         }
     }
 
-    async fn get_cert(&self, digest: &TransactionDigest) -> SuiResult<CertifiedTransaction> {
-        match self.state.database.read_certificate(digest)? {
-            Some(cert) => Ok(cert),
-            None => {
-                let (cert, _) = self
-                    .download_cert_and_effects(None, &DownloadRequest::Validator(*digest))
-                    .await?;
-                Ok(cert)
+    async fn get_cert(
+        &self,
+        epoch_id: EpochId,
+        digest: &TransactionDigest,
+    ) -> SuiResult<CertifiedTransaction> {
+        if let Some(cert) = self.state().database.read_certificate(digest)? {
+            if cert.epoch() == epoch_id {
+                return Ok(cert);
             }
+            warn!(
+                ?digest, ?epoch_id, cert_epoch = ?cert.epoch(),
+                "Found certificate from prior epoch in authority db"
+            );
         }
+
+        let (cert, _) = self
+            .download_cert_and_effects(epoch_id, None, &DownloadRequest::Validator(*digest))
+            .await?;
+        Ok(cert)
     }
 
     fn get_missing_parents(
@@ -407,7 +461,7 @@ where
     ) -> SuiResult<Vec<TransactionDigest>> {
         let mut missing_parents = Vec::new();
         for parent in effects.dependencies.iter() {
-            if !self.state.database.effects_exists(parent)? {
+            if !self.state().database.effects_exists(parent)? {
                 missing_parents.push(*parent);
             }
         }
@@ -417,22 +471,27 @@ where
     async fn process_parent_request(
         &self,
         permit: OwnedSemaphorePermit,
+        epoch_id: EpochId,
         digest: &TransactionDigest,
     ) -> SyncResult {
         trace!(?digest, "parent certificate execution requested");
 
-        let cert = self.get_cert(digest).await?;
-        let effects = self.get_true_effects(&cert).await?;
+        // Note that parents can be from previous epochs. However, when we attempt are trying to
+        // sync parents of certs in epoch N, if the parent is from epoch P < N, the parent must
+        // already be final, so we shouldn't get this far. Since the parent therefore must be from
+        // the same epoch, we can assume the same epoch_id will hold.
+        let cert = self.get_cert(epoch_id, digest).await?;
+        let effects = self.get_true_effects(epoch_id, &cert).await?;
 
         // Must release permit before enqueuing new work to prevent deadlock.
         std::mem::drop(permit);
 
         let missing_parents = self.get_missing_parents(&effects.effects)?;
-        self.enqueue_parent_execution_requests(digest, &missing_parents, false)
+        self.enqueue_parent_execution_requests(epoch_id, digest, &missing_parents, false)
             .await?;
 
         match self
-            .state
+            .state()
             .handle_certificate_with_effects(cert.clone(), effects.clone())
             .await
         {
@@ -443,19 +502,20 @@ where
 
     async fn process_exec_driver_digest(
         &self,
+        epoch_id: EpochId,
         permit: OwnedSemaphorePermit,
         digest: &TransactionDigest,
         bypass_validator_halt: bool,
     ) -> SyncResult {
         trace!(?digest, "validator pending execution requested");
-        let cert = self.get_cert(digest).await?;
+        let cert = self.get_cert(epoch_id, digest).await?;
 
         let result = if bypass_validator_halt {
-            self.state
+            self.state()
                 .handle_certificate_bypass_validator_halt(cert.clone())
                 .await
         } else {
-            self.state.handle_certificate(cert.clone()).await
+            self.state().handle_certificate(cert.clone()).await
         };
         match result {
             Ok(_) => Ok(SyncStatus::CertExecuted),
@@ -464,23 +524,23 @@ where
             | Err(SuiError::SharedObjectLockNotSetError) => {
                 debug!(?digest, "cert execution failed due to missing parents");
 
-                let effects = self.get_true_effects(&cert).await?;
+                let effects = self.get_true_effects(epoch_id, &cert).await?;
 
                 // Must release permit before enqueuing new work to prevent deadlock.
                 std::mem::drop(permit);
 
                 let missing_parents = self.get_missing_parents(&effects.effects)?;
-                self.enqueue_parent_execution_requests(digest, &missing_parents, true)
+                self.enqueue_parent_execution_requests(epoch_id, digest, &missing_parents, true)
                     .await?;
 
                 // Parents have been executed, so this should now succeed.
                 debug!(?digest, "parents executed, re-attempting cert");
                 if bypass_validator_halt {
-                    self.state
+                    self.state()
                         .handle_certificate_bypass_validator_halt(cert.clone())
                         .await
                 } else {
-                    self.state.handle_certificate(cert.clone()).await
+                    self.state().handle_certificate(cert.clone()).await
                 }?;
                 Ok(SyncStatus::CertExecuted)
             }
@@ -488,21 +548,26 @@ where
         }
     }
 
-    pub fn cleanup_cert(&self, digest: &TransactionDigest) {
+    pub fn cleanup_cert(&self, epoch_id: EpochId, digest: &TransactionDigest) {
         debug!(?digest, "cleaning up temporary sync data");
         let _ = self
-            .node_sync_store
-            .cleanup_cert(digest)
+            .store()
+            .cleanup_cert(epoch_id, digest)
             .tap_err(|e| warn!("cleanup_cert failed: {}", e));
     }
 
-    async fn process_digest(&self, arg: SyncArg, permit: OwnedSemaphorePermit) -> SyncResult {
+    async fn process_digest(
+        &self,
+        epoch_id: EpochId,
+        arg: SyncArg,
+        permit: OwnedSemaphorePermit,
+    ) -> SyncResult {
         trace!(?arg, "process_digest");
 
         let digest = arg.transaction_digest();
 
         // check if the tx is already locally final
-        if self.state.database.effects_exists(digest)? {
+        if self.state().database.effects_exists(digest)? {
             return Ok(SyncStatus::CertExecuted);
         }
 
@@ -521,31 +586,38 @@ where
         let (digests, authorities_with_cert) = match arg {
             SyncArg::ExecDriver(digest) => {
                 return self
-                    .process_exec_driver_digest(permit, &digest, false)
+                    .process_exec_driver_digest(epoch_id, permit, &digest, false)
                     .await;
             }
             SyncArg::PendingCheckpoint(digest) => {
-                return self.process_exec_driver_digest(permit, &digest, true).await;
+                return self
+                    .process_exec_driver_digest(epoch_id, permit, &digest, true)
+                    .await;
             }
             SyncArg::Parent(digest) => {
                 // digest is known to be final because it appeared in the dependencies list of a
                 // verified TransactionEffects
-                return self.process_parent_request(permit, &digest).await;
+                return self.process_parent_request(permit, epoch_id, &digest).await;
             }
             SyncArg::Follow(peer, digests) => {
                 // Check if the tx is final.
-                let stake = self.committee.weight(&peer);
-                let quorum_threshold = self.committee.quorum_threshold();
+                let committee = self.state().committee.load();
+                check_epoch!(committee.epoch, epoch_id);
+                let stake = committee.weight(&peer);
+                let quorum_threshold = committee.quorum_threshold();
 
-                self.node_sync_store.record_effects_vote(
+                self.store().record_effects_vote(
+                    epoch_id,
                     peer,
                     digests.transaction,
                     digests.effects,
                     stake,
                 )?;
-                let votes = self
-                    .node_sync_store
-                    .count_effects_votes(digests.transaction, digests.effects)?;
+                let votes = self.store().count_effects_votes(
+                    epoch_id,
+                    digests.transaction,
+                    digests.effects,
+                )?;
 
                 let is_final = votes >= quorum_threshold;
 
@@ -557,10 +629,11 @@ where
 
                 (
                     digests,
-                    Some(
-                        self.node_sync_store
-                            .get_voters(digests.transaction, digests.effects)?,
-                    ),
+                    Some(self.store().get_voters(
+                        epoch_id,
+                        digests.transaction,
+                        digests.effects,
+                    )?),
                 )
             }
             SyncArg::Checkpoint(digests) => {
@@ -586,7 +659,11 @@ where
         // Download the cert and effects - either finality has been establish (above), or
         // we are a validator.
         let (cert, effects) = self
-            .download_cert_and_effects(authorities_with_cert, &DownloadRequest::Node(digests))
+            .download_cert_and_effects(
+                epoch_id,
+                authorities_with_cert,
+                &DownloadRequest::Node(digests),
+            )
             .await?;
 
         let effects = effects
@@ -597,10 +674,10 @@ where
             })
             .tap_err(|e| error!(?digest, "error: {}", e))?;
 
-        self.process_parents(permit, &digests.transaction, &effects)
+        self.process_parents(permit, epoch_id, &digests.transaction, &effects)
             .await?;
 
-        self.state
+        self.state()
             .handle_certificate_with_effects(cert, effects.clone())
             .await?;
 
@@ -610,6 +687,7 @@ where
     async fn process_parents(
         &self,
         permit: OwnedSemaphorePermit,
+        epoch_id: EpochId,
         digest: &TransactionDigest,
         effects: &SignedTransactionEffects,
     ) -> SuiResult {
@@ -641,6 +719,7 @@ where
 
         if let Err(err) = self
             .enqueue_parent_execution_requests(
+                epoch_id,
                 digest,
                 &missing_parents,
                 false, /* not validator */
@@ -658,23 +737,27 @@ where
 
     async fn enqueue_parent_execution_requests(
         &self,
+        epoch_id: EpochId,
         digest: &TransactionDigest,
         parents: &[TransactionDigest],
         is_validator: bool,
     ) -> SuiResult {
         debug!(?parents, "attempting to execute parents");
 
-        let handle = NodeSyncHandle::new_from_sender(self.sender.clone(), self.metrics.clone());
+        let handle = NodeSyncHandle::new_from_sender(
+            self.sender.clone(),
+            self.active_authority.gossip_metrics.clone(),
+        );
         let errors: Vec<_> = if is_validator {
             handle
-                .handle_execution_request(parents.iter().cloned())
+                .handle_execution_request(epoch_id, parents.iter().cloned())
                 .await?
                 .filter_map(|r| r.err())
                 .collect()
                 .await
         } else {
             handle
-                .handle_parents_request(parents.iter().cloned())
+                .handle_parents_request(epoch_id, parents.iter().cloned())
                 .await?
                 .filter_map(|r| r.err())
                 .collect()
@@ -704,7 +787,7 @@ where
         for parent in effects.effects.dependencies.iter() {
             let (_, mut rx) = self.pending_parents.wait(parent);
 
-            if self.state.database.effects_exists(parent)? {
+            if self.state().database.effects_exists(parent)? {
                 continue;
             }
 
@@ -721,7 +804,7 @@ where
 
         if cfg!(debug_assertions) {
             for parent in effects.effects.dependencies.iter() {
-                debug_assert!(self.state.database.effects_exists(parent).unwrap());
+                debug_assert!(self.state().database.effects_exists(parent).unwrap());
             }
         }
 
@@ -733,12 +816,16 @@ where
     // Transactions are not currently persisted anywhere, however (validators delete them eagerly).
     async fn download_cert_and_effects(
         &self,
+        epoch_id: EpochId,
         authorities_with_cert: Option<BTreeSet<AuthorityName>>,
         req: &DownloadRequest,
     ) -> SuiResult<(CertifiedTransaction, Option<SignedTransactionEffects>)> {
         let tx_digest = *req.transaction_digest();
 
-        match (req, self.node_sync_store.get_cert_and_effects(&tx_digest)?) {
+        match (
+            req,
+            self.store().get_cert_and_effects(epoch_id, &tx_digest)?,
+        ) {
             (DownloadRequest::Node(_), (Some(cert), Some(effects))) => {
                 return Ok((cert, Some(effects)))
             }
@@ -750,15 +837,16 @@ where
         let (first, mut rx) = pending_downloads.wait(&tx_digest);
         // Only start the download if there are no other concurrent downloads.
         if first {
-            let aggregator = self.aggregator.clone();
-            let node_sync_store = self.node_sync_store.clone();
+            let aggregator = self.aggregator();
+            let node_sync_store = self.store();
             let req = req.clone();
-            let metrics = self.metrics.clone();
+            let metrics = self.active_authority.gossip_metrics.clone();
             tokio::task::spawn(async move {
                 let _ = pending_downloads
                     .notify(
                         &tx_digest,
                         Self::download_impl(
+                            epoch_id,
                             authorities_with_cert,
                             aggregator,
                             &req,
@@ -777,21 +865,23 @@ where
                 error: format!("{:?}", e),
             })??;
 
-        let cert = self.node_sync_store.get_cert(&tx_digest)?.ok_or_else(|| {
-            SuiError::GenericAuthorityError {
+        let cert = self
+            .store()
+            .get_cert(epoch_id, &tx_digest)?
+            .ok_or_else(|| SuiError::GenericAuthorityError {
                 error: format!(
                     "cert/effects for {:?} should have been in the node_sync_store",
                     tx_digest
                 ),
-            }
-        })?;
+            })?;
 
-        let effects = self.node_sync_store.get_effects(&tx_digest)?;
+        let effects = self.store().get_effects(epoch_id, &tx_digest)?;
 
         Ok((cert, effects))
     }
 
     async fn download_impl(
+        epoch_id: EpochId,
         authorities: Option<BTreeSet<AuthorityName>>,
         aggregator: Arc<AuthorityAggregator<A>>,
         req: &DownloadRequest,
@@ -809,8 +899,8 @@ where
                     )
                     .await?;
                 metrics.total_successful_attempts_cert_downloads.inc();
-                node_sync_store.store_cert(&resp.0)?;
-                node_sync_store.store_effects(req.transaction_digest(), &resp.1)?;
+                node_sync_store.store_cert(epoch_id, &resp.0)?;
+                node_sync_store.store_effects(epoch_id, req.transaction_digest(), &resp.1)?;
             }
             DownloadRequest::Validator(digest) => {
                 let resp = aggregator.handle_cert_info_request(digest, None).await?;
@@ -820,7 +910,7 @@ where
                         ..
                     } => {
                         // can only store cert here, effects are not verified yet.
-                        node_sync_store.store_cert(&cert)?;
+                        node_sync_store.store_cert(epoch_id, &cert)?;
                     }
                     _ => return Err(SuiError::TransactionNotFound { digest: *digest }),
                 }
@@ -880,12 +970,13 @@ impl NodeSyncHandle {
     /// we can fully trust the effect digests in the checkpoint content.
     pub async fn sync_checkpoint_cert_transactions(
         &self,
+        epoch_id: EpochId,
         checkpoint_contents: &CheckpointContents,
     ) -> SuiResult<impl Stream<Item = SyncResult>> {
         let mut futures = FuturesOrdered::new();
         for digests in checkpoint_contents.iter() {
             let (tx, rx) = oneshot::channel();
-            let msg = DigestsMessage::new_for_ckpt(digests, tx);
+            let msg = DigestsMessage::new_for_ckpt(epoch_id, digests, tx);
             Self::send_msg_with_tx(self.sender.clone(), msg).await?;
             futures.push_back(Self::map_rx(rx));
         }
@@ -899,12 +990,13 @@ impl NodeSyncHandle {
     /// TODO: This shall eventually be able to bypass the validator halt.
     pub async fn sync_pending_checkpoint_transactions(
         &self,
+        epoch_id: EpochId,
         transactions: impl Iterator<Item = &ExecutionDigests>,
     ) -> SuiResult<impl Stream<Item = SyncResult>> {
         let mut futures = FuturesOrdered::new();
         for digests in transactions {
             let (tx, rx) = oneshot::channel();
-            let msg = DigestsMessage::new_for_pending_ckpt(&digests.transaction, tx);
+            let msg = DigestsMessage::new_for_pending_ckpt(epoch_id, &digests.transaction, tx);
             Self::send_msg_with_tx(self.sender.clone(), msg).await?;
             futures.push_back(Self::map_rx(rx));
         }
@@ -914,12 +1006,13 @@ impl NodeSyncHandle {
 
     pub async fn handle_execution_request(
         &self,
+        epoch_id: EpochId,
         digests: impl Iterator<Item = TransactionDigest>,
     ) -> SuiResult<impl Stream<Item = SyncResult>> {
         let mut futures = FuturesOrdered::new();
         for digest in digests {
             let (tx, rx) = oneshot::channel();
-            let msg = DigestsMessage::new_for_exec_driver(&digest, tx);
+            let msg = DigestsMessage::new_for_exec_driver(epoch_id, &digest, tx);
             Self::send_msg_with_tx(self.sender.clone(), msg).await?;
             futures.push_back(Self::map_rx(rx));
         }
@@ -929,12 +1022,13 @@ impl NodeSyncHandle {
 
     pub async fn handle_parents_request(
         &self,
+        epoch_id: EpochId,
         digests: impl Iterator<Item = TransactionDigest>,
     ) -> SuiResult<impl Stream<Item = SyncResult>> {
         let mut futures = FuturesOrdered::new();
         for digest in digests {
             let (tx, rx) = oneshot::channel();
-            let msg = DigestsMessage::new_for_parents(&digest, tx);
+            let msg = DigestsMessage::new_for_parents(epoch_id, &digest, tx);
             Self::send_msg_with_tx(self.sender.clone(), msg).await?;
             futures.push_back(Self::map_rx(rx));
         }
@@ -944,12 +1038,13 @@ impl NodeSyncHandle {
 
     pub async fn handle_sync_digest(
         &self,
+        epoch_id: EpochId,
         peer: AuthorityName,
         digests: ExecutionDigests,
     ) -> SuiResult<BoxFuture<'static, SyncResult>> {
         let (tx, rx) = oneshot::channel();
         let sender = self.sender.clone();
-        Self::send_msg_with_tx(sender, DigestsMessage::new(&digests, peer, tx)).await?;
+        Self::send_msg_with_tx(sender, DigestsMessage::new(epoch_id, &digests, peer, tx)).await?;
         Ok(Self::map_rx(rx))
     }
 }

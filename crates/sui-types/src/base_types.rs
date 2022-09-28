@@ -25,7 +25,7 @@ use serde_with::Bytes;
 use sha2::Sha512;
 use sha3::Sha3_256;
 
-use crate::committee::EpochId;
+pub use crate::committee::EpochId;
 use crate::crypto::{
     AuthorityPublicKey, AuthorityPublicKeyBytes, KeypairTraits, PublicKey, SuiPublicKey,
 };

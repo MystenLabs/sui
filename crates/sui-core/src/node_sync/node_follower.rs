@@ -7,7 +7,7 @@ use crate::{
 };
 use sui_storage::node_sync_store::NodeSyncStore;
 use sui_types::{
-    base_types::{AuthorityName, ExecutionDigests},
+    base_types::{AuthorityName, EpochId, ExecutionDigests},
     batch::{TxSequenceNumber, UpdateItem},
     error::{SuiError, SuiResult},
     messages::{BatchInfoRequest, BatchInfoResponseItem},
@@ -20,7 +20,7 @@ use std::sync::Arc;
 use tokio::sync::oneshot;
 use tokio::time::{sleep, timeout, Duration, Instant};
 
-use super::{NodeSyncHandle, NodeSyncState, SyncResult};
+use super::{NodeSyncHandle, SyncResult};
 
 use tap::TapFallible;
 use tracing::{debug, info, trace, warn};
@@ -33,7 +33,8 @@ const DRAIN_RESULTS_TIMEOUT: Duration = Duration::from_secs(1);
 
 pub async fn node_sync_process<A>(
     node_sync_handle: NodeSyncHandle,
-    node_sync_state: Arc<NodeSyncState<A>>,
+    node_sync_store: Arc<NodeSyncStore>,
+    epoch_id: EpochId,
     aggregator: Arc<AuthorityAggregator<A>>,
     cancel_receiver: oneshot::Receiver<()>,
 ) where
@@ -41,7 +42,8 @@ pub async fn node_sync_process<A>(
 {
     follower_process(
         node_sync_handle.clone(),
-        node_sync_state.node_sync_store.clone(),
+        node_sync_store,
+        epoch_id,
         aggregator,
         NUM_ITEMS_PER_REQUEST,
         &node_sync_handle.metrics,
@@ -53,6 +55,7 @@ pub async fn node_sync_process<A>(
 async fn follower_process<A, Handler>(
     node_sync_handle: Handler,
     node_sync_store: Arc<NodeSyncStore>,
+    epoch_id: EpochId,
     aggregator: Arc<AuthorityAggregator<A>>,
     max_stream_items: u64,
     metrics: &GossipMetrics,
@@ -73,10 +76,17 @@ async fn follower_process<A, Handler>(
             let start_time = Instant::now();
             let client = aggregator.clone_client(name);
             async move {
-                let result =
-                    follow_one_peer(handle, store, *name, client, max_stream_items, metrics)
-                        .await
-                        .tap_err(|e| warn!("follower task exited with error {}", e));
+                let result = follow_one_peer(
+                    handle,
+                    store,
+                    epoch_id,
+                    *name,
+                    client,
+                    max_stream_items,
+                    metrics,
+                )
+                .await
+                .tap_err(|e| warn!("follower task exited with error {}", e));
                 (result, start_time, name)
             }
         };
@@ -142,6 +152,7 @@ async fn follower_process<A, Handler>(
 trait SyncHandler {
     async fn handle_digest(
         &self,
+        epoch_id: EpochId,
         peer: AuthorityName,
         seq: TxSequenceNumber,
         digests: ExecutionDigests,
@@ -152,11 +163,12 @@ trait SyncHandler {
 impl SyncHandler for NodeSyncHandle {
     async fn handle_digest(
         &self,
+        epoch_id: EpochId,
         peer: AuthorityName,
         _seq: TxSequenceNumber,
         digests: ExecutionDigests,
     ) -> SuiResult<BoxFuture<'static, SyncResult>> {
-        self.handle_sync_digest(peer, digests).await
+        self.handle_sync_digest(epoch_id, peer, digests).await
     }
 }
 
@@ -169,6 +181,7 @@ struct FollowResult {
 async fn follow_one_peer<A, Handler>(
     sync_handle: Handler,
     node_sync_store: Arc<NodeSyncStore>,
+    epoch_id: EpochId,
     peer: AuthorityName,
     client: SafeClient<A>,
     max_stream_items: u64,
@@ -195,21 +208,23 @@ where
         ($seq: expr, $digests: expr) => {{
             let seq = $seq;
             let digests = $digests;
-            let fut = sync_handle.handle_digest(peer, seq, digests).await?;
+            let fut = sync_handle
+                .handle_digest(epoch_id, peer, seq, digests)
+                .await?;
             results.push(result_block(fut, seq, digests));
         }};
     }
 
     let remove_from_seq_store = |seq| {
         trace!(?peer, ?seq, "removing completed batch stream item");
-        node_sync_store.remove_batch_stream_item(peer, seq)
+        node_sync_store.remove_batch_stream_item(epoch_id, peer, seq)
     };
 
     let mut follow_result = FollowResult::default();
 
     // Process everything currently in the db.
     let mut first = true;
-    for (seq, digests) in node_sync_store.batch_stream_iter(&peer)? {
+    for (seq, digests) in node_sync_store.batch_stream_iter(epoch_id, &peer)? {
         if first {
             first = false;
             debug!(
@@ -224,7 +239,7 @@ where
 
     // Find the sequence to start streaming at.
     let start_seq = node_sync_store
-        .latest_seq_for_peer(&peer)?
+        .latest_seq_for_peer(epoch_id, &peer)?
         .map(|seq| seq + 1)
         .unwrap_or(0);
 
@@ -264,7 +279,7 @@ where
                     Some(Ok(BatchInfoResponseItem(UpdateItem::Transaction((seq, digests))))) => {
                         trace!(?peer, ?digests, ?seq, "received tx from peer");
                         metrics.total_tx_received.inc();
-                        node_sync_store.enqueue_execution_digests(peer, seq, &digests)?;
+                        node_sync_store.enqueue_execution_digests(epoch_id, peer, seq, &digests)?;
                         process_digest!(seq, digests);
 
                         follow_result.items_from_stream += 1;
@@ -367,11 +382,12 @@ mod test {
     impl SyncHandler for TestNodeSyncHandler {
         async fn handle_digest(
             &self,
+            epoch_id: EpochId,
             peer: AuthorityName,
             seq: TxSequenceNumber,
             digests: ExecutionDigests,
         ) -> SuiResult<BoxFuture<'static, SyncResult>> {
-            debug!(?peer, ?digests, "handle_digest");
+            debug!(?peer, ?digests, ?epoch_id, "handle_digest");
             if let Some(after) = *self.break_after.lock().unwrap() {
                 if seq > after {
                     // reset so that the handler can make progress after follower is restarted.
@@ -451,6 +467,7 @@ mod test {
             follow_one_peer(
                 test_handler.clone().break_after(1),
                 sync_store.clone(),
+                0,
                 peer,
                 net.clone_client(&peer),
                 3,
@@ -464,6 +481,7 @@ mod test {
             let result = follow_one_peer(
                 test_handler.clone(),
                 sync_store.clone(),
+                0,
                 peer,
                 net.clone_client(&peer),
                 3,
@@ -499,6 +517,7 @@ mod test {
                     follower_process(
                         test_handler_clone.break_after(2),
                         sync_store,
+                        0,
                         net_clone,
                         5,
                         &metrics,
