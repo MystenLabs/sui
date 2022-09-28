@@ -1,12 +1,12 @@
 ---
-"@mysten/sui.js": patch
-"@mysten/bcs": patch
-"@mysten/wallet-adapter-all-wallets": patch
-"@mysten/wallet-adapter-base": patch
-"@mysten/wallet-adapter-mock-wallet": patch
-"@mysten/wallet-adapter-sui-wallet": patch
-"@mysten/wallet-adapter-react": patch
-"@mysten/wallet-adapter-react-ui": patch
+"@mysten/sui.js": minor
+"@mysten/bcs": minor
+"@mysten/wallet-adapter-all-wallets": minor
+"@mysten/wallet-adapter-base": minor
+"@mysten/wallet-adapter-mock-wallet": minor
+"@mysten/wallet-adapter-sui-wallet": minor
+"@mysten/wallet-adapter-react": minor
+"@mysten/wallet-adapter-react-ui": minor
 ---
 
 Re-release packages

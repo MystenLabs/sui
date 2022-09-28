@@ -1,6 +1,6 @@
 # @mysten/sui.js
 
-## 0.9.0
+## 0.11.0-pre
 
 ### Minor Changes
 
