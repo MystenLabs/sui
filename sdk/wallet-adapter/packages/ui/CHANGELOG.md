@@ -1,5 +1,16 @@
 # @mysten/wallet-adapter-react-ui
 
+## 0.1.0
+
+### Minor Changes
+
+- d343b67e: Re-release packages
+
+### Patch Changes
+
+- Updated dependencies [d343b67e]
+  - @mysten/wallet-adapter-react@2.0.0
+
 ## 0.0.1
 
 ### Patch Changes
