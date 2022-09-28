@@ -43,7 +43,7 @@ typed-store.workspace = true
 typed-store-derive.workspace = true
 
 tempfile = "3.3.0"
-narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "9688da76ae2aaf2b82e00a43efe4d66c5b7b07eb" }
+narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "ee65154749d2a14c096fe0b0999b84ce7f2a7c97" }
 
 move-core-types.workspace = true
 move-prover.workspace = true
