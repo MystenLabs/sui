@@ -3,16 +3,17 @@
 
 /*
 Transaction Orchestrator is a Node component that utilizes Quorum Driver to
-move transactions forward in validators and proactively executes finalized
-transactions locally by leveraging the NodeSyncState.
+submit transactions to validators for finality, and proactively executes
+finalized transactions locally, with the help of Node Sync.
 */
-
 use std::sync::Arc;
 use std::time::Duration;
+use tokio_stream::StreamExt;
 
+use crate::authority::AuthorityState;
 use crate::authority_aggregator::AuthorityAggregator;
 use crate::authority_client::AuthorityAPI;
-use crate::node_sync::NodeSyncState;
+use crate::node_sync::{NodeSyncHandle, SyncStatus};
 use crate::quorum_driver::{QuorumDriver, QuorumDriverHandler, QuorumDriverMetrics};
 use prometheus::Registry;
 use sui_types::error::{SuiError, SuiResult};
@@ -35,7 +36,8 @@ const LOCAL_EXECUTION_TIMEOUT: Duration = Duration::from_secs(5);
 pub struct TransactiondOrchestrator<A> {
     quorum_driver_handler: QuorumDriverHandler<A>,
     quorum_driver: Arc<QuorumDriver<A>>,
-    node_sync_state: Arc<NodeSyncState<A>>,
+    node_sync_handle: NodeSyncHandle,
+    validator_state: Arc<AuthorityState>,
     _local_executor_handle: JoinHandle<()>,
 }
 
@@ -45,23 +47,31 @@ where
 {
     pub fn new(
         validators: Arc<AuthorityAggregator<A>>,
-        node_sync_state: Arc<NodeSyncState<A>>,
+        validator_state: Arc<AuthorityState>,
+        node_sync_handle: NodeSyncHandle,
         prometheus_registry: &Registry,
     ) -> Self {
         let quorum_driver_handler =
             QuorumDriverHandler::new(validators, QuorumDriverMetrics::new(prometheus_registry));
         let quorum_driver = quorum_driver_handler.clone_quorum_driver();
         let effects_receiver = quorum_driver_handler.subscribe();
-        let state_clone = node_sync_state.clone();
+        let state_clone = validator_state.clone();
+        let handle_clone = node_sync_handle.clone();
         let _local_executor_handle = {
             tokio::task::spawn(async move {
-                Self::loop_execute_finalized_tx_locally(state_clone, effects_receiver).await;
+                Self::loop_execute_finalized_tx_locally(
+                    state_clone,
+                    handle_clone,
+                    effects_receiver,
+                )
+                .await;
             })
         };
         Self {
             quorum_driver_handler,
             quorum_driver,
-            node_sync_state,
+            validator_state,
+            node_sync_handle,
             _local_executor_handle,
         }
     }
@@ -114,7 +124,8 @@ where
                     ))));
                 }
                 match Self::execute_finalized_tx_locally_with_timeout(
-                    &self.node_sync_state,
+                    &self.validator_state,
+                    &self.node_sync_handle,
                     &tx_cert,
                     &effects_cert,
                 )
@@ -136,7 +147,8 @@ where
     }
 
     async fn execute_finalized_tx_locally_with_timeout(
-        node_sync_state: &Arc<NodeSyncState<A>>,
+        validator_state: &Arc<AuthorityState>,
+        node_sync_handle: &NodeSyncHandle,
         tx_cert: &CertifiedTransaction,
         effects_cert: &CertifiedTransactionEffects,
     ) -> SuiResult {
@@ -150,12 +162,12 @@ where
         //      (for one extra time)
         // 3. at the end of day, the tx will be executed at most once per lock guard.
         let tx_digest = tx_cert.digest();
-        if node_sync_state.is_tx_finalized_and_executed_locally(tx_digest)? {
+        if validator_state.is_tx_already_executed(tx_digest)? {
             return Ok(());
         }
         match timeout(
             LOCAL_EXECUTION_TIMEOUT,
-            node_sync_state.execute_finalized_transaction_for_orchestrator(tx_cert, effects_cert),
+            Self::execute_impl(validator_state, node_sync_handle, tx_cert, effects_cert),
         )
         .await
         {
@@ -181,14 +193,16 @@ where
     }
 
     async fn loop_execute_finalized_tx_locally(
-        node_sync_state: Arc<NodeSyncState<A>>,
+        validator_state: Arc<AuthorityState>,
+        node_sync_handle: NodeSyncHandle,
         mut effects_receiver: Receiver<(CertifiedTransaction, CertifiedTransactionEffects)>,
     ) {
         loop {
             match effects_receiver.recv().await {
                 Ok((tx_cert, effects_cert)) => {
                     let _ = Self::execute_finalized_tx_locally_with_timeout(
-                        &node_sync_state,
+                        &validator_state,
+                        &node_sync_handle,
                         &tx_cert,
                         &effects_cert,
                     )
@@ -213,5 +227,57 @@ where
         &self,
     ) -> tokio::sync::broadcast::Receiver<(CertifiedTransaction, CertifiedTransactionEffects)> {
         self.quorum_driver_handler.subscribe()
+    }
+
+    /// Execute a finalized transaction locally.
+    /// Firstly it tries to execute it optimistically. If there are missing
+    /// dependencies, it then leverages Node Sync to process the parents.
+    async fn execute_impl(
+        state: &Arc<AuthorityState>,
+        node_sync_handle: &NodeSyncHandle,
+        tx_cert: &CertifiedTransaction,
+        effects_cert: &CertifiedTransactionEffects,
+    ) -> SuiResult {
+        let tx_digest = tx_cert.digest();
+        let res = state
+            .handle_certificate_with_effects(tx_cert, effects_cert)
+            .await;
+        match res {
+            Ok(_) => {
+                debug!(
+                    ?tx_digest,
+                    "Orchestrator optimistically executed transaction successfully."
+                );
+                Ok(())
+            }
+            Err(SuiError::ObjectNotFound { .. }) | Err(SuiError::ObjectErrors { .. }) => {
+                debug!(?tx_digest, "Orchestrator failed to executue transaction optimistically due to missing parents");
+
+                match node_sync_handle
+                    .handle_parents_request(std::iter::once(*tx_digest))
+                    .await?
+                    .next()
+                    .await
+                    // Safe to unwrap because `handle_execution_request` wraps futures one by one
+                    .unwrap()?
+                {
+                    SyncStatus::CertExecuted => {
+                        debug!(
+                            ?tx_digest,
+                            "Orchestrator executed transaction via Node Sync."
+                        );
+                    }
+                    SyncStatus::NotFinal => {
+                        // This shall not happen
+                        error!(
+                            ?tx_digest,
+                            "Orchestrator failed to execute finalized transaction via Node Sync"
+                        );
+                    }
+                };
+                Ok(())
+            }
+            Err(e) => Err(e),
+        }
     }
 }

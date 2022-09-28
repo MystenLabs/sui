@@ -2421,7 +2421,8 @@ async fn test_consensus_message_processed() {
         let effects2 = if send_first && rng.gen_bool(0.5) {
             handle_cert(&authority2, &certificate).await
         } else {
-            authority2.handle_certificate_with_effects(certificate.clone(), effects1.clone())
+            authority2
+                .handle_certificate_with_effects(&certificate, &effects1)
                 .await
                 .unwrap();
             authority2

@@ -31,8 +31,9 @@ async fn test_blocking_execution() -> Result<(), anyhow::Error> {
     active.cancel_node_sync_process_for_tests().await;
 
     let net = active.agg_aggregator();
-    let node_sync_state = active.node_sync_state.clone();
-    let orchestrator = TransactiondOrchestrator::new(net, node_sync_state, &Registry::new());
+    let node_sync_handle = active.node_sync_handle();
+    let orchestrator =
+        TransactiondOrchestrator::new(net, node.state(), node_sync_handle, &Registry::new());
 
     let txn_count = 4;
     let mut txns = make_transactions_with_wallet_context(&mut context, txn_count).await;
@@ -90,8 +91,9 @@ async fn test_non_blocking_execution() -> Result<(), anyhow::Error> {
     active.cancel_node_sync_process_for_tests().await;
 
     let net = active.agg_aggregator();
-    let node_sync_state = active.node_sync_state.clone();
-    let orchestrator = TransactiondOrchestrator::new(net, node_sync_state, &Registry::new());
+    let node_sync_handle = active.node_sync_handle();
+    let orchestrator =
+        TransactiondOrchestrator::new(net, node.state(), node_sync_handle, &Registry::new());
 
     let txn_count = 4;
     let mut txns = make_transactions_with_wallet_context(&mut context, txn_count).await;
@@ -149,74 +151,81 @@ async fn test_local_execution_with_missing_parents() -> Result<(), anyhow::Error
     active.cancel_node_sync_process_for_tests().await;
 
     let net = active.agg_aggregator();
-    let node_sync_state = active.node_sync_state.clone();
-    let orchestrator = TransactiondOrchestrator::new(net, node_sync_state, &Registry::new());
+    let node_sync_handle = active.node_sync_handle();
+    let orchestrator =
+        TransactiondOrchestrator::new(net, node.state(), node_sync_handle, &Registry::new());
 
     let signer = context.keystore.addresses().get(0).cloned().unwrap();
     let (pkg_ref, counter_id) = publish_basics_package_and_make_counter(&context, signer).await;
 
-    // Construct a dependency graph:
-    // tx0.1 -> ... -> tx0.19 -------> tx1 -> tx2 ----> tx3.0 -> ... tx3.19 -> tx3
-
+    // 0. Execute with Quorum Driver
     let digests0 = increment(&context, &signer, counter_id, 20, pkg_ref).await;
+    // The node does not know about these txns
+    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+    node_does_not_know_txes(&node, &digests0).await;
+
+    let tx0 =
+        make_counter_increment_transaction_with_wallet_context(&context, signer, counter_id, None)
+            .await;
+    let digest0 = *tx0.digest();
+    orchestrator
+        .quorum_driver()
+        .execute_transaction(QuorumDriverRequest {
+            transaction: tx0,
+            request_type: QuorumDriverRequestType::WaitForTxCert,
+        })
+        .await
+        .unwrap_or_else(|e| panic!("Failed to execute transaction {:?}: {:?}", digest0, e));
+
+    // Even though tx0 is not executed from the Orchestrator,
+    // it subscribes to the Quorum Driver's effects queue,
+    // receives the finalized transactions and executes them.
+    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+    node_knows_txes(&node, &digests0).await;
+    node_knows_txes(&node, &vec![digest0]).await;
+
+    // 1. Execute with Orchestrator, WaitForLocalExecution
+    // WaitForLocalExecution synchronuously executes all previous txns
+    let digests1 = increment(&context, &signer, counter_id, 20, pkg_ref).await;
 
     let tx1 =
         make_counter_increment_transaction_with_wallet_context(&context, signer, counter_id, None)
             .await;
     let digest1 = *tx1.digest();
-    orchestrator
-        .quorum_driver()
-        .execute_transaction(QuorumDriverRequest {
-            transaction: tx1,
-            request_type: QuorumDriverRequestType::WaitForTxCert,
-        })
-        .await
-        .unwrap_or_else(|e| panic!("Failed to execute transaction {:?}: {:?}", digest1, e));
-
-    // The node does not know about these txns
-    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
-    node_does_not_know_txes(&node, &digests0).await;
-
-    // WaitForLocalExecution synchronuously executes all previous txns
-    let tx2 =
-        make_counter_increment_transaction_with_wallet_context(&context, signer, counter_id, None)
-            .await;
-    let digest2 = *tx2.digest();
     let res = execute_with_orchestrator(
         &orchestrator,
-        tx2,
+        tx1,
         ExecuteTransactionRequestType::WaitForLocalExecution,
     )
     .await;
-
     if let ExecuteTransactionResponse::EffectsCert(result) = res {
         let (_, _, executed_locally) = *result;
         assert!(executed_locally);
     };
-    // Now the node knows about all past txns
-    node_knows_txes(&node, &digests0).await;
-    node_knows_txes(&node, &vec![digest2]).await;
+    node_knows_txes(&node, &digests1).await;
+    node_knows_txes(&node, &vec![digest1]).await;
 
-    // Do another round of counter incrementing
-    let digests3 = increment(&context, &signer, counter_id, 20, pkg_ref).await;
+    // 2. Execute with Orchestrator, ImmediateReturn
+    // ImmediateReturn does not wait for execution results.
+    // But the execution asynchronuously triggers all dependencies to
+    // be executed as well.
+    let digests2 = increment(&context, &signer, counter_id, 20, pkg_ref).await;
+    node_does_not_know_txes(&node, &digests2).await;
 
-    node_does_not_know_txes(&node, &digests3).await;
-
-    let tx4 =
+    let tx2 =
         make_counter_increment_transaction_with_wallet_context(&context, signer, counter_id, None)
             .await;
-    let digest4 = *tx4.digest();
-    // ImmediateReturn asynchronuously executes all previous txns
+    let digest2 = *tx2.digest();
     execute_with_orchestrator(
         &orchestrator,
-        tx4,
+        tx2,
         ExecuteTransactionRequestType::ImmediateReturn,
     )
     .await;
 
     // Wait for the async execution to finish
-    wait_for_tx(digest4, node.state().clone()).await;
-    node_knows_txes(&node, &digests3).await;
+    wait_for_tx(digest2, node.state().clone()).await;
+    node_knows_txes(&node, &digests2).await;
 
     Ok(())
 }

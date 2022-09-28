@@ -140,8 +140,9 @@ pub enum SyncArg {
     /// In follow mode, wait for 2f+1 votes for a tx before executing
     Follow(AuthorityName, ExecutionDigests),
 
-    /// Sync a cert which is appears as a parent in the verified effects of some other cert,
-    /// and is thus known to be final.
+    /// Sync a cert that is finalized, including its parents. It may
+    /// appear as a parent in the verified effects of some other cert,
+    /// or come from the Transaction Orchestrator.
     Parent(TransactionDigest),
 
     /// In checkpoint mode, all txes are known to be final.
@@ -433,7 +434,7 @@ where
 
         match self
             .state
-            .handle_certificate_with_effects(cert.clone(), effects.clone())
+            .handle_certificate_with_effects(&cert, &effects)
             .await
         {
             Ok(_) => Ok(SyncStatus::CertExecuted),
@@ -528,8 +529,9 @@ where
                 return self.process_exec_driver_digest(permit, &digest, true).await;
             }
             SyncArg::Parent(digest) => {
-                // digest is known to be final because it appeared in the dependencies list of a
-                // verified TransactionEffects
+                // digest is known to be final because it either appeared in
+                // the dependencies list of a verified TransactionEffects, or
+                // is passed from TransactionOrchestrator
                 return self.process_parent_request(permit, &digest).await;
             }
             SyncArg::Follow(peer, digests) => {
@@ -601,7 +603,7 @@ where
             .await?;
 
         self.state
-            .handle_certificate_with_effects(cert, effects.clone())
+            .handle_certificate_with_effects(&cert, &effects)
             .await?;
 
         Ok(SyncStatus::CertExecuted)
