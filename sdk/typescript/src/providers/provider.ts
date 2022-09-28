@@ -150,7 +150,10 @@ export abstract class Provider {
    * @param digest transaction digest to search by
    * @param count max result count
    */
-  abstract getEventsByTransaction(digest: TransactionDigest, count: number): Promise<SuiEvents>;
+  abstract getEventsByTransaction(
+    digest: TransactionDigest,
+    count: number
+  ): Promise<SuiEvents>;
 
   /**
    * Get events emitted from within the specified Move module
@@ -161,7 +164,7 @@ export abstract class Provider {
    * @param endTime end of time range, exclusive
    */
   abstract getEventsByModule(
-    packageId: ObjectId, 
+    packageId: ObjectId,
     module: string,
     count: number,
     startTime: number,

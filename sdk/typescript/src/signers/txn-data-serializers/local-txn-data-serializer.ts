@@ -22,6 +22,7 @@ import {
   TransferSuiTransaction,
   PublishTransaction,
   TxnDataSerializer,
+  PayTransaction,
 } from './txn-data-serializer';
 import { Provider } from '../../providers/provider';
 import { CallArgSerializer } from './call-arg-serializer';
@@ -85,6 +86,31 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
         `Error constructing a TransferSui transaction: ${err} args ${JSON.stringify(
           t
         )}`
+      );
+    }
+  }
+
+  async newPay(
+    signerAddress: SuiAddress,
+    t: PayTransaction
+  ): Promise<Base64DataBuffer> {
+    try {
+      const tx = {
+        Pay: {
+          input_coins: t.inputCoins,
+          recipients: t.recipients,
+          amounts: t.amounts,
+        },
+      };
+      return await this.constructTransactionData(
+        tx,
+        t.gasPayment!,
+        t.gasBudget,
+        signerAddress
+      );
+    } catch (err) {
+      throw new Error(
+        `Error constructing a Pay transaction: ${err} args ${JSON.stringify(t)}`
       );
     }
   }

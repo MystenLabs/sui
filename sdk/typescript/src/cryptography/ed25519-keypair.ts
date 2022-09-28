@@ -34,7 +34,7 @@ export class Ed25519Keypair implements Keypair {
       this.keypair = nacl.sign.keyPair();
     }
   }
-  
+
   /**
    * Get the key scheme of the keypair ED25519
    */

@@ -138,10 +138,9 @@ export class JsonRpcClient {
 
     if (responses.length > validResponses.length) {
       console.warn(
-        `Batch request contains invalid responses. ${responses.length -
-          validResponses.length} of the ${
-          responses.length
-        } requests has invalid schema.`
+        `Batch request contains invalid responses. ${
+          responses.length - validResponses.length
+        } of the ${responses.length} requests has invalid schema.`
       );
       const exampleTypeMismatch = responses.find((r: any) => !isT(r.result));
       const exampleInvalidResponseIndex = responses.findIndex(
@@ -174,7 +173,7 @@ export class JsonRpcClient {
       // Do nothing if requests is empty
       if (requests.length === 0) resolve([]);
 
-      const batch = requests.map(params => {
+      const batch = requests.map((params) => {
         return this.rpcClient.request(params.method, params.args);
       });
 
