@@ -1,6 +1,6 @@
 {
   "name": "@mysten/wallet-adapter-sui-wallet",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "description": "Integration of Sui Wallet into the Sui Wallet Adapter",
   "license": "Apache-2.0",
   "author": "Mysten Labs <build@mystenlabs.com>",
