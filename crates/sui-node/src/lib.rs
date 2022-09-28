@@ -189,7 +189,9 @@ impl SuiNode {
         let transaction_orchestrator = if is_full_node {
             Some(Arc::new(TransactiondOrchestrator::new(
                 arc_net,
-                active_authority.node_sync_state.clone(),
+                state.clone(),
+                active_authority.node_sync_handle(),
+                // active_authority.node_sync_state.clone(),
                 &prometheus_registry,
             )))
         } else {

@@ -401,7 +401,7 @@ impl ValidatorService {
         // 2) Check idempotency
         let tx_digest = certificate.digest();
         if let Some(response) = state
-            .check_tx_already_executed(tx_digest)
+            .get_tx_info_already_executed(tx_digest)
             .await
             .map_err(|e| tonic::Status::internal(e.to_string()))?
         {
