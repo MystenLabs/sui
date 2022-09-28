@@ -205,11 +205,12 @@ module sui::validator {
         self: &mut Validator, 
         delegation: &mut Delegation, 
         staked_sui: &mut StakedSui,
-        withdraw_amount: u64,
+        withdraw_pool_token_amount: u64,
         ctx: &mut TxContext,
     ) {
-        staking_pool::withdraw_stake(&mut self.delegation_staking_pool, delegation, staked_sui, withdraw_amount, ctx);
-        decrease_next_epoch_delegation(self, withdraw_amount);
+        let withdraw_sui_amount = staking_pool::withdraw_stake(
+                &mut self.delegation_staking_pool, delegation, staked_sui, withdraw_pool_token_amount, ctx);
+        decrease_next_epoch_delegation(self, withdraw_sui_amount);
     }
 
     public(friend) fun decrease_next_epoch_delegation(self: &mut Validator, amount: u64) {

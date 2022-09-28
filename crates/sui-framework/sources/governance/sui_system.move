@@ -234,14 +234,14 @@ module sui::sui_system {
         self: &mut SuiSystemState,
         delegation: &mut Delegation,
         staked_sui: &mut StakedSui,
-        withdraw_amount: u64,
+        withdraw_pool_token_amount: u64,
         ctx: &mut TxContext,
     ) {
         validator_set::request_withdraw_delegation(
             &mut self.validators,
             delegation,
             staked_sui,
-            withdraw_amount,
+            withdraw_pool_token_amount,
             ctx,
         );
     }
