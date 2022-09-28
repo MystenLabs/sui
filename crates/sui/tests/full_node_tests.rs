@@ -82,6 +82,15 @@ async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
 }
 
 #[sui_test]
+async fn test_do_nothing() -> Result<(), anyhow::Error> {
+    let (_swarm, _, _) = setup_network_and_wallet().await?;
+    tracing::error!("BEGIN SLEEP >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>");
+    sleep(Duration::from_secs(10)).await;
+    tracing::error!("END SLEEP >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>");
+    Ok(())
+}
+
+#[sui_test]
 async fn test_full_node_shared_objects() -> Result<(), anyhow::Error> {
     let (swarm, context, _) = setup_network_and_wallet().await?;
 
