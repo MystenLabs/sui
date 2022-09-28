@@ -20,10 +20,6 @@
   "docs": {
     "learn": [
       {
-        "fileName": "learn/sui-doc-updates",
-        "title": "Sui doc updates"
-      },
-      {
         "label": "About Sui",
         "fileName": "learn/about-sui",
         "title": "About Sui",
@@ -270,6 +266,12 @@
         "label": "About Mysten Labs",
         "link": "https://mystenlabs.com/",
         "external": true
+      }
+    ],
+      "Doc updates":[
+      {
+      "fileName": "learn/sui-doc-updates",
+      "title": "Sui doc updates"
       }
     ]
   }
