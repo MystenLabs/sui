@@ -25,8 +25,8 @@ move-binary-format.workspace = true
 move-package.workspace = true
 move-core-types.workspace = true
 move-vm-runtime.workspace = true
-narwhal-config = { git = "https://github.com/MystenLabs/narwhal", rev = "9688da76ae2aaf2b82e00a43efe4d66c5b7b07eb" }
-narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "9688da76ae2aaf2b82e00a43efe4d66c5b7b07eb" }
+narwhal-config = { git = "https://github.com/MystenLabs/narwhal", rev = "ee65154749d2a14c096fe0b0999b84ce7f2a7c97" }
+narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "ee65154749d2a14c096fe0b0999b84ce7f2a7c97" }
 
 sui-framework = { path = "../sui-framework" }
 sui-adapter = { path = "../sui-adapter" }
