@@ -3,9 +3,6 @@
 
 use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
-use std::fs;
-use std::str::FromStr;
 use std::sync::Arc;
 use strum_macros::Display;
 use strum_macros::EnumString;
@@ -18,7 +15,6 @@ use sui_types::base_types::TransactionDigest;
 use sui_types::crypto::get_key_pair;
 use sui_types::crypto::AccountKeyPair;
 use sui_types::crypto::Signature as SuiSignature;
-use sui_types::crypto::ToFromBytes;
 use sui_types::error::SuiResult;
 use sui_types::gas::start_gas_metering;
 use sui_types::gas::GasCostSummary;
@@ -46,50 +42,14 @@ pub enum CommonTransactionCosts {
     SharedCounterIncrement,
 }
 
-pub fn estimate_computational_costs_for_transaction(
-    tx_kind: TransactionKind,
-) -> Result<GasCostSummary, anyhow::Error> {
-    let cost_map = read_estimate_file()?;
-    let unsupported_tx_kind = Err(anyhow!("Transaction kind not supported for estimator yet"));
-    match tx_kind {
-        TransactionKind::Single(s) => match s {
-            SingleTransactionKind::TransferSui(t) => Ok(if t.amount.is_none() {
-                cost_map.get(&CommonTransactionCosts::TransferWholeSuiCoin)
-            } else {
-                cost_map.get(&CommonTransactionCosts::TransferPortionSuiCoin)
-            }
-            .unwrap()
-            .clone()),
-            SingleTransactionKind::TransferObject(_) => unsupported_tx_kind,
-            SingleTransactionKind::Pay(_) => unsupported_tx_kind,
-            SingleTransactionKind::Publish(_) => unsupported_tx_kind,
-            SingleTransactionKind::Call(_) => unsupported_tx_kind,
-            SingleTransactionKind::ChangeEpoch(_) => unsupported_tx_kind,
-        },
-        TransactionKind::Batch(_) => Err(anyhow!("Batch TXes not supported for estimator")),
+impl CommonTransactionCosts {
+    pub fn is_shared_object_tx(&self) -> bool {
+        matches!(
+            self,
+            CommonTransactionCosts::SharedCounterAssertValue
+                | CommonTransactionCosts::SharedCounterIncrement
+        )
     }
-}
-
-pub fn read_estimate_file(
-) -> Result<BTreeMap<CommonTransactionCosts, GasCostSummary>, anyhow::Error> {
-    let json_str = fs::read_to_string(ESTIMATE_FILE).unwrap();
-
-    // Remove the metadata: first 4 lines form snapshot tests
-    let json_str = json_str
-        .split('\n')
-        .skip(4)
-        .map(|q| q.to_string())
-        .collect::<Vec<String>>()
-        .join("\n");
-
-    let cost_map: BTreeMap<String, GasCostSummary> = serde_json::from_str(&json_str).unwrap();
-
-    let cost_map: BTreeMap<CommonTransactionCosts, GasCostSummary> = cost_map
-        .iter()
-        .map(|(k, v)| (CommonTransactionCosts::from_str(k).unwrap(), v.clone()))
-        .collect();
-
-    Ok(cost_map)
 }
 
 // Emulation-based estimator
@@ -103,8 +63,7 @@ fn estimate_transaction_inner<S>(
     tx: TransactionKind,
     computation_gas_unit_price: u64,
     storage_gas_unit_price: u64,
-    mutated_object_sizes_before: usize,
-    mutated_object_sizes_after: usize,
+    mutated_object_sizes_after: Option<usize>,
     storage_rebate: SuiGas,
     temporary_store: &TemporaryStore<S>,
 ) -> SuiResult<GasCostSummary> {
@@ -121,15 +80,15 @@ fn estimate_transaction_inner<S>(
         gas_status.charge_consensus()?;
     }
     // Step 3: charge storage read for all input objects : can be computed precisely
-    // dummy gas obj
+    // Dummy gas obj
     let gas_obj = GasCoin::new(ObjectID::random(), 0).to_object(SequenceNumber::new());
-    let mut total_size: usize = temporary_store
+    let mut total_input_obj_size: usize = temporary_store
         .objects()
         .values()
         .map(|obj| obj.object_size_for_gas_metering())
         .sum();
-    total_size += gas_obj.object_size_for_gas_metering();
-    gas_status.charge_storage_read(total_size)?;
+    total_input_obj_size += gas_obj.object_size_for_gas_metering();
+    gas_status.charge_storage_read(total_input_obj_size)?;
 
     // Steps 4 & 5
     for single_tx in tx.single_transactions() {
@@ -146,11 +105,15 @@ fn estimate_transaction_inner<S>(
         gas_status.charge_vm_gas()?;
     }
 
+    // The assumption here is that size number of output objects is roughly double at most
+    // This assumption is not based on any real data. Feedback is welcomed
+    let mutated_object_sizes_after = mutated_object_sizes_after.unwrap_or(total_input_obj_size * 2);
+
     // Step 6: charge for mutations, deletions, rebates: cannot be computed precisely, will approx
     // At this point we need to estimate the effects of mutating objects after execution
     // We need to use some approx this
     gas_status.charge_storage_mutation(
-        mutated_object_sizes_before,
+        total_input_obj_size,
         mutated_object_sizes_after,
         storage_rebate,
     )?;
@@ -163,8 +126,7 @@ pub async fn estimate_transaction_computation_cost(
     state: Arc<AuthorityState>,
     computation_gas_unit_price: u64,
     storage_gas_unit_price: u64,
-    mutated_object_sizes_before: usize,
-    mutated_object_sizes_after: usize,
+    mutated_object_sizes_after: Option<usize>,
     storage_rebate: u64,
 ) -> anyhow::Result<GasCostSummary> {
     // Make a dummy transaction
@@ -174,7 +136,6 @@ pub async fn estimate_transaction_computation_cost(
 
     let (_gas_status, input_objects) =
         transaction_input_checker::check_transaction_input(&state.db(), &tx).await?;
-
     let in_mem_temporary_store =
         TemporaryStore::new(state.db(), input_objects, TransactionDigest::random());
 
@@ -182,7 +143,6 @@ pub async fn estimate_transaction_computation_cost(
         tx.signed_data.data.kind,
         computation_gas_unit_price,
         storage_gas_unit_price,
-        mutated_object_sizes_before,
         mutated_object_sizes_after,
         SuiGas::new(storage_rebate),
         &in_mem_temporary_store,
