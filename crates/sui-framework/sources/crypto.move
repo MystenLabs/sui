@@ -56,8 +56,8 @@ module sui::crypto {
     /// @param bit_length: The bit length that we prove the committed value is whithin. Note that bit_length must be either 64, 32, 16, or 8.
     ///
     /// If the range proof is valid, execution succeeds, else panics.
-    public fun verify_full_range_proof(proof: &vector<u8>, commitment: RistrettoPoint, bit_length: u64) {
-        native_verify_full_range_proof(proof, &ec::bytes(&commitment), bit_length)
+    public fun verify_full_range_proof(proof: &vector<u8>, commitment: &RistrettoPoint, bit_length: u64) {
+        native_verify_full_range_proof(proof, &ec::bytes(commitment), bit_length)
     }
 
     /// @param signature: 32-byte signature that is a point on the Ed25519 elliptic curve.

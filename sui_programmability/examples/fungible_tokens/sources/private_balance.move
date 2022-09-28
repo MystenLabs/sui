@@ -123,7 +123,7 @@ module fungible_tokens::private_balance {
         self.value = option::none();
         // In order to prevent new coins being minted, Open(A_new) = Open(A) - Open(B) must hold.
         // It is clear to see that as long as |A| >= |B| holds, then the above equation also holds
-        verify_full_range_proof(&proof, self.commitment, MAX_COIN_BIT);
+        verify_full_range_proof(&proof, &self.commitment, MAX_COIN_BIT);
         PrivateBalance {
             commitment: new_commitment,
             value: option::none()
@@ -144,7 +144,7 @@ module fungible_tokens::private_balance {
             assert!(*option::borrow(&self.value) >= value, 0)
         } else {
             self.value = option::none();
-            verify_full_range_proof(&proof, self.commitment, MAX_COIN_BIT);
+            verify_full_range_proof(&proof, &self.commitment, MAX_COIN_BIT);
         };
         PrivateBalance {
             commitment: new_commitment,

@@ -187,7 +187,7 @@ module sui::crypto_tests {
             ec::new_scalar_from_u64(blinding_factor)
         );
 
-        crypto::verify_full_range_proof(&bulletproof, point, bit_length);
+        crypto::verify_full_range_proof(&bulletproof, &point, bit_length);
     }
 
     #[test]
@@ -208,7 +208,7 @@ module sui::crypto_tests {
             ec::new_scalar_from_u64(blinding_factor)
         );
 
-        crypto::verify_full_range_proof(&bulletproof, point, bit_length);
+        crypto::verify_full_range_proof(&bulletproof, &point, bit_length);
     }
 
     #[test]
