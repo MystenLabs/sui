@@ -10,7 +10,8 @@ use move_binary_format::{
 use move_core_types::{account_address::AccountAddress, identifier::IdentStr};
 use sui_types::{
     base_types::{
-        STD_OPTION_MODULE_NAME, STD_OPTION_STRUCT_NAME, TX_CONTEXT_MODULE_NAME,
+        STD_ASCII_MODULE_NAME, STD_ASCII_STRUCT_NAME, STD_OPTION_MODULE_NAME,
+        STD_OPTION_STRUCT_NAME, STD_UTF8_MODULE_NAME, STD_UTF8_STRUCT_NAME, TX_CONTEXT_MODULE_NAME,
         TX_CONTEXT_STRUCT_NAME,
     },
     error::ExecutionError,
@@ -202,6 +203,16 @@ pub const RESOLVED_STD_OPTION: (&AccountAddress, &IdentStr, &IdentStr) = (
     STD_OPTION_MODULE_NAME,
     STD_OPTION_STRUCT_NAME,
 );
+pub const RESOLVED_ASCII_STR: (&AccountAddress, &IdentStr, &IdentStr) = (
+    &MOVE_STDLIB_ADDRESS,
+    STD_ASCII_MODULE_NAME,
+    STD_ASCII_STRUCT_NAME,
+);
+pub const RESOLVED_UTF8_STR: (&AccountAddress, &IdentStr, &IdentStr) = (
+    &MOVE_STDLIB_ADDRESS,
+    STD_UTF8_MODULE_NAME,
+    STD_UTF8_STRUCT_NAME,
+);
 
 fn is_primitive(
     view: &BinaryIndexedView,
@@ -221,6 +232,8 @@ fn is_primitive(
         SignatureToken::Struct(idx) => {
             let resolved_struct = resolve_struct(view, *idx);
             resolved_struct == RESOLVED_SUI_ID
+                || resolved_struct == RESOLVED_ASCII_STR
+                || resolved_struct == RESOLVED_UTF8_STR
         }
 
         SignatureToken::StructInstantiation(idx, targs) => {

@@ -19,6 +19,7 @@ move-vm-runtime.workspace = true
 
 sui-framework = { path = "../sui-framework" }
 sui-verifier = { path = "../sui-verifier" }
+sui-json = { path = "../sui-json" }
 sui-types = { path = "../sui-types" }
 workspace-hack = { path = "../workspace-hack"}
 

@@ -9,7 +9,7 @@ edition = "2021"
 [dependencies]
 workspace-hack = { path = "../workspace-hack"}
 sui-framework = { path = "../sui-framework" }
-telemetry-subscribers = "0.1.0"
+telemetry-subscribers.workspace = true
 tracing = "0.1"
 
 [target.'cfg(msim)'.dependencies]

@@ -31,8 +31,8 @@ To get started you need to install [pnpm](https://pnpm.io/), then run the follow
 ```bash
 # Install all dependencies
 $ pnpm install
-# Run the build for the TypeScript SDK and all of its dependencies.
-$ pnpm --filter @mysten/sui.js... build
+# Run the build for the TypeScript SDK
+$ pnpm sdk build
 ```
 
 ## Type Doc

@@ -1,0 +1,53 @@
+{
+  "name": "sui-wallet-adapter",
+  "version": "0.0.0",
+  "private": true,
+  "dependencies": {
+    "@emotion/react": "^11.9.3",
+    "@emotion/styled": "^11.9.3",
+    "@mui/icons-material": "^5.8.4",
+    "@mui/material": "^5.9.0",
+    "@mysten/sui.js": "workspace:*",
+    "@mysten/wallet-adapter-all-wallets": "workspace:*",
+    "@mysten/wallet-adapter-base": "workspace:*",
+    "@mysten/wallet-adapter-react": "workspace:*",
+    "@mysten/wallet-adapter-react-ui": "workspace:*",
+    "@mysten/wallet-adapter-sui-wallet": "workspace:*",
+    "@testing-library/jest-dom": "^5.16.4",
+    "@testing-library/react": "^13.3.0",
+    "@testing-library/user-event": "^13.5.0",
+    "@types/node": "^16.11.44",
+    "@types/react": "^18.0.20",
+    "@types/react-dom": "^18.0.6",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "typescript": "^4.8.3"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "pnpm -r --filter './packages/**' run build && vite build",
+    "test": "echo 'No tests.'"
+  },
+  "eslintConfig": {
+    "extends": [
+      "react-app"
+    ]
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^2.0.1",
+    "vite": "^3.0.9",
+    "vite-tsconfig-paths": "^3.5.0"
+  }
+}

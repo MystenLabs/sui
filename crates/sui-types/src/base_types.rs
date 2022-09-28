@@ -324,6 +324,12 @@ impl IntoPoint for ExecutionDigests {
 pub const STD_OPTION_MODULE_NAME: &IdentStr = ident_str!("option");
 pub const STD_OPTION_STRUCT_NAME: &IdentStr = ident_str!("Option");
 
+pub const STD_ASCII_MODULE_NAME: &IdentStr = ident_str!("ascii");
+pub const STD_ASCII_STRUCT_NAME: &IdentStr = ident_str!("String");
+
+pub const STD_UTF8_MODULE_NAME: &IdentStr = ident_str!("string");
+pub const STD_UTF8_STRUCT_NAME: &IdentStr = ident_str!("String");
+
 pub const TX_CONTEXT_MODULE_NAME: &IdentStr = ident_str!("tx_context");
 pub const TX_CONTEXT_STRUCT_NAME: &IdentStr = ident_str!("TxContext");
 

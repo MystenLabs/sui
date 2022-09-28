@@ -60,6 +60,13 @@ opt-level = 1
 # Dependencies that should be kept in sync through the whole workspace
 [workspace.dependencies]
 
+# github.com/MystenLabs/mysten-infra dependencies
+typed-store = "0.1.0"
+typed-store-derive = "0.1.0"
+telemetry-subscribers = "0.1.0"
+mysten-network = "0.1.0"
+name-variant = "0.1.0"
+
 # Move dependencies
 move-binary-format = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e" }
 move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e" }

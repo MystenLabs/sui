@@ -639,14 +639,14 @@ where
                 &available_authorities,
             )
             .await?;
-            state_checkpoints
-                .lock()
-                .process_new_checkpoint_certificate(
-                    checkpoint,
-                    &contents,
-                    committee,
-                    active_authority.state.database.clone(),
-                )?;
+            process_new_checkpoint_certificate(
+                active_authority,
+                state_checkpoints,
+                committee,
+                checkpoint,
+                &contents,
+            )
+            .await?;
             info!(
                 cp_seq=?checkpoint.summary.sequence_number(),
                 "Stored new checkpoint certificate",
@@ -700,35 +700,53 @@ where
         let (past, contents) =
             get_one_checkpoint_with_contents(net.clone(), seq, &available_authorities).await?;
 
-        let errors = active_authority
-            .node_sync_handle()
-            .sync_checkpoint_cert_transactions(&contents)
-            .await?
-            .zip(futures::stream::iter(contents.iter()))
-            .filter_map(|(r, digests)| async move {
-                r.map_err(|e| {
-                    info!(?digests, "failed to execute digest from checkpoint: {}", e);
-                    e
-                })
-                .err()
-            })
-            .collect::<Vec<SuiError>>()
-            .await;
-
-        if !errors.is_empty() {
-            let error = "Failed to sync transactions in checkpoint".to_string();
-            error!(?seq, "{}", error);
-            return Err(SuiError::CheckpointingError { error });
-        }
-
-        checkpoint_db.lock().process_synced_checkpoint_certificate(
+        process_new_checkpoint_certificate(
+            active_authority,
+            &checkpoint_db,
+            &net.committee,
             &past,
             &contents,
-            &net.committee,
-        )?;
+        )
+        .await?;
     }
 
     Ok(())
+}
+
+async fn process_new_checkpoint_certificate<A>(
+    active_authority: &ActiveAuthority<A>,
+    checkpoint_db: &Arc<Mutex<CheckpointStore>>,
+    committee: &Committee,
+    checkpoint_cert: &CertifiedCheckpointSummary,
+    contents: &CheckpointContents,
+) -> SuiResult
+where
+    A: AuthorityAPI + Send + Sync + 'static + Clone,
+{
+    let errors = active_authority
+        .node_sync_handle()
+        .sync_checkpoint_cert_transactions(contents)
+        .await?
+        .zip(futures::stream::iter(contents.iter()))
+        .filter_map(|(r, digests)| async move {
+            r.map_err(|e| {
+                info!(?digests, "failed to execute digest from checkpoint: {}", e);
+                e
+            })
+            .err()
+        })
+        .collect::<Vec<SuiError>>()
+        .await;
+
+    if !errors.is_empty() {
+        let error = "Failed to sync transactions in checkpoint".to_string();
+        error!(cp_seq=?checkpoint_cert.summary.sequence_number, "{}", error);
+        return Err(SuiError::CheckpointingError { error });
+    }
+
+    checkpoint_db
+        .lock()
+        .process_synced_checkpoint_certificate(checkpoint_cert, contents, committee)
 }
 
 pub async fn get_one_checkpoint_with_contents<A>(
