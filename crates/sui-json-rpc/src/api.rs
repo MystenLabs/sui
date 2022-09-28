@@ -263,6 +263,23 @@ pub trait RpcTransactionBuilder {
         amount: Option<u64>,
     ) -> RpcResult<TransactionBytes>;
 
+    #[method(name = "pay")]
+    async fn pay(
+        &self,
+        /// the transaction signer's Sui address
+        signer: SuiAddress,
+        /// the Sui coins to be used in this transaction
+        input_coins: Vec<ObjectID>,
+        /// the recipients' addresses, the length of this vector must be the same as amounts.
+        recipients: Vec<SuiAddress>,
+        /// the amounts to be transferred to recipients, following the same order
+        amounts: Vec<u64>,
+        /// gas object to be used in this transaction, the gateway will pick one from the signer's possession if not provided
+        gas: Option<ObjectID>,
+        /// the gas budget, the transaction will fail if the gas cost exceed the budget
+        gas_budget: u64,
+    ) -> RpcResult<TransactionBytes>;
+
     /// Create an unsigned transaction to execute a Move call on the network, by calling the specified function in the module of a given package.
     #[method(name = "moveCall")]
     async fn move_call(
