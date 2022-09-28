@@ -20,7 +20,7 @@ rocksdb = "0.19.0"
 typed-store.workspace = true
 typed-store-derive.workspace = true
 tempfile = "3.3.0"
-narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "ee65154749d2a14c096fe0b0999b84ce7f2a7c97" }
+narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "46bb2d73c17b2fd6b11fb08b73808dcb56434ad0" }
 serde_with = { version = "1.14.0", features = ["hex"] }
 sui-storage = { path = "../sui-storage" }
 strum_macros = "^0.24"

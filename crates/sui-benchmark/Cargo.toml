@@ -43,7 +43,7 @@ sui-node = { path = "../sui-node" }
 sui-json-rpc-types = { path = "../sui-json-rpc-types" }
 
 move-core-types.workspace = true
-narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "ee65154749d2a14c096fe0b0999b84ce7f2a7c97" }
+narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "46bb2d73c17b2fd6b11fb08b73808dcb56434ad0" }
 workspace-hack = { path = "../workspace-hack"}
 test-utils = { path = "../test-utils" }
 
