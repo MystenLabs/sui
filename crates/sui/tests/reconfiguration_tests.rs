@@ -4,28 +4,26 @@
 use futures::future::join_all;
 use multiaddr::Multiaddr;
 use prometheus::Registry;
+use std::time::Duration;
 use sui_config::ValidatorInfo;
 use sui_core::authority_active::checkpoint_driver::{
     checkpoint_process_step, CheckpointProcessControl,
 };
-use sui_core::authority_client::AuthorityAPI;
-use sui_core::safe_client::SafeClient;
 use sui_node::SuiNode;
-use sui_types::base_types::{ObjectID, ObjectRef};
+use sui_types::base_types::{ObjectRef, SequenceNumber, SuiAddress};
 use sui_types::crypto::{
     generate_proof_of_possession, get_key_pair, AuthorityKeyPair, AuthoritySignature,
     KeypairTraits, NetworkKeyPair,
 };
 use sui_types::error::SuiResult;
-use sui_types::messages::ObjectInfoResponse;
-use sui_types::messages::{CallArg, ObjectArg, ObjectInfoRequest, TransactionEffects};
+use sui_types::messages::{CallArg, ObjectArg, TransactionEffects};
 use sui_types::object::Object;
 use sui_types::SUI_SYSTEM_STATE_OBJECT_ID;
-use test_utils::authority::test_authority_configs;
-use test_utils::messages::move_transaction;
+use test_utils::authority::{get_object, test_authority_configs};
+use test_utils::messages::{make_transfer_sui_transaction, move_transaction};
 use test_utils::objects::{generate_gas_object_with_balance, test_gas_objects};
 use test_utils::test_account_keys;
-use test_utils::transaction::submit_shared_object_transaction;
+use test_utils::transaction::{submit_shared_object_transaction, submit_single_owner_transaction};
 
 #[tokio::test(flavor = "current_thread")]
 async fn reconfig_end_to_end_tests() {
@@ -86,47 +84,14 @@ async fn reconfig_end_to_end_tests() {
     let new_committee_size = sui_system_state.validators.next_epoch_validators.len();
     assert_eq!(old_committee_size + 1, new_committee_size);
 
-    let mut checkpoint_processes = vec![];
+    fast_forward_to_ready_for_reconfig_start(&nodes).await;
+
+    // Start epoch change and halt all validators.
     for node in &nodes {
-        let active = node.active().clone();
-        let handle = tokio::spawn(async move {
-            while !active
-                .state
-                .checkpoints
-                .as_ref()
-                .unwrap()
-                .lock()
-                .is_ready_to_start_epoch_change()
-            {
-                let _ =
-                    checkpoint_process_step(&active, &CheckpointProcessControl::default()).await;
-            }
-        });
-        checkpoint_processes.push(handle);
+        node.active().start_epoch_change().await.unwrap();
     }
-    // Wait for all validators to be ready for epoch change.
-    join_all(checkpoint_processes).await;
 
-    let results: Vec<_> = nodes
-        .iter()
-        .map(|node| async {
-            let active = node.active().clone();
-            active.start_epoch_change().await.unwrap();
-            while !active
-                .state
-                .checkpoints
-                .as_ref()
-                .unwrap()
-                .lock()
-                .is_ready_to_finish_epoch_change()
-            {
-                let _ =
-                    checkpoint_process_step(&active, &CheckpointProcessControl::default()).await;
-            }
-        })
-        .collect();
-
-    join_all(results).await;
+    fast_forward_to_ready_for_reconfig_finish(&nodes).await;
 
     let results: Vec<_> = nodes
         .iter()
@@ -144,7 +109,111 @@ async fn reconfig_end_to_end_tests() {
     assert_eq!(sui_system_state.validators.active_validators.len(), 5);
 }
 
-pub async fn create_and_register_new_validator(
+#[tokio::test(flavor = "current_thread")]
+async fn reconfig_last_checkpoint_sync_missing_tx() {
+    telemetry_subscribers::init_for_testing();
+
+    let mut configs = test_authority_configs();
+    for c in configs.validator_configs.iter_mut() {
+        // Turn off checkpoint process so that we can have fine control over it in the test.
+        c.enable_checkpoint = false;
+    }
+    let validator_info = configs.validator_set();
+    let mut gas_objects = test_gas_objects();
+    let mut states = Vec::new();
+    let mut nodes = Vec::new();
+    for validator in configs.validator_configs() {
+        let node = SuiNode::start(validator, Registry::new()).await.unwrap();
+        let state = node.state();
+
+        for gas in gas_objects.clone() {
+            state.insert_genesis_object(gas).await;
+        }
+        states.push(state);
+        nodes.push(node);
+    }
+
+    fast_forward_to_ready_for_reconfig_start(&nodes).await;
+
+    let (sender, key_pair) = test_account_keys().pop().unwrap();
+    let object_ref = gas_objects.pop().unwrap().compute_object_reference();
+    let transaction = make_transfer_sui_transaction(
+        object_ref,
+        SuiAddress::random_for_testing_only(),
+        None,
+        sender,
+        &key_pair,
+    );
+    // Only send the transaction to validator 0, but not other validators.
+    // Since gossip is disabled by default, validator 1-3 will not see it.
+    submit_single_owner_transaction(transaction, &validator_info[0..1]).await;
+    tokio::time::sleep(Duration::from_secs(10)).await;
+    for (idx, validator) in validator_info.iter().enumerate() {
+        // Check that the object is mutated on validator 0 only.
+        assert_eq!(
+            get_object(validator, object_ref.0).await.version(),
+            SequenceNumber::from(if idx == 0 { 1 } else { 0 })
+        );
+    }
+
+    // Start epoch change and halt all validators.
+    for node in &nodes {
+        node.active().start_epoch_change().await.unwrap();
+    }
+
+    // Create a proposal on validator 0, which ensures that the transaction above will be included
+    // in the checkpoint.
+    nodes[0]
+        .state()
+        .checkpoints
+        .as_ref()
+        .unwrap()
+        .lock()
+        .set_proposal(0)
+        .unwrap();
+    let mut checkpoint_processes = vec![];
+    // Only validator 1 and 2 will participate the checkpoint progress, which will use fragments
+    // involving validator 0, 1, 2. Since validator 1 and 2 don't have the above transaction
+    // executed, they will actively sync and execute it. This exercises the code path where we can
+    // execute a transaction from a pending checkpoint even when validator is halted.
+    for node in &nodes[1..3] {
+        let active = node.active().clone();
+        let handle = tokio::spawn(async move {
+            while !active
+                .state
+                .checkpoints
+                .as_ref()
+                .unwrap()
+                .lock()
+                .is_ready_to_finish_epoch_change()
+            {
+                let _ =
+                    checkpoint_process_step(&active, &CheckpointProcessControl::default()).await;
+            }
+        });
+        checkpoint_processes.push(handle);
+    }
+    // Wait for all validators to be ready for epoch change.
+    join_all(checkpoint_processes).await;
+
+    // Now that we have a new checkpoint cert formed for the last checkpoint, check that
+    // validator 3 is able to also sync and execute the above transaction and finish epoch change.
+    // This exercises the code path where a validator can execute transactions from a checkpoint
+    // cert even when the validator is halted.
+    while !nodes[3]
+        .state()
+        .checkpoints
+        .as_ref()
+        .unwrap()
+        .lock()
+        .is_ready_to_finish_epoch_change()
+    {
+        let _ =
+            checkpoint_process_step(nodes[3].active(), &CheckpointProcessControl::default()).await;
+    }
+}
+
+async fn create_and_register_new_validator(
     framework_pkg: ObjectRef,
     gas_objects: &mut Vec<Object>,
     validator_stake: ObjectRef,
@@ -199,21 +268,48 @@ pub fn get_new_validator() -> (ValidatorInfo, AuthoritySignature) {
     )
 }
 
-#[allow(dead_code)]
-pub async fn get_latest_ref<A>(authority: &SafeClient<A>, object_id: ObjectID) -> ObjectRef
-where
-    A: AuthorityAPI + Send + Sync + Clone + 'static,
-{
-    if let Ok(ObjectInfoResponse {
-        requested_object_reference: Some(object_ref),
-        ..
-    }) = authority
-        .handle_object_info_request(ObjectInfoRequest::latest_object_info_request(
-            object_id, None,
-        ))
-        .await
-    {
-        return object_ref;
+async fn fast_forward_to_ready_for_reconfig_start(nodes: &[SuiNode]) {
+    let mut checkpoint_processes = vec![];
+    for node in nodes {
+        let active = node.active().clone();
+        let handle = tokio::spawn(async move {
+            while !active
+                .state
+                .checkpoints
+                .as_ref()
+                .unwrap()
+                .lock()
+                .is_ready_to_start_epoch_change()
+            {
+                let _ =
+                    checkpoint_process_step(&active, &CheckpointProcessControl::default()).await;
+            }
+        });
+        checkpoint_processes.push(handle);
     }
-    panic!("Object not found!");
+    // Wait for all validators to be ready for epoch change.
+    join_all(checkpoint_processes).await;
+}
+
+async fn fast_forward_to_ready_for_reconfig_finish(nodes: &[SuiNode]) {
+    let mut checkpoint_processes = vec![];
+    for node in nodes {
+        let active = node.active().clone();
+        let handle = tokio::spawn(async move {
+            while !active
+                .state
+                .checkpoints
+                .as_ref()
+                .unwrap()
+                .lock()
+                .is_ready_to_finish_epoch_change()
+            {
+                let _ =
+                    checkpoint_process_step(&active, &CheckpointProcessControl::default()).await;
+            }
+        });
+        checkpoint_processes.push(handle);
+    }
+    // Wait for all validators to be ready for epoch change.
+    join_all(checkpoint_processes).await;
 }

@@ -21,11 +21,11 @@ sui-config = { path = "../sui-config" }
 sui-node = { path = "../sui-node" }
 sui-types = { path = "../sui-types" }
 
-mysten-network = "0.1.0"
+mysten-network.workspace = true
 workspace-hack = { path = "../workspace-hack"}
 
 [target.'cfg(msim)'.dependencies]
 sui-simulator = { path = "../sui-simulator" }
 
 [dev-dependencies]
-telemetry-subscribers = "0.1.0"
+telemetry-subscribers.workspace = true

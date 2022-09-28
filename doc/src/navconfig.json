@@ -12,8 +12,8 @@
         "external": true
       },
       {
-        "label": "Prototypes",
-        "link": "explore/prototypes"
+        "label": "Doc updates",
+        "link": "learn/sui-doc-updates"
       }
     ]
   },
@@ -266,6 +266,12 @@
         "label": "About Mysten Labs",
         "link": "https://mystenlabs.com/",
         "external": true
+      }
+    ],
+      "Doc updates":[
+      {
+      "fileName": "learn/sui-doc-updates",
+      "title": "Sui doc updates"
       }
     ]
   }

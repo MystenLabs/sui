@@ -60,8 +60,8 @@ pub enum KeyToolCommand {
         key_scheme: SignatureScheme,
         derivation_path: Option<DerivationPath>,
     },
-    /// This is a temporary helper function to ensure that testnet genesis does not break while
-    /// we transition towards BLS signatures.
+    /// Read keypair from path and show its base64 encoded value with flag. This is useful
+    /// to generate protocol, account, worker, network keys in NodeConfig with its expected encoding.
     LoadKeypair {
         file: PathBuf,
     },
@@ -155,18 +155,24 @@ impl KeyToolCommand {
             }
 
             KeyToolCommand::LoadKeypair { file } => {
-                let res: Result<SuiKeyPair, anyhow::Error> = read_keypair_from_file(&file);
-
-                match res {
+                match read_keypair_from_file(&file) {
                     Ok(keypair) => {
+                        // Account keypair is encoded with the key scheme flag {},
+                        // and network and worker keypair are not.
                         println!("Account Keypair: {}", keypair.encode_base64());
-                        println!("Network Keypair: {}", keypair.encode_base64());
                         if let SuiKeyPair::Ed25519SuiKeyPair(kp) = keypair {
-                            println!("Protocol Keypair: {}", kp.encode_base64());
+                            println!("Network Keypair: {}", kp.encode_base64());
+                            println!("Worker Keypair: {}", kp.encode_base64());
                         };
                     }
-                    Err(e) => {
-                        println!("Failed to read keypair at path {:?} err: {:?}", file, e)
+                    Err(_) => {
+                        // Authority keypair file is not stored with the flag, it will try read as BLS keypair..
+                        match read_authority_keypair_from_file(&file) {
+                            Ok(kp) => println!("Protocol Keypair: {}", kp.encode_base64()),
+                            Err(e) => {
+                                println!("Failed to read keypair at path {:?} err: {:?}", file, e)
+                            }
+                        }
                     }
                 }
             }

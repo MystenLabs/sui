@@ -2239,7 +2239,7 @@ pub struct ObjectNotExistsResponse {
     object_id: String,
 }
 
-#[derive(Serialize, Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema, Clone)]
 #[serde(rename = "TypeTag", rename_all = "camelCase")]
 pub struct SuiTypeTag(String);
 

@@ -166,16 +166,17 @@ module sui::staking_pool {
 
     /// Withdraw `withdraw_pool_token_amount` worth of delegated stake from a staking pool. A proportional amount of principal and rewards
     /// in SUI will be withdrawn and transferred to the delegator. 
+    /// Returns the amount of SUI withdrawn.
     public(friend) fun withdraw_stake(
         pool: &mut StakingPool,  
         delegation: &mut Delegation, 
         staked_sui: &mut StakedSui,
         withdraw_pool_token_amount: u64, 
         ctx: &mut TxContext
-    ) {
+    ) : u64 {
         let (principal_withdraw, reward_withdraw, time_lock) = 
             withdraw_to_sui_tokens(pool, delegation, staked_sui, withdraw_pool_token_amount);
-
+        let sui_withdraw_amount = balance::value(&principal_withdraw) + balance::value(&reward_withdraw);
         let delegator = tx_context::sender(ctx);
 
         // TODO: implement withdraw bonding period here.
@@ -186,7 +187,8 @@ module sui::staking_pool {
         } else {
             transfer::transfer(coin::from_balance(principal_withdraw, ctx), delegator);
             option::destroy_none(time_lock);
-        }
+        };
+        sui_withdraw_amount
     }
 
     /// Withdraw all the pool tokens in `delegation` object, with separate principal and rewards components, and
@@ -243,7 +245,6 @@ module sui::staking_pool {
         // withdraw the rewards component from rewards pool and transfer it to the delegator.
         assert!(balance::value(&pool.rewards_pool) >= sui_withdraw_from_rewards, EINSUFFICIENT_REWARDS_POOL_BALANCE);
         let reward_withdraw = balance::split(&mut pool.rewards_pool, sui_withdraw_from_rewards);
-        pool.sui_balance = pool.sui_balance - sui_withdraw_from_rewards;
 
         (principal_withdraw, reward_withdraw, time_lock)
     }

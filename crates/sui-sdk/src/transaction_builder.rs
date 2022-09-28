@@ -204,8 +204,13 @@ impl TransactionBuilder {
             .ok_or_else(|| anyhow!("Object [{}] is not a move package.", package_id))?;
         let package: MovePackage = MovePackage::new(package.id, &package.module_map);
 
-        let json_args =
-            resolve_move_function_args(&package, module.clone(), function.clone(), json_args)?;
+        let json_args = resolve_move_function_args(
+            &package,
+            module.clone(),
+            function.clone(),
+            type_args,
+            json_args,
+        )?;
         let mut args = Vec::new();
         let mut objects = BTreeMap::new();
         for arg in json_args {

@@ -506,8 +506,10 @@ impl CheckpointStore {
 
         // Send to consensus for sequencing.
         if let Some(sender) = &self.sender {
-            debug!("Send fragment: {} -- {}", self.name, other_name);
+            let seq = fragment.proposer.summary.sequence_number;
+            debug!(cp_seq=?seq, "Sending fragment: {} -- {}", self.name, other_name);
             sender.send_to_consensus(fragment.clone())?;
+            debug!(cp_seq=?seq, "Fragment successfully sent: {} -- {}", self.name, other_name);
         } else {
             return Err(SuiError::from("No consensus sender configured"));
         }

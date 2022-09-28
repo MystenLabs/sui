@@ -1186,6 +1186,12 @@ where
             type_arguments,
             arguments,
         } = params;
+        let mut type_params = vec![];
+        if !type_arguments.is_empty() {
+            for t in type_arguments.clone() {
+                type_params.push(t.try_into()?);
+            }
+        }
         let module = Identifier::new(module)?;
         let function = Identifier::new(function)?;
         let package_obj = self.get_object_internal(&package_object_id).await?;
@@ -1194,6 +1200,7 @@ where
             package_obj.data.try_as_package().unwrap(),
             module.clone(),
             function.clone(),
+            &type_params,
             arguments,
         )?;
 

@@ -67,6 +67,8 @@ struct Opts {
     /// ideally same as number of workers
     #[clap(long, default_value = "3", global = true)]
     pub num_client_threads: u64,
+    #[clap(long, default_value = "", global = true)]
+    pub log_path: String,
     /// Path where gateway config is stored when running remote benchmark
     /// This is also the path where gateway config is stored during local
     /// benchmark
@@ -244,11 +246,13 @@ pub async fn follow(authority_client: NetworkAuthorityClient, download_txes: boo
 /// --transfer-object 50```
 #[tokio::main]
 async fn main() -> Result<()> {
+    let opts: Opts = Opts::parse();
     let mut config = telemetry_subscribers::TelemetryConfig::new("stress");
     config.log_string = Some("warn".to_string());
-    config.log_file = Some("/tmp/stress.log".to_string());
+    if !opts.log_path.is_empty() {
+        config.log_file = Some(opts.log_path);
+    }
     let _guard = config.with_env().init();
-    let opts: Opts = Opts::parse();
 
     let barrier = Arc::new(Barrier::new(2));
     let cloned_barrier = barrier.clone();

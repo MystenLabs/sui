@@ -17,8 +17,8 @@ use tracing::debug;
 /// Use builder style to construct the conditions.
 /// When optionals fields are not set, related checks are omitted.
 /// Consuming functions such as `check` perform the check and panics if
-/// verification results are unexpected. `check_into_sui_object` and
-/// `check_info_gas_object` expect to get a `SuiObject` and `GasObject`
+/// verification results are unexpected. `check_into_object` and
+/// `check_into_gas_coin` expect to get a `SuiRawObject` and `GasCoin`
 /// respectfully.
 /// ```
 #[derive(Debug)]
@@ -65,8 +65,8 @@ impl ObjectChecker {
             .into_gas_coin()
     }
 
-    pub async fn check_into_sui_object(self, client: &SuiClient) -> SuiRawObject {
-        self.check(client).await.unwrap().into_sui_object()
+    pub async fn check_into_object(self, client: &SuiClient) -> SuiRawObject {
+        self.check(client).await.unwrap().into_object()
     }
 
     pub async fn check(self, client: &SuiClient) -> Result<CheckerResultObject, anyhow::Error> {
@@ -83,7 +83,11 @@ impl ObjectChecker {
 
         match object_info {
             GetRawObjectDataResponse::NotExists(_) => {
-                panic!("Node can't find gas object {}", object_id)
+                panic!(
+                    "Node can't find gas object {} with client {:?}",
+                    object_id,
+                    client.read_api()
+                )
             }
             GetRawObjectDataResponse::Deleted(_) => {
                 if !self.is_deleted {
@@ -119,21 +123,18 @@ impl ObjectChecker {
 
 pub struct CheckerResultObject {
     gas_coin: Option<GasCoin>,
-    sui_object: Option<SuiRawObject>,
+    object: Option<SuiRawObject>,
 }
 
 impl CheckerResultObject {
-    pub fn new(gas_coin: Option<GasCoin>, sui_object: Option<SuiRawObject>) -> Self {
-        Self {
-            gas_coin,
-            sui_object,
-        }
+    pub fn new(gas_coin: Option<GasCoin>, object: Option<SuiRawObject>) -> Self {
+        Self { gas_coin, object }
     }
     pub fn into_gas_coin(self) -> GasCoin {
         self.gas_coin.unwrap()
     }
-    pub fn into_sui_object(self) -> SuiRawObject {
-        self.sui_object.unwrap()
+    pub fn into_object(self) -> SuiRawObject {
+        self.object.unwrap()
     }
 }
 
