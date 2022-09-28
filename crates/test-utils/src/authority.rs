@@ -20,7 +20,7 @@ use sui_core::{
 };
 use sui_types::{committee::Committee, object::Object};
 
-pub use sui_node::SuiNode;
+pub use sui_node::{SuiNode, SuiNodeHandle};
 use sui_types::base_types::ObjectID;
 use sui_types::messages::{ObjectInfoRequest, ObjectInfoRequestKind};
 
@@ -120,27 +120,32 @@ where
 }
 
 /// Spawn checkpoint processes with very short checkpointing intervals.
-pub async fn spawn_checkpoint_processes(
-    aggregator: &AuthorityAggregator<NetworkAuthorityClient>,
-    handles: &[SuiNode],
-) {
+pub async fn spawn_checkpoint_processes(configs: &NetworkConfig, handles: &[SuiNodeHandle]) {
     // Start active part of each authority.
-    for authority in handles {
-        let state = authority.state().clone();
-        let inner_agg = aggregator.clone();
-        let active_state = Arc::new(
-            ActiveAuthority::new_with_ephemeral_storage_for_test(state, inner_agg).unwrap(),
-        );
-        let checkpoint_process_control = CheckpointProcessControl {
-            long_pause_between_checkpoints: Duration::from_millis(10),
-            ..CheckpointProcessControl::default()
-        };
-        let _active_authority_handle = active_state
-            .spawn_checkpoint_process_with_config(
-                checkpoint_process_control,
-                CheckpointMetrics::new_for_tests(),
-                false,
-            )
+    for handle in handles {
+        handle
+            .with_async(|authority| async move {
+                let state = authority.state().clone();
+
+                let aggregator =
+                    test_authority_aggregator(configs, authority.state().epoch_store().clone());
+
+                let inner_agg = aggregator.clone();
+                let active_state = Arc::new(
+                    ActiveAuthority::new_with_ephemeral_storage_for_test(state, inner_agg).unwrap(),
+                );
+                let checkpoint_process_control = CheckpointProcessControl {
+                    long_pause_between_checkpoints: Duration::from_millis(10),
+                    ..CheckpointProcessControl::default()
+                };
+                let _active_authority_handle = active_state
+                    .spawn_checkpoint_process_with_config(
+                        checkpoint_process_control,
+                        CheckpointMetrics::new_for_tests(),
+                        false,
+                    )
+                    .await;
+            })
             .await;
     }
 }

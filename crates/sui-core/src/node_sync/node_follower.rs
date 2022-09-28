@@ -463,7 +463,7 @@ mod test {
             let sync_store = new_sync_store();
             let test_handler = TestNodeSyncHandler::new();
 
-            let peer = authorities[0].state().name;
+            let peer = authorities[0].with(|node| node.state().name);
             let metrics = GossipMetrics::new_for_tests();
             follow_one_peer(
                 test_handler.clone().break_after(1),

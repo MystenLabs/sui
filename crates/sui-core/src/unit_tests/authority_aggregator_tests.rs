@@ -14,7 +14,6 @@ use sui_types::crypto::{
     AuthorityPublicKeyBytes, NetworkKeyPair, SuiKeyPair,
 };
 use sui_types::crypto::{KeypairTraits, Signature};
-use test_utils::authority::SuiNode;
 
 use sui_types::messages::*;
 use sui_types::object::{Object, GAS_VALUE_FOR_TESTING};
@@ -35,7 +34,7 @@ pub async fn init_network_authorities(
     genesis_objects: Vec<Object>,
 ) -> AuthorityAggregator<NetworkAuthorityClient> {
     let configs = test_and_configure_authority_configs(committee_size);
-    let _nodes: Vec<SuiNode> = spawn_test_authorities(genesis_objects, &configs).await;
+    let _nodes = spawn_test_authorities(genesis_objects, &configs).await;
     let gateway_config = GatewayConfig {
         epoch: 0,
         validator_set: configs.validator_set().to_vec(),
