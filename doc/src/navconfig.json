@@ -44,6 +44,10 @@
             "label": "Sui White Paper",
             "link": "https://github.com/MystenLabs/sui/blob/main/doc/paper/sui.pdf",
             "external": true
+          },
+          {
+            "label": "Sui doc updates",
+            "fileName": "learn/sui-doc-updates"
           }
         ]
       },
@@ -266,12 +270,6 @@
         "label": "About Mysten Labs",
         "link": "https://mystenlabs.com/",
         "external": true
-      }
-    ],
-      "Doc updates":[
-      {
-      "fileName": "learn/sui-doc-updates",
-      "title": "Sui doc updates"
       }
     ]
   }
