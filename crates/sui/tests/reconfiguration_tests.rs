@@ -188,7 +188,8 @@ async fn reconfig_last_checkpoint_sync_missing_tx() {
                 .is_ready_to_finish_epoch_change()
             {
                 let _ =
-                    checkpoint_process_step(&active, &CheckpointProcessControl::default()).await;
+                    checkpoint_process_step(active.clone(), &CheckpointProcessControl::default())
+                        .await;
             }
         });
         checkpoint_processes.push(handle);
@@ -208,8 +209,11 @@ async fn reconfig_last_checkpoint_sync_missing_tx() {
         .lock()
         .is_ready_to_finish_epoch_change()
     {
-        let _ =
-            checkpoint_process_step(nodes[3].active(), &CheckpointProcessControl::default()).await;
+        let _ = checkpoint_process_step(
+            nodes[3].active().clone(),
+            &CheckpointProcessControl::default(),
+        )
+        .await;
     }
 }
 
@@ -282,7 +286,8 @@ async fn fast_forward_to_ready_for_reconfig_start(nodes: &[SuiNode]) {
                 .is_ready_to_start_epoch_change()
             {
                 let _ =
-                    checkpoint_process_step(&active, &CheckpointProcessControl::default()).await;
+                    checkpoint_process_step(active.clone(), &CheckpointProcessControl::default())
+                        .await;
             }
         });
         checkpoint_processes.push(handle);
@@ -305,7 +310,8 @@ async fn fast_forward_to_ready_for_reconfig_finish(nodes: &[SuiNode]) {
                 .is_ready_to_finish_epoch_change()
             {
                 let _ =
-                    checkpoint_process_step(&active, &CheckpointProcessControl::default()).await;
+                    checkpoint_process_step(active.clone(), &CheckpointProcessControl::default())
+                        .await;
             }
         });
         checkpoint_processes.push(handle);
