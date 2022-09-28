@@ -100,7 +100,6 @@ where
     I: IntoIterator<Item = Object> + Clone,
 {
     let mut handles = Vec::new();
-    let config = config.clone();
     for validator in config.validator_configs() {
         let prom_registry = Registry::new();
         let node = start_node(validator, prom_registry).await;
@@ -125,7 +124,7 @@ pub async fn spawn_checkpoint_processes(configs: &NetworkConfig, handles: &[SuiN
     for handle in handles {
         handle
             .with_async(|authority| async move {
-                let state = authority.state().clone();
+                let state = authority.state();
 
                 let aggregator =
                     test_authority_aggregator(configs, authority.state().epoch_store().clone());

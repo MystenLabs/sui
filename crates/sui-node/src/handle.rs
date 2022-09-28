@@ -71,7 +71,10 @@ impl SuiNodeHandle {
 
 #[cfg(not(msim))]
 impl SuiNodeHandle {
-    fn guard(&self) {}
+    // Must return something to silence lints above at `let _guard = ...`
+    fn guard(&self) -> u32 {
+        0
+    }
 
     pub async fn with_async<'a, F, R, T>(&'a self, cb: F) -> T
     where

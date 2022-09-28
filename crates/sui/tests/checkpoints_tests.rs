@@ -112,7 +112,7 @@ fn make_aggregator(
 ) -> AuthorityAggregator<NetworkAuthorityClient> {
     let committee = handles[0].with(|h| h.state().clone_committee());
     let epoch_store = Arc::new(EpochStore::new_for_testing(&committee));
-    test_authority_aggregator(&configs, epoch_store)
+    test_authority_aggregator(configs, epoch_store)
 }
 
 #[sim_test]
