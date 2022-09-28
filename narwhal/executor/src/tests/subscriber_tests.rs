@@ -21,6 +21,7 @@ fn spawn_subscriber(
     Store<(CertificateDigest, BatchDigest), Batch>,
     watch::Sender<ReconfigureNotification>,
     JoinHandle<()>,
+    Arc<ExecutorMetrics>,
 ) {
     let message = ReconfigureNotification::NewEpoch(committee.to_owned());
     let (tx_reconfigure, rx_reconfigure) = watch::channel(message);
@@ -28,17 +29,18 @@ fn spawn_subscriber(
     // Spawn a test subscriber.
     let store = test_store();
     let executor_metrics = ExecutorMetrics::new(&Registry::new());
+    let metrics = Arc::new(executor_metrics);
     let subscriber_handle = Subscriber::spawn(
         store.clone(),
         tx_get_block_commands,
         rx_reconfigure,
         rx_sequence,
         tx_executor,
-        Arc::new(executor_metrics),
+        metrics.clone(),
         restored_consensus_output,
     );
 
-    (store, tx_reconfigure, subscriber_handle)
+    (store, tx_reconfigure, subscriber_handle, metrics)
 }
 
 #[tokio::test]
@@ -50,7 +52,7 @@ async fn handle_certificate_with_downloaded_batch() {
     let (tx_get_block_command, mut rx_get_block_command) = test_utils::test_get_block_commands!(1);
 
     // Spawn a subscriber.
-    let (store, _tx_reconfigure, _) = spawn_subscriber(
+    let (store, _tx_reconfigure, _, _) = spawn_subscriber(
         &committee,
         rx_sequence,
         tx_executor,
@@ -120,7 +122,7 @@ async fn should_retry_when_failed_to_get_payload() {
     let (tx_get_block_command, mut rx_get_block_command) = test_utils::test_get_block_commands!(1);
 
     // Spawn a subscriber.
-    let (store, _tx_reconfigure, _) = spawn_subscriber(
+    let (store, _tx_reconfigure, _, _) = spawn_subscriber(
         &committee,
         rx_sequence,
         tx_executor,
@@ -146,6 +148,7 @@ async fn should_retry_when_failed_to_get_payload() {
     };
 
     // send the certificate to download payload
+    tx_sequence.send(message.clone()).await.unwrap();
     tx_sequence.send(message).await.unwrap();
 
     // Now assume that the block_wait is responding with error for the
@@ -201,7 +204,7 @@ async fn subscriber_should_crash_when_irrecoverable_error() {
     let (tx_get_block_command, mut rx_get_block_command) = test_utils::test_get_block_commands!(1);
 
     // Spawn a subscriber.
-    let (_store, _tx_reconfigure, handle) = spawn_subscriber(
+    let (_store, _tx_reconfigure, handle, _) = spawn_subscriber(
         &committee,
         rx_sequence,
         tx_executor,
@@ -266,7 +269,7 @@ async fn test_subscriber_with_restored_consensus_output() {
         .collect();
 
     // Spawn a subscriber.
-    let (_store, _tx_reconfigure, _handle) = spawn_subscriber(
+    let (_store, _tx_reconfigure, _handle, _) = spawn_subscriber(
         &committee,
         rx_sequence,
         tx_executor,
