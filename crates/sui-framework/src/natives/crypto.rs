@@ -62,8 +62,8 @@ pub fn ecrecover(
 }
 
 fn recover_pubkey(
-    signature: &Vec<u8>,
-    hashed_msg: &Vec<u8>,
+    signature: &[u8],
+    hashed_msg: &[u8],
 ) -> Result<Secp256k1PublicKey, SuiError> {
     match <Secp256k1Signature as ToFromBytes>::from_bytes(signature) {
         Ok(signature) => match signature.recover(hashed_msg) {
