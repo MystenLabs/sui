@@ -77,7 +77,7 @@ function HomeAPI() {
     }, [network]);
 
     if (results.loadState === 'pending') {
-        return <div className={styles.gray}>loading...</div>;
+        return <div />;
     }
 
     if (!isLoaded && results.loadState === 'fail') {
