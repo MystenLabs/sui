@@ -13,7 +13,7 @@ import {
     getTransferSuiTransaction,
     getTransferSuiAmount,
 } from '@mysten/sui.js';
-import cl from 'classnames';
+import cl from 'clsx';
 import { Link } from 'react-router-dom';
 
 import {
@@ -23,7 +23,6 @@ import {
 import Longtext from '../../components/longtext/Longtext';
 import ModulesWrapper from '../../components/module/ModulesWrapper';
 import { type LinkObj, TxAddresses } from '../../components/table/TableCard';
-import Tabs from '../../components/tabs/Tabs';
 import { presentBN } from '../../utils/stringUtils';
 import SendReceiveView from './SendReceiveView';
 import TxLinks from './TxLinks';
@@ -40,6 +39,8 @@ import type {
 } from '@mysten/sui.js';
 
 import styles from './TransactionResult.module.css';
+
+import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 
 type TxDataProps = CertifiedTransaction & {
     status: ExecutionStatusType;
@@ -242,7 +243,6 @@ function TransactionView({ txdata }: { txdata: DataType }) {
         getTransferObjectTransaction(txdetails) ||
         getTransferSuiTransaction(txdetails);
     const txKindData = formatByTransactionKind(txKindName, txdetails, sender);
-    const TabName = `Details`;
 
     const txHeaderData = {
         txId: txdata.txId,
@@ -378,8 +378,6 @@ function TransactionView({ txdata }: { txdata: DataType }) {
         });
     }
 
-    const defaultActiveTab = 0;
-
     const modules =
         txKindData?.module?.value && Array.isArray(txKindData?.module?.value)
             ? {
@@ -388,76 +386,86 @@ function TransactionView({ txdata }: { txdata: DataType }) {
               }
             : false;
 
+    const hasEvents = txEventData && txEventData.length > 0;
+
     return (
         <div className={cl(styles.txdetailsbg)}>
             <TxResultHeader data={txHeaderData} />
-            <Tabs selected={defaultActiveTab}>
-                <section title={TabName} className={styles.txtabs}>
-                    <div className={styles.txgridcomponent} id={txdata.txId}>
-                        {typearguments && (
+            <TabGroup size="lg">
+                <TabList>
+                    <Tab>Details</Tab>
+                    {hasEvents && <Tab>Events</Tab>}
+                    <Tab>Signatures</Tab>
+                </TabList>
+                <TabPanels>
+                    <TabPanel>
+                        <div
+                            className={styles.txgridcomponent}
+                            id={txdata.txId}
+                        >
+                            {typearguments && (
+                                <section
+                                    className={cl([
+                                        styles.txcomponent,
+                                        styles.txgridcolspan2,
+                                        styles.packagedetails,
+                                    ])}
+                                >
+                                    <ItemView data={typearguments} />
+                                </section>
+                            )}
+                            <section
+                                className={cl([
+                                    styles.txcomponent,
+                                    styles.txsender,
+                                ])}
+                            >
+                                {amount !== null && (
+                                    <div className={styles.amountbox}>
+                                        <div>Amount</div>
+                                        <div>
+                                            {presentBN(amount)}
+                                            <sup>SUI</sup>
+                                        </div>
+                                    </div>
+                                )}
+                                <div className={styles.txaddress}>
+                                    <SendReceiveView data={sendreceive} />
+                                </div>
+                            </section>
+
                             <section
                                 className={cl([
                                     styles.txcomponent,
                                     styles.txgridcolspan2,
-                                    styles.packagedetails,
                                 ])}
                             >
-                                <ItemView data={typearguments} />
-                            </section>
-                        )}
-                        <section
-                            className={cl([
-                                styles.txcomponent,
-                                styles.txsender,
-                            ])}
-                        >
-                            {amount !== null && (
-                                <div className={styles.amountbox}>
-                                    <div>Amount</div>
-                                    <div>
-                                        {presentBN(amount)}
-                                        <sup>SUI</sup>
-                                    </div>
+                                <div className={styles.txlinks}>
+                                    {createdMutateData.map((item, idx) => (
+                                        <TxLinks data={item} key={idx} />
+                                    ))}
                                 </div>
-                            )}
-                            <div className={styles.txaddress}>
-                                <SendReceiveView data={sendreceive} />
-                            </div>
-                        </section>
-
-                        <section
-                            className={cl([
-                                styles.txcomponent,
-                                styles.txgridcolspan2,
-                            ])}
-                        >
-                            <div className={styles.txlinks}>
-                                {createdMutateData.map((item, idx) => (
-                                    <TxLinks data={item} key={idx} />
-                                ))}
-                            </div>
-                        </section>
-
-                        {modules && (
-                            <section
-                                className={cl([
-                                    styles.txcomponent,
-                                    styles.txgridcolspan3,
-                                ])}
-                            >
-                                <ModulesWrapper
-                                    id={txKindData.objectId?.value}
-                                    data={modules}
-                                />
                             </section>
-                        )}
-                    </div>
-                    <div className={styles.txgridcomponent}>
-                        <ItemView data={GasStorageFees} />
-                    </div>
-                </section>
-                {txEventData && txEventData?.length ? (
-                    <section title="Events">
+
+                            {modules && (
+                                <section
+                                    className={cl([
+                                        styles.txcomponent,
+                                        styles.txgridcolspan3,
+                                    ])}
+                                >
+                                    <ModulesWrapper
+                                        id={txKindData.objectId?.value}
+                                        data={modules}
+                                    />
+                                </section>
+                            )}
+                        </div>
+                        <div className={styles.txgridcomponent}>
+                            <ItemView data={GasStorageFees} />
+                        </div>
+                    </TabPanel>
+                    <TabPanel>
                         <div className={styles.txevents}>
                             <div className={styles.txeventsleft}>
                                 {eventTitlesDisplay}
@@ -466,17 +474,15 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                                 {txEventDisplay}
                             </div>
                         </div>
-                    </section>
-                ) : (
-                    <></>
-                )}
-                <section title="Signatures">
-                    <div className={styles.txgridcomponent}>
-                        <ItemView data={transactionSignatureData} />
-                        <ItemView data={validatorSignatureData} />
-                    </div>
-                </section>
-            </Tabs>
+                    </TabPanel>
+                    <TabPanel>
+                        <div className={styles.txgridcomponent}>
+                            <ItemView data={transactionSignatureData} />
+                            <ItemView data={validatorSignatureData} />
+                        </div>
+                    </TabPanel>
+                </TabPanels>
+            </TabGroup>
         </div>
     );
 }

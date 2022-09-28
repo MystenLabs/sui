@@ -14,15 +14,15 @@ import ErrorResult from '../../components/error-result/ErrorResult';
 import Longtext from '../../components/longtext/Longtext';
 import TableCard from '../../components/table/TableCard';
 import TabFooter from '../../components/tabs/TabFooter';
-import Tabs from '../../components/tabs/Tabs';
 import { STATE_DEFAULT } from '../../components/top-validators-card/TopValidatorsCard';
-import styles from '../../components/top-validators-card/TopValidatorsCard.module.css';
 import { NetworkContext } from '../../context';
 import theme from '../../styles/theme.module.css';
 import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
 import { IS_STATIC_ENV } from '../../utils/envUtil';
 import { truncate } from '../../utils/stringUtils';
 import { mockState } from './mockData';
+
+import { Heading } from '~/ui/Heading';
 
 const textDecoder = new TextDecoder();
 
@@ -210,22 +210,21 @@ function ValidatorsPage({ state }: { state: ValidatorState }): JSX.Element {
     };
 
     return (
-        <div className={styles.validators}>
-            <Tabs selected={0}>
-                <div title="Validators">
-                    <TableCard tabledata={tableData} />
-                    <TabFooter
-                        stats={getTabFooter(validatorsData.length).stats}
-                    >
-                        <Longtext
-                            text=""
-                            category="validators"
-                            isLink={false}
-                            alttext=""
-                        />
-                    </TabFooter>
-                </div>
-            </Tabs>
+        <div>
+            <Heading as="h1" variant="heading2" weight="bold">
+                Validators
+            </Heading>
+            <div className="mt-8">
+                <TableCard tabledata={tableData} />
+                <TabFooter stats={getTabFooter(validatorsData.length).stats}>
+                    <Longtext
+                        text=""
+                        category="validators"
+                        isLink={false}
+                        alttext=""
+                    />
+                </TabFooter>
+            </div>
         </div>
     );
 }

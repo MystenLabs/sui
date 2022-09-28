@@ -24,6 +24,8 @@
         "preview-storybook": "pnpm dlx serve ./storybook-static -l 6007"
     },
     "dependencies": {
+        "@headlessui/react": "^1.7.2",
+        "@headlessui/tailwindcss": "^0.1.1",
         "@mysten/sui.js": "workspace:*",
         "@sentry/react": "^7.6.0",
         "@sentry/tracing": "^7.6.0",
@@ -34,7 +36,7 @@
         "@visx/tooltip": "^2.10.0",
         "bn.js": "^5.2.0",
         "class-variance-authority": "^0.2.3",
-        "classnames": "^2.3.1",
+        "clsx": "^1.2.1",
         "plausible-tracker": "^0.3.8",
         "prism-react-renderer": "^1.3.5",
         "prism-themes": "^1.9.0",
