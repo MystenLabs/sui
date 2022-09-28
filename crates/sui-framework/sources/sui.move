@@ -13,7 +13,7 @@ module sui::sui {
     /// Name of the coin
     struct SUI has drop {}
 
-    /// Register the token to acquire its `TreasuryCap`.
+    /// Register the `SUI` Coin to acquire its `Supply`.
     /// This should be called only once during genesis creation.
     public(friend) fun new(ctx: &mut TxContext): Supply<SUI> {
         coin::treasury_into_supply(
