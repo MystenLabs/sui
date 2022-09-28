@@ -134,6 +134,44 @@ export const genTableDataFromTxData = (
     };
 };
 
+// Generate loading table display
+export const loadingTable = {
+    data: new Array(15).fill({
+        date: <div className={styles.placeholder} />,
+        txTypes: <div className={styles.placeholder} />,
+        transactionId: <div className={styles.placeholder} />,
+        addresses: <div className={styles.placeholder} />,
+        amounts: <div className={styles.placeholder} />,
+        gas: <div className={styles.placeholder} />,
+    }),
+    columns: [
+        {
+            headerLabel: 'Time',
+            accessorKey: 'date',
+        },
+        {
+            headerLabel: 'Type',
+            accessorKey: 'txTypes',
+        },
+        {
+            headerLabel: 'Transaction ID',
+            accessorKey: 'transactionId',
+        },
+        {
+            headerLabel: 'Addresses',
+            accessorKey: 'addresses',
+        },
+        {
+            headerLabel: 'Amount',
+            accessorKey: 'amounts',
+        },
+        {
+            headerLabel: 'Gas',
+            accessorKey: 'gas',
+        },
+    ],
+};
+
 export const getDataOnTxDigests = (
     network: Network | string,
     transactions: GetTxnDigestsResponse

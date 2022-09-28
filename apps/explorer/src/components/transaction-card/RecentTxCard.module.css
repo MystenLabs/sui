@@ -99,3 +99,7 @@ div.txadd {
 .suisuffix {
     @apply text-[10px] ml-[2px];
 }
+
+.placeholder {
+    @apply w-[80px] h-[16px] bg-red-900;
+}

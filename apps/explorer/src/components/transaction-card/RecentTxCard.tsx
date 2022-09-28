@@ -27,6 +27,7 @@ import {
     type TxnData,
     genTableDataFromTxData,
     getDataOnTxDigests,
+    loadingTable,
 } from './TxCardUtils';
 
 import styles from './RecentTxCard.module.css';
@@ -141,6 +142,8 @@ function LatestTxCard({ ...data }: RecentTx) {
 
     const [isLoaded, setIsLoaded] = useState(false);
     const [results, setResults] = useState(initState);
+    const [recentTx, setRecentTx] = useState(loadingTable);
+
     const [network] = useContext(NetworkContext);
     const [searchParams, setSearchParams] = useSearchParams();
 
@@ -156,7 +159,6 @@ function LatestTxCard({ ...data }: RecentTx) {
         [setSearchParams]
     );
     const defaultActiveTab = 0;
-    const recentTx = genTableDataFromTxData(results.latestTx, truncateLength);
 
     const stats = {
         count,
@@ -197,6 +199,9 @@ function LatestTxCard({ ...data }: RecentTx) {
                     latestTx: resp,
                     totalTxcount: count,
                 });
+                setRecentTx(
+                    genTableDataFromTxData(results.latestTx, truncateLength)
+                );
             })
             .catch((err) => {
                 setResults({
@@ -213,21 +218,15 @@ function LatestTxCard({ ...data }: RecentTx) {
         return () => {
             isMounted = false;
         };
-    }, [count, network, pageIndex, setSearchParams, txPerPage]);
-
-    if (results.loadState === 'pending') {
-        return (
-            <div className={cl(styles.txlatestresults, styles[paginationtype])}>
-                <Tab selected={defaultActiveTab}>
-                    <div title="Transactions">
-                        <div />
-                        {paginationtype !== 'none' &&
-                            PaginationWithStatsOrStatsWithLink}
-                    </div>
-                </Tab>
-            </div>
-        );
-    }
+    }, [
+        count,
+        network,
+        pageIndex,
+        setSearchParams,
+        txPerPage,
+        results,
+        truncateLength,
+    ]);
 
     if (!isLoaded && results.loadState === 'fail') {
         return (
