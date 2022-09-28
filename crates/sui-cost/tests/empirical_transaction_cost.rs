@@ -46,10 +46,13 @@ async fn test_good_snapshot() -> Result<(), anyhow::Error> {
     let mut common_costs_actual: BTreeMap<String, GasCostSummary> = BTreeMap::new();
     let mut common_costs_estimate: BTreeMap<String, GasCostSummary> = BTreeMap::new();
 
-    run_actual_and_estimate_costs().await?.iter().for_each(|(k, (actual, estimate))| {
-        common_costs_actual.insert(k.clone().to_string(), actual.clone());
-        common_costs_estimate.insert(k.clone().to_string(), estimate.clone());
-    });
+    run_actual_and_estimate_costs()
+        .await?
+        .iter()
+        .for_each(|(k, (actual, estimate))| {
+            common_costs_actual.insert(k.clone().to_string(), actual.clone());
+            common_costs_estimate.insert(k.clone().to_string(), estimate.clone());
+        });
     assert_json_snapshot!(common_costs_actual);
     assert_json_snapshot!(common_costs_estimate);
 
