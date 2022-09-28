@@ -3,27 +3,38 @@
 
 /// Sui types for specifying off-chain/external resources.
 ///
-/// TODO(ben): should we s/resource/object? or will it just confuse people with Sui objects?
+/// The keywords "MUST", "MUST NOT", "SHOULD", "SHOULD NOT" and "MAY" below should be interpreted as described in
+/// RFC 2119.
+///
+/// TODO(ben): Should we s/resource/object? or will it just confuse people with Sui objects?
+///
 module sui::external_resource {
     use std::ascii::{Self, String};
     use std::vector;
 
-    /// Length of the vector<u8> representing a resource SHA256 digest.
+    /// Length of the vector<u8> representing a SHA256 digest.
     const HASH_VECTOR_LENGTH: u64 = 32;
 
-    /// Error code when the length of the hash vector is not HASH_VECTOR_LENGTH
+    /// Error code when the length of the digest vector is not HASH_VECTOR_LENGTH.
     const EHashLengthMismatch: u64 = 0;
 
     /// URL: standard Uniform Resource Locator string.
-    /// Clients should support the following schemes: ipfs, https.
+    ///
+    /// MUST follow RFC-3986.
+    /// Clients MUST support (at least) the following schemes: ipfs, https.
     struct Url has store, copy, drop {
         url: String,
     }
 
     /// ImmutableExternalResource: An arbitrary, mutable URL plus an immutable digest of the resource.
-    /// Digest should be equal to SHA256(content of resource).
-    /// Clients of this type must fetch the resource at `url`, compute its digest and compare it against `digest`. If
-    /// the result is false, clients should indicate that to users or ignore the resource.
+    ///
+    /// Represents a resource that can move but must never change. Example use cases:
+    /// - NFT images.
+    /// - NFT metadata.
+    ///
+    /// `digest` MUST be set to SHA256(content of resource at `url`).
+    /// Clients of this type MUST fetch the resource at `url`, compute its digest and compare it against `digest`. If
+    /// the result is false, clients SHOULD indicate that to users or ignore the resource.
     struct ImmutableExternalResource has store, copy, drop {
         url: Url,
         digest: vector<u8>,
@@ -64,7 +75,7 @@ module sui::external_resource {
     }
 
 
-    // === `ImmutableResource` functions ===
+    // === `ImmutableExternalResource` functions ===
 
     /// Get the hash of the resource.
     public fun immutable_external_resource_digest(self: &ImmutableExternalResource): vector<u8> {
