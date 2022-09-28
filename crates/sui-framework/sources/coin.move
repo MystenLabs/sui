@@ -42,7 +42,7 @@ module sui::coin {
     struct CurrencyCreated<phantom T> has copy, drop {
         /// Number of decimal places the coin uses. 
         /// A coin with `value ` N and `decimals` D should be shown as N / 10^D
-        /// E.g., a coin with `value` 7002  and decimals 3 should be displayed as 7.002
+        /// E.g., a coin with `value` 7002 and decimals 3 should be displayed as 7.002
         /// This is metadata for display usage only.
         decimals: u8
     }
