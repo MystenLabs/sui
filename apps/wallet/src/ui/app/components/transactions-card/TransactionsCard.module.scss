@@ -1,33 +1,27 @@
 @use '_utils';
 @use '_values/colors';
 
-.title {
-    font-size: 15px;
-    font-weight: 700;
-    color: #404040;
-}
-
 .tx-card {
     text-decoration: none;
 }
 
 .card {
     display: grid;
-    gap: 5px;
-    grid-template-columns: 30px 6fr 2fr;
+    gap: 12px;
+    grid-template-columns: 30px 1fr;
     align-content: center;
     justify-content: space-between;
     border-bottom: 1px solid colors.$gray-45;
-    height: 64px;
+    height: auto;
+    padding: 15px 0;
     cursor: pointer;
 
     .card-icon {
         position: relative;
         display: flex;
         justify-content: center;
-        background-color: colors.$gray-40;
-        align-self: center;
-        border-radius: 50%;
+        background-color: colors.$gray-45;
+        border-radius: 10px;
         width: 30px;
         height: 30px;
 
@@ -44,8 +38,12 @@
             align-items: center;
             justify-content: center;
             margin: auto;
-            color: #589aea;
+            color: colors.$gradient-blue-start;
             font-size: 12px;
+        }
+
+        .received {
+            transform: rotate(312deg);
         }
     }
 
@@ -57,25 +55,21 @@
         display: flex;
         flex-flow: column;
         text-align: end;
-        justify-content: center;
+        justify-content: flex-start;
+        gap: 6px;
 
         .tx-amount {
-            @include utils.typography('table/text-sm');
+            @include utils.typography('header/search-text');
 
-            color: colors.$gray-100;
+            color: colors.$gray-90;
             text-align: right;
-            line-height: 120%;
-        }
+            line-height: 100%;
+            font-weight: 600;
 
-        .tx-image {
-            display: flex;
-            justify-content: flex-end;
-
-            img {
-                width: 50px;
-                height: 50px;
-                border-radius: 6px;
-                object-fit: cover;
+            span {
+                font-weight: 400;
+                font-size: 12px;
+                line-height: 100%;
             }
         }
     }
@@ -83,44 +77,63 @@
     .card-content {
         display: flex;
         flex-direction: column;
-        gap: 4px;
+        gap: 8px;
         justify-content: center;
 
         .tx-result {
             display: flex;
             align-items: center;
+            justify-content: space-between;
             gap: 6px;
 
-            .tx-type-date {
-                font-size: 11px;
-                line-height: 100%;
-
-                @include utils.typography('table/text-xs');
-            }
-
             .tx-type-name {
-                @include utils.typography('table/text-sm');
+                @include utils.typography('page-description');
 
-                color: colors.$gray-65;
+                color: colors.$gray-90;
+                line-height: 100%;
+                font-weight: 600;
+
+                span {
+                    font-weight: 400;
+                    font-size: 12px;
+                    line-height: 100%;
+                }
             }
 
             .kind {
                 @include utils.typography('table/title-sm');
+
+                color: colors.$gray-90;
+                line-height: 100%;
             }
         }
     }
 
+    .transfer-failed {
+        @include utils.typography('page-ex-small');
+
+        text-align: right;
+        color: colors.$issue;
+    }
+
     .tx-address {
-        @include utils.typography('table/text-sm');
+        @include utils.typography('page-description');
 
         font-family: 'Space Mono', ui-monospace, monospace;
-        color: colors.$gray-65;
+        color: colors.$gray-90;
+        line-height: 100%;
+    }
+
+    .address {
+        display: flex;
+        gap: 4px;
+        align-content: center;
     }
 }
 
 .failure {
     i {
-        color: #fca5a5;
+        color: colors.$issue;
     }
 }
 
@@ -129,4 +142,49 @@
         color: colors.$success;
         font-size: 8px;
     }
+}
+
+.tx-image {
+    display: flex;
+    justify-content: flex-start;
+    gap: 8px;
+
+    img {
+        width: 40px;
+        height: 40px;
+        border-radius: 4px;
+        object-fit: cover;
+    }
+
+    .nft-info {
+        display: flex;
+        flex-direction: column;
+        align-content: center;
+        justify-content: center;
+        gap: 4px;
+
+        .nft-name {
+            @include utils.typography('page-description');
+
+            color: colors.$gray-90;
+            line-height: 100%;
+            font-weight: 600;
+        }
+
+        .nft-description {
+            @include utils.typography('tooltip/label');
+
+            color: colors.$gray-75;
+            line-height: 100%;
+            font-weight: 400;
+            text-transform: none;
+        }
+    }
+}
+
+.tx-type-date {
+    @include utils.typography('page-ex-small');
+
+    color: colors.$gray-65;
+    font-weight: 400;
 }
