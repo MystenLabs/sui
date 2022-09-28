@@ -160,11 +160,6 @@ pub async fn checkpoint_process<A>(
 ) where
     A: AuthorityAPI + Send + Sync + 'static + Clone + Reconfigurable,
 {
-    if active_authority.state.checkpoints.is_none() {
-        // If the checkpointing database is not present, do not
-        // operate the active checkpointing logic.
-        return;
-    }
     info!("Start active checkpoint process.");
 
     tokio::time::sleep(timing.long_pause_between_checkpoints).await;
@@ -173,7 +168,7 @@ pub async fn checkpoint_process<A>(
 
     loop {
         let result = checkpoint_process_step(active_authority.clone(), timing).await;
-        let state_checkpoints = active_authority.state.checkpoints.as_ref().unwrap();
+        let state_checkpoints = &active_authority.state.checkpoints;
         let next_cp_seq = state_checkpoints.lock().next_checkpoint();
         match result {
             Ok(result) => {
@@ -301,7 +296,7 @@ where
     // while we do sync. We are in any case not in a position to make valuable
     // proposals.
     // Safe to unwrap due to check in the main process function.
-    let state_checkpoints = active_authority.state.checkpoints.as_ref().unwrap();
+    let state_checkpoints = &active_authority.state.checkpoints;
     if let Some(checkpoint) = highest_checkpoint {
         debug!(
             "Highest Checkpoint Certificate from the network: {}",
@@ -413,8 +408,6 @@ where
     active_authority
         .state
         .checkpoints
-        .as_ref()
-        .unwrap()
         .lock()
         .sign_new_checkpoint(
             epoch,

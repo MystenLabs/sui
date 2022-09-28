@@ -73,13 +73,7 @@ async fn checkpoint_active_flow_happy_path() {
 
     let mut value_set = BTreeSet::new();
     for a in authorities {
-        let next_checkpoint_sequence = a
-            .authority
-            .checkpoints
-            .as_ref()
-            .unwrap()
-            .lock()
-            .next_checkpoint();
+        let next_checkpoint_sequence = a.authority.checkpoints.lock().next_checkpoint();
         // TODO: This check is not very meaningful after we allowed empty checkpoints.
         // What we want to check is probably the number of non-empty checkpoints.
         assert!(
@@ -170,13 +164,7 @@ async fn checkpoint_active_flow_crash_client_with_gossip() {
 
     let mut value_set = BTreeSet::new();
     for a in authorities {
-        let next_checkpoint_sequence = a
-            .authority
-            .checkpoints
-            .as_ref()
-            .unwrap()
-            .lock()
-            .next_checkpoint();
+        let next_checkpoint_sequence = a.authority.checkpoints.lock().next_checkpoint();
         // TODO: This check is not very meaningful after we allowed empty checkpoints.
         // What we want to check is probably the number of non-empty checkpoints.
         assert!(
@@ -267,13 +255,7 @@ async fn checkpoint_active_flow_crash_client_no_gossip() {
 
     let mut value_set = BTreeSet::new();
     for a in authorities {
-        let next_checkpoint_sequence = a
-            .authority
-            .checkpoints
-            .as_ref()
-            .unwrap()
-            .lock()
-            .next_checkpoint();
+        let next_checkpoint_sequence = a.authority.checkpoints.lock().next_checkpoint();
         // TODO: This check is not very meaningful after we allowed empty checkpoints.
         // What we want to check is probably the number of non-empty checkpoints.
         assert!(
@@ -328,13 +310,7 @@ async fn test_empty_checkpoint() {
     tokio::time::sleep(Duration::from_secs(10 * 60)).await;
 
     for a in authorities {
-        let next_checkpoint_sequence = a
-            .authority
-            .checkpoints
-            .as_ref()
-            .unwrap()
-            .lock()
-            .next_checkpoint();
+        let next_checkpoint_sequence = a.authority.checkpoints.lock().next_checkpoint();
         assert!(next_checkpoint_sequence > 0)
     }
 }

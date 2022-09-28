@@ -163,14 +163,7 @@ async fn reconfig_last_checkpoint_sync_missing_tx() {
 
     // Create a proposal on validator 0, which ensures that the transaction above will be included
     // in the checkpoint.
-    nodes[0]
-        .state()
-        .checkpoints
-        .as_ref()
-        .unwrap()
-        .lock()
-        .set_proposal(0)
-        .unwrap();
+    nodes[0].state().checkpoints.lock().set_proposal(0).unwrap();
     let mut checkpoint_processes = vec![];
     // Only validator 1 and 2 will participate the checkpoint progress, which will use fragments
     // involving validator 0, 1, 2. Since validator 1 and 2 don't have the above transaction
@@ -182,8 +175,6 @@ async fn reconfig_last_checkpoint_sync_missing_tx() {
             while !active
                 .state
                 .checkpoints
-                .as_ref()
-                .unwrap()
                 .lock()
                 .is_ready_to_finish_epoch_change()
             {
@@ -204,8 +195,6 @@ async fn reconfig_last_checkpoint_sync_missing_tx() {
     while !nodes[3]
         .state()
         .checkpoints
-        .as_ref()
-        .unwrap()
         .lock()
         .is_ready_to_finish_epoch_change()
     {
@@ -280,8 +269,6 @@ async fn fast_forward_to_ready_for_reconfig_start(nodes: &[SuiNode]) {
             while !active
                 .state
                 .checkpoints
-                .as_ref()
-                .unwrap()
                 .lock()
                 .is_ready_to_start_epoch_change()
             {
@@ -304,8 +291,6 @@ async fn fast_forward_to_ready_for_reconfig_finish(nodes: &[SuiNode]) {
             while !active
                 .state
                 .checkpoints
-                .as_ref()
-                .unwrap()
                 .lock()
                 .is_ready_to_finish_epoch_change()
             {

@@ -961,8 +961,6 @@ async fn test_batch_to_checkpointing() {
     assert_eq!(
         authority_state
             .checkpoints
-            .as_ref()
-            .unwrap()
             .lock()
             .next_transaction_sequence_expected(),
         4
@@ -1080,8 +1078,6 @@ async fn test_batch_to_checkpointing_init_crash() {
         assert_eq!(
             authority_state
                 .checkpoints
-                .as_ref()
-                .unwrap()
                 .lock()
                 .next_transaction_sequence_expected(),
             4
@@ -1596,7 +1592,7 @@ pub async fn checkpoint_tests_setup(
                 async move { inner_state.run_batch_service(1000, batch_interval).await },
             );
 
-        let checkpoint = authority.checkpoints.as_ref().unwrap().clone();
+        let checkpoint = authority.checkpoints.clone();
         authorities.push(TestAuthority {
             store: authority.database.clone(),
             authority,

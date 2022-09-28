@@ -45,7 +45,7 @@ where
     /// all transactions from the second to the least checkpoint of the epoch. It's called by a
     /// validator that belongs to the committee of the current epoch.
     pub async fn start_epoch_change(&self) -> SuiResult {
-        let checkpoints = self.state.checkpoints.as_ref().unwrap();
+        let checkpoints = &self.state.checkpoints;
         assert!(
             checkpoints.lock().is_ready_to_start_epoch_change(),
             "start_epoch_change called at the wrong checkpoint",
@@ -65,7 +65,7 @@ where
     pub async fn finish_epoch_change(&self) -> SuiResult {
         let epoch = self.state.committee.load().epoch;
         info!(?epoch, "Finishing epoch change");
-        let checkpoints = self.state.checkpoints.as_ref().unwrap();
+        let checkpoints = &self.state.checkpoints;
         {
             let mut checkpoints = checkpoints.lock();
             assert!(
@@ -394,7 +394,7 @@ where
                 }
             }
         };
-        let mut checkpoint_store = self.state.checkpoints.as_ref().unwrap().lock();
+        let mut checkpoint_store = self.state.checkpoints.lock();
         let mut unbatched = self.state.database.transactions_in_seq_range(
             checkpoint_store.next_transaction_sequence_expected(),
             last_ticket,
