@@ -7,3 +7,4 @@ yarn-error.log*
 .swc/
 out/
 font-icons/output/
+CHANGELOG.md
