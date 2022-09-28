@@ -5,40 +5,42 @@ import BN from 'bn.js';
 /**
  * Value to be converted into public key.
  */
- export type PublicKeyInitData =
- | number
- | string
- | Buffer
- | Uint8Array
- | Array<number>
- | PublicKeyData;
+export type PublicKeyInitData =
+  | number
+  | string
+  | Buffer
+  | Uint8Array
+  | Array<number>
+  | PublicKeyData;
 
 /**
-* JSON object representation of PublicKey class.
-*/
+ * JSON object representation of PublicKey class.
+ */
 export type PublicKeyData = {
- /** @internal */
- _bn: BN;
+  /** @internal */
+  _bn: BN;
 };
 
 /**
  * A keypair used for signing transactions.
  */
 export type SignatureScheme = 'ED25519' | 'Secp256k1';
- 
+
 export const SIGNATURE_SCHEME_TO_FLAG = {
   ED25519: 0x00,
   Secp256k1: 0x01,
 };
 
-export function checkPublicKeyData(value: PublicKeyInitData): value is PublicKeyData {
+export function checkPublicKeyData(
+  value: PublicKeyInitData
+): value is PublicKeyData {
   return (value as PublicKeyData)._bn !== undefined;
 }
 
 /**
  * A public key
  */
- export interface PublicKey {
+export interface PublicKey {
   /**
    * Checks if two public keys are equal
    */
@@ -48,7 +50,7 @@ export function checkPublicKeyData(value: PublicKeyInitData): value is PublicKey
    * Return the base-64 representation of the public key
    */
   toBase64(): string;
-  
+
   /**
    * Return the byte array representation of the public key
    */
@@ -58,7 +60,7 @@ export function checkPublicKeyData(value: PublicKeyInitData): value is PublicKey
    * Return the Buffer representation of the public key
    */
   toBuffer(): Buffer;
-  
+
   /**
    * Return the base-64 representation of the public key
    */
@@ -67,5 +69,5 @@ export function checkPublicKeyData(value: PublicKeyInitData): value is PublicKey
   /**
    * Return the Sui address associated with this public key
    */
-  toSuiAddress(): string
+  toSuiAddress(): string;
 }

@@ -69,6 +69,17 @@ export type TransferSuiTx = {
   };
 };
 
+/**
+ * Transaction type used for Pay transaction.
+ */
+export type PayTx = {
+  Pay: {
+    input_coins: string[];
+    recipients: string[];
+    amounts: number[];
+  };
+};
+
 bcs.registerEnumType('Option<u64>', {
   None: null,
   Some: 'u64',
@@ -216,6 +227,7 @@ bcs
 
 export type Transaction =
   | MoveCallTx
+  | PayTx
   | PublishTx
   | TransferObjectTx
   | TransferSuiTx;
