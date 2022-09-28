@@ -76,7 +76,7 @@ async fn follower_process<A, Handler>(
                 let result =
                     follow_one_peer(handle, store, *name, client, max_stream_items, metrics)
                         .await
-                        .tap_err(|e| warn!("follower task exited with error {}", e));
+                        .tap_err(|e| warn!(peer=?name, "follower task exited with error {}", e));
                 (result, start_time, name)
             }
         };
