@@ -11,17 +11,20 @@ use crate::{
     synchronizer::Synchronizer,
 };
 use anemo::{types::PeerInfo, PeerId};
+use anemo_tower::{callback::CallbackLayer, trace::TraceLayer};
 use async_trait::async_trait;
 use config::{Parameters, SharedCommittee, SharedWorkerCache, WorkerId};
 use crypto::{traits::KeyPair as _, NetworkKeyPair, PublicKey};
 use futures::StreamExt;
 use multiaddr::{Multiaddr, Protocol};
+use network::metrics::MetricsMakeCallbackHandler;
 use network::P2pNetwork;
 use primary::PrimaryWorkerMessage;
 use std::{net::Ipv4Addr, sync::Arc};
 use store::Store;
 use tokio::{sync::watch, task::JoinHandle};
 use tonic::{Request, Response, Status};
+use tower::ServiceBuilder;
 use tracing::info;
 use types::{
     error::DagError,
@@ -82,6 +85,8 @@ impl Worker {
         let node_metrics = Arc::new(metrics.worker_metrics.unwrap());
         let endpoint_metrics = metrics.endpoint_metrics.unwrap();
         let channel_metrics: Arc<WorkerChannelMetrics> = Arc::new(metrics.channel_metrics.unwrap());
+        let inbound_network_metrics = Arc::new(metrics.inbound_network_metrics.unwrap());
+        let outbound_network_metrics = Arc::new(metrics.outbound_network_metrics.unwrap());
 
         // Spawn all worker tasks.
         let (tx_primary, rx_primary) = channel(CHANNEL_CAPACITY, &channel_metrics.tx_primary);
@@ -118,10 +123,25 @@ impl Worker {
         let routes = anemo::Router::new()
             .add_rpc_service(worker_service)
             .add_rpc_service(primary_service);
+
+        let service = ServiceBuilder::new()
+            .layer(TraceLayer::new())
+            .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
+                inbound_network_metrics,
+            )))
+            .service(routes);
+
+        let outbound_layer = ServiceBuilder::new()
+            .layer(TraceLayer::new())
+            .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
+                outbound_network_metrics,
+            )))
+            .into_inner();
         let network = anemo::Network::bind(addr)
             .server_name("narwhal")
             .private_key(worker.keypair.copy().private().0.to_bytes())
-            .start(routes)
+            .outbound_request_layer(outbound_layer)
+            .start(service)
             .unwrap();
 
         info!("Worker {} listening to worker messages on {}", id, address);

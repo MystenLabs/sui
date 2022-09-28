@@ -1,155 +1,180 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use prometheus::{default_registry, register_int_gauge_vec_with_registry, IntGaugeVec, Registry};
+use anemo_tower::callback::MakeCallbackHandler;
+use anemo_tower::callback::ResponseHandler;
+use prometheus::HistogramTimer;
+use prometheus::{
+    register_histogram_vec_with_registry, register_int_counter_vec_with_registry,
+    register_int_gauge_vec_with_registry, IntGaugeVec, Registry,
+};
+use prometheus::{HistogramVec, IntCounterVec};
 use std::sync::Arc;
 
-pub trait NetworkMetrics {
-    fn network_available_tasks(&self) -> &IntGaugeVec;
+#[derive(Clone)]
+pub struct NetworkMetrics {
+    /// Counter of requests by route
+    requests: IntCounterVec,
+    /// Request latency by route
+    request_latency: HistogramVec,
+    /// Request size by route
+    request_size: HistogramVec,
+    /// Response size by route
+    response_size: HistogramVec,
+    /// Gauge of the number of inflight requests at any given time by route
+    inflight_requests: IntGaugeVec,
+    /// Failed requests by route
+    errors: IntCounterVec,
 }
 
-#[derive(Clone, Debug)]
-pub struct PrimaryNetworkMetrics {
-    /// The number of executor available tasks
-    pub network_available_tasks: IntGaugeVec,
-}
+const LATENCY_SEC_BUCKETS: &[f64] = &[
+    0.001, 0.005, 0.01, 0.05, 0.1, 0.25, 0.5, 1., 2.5, 5., 10., 20., 30., 60., 90.,
+];
 
-impl PrimaryNetworkMetrics {
-    pub fn new(registry: &Registry) -> Self {
+impl NetworkMetrics {
+    pub fn new(node: &'static str, direction: &'static str, registry: &Registry) -> Self {
+        // Buckets from 1kb to 8mb by powers of 2
+        let size_byte_buckets = prometheus::exponential_buckets(1024.0, 2.0, 15).unwrap();
+
+        let requests = register_int_counter_vec_with_registry!(
+            format!("{node}_{direction}_requests"),
+            "The number of requests made on the network",
+            &["route"],
+            registry
+        )
+        .unwrap();
+
+        let request_latency = register_histogram_vec_with_registry!(
+            format!("{node}_{direction}_request_latency"),
+            "Latency of a request by route",
+            &["route"],
+            LATENCY_SEC_BUCKETS.to_vec(),
+            registry,
+        )
+        .unwrap();
+
+        let request_size = register_histogram_vec_with_registry!(
+            format!("{node}_{direction}_request_size"),
+            "Size of a request by route",
+            &["route"],
+            size_byte_buckets.clone(),
+            registry,
+        )
+        .unwrap();
+
+        let response_size = register_histogram_vec_with_registry!(
+            format!("{node}_{direction}_response_size"),
+            "Size of a response by route",
+            &["route"],
+            size_byte_buckets,
+            registry,
+        )
+        .unwrap();
+
+        let inflight_requests = register_int_gauge_vec_with_registry!(
+            format!("{node}_{direction}_inflight_requests"),
+            "The number of inflight network requests",
+            &["route"],
+            registry
+        )
+        .unwrap();
+
+        let errors = register_int_counter_vec_with_registry!(
+            format!("{node}_{direction}_request_errors"),
+            "Number of errors by route",
+            &["route", "status"],
+            registry,
+        )
+        .unwrap();
+
         Self {
-            network_available_tasks: register_int_gauge_vec_with_registry!(
-                "primary_network_available_tasks",
-                "The number of available tasks to run in the primary2primary network connector",
-                &["module", "network", "address"],
-                registry
-            )
-            .unwrap(),
+            requests,
+            request_latency,
+            request_size,
+            response_size,
+            inflight_requests,
+            errors,
         }
     }
 }
 
-impl NetworkMetrics for PrimaryNetworkMetrics {
-    fn network_available_tasks(&self) -> &IntGaugeVec {
-        &self.network_available_tasks
+#[derive(Clone)]
+pub struct MetricsMakeCallbackHandler {
+    metrics: Arc<NetworkMetrics>,
+}
+
+impl MetricsMakeCallbackHandler {
+    pub fn new(metrics: Arc<NetworkMetrics>) -> Self {
+        Self { metrics }
     }
 }
 
-impl Default for PrimaryNetworkMetrics {
-    fn default() -> Self {
-        Self::new(default_registry())
-    }
-}
+impl MakeCallbackHandler for MetricsMakeCallbackHandler {
+    type Handler = MetricsResponseHandler;
 
-#[derive(Clone, Debug)]
-pub struct WorkerNetworkMetrics {
-    /// The number of executor available tasks
-    pub network_available_tasks: IntGaugeVec,
-}
+    fn make_handler(&self, request: &anemo::Request<bytes::Bytes>) -> Self::Handler {
+        let route = request.route().to_owned();
 
-impl WorkerNetworkMetrics {
-    pub fn new(registry: &Registry) -> Self {
-        Self {
-            network_available_tasks: register_int_gauge_vec_with_registry!(
-                "worker_network_available_tasks",
-                "The number of available tasks to run in the worker2worker network connector",
-                &["module", "network", "address"],
-                registry
-            )
-            .unwrap(),
+        self.metrics.requests.with_label_values(&[&route]).inc();
+        self.metrics
+            .inflight_requests
+            .with_label_values(&[&route])
+            .inc();
+        self.metrics
+            .request_size
+            .with_label_values(&[&route])
+            .observe(request.body().len() as f64);
+
+        let timer = self
+            .metrics
+            .request_latency
+            .with_label_values(&[&route])
+            .start_timer();
+
+        MetricsResponseHandler {
+            metrics: self.metrics.clone(),
+            timer,
+            route,
         }
     }
 }
 
-impl NetworkMetrics for WorkerNetworkMetrics {
-    fn network_available_tasks(&self) -> &IntGaugeVec {
-        &self.network_available_tasks
-    }
+pub struct MetricsResponseHandler {
+    metrics: Arc<NetworkMetrics>,
+    // The timer is held on to and "observed" once dropped
+    #[allow(unused)]
+    timer: HistogramTimer,
+    route: String,
 }
 
-impl Default for WorkerNetworkMetrics {
-    fn default() -> Self {
-        Self::new(default_registry())
-    }
-}
+impl ResponseHandler for MetricsResponseHandler {
+    fn on_response(self, response: &anemo::Response<bytes::Bytes>) {
+        self.metrics
+            .response_size
+            .with_label_values(&[&self.route])
+            .observe(response.body().len() as f64);
 
-pub struct Metrics<N: NetworkMetrics> {
-    /// The handler to report the metrics.
-    metrics_handler: Arc<N>,
-    /// A tag used for every reported metric to trace the module where this has been used from
-    module_tag: String,
-    /// The network type - this shouldn't be set outside of this crate but is meant to
-    /// be initialised from the network modules.
-    network_type: String,
-}
-
-impl<N: NetworkMetrics> Metrics<N> {
-    pub fn new(metrics_handler: Arc<N>, module_tag: String) -> Self {
-        Self {
-            metrics_handler,
-            module_tag,
-            network_type: "".to_string(),
+        if !response.status().is_success() {
+            let status = response.status().to_u16().to_string();
+            self.metrics
+                .errors
+                .with_label_values(&[&self.route, &status])
+                .inc();
         }
     }
 
-    pub fn from(metrics: Metrics<N>, network_type: String) -> Metrics<N> {
-        Metrics {
-            metrics_handler: metrics.metrics_handler,
-            module_tag: metrics.module_tag,
-            network_type,
-        }
-    }
-
-    pub fn module_tag(&self) -> String {
-        self.module_tag.clone()
-    }
-
-    pub fn network_type(&self) -> String {
-        self.network_type.clone()
-    }
-
-    pub fn set_network_available_tasks(&self, value: i64, addr: Option<String>) {
-        self.metrics_handler
-            .network_available_tasks()
-            .with_label_values(&[
-                self.module_tag.as_str(),
-                self.network_type.as_str(),
-                addr.map_or("".to_string(), |a| a).as_str(),
-            ])
-            .set(value);
+    fn on_error<E>(self, _error: &E) {
+        self.metrics
+            .errors
+            .with_label_values(&[&self.route, "unknown"])
+            .inc();
     }
 }
 
-#[cfg(test)]
-mod test {
-    use crate::metrics::{Metrics, NetworkMetrics, PrimaryNetworkMetrics};
-    use prometheus::Registry;
-    use std::{collections::HashMap, sync::Arc};
-
-    #[test]
-    fn test_called_metrics() {
-        // GIVEN
-        let registry = Registry::new();
-        let metrics = Metrics {
-            metrics_handler: Arc::new(PrimaryNetworkMetrics::new(&registry)),
-            module_tag: "demo_handler".to_string(),
-            network_type: "primary".to_string(),
-        };
-
-        // WHEN update metrics
-        metrics.set_network_available_tasks(14, Some("127.0.0.1".to_string()));
-
-        // THEN registry should be updated with expected tag
-        let mut m = HashMap::new();
-        m.insert("module", "demo_handler");
-        m.insert("network", "primary");
-        m.insert("address", "127.0.0.1");
-        assert_eq!(
-            metrics
-                .metrics_handler
-                .network_available_tasks()
-                .get_metric_with(&m)
-                .unwrap()
-                .get(),
-            14
-        );
+impl Drop for MetricsResponseHandler {
+    fn drop(&mut self) {
+        self.metrics
+            .inflight_requests
+            .with_label_values(&[&self.route])
+            .dec();
     }
 }

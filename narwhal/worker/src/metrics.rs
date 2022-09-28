@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use mysten_network::metrics::MetricsCallbackProvider;
-use network::metrics::WorkerNetworkMetrics;
+use network::metrics::NetworkMetrics;
 use prometheus::{
     default_registry, register_histogram_vec_with_registry, register_int_counter_vec_with_registry,
     register_int_gauge_vec_with_registry, register_int_gauge_with_registry, HistogramVec,
@@ -15,7 +15,8 @@ pub struct Metrics {
     pub worker_metrics: Option<WorkerMetrics>,
     pub channel_metrics: Option<WorkerChannelMetrics>,
     pub endpoint_metrics: Option<WorkerEndpointMetrics>,
-    pub network_metrics: Option<WorkerNetworkMetrics>,
+    pub inbound_network_metrics: Option<NetworkMetrics>,
+    pub outbound_network_metrics: Option<NetworkMetrics>,
 }
 
 /// Initialises the metrics
@@ -29,14 +30,16 @@ pub fn initialise_metrics(metrics_registry: &Registry) -> Metrics {
     // Endpoint metrics
     let endpoint_metrics = WorkerEndpointMetrics::new(metrics_registry);
 
-    // The network metrics
-    let network_metrics = WorkerNetworkMetrics::new(metrics_registry);
+    // The metrics used for communicating over the network
+    let inbound_network_metrics = NetworkMetrics::new("worker", "inbound", metrics_registry);
+    let outbound_network_metrics = NetworkMetrics::new("worker", "outbound", metrics_registry);
 
     Metrics {
         worker_metrics: Some(node_metrics),
         channel_metrics: Some(channel_metrics),
         endpoint_metrics: Some(endpoint_metrics),
-        network_metrics: Some(network_metrics),
+        inbound_network_metrics: Some(inbound_network_metrics),
+        outbound_network_metrics: Some(outbound_network_metrics),
     }
 }
 

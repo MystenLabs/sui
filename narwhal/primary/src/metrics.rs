@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::EndpointMetrics;
 use mysten_network::metrics::MetricsCallbackProvider;
-use network::{metrics, metrics::PrimaryNetworkMetrics};
+use network::metrics::NetworkMetrics;
 use prometheus::{
     core::{AtomicI64, GenericGauge},
     default_registry, register_histogram_vec_with_registry, register_int_counter_vec_with_registry,
@@ -15,10 +15,10 @@ use tonic::Code;
 #[derive(Clone)]
 pub(crate) struct Metrics {
     pub(crate) endpoint_metrics: Option<EndpointMetrics>,
-    pub(crate) primary_endpoint_metrics: Option<PrimaryEndpointMetrics>,
+    pub(crate) inbound_network_metrics: Option<NetworkMetrics>,
+    pub(crate) outbound_network_metrics: Option<NetworkMetrics>,
     pub(crate) primary_channel_metrics: Option<PrimaryChannelMetrics>,
     pub(crate) node_metrics: Option<PrimaryMetrics>,
-    pub(crate) network_metrics: Option<PrimaryNetworkMetrics>,
 }
 
 /// Initialises the metrics
@@ -26,8 +26,9 @@ pub(crate) fn initialise_metrics(metrics_registry: &Registry) -> Metrics {
     // The metrics used for the gRPC primary node endpoints we expose to the external consensus
     let endpoint_metrics = EndpointMetrics::new(metrics_registry);
 
-    // The metrics used for the primary-to-primary communication node endpoints
-    let primary_endpoint_metrics = PrimaryEndpointMetrics::new(metrics_registry);
+    // The metrics used for communicating over the network
+    let inbound_network_metrics = NetworkMetrics::new("primary", "inbound", metrics_registry);
+    let outbound_network_metrics = NetworkMetrics::new("primary", "outbound", metrics_registry);
 
     // The metrics used for measuring the occupancy of the channels in the primary
     let primary_channel_metrics = PrimaryChannelMetrics::new(metrics_registry);
@@ -35,15 +36,12 @@ pub(crate) fn initialise_metrics(metrics_registry: &Registry) -> Metrics {
     // Essential/core metrics across the primary node
     let node_metrics = PrimaryMetrics::new(metrics_registry);
 
-    // Network metrics for the primary to primary comms
-    let network_metrics = metrics::PrimaryNetworkMetrics::new(metrics_registry);
-
     Metrics {
         node_metrics: Some(node_metrics),
         endpoint_metrics: Some(endpoint_metrics),
         primary_channel_metrics: Some(primary_channel_metrics),
-        primary_endpoint_metrics: Some(primary_endpoint_metrics),
-        network_metrics: Some(network_metrics),
+        inbound_network_metrics: Some(inbound_network_metrics),
+        outbound_network_metrics: Some(outbound_network_metrics),
     }
 }
 

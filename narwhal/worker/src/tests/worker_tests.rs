@@ -5,7 +5,6 @@ use super::*;
 use arc_swap::ArcSwap;
 use bytes::Bytes;
 use fastcrypto::Hash;
-use network::metrics::WorkerNetworkMetrics;
 use prometheus::Registry;
 use store::rocks;
 use test_utils::{
@@ -34,12 +33,7 @@ async fn handle_clients_transactions() {
     let store = Store::new(db);
 
     let registry = Registry::new();
-    let metrics = Metrics {
-        worker_metrics: Some(WorkerMetrics::new(&registry)),
-        channel_metrics: Some(WorkerChannelMetrics::new(&registry)),
-        endpoint_metrics: Some(WorkerEndpointMetrics::new(&registry)),
-        network_metrics: Some(WorkerNetworkMetrics::new(&registry)),
-    };
+    let metrics = crate::metrics::initialise_metrics(&registry);
 
     // Spawn a `Worker` instance.
     Worker::spawn(

@@ -24,6 +24,7 @@ use crate::{
 };
 
 use anemo::{types::PeerInfo, PeerId};
+use anemo_tower::{callback::CallbackLayer, trace::TraceLayer};
 use async_trait::async_trait;
 use config::{Parameters, SharedCommittee, SharedWorkerCache, WorkerId, WorkerInfo};
 use consensus::dag::Dag;
@@ -33,12 +34,14 @@ use fastcrypto::{
     SignatureService,
 };
 use multiaddr::Protocol;
+use network::metrics::MetricsMakeCallbackHandler;
 use network::P2pNetwork;
 use prometheus::Registry;
 use std::{collections::BTreeMap, net::Ipv4Addr, sync::Arc};
 use storage::CertificateStore;
 use store::Store;
 use tokio::{sync::watch, task::JoinHandle};
+use tower::ServiceBuilder;
 use tracing::info;
 use types::{
     error::DagError,
@@ -96,10 +99,9 @@ impl Primary {
         let metrics = initialise_metrics(registry);
         let endpoint_metrics = metrics.endpoint_metrics.unwrap();
         let mut primary_channel_metrics = metrics.primary_channel_metrics.unwrap();
-        // TODO Re-hookup metrics once the network migration is complete.
-        let _primary_endpoint_metrics = metrics.primary_endpoint_metrics.unwrap();
+        let inbound_network_metrics = Arc::new(metrics.inbound_network_metrics.unwrap());
+        let outbound_network_metrics = Arc::new(metrics.outbound_network_metrics.unwrap());
         let node_metrics = Arc::new(metrics.node_metrics.unwrap());
-        let _network_metrics = Arc::new(metrics.network_metrics.unwrap());
 
         let (tx_others_digests, rx_others_digests) =
             channel(CHANNEL_CAPACITY, &primary_channel_metrics.tx_others_digests);
@@ -207,10 +209,26 @@ impl Primary {
         let routes = anemo::Router::new()
             .add_rpc_service(primary_service)
             .add_rpc_service(worker_service);
+
+        let service = ServiceBuilder::new()
+            .layer(TraceLayer::new())
+            .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
+                inbound_network_metrics,
+            )))
+            .service(routes);
+
+        let outbound_layer = ServiceBuilder::new()
+            .layer(TraceLayer::new())
+            .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
+                outbound_network_metrics,
+            )))
+            .into_inner();
+
         let network = anemo::Network::bind(addr.clone())
             .server_name("narwhal")
             .private_key(network_signer.copy().private().0.to_bytes())
-            .start(routes)
+            .outbound_request_layer(outbound_layer)
+            .start(service)
             .unwrap_or_else(|_| {
                 panic!(
                     "Address {} should be available for the primary Narwhal service",

@@ -7,7 +7,6 @@ use crypto::PublicKey;
 use fastcrypto::{traits::KeyPair as _, Hash};
 use indexmap::IndexMap;
 use narwhal_primary as primary;
-use network::metrics::WorkerNetworkMetrics;
 use node::NodeStorage;
 use primary::{NetworkModel, PayloadToken, Primary, CHANNEL_CAPACITY};
 use prometheus::Registry;
@@ -30,10 +29,7 @@ use types::{
     ReadCausalRequest, ReconfigureNotification, RemoveCollectionsRequest, RetrievalResult,
     Transaction, ValidatorClient,
 };
-use worker::{
-    metrics::{Metrics, WorkerChannelMetrics, WorkerEndpointMetrics, WorkerMetrics},
-    Worker,
-};
+use worker::Worker;
 
 #[tokio::test]
 async fn test_get_collections() {
@@ -135,12 +131,7 @@ async fn test_get_collections() {
     );
 
     let registry = Registry::new();
-    let metrics = Metrics {
-        worker_metrics: Some(WorkerMetrics::new(&registry)),
-        channel_metrics: Some(WorkerChannelMetrics::new(&registry)),
-        endpoint_metrics: Some(WorkerEndpointMetrics::new(&registry)),
-        network_metrics: Some(WorkerNetworkMetrics::new(&registry)),
-    };
+    let metrics = worker::metrics::initialise_metrics(&registry);
 
     // Spawn a `Worker` instance.
     Worker::spawn(
@@ -355,12 +346,7 @@ async fn test_remove_collections() {
     );
 
     let registry = Registry::new();
-    let metrics = Metrics {
-        worker_metrics: Some(WorkerMetrics::new(&registry)),
-        channel_metrics: Some(WorkerChannelMetrics::new(&registry)),
-        endpoint_metrics: Some(WorkerEndpointMetrics::new(&registry)),
-        network_metrics: Some(WorkerNetworkMetrics::new(&registry)),
-    };
+    let metrics = worker::metrics::initialise_metrics(&registry);
 
     // Spawn a `Worker` instance.
     Worker::spawn(
@@ -960,12 +946,7 @@ async fn test_get_collections_with_missing_certificates() {
     );
 
     let registry_1 = Registry::new();
-    let metrics_1 = Metrics {
-        worker_metrics: Some(WorkerMetrics::new(&registry_1)),
-        channel_metrics: Some(WorkerChannelMetrics::new(&registry_1)),
-        endpoint_metrics: Some(WorkerEndpointMetrics::new(&registry_1)),
-        network_metrics: Some(WorkerNetworkMetrics::new(&registry_1)),
-    };
+    let metrics_1 = worker::metrics::initialise_metrics(&registry_1);
 
     // Spawn a `Worker` instance for primary 1.
     Worker::spawn(
@@ -1013,12 +994,7 @@ async fn test_get_collections_with_missing_certificates() {
     );
 
     let registry_2 = Registry::new();
-    let metrics_2 = Metrics {
-        worker_metrics: Some(WorkerMetrics::new(&registry_2)),
-        channel_metrics: Some(WorkerChannelMetrics::new(&registry_2)),
-        endpoint_metrics: Some(WorkerEndpointMetrics::new(&registry_2)),
-        network_metrics: Some(WorkerNetworkMetrics::new(&registry_2)),
-    };
+    let metrics_2 = worker::metrics::initialise_metrics(&registry_2);
 
     // Spawn a `Worker` instance for primary 2.
     Worker::spawn(
