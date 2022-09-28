@@ -43,5 +43,5 @@ store = { version = "0.1.0", package = "typed-store"}
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 telemetry-subscribers = "0.1.0"
 
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "6278d0fa78147a49ff2cb9dd2e45e763886be0a0" }
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "b145cbcf4a1917197e2b9ee6a1523afdb623dbf2" }
 tower = { version = "0.4.13", features = ["full"] }
