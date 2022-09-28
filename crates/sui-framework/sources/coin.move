@@ -125,7 +125,8 @@ module sui::coin {
         let i = 0;
         let len = vector::length(&coins);
         while (i < len) {
-            let coin = vector::remove(&mut coins, i);
+            // remove first from front
+            let coin = vector::remove(&mut coins, 0);
             join(self, coin);
             i = i + 1
         };
