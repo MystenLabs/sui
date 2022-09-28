@@ -4,7 +4,7 @@ expression: common_costs
 ---
 {
   "MergeCoin": {
-    "computation_cost": 482,
+    "computation_cost": 483,
     "storage_cost": 32,
     "storage_rebate": 0
   },
@@ -29,7 +29,7 @@ expression: common_costs
     "storage_rebate": 15
   },
   "SplitCoin": {
-    "computation_cost": 593,
+    "computation_cost": 594,
     "storage_cost": 80,
     "storage_rebate": 0
   },

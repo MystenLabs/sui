@@ -41,11 +41,11 @@ pub fn ecrecover(
     debug_assert!(ty_args.is_empty());
     debug_assert!(args.len() == 2);
 
-    let signature = pop_arg!(args, VectorRef);
     let hashed_msg = pop_arg!(args, VectorRef);
+    let signature = pop_arg!(args, VectorRef);
 
-    let signature_ref = signature.as_bytes_ref();
     let hashed_msg_ref = hashed_msg.as_bytes_ref();
+    let signature_ref = signature.as_bytes_ref();
 
     // TODO: implement native gas cost estimation https://github.com/MystenLabs/sui/issues/3593
     let cost = legacy_empty_cost();
