@@ -52,7 +52,7 @@ move-disassembler.workspace = true
 move-ir-types.workspace = true
 move-vm-types.workspace = true
 
-narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "0c7ff6cbeaa2995bb9034ebdbeb1ecd93caf967e" }
+narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "9688da76ae2aaf2b82e00a43efe4d66c5b7b07eb" }
 
 fastcrypto = { version = "0.1.2", features = ["copy_key"] }
 
