@@ -528,5 +528,9 @@ pub trait EstimatorApi {
         &self,
         /// transaction data bytes, as base-64 encoded string
         tx_bytes: Base64,
+        computation_gas_unit_price: u64,
+        storage_gas_unit_price: u64,
+        mutated_object_sizes_after: Option<usize>,
+        storage_rebate: u64,
     ) -> RpcResult<SuiGasCostSummary>;
 }
