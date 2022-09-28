@@ -4,6 +4,7 @@
 import { Base64DataBuffer, Secp256k1Keypair } from '../../../src';
 import { describe, it, expect } from 'vitest';
 import * as secp from '@noble/secp256k1';
+import { Signature } from '@noble/secp256k1';
 
 // Test case from https://github.com/rust-bitcoin/rust-secp256k1/blob/master/examples/sign_verify.rs#L26
 const VALID_SECP256K1_SECRET_KEY = [
@@ -64,12 +65,15 @@ describe('secp256k1-keypair', () => {
     );
 
     const msgHash = await secp.utils.sha256(signData.getData());
-    const signature = keypair.signData(signData);
-    const isValid = secp.verify(
-      signature.getData(),
+    const sig = keypair.signData(signData);
+    const pubkey = secp.recoverPublicKey(
       msgHash,
-      keypair.getPublicKey().toBytes()
+      Signature.fromCompact(sig.getData().slice(0, 64)),
+      sig.getData()[64],
+      true
     );
-    expect(isValid).toBeTruthy();
+    expect(Buffer.from(pubkey).toString('base64')).toEqual(
+      keypair.getPublicKey().toBase64()
+    );
   });
 });

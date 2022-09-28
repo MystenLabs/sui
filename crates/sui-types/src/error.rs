@@ -67,7 +67,7 @@ pub enum SuiError {
     #[error("An object that's owned by another object cannot be deleted or wrapped. It must be transferred to an account address first before deletion")]
     DeleteObjectOwnedObject,
     #[error("The shared locks for this transaction have not yet been set.")]
-    SharedObjectLockNotSetObject,
+    SharedObjectLockNotSetError,
     #[error("Invalid Batch Transaction: {}", error)]
     InvalidBatchTransaction { error: String },
     #[error("Object {child_id:?} is owned by object {parent_id:?}, which is not in the input")]

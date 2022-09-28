@@ -29,11 +29,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Lint
-        run: pnpm --filter sui-explorer lint
+        run: pnpm explorer lint
       - name: Unit Tests
-        run: pnpm --filter sui-explorer test:unit
+        run: pnpm explorer test:unit
       - name: Build
-        run: pnpm --filter sui-explorer build
+        run: pnpm explorer build
   end_to_end_static:
     name: End-to-end tests (Static)
     needs: diff
@@ -53,13 +53,13 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Install Cypress
-        run: pnpm --filter sui-explorer exec cypress install
+        run: pnpm explorer exec cypress install
       - name: Run e2e tests
         uses: cypress-io/github-action@v4
         with:
           install: false
           start: pnpm dev:static
-          working-directory: ./explorer/client
+          working-directory: ./apps/explorer
           spec: cypress/e2e/static/*
   end_to_end_localnet:
     name: End-to-end tests (Localnet)
@@ -81,13 +81,13 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Install Cypress
-        run: pnpm --filter sui-explorer exec cypress install
+        run: pnpm explorer exec cypress install
       - name: Run e2e tests
         uses: cypress-io/github-action@v4
         with:
           install: false
           start: pnpm dlx concurrently --kill-others 'cargo run --bin sui-test-validator' 'pnpm dev'
-          working-directory: ./explorer/client
+          working-directory: ./apps/explorer
           spec: cypress/e2e/localnet/*
           # Wait on faucet and explorer:
           wait-on: "http://localhost:3000, http://localhost:9123"

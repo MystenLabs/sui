@@ -106,15 +106,16 @@ impl TestCaseImpl for CallContractTest {
         )).unwrap_or_else(|| panic!("Expect such a MoveEvent in events {:?}", events));
 
         // Verify fullnode observes the txn
-        ctx.let_fullnode_sync().await;
+        ctx.let_fullnode_sync(vec![effects.transaction_digest], 5)
+            .await;
 
-        let sui_object = ObjectChecker::new(nft_id)
+        let object = ObjectChecker::new(nft_id)
             .owner(Owner::AddressOwner(signer))
-            .check_into_sui_object(ctx.get_fullnode())
+            .check_into_object(ctx.get_fullnode())
             .await;
 
         assert_eq!(
-            sui_object.reference.version,
+            object.reference.version,
             SequenceNumber::from_u64(1),
             "Expect sequence number to be 1"
         );
