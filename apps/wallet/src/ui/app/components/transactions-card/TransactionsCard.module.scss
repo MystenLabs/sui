@@ -8,7 +8,7 @@
 .card {
     display: grid;
     gap: 12px;
-    grid-template-columns: 30px 5fr 3fr;
+    grid-template-columns: 30px 1fr;
     align-content: center;
     justify-content: space-between;
     border-bottom: 1px solid colors.$gray-45;
@@ -21,7 +21,6 @@
         display: flex;
         justify-content: center;
         background-color: colors.$gray-45;
-        align-self: center;
         border-radius: 10px;
         width: 30px;
         height: 30px;
@@ -87,6 +86,7 @@
         .tx-result {
             display: flex;
             align-items: center;
+            justify-content: space-between;
             gap: 6px;
 
             .tx-type-name {
@@ -117,6 +117,13 @@
 
         font-family: 'Space Mono', ui-monospace, monospace;
         color: colors.$gray-90;
+        line-height: 100%;
+    }
+
+    .address {
+        display: flex;
+        gap: 4px;
+        align-content: center;
     }
 }
 
@@ -175,4 +182,5 @@
     @include utils.typography('page-ex-small');
 
     color: colors.$gray-65;
+    font-weight: 400;
 }

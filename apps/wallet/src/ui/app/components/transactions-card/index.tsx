@@ -46,7 +46,25 @@ function TransactionCard({ txn }: { txn: TxResultState }) {
 
     // TODO: update to account for bought, minted, swapped, etc
     const transferType =
-        txn.kind !== 'Call' && txn.isSender ? 'Sent' : 'Received';
+        txn.kind === 'Call' ? 'Call' : txn.isSender ? 'Sent' : 'Received';
+
+    const transferMeta = {
+        Call: {
+            txName: 'Minted',
+            transfer: '',
+            address: '',
+        },
+        Sent: {
+            txName: 'Sent',
+            transfer: 'To',
+            address: toAddrStr,
+        },
+        Received: {
+            txName: 'Received',
+            transfer: 'From',
+            address: fromAddrStr,
+        },
+    };
 
     const date = txn?.timestampMs
         ? formatDate(txn.timestampMs, ['month', 'day', 'hour', 'minute'])
@@ -68,26 +86,30 @@ function TransactionCard({ txn }: { txn: TxResultState }) {
                 <div className={st.cardContent}>
                     <div className={st.txResult}>
                         <div className={cl(st.txTypeName, st.kind)}>
-                            {transferType} {TransferSuiTxn}
+                            {transferMeta[transferType].txName} {TransferSuiTxn}
+                        </div>
+
+                        <div className={st.txTransferred}>
+                            <div className={st.txAmount}>
+                                {intl.formatNumber(
+                                    BigInt(txn?.amount || txn?.txGas || 0),
+                                    balanceFormatOptions
+                                )}{' '}
+                                <span>{GAS_SYMBOL}</span>
+                            </div>
                         </div>
                     </div>
                     <div className={st.txResult}>
-                        <div className={st.txTypeName}>
-                            {txn.kind !== 'Call' && txn.isSender
-                                ? 'To'
-                                : 'From'}
+                        <div className={st.address}>
+                            <div className={st.txTypeName}>
+                                {transferMeta[transferType].transfer}
+                            </div>
+                            <div className={cl(st.txValue, st.txAddress)}>
+                                {transferMeta[transferType].address}
+                            </div>
                         </div>
-                        <div className={cl(st.txValue, st.txAddress)}>
-                            {txn.kind !== 'Call' && txn.isSender
-                                ? toAddrStr
-                                : fromAddrStr}
-                            <span
-                                className={cl(
-                                    st[txn.status.toLowerCase()],
-                                    st.txstatus
-                                )}
-                            ></span>
-                        </div>
+
+                        {TransferFailed}
                     </div>
                     {txn.url && (
                         <div className={st.txImage}>
@@ -107,18 +129,6 @@ function TransactionCard({ txn }: { txn: TxResultState }) {
                         </div>
                     )}
                     {date && <div className={st.txTypeDate}>{date}</div>}
-                </div>
-                <div className={st.txTransferred}>
-                    <>
-                        <div className={st.txAmount}>
-                            {intl.formatNumber(
-                                BigInt(txn?.amount || txn?.txGas || 0),
-                                balanceFormatOptions
-                            )}{' '}
-                            <span>{GAS_SYMBOL}</span>
-                        </div>
-                        {TransferFailed}
-                    </>
                 </div>
             </div>
         </Link>
