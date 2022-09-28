@@ -1,0 +1,10 @@
+[package]
+name = "dependency_verify_test"
+version = "0.0.1"
+
+[dependencies]
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework", rev = "move-deps-verify" }
+
+[addresses]
+dependency_verify_test =  "0x0"
+sui =  "0000000000000000000000000000000000000002"
