@@ -1,6 +1,6 @@
 {
   "name": "@mysten/wallet-adapter-react",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "description": "React interface for Sui Wallet Adapter",
   "license": "Apache-2.0",
   "author": "Mysten Labs <build@mystenlabs.com>",
