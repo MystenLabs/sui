@@ -19,7 +19,12 @@ import st from './TransactionsCard.module.scss';
 const TRUNCATE_MAX_LENGTH = 8;
 const TRUNCATE_PREFIX_LENGTH = 4;
 
+// Truncatte text after two lines (~ 80 characters)
+const TRUNCATE_MAX_CHAR = 80;
+
 function TransactionCard({ txn }: { txn: TxResultState }) {
+    const intl = useIntl();
+
     const toAddrStr = useMiddleEllipsis(
         txn.to || '',
         TRUNCATE_MAX_LENGTH,
@@ -31,18 +36,16 @@ function TransactionCard({ txn }: { txn: TxResultState }) {
         TRUNCATE_PREFIX_LENGTH
     );
 
-    const intl = useIntl();
-
-    const TransferFailed =
-        txn.status !== 'success' ? (
-            <div className={st.transferFailed}>Failed</div>
-        ) : null;
-
-    //TODO update the logic to account for other transfer type
-    const TxIcon = txn.isSender ? SuiIcons.ArrowLeft : SuiIcons.Buy;
-    const iconClassName = txn.isSender
-        ? cl(st.arrowActionIcon, st.angledArrow)
-        : cl(st.arrowActionIcon, st.buyIcon);
+    const truncatedNftName = useMiddleEllipsis(
+        txn?.name || '',
+        TRUNCATE_MAX_CHAR,
+        TRUNCATE_MAX_CHAR - 1
+    );
+    const truncatedNftDiscription = useMiddleEllipsis(
+        txn?.description || '',
+        TRUNCATE_MAX_CHAR,
+        TRUNCATE_MAX_CHAR - 1
+    );
 
     // TODO: update to account for bought, minted, swapped, etc
     const transferType =
@@ -51,8 +54,8 @@ function TransactionCard({ txn }: { txn: TxResultState }) {
     const transferMeta = {
         Call: {
             txName: 'Minted',
-            transfer: '',
-            address: '',
+            transfer: false,
+            address: false,
         },
         Sent: {
             txName: 'Sent',
@@ -70,7 +73,27 @@ function TransactionCard({ txn }: { txn: TxResultState }) {
         ? formatDate(txn.timestampMs, ['month', 'day', 'hour', 'minute'])
         : false;
 
+    const TxIcon = txn.isSender ? SuiIcons.ArrowLeft : SuiIcons.Buy;
+    const iconClassName = txn.isSender
+        ? cl(st.arrowActionIcon, st.angledArrow)
+        : cl(st.arrowActionIcon, st.buyIcon);
+
     const TransferSuiTxn = txn.kind === 'TransferSui' ? <span>SUI</span> : null;
+    const TransferFailed =
+        txn.status !== 'success' ? (
+            <div className={st.transferFailed}>Failed</div>
+        ) : null;
+
+    const TxnsAddress = transferMeta[transferType]?.address ? (
+        <div className={st.address}>
+            <div className={st.txTypeName}>
+                {transferMeta[transferType].transfer}
+            </div>
+            <div className={cl(st.txValue, st.txAddress)}>
+                {transferMeta[transferType].address}
+            </div>
+        </div>
+    ) : null;
 
     return (
         <Link
@@ -99,18 +122,14 @@ function TransactionCard({ txn }: { txn: TxResultState }) {
                             </div>
                         </div>
                     </div>
-                    <div className={st.txResult}>
-                        <div className={st.address}>
-                            <div className={st.txTypeName}>
-                                {transferMeta[transferType].transfer}
-                            </div>
-                            <div className={cl(st.txValue, st.txAddress)}>
-                                {transferMeta[transferType].address}
-                            </div>
-                        </div>
 
-                        {TransferFailed}
-                    </div>
+                    {TxnsAddress || TransferFailed ? (
+                        <div className={st.txResult}>
+                            {TxnsAddress}
+                            {TransferFailed}
+                        </div>
+                    ) : null}
+
                     {txn.url && (
                         <div className={st.txImage}>
                             <img
@@ -121,9 +140,11 @@ function TransactionCard({ txn }: { txn: TxResultState }) {
                                 alt={txn?.name || 'NFT'}
                             />
                             <div className={st.nftInfo}>
-                                <div className={st.nftName}>{txn?.name}</div>
+                                <div className={st.nftName}>
+                                    {truncatedNftName}
+                                </div>
                                 <div className={st.nftDescription}>
-                                    {txn?.description}
+                                    {truncatedNftDiscription}
                                 </div>
                             </div>
                         </div>

@@ -68,19 +68,12 @@
                 line-height: 100%;
             }
         }
-
-        .transfer-failed {
-            @include utils.typography('page-ex-small');
-
-            text-align: right;
-            color: colors.$issue;
-        }
     }
 
     .card-content {
         display: flex;
         flex-direction: column;
-        gap: 4px;
+        gap: 6px;
         justify-content: center;
 
         .tx-result {
@@ -110,6 +103,13 @@
                 line-height: 100%;
             }
         }
+    }
+
+    .transfer-failed {
+        @include utils.typography('page-ex-small');
+
+        text-align: right;
+        color: colors.$issue;
     }
 
     .tx-address {
