@@ -1,10 +1,6 @@
 @use '_values/colors';
 @use '_utils';
 
-.wrapper {
-    display: contents;
-}
-
 .container {
     display: flex;
     flex-flow: row;
@@ -68,6 +64,8 @@
     padding: 10px 12px;
     z-index: 999;
     max-width: 55%;
+    top: 0;
+    left: 0;
 }
 
 .popup-content {
@@ -79,7 +77,7 @@
 .popup-arrow {
     position: absolute;
     z-index: -1;
-    top: -5px;
+    top: -6px;
 
     &::before {
         content: '';
