@@ -4,7 +4,7 @@
     "items": [
       {
         "label": "Sui Doc Updates",
-        "link": "doc-updates/index.md"
+        "link": "doc-updates/index"
       },
       {
         "label": "Sui by Example",
