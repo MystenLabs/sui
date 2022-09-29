@@ -101,5 +101,13 @@ div.txadd {
 }
 
 .placeholder {
-    @apply w-[80px] h-[16px] bg-red-900;
+    @apply w-[80px] h-[16px];
+
+    background: linear-gradient(
+        90deg,
+        #ecf1f4 -24.18%,
+        rgba(237 242 245 / 40%) 73.61%,
+        #f3f7f9 114.81%,
+        #ecf1f4 114.82%
+    );
 }
