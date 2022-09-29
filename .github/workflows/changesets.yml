@@ -40,5 +40,5 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Create Release Pull Request
         uses: changesets/action@v1
-        with:
-          ssh-key: ${{ secrets.SSH_CHANGESETS_PUSH }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
