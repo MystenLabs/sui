@@ -312,7 +312,7 @@ impl AuthorityPublicKeyBytes {
         &self,
         f: &mut std::fmt::Formatter<'_>,
     ) -> std::result::Result<(), std::fmt::Error> {
-        let s = hex::encode(&self.0);
+        let s = hex::encode(self.0);
         write!(f, "k#{}", s)?;
         Ok(())
     }
@@ -513,7 +513,7 @@ pub fn derive_key_pair_from_path(
             Ok((kp.public().into(), SuiKeyPair::Ed25519SuiKeyPair(kp)))
         }
         SignatureScheme::Secp256k1 => {
-            let child_xprv = XPrv::derive_from_path(&seed, &path)
+            let child_xprv = XPrv::derive_from_path(seed, &path)
                 .map_err(|e| SuiError::SignatureKeyGenError(e.to_string()))?;
             let kp = Secp256k1KeyPair::from(
                 Secp256k1PrivateKey::from_bytes(child_xprv.private_key().to_bytes().as_slice())
