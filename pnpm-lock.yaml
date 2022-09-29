@@ -136,9 +136,9 @@ importers:
 
   apps/wallet:
     specifiers:
+      '@floating-ui/react-dom-interactions': ^0.10.1
       '@metamask/browser-passworder': ^3.0.0
       '@mysten/sui.js': workspace:*
-      '@popperjs/core': ^2.11.6
       '@reduxjs/toolkit': ^1.8.3
       '@scure/bip32': ^1.1.0
       '@scure/bip39': ^1.1.0
@@ -177,7 +177,6 @@ importers:
       react-dom: ^18.2.0
       react-intl: ^6.0.5
       react-number-format: ^4.9.3
-      react-popper: ^2.3.0
       react-redux: ^8.0.2
       react-router-dom: ^6.3.0
       react-textarea-autosize: ^8.3.4
@@ -204,9 +203,9 @@ importers:
       webpack-merge: ^5.8.0
       yup: ^0.32.11
     dependencies:
+      '@floating-ui/react-dom-interactions': 0.10.1_7ey2zzynotv32rpkwno45fsx4e
       '@metamask/browser-passworder': 3.0.0
       '@mysten/sui.js': link:../../sdk/typescript
-      '@popperjs/core': 2.11.6
       '@reduxjs/toolkit': 1.8.5_kkwg4cbsojnjnupd3btipussee
       '@scure/bip32': 1.1.0
       '@scure/bip39': 1.1.0
@@ -219,7 +218,6 @@ importers:
       react-dom: 18.2.0_react@18.2.0
       react-intl: 6.0.8_n4upredruleo7vrbwztywbpoxq
       react-number-format: 4.9.3_biqbaboplfbrettd7655fr4n2y
-      react-popper: 2.3.0_r6q5zrenym2zg7je7hgi674bti
       react-redux: 8.0.2_6hrpdt74nuubt2lijsfizev3cu
       react-router-dom: 6.3.0_biqbaboplfbrettd7655fr4n2y
       react-textarea-autosize: 8.3.4_w5j4k42lgipnm43s3brx6h3c34
@@ -3499,6 +3497,41 @@ packages:
       strip-json-comments: 3.1.1
     transitivePeerDependencies:
       - supports-color
+
+  /@floating-ui/core/1.0.1:
+    resolution: {integrity: sha512-bO37brCPfteXQfFY0DyNDGB3+IMe4j150KFQcgJ5aBP295p9nBGeHEs/p0czrRbtlHq4Px/yoPXO/+dOCcF4uA==}
+    dev: false
+
+  /@floating-ui/dom/1.0.2:
+    resolution: {integrity: sha512-5X9WSvZ8/fjy3gDu8yx9HAA4KG1lazUN2P4/VnaXLxTO9Dz53HI1oYoh1OlhqFNlHgGDiwFX5WhFCc2ljbW3yA==}
+    dependencies:
+      '@floating-ui/core': 1.0.1
+    dev: false
+
+  /@floating-ui/react-dom-interactions/0.10.1_7ey2zzynotv32rpkwno45fsx4e:
+    resolution: {integrity: sha512-mb9Sn/cnPjVlEucSZTSt4Iu7NAvqnXTvmzeE5EtfdRhVQO6L94dqqT+DPTmJmbiw4XqzoyGP+Q6J+I5iK2p6bw==}
+    peerDependencies:
+      react: '>=16.8.0'
+      react-dom: '>=16.8.0'
+    dependencies:
+      '@floating-ui/react-dom': 1.0.0_biqbaboplfbrettd7655fr4n2y
+      aria-hidden: 1.2.1_w5j4k42lgipnm43s3brx6h3c34
+      react: 18.2.0
+      react-dom: 18.2.0_react@18.2.0
+    transitivePeerDependencies:
+      - '@types/react'
+    dev: false
+
+  /@floating-ui/react-dom/1.0.0_biqbaboplfbrettd7655fr4n2y:
+    resolution: {integrity: sha512-uiOalFKPG937UCLm42RxjESTWUVpbbatvlphQAU6bsv+ence6IoVG8JOUZcy8eW81NkU+Idiwvx10WFLmR4MIg==}
+    peerDependencies:
+      react: '>=16.8.0'
+      react-dom: '>=16.8.0'
+    dependencies:
+      '@floating-ui/dom': 1.0.2
+      react: 18.2.0
+      react-dom: 18.2.0_react@18.2.0
+    dev: false
 
   /@formatjs/ecma402-abstract/1.11.10:
     resolution: {integrity: sha512-v8nuQpx6pc0xzg4VMCXPWesFx8PxBysdF7q1CGEoet0X9nhbGPGNq0SC+D9g+Kh0pWWITidlEYsepLF7lb8Tqw==}
@@ -7780,6 +7813,21 @@ packages:
 
   /argparse/2.0.1:
     resolution: {integrity: sha512-8+9WqebbFzpX9OR+Wa6O29asIogeRMzcGtAINdpMHHyAg10f05aSFVBbcEqGf/PXw1EjAZ+q2/bEBg3DvurK3Q==}
+
+  /aria-hidden/1.2.1_w5j4k42lgipnm43s3brx6h3c34:
+    resolution: {integrity: sha512-PN344VAf9j1EAi+jyVHOJ8XidQdPVssGco39eNcsGdM4wcsILtxrKLkbuiMfLWYROK1FjRQasMWCBttrhjnr6A==}
+    engines: {node: '>=10'}
+    peerDependencies:
+      '@types/react': ^16.9.0 || ^17.0.0 || ^18.0.0
+      react: ^16.9.0 || ^17.0.0 || ^18.0.0
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
+    dependencies:
+      '@types/react': 18.0.20
+      react: 18.2.0
+      tslib: 2.4.0
+    dev: false
 
   /aria-query/4.2.2:
     resolution: {integrity: sha512-o/HelwhuKpTj/frsOsbNLNgnNGVIFsVP/SW2BSF14gVl7kAfMOJ6/8wUAUvG1R1NHKrfG+2sHZTu0yauT1qBrA==}
@@ -17500,10 +17548,6 @@ packages:
     resolution: {integrity: sha512-suNP+J1VU1MWFKcyt7RtjiSWUjvidmQSlqu+eHslq+342xCbGTYmC0mEhPCOHxlW0CywylOC1u2DFAT+bv4dBw==}
     dev: false
 
-  /react-fast-compare/3.2.0:
-    resolution: {integrity: sha512-rtGImPZ0YyLrscKI9xTpV8psd6I8VAtjKCzQDlzyDvqJA8XOW78TXYQwNRNd8g8JZnDu8q9Fu/1v4HPAVwVdHA==}
-    dev: false
-
   /react-ga4/1.4.1:
     resolution: {integrity: sha512-ioBMEIxd4ePw4YtaloTUgqhQGqz5ebDdC4slEpLgy2sLx1LuZBC9iYCwDymTXzcntw6K1dHX183ulP32nNdG7w==}
     dev: false
@@ -17560,20 +17604,6 @@ packages:
       prop-types: 15.8.1
       react: 18.2.0
       react-dom: 18.2.0_react@18.2.0
-    dev: false
-
-  /react-popper/2.3.0_r6q5zrenym2zg7je7hgi674bti:
-    resolution: {integrity: sha512-e1hj8lL3uM+sgSR4Lxzn5h1GxBlpa4CQz0XLF8kx4MDrDRWY0Ena4c97PUeSX9i5W3UAfDP0z0FXCTQkoXUl3Q==}
-    peerDependencies:
-      '@popperjs/core': ^2.0.0
-      react: ^16.8.0 || ^17 || ^18
-      react-dom: ^16.8.0 || ^17 || ^18
-    dependencies:
-      '@popperjs/core': 2.11.6
-      react: 18.2.0
-      react-dom: 18.2.0_react@18.2.0
-      react-fast-compare: 3.2.0
-      warning: 4.0.3
     dev: false
 
   /react-redux/8.0.2_6hrpdt74nuubt2lijsfizev3cu:
@@ -21086,12 +21116,6 @@ packages:
     dependencies:
       makeerror: 1.0.12
     dev: true
-
-  /warning/4.0.3:
-    resolution: {integrity: sha512-rpJyN222KWIvHJ/F53XSZv0Zl/accqHR8et1kpaMTD/fLCRxtV8iX8czMzY7sVZupTI3zcUTg8eycS2kNF9l6w==}
-    dependencies:
-      loose-envify: 1.4.0
-    dev: false
 
   /watchpack-chokidar2/2.0.1:
     resolution: {integrity: sha512-nCFfBIPKr5Sh61s4LPpy1Wtfi0HE8isJ3d2Yb5/Ppw2P2B/3eVSEBjKfN0fmHJSK14+31KwMKmcrzs2GM4P0Ww==}
