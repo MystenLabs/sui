@@ -459,8 +459,6 @@ where
         epoch_id: &EpochId,
     ) {
         if let Some(tx) = tx {
-            // Send status back to follower so that it knows whether to advance
-            // the watermark.
             if tx.send(res).is_err() {
                 // This will happen any time the follower times out and restarts, but
                 // that's ok - the follower won't have marked this digest as processed so it
