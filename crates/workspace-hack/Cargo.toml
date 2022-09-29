@@ -324,17 +324,17 @@ multihash = { version = "0.16", default-features = false, features = ["alloc", "
 mysten-network = { version = "0.1", default-features = false }
 mysten-util-mem = { git = "https://github.com/MystenLabs/mysten-infra", features = ["estimate-heapsize", "hashbrown", "parking_lot", "smallvec", "std"] }
 named-lock = { version = "0.1", default-features = false }
-narwhal-config = { git = "https://github.com/MystenLabs/narwhal", rev = "46bb2d73c17b2fd6b11fb08b73808dcb56434ad0", default-features = false }
-narwhal-consensus = { git = "https://github.com/MystenLabs/narwhal", rev = "46bb2d73c17b2fd6b11fb08b73808dcb56434ad0", features = ["benchmark", "rand"] }
-narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "46bb2d73c17b2fd6b11fb08b73808dcb56434ad0" }
-narwhal-dag = { git = "https://github.com/MystenLabs/narwhal", rev = "46bb2d73c17b2fd6b11fb08b73808dcb56434ad0", default-features = false }
-narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "46bb2d73c17b2fd6b11fb08b73808dcb56434ad0", default-features = false }
-narwhal-network = { git = "https://github.com/MystenLabs/narwhal", rev = "46bb2d73c17b2fd6b11fb08b73808dcb56434ad0", default-features = false }
-narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "46bb2d73c17b2fd6b11fb08b73808dcb56434ad0", default-features = false, features = ["benchmark", "trace_transaction"] }
-narwhal-primary = { git = "https://github.com/MystenLabs/narwhal", rev = "46bb2d73c17b2fd6b11fb08b73808dcb56434ad0", default-features = false, features = ["benchmark"] }
-narwhal-storage = { git = "https://github.com/MystenLabs/narwhal", rev = "46bb2d73c17b2fd6b11fb08b73808dcb56434ad0", default-features = false }
-narwhal-types = { git = "https://github.com/MystenLabs/narwhal", rev = "46bb2d73c17b2fd6b11fb08b73808dcb56434ad0" }
-narwhal-worker = { git = "https://github.com/MystenLabs/narwhal", rev = "46bb2d73c17b2fd6b11fb08b73808dcb56434ad0", default-features = false, features = ["benchmark", "trace_transaction"] }
+narwhal-config = { git = "https://github.com/MystenLabs/narwhal", rev = "10f8f5143460c1498bf24caa22f1daa89ee98a99", default-features = false }
+narwhal-consensus = { git = "https://github.com/MystenLabs/narwhal", rev = "10f8f5143460c1498bf24caa22f1daa89ee98a99", features = ["benchmark", "rand"] }
+narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "10f8f5143460c1498bf24caa22f1daa89ee98a99" }
+narwhal-dag = { git = "https://github.com/MystenLabs/narwhal", rev = "10f8f5143460c1498bf24caa22f1daa89ee98a99", default-features = false }
+narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "10f8f5143460c1498bf24caa22f1daa89ee98a99", default-features = false }
+narwhal-network = { git = "https://github.com/MystenLabs/narwhal", rev = "10f8f5143460c1498bf24caa22f1daa89ee98a99", default-features = false }
+narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "10f8f5143460c1498bf24caa22f1daa89ee98a99", default-features = false, features = ["benchmark", "trace_transaction"] }
+narwhal-primary = { git = "https://github.com/MystenLabs/narwhal", rev = "10f8f5143460c1498bf24caa22f1daa89ee98a99", default-features = false, features = ["benchmark"] }
+narwhal-storage = { git = "https://github.com/MystenLabs/narwhal", rev = "10f8f5143460c1498bf24caa22f1daa89ee98a99", default-features = false }
+narwhal-types = { git = "https://github.com/MystenLabs/narwhal", rev = "10f8f5143460c1498bf24caa22f1daa89ee98a99" }
+narwhal-worker = { git = "https://github.com/MystenLabs/narwhal", rev = "10f8f5143460c1498bf24caa22f1daa89ee98a99", default-features = false, features = ["benchmark", "trace_transaction"] }
 nested = { version = "0.1", default-features = false }
 nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "bff03c566c9e22b1f4e67f516d0fd592a5a88f20", default-features = false }
 nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "bff03c566c9e22b1f4e67f516d0fd592a5a88f20", default-features = false }
@@ -600,7 +600,7 @@ web-sys = { version = "0.3", default-features = false, features = ["BinaryType",
 webpki = { version = "0.22", default-features = false, features = ["alloc", "std"] }
 webpki-roots = { version = "0.22", default-features = false }
 whoami = { version = "1" }
-workspace-hack = { git = "https://github.com/MystenLabs/narwhal", rev = "46bb2d73c17b2fd6b11fb08b73808dcb56434ad0", default-features = false }
+workspace-hack = { git = "https://github.com/MystenLabs/narwhal", rev = "10f8f5143460c1498bf24caa22f1daa89ee98a99", default-features = false }
 wyz = { version = "0.2", default-features = false, features = ["alloc"] }
 x509-parser = { version = "0.14" }
 yaml-rust = { version = "0.4", default-features = false }
@@ -968,17 +968,17 @@ mysten-util-mem = { git = "https://github.com/MystenLabs/mysten-infra", features
 mysten-util-mem-derive = { git = "https://github.com/MystenLabs/mysten-infra", default-features = false }
 name-variant = { version = "0.1", default-features = false }
 named-lock = { version = "0.1", default-features = false }
-narwhal-config = { git = "https://github.com/MystenLabs/narwhal", rev = "46bb2d73c17b2fd6b11fb08b73808dcb56434ad0", default-features = false }
-narwhal-consensus = { git = "https://github.com/MystenLabs/narwhal", rev = "46bb2d73c17b2fd6b11fb08b73808dcb56434ad0", features = ["benchmark", "rand"] }
-narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "46bb2d73c17b2fd6b11fb08b73808dcb56434ad0" }
-narwhal-dag = { git = "https://github.com/MystenLabs/narwhal", rev = "46bb2d73c17b2fd6b11fb08b73808dcb56434ad0", default-features = false }
-narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "46bb2d73c17b2fd6b11fb08b73808dcb56434ad0", default-features = false }
-narwhal-network = { git = "https://github.com/MystenLabs/narwhal", rev = "46bb2d73c17b2fd6b11fb08b73808dcb56434ad0", default-features = false }
-narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "46bb2d73c17b2fd6b11fb08b73808dcb56434ad0", default-features = false, features = ["benchmark", "trace_transaction"] }
-narwhal-primary = { git = "https://github.com/MystenLabs/narwhal", rev = "46bb2d73c17b2fd6b11fb08b73808dcb56434ad0", default-features = false, features = ["benchmark"] }
-narwhal-storage = { git = "https://github.com/MystenLabs/narwhal", rev = "46bb2d73c17b2fd6b11fb08b73808dcb56434ad0", default-features = false }
-narwhal-types = { git = "https://github.com/MystenLabs/narwhal", rev = "46bb2d73c17b2fd6b11fb08b73808dcb56434ad0" }
-narwhal-worker = { git = "https://github.com/MystenLabs/narwhal", rev = "46bb2d73c17b2fd6b11fb08b73808dcb56434ad0", default-features = false, features = ["benchmark", "trace_transaction"] }
+narwhal-config = { git = "https://github.com/MystenLabs/narwhal", rev = "10f8f5143460c1498bf24caa22f1daa89ee98a99", default-features = false }
+narwhal-consensus = { git = "https://github.com/MystenLabs/narwhal", rev = "10f8f5143460c1498bf24caa22f1daa89ee98a99", features = ["benchmark", "rand"] }
+narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "10f8f5143460c1498bf24caa22f1daa89ee98a99" }
+narwhal-dag = { git = "https://github.com/MystenLabs/narwhal", rev = "10f8f5143460c1498bf24caa22f1daa89ee98a99", default-features = false }
+narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "10f8f5143460c1498bf24caa22f1daa89ee98a99", default-features = false }
+narwhal-network = { git = "https://github.com/MystenLabs/narwhal", rev = "10f8f5143460c1498bf24caa22f1daa89ee98a99", default-features = false }
+narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "10f8f5143460c1498bf24caa22f1daa89ee98a99", default-features = false, features = ["benchmark", "trace_transaction"] }
+narwhal-primary = { git = "https://github.com/MystenLabs/narwhal", rev = "10f8f5143460c1498bf24caa22f1daa89ee98a99", default-features = false, features = ["benchmark"] }
+narwhal-storage = { git = "https://github.com/MystenLabs/narwhal", rev = "10f8f5143460c1498bf24caa22f1daa89ee98a99", default-features = false }
+narwhal-types = { git = "https://github.com/MystenLabs/narwhal", rev = "10f8f5143460c1498bf24caa22f1daa89ee98a99" }
+narwhal-worker = { git = "https://github.com/MystenLabs/narwhal", rev = "10f8f5143460c1498bf24caa22f1daa89ee98a99", default-features = false, features = ["benchmark", "trace_transaction"] }
 nested = { version = "0.1", default-features = false }
 nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "bff03c566c9e22b1f4e67f516d0fd592a5a88f20", default-features = false }
 nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "bff03c566c9e22b1f4e67f516d0fd592a5a88f20", default-features = false }
@@ -1314,7 +1314,7 @@ webpki = { version = "0.22", default-features = false, features = ["alloc", "std
 webpki-roots = { version = "0.22", default-features = false }
 which = { version = "4", default-features = false }
 whoami = { version = "1" }
-workspace-hack = { git = "https://github.com/MystenLabs/narwhal", rev = "46bb2d73c17b2fd6b11fb08b73808dcb56434ad0", default-features = false }
+workspace-hack = { git = "https://github.com/MystenLabs/narwhal", rev = "10f8f5143460c1498bf24caa22f1daa89ee98a99", default-features = false }
 wyz = { version = "0.2", default-features = false, features = ["alloc"] }
 x509-parser = { version = "0.14" }
 yaml-rust = { version = "0.4", default-features = false }
