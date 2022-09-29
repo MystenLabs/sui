@@ -86,7 +86,7 @@ async fn follower_process<A, Handler>(
                     metrics,
                 )
                 .await
-                .tap_err(|e| warn!("follower task exited with error {}", e));
+                .tap_err(|e| warn!(peer=?name, "follower task exited with error {}", e));
                 (result, start_time, name)
             }
         };
