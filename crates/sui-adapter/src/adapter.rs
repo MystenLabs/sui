@@ -1112,7 +1112,7 @@ fn validate_primitive_arg(
     type_layout: Option<MoveTypeLayout>,
 ) -> Result<(), ExecutionError> {
     // at this point we only check validity of string arguments (ascii and utf8)
-    let string_arg_opt = string_arg(param_type, view, 0);
+    let string_arg_opt = string_arg(param_type, view);
     if string_arg_opt.is_none() {
         return Ok(());
     }
@@ -1218,7 +1218,6 @@ fn validate_string(bytes: &[u8], idx: LocalIndex, module: &IdentStr) -> Result<(
 fn string_arg<'a>(
     param_type: &SignatureToken,
     view: &'a BinaryIndexedView,
-    depth: u32,
 ) -> Option<(&'a AccountAddress, &'a IdentStr, &'a IdentStr)> {
     match param_type {
         SignatureToken::Struct(struct_handle_idx) => {
@@ -1229,7 +1228,7 @@ fn string_arg<'a>(
                 None
             }
         }
-        SignatureToken::Vector(el_token) => string_arg(el_token, view, depth + 1),
+        SignatureToken::Vector(el_token) => string_arg(el_token, view),
         _ => None,
     }
 }

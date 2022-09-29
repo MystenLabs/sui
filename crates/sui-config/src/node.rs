@@ -299,7 +299,7 @@ impl Genesis {
                 genesis_file_location,
             } => self
                 .genesis
-                .get_or_try_init(|| genesis::Genesis::load(&genesis_file_location)),
+                .get_or_try_init(|| genesis::Genesis::load(genesis_file_location)),
         }
     }
 }

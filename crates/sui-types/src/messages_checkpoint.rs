@@ -206,7 +206,7 @@ impl Display for CheckpointSummary {
             "CheckpointSummary {{ epoch: {:?}, seq: {:?}, content_digest: {} }}",
             self.epoch,
             self.sequence_number,
-            hex::encode(&self.content_digest),
+            hex::encode(self.content_digest),
         )
     }
 }
