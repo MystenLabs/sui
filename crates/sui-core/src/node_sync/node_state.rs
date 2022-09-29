@@ -344,35 +344,38 @@ where
             // For Follow message: we record vote and check finality here so
             // it's not rate limited. A semaphore is only needed when the
             // digest is final and ready to be executed.
-            if let SyncArg::Follow(peer, exec_digest) = sync_arg {
-                match self.record_vote_and_check_finality(&peer, &exec_digest) {
-                    Ok(false) => {
-                        trace!(tx_digest=?exec_digest.transaction, effects_digest=?exec_digest.effects, ?peer, "digests is not final");
-                        Self::send_sync_res_to_receiver(tx, Ok(SyncStatus::NotFinal), &sync_arg);
-                        continue; // tx is not final, do nothing
-                    }
-                    Ok(true) => {
-                        debug!(tx_digest=?exec_digest.transaction, effects_digest=?exec_digest.effects, ?peer, "digests are now final")
-                    }
-                    Err(err) => {
-                        error!(tx_digest=?exec_digest.transaction, effects_digest=?exec_digest.effects, ?peer, "failed to record vote and check finality: {}", err);
-                        Self::send_sync_res_to_receiver(tx, Err(err), &sync_arg);
-                        // error when checking finality, skip and wait for the next digest or checkpoint to re-trigger
-                        continue;
-                    }
-                }
-            }
-
-            let limit = limit.clone();
+            let permit = if let SyncArg::Follow(peer, exec_digest) = sync_arg {
+                None
+                // match self.record_vote_and_check_finality(&peer, &exec_digest) {
+                //     Ok(false) => {
+                //         trace!(tx_digest=?exec_digest.transaction, effects_digest=?exec_digest.effects, ?peer, "digests is not final");
+                //         Self::send_sync_res_to_receiver(tx, Ok(SyncStatus::NotFinal), &sync_arg);
+                //         continue; // tx is not final, do nothing
+                //     }
+                //     Ok(true) => {
+                //         debug!(tx_digest=?exec_digest.transaction, effects_digest=?exec_digest.effects, ?peer, "digests are now final")
+                //     }
+                //     Err(err) => {
+                //         error!(tx_digest=?exec_digest.transaction, effects_digest=?exec_digest.effects, ?peer, "failed to record vote and check finality: {}", err);
+                //         Self::send_sync_res_to_receiver(tx, Err(err), &sync_arg);
+                //         // error when checking finality, skip and wait for the next digest or checkpoint to re-trigger
+                //         continue;
+                //     }
+                // }
+            } else {
+                Some(limit.clone().acquire_owned().await.unwrap())
+            };
 
             // hold semaphore permit until task completes. unwrap ok because we never close
             // the semaphore in this context.
-            let permit = limit.acquire_owned().await.unwrap();
+            // let permit = limit.clone().acquire_owned().await.unwrap();
+
+            let limit = limit.clone();
 
             tokio::spawn(async move {
                 let res = timeout(
                     MAX_NODE_TASK_LIFETIME,
-                    state.process_digest(sync_arg, permit),
+                    state.process_digest(sync_arg, permit, limit.clone()),
                 )
                 .await
                 .map_err(|_| SuiError::TimeoutError);
@@ -550,7 +553,7 @@ where
             .tap_err(|e| warn!("cleanup_cert failed: {}", e));
     }
 
-    async fn process_digest(&self, arg: SyncArg, permit: OwnedSemaphorePermit) -> SyncResult {
+    async fn process_digest(&self, arg: SyncArg, mut permit: Option<OwnedSemaphorePermit>, limit: Arc<Semaphore>) -> SyncResult {
         trace!(?arg, "process_digest");
 
         let digest = arg.transaction_digest();
@@ -575,24 +578,35 @@ where
         let (digests, authorities_with_cert) = match arg {
             SyncArg::ExecDriver(digest) => {
                 return self
-                    .process_exec_driver_digest(permit, &digest, false)
+                    .process_exec_driver_digest(permit.unwrap(), &digest, false)
                     .await;
             }
             SyncArg::PendingCheckpoint(digest) => {
-                return self.process_exec_driver_digest(permit, &digest, true).await;
+                return self.process_exec_driver_digest(permit.unwrap(), &digest, true).await;
             }
             SyncArg::Parent(digest) => {
                 // digest is known to be final because it appeared in the dependencies list of a
                 // verified TransactionEffects
-                return self.process_parent_request(permit, &digest).await;
+                return self.process_parent_request(permit.unwrap(), &digest).await;
             }
-            SyncArg::Follow(_peer, digests) => {
+            SyncArg::Follow(peer, exec_digest) => {
                 // We checked the finality of digests earlier and know that it is final.
+                match self.record_vote_and_check_finality(&peer, &exec_digest)? {
+                    false => {
+                        trace!(tx_digest=?exec_digest.transaction, effects_digest=?exec_digest.effects, ?peer, "digests is not final");
+                        return Ok(SyncStatus::NotFinal);
+                    }
+                    true => {
+                        debug!(tx_digest=?exec_digest.transaction, effects_digest=?exec_digest.effects, ?peer, "digests are now final");
+                        permit.replace(limit.clone().acquire_owned().await.unwrap());
+                    }
+
+                }
                 (
-                    digests,
+                    exec_digest,
                     Some(
                         self.node_sync_store
-                            .get_voters(digests.transaction, digests.effects)?,
+                            .get_voters(exec_digest.transaction, exec_digest.effects)?,
                     ),
                 )
             }
@@ -630,7 +644,7 @@ where
             })
             .tap_err(|e| error!(?digest, "error: {}", e))?;
 
-        self.process_parents(permit, &digests.transaction, &effects)
+        self.process_parents(permit.unwrap(), &digests.transaction, &effects)
             .await?;
 
         self.state
