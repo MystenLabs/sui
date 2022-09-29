@@ -1,5 +1,11 @@
 # @mysten/wallet-adapter-react-ui
 
+## 0.1.1
+
+### Patch Changes
+
+- cc134ce0a: This is a test changeset.
+
 ## 0.1.0
 
 ### Minor Changes
