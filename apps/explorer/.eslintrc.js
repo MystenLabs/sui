@@ -5,7 +5,6 @@ module.exports = {
     plugins: ['header'],
     extends: ['react-app', 'prettier'],
     rules: {
-        'react/jsx-no-bind': ['error'],
         'import/order': [
             'warn',
             {

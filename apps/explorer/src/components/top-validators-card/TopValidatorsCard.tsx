@@ -5,7 +5,6 @@ import { useContext, useEffect, useState } from 'react';
 
 import Longtext from '../../components/longtext/Longtext';
 import TableCard from '../../components/table/TableCard';
-import Tabs from '../../components/tabs/Tabs';
 import { NetworkContext } from '../../context';
 import {
     getValidatorState,
@@ -17,7 +16,7 @@ import { mockState } from '../../pages/validators/mockData';
 import theme from '../../styles/theme.module.css';
 import { truncate } from '../../utils/stringUtils';
 
-import styles from './TopValidatorsCard.module.css';
+import { TabGroup, TabList, Tab, TabPanels, TabPanel } from '~/ui/Tabs';
 
 export const STATE_DEFAULT: ValidatorState = {
     delegation_reward: 0,
@@ -132,21 +131,17 @@ function TopValidatorsCard({ state }: { state: ValidatorState }): JSX.Element {
     };
 
     return (
-        <div data-testid="validators-table" className={styles.validators}>
-            <Tabs selected={0}>
-                <div title="Top Validators">
-                    <TableCard tabledata={tableData} />
-                    {/* <TabFooter stats={tabsFooter.stats}>
-                        <Longtext
-                            text=""
-                            category="validators"
-                            isLink={true}
-                            isCopyButton={false}
-                            alttext="More Validators"
-                        />
-                    </TabFooter> */}
-                </div>
-            </Tabs>
+        <div data-testid="validators-table">
+            <TabGroup>
+                <TabList>
+                    <Tab>Top Validators</Tab>
+                </TabList>
+                <TabPanels>
+                    <TabPanel>
+                        <TableCard tabledata={tableData} />
+                    </TabPanel>
+                </TabPanels>
+            </TabGroup>
         </div>
     );
 }
