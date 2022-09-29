@@ -61,7 +61,7 @@ module sui::vec_set {
 
     // == Helper functions ==
 
-    /// Find the index of `key` in `self. Return `None` if `key` is not in `self`.
+    /// Find the index of `key` in `self`. Return `None` if `key` is not in `self`.
     /// Note that keys are stored in insertion order, *not* sorted.
     fun get_idx_opt<K: copy + drop>(self: &VecSet<K>, key: &K): Option<u64> {
         let i = 0;
@@ -75,7 +75,7 @@ module sui::vec_set {
         option::none()
     }
 
-    /// Find the index of `key` in `self. Aborts if `key` is not in `self`.
+    /// Find the index of `key` in `self`. Aborts if `key` is not in `self`.
     /// Note that map entries are stored in insertion order, *not* sorted.
     fun get_idx<K: copy + drop>(self: &VecSet<K>, key: &K): u64 {
         let idx_opt = get_idx_opt(self, key);
