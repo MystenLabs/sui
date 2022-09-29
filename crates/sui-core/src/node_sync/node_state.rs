@@ -182,7 +182,7 @@ pub enum SyncArg {
     /// In follow mode, wait for 2f+1 votes for a tx before executing
     Follow(AuthorityName, ExecutionDigests),
 
-    /// Sync a cert that is finalized. It may appear as a parent in the verified effects of some 
+    /// Sync a cert that is finalized. It may appear as a parent in the verified effects of some
     /// other cert, or come from the Transaction Orchestrator.
     Parent(TransactionDigest),
 
@@ -553,7 +553,7 @@ where
             .await?;
 
         match self
-            .state
+            .state()
             .handle_certificate_with_effects(&cert, &effects)
             .await
         {

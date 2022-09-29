@@ -254,7 +254,10 @@ where
                 debug!(?tx_digest, "Orchestrator failed to executue transaction optimistically due to missing parents");
 
                 match node_sync_handle
-                    .handle_parents_request(std::iter::once(*tx_digest))
+                    .handle_parents_request(
+                        state.committee.load().epoch,
+                        std::iter::once(*tx_digest),
+                    )
                     .await?
                     .next()
                     .await

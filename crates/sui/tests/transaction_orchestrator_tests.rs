@@ -31,7 +31,7 @@ async fn test_blocking_execution() -> Result<(), anyhow::Error> {
     active.cancel_node_sync_process_for_tests().await;
 
     let net = active.agg_aggregator();
-    let node_sync_handle = active.node_sync_handle();
+    let node_sync_handle = active.clone().node_sync_handle();
     let orchestrator =
         TransactiondOrchestrator::new(net, node.state(), node_sync_handle, &Registry::new());
 
@@ -91,7 +91,7 @@ async fn test_non_blocking_execution() -> Result<(), anyhow::Error> {
     active.cancel_node_sync_process_for_tests().await;
 
     let net = active.agg_aggregator();
-    let node_sync_handle = active.node_sync_handle();
+    let node_sync_handle = active.clone().node_sync_handle();
     let orchestrator =
         TransactiondOrchestrator::new(net, node.state(), node_sync_handle, &Registry::new());
 
@@ -151,7 +151,7 @@ async fn test_local_execution_with_missing_parents() -> Result<(), anyhow::Error
     active.cancel_node_sync_process_for_tests().await;
 
     let net = active.agg_aggregator();
-    let node_sync_handle = active.node_sync_handle();
+    let node_sync_handle = active.clone().node_sync_handle();
     let orchestrator =
         TransactiondOrchestrator::new(net, node.state(), node_sync_handle, &Registry::new());
 

@@ -252,10 +252,6 @@ impl<A> ActiveAuthority<A> {
         let entry = lock.entry(name).or_default();
         entry.can_initiate_contact_now()
     }
-
-    pub fn clone_node_sync_state(&self) -> Arc<NodeSyncState<A>> {
-        self.node_sync_state.clone()
-    }
 }
 
 impl<A> Clone for ActiveAuthority<A> {
@@ -380,10 +376,11 @@ where
     }
 
     async fn respawn_node_sync_process_impl(
-        &self,
+        self: Arc<Self>,
         mut lock_guard: MutexGuard<'_, Option<NodeSyncProcessHandle>>,
     ) {
-        info!(epoch = ?self.state.committee.load().epoch, "respawn_node_sync_process");
+        let epoch = self.state.committee.load().epoch;
+        info!(?epoch, "respawn_node_sync_process");
         Self::cancel_node_sync_process_impl(&mut lock_guard).await;
 
         let (cancel_sender, cancel_receiver) = oneshot::channel();
