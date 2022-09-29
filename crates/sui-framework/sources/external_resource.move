@@ -10,7 +10,7 @@
 ///
 module sui::external_resource {
     use sui::digest::Sha256Digest;
-    use sui::url::{Url, update};
+    use sui::url::{Url, update, inner_url};
 
     /// ImmutableExternalResource: An arbitrary, mutable URL plus an immutable digest of the resource.
     ///
@@ -45,6 +45,6 @@ module sui::external_resource {
 
     /// Update the URL, but the digest of the resource must never change.
     public fun immutable_external_resource_update(self: &mut ImmutableExternalResource, url: Url) {
-        update(&mut self.url, url(&url))
+        update(&mut self.url, inner_url(&url))
     }
 }
