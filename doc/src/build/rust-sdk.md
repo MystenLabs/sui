@@ -88,13 +88,10 @@ async fn main() -> Result<(), anyhow::Error> {
         .transfer_sui(my_address, gas_object_id, 1000, recipient, Some(1000))
         .await?;
 
-    // Get signer from keystore
+    // Sign transaction
     let keystore = KeystoreType::File(keystore_path).init()?;
-    let signer = keystore.signer(my_address);
-
-    // Sign the transaction
-    let signature = Signature::new(&transfer_tx, &signer);
-
+    let signature = keystore.sign(&my_address, &transfer_tx)?;
+    
     // Execute the transaction
     let transaction_response = sui
         .quorum_driver()
