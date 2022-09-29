@@ -25,29 +25,6 @@ body {
     @apply m-0 text-offblack;
 }
 
-html {
-    scrollbar-color: #182435 #fefefe;
-    scrollbar-width: 6px;
-}
-
-/* Improves scrollbar look on Chromium browsers */
-
-::-webkit-scrollbar {
-    @apply w-[6px];
-}
-
-::-webkit-scrollbar-track {
-    @apply bg-inherit;
-}
-
-::-webkit-scrollbar-thumb {
-    @apply bg-sui-grey-50 rounded-[10px];
-}
-
-::-webkit-scrollbar-thumb:hover {
-    @apply bg-sui-grey-100;
-}
-
 input:focus,
 textarea:focus,
 select:focus {
