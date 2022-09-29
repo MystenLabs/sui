@@ -4,7 +4,7 @@ jobs:
   diff:
     runs-on: ubuntu-latest
     outputs:
-      isWalletExt: ${{ steps.diff.outputs.isWalletExt }}
+      isWalletExt: ${{ contains(fromJson(steps.diff.outputs.packages), 'sui-wallet') }}
     steps:
       - uses: actions/checkout@v3
       - name: Detect Changes

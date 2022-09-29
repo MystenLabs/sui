@@ -6,6 +6,6 @@
   "linked": [],
   "access": "public",
   "baseBranch": "main",
-  "updateInternalDependencies": "patch",
+  "updateInternalDependencies": "minor",
   "ignore": ["sui-explorer", "sui-wallet", "demo-nft-dapp", "sui-wallet-adapter"]
 }

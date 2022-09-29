@@ -4,7 +4,7 @@ jobs:
   diff:
     runs-on: [ubuntu-latest]
     outputs:
-      isTypescriptSDK: ${{ steps.diff.outputs.isTypescriptSDK }}
+      isTypescriptSDK: ${{ contains(fromJson(steps.diff.outputs.packages), '@mysten/sui.js') }}
     steps:
       - uses: actions/checkout@v3
       - name: Detect Changes

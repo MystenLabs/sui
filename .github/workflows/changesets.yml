@@ -9,15 +9,15 @@ on:
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
 jobs:
-  snapshot:
+  release:
     runs-on: ubuntu-latest
     steps:
-      - name: Dispatch Snapshot To Operations
+      - name: Dispatch Changesets To Operations
         uses: peter-evans/repository-dispatch@v2
         with:
           repository: MystenLabs/sui-operations
           token: ${{ secrets.CHANGESETS_DEPLOY_DISPATCH }}
-          event-type: changesets-snapshot
+          event-type: changesets
           client-payload: '{"ref": "${{ github.ref }}", "sha": "${{ github.sha }}"}'
 
   version:
