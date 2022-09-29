@@ -26,7 +26,7 @@ jobs:
       - name: checkout code repository
         uses: actions/checkout@v3
         with:
-          token: ${{ secrets.GH_TOKEN }}
+          token: ${{ secrets.CUSTOM_GH_TOKEN }}
           fetch-depth: 0
       - uses: pnpm/action-setup@v2.2.2
         with:
@@ -41,4 +41,4 @@ jobs:
       - name: Create Release Pull Request
         uses: changesets/action@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.CUSTOM_GH_TOKEN }}
