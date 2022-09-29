@@ -3,7 +3,7 @@
     "name": "Sui Explorer",
     "icons": [
         {
-            "src": "logo192.png",
+            "src": "favicon192x192.png",
             "type": "image/png",
             "sizes": "192x192"
         }
