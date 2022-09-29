@@ -135,7 +135,23 @@ impl Proposer {
         self.last_parents = Certificate::genesis(&self.committee);
     }
 
-    // Main loop listening to incoming messages.
+    /// Compute the timeout value of the proposer.
+    fn timeout_value(&self) -> Instant {
+        match self.network_model {
+            // In partial synchrony, if this node is going to be the leader of the next
+            // round, we set a lower timeout value to increase its chance of committing
+            // the leader committed.
+            NetworkModel::PartiallySynchronous
+                if self.committee.leader(self.round + 1) == self.name =>
+            {
+                Instant::now() + self.max_header_delay / 2
+            }
+
+            // Otherwise we keep the default timeout value.
+            _ => Instant::now() + self.max_header_delay,
+        }
+    }
+
     /// Update the last leader certificate. This is only relevant in partial synchrony.
     fn update_leader(&mut self) -> bool {
         let leader_name = self.committee.leader(self.round);
@@ -247,7 +263,7 @@ impl Proposer {
                 self.payload_size = 0;
 
                 // Reschedule the timer.
-                let deadline = Instant::now() + self.max_header_delay;
+                let deadline = self.timeout_value();
                 timer.as_mut().reset(deadline);
                 timer_expired = false;
             }
