@@ -51,7 +51,6 @@ COPY --from=builder /sui/bin/rosetta-cli /usr/local/bin
 COPY --from=builder /sui/crates/sui-config/data/fullnode-template.yaml /sui/devnet/fullnode.yaml
 COPY --from=builder /sui/genesis.blob /sui/devnet/genesis.blob
 RUN /usr/local/bin/sui genesis
-RUN /usr/local/bin/sui-rosetta generate-rosetta-cli-config
 
 ARG BUILD_DATE
 LABEL build-date=$BUILD_DATE

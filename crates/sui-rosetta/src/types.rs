@@ -66,6 +66,13 @@ impl SuiEnv {
 pub struct AccountIdentifier {
     pub address: SuiAddress,
 }
+
+impl From<SuiAddress> for AccountIdentifier {
+    fn from(address: SuiAddress) -> Self {
+        AccountIdentifier { address }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Currency {
     pub symbol: String,
@@ -123,11 +130,20 @@ pub struct Amount {
 #[derive(Clone, Default, Debug)]
 pub struct SignedValue {
     negative: bool,
-    value: u64,
+    value: u128,
 }
 
 impl From<u64> for SignedValue {
     fn from(value: u64) -> Self {
+        Self {
+            negative: false,
+            value: value.try_into().unwrap(),
+        }
+    }
+}
+
+impl From<u128> for SignedValue {
+    fn from(value: u128) -> Self {
         Self {
             negative: false,
             value,
@@ -145,7 +161,7 @@ impl From<i64> for SignedValue {
 }
 
 impl SignedValue {
-    pub fn neg(v: u64) -> Self {
+    pub fn neg(v: u128) -> Self {
         Self {
             negative: true,
             value: v,
@@ -155,7 +171,7 @@ impl SignedValue {
         self.negative
     }
 
-    pub fn abs(&self) -> u64 {
+    pub fn abs(&self) -> u128 {
         self.value
     }
 
@@ -200,12 +216,12 @@ impl<'de> Deserialize<'de> for SignedValue {
         Ok(if let Some(value) = s.strip_prefix('-') {
             SignedValue {
                 negative: true,
-                value: u64::from_str(value).map_err(D::Error::custom)?,
+                value: u128::from_str(value).map_err(D::Error::custom)?,
             }
         } else {
             SignedValue {
                 negative: false,
-                value: u64::from_str(&s).map_err(D::Error::custom)?,
+                value: u128::from_str(&s).map_err(D::Error::custom)?,
             }
         })
     }

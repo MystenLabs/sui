@@ -44,7 +44,7 @@ pub async fn balance(
             })
     } else {
         let gas_coins = get_coins(&context.state, payload.account_identifier.address).await?;
-        let amount: u64 = gas_coins.iter().map(|coin| coin.amount.value.abs()).sum();
+        let amount: u128 = gas_coins.iter().map(|coin| coin.amount.value.abs()).sum();
         Ok(AccountBalanceResponse {
             block_identifier: context.blocks().current_block_identifier().await?,
             balances: vec![Amount::new(amount.into())],

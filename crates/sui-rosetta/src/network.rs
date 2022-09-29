@@ -64,6 +64,7 @@ pub async fn status(
     let blocks = context.blocks();
     let current_block = blocks.current_block().await?;
     let index = current_block.block.block_identifier.index;
+    let target = context.state.get_total_transaction_number()?;
     Ok(NetworkStatusResponse {
         current_block_identifier: current_block.block.block_identifier,
         current_block_timestamp: current_block.block.timestamp,
@@ -71,9 +72,9 @@ pub async fn status(
         oldest_block_identifier: Some(blocks.oldest_block_identifier().await?),
         sync_status: Some(SyncStatus {
             current_index: Some(index),
-            target_index: Some(index),
+            target_index: Some(target),
             stage: None,
-            synced: Some(true),
+            synced: Some(index == target),
         }),
         peers,
     })

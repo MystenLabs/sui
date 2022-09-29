@@ -1,6 +1,6 @@
 transfer(10){
   transfer{
-    transfer.network = {"network":"localnet", "blockchain":"sui"};
+    transfer.network = {"network":"{{sui.env}}", "blockchain":"sui"};
     currency = {"symbol":"SUI", "decimals":9};
     sender = find_balance({
       "minimum_balance":{

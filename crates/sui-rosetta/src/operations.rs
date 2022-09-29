@@ -94,7 +94,8 @@ impl Operation {
             operation_identifier: counter.next_idx().into(),
             related_operations: vec![],
             type_: OperationType::GasSpent,
-            status,
+            // We always charge gas
+            status: Some(OperationStatus::Success),
             account: Some(AccountIdentifier { address: sender }),
             amount: Some(Amount {
                 value: effects.gas_used.net_gas_usage().neg().into(),
@@ -151,7 +152,7 @@ impl Operation {
                                 status,
                                 account: Some(AccountIdentifier { address: *sender }),
                                 amount: amount.map(|amount| Amount {
-                                    value: SignedValue::neg(amount),
+                                    value: SignedValue::neg(amount.try_into().unwrap()),
                                     currency: SUI.clone(),
                                 }),
                                 coin_change: input,
@@ -308,7 +309,7 @@ fn transfer_sui_operations(
             status,
             account: Some(AccountIdentifier { address: sender }),
             amount: amount.map(|amount| Amount {
-                value: SignedValue::neg(amount),
+                value: SignedValue::neg(amount.try_into().unwrap()),
                 currency: SUI.clone(),
             }),
             coin_change: Some(CoinChange {
@@ -576,7 +577,7 @@ impl TryInto<SuiAction> for Vec<Operation> {
                     if let Some(amount) = op.amount.as_ref() {
                         if amount.value.is_negative() {
                             builder.sender = Some(address);
-                            builder.send_amount = Some(amount.value.abs());
+                            builder.send_amount = Some(amount.value.abs().try_into()?);
                             if let Some(coin) = op.coin_change.as_ref() {
                                 builder.gas = Some(coin.coin_identifier.identifier.id);
                             }

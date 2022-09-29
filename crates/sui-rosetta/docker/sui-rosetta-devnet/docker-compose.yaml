@@ -12,6 +12,7 @@ services:
       - /bin/bash
       - -c
       - |
+        /usr/local/bin/sui-rosetta generate-rosetta-cli-config --env devnet &
         /usr/local/bin/sui-rosetta start-online-server --env devnet --node-config fullnode.yaml
     stdin_open: true
     tty: true

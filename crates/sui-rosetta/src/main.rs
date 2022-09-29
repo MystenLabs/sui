@@ -26,6 +26,8 @@ pub enum RosettaServerCommand {
     GenerateRosettaCLIConfig {
         #[clap(long)]
         keystore_path: Option<PathBuf>,
+        #[clap(long, default_value = "localnet")]
+        env: SuiEnv,
     },
     StartOnlineServer {
         #[clap(long, default_value = "localnet")]
@@ -46,7 +48,7 @@ pub enum RosettaServerCommand {
 impl RosettaServerCommand {
     async fn execute(self) -> Result<(), anyhow::Error> {
         match self {
-            RosettaServerCommand::GenerateRosettaCLIConfig { keystore_path } => {
+            RosettaServerCommand::GenerateRosettaCLIConfig { keystore_path, env } => {
                 let path = keystore_path
                     .unwrap_or_else(|| sui_config_dir().unwrap().join(SUI_KEYSTORE_FILENAME));
 
@@ -61,6 +63,16 @@ impl RosettaServerCommand {
                 let mut config: Value =
                     serde_json::from_str(include_str!("../resources/rosetta_cli.json"))?;
 
+                // Set network.
+                let network = config.pointer_mut("/network").ok_or_else(|| {
+                    anyhow!("Cannot find construction config in default config file.")
+                })?;
+                network
+                    .as_object_mut()
+                    .unwrap()
+                    .insert("network".to_string(), json!(env));
+
+                // Add prefunded accounts.
                 let construction = config.pointer_mut("/construction").ok_or_else(|| {
                     anyhow!("Cannot find construction config in default config file.")
                 })?;
@@ -78,7 +90,11 @@ impl RosettaServerCommand {
                 );
 
                 let dsl_path = PathBuf::from(".").join("sui.ros");
-                fs::write(&dsl_path, include_str!("../resources/sui.ros"))?;
+                let dsl = include_str!("../resources/sui.ros");
+                fs::write(
+                    &dsl_path,
+                    dsl.replace("{{sui.env}}", json!(env).as_str().unwrap()),
+                )?;
                 info!("Rosetta DSL file is stored in {:?}", dsl_path);
             }
             RosettaServerCommand::StartOfflineServer { env, addr } => {

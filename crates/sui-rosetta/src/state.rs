@@ -1,6 +1,8 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::anyhow;
+use std::cmp::min;
 use std::collections::BTreeMap;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -60,14 +62,17 @@ pub trait BlockProvider {
     fn genesis_block_identifier(&self) -> BlockIdentifier;
     async fn oldest_block_identifier(&self) -> Result<BlockIdentifier, Error>;
     async fn current_block_identifier(&self) -> Result<BlockIdentifier, Error>;
-    async fn get_balance_at_block(&self, addr: SuiAddress, block_height: u64)
-        -> Result<u64, Error>;
+    async fn get_balance_at_block(
+        &self,
+        addr: SuiAddress,
+        block_height: u64,
+    ) -> Result<u128, Error>;
 }
 
 #[derive(Clone)]
 pub struct PseudoBlockProvider {
     blocks: Arc<RwLock<Vec<BlockResponse>>>,
-    balance: Arc<RwLock<BTreeMap<SuiAddress, BTreeMap<u64, u64>>>>,
+    balance: Arc<RwLock<BTreeMap<SuiAddress, BTreeMap<u64, u128>>>>,
 }
 
 #[async_trait]
@@ -135,7 +140,7 @@ impl BlockProvider for PseudoBlockProvider {
         &self,
         addr: SuiAddress,
         block_height: u64,
-    ) -> Result<u64, Error> {
+    ) -> Result<u128, Error> {
         if let Some(balances) = self.balance.read().await.get(&addr) {
             for (blk_idx, balance) in balances.iter().rev() {
                 if blk_idx <= &block_height {
@@ -169,7 +174,7 @@ impl PseudoBlockProvider {
 
         let f = blocks.clone();
         tokio::spawn(async move {
-            f.update_balance(0, genesis_txs).await;
+            f.update_balance(0, genesis_txs).await.unwrap();
             loop {
                 if let Err(e) = f.create_next_block(state.clone()).await {
                     error!("Error creating block, cause: {e:?}")
@@ -188,7 +193,9 @@ impl PseudoBlockProvider {
             return Ok(());
         }
         if current_block.index < total_tx {
-            let tx_digests = state.get_transactions_in_range(current_block.index, total_tx)?;
+            // Make sure we don't hit the query limit.
+            let end = min(4000 + current_block.index, total_tx);
+            let tx_digests = state.get_transactions_in_range(current_block.index, end)?;
             let mut index = current_block.index;
             let mut parent_block_identifier = current_block;
 
@@ -219,7 +226,9 @@ impl PseudoBlockProvider {
                 let ops = Operation::from_data_and_effect(&tx.signed_data.data, &effect)?;
 
                 self.blocks.write().await.push(new_block);
-                self.update_balance(index, ops).await;
+                self.update_balance(index, ops).await.map_err(|e| {
+                    anyhow!("Failed to update balance, tx: {tx}, effect:{effect}, cause : {e}")
+                })?;
                 parent_block_identifier = block_identifier
             }
         } else {
@@ -229,8 +238,12 @@ impl PseudoBlockProvider {
         Ok(())
     }
 
-    async fn update_balance(&self, block_height: u64, ops: Vec<Operation>) {
-        let balance_changes = extract_balance_changes_from_ops(ops);
+    async fn update_balance(
+        &self,
+        block_height: u64,
+        ops: Vec<Operation>,
+    ) -> Result<(), anyhow::Error> {
+        let balance_changes = extract_balance_changes_from_ops(ops)?;
 
         let mut balances = self.balance.write().await;
 
@@ -250,27 +263,30 @@ impl PseudoBlockProvider {
             };
             balance.insert(block_height, new_balance);
         }
+        Ok(())
     }
 }
 
-fn extract_balance_changes_from_ops(ops: Vec<Operation>) -> BTreeMap<SuiAddress, SignedValue> {
+fn extract_balance_changes_from_ops(
+    ops: Vec<Operation>,
+) -> Result<BTreeMap<SuiAddress, SignedValue>, anyhow::Error> {
     let mut changes: BTreeMap<SuiAddress, SignedValue> = BTreeMap::new();
     for op in ops {
         match op.type_ {
             OperationType::TransferSUI | OperationType::GasSpent | OperationType::Genesis => {
                 let addr = op
                     .account
-                    .unwrap_or_else(|| panic!("Account address cannot be null for {:?}", op.type_))
+                    .ok_or_else(|| anyhow!("Account address cannot be null for {:?}", op.type_))?
                     .address;
                 let amount = op
                     .amount
-                    .unwrap_or_else(|| panic!("Amount cannot be null for {:?}", op.type_));
+                    .ok_or_else(|| anyhow!("Amount cannot be null for {:?}", op.type_))?;
                 changes.entry(addr).or_default().add(&amount.value)
             }
             _ => {}
         }
     }
-    changes
+    Ok(changes)
 }
 
 fn genesis_block(genesis: &Genesis) -> BlockResponse {
