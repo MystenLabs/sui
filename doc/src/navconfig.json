@@ -3,17 +3,17 @@
     "title": "QUICK LINKS",
     "items": [
       {
-        "label": "Devnet",
-        "link": "build/devnet"
+        "label": "Sui Doc Updates",
+        "link": "doc-updates/index.md"
       },
       {
-        "label": "examples.sui.io",
+        "label": "Sui by Example",
         "link": "https://examples.sui.io/",
         "external": true
       },
       {
-        "label": "Doc updates",
-        "link": "learn/sui-doc-updates"
+        "label": "Connect to Sui Devnet",
+        "link": "build/devnet"
       }
     ]
   },
@@ -44,10 +44,6 @@
             "label": "Sui White Paper",
             "link": "https://github.com/MystenLabs/sui/blob/main/doc/paper/sui.pdf",
             "external": true
-          },
-          {
-            "label": "Sui doc updates",
-            "fileName": "learn/sui-doc-updates"
           }
         ]
       },
@@ -271,6 +267,7 @@
         "link": "https://mystenlabs.com/",
         "external": true
       }
-    ]
+    ],
+    "doc-updates":[ ]
   }
 }

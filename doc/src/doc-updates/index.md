@@ -1,5 +1,5 @@
 ---
-title: Sui documentation updates
+title: Sui Documentation Updates
 ---
 
 This topic lists the significant updates to the [Sui documentation](https://docs.sui.io) site so that you can easily identify new or updated information. 
