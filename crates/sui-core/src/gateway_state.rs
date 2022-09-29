@@ -601,7 +601,11 @@ where
             "Setting transaction lock"
         );
         self.store
-            .lock_and_write_transaction(mutable_input_objects, transaction)
+            .lock_and_write_transaction(
+                self.authorities.committee.epoch,
+                mutable_input_objects,
+                transaction,
+            )
             .await
     }
 

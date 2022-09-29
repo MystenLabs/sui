@@ -17,6 +17,7 @@
 
 use futures::channel::oneshot;
 use rocksdb::Options;
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::thread::JoinHandle;
@@ -29,6 +30,7 @@ use typed_store_derive::DBMapUtils;
 
 use sui_types::base_types::{ObjectRef, TransactionDigest};
 use sui_types::batch::TxSequenceNumber;
+use sui_types::committee::EpochId;
 use sui_types::error::{SuiError, SuiResult};
 
 use crate::{block_on_future_in_sim, default_db_options};
@@ -38,6 +40,7 @@ use crate::{block_on_future_in_sim, default_db_options};
 #[derive(Debug)]
 enum LockServiceCommands {
     Acquire {
+        epoch: EpochId,
         refs: Vec<ObjectRef>,
         tx_digest: TransactionDigest,
         resp: oneshot::Sender<SuiResult>,
@@ -60,7 +63,7 @@ enum LockServiceCommands {
     },
 }
 
-type SuiLockResult = Result<Option<Option<TransactionDigest>>, SuiError>;
+type SuiLockResult = Result<Option<Option<LockInfo>>, SuiError>;
 
 /// Queries to the LockService state
 #[derive(Debug)]
@@ -75,6 +78,12 @@ enum LockServiceQueries {
     },
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LockInfo {
+    pub epoch: EpochId,
+    pub tx_digest: TransactionDigest,
+}
+
 /// Inner LockService implementation that does single threaded database accesses.  Cannot be
 /// used publicly, must be wrapped in a LockService to control access.
 #[derive(Clone, DBMapUtils)]
@@ -86,7 +95,7 @@ pub struct LockServiceImpl {
     /// the lock once it is set. After a certificate for this object is processed it can be
     /// forgotten.
     #[default_options_override_fn = "transaction_lock_table_default_config"]
-    transaction_lock: DBMap<ObjectRef, Option<TransactionDigest>>,
+    transaction_lock: DBMap<ObjectRef, Option<LockInfo>>,
 
     /// The semantics of transaction_lock ensure that certificates are always processed
     /// in causal order - that is, certificates naturally form a partial order. tx_sequence
@@ -114,8 +123,8 @@ impl LockServiceImpl {
     /// Returns the state of a single lock.
     /// * None - lock does not exist and is not initialized
     /// * Some(None) - lock exists and is initialized, but not locked to a particular transaction
-    /// * Some(Some(tx_digest)) - lock exists and set to transaction
-    fn get_lock(&self, object: ObjectRef) -> Result<Option<Option<TransactionDigest>>, SuiError> {
+    /// * Some(Some(lock_info)) - lock exists and set to transaction from a specific epoch.
+    fn get_lock(&self, object: ObjectRef) -> Result<Option<Option<LockInfo>>, SuiError> {
         self.transaction_lock
             .get(&object)
             .map_err(SuiError::StorageError)
@@ -232,6 +241,7 @@ impl LockServiceImpl {
     /// Otherwise, SuiError(TransactionLockDoesNotExist, ConflictingTransaction) is returned.
     fn acquire_locks(
         &self,
+        epoch: EpochId,
         owned_input_objects: &[ObjectRef],
         tx_digest: TransactionDigest,
     ) -> SuiResult {
@@ -241,24 +251,34 @@ impl LockServiceImpl {
 
         for (i, lock) in locks.iter().enumerate() {
             // The object / version must exist, and therefore lock initialized.
-            let lock = lock.ok_or(SuiError::TransactionLockDoesNotExist)?;
+            let lock = lock.as_ref().ok_or(SuiError::TransactionLockDoesNotExist)?;
 
-            if let Some(previous_tx_digest) = lock {
-                // Lock already set to different transaction
-                if previous_tx_digest != tx_digest {
+            if let Some(LockInfo {
+                epoch: previous_epoch,
+                tx_digest: previous_tx_digest,
+            }) = lock
+            {
+                // Lock already set to different transaction from the same epoch.
+                // If the lock is set in a previous epoch, it's ok to override it.
+                if previous_epoch == &epoch && previous_tx_digest != &tx_digest {
                     // TODO: add metrics here
                     debug!(prev_tx_digest =? previous_tx_digest,
                           cur_tx_digest =? tx_digest,
-                          "Conflicting transaction!  Lock state changed in unexpected way");
+                          "Conflicting transaction! Lock state changed in unexpected way");
                     return Err(SuiError::ConflictingTransaction {
-                        pending_transaction: previous_tx_digest,
+                        pending_transaction: *previous_tx_digest,
                     });
                 }
-            } else {
-                // Only write the locks that need to be written (are uninitialized)
-                let obj_ref = owned_input_objects[i];
-                locks_to_write.push((obj_ref, Some(tx_digest)));
+                if &epoch == previous_epoch {
+                    // Exactly the same epoch and same transaction, nothing to lock here.
+                    continue;
+                } else {
+                    debug!(prev_epoch =? previous_epoch, cur_epoch =? epoch, ?tx_digest, "Overriding an old lock from previous epoch");
+                    // Fall through and override the old lock.
+                }
             }
+            let obj_ref = owned_input_objects[i];
+            locks_to_write.push((obj_ref, Some(LockInfo { epoch, tx_digest })));
         }
 
         if !locks_to_write.is_empty() {
@@ -289,7 +309,9 @@ impl LockServiceImpl {
             let existing_locks: Vec<ObjectRef> = locks
                 .iter()
                 .zip(objects)
-                .filter_map(|(lock_opt, objref)| lock_opt.flatten().map(|_tx_digest| *objref))
+                .filter_map(|(lock_opt, objref)| {
+                    lock_opt.clone().flatten().map(|_tx_digest| *objref)
+                })
                 .collect();
             if !existing_locks.is_empty() {
                 info!(
@@ -332,11 +354,12 @@ impl LockServiceImpl {
         while let Some(msg) = receiver.blocking_recv() {
             match msg {
                 LockServiceCommands::Acquire {
+                    epoch,
                     refs,
                     tx_digest,
                     resp,
                 } => {
-                    let res = self.acquire_locks(&refs, tx_digest);
+                    let res = self.acquire_locks(epoch, &refs, tx_digest);
                     if let Err(_e) = resp.send(res) {
                         warn!("Could not respond to sender, sender dropped!");
                     }
@@ -480,11 +503,12 @@ impl LockService {
 
     /// Acquires a lock for a transaction on the given objects if they have all been initialized previously
     /// to None state.  It is also OK if they have been set to the same transaction.
-    /// The locks are all set to the given transacton digest.
+    /// The locks are all set to the given transaction digest.
     /// Otherwise, SuiError(TransactionLockDoesNotExist, ConflictingTransaction) is returned.
     /// Note that this method sends a message to inner LockService implementation and waits for a response
     pub async fn acquire_locks(
         &self,
+        epoch: EpochId,
         refs: Vec<ObjectRef>,
         tx_digest: TransactionDigest,
     ) -> SuiResult {
@@ -493,6 +517,7 @@ impl LockService {
             self.inner
                 .sender()
                 .send(LockServiceCommands::Acquire {
+                    epoch,
                     refs,
                     tx_digest,
                     resp: os_sender,
@@ -666,7 +691,7 @@ mod tests {
 
         // Should not be able to acquire lock for uninitialized locks
         assert_eq!(
-            ls.acquire_locks(&[ref1, ref2], tx1),
+            ls.acquire_locks(0, &[ref1, ref2], tx1),
             Err(SuiError::TransactionLockDoesNotExist)
         );
         assert_eq!(ls.get_lock(ref1), Ok(None));
@@ -679,13 +704,19 @@ mod tests {
 
         // Should not be able to acquire lock if not all objects initialized
         assert_eq!(
-            ls.acquire_locks(&[ref1, ref2, ref3], tx1),
+            ls.acquire_locks(0, &[ref1, ref2, ref3], tx1),
             Err(SuiError::TransactionLockDoesNotExist)
         );
 
         // Should be able to acquire lock if all objects initialized
-        ls.acquire_locks(&[ref1, ref2], tx1).unwrap();
-        assert_eq!(ls.get_lock(ref2), Ok(Some(Some(tx1))));
+        ls.acquire_locks(0, &[ref1, ref2], tx1).unwrap();
+        assert_eq!(
+            ls.get_lock(ref2),
+            Ok(Some(Some(LockInfo {
+                epoch: 0,
+                tx_digest: tx1
+            })))
+        );
 
         // Should be able to check locks exist for ref1 and ref2, but not others
         assert_eq!(ls.locks_exist(&[ref1, ref2]), Ok(()));
@@ -704,7 +735,7 @@ mod tests {
         ls.initialize_locks(&[ref3], false /* is_force_reset */)
             .unwrap();
         assert!(matches!(
-            ls.acquire_locks(&[ref2, ref3], tx2),
+            ls.acquire_locks(0, &[ref2, ref3], tx2),
             Err(SuiError::ConflictingTransaction { .. })
         ));
     }
@@ -723,8 +754,14 @@ mod tests {
             .unwrap();
 
         // Should be able to acquire lock if all objects initialized
-        ls.acquire_locks(&[ref1, ref2], tx1).unwrap();
-        assert_eq!(ls.get_lock(ref2), Ok(Some(Some(tx1))));
+        ls.acquire_locks(0, &[ref1, ref2], tx1).unwrap();
+        assert_eq!(
+            ls.get_lock(ref2),
+            Ok(Some(Some(LockInfo {
+                epoch: 0,
+                tx_digest: tx1
+            })))
+        );
 
         // Cannot initialize them again since they are locked already
         assert!(matches!(
@@ -734,7 +771,7 @@ mod tests {
 
         // Now remove the locks
         ls.delete_locks(&[ref1, ref2]).unwrap();
-        assert_eq!(ls.get_lock(ref2), Ok(None));
+        assert!(matches!(ls.get_lock(ref2), Ok(None)));
 
         // Now initialization should succeed
         ls.initialize_locks(&[ref1, ref2], false /* is_force_reset */)
@@ -763,14 +800,14 @@ mod tests {
         assert!(results.iter().all(|res| res.is_ok()));
 
         let lock_state = ls.get_lock(ref1).await;
-        assert_eq!(lock_state, Ok(Some(None)));
+        assert!(matches!(lock_state, Ok(Some(None))));
         assert_eq!(ls.locks_exist(vec![ref1, ref2]).await, Ok(()));
 
         // only one party should be able to successfully acquire the lock.  Use diff tx for each one
         let futures = txdigests.iter().map(|tx| {
             let ls = ls.clone();
             let tx = *tx;
-            tokio::spawn(async move { ls.acquire_locks(vec![ref1, ref2], tx).await })
+            tokio::spawn(async move { ls.acquire_locks(0, vec![ref1, ref2], tx).await })
         });
         let results = join_all(futures).await;
         let inner_res: Vec<_> = results.into_iter().map(|r| r.unwrap()).collect();
@@ -784,5 +821,62 @@ mod tests {
             .iter()
             .filter(|r| r.is_err())
             .all(|r| matches!(r, Err(SuiError::ConflictingTransaction { .. }))));
+    }
+
+    #[test]
+    fn test_lockdb_relock_at_new_epoch() {
+        let ls = init_lockservice_db();
+
+        let ref1: ObjectRef = (ObjectID::random(), 1.into(), ObjectDigest::random());
+        let ref2: ObjectRef = (ObjectID::random(), 1.into(), ObjectDigest::random());
+
+        let tx1 = TransactionDigest::random();
+        let tx2 = TransactionDigest::random();
+
+        // Initialize 2 locks
+        ls.initialize_locks(&[ref1, ref2], false /* is_force_reset */)
+            .unwrap();
+        assert_eq!(ls.get_lock(ref2), Ok(Some(None)));
+        assert_eq!(ls.locks_exist(&[ref1, ref2]), Ok(()));
+
+        // Should be able to acquire lock if all objects initialized
+        ls.acquire_locks(0, &[ref1, ref2], tx1).unwrap();
+
+        // Try to acquire lock for the same object with a different transaction should fail.
+        assert!(ls.acquire_locks(0, &[ref1], tx2).is_err());
+        // The object is still locked at the same transaction.
+        assert_eq!(ls.get_lock(ref1).unwrap().unwrap().unwrap().tx_digest, tx1);
+
+        // We should be able to relock the same object with a different transaction from a new epoch.
+        ls.acquire_locks(1, &[ref1], tx2).unwrap();
+        // The object is now locked at transaction tx2.
+        assert_eq!(
+            ls.get_lock(ref1).unwrap().unwrap().unwrap(),
+            LockInfo {
+                epoch: 1,
+                tx_digest: tx2
+            }
+        );
+
+        // Since ref1 is now locked by tx2, we cannot relock it at the same epoch.
+        assert!(ls.acquire_locks(1, &[ref1, ref2], tx1).is_err());
+
+        // ref1 is already locked by tx2, and hence this is a nop. ref2 is still locked by tx1 from
+        // epoch 0, which will be overridden here.
+        ls.acquire_locks(1, &[ref1, ref2], tx2).unwrap();
+        assert_eq!(
+            ls.get_lock(ref1).unwrap().unwrap().unwrap(),
+            LockInfo {
+                epoch: 1,
+                tx_digest: tx2
+            }
+        );
+        assert_eq!(
+            ls.get_lock(ref2).unwrap().unwrap().unwrap(),
+            LockInfo {
+                epoch: 1,
+                tx_digest: tx2
+            }
+        );
     }
 }

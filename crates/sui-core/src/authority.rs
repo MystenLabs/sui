@@ -1051,7 +1051,7 @@ impl AuthorityState {
                 match self.get_object(&request.object_id).await {
                     Ok(Some(object)) => {
                         let lock = if !object.is_owned_or_quasi_shared() {
-                            // Unowned obejcts have no locks.
+                            // Unowned objects have no locks.
                             None
                         } else {
                             self.get_transaction_lock(&object.compute_object_reference())
@@ -1840,7 +1840,7 @@ impl AuthorityState {
         signed_transaction: SignedTransaction,
     ) -> Result<(), SuiError> {
         self.database
-            .lock_and_write_transaction(mutable_input_objects, signed_transaction)
+            .lock_and_write_transaction(self.epoch(), mutable_input_objects, signed_transaction)
             .await
     }
 
@@ -1900,7 +1900,7 @@ impl AuthorityState {
         &self,
         object_ref: &ObjectRef,
     ) -> Result<Option<SignedTransaction>, SuiError> {
-        self.database.get_transaction_envelope(object_ref).await
+        self.database.get_transaction_lock(object_ref).await
     }
 
     // Helper functions to manage certificates
