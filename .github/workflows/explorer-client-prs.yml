@@ -4,7 +4,7 @@ jobs:
   diff:
     runs-on: [ubuntu-latest]
     outputs:
-      isClient: ${{ steps.diff.outputs.isExplorerClient }}
+      isClient: ${{ contains(fromJson(steps.diff.outputs.packages), "sui-explorer") }}
     steps:
       - uses: actions/checkout@v3
       - name: Detect Changes
@@ -13,7 +13,7 @@ jobs:
   client_checks:
     name: Lint, Test & Build
     needs: diff
-    if: needs.diff.outputs.isClient == 'true'
+    if: needs.diff.outputs.isClient
     runs-on: [ubuntu-latest]
     steps:
       - name: Checkout
@@ -64,7 +64,7 @@ jobs:
   end_to_end_localnet:
     name: End-to-end tests (Localnet)
     needs: diff
-    if: needs.diff.outputs.isClient == 'true'
+    if: needs.diff.outputs.isClient
     runs-on: [ubuntu-ghcloud]
     steps:
       - uses: actions/checkout@v3
