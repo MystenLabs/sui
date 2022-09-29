@@ -31,7 +31,7 @@ use tokio::sync::{broadcast, mpsc, oneshot, OwnedSemaphorePermit, Semaphore};
 use tokio::task::JoinHandle;
 use tokio::time::{timeout, Duration};
 
-use tracing::{debug, error, trace, warn};
+use tracing::{debug, error, instrument, trace, warn};
 
 const NODE_SYNC_QUEUE_LEN: usize = 500;
 
@@ -314,6 +314,30 @@ where
             .ok();
     }
 
+    #[instrument(name = "record_vote_and_check_finality", level = "trace", skip_all)]
+    fn record_vote_and_check_finality(
+        &self,
+        peer: &AuthorityName,
+        digests: &ExecutionDigests,
+    ) -> SuiResult<bool> {
+        // Check if the tx is final.
+        let committee = self.committee.load();
+        let stake = committee.weight(peer);
+        let quorum_threshold = committee.quorum_threshold();
+
+        self.store().record_effects_vote(
+            *peer,
+            digests.transaction,
+            digests.effects,
+            stake,
+        )?;
+        let votes =
+            self.store()
+                .count_effects_votes(digests.transaction, digests.effects)?;
+
+        Ok(votes >= quorum_threshold)
+    }
+
     async fn handle_messages(self: Arc<Self>, receiver: &mut mpsc::Receiver<DigestsMessage>) {
         // this pattern for limiting concurrency is from
         // https://github.com/tokio-rs/tokio/discussions/2648
@@ -321,6 +345,33 @@ where
 
         while let Some(DigestsMessage { sync_arg, tx }) = receiver.recv().await {
             let state = self.clone();
+
+            // For Follow message: we record vote and check finality here so
+            // it's not rate limited. A semaphore is only needed when the
+            // digest is final and ready to be executed.
+            if let SyncArg::Follow(peer, exec_digest) = sync_arg {
+                match self.record_vote_and_check_finality(&peer, &exec_digest) {
+                    Ok(false) => {
+                        trace!(tx_digest=?exec_digest.transaction, effects_digest=?exec_digest.effects, ?peer, "digests is not final");
+                        Self::send_sync_res_to_receiver(
+                            tx,
+                            Ok(SyncStatus::NotFinal),
+                            &sync_arg,
+                        );
+                        continue; // tx is not final, do nothing
+                    }
+                    Ok(true) => {
+                        debug!(tx_digest=?exec_digest.transaction, effects_digest=?exec_digest.effects, ?peer, "digests are now final")
+                    }
+                    Err(err) => {
+                        error!(tx_digest=?exec_digest.transaction, effects_digest=?exec_digest.effects, ?peer, "failed to record vote and check finality: {}", err);
+                        Self::send_sync_res_to_receiver(tx, Err(err), &sync_arg);
+                        // error when checking finality, skip and wait for the next digest or checkpoint to re-trigger
+                        continue;
+                    }
+                }
+            }
+
             let limit = limit.clone();
 
             // hold semaphore permit until task completes. unwrap ok because we never close
@@ -335,11 +386,11 @@ where
                 .await
                 .map_err(|_| SuiError::TimeoutError);
 
-                let digest = sync_arg.transaction_digest();
+                let tx_digest = sync_arg.transaction_digest();
 
                 let res = match res {
                     Err(error) | Ok(Err(error)) => {
-                        error!(?digest, "process_digest failed: {}", error);
+                        error!(?tx_digest, "process_digest failed: {}", error);
                         Err(error)
                     }
 
@@ -353,25 +404,38 @@ where
                 };
 
                 // Notify waiters even if tx failed, to avoid leaking resources.
-                trace!(?digest, "notifying parents and waiters");
-                Self::notify(&state.pending_parents, digest, res.clone()).await;
-                Self::notify(&state.pending_txes, digest, res.clone()).await;
+                trace!(?epoch_id, ?tx_digest, "notifying parents and waiters");
+                Self::notify(&state.pending_parents, tx_digest, res.clone()).await;
+                Self::notify(&state.pending_txes, tx_digest, res.clone()).await;
 
-                if let Some(tx) = tx {
-                    // Send status back to follower so that it knows whether to advance
-                    // the watermark.
-                    if tx.send(res).is_err() {
-                        // This will happen any time the follower times out and restarts, but
-                        // that's ok - the follower won't have marked this digest as processed so it
-                        // will be retried.
-                        debug!(
-                            ?sync_arg,
-                            "could not send process_digest response to caller",
-                        );
-                    }
-                }
+                Self::send_sync_res_to_receiver(tx, res, &sync_arg);
             });
         }
+    }
+
+
+    fn send_sync_res_to_receiver(
+        tx: Option<oneshot::Sender<Result<SyncStatus, SuiError>>>,
+        res: Result<SyncStatus, SuiError>,
+        sync_arg: &SyncArg,
+    ) {
+        if let Some(tx) = tx {
+            // Send status back to follower so that it knows whether to advance
+            // the watermark.
+            if tx.send(res).is_err() {
+                // This will happen any time the follower times out and restarts, but
+                // that's ok - the follower won't have marked this digest as processed so it
+                // will be retried.
+                debug!(
+                    ?sync_arg,
+                    "could not send process_digest response to caller",
+                );
+            }
+        }
+    }
+
+    fn aggregator(&self) -> Arc<AuthorityAggregator<A>> {
+        self.active_authority.net.load().deref().clone()
     }
 
     async fn get_true_effects(
@@ -532,29 +596,8 @@ where
                 // verified TransactionEffects
                 return self.process_parent_request(permit, &digest).await;
             }
-            SyncArg::Follow(peer, digests) => {
-                // Check if the tx is final.
-                let stake = self.committee.weight(&peer);
-                let quorum_threshold = self.committee.quorum_threshold();
-
-                self.node_sync_store.record_effects_vote(
-                    peer,
-                    digests.transaction,
-                    digests.effects,
-                    stake,
-                )?;
-                let votes = self
-                    .node_sync_store
-                    .count_effects_votes(digests.transaction, digests.effects)?;
-
-                let is_final = votes >= quorum_threshold;
-
-                if !is_final {
-                    return Ok(SyncStatus::NotFinal);
-                }
-
-                debug!(?digests, ?peer, "digests are now final");
-
+            SyncArg::Follow(_peer, digests) => {
+                // We checked the finality of digests earlier and know that it is final.
                 (
                     digests,
                     Some(
