@@ -13,7 +13,11 @@
     "overrides": {
       "node-notifier": "10.0.0",
       "async": "3.2.2",
-      "nth-check": "2.0.1"
+      "nth-check": "2.0.1",
+      "trim@<0.0.3": ">=0.0.3",
+      "trim-newlines@<3.0.1": ">=3.0.1",
+      "glob-parent@<5.1.2": ">=5.1.2",
+      "vm2@<3.9.11": ">=3.9.11"
     }
   },
   "devDependencies": {
