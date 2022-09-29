@@ -23,11 +23,18 @@ jobs:
   version:
     runs-on: ubuntu-latest
     steps:
+      - name: Generate token
+        id: generate_token
+        uses: tibdex/github-app-token@v1
+        with:
+          app_id: ${{ secrets.APP_ID }}
+          private_key: ${{ secrets.APP_PRIVATE_KEY }}
+
       - name: checkout code repository
         uses: actions/checkout@v3
         with:
+          token: ${{ steps.generate_token.outputs.token }}
           fetch-depth: 0
-          ssh-key: ${{ secrets.SSH_CHANGESETS_PUSH }}
       - uses: pnpm/action-setup@v2.2.2
         with:
           version: 7
@@ -41,4 +48,4 @@ jobs:
       - name: Create Release Pull Request
         uses: changesets/action@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.generate_token.outputs.token }}
