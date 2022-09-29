@@ -142,15 +142,6 @@ function TopValidatorsCard({ state }: { state: ValidatorState }): JSX.Element {
                     </TabPanel>
                 </TabPanels>
             </TabGroup>
-            {/* <TabFooter stats={tabsFooter.stats}>
-                        <Longtext
-                            text=""
-                            category="validators"
-                            isLink={true}
-                            isCopyButton={false}
-                            alttext="More Validators"
-                        />
-                    </TabFooter> */}
         </div>
     );
 }
