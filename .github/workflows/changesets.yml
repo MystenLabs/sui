@@ -40,3 +40,5 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Create Release Pull Request
         uses: peter-evans/create-pull-request@v4
+        with:
+          token: ${{ secrets.SSH_CHANGESETS_PUSH }}
