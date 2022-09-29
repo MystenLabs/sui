@@ -39,6 +39,4 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Create Release Pull Request
-        uses: changesets/action@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: peter-evans/create-pull-request@v4
