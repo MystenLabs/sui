@@ -321,19 +321,14 @@ where
         digests: &ExecutionDigests,
     ) -> SuiResult<bool> {
         // Check if the tx is final.
-        let committee = self.committee.load();
-        let stake = committee.weight(peer);
-        let quorum_threshold = committee.quorum_threshold();
+        let stake = self.committee.weight(peer);
+        let quorum_threshold = self.committee.quorum_threshold();
 
-        self.store().record_effects_vote(
-            *peer,
-            digests.transaction,
-            digests.effects,
-            stake,
-        )?;
-        let votes =
-            self.store()
-                .count_effects_votes(digests.transaction, digests.effects)?;
+        self.store()
+            .record_effects_vote(*peer, digests.transaction, digests.effects, stake)?;
+        let votes = self
+            .store()
+            .count_effects_votes(digests.transaction, digests.effects)?;
 
         Ok(votes >= quorum_threshold)
     }
@@ -353,11 +348,7 @@ where
                 match self.record_vote_and_check_finality(&peer, &exec_digest) {
                     Ok(false) => {
                         trace!(tx_digest=?exec_digest.transaction, effects_digest=?exec_digest.effects, ?peer, "digests is not final");
-                        Self::send_sync_res_to_receiver(
-                            tx,
-                            Ok(SyncStatus::NotFinal),
-                            &sync_arg,
-                        );
+                        Self::send_sync_res_to_receiver(tx, Ok(SyncStatus::NotFinal), &sync_arg);
                         continue; // tx is not final, do nothing
                     }
                     Ok(true) => {
@@ -397,14 +388,14 @@ where
                     Ok(Ok(res)) => {
                         // Garbage collect data for this tx.
                         if let SyncStatus::CertExecuted = res {
-                            state.cleanup_cert(digest);
+                            state.cleanup_cert(tx_digest);
                         }
                         Ok(res)
                     }
                 };
 
                 // Notify waiters even if tx failed, to avoid leaking resources.
-                trace!(?epoch_id, ?tx_digest, "notifying parents and waiters");
+                trace!(?tx_digest, "notifying parents and waiters");
                 Self::notify(&state.pending_parents, tx_digest, res.clone()).await;
                 Self::notify(&state.pending_txes, tx_digest, res.clone()).await;
 
@@ -412,7 +403,6 @@ where
             });
         }
     }
-
 
     fn send_sync_res_to_receiver(
         tx: Option<oneshot::Sender<Result<SyncStatus, SuiError>>>,
@@ -434,9 +424,9 @@ where
         }
     }
 
-    fn aggregator(&self) -> Arc<AuthorityAggregator<A>> {
-        self.active_authority.net.load().deref().clone()
-    }
+    // fn aggregator(&self) -> Arc<AuthorityAggregator<A>> {
+    //     self.aggregator.net.load().deref().clone()
+    // }
 
     async fn get_true_effects(
         &self,

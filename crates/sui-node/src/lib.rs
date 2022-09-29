@@ -195,18 +195,18 @@ impl SuiNode {
 
         let gossip_handle = if is_full_node {
             info!("Starting full node sync to latest checkpoint (this may take a while)");
-            let now = Instant::now();
-            if let Err(err) = active_authority.sync_to_latest_checkpoint().await {
-                error!(
-                    "Full node failed to catch up to latest checkpoint: {:?}",
-                    err
-                );
-            } else {
-                info!(
-                    "Full node caught up to latest checkpoint in {:?}",
-                    now.elapsed()
-                );
-            }
+            // let now = Instant::now();
+            // if let Err(err) = active_authority.sync_to_latest_checkpoint().await {
+            //     error!(
+            //         "Full node failed to catch up to latest checkpoint: {:?}",
+            //         err
+            //     );
+            // } else {
+            //     info!(
+            //         "Full node caught up to latest checkpoint in {:?}",
+            //         now.elapsed()
+            //     );
+            // }
             active_authority.clone().spawn_node_sync_process().await;
             None
         } else if config.enable_gossip {
