@@ -199,9 +199,12 @@ function LatestTxCard({ ...data }: RecentTx) {
                     latestTx: resp,
                     totalTxcount: count,
                 });
-                setRecentTx(
-                    genTableDataFromTxData(results.latestTx, truncateLength)
-                );
+
+                if (results.latestTx.length > 0) {
+                    setRecentTx(
+                        genTableDataFromTxData(results.latestTx, truncateLength)
+                    );
+                }
             })
             .catch((err) => {
                 setResults({
