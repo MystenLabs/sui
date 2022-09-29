@@ -197,6 +197,30 @@ impl SuiNode {
             None
         };
 
+        let batch_subsystem_handle = {
+            // Start batch system so that this node can be followed
+            let batch_state = state.clone();
+            tokio::task::spawn(async move {
+                batch_state
+                    .run_batch_service(1000, Duration::from_secs(1))
+                    .await
+                    .map_err(Into::into)
+            })
+        };
+
+        let post_processing_subsystem_handle =
+            if index_store.is_some() || config.enable_event_processing {
+                let indexing_state = state.clone();
+                Some(tokio::task::spawn(async move {
+                    indexing_state
+                        .run_tx_post_processing_process()
+                        .await
+                        .map_err(Into::into)
+                }))
+            } else {
+                None
+            };
+
         let gossip_handle = if is_full_node {
             info!("Starting full node sync to latest checkpoint (this may take a while)");
             let now = Instant::now();
@@ -234,30 +258,6 @@ impl SuiNode {
         } else {
             None
         };
-
-        let batch_subsystem_handle = {
-            // Start batch system so that this node can be followed
-            let batch_state = state.clone();
-            tokio::task::spawn(async move {
-                batch_state
-                    .run_batch_service(1000, Duration::from_secs(1))
-                    .await
-                    .map_err(Into::into)
-            })
-        };
-
-        let post_processing_subsystem_handle =
-            if index_store.is_some() || config.enable_event_processing {
-                let indexing_state = state.clone();
-                Some(tokio::task::spawn(async move {
-                    indexing_state
-                        .run_tx_post_processing_process()
-                        .await
-                        .map_err(Into::into)
-                }))
-            } else {
-                None
-            };
 
         let registry = prometheus_registry.clone();
         let validator_service = if config.consensus_config().is_some() {
