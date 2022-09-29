@@ -32,6 +32,7 @@ function TxAddressHeader({ data }: { data: TxResultState }) {
         // TODO: use a different icon
         ChangeEpoch: CallTypeIcon,
         TransferSui: TransferObjectTypeIcon,
+        Pay: TransferObjectTypeIcon,
     };
     const TxKindName = data.txKindName;
     const Icon = TxTransferTypeIcon[TxKindName];

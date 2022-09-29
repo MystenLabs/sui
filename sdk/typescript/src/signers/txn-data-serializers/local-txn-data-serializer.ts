@@ -95,9 +95,14 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
     t: PayTransaction
   ): Promise<Base64DataBuffer> {
     try {
+      const inputCoinRefs = (
+        await Promise.all(
+          t.inputCoins.map((coin) => this.provider.getObjectRef(coin))
+        )
+      ).map((ref) => ref!);
       const tx = {
         Pay: {
-          input_coins: t.inputCoins,
+          coins: inputCoinRefs,
           recipients: t.recipients,
           amounts: t.amounts,
         },

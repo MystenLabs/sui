@@ -22,6 +22,12 @@ export type SuiChangeEpoch = {
   computation_charge: number;
 };
 
+export type Pay = {
+  coins: SuiObjectRef[];
+  recipients: SuiAddress[];
+  amounts: number[];
+};
+
 export type ExecuteTransactionRequestType =
   | 'ImmediateReturn'
   | 'WaitForTxCert'
@@ -32,13 +38,16 @@ export type TransactionKindName =
   | 'Publish'
   | 'Call'
   | 'TransferSui'
-  | 'ChangeEpoch';
+  | 'ChangeEpoch'
+  | 'Pay';
+
 export type SuiTransactionKind =
   | { TransferObject: TransferObject }
   | { Publish: SuiMovePackage }
   | { Call: MoveCall }
   | { TransferSui: SuiTransferSui }
-  | { ChangeEpoch: SuiChangeEpoch };
+  | { ChangeEpoch: SuiChangeEpoch }
+  | { Pay: Pay };
 export type SuiTransactionData = {
   transactions: SuiTransactionKind[];
   sender: SuiAddress;
@@ -265,6 +274,10 @@ export function getTransferSuiTransaction(
   data: SuiTransactionKind
 ): SuiTransferSui | undefined {
   return 'TransferSui' in data ? data.TransferSui : undefined;
+}
+
+export function getPayTransaction(data: SuiTransactionKind): Pay | undefined {
+  return 'Pay' in data ? data.Pay : undefined;
 }
 
 export function getChangeEpochTransaction(
