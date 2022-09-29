@@ -16,7 +16,7 @@ jobs:
         uses: peter-evans/repository-dispatch@v2
         with:
           repository: MystenLabs/sui-operations
-          token: ${{ secrets.CUSTOM_GITHUB_TOKEN }}
+          token: ${{ secrets.CHANGESETS_DEPLOY_DISPATCH }}
           event-type: changesets-snapshot
           client-payload: '{"ref": "${{ github.ref }}", "sha": "${{ github.sha }}"}'
 
