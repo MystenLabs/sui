@@ -13,9 +13,9 @@ export function generateMnemonic(): string {
 }
 
 /**
- * Validate a 12-word mnemonic string in the English wordlist.
+ * Validate a mnemonic string in the BIP39 English wordlist.
  *
- * @param mnemonics 12 words string split by spaces.
+ * @param mnemonics a words string split by spaces of length 12/15/18/21/24.
  *
  * @returns true if the mnemonic is valid, false otherwise.
  */
