@@ -26,4 +26,4 @@ rand = "0.8.5"
 tempfile = "3.3.0"
 tracing-test = "0.2.3"
 
-test_utils = { path = "../test_utils", package = "narwhal-test-utils" }
+test-utils = { path = "../test-utils", package = "narwhal-test-utils" }

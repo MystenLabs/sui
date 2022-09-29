@@ -21,4 +21,4 @@ types = { path = "../types", package = "narwhal-types" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-test_utils = { path = "../test_utils", package = "narwhal-test-utils" }
+test-utils = { path = "../test-utils", package = "narwhal-test-utils" }

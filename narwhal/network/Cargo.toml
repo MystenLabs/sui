@@ -32,4 +32,4 @@ anyhow = "1.0.65"
 
 [dev-dependencies]
 bincode = "1.3.3"
-test_utils = { path = "../test_utils", package = "narwhal-test-utils" }
+test-utils = { path = "../test-utils", package = "narwhal-test-utils" }

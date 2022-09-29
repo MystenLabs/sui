@@ -40,7 +40,7 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 arc-swap = { version = "1.5.1", features = ["serde"] }
 rand = "0.8.5"
 tempfile = "3.3.0"
-test_utils = { path = "../test_utils", package = "narwhal-test-utils" }
+test-utils = { path = "../test-utils", package = "narwhal-test-utils" }
 
 [features]
 benchmark = []

@@ -39,6 +39,6 @@ indexmap = { version = "1.9.1", features = ["serde"] }
 rand = "0.8.5"
 tempfile = "3.3.0"
 primary = { path = "../primary", package = "narwhal-primary" }
-test_utils = { path = "../test_utils", package = "narwhal-test-utils" }
+test-utils = { path = "../test-utils", package = "narwhal-test-utils" }
 types = { path = "../types", package = "narwhal-types" }
 telemetry-subscribers = "0.1.0"

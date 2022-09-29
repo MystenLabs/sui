@@ -59,7 +59,7 @@ node = { path = "../node", package = "narwhal-node" }
 proptest = "1.0.0"
 tempfile = "3.3.0"
 telemetry-subscribers = "0.1.0"
-test_utils = { path = "../test_utils", package = "narwhal-test-utils" }
+test-utils = { path = "../test-utils", package = "narwhal-test-utils" }
 thiserror = "1.0.35"
 tracing = "0.1.36"
 tracing-test = "0.2.3"
