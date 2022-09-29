@@ -40,7 +40,7 @@ module sui::coin {
     /// Contains currency metadata for off-chain discovery. Type parameter `T`
     /// matches the one in `Coin<T>`
     struct CurrencyCreated<phantom T> has copy, drop {
-        /// Number of decimal places the coin uses. 
+        /// Number of decimal places the coin uses.
         /// A coin with `value ` N and `decimals` D should be shown as N / 10^D
         /// E.g., a coin with `value` 7002 and decimals 3 should be displayed as 7.002
         /// This is metadata for display usage only.
@@ -226,7 +226,7 @@ module sui::coin {
         burn(c, coin);
     }
 
-    /// Send `amount` units of `c` to `recipient
+    /// Send `amount` units of `c` to `recipient`
     /// Aborts with `EVALUE` if `amount` is greater than or equal to `amount`
     public entry fun split_and_transfer<T>(
         c: &mut Coin<T>, amount: u64, recipient: address, ctx: &mut TxContext

@@ -10,6 +10,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
+const FRAMEWORK_DOCS_DIR: &str = "docs";
+
 /// Save revision info to environment variable
 fn main() {
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
@@ -51,13 +53,24 @@ fn build_framework_and_stdlib(
     sui_framework_path: &Path,
     move_stdlib_path: &Path,
 ) -> (Vec<CompiledModule>, Vec<CompiledModule>) {
-    let pkg = sui_framework_build::build_move_package_with_deps(
-        sui_framework_path,
-        BuildConfig::default(),
-    )
-    .unwrap();
+    let config = BuildConfig {
+        generate_docs: true,
+        ..Default::default()
+    };
+    let pkg =
+        sui_framework_build::build_move_package_with_deps(sui_framework_path, config).unwrap();
     let sui_framework = sui_framework_build::filter_package_modules(&pkg).unwrap();
     let move_stdlib = sui_framework_build::build_move_stdlib_modules(move_stdlib_path).unwrap();
+    // copy generated docs from build/Sui/docs to docs/
+    for (fname, _) in pkg.compiled_docs.unwrap() {
+        let mut src_path = PathBuf::from("build");
+        src_path.push("Sui");
+        src_path.push("docs");
+        src_path.push(fname.clone());
+        let mut dst_path = PathBuf::from(FRAMEWORK_DOCS_DIR);
+        dst_path.push(fname);
+        fs::copy(src_path, dst_path).unwrap();
+    }
     (sui_framework, move_stdlib)
 }
 
