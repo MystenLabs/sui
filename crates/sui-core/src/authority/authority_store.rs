@@ -398,11 +398,11 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     }
 
     /// Read a transaction envelope via lock or returns Err(TransactionLockDoesNotExist) if the lock does not exist.
-    pub async fn get_transaction_envelope(
+    pub async fn get_transaction_lock(
         &self,
         object_ref: &ObjectRef,
     ) -> SuiResult<Option<TransactionEnvelope<S>>> {
-        let transaction_option = self
+        let tx_lock = self
             .lock_service
             .get_lock(*object_ref)
             .await?
@@ -411,13 +411,14 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         // Returns None if either no TX with the lock, or TX present but no entry in transactions table.
         // However we retry a couple times because the TX is written after the lock is acquired, so it might
         // just be a race.
-        match transaction_option {
-            Some(tx_digest) => {
+        match tx_lock {
+            Some(lock_info) => {
+                let tx_digest = &lock_info.tx_digest;
                 let mut retry_strategy = ExponentialBackoff::from_millis(2)
                     .factor(10)
                     .map(jitter)
                     .take(3);
-                let mut tx_option = self.tables.transactions.get(&tx_digest)?;
+                let mut tx_option = self.tables.transactions.get(tx_digest)?;
                 while tx_option.is_none() {
                     if let Some(duration) = retry_strategy.next() {
                         // Wait to retry
@@ -427,7 +428,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
                         // No more retries, just quit
                         break;
                     }
-                    tx_option = self.tables.transactions.get(&tx_digest)?;
+                    tx_option = self.tables.transactions.get(tx_digest)?;
                 }
                 Ok(tx_option)
             }
@@ -600,6 +601,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     /// The lock service is used to atomically acquire locks.
     pub async fn lock_and_write_transaction(
         &self,
+        epoch: EpochId,
         owned_input_objects: &[ObjectRef],
         transaction: TransactionEnvelope<S>,
     ) -> Result<(), SuiError> {
@@ -607,7 +609,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
 
         // Acquire the lock on input objects
         self.lock_service
-            .acquire_locks(owned_input_objects.to_owned(), tx_digest)
+            .acquire_locks(epoch, owned_input_objects.to_owned(), tx_digest)
             .await?;
 
         // TODO: we should have transaction insertion be atomic with lock acquisition, or retry.
