@@ -1,0 +1,53 @@
+[package]
+name = "narwhal-consensus"
+version = "0.1.0"
+license = "Apache-2.0"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+edition = "2021"
+
+[dependencies]
+arc-swap = { version = "1.5.1", features = ["serde"] }
+bincode = "1.3.3"
+blake2 = "0.9"
+bytes = "1.2.1"
+match_opt = "0.1.2"
+mysten-util-mem = { git = "https://github.com/MystenLabs/mysten-infra" }
+rand = { version = "0.8.5", optional = true }
+serde = { version = "1.0.144", features = ["derive"] }
+store = { version = "0.1.0", package = "typed-store" }
+thiserror = "1.0.35"
+tokio = { version = "1.20.1", features = ["sync"] }
+tracing = "0.1.36"
+
+config = { path = "../config", package = "narwhal-config" }
+fastcrypto = "0.1.2"
+crypto = { path = "../crypto", package = "narwhal-crypto" }
+storage = { path = "../storage", package = "narwhal-storage" }
+dag = { path = "../dag", package = "narwhal-dag" }
+prometheus = "0.13.2"
+types = { path = "../types", package = "narwhal-types" }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+cfg-if = "1.0.0"
+
+[dev-dependencies]
+bincode = "1.3.3"
+criterion = "0.3.6"
+futures = "0.3.24"
+indexmap = { version = "1.9.1", features = ["serde"] }
+test-utils = { path = "../test-utils", package = "narwhal-test-utils" }
+
+[target.'cfg(unix)'.dev-dependencies]
+pprof = { version = "0.10.1", features = ["criterion", "flamegraph"]}
+
+[features]
+default = ["rand"]
+benchmark = []
+pprof = []
+
+[lib]
+bench = false
+
+[[bench]]
+name = "process_certificates"
+harness = false
+required-features = ["benchmark", "pprof"]
