@@ -106,49 +106,41 @@ $main-extra-space: sizing.$main-bottom-space;
         font-style: normal;
         font-weight: 600;
         font-size: 11px;
-        line-height: 10px;
         text-transform: uppercase;
         color: colors.$gray-80;
     } @else if $type == 'stats/text-lg' {
         font-style: normal;
         font-weight: 600;
         font-size: 18px;
-        line-height: 19px;
         color: colors.$gray-100;
     } @else if $type == 'header/search-text' {
         font-style: normal;
         font-weight: 500;
         font-size: 14px;
-        line-height: 14px;
         color: colors.$gray-70;
     } @else if $type == 'table/text-xs' {
         font-style: normal;
         font-weight: 500;
         font-size: 12px;
-        line-height: 12px;
         color: colors.$gray-75;
     } @else if $type == 'table/text-sm' {
         font-style: normal;
         font-weight: 500;
         font-size: 13px;
-        line-height: 12px;
         color: colors.$white;
     } @else if $type == 'table/text-lg' {
         font-style: normal;
         font-weight: 500;
         font-size: 14px;
-        line-height: 13px;
     } @else if $type == 'table/title-sm' {
         font-style: normal;
         font-weight: 600;
         font-size: 14px;
-        line-height: 17px;
         color: colors.$gray-100;
     } @else if $type == 'page-title' {
         font-style: normal;
         font-weight: 600;
         font-size: 16px;
-        line-height: 18px;
         color: colors.$gray-100;
     } @else if $type == 'empty' {
         font-style: italic;
@@ -157,36 +149,29 @@ $main-extra-space: sizing.$main-bottom-space;
         text-align: center;
         color: colors.$gray-70;
         padding: 0 16px;
-        line-height: 16px;
         letter-spacing: 0;
     } @else if $type == 'Primary/BodySmall-M' {
         font-size: 13px;
         font-weight: 500;
-        line-height: 13px;
         letter-spacing: 0;
     } @else if $type == 'Primary/SubtitleSmall-M' {
         font-size: 11px;
         font-weight: 500;
-        line-height: 11px;
         letter-spacing: 0;
     } @else if $type == 'Primary/BodySmall-SB' {
         font-size: 13px;
         font-weight: 600;
-        line-height: 13px;
     } @else if $type == 'Primary/CAPTIONSMALL-M' {
         font-size: 11px;
         font-weight: 500;
-        line-height: 11px;
         letter-spacing: 0.05em;
     } @else if $type == 'ParagraphPrimary/P2-R' {
         font-size: 13px;
         font-weight: 400;
-        line-height: 17px;
         letter-spacing: 0;
     } @else if $type == 'page-ex-small' {
         font-weight: 500;
         font-size: 10px;
-        line-height: 100%;
         letter-spacing: 0;
     }
 }
