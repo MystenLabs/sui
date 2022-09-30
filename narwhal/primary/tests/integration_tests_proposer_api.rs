@@ -120,6 +120,7 @@ async fn test_rounds_errors() {
         tx_reconfigure,
         tx_feedback,
         &Registry::new(),
+        None,
     );
 
     // AND Wait for tasks to start
@@ -203,6 +204,7 @@ async fn test_rounds_return_successful_response() {
         tx_reconfigure,
         tx_feedback,
         &Registry::new(),
+        None,
     );
 
     // AND Wait for tasks to start
@@ -357,6 +359,7 @@ async fn test_node_read_causal_signed_certificates() {
         tx_reconfigure,
         tx_feedback,
         &Registry::new(),
+        None,
     );
 
     let (tx_new_certificates_2, rx_new_certificates_2) =
@@ -401,6 +404,7 @@ async fn test_node_read_causal_signed_certificates() {
         tx_reconfigure,
         tx_feedback_2,
         &Registry::new(),
+        None,
     );
 
     // Wait for tasks to start

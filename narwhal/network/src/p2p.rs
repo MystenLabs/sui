@@ -1,11 +1,13 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::traits::PrimaryToWorkerRpc;
 use crate::{
     traits::{Lucky, ReliableNetwork, UnreliableNetwork},
     BoundedExecutor, CancelOnDropHandler, RetryConfig, MAX_TASK_CONCURRENCY,
 };
 use anemo::PeerId;
+use anyhow::format_err;
 use anyhow::Result;
 use async_trait::async_trait;
 use crypto::{traits::KeyPair, NetworkPublicKey};
@@ -14,9 +16,10 @@ use rand::{rngs::SmallRng, SeedableRng as _};
 use std::collections::HashMap;
 use tokio::{runtime::Handle, task::JoinHandle};
 use types::{
-    PrimaryMessage, PrimaryToPrimaryClient, PrimaryToWorkerClient, PrimaryWorkerMessage,
-    WorkerBatchRequest, WorkerBatchResponse, WorkerMessage, WorkerPrimaryMessage,
-    WorkerSynchronizeMessage, WorkerToPrimaryClient, WorkerToWorkerClient,
+    Batch, BatchDigest, PrimaryMessage, PrimaryToPrimaryClient, PrimaryToWorkerClient,
+    PrimaryWorkerMessage, RequestBatchRequest, WorkerBatchRequest, WorkerBatchResponse,
+    WorkerMessage, WorkerPrimaryMessage, WorkerSynchronizeMessage, WorkerToPrimaryClient,
+    WorkerToWorkerClient,
 };
 
 fn default_executor() -> BoundedExecutor {
@@ -340,6 +343,27 @@ impl UnreliableNetwork<WorkerBatchRequest> for P2pNetwork {
                 .await
         };
         self.unreliable_send(peer, f)
+    }
+}
+
+#[async_trait]
+impl PrimaryToWorkerRpc for P2pNetwork {
+    async fn request_batch(
+        &self,
+        peer: &NetworkPublicKey,
+        batch: BatchDigest,
+    ) -> Result<Option<Batch>> {
+        let peer_id = PeerId(peer.0.to_bytes());
+        let peer = self
+            .network
+            .peer(peer_id)
+            .ok_or_else(|| format_err!("Network has no connection with peer {peer_id}"))?;
+        let request = RequestBatchRequest { batch };
+        let response = PrimaryToWorkerClient::new(peer)
+            .request_batch(request)
+            .await
+            .map_err(|e| format_err!("Network error {:?}", e))?;
+        Ok(response.into_body().batch)
     }
 }
 

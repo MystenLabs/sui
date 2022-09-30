@@ -9,25 +9,21 @@ use consensus::{
 };
 
 use crypto::{KeyPair, NetworkKeyPair, PublicKey};
-use executor::{
-    get_restored_consensus_output, ExecutionState, Executor, ExecutorOutput, SerializedTransaction,
-    SubscriberResult,
-};
+use executor::{get_restored_consensus_output, ExecutionState, Executor, SubscriberResult};
 use fastcrypto::traits::{KeyPair as _, VerifyingKey};
 use itertools::Itertools;
-use primary::{BlockCommand, NetworkModel, PayloadToken, Primary, PrimaryChannelMetrics};
+use network::P2pNetwork;
+use primary::{NetworkModel, PayloadToken, Primary, PrimaryChannelMetrics};
 use prometheus::{IntGauge, Registry};
-use std::{fmt::Debug, sync::Arc};
+use std::sync::Arc;
 use storage::{CertificateStore, CertificateToken};
 use store::{
     reopen,
     rocks::{open_cf, DBMap},
     Store,
 };
-use tokio::{
-    sync::{mpsc::Sender, watch},
-    task::JoinHandle,
-};
+use tokio::sync::oneshot;
+use tokio::{sync::watch, task::JoinHandle};
 use tracing::{debug, info};
 use types::{
     metered_channel, Batch, BatchDigest, Certificate, CertificateDigest, ConsensusStore, Header,
@@ -152,15 +148,11 @@ impl Node {
         internal_consensus: bool,
         // The state used by the client to execute transactions.
         execution_state: Arc<State>,
-        // A channel to output transactions execution confirmations.
-        tx_confirmation: Sender<ExecutorOutput<State>>,
         // A prometheus exporter Registry to use for the metrics
         registry: &Registry,
     ) -> SubscriberResult<Vec<JoinHandle<()>>>
     where
         State: ExecutionState + Send + Sync + 'static,
-        State::Outcome: Send + 'static,
-        State::Error: Debug,
     {
         let initial_committee = ReconfigureNotification::NewEpoch((**committee.load()).clone());
         let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
@@ -194,7 +186,7 @@ impl Node {
         // Compute the public key of this authority.
         let name = keypair.public().clone();
         let mut handles = Vec::new();
-
+        let (rx_executor_network, tx_executor_network) = oneshot::channel();
         let (dag, network_model) = if !internal_consensus {
             debug!("Consensus is disabled: the primary will run w/o Tusk");
             let consensus_metrics = Arc::new(ConsensusMetrics::new(registry));
@@ -205,6 +197,9 @@ impl Node {
             (Some(Arc::new(dag)), NetworkModel::Asynchronous)
         } else {
             let consensus_handles = Self::spawn_consensus(
+                name.clone(),
+                tx_executor_network,
+                worker_cache.clone(),
                 committee.clone(),
                 store,
                 parameters.clone(),
@@ -212,8 +207,6 @@ impl Node {
                 &tx_reconfigure,
                 rx_new_certificates,
                 tx_consensus.clone(),
-                tx_confirmation,
-                tx_get_block_commands.clone(),
                 registry,
             )
             .await?;
@@ -257,6 +250,7 @@ impl Node {
             tx_reconfigure,
             tx_consensus,
             registry,
+            Some(rx_executor_network),
         );
         handles.extend(primary_handles);
 
@@ -282,25 +276,22 @@ impl Node {
 
     /// Spawn the consensus core and the client executing transactions.
     async fn spawn_consensus<State>(
+        name: PublicKey,
+        network: oneshot::Receiver<P2pNetwork>,
+        worker_cache: SharedWorkerCache,
+
         committee: SharedCommittee,
         store: &NodeStorage,
         parameters: Parameters,
-        execution_state: Arc<State>,
+        execution_state: State,
         tx_reconfigure: &watch::Sender<ReconfigureNotification>,
         rx_new_certificates: metered_channel::Receiver<Certificate>,
         tx_feedback: metered_channel::Sender<Certificate>,
-        tx_confirmation: Sender<(
-            SubscriberResult<<State as ExecutionState>::Outcome>,
-            SerializedTransaction,
-        )>,
-        tx_get_block_commands: metered_channel::Sender<BlockCommand>,
         registry: &Registry,
     ) -> SubscriberResult<Vec<JoinHandle<()>>>
     where
         PublicKey: VerifyingKey,
         State: ExecutionState + Send + Sync + 'static,
-        State::Outcome: Send + 'static,
-        State::Error: Debug,
     {
         let consensus_metrics = Arc::new(ConsensusMetrics::new(registry));
         let channel_metrics = ChannelMetrics::new(registry);
@@ -312,7 +303,7 @@ impl Node {
         let restored_consensus_output = get_restored_consensus_output(
             store.consensus_store.clone(),
             store.certificate_store.clone(),
-            execution_state.clone(),
+            &execution_state,
         )
         .await?
         .into_iter()
@@ -352,16 +343,16 @@ impl Node {
         // Spawn the client executing the transactions. It can also synchronize with the
         // subscriber handler if it missed some transactions.
         let executor_handles = Executor::spawn(
-            store.temp_batch_store.clone(),
+            name,
+            network,
+            worker_cache,
+            (**committee.load()).clone(),
             execution_state,
             tx_reconfigure,
             /* rx_consensus */ rx_sequence,
-            /* tx_output */ tx_confirmation,
-            tx_get_block_commands,
             registry,
             restored_consensus_output,
-        )
-        .await?;
+        )?;
 
         Ok(executor_handles
             .into_iter()

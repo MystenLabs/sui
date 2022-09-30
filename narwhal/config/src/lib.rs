@@ -438,6 +438,17 @@ impl WorkerCache {
         Ok(res)
     }
 
+    /// Returns the addresses of all known workers.
+    pub fn all_workers(&self) -> Vec<(NetworkPublicKey, Multiaddr)> {
+        self.workers
+            .iter()
+            .flat_map(|(_, w)| {
+                w.0.values()
+                    .map(|w| (w.name.clone(), w.worker_address.clone()))
+            })
+            .collect()
+    }
+
     /// Returns the addresses of all workers with a specific id except the ones of the authority
     /// specified by `myself`.
     pub fn others_workers(

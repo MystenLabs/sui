@@ -40,6 +40,7 @@ use prometheus::Registry;
 use std::{collections::BTreeMap, net::Ipv4Addr, sync::Arc};
 use storage::CertificateStore;
 use store::Store;
+use tokio::sync::oneshot;
 use tokio::{sync::watch, task::JoinHandle};
 use tower::ServiceBuilder;
 use tracing::info;
@@ -91,6 +92,8 @@ impl Primary {
         tx_reconfigure: watch::Sender<ReconfigureNotification>,
         tx_committed_certificates: Sender<Certificate>,
         registry: &Registry,
+        // See comments in Subscriber::spawn
+        rx_executor_network: Option<oneshot::Sender<P2pNetwork>>,
     ) -> Vec<JoinHandle<()>> {
         // Write the parameters to the logs.
         parameters.tracing();
@@ -242,12 +245,7 @@ impl Primary {
             .others_primaries(&name)
             .into_iter()
             .map(|(_, address, network_key)| (network_key, address));
-        let workers = worker_cache
-            .load()
-            .our_workers(&name)
-            .unwrap()
-            .into_iter()
-            .map(|info| (info.name, info.worker_address));
+        let workers = worker_cache.load().all_workers().into_iter();
         for (public_key, address) in primaries.chain(workers) {
             let peer_id = PeerId(public_key.0.to_bytes());
             let address = network::multiaddr_to_address(&address).unwrap();
@@ -272,6 +270,13 @@ impl Primary {
 
         // The `SignatureService` is used to require signatures on specific digests.
         let signature_service = SignatureService::new(signer);
+
+        if let Some(rx_executor_network) = rx_executor_network {
+            let executor_network = P2pNetwork::new(network.clone());
+            if rx_executor_network.send(executor_network).is_err() {
+                panic!("Executor shut down before primary has a chance to start");
+            }
+        }
 
         // TODO (Laura): if we are restarting and not advancing, for the headers in the header
         // TODO (Laura): store that do not have a matching certificate, re-create and send a vote

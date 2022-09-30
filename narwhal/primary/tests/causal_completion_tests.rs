@@ -53,8 +53,7 @@ async fn test_restore_from_disk() {
 
     // wait for transactions to complete
     loop {
-        if let Ok(result) = receiver.recv().await {
-            assert!(result.0.is_ok());
+        if let Ok(_result) = receiver.recv().await {
             batch_len -= 1;
             if batch_len < 1 {
                 break;

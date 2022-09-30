@@ -2,60 +2,37 @@
 // SPDX-License-Identifier: Apache-2.0
 use async_trait::async_trait;
 use consensus::ConsensusOutput;
-use executor::{ExecutionIndices, ExecutionState, ExecutionStateError};
-use thiserror::Error;
+use executor::{ExecutionIndices, ExecutionState};
+
+use tokio::sync::mpsc::Sender;
 
 /// A simple/dumb execution engine.
-pub struct SimpleExecutionState;
+pub struct SimpleExecutionState {
+    tx_transaction_confirmation: Sender<Vec<u8>>,
+}
+
+impl SimpleExecutionState {
+    pub fn new(tx_transaction_confirmation: Sender<Vec<u8>>) -> Self {
+        Self {
+            tx_transaction_confirmation,
+        }
+    }
+}
 
 #[async_trait]
 impl ExecutionState for SimpleExecutionState {
-    type Transaction = String;
-    type Error = SimpleExecutionError;
-    type Outcome = Vec<u8>;
-
     async fn handle_consensus_transaction(
         &self,
         _consensus_output: &ConsensusOutput,
         _execution_indices: ExecutionIndices,
-        _transaction: Self::Transaction,
-    ) -> Result<Self::Outcome, Self::Error> {
-        Ok(Vec::default())
-    }
-
-    fn ask_consensus_write_lock(&self) -> bool {
-        true
-    }
-
-    fn release_consensus_write_lock(&self) {}
-
-    async fn load_execution_indices(&self) -> Result<ExecutionIndices, Self::Error> {
-        Ok(ExecutionIndices::default())
-    }
-}
-
-impl Default for SimpleExecutionState {
-    fn default() -> Self {
-        Self
-    }
-}
-
-/// A simple/dumb execution error.
-#[derive(Debug, Error)]
-pub enum SimpleExecutionError {
-    #[error("Something went wrong in the authority")]
-    ServerError,
-
-    #[error("The client made something bad")]
-    ClientError,
-}
-
-#[async_trait]
-impl ExecutionStateError for SimpleExecutionError {
-    fn node_error(&self) -> bool {
-        match self {
-            Self::ServerError => true,
-            Self::ClientError => false,
+        transaction: Vec<u8>,
+    ) {
+        if let Err(err) = self.tx_transaction_confirmation.send(transaction).await {
+            eprintln!("Failed to send txn in SimpleExecutionState: {}", err);
         }
+    }
+
+    async fn load_execution_indices(&self) -> ExecutionIndices {
+        ExecutionIndices::default()
     }
 }

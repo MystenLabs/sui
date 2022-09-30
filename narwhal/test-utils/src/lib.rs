@@ -27,10 +27,10 @@ use tracing::info;
 use types::{
     Batch, BatchDigest, Certificate, CertificateDigest, ConsensusStore, Header, HeaderBuilder,
     PrimaryMessage, PrimaryToPrimary, PrimaryToPrimaryServer, PrimaryToWorker,
-    PrimaryToWorkerServer, PrimaryWorkerMessage, Round, SequenceNumber, Transaction, Vote,
-    WorkerBatchRequest, WorkerBatchResponse, WorkerInfoResponse, WorkerMessage,
-    WorkerPrimaryMessage, WorkerSynchronizeMessage, WorkerToPrimary, WorkerToPrimaryServer,
-    WorkerToWorker, WorkerToWorkerServer,
+    PrimaryToWorkerServer, PrimaryWorkerMessage, RequestBatchRequest, RequestBatchResponse, Round,
+    SequenceNumber, Transaction, Vote, WorkerBatchRequest, WorkerBatchResponse, WorkerInfoResponse,
+    WorkerMessage, WorkerPrimaryMessage, WorkerSynchronizeMessage, WorkerToPrimary,
+    WorkerToPrimaryServer, WorkerToWorker, WorkerToWorkerServer,
 };
 
 pub mod cluster;
@@ -306,6 +306,14 @@ impl PrimaryToWorker for PrimaryToWorkerMockServer {
         let message = request.into_body();
         self.synchronize_sender.send(message).await.unwrap();
         Ok(anemo::Response::new(()))
+    }
+
+    async fn request_batch(
+        &self,
+        _request: anemo::Request<RequestBatchRequest>,
+    ) -> Result<anemo::Response<RequestBatchResponse>, anemo::rpc::Status> {
+        tracing::error!("Not implemented PrimaryToWorkerMockServer::request_batch");
+        Err(anemo::rpc::Status::internal("Unimplemented"))
     }
 }
 

@@ -1,11 +1,13 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::cluster::Cluster;
+use crate::ensure_test_environment;
 use std::time::Duration;
 use types::{PublicKeyProto, RoundsRequest};
 
 #[tokio::test]
 async fn basic_cluster_setup() {
+    ensure_test_environment();
     let mut cluster = Cluster::new(None, true);
 
     // start the cluster will all the possible nodes
@@ -37,6 +39,7 @@ async fn basic_cluster_setup() {
 
 #[tokio::test]
 async fn cluster_setup_with_consensus_disabled() {
+    ensure_test_environment();
     let mut cluster = Cluster::new(None, false);
 
     // start the cluster will all the possible nodes

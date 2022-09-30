@@ -19,7 +19,7 @@ pub use crate::{
     bounded_executor::BoundedExecutor,
     p2p::P2pNetwork,
     retry::RetryConfig,
-    traits::{Lucky, LuckyNetwork, ReliableNetwork, UnreliableNetwork},
+    traits::{Lucky, LuckyNetwork, PrimaryToWorkerRpc, ReliableNetwork, UnreliableNetwork},
 };
 
 /// This adapter will make a [`tokio::task::JoinHandle`] abort its handled task when the handle is dropped.

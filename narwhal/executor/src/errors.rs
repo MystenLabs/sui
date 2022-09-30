@@ -80,19 +80,3 @@ impl From<Box<bincode::ErrorKind>> for SubscriberError {
         Self::SerializationError(e.to_string())
     }
 }
-
-/// Trait do separate execution errors in two categories: (i) errors caused by a bad client, (ii)
-/// errors caused by a fault in the authority.
-pub trait ExecutionStateError: std::error::Error {
-    /// Whether the error is due to a fault in the authority (eg. internal storage error).
-    fn node_error(&self) -> bool;
-}
-
-impl<T: ExecutionStateError> From<T> for SubscriberError {
-    fn from(e: T) -> Self {
-        match e.node_error() {
-            true => Self::NodeExecutionError(e.to_string()),
-            false => Self::ClientExecutionError(e.to_string()),
-        }
-    }
-}

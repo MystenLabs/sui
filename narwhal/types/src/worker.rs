@@ -31,6 +31,17 @@ pub struct WorkerBatchResponse {
     pub batches: Vec<Batch>,
 }
 
+/// Used by primary to ask worker for the request.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RequestBatchRequest {
+    pub batch: BatchDigest,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RequestBatchResponse {
+    pub batch: Option<Batch>,
+}
+
 /// Hashes a serialized batch message without deserializing it into a batch.
 ///
 /// See the test `test_batch_and_serialized`, which guarantees that the output of this

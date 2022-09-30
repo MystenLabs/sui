@@ -69,6 +69,7 @@ async fn test_simple_epoch_change() {
             tx_reconfigure,
             /* tx_committed_certificates */ tx_feedback,
             &Registry::new(),
+            None,
         );
     }
 
@@ -196,6 +197,7 @@ async fn test_partial_committee_change() {
             tx_reconfigure,
             /* tx_committed_certificates */ tx_feedback,
             &Registry::new(),
+            None,
         );
     }
 
@@ -291,6 +293,7 @@ async fn test_partial_committee_change() {
             tx_reconfigure,
             /* tx_committed_certificates */ tx_feedback,
             &Registry::new(),
+            None,
         );
     }
 
@@ -365,6 +368,7 @@ async fn test_restart_with_new_committee_change() {
             tx_reconfigure,
             /* tx_committed_certificates */ tx_feedback,
             &Registry::new(),
+            None,
         );
         handles.extend(primary_handles);
     }
@@ -453,6 +457,7 @@ async fn test_restart_with_new_committee_change() {
                 tx_reconfigure,
                 /* tx_committed_certificates */ tx_feedback,
                 &Registry::new(),
+                None,
             );
             handles.extend(primary_handles);
         }
@@ -547,6 +552,7 @@ async fn test_simple_committee_update() {
             tx_reconfigure,
             /* tx_committed_certificates */ tx_feedback,
             &Registry::new(),
+            None,
         );
     }
 

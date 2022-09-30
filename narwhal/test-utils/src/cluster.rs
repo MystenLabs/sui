@@ -4,7 +4,7 @@ use crate::{temp_dir, CommitteeFixture};
 use arc_swap::ArcSwap;
 use config::{Parameters, SharedCommittee, SharedWorkerCache, WorkerId};
 use crypto::{KeyPair, NetworkKeyPair, PublicKey};
-use executor::{SerializedTransaction, SubscriberResult};
+use executor::SerializedTransaction;
 use fastcrypto::traits::KeyPair as _;
 use itertools::Itertools;
 use multiaddr::Multiaddr;
@@ -272,7 +272,7 @@ pub struct PrimaryNodeDetails {
     pub id: usize,
     pub key_pair: Arc<KeyPair>,
     pub network_key_pair: Arc<NetworkKeyPair>,
-    pub tx_transaction_confirmation: Sender<(SubscriberResult<Vec<u8>>, SerializedTransaction)>,
+    pub tx_transaction_confirmation: Sender<SerializedTransaction>,
     registry: Registry,
     store_path: PathBuf,
     committee: SharedCommittee,
@@ -353,8 +353,8 @@ impl PrimaryNodeDetails {
             &primary_store,
             self.parameters.clone(),
             /* consensus */ self.internal_consensus_enabled,
-            /* execution_state */ Arc::new(SimpleExecutionState::default()),
-            tx_transaction_confirmation,
+            /* execution_state */
+            Arc::new(SimpleExecutionState::new(tx_transaction_confirmation)),
             &registry,
         )
         .await
@@ -367,9 +367,6 @@ impl PrimaryNodeDetails {
         let h = tokio::spawn(async move {
             while let Some(t) = rx_transaction_confirmation.recv().await {
                 // send the transaction to the mpmc channel
-                if let Err(e) = t.clone().0 {
-                    println!("The result from consensus is an error: {:?}", e);
-                }
                 let _ = transactions_sender.send(t);
             }
         });

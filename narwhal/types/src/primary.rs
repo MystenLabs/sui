@@ -8,7 +8,7 @@ use crate::{
 };
 use blake2::{digest::Update, VarBlake2b};
 use bytes::Bytes;
-use config::{Committee, Epoch, SharedWorkerCache, WorkerId, WorkerInfo};
+use config::{Committee, Epoch, SharedWorkerCache, Stake, WorkerId, WorkerInfo};
 use crypto::{AggregateSignature, PublicKey, Signature};
 use dag::node_dag::Affiliated;
 use derive_builder::Builder;
@@ -484,6 +484,35 @@ impl Certificate {
         })
     }
 
+    /// This function requires that certificate was verified against given committee
+    pub fn signed_authorities(&self, committee: &Committee) -> Vec<PublicKey> {
+        assert_eq!(committee.epoch, self.epoch());
+        let (_stake, pks) = self.signed_by(committee);
+        pks
+    }
+
+    fn signed_by(&self, committee: &Committee) -> (Stake, Vec<PublicKey>) {
+        // Ensure the certificate has a quorum.
+        let mut weight = 0;
+
+        let auth_indexes = self.signed_authorities.iter().collect::<Vec<_>>();
+        let mut auth_iter = 0;
+        let pks = committee
+            .authorities()
+            .enumerate()
+            .filter(|(i, (_, auth))| match auth_indexes.get(auth_iter) {
+                Some(index) if *index == *i as u32 => {
+                    weight += auth.stake;
+                    auth_iter += 1;
+                    true
+                }
+                _ => false,
+            })
+            .map(|(_, (pk, _))| pk.clone())
+            .collect();
+        (weight, pks)
+    }
+
     pub fn verify(&self, committee: &Committee, worker_cache: SharedWorkerCache) -> DagResult<()> {
         // Ensure the header is from the correct epoch.
         ensure!(
@@ -502,24 +531,7 @@ impl Certificate {
         // Check the embedded header.
         self.header.verify(committee, worker_cache)?;
 
-        // Ensure the certificate has a quorum.
-        let mut weight = 0;
-
-        let auth_indexes = self.signed_authorities.iter().collect::<Vec<_>>();
-        let mut auth_iter = 0;
-        let pks: Vec<_> = committee
-            .authorities()
-            .enumerate()
-            .filter(|(i, (_, auth))| match auth_indexes.get(auth_iter) {
-                Some(index) if *index == *i as u32 => {
-                    weight += auth.stake;
-                    auth_iter += 1;
-                    true
-                }
-                _ => false,
-            })
-            .map(|(_, (pk, _))| pk.clone())
-            .collect();
+        let (weight, pks) = self.signed_by(committee);
 
         ensure!(
             weight >= committee.quorum_threshold(),

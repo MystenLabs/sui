@@ -21,8 +21,8 @@ use types::{
     error::DagError,
     metered_channel::{Receiver, Sender},
     Batch, BatchDigest, PrimaryToWorker, PrimaryWorkerMessage, ReconfigureNotification,
-    WorkerBatchRequest, WorkerBatchResponse, WorkerMessage, WorkerPrimaryMessage,
-    WorkerSynchronizeMessage, WorkerToWorker,
+    RequestBatchRequest, RequestBatchResponse, WorkerBatchRequest, WorkerBatchResponse,
+    WorkerMessage, WorkerPrimaryMessage, WorkerSynchronizeMessage, WorkerToWorker,
 };
 
 #[cfg(test)]
@@ -376,5 +376,19 @@ impl PrimaryToWorker for PrimaryReceiverHandler {
         Err(anemo::rpc::Status::unknown(format!(
             "Unable to retrieve batches after retry: {missing:?}"
         )))
+    }
+
+    async fn request_batch(
+        &self,
+        request: anemo::Request<RequestBatchRequest>,
+    ) -> Result<anemo::Response<RequestBatchResponse>, anemo::rpc::Status> {
+        let batch = request.into_body().batch;
+        let batch = self
+            .store
+            .read(batch)
+            .await
+            .map_err(|e| anemo::rpc::Status::from_error(Box::new(e)))?;
+
+        Ok(anemo::Response::new(RequestBatchResponse { batch }))
     }
 }

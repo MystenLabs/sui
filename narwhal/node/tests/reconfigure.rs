@@ -5,7 +5,7 @@ use bytes::Bytes;
 use config::{Committee, Parameters, SharedWorkerCache, WorkerCache, WorkerId};
 use consensus::ConsensusOutput;
 use crypto::{KeyPair, NetworkKeyPair, PublicKey};
-use executor::{ExecutionIndices, ExecutionState, ExecutionStateError};
+use executor::{ExecutionIndices, ExecutionState};
 use fastcrypto::traits::KeyPair as _;
 use futures::future::join_all;
 use narwhal_node as node;
@@ -13,10 +13,7 @@ use network::{P2pNetwork, ReliableNetwork};
 use node::{restarter::NodeRestarter, Node, NodeStorage};
 use primary::PrimaryWorkerMessage;
 use prometheus::Registry;
-use std::{
-    fmt::Debug,
-    sync::{Arc, Mutex},
-};
+use std::sync::{Arc, Mutex};
 use test_utils::{random_network, CommitteeFixture};
 use tokio::{
     sync::mpsc::{channel, Receiver, Sender},
@@ -31,6 +28,7 @@ struct SimpleExecutionState {
     worker_keypairs: Vec<NetworkKeyPair>,
     worker_cache: WorkerCache,
     committee: Arc<Mutex<Committee>>,
+    tx_output: Sender<u64>,
     tx_reconfigure: Sender<(
         KeyPair,
         NetworkKeyPair,
@@ -47,6 +45,7 @@ impl SimpleExecutionState {
         worker_keypairs: Vec<NetworkKeyPair>,
         worker_cache: WorkerCache,
         committee: Committee,
+        tx_output: Sender<u64>,
         tx_reconfigure: Sender<(
             KeyPair,
             NetworkKeyPair,
@@ -61,6 +60,7 @@ impl SimpleExecutionState {
             worker_keypairs,
             worker_cache,
             committee: Arc::new(Mutex::new(committee)),
+            tx_output,
             tx_reconfigure,
         }
     }
@@ -68,16 +68,13 @@ impl SimpleExecutionState {
 
 #[async_trait::async_trait]
 impl ExecutionState for SimpleExecutionState {
-    type Transaction = u64;
-    type Error = SimpleExecutionError;
-    type Outcome = u64;
-
     async fn handle_consensus_transaction(
         &self,
         _consensus_output: &ConsensusOutput,
         execution_indices: ExecutionIndices,
-        transaction: Self::Transaction,
-    ) -> Result<Self::Outcome, Self::Error> {
+        transaction: Vec<u8>,
+    ) {
+        let transaction: u64 = bincode::deserialize(&transaction).unwrap();
         // Change epoch every few certificates. Note that empty certificates are not provided to
         // this function (they are immediately skipped).
         let mut epoch = self.committee.lock().unwrap().epoch();
@@ -106,37 +103,11 @@ impl ExecutionState for SimpleExecutionState {
                 .unwrap();
         }
 
-        Ok(epoch)
+        let _ = self.tx_output.send(epoch).await;
     }
 
-    fn ask_consensus_write_lock(&self) -> bool {
-        true
-    }
-
-    fn release_consensus_write_lock(&self) {}
-
-    async fn load_execution_indices(&self) -> Result<ExecutionIndices, Self::Error> {
-        Ok(ExecutionIndices::default())
-    }
-}
-
-/// A simple/dumb execution error.
-#[derive(Debug, thiserror::Error)]
-pub enum SimpleExecutionError {
-    #[error("Something went wrong in the authority")]
-    ServerError,
-
-    #[error("The client made something bad")]
-    ClientError,
-}
-
-#[async_trait::async_trait]
-impl ExecutionStateError for SimpleExecutionError {
-    fn node_error(&self) -> bool {
-        match self {
-            Self::ServerError => true,
-            Self::ClientError => false,
-        }
+    async fn load_execution_indices(&self) -> ExecutionIndices {
+        ExecutionIndices::default()
     }
 }
 
@@ -198,7 +169,6 @@ async fn restart() {
     };
 
     // Spawn the nodes.
-    let mut states = Vec::new();
     let mut rx_nodes = Vec::new();
     for a in fixture.authorities() {
         let (tx_output, rx_output) = channel(10);
@@ -210,9 +180,9 @@ async fn restart() {
             a.worker_keypairs(),
             fixture.worker_cache(),
             committee.clone(),
+            tx_output,
             tx_node_reconfigure,
         ));
-        states.push(execution_state.clone());
 
         let worker_keypairs = a.worker_keypairs();
         let worker_ids = 0..worker_keypairs.len() as u32;
@@ -220,7 +190,6 @@ async fn restart() {
 
         let committee = committee.clone();
         let worker_cache = worker_cache.clone();
-        let execution_state = execution_state.clone();
         let parameters = parameters.clone();
         let keypair = a.keypair().copy();
         let network_keypair = a.network_keypair().copy();
@@ -235,7 +204,6 @@ async fn restart() {
                 execution_state,
                 parameters,
                 rx_node_reconfigure,
-                tx_output,
                 &Registry::new(),
             )
             .await;
@@ -265,19 +233,13 @@ async fn restart() {
     for (tx, mut rx) in tx_clients.into_iter().zip(rx_nodes.into_iter()) {
         handles.push(tokio::spawn(async move {
             let mut current_epoch = 0u64;
-            while let Some(output) = rx.recv().await {
-                let (outcome, _tx) = output;
-                match outcome {
-                    Ok(epoch) => {
-                        if epoch == 5 {
-                            return;
-                        }
-                        if epoch > current_epoch {
-                            current_epoch = epoch;
-                            tx.send(current_epoch).await.unwrap();
-                        }
-                    }
-                    Err(e) => panic!("{e}"),
+            while let Some(epoch) = rx.recv().await {
+                if epoch == 5 {
+                    return;
+                }
+                if epoch > current_epoch {
+                    current_epoch = epoch;
+                    tx.send(current_epoch).await.unwrap();
                 }
             }
         }));
@@ -297,7 +259,6 @@ async fn epoch_change() {
     };
 
     // Spawn the nodes.
-    let mut states = Vec::new();
     let mut rx_nodes = Vec::new();
     for a in fixture.authorities() {
         let (tx_output, rx_output) = channel(10);
@@ -312,9 +273,9 @@ async fn epoch_change() {
             a.worker_keypairs(),
             fixture.worker_cache(),
             committee.clone(),
+            tx_output,
             tx_node_reconfigure,
         ));
-        states.push(execution_state.clone());
 
         // Start a task that will broadcast the committee change signal.
         let name_clone = name.clone();
@@ -377,8 +338,7 @@ async fn epoch_change() {
             &store,
             parameters.clone(),
             /* consensus */ true,
-            execution_state.clone(),
-            tx_output,
+            execution_state,
             &Registry::new(),
         )
         .await
@@ -418,19 +378,13 @@ async fn epoch_change() {
     for (tx, mut rx) in tx_clients.into_iter().zip(rx_nodes.into_iter()) {
         handles.push(tokio::spawn(async move {
             let mut current_epoch = 0u64;
-            while let Some(output) = rx.recv().await {
-                let (outcome, _tx) = output;
-                match outcome {
-                    Ok(epoch) => {
-                        if epoch == 5 {
-                            return;
-                        }
-                        if epoch > current_epoch {
-                            current_epoch = epoch;
-                            tx.send(current_epoch).await.unwrap();
-                        }
-                    }
-                    Err(e) => panic!("{e}"),
+            while let Some(epoch) = rx.recv().await {
+                if epoch == 5 {
+                    return;
+                }
+                if epoch > current_epoch {
+                    current_epoch = epoch;
+                    tx.send(current_epoch).await.unwrap();
                 }
             }
         }));

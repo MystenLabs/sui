@@ -4,13 +4,13 @@ use crate::{Node, NodeStorage};
 use arc_swap::ArcSwap;
 use config::{Committee, Parameters, SharedWorkerCache, WorkerCache, WorkerId};
 use crypto::{KeyPair, NetworkKeyPair};
-use executor::{ExecutionState, ExecutorOutput};
+use executor::ExecutionState;
 use fastcrypto::traits::KeyPair as _;
 use futures::future::join_all;
 use network::{P2pNetwork, ReliableNetwork};
 use prometheus::Registry;
-use std::{fmt::Debug, path::PathBuf, sync::Arc};
-use tokio::sync::mpsc::{Receiver, Sender};
+use std::{path::PathBuf, sync::Arc};
+use tokio::sync::mpsc::Receiver;
 use types::{PrimaryWorkerMessage, ReconfigureNotification, WorkerPrimaryMessage};
 
 // Module to start a node (primary, workers and default consensus), keep it running, and restarting it
@@ -34,12 +34,9 @@ impl NodeRestarter {
             Vec<(WorkerId, NetworkKeyPair)>,
             WorkerCache,
         )>,
-        tx_output: Sender<ExecutorOutput<State>>,
         registry: &Registry,
     ) where
         State: ExecutionState + Send + Sync + 'static,
-        State::Outcome: Send + 'static,
-        State::Error: Debug,
     {
         let mut primary_keypair = primary_keypair;
         let mut primary_network_keypair = primary_network_keypair;
@@ -81,7 +78,6 @@ impl NodeRestarter {
                 parameters.clone(),
                 /* consensus */ true,
                 execution_state.clone(),
-                tx_output.clone(),
                 registry,
             )
             .await

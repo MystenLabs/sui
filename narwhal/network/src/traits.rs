@@ -6,6 +6,7 @@ use async_trait::async_trait;
 use crypto::NetworkPublicKey;
 use rand::prelude::{SliceRandom, SmallRng};
 use tokio::task::JoinHandle;
+use types::{Batch, BatchDigest};
 
 pub trait UnreliableNetwork<Request: Clone + Send + Sync> {
     type Response: Clone + Send + Sync;
@@ -89,4 +90,13 @@ pub trait ReliableNetwork<Request: Clone + Send + Sync> {
         }
         handlers
     }
+}
+
+#[async_trait]
+pub trait PrimaryToWorkerRpc {
+    async fn request_batch(
+        &self,
+        peer: &NetworkPublicKey,
+        batch: BatchDigest,
+    ) -> Result<Option<Batch>>;
 }

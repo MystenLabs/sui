@@ -50,10 +50,8 @@ async fn test_internal_consensus_output() {
     loop {
         let result = receiver.recv().await.unwrap();
 
-        assert!(result.0.is_ok());
-
         // deserialise transaction
-        let output_transaction = bincode::deserialize::<String>(&result.1).unwrap();
+        let output_transaction = bincode::deserialize::<String>(&result).unwrap();
 
         // we always remove the first transaction and check with the one
         // sequenced. We want the transactions to be sequenced in the

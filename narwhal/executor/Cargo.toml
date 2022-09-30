@@ -29,14 +29,17 @@ itertools = "0.10.4"
 
 types = { path = "../types", package = "narwhal-types" }
 mysten-network = "0.1.0"
+network = { path = "../network", package = "narwhal-network" }
+crypto = { path = "../crypto", package = "narwhal-crypto" }
+anyhow = "1.0.65"
 
 store = { version = "0.1.0", package = "typed-store" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 match_opt = "0.1.2"
+rand = "0.8.5"
 
 [dev-dependencies]
 indexmap = { version = "1.9.1", features = ["serde"] }
-rand = "0.8.5"
 tempfile = "3.3.0"
 primary = { path = "../primary", package = "narwhal-primary" }
 test-utils = { path = "../test-utils", package = "narwhal-test-utils" }
