@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
     batch_maker::BatchMaker,
-    handlers::{PrimaryReceiverHandler, WorkerReceiverHandler},
+    handlers::{ChildRpcSender, PrimaryReceiverHandler, WorkerReceiverHandler},
     metrics::WorkerChannelMetrics,
     primary_connector::PrimaryConnector,
     processor::Processor,
@@ -99,13 +99,23 @@ impl Worker {
             channel(CHANNEL_CAPACITY, &channel_metrics.tx_worker_processor);
         let (tx_synchronizer, rx_synchronizer) =
             channel(CHANNEL_CAPACITY, &channel_metrics.tx_synchronizer);
+        let (tx_request_batches_rpc, rx_request_batches_rpc) =
+            channel(CHANNEL_CAPACITY, &channel_metrics.tx_request_batches_rpc);
 
         let worker_service = WorkerToWorkerServer::new(WorkerReceiverHandler {
             tx_processor: tx_worker_processor.clone(),
             store: worker.store.clone(),
         });
-        let primary_service =
-            PrimaryToWorkerServer::new(PrimaryReceiverHandler { tx_synchronizer });
+        let primary_service = PrimaryToWorkerServer::new(PrimaryReceiverHandler {
+            id: worker.id,
+            worker_cache: worker.worker_cache.clone(),
+            store: worker.store.clone(),
+            request_batches_retry_nodes: worker.parameters.sync_retry_nodes,
+            tx_synchronizer,
+            tx_request_batches_rpc,
+            tx_primary: tx_primary.clone(),
+            tx_batch_processor: tx_worker_processor,
+        });
 
         // Receive incoming messages from other workers.
         let address = worker
@@ -186,17 +196,25 @@ impl Worker {
             affinity: anemo::types::PeerAffinity::High,
             address: vec![primary_address],
         });
-        let handle = PrimaryConnector::spawn(
+        let primary_connector_handle = PrimaryConnector::spawn(
             primary_network_key,
-            rx_reconfigure,
+            rx_reconfigure.clone(),
             rx_primary,
             network::P2pNetwork::new(network.clone()),
         );
-
+        let child_rpc_sender_handle = ChildRpcSender::spawn(
+            worker.primary_name.clone(),
+            worker.id,
+            worker.worker_cache.clone(),
+            worker.parameters.sync_retry_delay,
+            rx_request_batches_rpc,
+            rx_reconfigure,
+            network::P2pNetwork::new(network.clone()),
+        );
         let client_flow_handles = worker.handle_clients_transactions(
             &tx_reconfigure,
             tx_primary.clone(),
-            node_metrics.clone(),
+            node_metrics,
             channel_metrics,
             endpoint_metrics,
             network.clone(),
@@ -206,14 +224,8 @@ impl Worker {
             tx_primary.clone(),
             rx_worker_processor,
         );
-        let primary_flow_handles = worker.handle_primary_messages(
-            rx_synchronizer,
-            tx_reconfigure,
-            tx_primary,
-            tx_worker_processor,
-            node_metrics,
-            network,
-        );
+        let primary_flow_handles =
+            worker.handle_primary_messages(rx_synchronizer, tx_reconfigure, tx_primary, network);
 
         // NOTE: This log entry is used to compute performance.
         info!(
@@ -227,7 +239,7 @@ impl Worker {
                 .transactions
         );
 
-        let mut handles = vec![handle];
+        let mut handles = vec![primary_connector_handle, child_rpc_sender_handle];
         handles.extend(primary_flow_handles);
         handles.extend(client_flow_handles);
         handles.extend(worker_flow_handles);
@@ -240,26 +252,17 @@ impl Worker {
         rx_synchronizer: Receiver<PrimaryWorkerMessage>,
         tx_reconfigure: watch::Sender<ReconfigureNotification>,
         tx_primary: Sender<WorkerPrimaryMessage>,
-        tx_batch_processor: Sender<Batch>,
-        node_metrics: Arc<WorkerMetrics>,
         network: anemo::Network,
     ) -> Vec<JoinHandle<()>> {
         // The `Synchronizer` is responsible to keep the worker in sync with the others. It handles the commands
         // it receives from the primary (which are mainly notifications that we are out of sync).
         let handle = Synchronizer::spawn(
-            self.primary_name.clone(),
-            self.id,
             self.committee.clone(),
             self.worker_cache.clone(),
             self.store.clone(),
-            self.parameters.gc_depth,
-            self.parameters.sync_retry_delay,
-            self.parameters.sync_retry_nodes,
             /* rx_message */ rx_synchronizer,
             tx_reconfigure,
             tx_primary,
-            tx_batch_processor,
-            node_metrics,
             P2pNetwork::new(network),
         );
 

@@ -770,7 +770,7 @@ pub fn worker_listener(
     tx_batch_messages: metered_channel::Sender<BatchResult>,
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
-        let (mut recv, _network) = PrimaryToWorkerMockServer::spawn(keypair, address);
+        let (mut recv, _, _network) = PrimaryToWorkerMockServer::spawn(keypair, address);
         let mut counter = 0;
         loop {
             let message = recv

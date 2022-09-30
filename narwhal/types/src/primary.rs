@@ -702,8 +702,6 @@ pub enum ReconfigureNotification {
 #[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum PrimaryWorkerMessage {
-    /// The primary indicates that the worker need to sync the target missing batches.
-    Synchronize(Vec<BatchDigest>, /* target */ PublicKey),
     /// The primary indicates a round update.
     Cleanup(Round),
     /// Reconfigure the worker.
@@ -712,6 +710,13 @@ pub enum PrimaryWorkerMessage {
     RequestBatch(BatchDigest),
     /// Delete the batches, dictated from the provided vector of digest, from the worker node
     DeleteBatches(Vec<BatchDigest>),
+}
+
+/// Used by the primary to request that the worker sync the target missing batches.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct WorkerSynchronizeMessage {
+    pub digests: Vec<BatchDigest>,
+    pub target: PublicKey,
 }
 
 #[derive(Clone, Default, Debug, Eq, PartialEq)]

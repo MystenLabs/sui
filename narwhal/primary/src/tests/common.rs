@@ -13,11 +13,11 @@ use test_utils::{
 };
 use types::{
     BatchDigest, Certificate, CertificateDigest, Header, HeaderDigest, PrimaryWorkerMessage, Round,
-    RoundVoteDigestPair,
+    RoundVoteDigestPair, WorkerSynchronizeMessage,
 };
 
 use crypto::PublicKey;
-use tokio::{task::JoinHandle, time::timeout};
+use tokio::{task::JoinHandle, time::Instant};
 
 pub fn create_db_stores() -> (
     Store<HeaderDigest, Header>,
@@ -59,34 +59,44 @@ pub fn create_test_vote_store() -> Store<PublicKey, RoundVoteDigestPair> {
 
 #[must_use]
 pub fn worker_listener(
+    // -1 means receive unlimited messages until timeout expires
     num_of_expected_responses: i32,
     address: multiaddr::Multiaddr,
     keypair: NetworkKeyPair,
-) -> JoinHandle<Vec<PrimaryWorkerMessage>> {
+) -> JoinHandle<(Vec<PrimaryWorkerMessage>, Vec<WorkerSynchronizeMessage>)> {
     tokio::spawn(async move {
-        let (mut recv, _network) = PrimaryToWorkerMockServer::spawn(keypair, address);
-        let mut responses = Vec::new();
+        let (mut recv_msg, mut recv_sync, _network) =
+            PrimaryToWorkerMockServer::spawn(keypair, address);
+        let mut msgs = Vec::new();
+        let mut syncs = Vec::new();
+
+        let timer = tokio::time::sleep(Duration::from_secs(1));
+        tokio::pin!(timer);
 
         loop {
-            match timeout(Duration::from_secs(1), recv.recv()).await {
-                Err(_) => {
-                    // timeout happened - just return whatever has already
-                    return responses;
-                }
-                Ok(Some(message)) => {
-                    responses.push(message);
-
-                    // if -1 is given, then we don't count the number of messages
-                    // but we just rely to receive as many as possible until timeout
-                    // happens when waiting for requests.
+            tokio::select! {
+                Some(message) = recv_msg.recv() => {
+                    timer.as_mut().reset(Instant::now() + Duration::from_secs(1));
+                    msgs.push(message);
                     if num_of_expected_responses != -1
-                        && responses.len() as i32 == num_of_expected_responses
+                        && (msgs.len() + syncs.len()) as i32 == num_of_expected_responses
                     {
-                        return responses;
+                        return (msgs, syncs);
                     }
                 }
-                //  sender closed
-                _ => panic!("Failed to receive network message"),
+                Some(message) = recv_sync.recv() => {
+                    timer.as_mut().reset(Instant::now() + Duration::from_secs(1));
+                    syncs.push(message);
+                    if num_of_expected_responses != -1
+                        && (msgs.len() + syncs.len()) as i32 == num_of_expected_responses
+                    {
+                        return (msgs, syncs);
+                    }
+                }
+                () = &mut timer => {
+                    // timeout happened - just return whatever has already
+                    return (msgs, syncs);
+                }
             }
         }
     })

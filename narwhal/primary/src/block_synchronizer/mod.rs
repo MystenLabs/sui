@@ -36,8 +36,8 @@ use tokio::{
 };
 use tracing::{debug, error, info, instrument, trace, warn};
 use types::{
-    metered_channel, BatchDigest, Certificate, CertificateDigest, PrimaryWorkerMessage,
-    ReconfigureNotification, Round,
+    metered_channel, BatchDigest, Certificate, CertificateDigest, ReconfigureNotification, Round,
+    WorkerSynchronizeMessage,
 };
 
 use self::responses::{AvailabilityResponse, CertificateDigestsResponse};
@@ -896,13 +896,15 @@ impl BlockSynchronizer {
                 .expect("Worker id not found")
                 .name;
 
-            let message =
-                PrimaryWorkerMessage::Synchronize(batch_ids.clone(), primary_peer_name.clone());
+            let message = WorkerSynchronizeMessage {
+                digests: batch_ids,
+                target: primary_peer_name.clone(),
+            };
             let _ = self.network.unreliable_send(worker_name, &message);
 
             debug!(
                 "Sent request for batch ids {:?} to worker id {}",
-                batch_ids, worker_id
+                message.digests, worker_id
             );
         }
     }

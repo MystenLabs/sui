@@ -68,23 +68,17 @@ HeaderDigest:
 PrimaryWorkerMessage:
   ENUM:
     0:
-      Synchronize:
-        TUPLE:
-          - SEQ:
-              TYPENAME: BatchDigest
-          - STR
-    1:
       Cleanup:
         NEWTYPE: U64
-    2:
+    1:
       Reconfigure:
         NEWTYPE:
           TYPENAME: ReconfigureNotification
-    3:
+    2:
       RequestBatch:
         NEWTYPE:
           TYPENAME: BatchDigest
-    4:
+    3:
       DeleteBatches:
         NEWTYPE:
           SEQ:
@@ -154,4 +148,10 @@ WorkerPrimaryMessage:
       Reconfigure:
         NEWTYPE:
           TYPENAME: ReconfigureNotification
+WorkerSynchronizeMessage:
+  STRUCT:
+    - digests:
+        SEQ:
+          TYPENAME: BatchDigest
+    - target: STR
 

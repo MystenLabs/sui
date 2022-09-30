@@ -29,8 +29,8 @@ use types::{
     PrimaryMessage, PrimaryToPrimary, PrimaryToPrimaryServer, PrimaryToWorker,
     PrimaryToWorkerServer, PrimaryWorkerMessage, Round, SequenceNumber, Transaction, Vote,
     WorkerBatchRequest, WorkerBatchResponse, WorkerInfoResponse, WorkerMessage,
-    WorkerPrimaryMessage, WorkerToPrimary, WorkerToPrimaryServer, WorkerToWorker,
-    WorkerToWorkerServer,
+    WorkerPrimaryMessage, WorkerSynchronizeMessage, WorkerToPrimary, WorkerToPrimaryServer,
+    WorkerToWorker, WorkerToWorkerServer,
 };
 
 pub mod cluster;
@@ -257,17 +257,26 @@ impl WorkerToPrimary for WorkerToPrimaryMockServer {
 }
 
 pub struct PrimaryToWorkerMockServer {
-    sender: Sender<PrimaryWorkerMessage>,
+    msg_sender: Sender<PrimaryWorkerMessage>,
+    synchronize_sender: Sender<WorkerSynchronizeMessage>,
 }
 
 impl PrimaryToWorkerMockServer {
     pub fn spawn(
         keypair: NetworkKeyPair,
         address: Multiaddr,
-    ) -> (Receiver<PrimaryWorkerMessage>, anemo::Network) {
+    ) -> (
+        Receiver<PrimaryWorkerMessage>,
+        Receiver<WorkerSynchronizeMessage>,
+        anemo::Network,
+    ) {
         let addr = network::multiaddr_to_address(&address).unwrap();
-        let (sender, receiver) = channel(1);
-        let service = PrimaryToWorkerServer::new(Self { sender });
+        let (msg_sender, msg_receiver) = channel(1);
+        let (synchronize_sender, synchronize_receiver) = channel(1);
+        let service = PrimaryToWorkerServer::new(Self {
+            msg_sender,
+            synchronize_sender,
+        });
 
         let routes = anemo::Router::new().add_rpc_service(service);
         let network = anemo::Network::bind(addr)
@@ -276,7 +285,7 @@ impl PrimaryToWorkerMockServer {
             .start(routes)
             .unwrap();
         info!("starting network on: {}", network.local_addr());
-        (receiver, network)
+        (msg_receiver, synchronize_receiver, network)
     }
 }
 
@@ -287,7 +296,15 @@ impl PrimaryToWorker for PrimaryToWorkerMockServer {
         request: anemo::Request<PrimaryWorkerMessage>,
     ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
         let message = request.into_body();
-        self.sender.send(message).await.unwrap();
+        self.msg_sender.send(message).await.unwrap();
+        Ok(anemo::Response::new(()))
+    }
+    async fn synchronize(
+        &self,
+        request: anemo::Request<WorkerSynchronizeMessage>,
+    ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
+        let message = request.into_body();
+        self.synchronize_sender.send(message).await.unwrap();
         Ok(anemo::Response::new(()))
     }
 }

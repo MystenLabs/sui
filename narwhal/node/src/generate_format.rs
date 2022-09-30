@@ -14,7 +14,7 @@ use std::{fs::File, io::Write};
 use structopt::{clap::arg_enum, StructOpt};
 use types::{
     Batch, BatchDigest, Certificate, CertificateDigest, Header, HeaderDigest,
-    ReconfigureNotification, WorkerPrimaryError, WorkerPrimaryMessage,
+    ReconfigureNotification, WorkerPrimaryError, WorkerPrimaryMessage, WorkerSynchronizeMessage,
 };
 
 fn get_registry() -> Result<Registry> {
@@ -114,7 +114,10 @@ fn get_registry() -> Result<Registry> {
     let cleanup = PrimaryWorkerMessage::Cleanup(1u64);
     let request_batch = PrimaryWorkerMessage::RequestBatch(BatchDigest([0u8; 32]));
     let delete_batch = PrimaryWorkerMessage::DeleteBatches(vec![BatchDigest([0u8; 32])]);
-    let sync = PrimaryWorkerMessage::Synchronize(vec![BatchDigest([0u8; 32])], pk);
+    let sync = WorkerSynchronizeMessage {
+        digests: vec![BatchDigest([0u8; 32])],
+        target: pk,
+    };
     let epoch_change =
         PrimaryWorkerMessage::Reconfigure(ReconfigureNotification::NewEpoch(committee.clone()));
     let update_committee =

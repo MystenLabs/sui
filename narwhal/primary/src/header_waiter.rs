@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
     metrics::PrimaryMetrics,
-    primary::{PayloadToken, PrimaryMessage, PrimaryWorkerMessage},
+    primary::{PayloadToken, PrimaryMessage},
 };
 use config::{Committee, SharedWorkerCache, WorkerId};
 use crypto::PublicKey;
@@ -28,7 +28,7 @@ use types::{
     error::{DagError, DagResult},
     metered_channel::{Receiver, Sender},
     try_fut_and_permit, BatchDigest, CertificateDigest, Header, HeaderDigest,
-    ReconfigureNotification, Round,
+    ReconfigureNotification, Round, WorkerSynchronizeMessage,
 };
 
 #[cfg(test)]
@@ -231,7 +231,7 @@ impl HeaderWaiter {
                                     .name;
 
                                 // TODO [issue #423]: This network transmission needs to be reliable: the worker may crash-recover.
-                                let message = PrimaryWorkerMessage::Synchronize(digests, author.clone());
+                                let message = WorkerSynchronizeMessage{digests, target: author.clone()};
                                 let _ = self.network.unreliable_send(worker_name, &message);
                             }
                         }

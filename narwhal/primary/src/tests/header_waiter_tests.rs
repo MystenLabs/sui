@@ -4,7 +4,6 @@ use crate::{
     common::{create_db_stores, worker_listener},
     header_waiter::{HeaderWaiter, WaiterMessage},
     metrics::PrimaryMetrics,
-    PrimaryWorkerMessage,
 };
 
 use fastcrypto::{traits::KeyPair, Hash};
@@ -96,22 +95,20 @@ async fn successfully_synchronize_batches() {
         .unwrap();
 
     // THEN
-    if let Ok(Ok(mut result)) = timeout(Duration::from_millis(4_000), handle).await {
-        match result.remove(0) {
-            PrimaryWorkerMessage::Synchronize(missing, _) => {
-                assert_eq!(
-                    missing_digests, missing,
-                    "Expected missing digests don't match"
-                );
+    if let Ok(Ok((_primary_msg, mut sync_msg))) =
+        timeout(Duration::from_millis(4_000), handle).await
+    {
+        let msg = sync_msg.remove(0);
+        assert_eq!(
+            missing_digests, msg.digests,
+            "Expected missing digests don't match"
+        );
 
-                // now simulate the write of the batch to the payload store
-                payload_store
-                    .write_all(missing_digests.into_iter().map(|e| ((e, worker_id), 1)))
-                    .await
-                    .unwrap();
-            }
-            _ => panic!("Unexpected message received!"),
-        }
+        // now simulate the write of the batch to the payload store
+        payload_store
+            .write_all(missing_digests.into_iter().map(|e| ((e, worker_id), 1)))
+            .await
+            .unwrap();
 
         // now get the output as expected
         let header_result = rx_core.recv().await.unwrap();

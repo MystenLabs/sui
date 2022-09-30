@@ -481,7 +481,7 @@ pub fn worker_listener(
 ) -> JoinHandle<()> {
     let pubkey = keypair.public().clone();
     println!("[{}] Setting up server", pubkey);
-    let (mut recv, network) = PrimaryToWorkerMockServer::spawn(keypair, address);
+    let (mut recv, _, network) = PrimaryToWorkerMockServer::spawn(keypair, address);
     tokio::spawn(async move {
         let _network = network;
         let message = recv.recv().await.unwrap();

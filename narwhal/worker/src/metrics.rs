@@ -82,8 +82,10 @@ impl Default for WorkerMetrics {
 pub struct WorkerChannelMetrics {
     /// occupancy of the channel from various handlers to the `worker::PrimaryConnector`
     pub tx_primary: IntGauge,
-    /// occupancy of the channel from the `worker::PrimaryReceiverHandler` to the `worker::Synchronizer`
+    /// occupancy of the channel from the `handlers::PrimaryReceiverHandler` to the `worker::Synchronizer`
     pub tx_synchronizer: IntGauge,
+    /// occupancy of the channel from the `handlers::PrimaryReceiverHandler` to the `handlers::ChildRpcSender`
+    pub tx_request_batches_rpc: IntGauge,
     /// occupancy of the channel from the `worker::TxReceiverhandler` to the `worker::BatchMaker`
     pub tx_batch_maker: IntGauge,
     /// occupancy of the channel from the `worker::BatchMaker` to the `worker::QuorumWaiter`
@@ -107,6 +109,11 @@ impl WorkerChannelMetrics {
             tx_synchronizer: register_int_gauge_with_registry!(
                 "tx_synchronizer",
                 "occupancy of the channel from the `worker::PrimaryReceiverHandler` to the `worker::Synchronizer`",
+                registry
+            ).unwrap(),
+            tx_request_batches_rpc: register_int_gauge_with_registry!(
+                "tx_request_batches_rpc",
+                "occupancy of the channel from the `handlers::PrimaryReceiverHandler` to the `handlers::ChildRpcSender`",
                 registry
             ).unwrap(),
             tx_batch_maker: register_int_gauge_with_registry!(

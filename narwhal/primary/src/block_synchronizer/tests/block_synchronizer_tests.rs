@@ -9,7 +9,6 @@ use crate::{
     },
     common::{create_db_stores, worker_listener},
     primary::PrimaryMessage,
-    PrimaryWorkerMessage,
 };
 use anemo::{types::PeerInfo, PeerId};
 use config::{BlockSynchronizerParameters, Parameters};
@@ -588,19 +587,14 @@ async fn test_successful_payload_synchronization() {
     {
         assert!(result.is_ok(), "Error returned");
 
-        for (messages, worker) in result.unwrap().into_iter().zip(workers.into_iter()) {
-            for m in messages {
-                match m {
-                    PrimaryWorkerMessage::Synchronize(batch_ids, _) => {
-                        // Assume that the request is the correct one and just immediately
-                        // store the batch to the payload store.
-                        for batch_id in batch_ids {
-                            payload_store.write((batch_id, worker), 1).await;
-                        }
-                    }
-                    _ => {
-                        panic!("Unexpected request received");
-                    }
+        for ((_primary_messages, sync_messages), worker) in
+            result.unwrap().into_iter().zip(workers.into_iter())
+        {
+            for m in sync_messages {
+                // Assume that the request is the correct one and just immediately
+                // store the batch to the payload store.
+                for batch_id in m.digests {
+                    payload_store.write((batch_id, worker), 1).await;
                 }
             }
         }
