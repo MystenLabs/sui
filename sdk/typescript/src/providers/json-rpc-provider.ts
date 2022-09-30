@@ -61,17 +61,19 @@ export class JsonRpcProvider extends Provider {
    * Establish a connection to a Sui RPC endpoint
    *
    * @param endpoint URL to the Sui RPC endpoint
-   * @param skipDataValidation default to `false`. If set to `true`, the rpc
-   * client will not check if the responses from the RPC server conform to the schema
-   * defined in the TypeScript SDK. The mismatches often happen when the SDK
-   * is in a different version than the RPC server. Skipping the validation
-   * can maximize the version compatibility of the SDK, as not all the schema
+   * @param skipDataValidation default to `true`. If set to `false`, the rpc
+   * client will throw an error if the responses from the RPC server do not
+   * conform to the schema defined in the TypeScript SDK. If set to `true`, the
+   * rpc client will log the mismatch as a warning message instead of throwing an
+   * error. The mismatches often happen when the SDK is in a different version than
+   * the RPC server. Skipping the validation can maximize
+   * the version compatibility of the SDK, as not all the schema
    * changes in the RPC response will affect the caller, but the caller needs to
    * understand that the data may not match the TypeSrcript definitions.
    */
   constructor(
     public endpoint: string,
-    public skipDataValidation: boolean = false,
+    public skipDataValidation: boolean = true,
     public socketOptions: WebsocketClientOptions = DEFAULT_CLIENT_OPTIONS
   ) {
     super();
