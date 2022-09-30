@@ -13,11 +13,11 @@ import LoadingIndicator from '_components/loading/LoadingIndicator';
 import { useAppSelector, useAppDispatch } from '_hooks';
 import { getCuratedApps } from '_redux/slices/dapps';
 import { mintDemoNFT } from '_redux/slices/sui-objects';
+import { trackEvent } from '_src/shared/plausible';
 
 import type { SerializedError } from '@reduxjs/toolkit';
 
 import st from './Playground.module.scss';
-import { trackEvent } from '_src/shared/plausible';
 
 function AppsPlayGround() {
     const [mintInProgress, setMintInProgress] = useState(false);

@@ -1,11 +1,13 @@
-// NOTE: The url of Sui wallet Chrome extension:
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
 
 import Plausible from 'plausible-tracker';
 
+// NOTE: The url of Sui wallet Chrome extension:
 // https://chrome.google.com/webstore/detail/sui-wallet/opcgpfmipidbgpenhmajoajpbobppdil
 const WALLET_URL = 'chrome-extension://opcgpfmipidbgpenhmajoajpbobppdil';
 
-const PLAUSIBLE_ENABLED = process.env.NODE_ENV !== 'development' || true;
+const PLAUSIBLE_ENABLED = process.env.NODE_ENV !== 'development';
 
 const plausible = Plausible({
     domain: WALLET_URL,
@@ -19,6 +21,7 @@ export const trackEvent: typeof plausible.trackEvent = (...args) => {
     if (PLAUSIBLE_ENABLED) {
         plausible.trackEvent(...args);
     } else {
+        // eslint-disable-next-line no-console
         console.log(`[plausible] Skipping event "${args[0]}" in development.`);
     }
 };
@@ -33,6 +36,7 @@ export const trackPageview: typeof plausible.trackPageview = ({
             ...options,
         });
     } else {
+        // eslint-disable-next-line no-console
         console.log(
             `[plausible] Skipping pageview log "${url}" in development.`
         );

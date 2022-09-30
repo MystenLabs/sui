@@ -13,11 +13,11 @@ import Icon, { SuiIcons } from '_components/icon';
 import Overlay from '_components/overlay';
 import { useAppDispatch } from '_hooks';
 import { revokeAppPermissionByOrigin } from '_redux/slices/permissions';
+import { trackEvent } from '_src/shared/plausible';
 
 import type { SuiAddress } from '@mysten/sui.js';
 
 import st from './DisconnectApp.module.scss';
-import { trackEvent } from '_src/shared/plausible';
 
 type DisconnectAppProps = {
     name: string;

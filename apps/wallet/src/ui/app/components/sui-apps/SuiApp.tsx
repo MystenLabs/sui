@@ -7,9 +7,9 @@ import { memo, useState, useCallback } from 'react';
 import DisconnectApp from './DisconnectApp';
 import ExternalLink from '_components/external-link';
 import Icon, { SuiIcons } from '_components/icon';
+import { trackEvent } from '_src/shared/plausible';
 
 import st from './SuiApp.module.scss';
-import { trackEvent } from '_src/shared/plausible';
 
 type Displaytype = {
     displaytype: 'full' | 'card';

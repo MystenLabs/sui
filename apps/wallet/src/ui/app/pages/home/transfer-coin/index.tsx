@@ -24,12 +24,12 @@ import {
 import { Coin, GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
 import { sendTokens } from '_redux/slices/transactions';
 import { balanceFormatOptions } from '_shared/formatting';
+import { trackEvent } from '_src/shared/plausible';
 
 import type { SerializedError } from '@reduxjs/toolkit';
 import type { FormikHelpers } from 'formik';
 
 import st from './TransferCoinPage.module.scss';
-import { trackEvent } from '_src/shared/plausible';
 
 const initialValues = {
     to: '',
