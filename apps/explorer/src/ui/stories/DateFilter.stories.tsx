@@ -17,7 +17,7 @@ export default {
 function DateFilterWithState(
     props: Omit<DateFilterProps, 'value' | 'onChange'>
 ) {
-    const [value, onChange] = useDateFilterState();
+    const [value, onChange] = useDateFilterState('D');
     return <DateFilter {...props} value={value} onChange={onChange} />;
 }
 
