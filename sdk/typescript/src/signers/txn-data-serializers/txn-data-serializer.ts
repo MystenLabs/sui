@@ -57,6 +57,30 @@ export interface MoveCallTransaction {
   gasBudget: number;
 }
 
+/** A type that represents the possible transactions that can be signed: */
+export type SignableTransaction =
+  | {
+      moveCall: MoveCallTransaction;
+    }
+  | {
+      transferSui: TransferSuiTransaction;
+    }
+  | {
+      transferObject: TransferObjectTransaction;
+    }
+  | {
+      mergeCoin: MergeCoinTransaction;
+    }
+  | {
+      splitCoin: SplitCoinTransaction;
+    }
+  | {
+      pay: PayTransaction;
+    }
+  | {
+      bytes: Uint8Array;
+    };
+
 /**
  * Transaction type used for publishing Move modules to the Sui.
  *

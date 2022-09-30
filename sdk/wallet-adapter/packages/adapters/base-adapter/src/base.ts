@@ -3,6 +3,7 @@
 
 import {
   MoveCallTransaction,
+  SignableTransaction,
   SuiAddress,
   SuiTransactionResponse,
 } from "@mysten/sui.js";
@@ -15,6 +16,9 @@ export interface WalletCapabilities {
   // Connection Management
   connect: () => Promise<void>;
   disconnect: () => Promise<void>;
+  signAndSendTransaction?(
+    transaction: SignableTransaction
+  ): Promise<SuiTransactionResponse>;
   // DappInterfaces
   getAccounts: () => Promise<SuiAddress[]>;
   executeMoveCall: (
