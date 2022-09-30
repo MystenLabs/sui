@@ -180,7 +180,8 @@ async fn test_local_execution_with_missing_parents() -> Result<(), anyhow::Error
     // Even though tx0 is not executed from the Orchestrator,
     // it subscribes to the Quorum Driver's effects queue,
     // receives the finalized transactions and executes them.
-    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+    // Wait for the async execution to finish
+    wait_for_tx(digest0, node.state().clone()).await;
     node_knows_txes(&node, &digests0).await;
     node_knows_txes(&node, &vec![digest0]).await;
 
