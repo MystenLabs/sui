@@ -11,19 +11,35 @@ import { type NodeLocation } from './types';
 
 import styles from './ValidatorMap.module.css';
 
-// const HOST = 'https://imgmod.sui.io';
-const HOST = 'http://localhost:9200';
+import { DateFilter, useDateFilterState } from '~/ui/DateFilter';
+
+const HOST = 'https://imgmod.sui.io';
 
 type CountryNodes = Record<string, { count: number; country: string }>;
 
 const regionNamesInEnglish = new Intl.DisplayNames('en', { type: 'region' });
 const numberFormatter = new Intl.NumberFormat('en');
 
+const DATE_FILTER_TO_WINDOW = {
+    D: '1d',
+    W: '1w',
+    M: '1m',
+    ALL: 'all',
+};
+
 export default function ValidatorMap() {
-    const { data } = useQuery(['validator-map'], async () => {
-        const res = await fetch(`${HOST}/location?version=v2`, {
-            method: 'GET',
-        });
+    const [dateFilter, setDateFilter] = useDateFilterState('ALL');
+
+    const { data } = useQuery(['validator-map', dateFilter], async () => {
+        const res = await fetch(
+            `${HOST}/location?${new URLSearchParams({
+                version: 'v2',
+                window: DATE_FILTER_TO_WINDOW[dateFilter],
+            })}`,
+            {
+                method: 'GET',
+            }
+        );
 
         if (!res.ok) {
             return [];
@@ -94,20 +110,23 @@ export default function ValidatorMap() {
             <div className={styles.container}>
                 <div className={styles.contents}>
                     <div>
-                        <div className={styles.title}>Total Nodes</div>
+                        <div className={styles.title}>Nodes</div>
                         <div className={styles.stat}>
-                            {totalCount &&
-                                numberFormatter.format(totalCount)}
+                            {totalCount && numberFormatter.format(totalCount)}
                         </div>
                     </div>
                     <div>
-                        <div className={styles.title}>Total Countries</div>
+                        <div className={styles.title}>Countries</div>
                         <div className={styles.stat}>
                             {countryCount &&
                                 numberFormatter.format(countryCount)}
                         </div>
                     </div>
                 </div>
+            </div>
+
+            <div className="absolute top-8 right-8 z-10">
+                <DateFilter value={dateFilter} onChange={setDateFilter} />
             </div>
 
             <div className={styles.mapcontainer}>
