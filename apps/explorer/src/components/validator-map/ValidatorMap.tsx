@@ -28,7 +28,7 @@ const DATE_FILTER_TO_WINDOW = {
 };
 
 export default function ValidatorMap() {
-    const [dateFilter, setDateFilter] = useDateFilterState('ALL');
+    const [dateFilter, setDateFilter] = useDateFilterState('D');
 
     const { data } = useQuery(['validator-map', dateFilter], async () => {
         const res = await fetch(
