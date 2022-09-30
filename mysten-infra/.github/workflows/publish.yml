@@ -29,7 +29,8 @@ env:
 jobs:
   publish:
     name: Publish to crates.io
-    continue-on-error: false
+    # Needed to get around problems when running this script and package version does not change
+    continue-on-error: true
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -42,11 +43,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-      - name: Check semver
-        uses: obi1kenobi/cargo-semver-checks-action@v1
-        with:
-          crate-name: ${{ matrix.package }}
-          version-tag-prefix: ${{ matrix.package }}-v
       - id: check
         run: |
           set +e
@@ -61,6 +57,13 @@ jobs:
             # Unexpected outcome, indicates a bug.
             exit "$EXIT_CODE"
           fi
+      - name: Check semver
+        # Only run the semver script if the version changed, otherwise it errors out
+        if: steps.check.outputs.is_new_version == 'yes'
+        uses: obi1kenobi/cargo-semver-checks-action@v1
+        with:
+          crate-name: ${{ matrix.package }}
+          version-tag-prefix: ${{ matrix.package }}-v
       - name: Tag the version
         if: steps.check.outputs.is_new_version == 'yes'
         run: |
