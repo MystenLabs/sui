@@ -50,14 +50,14 @@ typed-store.workspace = true
 typed-store-derive.workspace = true
 mysten-network.workspace = true
 
-narwhal-config = { git = "https://github.com/MystenLabs/narwhal", rev = "af2192c654408a326456af9e906ef701adaeecbf" }
-narwhal-consensus = { git = "https://github.com/MystenLabs/narwhal", rev = "af2192c654408a326456af9e906ef701adaeecbf" }
-narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "af2192c654408a326456af9e906ef701adaeecbf" }
-narwhal-types = { git = "https://github.com/MystenLabs/narwhal", rev = "af2192c654408a326456af9e906ef701adaeecbf" }
-narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "af2192c654408a326456af9e906ef701adaeecbf", features = ["trace_transaction"] }
+narwhal-config = { path = "../../narwhal/config" }
+narwhal-consensus = { path = "../../narwhal/consensus" }
+narwhal-executor = { path = "../../narwhal/executor" }
+narwhal-node = { path = "../../narwhal/node" }
+narwhal-types = { path = "../../narwhal/types" }
 
 fastcrypto = "0.1.2"
-workspace-hack = { path = "../workspace-hack"}
+workspace-hack.workspace = true
 thiserror = "1.0.34"
 eyre = "0.6.8"
 

@@ -26,10 +26,11 @@ pub fn run(args: Args) -> crate::Result<()> {
                 "lazy_static".to_owned(),
                 "use once_cell::sync::Lazy instead".to_owned(),
             ),
-            (
-                "tracing-test".to_owned(),
-                "you should not be testing against log lines".to_owned(),
-            ),
+            // TODO: re-enable after dropping the dependency from Narwhal.
+            // (
+            //     "tracing-test".to_owned(),
+            //     "you should not be testing against log lines".to_owned(),
+            // ),
         ]
         .into_iter()
         .collect(),
@@ -44,10 +45,13 @@ pub fn run(args: Args) -> crate::Result<()> {
         &IrrelevantBuildDeps,
         // This one seems to be broken
         //&UnpublishedPackagesOnlyUsePathDependencies::new(),
-        &PublishedPackagesDontDependOnUnpublishedPackages,
-        &OnlyPublishToCratesIo,
+        // TODO: re-enable after fixing the issue for Narwhal.
+        // &PublishedPackagesDontDependOnUnpublishedPackages,
+        // TODO: re-enable after fixing the issue for Narwhal.
+        // &OnlyPublishToCratesIo,
         &CratesInCratesDirectory,
-        &CratesOnlyInCratesDirectory,
+        // TODO: re-enable after moving Narwhal crates to crates/, or back to Narwhal repo.
+        // &CratesOnlyInCratesDirectory,
     ];
 
     let file_path_linters: &[&dyn FilePathLinter] = &[

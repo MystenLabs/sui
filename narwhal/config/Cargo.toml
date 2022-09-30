@@ -17,7 +17,7 @@ arc-swap = { version = "1.5.1", features = ["serde"] }
 
 fastcrypto = "0.1.2"
 crypto = { path = "../crypto", package = "narwhal-crypto" }
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
+workspace-hack.workspace = true
 rand = "0.8.5"
 
 [dev-dependencies]

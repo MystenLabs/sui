@@ -41,10 +41,9 @@ crypto = { path = "../crypto", package = "narwhal-crypto" }
 network = { path = "../network", package = "narwhal-network" }
 types = { path = "../types", package = "narwhal-types" }
 storage = { path = "../storage", package = "narwhal-storage" }
-mysten-network = "0.1.0"
-
-store = { version = "0.1.0", package = "typed-store" }
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
+mysten-network.workspace = true
+store.workspace = true
+workspace-hack.workspace = true
 
 anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "b145cbcf4a1917197e2b9ee6a1523afdb623dbf2" }
 anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "b145cbcf4a1917197e2b9ee6a1523afdb623dbf2" }
@@ -59,7 +58,7 @@ mockall = "0.11.2"
 node = { path = "../node", package = "narwhal-node" }
 proptest = "1.0.0"
 tempfile = "3.3.0"
-telemetry-subscribers = "0.1.0"
+telemetry-subscribers.workspace = true
 test-utils = { path = "../test-utils", package = "narwhal-test-utils" }
 thiserror = "1.0.35"
 tracing = "0.1.36"

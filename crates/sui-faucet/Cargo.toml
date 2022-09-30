@@ -29,7 +29,7 @@ sui-json-rpc-types= { path = "../sui-json-rpc-types" }
 sui-types = { path = "../sui-types" }
 sui-config = { path = "../sui-config" }
 telemetry-subscribers.workspace = true
-workspace-hack = { path = "../workspace-hack"}
+workspace-hack.workspace = true
 
 [dev-dependencies]
 test-utils = { path = "../test-utils" }
