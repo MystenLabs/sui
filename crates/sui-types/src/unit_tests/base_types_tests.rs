@@ -328,8 +328,6 @@ fn test_move_object_size_for_gas_metering() {
     );
     let size = object.object_size_for_gas_metering();
     let serialized = bcs::to_bytes(&object).unwrap();
-    // The result of object_size_for_gas_metering() will be smaller due to not including
-    // all the metadata data needed for serializing various types.
     // If the following assertion breaks, it's likely you have changed MoveObject's fields.
     // Make sure to adjust `object_size_for_gas_metering()` to include those changes.
     assert_eq!(size, serialized.len());
