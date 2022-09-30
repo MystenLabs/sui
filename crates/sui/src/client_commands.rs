@@ -18,6 +18,7 @@ use move_core_types::language_storage::TypeTag;
 use move_package::BuildConfig;
 use serde::Serialize;
 use serde_json::json;
+use sui_bytecode_src_verify::BytecodeSourceVerifier;
 use tracing::info;
 
 use crate::config::{Config, PersistedConfig, SuiClientConfig};
@@ -403,7 +404,20 @@ impl SuiClientCommands {
                 let sender = context.try_get_object_owner(&gas).await?;
                 let sender = sender.unwrap_or(context.active_address()?);
 
-                let compiled_modules = build_move_package_to_bytes(&package_path, build_config)?;
+                let compiled_modules = build_move_package_to_bytes(&package_path, build_config.clone())?;
+
+                // verify that all dependency packages have the correct on-chain bytecode
+                let node_url = "http://localhost:9000";
+                match BytecodeSourceVerifier::new(node_url).await {
+                    Ok(verifier) => {
+                        let result = verifier.verify_deployed_dependencies
+                            (&build_config, &package_path, &compiled_modules).await;
+
+                        println!("on-chain bytecode verification result:\n{:?}", result);
+                    },
+                    Err(err) => eprintln!("Error verifying on-chain bytecode:\n{:?}", err),
+                };
+
                 let data = context
                     .client
                     .transaction_builder()
