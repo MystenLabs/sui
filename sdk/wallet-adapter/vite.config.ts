@@ -3,9 +3,16 @@
 
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
-import tsconfigPaths from "vite-tsconfig-paths";
+import tsconfig from './tsconfig.json';
+
+// TODO: Make an internal helper for this:
+const alias = {};
+Object.entries(tsconfig.compilerOptions.paths).forEach(([key, [value]]) => {
+  alias[key] = new URL(value, import.meta.url).pathname + '/';
+});
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [react(), tsconfigPaths()],
+  plugins: [react()],
+  resolve: { alias },
 });

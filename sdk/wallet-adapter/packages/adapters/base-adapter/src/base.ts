@@ -16,14 +16,22 @@ export interface WalletCapabilities {
   // Connection Management
   connect: () => Promise<void>;
   disconnect: () => Promise<void>;
+
+  /**
+   * Suggest a transaction for the user to sign. Supports all valid transaction types.
+   */
   signAndExecuteTransaction?(
     transaction: SignableTransaction
   ): Promise<SuiTransactionResponse>;
-  // DappInterfaces
+
   getAccounts: () => Promise<SuiAddress[]>;
+
+  /** @deprecated Prefer `signAndExecuteTransaction` when available. */
   executeMoveCall: (
     transaction: MoveCallTransaction
   ) => Promise<SuiTransactionResponse>;
+
+  /** @deprecated Prefer `signAndExecuteTransaction` when available. */
   executeSerializedMoveCall: (
     transactionBytes: Uint8Array
   ) => Promise<SuiTransactionResponse>;

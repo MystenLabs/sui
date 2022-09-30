@@ -1,21 +1,29 @@
 {
-	"extends": "./tsconfig.base.json",
+  "extends": "./tsconfig.base.json",
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
       "@mysten/wallet-adapter-react": ["./packages/react-providers/src"],
       "@mysten/wallet-adapter-react-ui": ["./packages/ui/src"],
       "@mysten/wallet-adapter-all-wallets": [
-        "./packages/adapters/integrations/all-wallets/src"
+        "./packages/adapters/all-wallets/src"
       ],
       "@mysten/wallet-adapter-base": ["./packages/adapters/base-adapter/src"],
       "@mysten/wallet-adapter-sui-wallet": [
-        "./packages/adapters/integrations/sui-wallet/src"
+        "./packages/adapters/sui-wallet/src"
       ],
       "@mysten/wallet-adapter-mock-wallet": [
-        "./packages/adapters/integrations/mock-wallet/src"
+        "./packages/adapters/mock-wallet/src"
       ]
     }
   },
-  "include": ["src"]
+  "include": ["src"],
+  "references": [
+    { "path": "./packages/react-providers" },
+    { "path": "./packages/ui" },
+    { "path": "./packages/adapters/all-wallets" },
+    { "path": "./packages/adapters/base-adapter" },
+    { "path": "./packages/adapters/sui-wallet" },
+    { "path": "./packages/adapters/mock-wallet" }
+  ]
 }
