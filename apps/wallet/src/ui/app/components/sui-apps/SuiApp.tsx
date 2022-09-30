@@ -7,6 +7,7 @@ import { memo, useState, useCallback } from 'react';
 import DisconnectApp from './DisconnectApp';
 import ExternalLink from '_components/external-link';
 import Icon, { SuiIcons } from '_components/icon';
+import { useMiddleEllipsis } from '_hooks';
 import { plausible } from '_src/shared/constants';
 
 import st from './SuiApp.module.scss';
@@ -27,6 +28,8 @@ type SuiAppProps = {
     permissions: string[];
     disconnect?: boolean;
 };
+
+const TRUNCATE_MAX_LENGTH = 18;
 
 function SuiAppEmpty({ displaytype }: Displaytype) {
     return (
@@ -65,6 +68,13 @@ function SuiApp({
         id,
         permissions,
     };
+
+    const originLabel = useMiddleEllipsis(
+        new URL(link).hostname,
+        TRUNCATE_MAX_LENGTH,
+        TRUNCATE_MAX_LENGTH - 1
+    );
+
     const AppDetails = (
         <div className={cl(st.suiApp, st[displaytype])}>
             <div className={st.icon}>
@@ -99,7 +109,7 @@ function SuiApp({
                 )}
 
                 {displaytype === 'card' && (
-                    <div className={st.link}>{link}</div>
+                    <div className={st.link}>{originLabel}</div>
                 )}
 
                 {displaytype === 'full' && tags?.length && (

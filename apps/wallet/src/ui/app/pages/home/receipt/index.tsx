@@ -3,7 +3,6 @@
 import { useMemo, useEffect, useCallback, useState } from 'react';
 import { Navigate, useSearchParams, useNavigate } from 'react-router-dom';
 
-import { Content } from '_app/shared/bottom-menu-layout';
 import { SuiIcons } from '_components/icon';
 import Overlay from '_components/overlay';
 import ReceiptCard from '_components/receipt-card';
@@ -11,6 +10,8 @@ import { useAppSelector, useAppDispatch } from '_hooks';
 import { getTransactionsByAddress } from '_redux/slices/txresults';
 
 import type { TxResultState } from '_redux/slices/txresults';
+
+import st from './ReceiptPage.module.scss';
 
 // Response pages for all transactions
 // use txDigest for the transaction result
@@ -51,7 +52,7 @@ function ReceiptPage() {
     //TODO : add more transfer types and messages
     const transfersTxt = {
         Call: {
-            sender: 'Mint Successfully',
+            sender: 'Minted Successfully!',
             receiver: '',
         },
         TransferObject: {
@@ -69,19 +70,19 @@ function ReceiptPage() {
         ? transfersTxt[kind][txnItem.isSender ? 'sender' : 'receiver']
         : '';
 
+    const transferStatus =
+        txnItem?.status === 'success' ? headerCopy : 'Transaction Failed';
+
     return (
         <Overlay
             showModal={showModal}
             setShowModal={setShowModal}
-            title={headerCopy}
+            title={transferStatus}
             closeOverlay={closeReceipt}
-            closeIcon={SuiIcons.Checkmark}
+            closeIcon={SuiIcons.Check}
+            className={st.receiptOverlay}
         >
-            <Content>
-                {txnItem && (
-                    <ReceiptCard txDigest={txnItem} tranferType={tranferType} />
-                )}
-            </Content>
+            {txnItem && <ReceiptCard txDigest={txnItem} />}
         </Overlay>
     );
 }

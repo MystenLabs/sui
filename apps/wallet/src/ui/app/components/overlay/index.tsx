@@ -40,8 +40,8 @@ function Overlay({
     return (
         <>
             {showModal ? (
-                <div className={cl(st.container, className)}>
-                    <div className={st.header}>
+                <div className={st.container}>
+                    <div className={cl(className, st.header)}>
                         <div className={st.headerContent}>{title}</div>
                     </div>
                     <div className={st.content}>{children}</div>

@@ -19,7 +19,7 @@ import st from './TransactionsCard.module.scss';
 const TRUNCATE_MAX_LENGTH = 8;
 const TRUNCATE_PREFIX_LENGTH = 4;
 
-// Truncatte text after one line (~ 35 characters)
+// Truncate text after one line (~ 35 characters)
 const TRUNCATE_MAX_CHAR = 35;
 
 function TransactionCard({ txn }: { txn: TxResultState }) {
@@ -79,13 +79,13 @@ function TransactionCard({ txn }: { txn: TxResultState }) {
         ? formatDate(txn.timestampMs, ['month', 'day', 'hour', 'minute'])
         : false;
 
-    const TransferSuiTxn = txn.kind === 'TransferSui' ? <span>SUI</span> : null;
-    const TransferFailed =
+    const transferSuiTxn = txn.kind === 'TransferSui' ? <span>SUI</span> : null;
+    const transferFailed =
         txn.status !== 'success' ? (
             <div className={st.transferFailed}>Failed</div>
         ) : null;
 
-    const TxnsAddress = transferMeta[transferType]?.address ? (
+    const txnsAddress = transferMeta[transferType]?.address ? (
         <div className={st.address}>
             <div className={st.txTypeName}>
                 {transferMeta[transferType].transfer}
@@ -113,7 +113,7 @@ function TransactionCard({ txn }: { txn: TxResultState }) {
                 <div className={st.cardContent}>
                     <div className={st.txResult}>
                         <div className={cl(st.txTypeName, st.kind)}>
-                            {transferMeta[transferType].txName} {TransferSuiTxn}
+                            {transferMeta[transferType].txName} {transferSuiTxn}
                         </div>
 
                         <div className={st.txTransferred}>
@@ -127,10 +127,10 @@ function TransactionCard({ txn }: { txn: TxResultState }) {
                         </div>
                     </div>
 
-                    {TxnsAddress || TransferFailed ? (
+                    {txnsAddress || transferFailed ? (
                         <div className={st.txResult}>
-                            {TxnsAddress}
-                            {TransferFailed}
+                            {txnsAddress}
+                            {transferFailed}
                         </div>
                     ) : null}
 
