@@ -599,6 +599,14 @@ fn process_successful_execution<
         };
     }
 
+    // any object left in `by_value_objects` is an input passed by value that was not transferred,
+    // frozen, shared, or deleted.
+    // This means that either the object was wrapped inside another object that is in the Sui object
+    // pool
+    for (id, (_owner, version)) in by_value_objects {
+        changes.insert(id, ObjectChange::Delete(version, DeleteKind::Wrap));
+    }
+
     // apply object writes and object deletions
     state_view.apply_object_changes(changes);
 

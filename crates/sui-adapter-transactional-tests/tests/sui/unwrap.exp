@@ -18,7 +18,8 @@ Contents: test::object_basics::Object {id: sui::object::UID {id: sui::object::ID
 
 task 4 'run'. lines 77-77:
 created: object(108)
-written: object(106), object(107)
+written: object(107)
+deleted: object(106)
 
 task 5 'run'. lines 79-79:
 written: object(106), object(109)
@@ -26,5 +27,5 @@ deleted: object(108)
 
 task 6 'view-object'. lines 81-81:
 Owner: Account Address ( A )
-Version: 3
+Version: 2
 Contents: test::object_basics::Object {id: sui::object::UID {id: sui::object::ID {bytes: fake(106)}}, value: 10u64}

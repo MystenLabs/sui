@@ -20,4 +20,5 @@ written: object(107), object(109), object(110)
 
 task 5 'run'. lines 51-51:
 created: object(112)
-written: object(107), object(111)
+written: object(111)
+deleted: object(107)

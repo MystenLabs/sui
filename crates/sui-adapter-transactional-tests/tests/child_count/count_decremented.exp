@@ -131,7 +131,8 @@ Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(137
 
 task 30 'run'. lines 145-145:
 created: object(140)
-written: object(137), object(138), object(139)
+written: object(137), object(139)
+deleted: object(138)
 
 task 31 'view-object'. lines 147-147:
 Owner: Account Address ( A )

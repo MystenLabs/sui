@@ -25,4 +25,5 @@ Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(109
 
 task 6 'run'. lines 54-54:
 created: object(112)
-written: object(109), object(111)
+written: object(111)
+deleted: object(109)
