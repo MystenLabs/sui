@@ -1,6 +1,9 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import bip39 from '@scure/bip39';
+import {
+    generateMnemonic as bip39GenerateMnemonic,
+    validateMnemonic as bip39ValidateMnemonic,
+} from '@scure/bip39';
 import { wordlist } from '@scure/bip39/wordlists/english';
 
 /**
@@ -9,7 +12,7 @@ import { wordlist } from '@scure/bip39/wordlists/english';
  * @returns a 12 words string separated by spaces.
  */
 export function generateMnemonic(): string {
-    return bip39.generateMnemonic(wordlist);
+    return bip39GenerateMnemonic(wordlist);
 }
 
 /**
@@ -20,7 +23,7 @@ export function generateMnemonic(): string {
  * @returns true if the mnemonic is valid, false otherwise.
  */
 export function validateMnemonics(mnemonics: string): boolean {
-    return bip39.validateMnemonic(mnemonics, wordlist);
+    return bip39ValidateMnemonic(mnemonics, wordlist);
 }
 
 /**
