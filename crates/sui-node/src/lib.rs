@@ -15,8 +15,8 @@ use sui_config::NodeConfig;
 use sui_core::authority_active::checkpoint_driver::CheckpointMetrics;
 use sui_core::authority_aggregator::{AuthAggMetrics, AuthorityAggregator};
 use sui_core::authority_server::ValidatorService;
-use sui_core::quorum_driver::{QuorumDriver, QuorumDriverHandler, QuorumDriverMetrics};
 use sui_core::safe_client::SafeClientMetrics;
+use sui_core::transaction_orchestrator::TransactiondOrchestrator;
 use sui_core::transaction_streamer::TransactionStreamer;
 use sui_core::{
     authority::{AuthorityState, AuthorityStore},
@@ -45,9 +45,9 @@ use sui_core::epoch::epoch_store::EpochStore;
 use sui_json_rpc::event_api::EventReadApiImpl;
 use sui_json_rpc::event_api::EventStreamingApiImpl;
 use sui_json_rpc::http_server::HttpServerHandle;
-use sui_json_rpc::quorum_driver_api::FullNodeQuorumDriverApi;
 use sui_json_rpc::read_api::FullNodeApi;
 use sui_json_rpc::read_api::ReadApi;
+use sui_json_rpc::transaction_execution_api::FullNodeTransactionExecutionApi;
 use sui_json_rpc::ws_server::WsServerHandle;
 use sui_json_rpc::JsonRpcServerBuilder;
 use sui_types::crypto::KeypairTraits;
@@ -66,7 +66,7 @@ pub struct SuiNode {
     _checkpoint_process_handle: Option<tokio::task::JoinHandle<()>>,
     state: Arc<AuthorityState>,
     active: Arc<ActiveAuthority<NetworkAuthorityClient>>,
-    quorum_driver_handler: Option<QuorumDriverHandler<NetworkAuthorityClient>>,
+    transaction_orchestrator: Option<Arc<TransactiondOrchestrator<NetworkAuthorityClient>>>,
     _prometheus_registry: Registry,
 }
 
@@ -171,27 +171,31 @@ impl SuiNode {
             SafeClientMetrics::new(&prometheus_registry),
         );
 
-        let quorum_driver_handler = if is_full_node {
-            Some(QuorumDriverHandler::new(
-                net.clone(),
-                QuorumDriverMetrics::new(&prometheus_registry),
-            ))
-        } else {
-            None
-        };
-
-        let pending_store = Arc::new(NodeSyncStore::open_tables_read_write(
+        let node_sync_store = Arc::new(NodeSyncStore::open_tables_read_write(
             config.db_path().join("node_sync_db"),
             None,
             None,
         ));
         let active_authority = Arc::new(ActiveAuthority::new(
             state.clone(),
-            pending_store,
-            net,
+            node_sync_store,
+            net.clone(),
             GossipMetrics::new(&prometheus_registry),
             network_metrics.clone(),
         )?);
+
+        let arc_net = active_authority.agg_aggregator();
+
+        let transaction_orchestrator = if is_full_node {
+            Some(Arc::new(TransactiondOrchestrator::new(
+                arc_net,
+                state.clone(),
+                active_authority.clone().node_sync_handle(),
+                &prometheus_registry,
+            )))
+        } else {
+            None
+        };
 
         let gossip_handle = if is_full_node {
             info!("Starting full node sync to latest checkpoint (this may take a while)");
@@ -288,7 +292,7 @@ impl SuiNode {
 
         let (json_rpc_service, ws_subscription_service) = build_http_servers(
             state.clone(),
-            &quorum_driver_handler,
+            &transaction_orchestrator.clone(),
             config,
             &prometheus_registry,
         )
@@ -305,7 +309,7 @@ impl SuiNode {
             _post_processing_subsystem_handle: post_processing_subsystem_handle,
             state,
             active: active_authority,
-            quorum_driver_handler,
+            transaction_orchestrator,
             _prometheus_registry: prometheus_registry,
         };
 
@@ -322,20 +326,20 @@ impl SuiNode {
         &self.active
     }
 
-    pub fn quorum_driver(&self) -> Option<Arc<QuorumDriver<NetworkAuthorityClient>>> {
-        self.quorum_driver_handler
-            .as_ref()
-            .map(|qdh| qdh.clone_quorum_driver())
+    pub fn transaction_orchestrator(
+        &self,
+    ) -> Option<Arc<TransactiondOrchestrator<NetworkAuthorityClient>>> {
+        self.transaction_orchestrator.clone()
     }
 
-    pub fn subscribe_to_quorum_driver_effects(
+    pub fn subscribe_to_transaction_orchestrator_effects(
         &self,
     ) -> Result<tokio::sync::broadcast::Receiver<(CertifiedTransaction, CertifiedTransactionEffects)>>
     {
-        self.quorum_driver_handler
+        self.transaction_orchestrator
             .as_ref()
-            .map(|qdh| qdh.subscribe())
-            .ok_or_else(|| anyhow::anyhow!("Quorum Driver is not enabled in this node."))
+            .map(|to| to.subscribe_to_effects_queue())
+            .ok_or_else(|| anyhow::anyhow!("Transaction Orchestrator is not enabled in this node."))
     }
 
     //TODO watch/wait on all the components
@@ -348,7 +352,7 @@ impl SuiNode {
 
 pub async fn build_http_servers(
     state: Arc<AuthorityState>,
-    quorum_driver_handler: &Option<QuorumDriverHandler<NetworkAuthorityClient>>,
+    transaction_orchestrator: &Option<Arc<TransactiondOrchestrator<NetworkAuthorityClient>>>,
     config: &NodeConfig,
     prometheus_registry: &Registry,
 ) -> Result<(Option<HttpServerHandle>, Option<WsServerHandle>)> {
@@ -370,9 +374,9 @@ pub async fn build_http_servers(
     server.register_module(FullNodeApi::new(state.clone()))?;
     server.register_module(BcsApiImpl::new(state.clone()))?;
 
-    if let Some(quorum_driver_handler_) = quorum_driver_handler {
-        server.register_module(FullNodeQuorumDriverApi::new(
-            quorum_driver_handler_.clone_quorum_driver(),
+    if let Some(transaction_orchestrator) = transaction_orchestrator {
+        server.register_module(FullNodeTransactionExecutionApi::new(
+            transaction_orchestrator.clone(),
             state.module_cache.clone(),
         ))?;
     }

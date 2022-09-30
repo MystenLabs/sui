@@ -170,7 +170,7 @@ impl<A> ActiveAuthority<A> {
         })
     }
 
-    fn net(&self) -> Arc<AuthorityAggregator<A>> {
+    pub fn agg_aggregator(&self) -> Arc<AuthorityAggregator<A>> {
         self.net.load().clone()
     }
 
@@ -304,7 +304,7 @@ where
         // TODO: potentially move get_latest_proposal_and_checkpoint_from_all and
         // sync_to_checkpoint out of checkpoint_driver
         let checkpoint_summary = get_latest_checkpoint_from_all(
-            self.net(),
+            self.agg_aggregator(),
             checkpoint_process_control.extra_time_after_quorum,
             checkpoint_process_control.timeout_until_quorum,
         )
@@ -351,13 +351,9 @@ where
         self.respawn_node_sync_process_impl(lock_guard).await
     }
 
-    async fn respawn_node_sync_process_impl(
-        self: Arc<Self>,
-        mut lock_guard: MutexGuard<'_, Option<NodeSyncProcessHandle>>,
+    async fn cancel_node_sync_process_impl(
+        lock_guard: &mut MutexGuard<'_, Option<NodeSyncProcessHandle>>,
     ) {
-        let epoch = self.state.committee.load().epoch;
-        info!(?epoch, "respawn_node_sync_process");
-
         if let Some(NodeSyncProcessHandle(join_handle, cancel_sender)) = lock_guard.take() {
             info!("sending cancel request to node sync task");
             let _ = cancel_sender
@@ -377,9 +373,18 @@ where
                 let _ = join_handle.await;
             }
         }
+    }
+
+    async fn respawn_node_sync_process_impl(
+        self: Arc<Self>,
+        mut lock_guard: MutexGuard<'_, Option<NodeSyncProcessHandle>>,
+    ) {
+        let epoch = self.state.committee.load().epoch;
+        info!(?epoch, "respawn_node_sync_process");
+        Self::cancel_node_sync_process_impl(&mut lock_guard).await;
 
         let (cancel_sender, cancel_receiver) = oneshot::channel();
-        let aggregator = self.net();
+        let aggregator = self.agg_aggregator();
 
         let node_sync_handle = self.clone().node_sync_handle();
         let node_sync_store = self.node_sync_store.clone();
@@ -401,6 +406,11 @@ where
         tokio::task::spawn(async move {
             execution_process(self).await;
         })
+    }
+
+    pub async fn cancel_node_sync_process_for_tests(&self) {
+        let mut lock_guard = self.node_sync_process.lock().await;
+        Self::cancel_node_sync_process_impl(&mut lock_guard).await;
     }
 }
 

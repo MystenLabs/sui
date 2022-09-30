@@ -224,6 +224,41 @@ pub async fn create_devnet_nft(
     Ok((sender, object_id, digest))
 }
 
+pub async fn transfer_sui(
+    context: &mut WalletContext,
+    sender: Option<SuiAddress>,
+    receiver: Option<SuiAddress>,
+) -> Result<(ObjectID, SuiAddress, SuiAddress, TransactionDigest), anyhow::Error> {
+    let sender = match sender {
+        None => context.keystore.addresses().get(0).cloned().unwrap(),
+        Some(addr) => addr,
+    };
+    let receiver = match receiver {
+        None => context.keystore.addresses().get(1).cloned().unwrap(),
+        Some(addr) => addr,
+    };
+    let gas_ref = get_gas_object_with_wallet_context(context, &sender)
+        .await
+        .unwrap();
+
+    let res = SuiClientCommands::TransferSui {
+        to: receiver,
+        amount: None,
+        sui_coin_object_id: gas_ref.0,
+        gas_budget: 50000,
+    }
+    .execute(context)
+    .await?;
+
+    let digest = if let SuiClientCommandResult::TransferSui(tx_cert, _effects) = res {
+        tx_cert.transaction_digest
+    } else {
+        panic!("transfer command did not return WalletCommandResult::TransferSui");
+    };
+
+    Ok((gas_ref.0, sender, receiver, digest))
+}
+
 pub async fn transfer_coin(
     context: &mut WalletContext,
 ) -> Result<(ObjectID, SuiAddress, SuiAddress, TransactionDigest), anyhow::Error> {
@@ -258,6 +293,19 @@ pub async fn transfer_coin(
     };
 
     Ok((object_to_send, sender, receiver, digest))
+}
+
+pub async fn split_coin_with_wallet_context(context: &mut WalletContext, coin_id: ObjectID) {
+    SuiClientCommands::SplitCoin {
+        coin_id,
+        amounts: None,
+        count: 2,
+        gas: None,
+        gas_budget: MAX_GAS,
+    }
+    .execute(context)
+    .await
+    .unwrap();
 }
 
 pub async fn delete_devnet_nft(

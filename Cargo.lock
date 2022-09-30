@@ -8393,6 +8393,7 @@ dependencies = [
  "prometheus",
  "rand 0.8.5",
  "serde_json",
+ "signature",
  "sui",
  "sui-adapter",
  "sui-config",

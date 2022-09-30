@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::api::QuorumDriverApiServer;
+use crate::api::TransactionExecutionApiServer;
 use crate::SuiRpcModule;
 use anyhow::anyhow;
 use async_trait::async_trait;
@@ -12,7 +12,7 @@ use signature::Signature;
 use std::sync::Arc;
 use sui_core::authority::{AuthorityStore, ResolverWrapper};
 use sui_core::authority_client::NetworkAuthorityClient;
-use sui_core::quorum_driver::QuorumDriver;
+use sui_core::transaction_orchestrator::TransactiondOrchestrator;
 use sui_json_rpc_types::SuiExecuteTransactionResponse;
 use sui_open_rpc::Module;
 use sui_types::crypto::SignatureScheme;
@@ -24,25 +24,25 @@ use sui_types::{
     messages::{Transaction, TransactionData},
 };
 
-pub struct FullNodeQuorumDriverApi {
-    pub quorum_driver: Arc<QuorumDriver<NetworkAuthorityClient>>,
+pub struct FullNodeTransactionExecutionApi {
+    pub transaction_orchestrator: Arc<TransactiondOrchestrator<NetworkAuthorityClient>>,
     pub module_cache: Arc<SyncModuleCache<ResolverWrapper<AuthorityStore>>>,
 }
 
-impl FullNodeQuorumDriverApi {
+impl FullNodeTransactionExecutionApi {
     pub fn new(
-        quorum_driver: Arc<QuorumDriver<NetworkAuthorityClient>>,
+        transaction_orchestrator: Arc<TransactiondOrchestrator<NetworkAuthorityClient>>,
         module_cache: Arc<SyncModuleCache<ResolverWrapper<AuthorityStore>>>,
     ) -> Self {
         Self {
-            quorum_driver,
+            transaction_orchestrator,
             module_cache,
         }
     }
 }
 
 #[async_trait]
-impl QuorumDriverApiServer for FullNodeQuorumDriverApi {
+impl TransactionExecutionApiServer for FullNodeTransactionExecutionApi {
     async fn execute_transaction(
         &self,
         tx_bytes: Base64,
@@ -59,8 +59,9 @@ impl QuorumDriverApiServer for FullNodeQuorumDriverApi {
         .map_err(|e| anyhow!(e))?;
         let txn = Transaction::new(data, signature);
         let txn_digest = *txn.digest();
+
         let response = self
-            .quorum_driver
+            .transaction_orchestrator
             .execute_transaction(ExecuteTransactionRequest {
                 transaction: txn,
                 request_type,
@@ -76,12 +77,12 @@ impl QuorumDriverApiServer for FullNodeQuorumDriverApi {
     }
 }
 
-impl SuiRpcModule for FullNodeQuorumDriverApi {
+impl SuiRpcModule for FullNodeTransactionExecutionApi {
     fn rpc(self) -> RpcModule<Self> {
         self.into_rpc()
     }
 
     fn rpc_doc_module() -> Module {
-        crate::api::QuorumDriverApiOpenRpc::module_doc()
+        crate::api::TransactionExecutionApiOpenRpc::module_doc()
     }
 }

@@ -21,11 +21,11 @@ use tracing::info;
 
 use sui_framework::build_move_package_to_bytes;
 use sui_json::SuiJsonValue;
-use sui_json_rpc_types::SuiData;
 use sui_json_rpc_types::{
     GetObjectDataResponse, SuiExecuteTransactionResponse, SuiObjectInfo, SuiParsedObject,
     SuiTransactionResponse,
 };
+use sui_json_rpc_types::{GetRawObjectDataResponse, SuiData};
 use sui_json_rpc_types::{SuiCertifiedTransaction, SuiExecutionStatus, SuiTransactionEffects};
 use sui_sdk::crypto::SuiKeystore;
 use sui_sdk::{ClientType, SuiClient};
@@ -34,7 +34,6 @@ use sui_types::sui_serde::{Base64, Encoding};
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     gas_coin::GasCoin,
-    messages::ExecuteTransactionRequestType,
     messages::Transaction,
     object::Owner,
     parse_sui_type_tag, SUI_FRAMEWORK_ADDRESS,
@@ -681,6 +680,14 @@ impl WalletContext {
         Ok(self.config.active_address.unwrap())
     }
 
+    /// Get the latest object reference given a object id
+    pub async fn get_object_ref(
+        &self,
+        object_id: ObjectID,
+    ) -> Result<GetRawObjectDataResponse, anyhow::Error> {
+        self.client.read_api().get_object(object_id).await
+    }
+
     /// Get all the gas objects (and conveniently, gas amounts) for the address
     pub async fn gas_objects(
         &self,
@@ -767,13 +774,15 @@ impl WalletContext {
                 .quorum_driver()
                 .execute_transaction_by_fullnode(
                     tx,
-                    ExecuteTransactionRequestType::WaitForEffectsCert,
+                    sui_types::messages::ExecuteTransactionRequestType::WaitForLocalExecution,
                 )
                 .await;
             match result {
+                // TODO: if confirmed_local_execution is false, poll fullnode until it's confirmed
                 Ok(SuiExecuteTransactionResponse::EffectsCert {
                     certificate,
                     effects,
+                    confirmed_local_execution: _,
                 }) => Ok(SuiTransactionResponse {
                     certificate,
                     effects: effects.effects,

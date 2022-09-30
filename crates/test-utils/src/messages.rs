@@ -149,6 +149,33 @@ pub async fn make_transactions_with_wallet_context(
     res
 }
 
+pub async fn make_counter_increment_transaction_with_wallet_context(
+    context: &WalletContext,
+    sender: SuiAddress,
+    counter_id: ObjectID,
+    gas_object_ref: Option<ObjectRef>,
+) -> Transaction {
+    let package_object_ref = genesis::get_framework_object_ref();
+    let gas_objeect_ref = match gas_object_ref {
+        Some(obj_ref) => obj_ref,
+        None => get_gas_object_with_wallet_context(context, &sender)
+            .await
+            .unwrap(),
+    };
+    let data = TransactionData::new_move_call(
+        sender,
+        package_object_ref,
+        "counter".parse().unwrap(),
+        "increment".parse().unwrap(),
+        Vec::new(),
+        gas_objeect_ref,
+        vec![CallArg::Object(ObjectArg::SharedObject(counter_id))],
+        MAX_GAS,
+    );
+    let signature = context.keystore.sign(&sender, &data.to_bytes()).unwrap();
+    Transaction::new(data, signature)
+}
+
 /// Make a few different single-writer test transactions owned by specific addresses.
 pub fn make_transactions_with_pre_genesis_objects(
     keys: SuiKeystore,
@@ -196,11 +223,11 @@ pub fn test_shared_object_transactions() -> Vec<Transaction> {
     // Make one transaction per gas object (all containing the same shared object).
     let mut transactions = Vec::new();
     let shared_object_id = test_shared_object().id();
-    for gas_object in test_gas_objects() {
-        let module = "object_basics";
-        let function = "create";
-        let package_object_ref = genesis::get_framework_object_ref();
+    let module = "object_basics";
+    let function = "create";
+    let package_object_ref = genesis::get_framework_object_ref();
 
+    for gas_object in test_gas_objects() {
         let data = TransactionData::new_move_call(
             sender,
             package_object_ref,
@@ -349,8 +376,6 @@ pub fn move_transaction(
     package_ref: ObjectRef,
     arguments: Vec<CallArg>,
 ) -> Transaction {
-    // The key pair of the sender of the transaction.
-
     move_transaction_with_type_tags(gas_object, module, function, package_ref, &[], arguments)
 }
 
