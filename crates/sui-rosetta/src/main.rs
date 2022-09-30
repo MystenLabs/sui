@@ -117,8 +117,10 @@ impl RosettaServerCommand {
 
                 let node = SuiNode::start(&config, prometheus_registry).await?;
                 let quorum_driver = node
+                    .transaction_orchestrator()
+                    .ok_or_else(|| anyhow!("Quorum driver is None"))?
                     .quorum_driver()
-                    .ok_or_else(|| anyhow!("Quorum driver is None"))?;
+                    .clone();
 
                 let rosetta =
                     RosettaOnlineServer::new(env, node.state(), quorum_driver, config.genesis()?);
