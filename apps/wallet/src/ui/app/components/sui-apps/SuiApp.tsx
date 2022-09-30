@@ -6,7 +6,6 @@ import { memo, useState, useCallback } from 'react';
 
 import DisconnectApp from './DisconnectApp';
 import ExternalLink from '_components/external-link';
-
 import { useMiddleEllipsis } from '_hooks';
 import { trackEvent } from '_src/shared/plausible';
 
