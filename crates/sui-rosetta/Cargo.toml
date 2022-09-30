@@ -30,6 +30,7 @@ sui-types = { path = "../sui-types" }
 sui-core = { path = "../sui-core" }
 sui-node = { path = "../sui-node" }
 sui-config = { path = "../sui-config" }
+sui-sdk = { path = "../sui-sdk" }
 
 move-core-types = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e", features = ["address20"] }
 

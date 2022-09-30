@@ -6,6 +6,7 @@ use sui::client_commands::WalletContext;
 use sui_core::authority_client::NetworkAuthorityClient;
 use sui_core::transaction_orchestrator::TransactiondOrchestrator;
 use sui_node::SuiNode;
+use sui_sdk::crypto::AccountKeystore;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest};
 use sui_types::messages::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
@@ -155,7 +156,7 @@ async fn test_local_execution_with_missing_parents() -> Result<(), anyhow::Error
     let orchestrator =
         TransactiondOrchestrator::new(net, node.state(), node_sync_handle, &Registry::new());
 
-    let signer = context.keystore.addresses().get(0).cloned().unwrap();
+    let signer = context.config.keystore.addresses().get(0).cloned().unwrap();
     let (pkg_ref, counter_id) = publish_basics_package_and_make_counter(&context, signer).await;
 
     // 0. Execute with Quorum Driver
