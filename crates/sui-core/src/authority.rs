@@ -1900,7 +1900,9 @@ impl AuthorityState {
         &self,
         object_ref: &ObjectRef,
     ) -> Result<Option<SignedTransaction>, SuiError> {
-        self.database.get_transaction_lock(object_ref).await
+        self.database
+            .get_object_locking_transaction(object_ref)
+            .await
     }
 
     // Helper functions to manage certificates
