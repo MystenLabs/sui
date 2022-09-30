@@ -1,0 +1,47 @@
+[package]
+name = "narwhal-test-utils"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+publish = false
+
+[dependencies]
+arc-swap = { version = "1.5.1", features = ["serde"] }
+base64 = "0.13.0"
+bincode = "1.3.3"
+blake2 = "0.9"
+bytes = "1.2.1"
+derive_builder = "0.11.2"
+fdlimit = "0.2"
+futures = "0.3.24"
+indexmap = { version = "1.9.1", features = ["serde"] }
+itertools = "0.10.4"
+multiaddr = "0.14.0"
+prometheus = "0.13.2"
+rand = "0.8.5"
+serde = { version = "1.0.144", features = ["derive"] }
+tempfile = "3.3.0"
+thiserror = "1.0.35"
+tokio = { version = "1.20.1", features = ["sync", "rt", "macros"] }
+tokio-util = { version = "0.7.4", features = ["codec"] }
+tonic = "0.7.2"
+tracing = "0.1.36"
+
+config = { path = "../config", package = "narwhal-config" }
+fastcrypto = "0.1.2"
+crypto = { path = "../crypto", package = "narwhal-crypto" }
+executor = { path = "../executor", package = "narwhal-executor" }
+node = { path = "../node", package = "narwhal-node" }
+primary = { path = "../primary", package = "narwhal-primary" }
+network = { path = "../network", package = "narwhal-network" }
+types = { path = "../types", package = "narwhal-types" }
+worker = { path = "../worker", package = "narwhal-worker" }
+mysten-network = "0.1.0"
+
+store = { version = "0.1.0", package = "typed-store"}
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+telemetry-subscribers = "0.1.0"
+
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "b145cbcf4a1917197e2b9ee6a1523afdb623dbf2" }
+tower = { version = "0.4.13", features = ["full"] }
