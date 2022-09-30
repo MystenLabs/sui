@@ -120,12 +120,13 @@ export class Ed25519Keypair implements Keypair {
       throw new Error('Invalid derivation path');
     }
     const { key } = derivePath(path, mnemonicToSeedHex(mnemonics));    
+    const pubkey = getPublicKey(key, false);
     
     // Ed25519 private key returned here has 32 bytes. NaCl expects 64 bytes where the last 32 bytes are the public key. 
     let fullPrivateKey = new Uint8Array(64);
     fullPrivateKey.set(key);
-    fullPrivateKey.set(getPublicKey(key, false), 32);
+    fullPrivateKey.set(pubkey, 32);
 
-    return new Ed25519Keypair({ publicKey: getPublicKey(key), secretKey: fullPrivateKey });
+    return new Ed25519Keypair({ publicKey: pubkey, secretKey: fullPrivateKey });
   }
 }
