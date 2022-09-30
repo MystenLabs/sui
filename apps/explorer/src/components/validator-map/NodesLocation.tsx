@@ -14,7 +14,13 @@ const MIN_NODE_SIZE = 2;
 const MAX_NODE_SIZE = 7;
 
 export function NodesLocation({ node, projection }: Props) {
-    const position = projection(node.location);
+    const position = projection(
+        node.location
+            .split(',')
+            .reverse()
+            .map((geo) => parseFloat(geo)) as [number, number]
+    );
+
     const r = Math.max(
         Math.min(Math.floor(node.count / NODE_MULTIPLIER), MAX_NODE_SIZE),
         MIN_NODE_SIZE
