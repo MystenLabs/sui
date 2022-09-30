@@ -80,10 +80,9 @@ function TransactionCard({ txn }: { txn: TxResultState }) {
         : false;
 
     const transferSuiTxn = txn.kind === 'TransferSui' ? <span>SUI</span> : null;
-    const transferFailed =
-        txn.status !== 'success' ? (
-            <div className={st.transferFailed}>Failed</div>
-        ) : null;
+    const transferFailed = txn.error ? (
+        <div className={st.transferFailed}>{txn.error}</div>
+    ) : null;
 
     const txnsAddress = transferMeta[transferType]?.address ? (
         <div className={st.address}>
@@ -113,7 +112,10 @@ function TransactionCard({ txn }: { txn: TxResultState }) {
                 <div className={st.cardContent}>
                     <div className={st.txResult}>
                         <div className={cl(st.txTypeName, st.kind)}>
-                            {transferMeta[transferType].txName} {transferSuiTxn}
+                            {txn.error
+                                ? 'Transaction failed'
+                                : transferMeta[transferType].txName}{' '}
+                            {transferSuiTxn}
                         </div>
 
                         <div className={st.txTransferred}>

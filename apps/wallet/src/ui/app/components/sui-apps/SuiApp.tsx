@@ -6,7 +6,6 @@ import { memo, useState, useCallback } from 'react';
 
 import DisconnectApp from './DisconnectApp';
 import ExternalLink from '_components/external-link';
-import Icon, { SuiIcons } from '_components/icon';
 import { useMiddleEllipsis } from '_hooks';
 import { plausible } from '_src/shared/constants';
 
@@ -83,27 +82,9 @@ function SuiApp({
                 ) : (
                     <div className={st.defaultImg}></div>
                 )}
-                {displaytype === 'card' && (
-                    <Icon
-                        icon={SuiIcons.ArrowRight}
-                        className={cl(
-                            st.arrowActionIcon,
-                            st.angledArrow,
-                            st.externalLinkIcon
-                        )}
-                    />
-                )}
             </div>
             <div className={st.info}>
-                <div className={st.title}>
-                    {name}{' '}
-                    {displaytype === 'full' && (
-                        <Icon
-                            icon={SuiIcons.ArrowRight}
-                            className={cl(st.arrowActionIcon, st.angledArrow)}
-                        />
-                    )}
-                </div>
+                <div className={st.title}>{name} </div>
                 {displaytype === 'full' && (
                     <div className={st.description}>{description}</div>
                 )}
