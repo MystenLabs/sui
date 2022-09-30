@@ -10,6 +10,7 @@ import {
     arrow,
 } from '@floating-ui/react-dom-interactions';
 import cn from 'classnames';
+import { motion, AnimatePresence } from 'framer-motion';
 import { memo, useCallback, useMemo, useRef, useState } from 'react';
 
 import { appDisconnect } from './actions';
@@ -105,48 +106,61 @@ function DappStatus() {
                     <Icon icon={SuiIcons.ChevronDown} className={st.chevron} />
                 ) : null}
             </Component>
-            {visible ? (
-                <div
-                    className={st.popup}
-                    style={{ top: y || 0, left: x || 0 }}
-                    {...getFloatingProps()}
-                    ref={floating}
-                >
-                    <div className={st.popupContent}>
-                        <div className={st.originContainer}>
-                            {activeOriginFavIcon ? (
-                                <img
-                                    src={activeOriginFavIcon}
-                                    className={st.favicon}
-                                    alt="App Icon"
-                                />
-                            ) : null}
-                            <span className={st.originText}>
-                                <div>Connected to</div>
-                                <div className={st.originUrl}>
-                                    {activeOrigin}
-                                </div>
-                            </span>
+            <AnimatePresence>
+                {visible ? (
+                    <motion.div
+                        initial={{
+                            opacity: 0,
+                            scale: 0,
+                            y: 'calc(-50% - 15px)',
+                        }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0, y: 'calc(-50% - 15px)' }}
+                        transition={{
+                            duration: 0.3,
+                            ease: 'anticipate',
+                        }}
+                        className={st.popup}
+                        style={{ top: y || 0, left: x || 0 }}
+                        {...getFloatingProps()}
+                        ref={floating}
+                    >
+                        <div className={st.popupContent}>
+                            <div className={st.originContainer}>
+                                {activeOriginFavIcon ? (
+                                    <img
+                                        src={activeOriginFavIcon}
+                                        className={st.favicon}
+                                        alt="App Icon"
+                                    />
+                                ) : null}
+                                <span className={st.originText}>
+                                    <div>Connected to</div>
+                                    <div className={st.originUrl}>
+                                        {activeOrigin}
+                                    </div>
+                                </span>
+                            </div>
+                            <div className={st.divider} />
+                            <Loading loading={disconnecting}>
+                                <button
+                                    type="button"
+                                    className={st.disconnect}
+                                    onClick={onHandleDisconnect}
+                                    disabled={disconnecting}
+                                >
+                                    Disconnect App
+                                </button>
+                            </Loading>
                         </div>
-                        <div className={st.divider} />
-                        <Loading loading={disconnecting}>
-                            <button
-                                type="button"
-                                className={st.disconnect}
-                                onClick={onHandleDisconnect}
-                                disabled={disconnecting}
-                            >
-                                Disconnect App
-                            </button>
-                        </Loading>
-                    </div>
-                    <div
-                        className={st.popupArrow}
-                        ref={arrowRef}
-                        style={{ left: arrowData?.x || 0 }}
-                    />
-                </div>
-            ) : null}
+                        <div
+                            className={st.popupArrow}
+                            ref={arrowRef}
+                            style={{ left: arrowData?.x || 0 }}
+                        />
+                    </motion.div>
+                ) : null}
+            </AnimatePresence>
         </>
     );
 }
