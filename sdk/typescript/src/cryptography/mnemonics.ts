@@ -1,6 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import bip39 from '@scure/bip39';
+import { mnemonicToSeedSync as bip39MnemonicToSeedSync } from '@scure/bip39';
 
 /**
  * Parse and validate a path that is compliant to SLIP-0010 in form m/44'/784'/{account_index}'/{change_index}'/{address_index}'.
@@ -33,7 +33,7 @@ export function isValidBIP32Path(path: string): boolean {
  * @param mnemonics 12 words string split by spaces.
  */
 export function mnemonicToSeed(mnemonics: string): Uint8Array {
-  return bip39.mnemonicToSeedSync(mnemonics, '');
+  return bip39MnemonicToSeedSync(mnemonics, '');
 }
 
 /**
