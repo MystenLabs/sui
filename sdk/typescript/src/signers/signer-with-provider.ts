@@ -22,6 +22,7 @@ import {
   TransferSuiTransaction,
   TxnDataSerializer,
   PublishTransaction,
+  SignableTransaction,
 } from './txn-data-serializers/txn-data-serializer';
 
 ///////////////////////////////
@@ -61,39 +62,92 @@ export abstract class SignerWithProvider implements Signer {
   }
 
   /**
-   * Sign a transaction and submit to the Gateway for execution
-   * @experimental
-   * @param txBytes BCS serialised TransactionData bytes
+   * @experimental Sign a transaction and submit to the Gateway for execution
    */
   async signAndExecuteTransaction(
-    txBytes: Base64DataBuffer
+    transaction: Base64DataBuffer | SignableTransaction
   ): Promise<SuiTransactionResponse> {
-    const sig = await this.signData(txBytes);
-    return await this.provider.executeTransaction(
-      txBytes.toString(),
-      sig.signatureScheme,
-      sig.signature.toString(),
-      sig.pubKey.toString()
-    );
+    // Handle submitting raw transaction bytes:
+    if (transaction instanceof Base64DataBuffer || 'bytes' in transaction) {
+      const txBytes =
+        transaction instanceof Base64DataBuffer
+          ? transaction
+          : new Base64DataBuffer(transaction.bytes);
+
+      const sig = await this.signData(txBytes);
+      return await this.provider.executeTransaction(
+        txBytes.toString(),
+        sig.signatureScheme,
+        sig.signature.toString(),
+        sig.pubKey.toString()
+      );
+    }
+
+    if ('moveCall' in transaction) {
+      return this.executeMoveCall(transaction.moveCall);
+    } else if ('transferSui' in transaction) {
+      return this.transferSui(transaction.transferSui);
+    } else if ('transferObject' in transaction) {
+      return this.transferObject(transaction.transferObject);
+    } else if ('mergeCoin' in transaction) {
+      return this.mergeCoin(transaction.mergeCoin);
+    } else if ('splitCoin' in transaction) {
+      return this.splitCoin(transaction.splitCoin);
+    } else if ('pay' in transaction) {
+      return this.pay(transaction.pay);
+    }
+
+    throw new Error('Unknown transaction provided.');
   }
 
   /**
    * @experimental Sign a transaction and submit to the Fullnode for execution
-   *
-   * @param txBytes BCS serialised TransactionData bytes
    */
   async signAndExecuteTransactionWithRequestType(
-    txBytes: Base64DataBuffer,
+    transaction: Base64DataBuffer | SignableTransaction,
     requestType: ExecuteTransactionRequestType
   ): Promise<SuiExecuteTransactionResponse> {
-    const sig = await this.signData(txBytes);
-    return await this.provider.executeTransactionWithRequestType(
-      txBytes.toString(),
-      sig.signatureScheme,
-      sig.signature.toString(),
-      sig.pubKey.toString(),
-      requestType
-    );
+    // Handle submitting raw transaction bytes:
+    if (transaction instanceof Base64DataBuffer || 'bytes' in transaction) {
+      const txBytes =
+        transaction instanceof Base64DataBuffer
+          ? transaction
+          : new Base64DataBuffer(transaction.bytes);
+
+      const sig = await this.signData(txBytes);
+      return await this.provider.executeTransactionWithRequestType(
+        txBytes.toString(),
+        sig.signatureScheme,
+        sig.signature.toString(),
+        sig.pubKey.toString(),
+        requestType
+      );
+    }
+
+    if ('moveCall' in transaction) {
+      return this.executeMoveCallWithRequestType(
+        transaction.moveCall,
+        requestType
+      );
+    } else if ('transferSui' in transaction) {
+      return this.transferSuiWithRequestType(
+        transaction.transferSui,
+        requestType
+      );
+    } else if ('transferObject' in transaction) {
+      return this.transferObjectWithRequestType(
+        transaction.transferObject,
+        requestType
+      );
+    } else if ('mergeCoin' in transaction) {
+      return this.mergeCoinWithRequestType(transaction.mergeCoin, requestType);
+    } else if ('splitCoin' in transaction) {
+      return this.splitCoinWithRequestType(transaction.splitCoin, requestType);
+    } else if ('pay' in transaction) {
+      return this.payWithRequestType(transaction.pay, requestType);
+    }
+
+    throw new Error('Unknown transaction provided.');
   }
 
   /**

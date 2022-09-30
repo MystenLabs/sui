@@ -16,7 +16,7 @@ export interface WalletCapabilities {
   // Connection Management
   connect: () => Promise<void>;
   disconnect: () => Promise<void>;
-  signAndSendTransaction?(
+  signAndExecuteTransaction?(
     transaction: SignableTransaction
   ): Promise<SuiTransactionResponse>;
   // DappInterfaces

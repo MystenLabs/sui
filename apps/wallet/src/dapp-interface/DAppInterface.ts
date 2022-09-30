@@ -90,7 +90,7 @@ export class DAppInterface {
         );
     }
 
-    public signAndSendTransaction(transaction: SignableTransaction) {
+    public signAndExecuteTransaction(transaction: SignableTransaction) {
         return mapToPromise(
             this.send<ExecuteTransactionRequest, ExecuteTransactionResponse>({
                 type: 'execute-transaction-request',
