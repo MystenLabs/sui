@@ -28,7 +28,7 @@ sui-node = { path = "../sui-node" }
 
 mysten-network.workspace = true
 move-package.workspace = true
-workspace-hack = { path = "../workspace-hack"}
+workspace-hack.workspace = true
 
 [dev-dependencies]
 test-utils = { path = "../test-utils" }

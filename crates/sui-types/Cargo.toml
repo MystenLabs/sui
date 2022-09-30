@@ -52,12 +52,12 @@ move-disassembler.workspace = true
 move-ir-types.workspace = true
 move-vm-types.workspace = true
 
-narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "103b9f481f321620ee3054e7964c7211f1a335d3" }
+narwhal-executor = { path = "../../narwhal/executor" }
 
 fastcrypto = { version = "0.1.2", features = ["copy_key"] }
 
 sui-cost-tables = { path = "../sui-cost-tables"}
-workspace-hack = { path = "../workspace-hack"}
+workspace-hack.workspace = true
 
 [dev-dependencies]
 bincode = "1.3.3"

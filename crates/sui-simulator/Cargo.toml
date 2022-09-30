@@ -7,7 +7,7 @@ publish = false
 edition = "2021"
 
 [dependencies]
-workspace-hack = { path = "../workspace-hack"}
+workspace-hack.workspace = true
 sui-framework = { path = "../sui-framework" }
 telemetry-subscribers.workspace = true
 tracing = "0.1"

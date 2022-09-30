@@ -32,4 +32,4 @@ sui-core = { path = "../sui-core" }
 sui-json = { path = "../sui-json" }
 sui-config = { path = "../sui-config" }
 test-utils = { path = "../test-utils" }
-workspace-hack = { path = "../workspace-hack"}
+workspace-hack.workspace = true

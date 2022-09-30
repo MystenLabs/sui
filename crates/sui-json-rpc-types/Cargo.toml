@@ -25,4 +25,4 @@ move-bytecode-utils.workspace = true
 
 sui-types = { path = "../sui-types" }
 sui-json = { path = "../sui-json" }
-workspace-hack = { path = "../workspace-hack"}
+workspace-hack.workspace = true

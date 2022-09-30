@@ -1,0 +1,10 @@
+
+/crypto/ @huitseeker @kchalkias
+/executor/ @asonnino @akichidis
+/examples/ @arun-koshy
+/network/ @bmwill
+/config/tests/snapshots/ @huitseeker
+/dag/ @huitseeker
+/storage/ @akichidis
+/primary/src/block_synchronizer/ @akichidis
+/primary/src/block_waiter.rs @akichidis

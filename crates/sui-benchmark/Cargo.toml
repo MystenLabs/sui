@@ -43,8 +43,8 @@ sui-node = { path = "../sui-node" }
 sui-json-rpc-types = { path = "../sui-json-rpc-types" }
 
 move-core-types.workspace = true
-narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "103b9f481f321620ee3054e7964c7211f1a335d3" }
-workspace-hack = { path = "../workspace-hack"}
+narwhal-node = { path = "../../narwhal/node" }
+workspace-hack.workspace = true
 test-utils = { path = "../test-utils" }
 
 [target.'cfg(msim)'.dependencies]
