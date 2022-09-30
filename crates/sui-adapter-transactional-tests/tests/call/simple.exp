@@ -11,5 +11,4 @@ written: object(104)
 task 3 'view-object'. lines 32-32:
 Owner: Account Address ( A )
 Version: 1
-Child Count: None
 Contents: Test::M1::Object {id: sui::object::UID {id: sui::object::ID {bytes: fake(105)}}, value: 0u64}

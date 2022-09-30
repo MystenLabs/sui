@@ -146,7 +146,7 @@ fn execute_internal<
     type_args: Vec<TypeTag>,
     args: Vec<Vec<u8>>,
     has_ctx_arg: bool,
-    object_data: BTreeMap<ObjectID, (object::Owner, SequenceNumber, Option<u32>)>,
+    object_data: BTreeMap<ObjectID, (object::Owner, SequenceNumber)>,
     by_value_objects: BTreeSet<ObjectID>,
     mut mutable_ref_objects: BTreeMap<LocalIndex, ObjectID>,
     gas_status: &mut SuiGasStatus, // gas status for the current call operation
@@ -158,7 +158,7 @@ fn execute_internal<
     // by objects.
     let object_owner_map: BTreeMap<SuiAddress, SuiAddress> = object_data
         .iter()
-        .filter_map(|(id, (owner, _, _))| match owner {
+        .filter_map(|(id, (owner, _))| match owner {
             Owner::ObjectOwner(owner) => Some(((*id).into(), *owner)),
             _ => None,
         })
@@ -460,7 +460,7 @@ fn process_successful_execution<
 >(
     state_view: &mut S,
     module_id: &ModuleId,
-    mut by_value_objects: BTreeMap<ObjectID, (object::Owner, SequenceNumber, Option<u32>)>,
+    mut by_value_objects: BTreeMap<ObjectID, (object::Owner, SequenceNumber)>,
     mutable_refs: Vec<(ObjectID, Vec<u8>)>,
     events: Vec<MoveEvent>,
     ctx: &TxContext,
@@ -487,9 +487,6 @@ fn process_successful_execution<
     // It's a bit hacky. Ideally, we want `newly_generated_ids` to include it. But it's unclear how.
     let mut newly_generated_ids = ctx.recreate_all_ids();
     let mut frozen_object_ids = BTreeSet::new();
-    let mut child_count_deltas: BTreeMap<ObjectID, i64> = BTreeMap::new();
-    let mut newly_generated_deleted = BTreeSet::new();
-    let mut newly_generated_unused = newly_generated_ids.clone();
     // process events to identify transfers, freezes
     for e in events {
         let (recipient, event_type, type_, abilities, event_bytes) = e;
@@ -523,9 +520,7 @@ fn process_successful_execution<
                     module_id,
                     &mut object_owner_map,
                     &mut newly_generated_ids,
-                    &mut newly_generated_unused,
                     &mut frozen_object_ids,
-                    &mut child_count_deltas,
                 )?;
                 changes.insert(obj.id(), ObjectChange::Write(obj, write_kind));
             }
@@ -534,30 +529,15 @@ fn process_successful_execution<
                 // native call delete_id, which guarantees the type of the id.
                 let uid: UID = bcs::from_bytes(&event_bytes).unwrap();
                 let obj_id = uid.object_id();
-                newly_generated_unused.remove(obj_id);
-                if newly_generated_ids.contains(obj_id) {
-                    // we will need to make sure that this deleted object did not receive any
-                    // children
-                    newly_generated_deleted.insert(*obj_id);
-                } else {
+                if !newly_generated_ids.contains(obj_id) {
                     match by_value_objects.remove(obj_id) {
-                        Some((owner, version, child_count_opt)) => {
+                        Some((_owner, version)) => {
                             state_view.log_event(Event::delete_object(
                                 module_id.address(),
                                 module_id.name(),
                                 ctx.sender(),
                                 *obj_id,
                             ));
-                            if let Owner::ObjectOwner(parent_id) = owner {
-                                let delta = child_count_deltas.entry(parent_id.into()).or_insert(0);
-                                *delta -= 1
-                            }
-                            // update the child_count for the object being deleted
-                            // this must be zero at the end
-                            if let Some(child_count) = child_count_opt {
-                                let delta = child_count_deltas.entry(*obj_id).or_insert(0);
-                                *delta += child_count as i64;
-                            }
                             changes
                                 .insert(*obj_id, ObjectChange::Delete(version, DeleteKind::Normal));
                         }
@@ -623,99 +603,12 @@ fn process_successful_execution<
     // frozen, shared, or deleted.
     // This means that either the object was wrapped inside another object that is in the Sui object
     // pool
-    for (id, (owner, version, child_count_opt)) in by_value_objects {
-        if let Owner::ObjectOwner(parent) = owner {
-            let delta = child_count_deltas.entry(parent.into()).or_insert(0);
-            *delta -= 1
-        }
-        if let Some(child_count) = child_count_opt {
-            let delta = child_count_deltas.entry(id).or_insert(0);
-            *delta += child_count as i64;
-        }
+    for (id, (_owner, version)) in by_value_objects {
         changes.insert(id, ObjectChange::Delete(version, DeleteKind::Wrap));
-    }
-
-    // Check validity of child object counts
-    // - Any newly generated, and then deleted object, cannot have child objects
-    // - Any deleted object (wrapped or deleted) cannot have child objects
-    // - Any frozen object (made immutable) cannot have child objects
-    for id in newly_generated_deleted {
-        // check that the newly generated (but not used) object does not have children
-        // we remove it here as it is not needed for updating the written object child counts
-        let delta = child_count_deltas.remove(&id).unwrap_or(0);
-        if delta != 0 {
-            return Err(ExecutionErrorKind::InvalidParentDeletion {
-                parent: id,
-                kind: None,
-            }
-            .into());
-        }
-    }
-
-    for id in newly_generated_unused {
-        // check that any remaining non-zero delta was created this transaction and wrapped
-        // we remove it here as it is not needed for updating the written object child counts
-        let delta = child_count_deltas.remove(&id).unwrap_or(0);
-        if delta != 0 {
-            debug_assert!(delta > 0);
-            return Err(ExecutionErrorKind::InvalidParentDeletion {
-                parent: id,
-                kind: Some(DeleteKind::Wrap),
-            }
-            .into());
-        }
-    }
-
-    // check that all deleted objects have a child count of zero
-    for (id, delta) in child_count_deltas {
-        if delta == 0 {
-            continue;
-        }
-        let change = changes.entry(id).or_insert_with(|| {
-            let mut object = state_view.read_object(&id).unwrap().clone();
-            // Active input object must be Move object.
-            object.data.try_as_move_mut().unwrap().increment_version();
-            ObjectChange::Write(object, WriteKind::Mutate)
-        });
-        match change {
-            ObjectChange::Write(object, _) => {
-                object
-                    .data
-                    .try_as_move_mut()
-                    .expect("must be move object")
-                    .change_child_count(delta)
-                    .map_err(|()| ExecutionErrorKind::TooManyChildObjects { object: id })?;
-            }
-            ObjectChange::Delete(_, kind) => {
-                if delta != 0 {
-                    return Err(ExecutionErrorKind::InvalidParentDeletion {
-                        parent: id,
-                        kind: Some(*kind),
-                    }
-                    .into());
-                }
-            }
-        }
     }
 
     // apply object writes and object deletions
     state_view.apply_object_changes(changes);
-
-    // check all frozen objects have a child count of zero
-    for frozen_object_id in frozen_object_ids {
-        let frozen_object = state_view
-            .read_object(&frozen_object_id)
-            .unwrap()
-            .data
-            .try_as_move()
-            .unwrap();
-        if frozen_object.child_count().unwrap_or(0) != 0 {
-            return Err(ExecutionErrorKind::InvalidParentFreezing {
-                parent: frozen_object_id,
-            }
-            .into());
-        }
-    }
 
     Ok(())
 }
@@ -731,14 +624,12 @@ fn handle_transfer<
     abilities: AbilitySet,
     contents: Vec<u8>,
     tx_digest: TransactionDigest,
-    by_value_objects: &mut BTreeMap<ObjectID, (object::Owner, SequenceNumber, Option<u32>)>,
+    by_value_objects: &mut BTreeMap<ObjectID, (object::Owner, SequenceNumber)>,
     state_view: &mut S,
     module_id: &ModuleId,
     object_owner_map: &mut BTreeMap<SuiAddress, SuiAddress>,
     newly_generated_ids: &mut BTreeSet<ObjectID>,
-    newly_generated_unused: &mut BTreeSet<ObjectID>,
     frozen_object_ids: &mut BTreeSet<ObjectID>,
-    child_count_deltas: &mut BTreeMap<ObjectID, i64>,
 ) -> Result<(Object, WriteKind), ExecutionError> {
     let s_type = match type_ {
         TypeTag::Struct(s_type) => s_type,
@@ -748,18 +639,17 @@ fn handle_transfer<
     debug_assert!(abilities.has_key(), "objects should have key");
     let id = ObjectID::try_from(&contents[0..ID_END_INDEX])
         .expect("object contents should start with an id");
-    newly_generated_unused.remove(&id);
     let old_object = by_value_objects.remove(&id);
     let mut is_unwrapped = !(newly_generated_ids.contains(&id) || id == SUI_SYSTEM_STATE_OBJECT_ID);
-    let (write_kind, version, child_count) = match old_object {
-        Some((_, version, child_count)) => (WriteKind::Mutate, version, child_count),
+    let (write_kind, version) = match old_object {
+        Some((_, version)) => (WriteKind::Mutate, version),
         // When an object was wrapped at version `v`, we added an record into `parent_sync`
         // with version `v+1` along with OBJECT_DIGEST_WRAPPED. Now when the object is unwrapped,
         // it will also have version `v+1`, leading to a violation of the invariant that any
         // object_id and version pair must be unique. We use the version from parent_sync and
         // increment it (below), so we will have `(v+1)+1`, thus preserving the uniqueness
         None if is_unwrapped => match state_view.get_latest_parent_entry_ref(id) {
-            Ok(Some((_, last_version, _))) => (WriteKind::Unwrap, last_version, None),
+            Ok(Some((_, last_version, _))) => (WriteKind::Unwrap, last_version),
             // if the object is not in parent sync, it was wrapped before ever being stored into
             // storage.
             // we set is_unwrapped to false since the object has never been in storage
@@ -767,7 +657,7 @@ fn handle_transfer<
             Ok(None) => {
                 is_unwrapped = false;
                 newly_generated_ids.insert(id);
-                (WriteKind::Create, SequenceNumber::new(), None)
+                (WriteKind::Create, SequenceNumber::new())
             }
             Err(_) => {
                 // TODO this error is (hopefully) transient and should not be
@@ -778,13 +668,12 @@ fn handle_transfer<
                 ));
             }
         },
-        None => (WriteKind::Create, SequenceNumber::new(), None),
+        None => (WriteKind::Create, SequenceNumber::new()),
     };
 
     // safe because `has_public_transfer` was properly determined from the abilities
-    let mut move_obj = unsafe {
-        MoveObject::new_from_execution(s_type, has_public_transfer, version, child_count, contents)
-    };
+    let mut move_obj =
+        unsafe { MoveObject::new_from_execution(s_type, has_public_transfer, version, contents) };
 
     debug_assert_eq!(id, move_obj.id());
 
@@ -803,12 +692,7 @@ fn handle_transfer<
     //   2. Created in this transaction (in `newly_generated_ids`)
     //   3. Unwrapped in this transaction
     // The following condition checks if this object was unwrapped in this transaction.
-    if let Some((old_owner, old_obj_ver, _)) = old_object {
-        // decrement old owner count
-        if let Owner::ObjectOwner(old_parent) = old_owner {
-            let delta = child_count_deltas.entry(old_parent.into()).or_insert(0);
-            *delta -= 1
-        }
+    if let Some((_old_owner, old_obj_ver)) = old_object {
         // Some kind of transfer since there's an old object
         // Add an event for the transfer
         let transfer_type = match recipient {
@@ -861,8 +745,6 @@ fn handle_transfer<
             frozen_object_ids.insert(id);
         }
         Owner::ObjectOwner(new_owner) => {
-            let delta = child_count_deltas.entry(new_owner.into()).or_insert(0);
-            *delta += 1;
             // Below we check whether the transfer introduced any circular ownership.
             // We know that for any mutable object, all its ancenstors (if it was owned by another object)
             // must be in the input as well. Prior to this we have recorded the original ownership mapping
@@ -885,20 +767,19 @@ fn handle_transfer<
 #[cfg(debug_assertions)]
 fn check_transferred_object_invariants(
     new_object: &MoveObject,
-    old_object: &Option<(object::Owner, SequenceNumber, Option<u32>)>,
+    old_object: &Option<(object::Owner, SequenceNumber)>,
 ) {
-    if let Some((_owner, old_version, old_child_count)) = old_object {
+    if let Some((_owner, old_version)) = old_object {
         // check consistency between the transferred object `new_object` and the tx input `o`
         // specifically, the object id, type, and version should be unchanged
         // we can only check the version here
         debug_assert_eq!(*old_version, new_object.version());
-        debug_assert_eq!(*old_child_count, new_object.child_count());
     }
 }
 
 pub struct TypeCheckSuccess {
     pub module_id: ModuleId,
-    pub object_data: BTreeMap<ObjectID, (object::Owner, SequenceNumber, Option<u32>)>,
+    pub object_data: BTreeMap<ObjectID, (object::Owner, SequenceNumber)>,
     pub by_value_objects: BTreeSet<ObjectID>,
     pub mutable_ref_objects: BTreeMap<LocalIndex, ObjectID>,
     pub args: Vec<Vec<u8>>,
@@ -1240,7 +1121,7 @@ fn serialize_object<'a>(
     idx: LocalIndex,
     param_type: &'a SignatureToken,
     objects: &'a BTreeMap<ObjectID, impl Borrow<Object>>,
-    object_data: &mut BTreeMap<ObjectID, (Owner, SequenceNumber, Option<u32>)>,
+    object_data: &mut BTreeMap<ObjectID, (Owner, SequenceNumber)>,
     mutable_ref_objects: &mut BTreeMap<u8, ObjectID>,
     by_value_objects: &mut BTreeSet<ObjectID>,
     object_type_map: &mut BTreeMap<ObjectID, ModuleId>,
@@ -1318,10 +1199,7 @@ fn serialize_object<'a>(
     )?;
 
     object_type_map.insert(object_id, move_object.type_.module_id());
-    object_data.insert(
-        object_id,
-        (object.owner, object.version(), move_object.child_count()),
-    );
+    object_data.insert(object_id, (object.owner, object.version()));
     Ok((
         move_object.contents().to_vec(),
         &move_object.type_,

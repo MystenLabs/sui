@@ -14,7 +14,6 @@ written: object(106)
 task 3 'view-object'. lines 26-26:
 Owner: Immutable
 Version: 1
-Child Count: None
 Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(107)}}}
 
 task 4 'transfer-object'. lines 28-28:
@@ -24,5 +23,4 @@ Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { k
 task 5 'view-object'. lines 30-30:
 Owner: Immutable
 Version: 1
-Child Count: None
 Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(107)}}}

@@ -283,8 +283,6 @@ MoveObject:
     - has_public_transfer: BOOL
     - version:
         TYPENAME: SequenceNumber
-    - child_count:
-        OPTION: U32
     - contents: BYTES
 MovePackage:
   STRUCT:

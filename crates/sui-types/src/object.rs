@@ -39,9 +39,6 @@ pub struct MoveObject {
     /// Derived from the type_
     has_public_transfer: bool,
     version: SequenceNumber,
-    /// The number of immediate children for this object.
-    /// It is an option to reduce object size, as most objects will not have children.
-    child_count: Option<u32>,
     #[serde_as(as = "Bytes")]
     contents: Vec<u8>,
 }
@@ -74,31 +71,25 @@ impl MoveObject {
         type_: StructTag,
         has_public_transfer: bool,
         version: SequenceNumber,
-        child_count: Option<u32>,
         contents: Vec<u8>,
     ) -> Self {
         // coins should always have public transfer, as they always should have store.
         // Thus, type_ == GasCoin::type_() ==> has_public_transfer
         debug_assert!(type_ != GasCoin::type_() || has_public_transfer);
-        let child_count = match child_count {
-            Some(0) => None,
-            cc => cc,
-        };
         Self {
             type_,
             has_public_transfer,
-            child_count,
             version,
             contents,
         }
     }
 
     pub fn new_gas_coin(version: SequenceNumber, contents: Vec<u8>) -> Self {
-        unsafe { Self::new_from_execution(GasCoin::type_(), true, version, None, contents) }
+        unsafe { Self::new_from_execution(GasCoin::type_(), true, version, contents) }
     }
 
     pub fn new_coin(coin_type: StructTag, version: SequenceNumber, contents: Vec<u8>) -> Self {
-        unsafe { Self::new_from_execution(coin_type, true, version, None, contents) }
+        unsafe { Self::new_from_execution(coin_type, true, version, contents) }
     }
 
     pub fn has_public_transfer(&self) -> bool {
@@ -111,11 +102,6 @@ impl MoveObject {
 
     pub fn version(&self) -> SequenceNumber {
         self.version
-    }
-
-    pub fn child_count(&self) -> Option<u32> {
-        debug_assert_ne!(self.child_count, Some(0));
-        self.child_count
     }
 
     /// Contents of the object that are specific to its type--i.e., not its ID and version, which all objects have
@@ -155,34 +141,6 @@ impl MoveObject {
     /// Increase the version of this object by one
     pub fn increment_version(&mut self) {
         self.version = self.version.increment();
-    }
-
-    #[allow(clippy::result_unit_err)]
-    pub fn change_child_count(&mut self, delta: i64) -> Result<(), ()> {
-        Self::apply_child_count_delta(&mut self.child_count, delta)
-    }
-
-    #[allow(clippy::result_unit_err)]
-    pub fn apply_child_count_delta(child_count: &mut Option<u32>, delta: i64) -> Result<(), ()> {
-        let ichild_count = child_count.unwrap_or(0) as i64;
-        debug_assert!(
-            delta > 0 || ichild_count >= delta.abs(),
-            "apply_child_count_delta should only be called by values generated via Move. \
-            As such, it is an invariant that the delta doesn't pull the count negative"
-        );
-        let new_child_count: i64 = match ichild_count.checked_add(delta) {
-            None => return Err(()),
-            Some(n) => n,
-        };
-        debug_assert!(new_child_count >= 0);
-        let new_child_count: u32 = new_child_count.try_into().map_err(|_| ())?;
-        let new_child_count = if new_child_count == 0 {
-            None
-        } else {
-            Some(new_child_count)
-        };
-        *child_count = new_child_count;
-        Ok(())
     }
 
     pub fn contents(&self) -> &[u8] {
@@ -251,17 +209,9 @@ impl MoveObject {
     pub fn object_size_for_gas_metering(&self) -> usize {
         let seriealized_type_tag =
             bcs::to_bytes(&self.type_).expect("Serializing type tag should not fail");
-        let child_count_size = if self.child_count.is_some() {
-            // 1 for option enum variant
-            // 4 for u32
-            5
-        } else {
-            // 1 for option enum variant
-            1
-        };
         // + 1 for 'has_public_transfer'
         // + 8 for `version`
-        self.contents.len() + seriealized_type_tag.len() + child_count_size + 1 + 8
+        self.contents.len() + seriealized_type_tag.len() + 1 + 8
     }
 }
 
@@ -528,7 +478,6 @@ impl Object {
             type_: GasCoin::type_(),
             has_public_transfer: true,
             version: SequenceNumber::new(),
-            child_count: None,
             contents: GasCoin::new(id, GAS_VALUE_FOR_TESTING).to_bcs_bytes(),
         });
         Self {
@@ -544,7 +493,6 @@ impl Object {
             type_: GasCoin::type_(),
             has_public_transfer: true,
             version: SequenceNumber::new(),
-            child_count: None,
             contents: GasCoin::new(id, gas).to_bcs_bytes(),
         });
         Self {
@@ -560,7 +508,6 @@ impl Object {
             type_: GasCoin::type_(),
             has_public_transfer: true,
             version: SequenceNumber::new(),
-            child_count: None,
             contents: GasCoin::new(id, GAS_VALUE_FOR_TESTING).to_bcs_bytes(),
         });
         Self {
@@ -585,7 +532,6 @@ impl Object {
             type_: GasCoin::type_(),
             has_public_transfer: true,
             version,
-            child_count: None,
             contents: GasCoin::new(id, GAS_VALUE_FOR_TESTING).to_bcs_bytes(),
         });
         Self {
