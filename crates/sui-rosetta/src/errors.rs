@@ -18,6 +18,8 @@ use sui_types::error::SuiError;
 
 use crate::types::OperationType;
 
+/// Sui-Rosetta specific error types.
+/// This contains all the errors returns by the sui-rosetta server.
 #[derive(Eq, PartialEq, Copy, Clone, Debug, Serialize, Deserialize, EnumIter)]
 #[serde(rename_all = "lowercase")]
 pub enum ErrorType {

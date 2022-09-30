@@ -20,6 +20,7 @@ use crate::state::{OnlineServerContext, PseudoBlockProvider};
 use crate::types::{Currency, SuiEnv};
 use crate::ErrorType::{UnsupportedBlockchain, UnsupportedNetwork};
 
+/// This lib implements the Rosetta online and offline server defined by the [Rosetta API Spec](https://www.rosetta-api.org/docs/Reference.html)
 mod account;
 mod block;
 mod construction;

@@ -73,7 +73,7 @@ pub trait BlockProvider {
 #[derive(Clone)]
 pub struct PseudoBlockProvider {
     blocks: Arc<RwLock<Vec<BlockResponse>>>,
-    balance: Arc<RwLock<BTreeMap<SuiAddress, BTreeMap<u64, u128>>>>,
+    balance: Arc<RwLock<BTreeMap<SuiAddress, Vec<HistoricBalance>>>>,
 }
 
 #[async_trait]
@@ -143,7 +143,11 @@ impl BlockProvider for PseudoBlockProvider {
         block_height: u64,
     ) -> Result<u128, Error> {
         if let Some(balances) = self.balance.read().await.get(&addr) {
-            for (blk_idx, balance) in balances.iter().rev() {
+            for HistoricBalance {
+                block_height: blk_idx,
+                balance,
+            } in balances.iter().rev()
+            {
                 if blk_idx <= &block_height {
                     return Ok(*balance);
                 }
@@ -195,6 +199,7 @@ impl PseudoBlockProvider {
         }
         if current_block.index < total_tx {
             // Make sure we don't hit the query limit.
+            // TODO: replace this with pagination when it's available.
             let end = min(4000 + current_block.index, total_tx);
             let tx_digests = state.get_transactions_in_range(current_block.index, end)?;
             let mut index = current_block.index;
@@ -265,7 +270,11 @@ impl PseudoBlockProvider {
 
         for (addr, value) in balance_changes {
             let balance = balances.entry(addr).or_default();
-            let current_balance = balance.iter().last().map(|(_, b)| *b).unwrap_or_default();
+            let current_balance = balance
+                .iter()
+                .last()
+                .map(|HistoricBalance { balance, .. }| *balance)
+                .unwrap_or_default();
             let new_balance = if value.is_negative() {
                 assert!(
                     current_balance >= value.abs(),
@@ -277,10 +286,18 @@ impl PseudoBlockProvider {
             } else {
                 current_balance + value.abs()
             };
-            balance.insert(block_height, new_balance);
+            balance.push(HistoricBalance {
+                block_height,
+                balance: new_balance,
+            });
         }
         Ok(())
     }
+}
+
+struct HistoricBalance {
+    block_height: u64,
+    balance: u128,
 }
 
 fn extract_balance_changes_from_ops(

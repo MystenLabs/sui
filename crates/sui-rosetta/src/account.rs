@@ -1,5 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+//! This module implements the [Rosetta Account API](https://www.rosetta-api.org/docs/AccountApi.html)
 
 use std::sync::Arc;
 
@@ -17,16 +18,19 @@ use crate::types::{
 };
 use crate::{ErrorType, OnlineServerContext, SuiEnv, SUI};
 
+/// Get an array of all AccountBalances for an AccountIdentifier and the BlockIdentifier
+/// at which the balance lookup was performed.
+/// [Rosetta API Spec](https://www.rosetta-api.org/docs/AccountApi.html#accountbalance)
 pub async fn balance(
-    Json(payload): Json<AccountBalanceRequest>,
+    Json(request): Json<AccountBalanceRequest>,
     Extension(context): Extension<Arc<OnlineServerContext>>,
     Extension(env): Extension<SuiEnv>,
 ) -> Result<AccountBalanceResponse, Error> {
-    env.check_network_identifier(&payload.network_identifier)?;
+    env.check_network_identifier(&request.network_identifier)?;
 
-    let block_id = if let Some(index) = payload.block_identifier.index {
+    let block_id = if let Some(index) = request.block_identifier.index {
         context.blocks().get_block_by_index(index).await.ok()
-    } else if let Some(hash) = payload.block_identifier.hash {
+    } else if let Some(hash) = request.block_identifier.hash {
         context.blocks().get_block_by_hash(hash).await.ok()
     } else {
         None
@@ -36,14 +40,14 @@ pub async fn balance(
     if let Some(block_identifier) = block_id {
         context
             .blocks()
-            .get_balance_at_block(payload.account_identifier.address, block_identifier.index)
+            .get_balance_at_block(request.account_identifier.address, block_identifier.index)
             .await
             .map(|balance| AccountBalanceResponse {
                 block_identifier,
                 balances: vec![Amount::new(balance.into())],
             })
     } else {
-        let gas_coins = get_coins(&context.state, payload.account_identifier.address).await?;
+        let gas_coins = get_coins(&context.state, request.account_identifier.address).await?;
         let amount: u128 = gas_coins.iter().map(|coin| coin.amount.value.abs()).sum();
         Ok(AccountBalanceResponse {
             block_identifier: context.blocks().current_block_identifier().await?,
@@ -52,13 +56,15 @@ pub async fn balance(
     }
 }
 
+/// Get an array of all unspent coins for an AccountIdentifier and the BlockIdentifier at which the lookup was performed. .
+/// [Rosetta API Spec](https://www.rosetta-api.org/docs/AccountApi.html#accountcoins)
 pub async fn coins(
-    Json(payload): Json<AccountCoinsRequest>,
+    Json(request): Json<AccountCoinsRequest>,
     Extension(context): Extension<Arc<OnlineServerContext>>,
     Extension(env): Extension<SuiEnv>,
 ) -> Result<AccountCoinsResponse, Error> {
-    env.check_network_identifier(&payload.network_identifier)?;
-    let coins = get_coins(&context.state, payload.account_identifier.address).await?;
+    env.check_network_identifier(&request.network_identifier)?;
+    let coins = get_coins(&context.state, request.account_identifier.address).await?;
     Ok(AccountCoinsResponse {
         block_identifier: context.blocks().current_block_identifier().await?,
         coins,

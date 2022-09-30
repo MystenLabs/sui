@@ -9,7 +9,6 @@ edition = "2021"
 [dependencies]
 axum = "0.5.13"
 axum-core = "0.2.7"
-axum-macros = "0.2.3"
 anyhow = { version = "1.0.58", features = ["backtrace"] }
 tracing = "0.1.36"
 serde = "1.0.143"

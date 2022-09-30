@@ -8148,7 +8148,6 @@ dependencies = [
  "async-trait",
  "axum",
  "axum-core",
- "axum-macros",
  "bcs",
  "clap 3.2.17",
  "hyper",

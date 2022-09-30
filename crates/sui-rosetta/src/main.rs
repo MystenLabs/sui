@@ -114,7 +114,7 @@ impl RosettaServerCommand {
 
                 let config = NodeConfig::load(&node_config)?;
                 let prometheus_registry = metrics::start_prometheus_server(config.metrics_address);
-
+                // Staring a full node for the rosetta server.
                 let node = SuiNode::start(&config, prometheus_registry).await?;
                 let quorum_driver = node
                     .transaction_orchestrator()
@@ -130,7 +130,9 @@ impl RosettaServerCommand {
         Ok(())
     }
 }
-
+/// This method reads the keypairs from the Sui keystore to create the PrefundedAccount objects,
+/// PrefundedAccount will be written to the rosetta-cli config file for testing.
+///
 fn read_prefunded_account(path: &Path) -> Result<Vec<PrefundedAccount>, anyhow::Error> {
     let reader = BufReader::new(File::open(path).unwrap());
     let kp_strings: Vec<String> = serde_json::from_reader(reader).unwrap();

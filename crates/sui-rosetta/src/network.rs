@@ -20,6 +20,11 @@ use crate::types::{
 use crate::ErrorType::InternalError;
 use crate::{ErrorType, OnlineServerContext, SuiEnv};
 
+/// This module implements the [Rosetta Network API](https://www.rosetta-api.org/docs/NetworkApi.html)
+
+/// This endpoint returns a list of NetworkIdentifiers that the Rosetta server supports.
+///
+/// [Rosetta API Spec](https://www.rosetta-api.org/docs/NetworkApi.html#networklist)
 pub async fn list(Extension(env): Extension<SuiEnv>) -> Result<NetworkListResponse, Error> {
     Ok(NetworkListResponse {
         network_identifiers: vec![NetworkIdentifier {
@@ -29,12 +34,15 @@ pub async fn list(Extension(env): Extension<SuiEnv>) -> Result<NetworkListRespon
     })
 }
 
+/// This endpoint returns the current status of the network requested.
+///
+/// [Rosetta API Spec](https://www.rosetta-api.org/docs/NetworkApi.html#networkstatus)
 pub async fn status(
-    Json(payload): Json<NetworkRequest>,
+    Json(request): Json<NetworkRequest>,
     Extension(context): Extension<Arc<OnlineServerContext>>,
     Extension(env): Extension<SuiEnv>,
 ) -> Result<NetworkStatusResponse, Error> {
-    env.check_network_identifier(&payload.network_identifier)?;
+    env.check_network_identifier(&request.network_identifier)?;
     let object = context
         .state
         .get_object_read(&SUI_SYSTEM_STATE_OBJECT_ID)
@@ -80,11 +88,14 @@ pub async fn status(
     })
 }
 
+/// This endpoint returns the version information and allowed network-specific types for a NetworkIdentifier.
+///
+/// [Rosetta API Spec](https://www.rosetta-api.org/docs/NetworkApi.html#networkoptions)
 pub async fn options(
-    Json(payload): Json<NetworkRequest>,
+    Json(request): Json<NetworkRequest>,
     Extension(env): Extension<SuiEnv>,
 ) -> Result<NetworkOptionsResponse, Error> {
-    env.check_network_identifier(&payload.network_identifier)?;
+    env.check_network_identifier(&request.network_identifier)?;
 
     let errors = ErrorType::iter().map(Error::new).collect();
     let operation_statuses = vec![
@@ -94,7 +105,7 @@ pub async fn options(
 
     Ok(NetworkOptionsResponse {
         version: Version {
-            rosetta_version: "1.4.12".to_string(),
+            rosetta_version: "1.4.14".to_string(),
             node_version: env!("CARGO_PKG_VERSION").to_owned(),
             middleware_version: None,
             metadata: None,
