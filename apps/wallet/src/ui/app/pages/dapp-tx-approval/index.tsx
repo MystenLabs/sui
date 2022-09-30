@@ -189,29 +189,40 @@ export function DappTxApprovalPage() {
         }
     }, [loading, txRequest]);
 
-    const valuesContent = useMemo(
-        () =>
-            txRequest?.tx?.type === 'move-call'
-                ? [
-                      { label: 'Transaction Type', content: 'MoveCall' },
-                      {
-                          label: 'Function',
-                          content: txRequest.tx.data.function,
-                      },
-                      {
-                          label: 'Gas Fees',
-                          content: txRequest.tx.data.gasBudget,
-                      },
-                  ]
-                : [
-                      {
-                          label: 'Transaction Type',
-                          content: 'SerializedMoveCall',
-                      },
-                      { label: 'Contents', content: txRequest?.tx?.data },
-                  ],
-        [txRequest]
-    );
+    const valuesContent = useMemo(() => {
+        switch (txRequest?.tx.type) {
+            case 'v2': {
+                return [
+                    {
+                        label: 'Transaction Type',
+                        content: txRequest.tx.data.kind,
+                    },
+                ];
+            }
+            case 'move-call':
+                return [
+                    { label: 'Transaction Type', content: 'MoveCall' },
+                    {
+                        label: 'Function',
+                        content: txRequest.tx.data.function,
+                    },
+                    {
+                        label: 'Gas Fees',
+                        content: txRequest.tx.data.gasBudget,
+                    },
+                ];
+            case 'serialized-move-call':
+                return [
+                    {
+                        label: 'Transaction Type',
+                        content: 'SerializedMoveCall',
+                    },
+                    { label: 'Contents', content: txRequest?.tx?.data },
+                ];
+            default:
+                return [];
+        }
+    }, [txRequest]);
 
     return (
         <Loading loading={loading}>

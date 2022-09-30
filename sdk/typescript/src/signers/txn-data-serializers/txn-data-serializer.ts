@@ -60,26 +60,36 @@ export interface MoveCallTransaction {
 /** A type that represents the possible transactions that can be signed: */
 export type SignableTransaction =
   | {
-      moveCall: MoveCallTransaction;
+      kind: 'moveCall';
+      data: MoveCallTransaction;
     }
   | {
-      transferSui: TransferSuiTransaction;
+      kind: 'transferSui';
+      data: TransferSuiTransaction;
     }
   | {
-      transferObject: TransferObjectTransaction;
+      kind: 'transferObject';
+      data: TransferObjectTransaction;
     }
   | {
-      mergeCoin: MergeCoinTransaction;
+      kind: 'mergeCoin';
+      data: MergeCoinTransaction;
     }
   | {
-      splitCoin: SplitCoinTransaction;
+      kind: 'splitCoin';
+      data: SplitCoinTransaction;
     }
   | {
-      pay: PayTransaction;
+      kind: 'pay';
+      data: PayTransaction;
     }
   | {
-      bytes: Uint8Array;
+      kind: 'bytes';
+      data: Uint8Array;
     };
+
+export type SignableTransactionKind = SignableTransaction['kind'];
+export type SignableTransactionData = SignableTransaction['data'];
 
 /**
  * Transaction type used for publishing Move modules to the Sui.

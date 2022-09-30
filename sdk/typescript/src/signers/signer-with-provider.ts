@@ -68,11 +68,14 @@ export abstract class SignerWithProvider implements Signer {
     transaction: Base64DataBuffer | SignableTransaction
   ): Promise<SuiTransactionResponse> {
     // Handle submitting raw transaction bytes:
-    if (transaction instanceof Base64DataBuffer || 'bytes' in transaction) {
+    if (
+      transaction instanceof Base64DataBuffer ||
+      transaction.kind === 'bytes'
+    ) {
       const txBytes =
         transaction instanceof Base64DataBuffer
           ? transaction
-          : new Base64DataBuffer(transaction.bytes);
+          : new Base64DataBuffer(transaction.data);
 
       const sig = await this.signData(txBytes);
       return await this.provider.executeTransaction(
@@ -83,21 +86,24 @@ export abstract class SignerWithProvider implements Signer {
       );
     }
 
-    if ('moveCall' in transaction) {
-      return this.executeMoveCall(transaction.moveCall);
-    } else if ('transferSui' in transaction) {
-      return this.transferSui(transaction.transferSui);
-    } else if ('transferObject' in transaction) {
-      return this.transferObject(transaction.transferObject);
-    } else if ('mergeCoin' in transaction) {
-      return this.mergeCoin(transaction.mergeCoin);
-    } else if ('splitCoin' in transaction) {
-      return this.splitCoin(transaction.splitCoin);
-    } else if ('pay' in transaction) {
-      return this.pay(transaction.pay);
+    switch (transaction.kind) {
+      case 'moveCall':
+        return this.executeMoveCall(transaction.data);
+      case 'transferSui':
+        return this.transferSui(transaction.data);
+      case 'transferObject':
+        return this.transferObject(transaction.data);
+      case 'mergeCoin':
+        return this.mergeCoin(transaction.data);
+      case 'splitCoin':
+        return this.splitCoin(transaction.data);
+      case 'pay':
+        return this.pay(transaction.data);
+      default:
+        throw new Error(
+          `Unknown transaction kind: "${(transaction as any).kind}"`
+        );
     }
-
-    throw new Error('Unknown transaction provided.');
   }
 
   /**
@@ -108,11 +114,14 @@ export abstract class SignerWithProvider implements Signer {
     requestType: ExecuteTransactionRequestType
   ): Promise<SuiExecuteTransactionResponse> {
     // Handle submitting raw transaction bytes:
-    if (transaction instanceof Base64DataBuffer || 'bytes' in transaction) {
+    if (
+      transaction instanceof Base64DataBuffer ||
+      transaction.kind === 'bytes'
+    ) {
       const txBytes =
         transaction instanceof Base64DataBuffer
           ? transaction
-          : new Base64DataBuffer(transaction.bytes);
+          : new Base64DataBuffer(transaction.data);
 
       const sig = await this.signData(txBytes);
       return await this.provider.executeTransactionWithRequestType(
@@ -124,30 +133,30 @@ export abstract class SignerWithProvider implements Signer {
       );
     }
 
-    if ('moveCall' in transaction) {
-      return this.executeMoveCallWithRequestType(
-        transaction.moveCall,
-        requestType
-      );
-    } else if ('transferSui' in transaction) {
-      return this.transferSuiWithRequestType(
-        transaction.transferSui,
-        requestType
-      );
-    } else if ('transferObject' in transaction) {
-      return this.transferObjectWithRequestType(
-        transaction.transferObject,
-        requestType
-      );
-    } else if ('mergeCoin' in transaction) {
-      return this.mergeCoinWithRequestType(transaction.mergeCoin, requestType);
-    } else if ('splitCoin' in transaction) {
-      return this.splitCoinWithRequestType(transaction.splitCoin, requestType);
-    } else if ('pay' in transaction) {
-      return this.payWithRequestType(transaction.pay, requestType);
+    switch (transaction.kind) {
+      case 'moveCall':
+        return this.executeMoveCallWithRequestType(
+          transaction.data,
+          requestType
+        );
+      case 'transferSui':
+        return this.transferSuiWithRequestType(transaction.data, requestType);
+      case 'transferObject':
+        return this.transferObjectWithRequestType(
+          transaction.data,
+          requestType
+        );
+      case 'mergeCoin':
+        return this.mergeCoinWithRequestType(transaction.data, requestType);
+      case 'splitCoin':
+        return this.splitCoinWithRequestType(transaction.data, requestType);
+      case 'pay':
+        return this.payWithRequestType(transaction.data, requestType);
+      default:
+        throw new Error(
+          `Unknown transaction kind: "${(transaction as any).kind}"`
+        );
     }
-
-    throw new Error('Unknown transaction provided.');
   }
 
   /**

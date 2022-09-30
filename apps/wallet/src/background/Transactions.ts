@@ -21,6 +21,8 @@ function openTxWindow(txRequestID: string) {
     );
 }
 
+Browser.storage.local.remove(TX_STORE_KEY);
+
 class Transactions {
     private _txResponseMessages = new Subject<TransactionRequestResponse>();
 
