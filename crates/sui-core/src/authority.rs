@@ -24,7 +24,6 @@ use narwhal_config::{
     Committee as ConsensusCommittee, WorkerCache as ConsensusWorkerCache,
     WorkerId as ConsensusWorkerId,
 };
-use narwhal_executor::ExecutionStateError;
 use narwhal_executor::{ExecutionIndices, ExecutionState};
 use parking_lot::Mutex;
 use prometheus::{
@@ -1962,23 +1961,14 @@ impl AuthorityState {
         // consensus.
         certificate.verify(&self.committee.load())
     }
-}
 
-#[async_trait]
-impl ExecutionState for AuthorityState {
-    type Transaction = ConsensusTransaction;
-    type Error = NarwhalHandlerError;
-    type Outcome = Vec<u8>;
-
-    /// This function will be called by Narwhal, after Narwhal sequenced this certificate.
-    #[instrument(level = "trace", skip_all)]
-    async fn handle_consensus_transaction(
+    pub(crate) async fn handle_consensus_transaction(
         &self,
         // TODO [2533]: use this once integrating Narwhal reconfiguration
         _consensus_output: &narwhal_consensus::ConsensusOutput,
         consensus_index: ExecutionIndices,
-        transaction: Self::Transaction,
-    ) -> Result<Self::Outcome, Self::Error> {
+        transaction: ConsensusTransaction,
+    ) -> Result<(), NarwhalHandlerError> {
         self.metrics.total_consensus_txns.inc();
         let _timer = self
             .metrics
@@ -2003,9 +1993,7 @@ impl ExecutionState for AuthorityState {
                     .await
                     .map_err(NarwhalHandlerError::NodeError)?;
 
-                // TODO: This return time is not ideal.
-                // TODO [2533]: edit once integrating Narwhal reconfiguration
-                Ok(Vec::default())
+                Ok(())
             }
             ConsensusTransactionKind::Checkpoint(fragment) => {
                 let cp_seq = fragment.proposer_sequence_number();
@@ -2043,29 +2031,77 @@ impl ExecutionState for AuthorityState {
                 // ```
                 let _tx_reconfigure_consensus = &self.tx_reconfigure_consensus;
 
-                // TODO: This return time is not ideal. The authority submitting the checkpoint fragment
-                // is not expecting any reply.
-                // TODO [2533]: edit once integrating Narwhal reconfiguration
-                Ok(Vec::default())
+                Ok(())
+            }
+        }
+    }
+}
+
+pub struct ConsensusHandler {
+    state: Arc<AuthorityState>,
+    // todo - change Vec<u8> to Box<CertifiedTransaction> and use tx id as consensus adapter hash
+    sender: Sender<Vec<u8>>,
+}
+
+impl ConsensusHandler {
+    pub fn new(state: Arc<AuthorityState>, sender: Sender<Vec<u8>>) -> Self {
+        Self { state, sender }
+    }
+}
+
+#[async_trait]
+impl ExecutionState for ConsensusHandler {
+    /// This function will be called by Narwhal, after Narwhal sequenced this certificate.
+    #[instrument(level = "trace", skip_all)]
+    async fn handle_consensus_transaction(
+        &self,
+        // TODO [2533]: use this once integrating Narwhal reconfiguration
+        consensus_output: &narwhal_consensus::ConsensusOutput,
+        consensus_index: ExecutionIndices,
+        serialized_transaction: Vec<u8>,
+    ) {
+        let transaction =
+            match bincode::deserialize::<ConsensusTransaction>(&serialized_transaction) {
+                Ok(transaction) => transaction,
+                Err(err) => {
+                    warn!(
+                        "Ignoring malformed transaction (failed to deserialize) from {}: {}",
+                        consensus_output.certificate.header.author, err
+                    );
+                    return;
+                }
+            };
+        match self
+            .state
+            .handle_consensus_transaction(consensus_output, consensus_index, transaction)
+            .await
+        {
+            Ok(()) => {
+                if self.sender.send(serialized_transaction).await.is_err() {
+                    warn!("Consensus handler outbound channel closed");
+                }
+            }
+            Err(NarwhalHandlerError::SkipNarwhalTransaction(err)) => {
+                warn!(
+                    "Ignoring malformed transaction (failed to verify) from {}: {:?}",
+                    consensus_output.certificate.header.author, err
+                );
+            }
+            Err(NarwhalHandlerError::NodeError(err)) => {
+                Err(err).expect("Unrecoverable error in consensus handler")
             }
         }
     }
 
-    fn ask_consensus_write_lock(&self) -> bool {
-        self.consensus_guardrail.fetch_add(1, Ordering::SeqCst) == 0
-    }
-
-    fn release_consensus_write_lock(&self) {
-        self.consensus_guardrail.fetch_sub(0, Ordering::SeqCst);
-    }
-
-    async fn load_execution_indices(&self) -> Result<ExecutionIndices, Self::Error> {
-        self.database
+    async fn load_execution_indices(&self) -> ExecutionIndices {
+        self.state
+            .database
             .last_consensus_index()
-            .map_err(NarwhalHandlerError::NodeError)
+            .expect("Failed to load consensus indices")
     }
 }
 
+// todo - consider deleting this struct
 #[derive(Eq, PartialEq, Clone, Debug, Error)]
 pub enum NarwhalHandlerError {
     /// Local node error after which it is not safe to continue consuming narwhal stream
@@ -2075,13 +2111,4 @@ pub enum NarwhalHandlerError {
     /// narwhal can continue streaming next transactions to SUI
     #[error("Invalid transaction {}", 0)]
     SkipNarwhalTransaction(SuiError),
-}
-
-impl ExecutionStateError for NarwhalHandlerError {
-    fn node_error(&self) -> bool {
-        match self {
-            Self::NodeError(..) => true,
-            Self::SkipNarwhalTransaction(..) => false,
-        }
-    }
 }

@@ -1399,9 +1399,7 @@ fn test_fragment_full_flow() {
         assert!(cps0
             .handle_internal_fragment(seq.clone(), fragment, PendCertificateForExecutionNoop)
             .is_ok());
-        seq.next(
-            /* total_batches */ 100, /* total_transactions */ 100,
-        );
+        seq.next_transaction_index += 1;
     }
     let transactions = cps0.attempt_to_construct_checkpoint(&committee).unwrap();
     cps0.sign_new_checkpoint(0, 0, transactions.iter(), TestCausalOrderPendCertNoop)
@@ -1433,9 +1431,7 @@ fn test_fragment_full_flow() {
             fragment.clone(),
             PendCertificateForExecutionNoop,
         );
-        seq.next(
-            /* total_batches */ 100, /* total_transactions */ 100,
-        );
+        seq.next_transaction_index += 100;
     }
 
     // Two fragments for 5-6, and then 0-1, 1-2, 2-3, 3-4
@@ -1453,9 +1449,7 @@ fn test_fragment_full_flow() {
             fragment.clone(),
             PendCertificateForExecutionNoop,
         );
-        seq.next(
-            /* total_batches */ 100, /* total_transactions */ 100,
-        );
+        seq.next_transaction_index += 100;
     }
 
     // Two fragments for 5-6, and then 0-1, 1-2, 2-3, 3-4
@@ -1625,9 +1619,7 @@ pub async fn checkpoint_tests_setup(
                     println!("Error: {:?}", err);
                 }
             }
-            seq.next(
-                /* total_batches */ 100, /* total_transactions */ 100,
-            );
+            seq.next_transaction_index += 100;
         }
         println!("CHANNEL EXIT.");
     });

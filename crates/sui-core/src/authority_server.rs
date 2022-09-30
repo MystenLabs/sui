@@ -33,6 +33,7 @@ use tokio::{
 use sui_types::messages_checkpoint::CheckpointRequest;
 use sui_types::messages_checkpoint::CheckpointResponse;
 
+use crate::authority::ConsensusHandler;
 use tracing::{info, Instrument};
 
 #[cfg(test)]
@@ -261,7 +262,8 @@ impl ValidatorService {
         let consensus_committee = config.genesis()?.narwhal_committee().load();
         let consensus_worker_cache = config.genesis()?.narwhal_worker_cache();
         let consensus_storage_base_path = consensus_config.db_path().to_path_buf();
-        let consensus_execution_state = state.clone();
+        let consensus_execution_state = ConsensusHandler::new(state.clone(), tx_consensus_to_sui);
+        let consensus_execution_state = Arc::new(consensus_execution_state);
         let consensus_parameters = consensus_config.narwhal_config().to_owned();
         let network_keypair = config.network_key_pair.copy();
 
@@ -277,7 +279,6 @@ impl ValidatorService {
                 consensus_execution_state,
                 consensus_parameters,
                 rx_reconfigure_consensus,
-                /* tx_output */ tx_consensus_to_sui,
                 &registry,
             )
             .await
