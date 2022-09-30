@@ -31,6 +31,7 @@ sui-swarm = { path = "../sui-swarm" }
 sui-json-rpc-types = { path = "../sui-json-rpc-types" }
 sui-sdk = { path = "../sui-sdk" }
 sui-keys = { path = "../sui-keys" }
+sui-bytecode-src-verify = { path = "../sui-bytecode-src-verify" }
 
 fastcrypto.workspace = true
 

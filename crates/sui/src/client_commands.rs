@@ -21,6 +21,7 @@ use move_core_types::language_storage::TypeTag;
 use move_package::BuildConfig as MoveBuildConfig;
 use serde::Serialize;
 use serde_json::json;
+use sui_bytecode_src_verify::BytecodeSourceVerifier;
 use tracing::info;
 
 use sui_framework::build_move_package;
@@ -424,6 +425,19 @@ impl SuiClientCommands {
                     },
                 )?
                 .get_package_bytes();
+
+                // verify that all dependency packages have the correct on-chain bytecode
+                let node_url = "http://localhost:9000";
+                match BytecodeSourceVerifier::new(node_url).await {
+                    Ok(verifier) => {
+                        let result = verifier.verify_deployed_dependencies
+                            (&build_config, &package_path, &compiled_modules).await;
+
+                        println!("on-chain bytecode verification result:\n{:?}", result);
+                    },
+                    Err(err) => eprintln!("Error verifying on-chain bytecode:\n{:?}", err),
+                };
+
                 let data = context
                     .client
                     .transaction_builder()
