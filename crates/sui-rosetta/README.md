@@ -130,3 +130,74 @@ rosetta-cli --configuration-file rosetta-cli.json check:construction
 | Method | Endpoint             | Description                       | Sui Supported? | Server Type |
 |--------|----------------------|-----------------------------------|:--------------:|:-----------:|
 | POST   | /search/transactions | [INDEXER] Search for Transactions |       No       |     --      |
+
+
+## Sui transaction <> Rosetta Operation conversion explained
+There are 2 places we convert Sui's transaction to Rosetta's operations, 
+one is in the `/construction/parse` endpoint and another one in `/block/transaction endpoint`.
+`/operation/parse` uses `Operation::from_data` to create the "intent" operations and `/block/transaction` uses `Operation::from_data_and_effect` to create the "confirmed" operations.
+the `/construction/parse` endpoint is used for checking transaction correctness during transaction construction, in our case we only support `TransferSui` for now, the operations created looks like this (negative amount indicate sender):
+```json
+{
+    "operation_identifier": {
+        "index": 0
+    },
+    "type": "TransferSUI",
+    "account": {
+        "address": "0xc4173a804406a365e69dfb297d4eaaf002546ebd"
+    },
+    "amount": {
+        "value": "-100000",
+        "currency": {
+            "symbol": "SUI",
+            "decimals": 9
+        }
+    },
+    "coin_change": {
+        "coin_identifier": {
+            "identifier": "0x0dce9190d54cde842d39537bf94efe128181b8a6:5549"
+        },
+        "coin_action": "coin_spent"
+    }
+},
+{
+    "operation_identifier": {
+        "index": 1
+    },
+    "type": "TransferSUI",
+    "account": {
+        "address": "0x96bc0b37b67103651d1f98c67b34df9558ea527a"
+    },
+    "amount": {
+        "value": "100000",
+        "currency": {
+            "symbol": "SUI",
+            "decimals": 9
+        }
+    }
+},
+{
+    "operation_identifier": {
+        "index": 2
+    },
+    "type": "GasBudget",
+    "account": {
+        "address": "0xc4173a804406a365e69dfb297d4eaaf002546ebd"
+    },
+    "coin_change": {
+        "coin_identifier": {
+            "identifier": "0x0dce9190d54cde842d39537bf94efe128181b8a6:5549"
+        },
+        "coin_action": "coin_spent"
+    },
+    "metadata": {
+        "budget": 1000
+    }
+}
+```
+The sender, recipients and transfer amounts are specified in the intent operations, 
+these data are being used to create TransactionData for signature.
+After the tx is executed, the rosetta-cli compare the intent operations with the confirmed operations , 
+the confirmed operations must contain the intent operations (the confirmed operations can have more operations than the intent).
+Since the intent operations of TransferSui contains all the balance change information(amount field) already, 
+we don't need to use the event to create the operations, also operation created by `get_coin_operation_from_event` will contain recipient's coin id, which will cause a mismatch.
