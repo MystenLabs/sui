@@ -122,14 +122,12 @@ function columnsContent(columns: TableColumn[]) {
     }));
 }
 
-function TableCard({
-    tabledata,
-}: {
-    tabledata: {
-        data: TxType[];
-        columns: TableColumn[];
-    };
-}) {
+export type TableType = {
+    data: TxType[];
+    columns: TableColumn[];
+};
+
+function TableCard({ tabledata }: { tabledata: TableType }) {
     const data = useMemo(() => tabledata.data, [tabledata.data]);
     // Use Columns to create a table
     const columns = useMemo(

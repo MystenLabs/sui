@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import { useState, useCallback } from 'react';
 
+import placeholdertheme from '../../styles/placeholder.module.css';
 import { numberSuffix } from '../../utils/numberUtil';
 
 import styles from './TabFooter.module.css';
@@ -18,6 +19,7 @@ function TabFooter({
     stats?: {
         count: number | string;
         stats_text: string;
+        loadState?: string;
     };
     paging?: number;
     itemsPerPageChange?: Function;
@@ -42,7 +44,12 @@ function TabFooter({
             )}
             {(stats || paging) && (
                 <div className={styles.stats}>
-                    {stats && (
+                    {stats && stats.loadState === 'pending' && (
+                        <div
+                            className={`${placeholdertheme.placeholder} ${styles.placeholder}`}
+                        />
+                    )}
+                    {stats && stats.loadState === 'loaded' && (
                         <>
                             {typeof stats.count === 'number'
                                 ? numberSuffix(stats.count)
@@ -50,6 +57,9 @@ function TabFooter({
                             {stats.stats_text}
                         </>
                     )}
+
+                    {stats && stats.loadState === 'fail' && <></>}
+
                     {paging && (
                         <div>
                             <select

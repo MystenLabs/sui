@@ -4,6 +4,7 @@
 import { useContext, useEffect, useState } from 'react';
 
 import Longtext from '../../components/longtext/Longtext';
+import PlaceholderTable from '../../components/placeholder/Table';
 import TableCard from '../../components/table/TableCard';
 import { NetworkContext } from '../../context';
 import {
@@ -13,7 +14,6 @@ import {
     type ValidatorState,
 } from '../../pages/validators/Validators';
 import { mockState } from '../../pages/validators/mockData';
-import theme from '../../styles/theme.module.css';
 import { truncate } from '../../utils/stringUtils';
 
 import { TabGroup, TabList, Tab, TabPanels, TabPanel } from '~/ui/Tabs';
@@ -72,7 +72,25 @@ export const TopValidatorsCardAPI = (): JSX.Element => {
         return <TopValidatorsCard state={showObjectState as ValidatorState} />;
     }
     if (loadState === 'pending') {
-        return <div className={theme.pending}>loading validator info...</div>;
+        return (
+            <div className={styles.validators}>
+                <Tabs selected={0}>
+                    <div title="Top Validators">
+                        <PlaceholderTable
+                            rowCount={4}
+                            rowHeight="13px"
+                            colHeadings={[
+                                '#',
+                                'Name',
+                                'Address',
+                                'Pubkey Bytes',
+                            ]}
+                            colWidths={['25px', '70px', '260px', '260px']}
+                        />
+                    </div>
+                </Tabs>
+            </div>
+        );
     }
     if (loadState === 'fail') {
         return <ValidatorLoadFail />;

@@ -1,6 +1,5 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
 import {
     type GetTxnDigestsResponse,
     type ExecutionStatusType,
@@ -12,7 +11,7 @@ import { useEffect, useState, useContext, useCallback } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 
 import { ReactComponent as ArrowRight } from '../../assets/SVGIcons/12px/ArrowRight.svg';
-import TableCard from '../../components/table/TableCard';
+import TableCard, { type TableType } from '../../components/table/TableCard';
 import TabFooter from '../../components/tabs/TabFooter';
 import { NetworkContext } from '../../context';
 import {
@@ -23,11 +22,11 @@ import { IS_STATIC_ENV } from '../../utils/envUtil';
 import { getAllMockTransaction } from '../../utils/static/searchUtil';
 import ErrorResult from '../error-result/ErrorResult';
 import Pagination from '../pagination/Pagination';
+import PlaceholderTable from '../placeholder/Table';
 import {
     type TxnData,
     genTableDataFromTxData,
     getDataOnTxDigests,
-    loadingTable,
 } from './TxCardUtils';
 
 import styles from './RecentTxCard.module.css';
@@ -122,6 +121,10 @@ async function getRecentTransactions(
     }
 }
 
+async function getTransactionCount(network: Network | string): Promise<number> {
+    return rpc(network).getTotalTransactionNumber();
+}
+
 type RecentTx = {
     count?: number;
     paginationtype?: PaginationType;
@@ -131,7 +134,6 @@ type RecentTx = {
 
 function LatestTxCard({ ...data }: RecentTx) {
     const {
-        count = 0,
         truncateLength = TRUNCATE_LENGTH,
         paginationtype = DEFAULT_PAGI_TYPE,
     } = data;
@@ -140,9 +142,9 @@ function LatestTxCard({ ...data }: RecentTx) {
         data.txPerPage || NUMBER_OF_TX_PER_PAGE
     );
 
-    const [isLoaded, setIsLoaded] = useState(false);
     const [results, setResults] = useState(initState);
-    const [recentTx, setRecentTx] = useState(loadingTable);
+    const [recentTx, setRecentTx] = useState<null | TableType>(null);
+    const [txCount, setTxCount] = useState({ loadState: 'pending', data: 0 });
 
     const [network] = useContext(NetworkContext);
     const [searchParams, setSearchParams] = useSearchParams();
@@ -161,14 +163,15 @@ function LatestTxCard({ ...data }: RecentTx) {
     const defaultActiveTab = 0;
 
     const stats = {
-        count,
+        count: txCount.data,
         stats_text: 'Total transactions',
+        loadState: txCount.loadState,
     };
 
     const PaginationWithStatsOrStatsWithLink =
         paginationtype === 'pagination' ? (
             <Pagination
-                totalItems={count}
+                totalItems={txCount.data}
                 itemsPerPage={txPerPage}
                 updateItemsPerPage={setTxPerPage}
                 onPagiChangeFn={handlePageChange}
@@ -184,54 +187,67 @@ function LatestTxCard({ ...data }: RecentTx) {
         );
     // update the page index when the user clicks on the pagination buttons
     useEffect(() => {
-        let isMounted = true;
-        // If pageIndex is greater than maxTxPage, set to maxTxPage
-        const maxTxPage = Math.ceil(count / txPerPage);
-        const pg = pageIndex > maxTxPage ? maxTxPage : pageIndex;
-
-        getRecentTransactions(network, count, txPerPage, pg)
-            .then(async (resp: any) => {
-                if (isMounted) {
-                    setIsLoaded(true);
-                }
-                setResults({
+        getTransactionCount(network)
+            .then((resp: number) => {
+                setTxCount({
                     loadState: 'loaded',
-                    latestTx: resp,
-                    totalTxcount: count,
+                    data: resp,
                 });
 
-                if (results.latestTx.length > 0) {
-                    setRecentTx(
-                        genTableDataFromTxData(results.latestTx, truncateLength)
-                    );
-                }
+                return resp;
             })
             .catch((err) => {
+                setTxCount({
+                    loadState: 'fail',
+                    data: 0,
+                });
                 setResults({
                     ...initState,
                     loadState: 'fail',
                 });
-                setIsLoaded(false);
+
                 console.error(
-                    'Encountered error when fetching recent transactions',
+                    'Encountered error when fetching transaction count',
                     err
                 );
-                Sentry.captureException(err);
-            });
-        return () => {
-            isMounted = false;
-        };
-    }, [
-        count,
-        network,
-        pageIndex,
-        setSearchParams,
-        txPerPage,
-        results,
-        truncateLength,
-    ]);
+                return null;
+            })
+            .then((count: number | null) => {
+                if (count) {
+                    // If pageIndex is greater than maxTxPage, set to maxTxPage
+                    const maxTxPage = Math.ceil(count / txPerPage);
+                    const pg = pageIndex > maxTxPage ? maxTxPage : pageIndex;
 
-    if (!isLoaded && results.loadState === 'fail') {
+                    getRecentTransactions(network, count, txPerPage, pg)
+                        .then(async (resp: any) => {
+                            setResults({
+                                loadState: 'loaded',
+                                latestTx: resp,
+                                totalTxcount: count,
+                            });
+
+                            if (resp.length > 0) {
+                                setRecentTx(
+                                    genTableDataFromTxData(resp, truncateLength)
+                                );
+                            }
+                        })
+                        .catch((err) => {
+                            setResults({
+                                ...initState,
+                                loadState: 'fail',
+                            });
+                            console.error(
+                                'Encountered error when fetching recent transactions',
+                                err
+                            );
+                            Sentry.captureException(err);
+                        });
+                }
+            });
+    }, [network, pageIndex, setSearchParams, txPerPage, truncateLength]);
+
+    if (results.loadState === 'fail') {
         return (
             <ErrorResult
                 id=""
@@ -246,18 +262,36 @@ function LatestTxCard({ ...data }: RecentTx) {
 
     return (
         <div className={cl(styles.txlatestresults, styles[paginationtype])}>
-            <TabGroup size="lg">
-                <TabList>
-                    <Tab>Transactions</Tab>
-                </TabList>
-                <TabPanels>
-                    <TabPanel>
+            <Tab selected={defaultActiveTab}>
+                <div title="Transactions">
+                    {recentTx ? (
                         <TableCard tabledata={recentTx} />
-                        {paginationtype !== 'none' &&
-                            PaginationWithStatsOrStatsWithLink}
-                    </TabPanel>
-                </TabPanels>
-            </TabGroup>
+                    ) : (
+                        <PlaceholderTable
+                            rowCount={15}
+                            rowHeight="16px"
+                            colHeadings={[
+                                'Time',
+                                'Type',
+                                'Transaction ID',
+                                'Addresses',
+                                'Amount',
+                                'Gas',
+                            ]}
+                            colWidths={[
+                                '85px',
+                                '80px',
+                                '90px',
+                                '204px',
+                                '90',
+                                '38px',
+                            ]}
+                        />
+                    )}
+                    {paginationtype !== 'none' &&
+                        PaginationWithStatsOrStatsWithLink}
+                </div>
+            </Tab>
         </div>
     );
 }
