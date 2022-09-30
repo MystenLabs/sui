@@ -64,13 +64,17 @@ export type TabListProps = ExtractProps<typeof HeadlessTab.List> & {
     disableBottomBorder?: boolean;
 };
 
-export function TabList({ fullWidth, disableBottomBorder, ...props }: TabListProps) {
+export function TabList({
+    fullWidth,
+    disableBottomBorder,
+    ...props
+}: TabListProps) {
     return (
         <HeadlessTab.List
             className={clsx(
                 'flex gap-6 border-sui-grey-45 border-solid border-0',
                 fullWidth && 'flex-1',
-                !disableBottomBorder && 'border-b',
+                !disableBottomBorder && 'border-b'
             )}
             {...props}
         />

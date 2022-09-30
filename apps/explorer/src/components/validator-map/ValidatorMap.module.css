@@ -27,7 +27,7 @@
 }
 
 .map {
-    @apply absolute inset-0 md:left-0 pointer-events-none md:pointer-events-auto;
+    @apply absolute inset-0 pointer-events-none md:pointer-events-auto;
 }
 
 .map svg {

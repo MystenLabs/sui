@@ -8,7 +8,7 @@ import { Tab, TabGroup, TabList } from './Tabs';
 export type DateFilterOption = 'D' | 'W' | 'M' | 'ALL';
 
 export function useDateFilterState(defaultFilter: DateFilterOption = 'ALL') {
-	return useState(defaultFilter);
+    return useState(defaultFilter);
 }
 
 export interface DateFilterProps {
