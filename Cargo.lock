@@ -502,18 +502,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "axum-macros"
-version = "0.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6293dae2ec708e679da6736e857cf8532886ef258e92930f38279c12641628b8"
-dependencies = [
- "heck 0.4.0",
- "proc-macro2 1.0.43",
- "quote 1.0.21",
- "syn 1.0.99",
-]
-
-[[package]]
 name = "backoff"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8172,7 +8160,7 @@ dependencies = [
  "tracing",
  "typed-store",
  "typed-store-derive",
- "workspace-hack 0.1.0",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -9991,7 +9979,6 @@ dependencies = [
  "autocfg",
  "axum",
  "axum-core",
- "axum-macros",
  "backoff",
  "backtrace",
  "base16ct",
