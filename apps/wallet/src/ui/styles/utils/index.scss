@@ -63,14 +63,16 @@ $main-extra-space: sizing.$main-bottom-space;
 
     &::after {
         content: '';
-        background-image: url('_assets/images/nft-detail-bg.png');
+        mask: url('_assets/images/receipt_bottom.svg');
+        background-color: colors.$gray-40;
         background-repeat: no-repeat;
         background-position: center bottom;
         background-size: 100%;
-        width: 100%;
-        height: 15px;
+        width: 320px;
+        height: 20px;
         display: flex;
-        top: 12px;
+        left: -20px;
+        top: 25px;
         position: relative;
     }
 }

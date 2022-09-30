@@ -6,9 +6,8 @@ import { useIntl } from 'react-intl';
 
 import ExplorerLink from '_components/explorer-link';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
-import Icon, { SuiIcons } from '_components/icon';
 import { formatDate } from '_helpers';
-import { useFileExtentionType } from '_hooks';
+import { useMiddleEllipsis } from '_hooks';
 import { GAS_SYMBOL } from '_redux/slices/sui-objects/Coin';
 import { balanceFormatOptions } from '_shared/formatting';
 
@@ -21,11 +20,62 @@ type TxResponseProps = {
     tranferType?: 'nft' | 'coin' | null;
 };
 
-function ReceiptCard({ tranferType, txDigest }: TxResponseProps) {
-    const TxIcon = txDigest.isSender ? SuiIcons.ArrowLeft : SuiIcons.Buy;
-    const iconClassName = txDigest.isSender
-        ? cl(st.arrowActionIcon, st.angledArrow)
-        : cl(st.arrowActionIcon, st.buyIcon);
+const TRUNCATE_MAX_LENGTH = 8;
+const TRUNCATE_PREFIX_LENGTH = 4;
+
+// Truncate text after one line (~ 35 characters)
+const TRUNCATE_MAX_CHAR = 40;
+
+function ReceiptCard({ txDigest }: TxResponseProps) {
+    const toAddrStr = useMiddleEllipsis(
+        txDigest.to || '',
+        TRUNCATE_MAX_LENGTH,
+        TRUNCATE_PREFIX_LENGTH
+    );
+    const fromAddrStr = useMiddleEllipsis(
+        txDigest.from || '',
+        TRUNCATE_MAX_LENGTH,
+        TRUNCATE_PREFIX_LENGTH
+    );
+
+    const truncatedNftName = useMiddleEllipsis(
+        txDigest?.name || '',
+        TRUNCATE_MAX_CHAR,
+        TRUNCATE_MAX_CHAR - 1
+    );
+    const truncatedNftDiscription = useMiddleEllipsis(
+        txDigest?.description || '',
+        TRUNCATE_MAX_CHAR,
+        TRUNCATE_MAX_CHAR - 1
+    );
+
+    const transferType =
+        txDigest.kind === 'Call'
+            ? 'Call'
+            : txDigest.isSender
+            ? 'Sent'
+            : 'Received';
+
+    const transferMeta = {
+        Call: {
+            txName: 'Minted',
+            transfer: false,
+            address: false,
+            failedMsg: 'Failed to Mint',
+        },
+        Sent: {
+            txName: 'Sent',
+            transfer: 'To',
+            address: toAddrStr,
+            failedMsg: 'Failed to Send',
+        },
+        Received: {
+            txName: 'Received',
+            transfer: 'From',
+            address: fromAddrStr,
+            failedMsg: '',
+        },
+    };
 
     const intl = useIntl();
 
@@ -34,58 +84,26 @@ function ReceiptCard({ tranferType, txDigest }: TxResponseProps) {
         : false;
 
     const date = txDigest?.timestampMs
-        ? formatDate(txDigest.timestampMs, ['month', 'day', 'year'])
+        ? formatDate(txDigest.timestampMs, [
+              'month',
+              'day',
+              'year',
+              'hour',
+              'minute',
+          ])
         : false;
 
-    const transfersTxt = {
-        nft: {
-            header: 'Successfully Sent!',
-        },
-        coin: {
-            header: 'SUI Transfer Completed!',
-            copy: 'Staking SUI provides SUI holders with rewards to market price gains.',
-        },
-    };
-    // TODO add copy for other trafer type like transfer sui, swap, etc.
-    const headerCopy = tranferType
-        ? transfersTxt[tranferType].header
-        : `${txDigest.isSender ? 'Sent' : 'Received'} ${date || ''}`;
-    const SuccessCard = (
-        <>
-            <div className={st.successIcon}>
-                <Icon icon={TxIcon} className={iconClassName} />
-            </div>
-            <div className={st.successText}>{headerCopy}</div>
-        </>
-    );
-
-    const failedCard = (
-        <>
-            <div className={st.failedIcon}>
-                <div className={st.iconBg}>
-                    <Icon icon={SuiIcons.Close} className={cl(st.close)} />
-                </div>
-            </div>
-            <div className={st.failedText}>Failed</div>
-            <div className={st.errorMessage}>{txDigest?.error}</div>
-        </>
-    );
-
-    const fileExtentionType = useFileExtentionType(txDigest.url || '');
-
-    const AssetCard = imgUrl && (
+    const assetCard = imgUrl && (
         <div className={st.wideview}>
-            <div className={st.nftfields}>
-                <div className={st.nftName}>{txDigest?.name}</div>
-                <div className={st.nftType}>
-                    {fileExtentionType?.name} {fileExtentionType?.type}
-                </div>
-            </div>
             <img
                 className={cl(st.img)}
                 src={imgUrl}
                 alt={txDigest?.name || 'NFT'}
             />
+            <div className={st.nftfields}>
+                <div className={st.nftName}>{truncatedNftName}</div>
+                <div className={st.nftType}>{truncatedNftDiscription}</div>
+            </div>
         </div>
     );
 
@@ -94,39 +112,51 @@ function ReceiptCard({ tranferType, txDigest }: TxResponseProps) {
 
     return (
         <>
-            <div className={st.txnResponse}>
-                {txDigest.status === 'success' ? SuccessCard : failedCard}
+            <div className={cl(st.txnResponse, statusClassName)}>
+                <div className={st.txnResponseStatus}>
+                    <div className={st.statusIcon}></div>
+                    <div className={st.date}>
+                        {date && date.replace(' AM', 'am').replace(' PM', 'pm')}
+                    </div>
+                </div>
+
                 <div className={st.responseCard}>
-                    {AssetCard}
-                    {txDigest.amount && (
-                        <div className={st.amount}>
-                            {intl.formatNumber(
-                                BigInt(txDigest.amount || 0),
-                                balanceFormatOptions
-                            )}{' '}
-                            <span>{GAS_SYMBOL}</span>
+                    <div className={st.status}>
+                        <div className={st.amountTransfered}>
+                            <div className={st.label}>
+                                {txDigest.status === 'success'
+                                    ? transferMeta[transferType].txName
+                                    : transferMeta[transferType].failedMsg}
+                            </div>
+                            {txDigest.amount && (
+                                <div className={st.amount}>
+                                    {intl.formatNumber(
+                                        BigInt(txDigest.amount || 0),
+                                        balanceFormatOptions
+                                    )}
+                                    <sup>{GAS_SYMBOL}</sup>
+                                </div>
+                            )}
+                        </div>
+
+                        {assetCard}
+                    </div>
+
+                    {transferMeta[transferType].address && (
+                        <div className={st.txnItem}>
+                            <div className={st.label}>
+                                {transferMeta[transferType].transfer}
+                            </div>
+                            <div className={cl(st.value, st.walletaddress)}>
+                                {transferMeta[transferType].address}
+                            </div>
                         </div>
                     )}
-                    <div
-                        className={cl(
-                            st.txInfo,
-                            !txDigest.isSender && st.reciever
-                        )}
-                    >
-                        <div className={cl(st.txInfoLabel, statusClassName)}>
-                            Your Wallet
-                        </div>
-                        <div className={cl(st.txInfoValue, statusClassName)}>
-                            {txDigest.kind !== 'Call' && txDigest.isSender
-                                ? txDigest.to
-                                : txDigest.from}
-                        </div>
-                    </div>
 
                     {txDigest.txGas && (
                         <div className={st.txFees}>
-                            <div className={st.txInfoLabel}>Gas Fee</div>
-                            <div className={st.walletInfoValue}>
+                            <div className={st.label}>Gas Fees</div>
+                            <div className={st.value}>
                                 {txDigest.txGas} {GAS_SYMBOL}
                             </div>
                         </div>
@@ -147,13 +177,6 @@ function ReceiptCard({ tranferType, txDigest }: TxResponseProps) {
                         </div>
                     )}
 
-                    {date && (
-                        <div className={st.txDate}>
-                            <div className={st.txInfoLabel}>Date</div>
-                            <div className={st.walletInfoValue}>{date}</div>
-                        </div>
-                    )}
-
                     {txDigest.txId && (
                         <div className={st.explorerLink}>
                             <ExplorerLink
@@ -163,7 +186,7 @@ function ReceiptCard({ tranferType, txDigest }: TxResponseProps) {
                                 className={st['explorer-link']}
                                 showIcon={true}
                             >
-                                View in Explorer
+                                View on Explorer
                             </ExplorerLink>
                         </div>
                     )}
