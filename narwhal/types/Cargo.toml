@@ -37,7 +37,7 @@ fastcrypto = "0.1.2"
 crypto = { path = "../crypto", package = "narwhal-crypto" }
 dag = { path = "../dag", package = "narwhal-dag" }
 anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "b145cbcf4a1917197e2b9ee6a1523afdb623dbf2" }
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
+workspace-hack.workspace = true
 
 [dev-dependencies]
 criterion = "0.3.6"

@@ -43,7 +43,7 @@ typed-store.workspace = true
 typed-store-derive.workspace = true
 
 tempfile = "3.3.0"
-narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "103b9f481f321620ee3054e7964c7211f1a335d3" }
+narwhal-executor = { path = "../../narwhal/executor" }
 
 move-core-types.workspace = true
 move-prover.workspace = true
@@ -52,7 +52,7 @@ move-unit-test.workspace = true
 move-cli.workspace = true
 move-package.workspace = true
 
-workspace-hack = { path = "../workspace-hack" }
+workspace-hack.workspace = true
 multiaddr = "0.14.0"
 hex = "0.4.3"
 

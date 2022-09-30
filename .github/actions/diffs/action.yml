@@ -5,8 +5,11 @@ outputs:
     description: True when changes happened to some documentation
     value: "${{ steps.diff.outputs.isDoc }}"
   isRust:
-    description: True when changes happened to the rust code
+    description: True when changes happened to the Rust code
     value: "${{ steps.diff.outputs.isRust }}"
+  isNarwhal:
+    description: True when changes happened to the Narwhal code
+    value: "${{ steps.diff.outputs.isNarwhal }}"
 runs:
   using: composite
   steps:
@@ -18,6 +21,7 @@ runs:
       filters: |
         isRust:
           - 'crates/**'
+          - 'narwhal/**'
           - '.github/workflows/bench.yml'
           - '.github/workflows/codecov.yml'
           - '.github/workflows/rust.yml'
@@ -25,3 +29,5 @@ runs:
           - 'doc/**'
           - '*.md'
           - '.github/workflows/docs.yml'
+        isNarwhal:
+          - 'narwhal/**'

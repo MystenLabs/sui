@@ -33,4 +33,4 @@ once_cell = "1.14.0"
 
 move-package.workspace = true
 move-core-types.workspace = true
-workspace-hack = { path = "../workspace-hack"}
+workspace-hack.workspace = true

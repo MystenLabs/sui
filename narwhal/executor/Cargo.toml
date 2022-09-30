@@ -28,15 +28,15 @@ storage = { path = "../storage", package = "narwhal-storage" }
 itertools = "0.10.4"
 
 types = { path = "../types", package = "narwhal-types" }
-mysten-network = "0.1.0"
+mysten-network.workspace = true
 network = { path = "../network", package = "narwhal-network" }
 crypto = { path = "../crypto", package = "narwhal-crypto" }
 anyhow = "1.0.65"
-
-store = { version = "0.1.0", package = "typed-store" }
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
+store.workspace = true
 match_opt = "0.1.2"
 rand = "0.8.5"
+
+workspace-hack.workspace = true
 
 [dev-dependencies]
 indexmap = { version = "1.9.1", features = ["serde"] }
@@ -44,4 +44,4 @@ tempfile = "3.3.0"
 primary = { path = "../primary", package = "narwhal-primary" }
 test-utils = { path = "../test-utils", package = "narwhal-test-utils" }
 types = { path = "../types", package = "narwhal-types" }
-telemetry-subscribers = "0.1.0"
+telemetry-subscribers.workspace = true

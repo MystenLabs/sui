@@ -28,15 +28,15 @@ crypto = { path = "../crypto", package = "narwhal-crypto" }
 network = { path = "../network", package = "narwhal-network" }
 primary = { path = "../primary", package = "narwhal-primary" }
 types = { path = "../types", package = "narwhal-types" }
-mysten-network = "0.1.0"
+mysten-network.workspace = true
 prometheus = "0.13.2"
 
 anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "b145cbcf4a1917197e2b9ee6a1523afdb623dbf2" }
 anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "b145cbcf4a1917197e2b9ee6a1523afdb623dbf2" }
 anyhow = "1.0.65"
 
-store = { version = "0.1.0", package = "typed-store" }
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
+store.workspace = true
+workspace-hack.workspace = true
 
 [dev-dependencies]
 arc-swap = { version = "1.5.1", features = ["serde"] }

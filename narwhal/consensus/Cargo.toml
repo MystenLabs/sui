@@ -14,7 +14,7 @@ match_opt = "0.1.2"
 mysten-util-mem = { git = "https://github.com/MystenLabs/mysten-infra" }
 rand = { version = "0.8.5", optional = true }
 serde = { version = "1.0.144", features = ["derive"] }
-store = { version = "0.1.0", package = "typed-store" }
+store.workspace = true
 thiserror = "1.0.35"
 tokio = { version = "1.20.1", features = ["sync"] }
 tracing = "0.1.36"
@@ -26,7 +26,7 @@ storage = { path = "../storage", package = "narwhal-storage" }
 dag = { path = "../dag", package = "narwhal-dag" }
 prometheus = "0.13.2"
 types = { path = "../types", package = "narwhal-types" }
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
+workspace-hack.workspace = true
 cfg-if = "1.0.0"
 
 [dev-dependencies]

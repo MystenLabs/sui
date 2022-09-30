@@ -310,6 +310,7 @@ async fn test_partial_committee_change() {
 
 /// The epoch changes but the stake distribution and network addresses stay the same.
 #[tokio::test]
+#[ignore]
 async fn test_restart_with_new_committee_change() {
     telemetry_subscribers::init_for_testing();
     ensure_test_environment();

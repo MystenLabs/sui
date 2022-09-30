@@ -15,10 +15,10 @@ clap = "2.34"
 dhat = { version = "0.3.0", optional = true }
 futures = "0.3.24"
 multiaddr = "0.14.0"
-mysten-network = "0.1.0"
+mysten-network.workspace = true
 rand = "0.8.5"
 store = { version = "0.1.0", package = "typed-store"}
-telemetry-subscribers = "0.1.0"
+telemetry-subscribers.workspace = true
 thiserror = "1.0.35"
 tokio = { version = "1.20.1", features = ["full"] }
 tokio-stream = "0.1.10"
@@ -41,7 +41,7 @@ prometheus = "0.13.2"
 storage = { path = "../storage", package = "narwhal-storage" }
 types = { path = "../types", package = "narwhal-types" }
 worker = { path = "../worker", package = "narwhal-worker" }
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
+workspace-hack.workspace = true
 eyre = "0.6.8"
 
 anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "b145cbcf4a1917197e2b9ee6a1523afdb623dbf2" }
@@ -69,6 +69,6 @@ path = "src/benchmark_client.rs"
 required-features = ["benchmark"]
 
 [[example]]
-name = "generate-format"
+name = "narwhal-generate-format"
 path = "src/generate_format.rs"
 test = false

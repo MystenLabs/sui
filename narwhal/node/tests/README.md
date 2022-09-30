@@ -42,7 +42,7 @@ Now our code is modified in a way that will make the format test fail: let's upd
 
 ```
 narwhal/node(main)» cd node                                                                                                                                       [14:12:53]
-narwhal/node(main)» cargo -q run --example generate-format -- print > tests/staged/narwhal.yaml
+narwhal/node(main)» cargo -q run --example narwhal-generate-format -- print > tests/staged/narwhal.yaml
 ```
 
 
@@ -84,7 +84,7 @@ running 1 test
    Compiling worker v0.1.0 (narwhal/worker)
    Compiling node v0.1.0 (narwhal/node)
     Finished dev [unoptimized + debuginfo] target(s) in 7.68s
-     Running `target/debug/examples/generate-format test`
+     Running `target/debug/examples/narwhal-generate-format test`
 test test_format ... ok
 
 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 8.08s

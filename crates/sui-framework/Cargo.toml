@@ -36,7 +36,7 @@ move-vm-runtime.workspace = true
 move-vm-test-utils.workspace = true
 move-vm-types.workspace = true
 
-workspace-hack = { path = "../workspace-hack"}
+workspace-hack.workspace = true
 
 [build-dependencies]
 anyhow = { version = "1.0.64", features = ["backtrace"] }

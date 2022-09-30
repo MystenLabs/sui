@@ -179,7 +179,7 @@ fn main() {
         }
         Action::Test => {
             // If this test fails, run the following command from the folder `node`:
-            // cargo -q run --example generate-format -- print > tests/staged/narwhal.yaml
+            // cargo -q run --example narwhal-generate-format -- print > tests/staged/narwhal.yaml
             let reference = std::fs::read_to_string(FILE_PATH).unwrap();
             let reference: Registry = serde_yaml::from_str(&reference).unwrap();
             pretty_assertions::assert_eq!(reference, registry);
