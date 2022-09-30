@@ -10,7 +10,7 @@ import Browser from 'webextension-polyfill';
 
 import { suiObjectsAdapterSelectors } from '_redux/slices/sui-objects';
 import { Coin } from '_redux/slices/sui-objects/Coin';
-import { generateMnemonic } from '_shared/cryptography/mnemonics';
+import { generateMnemonic } from '_src/shared/utils/bip39';
 
 import type { SuiAddress, SuiMoveObject } from '@mysten/sui.js';
 import type { PayloadAction } from '@reduxjs/toolkit';
