@@ -14,6 +14,7 @@ import type { ObjectId, SuiAddress, TransactionDigest } from '@mysten/sui.js';
 import type { ReactNode } from 'react';
 
 import st from './ExplorerLink.module.scss';
+import { trackEvent } from '_src/shared/plausible';
 
 export type ExplorerLinkProps = (
     | {
@@ -28,6 +29,7 @@ export type ExplorerLinkProps = (
     | { type: ExplorerLinkType.object; objectID: ObjectId }
     | { type: ExplorerLinkType.transaction; transactionID: TransactionDigest }
 ) & {
+    track?: boolean;
     children?: ReactNode;
     className?: string;
     title?: string;
@@ -66,6 +68,7 @@ function ExplorerLink(props: ExplorerLinkProps) {
                 );
         }
     }, [type, address, objectID, transactionID, selectedApiEnv]);
+
     if (!explorerHref) {
         return null;
     }
@@ -75,6 +78,11 @@ function ExplorerLink(props: ExplorerLinkProps) {
             className={className}
             title={title}
             showIcon={false}
+            onClick={() => {
+                if (props.track) {
+                    trackEvent('ViewExplorerAccount');
+                }
+            }}
         >
             <>
                 {children}{' '}

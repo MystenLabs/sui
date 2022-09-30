@@ -17,6 +17,7 @@ import { mintDemoNFT } from '_redux/slices/sui-objects';
 import type { SerializedError } from '@reduxjs/toolkit';
 
 import st from './Playground.module.scss';
+import { trackEvent } from '_src/shared/plausible';
 
 function AppsPlayGround() {
     const [mintInProgress, setMintInProgress] = useState(false);
@@ -69,6 +70,7 @@ function AppsPlayGround() {
     const handleMint = useCallback(async () => {
         setMintInProgress(true);
         setMintError(null);
+        trackEvent('MintDevnetNFT');
         try {
             //TODO: add notification on success
             await dispatch(mintDemoNFT()).unwrap();
@@ -117,6 +119,7 @@ function AppsPlayGround() {
                     type={ExplorerLinkType.address}
                     useActiveAddress={true}
                     showIcon={false}
+                    track
                 >
                     View account on Sui Explorer
                     <Icon

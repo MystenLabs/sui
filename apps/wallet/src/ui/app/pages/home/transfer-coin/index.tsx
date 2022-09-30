@@ -29,6 +29,7 @@ import type { SerializedError } from '@reduxjs/toolkit';
 import type { FormikHelpers } from 'formik';
 
 import st from './TransferCoinPage.module.scss';
+import { trackEvent } from '_src/shared/plausible';
 
 const initialValues = {
     to: '',
@@ -106,6 +107,9 @@ function TransferCoinPage() {
                 return;
             }
             setSendError(null);
+            trackEvent('TransferCoins', {
+                props: { coinType },
+            });
             try {
                 const response = await dispatch(
                     sendTokens({

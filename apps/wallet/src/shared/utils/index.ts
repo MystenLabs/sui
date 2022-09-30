@@ -4,8 +4,7 @@
 import { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import Browser from 'webextension-polyfill';
-
-import { WALLET_URL, plausible } from '_shared/constants';
+import { trackPageview } from '../plausible';
 
 export function openInNewTab() {
     const url = Browser.runtime.getURL('ui.html');
@@ -15,10 +14,8 @@ export function openInNewTab() {
 export function usePageView() {
     const location = useLocation();
     useEffect(() => {
-        if (process.env.NODE_ENV !== 'development') {
-            plausible.trackPageview({
-                url: WALLET_URL + location.pathname,
-            });
-        }
+        trackPageview({
+            url: location.pathname,
+        });
     }, [location]);
 }

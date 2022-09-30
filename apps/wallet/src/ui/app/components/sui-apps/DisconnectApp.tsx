@@ -13,11 +13,11 @@ import Icon, { SuiIcons } from '_components/icon';
 import Overlay from '_components/overlay';
 import { useAppDispatch } from '_hooks';
 import { revokeAppPermissionByOrigin } from '_redux/slices/permissions';
-import { plausible } from '_src/shared/constants';
 
 import type { SuiAddress } from '@mysten/sui.js';
 
 import st from './DisconnectApp.module.scss';
+import { trackEvent } from '_src/shared/plausible';
 
 type DisconnectAppProps = {
     name: string;
@@ -49,11 +49,9 @@ function DisconnectApp({
     // TODO: add loading state since this is async
     const revokeApp = useCallback(
         (e: React.MouseEvent<HTMLElement>) => {
-            if (process.env.NODE_ENV !== 'development') {
-                plausible.trackEvent('AppDisconnect', {
-                    props: { source: 'AppPage' },
-                });
-            }
+            trackEvent('AppDisconnect', {
+                props: { source: 'AppPage' },
+            });
             dispatch(revokeAppPermissionByOrigin({ origin: link }));
             setShowDisconnectApp(false);
         },
