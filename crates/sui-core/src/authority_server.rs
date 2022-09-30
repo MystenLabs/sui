@@ -304,27 +304,25 @@ impl ValidatorService {
         );
 
         // Update the checkpoint store with a consensus client.
-        let checkpoint_consensus_handle = if let Some(checkpoint_store) = state.checkpoints() {
-            let (tx_checkpoint_consensus_adapter, rx_checkpoint_consensus_adapter) = channel(1_000);
-            let consensus_sender = CheckpointSender::new(tx_checkpoint_consensus_adapter);
-            checkpoint_store
-                .lock()
-                .set_consensus(Box::new(consensus_sender))?;
+        let (tx_checkpoint_consensus_adapter, rx_checkpoint_consensus_adapter) = channel(1_000);
+        let consensus_sender = CheckpointSender::new(tx_checkpoint_consensus_adapter);
+        state
+            .checkpoints
+            .lock()
+            .set_consensus(Box::new(consensus_sender))?;
 
-            let handle = CheckpointConsensusAdapter::new(
+        let checkpoint_consensus_handle = Some(
+            CheckpointConsensusAdapter::new(
                 /* consensus_address */ consensus_config.address().to_owned(),
                 /* tx_consensus_listener */ tx_sui_to_consensus,
                 rx_checkpoint_consensus_adapter,
-                /* checkpoint_locals */ checkpoint_store,
+                /* checkpoint_locals */ state.checkpoints(),
                 /* retry_delay */ Duration::from_millis(5_000),
                 /* max_pending_transactions */ 10_000,
                 ca_metrics,
             )
-            .spawn();
-            Some(handle)
-        } else {
-            None
-        };
+            .spawn(),
+        );
 
         Ok(Self {
             state,

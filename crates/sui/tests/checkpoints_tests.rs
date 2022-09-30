@@ -26,7 +26,7 @@ use typed_store::traits::Map;
 /// Helper function determining whether the checkpoint store of an authority contains the input
 /// transactions' digests.
 fn transactions_in_checkpoint(authority: &AuthorityState) -> HashSet<TransactionDigest> {
-    let checkpoints_store = authority.checkpoints().unwrap();
+    let checkpoints_store = authority.checkpoints();
 
     // Get all transactions in the first 10 checkpoints.
     (0..10)
@@ -92,7 +92,6 @@ async fn wait_for_advance_to_next_checkpoint(
             authority
                 .state()
                 .checkpoints()
-                .unwrap()
                 .lock()
                 .get_locals()
                 .next_checkpoint
@@ -118,7 +117,7 @@ async fn sequence_fragments() {
     let mut proposals: Vec<_> = handles
         .iter_mut()
         .map(|handle| {
-            let checkpoints_store = handle.state().checkpoints().unwrap();
+            let checkpoints_store = handle.state().checkpoints();
             checkpoints_store
                 .lock()
                 .handle_internal_batch(next_sequence_number, &transactions)
@@ -136,7 +135,6 @@ async fn sequence_fragments() {
         let status = handle
             .state()
             .checkpoints()
-            .unwrap()
             .lock()
             .tables
             .fragments
@@ -155,7 +153,6 @@ async fn sequence_fragments() {
         let _response = handle
             .state()
             .checkpoints()
-            .unwrap()
             .lock()
             .submit_local_fragment_to_consensus(&fragment, committee);
     }
@@ -166,7 +163,6 @@ async fn sequence_fragments() {
             handle
                 .state()
                 .checkpoints()
-                .unwrap()
                 .lock()
                 .tables
                 .fragments

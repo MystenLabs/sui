@@ -392,7 +392,7 @@ pub struct AuthorityState {
     pub transaction_streamer: Option<Arc<TransactionStreamer>>,
 
     /// The checkpoint store
-    pub checkpoints: Option<Arc<Mutex<CheckpointStore>>>,
+    pub checkpoints: Arc<Mutex<CheckpointStore>>,
 
     epoch_store: Arc<EpochStore>,
 
@@ -1190,13 +1190,7 @@ impl AuthorityState {
         &self,
         request: &CheckpointRequest,
     ) -> Result<CheckpointResponse, SuiError> {
-        let mut checkpoint_store = self
-            .checkpoints
-            .as_ref()
-            .ok_or(SuiError::UnsupportedFeatureError {
-                error: "Checkpoint not supported".to_owned(),
-            })?
-            .lock();
+        let mut checkpoint_store = self.checkpoints.lock();
         match &request.request_type {
             CheckpointRequestType::AuthenticatedCheckpoint(seq) => {
                 checkpoint_store.handle_authenticated_checkpoint(seq, request.detail)
@@ -1225,7 +1219,7 @@ impl AuthorityState {
         indexes: Option<Arc<IndexStore>>,
         event_store: Option<Arc<EventStoreType>>,
         transaction_streamer: Option<Arc<TransactionStreamer>>,
-        checkpoints: Option<Arc<Mutex<CheckpointStore>>>,
+        checkpoints: Arc<Mutex<CheckpointStore>>,
         genesis: &Genesis,
         prometheus_registry: &prometheus::Registry,
         tx_reconfigure_consensus: Sender<ReconfigConsensusMessage>,
@@ -1293,37 +1287,38 @@ impl AuthorityState {
             .init_batches_from_database()
             .expect("Init batches failed!");
 
-        // If a checkpoint store is present, ensure it is up-to-date with the latest
-        // batches.
-        if let Some(checkpoint) = &state.checkpoints {
-            let next_expected_tx = checkpoint.lock().next_transaction_sequence_expected();
+        // Ensure it is up-to-date with the latest batches.
+        let next_expected_tx = state
+            .checkpoints
+            .lock()
+            .next_transaction_sequence_expected();
 
-            // Get all unprocessed checkpoints
-            for (_seq, batch) in state
+        // Get all unprocessed checkpoints
+        for (_seq, batch) in state
+            .database
+            .tables
+            .batches
+            .iter()
+            .skip_to(&next_expected_tx)
+            .expect("Seeking batches should never fail at this point")
+        {
+            let transactions: Vec<(TxSequenceNumber, ExecutionDigests)> = state
                 .database
                 .tables
-                .batches
+                .executed_sequence
                 .iter()
-                .skip_to(&next_expected_tx)
-                .expect("Seeking batches should never fail at this point")
-            {
-                let transactions: Vec<(TxSequenceNumber, ExecutionDigests)> = state
-                    .database
-                    .tables
-                    .executed_sequence
-                    .iter()
-                    .skip_to(&batch.data().initial_sequence_number)
-                    .expect("Should never fail to get an iterator")
-                    .take_while(|(seq, _tx)| *seq < batch.data().next_sequence_number)
-                    .collect();
+                .skip_to(&batch.data().initial_sequence_number)
+                .expect("Should never fail to get an iterator")
+                .take_while(|(seq, _tx)| *seq < batch.data().next_sequence_number)
+                .collect();
 
-                if batch.data().next_sequence_number > next_expected_tx {
-                    // Update the checkpointing mechanism
-                    checkpoint
-                        .lock()
-                        .handle_internal_batch(batch.data().next_sequence_number, &transactions)
-                        .expect("Should see no errors updating the checkpointing mechanism.");
-                }
+            if batch.data().next_sequence_number > next_expected_tx {
+                // Update the checkpointing mechanism
+                state
+                    .checkpoints
+                    .lock()
+                    .handle_internal_batch(batch.data().next_sequence_number, &transactions)
+                    .expect("Should see no errors updating the checkpointing mechanism.");
             }
         }
 
@@ -1384,7 +1379,7 @@ impl AuthorityState {
             None,
             None,
             None,
-            Some(Arc::new(Mutex::new(checkpoints))),
+            Arc::new(Mutex::new(checkpoints)),
             genesis,
             &prometheus::Registry::new(),
             tx_reconfigure_consensus,
@@ -1428,7 +1423,7 @@ impl AuthorityState {
         Ok(())
     }
 
-    pub fn checkpoints(&self) -> Option<Arc<Mutex<CheckpointStore>>> {
+    pub fn checkpoints(&self) -> Arc<Mutex<CheckpointStore>> {
         self.checkpoints.clone()
     }
 
@@ -2022,33 +2017,31 @@ impl ExecutionState for AuthorityState {
                     fragment.other.authority(),
                 );
 
-                if let Some(checkpoint) = &self.checkpoints {
-                    let committee = self.committee.load();
-                    fragment
-                        .verify(&committee)
-                        .map_err(NarwhalHandlerError::SkipNarwhalTransaction)?;
+                let committee = self.committee.load();
+                fragment
+                    .verify(&committee)
+                    .map_err(NarwhalHandlerError::SkipNarwhalTransaction)?;
 
-                    let mut checkpoint = checkpoint.lock();
-                    checkpoint
-                        .handle_internal_fragment(consensus_index, *fragment, self.database.clone())
-                        .map_err(NarwhalHandlerError::NodeError)?;
+                let mut checkpoint = self.checkpoints.lock();
+                checkpoint
+                    .handle_internal_fragment(consensus_index, *fragment, self.database.clone())
+                    .map_err(NarwhalHandlerError::NodeError)?;
 
-                    // NOTE: The method `handle_internal_fragment` is idempotent, so we don't need
-                    // to persist the consensus index. If the validator crashes, this transaction
-                    // may be resent to the checkpoint logic that will simply ignore it.
+                // NOTE: The method `handle_internal_fragment` is idempotent, so we don't need
+                // to persist the consensus index. If the validator crashes, this transaction
+                // may be resent to the checkpoint logic that will simply ignore it.
 
-                    // TODO: At this point we should know whether we want to change epoch. If we do,
-                    // we should have (i) the new committee and (ii) the new keypair of this authority.
-                    // We then call:
-                    // ```
-                    //  self
-                    //      .tx_reconfigure_consensus
-                    //      .send((new_keypair, new_committee, new_worker_ids_and_keypairs, new_worker_cache))
-                    //      .await
-                    //      .expect("Failed to reconfigure consensus");
-                    // ```
-                    let _tx_reconfigure_consensus = &self.tx_reconfigure_consensus;
-                }
+                // TODO: At this point we should know whether we want to change epoch. If we do,
+                // we should have (i) the new committee and (ii) the new keypair of this authority.
+                // We then call:
+                // ```
+                //  self
+                //      .tx_reconfigure_consensus
+                //      .send((new_keypair, new_committee, new_worker_ids_and_keypairs, new_worker_cache))
+                //      .await
+                //      .expect("Failed to reconfigure consensus");
+                // ```
+                let _tx_reconfigure_consensus = &self.tx_reconfigure_consensus;
 
                 // TODO: This return time is not ideal. The authority submitting the checkpoint fragment
                 // is not expecting any reply.

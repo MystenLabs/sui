@@ -133,7 +133,7 @@ impl SuiNode {
                 index_store.clone(),
                 event_store,
                 transaction_streamer,
-                Some(checkpoint_store),
+                checkpoint_store,
                 genesis,
                 &prometheus_registry,
                 tx_reconfigure_consensus,
