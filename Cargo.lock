@@ -7002,6 +7002,7 @@ version = "1.0.85"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e55a28e3aaef9d5ce0506d0a14dbba8054ddc7e499ef522dd8b26859ec9d4a44"
 dependencies = [
+ "indexmap",
  "itoa 1.0.2",
  "ryu",
  "serde 1.0.144",
@@ -8124,6 +8125,41 @@ dependencies = [
  "quote 1.0.21",
  "syn 1.0.99",
  "unescape",
+ "workspace-hack",
+]
+
+[[package]]
+name = "sui-rosetta"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "axum",
+ "axum-core",
+ "bcs",
+ "clap 3.2.17",
+ "hyper",
+ "move-core-types",
+ "once_cell",
+ "serde 1.0.144",
+ "serde_json",
+ "serde_with 1.14.0",
+ "signature",
+ "strum",
+ "strum_macros",
+ "sui-config",
+ "sui-core",
+ "sui-node",
+ "sui-sdk",
+ "sui-types",
+ "telemetry-subscribers",
+ "tempfile",
+ "tokio",
+ "tower",
+ "tower-http",
+ "tracing",
+ "typed-store",
+ "typed-store-derive",
  "workspace-hack",
 ]
 

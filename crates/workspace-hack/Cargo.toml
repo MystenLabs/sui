@@ -453,7 +453,7 @@ serde-reflection = { version = "0.3", default-features = false }
 serde-value = { version = "0.7", default-features = false }
 serde_bytes = { version = "0.11", features = ["std"] }
 serde_cbor = { version = "0.11", features = ["std"] }
-serde_json = { version = "1", features = ["alloc", "raw_value", "std", "unbounded_depth"] }
+serde_json = { version = "1", features = ["alloc", "indexmap", "preserve_order", "raw_value", "std", "unbounded_depth"] }
 serde_test = { version = "1", default-features = false }
 serde_urlencoded = { version = "0.7", default-features = false }
 serde_with-dff4ba8e3ae991db = { package = "serde_with", version = "1", features = ["hex", "macros", "serde_with_macros"] }
@@ -1121,7 +1121,7 @@ serde_bytes = { version = "0.11", features = ["std"] }
 serde_cbor = { version = "0.11", features = ["std"] }
 serde_derive = { version = "1" }
 serde_derive_internals = { version = "0.26", default-features = false }
-serde_json = { version = "1", features = ["alloc", "raw_value", "std", "unbounded_depth"] }
+serde_json = { version = "1", features = ["alloc", "indexmap", "preserve_order", "raw_value", "std", "unbounded_depth"] }
 serde_test = { version = "1", default-features = false }
 serde_urlencoded = { version = "0.7", default-features = false }
 serde_with-dff4ba8e3ae991db = { package = "serde_with", version = "1", features = ["hex", "macros", "serde_with_macros"] }

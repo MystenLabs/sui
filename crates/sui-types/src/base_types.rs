@@ -116,6 +116,12 @@ impl From<ObjectInfo> for ObjectRef {
     }
 }
 
+impl From<&ObjectInfo> for ObjectRef {
+    fn from(info: &ObjectInfo) -> Self {
+        (info.object_id, info.version, info.digest)
+    }
+}
+
 pub const SUI_ADDRESS_LENGTH: usize = ObjectID::LENGTH;
 
 #[serde_as]
