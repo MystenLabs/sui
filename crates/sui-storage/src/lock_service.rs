@@ -32,6 +32,7 @@ use sui_types::base_types::{ObjectRef, TransactionDigest};
 use sui_types::batch::TxSequenceNumber;
 use sui_types::committee::EpochId;
 use sui_types::error::{SuiError, SuiResult};
+use sui_types::fp_ensure;
 
 use crate::{block_on_future_in_sim, default_db_options};
 
@@ -123,7 +124,7 @@ impl LockServiceImpl {
     /// Returns the state of a single lock.
     /// * None - lock does not exist and is not initialized
     /// * Some(None) - lock exists and is initialized, but not locked to a particular transaction
-    /// * Some(Some(lock_info)) - lock exists and set to transaction from a specific epoch.
+    /// * Some(Some(lock_info)) - lock exists and set to some transaction.
     fn get_lock(&self, object: ObjectRef) -> Result<Option<Option<LockInfo>>, SuiError> {
         self.transaction_lock
             .get(&object)
@@ -134,16 +135,14 @@ impl LockServiceImpl {
     /// Returns Err(TransactionLockDoesNotExist) if at least one object lock is not initialized.
     fn locks_exist(&self, objects: &[ObjectRef]) -> SuiResult {
         let locks = self.transaction_lock.multi_get(objects)?;
-        locks
-            .iter()
-            .all(Option::is_some)
-            .then(|| {
-                debug!(?objects, "locks_exist: all locks do exist");
-            })
-            .ok_or_else(|| {
-                debug!(?locks, ?objects, "locks_exist: not all locks exist");
-                SuiError::TransactionLockDoesNotExist
-            })
+        for (lock, obj_ref) in locks.into_iter().zip(objects) {
+            fp_ensure!(
+                lock.is_some(),
+                SuiError::ObjectLockUninitialized { obj_ref: *obj_ref }
+            );
+        }
+        debug!(?objects, "locks_exist: all locks do exist");
+        Ok(())
     }
 
     fn create_locks_for_genesis_objects(&self, objects: &[ObjectRef]) -> SuiResult {
@@ -237,7 +236,7 @@ impl LockServiceImpl {
 
     /// Acquires a lock for a transaction on the given objects if they have all been initialized previously
     /// to None state.  It is also OK if they have been set to the same transaction.
-    /// The locks are all set to the given transacton digest.
+    /// The locks are all set to the given transaction digest.
     /// Otherwise, SuiError(TransactionLockDoesNotExist, ConflictingTransaction) is returned.
     fn acquire_locks(
         &self,
@@ -249,15 +248,25 @@ impl LockServiceImpl {
         let mut locks_to_write = Vec::new();
         let locks = self.transaction_lock.multi_get(owned_input_objects)?;
 
-        for (i, lock) in locks.iter().enumerate() {
+        for ((i, lock), obj_ref) in locks.iter().enumerate().zip(owned_input_objects) {
             // The object / version must exist, and therefore lock initialized.
-            let lock = lock.as_ref().ok_or(SuiError::TransactionLockDoesNotExist)?;
+            let lock = lock
+                .as_ref()
+                .ok_or(SuiError::ObjectLockUninitialized { obj_ref: *obj_ref })?;
 
             if let Some(LockInfo {
                 epoch: previous_epoch,
                 tx_digest: previous_tx_digest,
             }) = lock
             {
+                fp_ensure!(
+                    &epoch >= previous_epoch,
+                    SuiError::ObjectLockedAtFutureEpoch {
+                        obj_refs: owned_input_objects.to_vec(),
+                        locked_epoch: *previous_epoch,
+                        new_epoch: epoch,
+                    }
+                );
                 // Lock already set to different transaction from the same epoch.
                 // If the lock is set in a previous epoch, it's ok to override it.
                 if previous_epoch == &epoch && previous_tx_digest != &tx_digest {
@@ -265,7 +274,8 @@ impl LockServiceImpl {
                     debug!(prev_tx_digest =? previous_tx_digest,
                           cur_tx_digest =? tx_digest,
                           "Conflicting transaction! Lock state changed in unexpected way");
-                    return Err(SuiError::ConflictingTransaction {
+                    return Err(SuiError::ObjectLockConflict {
+                        obj_ref: *obj_ref,
                         pending_transaction: *previous_tx_digest,
                     });
                 }
@@ -318,7 +328,7 @@ impl LockServiceImpl {
                     ?existing_locks,
                     "Cannot initialize locks because some exist already"
                 );
-                return Err(SuiError::TransactionLockExists {
+                return Err(SuiError::ObjectLockAlreadyInitialized {
                     refs: existing_locks,
                 });
             }
@@ -692,7 +702,7 @@ mod tests {
         // Should not be able to acquire lock for uninitialized locks
         assert_eq!(
             ls.acquire_locks(0, &[ref1, ref2], tx1),
-            Err(SuiError::TransactionLockDoesNotExist)
+            Err(SuiError::ObjectLockUninitialized { obj_ref: ref1 })
         );
         assert_eq!(ls.get_lock(ref1), Ok(None));
 
@@ -705,7 +715,7 @@ mod tests {
         // Should not be able to acquire lock if not all objects initialized
         assert_eq!(
             ls.acquire_locks(0, &[ref1, ref2, ref3], tx1),
-            Err(SuiError::TransactionLockDoesNotExist)
+            Err(SuiError::ObjectLockUninitialized { obj_ref: ref3 })
         );
 
         // Should be able to acquire lock if all objects initialized
@@ -722,13 +732,13 @@ mod tests {
         assert_eq!(ls.locks_exist(&[ref1, ref2]), Ok(()));
         assert_eq!(
             ls.locks_exist(&[ref2, ref3]),
-            Err(SuiError::TransactionLockDoesNotExist)
+            Err(SuiError::ObjectLockUninitialized { obj_ref: ref3 })
         );
 
         // Should get TransactionLockExists if try to initialize already locked object
         assert!(matches!(
             ls.initialize_locks(&[ref2, ref3], false /* is_force_reset */),
-            Err(SuiError::TransactionLockExists { .. })
+            Err(SuiError::ObjectLockAlreadyInitialized { .. })
         ));
 
         // Should not be able to acquire lock for diff tx if already locked
@@ -736,7 +746,7 @@ mod tests {
             .unwrap();
         assert!(matches!(
             ls.acquire_locks(0, &[ref2, ref3], tx2),
-            Err(SuiError::ConflictingTransaction { .. })
+            Err(SuiError::ObjectLockConflict { .. })
         ));
     }
 
@@ -766,7 +776,7 @@ mod tests {
         // Cannot initialize them again since they are locked already
         assert!(matches!(
             ls.initialize_locks(&[ref1, ref2], false /* is_force_reset */),
-            Err(SuiError::TransactionLockExists { .. })
+            Err(SuiError::ObjectLockAlreadyInitialized { .. })
         ));
 
         // Now remove the locks
@@ -820,7 +830,7 @@ mod tests {
         assert!(inner_res
             .iter()
             .filter(|r| r.is_err())
-            .all(|r| matches!(r, Err(SuiError::ConflictingTransaction { .. }))));
+            .all(|r| matches!(r, Err(SuiError::ObjectLockConflict { .. }))));
     }
 
     #[test]

@@ -397,16 +397,17 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         }
     }
 
-    /// Read a transaction envelope via lock or returns Err(TransactionLockDoesNotExist) if the lock does not exist.
-    pub async fn get_transaction_lock(
+    /// Get the transaction envelope that currently locks the given object,
+    /// or returns Err(TransactionLockDoesNotExist) if the lock does not exist.
+    pub async fn get_object_locking_transaction(
         &self,
         object_ref: &ObjectRef,
     ) -> SuiResult<Option<TransactionEnvelope<S>>> {
-        let tx_lock = self
-            .lock_service
-            .get_lock(*object_ref)
-            .await?
-            .ok_or(SuiError::TransactionLockDoesNotExist)?;
+        let tx_lock = self.lock_service.get_lock(*object_ref).await?.ok_or(
+            SuiError::ObjectLockUninitialized {
+                obj_ref: *object_ref,
+            },
+        )?;
 
         // Returns None if either no TX with the lock, or TX present but no entry in transactions table.
         // However we retry a couple times because the TX is written after the lock is acquired, so it might
