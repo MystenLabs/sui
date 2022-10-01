@@ -95,14 +95,6 @@ impl RpcReadApiServer for ReadApi {
         Ok(self.state.get_total_transaction_number()?)
     }
 
-    async fn get_transactions_in_range(
-        &self,
-        start: TxSeqNumber,
-        end: TxSeqNumber,
-    ) -> RpcResult<Vec<(TxSeqNumber, TransactionDigest)>> {
-        Ok(self.state.get_transactions_in_range(start, end)?)
-    }
-
     async fn get_recent_transactions(
         &self,
         count: u64,
@@ -270,8 +262,7 @@ impl RpcFullNodeReadApiServer for FullNodeApi {
         let limit = limit.unwrap_or(MAX_RESULT_SIZE);
         let mut data = self
             .state
-            .get_transactions(query.into(), cursor, Some(limit + 1))
-            .await?;
+            .get_transactions(query.into(), cursor, Some(limit + 1))?;
 
         Ok(if data.len() == limit + 1 {
             let next_cursor = Some(data.last().unwrap().0);

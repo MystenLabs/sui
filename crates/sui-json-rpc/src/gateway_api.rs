@@ -157,14 +157,6 @@ impl RpcReadApiServer for GatewayReadApiImpl {
     async fn get_total_transaction_number(&self) -> RpcResult<u64> {
         Ok(self.client.get_total_transaction_number()?)
     }
-
-    async fn get_transactions_in_range(
-        &self,
-        start: TxSeqNumber,
-        end: TxSeqNumber,
-    ) -> RpcResult<Vec<(TxSeqNumber, TransactionDigest)>> {
-        Ok(self.client.get_transactions_in_range(start, end)?)
-    }
 }
 
 impl SuiRpcModule for GatewayReadApiImpl {

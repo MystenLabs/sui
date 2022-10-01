@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::cmp::min;
 use std::collections::BTreeMap;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -19,6 +18,7 @@ use sui_core::quorum_driver::QuorumDriver;
 use sui_types::base_types::{
     SequenceNumber, SuiAddress, TransactionDigest, TRANSACTION_DIGEST_LENGTH,
 };
+use sui_types::filter::TransactionQueryCriteria;
 use sui_types::gas_coin::GasCoin;
 use sui_types::object::PastObjectRead;
 
@@ -202,8 +202,11 @@ impl PseudoBlockProvider {
         if current_block.index < total_tx {
             // Make sure we don't hit the query limit.
             // TODO: replace this with pagination when it's available.
-            let end = min(4000 + current_block.index, total_tx);
-            let tx_digests = state.get_transactions_in_range(current_block.index, end)?;
+            let tx_digests = state.get_transactions(
+                TransactionQueryCriteria::All,
+                Some(current_block.index),
+                None,
+            )?;
             let mut index = current_block.index;
             let mut parent_block_identifier = current_block;
 

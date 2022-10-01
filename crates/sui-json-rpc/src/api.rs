@@ -81,16 +81,6 @@ pub trait RpcReadApi {
     #[method(name = "getTotalTransactionNumber")]
     async fn get_total_transaction_number(&self) -> RpcResult<u64>;
 
-    /// Return list of transaction digests within the queried range.
-    #[method(name = "getTransactionsInRange")]
-    async fn get_transactions_in_range(
-        &self,
-        /// the matching transactions' sequence number will be greater than or equals to the starting sequence number
-        start: TxSeqNumber,
-        /// the matching transactions' sequence number will be less than the ending sequence number
-        end: TxSeqNumber,
-    ) -> RpcResult<Vec<(TxSeqNumber, TransactionDigest)>>;
-
     /// Return list of recent transaction digest.
     #[method(name = "getRecentTransactions")]
     async fn get_recent_transactions(
