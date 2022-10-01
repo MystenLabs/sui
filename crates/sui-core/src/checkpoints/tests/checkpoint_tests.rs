@@ -490,7 +490,13 @@ fn latest_proposal() {
 
     // Fail to set if transactions not processed.
     assert!(cps1
-        .sign_new_checkpoint(epoch, 0, ckp_items.iter(), TestCausalOrderPendCertNoop,)
+        .sign_new_checkpoint(
+            epoch,
+            0,
+            ckp_items.iter(),
+            TestCausalOrderPendCertNoop,
+            None
+        )
         .is_err());
 
     // Set the transactions as executed.
@@ -505,14 +511,38 @@ fn latest_proposal() {
     cps4.handle_internal_batch(0, &batch).unwrap();
 
     // Try to get checkpoint
-    cps1.sign_new_checkpoint(epoch, 0, ckp_items.iter(), TestCausalOrderPendCertNoop)
-        .unwrap();
-    cps2.sign_new_checkpoint(epoch, 0, ckp_items.iter(), TestCausalOrderPendCertNoop)
-        .unwrap();
-    cps3.sign_new_checkpoint(epoch, 0, ckp_items.iter(), TestCausalOrderPendCertNoop)
-        .unwrap();
-    cps4.sign_new_checkpoint(epoch, 0, ckp_items.iter(), TestCausalOrderPendCertNoop)
-        .unwrap();
+    cps1.sign_new_checkpoint(
+        epoch,
+        0,
+        ckp_items.iter(),
+        TestCausalOrderPendCertNoop,
+        None,
+    )
+    .unwrap();
+    cps2.sign_new_checkpoint(
+        epoch,
+        0,
+        ckp_items.iter(),
+        TestCausalOrderPendCertNoop,
+        None,
+    )
+    .unwrap();
+    cps3.sign_new_checkpoint(
+        epoch,
+        0,
+        ckp_items.iter(),
+        TestCausalOrderPendCertNoop,
+        None,
+    )
+    .unwrap();
+    cps4.sign_new_checkpoint(
+        epoch,
+        0,
+        ckp_items.iter(),
+        TestCausalOrderPendCertNoop,
+        None,
+    )
+    .unwrap();
 
     // --- TEST3 ---
 
@@ -653,7 +683,13 @@ fn set_get_checkpoint() {
 
     // Need to load the transactions as processed, before getting a checkpoint.
     assert!(cps1
-        .sign_new_checkpoint(epoch, 0, ckp_items.iter(), TestCausalOrderPendCertNoop,)
+        .sign_new_checkpoint(
+            epoch,
+            0,
+            ckp_items.iter(),
+            TestCausalOrderPendCertNoop,
+            None
+        )
         .is_err());
     let batch: Vec<_> = ckp_items
         .iter()
@@ -664,12 +700,30 @@ fn set_get_checkpoint() {
     cps2.handle_internal_batch(0, &batch).unwrap();
     cps3.handle_internal_batch(0, &batch).unwrap();
 
-    cps1.sign_new_checkpoint(epoch, 0, ckp_items.iter(), TestCausalOrderPendCertNoop)
-        .unwrap();
-    cps2.sign_new_checkpoint(epoch, 0, ckp_items.iter(), TestCausalOrderPendCertNoop)
-        .unwrap();
-    cps3.sign_new_checkpoint(epoch, 0, ckp_items.iter(), TestCausalOrderPendCertNoop)
-        .unwrap();
+    cps1.sign_new_checkpoint(
+        epoch,
+        0,
+        ckp_items.iter(),
+        TestCausalOrderPendCertNoop,
+        None,
+    )
+    .unwrap();
+    cps2.sign_new_checkpoint(
+        epoch,
+        0,
+        ckp_items.iter(),
+        TestCausalOrderPendCertNoop,
+        None,
+    )
+    .unwrap();
+    cps3.sign_new_checkpoint(
+        epoch,
+        0,
+        ckp_items.iter(),
+        TestCausalOrderPendCertNoop,
+        None,
+    )
+    .unwrap();
     // cps4.handle_internal_set_checkpoint(summary, &transactions)
     //     .unwrap();
 
@@ -821,6 +875,7 @@ fn checkpoint_integration() {
                     old_checkpoint,
                     transactions.iter(),
                     TestCausalOrderPendCertNoop,
+                    None,
                 )
                 .is_ok());
 
@@ -866,7 +921,8 @@ fn checkpoint_integration() {
                 committee.epoch,
                 next_checkpoint,
                 transactions.iter(),
-                TestCausalOrderPendCertNoop
+                TestCausalOrderPendCertNoop,
+                None
             )
             .is_err());
 
@@ -1402,7 +1458,7 @@ fn test_fragment_full_flow() {
         seq.next_transaction_index += 1;
     }
     let transactions = cps0.attempt_to_construct_checkpoint(&committee).unwrap();
-    cps0.sign_new_checkpoint(0, 0, transactions.iter(), TestCausalOrderPendCertNoop)
+    cps0.sign_new_checkpoint(0, 0, transactions.iter(), TestCausalOrderPendCertNoop, None)
         .unwrap();
 
     // Two fragments for 5-6, and then 0-1, 1-2, 2-3, 3-4
@@ -1756,7 +1812,7 @@ async fn checkpoint_messaging_flow() {
             .unwrap();
         auth.checkpoint
             .lock()
-            .sign_new_checkpoint(0, 0, transactions.iter(), TestCausalOrderPendCertNoop)
+            .sign_new_checkpoint(0, 0, transactions.iter(), TestCausalOrderPendCertNoop, None)
             .unwrap();
     }
 

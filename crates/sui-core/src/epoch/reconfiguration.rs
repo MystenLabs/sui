@@ -89,18 +89,7 @@ where
 
         let sui_system_state = self.state.get_sui_system_state_object().await?;
         let next_epoch = epoch + 1;
-        let next_epoch_validators = &sui_system_state.validators.next_epoch_validators;
-        let votes = next_epoch_validators
-            .iter()
-            .map(|metadata| {
-                (
-                    AuthorityPublicKeyBytes::from_bytes(metadata.pubkey_bytes.as_ref())
-                        .expect("Validity of public key bytes should be verified on-chain"),
-                    metadata.next_epoch_stake + metadata.next_epoch_delegation,
-                )
-            })
-            .collect();
-        let new_committee = Committee::new(next_epoch, votes)?;
+        let new_committee = sui_system_state.get_next_epoch_committee();
         debug!(
             ?epoch,
             "New committee for the next epoch: {}", new_committee

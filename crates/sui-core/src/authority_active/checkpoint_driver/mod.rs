@@ -167,7 +167,8 @@ pub async fn checkpoint_process<A>(
     let mut last_cert_time = Instant::now();
 
     loop {
-        let result = checkpoint_process_step(active_authority.clone(), timing).await;
+        let result =
+            checkpoint_process_step(active_authority.clone(), timing, enable_reconfig).await;
         let state_checkpoints = &active_authority.state.checkpoints;
         let next_cp_seq = state_checkpoints.lock().next_checkpoint();
         match result {
@@ -270,6 +271,7 @@ pub async fn checkpoint_process<A>(
 pub async fn checkpoint_process_step<A>(
     active_authority: Arc<ActiveAuthority<A>>,
     timing: &CheckpointProcessControl,
+    enable_reconfig: bool,
 ) -> Result<CheckpointStepResult, CheckpointStepError>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone + Reconfigurable,
@@ -368,6 +370,7 @@ where
         my_proposal.signed_summary.auth_signature.epoch,
         *my_proposal.sequence_number(),
         transactions,
+        enable_reconfig,
     )
     .await
     .map_err(|err| CheckpointStepError::CheckpointSignBlocked(Box::new(err)))?;
@@ -380,6 +383,7 @@ pub async fn sync_and_sign_new_checkpoint<A>(
     epoch: EpochId,
     seq: CheckpointSequenceNumber,
     transactions: BTreeSet<ExecutionDigests>,
+    enable_reconfig: bool,
 ) -> SuiResult
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone + Reconfigurable,
@@ -405,6 +409,27 @@ where
         return Err(SuiError::CheckpointingError { error });
     }
 
+    let next_epoch_committee = if enable_reconfig {
+        // Ready to start epoch change means that we have finalized the last second checkpoint,
+        // and now we are about to finalize the last checkpoint of the epoch.
+        let is_last_checkpoint = active_authority
+            .state
+            .checkpoints
+            .lock()
+            .is_ready_to_start_epoch_change();
+
+        if is_last_checkpoint {
+            // If this is the last checkpoint we are about to sign, we read the committee
+            // information for the next epoch and put it into the last checkpoint.
+            let sui_system_state = active_authority.state.get_sui_system_state_object().await?;
+            Some(sui_system_state.get_next_epoch_committee())
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
     active_authority
         .state
         .checkpoints
@@ -414,6 +439,7 @@ where
             seq,
             transactions.iter(),
             active_authority.state.database.clone(),
+            next_epoch_committee,
         )
 }
 
