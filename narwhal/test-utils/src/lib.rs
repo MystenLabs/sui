@@ -942,6 +942,14 @@ impl WorkerFixture {
         &self.info
     }
 
+    pub fn new_network(&self, router: anemo::Router) -> anemo::Network {
+        anemo::Network::bind(network::multiaddr_to_address(&self.info().worker_address).unwrap())
+            .server_name("narwhal")
+            .private_key(self.keypair().private().0.to_bytes())
+            .start(router)
+            .unwrap()
+    }
+
     fn generate<R, P>(mut rng: R, id: WorkerId, mut get_port: P) -> Self
     where
         R: rand::RngCore + rand::CryptoRng,
