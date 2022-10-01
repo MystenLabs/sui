@@ -19,8 +19,8 @@ use sui_json_rpc_types::{
     MoveCallParams, OwnedObjectRef, RPCTransactionRequestParams, SuiCertifiedTransaction, SuiData,
     SuiEvent, SuiEventEnvelope, SuiExecutionStatus, SuiGasCostSummary, SuiObject, SuiObjectRead,
     SuiObjectRef, SuiParsedData, SuiPastObjectRead, SuiRawData, SuiRawMoveObject,
-    SuiTransactionData, SuiTransactionEffects, SuiTransactionResponse, TransactionBytes,
-    TransferObjectParams, TxSeqNumber,
+    SuiTransactionData, SuiTransactionEffects, SuiTransactionQueryCriteria, SuiTransactionResponse,
+    TransactionBytes, TransferObjectParams, TxSeqNumber,
 };
 use sui_open_rpc::ExamplePairing;
 use sui_types::base_types::{
@@ -75,12 +75,7 @@ impl RpcExampleProvider {
             self.get_recent_transactions(),
             self.get_total_transaction_number(),
             self.get_transaction(),
-            /*  self.get_transactions_by_input_object(),
-            self.get_transactions_by_move_function(),
-            self.get_transactions_by_mutated_object(),
-            self.get_transactions_from_address(),
-            self.get_transactions_in_range(),
-            self.get_transactions_to_address(),*/
+            self.get_transactions(),
             self.get_events_by_transaction(),
             self.get_events_by_object(),
             self.get_events_by_sender(),
@@ -376,83 +371,22 @@ impl RpcExampleProvider {
         )
     }
 
-    fn get_transactions_by_input_object(&mut self) -> Examples {
+    fn get_transactions(&mut self) -> Examples {
         let result = self.get_transaction_digests(5..8);
         Examples::new(
-            "sui_getTransactionsByInputObject",
+            "sui_getTransactions",
             vec![ExamplePairing::new(
-                "Return the transaction digest for specified input object",
-                vec![("object", json!(ObjectID::new(self.rng.gen())))],
-                json!(result),
-            )],
-        )
-    }
-
-    fn get_transactions_by_move_function(&mut self) -> Examples {
-        let result = self.get_transaction_digests(6..10);
-        Examples::new(
-            "sui_getTransactionsByMoveFunction",
-            vec![ExamplePairing::new(
-                "Return the transaction digest for specified input object",
+                "Return the transaction digest for specified query criteria",
                 vec![
-                    ("package", json!(SUI_FRAMEWORK_OBJECT_ID)),
-                    ("module", json!("devnet_nft")),
-                    ("function", json!("function")),
+                    (
+                        "query",
+                        json!(SuiTransactionQueryCriteria::InputObject {
+                            object_id: ObjectID::new(self.rng.gen())
+                        }),
+                    ),
+                    ("cursor", json!(10)),
+                    ("limit", json!(100)),
                 ],
-                json!(result),
-            )],
-        )
-    }
-
-    fn get_transactions_by_mutated_object(&mut self) -> Examples {
-        let result = self.get_transaction_digests(5..8);
-        Examples::new(
-            "sui_getTransactionsByMutatedObject",
-            vec![ExamplePairing::new(
-                "Return the transaction digest for specified mutated object",
-                vec![("object", json!(ObjectID::new(self.rng.gen())))],
-                json!(result),
-            )],
-        )
-    }
-
-    fn get_transactions_from_address(&mut self) -> Examples {
-        let result = self.get_transaction_digests(5..8);
-        Examples::new(
-            "sui_getTransactionsFromAddress",
-            vec![ExamplePairing::new(
-                "Return the transaction digest for specified sender address",
-                vec![(
-                    "addr",
-                    json!(SuiAddress::from(ObjectID::new(self.rng.gen()))),
-                )],
-                json!(result),
-            )],
-        )
-    }
-
-    fn get_transactions_in_range(&mut self) -> Examples {
-        let result = self.get_transaction_digests(5..8);
-        Examples::new(
-            "sui_getTransactionsInRange",
-            vec![ExamplePairing::new(
-                "Return the transaction digest in range",
-                vec![("start", json!(5)), ("end", json!(8))],
-                json!(result),
-            )],
-        )
-    }
-
-    fn get_transactions_to_address(&mut self) -> Examples {
-        let result = self.get_transaction_digests(5..8);
-        Examples::new(
-            "sui_getTransactionsToAddress",
-            vec![ExamplePairing::new(
-                "Return the transaction digest for specified recipient address",
-                vec![(
-                    "addr",
-                    json!(SuiAddress::from(ObjectID::new(self.rng.gen()))),
-                )],
                 json!(result),
             )],
         )
