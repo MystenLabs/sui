@@ -26,7 +26,6 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
 use serde_with::serde_as;
-use sui_types::{parse_sui_struct_tag, parse_sui_type_tag};
 use tracing::warn;
 
 use sui_json::SuiJsonValue;
@@ -39,7 +38,7 @@ use sui_types::crypto::{AuthorityStrongQuorumSignInfo, SignableBytes, Signature}
 use sui_types::error::SuiError;
 use sui_types::event::{Event, TransferType};
 use sui_types::event::{EventEnvelope, EventType};
-use sui_types::filter::{EventFilter, TransactionFilter};
+use sui_types::filter::{EventFilter, TransactionFilter, TransactionQueryCriteria};
 use sui_types::gas::GasCostSummary;
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::{
@@ -53,13 +52,15 @@ use sui_types::object::{
     Data, MoveObject, Object, ObjectFormatOptions, ObjectRead, Owner, PastObjectRead,
 };
 use sui_types::sui_serde::{Base64, Encoding};
+use sui_types::{parse_sui_struct_tag, parse_sui_type_tag};
 
 #[cfg(test)]
 #[path = "unit_tests/rpc_types_tests.rs"]
 mod rpc_types_tests;
 
-pub type GatewayTxSeqNumber = u64;
+pub type TxSeqNumber = u64;
 pub type SuiMoveTypeParameterIndex = u16;
+pub type TransactionsPage = Page<(TxSeqNumber, TransactionDigest), TxSeqNumber>;
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
 pub enum SuiMoveAbility {
@@ -2377,4 +2378,82 @@ impl TransactionBytes {
     pub fn to_data(self) -> Result<TransactionData, anyhow::Error> {
         TransactionData::from_signable_bytes(&self.tx_bytes.to_vec()?)
     }
+}
+
+#[derive(Clone, Debug, JsonSchema, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SuiTransactionQueryCriteria {
+    All,
+    MoveFunction {
+        package: ObjectID,
+        module: Option<String>,
+        function: Option<String>,
+    },
+    InputObject {
+        object_id: ObjectID,
+    },
+    MutatedObject {
+        object_id: ObjectID,
+    },
+    FromAddress {
+        address: SuiAddress,
+    },
+    ToAddress {
+        address: SuiAddress,
+    },
+}
+
+impl From<TransactionQueryCriteria> for SuiTransactionQueryCriteria {
+    fn from(filter: TransactionQueryCriteria) -> Self {
+        match filter {
+            TransactionQueryCriteria::MoveFunction {
+                package,
+                module,
+                function,
+            } => Self::MoveFunction {
+                package,
+                module,
+                function,
+            },
+            TransactionQueryCriteria::InputObject { object_id } => Self::InputObject { object_id },
+            TransactionQueryCriteria::MutatedObject { object_id } => {
+                Self::MutatedObject { object_id }
+            }
+            TransactionQueryCriteria::FromAddress { address } => Self::FromAddress { address },
+            TransactionQueryCriteria::ToAddress { address } => Self::ToAddress { address },
+            TransactionQueryCriteria::All => Self::All,
+        }
+    }
+}
+
+impl From<SuiTransactionQueryCriteria> for TransactionQueryCriteria {
+    fn from(filter: SuiTransactionQueryCriteria) -> Self {
+        match filter {
+            SuiTransactionQueryCriteria::MoveFunction {
+                package,
+                module,
+                function,
+            } => Self::MoveFunction {
+                package,
+                module,
+                function,
+            },
+            SuiTransactionQueryCriteria::InputObject { object_id } => {
+                Self::InputObject { object_id }
+            }
+            SuiTransactionQueryCriteria::MutatedObject { object_id } => {
+                Self::MutatedObject { object_id }
+            }
+            SuiTransactionQueryCriteria::FromAddress { address } => Self::FromAddress { address },
+            SuiTransactionQueryCriteria::ToAddress { address } => Self::ToAddress { address },
+            SuiTransactionQueryCriteria::All => Self::All,
+        }
+    }
+}
+
+#[derive(Clone, Debug, JsonSchema, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Page<T, C> {
+    pub data: Vec<T>,
+    pub next_cursor: Option<C>,
 }

@@ -32,8 +32,8 @@ use sui_json_rpc::api::RpcReadApiClient;
 use sui_json_rpc::api::TransactionExecutionApiClient;
 pub use sui_json_rpc_types as rpc_types;
 use sui_json_rpc_types::{
-    GatewayTxSeqNumber, GetObjectDataResponse, GetRawObjectDataResponse, SuiEventEnvelope,
-    SuiEventFilter, SuiObjectInfo, SuiTransactionResponse,
+    GetObjectDataResponse, GetRawObjectDataResponse, Page, SuiEventEnvelope, SuiEventFilter,
+    SuiObjectInfo, SuiTransactionQueryCriteria, SuiTransactionResponse, TxSeqNumber,
 };
 use sui_transaction_builder::{DataReader, TransactionBuilder};
 pub use sui_types as types;
@@ -296,9 +296,9 @@ impl ReadApi {
 
     pub async fn get_transactions_in_range(
         &self,
-        start: GatewayTxSeqNumber,
-        end: GatewayTxSeqNumber,
-    ) -> anyhow::Result<Vec<(GatewayTxSeqNumber, TransactionDigest)>> {
+        start: TxSeqNumber,
+        end: TxSeqNumber,
+    ) -> anyhow::Result<Vec<(TxSeqNumber, TransactionDigest)>> {
         Ok(match &*self.api {
             SuiClientApi::Rpc(c) => c.http.get_transactions_in_range(start, end).await?,
             SuiClientApi::Embedded(c) => c.get_transactions_in_range(start, end)?,
@@ -308,7 +308,7 @@ impl ReadApi {
     pub async fn get_recent_transactions(
         &self,
         count: u64,
-    ) -> anyhow::Result<Vec<(GatewayTxSeqNumber, TransactionDigest)>> {
+    ) -> anyhow::Result<Vec<(TxSeqNumber, TransactionDigest)>> {
         Ok(match &*self.api {
             SuiClientApi::Rpc(c) => c.http.get_recent_transactions(count).await?,
             SuiClientApi::Embedded(c) => c.get_recent_transactions(count)?,
@@ -329,72 +329,18 @@ impl ReadApi {
 pub struct FullNodeApi(Arc<SuiClientApi>);
 
 impl FullNodeApi {
-    pub async fn get_transactions_by_input_object(
+    pub async fn get_transactions(
         &self,
-        object: ObjectID,
-    ) -> anyhow::Result<Vec<(GatewayTxSeqNumber, TransactionDigest)>> {
+        query: SuiTransactionQueryCriteria,
+        cursor: Option<TxSeqNumber>,
+        limit: Option<usize>,
+    ) -> anyhow::Result<Page<(TxSeqNumber, TransactionDigest), TxSeqNumber>> {
         Ok(match &*self.0 {
-            SuiClientApi::Rpc(c) => c.http.get_transactions_by_input_object(object).await?,
+            SuiClientApi::Rpc(c) => c.http.get_transactions(query, cursor, limit).await?,
             SuiClientApi::Embedded(_) => {
                 return Err(anyhow!("Method not supported by embedded gateway client."))
             }
         })
-    }
-
-    pub async fn get_transactions_by_mutated_object(
-        &self,
-        object: ObjectID,
-    ) -> anyhow::Result<Vec<(GatewayTxSeqNumber, TransactionDigest)>> {
-        Ok(match &*self.0 {
-            SuiClientApi::Rpc(c) => c.http.get_transactions_by_mutated_object(object),
-            SuiClientApi::Embedded(_) => {
-                return Err(anyhow!("Method not supported by embedded gateway client."))
-            }
-        }
-        .await?)
-    }
-
-    pub async fn get_transactions_by_move_function(
-        &self,
-        package: ObjectID,
-        module: Option<String>,
-        function: Option<String>,
-    ) -> anyhow::Result<Vec<(GatewayTxSeqNumber, TransactionDigest)>> {
-        Ok(match &*self.0 {
-            SuiClientApi::Rpc(c) => c
-                .http
-                .get_transactions_by_move_function(package, module, function),
-            SuiClientApi::Embedded(_) => {
-                return Err(anyhow!("Method not supported by embedded gateway client."))
-            }
-        }
-        .await?)
-    }
-
-    pub async fn get_transactions_from_addr(
-        &self,
-        addr: SuiAddress,
-    ) -> anyhow::Result<Vec<(GatewayTxSeqNumber, TransactionDigest)>> {
-        Ok(match &*self.0 {
-            SuiClientApi::Rpc(c) => c.http.get_transactions_from_addr(addr),
-            SuiClientApi::Embedded(_) => {
-                return Err(anyhow!("Method not supported by embedded gateway client."))
-            }
-        }
-        .await?)
-    }
-
-    pub async fn get_transactions_to_addr(
-        &self,
-        addr: SuiAddress,
-    ) -> anyhow::Result<Vec<(GatewayTxSeqNumber, TransactionDigest)>> {
-        Ok(match &*self.0 {
-            SuiClientApi::Rpc(c) => c.http.get_transactions_to_addr(addr),
-            SuiClientApi::Embedded(_) => {
-                return Err(anyhow!("Method not supported by embedded gateway client."))
-            }
-        }
-        .await?)
     }
 }
 pub struct EventApi(Arc<SuiClientApi>);

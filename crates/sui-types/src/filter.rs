@@ -92,3 +92,25 @@ impl Filter<TxCertAndSignedEffects> for TransactionFilter {
 pub trait Filter<T> {
     fn matches(&self, item: &T) -> bool;
 }
+
+#[derive(Clone, Debug)]
+pub enum TransactionQueryCriteria {
+    All,
+    MoveFunction {
+        package: ObjectID,
+        module: Option<String>,
+        function: Option<String>,
+    },
+    InputObject {
+        object_id: ObjectID,
+    },
+    MutatedObject {
+        object_id: ObjectID,
+    },
+    FromAddress {
+        address: SuiAddress,
+    },
+    ToAddress {
+        address: SuiAddress,
+    },
+}

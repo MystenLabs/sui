@@ -5,7 +5,7 @@ use move_package::BuildConfig;
 use std::{path::Path, str::FromStr};
 use sui_config::utils::get_available_port;
 use sui_config::SUI_KEYSTORE_FILENAME;
-use sui_core::gateway_state::GatewayTxSeqNumber;
+use sui_core::gateway_state::TxSeqNumber;
 use sui_core::test_utils::to_sender_signed_transaction;
 use sui_framework::build_move_package_to_bytes;
 use sui_json::SuiJsonValue;
@@ -222,23 +222,21 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
         tx_responses.push(response);
     }
     // test get_transactions_in_range
-    let tx: Vec<(GatewayTxSeqNumber, TransactionDigest)> =
+    let tx: Vec<(TxSeqNumber, TransactionDigest)> =
         http_client.get_transactions_in_range(0, 10).await?;
     assert_eq!(4, tx.len());
 
     // test get_transactions_in_range with smaller range
-    let tx: Vec<(GatewayTxSeqNumber, TransactionDigest)> =
+    let tx: Vec<(TxSeqNumber, TransactionDigest)> =
         http_client.get_transactions_in_range(1, 3).await?;
     assert_eq!(2, tx.len());
 
     // test get_recent_transactions with smaller range
-    let tx: Vec<(GatewayTxSeqNumber, TransactionDigest)> =
-        http_client.get_recent_transactions(3).await?;
+    let tx: Vec<(TxSeqNumber, TransactionDigest)> = http_client.get_recent_transactions(3).await?;
     assert_eq!(3, tx.len());
 
     // test get_recent_transactions
-    let tx: Vec<(GatewayTxSeqNumber, TransactionDigest)> =
-        http_client.get_recent_transactions(10).await?;
+    let tx: Vec<(TxSeqNumber, TransactionDigest)> = http_client.get_recent_transactions(10).await?;
     assert_eq!(4, tx.len());
 
     // test get_transaction

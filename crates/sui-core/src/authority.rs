@@ -2,34 +2,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::checkpoints::ConsensusSender;
-use crate::{
-    authority_batch::{BroadcastReceiver, BroadcastSender},
-    checkpoints::CheckpointStore,
-    event_handler::EventHandler,
-    execution_engine,
-    metrics::start_timer,
-    query_helpers::QueryHelpers,
-    transaction_input_checker,
-    transaction_streamer::TransactionStreamer,
-};
-use arc_swap::ArcSwap;
-use async_trait::async_trait;
-use chrono::prelude::*;
-use fastcrypto::traits::KeyPair;
-use move_bytecode_utils::module_cache::SyncModuleCache;
-use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
-use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
-use narwhal_config::{
-    Committee as ConsensusCommittee, WorkerCache as ConsensusWorkerCache,
-    WorkerId as ConsensusWorkerId,
-};
-use narwhal_executor::{ExecutionIndices, ExecutionState};
-use parking_lot::Mutex;
-use prometheus::{
-    exponential_buckets, register_histogram_with_registry, register_int_counter_with_registry,
-    register_int_gauge_with_registry, Histogram, IntCounter, IntGauge,
-};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::ops::Deref;
@@ -38,11 +10,42 @@ use std::{
     collections::{HashMap, VecDeque},
     pin::Pin,
     sync::{
-        atomic::{AtomicUsize, Ordering},
+        atomic::{AtomicBool, AtomicUsize, Ordering},
         Arc,
     },
 };
+
+use arc_swap::ArcSwap;
+use async_trait::async_trait;
+use chrono::prelude::*;
+use fastcrypto::traits::KeyPair;
+use move_bytecode_utils::module_cache::SyncModuleCache;
+use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
+use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
+use parking_lot::Mutex;
+use prometheus::{
+    exponential_buckets, register_histogram_with_registry, register_int_counter_with_registry,
+    register_int_gauge_with_registry, Histogram, IntCounter, IntGauge,
+};
+use tap::TapFallible;
+use thiserror::Error;
+use tokio::sync::broadcast::error::RecvError;
+use tokio::sync::mpsc::Sender;
+use tracing::Instrument;
+use tracing::{debug, error, instrument, warn};
+use typed_store::Map;
+
+pub use authority_store::{
+    AuthorityStore, GatewayStore, ResolverWrapper, SuiDataStore, UpdateType,
+};
+use narwhal_config::{
+    Committee as ConsensusCommittee, WorkerCache as ConsensusWorkerCache,
+    WorkerId as ConsensusWorkerId,
+};
+use narwhal_executor::{ExecutionIndices, ExecutionState};
 use sui_adapter::adapter;
+use sui_adapter::temporary_store::InnerTemporaryStore;
+pub use sui_adapter::temporary_store::TemporaryStore;
 use sui_config::genesis::Genesis;
 use sui_json_rpc_types::{SuiEventEnvelope, SuiTransactionEffects};
 use sui_simulator::nondeterministic;
@@ -51,8 +54,16 @@ use sui_storage::{
     write_ahead_log::{DBTxGuard, TxGuard, WriteAheadLog},
     IndexStore,
 };
+use sui_types::committee::EpochId;
 use sui_types::crypto::{AuthorityKeyPair, NetworkKeyPair};
+use sui_types::filter::TransactionQueryCriteria;
+use sui_types::messages_checkpoint::{
+    CheckpointRequest, CheckpointRequestType, CheckpointResponse, CheckpointSequenceNumber,
+};
+use sui_types::object::{Owner, PastObjectRead};
+use sui_types::sui_system_state::SuiSystemState;
 use sui_types::temporary_store::InnerTemporaryStore;
+pub use sui_types::temporary_store::TemporaryStore;
 use sui_types::{
     base_types::*,
     batch::{TxSequenceNumber, UpdateItem},
@@ -65,13 +76,23 @@ use sui_types::{
     storage::{BackingPackageStore, DeleteKind},
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID,
 };
-use tap::TapFallible;
-use thiserror::Error;
-use tokio::sync::broadcast::error::RecvError;
-use tokio::sync::mpsc::Sender;
-use tracing::Instrument;
-use tracing::{debug, error, instrument, warn};
-use typed_store::Map;
+
+use crate::authority::authority_store_tables::ExecutionIndicesWithHash;
+use crate::checkpoints::ConsensusSender;
+use crate::consensus_adapter::ConsensusListenerMessage;
+use crate::epoch::committee_store::CommitteeStore;
+use crate::epoch::epoch_store::EpochStore;
+use crate::metrics::TaskUtilizationExt;
+use crate::{
+    authority_batch::{BroadcastReceiver, BroadcastSender},
+    checkpoints::CheckpointStore,
+    event_handler::EventHandler,
+    execution_engine,
+    metrics::start_timer,
+    query_helpers::QueryHelpers,
+    transaction_input_checker,
+    transaction_streamer::TransactionStreamer,
+};
 
 #[cfg(test)]
 #[path = "unit_tests/authority_tests.rs"]
@@ -89,26 +110,10 @@ pub mod move_integration_tests;
 #[path = "unit_tests/gas_tests.rs"]
 mod gas_tests;
 
-pub use sui_types::temporary_store::TemporaryStore;
-
 pub mod authority_store_tables;
 
-mod authority_store;
-use crate::authority::authority_store_tables::ExecutionIndicesWithHash;
-use crate::consensus_adapter::ConsensusListenerMessage;
-use crate::epoch::committee_store::CommitteeStore;
-use crate::metrics::TaskUtilizationExt;
-pub use authority_store::{
-    AuthorityStore, GatewayStore, ResolverWrapper, SuiDataStore, UpdateType,
-};
-use sui_types::committee::EpochId;
-use sui_types::messages_checkpoint::{
-    CheckpointRequest, CheckpointRequestType, CheckpointResponse,
-};
-use sui_types::object::{Owner, PastObjectRead};
-use sui_types::sui_system_state::SuiSystemState;
-
 pub mod authority_notifier;
+mod authority_store;
 
 pub const MAX_ITEMS_LIMIT: u64 = 1_000;
 const BROADCAST_CAPACITY: usize = 10_000;
@@ -623,7 +628,7 @@ impl AuthorityState {
         let resp = self
             .process_certificate(tx_guard, certificate, true)
             .await
-            .tap_err(|e| debug!(?digest, "process_certificate failed: {}", e))?;
+            .tap_err(|e| debug!(?digest, "process_certificate failed: {e}"))?;
 
         let expected_effects_digest = effects.digest();
         let observed_effects_digest = resp.signed_effects.as_ref().map(|e| e.digest());
@@ -695,7 +700,7 @@ impl AuthorityState {
 
         self.process_certificate(tx_guard, &certificate, bypass_validator_halt)
             .await
-            .tap_err(|e| debug!(?tx_digest, "process_certificate failed: {}", e))
+            .tap_err(|e| debug!(?tx_digest, "process_certificate failed: {e}"))
     }
 
     #[instrument(level = "trace", skip_all)]
@@ -795,7 +800,7 @@ impl AuthorityState {
         let (inner_temporary_store, signed_effects) =
             match self.prepare_certificate(certificate, digest).await {
                 Err(e) => {
-                    debug!(name = ?self.name, ?digest, "Error preparing transaction: {}", e);
+                    debug!(name = ?self.name, ?digest, "Error preparing transaction: {e}");
                     tx_guard.release();
                     return Err(e);
                 }
@@ -814,7 +819,7 @@ impl AuthorityState {
             bypass_validator_halt,
         )
         .await
-        .tap_err(|e| error!(?digest, "commit_certificate failed: {}", e))?;
+        .tap_err(|e| error!(?digest, "commit_certificate failed: {e}"))?;
 
         // commit_certificate finished, the tx is fully committed to the store.
         tx_guard.commit_tx();
@@ -1008,9 +1013,7 @@ impl AuthorityState {
             let _ = self
                 .index_tx(indexes.as_ref(), seq, digest, &cert, &effects, timestamp_ms)
                 .tap_ok(|_| self.metrics.post_processing_total_tx_indexed.inc())
-                .tap_err(
-                    |e| warn!(tx_digest=?digest, "Post processing - Couldn't index tx: {}", e),
-                );
+                .tap_err(|e| warn!(tx_digest=?digest, "Post processing - Couldn't index tx: {e}"));
         }
 
         // Stream transaction
@@ -1058,7 +1061,7 @@ impl AuthorityState {
                             .post_processing_total_tx_sent_to_post_processing
                             .inc();
                         if let Err(e) = self.post_process_one_tx(seq, &digest).await {
-                            warn!(?digest, "Couldn't process tx: {}", e);
+                            warn!(?digest, "Couldn't process tx: {e}");
                         }
                     }
                 }
@@ -1505,7 +1508,7 @@ impl AuthorityState {
                 }
 
                 if let Err(e) = self.process_certificate(tx_guard, &cert, false).await {
-                    warn!(?digest, "Failed to process in-progress certificate: {}", e);
+                    warn!(?digest, "Failed to process in-progress certificate: {e}");
                 }
             } else {
                 break;
@@ -1694,15 +1697,50 @@ impl AuthorityState {
         }
     }
 
-    pub async fn get_transactions_by_move_function(
+    pub async fn get_transactions(
         &self,
-        package: ObjectID,
-        module: Option<String>,
-        function: Option<String>,
+        filter: TransactionQueryCriteria,
+        cursor: Option<TxSequenceNumber>,
+        limit: Option<usize>,
     ) -> Result<Vec<(TxSequenceNumber, TransactionDigest)>, anyhow::Error> {
-        Ok(self
-            .get_indexes()?
-            .get_transactions_by_move_function(package, module, function)?)
+        Ok(match filter {
+            TransactionQueryCriteria::MoveFunction {
+                package,
+                module,
+                function,
+            } => self
+                .get_indexes()?
+                .get_transactions_by_move_function(package, module, function, cursor, limit)?,
+            TransactionQueryCriteria::InputObject { object_id } => self
+                .get_indexes()?
+                .get_transactions_by_input_object(object_id, cursor, limit)?,
+            TransactionQueryCriteria::MutatedObject { object_id } => self
+                .get_indexes()?
+                .get_transactions_by_mutated_object(object_id, cursor, limit)?,
+            TransactionQueryCriteria::FromAddress { address } => self
+                .get_indexes()?
+                .get_transactions_from_addr(address, cursor, limit)?,
+            TransactionQueryCriteria::ToAddress { address } => self
+                .get_indexes()?
+                .get_transactions_to_addr(address, cursor, limit)?,
+            TransactionQueryCriteria::All => {
+                let start = cursor.unwrap_or_default();
+                let iter = self
+                    .database
+                    .tables
+                    .executed_sequence
+                    .iter()
+                    .skip_to(&start)?;
+                if let Some(limit) = limit {
+                    iter.take(limit)
+                        .map(|(seq, digest)| (seq, digest.transaction))
+                        .collect()
+                } else {
+                    iter.map(|(seq, digest)| (seq, digest.transaction))
+                        .collect()
+                }
+            }
+        })
     }
 
     pub async fn get_timestamp_ms(
@@ -1710,38 +1748,6 @@ impl AuthorityState {
         digest: &TransactionDigest,
     ) -> Result<Option<u64>, anyhow::Error> {
         Ok(self.get_indexes()?.get_timestamp_ms(digest)?)
-    }
-
-    pub async fn get_transactions_by_input_object(
-        &self,
-        object: ObjectID,
-    ) -> Result<Vec<(TxSequenceNumber, TransactionDigest)>, anyhow::Error> {
-        Ok(self
-            .get_indexes()?
-            .get_transactions_by_input_object(object)?)
-    }
-
-    pub async fn get_transactions_by_mutated_object(
-        &self,
-        object: ObjectID,
-    ) -> Result<Vec<(TxSequenceNumber, TransactionDigest)>, anyhow::Error> {
-        Ok(self
-            .get_indexes()?
-            .get_transactions_by_mutated_object(object)?)
-    }
-
-    pub async fn get_transactions_from_addr(
-        &self,
-        address: SuiAddress,
-    ) -> Result<Vec<(TxSequenceNumber, TransactionDigest)>, anyhow::Error> {
-        Ok(self.get_indexes()?.get_transactions_from_addr(address)?)
-    }
-
-    pub async fn get_transactions_to_addr(
-        &self,
-        address: SuiAddress,
-    ) -> Result<Vec<(TxSequenceNumber, TransactionDigest)>, anyhow::Error> {
-        Ok(self.get_indexes()?.get_transactions_to_addr(address)?)
     }
 
     /// Returns a full handle to the event store, including inserts... so be careful!

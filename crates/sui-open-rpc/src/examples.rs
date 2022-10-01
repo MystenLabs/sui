@@ -16,11 +16,11 @@ use sui::client_commands::EXAMPLE_NFT_URL;
 use sui_core::test_utils::to_sender_signed_transaction;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    GatewayTxSeqNumber, MoveCallParams, OwnedObjectRef, RPCTransactionRequestParams,
-    SuiCertifiedTransaction, SuiData, SuiEvent, SuiEventEnvelope, SuiExecutionStatus,
-    SuiGasCostSummary, SuiObject, SuiObjectRead, SuiObjectRef, SuiParsedData, SuiPastObjectRead,
-    SuiRawData, SuiRawMoveObject, SuiTransactionData, SuiTransactionEffects,
-    SuiTransactionResponse, TransactionBytes, TransferObjectParams,
+    MoveCallParams, OwnedObjectRef, RPCTransactionRequestParams, SuiCertifiedTransaction, SuiData,
+    SuiEvent, SuiEventEnvelope, SuiExecutionStatus, SuiGasCostSummary, SuiObject, SuiObjectRead,
+    SuiObjectRef, SuiParsedData, SuiPastObjectRead, SuiRawData, SuiRawMoveObject,
+    SuiTransactionData, SuiTransactionEffects, SuiTransactionResponse, TransactionBytes,
+    TransferObjectParams, TxSeqNumber,
 };
 use sui_open_rpc::ExamplePairing;
 use sui_types::base_types::{
@@ -75,12 +75,12 @@ impl RpcExampleProvider {
             self.get_recent_transactions(),
             self.get_total_transaction_number(),
             self.get_transaction(),
-            self.get_transactions_by_input_object(),
+            /*  self.get_transactions_by_input_object(),
             self.get_transactions_by_move_function(),
             self.get_transactions_by_mutated_object(),
             self.get_transactions_from_address(),
             self.get_transactions_in_range(),
-            self.get_transactions_to_address(),
+            self.get_transactions_to_address(),*/
             self.get_events_by_transaction(),
             self.get_events_by_object(),
             self.get_events_by_sender(),
@@ -461,7 +461,7 @@ impl RpcExampleProvider {
     fn get_transaction_digests(
         &mut self,
         range: Range<u64>,
-    ) -> Vec<(GatewayTxSeqNumber, TransactionDigest)> {
+    ) -> Vec<(TxSeqNumber, TransactionDigest)> {
         range
             .into_iter()
             .map(|seq| (seq, TransactionDigest::new(self.rng.gen())))
