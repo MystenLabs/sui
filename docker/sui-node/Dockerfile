@@ -14,7 +14,7 @@ RUN apt-get update && apt-get install -y cmake clang
 FROM chef AS planner
 COPY Cargo.toml Cargo.lock ./
 COPY crates/workspace-hack crates/workspace-hack
-RUN sed -i '/crates\/workspace-hack/b; /crates/d' Cargo.toml \
+RUN sed -i '/crates\/workspace-hack/b; /crates/d; /narwhal/d' Cargo.toml \
     && cargo metadata -q >/dev/null
 
 # Build and cache all dependencies.
@@ -36,6 +36,7 @@ RUN cargo build --profile $PROFILE
 # built as they were built and cached by the previous layer.
 COPY Cargo.toml Cargo.lock ./
 COPY crates crates
+COPY narwhal narwhal
 RUN cargo build --profile $PROFILE --bin sui-node
 # RUN apt-get update && apt-get install -y binutils
 # RUN strip --debug-only -w -K sui* -K narwhal* -K hyper* -K typed_store* "/sui/target/$PROFILE/sui-node"
