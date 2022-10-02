@@ -30,7 +30,7 @@ use sui_types::{
 };
 
 use crate::authority_aggregator::AuthAggMetrics;
-use crate::epoch::epoch_store::EpochStore;
+use crate::epoch::committee_store::CommitteeStore;
 use parking_lot::Mutex;
 
 use sui_macros::sim_test;
@@ -1686,7 +1686,7 @@ pub async fn checkpoint_tests_setup(
     // Now make an authority aggregator
     let aggregator = AuthorityAggregator::new(
         committee.clone(),
-        Arc::new(EpochStore::new_for_testing(&committee)),
+        Arc::new(CommitteeStore::new_for_testing(&committee)),
         authorities
             .iter()
             .map(|a| {

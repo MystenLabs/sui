@@ -48,7 +48,7 @@ pub async fn init_network_authorities(
         db_folder_path: PathBuf::from("/tmp/client_db"),
     };
     let committee = GatewayState::make_committee(&gateway_config).unwrap();
-    let epoch_store = Arc::new(EpochStore::new_for_testing(&committee));
+    let committee_store = Arc::new(CommitteeStore::new_for_testing(&committee));
     let auth_clients = GatewayState::make_authority_clients(
         &gateway_config,
         NetworkAuthorityClientMetrics::new_for_tests(),
@@ -56,7 +56,7 @@ pub async fn init_network_authorities(
     let registry = prometheus::Registry::new();
     AuthorityAggregator::new(
         committee,
-        epoch_store,
+        committee_store,
         auth_clients,
         AuthAggMetrics::new(&registry),
         SafeClientMetrics::new(&registry),
@@ -142,11 +142,11 @@ pub async fn init_local_authorities_with_genesis(
         serial_authority_request_timeout: Duration::from_secs(1),
         serial_authority_request_interval: Duration::from_secs(1),
     };
-    let epoch_store = Arc::new(EpochStore::new_for_testing(&committee));
+    let committee_store = Arc::new(CommitteeStore::new_for_testing(&committee));
     (
         AuthorityAggregator::new_with_timeouts(
             committee,
-            epoch_store,
+            committee_store,
             clients,
             AuthAggMetrics::new_for_tests(),
             SafeClientMetrics::new_for_tests(),
@@ -1046,10 +1046,6 @@ async fn test_quorum_once_with_timeout() {
         ) -> Result<CheckpointResponse, SuiError> {
             unreachable!();
         }
-
-        async fn handle_epoch(&self, _request: EpochRequest) -> Result<EpochResponse, SuiError> {
-            unreachable!()
-        }
     }
 
     let count = Arc::new(Mutex::new(0));
@@ -1070,11 +1066,11 @@ async fn test_quorum_once_with_timeout() {
     }
 
     let committee = Committee::new(0, authorities).unwrap();
-    let epoch_store = Arc::new(EpochStore::new_for_testing(&committee));
+    let committee_store = Arc::new(CommitteeStore::new_for_testing(&committee));
 
     let agg = AuthorityAggregator::new_with_timeouts(
         committee,
-        epoch_store,
+        committee_store,
         clients,
         AuthAggMetrics::new_for_tests(),
         SafeClientMetrics::new_for_tests(),

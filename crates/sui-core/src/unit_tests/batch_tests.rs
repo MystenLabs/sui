@@ -19,7 +19,7 @@ use crate::safe_client::SafeClient;
 
 use crate::authority_client::{AuthorityAPI, BatchInfoResponseItemStream};
 use crate::checkpoints::CheckpointStore;
-use crate::epoch::epoch_store::EpochStore;
+use crate::epoch::committee_store::CommitteeStore;
 use crate::safe_client::SafeClientMetrics;
 use async_trait::async_trait;
 use futures::lock::Mutex;
@@ -30,8 +30,8 @@ use std::fs;
 use std::sync::Arc;
 use sui_types::messages::{
     AccountInfoRequest, AccountInfoResponse, BatchInfoRequest, BatchInfoResponseItem,
-    CertifiedTransaction, EpochRequest, EpochResponse, ObjectInfoRequest, ObjectInfoResponse,
-    Transaction, TransactionInfoRequest, TransactionInfoResponse,
+    CertifiedTransaction, ObjectInfoRequest, ObjectInfoResponse, Transaction,
+    TransactionInfoRequest, TransactionInfoResponse,
 };
 
 pub(crate) fn init_state_parameters_from_rng<R>(
@@ -63,7 +63,7 @@ pub(crate) async fn init_state(
     let checkpoint_path = dir.join(format!("DB_{:?}", ObjectID::random()));
     fs::create_dir(&epoch_path).unwrap();
     let (tx_reconfigure_consensus, _rx_reconfigure_consensus) = tokio::sync::mpsc::channel(10);
-    let epoch_store = Arc::new(EpochStore::new(epoch_path, &committee, None));
+    let committee_store = Arc::new(CommitteeStore::new(epoch_path, &committee, None));
     let checkpoint_store = Arc::new(parking_lot::Mutex::new(
         CheckpointStore::open(&checkpoint_path, None, 0, name, secrete.clone()).unwrap(),
     ));
@@ -71,7 +71,7 @@ pub(crate) async fn init_state(
         name,
         secrete,
         store,
-        epoch_store,
+        committee_store,
         None,
         None,
         None,
@@ -581,10 +581,6 @@ impl AuthorityAPI for TrustworthyAuthorityClient {
         unimplemented!();
     }
 
-    async fn handle_epoch(&self, _request: EpochRequest) -> Result<EpochResponse, SuiError> {
-        unimplemented!()
-    }
-
     /// Handle Batch information requests for this authority.
     async fn handle_batch_stream(
         &self,
@@ -700,10 +696,6 @@ impl AuthorityAPI for ByzantineAuthorityClient {
         unimplemented!()
     }
 
-    async fn handle_epoch(&self, _request: EpochRequest) -> Result<EpochResponse, SuiError> {
-        unimplemented!()
-    }
-
     /// Handle Batch information requests for this authority.
     /// This function comes from a byzantine authority that has incorrect behavior.
     async fn handle_batch_stream(
@@ -776,13 +768,13 @@ async fn test_safe_batch_stream() {
     // Create an authority
     let store = Arc::new(AuthorityStore::open(&path.join("store"), None));
     let state = init_state(committee.clone(), authority_key, store).await;
-    let epoch_store = state.epoch_store().clone();
+    let committee_store = state.committee_store().clone();
 
     // Happy path:
     let auth_client = TrustworthyAuthorityClient::new(state);
     let safe_client = SafeClient::new(
         auth_client,
-        epoch_store,
+        committee_store,
         public_key_bytes,
         SafeClientMetrics::new_for_tests(),
     );
@@ -826,12 +818,12 @@ async fn test_safe_batch_stream() {
         tx_reconfigure_consensus,
     )
     .await;
-    let epoch_store = state_b.epoch_store().clone();
+    let committee_store = state_b.committee_store().clone();
     let auth_client_from_byzantine = ByzantineAuthorityClient::new(state_b);
     let public_key_bytes_b = authority_key.public().into();
     let safe_client_from_byzantine = SafeClient::new(
         auth_client_from_byzantine,
-        epoch_store,
+        committee_store,
         public_key_bytes_b,
         SafeClientMetrics::new_for_tests(),
     );

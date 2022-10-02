@@ -9,7 +9,7 @@ use crate::{
     authority::AuthorityState,
     authority_aggregator::{AuthAggMetrics, AuthorityAggregator},
     authority_client::{NetworkAuthorityClient, NetworkAuthorityClientMetrics},
-    epoch::epoch_store::EpochStore,
+    epoch::committee_store::CommitteeStore,
     safe_client::SafeClientMetrics,
 };
 
@@ -36,7 +36,7 @@ pub fn test_authority_aggregator(
 ) -> AuthorityAggregator<NetworkAuthorityClient> {
     let validators_info = config.validator_set();
     let committee = Committee::new(0, ValidatorInfo::voting_rights(validators_info)).unwrap();
-    let epoch_store = Arc::new(EpochStore::new_for_testing(&committee));
+    let committee_store = Arc::new(CommitteeStore::new_for_testing(&committee));
     let clients: BTreeMap<_, _> = validators_info
         .iter()
         .map(|config| {
@@ -53,7 +53,7 @@ pub fn test_authority_aggregator(
     let registry = prometheus::Registry::new();
     AuthorityAggregator::new(
         committee,
-        epoch_store,
+        committee_store,
         clients,
         AuthAggMetrics::new(&registry),
         SafeClientMetrics::new(&registry),

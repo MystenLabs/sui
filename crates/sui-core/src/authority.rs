@@ -92,14 +92,14 @@ pub use sui_adapter::temporary_store::TemporaryStore;
 pub mod authority_store_tables;
 
 mod authority_store;
-use crate::epoch::epoch_store::EpochStore;
+use crate::epoch::committee_store::CommitteeStore;
 use crate::metrics::TaskUtilizationExt;
 pub use authority_store::{
     AuthorityStore, GatewayStore, ResolverWrapper, SuiDataStore, UpdateType,
 };
 use sui_types::committee::EpochId;
 use sui_types::messages_checkpoint::{
-    CheckpointRequest, CheckpointRequestType, CheckpointResponse, CheckpointSequenceNumber,
+    CheckpointRequest, CheckpointRequestType, CheckpointResponse,
 };
 use sui_types::object::{Owner, PastObjectRead};
 use sui_types::sui_system_state::SuiSystemState;
@@ -401,7 +401,7 @@ pub struct AuthorityState {
     /// The checkpoint store
     pub checkpoints: Arc<Mutex<CheckpointStore>>,
 
-    epoch_store: Arc<EpochStore>,
+    committee_store: Arc<CommitteeStore>,
 
     // Structures needed for handling batching and notifications.
     /// The sender to notify of new transactions
@@ -441,8 +441,8 @@ impl AuthorityState {
         self.committee.load().epoch
     }
 
-    pub fn epoch_store(&self) -> &Arc<EpochStore> {
-        &self.epoch_store
+    pub fn committee_store(&self) -> &Arc<CommitteeStore> {
+        &self.committee_store
     }
 
     async fn handle_transaction_impl(
@@ -1208,21 +1208,13 @@ impl AuthorityState {
         }
     }
 
-    pub fn handle_epoch_request(&self, request: &EpochRequest) -> SuiResult<EpochResponse> {
-        let epoch_info = match &request.epoch_id {
-            Some(id) => self.epoch_store.get_authenticated_epoch(id)?,
-            None => Some(self.epoch_store.get_latest_authenticated_epoch()),
-        };
-        Ok(EpochResponse { epoch_info })
-    }
-
     // TODO: This function takes both committee and genesis as parameter.
     // Technically genesis already contains committee information. Could consider merging them.
     pub async fn new(
         name: AuthorityName,
         secret: StableSyncAuthoritySigner,
         store: Arc<AuthorityStore>,
-        epoch_store: Arc<EpochStore>,
+        committee_store: Arc<CommitteeStore>,
         indexes: Option<Arc<IndexStore>>,
         event_store: Option<Arc<EventStoreType>>,
         transaction_streamer: Option<Arc<TransactionStreamer>>,
@@ -1249,11 +1241,7 @@ impl AuthorityState {
                 .expect("Cannot bulk insert genesis objects");
         }
 
-        let committee = epoch_store
-            .get_latest_authenticated_epoch()
-            .epoch_info()
-            .committee()
-            .clone();
+        let committee = committee_store.get_latest_committee();
 
         let event_handler = event_store.map(|es| Arc::new(EventHandler::new(store.clone(), es)));
 
@@ -1272,7 +1260,7 @@ impl AuthorityState {
             event_handler,
             transaction_streamer,
             checkpoints,
-            epoch_store,
+            committee_store,
             batch_channels: tx,
             batch_notifier: Arc::new(
                 authority_notifier::TransactionNotifier::new(store.clone())
@@ -1372,7 +1360,7 @@ impl AuthorityState {
                 .expect("No issues");
         }
 
-        let epochs = Arc::new(EpochStore::new(
+        let epochs = Arc::new(CommitteeStore::new(
             path.join("epochs"),
             &genesis_committee,
             None,
@@ -1434,44 +1422,18 @@ impl AuthorityState {
         self.checkpoints.clone()
     }
 
-    pub(crate) fn sign_new_epoch_and_update_committee(
-        &self,
-        new_committee: Committee,
-        next_checkpoint: CheckpointSequenceNumber,
-    ) -> SuiResult {
+    pub(crate) fn update_committee(&self, new_committee: Committee) -> SuiResult {
         // TODO: It's likely safer to do the following operations atomically, in case this function
         // gets called from different threads. It cannot happen today, but worth the caution.
         fp_ensure!(
             self.epoch() + 1 == new_committee.epoch,
             SuiError::from("Invalid new epoch to sign and update")
         );
-        let cur_epoch = new_committee.epoch;
-        let latest_epoch = self.epoch_store.get_latest_authenticated_epoch();
-        fp_ensure!(
-            latest_epoch.epoch() + 1 == cur_epoch,
-            SuiError::from("Unexpected new epoch number")
-        );
 
-        let signed_epoch = SignedEpoch::new(
-            new_committee.clone(),
-            self.name,
-            &*self.secret,
-            next_checkpoint,
-            latest_epoch.epoch_info(),
-        );
-        self.epoch_store
-            .epochs
-            .insert(&cur_epoch, &AuthenticatedEpoch::Signed(signed_epoch))?;
+        self.committee_store.insert_new_committee(&new_committee)?;
         // TODO: Do we want to make it possible to subscribe to committee changes?
         self.committee.swap(Arc::new(new_committee));
         Ok(())
-    }
-
-    pub(crate) fn promote_signed_epoch_to_cert(&self, cert: CertifiedEpoch) -> SuiResult {
-        Ok(self.epoch_store.epochs.insert(
-            &cert.epoch_info.epoch(),
-            &AuthenticatedEpoch::Certified(cert),
-        )?)
     }
 
     pub(crate) fn is_halted(&self) -> bool {

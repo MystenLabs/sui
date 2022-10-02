@@ -4,7 +4,6 @@
 use std::sync::Arc;
 use sui_core::authority::GatewayStore;
 use sui_core::authority_client::AuthorityAPI;
-use sui_core::epoch::epoch_store::EpochStore;
 use sui_core::gateway_state::{GatewayAPI, GatewayMetrics, GatewayState};
 use sui_types::messages::{
     CallArg, ExecutionStatus, ObjectArg, ObjectInfoRequest, ObjectInfoRequestKind,
@@ -350,9 +349,8 @@ async fn shared_object_on_gateway() {
     // the handles (or the authorities will stop).
     let configs = test_authority_configs();
     let handles = spawn_test_authorities(gas_objects.clone(), &configs).await;
-    let committee = handles[0].with(|h| h.state().clone_committee());
-    let epoch_store = Arc::new(EpochStore::new_for_testing(&committee));
-    let clients = test_authority_aggregator(&configs, epoch_store);
+    let committee_store = handles[0].with(|h| h.state().committee_store().clone());
+    let clients = test_authority_aggregator(&configs, committee_store);
     let path = tempfile::tempdir().unwrap().into_path();
     let gateway_store = Arc::new(GatewayStore::open(&path.join("store"), None));
     let gateway = Arc::new(
