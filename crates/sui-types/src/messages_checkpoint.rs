@@ -171,6 +171,8 @@ pub struct CheckpointSummary {
     /// will change after this checkpoint, as well as what the new committee is.
     /// The committee is stored as a vector of validator pub key and stake pairs. The vector
     /// should be sorted based on the Committee data structure.
+    /// TODO: If desired, we could also commit to the previous last checkpoint cert so that
+    /// they form a hash chain.
     pub next_epoch_committee: Option<Vec<(AuthorityName, StakeUnit)>>,
 }
 

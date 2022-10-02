@@ -1294,7 +1294,6 @@ mod bcs_signable {
     impl BcsSignable for crate::messages::TransactionEffects {}
     impl BcsSignable for crate::messages::TransactionData {}
     impl BcsSignable for crate::messages::SenderSignedData {}
-    impl BcsSignable for crate::messages::EpochInfo {}
     impl BcsSignable for crate::object::Object {}
 
     impl BcsSignable for super::bcs_signable_test::Foo {}

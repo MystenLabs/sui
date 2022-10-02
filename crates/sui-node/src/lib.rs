@@ -41,7 +41,7 @@ use tracing::{error, info, warn};
 
 use crate::metrics::GrpcMetrics;
 use sui_core::authority_client::NetworkAuthorityClientMetrics;
-use sui_core::epoch::epoch_store::EpochStore;
+use sui_core::epoch::committee_store::CommitteeStore;
 use sui_json_rpc::event_api::EventReadApiImpl;
 use sui_json_rpc::event_api::EventStreamingApiImpl;
 use sui_json_rpc::http_server::HttpServerHandle;
@@ -91,7 +91,7 @@ impl SuiNode {
         let secret = Arc::pin(config.protocol_key_pair().copy());
         let committee = genesis.committee()?;
         let store = Arc::new(AuthorityStore::open(&config.db_path().join("store"), None));
-        let epoch_store = Arc::new(EpochStore::new(
+        let committee_store = Arc::new(CommitteeStore::new(
             config.db_path().join("epochs"),
             &committee,
             None,
@@ -135,7 +135,7 @@ impl SuiNode {
                 config.protocol_public_key(),
                 secret,
                 store,
-                epoch_store.clone(),
+                committee_store.clone(),
                 index_store.clone(),
                 event_store,
                 transaction_streamer,
@@ -171,7 +171,7 @@ impl SuiNode {
         }?;
         let net = AuthorityAggregator::new(
             state.clone_committee(),
-            epoch_store,
+            committee_store,
             authority_clients,
             AuthAggMetrics::new(&prometheus_registry),
             SafeClientMetrics::new(&prometheus_registry),

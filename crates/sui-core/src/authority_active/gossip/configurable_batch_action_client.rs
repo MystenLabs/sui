@@ -6,7 +6,7 @@ use crate::authority::AuthorityState;
 use crate::authority_aggregator::authority_aggregator_tests::*;
 use crate::authority_aggregator::{AuthAggMetrics, AuthorityAggregator};
 use crate::authority_client::{AuthorityAPI, BatchInfoResponseItemStream};
-use crate::epoch::epoch_store::EpochStore;
+use crate::epoch::committee_store::CommitteeStore;
 use crate::safe_client::SafeClient;
 use async_trait::async_trait;
 use std::borrow::Borrow;
@@ -21,8 +21,8 @@ use sui_types::crypto::{get_key_pair, AuthorityKeyPair};
 use sui_types::error::SuiError;
 use sui_types::messages::{
     AccountInfoRequest, AccountInfoResponse, BatchInfoRequest, BatchInfoResponseItem,
-    CertifiedTransaction, EpochRequest, EpochResponse, ObjectInfoRequest, ObjectInfoResponse,
-    Transaction, TransactionInfoRequest, TransactionInfoResponse,
+    CertifiedTransaction, ObjectInfoRequest, ObjectInfoResponse, Transaction,
+    TransactionInfoRequest, TransactionInfoResponse,
 };
 use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
 use sui_types::object::Object;
@@ -193,11 +193,6 @@ impl AuthorityAPI for ConfigurableBatchActionClient {
         let state = self.state.clone();
         state.handle_checkpoint_request(&request)
     }
-
-    async fn handle_epoch(&self, request: EpochRequest) -> Result<EpochResponse, SuiError> {
-        let state = self.state.clone();
-        state.handle_epoch_request(&request)
-    }
 }
 
 #[cfg(test)]
@@ -248,10 +243,10 @@ pub async fn init_configurable_authorities(
         }
         states.push(client.state.clone());
         names.push(authority_name);
-        let epoch_store = client.state.epoch_store().clone();
+        let committee_store = client.state.committee_store().clone();
         clients.push(SafeClient::new(
             client,
-            epoch_store,
+            committee_store,
             authority_name,
             SafeClientMetrics::new_for_tests(),
         ));
@@ -330,10 +325,10 @@ pub async fn init_configurable_authorities(
         .into_iter()
         .map(|(name, client)| (name, client.authority_client().clone()))
         .collect();
-    let epoch_store = Arc::new(EpochStore::new_for_testing(&committee));
+    let committee_store = Arc::new(CommitteeStore::new_for_testing(&committee));
     let net = AuthorityAggregator::new(
         committee,
-        epoch_store,
+        committee_store,
         authority_clients,
         AuthAggMetrics::new_for_tests(),
         SafeClientMetrics::new_for_tests(),

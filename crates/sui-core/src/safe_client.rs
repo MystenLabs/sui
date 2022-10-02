@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority_client::{AuthorityAPI, BatchInfoResponseItemStream};
-use crate::epoch::epoch_store::EpochStore;
+use crate::epoch::committee_store::CommitteeStore;
 use crate::histogram::{Histogram, HistogramVec};
 use futures::StreamExt;
 use prometheus::core::{GenericCounter, GenericGauge};
@@ -23,7 +23,6 @@ use sui_types::{
     error::{SuiError, SuiResult},
     messages::*,
 };
-use tap::TapFallible;
 use tracing::info;
 
 /// Prometheus metrics which can be displayed in Grafana, queried and alerted on
@@ -87,7 +86,7 @@ impl SafeClientMetrics {
 #[derive(Clone)]
 pub struct SafeClient<C> {
     authority_client: C,
-    epoch_store: Arc<EpochStore>,
+    committee_store: Arc<CommitteeStore>,
     address: AuthorityPublicKeyBytes,
 
     metrics_total_requests_handle_transaction_and_effects_info_request:
@@ -115,7 +114,7 @@ pub struct SafeClient<C> {
 impl<C> SafeClient<C> {
     pub fn new(
         authority_client: C,
-        epoch_store: Arc<EpochStore>,
+        committee_store: Arc<CommitteeStore>,
         address: AuthorityPublicKeyBytes,
         safe_client_metrics: SafeClientMetrics,
     ) -> Self {
@@ -172,7 +171,7 @@ impl<C> SafeClient<C> {
 
         Self {
             authority_client,
-            epoch_store,
+            committee_store,
             address,
 
             metrics_total_requests_handle_transaction_and_effects_info_request,
@@ -202,13 +201,9 @@ impl<C> SafeClient<C> {
     }
 
     fn get_committee(&self, epoch_id: &EpochId) -> SuiResult<Committee> {
-        match self.epoch_store.get_authenticated_epoch(epoch_id)? {
-            Some(epoch_info) => Ok(epoch_info.into_epoch_info().into_committee()),
-            None => Err(SuiError::InvalidAuthenticatedEpoch(format!(
-                "Epoch info not found in the store for epoch {:?}",
-                epoch_id
-            ))),
-        }
+        self.committee_store
+            .get_committee(epoch_id)?
+            .ok_or(SuiError::MissingCommitteeAtEpoch(*epoch_id))
     }
 
     // Here we centralize all checks for transaction info responses
@@ -775,52 +770,5 @@ where
             },
         ));
         Ok(Box::pin(stream))
-    }
-
-    fn verify_epoch(
-        &self,
-        requested_epoch_id: Option<EpochId>,
-        response: &EpochResponse,
-    ) -> SuiResult {
-        if let Some(epoch) = &response.epoch_info {
-            fp_ensure!(
-                requested_epoch_id.is_none() || requested_epoch_id == Some(epoch.epoch()),
-                SuiError::InvalidEpochResponse("Responded epoch number mismatch".to_string())
-            );
-        }
-        match (requested_epoch_id, &response.epoch_info) {
-            (None, None) => Err(SuiError::InvalidEpochResponse(
-                "Latest epoch must not be None".to_string(),
-            )),
-            (Some(epoch_id), None) => {
-                fp_ensure!(
-                    epoch_id != 0,
-                    SuiError::InvalidEpochResponse("Genesis epoch must be available".to_string())
-                );
-                Ok(())
-            }
-            (_, Some(AuthenticatedEpoch::Genesis(g))) => g.verify(&self.get_committee(&0)?),
-            (_, Some(AuthenticatedEpoch::Signed(s))) => {
-                s.verify(&self.get_committee(&s.auth_sign_info.epoch)?)
-            }
-            (_, Some(AuthenticatedEpoch::Certified(c))) => {
-                c.verify(&self.get_committee(&c.auth_sign_info.epoch)?)
-            }
-        }
-    }
-
-    pub async fn handle_epoch(&self, request: EpochRequest) -> Result<EpochResponse, SuiError> {
-        let epoch_id = request.epoch_id;
-        let authority = self.address;
-        let response = self.authority_client.handle_epoch(request).await?;
-        self.verify_epoch(epoch_id, &response)
-            .map_err(|err| SuiError::ByzantineAuthoritySuspicion {
-                authority,
-                reason: err.to_string(),
-            })
-            .tap_err(|err| {
-                self.report_client_error(err);
-            })?;
-        Ok(response)
     }
 }

@@ -33,7 +33,7 @@ use sui_types::committee::StakeUnit;
 use tokio::sync::mpsc::Receiver;
 use tokio::time::{sleep, timeout};
 
-use crate::epoch::epoch_store::EpochStore;
+use crate::epoch::committee_store::CommitteeStore;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use tap::TapFallible;
 
@@ -159,14 +159,14 @@ pub struct AuthorityAggregator<A> {
 impl<A> AuthorityAggregator<A> {
     pub fn new(
         committee: Committee,
-        epoch_store: Arc<EpochStore>,
+        committee_store: Arc<CommitteeStore>,
         authority_clients: BTreeMap<AuthorityName, A>,
         metrics: AuthAggMetrics,
         safe_client_metrics: SafeClientMetrics,
     ) -> Self {
         Self::new_with_timeouts(
             committee,
-            epoch_store,
+            committee_store,
             authority_clients,
             metrics,
             safe_client_metrics,
@@ -176,7 +176,7 @@ impl<A> AuthorityAggregator<A> {
 
     pub fn new_with_timeouts(
         committee: Committee,
-        epoch_store: Arc<EpochStore>,
+        committee_store: Arc<CommitteeStore>,
         authority_clients: BTreeMap<AuthorityName, A>,
         metrics: AuthAggMetrics,
         safe_client_metrics: SafeClientMetrics,
@@ -191,7 +191,7 @@ impl<A> AuthorityAggregator<A> {
                         name,
                         SafeClient::new(
                             api,
-                            epoch_store.clone(),
+                            committee_store.clone(),
                             name,
                             safe_client_metrics.clone(),
                         ),

@@ -8,7 +8,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use sui_config::{NetworkConfig, NodeConfig, ValidatorInfo};
 use sui_core::authority_client::{AuthorityAPI, NetworkAuthorityClientMetrics};
-use sui_core::epoch::epoch_store::EpochStore;
+use sui_core::epoch::committee_store::CommitteeStore;
 use sui_core::{
     authority_active::{
         checkpoint_driver::{CheckpointMetrics, CheckpointProcessControl},
@@ -60,7 +60,7 @@ pub async fn start_node(config: &NodeConfig, prom_registry: Registry) -> SuiNode
 }
 
 /// In the simulator, we call SuiNode::start from inside a newly spawned simulator node.
-/// However, we then immmediately return the SuiNode handle back to the caller. The caller now has
+/// However, we then immediately return the SuiNode handle back to the caller. The caller now has
 /// a direct handle to an object that is "running" on a different "machine". By itself, this
 /// doesn't break anything in the simulator, it just allows test code to magically mutate state
 /// that is owned by some other machine.
@@ -127,7 +127,7 @@ pub async fn spawn_checkpoint_processes(configs: &NetworkConfig, handles: &[SuiN
                 let state = authority.state();
 
                 let aggregator =
-                    test_authority_aggregator(configs, authority.state().epoch_store().clone());
+                    test_authority_aggregator(configs, authority.state().committee_store().clone());
 
                 let inner_agg = aggregator.clone();
                 let active_state = Arc::new(
@@ -152,7 +152,7 @@ pub async fn spawn_checkpoint_processes(configs: &NetworkConfig, handles: &[SuiN
 /// Create a test authority aggregator.
 pub fn test_authority_aggregator(
     config: &NetworkConfig,
-    epoch_store: Arc<EpochStore>,
+    committee_store: Arc<CommitteeStore>,
 ) -> AuthorityAggregator<NetworkAuthorityClient> {
     let validators_info = config.validator_set();
     let committee = Committee::new(0, ValidatorInfo::voting_rights(validators_info)).unwrap();
@@ -172,7 +172,7 @@ pub fn test_authority_aggregator(
     let registry = prometheus::Registry::new();
     AuthorityAggregator::new(
         committee,
-        epoch_store,
+        committee_store,
         clients,
         AuthAggMetrics::new(&registry),
         SafeClientMetrics::new(&registry),
