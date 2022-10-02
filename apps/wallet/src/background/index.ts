@@ -3,6 +3,7 @@
 
 import Browser from 'webextension-polyfill';
 
+import Keyring from './Keyring';
 import Permissions from './Permissions';
 import { Connections } from './connections';
 import { openInNewTab } from '_shared/utils';
@@ -19,4 +20,8 @@ Permissions.permissionReply.subscribe((permission) => {
     if (permission) {
         connections.notifyForPermissionReply(permission);
     }
+});
+
+Keyring.isLocked.subscribe((isLocked) => {
+    // TODO notify UI
 });
