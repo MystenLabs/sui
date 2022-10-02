@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { filter, lastValueFrom, map, take } from 'rxjs';
+import { filter, map } from 'rxjs';
 
+import { mapToPromise } from './utils';
 import { createMessage } from '_messages';
 import { WindowMessageStream } from '_messaging/WindowMessageStream';
-import { isErrorPayload } from '_payloads';
 import { ALL_PERMISSION_TYPES } from '_payloads/permissions';
 
 import type {
@@ -28,24 +28,6 @@ import type {
     ExecuteTransactionResponse,
 } from '_payloads/transactions';
 import type { Observable } from 'rxjs';
-
-function mapToPromise<T extends Payload, R>(
-    stream: Observable<T>,
-    project: (value: T) => R
-) {
-    return lastValueFrom(
-        stream.pipe(
-            take<T>(1),
-            map<T, R>((response) => {
-                if (isErrorPayload(response)) {
-                    // TODO: throw proper error
-                    throw new Error(response.message);
-                }
-                return project(response);
-            })
-        )
-    );
-}
 
 export class DAppInterface {
     private _messagesStream: WindowMessageStream;

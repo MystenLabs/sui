@@ -6,8 +6,8 @@
     "rootDir": "src"
   },
   "references": [
-    { "path": "../mock-wallet" },
-    { "path": "../sui-wallet" },
-    { "path": "../wallet-standard-adapter" }
+    { "path": "../base-adapter" },
+    { "path": "../../wallet-standard" },
+    { "path": "../../../../typescript" },
   ]
 }

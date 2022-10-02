@@ -1,7 +1,7 @@
 {
-  "name": "@mysten/wallet-adapter-all-wallets",
+  "name": "@mysten/wallet-adapter-wallet-standard",
   "version": "0.1.0",
-  "description": "Module exporting all integrated wallets for Sui Wallet Adapter",
+  "description": "Integration of the Wallet Standard for the Sui Wallet Adapter",
   "license": "Apache-2.0",
   "author": "Mysten Labs <build@mystenlabs.com>",
   "main": "./dist/index.js",
@@ -25,9 +25,11 @@
     "prepublishOnly": "pnpm build"
   },
   "dependencies": {
-    "@mysten/wallet-adapter-mock-wallet": "workspace:*",
-    "@mysten/wallet-adapter-sui-wallet": "workspace:*",
-    "@mysten/wallet-adapter-wallet-standard": "workspace:*"
+    "@mysten/sui.js": "workspace:*",
+    "@mysten/wallet-adapter-base": "workspace:*",
+    "@mysten/wallet-standard": "workspace:*",
+    "@wallet-standard/app": "0.1.0-alpha.3",
+    "mitt": "^3.0.0"
   },
   "devDependencies": {
     "tsup": "^6.2.2",

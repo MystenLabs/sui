@@ -15,14 +15,13 @@ npm install @mysten/wallet-adapter-all-wallets @mysten/wallet-adapter-react @mys
 At the root of your application, you can then set up the wallet providers:
 
 ```tsx
-import { Wallet, WalletProvider } from "@mysten/wallet-adapter-react";
-import { SuiWalletAdapter } from "@mysten/wallet-adapter-all-wallets";
+import { WalletProvider } from "@mysten/wallet-adapter-react";
+import { WalletStandardAdapterProvider } from "@mysten/wallet-adapter-all-wallets";
 
 export function App() {
-  const supportedWallets: Wallet[] = [
-    {
-      adapter: new SuiWalletAdapter(),
-    },
+  const supportedWallets = [
+    // Add support for all wallets that adhere to the Wallet Standard:
+    new WalletStandardAdapterProvider(),
   ];
 
   return (
@@ -49,20 +48,23 @@ To get access to the currently connected wallet, use the `useWallet()` hook from
 import { useWallet } from "sui-wallet-adapter-react";
 
 export function SendTransaction() {
-  const { connected, getAccounts, executeMoveCall } = useWallet();
+  const { connected, getAccounts, signAndExecuteTransaction } = useWallet();
 
   const handleClick = async () => {
-    await executeMoveCall({
-      packageObjectId: "0x2",
-      module: "devnet_nft",
-      function: "mint",
-      typeArguments: [],
-      arguments: [
-        "name",
-        "capy",
-        "https://cdn.britannica.com/94/194294-138-B2CF7780/overview-capybara.jpg?w=800&h=450&c=crop",
-      ],
-      gasBudget: 10000,
+    await signAndExecuteTransaction({
+      kind: "moveCall",
+      data: {
+        packageObjectId: "0x2",
+        module: "devnet_nft",
+        function: "mint",
+        typeArguments: [],
+        arguments: [
+          "name",
+          "capy",
+          "https://cdn.britannica.com/94/194294-138-B2CF7780/overview-capybara.jpg?w=800&h=450&c=crop",
+        ],
+        gasBudget: 10000,
+      },
     });
   };
 
@@ -83,7 +85,13 @@ We do not currently have non-React UI libraries for connecting to wallets. The w
 All available wallet adapters are currently exported via the `@mysten/wallet-adapter-all-wallets` package.
 You can also install individual wallet adapters that you plan on using in your project.
 
-- **[Sui Wallet](https://docs.sui.io/devnet/explore/wallet-browser)** - `@mysten/wallet-adapter-sui-wallet`
+### Wallet Standard
+
+Wallets that adhere to the cross-chain [Wallet Standard](https://github.com/wallet-standard/wallet-standard/) are automatically supported using the `WalletStandardAdapterProvider` adapter (published under `@mysten/wallet-adapter-wallet-standard`). This adapter detects wallets that are available in the users' browser without the need for additional configured adapters.
+
+The following wallets are known to work with the Wallet Standard:
+
+- **[Sui Wallet](https://docs.sui.io/devnet/explore/wallet-browser)**
 
 ## Demo app
 
