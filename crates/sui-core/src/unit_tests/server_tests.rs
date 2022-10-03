@@ -333,7 +333,7 @@ async fn test_subscription_safe_client() {
             .executed_sequence
             .insert(&ticket.seq(), &tx_zero)
             .expect("Failed to write.");
-        drop(ticket);
+        ticket.notify();
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
     println!("Sent tickets.");

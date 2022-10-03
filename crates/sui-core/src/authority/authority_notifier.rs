@@ -211,12 +211,7 @@ impl TransactionNotifierTicket {
     pub fn seq(&self) -> u64 {
         self.seq
     }
-}
-
-/// A custom drop to notify authority state's transaction_notifier
-/// that a new certified transaction's has just been executed and committed.
-impl Drop for TransactionNotifierTicket {
-    fn drop(&mut self) {
+    pub fn notify(self) {
         let mut inner = self.transaction_notifier.inner.lock();
         inner.live_tickets.remove(&self.seq);
 

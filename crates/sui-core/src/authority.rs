@@ -1883,7 +1883,10 @@ impl AuthorityState {
             .await
             .tap_ok(|_| {
                 debug!(?digest, ?effects_digest, ?self.name, "commit_certificate finished");
-            })
+            })?;
+        // We only notify i.e. update low watermark once database changes are committed
+        notifier_ticket.notify();
+        Ok(())
 
         // implicitly we drop the ticket here and that notifies the batch manager
     }
