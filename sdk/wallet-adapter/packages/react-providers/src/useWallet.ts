@@ -3,6 +3,7 @@
 
 import {
   MoveCallTransaction,
+  SignableTransaction,
   SuiAddress,
   SuiTransactionResponse,
 } from "@mysten/sui.js";
@@ -28,9 +29,16 @@ export interface WalletContextState {
   disconnect(): Promise<void>;
 
   getAccounts: () => Promise<SuiAddress[]>;
+
+  signAndExecuteTransaction(
+    transaction: SignableTransaction
+  ): Promise<SuiTransactionResponse>;
+
+  /** @deprecated Prefer `signAndExecuteTransaction` when available. */
   executeMoveCall: (
     transaction: MoveCallTransaction
   ) => Promise<SuiTransactionResponse>;
+  /** @deprecated Prefer `signAndExecuteTransaction` when available. */
   executeSerializedMoveCall: (
     transactionBytes: Uint8Array
   ) => Promise<SuiTransactionResponse>;
@@ -59,6 +67,15 @@ const DEFAULT_CONTEXT = {
   getAccounts() {
     return Promise.reject(
       console.error(constructMissingProviderErrorMessage("get", "getAccounts"))
+    );
+  },
+  signAndExecuteTransaction(
+    transaction: SignableTransaction
+  ): Promise<SuiTransactionResponse> {
+    return Promise.reject(
+      console.error(
+        constructMissingProviderErrorMessage("get", "signAndExecuteTransaction")
+      )
     );
   },
   executeMoveCall(
