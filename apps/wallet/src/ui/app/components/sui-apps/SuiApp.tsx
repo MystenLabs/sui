@@ -7,7 +7,7 @@ import { memo, useState, useCallback } from 'react';
 import DisconnectApp from './DisconnectApp';
 import ExternalLink from '_components/external-link';
 import Icon, { SuiIcons } from '_components/icon';
-import { plausible } from '_src/shared/constants';
+import { trackEvent } from '_src/shared/plausible';
 
 import st from './SuiApp.module.scss';
 
@@ -123,11 +123,9 @@ function SuiApp({
     );
 
     const onClickAppLink = useCallback(() => {
-        if (process.env.NODE_ENV !== 'development') {
-            plausible.trackEvent('AppOpen', {
-                props: { name: name || link, source: 'AppPage' },
-            });
-        }
+        trackEvent('AppOpen', {
+            props: { name: name || link, source: 'AppPage' },
+        });
     }, [name, link]);
 
     return (
