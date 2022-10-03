@@ -1848,7 +1848,7 @@ impl AuthorityState {
             return Err(SuiError::ValidatorHaltedAtEpochEnd);
         }
 
-        let notifier_ticket = self.batch_notifier.ticket()?;
+        let mut notifier_ticket = self.batch_notifier.ticket()?;
         let seq = notifier_ticket.seq();
 
         let digest = certificate.digest();
@@ -1864,7 +1864,10 @@ impl AuthorityState {
             .await
             .tap_ok(|_| {
                 debug!(?digest, ?effects_digest, ?self.name, "commit_certificate finished");
-            })
+            })?;
+
+        notifier_ticket.notify();
+        Ok(())
 
         // implicitly we drop the ticket here and that notifies the batch manager
     }
