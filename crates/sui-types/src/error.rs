@@ -2,7 +2,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{base_types::*, committee::EpochId, messages::ExecutionFailureStatus};
+use crate::{base_types::*, committee::EpochId, messages::ExecutionFailureStatus, object::Owner};
 use move_binary_format::errors::{Location, PartialVMError, VMError};
 use move_core_types::vm_status::{StatusCode, StatusType};
 use narwhal_executor::SubscriberError;
@@ -343,6 +343,15 @@ pub enum SuiError {
     StorageError(#[from] TypedStoreError),
     #[error("Non-RocksDB Storage error: {0}")]
     GenericStorageError(String),
+    #[error(
+        "Attempted to access {object} through parent {given_parent}, \
+        but it's actual parent is {actual_owner}"
+    )]
+    InvalidChildObjectAccess {
+        object: ObjectID,
+        given_parent: ObjectID,
+        actual_owner: Owner,
+    },
 
     #[error("Missing fields/data in storage error: {0}")]
     StorageMissingFieldError(String),

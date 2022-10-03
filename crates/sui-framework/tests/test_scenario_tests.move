@@ -670,6 +670,126 @@ module sui::test_scenarioTests {
         abort 42
     }
 
+    #[test]
+    fun test_dynamic_field_still_borrowed() {
+        let sender = @0x0;
+        let scenario = ts::begin(sender);
+        let parent = ts::new_object(&mut scenario);
+        sui::dynamic_field::add(&mut parent, b"", 10);
+        let r = sui::dynamic_field::borrow<vector<u8>, u64>(&mut parent, b"");
+        ts::end(scenario);
+        assert!(*r == 10, 0);
+        object::delete(parent);
+    }
+
+    #[test]
+    fun test_dynamic_object_field_still_borrowed() {
+        let sender = @0x0;
+        let scenario = ts::begin(sender);
+        let parent = ts::new_object(&mut scenario);
+        let id = ts::new_object(&mut scenario);
+        sui::dynamic_object_field::add(&mut parent, b"", Object { id, value: 10});
+        let obj = sui::dynamic_object_field::borrow<vector<u8>, Object>(&mut parent, b"");
+        ts::end(scenario);
+        assert!(obj.value == 10, 0);
+        object::delete(parent);
+    }
+
+    #[test]
+    fun test_dynamic_object_field_not_retrievable() {
+        let sender = @0x0;
+        let scenario = ts::begin(sender);
+        let parent = ts::new_object(&mut scenario);
+        let uid = ts::new_object(&mut scenario);
+        let obj = Object { id: uid, value: 10};
+        let id = object::id(&obj);
+        transfer::transfer(obj, sender);
+        ts::next_tx(&mut scenario, sender);
+        assert!(ts::has_most_recent_for_address<Object>(sender), 0);
+        let obj = ts::take_from_sender<Object>(&mut scenario);
+        assert!(object::id(&obj) == id, 0);
+        assert!(!ts::has_most_recent_for_address<Object>(sender), 0);
+        sui::dynamic_object_field::add(&mut parent, b"", obj);
+        ts::next_tx(&mut scenario, sender);
+        assert!(!ts::has_most_recent_for_address<Object>(sender), 0);
+        ts::end(scenario);
+        object::delete(parent);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = 1 /* EInvalidSharedOrImmutableUsage */)]
+    fun test_dynamic_field_shared_misuse() {
+        let sender = @0x0;
+        let scenario = ts::begin(sender);
+        let parent = ts::new_object(&mut scenario);
+        let uid = ts::new_object(&mut scenario);
+        let obj = Object { id: uid, value: 10};
+        let id = object::id(&obj);
+        transfer::share_object(obj);
+        ts::next_tx(&mut scenario, sender);
+        let obj = ts::take_shared<Object>(&mut scenario);
+        assert!(object::id(&obj) == id, 0);
+        // wraps the object
+        sui::dynamic_field::add(&mut parent, b"", obj);
+        ts::next_tx(&mut scenario, sender);
+        abort 42
+    }
+
+    #[test]
+    #[expected_failure(abort_code = 1 /* EInvalidSharedOrImmutableUsage */)]
+    fun test_dynamic_field_immutable_misuse() {
+        let sender = @0x0;
+        let scenario = ts::begin(sender);
+        let parent = ts::new_object(&mut scenario);
+        let uid = ts::new_object(&mut scenario);
+        let obj = Object { id: uid, value: 10};
+        let id = object::id(&obj);
+        transfer::freeze_object(obj);
+        ts::next_tx(&mut scenario, sender);
+        let obj = ts::take_immutable<Object>(&mut scenario);
+        assert!(object::id(&obj) == id, 0);
+        // wraps the object
+        sui::dynamic_field::add(&mut parent, b"", obj);
+        ts::next_tx(&mut scenario, sender);
+        abort 42
+    }
+
+        #[test]
+    #[expected_failure(abort_code = 1 /* EInvalidSharedOrImmutableUsage */)]
+    fun test_dynamic_object_field_shared_misuse() {
+        let sender = @0x0;
+        let scenario = ts::begin(sender);
+        let parent = ts::new_object(&mut scenario);
+        let uid = ts::new_object(&mut scenario);
+        let obj = Object { id: uid, value: 10};
+        let id = object::id(&obj);
+        transfer::share_object(obj);
+        ts::next_tx(&mut scenario, sender);
+        let obj = ts::take_shared<Object>(&mut scenario);
+        assert!(object::id(&obj) == id, 0);
+        sui::dynamic_object_field::add(&mut parent, b"", obj);
+        ts::next_tx(&mut scenario, sender);
+        abort 42
+    }
+
+    #[test]
+    #[expected_failure(abort_code = 1 /* EInvalidSharedOrImmutableUsage */)]
+    fun test_dynamic_object_field_immutable_misuse() {
+        let sender = @0x0;
+        let scenario = ts::begin(sender);
+        let parent = ts::new_object(&mut scenario);
+        let uid = ts::new_object(&mut scenario);
+        let obj = Object { id: uid, value: 10};
+        let id = object::id(&obj);
+        transfer::freeze_object(obj);
+        ts::next_tx(&mut scenario, sender);
+        let obj = ts::take_immutable<Object>(&mut scenario);
+        assert!(object::id(&obj) == id, 0);
+        sui::dynamic_object_field::add(&mut parent, b"", obj);
+        ts::next_tx(&mut scenario, sender);
+        abort 42
+    }
+
     /// Create object and parent. object is a child of parent.
     /// parent is owned by sender of `scenario`.
     fun create_parent_and_object(scenario: &mut Scenario) {

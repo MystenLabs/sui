@@ -5,7 +5,7 @@ use move_core_types::ident_str;
 use move_core_types::identifier::Identifier;
 use std::{collections::BTreeSet, sync::Arc};
 use sui_types::id::UID;
-use sui_types::storage::{DeleteKind, ObjectResolver, ParentSync, WriteKind};
+use sui_types::storage::{ChildObjectResolver, DeleteKind, ParentSync, WriteKind};
 #[cfg(test)]
 use sui_types::temporary_store;
 use sui_types::temporary_store::InnerTemporaryStore;
@@ -35,14 +35,14 @@ use sui_types::{
         TransactionData, TransactionEffects, TransferObject, TransferSui,
     },
     object::Object,
-    storage::{BackingPackageStore, Storage},
+    storage::BackingPackageStore,
     sui_system_state::{ADVANCE_EPOCH_FUNCTION_NAME, SUI_SYSTEM_MODULE_NAME},
     SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID,
 };
 use tracing::{debug, instrument, trace};
 
 #[instrument(name = "tx_execute_to_effects", level = "debug", skip_all)]
-pub fn execute_transaction_to_effects<S: BackingPackageStore + ParentSync>(
+pub fn execute_transaction_to_effects<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
     shared_object_refs: Vec<ObjectRef>,
     mut temporary_store: TemporaryStore<S>,
     transaction_data: TransactionData,
@@ -115,7 +115,7 @@ fn charge_gas_for_object_read<S>(
 }
 
 #[instrument(name = "tx_execute", level = "debug", skip_all)]
-fn execute_transaction<S: BackingPackageStore + ParentSync>(
+fn execute_transaction<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
     temporary_store: &mut TemporaryStore<S>,
     transaction_data: TransactionData,
     gas_object_id: ObjectID,

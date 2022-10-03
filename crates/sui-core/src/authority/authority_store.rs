@@ -23,7 +23,7 @@ use sui_storage::{
 use sui_types::batch::{SignedBatch, TxSequenceNumber};
 use sui_types::crypto::{AuthoritySignInfo, EmptySignInfo};
 use sui_types::object::Owner;
-use sui_types::storage::WriteKind;
+use sui_types::storage::{ChildObjectResolver, WriteKind};
 use sui_types::{base_types::SequenceNumber, storage::ParentSync};
 use tokio::sync::Notify;
 use tokio_retry::strategy::{jitter, ExponentialBackoff};
@@ -1403,6 +1403,26 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> BackingPackageStore
             );
         }
         Ok(package)
+    }
+}
+
+impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> ChildObjectResolver
+    for SuiDataStore<S>
+{
+    fn read_child_object(&self, parent: &ObjectID, child: &ObjectID) -> SuiResult<Option<Object>> {
+        let child_object = match self.get_object(child)? {
+            None => return Ok(None),
+            Some(o) => o,
+        };
+        let parent = *parent;
+        if child_object.owner != Owner::ObjectOwner(parent.into()) {
+            return Err(SuiError::InvalidChildObjectAccess {
+                object: *child,
+                given_parent: parent,
+                actual_owner: child_object.owner,
+            });
+        }
+        Ok(Some(child_object))
     }
 }
 

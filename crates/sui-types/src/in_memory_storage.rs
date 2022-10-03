@@ -5,7 +5,7 @@ use crate::{
     base_types::{ObjectID, ObjectRef, SequenceNumber},
     error::{SuiError, SuiResult},
     object::Object,
-    storage::{BackingPackageStore, DeleteKind, ParentSync, WriteKind},
+    storage::{BackingPackageStore, ChildObjectResolver, DeleteKind, ParentSync, WriteKind},
 };
 use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 use std::collections::BTreeMap;
@@ -21,6 +21,12 @@ pub struct InMemoryStorage {
 impl BackingPackageStore for InMemoryStorage {
     fn get_package(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
         Ok(self.persistent.get(package_id).cloned())
+    }
+}
+
+impl ChildObjectResolver for InMemoryStorage {
+    fn read_child_object(&self, _parent: &ObjectID, child: &ObjectID) -> SuiResult<Option<Object>> {
+        Ok(self.persistent.get(child).cloned())
     }
 }
 

@@ -24,6 +24,7 @@ Sui object identifiers
 -  [Function `id_bytes`](#0x2_object_id_bytes)
 -  [Function `id_address`](#0x2_object_id_address)
 -  [Function `borrow_uid`](#0x2_object_borrow_uid)
+-  [Function `new_uid_from_hash`](#0x2_object_new_uid_from_hash)
 -  [Function `delete_impl`](#0x2_object_delete_impl)
 
 
@@ -501,6 +502,31 @@ restrictable in the object's module.
 
 
 <pre><code><b>native</b> <b>fun</b> <a href="object.md#0x2_object_borrow_uid">borrow_uid</a>&lt;T: key&gt;(obj: &T): &<a href="object.md#0x2_object_UID">UID</a>;
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_object_new_uid_from_hash"></a>
+
+## Function `new_uid_from_hash`
+
+Generate a new UID specifically used for creating a UID from a hash
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="object.md#0x2_object_new_uid_from_hash">new_uid_from_hash</a>(bytes: <b>address</b>): <a href="object.md#0x2_object_UID">object::UID</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="object.md#0x2_object_new_uid_from_hash">new_uid_from_hash</a>(bytes: <b>address</b>): <a href="object.md#0x2_object_UID">UID</a> {
+    <a href="object.md#0x2_object_UID">UID</a> { id: <a href="object.md#0x2_object_ID">ID</a> { bytes } }
+}
 </code></pre>
 
 

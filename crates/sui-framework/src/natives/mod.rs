@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod crypto;
+mod dynamic_field;
 mod event;
 mod object;
 pub mod object_runtime;
@@ -27,6 +28,36 @@ pub fn all_natives(
 ) -> NativeFunctionTable {
     let sui_natives: &[(&str, &str, NativeFunction)] = &[
         ("ecdsa", "ecrecover", make_native!(crypto::ecrecover)),
+        (
+            "dynamic_field",
+            "hash_type_and_key",
+            make_native!(dynamic_field::hash_type_and_key),
+        ),
+        (
+            "dynamic_field",
+            "add_child_object",
+            make_native!(dynamic_field::add_child_object),
+        ),
+        (
+            "dynamic_field",
+            "borrow_child_object",
+            make_native!(dynamic_field::borrow_child_object),
+        ),
+        (
+            "dynamic_field",
+            "remove_child_object",
+            make_native!(dynamic_field::remove_child_object),
+        ),
+        (
+            "dynamic_field",
+            "has_child_object",
+            make_native!(dynamic_field::has_child_object),
+        ),
+        (
+            "dynamic_field",
+            "has_child_object_with_ty",
+            make_native!(dynamic_field::has_child_object_with_ty),
+        ),
         (
             "ecdsa",
             "decompress_pubkey",
