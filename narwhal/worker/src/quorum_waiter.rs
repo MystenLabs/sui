@@ -74,7 +74,7 @@ impl QuorumWaiter {
 
     /// Main loop.
     async fn run(&mut self) {
-        // 
+        //
         let mut pipeline = FuturesOrdered::new();
         let mut best_effort_with_timeout = FuturesUnordered::new();
 
@@ -143,7 +143,7 @@ impl QuorumWaiter {
 
                     // Attempt to send messages to the remaining workers
                     best_effort_with_timeout.push(async move {
-                        // Bound the attempt to a few seconds to tolerate nodes that are 
+                        // Bound the attempt to a few seconds to tolerate nodes that are
                         // offline and will never succeed.
                         timeout(Duration::from_secs(5), async move{
                             while remaining.next().await.is_some() { }
