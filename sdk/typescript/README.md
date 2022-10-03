@@ -31,8 +31,8 @@ To get started you need to install [pnpm](https://pnpm.io/), then run the follow
 ```bash
 # Install all dependencies
 $ pnpm install
-# Run the build for the TypeScript SDK and all of its dependencies.
-$ pnpm --filter @mysten/sui.js... build
+# Run the build for the TypeScript SDK
+$ pnpm sdk build
 ```
 
 ## Type Doc
@@ -128,7 +128,7 @@ const signer = new RawSigner(
   keypair,
   new JsonRpcProvider('https://gateway.devnet.sui.io:443')
 );
-const splitTxn = await signer..splitCoin({
+const splitTxn = await signer.splitCoin({
   coinObjectId: '0x5015b016ab570df14c87649eda918e09e5cc61e0',
   // Say if the original coin has a balance of 100,
   // This function will create three new coins of amount 10, 20, 30,

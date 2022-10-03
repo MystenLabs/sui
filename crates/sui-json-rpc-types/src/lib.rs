@@ -44,7 +44,7 @@ use sui_types::gas::GasCostSummary;
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::{
     CallArg, CertifiedTransaction, CertifiedTransactionEffects, ExecuteTransactionResponse,
-    ExecutionStatus, InputObjectKind, MoveModulePublish, ObjectArg, SingleTransactionKind,
+    ExecutionStatus, InputObjectKind, MoveModulePublish, ObjectArg, Pay, SingleTransactionKind,
     TransactionData, TransactionEffects, TransactionKind,
 };
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
@@ -366,6 +366,9 @@ pub enum SuiExecuteTransactionResponse {
     EffectsCert {
         certificate: SuiCertifiedTransaction,
         effects: SuiCertifiedTransactionEffects,
+        // If the transaction is confirmed to be executed locally
+        // before this reponse.
+        confirmed_local_execution: bool,
     },
 }
 
@@ -385,13 +388,14 @@ impl SuiExecuteTransactionResponse {
                 }
             }
             ExecuteTransactionResponse::EffectsCert(cert) => {
-                let (certificate, effects) = *cert;
+                let (certificate, effects, is_executed_locally) = *cert;
                 let certificate: SuiCertifiedTransaction = certificate.try_into()?;
                 let effects: SuiCertifiedTransactionEffects =
                     SuiCertifiedTransactionEffects::try_from(effects, resolver)?;
                 SuiExecuteTransactionResponse::EffectsCert {
                     certificate,
                     effects,
+                    confirmed_local_execution: is_executed_locally,
                 }
             }
         })
@@ -485,7 +489,6 @@ impl TryInto<Object> for SuiObject<SuiRawData> {
                         struct_tag,
                         o.has_public_transfer,
                         o.version,
-                        o.child_count,
                         o.bcs_bytes,
                     )
                 })
@@ -802,8 +805,6 @@ pub struct SuiRawMoveObject {
     pub type_: String,
     pub has_public_transfer: bool,
     pub version: SequenceNumber,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub child_count: Option<u32>,
     #[serde_as(as = "Base64")]
     #[schemars(with = "Base64")]
     pub bcs_bytes: Vec<u8>,
@@ -815,7 +816,6 @@ impl From<MoveObject> for SuiRawMoveObject {
             type_: o.type_.to_string(),
             has_public_transfer: o.has_public_transfer(),
             version: o.version(),
-            child_count: o.child_count(),
             bcs_bytes: o.into_contents(),
         }
     }
@@ -830,7 +830,6 @@ impl SuiMoveObject for SuiRawMoveObject {
             type_: object.type_.to_string(),
             has_public_transfer: object.has_public_transfer(),
             version: object.version(),
-            child_count: object.child_count(),
             bcs_bytes: object.into_contents(),
         })
     }
@@ -1367,6 +1366,29 @@ impl TryFrom<MoveModulePublish> for SuiMovePackage {
     }
 }
 
+#[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, Eq, PartialEq)]
+#[serde(rename = "Pay")]
+pub struct SuiPay {
+    /// The coins to be used for payment
+    pub coins: Vec<SuiObjectRef>,
+    /// The addresses that will receive payment
+    pub recipients: Vec<SuiAddress>,
+    /// The amounts each recipient will receive.
+    /// Must be the same length as amounts
+    pub amounts: Vec<u64>,
+}
+
+impl From<Pay> for SuiPay {
+    fn from(p: Pay) -> Self {
+        let coins = p.coins.into_iter().map(|c| c.into()).collect();
+        SuiPay {
+            coins,
+            recipients: p.recipients,
+            amounts: p.amounts,
+        }
+    }
+}
+
 #[derive(Debug, Deserialize, Serialize, JsonSchema, Clone)]
 #[serde(rename = "TransactionData", rename_all = "camelCase")]
 pub struct SuiTransactionData {
@@ -1419,6 +1441,8 @@ impl TryFrom<TransactionData> for SuiTransactionData {
 pub enum SuiTransactionKind {
     /// Initiate an object transfer between addresses
     TransferObject(SuiTransferObject),
+    /// Pay one or more recipients from a set of input coins
+    Pay(SuiPay),
     /// Publish a new Move module
     Publish(SuiMovePackage),
     /// Call a function in a published Move module
@@ -1452,6 +1476,21 @@ impl Display for SuiTransactionKind {
                     writeln!(writer, "Amount: {}", amount)?;
                 } else {
                     writeln!(writer, "Amount: Full Balance")?;
+                }
+            }
+            Self::Pay(p) => {
+                writeln!(writer, "Transaction Kind : Pay")?;
+                writeln!(writer, "Coins:")?;
+                for obj_ref in &p.coins {
+                    writeln!(writer, "Object ID : {}", obj_ref.object_id)?;
+                }
+                writeln!(writer, "Recipients:")?;
+                for recipient in &p.recipients {
+                    writeln!(writer, "{}", recipient)?;
+                }
+                writeln!(writer, "Amounts:")?;
+                for amount in &p.amounts {
+                    writeln!(writer, "{}", amount)?
                 }
             }
             Self::Publish(_p) => {
@@ -1493,6 +1532,7 @@ impl TryFrom<SingleTransactionKind> for SuiTransactionKind {
                 recipient: t.recipient,
                 amount: t.amount,
             }),
+            SingleTransactionKind::Pay(p) => Self::Pay(p.into()),
             SingleTransactionKind::Publish(p) => Self::Publish(p.try_into()?),
             SingleTransactionKind::Call(c) => Self::Call(SuiMoveCall {
                 package: c.package.into(),
@@ -2198,7 +2238,7 @@ pub struct ObjectNotExistsResponse {
     object_id: String,
 }
 
-#[derive(Serialize, Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema, Clone)]
 #[serde(rename = "TypeTag", rename_all = "camelCase")]
 pub struct SuiTypeTag(String);
 

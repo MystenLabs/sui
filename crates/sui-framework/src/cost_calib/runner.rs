@@ -43,7 +43,7 @@ pub fn run_calib_tests(
     let config = config
         .unwrap_or_else(|| UnitTestingConfig::default_with_bound(Some(MAX_UNIT_TEST_INSTRUCTIONS)));
 
-    let mut out_map = HashMap::new();
+    let mut out_map: HashMap<_, Vec<_>> = HashMap::new();
 
     for _ in 0..runs {
         let config = config.clone();
@@ -74,7 +74,7 @@ pub fn run_calib_tests(
         out.iter().for_each(|q| {
             out_map
                 .entry(q.name.clone())
-                .or_insert(vec![])
+                .or_default()
                 .push((q.subject, q.baseline));
         });
     }

@@ -17,7 +17,8 @@ use sui_types::{
     base_types::encode_bytes_hex,
     crypto::{
         generate_proof_of_possession, get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair,
-        AuthorityPublicKeyBytes, KeypairTraits, PublicKey, SuiKeyPair,
+        AuthorityPublicKeyBytes, KeypairTraits, NetworkKeyPair, NetworkPublicKey, PublicKey,
+        SuiKeyPair,
     },
 };
 
@@ -123,16 +124,14 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
                             get_key_pair_from_rng::<AccountKeyPair, _>(&mut rng)
                                 .1
                                 .into(),
-                            get_key_pair_from_rng::<AccountKeyPair, _>(&mut rng)
-                                .1
-                                .into(),
+                            get_key_pair_from_rng(&mut rng).1,
                         ),
                     )
                 })
                 .map(
                     |(i, (key_pair, worker_key_pair, account_key_pair, network_key_pair)): (
                         _,
-                        (AuthorityKeyPair, AuthorityKeyPair, SuiKeyPair, SuiKeyPair),
+                        (AuthorityKeyPair, NetworkKeyPair, SuiKeyPair, NetworkKeyPair),
                     )| {
                         self.build_validator(
                             i,
@@ -154,9 +153,9 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
         &self,
         index: usize,
         key_pair: AuthorityKeyPair,
-        worker_key_pair: AuthorityKeyPair,
+        worker_key_pair: NetworkKeyPair,
         account_key_pair: SuiKeyPair,
-        network_key_pair: SuiKeyPair,
+        network_key_pair: NetworkKeyPair,
     ) -> ValidatorGenesisInfo {
         match self.validator_ip_sel {
             ValidatorIpSelection::Localhost => ValidatorGenesisInfo::from_localhost_for_testing(
@@ -197,9 +196,9 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
             .map(|(i, validator)| {
                 let name = format!("validator-{i}");
                 let protocol_key: AuthorityPublicKeyBytes = validator.key_pair.public().into();
-                let worker_key: AuthorityPublicKeyBytes = validator.worker_key_pair.public().into();
                 let account_key: PublicKey = validator.account_key_pair.public();
-                let network_key: PublicKey = validator.network_key_pair.public();
+                let network_key: NetworkPublicKey = validator.network_key_pair.public().clone();
+                let worker_key: NetworkPublicKey = validator.worker_key_pair.public().clone();
                 let stake = validator.stake;
                 let network_address = validator.network_address.clone();
                 let pop = generate_proof_of_possession(
@@ -218,10 +217,8 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
                         delegation: 0, // no delegation yet at genesis
                         gas_price: validator.gas_price,
                         network_address,
-                        narwhal_primary_to_primary: validator.narwhal_primary_to_primary.clone(),
-                        narwhal_worker_to_primary: validator.narwhal_worker_to_primary.clone(),
-                        narwhal_primary_to_worker: validator.narwhal_primary_to_worker.clone(),
-                        narwhal_worker_to_worker: validator.narwhal_worker_to_worker.clone(),
+                        narwhal_primary_address: validator.narwhal_primary_address.clone(),
+                        narwhal_worker_address: validator.narwhal_worker_address.clone(),
                         narwhal_consensus_address: validator.narwhal_consensus_address.clone(),
                     },
                     pop,
@@ -251,13 +248,13 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
                 let db_path = self
                     .config_directory
                     .join(AUTHORITIES_DB_NAME)
-                    .join(encode_bytes_hex(&public_key));
+                    .join(encode_bytes_hex(public_key));
                 let network_address = validator.network_address;
                 let consensus_address = validator.narwhal_consensus_address;
                 let consensus_db_path = self
                     .config_directory
                     .join(CONSENSUS_DB_NAME)
-                    .join(encode_bytes_hex(&public_key));
+                    .join(encode_bytes_hex(public_key));
                 let consensus_config = ConsensusConfig {
                     consensus_address,
                     consensus_db_path,

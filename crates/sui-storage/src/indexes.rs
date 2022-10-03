@@ -74,11 +74,11 @@ fn timestamps_table_default_config() -> Options {
 }
 
 impl IndexStore {
-    pub fn index_tx<'a>(
+    pub fn index_tx(
         &self,
         sender: SuiAddress,
         active_inputs: impl Iterator<Item = ObjectID>,
-        mutated_objects: impl Iterator<Item = &'a (ObjectRef, Owner)> + Clone,
+        mutated_objects: impl Iterator<Item = (ObjectRef, Owner)> + Clone,
         move_functions: impl Iterator<Item = (ObjectID, Identifier, Identifier)> + Clone,
         sequence: TxSequenceNumber,
         digest: &TransactionDigest,
@@ -186,8 +186,8 @@ impl IndexStore {
             .iter()
             .skip_to(&(
                 package,
-                module.clone().unwrap_or_else(|| "".to_string()),
-                function.clone().unwrap_or_else(|| "".to_string()),
+                module.clone().unwrap_or_default(),
+                function.clone().unwrap_or_default(),
                 TxSequenceNumber::MIN,
             ))?
             .take_while(|((id, m, f, _), _)| {

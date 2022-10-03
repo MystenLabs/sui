@@ -1,0 +1,60 @@
+[package]
+name = "narwhal-types"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+publish = false
+
+[dependencies]
+base64 = "0.13.0"
+bincode = "1.3.3"
+blake2 = "0.9"
+bytes = "1.2.1"
+dashmap = "5.4.0"
+derive_builder = "0.11.2"
+futures = "0.3.24"
+indexmap = { version = "1.9.1", features = ["serde"] }
+mysten-util-mem = { git = "https://github.com/MystenLabs/mysten-infra" }
+prometheus = "0.13.2"
+proptest = "1.0.0"
+proptest-derive = "0.3.0"
+prost = "0.10.4"
+rand = "0.8.5"
+roaring = "0.10.1"
+serde = { version = "1.0.144", features = ["derive"] }
+serde_with = "2.0.1"
+signature = "1.6.1"
+store = {  version = "0.1.0", package = "typed-store"}
+thiserror = "1.0.35"
+tokio = { version = "1.20.1", features = ["sync", "rt", "macros"] }
+tokio-util = { version = "0.7.4", features = ["codec"] }
+tonic = { version = "0.7.2", features = ["tls"] }
+tracing = "0.1.36"
+
+config = { path = "../config", package = "narwhal-config" }
+fastcrypto = "0.1.2"
+crypto = { path = "../crypto", package = "narwhal-crypto" }
+dag = { path = "../dag", package = "narwhal-dag" }
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "b145cbcf4a1917197e2b9ee6a1523afdb623dbf2" }
+workspace-hack.workspace = true
+
+[dev-dependencies]
+criterion = "0.3.6"
+hex = "0.4.3"
+serde_test = "1.0.144"
+test-utils = { path = "../test-utils", package = "narwhal-test-utils" }
+
+[build-dependencies]
+prost-build = "0.10.4"
+rustversion = "1.0.9"
+tonic-build = { version = "0.7.2", features = [ "prost", "transport" ] }
+anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "b145cbcf4a1917197e2b9ee6a1523afdb623dbf2" }
+
+[features]
+default = []
+test = []
+
+[[bench]]
+name = "batch_digest"
+harness = false

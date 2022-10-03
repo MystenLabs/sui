@@ -25,14 +25,17 @@ impl TestCaseImpl for SharedCounterTest {
     async fn run(&self, ctx: &mut TestContext) -> Result<(), anyhow::Error> {
         info!("Testing shared object transactions.");
 
+        let sui_objs = ctx.get_sui_from_faucet(Some(1)).await;
+        assert!(!sui_objs.is_empty());
+
         let wallet_context: &WalletContext = ctx.get_wallet();
         let address = ctx.get_wallet_address();
         let (package_ref, counter_id) =
             publish_basics_package_and_make_counter(wallet_context, address).await;
 
-        let effects: SuiTransactionResponse =
+        let response: SuiTransactionResponse =
             increment_counter(wallet_context, address, None, package_ref, counter_id).await;
-        let effects = effects.effects;
+        let effects = response.effects;
         assert_eq!(
             effects.status,
             SuiExecutionStatus::Success,
@@ -46,15 +49,16 @@ impl TestCaseImpl for SharedCounterTest {
             .expect("Expect obj {counter_id} in shared_objects");
 
         // Verify fullnode observes the txn
-        ctx.let_fullnode_sync().await;
+        ctx.let_fullnode_sync(vec![response.certificate.transaction_digest], 5)
+            .await;
 
-        let sui_object = ObjectChecker::new(counter_id)
+        let counter_object = ObjectChecker::new(counter_id)
             .owner(Owner::Shared)
-            .check_into_sui_object(ctx.get_fullnode())
+            .check_into_object(ctx.get_fullnode())
             .await;
 
         assert_eq!(
-            sui_object.reference.version,
+            counter_object.reference.version,
             SequenceNumber::from_u64(2),
             "Expect sequence number to be 2"
         );

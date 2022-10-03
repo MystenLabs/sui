@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fmt::Write;
+use std::fmt::{Debug, Write};
 use std::fmt::{Display, Formatter};
 use std::sync::Arc;
 
@@ -21,11 +21,11 @@ use sui_config::gateway::GatewayConfig;
 use sui_core::gateway_state::{GatewayClient, GatewayState};
 pub use sui_json as json;
 use sui_json_rpc::api::EventStreamingApiClient;
-use sui_json_rpc::api::QuorumDriverApiClient;
 use sui_json_rpc::api::RpcBcsApiClient;
 use sui_json_rpc::api::RpcFullNodeReadApiClient;
 use sui_json_rpc::api::RpcGatewayApiClient;
 use sui_json_rpc::api::RpcReadApiClient;
+use sui_json_rpc::api::TransactionExecutionApiClient;
 use sui_json_rpc::api::WalletSyncApiClient;
 pub use sui_json_rpc_types as rpc_types;
 use sui_json_rpc_types::{
@@ -58,6 +58,19 @@ pub struct SuiClient {
 enum SuiClientApi {
     Rpc(RpcClient),
     Embedded(GatewayClient),
+}
+
+impl Debug for SuiClientApi {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SuiClientApi::Rpc(rpc_client) => write!(
+                f,
+                "RPC client. Http: {:?}, Websocket: {:?}",
+                rpc_client.http, rpc_client.ws
+            ),
+            SuiClientApi::Embedded(_) => write!(f, "Embedded Gateway client."),
+        }
+    }
 }
 
 struct RpcClient {
@@ -200,6 +213,7 @@ impl SuiClient {
     }
 }
 
+#[derive(Debug)]
 pub struct ReadApi {
     api: Arc<SuiClientApi>,
 }
@@ -415,7 +429,7 @@ impl QuorumDriver {
         Ok(match &*self.api {
             SuiClientApi::Rpc(c) => {
                 let (tx_bytes, flag, signature, pub_key) = tx.to_network_data_for_execution();
-                QuorumDriverApiClient::execute_transaction(
+                TransactionExecutionApiClient::execute_transaction(
                     &c.http,
                     tx_bytes,
                     flag,

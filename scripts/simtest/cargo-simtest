@@ -43,16 +43,54 @@ else
   echo "Using MSIM_TEST_SEED=$MSIM_TEST_SEED from the environment"
 fi
 
+RUST_FLAGS=('"--cfg"' '"msim"')
+
+cargo_patch_args=(
+  --config 'patch.crates-io.hyper.git = "https://github.com/mystenmark/hyper-madsim-fork.git"'
+  --config 'patch.crates-io.hyper.rev = "2b2eca1e983376294c84c93385ebe848ccf9a99f"'
+)
+
+if [ -n "$LOCAL_MSIM_PATH" ]; then
+  cargo_patch_args+=(
+    --config "patch.crates-io.tokio.path = \"$LOCAL_MSIM_PATH/msim-tokio\""
+    --config "patch.'https://github.com/MystenLabs/mysten-sim'.msim.path = \"$LOCAL_MSIM_PATH/msim\""
+  )
+else
+  cargo_patch_args+=(
+    --config 'patch.crates-io.tokio.git = "https://github.com/MystenLabs/mysten-sim.git"'
+    --config 'patch.crates-io.tokio.rev = "e7773753dcb5becda0ea27b10694eb9c11e7af4a"'
+  )
+fi
+
+# Mock out the blst crate to massively speed up the simulation.
+# You should not assume that test runs will be repeatable with and without blst mocking,
+# as blst samples from the PRNG when not mocked.
+if [ -n "$USE_MOCK_CRYPTO" ]; then
+  echo "Using mocked crypto crates - no cryptographic verification will occur"
+  RUST_FLAGS+=(
+    '"--cfg"'
+    '"use_mock_crypto"'
+  )
+  cargo_patch_args+=(
+    --config 'patch.crates-io.blst.git = "https://github.com/MystenLabs/mock-blst.git"'
+    --config 'patch.crates-io.blst.rev = "630ca4d55de8e199e62c5b6a695c702d95fe6498"'
+  )
+fi
+
+RUST_FLAGS=$(IFS=, ; echo "${RUST_FLAGS[*]}")
+
 CARGO_COMMAND=(nextest run --cargo-profile simulator)
 if [ "$1" = "build" ]; then
   shift
   CARGO_COMMAND=(build --profile simulator)
 fi
 
+# Must supply a new temp dir - the test is deterministic and can't choose one randomly itself.
+export TMPDIR=$(mktemp -d)
+
 cargo ${CARGO_COMMAND[@]} \
-  --config 'build.rustflags = ["--cfg", "msim"]' \
-  --config 'patch.crates-io.tokio.git = "https://github.com/MystenLabs/mysten-sim.git"' \
-  --config 'patch.crates-io.tokio.rev = "bccf26947cc8a22cc69526f1720edde6e55a7d8c"' \
+  --config "build.rustflags = [$RUST_FLAGS]" \
+  "${cargo_patch_args[@]}" \
   --config 'patch.crates-io.hyper.git = "https://github.com/mystenmark/hyper-madsim-fork.git"' \
   --config 'patch.crates-io.hyper.rev = "2b2eca1e983376294c84c93385ebe848ccf9a99f"' \
   "$@"

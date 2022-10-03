@@ -1,0 +1,36 @@
+[package]
+name = "narwhal-network"
+version = "0.1.0"
+license = "Apache-2.0"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+edition = "2021"
+publish = false
+
+[dependencies]
+async-trait = "0.1.57"
+backoff = { version = "0.4.0", features = ["tokio"] }
+bytes = "1.2.1"
+fastcrypto = "0.1.2"
+futures = "0.3.24"
+multiaddr = "0.14.0"
+prometheus = "0.13.2"
+rand = { version = "0.8.5", features = ["small_rng"] }
+thiserror = "1.0.35"
+tokio = { version = "1.20.1", features = ["rt", "net", "sync", "macros", "time"] }
+tokio-util = { version = "0.7.4", features = ["codec"] }
+tonic = { version = "0.7.2", features = ["tls"] }
+tracing = "0.1.36"
+types = { path = "../types", package = "narwhal-types" }
+crypto = { path = "../crypto", package = "narwhal-crypto" }
+
+serde = "1.0.144"
+workspace-hack.workspace = true
+eyre = "0.6.8"
+
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "b145cbcf4a1917197e2b9ee6a1523afdb623dbf2" }
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "b145cbcf4a1917197e2b9ee6a1523afdb623dbf2" }
+anyhow = "1.0.65"
+
+[dev-dependencies]
+bincode = "1.3.3"
+test-utils = { path = "../test-utils", package = "narwhal-test-utils" }

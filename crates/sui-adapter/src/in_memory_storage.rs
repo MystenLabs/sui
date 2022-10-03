@@ -7,7 +7,7 @@ use sui_types::{
     base_types::{ObjectID, ObjectRef, SequenceNumber},
     error::{SuiError, SuiResult},
     object::Object,
-    storage::{BackingPackageStore, DeleteKind, ParentSync},
+    storage::{BackingPackageStore, DeleteKind, ParentSync, WriteKind},
 };
 
 // TODO: We should use AuthorityTemporaryStore instead.
@@ -26,7 +26,9 @@ impl BackingPackageStore for InMemoryStorage {
 
 impl ParentSync for InMemoryStorage {
     fn get_latest_parent_entry_ref(&self, object_id: ObjectID) -> SuiResult<Option<ObjectRef>> {
-        debug_assert!(!self.persistent.contains_key(&object_id));
+        if let Some(obj) = self.persistent.get(&object_id) {
+            return Ok(Some(obj.compute_object_reference()));
+        }
         Ok(self.last_entry_for_deleted.get(&object_id).copied())
     }
 }
@@ -97,11 +99,11 @@ impl InMemoryStorage {
 
     pub fn finish(
         &mut self,
-        written: BTreeMap<ObjectID, (ObjectRef, Object)>,
+        written: BTreeMap<ObjectID, (ObjectRef, Object, WriteKind)>,
         deleted: BTreeMap<ObjectID, (SequenceNumber, DeleteKind)>,
     ) {
         debug_assert!(written.keys().all(|id| !deleted.contains_key(id)));
-        for (_id, (_, new_object)) in written {
+        for (_id, (_, new_object, _)) in written {
             debug_assert!(new_object.id() == _id);
             self.insert_object(new_object);
         }

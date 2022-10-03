@@ -15,7 +15,6 @@ written: object(106)
 task 4 'view-object'. lines 43-43:
 Owner: Shared
 Version: 1
-Child Count: None
 Contents: t2::o2::Obj2 {id: sui::object::UID {id: sui::object::ID {bytes: fake(107)}}}
 
 task 5 'run'. lines 45-45:

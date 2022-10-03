@@ -5,14 +5,20 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::anyhow;
+use base64ct::Encoding as _;
+use bip32::{DerivationPath, Mnemonic};
 use clap::*;
+use fastcrypto::traits::{ToFromBytes, VerifyingKey};
+use signature::rand_core::OsRng;
 use tracing::info;
 
+use fastcrypto::ed25519::{Ed25519KeyPair, Ed25519PrivateKey, Ed25519PublicKey};
 use sui_sdk::crypto::SuiKeystore;
 use sui_types::base_types::SuiAddress;
 use sui_types::base_types::{decode_bytes_hex, encode_bytes_hex};
 use sui_types::crypto::{
-    random_key_pair_by_type, AuthorityKeyPair, EncodeDecodeBase64, SignatureScheme, SuiKeyPair,
+    derive_key_pair_from_path, get_key_pair, AuthorityKeyPair, Ed25519SuiSignature,
+    EncodeDecodeBase64, NetworkKeyPair, SignatureScheme, SuiKeyPair, SuiSignatureInner,
 };
 use sui_types::sui_serde::{Base64, Encoding};
 
@@ -24,9 +30,12 @@ mod keytool_tests;
 #[derive(Subcommand)]
 #[clap(rename_all = "kebab-case")]
 pub enum KeyToolCommand {
-    /// Generate a new keypair with keypair scheme flag {ed25519 | secp256k1}. Output file to current dir (to generate keypair to sui.keystore, use `sui client new-address`)
+    /// Generate a new keypair with keypair scheme flag {ed25519 | secp256k1}
+    /// with optional derivation path, default to m/44'/784'/0'/0'/0' for ed25519 or m/54'/784'/0'/0/0 for secp256k1.
+    /// And output file to current dir (to generate keypair and add to sui.keystore, use `sui client new-address`)
     Generate {
         key_scheme: SignatureScheme,
+        derivation_path: Option<DerivationPath>,
     },
     Show {
         file: PathBuf,
@@ -44,13 +53,15 @@ pub enum KeyToolCommand {
         #[clap(long)]
         data: String,
     },
-    /// Import mnemonic phrase and generate keypair based on key scheme flag {ed25519 | secp256k1}.
+    /// Import mnemonic phrase and generate keypair based on key scheme flag {ed25519 | secp256k1}
+    /// with optional derivation path, default to m/44'/784'/0'/0'/0' for ed25519 or m/54'/784'/0'/0/0 for secp256k1.
     Import {
         mnemonic_phrase: String,
         key_scheme: SignatureScheme,
+        derivation_path: Option<DerivationPath>,
     },
-    /// This is a temporary helper function to ensure that testnet genesis does not break while
-    /// we transition towards BLS signatures.
+    /// Read keypair from path and show its base64 encoded value with flag. This is useful
+    /// to generate protocol, account, worker, network keys in NodeConfig with its expected encoding.
     LoadKeypair {
         file: PathBuf,
     },
@@ -59,20 +70,28 @@ pub enum KeyToolCommand {
 impl KeyToolCommand {
     pub fn execute(self, keystore: &mut SuiKeystore) -> Result<(), anyhow::Error> {
         match self {
-            KeyToolCommand::Generate { key_scheme } => {
+            KeyToolCommand::Generate {
+                key_scheme,
+                derivation_path,
+            } => {
                 let k = key_scheme.to_string();
-                match random_key_pair_by_type(key_scheme) {
-                    Ok((address, keypair)) => {
-                        let file_name = format!("{address}.key");
-                        write_keypair_to_file(&keypair, &file_name)?;
-                        println!("{:?} key generated and saved to '{file_name}'", k);
-                    }
-                    Err(e) => {
-                        println!("Failed to generate keypair: {:?}", e)
+                if "bls12381" == key_scheme.to_string() {
+                    let (address, keypair): (_, AuthorityKeyPair) = get_key_pair();
+                    let file_name = format!("bls-{address}.key");
+                    write_authority_keypair_to_file(&keypair, &file_name)?;
+                } else {
+                    let mnemonic = Mnemonic::random(OsRng, Default::default());
+                    let seed = mnemonic.to_seed("");
+                    match derive_key_pair_from_path(seed.as_bytes(), derivation_path, &key_scheme) {
+                        Ok((address, kp)) => {
+                            let file_name = format!("{address}.key");
+                            write_keypair_to_file(&kp, &file_name)?;
+                            println!("{:?} key generated and saved to '{file_name}'", k);
+                        }
+                        Err(e) => println!("Failed to generate keypair: {:?}", e),
                     }
                 }
             }
-
             KeyToolCommand::Show { file } => {
                 let res: Result<SuiKeyPair, anyhow::Error> = read_keypair_from_file(&file);
                 match res {
@@ -128,24 +147,32 @@ impl KeyToolCommand {
             KeyToolCommand::Import {
                 mnemonic_phrase,
                 key_scheme,
+                derivation_path,
             } => {
-                let address = keystore.import_from_mnemonic(&mnemonic_phrase, key_scheme)?;
+                let address =
+                    keystore.import_from_mnemonic(&mnemonic_phrase, key_scheme, derivation_path)?;
                 info!("Key imported for address [{address}]");
             }
 
             KeyToolCommand::LoadKeypair { file } => {
-                let res: Result<SuiKeyPair, anyhow::Error> = read_keypair_from_file(&file);
-
-                match res {
+                match read_keypair_from_file(&file) {
                     Ok(keypair) => {
+                        // Account keypair is encoded with the key scheme flag {},
+                        // and network and worker keypair are not.
                         println!("Account Keypair: {}", keypair.encode_base64());
-                        println!("Network Keypair: {}", keypair.encode_base64());
                         if let SuiKeyPair::Ed25519SuiKeyPair(kp) = keypair {
-                            println!("Protocol Keypair: {}", kp.encode_base64());
+                            println!("Network Keypair: {}", kp.encode_base64());
+                            println!("Worker Keypair: {}", kp.encode_base64());
                         };
                     }
-                    Err(e) => {
-                        println!("Failed to read keypair at path {:?} err: {:?}", file, e)
+                    Err(_) => {
+                        // Authority keypair file is not stored with the flag, it will try read as BLS keypair..
+                        match read_authority_keypair_from_file(&file) {
+                            Ok(kp) => println!("Protocol Keypair: {}", kp.encode_base64()),
+                            Err(e) => {
+                                println!("Failed to read keypair at path {:?} err: {:?}", file, e)
+                            }
+                        }
                     }
                 }
             }
@@ -178,19 +205,38 @@ pub fn write_keypair_to_file<P: AsRef<std::path::Path>>(
     Ok(())
 }
 
+pub fn write_authority_keypair_to_file<P: AsRef<std::path::Path>>(
+    keypair: &AuthorityKeyPair,
+    path: P,
+) -> anyhow::Result<()> {
+    let contents = keypair.encode_base64();
+    std::fs::write(path, contents)?;
+    Ok(())
+}
+
 pub fn read_authority_keypair_from_file<P: AsRef<std::path::Path>>(
     path: P,
 ) -> anyhow::Result<AuthorityKeyPair> {
-    match read_keypair_from_file(path) {
-        Ok(kp) => match kp {
-            SuiKeyPair::Ed25519SuiKeyPair(k) => Ok(k),
-            SuiKeyPair::Secp256k1SuiKeyPair(_) => Err(anyhow!("Invalid authority keypair type")),
-        },
-        Err(e) => Err(anyhow!("Failed to read keypair file {:?}", e)),
-    }
+    let contents = std::fs::read_to_string(path)?;
+    AuthorityKeyPair::decode_base64(contents.as_str().trim()).map_err(|e| anyhow!(e))
 }
 
 pub fn read_keypair_from_file<P: AsRef<std::path::Path>>(path: P) -> anyhow::Result<SuiKeyPair> {
     let contents = std::fs::read_to_string(path)?;
     SuiKeyPair::decode_base64(contents.as_str().trim()).map_err(|e| anyhow!(e))
+}
+
+pub fn read_network_keypair_from_file<P: AsRef<std::path::Path>>(
+    path: P,
+) -> anyhow::Result<NetworkKeyPair> {
+    let value = std::fs::read_to_string(path)?;
+    let bytes =
+        base64ct::Base64::decode_vec(value.as_str()).map_err(|e| anyhow!("{}", e.to_string()))?;
+    if let Some(flag) = bytes.first() {
+        if flag == &Ed25519SuiSignature::SCHEME.flag() {
+            let sk = Ed25519PrivateKey::from_bytes(&bytes[1 + Ed25519PublicKey::LENGTH..])?;
+            return Ok(<Ed25519KeyPair as From<Ed25519PrivateKey>>::from(sk));
+        }
+    }
+    Err(anyhow!("Invalid bytes"))
 }

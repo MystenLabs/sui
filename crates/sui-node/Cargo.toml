@@ -1,6 +1,6 @@
 [package]
 name = "sui-node"
-version = "0.9.0"
+version = "0.10.0"
 authors = ["Mysten Labs <build@mystenlabs.com>"]
 license = "Apache-2.0"
 publish = false
@@ -16,7 +16,7 @@ tokio = { version = "1.20.1", features = ["full"] }
 tracing = "0.1.36"
 parking_lot = "0.12.1"
 futures = "0.3.23"
-typed-store = "0.1.0"
+typed-store.workspace = true
 chrono = "0.4.0"
 
 sui-config = { path = "../sui-config" }
@@ -26,11 +26,10 @@ sui-network = { path = "../sui-network" }
 sui-json-rpc = { path = "../sui-json-rpc" }
 sui-telemetry = { path = "../sui-telemetry" }
 sui-types = { path = "../sui-types" }
-sui-quorum-driver = { path = "../sui-quorum-driver" }
 
-telemetry-subscribers = "0.1.0"
-mysten-network = "0.1.0"
-workspace-hack = { path = "../workspace-hack"}
+telemetry-subscribers.workspace = true
+mysten-network.workspace = true
+workspace-hack.workspace = true
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemallocator = { version = "^0.5", features = ["profiling"] }

@@ -25,7 +25,7 @@ use serde_with::Bytes;
 use sha2::Sha512;
 use sha3::Sha3_256;
 
-use crate::committee::EpochId;
+pub use crate::committee::EpochId;
 use crate::crypto::{
     AuthorityPublicKey, AuthorityPublicKeyBytes, KeypairTraits, PublicKey, SuiPublicKey,
 };
@@ -116,6 +116,12 @@ impl From<ObjectInfo> for ObjectRef {
     }
 }
 
+impl From<&ObjectInfo> for ObjectRef {
+    fn from(info: &ObjectInfo) -> Self {
+        (info.object_id, info.version, info.digest)
+    }
+}
+
 pub const SUI_ADDRESS_LENGTH: usize = ObjectID::LENGTH;
 
 #[serde_as]
@@ -146,10 +152,7 @@ impl SuiAddress {
     where
         S: serde::ser::Serializer,
     {
-        serializer.serialize_str(
-            &key.map(|addr| encode_bytes_hex(&addr))
-                .unwrap_or_else(|| "".to_string()),
-        )
+        serializer.serialize_str(&key.map(encode_bytes_hex).unwrap_or_default())
     }
 
     pub fn optional_address_from_hex<'de, D>(
@@ -174,6 +177,12 @@ impl From<ObjectID> for SuiAddress {
     }
 }
 
+impl From<AccountAddress> for SuiAddress {
+    fn from(address: AccountAddress) -> SuiAddress {
+        Self(address.into_bytes())
+    }
+}
+
 impl TryFrom<Vec<u8>> for SuiAddress {
     type Error = SuiError;
 
@@ -187,7 +196,7 @@ impl TryFrom<Vec<u8>> for SuiAddress {
 impl From<&AuthorityPublicKeyBytes> for SuiAddress {
     fn from(pkb: &AuthorityPublicKeyBytes) -> Self {
         let mut hasher = Sha3_256::default();
-        hasher.update(&[AuthorityPublicKey::SIGNATURE_SCHEME.flag()]);
+        hasher.update([AuthorityPublicKey::SIGNATURE_SCHEME.flag()]);
         hasher.update(pkb);
         let g_arr = hasher.finalize();
 
@@ -200,7 +209,7 @@ impl From<&AuthorityPublicKeyBytes> for SuiAddress {
 impl<T: SuiPublicKey> From<&T> for SuiAddress {
     fn from(pk: &T) -> Self {
         let mut hasher = Sha3_256::default();
-        hasher.update(&[T::SIGNATURE_SCHEME.flag()]);
+        hasher.update([T::SIGNATURE_SCHEME.flag()]);
         hasher.update(pk);
         let g_arr = hasher.finalize();
 
@@ -213,7 +222,7 @@ impl<T: SuiPublicKey> From<&T> for SuiAddress {
 impl From<&PublicKey> for SuiAddress {
     fn from(pk: &PublicKey) -> Self {
         let mut hasher = Sha3_256::default();
-        hasher.update(&[pk.flag()]);
+        hasher.update([pk.flag()]);
         hasher.update(pk);
         let g_arr = hasher.finalize();
 
@@ -321,6 +330,12 @@ impl IntoPoint for ExecutionDigests {
 pub const STD_OPTION_MODULE_NAME: &IdentStr = ident_str!("option");
 pub const STD_OPTION_STRUCT_NAME: &IdentStr = ident_str!("Option");
 
+pub const STD_ASCII_MODULE_NAME: &IdentStr = ident_str!("ascii");
+pub const STD_ASCII_STRUCT_NAME: &IdentStr = ident_str!("String");
+
+pub const STD_UTF8_MODULE_NAME: &IdentStr = ident_str!("string");
+pub const STD_UTF8_STRUCT_NAME: &IdentStr = ident_str!("String");
+
 pub const TX_CONTEXT_MODULE_NAME: &IdentStr = ident_str!("tx_context");
 pub const TX_CONTEXT_STRUCT_NAME: &IdentStr = ident_str!("TxContext");
 
@@ -393,6 +408,11 @@ impl TxContext {
             &TransactionDigest::random(),
             0,
         )
+    }
+
+    // for testing
+    pub fn with_sender_for_testing_only(sender: &SuiAddress) -> Self {
+        Self::new(sender, &TransactionDigest::random(), 0)
     }
 
     /// A function that lists all IDs created by this TXContext
@@ -579,7 +599,7 @@ pub fn dbg_object_id(name: u8) -> ObjectID {
 
 impl std::fmt::Debug for ObjectDigest {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        let s = hex::encode(&self.0);
+        let s = hex::encode(self.0);
         write!(f, "o#{}", s)?;
         Ok(())
     }

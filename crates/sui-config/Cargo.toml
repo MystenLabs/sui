@@ -21,20 +21,22 @@ once_cell = "1.14.0"
 tracing = "0.1.36"
 
 fastcrypto = "0.1.2"
-move-binary-format = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e" }
-move-package = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e" }
-move-core-types = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e", features = ["address20"] }
-move-vm-runtime = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e" }
-narwhal-config = { git = "https://github.com/MystenLabs/narwhal", rev = "2b77ef805c9bce0af4d74477dd922d150d31cb16", package = "config" }
-narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "2b77ef805c9bce0af4d74477dd922d150d31cb16", package = "crypto" }
+move-binary-format.workspace = true
+move-package.workspace = true
+move-core-types.workspace = true
+move-vm-runtime.workspace = true
+narwhal-config = { path = "../../narwhal/config" }
+narwhal-crypto = { path = "../../narwhal/crypto" }
 
 sui-framework = { path = "../sui-framework" }
 sui-adapter = { path = "../sui-adapter" }
-sui-simulator = { path = "../sui-simulator" }
 sui-types = { path = "../sui-types" }
-workspace-hack = { path = "../workspace-hack"}
+workspace-hack.workspace = true
 sha3 = "0.10.4"
 digest = "0.10.3"
+
+[target.'cfg(msim)'.dependencies]
+sui-simulator = { path = "../sui-simulator" }
 
 [dev-dependencies]
 insta = { version = "1.19.1", features = ["redactions", "yaml"] }

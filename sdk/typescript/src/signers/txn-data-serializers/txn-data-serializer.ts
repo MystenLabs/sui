@@ -20,6 +20,14 @@ export interface TransferSuiTransaction {
   amount: number | null;
 }
 
+export interface PayTransaction {
+  inputCoins: ObjectId[];
+  recipients: SuiAddress[];
+  amounts: number[];
+  gasPayment?: ObjectId;
+  gasBudget: number;
+}
+
 export interface MergeCoinTransaction {
   primaryCoin: ObjectId;
   coinToMerge: ObjectId;
@@ -48,6 +56,40 @@ export interface MoveCallTransaction {
   gasPayment?: ObjectId;
   gasBudget: number;
 }
+
+/** A type that represents the possible transactions that can be signed: */
+export type SignableTransaction =
+  | {
+      kind: 'moveCall';
+      data: MoveCallTransaction;
+    }
+  | {
+      kind: 'transferSui';
+      data: TransferSuiTransaction;
+    }
+  | {
+      kind: 'transferObject';
+      data: TransferObjectTransaction;
+    }
+  | {
+      kind: 'mergeCoin';
+      data: MergeCoinTransaction;
+    }
+  | {
+      kind: 'splitCoin';
+      data: SplitCoinTransaction;
+    }
+  | {
+      kind: 'pay';
+      data: PayTransaction;
+    }
+  | {
+      kind: 'bytes';
+      data: Uint8Array;
+    };
+
+export type SignableTransactionKind = SignableTransaction['kind'];
+export type SignableTransactionData = SignableTransaction['data'];
 
 /**
  * Transaction type used for publishing Move modules to the Sui.
@@ -90,6 +132,11 @@ export interface TxnDataSerializer {
   newTransferSui(
     signerAddress: SuiAddress,
     txn: TransferSuiTransaction
+  ): Promise<Base64DataBuffer>;
+
+  newPay(
+    signerAddress: SuiAddress,
+    txn: PayTransaction
   ): Promise<Base64DataBuffer>;
 
   newMoveCall(

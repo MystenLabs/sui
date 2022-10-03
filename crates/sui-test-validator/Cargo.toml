@@ -16,11 +16,11 @@ axum = "0.5.16"
 tower = { version = "0.4.12", features = ["util", "timeout", "load-shed", "limit"] }
 tower-http = { version = "0.3.4", features = ["cors"] }
 http = { version = "0.2.8" }
-workspace-hack = { path = "../workspace-hack"}
+workspace-hack.workspace = true
 
 sui = { path = "../sui" }
 sui-faucet = { path = "../sui-faucet" }
 sui-cluster-test = { path = "../sui-cluster-test" }
 sui-types = { path = "../sui-types" }
 
-move-package = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e" }
+move-package.workspace = true

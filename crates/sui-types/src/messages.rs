@@ -12,7 +12,7 @@ use crate::crypto::{
 use crate::gas::GasCostSummary;
 use crate::messages_checkpoint::{CheckpointFragment, CheckpointSequenceNumber};
 use crate::object::{Object, ObjectFormatOptions, Owner, OBJECT_START_VERSION};
-use crate::storage::DeleteKind;
+use crate::storage::{DeleteKind, WriteKind};
 use crate::sui_serde::Base64;
 use crate::SUI_SYSTEM_STATE_OBJECT_ID;
 use base64ct::Encoding;
@@ -96,6 +96,18 @@ pub struct TransferSui {
     pub amount: Option<u64>,
 }
 
+/// Pay each recipient the corresponding amount using the input coins
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub struct Pay {
+    /// The coins to be used for payment
+    pub coins: Vec<ObjectRef>,
+    /// The addresses that will receive payment
+    pub recipients: Vec<SuiAddress>,
+    /// The amounts each recipient will receive.
+    /// Must be the same length as recipients
+    pub amounts: Vec<u64>,
+}
+
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct ChangeEpoch {
     /// The next (to become) epoch ID.
@@ -116,6 +128,8 @@ pub enum SingleTransactionKind {
     Call(MoveCall),
     /// Initiate a SUI coin transfer between addresses
     TransferSui(TransferSui),
+    /// Pay multiple recipients using multiple input coins
+    Pay(Pay),
     /// A system transaction that will update epoch information on-chain.
     /// It will only ever be executed once in an epoch.
     /// The argument is the next epoch number, which is critical
@@ -224,6 +238,10 @@ impl SingleTransactionKind {
             Self::TransferSui(_) => {
                 vec![]
             }
+            Self::Pay(Pay { coins, .. }) => coins
+                .iter()
+                .map(|o| InputObjectKind::ImmOrOwnedMoveObject(*o))
+                .collect(),
             Self::ChangeEpoch(_) => {
                 vec![InputObjectKind::SharedMoveObject(
                     SUI_SYSTEM_STATE_OBJECT_ID,
@@ -255,7 +273,7 @@ impl Display for SingleTransactionKind {
                 let (object_id, seq, digest) = t.object_ref;
                 writeln!(writer, "Object ID : {}", &object_id)?;
                 writeln!(writer, "Sequence Number : {:?}", seq)?;
-                writeln!(writer, "Object Digest : {}", encode_bytes_hex(&digest.0))?;
+                writeln!(writer, "Object Digest : {}", encode_bytes_hex(digest.0))?;
             }
             Self::TransferSui(t) => {
                 writeln!(writer, "Transaction Kind : Transfer SUI")?;
@@ -264,6 +282,23 @@ impl Display for SingleTransactionKind {
                     writeln!(writer, "Amount: {}", amount)?;
                 } else {
                     writeln!(writer, "Amount: Full Balance")?;
+                }
+            }
+            Self::Pay(p) => {
+                writeln!(writer, "Transaction Kind : Pay")?;
+                writeln!(writer, "Coins:")?;
+                for (object_id, seq, digest) in &p.coins {
+                    writeln!(writer, "Object ID : {}", &object_id)?;
+                    writeln!(writer, "Sequence Number : {:?}", seq)?;
+                    writeln!(writer, "Object Digest : {}", encode_bytes_hex(digest.0))?;
+                }
+                writeln!(writer, "Recipients:")?;
+                for recipient in &p.recipients {
+                    writeln!(writer, "{}", recipient)?;
+                }
+                writeln!(writer, "Amounts:")?;
+                for amount in &p.amounts {
+                    writeln!(writer, "{}", amount)?
                 }
             }
             Self::Publish(_p) => {
@@ -314,6 +349,26 @@ impl TransactionKind {
         }
     }
 
+    pub fn input_objects(&self) -> SuiResult<Vec<InputObjectKind>> {
+        let inputs: Vec<_> = self
+            .single_transactions()
+            .map(|s| s.input_objects())
+            .collect::<SuiResult<Vec<_>>>()?
+            .into_iter()
+            .flatten()
+            .collect();
+        Ok(inputs)
+    }
+
+    pub fn shared_input_objects(&self) -> impl Iterator<Item = &ObjectID> {
+        match &self {
+            TransactionKind::Single(s) => Either::Left(s.shared_input_objects()),
+            TransactionKind::Batch(b) => {
+                Either::Right(b.iter().flat_map(|kind| kind.shared_input_objects()))
+            }
+        }
+    }
+
     pub fn batch_size(&self) -> usize {
         match self {
             TransactionKind::Single(_) => 1,
@@ -346,11 +401,12 @@ impl TransactionKind {
                 );
                 // Check that all transaction kinds can be in a batch.
                 let valid = self.single_transactions().all(|s| match s {
-                    SingleTransactionKind::Call(_) => true,
-                    SingleTransactionKind::TransferObject(_) => true,
-                    SingleTransactionKind::TransferSui(_) => false,
-                    SingleTransactionKind::ChangeEpoch(_) => false,
-                    SingleTransactionKind::Publish(_) => false,
+                    SingleTransactionKind::Call(_)
+                    | SingleTransactionKind::TransferObject(_)
+                    | SingleTransactionKind::Pay(_) => true,
+                    SingleTransactionKind::TransferSui(_)
+                    | SingleTransactionKind::ChangeEpoch(_)
+                    | SingleTransactionKind::Publish(_) => false,
                 });
                 fp_ensure!(
                     valid,
@@ -359,7 +415,14 @@ impl TransactionKind {
                     }
                 );
             }
-            Self::Single(_) => (),
+            Self::Single(s) => match s {
+                SingleTransactionKind::Pay(_)
+                | SingleTransactionKind::Call(_)
+                | SingleTransactionKind::Publish(_)
+                | SingleTransactionKind::TransferObject(_)
+                | SingleTransactionKind::TransferSui(_)
+                | SingleTransactionKind::ChangeEpoch(_) => (),
+            },
         }
         Ok(())
     }
@@ -474,6 +537,22 @@ impl TransactionData {
         Self::new(kind, sender, gas_payment, gas_budget)
     }
 
+    pub fn new_pay(
+        sender: SuiAddress,
+        coins: Vec<ObjectRef>,
+        recipients: Vec<SuiAddress>,
+        amounts: Vec<u64>,
+        gas_payment: ObjectRef,
+        gas_budget: u64,
+    ) -> Self {
+        let kind = TransactionKind::Single(SingleTransactionKind::Pay(Pay {
+            coins,
+            recipients,
+            amounts,
+        }));
+        Self::new(kind, sender, gas_payment, gas_budget)
+    }
+
     pub fn new_module(
         sender: SuiAddress,
         gas_payment: ObjectRef,
@@ -521,14 +600,8 @@ impl TransactionData {
     }
 
     pub fn input_objects(&self) -> SuiResult<Vec<InputObjectKind>> {
-        let mut inputs: Vec<_> = self
-            .kind
-            .single_transactions()
-            .map(|s| s.input_objects())
-            .collect::<SuiResult<Vec<_>>>()?
-            .into_iter()
-            .flatten()
-            .collect();
+        let mut inputs = self.kind.input_objects()?;
+
         if !self.kind.is_system_tx() {
             inputs.push(InputObjectKind::ImmOrOwnedMoveObject(
                 *self.gas_payment_object_ref(),
@@ -616,12 +689,7 @@ impl<S> TransactionEnvelope<S> {
     }
 
     pub fn shared_input_objects(&self) -> impl Iterator<Item = &ObjectID> {
-        match &self.signed_data.data.kind {
-            TransactionKind::Single(s) => Either::Left(s.shared_input_objects()),
-            TransactionKind::Batch(b) => {
-                Either::Right(b.iter().flat_map(|kind| kind.shared_input_objects()))
-            }
-        }
+        self.signed_data.data.kind.shared_input_objects()
     }
 
     /// Get the transaction digest and write it to the cache
@@ -1029,6 +1097,18 @@ pub enum ExecutionFailureStatus {
     InvalidCoinObject,
 
     //
+    // Pay errors
+    //
+    /// Supplied 0 input coins
+    EmptyInputCoins,
+    /// Supplied an empty list of recipient addresses for the payment
+    EmptyRecipients,
+    /// Supplied a different number of recipient addresses and recipient amounts
+    RecipientsAmountsArityMismatch,
+    /// Not enough funds to perform the requested payment
+    InsufficientBalance,
+
+    //
     // MoveCall errors
     //
     NonEntryFunctionInvoked,
@@ -1132,6 +1212,16 @@ impl ExecutionFailureStatus {
 impl std::fmt::Display for ExecutionFailureStatus {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
+            ExecutionFailureStatus::EmptyInputCoins => {
+                write!(f, "Expected a non-empty list of input Coin objects")
+            }
+            ExecutionFailureStatus::EmptyRecipients => {
+                write!(f, "Expected a non-empty list of recipient addresses")
+            }
+            ExecutionFailureStatus::InsufficientBalance => write!(
+                f,
+                "Value of input coins is insufficient to cover outgoing amounts"
+            ),
             ExecutionFailureStatus::InsufficientGas => write!(f, "Insufficient Gas."),
             ExecutionFailureStatus::InvalidGasObject => {
                 write!(
@@ -1184,6 +1274,10 @@ impl std::fmt::Display for ExecutionFailureStatus {
             ExecutionFailureStatus::InvalidSharedByValue(data) => {
                 write!(f, "Invalid Shared Object By-Value Usage. {data}.")
             }
+            ExecutionFailureStatus::RecipientsAmountsArityMismatch => write!(
+                f,
+                "Expected recipient and amounts lists to be the same length"
+            ),
             ExecutionFailureStatus::TooManyChildObjects { object } => {
                 write!(
                     f,
@@ -1430,11 +1524,16 @@ impl TransactionEffects {
     /// created and unwrapped objects. In other words, all objects that still exist
     /// in the object state after this transaction.
     /// It doesn't include deleted/wrapped objects.
-    pub fn all_mutated(&self) -> impl Iterator<Item = &(ObjectRef, Owner)> + Clone {
+    pub fn all_mutated(&self) -> impl Iterator<Item = (&ObjectRef, &Owner, WriteKind)> + Clone {
         self.mutated
             .iter()
-            .chain(self.created.iter())
-            .chain(self.unwrapped.iter())
+            .map(|(r, o)| (r, o, WriteKind::Mutate))
+            .chain(self.created.iter().map(|(r, o)| (r, o, WriteKind::Create)))
+            .chain(
+                self.unwrapped
+                    .iter()
+                    .map(|(r, o)| (r, o, WriteKind::Unwrap)),
+            )
     }
 
     /// Return an iterator of mutated objects, but excluding the gas object.
@@ -1448,7 +1547,7 @@ impl TransactionEffects {
 
     pub fn is_object_mutated_here(&self, obj_ref: ObjectRef) -> bool {
         // The mutated or created case
-        if self.all_mutated().any(|(oref, _)| *oref == obj_ref) {
+        if self.all_mutated().any(|(oref, _, _)| *oref == obj_ref) {
             return true;
         }
 
@@ -1714,6 +1813,17 @@ impl InputObjects {
     }
 }
 
+impl From<Vec<Object>> for InputObjects {
+    fn from(objects: Vec<Object>) -> Self {
+        Self::new(
+            objects
+                .into_iter()
+                .map(|o| (o.input_object_kind(), o))
+                .collect(),
+        )
+    }
+}
+
 pub struct SignatureAggregator<'a> {
     committee: &'a Committee,
     weight: StakeUnit,
@@ -1826,6 +1936,10 @@ impl CertifiedTransaction {
 
         obligation.verify_all().map(|_| ())
     }
+
+    pub fn epoch(&self) -> EpochId {
+        self.auth_sign_info.epoch
+    }
 }
 
 impl Display for CertifiedTransaction {
@@ -1918,6 +2032,7 @@ pub enum ExecuteTransactionRequestType {
     ImmediateReturn,
     WaitForTxCert,
     WaitForEffectsCert,
+    WaitForLocalExecution,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -1926,8 +2041,41 @@ pub struct ExecuteTransactionRequest {
     pub request_type: ExecuteTransactionRequestType,
 }
 
+/// When requested to execute a transaction with WaitForLocalExecution,
+/// TransactionOrchestrator attempts to execute this transaction locally
+/// after it is finalized. This value represents whether the transaction
+/// is confirmed to be executed on this node before the response returns.
+pub type IsTransactionExecutedLocally = bool;
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum ExecuteTransactionResponse {
+    ImmediateReturn,
+    TxCert(Box<CertifiedTransaction>),
+    // TODO: Change to CertifiedTransactionEffects eventually.
+    EffectsCert(
+        Box<(
+            CertifiedTransaction,
+            CertifiedTransactionEffects,
+            IsTransactionExecutedLocally,
+        )>,
+    ),
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, schemars::JsonSchema)]
+pub enum QuorumDriverRequestType {
+    ImmediateReturn,
+    WaitForTxCert,
+    WaitForEffectsCert,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct QuorumDriverRequest {
+    pub transaction: Transaction,
+    pub request_type: QuorumDriverRequestType,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum QuorumDriverResponse {
     ImmediateReturn,
     TxCert(Box<CertifiedTransaction>),
     // TODO: Change to CertifiedTransactionEffects eventually.

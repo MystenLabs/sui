@@ -7,5 +7,5 @@ Every Move package has a *package manifest* in the form of a `Move.toml` file - 
 - `[addresses]` - address aliases (eg `@me` will be treated as a `0x0` address)
 
 ```toml
-{{#include ../../examples/Move.toml}}
+{{#include ../../examples/Move.toml.example}}
 ```

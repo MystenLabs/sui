@@ -67,7 +67,7 @@ pub enum SuiError {
     #[error("An object that's owned by another object cannot be deleted or wrapped. It must be transferred to an account address first before deletion")]
     DeleteObjectOwnedObject,
     #[error("The shared locks for this transaction have not yet been set.")]
-    SharedObjectLockNotSetObject,
+    SharedObjectLockNotSetError,
     #[error("Invalid Batch Transaction: {}", error)]
     InvalidBatchTransaction { error: String },
     #[error("Object {child_id:?} is owned by object {parent_id:?}, which is not in the input")]
@@ -90,6 +90,8 @@ pub enum SuiError {
     WrongEpoch { expected_epoch: EpochId },
     #[error("Signatures in a certificate must form a quorum")]
     CertificateRequiresQuorum,
+    #[error("Authority {authority_name:?} could not sync certificate: {err:?}")]
+    CertificateSyncError { authority_name: String, err: String },
     #[error(
         "The given sequence number ({given_sequence:?}) must match the next expected sequence ({expected_sequence:?}) number of the object ({object_id:?})"
     )]
@@ -100,10 +102,6 @@ pub enum SuiError {
     },
     #[error("Invalid Authority Bitmap: {}", error)]
     InvalidAuthorityBitmap { error: String },
-    #[error("Conflicting transaction already received: {pending_transaction:?}")]
-    ConflictingTransaction {
-        pending_transaction: TransactionDigest,
-    },
     #[error("Transaction processing failed: {err}")]
     ErrorWhileProcessingTransactionTransaction { err: String },
     #[error("Confirmation transaction processing failed: {err}")]
@@ -265,11 +263,22 @@ pub enum SuiError {
     #[error("Attempt to update state of TxContext from a different instance than original.")]
     InvalidTxUpdate,
     #[error("Attempt to re-initialize a transaction lock for objects {:?}.", refs)]
-    TransactionLockExists { refs: Vec<ObjectRef> },
-    #[error("Attempt to set an non-existing transaction lock.")]
-    TransactionLockDoesNotExist,
-    #[error("Attempt to reset a set transaction lock to a different value.")]
-    TransactionLockReset,
+    ObjectLockAlreadyInitialized { refs: Vec<ObjectRef> },
+    #[error("Object {obj_ref:?} lock has not been initialized.")]
+    ObjectLockUninitialized { obj_ref: ObjectRef },
+    #[error(
+        "Object {obj_ref:?} already locked by a different transaction: {pending_transaction:?}"
+    )]
+    ObjectLockConflict {
+        obj_ref: ObjectRef,
+        pending_transaction: TransactionDigest,
+    },
+    #[error("Objects {obj_refs:?} are already locked by a transaction from a future epoch {locked_epoch:?}), attempt to override with a transaction from epoch {new_epoch:?}")]
+    ObjectLockedAtFutureEpoch {
+        obj_refs: Vec<ObjectRef>,
+        locked_epoch: EpochId,
+        new_epoch: EpochId,
+    },
     #[error("Could not find the referenced transaction [{:?}].", digest)]
     TransactionNotFound { digest: TransactionDigest },
     #[error("Could not find the referenced object {:?}.", object_id)]
@@ -341,6 +350,9 @@ pub enum SuiError {
     #[error("Failed to deserialize fields into JSON: {error:?}")]
     ExtraFieldFailedToDeserialize { error: String },
 
+    #[error("Failed to execute transaction locally by Orchestrator: {error:?}")]
+    TransactionOrchestratorLocalExecutionError { error: String },
+
     #[error(
     "Failed to achieve quorum between authorities, cause by : {:#?}",
     errors.iter().map(| e | ToString::to_string(&e)).collect::<Vec<String>>()
@@ -377,8 +389,8 @@ pub enum SuiError {
     ConsensusConnectionBroken(String),
     #[error("Failed to hear back from consensus: {0}")]
     FailedToHearBackFromConsensus(String),
-    #[error("Failed to lock shared objects: {0}")]
-    SharedObjectLockingFailure(String),
+    #[error("Failed to execute handle_consensus_transaction on Sui: {0}")]
+    HandleConsensusTransactionFailure(String),
     #[error("Consensus listener is out of capacity")]
     ListenerCapacityExceeded,
     #[error("Failed to serialize/deserialize Narwhal message: {0}")]
@@ -458,7 +470,7 @@ impl std::convert::From<VMError> for SuiError {
 
 impl std::convert::From<SubscriberError> for SuiError {
     fn from(error: SubscriberError) -> Self {
-        SuiError::SharedObjectLockingFailure(error.to_string())
+        SuiError::HandleConsensusTransactionFailure(error.to_string())
     }
 }
 

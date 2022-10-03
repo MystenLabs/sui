@@ -39,24 +39,18 @@ use sui_types::{crypto::AuthorityPublicKeyBytes, object::Data};
 use tracing::info;
 
 pub enum TestCallArg {
+    Pure(Vec<u8>),
     Object(ObjectID),
-    U64(u64),
-    Address(SuiAddress),
-    PrimVec(Vec<u64>),
     ObjVec(Vec<ObjectID>),
 }
 
 impl TestCallArg {
     pub async fn to_call_arg(self, state: &AuthorityState) -> CallArg {
         match self {
+            Self::Pure(value) => CallArg::Pure(value),
             Self::Object(object_id) => {
                 CallArg::Object(Self::call_arg_from_id(object_id, state).await)
             }
-            Self::U64(value) => CallArg::Pure(bcs::to_bytes(&value).unwrap()),
-            Self::Address(addr) => {
-                CallArg::Pure(bcs::to_bytes(&AccountAddress::from(addr)).unwrap())
-            }
-            Self::PrimVec(value) => CallArg::Pure(bcs::to_bytes(&value).unwrap()),
             Self::ObjVec(vec) => {
                 let mut refs = vec![];
                 for object_id in vec {
@@ -83,7 +77,10 @@ const MAX_GAS: u64 = 10000;
 fn compare_certified_transactions(o1: &CertifiedTransaction, o2: &CertifiedTransaction) {
     assert_eq!(o1.digest(), o2.digest());
     // in this ser/de context it's relevant to compare signatures
-    assert_eq!(o1.auth_sign_info.signature, o2.auth_sign_info.signature);
+    assert_eq!(
+        o1.auth_sign_info.signature.as_ref(),
+        o2.auth_sign_info.signature.as_ref()
+    );
 }
 
 // Only relevant in a ser/de context : the `CertifiedTransaction` for a transaction is not unique
@@ -97,8 +94,8 @@ fn compare_transaction_info_responses(o1: &TransactionInfoResponse, o2: &Transac
         (Some(cert1), Some(cert2)) => {
             assert_eq!(cert1.digest(), cert2.digest());
             assert_eq!(
-                cert1.auth_sign_info.signature,
-                cert2.auth_sign_info.signature
+                cert1.auth_sign_info.signature.as_ref(),
+                cert2.auth_sign_info.signature.as_ref()
             );
         }
         (None, None) => (),
@@ -2207,7 +2204,10 @@ pub async fn create_move_object(
         "object_basics",
         "create",
         vec![],
-        vec![TestCallArg::U64(16), TestCallArg::Address(*sender)],
+        vec![
+            TestCallArg::Pure(bcs::to_bytes(&(16_u64)).unwrap()),
+            TestCallArg::Pure(bcs::to_bytes(sender).unwrap()),
+        ],
     )
     .await
 }
@@ -2263,7 +2263,7 @@ async fn make_test_transaction(
     unreachable!("couldn't form cert")
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn shared_object() {
     let (sender, keypair): (_, AccountKeyPair) = get_key_pair();
 
@@ -2297,7 +2297,15 @@ async fn shared_object() {
 
     // Sending the certificate now fails since it was not sequenced.
     let result = authority.handle_certificate(certificate.clone()).await;
-    assert!(matches!(result, Err(SuiError::ObjectErrors { .. })));
+    assert!(
+        matches!(
+            result,
+            Err(SuiError::ObjectErrors { ref errors })
+                if errors.len() == 1 && matches!(errors[0], SuiError::SharedObjectLockNotSetError)
+        ),
+        "{:#?}",
+        result
+    );
 
     // Sequence the certificate to assign a sequence number to the shared object.
     send_consensus(&authority, &certificate).await;
@@ -2414,7 +2422,7 @@ async fn test_consensus_message_processed() {
             handle_cert(&authority2, &certificate).await
         } else {
             authority2
-                .handle_node_sync_certificate(certificate.clone(), effects1.clone())
+                .handle_certificate_with_effects(&certificate, &effects1)
                 .await
                 .unwrap();
             authority2

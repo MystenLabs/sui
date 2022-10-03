@@ -4,7 +4,9 @@
 mod crypto;
 mod event;
 mod object;
+pub mod object_runtime;
 mod test_scenario;
+mod test_scenario_wip;
 mod transfer;
 mod tx_context;
 mod types;

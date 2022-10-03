@@ -67,7 +67,7 @@ Continuing our fantasy game example, let's introduce a
 concept of a forge that will be involved in the process of creating
 swords - for starters let it keep track of how many swords have been
 created. Let us define the `Forge` struct and a function returning the
-number of created swords as follows and put into the `m1.move` file:
+number of created swords as follows and put into the `my_module.move` file:
 
 ``` rust
     struct Forge has key, store {
@@ -151,4 +151,4 @@ encounter compilation errors in the existing tests due to the
 required for the tests to run again as an exercise for the reader. The
 entire source code for the package we have developed (with all the
 tests properly adjusted) can be found in
-[m1.move](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples/move_tutorial/sources/m1.move).
+[my_module.move](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples/move_tutorial/sources/my_module.move).

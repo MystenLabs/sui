@@ -69,6 +69,26 @@ export type TransferSuiTx = {
   };
 };
 
+/**
+ * Transaction type used for Pay transaction.
+ */
+export type PayTx = {
+  Pay: {
+    coins: SuiObjectRef[];
+    recipients: string[];
+    amounts: number[];
+  };
+};
+
+bcs
+  .registerVectorType('vector<SuiAddress>', 'SuiAddress')
+  .registerVectorType('vector<SuiObjectRef>', 'SuiObjectRef')
+  .registerStructType('PayTx', {
+    coins: 'vector<SuiObjectRef>',
+    recipients: 'vector<SuiAddress>',
+    amounts: 'vector<u64>',
+  });
+
 bcs.registerEnumType('Option<u64>', {
   None: null,
   Some: 'u64',
@@ -216,6 +236,7 @@ bcs
 
 export type Transaction =
   | MoveCallTx
+  | PayTx
   | PublishTx
   | TransferObjectTx
   | TransferSuiTx;
@@ -225,6 +246,7 @@ bcs.registerEnumType('Transaction', {
   Publish: 'PublishTx',
   Call: 'MoveCallTx',
   TransferSui: 'TransferSuiTx',
+  Pay: 'PayTx',
 });
 /**
  * Transaction kind - either Batch or Single.

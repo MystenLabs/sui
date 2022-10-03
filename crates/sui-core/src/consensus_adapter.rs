@@ -7,15 +7,14 @@ use bytes::Bytes;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use multiaddr::Multiaddr;
-use narwhal_executor::SubscriberResult;
 use narwhal_types::TransactionProto;
 use narwhal_types::TransactionsClient;
 use parking_lot::Mutex;
-use prometheus::register_int_counter_with_registry;
 use prometheus::register_int_gauge_with_registry;
 use prometheus::IntCounter;
 use prometheus::IntGauge;
 use prometheus::Registry;
+use prometheus::{register_histogram_with_registry, register_int_counter_with_registry, Histogram};
 use std::collections::VecDeque;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
@@ -46,7 +45,7 @@ use tokio::{
     time::{timeout, Duration},
 };
 use tracing::debug;
-use tracing::log::error;
+use tracing::error;
 
 #[cfg(test)]
 #[path = "unit_tests/consensus_tests.rs"]
@@ -58,11 +57,8 @@ type SerializedConsensusTransaction = Vec<u8>;
 /// The digest of a consensus transactions.
 type ConsensusTransactionDigest = u64;
 
-/// Transaction info response serialized by Sui.
-type SerializedTransactionInfoResponse = Vec<u8>;
-
 /// Channel to notify the caller when the Sui certificate has been sequenced.
-type TxSequencedNotifier = oneshot::Sender<SuiResult<SerializedTransactionInfoResponse>>;
+type TxSequencedNotifier = oneshot::Sender<SuiResult<()>>;
 type TxSequencedNotifierClose = oneshot::Sender<()>;
 
 pub struct ConsensusAdapterMetrics {
@@ -71,8 +67,9 @@ pub struct ConsensusAdapterMetrics {
     pub sequencing_certificate_success: IntCounter,
     pub sequencing_certificate_timeouts: IntCounter,
     pub sequencing_certificate_control_delay: IntGauge,
+    pub sequencing_certificate_latency: Histogram,
 
-    // Certificate sequencing metrics
+    // Fragment sequencing metrics
     pub sequencing_fragment_attempt: IntCounter,
     pub sequencing_fragment_success: IntCounter,
     pub sequencing_fragment_timeouts: IntCounter,
@@ -110,6 +107,12 @@ impl ConsensusAdapterMetrics {
             sequencing_certificate_control_delay: register_int_gauge_with_registry!(
                 "sequencing_certificate_control_delay",
                 "The estimated latency for the certificate sequencer.",
+                registry,
+            )
+            .unwrap(),
+            sequencing_certificate_latency: register_histogram_with_registry!(
+                "sequencing_certificate_latency",
+                "The latency for certificate sequencing.",
                 registry,
             )
             .unwrap(),
@@ -158,7 +161,7 @@ pub enum ConsensusListenerMessage {
 pub struct ConsensusWaiter {
     // This channel is used to signal the result if the transaction gets
     // sequenced and observed at the output of consensus.
-    signal_back: oneshot::Receiver<SuiResult<SerializedTransactionInfoResponse>>,
+    signal_back: oneshot::Receiver<SuiResult<()>>,
     // We use this channel as a signalling mechanism, to detect if the ConsensusWaiter
     // struct is dropped, and to clean up the ConsensusListener structures to prevent
     // memory leaks.
@@ -185,19 +188,12 @@ impl ConsensusWaiter {
         self.signal_close.close();
     }
 
-    pub async fn wait_for_result(self) -> SuiResult<SerializedTransactionInfoResponse> {
+    pub async fn wait_for_result(self) -> SuiResult<()> {
         self.signal_back
             .await
             .map_err(|e| SuiError::FailedToHearBackFromConsensus(e.to_string()))?
     }
 }
-
-/// The message returned by the consensus to notify that a Sui certificate has been sequenced
-/// and all its shared objects are locked.
-type ConsensusOutput = (
-    /* result */ SubscriberResult<SerializedTransactionInfoResponse>,
-    /* transaction */ SerializedConsensusTransaction,
-);
 
 /// Submit Sui certificates to the consensus.
 pub struct ConsensusAdapter {
@@ -312,6 +308,7 @@ impl ConsensusAdapter {
             self.delay_step + Duration::from_millis(self.delay_ms.load(Ordering::Relaxed));
         let result = match timeout(back_off_delay, waiter.wait_for_result()).await {
             Ok(_) => {
+                // todo - handle error in Ok(Err(..))
                 // Increment the attempted certificate sequencing success
                 self.opt_metrics.as_ref().map(|metrics| {
                     metrics.sequencing_certificate_success.inc();
@@ -351,6 +348,9 @@ impl ConsensusAdapter {
                 metrics
                     .sequencing_certificate_control_delay
                     .set(new_delay as i64);
+                metrics
+                    .sequencing_certificate_latency
+                    .observe(past_ms as f64);
             });
 
             self.delay_ms.store(new_delay, Ordering::Relaxed);
@@ -366,7 +366,7 @@ pub struct ConsensusListener {
     /// Receive messages input to the consensus.
     rx_consensus_input: Receiver<ConsensusListenerMessage>,
     /// Receive consensus outputs.
-    rx_consensus_output: Receiver<ConsensusOutput>,
+    rx_consensus_output: Receiver<Vec<u8>>,
     /// The maximum number of pending replies. This cap indicates the maximum amount of client
     /// transactions submitted to consensus for which we keep track. If we submit more transactions
     /// than this cap, the transactions will be handled by consensus as usual but this module won't
@@ -381,19 +381,18 @@ impl ConsensusListener {
     /// Spawn a new consensus adapter in a dedicated tokio task.
     pub fn spawn(
         rx_consensus_input: Receiver<ConsensusListenerMessage>,
-        rx_consensus_output: Receiver<ConsensusOutput>,
+        rx_consensus_output: Receiver<Vec<u8>>,
         max_pending_transactions: usize,
     ) -> JoinHandle<()> {
-        tokio::spawn(async move {
+        tokio::spawn(
             Self {
                 rx_consensus_input,
                 rx_consensus_output,
                 max_pending_transactions,
                 pending: HashMap::with_capacity(2 * max_pending_transactions),
             }
-            .run()
-            .await
-        })
+            .run(),
+        )
     }
 
     /// Hash serialized consensus transactions. We do not need specific cryptographic properties except
@@ -417,7 +416,7 @@ impl ConsensusListener {
 
     /// Main loop receiving messages input to consensus and notifying the caller once the inputs
     /// are sequenced (or if an error happened).
-    async fn run(&mut self) {
+    async fn run(mut self) {
         let mut closed_notifications = FuturesUnordered::new();
         let mut id_counter: u64 = 0;
 
@@ -452,12 +451,11 @@ impl ConsensusListener {
                 },
 
                 // Notify the caller that the transaction has been sequenced (if there is a caller).
-                Some((result, serialized)) = self.rx_consensus_output.recv() => {
-                    let outcome = result.map_err(SuiError::from);
+                Some(serialized) = self.rx_consensus_output.recv() => {
                     let digest = Self::hash_serialized_transaction(&serialized);
                     if let Some(repliers) = self.pending.remove(&digest) {
                         for (_, replier) in repliers {
-                            if replier.send(outcome.clone()).is_err() {
+                            if replier.send(Ok(())).is_err() {
                                 debug!("No replier to listen to consensus output {digest}");
                             }
                         }
@@ -585,7 +583,7 @@ impl CheckpointConsensusAdapter {
         receiver: ConsensusWaiter,
         retry_delay: Duration,
         deliver: T,
-    ) -> (SuiResult<SerializedTransactionInfoResponse>, u64, T) {
+    ) -> (SuiResult<()>, u64, T) {
         let now = Instant::now();
         let outcome = match timeout(retry_delay, receiver.wait_for_result()).await {
             Ok(reply) => reply,
@@ -661,14 +659,15 @@ impl CheckpointConsensusAdapter {
                     let other = fragment.other.auth_signature.authority;
                     let transaction = ConsensusTransaction::new_checkpoint_message(fragment);
                     let tracking_id = transaction.get_tracking_id();
+                    let serialized = bincode::serialize(&transaction).expect("Serialize consensus transaction cannot fail");
                     debug!(
                         ?tracking_id,
                         ?cp_seq,
+                        size=?serialized.len(),
                         "Checkpoint fragment consensus message created. Proposer: {}, Other: {}",
                         proposer,
                         other,
                     );
-                    let serialized = bincode::serialize(&transaction).expect("Serialize consensus transaction cannot fail");
                     self.buffer.push_front((serialized, sequence_number));
                 },
 

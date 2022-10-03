@@ -54,7 +54,7 @@ Running Move unit tests
 Test result: OK. Total tests: 0; passed: 0; failed: 0
 ```
 
-Let us write a simple test function and insert it into the `m1.move`
+Let us write a simple test function and insert it into the `my_module.move`
 file:
 
 ``` rust
@@ -97,7 +97,7 @@ get a compilation error:
 
 ``` shell
 error[E06001]: unused value without 'drop'
-   ┌─ ./sources/m1.move:34:65
+   ┌─ ./sources/my_module.move:60:65
    │
  4 │       struct Sword has key, store {
    │              ----- To satisfy the constraint, the 'drop' ability would need to be added here
@@ -109,7 +109,7 @@ error[E06001]: unused value without 'drop'
 29 │ │             magic: 42,
 30 │ │             strength: 7,
 31 │ │         };
-   │ ╰─────────' The type 'MyFirstPackage::M1::Sword' does not have the ability 'drop'
+   │ ╰─────────' The type 'MyFirstPackage::my_module::Sword' does not have the ability 'drop'
    · │
 34 │           assert!(magic(&sword) == 42 && strength(&sword) == 7, 1);
    │                                                                   ^ Invalid return
@@ -163,7 +163,7 @@ BUILDING MoveStdlib
 BUILDING Sui
 BUILDING MyFirstPackage
 Running Move unit tests
-[ PASS    ] 0x0::M1::test_sword_create
+[ PASS    ] 0x0::my_module::test_sword_create
 Test result: OK. Total tests: 1; passed: 1; failed: 0
 ```
 
@@ -220,7 +220,7 @@ Let us extend our running example with a multi-transaction test that
 uses the `test_scenario` to test sword creation and transfer from the
 point of view of a Sui developer. First, let us create
 [entry functions](index.md#entry-functions) callable from Sui that implement
-sword creation and transfer and put them into the `m1.move` file:
+sword creation and transfer and put them into the `my_module.move` file:
 
 ``` rust
     public entry fun sword_create(magic: u64, strength: u64, recipient: address, ctx: &mut TxContext) {
@@ -346,7 +346,7 @@ BUILDING MoveStdlib
 BUILDING Sui
 BUILDING MyFirstPackage
 Running Move unit tests
-[ PASS    ] 0x0::M1::test_sword_create
-[ PASS    ] 0x0::M1::test_sword_transactions
+[ PASS    ] 0x0::my_module::test_sword_create
+[ PASS    ] 0x0::my_module::test_sword_transactions
 Test result: OK. Total tests: 2; passed: 2; failed: 0
 ```

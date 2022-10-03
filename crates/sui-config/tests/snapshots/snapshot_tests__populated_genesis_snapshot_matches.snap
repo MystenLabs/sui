@@ -4,15 +4,14 @@ expression: genesis.validator_set()
 ---
 - name: "0"
   account-key: ALnG7hYw7z5xEUSmSNsGu7IoT3J0z77lP/zuUDzBpJIA
-  protocol-key: ucbuFjDvPnERRKZI2wa7sihPcnTPvuU//O5QPMGkkgA=
+  protocol-key: jGbcLB6p5T8JhcF7TnrxmRK208QODFkgpaElCbTrNhn14H7Fbqd/CzBim6HMctdbE5RgeCpfDi+J+0xCtLil+uPSYBAiIOY9B1Tn4YRt7v05iOreTtN/E4VDfRneGhYY
   worker-key: ucbuFjDvPnERRKZI2wa7sihPcnTPvuU//O5QPMGkkgA=
-  network-key: ALnG7hYw7z5xEUSmSNsGu7IoT3J0z77lP/zuUDzBpJIA
+  network-key: ucbuFjDvPnERRKZI2wa7sihPcnTPvuU//O5QPMGkkgA=
   stake: 1
   delegation: 0
   gas-price: 1
   network-address: ""
-  narwhal-primary-to-primary: ""
-  narwhal-worker-to-primary: ""
-  narwhal-primary-to-worker: ""
-  narwhal-worker-to-worker: ""
+  narwhal-primary-address: ""
+  narwhal-worker-address: ""
   narwhal-consensus-address: ""
+

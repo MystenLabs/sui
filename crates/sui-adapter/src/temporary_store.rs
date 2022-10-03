@@ -4,7 +4,7 @@
 use move_core_types::account_address::AccountAddress;
 use move_core_types::language_storage::{ModuleId, StructTag};
 use move_core_types::resolver::{ModuleResolver, ResourceResolver};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use sui_types::base_types::{
     ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
 };
@@ -12,7 +12,9 @@ use sui_types::error::{ExecutionError, SuiError, SuiResult};
 use sui_types::fp_bail;
 use sui_types::messages::{ExecutionStatus, InputObjects, TransactionEffects};
 use sui_types::object::{Data, Object};
-use sui_types::storage::{BackingPackageStore, DeleteKind, ObjectChange, ParentSync, Storage};
+use sui_types::storage::{
+    BackingPackageStore, DeleteKind, ObjectChange, ParentSync, Storage, WriteKind,
+};
 use sui_types::{
     event::Event,
     gas::{GasCostSummary, SuiGasStatus},
@@ -22,8 +24,45 @@ use sui_types::{
 pub struct InnerTemporaryStore {
     pub objects: BTreeMap<ObjectID, Object>,
     pub mutable_inputs: Vec<ObjectRef>,
-    pub written: BTreeMap<ObjectID, (ObjectRef, Object)>,
+    pub written: BTreeMap<ObjectID, (ObjectRef, Object, WriteKind)>,
     pub deleted: BTreeMap<ObjectID, (SequenceNumber, DeleteKind)>,
+}
+
+impl InnerTemporaryStore {
+    /// Return the written object value with the given ID (if any)
+    pub fn get_written_object(&self, id: &ObjectID) -> Option<&Object> {
+        self.written.get(id).map(|o| &o.1)
+    }
+
+    /// Return the set of object ID's created during the current tx
+    pub fn created(&self) -> Vec<ObjectID> {
+        self.written
+            .values()
+            .filter_map(|(obj_ref, _, w)| {
+                if *w == WriteKind::Create {
+                    Some(obj_ref.0)
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
+    /// Get the written objects owned by `address`
+    pub fn get_written_objects_owned_by(&self, address: &SuiAddress) -> Vec<ObjectID> {
+        self.written
+            .values()
+            .filter_map(|(_, o, _)| {
+                if o.get_single_owner()
+                    .map_or(false, |owner| &owner == address)
+                {
+                    Some(o.id())
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
 }
 
 pub struct TemporaryStore<S> {
@@ -39,14 +78,11 @@ pub struct TemporaryStore<S> {
     // When an object is being written, we need to ensure that a few invariants hold.
     // It's critical that we always call write_object to update `_written`, instead of writing
     // into _written directly.
-    _written: BTreeMap<ObjectID, Object>, // Objects written
+    _written: BTreeMap<ObjectID, (Object, WriteKind)>, // Objects written
     /// Objects actively deleted.
     deleted: BTreeMap<ObjectID, (SequenceNumber, DeleteKind)>,
     /// Ordered sequence of events emitted by execution
     events: Vec<Event>,
-    // New object IDs created during the transaction, needed for
-    // telling apart unwrapped objects.
-    created_object_ids: BTreeSet<ObjectID>,
 }
 
 impl<S> TemporaryStore<S> {
@@ -63,7 +99,6 @@ impl<S> TemporaryStore<S> {
             _written: BTreeMap::new(),
             deleted: BTreeMap::new(),
             events: Vec::new(),
-            created_object_ids: BTreeSet::new(),
         }
     }
 
@@ -85,7 +120,7 @@ impl<S> TemporaryStore<S> {
         let written = self
             ._written
             .into_iter()
-            .map(|(id, obj)| (id, (obj.compute_object_reference(), obj)))
+            .map(|(id, (obj, kind))| (id, (obj.compute_object_reference(), obj, kind)))
             .collect();
         let deleted = self
             .deleted
@@ -124,7 +159,8 @@ impl<S> TemporaryStore<S> {
             }
         }
         for object in to_be_updated {
-            self.write_object(object);
+            // The object must be mutated as it was present in the input objects
+            self.write_object(object, WriteKind::Mutate);
         }
     }
 
@@ -144,18 +180,14 @@ impl<S> TemporaryStore<S> {
             gas_object_size,
             gas_object.storage_rebate.into(),
         )?;
-        objects_to_update.push(gas_object.clone());
+        objects_to_update.push((gas_object.clone(), WriteKind::Mutate));
 
-        for (object_id, object) in &mut self._written {
-            let (old_object_size, storage_rebate) =
-                if let Some(old_object) = self.input_objects.get(object_id) {
-                    (
-                        old_object.object_size_for_gas_metering(),
-                        old_object.storage_rebate,
-                    )
-                } else {
-                    (0, 0)
-                };
+        for (object_id, (object, write_kind)) in &mut self._written {
+            let (old_object_size, storage_rebate) = self
+                .input_objects
+                .get(object_id)
+                .map(|old| (old.object_size_for_gas_metering(), old.storage_rebate))
+                .unwrap_or((0, 0));
             let new_storage_rebate = gas_status.charge_storage_mutation(
                 old_object_size,
                 object.object_size_for_gas_metering(),
@@ -165,7 +197,7 @@ impl<S> TemporaryStore<S> {
                 // We don't need to set storage rebate for immutable objects, as they will
                 // never be deleted.
                 object.storage_rebate = new_storage_rebate;
-                objects_to_update.push(object.clone());
+                objects_to_update.push((object.clone(), *write_kind));
             }
         }
 
@@ -185,8 +217,8 @@ impl<S> TemporaryStore<S> {
 
         // Write all objects at the end only if all previous gas charges succeeded.
         // This avoids polluting the temporary store state if this function failed.
-        for object in objects_to_update {
-            self.write_object(object);
+        for (object, write_kind) in objects_to_update {
+            self.write_object(object, write_kind);
         }
 
         Ok(())
@@ -201,35 +233,31 @@ impl<S> TemporaryStore<S> {
         status: ExecutionStatus,
         gas_object_ref: ObjectRef,
     ) -> (InnerTemporaryStore, TransactionEffects) {
-        let written = self
+        let written: BTreeMap<ObjectID, (ObjectRef, Owner, WriteKind)> = self
             ._written
             .iter()
-            .map(|(id, obj)| (*id, (obj.compute_object_reference(), obj.owner)))
-            .collect::<BTreeMap<_, _>>();
+            .map(|(id, (obj, write_kind))| {
+                let obj_ref = obj.compute_object_reference();
+                (*id, (obj_ref, obj.owner, *write_kind))
+            })
+            .collect();
 
         // In the case of special transactions that don't require a gas object,
         // we don't really care about the effects to gas, just use the input for it.
         let updated_gas_object_info = if gas_object_ref.0 == ObjectID::ZERO {
             (gas_object_ref, Owner::AddressOwner(SuiAddress::default()))
         } else {
-            written[&gas_object_ref.0]
+            let (obj_ref, owner, _kind) = written[&gas_object_ref.0];
+            (obj_ref, owner)
         };
-        let mut created = vec![];
         let mut mutated = vec![];
+        let mut created = vec![];
         let mut unwrapped = vec![];
-        for (id, object_ref_and_owner) in written {
-            match (
-                self.created_object_ids.contains(&id),
-                self.input_objects.contains_key(&id),
-            ) {
-                (true, _) => created.push(object_ref_and_owner),
-                (false, true) => mutated.push(object_ref_and_owner),
-                (false, false) => {
-                    // wrapped objects must have their version set to 1 + the last known version in
-                    // the `parent_sync`
-                    debug_assert!(object_ref_and_owner.0 .1.value() > 1);
-                    unwrapped.push(object_ref_and_owner)
-                }
+        for (_id, (object_ref, owner, kind)) in written {
+            match kind {
+                WriteKind::Mutate => mutated.push((object_ref, owner)),
+                WriteKind::Create => created.push((object_ref, owner)),
+                WriteKind::Unwrap => unwrapped.push((object_ref, owner)),
             }
         }
 
@@ -294,17 +322,9 @@ impl<S> TemporaryStore<S> {
 
         debug_assert!(
             {
-                let input_ids = self.input_objects.clone().into_keys().collect();
-                self.created_object_ids.is_disjoint(&input_ids)
-            },
-            "Newly created object IDs showed up in the input",
-        );
-
-        debug_assert!(
-            {
                 self._written
                     .iter()
-                    .all(|(_, obj)| obj.previous_transaction == self.tx_digest)
+                    .all(|(_, (obj, _))| obj.previous_transaction == self.tx_digest)
             },
             "Object previous transaction not properly set",
         );
@@ -314,9 +334,9 @@ impl<S> TemporaryStore<S> {
     // is that an entry is not both added and deleted by the
     // caller.
 
-    pub fn write_object(&mut self, mut object: Object) {
+    pub fn write_object(&mut self, mut object: Object, kind: WriteKind) {
         // there should be no write after delete
-        debug_assert!(self.deleted.get(&object.id()) == None);
+        debug_assert!(self.deleted.get(&object.id()).is_none());
         // Check it is not read-only
         #[cfg(test)] // Movevm should ensure this
         if let Some(existing_object) = self.read_object(&object.id()) {
@@ -330,12 +350,12 @@ impl<S> TemporaryStore<S> {
         // The adapter is not very disciplined at filling in the correct
         // previous transaction digest, so we ensure it is correct here.
         object.previous_transaction = self.tx_digest;
-        self._written.insert(object.id(), object);
+        self._written.insert(object.id(), (object, kind));
     }
 
     pub fn delete_object(&mut self, id: &ObjectID, version: SequenceNumber, kind: DeleteKind) {
         // there should be no deletion after write
-        debug_assert!(self._written.get(id) == None);
+        debug_assert!(self._written.get(id).is_none());
         // Check it is not read-only
         #[cfg(test)] // Movevm should ensure this
         if let Some(object) = self.read_object(id) {
@@ -358,26 +378,25 @@ impl<S> Storage for TemporaryStore<S> {
         self._written.clear();
         self.deleted.clear();
         self.events.clear();
-        self.created_object_ids.clear();
     }
 
     fn read_object(&self, id: &ObjectID) -> Option<&Object> {
         // there should be no read after delete
-        debug_assert!(self.deleted.get(id) == None);
-        self._written.get(id).or_else(|| self.input_objects.get(id))
-    }
-
-    fn set_create_object_ids(&mut self, ids: BTreeSet<ObjectID>) {
-        self.created_object_ids = ids;
+        debug_assert!(self.deleted.get(id).is_none());
+        self._written
+            .get(id)
+            .map(|(obj, _kind)| obj)
+            .or_else(|| self.input_objects.get(id))
     }
 
     fn log_event(&mut self, event: Event) {
         self.events.push(event)
     }
+
     fn apply_object_changes(&mut self, changes: BTreeMap<ObjectID, ObjectChange>) {
         for (id, change) in changes {
             match change {
-                ObjectChange::Write(new_value) => self.write_object(new_value),
+                ObjectChange::Write(new_value, kind) => self.write_object(new_value, kind),
                 ObjectChange::Delete(version, kind) => self.delete_object(&id, version, kind),
             }
         }
@@ -452,4 +471,20 @@ impl<S: ParentSync> ParentSync for TemporaryStore<S> {
     fn get_latest_parent_entry_ref(&self, object_id: ObjectID) -> SuiResult<Option<ObjectRef>> {
         self.store.get_latest_parent_entry_ref(object_id)
     }
+}
+
+/// Create an empty `TemporaryStore` with no backing storage for module resolution.
+/// For testing purposes only.
+pub fn empty_for_testing() -> TemporaryStore<()> {
+    TemporaryStore::new(
+        (),
+        InputObjects::new(Vec::new()),
+        TransactionDigest::genesis(),
+    )
+}
+
+/// Create a `TemporaryStore` with the given inputs and no backing storage for module resolution.
+/// For testing purposes only.
+pub fn with_input_objects_for_testing(input_objects: InputObjects) -> TemporaryStore<()> {
+    TemporaryStore::new((), input_objects, TransactionDigest::genesis())
 }

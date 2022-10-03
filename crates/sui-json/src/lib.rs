@@ -8,7 +8,8 @@ use move_binary_format::{
 use move_core_types::account_address::AccountAddress;
 use move_core_types::{
     identifier::Identifier,
-    value::{MoveTypeLayout, MoveValue},
+    language_storage::{StructTag, TypeTag},
+    value::{MoveStruct, MoveStructLayout, MoveTypeLayout, MoveValue},
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -17,7 +18,9 @@ use std::collections::VecDeque;
 use std::fmt::{Debug, Formatter};
 use sui_types::base_types::{decode_bytes_hex, ObjectID, SuiAddress};
 use sui_types::move_package::MovePackage;
-use sui_verifier::entry_points_verifier::is_tx_context;
+use sui_verifier::entry_points_verifier::{
+    is_tx_context, RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_SUI_ID, RESOLVED_UTF8_STR,
+};
 
 const HEX_PREFIX: &str = "0x";
 
@@ -51,10 +54,10 @@ impl SuiJsonValue {
             JsonValue::Array(a) => {
                 // Fail if not homogeneous
                 if !is_homogeneous(&JsonValue::Array(a)) {
-                    return Err(anyhow!("Arrays must be homogeneous",));
+                    bail!("Arrays must be homogeneous",);
                 }
             }
-            _ => return Err(anyhow!("{json_value} not allowed.")),
+            _ => bail!("{json_value} not allowed."),
         };
         Ok(Self(json_value))
     }
@@ -75,6 +78,44 @@ impl SuiJsonValue {
 
     pub fn to_json_value(&self) -> JsonValue {
         self.0.clone()
+    }
+
+    fn handle_inner_struct_layout(
+        inner_vec: &[MoveTypeLayout],
+        val: &JsonValue,
+        ty: &MoveTypeLayout,
+        s: &String,
+    ) -> Result<MoveValue, anyhow::Error> {
+        // delegate MoveValue construction to the case when JsonValue::String and
+        // MoveTypeLayout::Vector are handled to get an address (with 0x string
+        // prefix) or a vector of u8s (no prefix)
+        debug_assert!(matches!(val, JsonValue::String(_)));
+
+        if inner_vec.len() != 1 {
+            bail!(
+                "Cannot convert string arg {s} to {ty} which is expected \
+                 to be a struct with one field"
+            );
+        }
+
+        match &inner_vec[0] {
+            MoveTypeLayout::Vector(inner) => match **inner {
+                MoveTypeLayout::U8 | MoveTypeLayout::Address => {
+                    Ok(MoveValue::Struct(MoveStruct::Runtime(vec![
+                        Self::to_move_value(val, &inner_vec[0].clone())?,
+                    ])))
+                }
+                _ => bail!(
+                    "Cannot convert string arg {s} to {ty} \
+                             which is expected to be a struct \
+                             with one field of address or u8 vector type"
+                ),
+            },
+            _ => bail!(
+                "Cannot convert string arg {s} to {ty} which is expected \
+                 to be a struct with one field of a vector type"
+            ),
+        }
     }
 
     fn to_move_value(val: &JsonValue, ty: &MoveTypeLayout) -> Result<MoveValue, anyhow::Error> {
@@ -99,26 +140,37 @@ impl SuiJsonValue {
             (JsonValue::String(s), MoveTypeLayout::U128) => {
                 MoveValue::U128(convert_string_to_u128(s.as_str())?)
             }
-
-            // U256 Not allowed for now
-
-            // We can encode U8 Vector as string in 2 ways
-            // 1. If it starts with 0x, we treat it as hex strings, where each pair is a byte
-            // 2. If it does not start with 0x, we treat each character as an ASCII encoded byte
-            // We have to support both for the convenience of the user. This is because sometime we need Strings as arg
-            // Other times we need vec of hex bytes for address. Issue is both Address and Strings are represented as Vec<u8> in Move call
+            (JsonValue::String(s), MoveTypeLayout::Struct(MoveStructLayout::Runtime(inner))) => {
+                Self::handle_inner_struct_layout(inner, val, ty, s)?
+            }
             (JsonValue::String(s), MoveTypeLayout::Vector(t)) => {
-                if !matches!(&**t, &MoveTypeLayout::U8) {
-                    return Err(anyhow!("Cannot convert string arg {s} to {ty}"));
+                match &**t {
+                    MoveTypeLayout::U8 => {
+                        // U256 Not allowed for now
+
+                        // We can encode U8 Vector as string in 2 ways
+                        // 1. If it starts with 0x, we treat it as hex strings, where each pair is a
+                        //    byte
+                        // 2. If it does not start with 0x, we treat each character as an ASCII
+                        //    encoded byte
+                        // We have to support both for the convenience of the user. This is because
+                        // sometime we need Strings as arg Other times we need vec of hex bytes for
+                        // address. Issue is both Address and Strings are represented as Vec<u8> in
+                        // Move call
+                        let vec = if s.starts_with(HEX_PREFIX) {
+                            // If starts with 0x, treat as hex vector
+                            hex::decode(s.trim_start_matches(HEX_PREFIX))?
+                        } else {
+                            // Else raw bytes
+                            s.as_bytes().to_vec()
+                        };
+                        MoveValue::Vector(vec.iter().copied().map(MoveValue::U8).collect())
+                    }
+                    MoveTypeLayout::Struct(MoveStructLayout::Runtime(inner)) => {
+                        Self::handle_inner_struct_layout(inner, val, ty, s)?
+                    }
+                    _ => bail!("Cannot convert string arg {s} to {ty}"),
                 }
-                let vec = if s.starts_with(HEX_PREFIX) {
-                    // If starts with 0x, treat as hex vector
-                    hex::decode(s.trim_start_matches(HEX_PREFIX))?
-                } else {
-                    // Else raw bytes
-                    s.as_bytes().to_vec()
-                };
-                MoveValue::Vector(vec.iter().copied().map(MoveValue::U8).collect())
             }
 
             // We have already checked that the array is homogeneous in the constructor
@@ -134,12 +186,12 @@ impl SuiJsonValue {
             (JsonValue::String(s), MoveTypeLayout::Address) => {
                 let s = s.trim().to_lowercase();
                 if !s.starts_with(HEX_PREFIX) {
-                    return Err(anyhow!("Address hex string must start with 0x.",));
+                    bail!("Address hex string must start with 0x.",);
                 }
                 let r: SuiAddress = decode_bytes_hex(&s)?;
                 MoveValue::Address(r.into())
             }
-            _ => return Err(anyhow!("Unexpected arg {val} for expected type {ty}")),
+            _ => bail!("Unexpected arg {val} for expected type {ty}"),
         })
     }
 }
@@ -247,45 +299,102 @@ fn is_homogeneous_rec(curr_q: &mut VecDeque<&JsonValue>) -> bool {
     is_homogeneous_rec(&mut next_q)
 }
 
-fn resolve_primtive_arg(
-    arg: &SuiJsonValue,
-    param: &SignatureToken,
-) -> Result<Vec<u8>, anyhow::Error> {
-    let move_type_layout = make_prim_move_type_layout(param)?;
-    // Check that the args are what we expect or can be converted
-    // Then return the serialized bcs value
-    arg.to_bcs_bytes(&move_type_layout).map_err(|e| {
-        anyhow!(
-            "Unable to parse arg at type {}. Got error: {:?}",
-            move_type_layout,
-            e
-        )
-    })
+fn is_primitive_type_tag(t: &TypeTag) -> bool {
+    match t {
+        TypeTag::Bool | TypeTag::U8 | TypeTag::U64 | TypeTag::U128 | TypeTag::Address => true,
+        TypeTag::Vector(inner) => is_primitive_type_tag(inner),
+        TypeTag::Struct(StructTag {
+            address,
+            module,
+            name,
+            type_params: type_args,
+        }) => {
+            let resolved_struct = (address, module.as_ident_str(), name.as_ident_str());
+            // is id or..
+            if resolved_struct == RESOLVED_SUI_ID {
+                return true;
+            }
+            // is option of a primitive
+            resolved_struct == RESOLVED_STD_OPTION
+                && type_args.len() == 1
+                && is_primitive_type_tag(&type_args[0])
+        }
+        TypeTag::Signer => false,
+    }
 }
 
-fn make_prim_move_type_layout(param: &SignatureToken) -> Result<MoveTypeLayout, anyhow::Error> {
-    Ok(match param {
-        SignatureToken::Bool => MoveTypeLayout::Bool,
-        SignatureToken::U8 => MoveTypeLayout::U8,
-        SignatureToken::U64 => MoveTypeLayout::U64,
-        SignatureToken::U128 => MoveTypeLayout::U128,
-        SignatureToken::Address => MoveTypeLayout::Address,
-        SignatureToken::Signer => MoveTypeLayout::Signer,
+/// Checks if a give SignatureToken represents a primitive type and, if so, returns MoveTypeLayout
+/// for this type (if available). The reason we need to return both information about whether a
+/// SignatureToken represents a primitive and an Option representing MoveTypeLayout is that there
+/// can be signature tokens that represent primitives but that do not have corresponding
+/// MoveTypeLayout (e.g., SignatureToken::StructInstantiation).
+pub fn primitive_type(
+    view: &BinaryIndexedView,
+    type_args: &[TypeTag],
+    param: &SignatureToken,
+) -> (bool, Option<MoveTypeLayout>) {
+    match param {
+        SignatureToken::Bool => (true, Some(MoveTypeLayout::Bool)),
+        SignatureToken::U8 => (true, Some(MoveTypeLayout::U8)),
+        SignatureToken::U64 => (true, Some(MoveTypeLayout::U64)),
+        SignatureToken::U128 => (true, Some(MoveTypeLayout::U128)),
+        SignatureToken::Address => (true, Some(MoveTypeLayout::Address)),
         SignatureToken::Vector(inner) => {
-            MoveTypeLayout::Vector(Box::new(make_prim_move_type_layout(inner)?))
+            let (is_primitive, inner_layout_opt) = primitive_type(view, type_args, inner);
+            match inner_layout_opt {
+                Some(inner_layout) => (
+                    is_primitive,
+                    Some(MoveTypeLayout::Vector(Box::new(inner_layout))),
+                ),
+                None => (is_primitive, None),
+            }
         }
-        SignatureToken::Struct(_)
-        | SignatureToken::StructInstantiation(_, _)
+        SignatureToken::Struct(struct_handle_idx) => {
+            let resolved_struct = sui_verifier::resolve_struct(view, *struct_handle_idx);
+            if resolved_struct == RESOLVED_ASCII_STR || resolved_struct == RESOLVED_UTF8_STR {
+                // both structs structs representing strings have one field - a vector of type u8
+                (
+                    true,
+                    Some(MoveTypeLayout::Struct(MoveStructLayout::Runtime(vec![
+                        MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8)),
+                    ]))),
+                )
+            } else if resolved_struct == RESOLVED_SUI_ID {
+                (
+                    true,
+                    Some(MoveTypeLayout::Struct(MoveStructLayout::Runtime(vec![
+                        MoveTypeLayout::Vector(Box::new(MoveTypeLayout::Address)),
+                    ]))),
+                )
+            } else {
+                (false, None)
+            }
+        }
+        SignatureToken::StructInstantiation(idx, targs) => {
+            let resolved_struct = sui_verifier::resolve_struct(view, *idx);
+            // is option of a primitive
+            if resolved_struct == RESOLVED_STD_OPTION && targs.len() == 1 {
+                // there is no MoveLayout for this so while we can still report whether a type
+                // is primitive or not, we can't return the layout
+                let (is_primitive, _) = primitive_type(view, type_args, &targs[0]);
+                (is_primitive, None)
+            } else {
+                (false, None)
+            }
+        }
+
+        SignatureToken::TypeParameter(idx) => (
+            type_args
+                .get(*idx as usize)
+                .map(is_primitive_type_tag)
+                .unwrap_or(false),
+            None,
+        ),
+
+        SignatureToken::Signer
         | SignatureToken::Reference(_)
-        | SignatureToken::MutableReference(_)
-        | SignatureToken::TypeParameter(_) => {
-            debug_assert!(
-                false,
-                "Should be unreachable. Args should be primitive types only"
-            );
-            bail!("Could not serialize argument of type {:?}", param)
-        }
-    })
+        | SignatureToken::MutableReference(_) => (false, None),
+    }
 }
 
 fn resolve_object_arg(idx: usize, arg: &JsonValue) -> Result<ObjectID, anyhow::Error> {
@@ -294,17 +403,17 @@ fn resolve_object_arg(idx: usize, arg: &JsonValue) -> Result<ObjectID, anyhow::E
         JsonValue::String(s) => {
             let s = s.trim().to_lowercase();
             if !s.starts_with(HEX_PREFIX) {
-                return Err(anyhow!("ObjectID hex string must start with 0x.",));
+                bail!("ObjectID hex string must start with 0x.",);
             }
             Ok(ObjectID::from_hex_literal(&s)?)
         }
-        _ => Err(anyhow!(
+        _ => bail!(
             "Unable to parse arg {:?} as ObjectID at pos {}. Expected {:?}-byte hex string \
                 prefixed with 0x.",
             arg,
             idx,
             ObjectID::LENGTH,
-        )),
+        ),
     }
 }
 
@@ -318,53 +427,89 @@ fn resolve_object_vec_arg(idx: usize, arg: &SuiJsonValue) -> Result<Vec<ObjectID
             }
             Ok(object_ids)
         }
-        _ => Err(anyhow!(
+        _ => bail!(
             "Unable to parse arg {:?} as vector of ObjectIDs at pos {}. \
              Expected a vector of {:?}-byte hex strings prefixed with 0x.",
             arg.to_json_value(),
             idx,
             ObjectID::LENGTH,
-        )),
+        ),
     }
 }
 
 fn resolve_call_arg(
+    view: &BinaryIndexedView,
+    type_args: &[TypeTag],
     idx: usize,
     arg: &SuiJsonValue,
     param: &SignatureToken,
 ) -> Result<SuiJsonCallArg, anyhow::Error> {
-    Ok(match param {
-        SignatureToken::Bool
-        | SignatureToken::U8
-        | SignatureToken::U64
-        | SignatureToken::U128
-        | SignatureToken::Address => SuiJsonCallArg::Pure(resolve_primtive_arg(arg, param)?),
+    let (is_primitive, layout_opt) = primitive_type(view, type_args, param);
+    if is_primitive {
+        match layout_opt {
+            Some(layout) => {
+                return Ok(SuiJsonCallArg::Pure(arg.to_bcs_bytes(&layout).map_err(
+                    |e| {
+                        anyhow!(
+                        "Could not serialize argument of type {:?} at {} into {}. Got error: {:?}",
+                        param,
+                        idx,
+                        layout,
+                        e
+                    )
+                    },
+                )?))
+            }
+            None => {
+                debug_assert!(
+                    false,
+                    "Should be unreachable. All primitive type function args \
+                     should have a corresponding MoveLayout"
+                );
+                bail!(
+                    "Could not serialize argument of type {:?} at {}",
+                    param,
+                    idx
+                );
+            }
+        }
+    }
 
+    // in terms of non-primitives we only currently support objects and "flat" (depth == 1) vectors
+    // of objects (but not, for example, vectors of references)
+    match param {
         SignatureToken::Struct(_)
         | SignatureToken::StructInstantiation(_, _)
         | SignatureToken::TypeParameter(_)
         | SignatureToken::Reference(_)
-        | SignatureToken::MutableReference(_) => {
-            SuiJsonCallArg::Object(resolve_object_arg(idx, &arg.to_json_value())?)
-        }
-
+        | SignatureToken::MutableReference(_) => Ok(SuiJsonCallArg::Object(resolve_object_arg(
+            idx,
+            &arg.to_json_value(),
+        )?)),
         SignatureToken::Vector(inner) => {
-            match **inner {
-                // in terms of non-primitive vectors we only currently support vectors of objects
-                // (but not, for example, vectors of references), so vector content are either
-                // objects of we assume that they are primitive (and throw an error if not)
-                SignatureToken::Struct(_) => {
-                    SuiJsonCallArg::ObjVec(resolve_object_vec_arg(idx, arg)?)
-                }
-                _ => SuiJsonCallArg::Pure(resolve_primtive_arg(arg, param)?),
+            if let SignatureToken::Struct(_) = &**inner {
+                Ok(SuiJsonCallArg::ObjVec(resolve_object_vec_arg(idx, arg)?))
+            } else {
+                bail!(
+                    "Unexpected non-primitive vector arg {:?} at {} with value {:?}",
+                    param,
+                    idx,
+                    arg
+                );
             }
         }
-
-        SignatureToken::Signer => unreachable!(),
-    })
+        _ => bail!(
+            "Unexpected non-primitive arg {:?} at {} with value {:?}",
+            param,
+            idx,
+            arg
+        ),
+    }
 }
 
 fn resolve_call_args(
+    view: &BinaryIndexedView,
+    type_args: &[TypeTag],
     json_args: &[SuiJsonValue],
     parameter_types: &[SignatureToken],
 ) -> Result<Vec<SuiJsonCallArg>, anyhow::Error> {
@@ -372,7 +517,7 @@ fn resolve_call_args(
         .iter()
         .zip(parameter_types)
         .enumerate()
-        .map(|(idx, (arg, param))| resolve_call_arg(idx, arg, param))
+        .map(|(idx, (arg, param))| resolve_call_arg(view, type_args, idx, arg, param))
         .collect()
 }
 
@@ -382,6 +527,7 @@ pub fn resolve_move_function_args(
     package: &MovePackage,
     module_ident: Identifier,
     function: Identifier,
+    type_args: &[TypeTag],
     combined_args_json: Vec<SuiJsonValue>,
 ) -> Result<Vec<SuiJsonCallArg>, anyhow::Error> {
     // Extract the expected function signature
@@ -411,23 +557,23 @@ pub fn resolve_move_function_args(
         )
     }
 
+    let view = BinaryIndexedView::Module(&module);
+
     // Lengths have to match, less one, due to TxContext
     let expected_len = match parameters.last() {
-        Some(param) if is_tx_context(&BinaryIndexedView::Module(&module), param) => {
-            parameters.len() - 1
-        }
+        Some(param) if is_tx_context(&view, param) => parameters.len() - 1,
         _ => parameters.len(),
     };
     if combined_args_json.len() != expected_len {
-        return Err(anyhow!(
+        bail!(
             "Expected {} args, found {}",
             expected_len,
             combined_args_json.len()
-        ));
+        );
     }
 
     // Check that the args are valid and convert to the correct format
-    resolve_call_args(&combined_args_json, parameters)
+    resolve_call_args(&view, type_args, &combined_args_json, parameters)
 }
 
 fn convert_string_to_u128(s: &str) -> Result<u128, anyhow::Error> {
@@ -442,7 +588,7 @@ fn convert_string_to_u128(s: &str) -> Result<u128, anyhow::Error> {
 
     let s = s.trim().to_lowercase();
     if !s.starts_with(HEX_PREFIX) {
-        return Err(anyhow!("Unable to convert {s} to unsigned int.",));
+        bail!("Unable to convert {s} to unsigned int.",);
     }
     u128::from_str_radix(s.trim_start_matches(HEX_PREFIX), 16).map_err(|e| e.into())
 }
