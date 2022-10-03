@@ -164,6 +164,7 @@ importers:
       eslint-config-react-app: ^7.0.1
       eslint-plugin-react: ^7.31.8
       eslint-webpack-plugin: ^3.2.0
+      events: ^3.3.0
       formik: ^2.2.9
       framer-motion: ^7.5.1
       html-webpack-plugin: ^5.5.0
@@ -214,6 +215,7 @@ importers:
       buffer: 6.0.3
       classnames: 2.3.1
       eslint-plugin-react: 7.31.8_eslint@8.23.0
+      events: 3.3.0
       formik: 2.2.9_react@18.2.0
       framer-motion: 7.5.1_biqbaboplfbrettd7655fr4n2y
       react: 18.2.0
@@ -11817,7 +11819,6 @@ packages:
   /events/3.3.0:
     resolution: {integrity: sha512-mQw+2fkQbALzQ7V0MY0IqdnXNOeTtP4r0lN9z7AAawCXgqea7bDii20AYrIBrFd/Hx0M2Ocz6S111CaFkUcb0Q==}
     engines: {node: '>=0.8.x'}
-    dev: true
 
   /evp_bytestokey/1.0.3:
     resolution: {integrity: sha512-/f2Go4TognH/KvCISP7OUsHn85hT9nUkxxA9BEWxFn+Oj9o8ZNLm/40hdlgSLyuOimsrTKLUMEorQexp/aPQeA==}
@@ -19885,7 +19886,7 @@ packages:
       schema-utils: 3.1.1
       serialize-javascript: 6.0.0
       terser: 5.14.2
-      webpack: 5.74.0
+      webpack: 5.74.0_webpack-cli@4.10.0
     dev: true
 
   /terser/4.8.1:

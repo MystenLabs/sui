@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Ed25519Keypair } from '@mysten/sui.js';
-import { BehaviorSubject } from 'rxjs';
+import { EventEmitter } from 'events';
 import Browser from 'webextension-polyfill';
 
 import { encrypt, decrypt } from '_shared/cryptography/keystore';
@@ -10,15 +10,23 @@ import { generateMnemonic } from '_shared/utils/bip39';
 
 import type { Keypair } from '@mysten/sui.js';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type ListenerFn = (...args: any[]) => void;
+
+export enum KeyringEvent {
+    lockedStatusUpdate = 'lockedStatusUpdate',
+}
+
 const STORAGE_KEY = 'vault';
 
 class Keyring {
-    private readonly _locked = new BehaviorSubject<boolean>(true);
-    private _encryptedMnemonic: Promise<string | null>;
-    private _keypair: Keypair | null = null;
+    #events = new EventEmitter();
+    #locked = true;
+    #encryptedMnemonic: Promise<string | null>;
+    #keypair: Keypair | null = null;
 
     constructor() {
-        this._encryptedMnemonic = this.loadMnemonic();
+        this.#encryptedMnemonic = this.loadMnemonic();
     }
 
     // Creates a new mnemonic and saves it to storage encrypted
@@ -33,19 +41,21 @@ class Keyring {
             Buffer.from(generateMnemonic(), 'utf8')
         );
         await this.storeEncryptedMnemonic(encryptedMnemonic);
-        this._encryptedMnemonic = Promise.resolve(encryptedMnemonic);
+        this.#encryptedMnemonic = Promise.resolve(encryptedMnemonic);
     }
 
     public lock() {
-        this._keypair = null;
-        this._locked.next(true);
+        this.#keypair = null;
+        this.#locked = true;
+        this.notifyLockedStatusUpdate(this.#locked);
     }
 
     public async unlock(password: string) {
-        this._keypair = Ed25519Keypair.deriveKeypair(
+        this.#keypair = Ed25519Keypair.deriveKeypair(
             await this.decryptMnemonic(password)
         );
-        this._locked.next(false);
+        this.#locked = false;
+        this.notifyLockedStatusUpdate(this.#locked);
     }
 
     public exportMnemonic(password: string) {
@@ -53,33 +63,45 @@ class Keyring {
     }
 
     public async clearMnemonic() {
-        this._encryptedMnemonic = Promise.resolve(null);
+        this.#encryptedMnemonic = Promise.resolve(null);
         await this.storeEncryptedMnemonic(null);
         this.lock();
     }
 
     public async isWalletInitialized() {
-        return !!(await this._encryptedMnemonic);
+        return !!(await this.#encryptedMnemonic);
     }
 
     public get isLocked() {
-        return this._locked.asObservable();
+        return this.#locked;
     }
 
     public get keypair() {
-        return this._keypair;
+        return this.#keypair;
     }
 
     // sui address always prefixed with 0x
     public get address() {
-        if (this._keypair) {
-            let address = this._keypair.getPublicKey().toSuiAddress();
+        if (this.#keypair) {
+            let address = this.#keypair.getPublicKey().toSuiAddress();
             if (!address.startsWith('0x')) {
                 address = `0x${address}`;
             }
             return address;
         }
         return null;
+    }
+
+    public addEventListener(
+        event: KeyringEvent.lockedStatusUpdate,
+        listener: (isLocked: boolean) => void
+    ): void;
+    public addEventListener(event: KeyringEvent, listener: ListenerFn): void {
+        this.#events.addListener(event, listener);
+    }
+
+    public removeEventListener(event: KeyringEvent, listener: ListenerFn) {
+        this.#events.removeListener(event, listener);
     }
 
     // pass null to delete it
@@ -95,7 +117,7 @@ class Keyring {
     }
 
     private async decryptMnemonic(password: string) {
-        const encryptedMnemonic = await this._encryptedMnemonic;
+        const encryptedMnemonic = await this.#encryptedMnemonic;
         if (!encryptedMnemonic) {
             throw new Error(
                 'Mnemonic is not initialized. Create a new one first.'
@@ -104,6 +126,10 @@ class Keyring {
         return Buffer.from(await decrypt(password, encryptedMnemonic)).toString(
             'utf8'
         );
+    }
+
+    private notifyLockedStatusUpdate(isLocked: boolean) {
+        this.#events.emit(KeyringEvent.lockedStatusUpdate, isLocked);
     }
 }
 
