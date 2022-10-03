@@ -265,17 +265,21 @@ async fn run_actual_and_estimate_costs(
                 .clone()
         };
 
-        let state = handles[0].state();
-        let gas_estimate = estimate_transaction_computation_cost(
-            tx.signed_data.data,
-            state.clone(),
-            None,
-            None,
-            None,
-            None,
-        )
-        .await
-        .unwrap();
+        let gas_estimate = handles[0]
+            .with_async(|node| async move {
+                let state = node.state();
+                estimate_transaction_computation_cost(
+                    tx.signed_data.data,
+                    state.clone(),
+                    None,
+                    None,
+                    None,
+                    None,
+                )
+                .await
+                .unwrap()
+            })
+            .await;
         ret.insert(tx_type.clone(), (gas_used.clone(), gas_estimate.clone()));
 
         // Check that the estimates are not less than actual
