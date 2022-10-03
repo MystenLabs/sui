@@ -15,16 +15,7 @@ To get started using Sui:
 1. Optionally, download the [source code](#source-code) to have local
    access to examples and modify Sui itself.
 
-## Install with a script
-
-If you're using macOS or Linux and already have `curl`, Rust Cargo, the `git` command, and a GitHub account (see [Prerequisites](#prerequisites)), you can download the `sui-setup.sh` script and run it install Sui, including removal of any existing Sui assets.
-```shell
-$ curl https://raw.githubusercontent.com/MystenLabs/sui/main/doc/utils/sui-setup.sh -o sui-setup.sh
-chmod 755 sui-setup.sh
-./sui-setup.sh
-```
-
-## Supported OSes
+## Supported Operating Systems
 
 Sui supports the following operating systems:
 
