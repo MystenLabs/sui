@@ -2081,3 +2081,16 @@ pub enum QuorumDriverResponse {
     // TODO: Change to CertifiedTransactionEffects eventually.
     EffectsCert(Box<(CertifiedTransaction, CertifiedTransactionEffects)>),
 }
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct CommitteeInfoRequest {
+    pub epoch: Option<EpochId>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct CommitteeInfoResponse {
+    pub epoch: EpochId,
+    pub committee_info: Option<Vec<(AuthorityName, StakeUnit)>>,
+    // TODO: We could also return the certified checkpoint that contains this committee.
+    // This would allows a client to verify the authenticity of the committee.
+}

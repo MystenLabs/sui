@@ -1208,6 +1208,23 @@ impl AuthorityState {
         }
     }
 
+    pub fn handle_committee_info_request(
+        &self,
+        request: &CommitteeInfoRequest,
+    ) -> SuiResult<CommitteeInfoResponse> {
+        let (epoch, committee) = match request.epoch {
+            Some(epoch) => (epoch, self.committee_store.get_committee(&epoch)?),
+            None => {
+                let committee = self.committee_store.get_latest_committee();
+                (committee.epoch, Some(committee))
+            }
+        };
+        Ok(CommitteeInfoResponse {
+            epoch,
+            committee_info: committee.map(|c| c.voting_rights),
+        })
+    }
+
     // TODO: This function takes both committee and genesis as parameter.
     // Technically genesis already contains committee information. Could consider merging them.
     pub async fn new(

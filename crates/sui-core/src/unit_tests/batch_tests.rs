@@ -30,8 +30,8 @@ use std::fs;
 use std::sync::Arc;
 use sui_types::messages::{
     AccountInfoRequest, AccountInfoResponse, BatchInfoRequest, BatchInfoResponseItem,
-    CertifiedTransaction, ObjectInfoRequest, ObjectInfoResponse, Transaction,
-    TransactionInfoRequest, TransactionInfoResponse,
+    CertifiedTransaction, CommitteeInfoRequest, CommitteeInfoResponse, ObjectInfoRequest,
+    ObjectInfoResponse, Transaction, TransactionInfoRequest, TransactionInfoResponse,
 };
 
 pub(crate) fn init_state_parameters_from_rng<R>(
@@ -621,6 +621,13 @@ impl AuthorityAPI for TrustworthyAuthorityClient {
         });
         Ok(Box::pin(stream))
     }
+
+    async fn handle_committee_info_request(
+        &self,
+        _request: CommitteeInfoRequest,
+    ) -> Result<CommitteeInfoResponse, SuiError> {
+        unimplemented!();
+    }
 }
 
 impl TrustworthyAuthorityClient {
@@ -742,6 +749,13 @@ impl AuthorityAPI for ByzantineAuthorityClient {
             items.pop().map(|item| (Ok(item), items))
         });
         Ok(Box::pin(stream))
+    }
+
+    async fn handle_committee_info_request(
+        &self,
+        _request: CommitteeInfoRequest,
+    ) -> Result<CommitteeInfoResponse, SuiError> {
+        unimplemented!();
     }
 }
 
