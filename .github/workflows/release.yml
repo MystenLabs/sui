@@ -3,7 +3,7 @@ name: Release Binaries
 on:
   push:
     tags:
-      - 'devnet-.*'
+      - 'devnet-*'
   workflow_dispatch:
 
 env:
