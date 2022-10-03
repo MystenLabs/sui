@@ -1848,7 +1848,7 @@ impl AuthorityState {
             return Err(SuiError::ValidatorHaltedAtEpochEnd);
         }
 
-        let mut notifier_ticket = self.batch_notifier.ticket()?;
+        let notifier_ticket = self.batch_notifier.ticket()?;
         let seq = notifier_ticket.seq();
 
         let digest = certificate.digest();
@@ -1865,11 +1865,9 @@ impl AuthorityState {
             .tap_ok(|_| {
                 debug!(?digest, ?effects_digest, ?self.name, "commit_certificate finished");
             })?;
-
+        // We only notify i.e. update low watermark once database changes are committed
         notifier_ticket.notify();
         Ok(())
-
-        // implicitly we drop the ticket here and that notifies the batch manager
     }
 
     /// Check whether a shared-object certificate has already been given shared-locks.

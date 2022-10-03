@@ -77,7 +77,7 @@ async fn test_start_epoch_change() {
     assert_eq!(checkpoints.lock().next_transaction_sequence_expected(), 0);
 
     // Drain ticket.
-    drop(ticket);
+    ticket.notify();
     tokio::time::sleep(Duration::from_secs(3)).await;
     // After we drained ticket, epoch change should have started, as it will actively update
     // the newly processed transactions regardless whether batch service has picked up.
