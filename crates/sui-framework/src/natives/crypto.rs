@@ -13,7 +13,10 @@ use fastcrypto::{
 use move_binary_format::errors::PartialVMResult;
 use move_vm_runtime::native_functions::NativeContext;
 use move_vm_types::{
-    loaded_data::runtime_types::Type, natives::function::NativeResult, pop_arg, values::Value,
+    loaded_data::runtime_types::Type,
+    natives::function::NativeResult,
+    pop_arg,
+    values::{Value, VectorRef},
 };
 use smallvec::smallvec;
 use std::collections::VecDeque;
@@ -39,11 +42,15 @@ pub fn ecrecover(
     debug_assert!(ty_args.is_empty());
     debug_assert!(args.len() == 2);
 
-    let hashed_msg = pop_arg!(args, Vec<u8>);
-    let signature = pop_arg!(args, Vec<u8>);
+    let hashed_msg = pop_arg!(args, VectorRef);
+    let signature = pop_arg!(args, VectorRef);
+
+    let hashed_msg_ref = hashed_msg.as_bytes_ref();
+    let signature_ref = signature.as_bytes_ref();
+
     // TODO: implement native gas cost estimation https://github.com/MystenLabs/sui/issues/3593
     let cost = legacy_empty_cost();
-    match recover_pubkey(signature, hashed_msg) {
+    match recover_pubkey(&signature_ref, &hashed_msg_ref) {
         Ok(pubkey) => Ok(NativeResult::ok(
             cost,
             smallvec![Value::vector_u8(pubkey.as_bytes().to_vec())],
@@ -55,9 +62,9 @@ pub fn ecrecover(
     }
 }
 
-fn recover_pubkey(signature: Vec<u8>, hashed_msg: Vec<u8>) -> Result<Secp256k1PublicKey, SuiError> {
-    match <Secp256k1Signature as ToFromBytes>::from_bytes(&signature) {
-        Ok(signature) => match signature.recover(&hashed_msg) {
+fn recover_pubkey(signature: &[u8], hashed_msg: &[u8]) -> Result<Secp256k1PublicKey, SuiError> {
+    match <Secp256k1Signature as ToFromBytes>::from_bytes(signature) {
+        Ok(signature) => match signature.recover(hashed_msg) {
             Ok(pubkey) => Ok(pubkey),
             Err(e) => Err(SuiError::KeyConversionError(e.to_string())),
         },
@@ -76,12 +83,13 @@ pub fn decompress_pubkey(
     debug_assert!(ty_args.is_empty());
     debug_assert!(args.len() == 1);
 
-    let pubkey = pop_arg!(args, Vec<u8>);
+    let pubkey = pop_arg!(args, VectorRef);
+    let pubkey_ref = pubkey.as_bytes_ref();
 
     // TODO: implement native gas cost estimation https://github.com/MystenLabs/sui/issues/3593
     let cost = legacy_empty_cost();
 
-    match Secp256k1PublicKey::from_bytes(&pubkey) {
+    match Secp256k1PublicKey::from_bytes(&pubkey_ref) {
         Ok(pubkey) => {
             let uncompressed = &pubkey.pubkey.serialize_uncompressed();
             Ok(NativeResult::ok(
@@ -104,11 +112,13 @@ pub fn keccak256(
 
     // TODO: implement native gas cost estimation https://github.com/MystenLabs/sui/issues/3593
     let cost = legacy_empty_cost();
-    let msg = pop_arg!(args, Vec<u8>);
+    let msg = pop_arg!(args, VectorRef);
+    let msg_ref = msg.as_bytes_ref();
+
     Ok(NativeResult::ok(
         cost,
         smallvec![Value::vector_u8(
-            <sha3::Keccak256 as sha3::digest::Digest>::digest(&msg)
+            <sha3::Keccak256 as sha3::digest::Digest>::digest(&*msg_ref)
                 .as_slice()
                 .to_vec()
         )],
@@ -124,24 +134,28 @@ pub fn secp256k1_verify(
     debug_assert!(ty_args.is_empty());
     debug_assert!(args.len() == 3);
 
-    let hashed_msg = pop_arg!(args, Vec<u8>);
-    let public_key_bytes = pop_arg!(args, Vec<u8>);
-    let signature_bytes = pop_arg!(args, Vec<u8>);
+    let hashed_msg = pop_arg!(args, VectorRef);
+    let public_key_bytes = pop_arg!(args, VectorRef);
+    let signature_bytes = pop_arg!(args, VectorRef);
+
+    let hashed_msg_ref = hashed_msg.as_bytes_ref();
+    let public_key_bytes_ref = public_key_bytes.as_bytes_ref();
+    let signature_bytes_ref = signature_bytes.as_bytes_ref();
 
     // TODO: implement native gas cost estimation https://github.com/MystenLabs/sui/issues/4086
     let cost = legacy_emit_cost();
 
-    let signature = match <Secp256k1Signature as ToFromBytes>::from_bytes(&signature_bytes) {
+    let signature = match <Secp256k1Signature as ToFromBytes>::from_bytes(&signature_bytes_ref) {
         Ok(signature) => signature,
         Err(_) => return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
     };
 
-    let public_key = match <Secp256k1PublicKey as ToFromBytes>::from_bytes(&public_key_bytes) {
+    let public_key = match <Secp256k1PublicKey as ToFromBytes>::from_bytes(&public_key_bytes_ref) {
         Ok(public_key) => public_key,
         Err(_) => return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
     };
 
-    match public_key.verify_hashed(&hashed_msg, &signature) {
+    match public_key.verify_hashed(&hashed_msg_ref, &signature) {
         Ok(_) => Ok(NativeResult::ok(cost, smallvec![Value::bool(true)])),
         Err(_) => Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
     }
@@ -157,24 +171,28 @@ pub fn bls12381_verify_g1_sig(
     debug_assert!(ty_args.is_empty());
     debug_assert!(args.len() == 3);
 
-    let msg = pop_arg!(args, Vec<u8>);
-    let public_key_bytes = pop_arg!(args, Vec<u8>);
-    let signature_bytes = pop_arg!(args, Vec<u8>);
+    let msg = pop_arg!(args, VectorRef);
+    let public_key_bytes = pop_arg!(args, VectorRef);
+    let signature_bytes = pop_arg!(args, VectorRef);
+
+    let msg_ref = msg.as_bytes_ref();
+    let public_key_bytes_ref = public_key_bytes.as_bytes_ref();
+    let signature_bytes_ref = signature_bytes.as_bytes_ref();
 
     // TODO: implement native gas cost estimation https://github.com/MystenLabs/sui/issues/3868
     let cost = legacy_emit_cost();
 
-    let signature = match <BLS12381Signature as ToFromBytes>::from_bytes(&signature_bytes) {
+    let signature = match <BLS12381Signature as ToFromBytes>::from_bytes(&signature_bytes_ref) {
         Ok(signature) => signature,
         Err(_) => return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
     };
 
-    let public_key = match <BLS12381PublicKey as ToFromBytes>::from_bytes(&public_key_bytes) {
+    let public_key = match <BLS12381PublicKey as ToFromBytes>::from_bytes(&public_key_bytes_ref) {
         Ok(public_key) => public_key,
         Err(_) => return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
     };
 
-    match public_key.verify(&msg, &signature) {
+    match public_key.verify(&msg_ref, &signature) {
         Ok(_) => Ok(NativeResult::ok(cost, smallvec![Value::bool(true)])),
         Err(_) => Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
     }
@@ -191,17 +209,20 @@ pub fn verify_range_proof(
     debug_assert!(args.len() == 3);
 
     let bit_length = pop_arg!(args, u64);
-    let commitment_bytes = pop_arg!(args, Vec<u8>);
-    let proof_bytes = pop_arg!(args, Vec<u8>);
+    let commitment_bytes = pop_arg!(args, VectorRef);
+    let proof_bytes = pop_arg!(args, VectorRef);
     let cost = legacy_empty_cost();
 
-    let proof = if let Ok(val) = BulletproofsRangeProof::from_bytes(&proof_bytes[..]) {
+    let commitment_bytes_ref = commitment_bytes.as_bytes_ref();
+    let proof_bytes_ref = proof_bytes.as_bytes_ref();
+
+    let proof = if let Ok(val) = BulletproofsRangeProof::from_bytes(&proof_bytes_ref) {
         val
     } else {
         return Ok(NativeResult::err(cost, INVALID_BULLETPROOF));
     };
 
-    let commitment = if let Ok(val) = PedersenCommitment::from_bytes(&commitment_bytes[..]) {
+    let commitment = if let Ok(val) = PedersenCommitment::from_bytes(&commitment_bytes_ref) {
         val
     } else {
         return Ok(NativeResult::err(cost, INVALID_RISTRETTO_GROUP_ELEMENT));
@@ -363,23 +384,26 @@ pub fn ed25519_verify(
     debug_assert!(ty_args.is_empty());
     debug_assert!(args.len() == 3);
 
-    let msg = pop_arg!(args, Vec<u8>);
-    let public_key_bytes = pop_arg!(args, Vec<u8>);
-    let signature_bytes = pop_arg!(args, Vec<u8>);
+    let msg = pop_arg!(args, VectorRef);
+    let msg_ref = msg.as_bytes_ref();
+    let public_key_bytes = pop_arg!(args, VectorRef);
+    let public_key_bytes_ref = public_key_bytes.as_bytes_ref();
+    let signature_bytes = pop_arg!(args, VectorRef);
+    let signature_bytes_ref = signature_bytes.as_bytes_ref();
 
     let cost = legacy_empty_cost();
 
-    let signature = match <Ed25519Signature as ToFromBytes>::from_bytes(&signature_bytes) {
+    let signature = match <Ed25519Signature as ToFromBytes>::from_bytes(&signature_bytes_ref) {
         Ok(signature) => signature,
         Err(_) => return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
     };
 
-    let public_key = match <Ed25519PublicKey as ToFromBytes>::from_bytes(&public_key_bytes) {
+    let public_key = match <Ed25519PublicKey as ToFromBytes>::from_bytes(&public_key_bytes_ref) {
         Ok(public_key) => public_key,
         Err(_) => return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
     };
 
-    match public_key.verify(&msg, &signature) {
+    match public_key.verify(&msg_ref, &signature) {
         Ok(_) => Ok(NativeResult::ok(cost, smallvec![Value::bool(true)])),
         Err(_) => Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
     }

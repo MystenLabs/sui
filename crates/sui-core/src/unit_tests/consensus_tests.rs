@@ -3,7 +3,7 @@
 use super::*;
 use crate::authority::{authority_tests::init_state_with_objects, AuthorityState};
 use move_core_types::{account_address::AccountAddress, ident_str};
-use narwhal_executor::{ExecutionIndices, ExecutionState};
+use narwhal_executor::ExecutionIndices;
 use narwhal_types::Transactions;
 use narwhal_types::TransactionsServer;
 use narwhal_types::{Empty, TransactionProto};
@@ -132,8 +132,7 @@ async fn listen_to_sequenced_transaction() {
 
     // Notify the consensus listener that the transaction has been sequenced.
     tokio::task::yield_now().await;
-    let output = (Ok(Vec::default()), serialized);
-    tx_consensus_to_sui.send(output).await.unwrap();
+    tx_consensus_to_sui.send(serialized.clone()).await.unwrap();
 
     // Ensure the caller get notified from the consensus listener.
     assert!(waiter.wait_for_result().await.is_ok());
@@ -199,7 +198,7 @@ async fn submit_transaction_to_consensus() {
                 .unwrap();
 
             // Reply to the submitter.
-            let result = Ok(Vec::default());
+            let result = Ok(());
             replier.0.send(result).unwrap();
         }
     });

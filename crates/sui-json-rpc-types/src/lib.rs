@@ -366,6 +366,9 @@ pub enum SuiExecuteTransactionResponse {
     EffectsCert {
         certificate: SuiCertifiedTransaction,
         effects: SuiCertifiedTransactionEffects,
+        // If the transaction is confirmed to be executed locally
+        // before this reponse.
+        confirmed_local_execution: bool,
     },
 }
 
@@ -385,13 +388,14 @@ impl SuiExecuteTransactionResponse {
                 }
             }
             ExecuteTransactionResponse::EffectsCert(cert) => {
-                let (certificate, effects) = *cert;
+                let (certificate, effects, is_executed_locally) = *cert;
                 let certificate: SuiCertifiedTransaction = certificate.try_into()?;
                 let effects: SuiCertifiedTransactionEffects =
                     SuiCertifiedTransactionEffects::try_from(effects, resolver)?;
                 SuiExecuteTransactionResponse::EffectsCert {
                     certificate,
                     effects,
+                    confirmed_local_execution: is_executed_locally,
                 }
             }
         })
@@ -485,7 +489,6 @@ impl TryInto<Object> for SuiObject<SuiRawData> {
                         struct_tag,
                         o.has_public_transfer,
                         o.version,
-                        o.child_count,
                         o.bcs_bytes,
                     )
                 })
@@ -802,8 +805,6 @@ pub struct SuiRawMoveObject {
     pub type_: String,
     pub has_public_transfer: bool,
     pub version: SequenceNumber,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub child_count: Option<u32>,
     #[serde_as(as = "Base64")]
     #[schemars(with = "Base64")]
     pub bcs_bytes: Vec<u8>,
@@ -815,7 +816,6 @@ impl From<MoveObject> for SuiRawMoveObject {
             type_: o.type_.to_string(),
             has_public_transfer: o.has_public_transfer(),
             version: o.version(),
-            child_count: o.child_count(),
             bcs_bytes: o.into_contents(),
         }
     }
@@ -830,7 +830,6 @@ impl SuiMoveObject for SuiRawMoveObject {
             type_: object.type_.to_string(),
             has_public_transfer: object.has_public_transfer(),
             version: object.version(),
-            child_count: object.child_count(),
             bcs_bytes: object.into_contents(),
         })
     }

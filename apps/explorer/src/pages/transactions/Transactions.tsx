@@ -78,7 +78,6 @@ function TransactionsAPI() {
             id="transaction"
             className={styles.container}
         >
-            <h1 className={styles.title}>Transactions</h1>
             <LastestTxCard
                 count={results.count}
                 txPerPage={TXN_PER_PAGE}

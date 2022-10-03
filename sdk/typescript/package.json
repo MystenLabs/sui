@@ -2,7 +2,7 @@
   "name": "@mysten/sui.js",
   "author": "Mysten Labs <build@mystenlabs.com>",
   "description": "Sui TypeScript API(Work in Progress)",
-  "version": "0.8.0",
+  "version": "0.11.0",
   "license": "Apache-2.0",
   "files": [
     "dist",
@@ -86,6 +86,8 @@
     "@mysten/bcs": "workspace:*",
     "@noble/hashes": "^1.1.2",
     "@noble/secp256k1": "^1.6.3",
+    "@scure/bip32": "^1.1.0",
+    "@scure/bip39": "^1.1.0",
     "bn.js": "^5.2.0",
     "buffer": "^6.0.3",
     "cross-fetch": "^3.1.5",

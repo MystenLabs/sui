@@ -80,7 +80,7 @@ impl KeyToolCommand {
                     let file_name = format!("bls-{address}.key");
                     write_authority_keypair_to_file(&keypair, &file_name)?;
                 } else {
-                    let mnemonic = Mnemonic::random(&mut OsRng, Default::default());
+                    let mnemonic = Mnemonic::random(OsRng, Default::default());
                     let seed = mnemonic.to_seed("");
                     match derive_key_pair_from_path(seed.as_bytes(), derivation_path, &key_scheme) {
                         Ok((address, kp)) => {

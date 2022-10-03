@@ -57,7 +57,8 @@ jobs:
     - name: prepare artifact directory
       run: |
         mkdir -p artifacts
-        echo '# Bench results' > artifacts/bench_results.txt
+        echo '# Bench results' > artifacts/owned.txt
+        echo '# Bench results' > artifacts/shared.txt
     - name: compile benchmark
       uses: actions-rs/cargo@v1
       with:
@@ -66,16 +67,20 @@ jobs:
     - name: run benchmark
       run: |
         set -o pipefail
-        cargo run --release --bin bench microbench throughput 2>&1 | huniq | tee -a artifacts/bench_results.txt
+        cargo run --package sui-benchmark --bin stress -- --log-path /tmp/stress.log --num-client-threads 10 --num-server-threads 24 --num-transfer-accounts 2 bench --target-qps 100 --num-workers 10  --transfer-object 100 --run-duration 60s 2>&1 | huniq | tee -a artifacts/owned.txt
+        cargo run --package sui-benchmark --bin stress -- --log-path /tmp/stress.log --num-client-threads 10 --num-server-threads 24 --num-transfer-accounts 2 bench --target-qps 100 --num-workers 10  --shared-counter 100 --run-duration 60s 2>&1 | huniq | tee -a artifacts/shared.txt
     - name: retrieve benchmark results
       id: get-comment-body
       run: |
-        body=$(cat artifacts/bench_results.txt)
-        body="${body//$'\n'/'%0A'}"
-        body="${body//$'\r'/'%0D'}"
-        echo ::set-output name=body::$body
+        owned="Owned $(cat artifacts/owned.txt | grep -e '|' -e '-' -e 'Bench' -e '+')"
+        shared="Shared $(cat artifacts/shared.txt | grep -e '|' -e '-' -e 'Bench' -e '+')"
+        echo ::set-output name=owned::$owned
+        echo ::set-output name=shared::$shared
     - name: Create commit comment
       uses: peter-evans/commit-comment@v2
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
-        body: ${{ steps.get-comment-body.outputs.body }}
+        body: |
+          Benchmark Reports:
+          - ${{ steps.get-comment-body.outputs.owned }}
+          - ${{ steps.get-comment-body.outputs.shared }}

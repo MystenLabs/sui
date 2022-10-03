@@ -248,13 +248,13 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
                 let db_path = self
                     .config_directory
                     .join(AUTHORITIES_DB_NAME)
-                    .join(encode_bytes_hex(&public_key));
+                    .join(encode_bytes_hex(public_key));
                 let network_address = validator.network_address;
                 let consensus_address = validator.narwhal_consensus_address;
                 let consensus_db_path = self
                     .config_directory
                     .join(CONSENSUS_DB_NAME)
-                    .join(encode_bytes_hex(&public_key));
+                    .join(encode_bytes_hex(public_key));
                 let consensus_config = ConsensusConfig {
                     consensus_address,
                     consensus_db_path,

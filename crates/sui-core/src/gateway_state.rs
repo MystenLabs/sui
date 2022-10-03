@@ -2,6 +2,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use futures::future::join_all;
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::path::Path;
@@ -55,7 +56,7 @@ use sui_json_rpc_types::{
     SuiParsedSplitCoinResponse, SuiParsedTransactionResponse, SuiTransactionEffects,
     SuiTransactionResponse, SuiTypeTag, TransferObjectParams,
 };
-use sui_types::error::SuiError::ConflictingTransaction;
+use sui_types::error::SuiError::ObjectLockConflict;
 
 use crate::epoch::epoch_store::EpochStore;
 use tap::TapFallible;
@@ -316,6 +317,17 @@ pub trait GatewayAPI {
         gas_budget: u64,
         recipient: SuiAddress,
         amount: Option<u64>,
+    ) -> Result<TransactionData, anyhow::Error>;
+
+    /// Send SUI coins to a list of addresses, following a list of amounts.
+    async fn pay(
+        &self,
+        signer: SuiAddress,
+        input_coins: Vec<ObjectID>,
+        recipients: Vec<SuiAddress>,
+        amounts: Vec<u64>,
+        gas: Option<ObjectID>,
+        gas_budget: u64,
     ) -> Result<TransactionData, anyhow::Error>;
 
     /// Synchronise account state with a random authorities, updates all object_ids
@@ -589,7 +601,11 @@ where
             "Setting transaction lock"
         );
         self.store
-            .lock_and_write_transaction(mutable_input_objects, transaction)
+            .lock_and_write_transaction(
+                self.authorities.committee.epoch,
+                mutable_input_objects,
+                transaction,
+            )
             .await
     }
 
@@ -717,8 +733,9 @@ where
             // we should first try to finish executing the previous transaction. If that failed,
             // we should just reset the locks.
             match err {
-                ConflictingTransaction {
+                ObjectLockConflict {
                     pending_transaction,
+                    ..
                 } => {
                     debug!(tx_digest=?pending_transaction, "Objects locked by a previous transaction, re-executing the previous transaction");
                     if let Err(err) = self.retry_pending_tx(pending_transaction).await {
@@ -1388,6 +1405,37 @@ where
         let object_ref = object.compute_object_reference();
         let data =
             TransactionData::new_transfer_sui(recipient, signer, amount, object_ref, gas_budget);
+        Ok(data)
+    }
+
+    async fn pay(
+        &self,
+        signer: SuiAddress,
+        input_coins: Vec<ObjectID>,
+        recipients: Vec<SuiAddress>,
+        amounts: Vec<u64>,
+        gas: Option<ObjectID>,
+        gas_budget: u64,
+    ) -> Result<TransactionData, anyhow::Error> {
+        let used_coins = BTreeSet::from_iter(input_coins.iter().cloned());
+        if let Some(gas) = gas {
+            if used_coins.contains(&gas) {
+                return Err(anyhow!("Gas coin is in input coins of Pay transaction, use PaySui transaction instead!"));
+            }
+        }
+        let gas = self
+            .choose_gas_for_address(signer, gas_budget, gas, used_coins)
+            .await?;
+        let handles: Vec<_> = input_coins
+            .iter()
+            .map(|id| self.get_object_ref(id))
+            .collect();
+        let coins = join_all(handles)
+            .await
+            .into_iter()
+            .map(|c| c.unwrap())
+            .collect();
+        let data = TransactionData::new_pay(signer, coins, recipients, amounts, gas, gas_budget);
         Ok(data)
     }
 

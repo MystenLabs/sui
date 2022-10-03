@@ -24,7 +24,6 @@ use narwhal_config::{
     Committee as ConsensusCommittee, WorkerCache as ConsensusWorkerCache,
     WorkerId as ConsensusWorkerId,
 };
-use narwhal_executor::ExecutionStateError;
 use narwhal_executor::{ExecutionIndices, ExecutionState};
 use parking_lot::Mutex;
 use prometheus::{
@@ -392,7 +391,7 @@ pub struct AuthorityState {
     pub transaction_streamer: Option<Arc<TransactionStreamer>>,
 
     /// The checkpoint store
-    pub checkpoints: Option<Arc<Mutex<CheckpointStore>>>,
+    pub checkpoints: Arc<Mutex<CheckpointStore>>,
 
     epoch_store: Arc<EpochStore>,
 
@@ -521,48 +520,50 @@ impl AuthorityState {
     /// TODO: down the road, we may want to execute a shared object tx on a validator when f+1
     /// validators have executed it.
     #[instrument(level = "trace", skip_all)]
-    pub async fn handle_certificate_with_effects(
+    pub async fn handle_certificate_with_effects<S>(
         &self,
-        certificate: CertifiedTransaction,
-        // Signed effects is signed by only one validator, it is not a
-        // CertifiedTransactionEffects. The caller of this (node_sync) must promise to
-        // wait until it has seen at least f+1 identifical effects digests matching this
-        // SignedTransactionEffects before calling this function, in order to prevent a
-        // byzantine validator from giving us incorrect effects.
-        signed_effects: SignedTransactionEffects,
+        certificate: &CertifiedTransaction,
+        // NOTE: the caller of this (node_sync) must promise to wait until it
+        // knows for sure this tx is finalized, namely, it has seen a
+        // CertifiedTransactionEffects or at least f+1 identifical effects
+        // digests matching this TransactionEffectsEnvelope, before calling
+        // this function, in order to prevent a byzantine validator from
+        // giving us incorrect effects.
+        // TODO: allow CertifiedTransactionEffects only
+        effects: &TransactionEffectsEnvelope<S>,
     ) -> SuiResult {
         let _metrics_guard = start_timer(self.metrics.handle_node_sync_certificate_latency.clone());
         let digest = *certificate.digest();
         debug!(?digest, "handle_certificate_with_effects");
         fp_ensure!(
-            signed_effects.effects.transaction_digest == digest,
+            effects.effects.transaction_digest == digest,
             SuiError::ErrorWhileProcessingConfirmationTransaction {
                 err: "effects/tx digest mismatch".to_string()
             }
         );
 
-        let tx_guard = self.database.acquire_tx_guard(&certificate).await?;
+        let tx_guard = self.database.acquire_tx_guard(certificate).await?;
 
         if certificate.contains_shared_object() {
             self.database.acquire_shared_locks_from_effects(
-                &certificate,
-                &signed_effects.effects,
+                certificate,
+                &effects.effects,
                 &tx_guard,
             )?;
         }
 
         let resp = self
-            .process_certificate(tx_guard, &certificate, true)
+            .process_certificate(tx_guard, certificate, true)
             .await
             .tap_err(|e| debug!(?digest, "process_certificate failed: {}", e))?;
 
-        let expected_effects_digest = signed_effects.digest();
+        let expected_effects_digest = effects.digest();
         let observed_effects_digest = resp.signed_effects.as_ref().map(|e| e.digest());
         if observed_effects_digest != Some(expected_effects_digest) {
             error!(
                 ?expected_effects_digest,
                 ?observed_effects_digest,
-                ?signed_effects,
+                ?effects.effects,
                 ?resp.signed_effects,
                 input_objects = ?certificate.signed_data.data.input_objects(),
                 "Locally executed effects do not match canonical effects!");
@@ -696,7 +697,7 @@ impl AuthorityState {
         let digest = *certificate.digest();
         // The cert could have been processed by a concurrent attempt of the same cert, so check if
         // the effects have already been written.
-        if let Some(info) = self.check_tx_already_executed(&digest).await? {
+        if let Some(info) = self.get_tx_info_already_executed(&digest).await? {
             tx_guard.release();
             return Ok(info);
         }
@@ -858,7 +859,11 @@ impl AuthorityState {
         SuiTransactionEffects::try_from(effects, self.module_cache.as_ref())
     }
 
-    pub async fn check_tx_already_executed(
+    pub fn is_tx_already_executed(&self, digest: &TransactionDigest) -> SuiResult<bool> {
+        self.database.effects_exists(digest)
+    }
+
+    pub async fn get_tx_info_already_executed(
         &self,
         digest: &TransactionDigest,
     ) -> SuiResult<Option<TransactionInfoResponse>> {
@@ -1051,7 +1056,7 @@ impl AuthorityState {
                 match self.get_object(&request.object_id).await {
                     Ok(Some(object)) => {
                         let lock = if !object.is_owned_or_quasi_shared() {
-                            // Unowned obejcts have no locks.
+                            // Unowned objects have no locks.
                             None
                         } else {
                             self.get_transaction_lock(&object.compute_object_reference())
@@ -1184,13 +1189,7 @@ impl AuthorityState {
         &self,
         request: &CheckpointRequest,
     ) -> Result<CheckpointResponse, SuiError> {
-        let mut checkpoint_store = self
-            .checkpoints
-            .as_ref()
-            .ok_or(SuiError::UnsupportedFeatureError {
-                error: "Checkpoint not supported".to_owned(),
-            })?
-            .lock();
+        let mut checkpoint_store = self.checkpoints.lock();
         match &request.request_type {
             CheckpointRequestType::AuthenticatedCheckpoint(seq) => {
                 checkpoint_store.handle_authenticated_checkpoint(seq, request.detail)
@@ -1219,7 +1218,7 @@ impl AuthorityState {
         indexes: Option<Arc<IndexStore>>,
         event_store: Option<Arc<EventStoreType>>,
         transaction_streamer: Option<Arc<TransactionStreamer>>,
-        checkpoints: Option<Arc<Mutex<CheckpointStore>>>,
+        checkpoints: Arc<Mutex<CheckpointStore>>,
         genesis: &Genesis,
         prometheus_registry: &prometheus::Registry,
         tx_reconfigure_consensus: Sender<ReconfigConsensusMessage>,
@@ -1287,37 +1286,38 @@ impl AuthorityState {
             .init_batches_from_database()
             .expect("Init batches failed!");
 
-        // If a checkpoint store is present, ensure it is up-to-date with the latest
-        // batches.
-        if let Some(checkpoint) = &state.checkpoints {
-            let next_expected_tx = checkpoint.lock().next_transaction_sequence_expected();
+        // Ensure it is up-to-date with the latest batches.
+        let next_expected_tx = state
+            .checkpoints
+            .lock()
+            .next_transaction_sequence_expected();
 
-            // Get all unprocessed checkpoints
-            for (_seq, batch) in state
+        // Get all unprocessed checkpoints
+        for (_seq, batch) in state
+            .database
+            .tables
+            .batches
+            .iter()
+            .skip_to(&next_expected_tx)
+            .expect("Seeking batches should never fail at this point")
+        {
+            let transactions: Vec<(TxSequenceNumber, ExecutionDigests)> = state
                 .database
                 .tables
-                .batches
+                .executed_sequence
                 .iter()
-                .skip_to(&next_expected_tx)
-                .expect("Seeking batches should never fail at this point")
-            {
-                let transactions: Vec<(TxSequenceNumber, ExecutionDigests)> = state
-                    .database
-                    .tables
-                    .executed_sequence
-                    .iter()
-                    .skip_to(&batch.data().initial_sequence_number)
-                    .expect("Should never fail to get an iterator")
-                    .take_while(|(seq, _tx)| *seq < batch.data().next_sequence_number)
-                    .collect();
+                .skip_to(&batch.data().initial_sequence_number)
+                .expect("Should never fail to get an iterator")
+                .take_while(|(seq, _tx)| *seq < batch.data().next_sequence_number)
+                .collect();
 
-                if batch.data().next_sequence_number > next_expected_tx {
-                    // Update the checkpointing mechanism
-                    checkpoint
-                        .lock()
-                        .handle_internal_batch(batch.data().next_sequence_number, &transactions)
-                        .expect("Should see no errors updating the checkpointing mechanism.");
-                }
+            if batch.data().next_sequence_number > next_expected_tx {
+                // Update the checkpointing mechanism
+                state
+                    .checkpoints
+                    .lock()
+                    .handle_internal_batch(batch.data().next_sequence_number, &transactions)
+                    .expect("Should see no errors updating the checkpointing mechanism.");
             }
         }
 
@@ -1378,7 +1378,7 @@ impl AuthorityState {
             None,
             None,
             None,
-            Some(Arc::new(Mutex::new(checkpoints))),
+            Arc::new(Mutex::new(checkpoints)),
             genesis,
             &prometheus::Registry::new(),
             tx_reconfigure_consensus,
@@ -1422,7 +1422,7 @@ impl AuthorityState {
         Ok(())
     }
 
-    pub fn checkpoints(&self) -> Option<Arc<Mutex<CheckpointStore>>> {
+    pub fn checkpoints(&self) -> Arc<Mutex<CheckpointStore>> {
         self.checkpoints.clone()
     }
 
@@ -1840,7 +1840,7 @@ impl AuthorityState {
         signed_transaction: SignedTransaction,
     ) -> Result<(), SuiError> {
         self.database
-            .lock_and_write_transaction(mutable_input_objects, signed_transaction)
+            .lock_and_write_transaction(self.epoch(), mutable_input_objects, signed_transaction)
             .await
     }
 
@@ -1900,7 +1900,9 @@ impl AuthorityState {
         &self,
         object_ref: &ObjectRef,
     ) -> Result<Option<SignedTransaction>, SuiError> {
-        self.database.get_transaction_envelope(object_ref).await
+        self.database
+            .get_object_locking_transaction(object_ref)
+            .await
     }
 
     // Helper functions to manage certificates
@@ -1961,23 +1963,14 @@ impl AuthorityState {
         // consensus.
         certificate.verify(&self.committee.load())
     }
-}
 
-#[async_trait]
-impl ExecutionState for AuthorityState {
-    type Transaction = ConsensusTransaction;
-    type Error = NarwhalHandlerError;
-    type Outcome = Vec<u8>;
-
-    /// This function will be called by Narwhal, after Narwhal sequenced this certificate.
-    #[instrument(level = "trace", skip_all)]
-    async fn handle_consensus_transaction(
+    pub(crate) async fn handle_consensus_transaction(
         &self,
         // TODO [2533]: use this once integrating Narwhal reconfiguration
         _consensus_output: &narwhal_consensus::ConsensusOutput,
         consensus_index: ExecutionIndices,
-        transaction: Self::Transaction,
-    ) -> Result<Self::Outcome, Self::Error> {
+        transaction: ConsensusTransaction,
+    ) -> Result<(), NarwhalHandlerError> {
         self.metrics.total_consensus_txns.inc();
         let _timer = self
             .metrics
@@ -2002,9 +1995,7 @@ impl ExecutionState for AuthorityState {
                     .await
                     .map_err(NarwhalHandlerError::NodeError)?;
 
-                // TODO: This return time is not ideal.
-                // TODO [2533]: edit once integrating Narwhal reconfiguration
-                Ok(Vec::default())
+                Ok(())
             }
             ConsensusTransactionKind::Checkpoint(fragment) => {
                 let cp_seq = fragment.proposer_sequence_number();
@@ -2016,57 +2007,103 @@ impl ExecutionState for AuthorityState {
                     fragment.other.authority(),
                 );
 
-                if let Some(checkpoint) = &self.checkpoints {
-                    let committee = self.committee.load();
-                    fragment
-                        .verify(&committee)
-                        .map_err(NarwhalHandlerError::SkipNarwhalTransaction)?;
+                let committee = self.committee.load();
+                fragment
+                    .verify(&committee)
+                    .map_err(NarwhalHandlerError::SkipNarwhalTransaction)?;
 
-                    let mut checkpoint = checkpoint.lock();
-                    checkpoint
-                        .handle_internal_fragment(consensus_index, *fragment, self.database.clone())
-                        .map_err(NarwhalHandlerError::NodeError)?;
+                let mut checkpoint = self.checkpoints.lock();
+                checkpoint
+                    .handle_internal_fragment(consensus_index, *fragment, self.database.clone())
+                    .map_err(NarwhalHandlerError::NodeError)?;
 
-                    // NOTE: The method `handle_internal_fragment` is idempotent, so we don't need
-                    // to persist the consensus index. If the validator crashes, this transaction
-                    // may be resent to the checkpoint logic that will simply ignore it.
+                // NOTE: The method `handle_internal_fragment` is idempotent, so we don't need
+                // to persist the consensus index. If the validator crashes, this transaction
+                // may be resent to the checkpoint logic that will simply ignore it.
 
-                    // TODO: At this point we should know whether we want to change epoch. If we do,
-                    // we should have (i) the new committee and (ii) the new keypair of this authority.
-                    // We then call:
-                    // ```
-                    //  self
-                    //      .tx_reconfigure_consensus
-                    //      .send((new_keypair, new_committee, new_worker_ids_and_keypairs, new_worker_cache))
-                    //      .await
-                    //      .expect("Failed to reconfigure consensus");
-                    // ```
-                    let _tx_reconfigure_consensus = &self.tx_reconfigure_consensus;
+                // TODO: At this point we should know whether we want to change epoch. If we do,
+                // we should have (i) the new committee and (ii) the new keypair of this authority.
+                // We then call:
+                // ```
+                //  self
+                //      .tx_reconfigure_consensus
+                //      .send((new_keypair, new_committee, new_worker_ids_and_keypairs, new_worker_cache))
+                //      .await
+                //      .expect("Failed to reconfigure consensus");
+                // ```
+                let _tx_reconfigure_consensus = &self.tx_reconfigure_consensus;
+
+                Ok(())
+            }
+        }
+    }
+}
+
+pub struct ConsensusHandler {
+    state: Arc<AuthorityState>,
+    // todo - change Vec<u8> to Box<CertifiedTransaction> and use tx id as consensus adapter hash
+    sender: Sender<Vec<u8>>,
+}
+
+impl ConsensusHandler {
+    pub fn new(state: Arc<AuthorityState>, sender: Sender<Vec<u8>>) -> Self {
+        Self { state, sender }
+    }
+}
+
+#[async_trait]
+impl ExecutionState for ConsensusHandler {
+    /// This function will be called by Narwhal, after Narwhal sequenced this certificate.
+    #[instrument(level = "trace", skip_all)]
+    async fn handle_consensus_transaction(
+        &self,
+        // TODO [2533]: use this once integrating Narwhal reconfiguration
+        consensus_output: &narwhal_consensus::ConsensusOutput,
+        consensus_index: ExecutionIndices,
+        serialized_transaction: Vec<u8>,
+    ) {
+        let transaction =
+            match bincode::deserialize::<ConsensusTransaction>(&serialized_transaction) {
+                Ok(transaction) => transaction,
+                Err(err) => {
+                    warn!(
+                        "Ignoring malformed transaction (failed to deserialize) from {}: {}",
+                        consensus_output.certificate.header.author, err
+                    );
+                    return;
                 }
-
-                // TODO: This return time is not ideal. The authority submitting the checkpoint fragment
-                // is not expecting any reply.
-                // TODO [2533]: edit once integrating Narwhal reconfiguration
-                Ok(Vec::default())
+            };
+        match self
+            .state
+            .handle_consensus_transaction(consensus_output, consensus_index, transaction)
+            .await
+        {
+            Ok(()) => {
+                if self.sender.send(serialized_transaction).await.is_err() {
+                    warn!("Consensus handler outbound channel closed");
+                }
+            }
+            Err(NarwhalHandlerError::SkipNarwhalTransaction(err)) => {
+                warn!(
+                    "Ignoring malformed transaction (failed to verify) from {}: {:?}",
+                    consensus_output.certificate.header.author, err
+                );
+            }
+            Err(NarwhalHandlerError::NodeError(err)) => {
+                Err(err).expect("Unrecoverable error in consensus handler")
             }
         }
     }
 
-    fn ask_consensus_write_lock(&self) -> bool {
-        self.consensus_guardrail.fetch_add(1, Ordering::SeqCst) == 0
-    }
-
-    fn release_consensus_write_lock(&self) {
-        self.consensus_guardrail.fetch_sub(0, Ordering::SeqCst);
-    }
-
-    async fn load_execution_indices(&self) -> Result<ExecutionIndices, Self::Error> {
-        self.database
+    async fn load_execution_indices(&self) -> ExecutionIndices {
+        self.state
+            .database
             .last_consensus_index()
-            .map_err(NarwhalHandlerError::NodeError)
+            .expect("Failed to load consensus indices")
     }
 }
 
+// todo - consider deleting this struct
 #[derive(Eq, PartialEq, Clone, Debug, Error)]
 pub enum NarwhalHandlerError {
     /// Local node error after which it is not safe to continue consuming narwhal stream
@@ -2076,13 +2113,4 @@ pub enum NarwhalHandlerError {
     /// narwhal can continue streaming next transactions to SUI
     #[error("Invalid transaction {}", 0)]
     SkipNarwhalTransaction(SuiError),
-}
-
-impl ExecutionStateError for NarwhalHandlerError {
-    fn node_error(&self) -> bool {
-        match self {
-            Self::NodeError(..) => true,
-            Self::SkipNarwhalTransaction(..) => false,
-        }
-    }
 }

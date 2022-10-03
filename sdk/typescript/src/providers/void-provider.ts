@@ -130,7 +130,10 @@ export class VoidProvider extends Provider {
     throw this.newError('syncAccountState');
   }
 
-  async getEventsByTransaction(_digest: TransactionDigest, _count: number): Promise<SuiEvents> {
+  async getEventsByTransaction(
+    _digest: TransactionDigest,
+    _count: number
+  ): Promise<SuiEvents> {
     throw this.newError('getEventsByTransaction');
   }
 
@@ -192,7 +195,7 @@ export class VoidProvider extends Provider {
     _filter: SuiEventFilter,
     _onMessage: (event: SuiEventEnvelope) => void
   ): Promise<SubscriptionId> {
-      throw this.newError('subscribeEvent');
+    throw this.newError('subscribeEvent');
   }
 
   async unsubscribeEvent(_id: SubscriptionId): Promise<boolean> {

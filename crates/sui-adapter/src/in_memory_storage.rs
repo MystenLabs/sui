@@ -26,7 +26,9 @@ impl BackingPackageStore for InMemoryStorage {
 
 impl ParentSync for InMemoryStorage {
     fn get_latest_parent_entry_ref(&self, object_id: ObjectID) -> SuiResult<Option<ObjectRef>> {
-        debug_assert!(!self.persistent.contains_key(&object_id));
+        if let Some(obj) = self.persistent.get(&object_id) {
+            return Ok(Some(obj.compute_object_reference()));
+        }
         Ok(self.last_entry_for_deleted.get(&object_id).copied())
     }
 }

@@ -21,11 +21,11 @@ use sui_config::gateway::GatewayConfig;
 use sui_core::gateway_state::{GatewayClient, GatewayState};
 pub use sui_json as json;
 use sui_json_rpc::api::EventStreamingApiClient;
-use sui_json_rpc::api::QuorumDriverApiClient;
 use sui_json_rpc::api::RpcBcsApiClient;
 use sui_json_rpc::api::RpcFullNodeReadApiClient;
 use sui_json_rpc::api::RpcGatewayApiClient;
 use sui_json_rpc::api::RpcReadApiClient;
+use sui_json_rpc::api::TransactionExecutionApiClient;
 use sui_json_rpc::api::WalletSyncApiClient;
 pub use sui_json_rpc_types as rpc_types;
 use sui_json_rpc_types::{
@@ -429,7 +429,7 @@ impl QuorumDriver {
         Ok(match &*self.api {
             SuiClientApi::Rpc(c) => {
                 let (tx_bytes, flag, signature, pub_key) = tx.to_network_data_for_execution();
-                QuorumDriverApiClient::execute_transaction(
+                TransactionExecutionApiClient::execute_transaction(
                     &c.http,
                     tx_bytes,
                     flag,

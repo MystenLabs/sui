@@ -7,7 +7,6 @@ written: object(102)
 task 2 'view-object'. lines 25-25:
 Owner: Account Address ( _ )
 Version: 1
-Child Count: None
 Contents: Test::M1::Object {id: sui::object::UID {id: sui::object::ID {bytes: fake(104)}}, value: 42u64}
 
 task 3 'view-object'. lines 27-27:

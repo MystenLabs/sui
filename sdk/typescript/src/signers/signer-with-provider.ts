@@ -16,6 +16,7 @@ import { RpcTxnDataSerializer } from './txn-data-serializers/rpc-txn-data-serial
 import {
   MoveCallTransaction,
   MergeCoinTransaction,
+  PayTransaction,
   SplitCoinTransaction,
   TransferObjectTransaction,
   TransferSuiTransaction,
@@ -133,6 +134,15 @@ export abstract class SignerWithProvider implements Signer {
   }
 
   /**
+   * Serialize and Sign a `Pay` transaction and submit to the Gateway for execution
+   */
+  async pay(transaction: PayTransaction): Promise<SuiTransactionResponse> {
+    const signerAddress = await this.getAddress();
+    const txBytes = await this.serializer.newPay(signerAddress, transaction);
+    return await this.signAndExecuteTransaction(txBytes);
+  }
+
+  /**
    * Serialize and Sign a `MergeCoin` transaction and submit to the Gateway for execution
    */
   async mergeCoin(
@@ -222,6 +232,21 @@ export abstract class SignerWithProvider implements Signer {
       signerAddress,
       transaction
     );
+    return await this.signAndExecuteTransactionWithRequestType(
+      txBytes,
+      requestType
+    );
+  }
+
+  /**
+   * @experimental Serialize and Sign a `Pay` transaction and submit to the fullnode for execution
+   */
+  async payWithRequestType(
+    transaction: PayTransaction,
+    requestType: ExecuteTransactionRequestType = 'WaitForEffectsCert'
+  ): Promise<SuiExecuteTransactionResponse> {
+    const signerAddress = await this.getAddress();
+    const txBytes = await this.serializer.newPay(signerAddress, transaction);
     return await this.signAndExecuteTransactionWithRequestType(
       txBytes,
       requestType

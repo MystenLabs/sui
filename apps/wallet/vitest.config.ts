@@ -4,6 +4,10 @@
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
+    test: {
+        minThreads: 1,
+        setupFiles: ['./test_setup.ts'],
+    },
     resolve: {
         alias: {
             '@mysten/sui.js': new URL(

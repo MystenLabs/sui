@@ -15,7 +15,8 @@ module examples::mycoin {
     /// cap is sent to the publisher, who then controls minting and burning
     fun init(witness: MYCOIN, ctx: &mut TxContext) {
         transfer::transfer(
-            coin::create_currency(witness, ctx),
+            // second parameter defines decimals of the Coin: 6
+            coin::create_currency(witness, 6, ctx),
             tx_context::sender(ctx)
         )
     }

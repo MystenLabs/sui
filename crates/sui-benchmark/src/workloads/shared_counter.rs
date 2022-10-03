@@ -80,7 +80,7 @@ impl SharedCounterWorkload {
 
 pub async fn publish_basics_package(
     gas: ObjectRef,
-    aggregator: &AuthorityAggregator<NetworkAuthorityClient>,
+    aggregator: Arc<AuthorityAggregator<NetworkAuthorityClient>>,
     sender: SuiAddress,
     keypair: &AccountKeyPair,
 ) -> ObjectRef {
@@ -93,12 +93,12 @@ pub async fn publish_basics_package(
 
 #[async_trait]
 impl Workload<dyn Payload> for SharedCounterWorkload {
-    async fn init(&mut self, aggregator: &AuthorityAggregator<NetworkAuthorityClient>) {
+    async fn init(&mut self, aggregator: Arc<AuthorityAggregator<NetworkAuthorityClient>>) {
         if self.basics_package_ref.is_some() {
             return;
         }
         // publish basics package
-        let primary_gas = get_latest(self.test_gas, aggregator).await.unwrap();
+        let primary_gas = get_latest(self.test_gas, aggregator.clone()).await.unwrap();
         let primary_gas_ref = primary_gas.compute_object_reference();
         let mut publish_module_gas_ref = None;
         let (address, keypair) = get_key_pair();
@@ -107,7 +107,7 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
             &self.test_gas_keypair,
             MAX_GAS_FOR_TESTING,
             address,
-            aggregator,
+            aggregator.clone(),
         )
         .await
         {
@@ -129,10 +129,10 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
     async fn make_test_payloads(
         &self,
         count: u64,
-        aggregator: &AuthorityAggregator<NetworkAuthorityClient>,
+        aggregator: Arc<AuthorityAggregator<NetworkAuthorityClient>>,
     ) -> Vec<Box<dyn Payload>> {
         // Read latest test gas object
-        let primary_gas = get_latest(self.test_gas, aggregator).await.unwrap();
+        let primary_gas = get_latest(self.test_gas, aggregator.clone()).await.unwrap();
         let mut primary_gas_ref = primary_gas.compute_object_reference();
         // Make as many gas objects as the number of counters
         let mut counters_gas = vec![];
@@ -143,7 +143,7 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
                 &self.test_gas_keypair,
                 MAX_GAS_FOR_TESTING,
                 address,
-                aggregator,
+                aggregator.clone(),
             )
             .await
             {
@@ -151,6 +151,7 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
                 counters_gas.push((address, keypair, minted));
             }
         }
+        let agg = &aggregator;
         // create counters using gas objects we created above
         eprintln!("Creating shared counters, this may take a while..");
         let futures = counters_gas
@@ -162,7 +163,7 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
                     sender,
                     &keypair,
                 );
-                if let Some(effects) = submit_transaction(transaction, aggregator).await {
+                if let Some(effects) = submit_transaction(transaction, agg.clone()).await {
                     Box::new(SharedCounterTestPayload {
                         package_ref: self.basics_package_ref.unwrap(),
                         counter_id: effects.created[0].0 .0,

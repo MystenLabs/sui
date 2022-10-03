@@ -4,7 +4,7 @@ jobs:
   diff:
     runs-on: [ubuntu-latest]
     outputs:
-      isWalletAdapter: ${{ steps.diff.outputs.isWalletAdapter }}
+      isWalletAdapter: ${{ contains(fromJson(steps.diff.outputs.packages), 'sui-wallet-adapter') }}
     steps:
       - uses: actions/checkout@v3
       - name: Detect Changes
@@ -29,4 +29,4 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Build
-        run: pnpm --filter sui-wallet-adapter build
+        run: pnpm wallet-adapter build

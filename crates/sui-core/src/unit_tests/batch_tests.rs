@@ -18,6 +18,7 @@ use crate::authority::*;
 use crate::safe_client::SafeClient;
 
 use crate::authority_client::{AuthorityAPI, BatchInfoResponseItemStream};
+use crate::checkpoints::CheckpointStore;
 use crate::epoch::epoch_store::EpochStore;
 use crate::safe_client::SafeClientMetrics;
 use async_trait::async_trait;
@@ -55,20 +56,26 @@ pub(crate) async fn init_state(
     authority_key: AuthorityKeyPair,
     store: Arc<AuthorityStore>,
 ) -> AuthorityState {
+    let name = authority_key.public().into();
+    let secrete = Arc::pin(authority_key);
     let dir = env::temp_dir();
     let epoch_path = dir.join(format!("DB_{:?}", ObjectID::random()));
+    let checkpoint_path = dir.join(format!("DB_{:?}", ObjectID::random()));
     fs::create_dir(&epoch_path).unwrap();
     let (tx_reconfigure_consensus, _rx_reconfigure_consensus) = tokio::sync::mpsc::channel(10);
     let epoch_store = Arc::new(EpochStore::new(epoch_path, &committee, None));
+    let checkpoint_store = Arc::new(parking_lot::Mutex::new(
+        CheckpointStore::open(&checkpoint_path, None, 0, name, secrete.clone()).unwrap(),
+    ));
     AuthorityState::new(
-        authority_key.public().into(),
-        Arc::pin(authority_key),
+        name,
+        secrete,
         store,
         epoch_store,
         None,
         None,
         None,
-        None,
+        checkpoint_store,
         &sui_config::genesis::Genesis::get_default_genesis(),
         &prometheus::Registry::new(),
         tx_reconfigure_consensus,

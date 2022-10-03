@@ -20,6 +20,7 @@ import type {
     CertifiedTransaction,
     TransactionKindName,
     ExecutionStatusType,
+    TransactionEffects,
 } from '@mysten/sui.js';
 import type { AppThunkConfig } from '_store/thunk-extras';
 
@@ -64,6 +65,13 @@ const deduplicate = (results: [number, string][] | undefined) =>
               .filter((value, index, self) => self.indexOf(value) === index)
         : [];
 
+// TODO: This is a temporary solution to get the NFT data from Call txn
+const getCreatedObjectID = (txEffects: TransactionEffects): string | null => {
+    return txEffects?.created
+        ? txEffects?.created.map((item) => item.reference)[0]?.objectId
+        : null;
+};
+
 export const getTransactionsByAddress = createAsyncThunk<
     TxResultByAddress,
     void,
@@ -93,7 +101,7 @@ export const getTransactionsByAddress = createAsyncThunk<
             .then(async (txEffs) => {
                 return (
                     txEffs
-                        .map((txEff, i) => {
+                        .map((txEff) => {
                             const [seq, digest] = transactions.filter(
                                 (transactionId) =>
                                     transactionId[1] ===
@@ -117,6 +125,10 @@ export const getTransactionsByAddress = createAsyncThunk<
                                 transferSui?.recipient ??
                                 txTransferObject?.recipient;
 
+                            const callObjectId = getCreatedObjectID(
+                                txEff.effects
+                            );
+
                             return {
                                 seq,
                                 txId: digest,
@@ -124,11 +136,11 @@ export const getTransactionsByAddress = createAsyncThunk<
                                 txGas: getTotalGasUsed(txEff),
                                 kind: txKind,
                                 from: res.data.sender,
-                                ...(txTransferObject
+                                ...(txTransferObject || callObjectId
                                     ? {
                                           objectId:
                                               txTransferObject?.objectRef
-                                                  .objectId,
+                                                  .objectId ?? callObjectId,
                                       }
                                     : {}),
                                 error: getExecutionStatusError(txEff),

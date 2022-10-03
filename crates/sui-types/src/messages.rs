@@ -517,6 +517,22 @@ impl TransactionData {
         Self::new(kind, sender, gas_payment, gas_budget)
     }
 
+    pub fn new_pay(
+        sender: SuiAddress,
+        coins: Vec<ObjectRef>,
+        recipients: Vec<SuiAddress>,
+        amounts: Vec<u64>,
+        gas_payment: ObjectRef,
+        gas_budget: u64,
+    ) -> Self {
+        let kind = TransactionKind::Single(SingleTransactionKind::Pay(Pay {
+            coins,
+            recipients,
+            amounts,
+        }));
+        Self::new(kind, sender, gas_payment, gas_budget)
+    }
+
     pub fn new_module(
         sender: SuiAddress,
         gas_payment: ObjectRef,
@@ -1911,6 +1927,10 @@ impl CertifiedTransaction {
 
         obligation.verify_all().map(|_| ())
     }
+
+    pub fn epoch(&self) -> EpochId {
+        self.auth_sign_info.epoch
+    }
 }
 
 impl Display for CertifiedTransaction {
@@ -2003,6 +2023,7 @@ pub enum ExecuteTransactionRequestType {
     ImmediateReturn,
     WaitForTxCert,
     WaitForEffectsCert,
+    WaitForLocalExecution,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -2011,8 +2032,41 @@ pub struct ExecuteTransactionRequest {
     pub request_type: ExecuteTransactionRequestType,
 }
 
+/// When requested to execute a transaction with WaitForLocalExecution,
+/// TransactionOrchestrator attempts to execute this transaction locally
+/// after it is finalized. This value represents whether the transaction
+/// is confirmed to be executed on this node before the response returns.
+pub type IsTransactionExecutedLocally = bool;
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum ExecuteTransactionResponse {
+    ImmediateReturn,
+    TxCert(Box<CertifiedTransaction>),
+    // TODO: Change to CertifiedTransactionEffects eventually.
+    EffectsCert(
+        Box<(
+            CertifiedTransaction,
+            CertifiedTransactionEffects,
+            IsTransactionExecutedLocally,
+        )>,
+    ),
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, schemars::JsonSchema)]
+pub enum QuorumDriverRequestType {
+    ImmediateReturn,
+    WaitForTxCert,
+    WaitForEffectsCert,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct QuorumDriverRequest {
+    pub transaction: Transaction,
+    pub request_type: QuorumDriverRequestType,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum QuorumDriverResponse {
     ImmediateReturn,
     TxCert(Box<CertifiedTransaction>),
     // TODO: Change to CertifiedTransactionEffects eventually.

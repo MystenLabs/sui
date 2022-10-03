@@ -54,7 +54,7 @@ module fungible_tokens::private_balance {
 
     /// Create a new supply for type T.
     public fun create_supply<T: drop>(_witness: T): Supply<T> {
-        Supply { 
+        Supply {
             value: 0
         }
     }
@@ -62,14 +62,14 @@ module fungible_tokens::private_balance {
     /// Increase supply by `value` and create a new `PrivateBalance<T>` with this value.
     /// The new `PrivateBalance<T>` that is created by this function has a blinding_factor set
     /// to 0, and is public by default.
-    /// 
-    /// The first minted private balances never hides its value, because it is 
+    ///
+    /// The first minted private balances never hides its value, because it is
     /// important for public auditability that users know the max supply of the coin.
     public fun increase_supply<T>(self: &mut Supply<T>, value: u64): PrivateBalance<T> {
         assert!(value < (18446744073709551615u64 - self.value), EOverflow);
         self.value = self.value + value;
         let commitment = ec::create_pedersen_commitment(ec::new_scalar_from_u64(value), ec::new_scalar_from_u64(0));
-        PrivateBalance { 
+        PrivateBalance {
             commitment,
             value: option::some(value)
         }
@@ -80,7 +80,7 @@ module fungible_tokens::private_balance {
     public fun zero<T>(): PrivateBalance<T> {
         // TODO: For optimization, pre-compute this and store somewhere.
         let commitment = ec::create_pedersen_commitment(ec::new_scalar_from_u64(0), ec::new_scalar_from_u64(0));
-        PrivateBalance { 
+        PrivateBalance {
             commitment,
             value: option::some(0)
         }
@@ -107,7 +107,7 @@ module fungible_tokens::private_balance {
     /// Overflows above u64 are not checked, as this is already checked during the minting process.
     public fun join<T>(self: &mut PrivateBalance<T>, other: PrivateBalance<T>) {
         let new_value: Option<u64> = option::none();
-        // If both coins are already revealed, 
+        // If both coins are already revealed,
         if (option::is_some(&self.value) && option::is_some(&other.value)) {
             new_value = option::some(*option::borrow(&self.value) + *option::borrow(&other.value));
         };
@@ -123,8 +123,8 @@ module fungible_tokens::private_balance {
         self.value = option::none();
         // In order to prevent new coins being minted, Open(A_new) = Open(A) - Open(B) must hold.
         // It is clear to see that as long as |A| >= |B| holds, then the above equation also holds
-        verify_full_range_proof(proof, self.commitment, MAX_COIN_BIT);
-        PrivateBalance { 
+        verify_full_range_proof(&proof, &self.commitment, MAX_COIN_BIT);
+        PrivateBalance {
             commitment: new_commitment,
             value: option::none()
         }
@@ -144,7 +144,7 @@ module fungible_tokens::private_balance {
             assert!(*option::borrow(&self.value) >= value, 0)
         } else {
             self.value = option::none();
-            verify_full_range_proof(proof, self.commitment, MAX_COIN_BIT);
+            verify_full_range_proof(&proof, &self.commitment, MAX_COIN_BIT);
         };
         PrivateBalance {
             commitment: new_commitment,
@@ -156,7 +156,7 @@ module fungible_tokens::private_balance {
     /// Create a `PrivacyBalance` of any coin for testing purposes.
     public fun create_for_testing<T>(value: u64): PrivateBalance<T> {
         let commitment = ec::create_pedersen_commitment(ec::new_scalar_from_u64(value), ec::new_scalar_from_u64(0));
-        PrivateBalance { 
+        PrivateBalance {
             commitment,
             value: option::none()
         }

@@ -375,15 +375,10 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                             .unwrap();
                         let move_struct =
                             MoveStruct::simple_deserialize(move_obj.contents(), &layout).unwrap();
-                        let child_count = match move_obj.child_count() {
-                            None => "None".to_owned(),
-                            Some(c) => format!("Some({c})"),
-                        };
                         self.stabilize_str(format!(
-                            "Owner: {}\nVersion: {}\nChild Count: {}\nContents: {}",
+                            "Owner: {}\nVersion: {}\nContents: {}",
                             &obj.owner,
                             obj.version().value(),
-                            child_count,
                             move_struct
                         ))
                     }
