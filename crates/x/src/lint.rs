@@ -44,11 +44,9 @@ pub fn run(args: Args) -> crate::Result<()> {
         &CrateNamesPaths,
         &IrrelevantBuildDeps,
         // This one seems to be broken
-        //&UnpublishedPackagesOnlyUsePathDependencies::new(),
-        // TODO: re-enable after fixing the issue for Narwhal.
-        // &PublishedPackagesDontDependOnUnpublishedPackages,
-        // TODO: re-enable after fixing the issue for Narwhal.
-        // &OnlyPublishToCratesIo,
+        // &UnpublishedPackagesOnlyUsePathDependencies::new(),
+        &PublishedPackagesDontDependOnUnpublishedPackages,
+        &OnlyPublishToCratesIo,
         &CratesInCratesDirectory,
         // TODO: re-enable after moving Narwhal crates to crates/, or back to Narwhal repo.
         // &CratesOnlyInCratesDirectory,
