@@ -5,6 +5,7 @@
 .container {
     display: flex;
     align-items: center;
+    justify-content: center;
     flex-flow: column nowrap;
     background-color: v.use(v.$colors-main-content-background);
 
@@ -21,7 +22,7 @@
     }
 
     &.dynamic-size {
-        width: 100vw;
-        height: 100vh;
+        width: 100%;
+        min-height: 100vh;
     }
 }
