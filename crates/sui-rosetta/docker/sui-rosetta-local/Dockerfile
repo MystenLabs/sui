@@ -17,7 +17,7 @@ ENV PATH="/root/.cargo/bin:${PATH}"
 FROM chef AS planner
 COPY Cargo.toml Cargo.lock ./
 COPY crates/workspace-hack crates/workspace-hack
-RUN sed -i '/crates\/workspace-hack/b; /crates/d' Cargo.toml \
+RUN sed -i '/crates\/workspace-hack/b; /crates/d; /narwhal/d' Cargo.toml \
     && cargo metadata -q >/dev/null
 
 # Build and cache all dependencies.
@@ -40,6 +40,7 @@ RUN curl -fLJO https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis
 # built as they were built and cached by the previous layer.
 COPY Cargo.toml Cargo.lock ./
 COPY crates crates
+COPY narwhal narwhal
 RUN cargo build --release --bin sui --bin sui-rosetta
 
 # Production Image

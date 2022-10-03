@@ -43,7 +43,7 @@ This will generate the `rosetta-cli.json` and `sui.ros` file to be used by the [
 #### 1. CD into the Dockerfile directory
 
 ```shell
-cd <sui project directory>/crate/sui-rosetta/docker
+cd <sui project directory>/crate/sui-rosetta/docker/sui-rosetta-local
 ```   
 #### 2. Build the image
 ```shell
@@ -52,7 +52,6 @@ cd <sui project directory>/crate/sui-rosetta/docker
 #### 3. Start the container
 
 ```shell
-cd sui-rosetta-local
 docker-compose up -d
 ```
 Docker compose will start the rosetta-online and rosetta-offline containers, the ports for both rosetta server (9002, 9003 respectively) will be exposed to the host.  
