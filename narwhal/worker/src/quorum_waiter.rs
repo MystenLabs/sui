@@ -83,6 +83,8 @@ impl QuorumWaiter {
 
                 // When a new batch is available, and the pipeline is not full, add a new
                 // task to the pipeline to send this batch to workers. 
+                //
+                // TODO: make the constant a config parameter.
                 Some((batch, opt_channel)) = self.rx_message.recv(), if pipeline.len() < 20 => {
                     // Broadcast the batch to the other workers.
                     let workers: Vec<_> = self
@@ -145,6 +147,8 @@ impl QuorumWaiter {
                     best_effort_with_timeout.push(async move {
                         // Bound the attempt to a few seconds to tolerate nodes that are
                         // offline and will never succeed.
+                        //
+                        // TODO: make the constant a config parameter.
                         timeout(Duration::from_secs(5), async move{
                             while remaining.next().await.is_some() { }
                         }).await
