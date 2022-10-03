@@ -66,8 +66,8 @@ use tap::TapFallible;
 use thiserror::Error;
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::mpsc::Sender;
-use tracing::Instrument;
 use tracing::{debug, error, instrument, warn};
+use tracing::{trace, Instrument};
 use typed_store::Map;
 
 #[cfg(test)]
@@ -140,6 +140,7 @@ pub struct AuthorityMetrics {
     handle_node_sync_certificate_latency: Histogram,
 
     total_consensus_txns: IntCounter,
+    skipped_consensus_txns: IntCounter,
     handle_consensus_duration_mcs: IntCounter,
     verify_narwhal_transaction_duration_mcs: IntCounter,
 
@@ -280,6 +281,12 @@ impl AuthorityMetrics {
             total_consensus_txns: register_int_counter_with_registry!(
                 "total_consensus_txns",
                 "Total number of consensus transactions received from narwhal",
+                registry,
+            )
+            .unwrap(),
+            skipped_consensus_txns: register_int_counter_with_registry!(
+                "skipped_consensus_txns",
+                "Total number of consensus transactions skipped",
                 registry,
             )
             .unwrap(),
@@ -1979,6 +1986,16 @@ impl AuthorityState {
         let tracking_id = transaction.get_tracking_id();
         match transaction.kind {
             ConsensusTransactionKind::UserTransaction(certificate) => {
+                if self
+                    .database
+                    .consensus_message_processed(certificate.digest())
+                    .await
+                    .map_err(NarwhalHandlerError::NodeError)?
+                {
+                    trace!("Already processed {:?}", certificate.digest());
+                    self.metrics.skipped_consensus_txns.inc();
+                    return Ok(());
+                }
                 self.verify_narwhal_transaction(&certificate)
                     .map_err(NarwhalHandlerError::SkipNarwhalTransaction)?;
 
