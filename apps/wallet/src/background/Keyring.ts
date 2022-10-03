@@ -23,6 +23,7 @@ class Keyring {
     #events = new EventEmitter();
     #locked = true;
     #keypair: Keypair | null = null;
+    #mnemonic: string | null = null;
 
     // Creates a new mnemonic and saves it to storage encrypted
     public async createMnemonic(password: string) {
@@ -40,20 +41,16 @@ class Keyring {
 
     public lock() {
         this.#keypair = null;
+        this.#mnemonic = null;
         this.#locked = true;
         this.notifyLockedStatusUpdate(this.#locked);
     }
 
     public async unlock(password: string) {
-        this.#keypair = Ed25519Keypair.deriveKeypair(
-            await this.decryptMnemonic(password)
-        );
+        this.#mnemonic = await this.decryptMnemonic(password);
+        this.#keypair = Ed25519Keypair.deriveKeypair(this.#mnemonic);
         this.#locked = false;
         this.notifyLockedStatusUpdate(this.#locked);
-    }
-
-    public exportMnemonic(password: string) {
-        return this.decryptMnemonic(password);
     }
 
     public async clearMnemonic() {
@@ -71,6 +68,10 @@ class Keyring {
 
     public get keypair() {
         return this.#keypair;
+    }
+
+    public get mnemonic() {
+        return this.#mnemonic;
     }
 
     // sui address always prefixed with 0x
