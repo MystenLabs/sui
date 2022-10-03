@@ -44,6 +44,7 @@ use sui_adapter::adapter;
 use sui_adapter::temporary_store::InnerTemporaryStore;
 use sui_config::genesis::Genesis;
 use sui_json_rpc_types::{SuiEventEnvelope, SuiTransactionEffects};
+use sui_simulator::nondeterministic;
 use sui_storage::{
     event_store::{EventStore, EventStoreType, StoredEvent},
     write_ahead_log::{DBTxGuard, TxGuard, WriteAheadLog},
@@ -1345,7 +1346,7 @@ impl AuthorityState {
             Some(path) => path,
             None => {
                 let dir = std::env::temp_dir();
-                let path = dir.join(format!("DB_{:?}", ObjectID::random()));
+                let path = dir.join(format!("DB_{:?}", nondeterministic!(ObjectID::random())));
                 std::fs::create_dir(&path).unwrap();
                 path
             }

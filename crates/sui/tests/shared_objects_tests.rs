@@ -4,6 +4,7 @@
 use std::sync::Arc;
 use sui_core::authority::GatewayStore;
 use sui_core::authority_client::AuthorityAPI;
+use sui_core::epoch::epoch_store::EpochStore;
 use sui_core::gateway_state::{GatewayAPI, GatewayMetrics, GatewayState};
 use sui_types::messages::{
     CallArg, ExecutionStatus, ObjectArg, ObjectInfoRequest, ObjectInfoRequestKind,
@@ -19,8 +20,10 @@ use test_utils::{
     objects::{test_gas_objects, test_shared_object},
 };
 
+use sui_macros::sim_test;
+
 /// Send a simple shared object transaction to Sui and ensures the client gets back a response.
-#[tokio::test]
+#[sim_test]
 async fn shared_object_transaction() {
     let mut objects = test_gas_objects();
     objects.push(test_shared_object());
@@ -42,7 +45,7 @@ async fn shared_object_transaction() {
 }
 
 /// Same as `shared_object_transaction` but every authorities submit the transaction.
-#[tokio::test]
+#[sim_test]
 async fn many_shared_object_transactions() {
     let mut objects = test_gas_objects();
     objects.push(test_shared_object());
@@ -66,7 +69,7 @@ async fn many_shared_object_transactions() {
 
 /// End-to-end shared transaction test for a Sui validator. It does not test the client, wallet,
 /// or gateway but tests the end-to-end flow from Sui to consensus.
-#[tokio::test]
+#[sim_test]
 async fn call_shared_object_contract() {
     let mut gas_objects = test_gas_objects();
 
@@ -144,7 +147,7 @@ async fn call_shared_object_contract() {
 
 /// Same test as `call_shared_object_contract` but the clients submits many times the same
 /// transaction (one copy per authority).
-#[tokio::test]
+#[sim_test]
 async fn shared_object_flood() {
     telemetry_subscribers::init_for_testing();
     let mut gas_objects = test_gas_objects();
@@ -221,7 +224,7 @@ async fn shared_object_flood() {
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
 }
 
-#[tokio::test]
+#[sim_test]
 async fn shared_object_sync() {
     let mut gas_objects = test_gas_objects();
 
@@ -322,7 +325,7 @@ async fn shared_object_sync() {
 }
 
 /// Send a simple shared object transaction to Sui and ensures the client gets back a response.
-#[tokio::test]
+#[sim_test]
 async fn replay_shared_object_transaction() {
     let mut gas_objects = test_gas_objects();
 
@@ -359,8 +362,7 @@ async fn replay_shared_object_transaction() {
     }
 }
 
-#[tokio::test]
-//#[ignore] // cargo test gateway -p sui --test shared_objects_tests -- --nocapture
+#[sim_test]
 async fn shared_object_on_gateway() {
     let mut gas_objects = test_gas_objects();
 
@@ -368,7 +370,9 @@ async fn shared_object_on_gateway() {
     // the handles (or the authorities will stop).
     let configs = test_authority_configs();
     let handles = spawn_test_authorities(gas_objects.clone(), &configs).await;
-    let clients = test_authority_aggregator(&configs, handles[0].state().epoch_store().clone());
+    let committee = handles[0].with(|h| h.state().clone_committee());
+    let epoch_store = Arc::new(EpochStore::new_for_testing(&committee));
+    let clients = test_authority_aggregator(&configs, epoch_store);
     let path = tempfile::tempdir().unwrap().into_path();
     let gateway_store = Arc::new(GatewayStore::open(&path.join("store"), None));
     let gateway = Arc::new(

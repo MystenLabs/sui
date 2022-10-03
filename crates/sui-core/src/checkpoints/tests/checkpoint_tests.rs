@@ -33,6 +33,9 @@ use crate::authority_aggregator::AuthAggMetrics;
 use crate::epoch::epoch_store::EpochStore;
 use parking_lot::Mutex;
 
+use sui_macros::sim_test;
+use sui_simulator::nondeterministic;
+
 pub struct TestCausalOrderPendCertNoop;
 
 impl CausalOrder for TestCausalOrderPendCertNoop {
@@ -885,7 +888,7 @@ fn checkpoint_integration() {
 
 // Now check the connection between state / bacth and checkpoint mechanism
 
-#[tokio::test]
+#[sim_test]
 async fn test_batch_to_checkpointing() {
     // Create an authority
     // Make a test key pair
@@ -972,11 +975,11 @@ async fn test_batch_to_checkpointing() {
     _join.await.expect("No errors in task").expect("ok");
 }
 
-#[tokio::test(flavor = "current_thread", start_paused = true)]
+#[sim_test]
 async fn test_batch_to_checkpointing_init_crash() {
     // Create a random directory to store the DB
     let dir = env::temp_dir();
-    let path = dir.join(format!("DB_{:?}", ObjectID::random()));
+    let path = dir.join(format!("DB_{:?}", nondeterministic!(ObjectID::random())));
     fs::create_dir(&path).unwrap();
 
     // Make a test key pair
@@ -1007,7 +1010,7 @@ async fn test_batch_to_checkpointing_init_crash() {
                 .await
         });
 
-        tokio::time::advance(Duration::from_millis(10)).await;
+        tokio::time::sleep(Duration::from_millis(10)).await;
         tokio::task::yield_now().await;
 
         // Send transactions out of order

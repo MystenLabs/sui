@@ -5,8 +5,9 @@ use std::sync::Arc;
 use std::time::Duration;
 use sui_core::authority_aggregator::AuthorityAggregator;
 use sui_core::authority_client::NetworkAuthorityClient;
+use sui_core::epoch::epoch_store::EpochStore;
 use sui_core::quorum_driver::{QuorumDriverHandler, QuorumDriverMetrics};
-use sui_node::SuiNode;
+use sui_node::SuiNodeHandle;
 use sui_types::base_types::SuiAddress;
 use sui_types::messages::{
     QuorumDriverRequest, QuorumDriverRequestType, QuorumDriverResponse, Transaction,
@@ -19,14 +20,16 @@ use test_utils::objects::test_gas_objects;
 use test_utils::test_account_keys;
 
 async fn setup() -> (
-    Vec<SuiNode>,
+    Vec<SuiNodeHandle>,
     AuthorityAggregator<NetworkAuthorityClient>,
     Transaction,
 ) {
     let mut gas_objects = test_gas_objects();
     let configs = test_authority_configs();
     let handles = spawn_test_authorities(gas_objects.clone(), &configs).await;
-    let aggregator = test_authority_aggregator(&configs, handles[0].state().epoch_store().clone());
+    let committee = handles[0].with(|h| h.state().clone_committee());
+    let epoch_store = Arc::new(EpochStore::new_for_testing(&committee));
+    let aggregator = test_authority_aggregator(&configs, epoch_store);
     let (sender, keypair) = test_account_keys().pop().unwrap();
     let tx = make_transfer_sui_transaction(
         gas_objects.pop().unwrap().compute_object_reference(),
