@@ -196,6 +196,7 @@ impl Node {
 
             (Some(Arc::new(dag)), NetworkModel::Asynchronous)
         } else {
+            let (tx_recovery_token, tr_recovery_token) = tokio::sync::oneshot::channel();
             let consensus_handles = Self::spawn_consensus(
                 name.clone(),
                 tx_executor_network,
@@ -208,8 +209,26 @@ impl Node {
                 rx_new_certificates,
                 tx_consensus.clone(),
                 registry,
+                tx_recovery_token,
             )
             .await?;
+            // Ensure that the primary is spawned only after the consensus is fully recovered.
+            // so that consensus is guaranteed to in a state where it can process messages it
+            // receives from the primary when the primary starts up.
+            let timeout = 60;
+            let sleep = time::sleep(Duration::from_seconds(timeout));
+            tokio::pin!(sleep);
+            tokio::select! {
+                _ = tr_recovery_token => {
+                    info!("Consensus component has signaled that it is ready for messages");
+                    break;
+                }
+                _ &mut sleep => {
+                    info!("Consensus component has not yet signaled it is ready for messages after {timeout} seconds. Proceeding with startup.");
+                    break;
+                }
+            }
+
             handles.extend(consensus_handles);
             (None, NetworkModel::PartiallySynchronous)
         };
@@ -288,6 +307,7 @@ impl Node {
         rx_new_certificates: metered_channel::Receiver<Certificate>,
         tx_feedback: metered_channel::Sender<Certificate>,
         registry: &Registry,
+        tx_recovery_token: tokio::sync::oneshot::Sender<()>,
     ) -> SubscriberResult<Vec<JoinHandle<()>>>
     where
         PublicKey: VerifyingKey,
@@ -338,6 +358,7 @@ impl Node {
             ordering_engine,
             consensus_metrics.clone(),
             parameters.gc_depth,
+            tx_recovery_token,
         );
 
         // Spawn the client executing the transactions. It can also synchronize with the

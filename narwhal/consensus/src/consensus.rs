@@ -213,6 +213,7 @@ where
         protocol: Protocol,
         metrics: Arc<ConsensusMetrics>,
         gc_depth: Round,
+        recovery_token: tokio::sync::oneshot::Sender<()>,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
             let consensus_index = store
@@ -229,7 +230,12 @@ where
                 protocol,
                 metrics,
             }
-            .run(recovered_last_committed, cert_store, gc_depth)
+            .run(
+                recovered_last_committed,
+                recovery_token,
+                cert_store,
+                gc_depth,
+            )
             .await
             .expect("Failed to run consensus")
         })
@@ -249,6 +255,7 @@ where
     async fn run(
         &mut self,
         recover_last_committed: HashMap<PublicKey, Round>,
+        recovery_token: tokio::sync::oneshot::Sender<()>,
         cert_store: CertificateStore,
         gc_depth: Round,
     ) -> StoreResult<()> {
@@ -262,6 +269,9 @@ where
             gc_depth,
         )
         .await;
+
+        // Signal to the other thread that consensus is ready to begin receiving messages
+        _ = recovery_token.send(());
 
         // Listen to incoming certificates.
         loop {
