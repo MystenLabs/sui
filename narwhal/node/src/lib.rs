@@ -9,25 +9,29 @@ use consensus::{
 };
 
 use crypto::{KeyPair, NetworkKeyPair, PublicKey};
-use executor::{get_restored_consensus_output, ExecutionState, Executor, SubscriberResult};
+use executor::{
+    get_restored_consensus_output, ExecutionState, Executor, ExecutorOutput, SerializedTransaction,
+    SubscriberResult,
+};
 use fastcrypto::traits::{KeyPair as _, VerifyingKey};
 use itertools::Itertools;
-use network::P2pNetwork;
-use primary::{NetworkModel, PayloadToken, Primary, PrimaryChannelMetrics};
+use primary::{BlockCommand, NetworkModel, PayloadToken, Primary, PrimaryChannelMetrics};
 use prometheus::{IntGauge, Registry};
-use std::sync::Arc;
+use std::{fmt::Debug, sync::Arc};
 use storage::{CertificateStore, CertificateToken};
 use store::{
     reopen,
     rocks::{open_cf, DBMap},
     Store,
 };
-use tokio::sync::oneshot;
-use tokio::{sync::watch, task::JoinHandle};
+use tokio::{
+    sync::{mpsc::Sender, watch},
+    task::JoinHandle,
+};
 use tracing::{debug, info};
 use types::{
     metered_channel, Batch, BatchDigest, Certificate, CertificateDigest, ConsensusStore, Header,
-    HeaderDigest, ReconfigureNotification, Round, RoundVoteDigestPair, SequenceNumber,
+    HeaderDigest, ReconfigureNotification, Round, SequenceNumber,
 };
 use worker::{metrics::initialise_metrics, Worker};
 
@@ -37,7 +41,6 @@ pub mod restarter;
 
 /// All the data stores of the node.
 pub struct NodeStorage {
-    pub vote_digest_store: Store<PublicKey, RoundVoteDigestPair>,
     pub header_store: Store<HeaderDigest, Header>,
     pub certificate_store: CertificateStore,
     pub payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
@@ -48,7 +51,6 @@ pub struct NodeStorage {
 
 impl NodeStorage {
     /// The datastore column family names.
-    const VOTES_CF: &'static str = "votes";
     const HEADERS_CF: &'static str = "headers";
     const CERTIFICATES_CF: &'static str = "certificates";
     const CERTIFICATE_ID_BY_ROUND_CF: &'static str = "certificate_id_by_round";
@@ -64,7 +66,6 @@ impl NodeStorage {
             store_path,
             None,
             &[
-                Self::VOTES_CF,
                 Self::HEADERS_CF,
                 Self::CERTIFICATES_CF,
                 Self::CERTIFICATE_ID_BY_ROUND_CF,
@@ -78,7 +79,6 @@ impl NodeStorage {
         .expect("Cannot open database");
 
         let (
-            votes_map,
             header_map,
             certificate_map,
             certificate_id_by_round_map,
@@ -88,7 +88,6 @@ impl NodeStorage {
             sequence_map,
             temp_batch_map,
         ) = reopen!(&rocksdb,
-            Self::VOTES_CF;<PublicKey, RoundVoteDigestPair>,
             Self::HEADERS_CF;<HeaderDigest, Header>,
             Self::CERTIFICATES_CF;<CertificateDigest, Certificate>,
             Self::CERTIFICATE_ID_BY_ROUND_CF;<(Round, CertificateDigest), CertificateToken>,
@@ -99,7 +98,6 @@ impl NodeStorage {
             Self::TEMP_BATCH_CF;<(CertificateDigest, BatchDigest), Batch>
         );
 
-        let vote_digest_store = Store::new(votes_map);
         let header_store = Store::new(header_map);
         let certificate_store = CertificateStore::new(certificate_map, certificate_id_by_round_map);
         let payload_store = Store::new(payload_map);
@@ -108,7 +106,6 @@ impl NodeStorage {
         let temp_batch_store = Store::new(temp_batch_map);
 
         Self {
-            vote_digest_store,
             header_store,
             certificate_store,
             payload_store,
@@ -148,11 +145,15 @@ impl Node {
         internal_consensus: bool,
         // The state used by the client to execute transactions.
         execution_state: Arc<State>,
+        // A channel to output transactions execution confirmations.
+        tx_confirmation: Sender<ExecutorOutput<State>>,
         // A prometheus exporter Registry to use for the metrics
         registry: &Registry,
     ) -> SubscriberResult<Vec<JoinHandle<()>>>
     where
         State: ExecutionState + Send + Sync + 'static,
+        State::Outcome: Send + 'static,
+        State::Error: Debug,
     {
         let initial_committee = ReconfigureNotification::NewEpoch((**committee.load()).clone());
         let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
@@ -186,7 +187,7 @@ impl Node {
         // Compute the public key of this authority.
         let name = keypair.public().clone();
         let mut handles = Vec::new();
-        let (rx_executor_network, tx_executor_network) = oneshot::channel();
+
         let (dag, network_model) = if !internal_consensus {
             debug!("Consensus is disabled: the primary will run w/o Tusk");
             let consensus_metrics = Arc::new(ConsensusMetrics::new(registry));
@@ -196,10 +197,8 @@ impl Node {
 
             (Some(Arc::new(dag)), NetworkModel::Asynchronous)
         } else {
+            let (tx_recovery_token, tr_recovery_token) = tokio::sync::oneshot::channel();
             let consensus_handles = Self::spawn_consensus(
-                name.clone(),
-                tx_executor_network,
-                worker_cache.clone(),
                 committee.clone(),
                 store,
                 parameters.clone(),
@@ -207,9 +206,25 @@ impl Node {
                 &tx_reconfigure,
                 rx_new_certificates,
                 tx_consensus.clone(),
+                tx_confirmation,
+                tx_get_block_commands.clone(),
                 registry,
+                tx_recovery_token,
             )
             .await?;
+            // Ensure that the primary is spawned only after the consensus is fully recovered.
+            // so that consensus is guaranteed to in a state where it can process messages it
+            // receives from the primary when the primary starts up.
+            // todo: loop and log when recovered
+            loop {
+                tokio::select! {
+                    _ = tr_recovery_token => {
+                        info!("Consensus component has signaled that it is ready for messages");
+                        break;
+                    }
+                }
+            }
+
             handles.extend(consensus_handles);
             (None, NetworkModel::PartiallySynchronous)
         };
@@ -240,7 +255,6 @@ impl Node {
             store.header_store.clone(),
             store.certificate_store.clone(),
             store.payload_store.clone(),
-            store.vote_digest_store.clone(),
             tx_new_certificates,
             /* rx_consensus */ rx_consensus,
             tx_get_block_commands,
@@ -250,7 +264,6 @@ impl Node {
             tx_reconfigure,
             tx_consensus,
             registry,
-            Some(rx_executor_network),
         );
         handles.extend(primary_handles);
 
@@ -276,22 +289,26 @@ impl Node {
 
     /// Spawn the consensus core and the client executing transactions.
     async fn spawn_consensus<State>(
-        name: PublicKey,
-        network: oneshot::Receiver<P2pNetwork>,
-        worker_cache: SharedWorkerCache,
-
         committee: SharedCommittee,
         store: &NodeStorage,
         parameters: Parameters,
-        execution_state: State,
+        execution_state: Arc<State>,
         tx_reconfigure: &watch::Sender<ReconfigureNotification>,
         rx_new_certificates: metered_channel::Receiver<Certificate>,
         tx_feedback: metered_channel::Sender<Certificate>,
+        tx_confirmation: Sender<(
+            SubscriberResult<<State as ExecutionState>::Outcome>,
+            SerializedTransaction,
+        )>,
+        tx_get_block_commands: metered_channel::Sender<BlockCommand>,
         registry: &Registry,
+        tx_recovery_token: tokio::sync::oneshot::Sender<()>,
     ) -> SubscriberResult<Vec<JoinHandle<()>>>
     where
         PublicKey: VerifyingKey,
         State: ExecutionState + Send + Sync + 'static,
+        State::Outcome: Send + 'static,
+        State::Error: Debug,
     {
         let consensus_metrics = Arc::new(ConsensusMetrics::new(registry));
         let channel_metrics = ChannelMetrics::new(registry);
@@ -303,7 +320,7 @@ impl Node {
         let restored_consensus_output = get_restored_consensus_output(
             store.consensus_store.clone(),
             store.certificate_store.clone(),
-            &execution_state,
+            execution_state.clone(),
         )
         .await?
         .into_iter()
@@ -327,6 +344,7 @@ impl Node {
             store.consensus_store.clone(),
             parameters.gc_depth,
         );
+
         let consensus_handles = Consensus::spawn(
             (**committee.load()).clone(),
             store.consensus_store.clone(),
@@ -338,21 +356,22 @@ impl Node {
             ordering_engine,
             consensus_metrics.clone(),
             parameters.gc_depth,
+            tx_recovery_token,
         );
 
         // Spawn the client executing the transactions. It can also synchronize with the
         // subscriber handler if it missed some transactions.
         let executor_handles = Executor::spawn(
-            name,
-            network,
-            worker_cache,
-            (**committee.load()).clone(),
+            store.temp_batch_store.clone(),
             execution_state,
             tx_reconfigure,
             /* rx_consensus */ rx_sequence,
+            /* tx_output */ tx_confirmation,
+            tx_get_block_commands,
             registry,
             restored_consensus_output,
-        )?;
+        )
+        .await?;
 
         Ok(executor_handles
             .into_iter()
