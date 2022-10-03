@@ -2,17 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Plausible from 'plausible-tracker';
+import Browser from 'webextension-polyfill';
 
-// NOTE: The url of Sui wallet Chrome extension:
-// https://chrome.google.com/webstore/detail/sui-wallet/opcgpfmipidbgpenhmajoajpbobppdil
-const WALLET_URL = 'chrome-extension://opcgpfmipidbgpenhmajoajpbobppdil';
+const WALLET_URL = Browser.runtime.getURL('').slice(0, -1);
 
-const PLAUSIBLE_ENABLED = process.env.NODE_ENV !== 'development';
+const PLAUSIBLE_ENABLED = true || process.env.NODE_ENV === 'production';
 
 const plausible = Plausible({
     domain: WALLET_URL,
 });
 
+// Plausible's outbound link tracking works by inspecting the document, which doesn't exist in every context.
 if (PLAUSIBLE_ENABLED && typeof document !== 'undefined') {
     plausible.enableAutoOutboundTracking();
 }
