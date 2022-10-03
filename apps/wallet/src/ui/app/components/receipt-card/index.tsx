@@ -61,18 +61,21 @@ function ReceiptCard({ txDigest }: TxResponseProps) {
             txName: 'Minted',
             transfer: false,
             address: false,
+            addressTruncate: false,
             failedMsg: 'Failed to Mint',
         },
         Sent: {
             txName: 'Sent',
             transfer: 'To',
-            address: toAddrStr,
+            addressTruncate: toAddrStr,
+            address: txDigest.to,
             failedMsg: 'Failed to Send',
         },
         Received: {
             txName: 'Received',
             transfer: 'From',
-            address: fromAddrStr,
+            addressTruncate: fromAddrStr,
+            address: txDigest.from,
             failedMsg: '',
         },
     };
@@ -148,13 +151,30 @@ function ReceiptCard({ txDigest }: TxResponseProps) {
                                 {transferMeta[transferType].transfer}
                             </div>
                             <div className={cl(st.value, st.walletaddress)}>
-                                {transferMeta[transferType].address}
+                                <ExplorerLink
+                                    type={ExplorerLinkType.address}
+                                    address={
+                                        transferMeta[transferType]
+                                            .address as string
+                                    }
+                                    title="View on Sui Explorer"
+                                    className={st['explorer-link']}
+                                    showIcon={false}
+                                >
+                                    {transferMeta[transferType].addressTruncate}
+                                </ExplorerLink>
                             </div>
                         </div>
                     )}
 
                     {txDigest.txGas && (
-                        <div className={st.txFees}>
+                        <div
+                            className={cl(
+                                st.txFees,
+                                st.txnItem,
+                                txDigest.isSender && st.noBorder
+                            )}
+                        >
                             <div className={st.label}>Gas Fees</div>
                             <div className={st.value}>
                                 {txDigest.txGas} {GAS_SYMBOL}
@@ -162,8 +182,8 @@ function ReceiptCard({ txDigest }: TxResponseProps) {
                         </div>
                     )}
 
-                    {txDigest.amount && (
-                        <div className={st.txFees}>
+                    {txDigest.amount && txDigest.isSender && (
+                        <div className={cl(st.txFees, st.txnItem)}>
                             <div className={st.txInfoLabel}>Total Amount</div>
                             <div className={st.walletInfoValue}>
                                 {intl.formatNumber(

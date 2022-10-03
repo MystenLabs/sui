@@ -28,6 +28,10 @@ function ReceiptPage() {
         ({ txresults }) => txresults.latestTx
     );
 
+    const loading: boolean = useAppSelector(
+        ({ txresults }) => txresults.loading
+    );
+
     useEffect(() => {
         dispatch(getTransactionsByAddress()).unwrap();
     }, [dispatch]);
@@ -45,7 +49,7 @@ function ReceiptPage() {
         navigate(linkTo);
     }, [linkTo, navigate]);
 
-    if (!txDigest && txResults && !txnItem) {
+    if ((!txDigest && !txnItem) || (!loading && !txResults.length)) {
         return <Navigate to={linkTo} replace={true} />;
     }
 

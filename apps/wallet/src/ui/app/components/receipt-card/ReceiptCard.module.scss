@@ -1,6 +1,13 @@
 @use '_utils';
 @use '_values/colors';
 
+.walletaddress {
+    a {
+        color: colors.$sui-dark-blue;
+        @include utils.typography('mono-type');
+    }
+}
+
 .txn-response {
     display: block;
     position: relative;
@@ -72,6 +79,10 @@
 
     > div:not(:last-child) {
         border-bottom: 1px solid #9c9fa433;
+    }
+
+    .no-border {
+        border-bottom: 0;
     }
 
     .status {
