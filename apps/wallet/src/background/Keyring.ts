@@ -22,12 +22,7 @@ const STORAGE_KEY = 'vault';
 class Keyring {
     #events = new EventEmitter();
     #locked = true;
-    #encryptedMnemonic: Promise<string | null>;
     #keypair: Keypair | null = null;
-
-    constructor() {
-        this.#encryptedMnemonic = this.loadMnemonic();
-    }
 
     // Creates a new mnemonic and saves it to storage encrypted
     public async createMnemonic(password: string) {
@@ -41,7 +36,6 @@ class Keyring {
             Buffer.from(generateMnemonic(), 'utf8')
         );
         await this.storeEncryptedMnemonic(encryptedMnemonic);
-        this.#encryptedMnemonic = Promise.resolve(encryptedMnemonic);
     }
 
     public lock() {
@@ -63,13 +57,12 @@ class Keyring {
     }
 
     public async clearMnemonic() {
-        this.#encryptedMnemonic = Promise.resolve(null);
         await this.storeEncryptedMnemonic(null);
         this.lock();
     }
 
     public async isWalletInitialized() {
-        return !!(await this.#encryptedMnemonic);
+        return !!(await this.loadMnemonic());
     }
 
     public get isLocked() {
@@ -117,7 +110,7 @@ class Keyring {
     }
 
     private async decryptMnemonic(password: string) {
-        const encryptedMnemonic = await this.#encryptedMnemonic;
+        const encryptedMnemonic = await this.loadMnemonic();
         if (!encryptedMnemonic) {
             throw new Error(
                 'Mnemonic is not initialized. Create a new one first.'
