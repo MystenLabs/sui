@@ -34,6 +34,16 @@ use tokio::time::{sleep, Duration};
 use tracing::debug;
 use tracing::info;
 
+pub fn make_publish_package(gas_object: Object, path: PathBuf) -> Transaction {
+    let (sender, keypair) = test_account_keys().pop().unwrap();
+    create_publish_move_package_transaction(
+        gas_object.compute_object_reference(),
+        path,
+        sender,
+        &keypair,
+    )
+}
+
 pub async fn publish_package(
     gas_object: Object,
     path: PathBuf,
@@ -48,14 +58,7 @@ pub async fn publish_package_for_effects(
     path: PathBuf,
     configs: &[ValidatorInfo],
 ) -> TransactionEffects {
-    let (sender, keypair) = test_account_keys().pop().unwrap();
-    let transaction = create_publish_move_package_transaction(
-        gas_object.compute_object_reference(),
-        path,
-        sender,
-        &keypair,
-    );
-    submit_single_owner_transaction(transaction, configs).await
+    submit_single_owner_transaction(make_publish_package(gas_object, path), configs).await
 }
 
 /// Helper function to publish the move package of a simple shared counter.
