@@ -48,7 +48,7 @@ async fn test_start_epoch_change() {
 
     // Set the checkpoint number to be near the end of epoch.
 
-    let checkpoints = state.checkpoints.as_ref().unwrap();
+    let checkpoints = &state.checkpoints;
     checkpoints
         .lock()
         .set_locals_for_testing(CheckpointLocals {
@@ -193,8 +193,6 @@ async fn test_finish_epoch_change() {
                 };
                 state
                     .checkpoints
-                    .as_ref()
-                    .unwrap()
                     .lock()
                     .set_locals_for_testing(locals.clone())
                     .unwrap();
@@ -204,8 +202,6 @@ async fn test_finish_epoch_change() {
                 locals.next_checkpoint += 1;
                 state
                     .checkpoints
-                    .as_ref()
-                    .unwrap()
                     .lock()
                     .set_locals_for_testing(locals.clone())
                     .unwrap();

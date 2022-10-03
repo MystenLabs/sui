@@ -24,7 +24,7 @@ function TransactionsPage() {
 
     return txByAddress && txByAddress.length ? (
         <div className={st.container}>
-            <PageTitle title="Activity" className={st.pageTitle} />
+            <PageTitle title="Your Activity" />
             <Content>
                 <section className={st.txContent}>
                     {txByAddress.map((txn) => (

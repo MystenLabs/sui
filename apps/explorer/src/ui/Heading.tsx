@@ -13,12 +13,12 @@ const headingStyles = cva(
     {
         variants: {
             variant: {
-                heading1: 'text-h1',
-                heading2: 'text-h2',
-                heading3: 'text-h3',
-                heading4: 'text-h4',
-                heading5: 'text-h5',
-                heading6: 'text-h6',
+                heading1: 'text-heading1',
+                heading2: 'text-heading2',
+                heading3: 'text-heading3',
+                heading4: 'text-heading4',
+                heading5: 'text-heading5',
+                heading6: 'text-heading6',
             },
             weight: {
                 medium: 'font-medium',

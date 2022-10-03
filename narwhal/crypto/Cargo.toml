@@ -1,0 +1,57 @@
+[package]
+name = "narwhal-crypto"
+version = "0.1.0"
+license = "Apache-2.0"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+edition = "2021"
+publish = false
+
+[dependencies]
+ark-bls12-377 = { version = "0.3.0", features = ["std"], optional = true }
+base64ct = { version = "1.5.2", features = ["alloc"] }
+ed25519-consensus = { version = "2.0.1", features = ["serde"] }
+eyre = "0.6.8"
+hex = "0.4.3"
+hkdf = { version = "0.12.3", features = ["std"] }
+rand = { version = "0.8.5", features = ["std"] }
+rust_secp256k1 = { version = "0.24.0", package = "secp256k1", features = ["recovery", "rand-std", "bitcoin_hashes", "global-context"] }
+serde = { version = "1.0.144", features = ["derive"] }
+serde_bytes = "0.11.7"
+serde_with = "2.0.1"
+signature = "1.6.1"
+tokio = { version = "1.20.1", features = ["sync", "rt", "macros"] }
+zeroize = "1.5.7"
+bulletproofs = "4.0.0"
+curve25519-dalek-ng = "4.1.1"
+merlin = "3.0.0"
+
+# TODO: switch to https://github.com/celo-org/celo-bls-snark-rs
+# when https://github.com/celo-org/celo-bls-snark-rs/issues/228 is solved
+celo-bls = { git = "https://github.com/huitseeker/celo-bls-snark-rs", branch = "updates-2", package = "bls-crypto", optional = true }
+fastcrypto = { version = "0.1.2", features = ["copy_key"] }
+
+ark-ec = { version = "0.3.0", features = ["std"], optional = true }
+ark-ff = { version = "0.3.0", features = ["std"], optional = true }
+ark-serialize = { version = "0.3.0", features = ["std"], optional = true }
+ark-std = { version = "0.3.0", features = ["std"], optional = true }
+blake2 = "0.9"
+blst = "0.3.10"
+digest = "0.10.3"
+once_cell = "1.14.0"
+readonly = "0.2.2"
+workspace-hack.workspace = true
+
+[features]
+default = []
+celo = ["ark-ec", "ark-ff", "ark-serialize", "ark-bls12-377", "ark-std", "celo-bls"]
+
+[dev-dependencies]
+bincode = "1.3.3"
+criterion = "0.3.6"
+hex-literal = "0.3.4"
+k256 = { version = "0.11.5", features = ["ecdsa", "sha256", "keccak256"] }
+proptest = "1.0.0"
+proptest-derive = "0.3.0"
+serde_json = "1.0.85"
+sha3 = "0.10.5"
+serde-reflection = "0.3.6"

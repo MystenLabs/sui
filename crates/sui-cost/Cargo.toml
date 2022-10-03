@@ -7,7 +7,7 @@ publish = false
 edition = "2021"
 
 [dependencies]
-workspace-hack = { path = "../workspace-hack"}
+workspace-hack.workspace = true
 sui-types = {path = "../sui-types"}
 anyhow = { version = "1.0.64", features = ["backtrace"] }
 tokio = { version = "1.20.1", features = ["full"] }

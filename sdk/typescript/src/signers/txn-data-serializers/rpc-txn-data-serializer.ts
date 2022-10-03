@@ -11,6 +11,7 @@ import {
   SplitCoinTransaction,
   TransferObjectTransaction,
   TransferSuiTransaction,
+  PayTransaction,
   PublishTransaction,
   TxnDataSerializer,
 } from './txn-data-serializer';
@@ -72,6 +73,30 @@ export class RpcTxnDataSerializer implements TxnDataSerializer {
       return new Base64DataBuffer(resp.txBytes);
     } catch (err) {
       throw new Error(`Error transferring Sui coin: ${err} with args ${t}`);
+    }
+  }
+
+  async newPay(
+    signerAddress: SuiAddress,
+    t: PayTransaction
+  ): Promise<Base64DataBuffer> {
+    try {
+      const resp = await this.client.requestWithType(
+        'sui_pay',
+        [
+          signerAddress,
+          t.inputCoins,
+          t.recipients,
+          t.amounts,
+          t.gasPayment,
+          t.gasBudget,
+        ],
+        isTransactionBytes,
+        this.skipDataValidation
+      );
+      return new Base64DataBuffer(resp.txBytes);
+    } catch (err) {
+      throw new Error(`Error executing Pay transaction: ${err} with args ${t}`);
     }
   }
 

@@ -7,14 +7,13 @@ import {
     type TransactionKindName,
 } from '@mysten/sui.js';
 import * as Sentry from '@sentry/react';
-import cl from 'classnames';
+import cl from 'clsx';
 import { useEffect, useState, useContext, useCallback } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 
 import { ReactComponent as ArrowRight } from '../../assets/SVGIcons/12px/ArrowRight.svg';
 import TableCard from '../../components/table/TableCard';
 import TabFooter from '../../components/tabs/TabFooter';
-import Tabs from '../../components/tabs/Tabs';
 import { NetworkContext } from '../../context';
 import theme from '../../styles/theme.module.css';
 import {
@@ -32,6 +31,8 @@ import {
 } from './TxCardUtils';
 
 import styles from './RecentTxCard.module.css';
+
+import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 
 const TRUNCATE_LENGTH = 10;
 const NUMBER_OF_TX_PER_PAGE = 20;
@@ -212,7 +213,6 @@ function LatestTxCard({ ...data }: RecentTx) {
         return <ErrorResult id="" errorMsg="No Transactions Found" />;
     }
 
-    const defaultActiveTab = 0;
     const recentTx = genTableDataFromTxData(results.latestTx, truncateLength);
 
     const stats = {
@@ -240,13 +240,18 @@ function LatestTxCard({ ...data }: RecentTx) {
 
     return (
         <div className={cl(styles.txlatestresults, styles[paginationtype])}>
-            <Tabs selected={defaultActiveTab}>
-                <div title="Transactions">
-                    <TableCard tabledata={recentTx} />
-                    {paginationtype !== 'none' &&
-                        PaginationWithStatsOrStatsWithLink}
-                </div>
-            </Tabs>
+            <TabGroup size="lg">
+                <TabList>
+                    <Tab>Transactions</Tab>
+                </TabList>
+                <TabPanels>
+                    <TabPanel>
+                        <TableCard tabledata={recentTx} />
+                        {paginationtype !== 'none' &&
+                            PaginationWithStatsOrStatsWithLink}
+                    </TabPanel>
+                </TabPanels>
+            </TabGroup>
         </div>
     );
 }

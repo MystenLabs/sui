@@ -1,6 +1,6 @@
 [package]
 name = "sui"
-version = "0.9.0"
+version = "0.10.0"
 authors = ["Mysten Labs <build@mystenlabs.com>"]
 license = "Apache-2.0"
 publish = false
@@ -43,7 +43,7 @@ typed-store.workspace = true
 typed-store-derive.workspace = true
 
 tempfile = "3.3.0"
-narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "9688da76ae2aaf2b82e00a43efe4d66c5b7b07eb" }
+narwhal-executor = { path = "../../narwhal/executor" }
 
 move-core-types.workspace = true
 move-prover.workspace = true
@@ -52,7 +52,7 @@ move-unit-test.workspace = true
 move-cli.workspace = true
 move-package.workspace = true
 
-workspace-hack = { path = "../workspace-hack" }
+workspace-hack.workspace = true
 multiaddr = "0.14.0"
 hex = "0.4.3"
 

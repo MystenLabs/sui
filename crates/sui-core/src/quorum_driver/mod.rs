@@ -16,13 +16,13 @@ use crate::authority_aggregator::AuthorityAggregator;
 use crate::authority_client::AuthorityAPI;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{
-    CertifiedTransaction, CertifiedTransactionEffects, ExecuteTransactionRequest,
-    ExecuteTransactionRequestType, ExecuteTransactionResponse, Transaction,
+    CertifiedTransaction, CertifiedTransactionEffects, QuorumDriverRequest,
+    QuorumDriverRequestType, QuorumDriverResponse, Transaction,
 };
 pub enum QuorumTask<A> {
     ProcessTransaction(Transaction),
     ProcessCertificate(CertifiedTransaction),
-    UpdateCommittee(AuthorityAggregator<A>),
+    UpdateCommittee(Arc<AuthorityAggregator<A>>),
 }
 
 /// A handler to wrap around QuorumDriver. This handler should be owned by the node with exclusive
@@ -50,7 +50,7 @@ pub struct QuorumDriver<A> {
 
 impl<A> QuorumDriver<A> {
     pub fn new(
-        validators: AuthorityAggregator<A>,
+        validators: Arc<AuthorityAggregator<A>>,
         task_sender: Sender<QuorumTask<A>>,
         effects_subscribe_sender: tokio::sync::broadcast::Sender<(
             CertifiedTransaction,
@@ -59,7 +59,7 @@ impl<A> QuorumDriver<A> {
         metrics: QuorumDriverMetrics,
     ) -> Self {
         Self {
-            validators: ArcSwap::from(Arc::new(validators)),
+            validators: ArcSwap::from(validators),
             task_sender,
             effects_subscribe_sender,
             metrics,
@@ -73,21 +73,21 @@ where
 {
     pub async fn execute_transaction(
         &self,
-        request: ExecuteTransactionRequest,
-    ) -> SuiResult<ExecuteTransactionResponse> {
+        request: QuorumDriverRequest,
+    ) -> SuiResult<QuorumDriverResponse> {
         let tx_digest = request.transaction.digest();
-        debug!("Receive tranasction execution request {tx_digest:?}");
+        debug!(?tx_digest, "Receive tranasction execution request");
         self.metrics.current_requests_in_flight.inc();
         let _metrics_guard = scopeguard::guard(self.metrics.clone(), |metrics| {
             metrics.current_requests_in_flight.dec();
         });
 
-        let ExecuteTransactionRequest {
+        let QuorumDriverRequest {
             transaction,
             request_type,
         } = request;
         let (ok_metric, result) = match request_type {
-            ExecuteTransactionRequestType::ImmediateReturn => {
+            QuorumDriverRequestType::ImmediateReturn => {
                 self.metrics.total_requests_immediate_return.inc();
                 let _timer = self.metrics.latency_sec_immediate_return.start_timer();
 
@@ -95,7 +95,7 @@ where
 
                 (&self.metrics.total_ok_responses_immediate_return, res)
             }
-            ExecuteTransactionRequestType::WaitForTxCert => {
+            QuorumDriverRequestType::WaitForTxCert => {
                 self.metrics.total_requests_wait_for_tx_cert.inc();
                 let _timer = self.metrics.latency_sec_wait_for_tx_cert.start_timer();
 
@@ -103,7 +103,7 @@ where
 
                 (&self.metrics.total_ok_responses_wait_for_tx_cert, res)
             }
-            ExecuteTransactionRequestType::WaitForEffectsCert => {
+            QuorumDriverRequestType::WaitForEffectsCert => {
                 self.metrics.total_requests_wait_for_effects_cert.inc();
                 let _timer = self.metrics.latency_sec_wait_for_effects_cert.start_timer();
 
@@ -123,20 +123,20 @@ where
     async fn execute_transaction_immediate_return(
         &self,
         transaction: Transaction,
-    ) -> SuiResult<ExecuteTransactionResponse> {
+    ) -> SuiResult<QuorumDriverResponse> {
         self.task_sender
             .send(QuorumTask::ProcessTransaction(transaction))
             .await
             .map_err(|err| SuiError::QuorumDriverCommunicationError {
                 error: err.to_string(),
             })?;
-        Ok(ExecuteTransactionResponse::ImmediateReturn)
+        Ok(QuorumDriverResponse::ImmediateReturn)
     }
 
     async fn execute_transaction_wait_for_tx_cert(
         &self,
         transaction: Transaction,
-    ) -> SuiResult<ExecuteTransactionResponse> {
+    ) -> SuiResult<QuorumDriverResponse> {
         let certificate = self
             .process_transaction(transaction)
             .instrument(tracing::debug_span!("process_tx"))
@@ -147,13 +147,13 @@ where
             .map_err(|err| SuiError::QuorumDriverCommunicationError {
                 error: err.to_string(),
             })?;
-        Ok(ExecuteTransactionResponse::TxCert(Box::new(certificate)))
+        Ok(QuorumDriverResponse::TxCert(Box::new(certificate)))
     }
 
     async fn execute_transaction_wait_for_effects_cert(
         &self,
         transaction: Transaction,
-    ) -> SuiResult<ExecuteTransactionResponse> {
+    ) -> SuiResult<QuorumDriverResponse> {
         let certificate = self
             .process_transaction(transaction)
             .instrument(tracing::debug_span!("process_tx"))
@@ -162,7 +162,7 @@ where
             .process_certificate(certificate)
             .instrument(tracing::debug_span!("process_cert"))
             .await?;
-        Ok(ExecuteTransactionResponse::EffectsCert(Box::new(response)))
+        Ok(QuorumDriverResponse::EffectsCert(Box::new(response)))
     }
 
     pub async fn process_transaction(
@@ -200,7 +200,7 @@ impl<A> QuorumDriverHandler<A>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
-    pub fn new(validators: AuthorityAggregator<A>, metrics: QuorumDriverMetrics) -> Self {
+    pub fn new(validators: Arc<AuthorityAggregator<A>>, metrics: QuorumDriverMetrics) -> Self {
         let (task_tx, task_rx) = mpsc::channel::<QuorumTask<A>>(5000);
         let (subscriber_tx, subscriber_rx) = tokio::sync::broadcast::channel::<_>(100);
         let quorum_driver = Arc::new(QuorumDriver::new(
@@ -232,7 +232,10 @@ where
         self.effects_subscriber.resubscribe()
     }
 
-    pub async fn update_validators(&self, new_validators: AuthorityAggregator<A>) -> SuiResult {
+    pub async fn update_validators(
+        &self,
+        new_validators: Arc<AuthorityAggregator<A>>,
+    ) -> SuiResult {
         self.quorum_driver
             .task_sender
             .send(QuorumTask::UpdateCommittee(new_validators))
@@ -246,6 +249,8 @@ where
         quorum_driver: Arc<QuorumDriver<A>>,
         mut task_receiver: Receiver<QuorumTask<A>>,
     ) {
+        // TODO https://github.com/MystenLabs/sui/issues/4565
+        // spawn a tokio task for each job for higher concurrency
         loop {
             if let Some(task) = task_receiver.recv().await {
                 match task {
@@ -283,7 +288,7 @@ where
                         }
                     }
                     QuorumTask::UpdateCommittee(new_validators) => {
-                        quorum_driver.validators.store(Arc::new(new_validators));
+                        quorum_driver.validators.store(new_validators);
                     }
                 }
             }

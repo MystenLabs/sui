@@ -24,12 +24,18 @@ module.exports = {
                 captionSmall: ['11px', '1'],
 
                 // Heading sizes:
-                h1: ['28px', '0.8'],
-                h2: ['24px', '0.8'],
-                h3: ['20px', '1'],
-                h4: ['18px', '1'],
-                h5: ['17px', '1'],
-                h6: ['16px', '1'],
+                heading1: ['28px', '0.8'],
+                heading2: ['24px', '0.8'],
+                heading3: ['20px', '1'],
+                heading4: ['18px', '1'],
+                heading5: ['17px', '1'],
+                heading6: ['16px', '1'],
+
+                // Paragraph sizes:
+                p1: ['14px', '1.3'],
+                p2: ['13px', '1.3'],
+                p3: ['12px', '1.3'],
+                p4: ['11px', '1.3'],
             },
             fontFamily: {
                 sans: ['Inter', ...defaultTheme.fontFamily.sans],
@@ -40,6 +46,12 @@ module.exports = {
                     dark: '#1F6493',
                     DEFAULT: '#6fbcf0',
                     light: '#E1F3FF',
+                    steel: {
+                        DEFAULT: '#A0B6C3',
+                        dark: '#758F9E',
+                        darker: '#627885',
+                    },
+                    // TODO: Replace default gray palette with this:
                     grey: {
                         100: '#182435',
                         95: '#2A3645',
@@ -56,21 +68,27 @@ module.exports = {
                         40: '#F7F8F8',
                         35: '#FEFEFE',
                     },
-                    blue: {
-                        steel: '#A0B6C3',
-                    },
                 },
                 issue: {
+                    DEFAULT: '#FF794B',
                     dark: '#EB5A29',
                     light: '#FFECE5',
                 },
+                hero: {
+                    DEFAULT: '#0284AD',
+                    dark: '#007195',
+                },
                 success: {
-                    dark: '#008C65',
                     DEFAULT: '#2DD7A7',
+                    dark: '#008C65',
                     light: '#D5F7EE',
                 },
-                cardDark: '#F3F4F5',
-                header: '#2A4362',
+                warning: {
+                    DEFAULT: '#F2BD24',
+                    dark: '#8D6E15',
+                    light: '#FFF8E2',
+                },
+                headerNav: '#2A4362',
                 search: {
                     fill: '#162A43',
                 },
@@ -79,5 +97,5 @@ module.exports = {
             },
         },
     },
-    plugins: [],
+    plugins: [require('@headlessui/tailwindcss')],
 };

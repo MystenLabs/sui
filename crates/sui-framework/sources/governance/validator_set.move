@@ -166,7 +166,7 @@ module sui::validator_set {
         self: &mut ValidatorSet,
         delegation: &mut Delegation,
         staked_sui: &mut StakedSui,
-        withdraw_amount: u64,
+        withdraw_pool_token_amount: u64,
         ctx: &mut TxContext,
     ) {
         let validator_address = staking_pool::validator_address(delegation);
@@ -176,7 +176,7 @@ module sui::validator_set {
         
         let validator_index = option::extract(&mut validator_index_opt);
         let validator = vector::borrow_mut(&mut self.active_validators, validator_index);
-        validator::request_withdraw_delegation(validator, delegation, staked_sui, withdraw_amount, ctx);
+        validator::request_withdraw_delegation(validator, delegation, staked_sui, withdraw_pool_token_amount, ctx);
         self.next_epoch_validators = derive_next_epoch_validators(self);
     }
 

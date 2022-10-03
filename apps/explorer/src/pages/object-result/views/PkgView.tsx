@@ -2,13 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 import Longtext from '../../../components/longtext/Longtext';
 import ModulesWrapper from '../../../components/module/ModulesWrapper';
-import Tabs from '../../../components/tabs/Tabs';
 import TxForID from '../../../components/transaction-card/TxForID';
 import { getOwnerStr } from '../../../utils/objectUtils';
 import { trimStdLibPrefix } from '../../../utils/stringUtils';
 import { type DataType } from '../ObjectResultType';
 
 import styles from './ObjectView.module.css';
+
+import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 
 function PkgView({ data }: { data: DataType }) {
     const viewedData = {
@@ -29,49 +30,59 @@ function PkgView({ data }: { data: DataType }) {
         .filter(([key, _]) => key !== 'name')
         .filter(([_, value]) => checkIsPropertyType(value));
 
-    const defaultactivetab = 0;
-
     return (
         <div>
             <div>
-                <Tabs selected={defaultactivetab}>
-                    <table
-                        title="Details"
-                        className={styles.description}
-                        id="descriptionResults"
-                    >
-                        <tbody>
-                            <tr>
-                                <td>Object ID</td>
-                                <td id="objectID" className={styles.objectid}>
-                                    <Longtext
-                                        text={viewedData.id}
-                                        category="objects"
-                                        isLink={false}
-                                    />
-                                </td>
-                            </tr>
+                <TabGroup size="lg">
+                    <TabList>
+                        <Tab>Details</Tab>
+                    </TabList>
+                    <TabPanels>
+                        <TabPanel>
+                            <table
+                                className={styles.description}
+                                id="descriptionResults"
+                            >
+                                <tbody>
+                                    <tr>
+                                        <td>Object ID</td>
+                                        <td
+                                            id="objectID"
+                                            className={styles.objectid}
+                                        >
+                                            <Longtext
+                                                text={viewedData.id}
+                                                category="objects"
+                                                isLink={false}
+                                            />
+                                        </td>
+                                    </tr>
 
-                            <tr>
-                                <td>Version</td>
-                                <td>{viewedData.version}</td>
-                            </tr>
+                                    <tr>
+                                        <td>Version</td>
+                                        <td>{viewedData.version}</td>
+                                    </tr>
 
-                            {viewedData?.publisherAddress && (
-                                <tr>
-                                    <td>Publisher</td>
-                                    <td id="lasttxID">
-                                        <Longtext
-                                            text={viewedData.publisherAddress}
-                                            category="addresses"
-                                            isLink={!isPublisherGenesis}
-                                        />
-                                    </td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
-                </Tabs>
+                                    {viewedData?.publisherAddress && (
+                                        <tr>
+                                            <td>Publisher</td>
+                                            <td id="lasttxID">
+                                                <Longtext
+                                                    text={
+                                                        viewedData.publisherAddress
+                                                    }
+                                                    category="addresses"
+                                                    isLink={!isPublisherGenesis}
+                                                />
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </TabPanel>
+                    </TabPanels>
+                </TabGroup>
+
                 <ModulesWrapper
                     id={data.id}
                     data={{

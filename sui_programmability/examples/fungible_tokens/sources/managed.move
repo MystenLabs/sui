@@ -18,7 +18,7 @@ module fungible_tokens::managed {
     /// registered once.
     fun init(witness: MANAGED, ctx: &mut TxContext) {
         // Get a treasury cap for the coin and give it to the transaction sender
-        let treasury_cap = coin::create_currency<MANAGED>(witness, ctx);
+        let treasury_cap = coin::create_currency<MANAGED>(witness, 2, ctx);
         transfer::transfer(treasury_cap, tx_context::sender(ctx))
     }
 

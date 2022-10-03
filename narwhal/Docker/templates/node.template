@@ -1,0 +1,40 @@
+  primary_{counter}:
+    build:
+      context: ../../
+      dockerfile: ./Docker/Dockerfile
+    image: narwhal-node:latest
+    environment:
+      - NODE_TYPE=primary
+      - VALIDATOR_ID={counter}
+      - LOG_LEVEL=-vvv
+      - CONSENSUS_DISABLED=--consensus-disabled
+    expose:
+      - "3000" # Port to listen on messages from other primary nodes
+      - "3001" # Port to listen on messages from our worker nodes
+    ports:
+      - "80{counter}:8000" # expose the gRPC port to be publicly accessible
+      - "81{counter}:8010" # expose the port listening to metrics endpoint for prometheus metrics
+    volumes:
+      - .:/validators
+      - ./validator-{counter}/logs:/home/logs
+  worker_{counter}:
+    build:
+      context: ../../
+      dockerfile: ./Docker/Dockerfile
+    depends_on:
+      - primary_{counter}
+    image: narwhal-node:latest
+    environment:
+      - NODE_TYPE=worker
+      - VALIDATOR_ID={counter}
+      - LOG_LEVEL=-vvv
+      - WORKER_ID=0  # ?
+    expose:
+      - "4000" # Port to listen on messages from our primary node
+      - "4001" # Port to listen for transactions from clients
+      - "4002" # Port to listen on messages from other worker nodes
+    ports:
+      - "71{counter}:4001" # expose the port for the worker to accept transactions from clients
+    volumes:
+      - .:/validators
+      - ./validator-{counter}/logs:/home/logs

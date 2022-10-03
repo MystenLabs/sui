@@ -33,9 +33,7 @@ module sui::delegation_tests {
 
             let ctx = test_scenario::ctx(scenario);
 
-            // Create two delegations to VALIDATOR_ADDR_1.
-            sui_system::request_add_delegation(
-                system_state_mut_ref, coin::mint_for_testing(10, ctx), VALIDATOR_ADDR_1, ctx);
+            // Create a delegation to VALIDATOR_ADDR_1.
             sui_system::request_add_delegation(
                 system_state_mut_ref, coin::mint_for_testing(60, ctx), VALIDATOR_ADDR_1, ctx);
 
@@ -45,7 +43,7 @@ module sui::delegation_tests {
             governance_test_utils::advance_epoch(system_state_mut_ref, scenario);
 
             // The amount hasn't changed yet because delegation is not activated
-            assert!(sui_system::validator_delegate_amount(system_state_mut_ref, VALIDATOR_ADDR_1) == 70, 103);
+            assert!(sui_system::validator_delegate_amount(system_state_mut_ref, VALIDATOR_ADDR_1) == 60, 103);
             assert!(sui_system::validator_delegate_amount(system_state_mut_ref, VALIDATOR_ADDR_2) == 0, 104);
             test_scenario::return_shared(scenario, system_state_wrapper);
         };
@@ -54,7 +52,7 @@ module sui::delegation_tests {
         {
             
             let delegation = test_scenario::take_last_created_owned<Delegation>(scenario);
-            assert!(staking_pool::delegation_token_amount(&delegation) == 70, 105);
+            assert!(staking_pool::delegation_token_amount(&delegation) == 60, 105);
 
             let staked_sui = test_scenario::take_last_created_owned<StakedSui>(scenario);
             assert!(staking_pool::staked_sui_amount(&staked_sui) == 60, 105);
@@ -69,16 +67,16 @@ module sui::delegation_tests {
             sui_system::request_withdraw_delegation(
                 system_state_mut_ref, &mut delegation, &mut staked_sui, 40, ctx);
 
-            assert!(staking_pool::delegation_token_amount(&delegation) == 30, 106);
+            assert!(staking_pool::delegation_token_amount(&delegation) == 20, 106);
             test_scenario::return_owned(scenario, delegation);
             assert!(staking_pool::staked_sui_amount(&staked_sui) == 20, 106);
             test_scenario::return_owned(scenario, staked_sui);
 
-            assert!(sui_system::validator_delegate_amount(system_state_mut_ref, VALIDATOR_ADDR_1) == 70, 107);
+            assert!(sui_system::validator_delegate_amount(system_state_mut_ref, VALIDATOR_ADDR_1) == 60, 107);
 
             governance_test_utils::advance_epoch(system_state_mut_ref, scenario);
 
-            assert!(sui_system::validator_delegate_amount(system_state_mut_ref, VALIDATOR_ADDR_1) == 30, 107);
+            assert!(sui_system::validator_delegate_amount(system_state_mut_ref, VALIDATOR_ADDR_1) == 20, 107);
             test_scenario::return_shared(scenario, system_state_wrapper);
         };
     }

@@ -266,4 +266,13 @@ mod tests {
             run_move_unit_tests(&path, BuildConfig::default(), None, false).unwrap();
         }
     }
+
+    #[test]
+    #[cfg_attr(msim, ignore)]
+    fn run_book_examples_move_unit_tests() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../doc/book/examples");
+
+        build_and_verify_package(&path, BuildConfig::default()).unwrap();
+        run_move_unit_tests(&path, BuildConfig::default(), None, false).unwrap();
+    }
 }

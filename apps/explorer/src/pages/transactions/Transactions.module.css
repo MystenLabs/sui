@@ -1,7 +1,3 @@
 div.container {
     @apply mx-auto;
 }
-
-.title {
-    @apply text-2xl font-[700];
-}

@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+// DEPRECATED child count no longer tracked
 // tests that a parent object can be deleted, after it was wrapped in the same txn where it lost its
 // last parent
 

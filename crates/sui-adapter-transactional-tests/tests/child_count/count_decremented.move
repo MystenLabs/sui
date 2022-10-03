@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+// DEPRECATED child count no longer tracked
 // tests various ways of "removing" a child decrements the count
 
 //# init --addresses test=0x0 --accounts A B

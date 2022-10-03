@@ -33,6 +33,7 @@ use tokio::{
 use sui_types::messages_checkpoint::CheckpointRequest;
 use sui_types::messages_checkpoint::CheckpointResponse;
 
+use crate::authority::ConsensusHandler;
 use tracing::{info, Instrument};
 
 #[cfg(test)]
@@ -261,7 +262,8 @@ impl ValidatorService {
         let consensus_committee = config.genesis()?.narwhal_committee().load();
         let consensus_worker_cache = config.genesis()?.narwhal_worker_cache();
         let consensus_storage_base_path = consensus_config.db_path().to_path_buf();
-        let consensus_execution_state = state.clone();
+        let consensus_execution_state = ConsensusHandler::new(state.clone(), tx_consensus_to_sui);
+        let consensus_execution_state = Arc::new(consensus_execution_state);
         let consensus_parameters = consensus_config.narwhal_config().to_owned();
         let network_keypair = config.network_key_pair.copy();
 
@@ -277,7 +279,6 @@ impl ValidatorService {
                 consensus_execution_state,
                 consensus_parameters,
                 rx_reconfigure_consensus,
-                /* tx_output */ tx_consensus_to_sui,
                 &registry,
             )
             .await
@@ -304,27 +305,25 @@ impl ValidatorService {
         );
 
         // Update the checkpoint store with a consensus client.
-        let checkpoint_consensus_handle = if let Some(checkpoint_store) = state.checkpoints() {
-            let (tx_checkpoint_consensus_adapter, rx_checkpoint_consensus_adapter) = channel(1_000);
-            let consensus_sender = CheckpointSender::new(tx_checkpoint_consensus_adapter);
-            checkpoint_store
-                .lock()
-                .set_consensus(Box::new(consensus_sender))?;
+        let (tx_checkpoint_consensus_adapter, rx_checkpoint_consensus_adapter) = channel(1_000);
+        let consensus_sender = CheckpointSender::new(tx_checkpoint_consensus_adapter);
+        state
+            .checkpoints
+            .lock()
+            .set_consensus(Box::new(consensus_sender))?;
 
-            let handle = CheckpointConsensusAdapter::new(
+        let checkpoint_consensus_handle = Some(
+            CheckpointConsensusAdapter::new(
                 /* consensus_address */ consensus_config.address().to_owned(),
                 /* tx_consensus_listener */ tx_sui_to_consensus,
                 rx_checkpoint_consensus_adapter,
-                /* checkpoint_locals */ checkpoint_store,
+                /* checkpoint_locals */ state.checkpoints(),
                 /* retry_delay */ Duration::from_millis(5_000),
                 /* max_pending_transactions */ 10_000,
                 ca_metrics,
             )
-            .spawn();
-            Some(handle)
-        } else {
-            None
-        };
+            .spawn(),
+        );
 
         Ok(Self {
             state,
@@ -401,7 +400,7 @@ impl ValidatorService {
         // 2) Check idempotency
         let tx_digest = certificate.digest();
         if let Some(response) = state
-            .check_tx_already_executed(tx_digest)
+            .get_tx_info_already_executed(tx_digest)
             .await
             .map_err(|e| tonic::Status::internal(e.to_string()))?
         {

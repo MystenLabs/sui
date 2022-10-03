@@ -263,6 +263,23 @@ pub trait RpcTransactionBuilder {
         amount: Option<u64>,
     ) -> RpcResult<TransactionBytes>;
 
+    #[method(name = "pay")]
+    async fn pay(
+        &self,
+        /// the transaction signer's Sui address
+        signer: SuiAddress,
+        /// the Sui coins to be used in this transaction
+        input_coins: Vec<ObjectID>,
+        /// the recipients' addresses, the length of this vector must be the same as amounts.
+        recipients: Vec<SuiAddress>,
+        /// the amounts to be transferred to recipients, following the same order
+        amounts: Vec<u64>,
+        /// gas object to be used in this transaction, the gateway will pick one from the signer's possession if not provided
+        gas: Option<ObjectID>,
+        /// the gas budget, the transaction will fail if the gas cost exceed the budget
+        gas_budget: u64,
+    ) -> RpcResult<TransactionBytes>;
+
     /// Create an unsigned transaction to execute a Move call on the network, by calling the specified function in the module of a given package.
     #[method(name = "moveCall")]
     async fn move_call(
@@ -496,10 +513,23 @@ pub trait EventReadApi {
     ) -> RpcResult<Vec<SuiEventEnvelope>>;
 }
 
-#[open_rpc(namespace = "sui", tag = "Quorum Driver APIs to execute transactions.")]
+#[open_rpc(namespace = "sui", tag = "APIs to execute transactions.")]
 #[rpc(server, client, namespace = "sui")]
-pub trait QuorumDriverApi {
-    /// Execute the transaction and wait for results if desired
+pub trait TransactionExecutionApi {
+    /// Execute the transaction and wait for results if desired.
+    /// Request types:
+    /// 1. ImmediateReturn: immediately returns a response to client without waiting
+    ///     for any execution results.  Note the transaction may fail without being
+    ///     noticed by client in this mode. After getting the response, the client
+    ///     may poll the node to check the result of the transaction.
+    /// 2. WaitForTxCert: waits for TransactionCertificate and then return to client.
+    /// 3. WaitForEffectsCert: waits for TransactionEffectsCert and then return to client.
+    ///     This mode is a proxy for transaction finality.
+    /// 4. WaitForLocalExecution: waits for TransactionEffectsCert and make sure the node
+    ///     executed the transaction locally before returning the client. The local execution
+    ///     makes sure this node is aware of this transaction when client fires subsequent queries.
+    ///     However if the node fails to execute the transaction locally in a timely manner,
+    ///     a bool type in the response is set to false to indicated the case.
     #[method(name = "executeTransaction")]
     async fn execute_transaction(
         &self,

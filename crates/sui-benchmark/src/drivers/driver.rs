@@ -1,6 +1,8 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::sync::Arc;
+
 use crate::drivers::Interval;
 use async_trait::async_trait;
 use prometheus::Registry;
@@ -14,7 +16,7 @@ pub trait Driver<T> {
     async fn run(
         &self,
         workload: Vec<WorkloadInfo>,
-        aggregator: AuthorityAggregator<NetworkAuthorityClient>,
+        aggregator: Arc<AuthorityAggregator<NetworkAuthorityClient>>,
         registry: &Registry,
         show_progress: bool,
         run_duration: Interval,

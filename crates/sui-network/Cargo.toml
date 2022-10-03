@@ -13,7 +13,7 @@ tonic = "0.7"
 sui-types = { path = "../sui-types" }
 
 mysten-network.workspace = true
-workspace-hack = { path = "../workspace-hack"}
+workspace-hack.workspace = true
 
 [build-dependencies]
 tonic-build = { git = "https://github.com/hyperium/tonic.git", rev = "de2e4ac077c076736dc451f3415ea7da1a61a560", default-features = false, features = [ "transport" ] }

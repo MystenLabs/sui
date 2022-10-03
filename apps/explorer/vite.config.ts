@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import react from '@vitejs/plugin-react';
-import path from 'path';
 import { defineConfig } from 'vite';
 import svgr from 'vite-plugin-svgr';
+
+const alias = (folder: string) => new URL(folder, import.meta.url).pathname;
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -15,11 +16,9 @@ export default defineConfig({
     },
     resolve: {
         alias: {
-            '@mysten/sui.js': path.resolve(
-                __dirname,
-                '../../sdk/typescript/src/'
-            ),
-            '@mysten/bcs': path.resolve(__dirname, '../../sdk/bcs/src/'),
+            '~': alias('./src'),
+            '@mysten/sui.js': alias('../../sdk/typescript/src/'),
+            '@mysten/bcs': alias('../../sdk/bcs/src/'),
         },
     },
 });
