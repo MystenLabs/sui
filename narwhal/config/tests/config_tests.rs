@@ -151,10 +151,12 @@ fn parameters_snapshot_matches() {
     let prometheus_metrics_parameters = PrometheusMetricsParameters {
         socket_addr: "/ip4/127.0.0.1/tcp/8081/http".parse().unwrap(),
     };
+    let network_admin_server_port = 1234;
 
     let parameters = Parameters {
         consensus_api_grpc: consensus_api_grpc_parameters,
         prometheus_metrics: prometheus_metrics_parameters,
+        network_admin_server_port,
         ..Parameters::default()
     };
     assert_json_snapshot!("parameters", parameters)
@@ -185,7 +187,8 @@ fn parameters_import_snapshot_matches() {
          "max_concurrent_requests": 500000,
          "prometheus_metrics": {
             "socket_addr": "/ip4/127.0.0.1/tcp/0/http"
-         }
+         },
+         "network_admin_server_port": 0
       }"#;
 
     // AND temporary file
