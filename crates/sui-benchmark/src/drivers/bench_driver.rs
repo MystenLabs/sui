@@ -189,8 +189,9 @@ impl BenchDriver {
         let mut workers = vec![];
         for i in 0..workload_info.num_workers {
             if i == workload_info.num_workers - 1 {
-                num_requests += workload_info.max_in_flight_ops % workload_info.num_workers;
-                target_qps += workload_info.target_qps % workload_info.num_workers;
+                num_requests =
+                    workload_info.max_in_flight_ops - workers.len() as u64 * num_requests;
+                target_qps = workload_info.target_qps - workers.len() as u64 * target_qps;
             }
             if num_requests > 0 && target_qps > 0 {
                 workers.push(BenchWorker {
