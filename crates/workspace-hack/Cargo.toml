@@ -101,6 +101,8 @@ combine = { version = "4", features = ["alloc", "bytes", "std"] }
 comfy-table = { version = "6", features = ["crossterm", "tty"] }
 config = { version = "0.11", features = ["hjson", "ini", "json", "rust-ini", "serde-hjson", "serde_json", "toml", "yaml", "yaml-rust"] }
 console = { version = "0.15", default-features = false, features = ["ansi-parsing", "unicode-width"] }
+console-api = { version = "0.4", default-features = false, features = ["transport"] }
+console-subscriber = { version = "0.1", features = ["env-filter"] }
 const-oid = { version = "0.9", default-features = false }
 constant_time_eq = { version = "0.1", default-features = false }
 core2 = { version = "0.4", default-features = false, features = ["alloc"] }
@@ -348,9 +350,14 @@ oid-registry = { version = "0.6", features = ["crypto", "kdf", "nist_algs", "pkc
 once_cell = { version = "1", features = ["alloc", "race", "std"] }
 oorandom = { version = "11", default-features = false }
 opaque-debug = { version = "0.3", default-features = false }
-opentelemetry = { version = "0.17", features = ["async-trait", "crossbeam-channel", "percent-encoding", "pin-project", "rand", "rt-tokio", "tokio", "tokio-stream", "trace"] }
-opentelemetry-jaeger = { version = "0.16", features = ["rt-tokio", "tokio"] }
-opentelemetry-semantic-conventions = { version = "0.9", default-features = false }
+opentelemetry-9067fe90e8c1f593 = { package = "opentelemetry", version = "0.17", features = ["async-trait", "crossbeam-channel", "percent-encoding", "pin-project", "rand", "rt-tokio", "tokio", "tokio-stream", "trace"] }
+opentelemetry-954333c9f9249c96 = { package = "opentelemetry", version = "0.18", features = ["metrics", "rt-tokio", "trace"] }
+opentelemetry-jaeger-986da7b5efc2b80e = { package = "opentelemetry-jaeger", version = "0.16", features = ["rt-tokio", "tokio"] }
+opentelemetry-jaeger-9067fe90e8c1f593 = { package = "opentelemetry-jaeger", version = "0.17", features = ["rt-tokio", "tokio"] }
+opentelemetry-semantic-conventions-93f6ce9d446188ac = { package = "opentelemetry-semantic-conventions", version = "0.10", default-features = false }
+opentelemetry-semantic-conventions-274715c4dabd11b0 = { package = "opentelemetry-semantic-conventions", version = "0.9", default-features = false }
+opentelemetry_api = { version = "0.18", features = ["fnv", "metrics", "pin-project-lite", "trace"] }
+opentelemetry_sdk = { version = "0.18", features = ["async-trait", "crossbeam-channel", "dashmap", "fnv", "metrics", "percent-encoding", "rand", "rt-tokio", "tokio", "tokio-stream", "trace"] }
 ordered-float-dff4ba8e3ae991db = { package = "ordered-float", version = "1", features = ["std"] }
 ordered-float-f595c2ba2a3f28df = { package = "ordered-float", version = "2", features = ["std"] }
 os_str_bytes = { version = "6", default-features = false, features = ["raw_os_str"] }
@@ -388,7 +395,9 @@ pretty_assertions = { version = "1", features = ["std"] }
 proc-macro2-dff4ba8e3ae991db = { package = "proc-macro2", version = "1", features = ["proc-macro", "span-locations"] }
 prometheus = { version = "0.13", features = ["protobuf"] }
 proptest = { version = "1", features = ["bit-set", "break-dead-code", "fork", "lazy_static", "quick-error", "regex-syntax", "rusty-fork", "std", "tempfile", "timeout"] }
-prost = { version = "0.10", features = ["prost-derive", "std"] }
+prost-93f6ce9d446188ac = { package = "prost", version = "0.10", features = ["prost-derive", "std"] }
+prost-a6292c17cd707f01 = { package = "prost", version = "0.11", features = ["prost-derive", "std"] }
+prost-types-a6292c17cd707f01 = { package = "prost-types", version = "0.11", features = ["std"] }
 protobuf = { version = "2", default-features = false }
 ptree = { version = "0.4", features = ["ansi", "ansi_term", "atty", "conf", "config", "directories", "petgraph", "serde-value", "tint", "value"] }
 quick-error-dff4ba8e3ae991db = { package = "quick-error", version = "1", default-features = false }
@@ -500,7 +509,8 @@ tabular = { version = "0.2", features = ["ansi-cell", "strip-ansi-escapes", "uni
 tap = { version = "1", default-features = false }
 target-lexicon = { version = "0.12", features = ["std"] }
 target-spec = { version = "1", default-features = false, features = ["serde", "summaries"] }
-telemetry-subscribers = { version = "0.1", features = ["chrome", "jaeger", "opentelemetry", "opentelemetry-jaeger", "tracing-chrome", "tracing-opentelemetry"] }
+telemetry-subscribers-c65f7effa3be6d31 = { package = "telemetry-subscribers", version = "0.1", features = ["chrome", "jaeger", "opentelemetry", "opentelemetry-jaeger", "tracing-chrome", "tracing-opentelemetry"] }
+telemetry-subscribers-6f8ce4dd05d13bba = { package = "telemetry-subscribers", version = "0.2", features = ["chrome", "console-subscriber", "jaeger", "opentelemetry", "opentelemetry-jaeger", "tokio-console", "tracing-chrome", "tracing-opentelemetry"] }
 tempfile = { version = "3", default-features = false }
 tera = { version = "1", features = ["builtins", "chrono", "chrono-tz", "humansize", "percent-encoding", "rand", "slug", "urlencode"] }
 termcolor = { version = "1", default-features = false }
@@ -515,7 +525,8 @@ thiserror = { version = "1", default-features = false }
 thousands = { version = "0.2", default-features = false }
 thread_local = { version = "1", default-features = false }
 threadpool = { version = "1", default-features = false }
-thrift = { version = "0.15", default-features = false }
+thrift-3575ec1268b04181 = { package = "thrift", version = "0.15", default-features = false }
+thrift-986da7b5efc2b80e = { package = "thrift", version = "0.16", features = ["log", "server", "threadpool"] }
 time-c65f7effa3be6d31 = { package = "time", version = "0.1", default-features = false }
 time-468e82937335b1c9 = { package = "time", version = "0.3", features = ["alloc", "formatting", "itoa", "macros", "parsing", "std", "time-macros"] }
 tint = { version = "1", default-features = false }
@@ -532,7 +543,8 @@ tokio-util = { version = "0.7", features = ["codec", "compat", "futures-io", "tr
 toml = { version = "0.5", features = ["indexmap", "preserve_order"] }
 toml_edit-594e8ee84c453af0 = { package = "toml_edit", version = "0.13" }
 toml_edit-582f2526e08bb6a0 = { package = "toml_edit", version = "0.14", features = ["easy", "serde"] }
-tonic = { version = "0.7", features = ["async-trait", "axum", "channel", "codegen", "h2", "hyper", "hyper-timeout", "prost", "prost-derive", "prost1", "rustls-pemfile", "tls", "tokio", "tokio-rustls", "tower", "tracing-futures", "transport"] }
+tonic-ca01ad9e24f5d932 = { package = "tonic", version = "0.7", features = ["async-trait", "axum", "channel", "codegen", "h2", "hyper", "hyper-timeout", "prost", "prost-derive", "prost1", "rustls-pemfile", "tls", "tokio", "tokio-rustls", "tower", "tracing-futures", "transport"] }
+tonic-c38e5c1d305a1b54 = { package = "tonic", version = "0.8", features = ["async-trait", "axum", "channel", "codegen", "h2", "hyper", "hyper-timeout", "prost", "prost-derive", "prost1", "tokio", "tower", "tracing-futures", "transport"] }
 tonic-health = { version = "0.6", features = ["transport"] }
 tower = { version = "0.4", features = ["__common", "balance", "buffer", "discover", "filter", "full", "futures-core", "futures-util", "hdrhistogram", "hedge", "indexmap", "limit", "load", "load-shed", "log", "make", "pin-project", "pin-project-lite", "rand", "ready-cache", "reconnect", "retry", "slab", "spawn-ready", "steer", "timeout", "tokio", "tokio-util", "tracing", "util"] }
 tower-http = { version = "0.3", features = ["cors", "map-response-body", "propagate-header", "set-header", "tower", "trace", "tracing", "util"] }
@@ -545,7 +557,8 @@ tracing-chrome = { version = "0.6", default-features = false }
 tracing-core = { version = "0.1", features = ["once_cell", "std"] }
 tracing-futures = { version = "0.2", features = ["pin-project", "std", "std-future"] }
 tracing-log = { version = "0.1", features = ["log-tracer", "std", "trace-logger"] }
-tracing-opentelemetry = { version = "0.17", features = ["tracing-log"] }
+tracing-opentelemetry-9067fe90e8c1f593 = { package = "tracing-opentelemetry", version = "0.17", features = ["tracing-log"] }
+tracing-opentelemetry-954333c9f9249c96 = { package = "tracing-opentelemetry", version = "0.18", features = ["metrics", "tracing-log"] }
 tracing-subscriber-6f8ce4dd05d13bba = { package = "tracing-subscriber", version = "0.2", default-features = false }
 tracing-subscriber-468e82937335b1c9 = { package = "tracing-subscriber", version = "0.3", features = ["alloc", "ansi", "ansi_term", "env-filter", "fmt", "matchers", "once_cell", "regex", "registry", "sharded-slab", "smallvec", "std", "thread_local", "time", "tracing", "tracing-log"] }
 tracing-test = { version = "0.2", default-features = false }
@@ -703,6 +716,8 @@ combine = { version = "4", features = ["alloc", "bytes", "std"] }
 comfy-table = { version = "6", features = ["crossterm", "tty"] }
 config = { version = "0.11", features = ["hjson", "ini", "json", "rust-ini", "serde-hjson", "serde_json", "toml", "yaml", "yaml-rust"] }
 console = { version = "0.15", default-features = false, features = ["ansi-parsing", "unicode-width"] }
+console-api = { version = "0.4", default-features = false, features = ["transport"] }
+console-subscriber = { version = "0.1", features = ["env-filter"] }
 const-oid = { version = "0.9", default-features = false }
 constant_time_eq = { version = "0.1", default-features = false }
 core2 = { version = "0.4", default-features = false, features = ["alloc"] }
@@ -980,9 +995,14 @@ oid-registry = { version = "0.6", features = ["crypto", "kdf", "nist_algs", "pkc
 once_cell = { version = "1", features = ["alloc", "race", "std"] }
 oorandom = { version = "11", default-features = false }
 opaque-debug = { version = "0.3", default-features = false }
-opentelemetry = { version = "0.17", features = ["async-trait", "crossbeam-channel", "percent-encoding", "pin-project", "rand", "rt-tokio", "tokio", "tokio-stream", "trace"] }
-opentelemetry-jaeger = { version = "0.16", features = ["rt-tokio", "tokio"] }
-opentelemetry-semantic-conventions = { version = "0.9", default-features = false }
+opentelemetry-9067fe90e8c1f593 = { package = "opentelemetry", version = "0.17", features = ["async-trait", "crossbeam-channel", "percent-encoding", "pin-project", "rand", "rt-tokio", "tokio", "tokio-stream", "trace"] }
+opentelemetry-954333c9f9249c96 = { package = "opentelemetry", version = "0.18", features = ["metrics", "rt-tokio", "trace"] }
+opentelemetry-jaeger-986da7b5efc2b80e = { package = "opentelemetry-jaeger", version = "0.16", features = ["rt-tokio", "tokio"] }
+opentelemetry-jaeger-9067fe90e8c1f593 = { package = "opentelemetry-jaeger", version = "0.17", features = ["rt-tokio", "tokio"] }
+opentelemetry-semantic-conventions-93f6ce9d446188ac = { package = "opentelemetry-semantic-conventions", version = "0.10", default-features = false }
+opentelemetry-semantic-conventions-274715c4dabd11b0 = { package = "opentelemetry-semantic-conventions", version = "0.9", default-features = false }
+opentelemetry_api = { version = "0.18", features = ["fnv", "metrics", "pin-project-lite", "trace"] }
+opentelemetry_sdk = { version = "0.18", features = ["async-trait", "crossbeam-channel", "dashmap", "fnv", "metrics", "percent-encoding", "rand", "rt-tokio", "tokio", "tokio-stream", "trace"] }
 ordered-float-dff4ba8e3ae991db = { package = "ordered-float", version = "1", features = ["std"] }
 ordered-float-f595c2ba2a3f28df = { package = "ordered-float", version = "2", features = ["std"] }
 os_str_bytes = { version = "6", default-features = false, features = ["raw_os_str"] }
@@ -1039,10 +1059,13 @@ proc-macro2-dff4ba8e3ae991db = { package = "proc-macro2", version = "1", feature
 prometheus = { version = "0.13", features = ["protobuf"] }
 proptest = { version = "1", features = ["bit-set", "break-dead-code", "fork", "lazy_static", "quick-error", "regex-syntax", "rusty-fork", "std", "tempfile", "timeout"] }
 proptest-derive = { version = "0.3", default-features = false }
-prost = { version = "0.10", features = ["prost-derive", "std"] }
+prost-93f6ce9d446188ac = { package = "prost", version = "0.10", features = ["prost-derive", "std"] }
+prost-a6292c17cd707f01 = { package = "prost", version = "0.11", features = ["prost-derive", "std"] }
 prost-build = { version = "0.10" }
-prost-derive = { version = "0.10", default-features = false }
-prost-types = { version = "0.10", default-features = false }
+prost-derive-93f6ce9d446188ac = { package = "prost-derive", version = "0.10", default-features = false }
+prost-derive-a6292c17cd707f01 = { package = "prost-derive", version = "0.11", default-features = false }
+prost-types-93f6ce9d446188ac = { package = "prost-types", version = "0.10", default-features = false }
+prost-types-a6292c17cd707f01 = { package = "prost-types", version = "0.11", features = ["std"] }
 protobuf = { version = "2", default-features = false }
 ptree = { version = "0.4", features = ["ansi", "ansi_term", "atty", "conf", "config", "directories", "petgraph", "serde-value", "tint", "value"] }
 quick-error-dff4ba8e3ae991db = { package = "quick-error", version = "1", default-features = false }
@@ -1178,7 +1201,8 @@ tabular = { version = "0.2", features = ["ansi-cell", "strip-ansi-escapes", "uni
 tap = { version = "1", default-features = false }
 target-lexicon = { version = "0.12", features = ["std"] }
 target-spec = { version = "1", default-features = false, features = ["serde", "summaries"] }
-telemetry-subscribers = { version = "0.1", features = ["chrome", "jaeger", "opentelemetry", "opentelemetry-jaeger", "tracing-chrome", "tracing-opentelemetry"] }
+telemetry-subscribers-c65f7effa3be6d31 = { package = "telemetry-subscribers", version = "0.1", features = ["chrome", "jaeger", "opentelemetry", "opentelemetry-jaeger", "tracing-chrome", "tracing-opentelemetry"] }
+telemetry-subscribers-6f8ce4dd05d13bba = { package = "telemetry-subscribers", version = "0.2", features = ["chrome", "console-subscriber", "jaeger", "opentelemetry", "opentelemetry-jaeger", "tokio-console", "tracing-chrome", "tracing-opentelemetry"] }
 tempfile = { version = "3", default-features = false }
 tera = { version = "1", features = ["builtins", "chrono", "chrono-tz", "humansize", "percent-encoding", "rand", "slug", "urlencode"] }
 termcolor = { version = "1", default-features = false }
@@ -1195,7 +1219,8 @@ thiserror-impl = { version = "1", default-features = false }
 thousands = { version = "0.2", default-features = false }
 thread_local = { version = "1", default-features = false }
 threadpool = { version = "1", default-features = false }
-thrift = { version = "0.15", default-features = false }
+thrift-3575ec1268b04181 = { package = "thrift", version = "0.15", default-features = false }
+thrift-986da7b5efc2b80e = { package = "thrift", version = "0.16", features = ["log", "server", "threadpool"] }
 time-c65f7effa3be6d31 = { package = "time", version = "0.1", default-features = false }
 time-468e82937335b1c9 = { package = "time", version = "0.3", features = ["alloc", "formatting", "itoa", "macros", "parsing", "std", "time-macros"] }
 time-macros = { version = "0.2", default-features = false }
@@ -1214,7 +1239,8 @@ tokio-util = { version = "0.7", features = ["codec", "compat", "futures-io", "tr
 toml = { version = "0.5", features = ["indexmap", "preserve_order"] }
 toml_edit-594e8ee84c453af0 = { package = "toml_edit", version = "0.13" }
 toml_edit-582f2526e08bb6a0 = { package = "toml_edit", version = "0.14", features = ["easy", "serde"] }
-tonic = { version = "0.7", features = ["async-trait", "axum", "channel", "codegen", "h2", "hyper", "hyper-timeout", "prost", "prost-derive", "prost1", "rustls-pemfile", "tls", "tokio", "tokio-rustls", "tower", "tracing-futures", "transport"] }
+tonic-ca01ad9e24f5d932 = { package = "tonic", version = "0.7", features = ["async-trait", "axum", "channel", "codegen", "h2", "hyper", "hyper-timeout", "prost", "prost-derive", "prost1", "rustls-pemfile", "tls", "tokio", "tokio-rustls", "tower", "tracing-futures", "transport"] }
+tonic-c38e5c1d305a1b54 = { package = "tonic", version = "0.8", features = ["async-trait", "axum", "channel", "codegen", "h2", "hyper", "hyper-timeout", "prost", "prost-derive", "prost1", "tokio", "tower", "tracing-futures", "transport"] }
 tonic-build-bb1f6c4a1756a23d = { package = "tonic-build", git = "https://github.com/hyperium/tonic.git", rev = "de2e4ac077c076736dc451f3415ea7da1a61a560", default-features = false, features = ["transport"] }
 tonic-build-ca01ad9e24f5d932 = { package = "tonic-build", version = "0.7", features = ["prost", "prost-build", "transport"] }
 tonic-health = { version = "0.6", features = ["transport"] }
@@ -1231,7 +1257,8 @@ tracing-chrome = { version = "0.6", default-features = false }
 tracing-core = { version = "0.1", features = ["once_cell", "std"] }
 tracing-futures = { version = "0.2", features = ["pin-project", "std", "std-future"] }
 tracing-log = { version = "0.1", features = ["log-tracer", "std", "trace-logger"] }
-tracing-opentelemetry = { version = "0.17", features = ["tracing-log"] }
+tracing-opentelemetry-9067fe90e8c1f593 = { package = "tracing-opentelemetry", version = "0.17", features = ["tracing-log"] }
+tracing-opentelemetry-954333c9f9249c96 = { package = "tracing-opentelemetry", version = "0.18", features = ["metrics", "tracing-log"] }
 tracing-subscriber-6f8ce4dd05d13bba = { package = "tracing-subscriber", version = "0.2", default-features = false }
 tracing-subscriber-468e82937335b1c9 = { package = "tracing-subscriber", version = "0.3", features = ["alloc", "ansi", "ansi_term", "env-filter", "fmt", "matchers", "once_cell", "regex", "registry", "sharded-slab", "smallvec", "std", "thread_local", "time", "tracing", "tracing-log"] }
 tracing-test = { version = "0.2", default-features = false }

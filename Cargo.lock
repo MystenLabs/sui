@@ -1203,6 +1203,42 @@ dependencies = [
 ]
 
 [[package]]
+name = "console-api"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e57ff02e8ad8e06ab9731d5dc72dc23bef9200778eae1a89d555d8c42e5d4a86"
+dependencies = [
+ "prost 0.11.0",
+ "prost-types 0.11.1",
+ "tonic 0.8.1",
+ "tracing-core",
+]
+
+[[package]]
+name = "console-subscriber"
+version = "0.1.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "22a3a81dfaf6b66bce5d159eddae701e3a002f194d378cbf7be5f053c281d9be"
+dependencies = [
+ "console-api",
+ "crossbeam-channel",
+ "crossbeam-utils",
+ "futures",
+ "hdrhistogram",
+ "humantime",
+ "prost-types 0.11.1",
+ "serde 1.0.144",
+ "serde_json",
+ "thread_local",
+ "tokio",
+ "tokio-stream",
+ "tonic 0.8.1",
+ "tracing",
+ "tracing-core",
+ "tracing-subscriber 0.3.15",
+]
+
+[[package]]
 name = "const-oid"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4485,7 +4521,7 @@ dependencies = [
  "serde 1.0.144",
  "tokio",
  "tokio-stream",
- "tonic",
+ "tonic 0.7.2",
  "tonic-health",
  "tower",
  "tower-http",
@@ -4673,9 +4709,9 @@ version = "0.1.0"
 dependencies = [
  "base64",
  "clap 2.34.0",
- "prost",
+ "prost 0.10.4",
  "tokio",
- "tonic",
+ "tonic 0.7.2",
  "tonic-build 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "workspace-hack",
 ]
@@ -4708,12 +4744,12 @@ dependencies = [
  "prometheus",
  "rand 0.8.5",
  "serde 1.0.144",
- "telemetry-subscribers",
+ "telemetry-subscribers 0.2.0",
  "tempfile",
  "thiserror",
  "tokio",
  "tokio-util 0.7.4",
- "tonic",
+ "tonic 0.7.2",
  "tracing",
  "typed-store",
  "workspace-hack",
@@ -4743,7 +4779,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-util 0.7.4",
- "tonic",
+ "tonic 0.7.2",
  "tracing",
  "workspace-hack",
 ]
@@ -4784,7 +4820,7 @@ dependencies = [
  "serde-reflection",
  "serde_yaml",
  "structopt",
- "telemetry-subscribers",
+ "telemetry-subscribers 0.2.0",
  "thiserror",
  "tokio",
  "tokio-stream",
@@ -4834,17 +4870,17 @@ dependencies = [
  "once_cell",
  "prometheus",
  "proptest",
- "prost",
+ "prost 0.10.4",
  "rand 0.8.5",
  "roaring",
  "serde 1.0.144",
  "tap",
- "telemetry-subscribers",
+ "telemetry-subscribers 0.2.0",
  "tempfile",
  "thiserror",
  "tokio",
  "tokio-util 0.7.4",
- "tonic",
+ "tonic 0.7.2",
  "tower",
  "tracing",
  "tracing-test",
@@ -4864,7 +4900,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-util 0.7.4",
- "tonic",
+ "tonic 0.7.2",
  "tracing",
  "typed-store",
  "workspace-hack",
@@ -4899,12 +4935,12 @@ dependencies = [
  "prometheus",
  "rand 0.8.5",
  "serde 1.0.144",
- "telemetry-subscribers",
+ "telemetry-subscribers 0.2.0",
  "tempfile",
  "thiserror",
  "tokio",
  "tokio-util 0.7.4",
- "tonic",
+ "tonic 0.7.2",
  "tower",
  "tracing",
  "typed-store",
@@ -4936,7 +4972,7 @@ dependencies = [
  "prometheus",
  "proptest",
  "proptest-derive",
- "prost",
+ "prost 0.10.4",
  "prost-build",
  "rand 0.8.5",
  "roaring",
@@ -4948,7 +4984,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-util 0.7.4",
- "tonic",
+ "tonic 0.7.2",
  "tonic-build 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "tracing",
  "typed-store",
@@ -4982,12 +5018,12 @@ dependencies = [
  "rand 0.8.5",
  "serde 1.0.144",
  "tap",
- "telemetry-subscribers",
+ "telemetry-subscribers 0.2.0",
  "tempfile",
  "tokio",
  "tokio-stream",
  "tokio-util 0.7.4",
- "tonic",
+ "tonic 0.7.2",
  "tower",
  "tracing",
  "typed-store",
@@ -5382,6 +5418,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "opentelemetry"
+version = "0.18.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "69d6c3d7288a106c0a363e4b0e8d308058d56902adefb16f4936f417ffef086e"
+dependencies = [
+ "opentelemetry_api",
+ "opentelemetry_sdk",
+]
+
+[[package]]
 name = "opentelemetry-jaeger"
 version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5389,10 +5435,27 @@ checksum = "f8c0b12cd9e3f9b35b52f6e0dac66866c519b26f424f4bbf96e3fe8bfbdc5229"
 dependencies = [
  "async-trait",
  "lazy_static 1.4.0",
- "opentelemetry",
- "opentelemetry-semantic-conventions",
+ "opentelemetry 0.17.0",
+ "opentelemetry-semantic-conventions 0.9.0",
  "thiserror",
- "thrift",
+ "thrift 0.15.0",
+ "tokio",
+]
+
+[[package]]
+name = "opentelemetry-jaeger"
+version = "0.17.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1e785d273968748578931e4dc3b4f5ec86b26e09d9e0d66b55adda7fce742f7a"
+dependencies = [
+ "async-trait",
+ "futures",
+ "futures-executor",
+ "once_cell",
+ "opentelemetry 0.18.0",
+ "opentelemetry-semantic-conventions 0.10.0",
+ "thiserror",
+ "thrift 0.16.0",
  "tokio",
 ]
 
@@ -5402,7 +5465,54 @@ version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "985cc35d832d412224b2cffe2f9194b1b89b6aa5d0bef76d080dce09d90e62bd"
 dependencies = [
- "opentelemetry",
+ "opentelemetry 0.17.0",
+]
+
+[[package]]
+name = "opentelemetry-semantic-conventions"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9b02e0230abb0ab6636d18e2ba8fa02903ea63772281340ccac18e0af3ec9eeb"
+dependencies = [
+ "opentelemetry 0.18.0",
+]
+
+[[package]]
+name = "opentelemetry_api"
+version = "0.18.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c24f96e21e7acc813c7a8394ee94978929db2bcc46cf6b5014fc612bf7760c22"
+dependencies = [
+ "fnv",
+ "futures-channel",
+ "futures-util",
+ "indexmap",
+ "js-sys",
+ "once_cell",
+ "pin-project-lite",
+ "thiserror",
+]
+
+[[package]]
+name = "opentelemetry_sdk"
+version = "0.18.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1ca41c4933371b61c2a2f214bf16931499af4ec90543604ec828f7a625c09113"
+dependencies = [
+ "async-trait",
+ "crossbeam-channel",
+ "dashmap",
+ "fnv",
+ "futures-channel",
+ "futures-executor",
+ "futures-util",
+ "once_cell",
+ "opentelemetry_api",
+ "percent-encoding",
+ "rand 0.8.5",
+ "thiserror",
+ "tokio",
+ "tokio-stream",
 ]
 
 [[package]]
@@ -6003,7 +6113,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "71adf41db68aa0daaefc69bb30bcd68ded9b9abaad5d1fbb6304c4fb390e083e"
 dependencies = [
  "bytes",
- "prost-derive",
+ "prost-derive 0.10.1",
+]
+
+[[package]]
+name = "prost"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "399c3c31cdec40583bb68f0b18403400d01ec4289c383aa047560439952c4dd7"
+dependencies = [
+ "bytes",
+ "prost-derive 0.11.0",
 ]
 
 [[package]]
@@ -6021,8 +6141,8 @@ dependencies = [
  "log",
  "multimap",
  "petgraph 0.6.2",
- "prost",
- "prost-types",
+ "prost 0.10.4",
+ "prost-types 0.10.1",
  "regex",
  "tempfile",
  "which",
@@ -6042,13 +6162,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "prost-derive"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7345d5f0e08c0536d7ac7229952590239e77abf0a0100a1b1d890add6ea96364"
+dependencies = [
+ "anyhow",
+ "itertools",
+ "proc-macro2 1.0.43",
+ "quote 1.0.21",
+ "syn 1.0.99",
+]
+
+[[package]]
 name = "prost-types"
 version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2d0a014229361011dc8e69c8a1ec6c2e8d0f2af7c91e3ea3f5b2170298461e68"
 dependencies = [
  "bytes",
- "prost",
+ "prost 0.10.4",
+]
+
+[[package]]
+name = "prost-types"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4dfaa718ad76a44b3415e6c4d53b17c8f99160dcb3a99b10470fce8ad43f6e3e"
+dependencies = [
+ "bytes",
+ "prost 0.11.0",
 ]
 
 [[package]]
@@ -7613,7 +7756,7 @@ dependencies = [
  "sui-simulator",
  "sui-swarm",
  "sui-types",
- "telemetry-subscribers",
+ "telemetry-subscribers 0.2.0",
  "tempfile",
  "test-utils",
  "tokio",
@@ -7688,7 +7831,7 @@ dependencies = [
  "sui-sdk",
  "sui-simulator",
  "sui-types",
- "telemetry-subscribers",
+ "telemetry-subscribers 0.2.0",
  "tempfile",
  "test-utils",
  "tokio",
@@ -7720,7 +7863,7 @@ dependencies = [
  "sui-sdk",
  "sui-swarm",
  "sui-types",
- "telemetry-subscribers",
+ "telemetry-subscribers 0.2.0",
  "tempfile",
  "test-utils",
  "tokio",
@@ -7812,7 +7955,7 @@ dependencies = [
  "sui-storage",
  "sui-types",
  "tap",
- "telemetry-subscribers",
+ "telemetry-subscribers 0.2.0",
  "tempfile",
  "test-fuzz",
  "test-utils",
@@ -7879,7 +8022,7 @@ dependencies = [
  "sui-json-rpc-types",
  "sui-node",
  "sui-types",
- "telemetry-subscribers",
+ "telemetry-subscribers 0.2.0",
  "test-utils",
  "thiserror",
  "tokio",
@@ -7959,7 +8102,7 @@ dependencies = [
  "sui-node",
  "sui-sdk",
  "sui-types",
- "telemetry-subscribers",
+ "telemetry-subscribers 0.2.0",
  "test-utils",
  "tokio",
  "tracing",
@@ -8056,7 +8199,7 @@ dependencies = [
  "async-trait",
  "mysten-network",
  "sui-types",
- "tonic",
+ "tonic 0.7.2",
  "tonic-build 0.7.2 (git+https://github.com/hyperium/tonic.git?rev=de2e4ac077c076736dc451f3415ea7da1a61a560)",
  "workspace-hack",
 ]
@@ -8083,7 +8226,7 @@ dependencies = [
  "sui-storage",
  "sui-telemetry",
  "sui-types",
- "telemetry-subscribers",
+ "telemetry-subscribers 0.2.0",
  "tokio",
  "tracing",
  "typed-store",
@@ -8152,7 +8295,7 @@ dependencies = [
  "sui-node",
  "sui-sdk",
  "sui-types",
- "telemetry-subscribers",
+ "telemetry-subscribers 0.1.0",
  "tempfile",
  "tokio",
  "tower",
@@ -8204,7 +8347,7 @@ version = "0.7.0"
 dependencies = [
  "msim",
  "sui-framework",
- "telemetry-subscribers",
+ "telemetry-subscribers 0.2.0",
  "tracing",
  "workspace-hack",
 ]
@@ -8233,7 +8376,7 @@ dependencies = [
  "sui-json-rpc-types",
  "sui-types",
  "tap",
- "telemetry-subscribers",
+ "telemetry-subscribers 0.2.0",
  "tempfile",
  "tokio",
  "tokio-stream",
@@ -8257,7 +8400,7 @@ dependencies = [
  "sui-simulator",
  "sui-types",
  "tap",
- "telemetry-subscribers",
+ "telemetry-subscribers 0.2.0",
  "tempfile",
  "tokio",
  "tonic-health",
@@ -8317,7 +8460,7 @@ dependencies = [
  "sui-core",
  "sui-storage",
  "sui-types",
- "telemetry-subscribers",
+ "telemetry-subscribers 0.2.0",
  "tempfile",
  "textwrap 0.15.0",
  "tokio",
@@ -8379,7 +8522,7 @@ dependencies = [
  "name-variant",
  "narwhal-executor",
  "once_cell",
- "opentelemetry",
+ "opentelemetry 0.17.0",
  "rand 0.8.5",
  "roaring",
  "schemars",
@@ -8398,7 +8541,7 @@ dependencies = [
  "sui-cost-tables",
  "test-utils",
  "thiserror",
- "tonic",
+ "tonic 0.7.2",
  "tracing",
  "typed-store",
  "workspace-hack",
@@ -8530,15 +8673,36 @@ checksum = "cd5997cf07ccebedf30d53f94effb0c992b655278e4777d71762aada8766b027"
 dependencies = [
  "crossterm 0.25.0",
  "once_cell",
- "opentelemetry",
- "opentelemetry-jaeger",
+ "opentelemetry 0.17.0",
+ "opentelemetry-jaeger 0.16.0",
  "prometheus",
  "tokio",
  "tracing",
  "tracing-appender",
  "tracing-bunyan-formatter",
  "tracing-chrome",
- "tracing-opentelemetry",
+ "tracing-opentelemetry 0.17.4",
+ "tracing-subscriber 0.3.15",
+]
+
+[[package]]
+name = "telemetry-subscribers"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e2a01f8161eb6d52700ec8f82a9432b425db5d1729ac747b52d34dfc9f4f0902"
+dependencies = [
+ "console-subscriber",
+ "crossterm 0.25.0",
+ "once_cell",
+ "opentelemetry 0.18.0",
+ "opentelemetry-jaeger 0.17.0",
+ "prometheus",
+ "tokio",
+ "tracing",
+ "tracing-appender",
+ "tracing-bunyan-formatter",
+ "tracing-chrome",
+ "tracing-opentelemetry 0.18.0",
  "tracing-subscriber 0.3.15",
 ]
 
@@ -8761,6 +8925,19 @@ name = "thrift"
 version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b82ca8f46f95b3ce96081fe3dd89160fdea970c254bb72925255d1b62aae692e"
+dependencies = [
+ "byteorder",
+ "integer-encoding",
+ "log",
+ "ordered-float 1.1.1",
+ "threadpool",
+]
+
+[[package]]
+name = "thrift"
+version = "0.16.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "09678c4cdbb4eed72e18b7c2af1329c69825ed16fcbac62d083fc3e2b0590ff0"
 dependencies = [
  "byteorder",
  "integer-encoding",
@@ -9034,11 +9211,43 @@ dependencies = [
  "hyper-timeout",
  "percent-encoding",
  "pin-project",
- "prost",
- "prost-derive",
+ "prost 0.10.4",
+ "prost-derive 0.10.1",
  "rustls-pemfile 1.0.0",
  "tokio",
  "tokio-rustls",
+ "tokio-stream",
+ "tokio-util 0.7.4",
+ "tower",
+ "tower-layer",
+ "tower-service",
+ "tracing",
+ "tracing-futures",
+]
+
+[[package]]
+name = "tonic"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "11cd56bdb54ef93935a6a79dbd1d91f1ebd4c64150fd61654031fd6b8b775c91"
+dependencies = [
+ "async-stream",
+ "async-trait",
+ "axum",
+ "base64",
+ "bytes",
+ "futures-core",
+ "futures-util",
+ "h2",
+ "http",
+ "http-body",
+ "hyper",
+ "hyper-timeout",
+ "percent-encoding",
+ "pin-project",
+ "prost 0.11.0",
+ "prost-derive 0.11.0",
+ "tokio",
  "tokio-stream",
  "tokio-util 0.7.4",
  "tower",
@@ -9080,10 +9289,10 @@ checksum = "9da1806c3ff2f02fb6d9b62fc72a2f3b6429c7f2f5d87861f548156708afcd71"
 dependencies = [
  "async-stream",
  "bytes",
- "prost",
+ "prost 0.10.4",
  "tokio",
  "tokio-stream",
- "tonic",
+ "tonic 0.7.2",
  "tonic-build 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -9255,7 +9464,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fbbe89715c1dbbb790059e2565353978564924ee85017b5fff365c872ff6721f"
 dependencies = [
  "once_cell",
- "opentelemetry",
+ "opentelemetry 0.17.0",
+ "tracing",
+ "tracing-core",
+ "tracing-log",
+ "tracing-subscriber 0.3.15",
+]
+
+[[package]]
+name = "tracing-opentelemetry"
+version = "0.18.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "21ebb87a95ea13271332df069020513ab70bdb5637ca42d6e492dc3bbbad48de"
+dependencies = [
+ "once_cell",
+ "opentelemetry 0.18.0",
  "tracing",
  "tracing-core",
  "tracing-log",
@@ -10045,6 +10268,8 @@ dependencies = [
  "comfy-table",
  "config",
  "console",
+ "console-api",
+ "console-subscriber",
  "const-oid",
  "constant_time_eq",
  "core-foundation",
@@ -10358,9 +10583,14 @@ dependencies = [
  "openssl-macros",
  "openssl-probe",
  "openssl-sys",
- "opentelemetry",
- "opentelemetry-jaeger",
- "opentelemetry-semantic-conventions",
+ "opentelemetry 0.17.0",
+ "opentelemetry 0.18.0",
+ "opentelemetry-jaeger 0.16.0",
+ "opentelemetry-jaeger 0.17.0",
+ "opentelemetry-semantic-conventions 0.10.0",
+ "opentelemetry-semantic-conventions 0.9.0",
+ "opentelemetry_api",
+ "opentelemetry_sdk",
  "ordered-float 1.1.1",
  "ordered-float 2.10.0",
  "os_str_bytes",
@@ -10419,10 +10649,13 @@ dependencies = [
  "prometheus",
  "proptest",
  "proptest-derive",
- "prost",
+ "prost 0.10.4",
+ "prost 0.11.0",
  "prost-build",
- "prost-derive",
- "prost-types",
+ "prost-derive 0.10.1",
+ "prost-derive 0.11.0",
+ "prost-types 0.10.1",
+ "prost-types 0.11.1",
  "protobuf",
  "ptree",
  "quick-error 1.2.3",
@@ -10573,7 +10806,8 @@ dependencies = [
  "tap",
  "target-lexicon",
  "target-spec",
- "telemetry-subscribers",
+ "telemetry-subscribers 0.1.0",
+ "telemetry-subscribers 0.2.0",
  "tempfile",
  "tera",
  "termcolor",
@@ -10590,7 +10824,8 @@ dependencies = [
  "thousands",
  "thread_local",
  "threadpool",
- "thrift",
+ "thrift 0.15.0",
+ "thrift 0.16.0",
  "time 0.1.43",
  "time 0.3.14",
  "time-macros",
@@ -10610,7 +10845,8 @@ dependencies = [
  "toml",
  "toml_edit 0.13.4",
  "toml_edit 0.14.4",
- "tonic",
+ "tonic 0.7.2",
+ "tonic 0.8.1",
  "tonic-build 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "tonic-build 0.7.2 (git+https://github.com/hyperium/tonic.git?rev=de2e4ac077c076736dc451f3415ea7da1a61a560)",
  "tonic-health",
@@ -10627,7 +10863,8 @@ dependencies = [
  "tracing-core",
  "tracing-futures",
  "tracing-log",
- "tracing-opentelemetry",
+ "tracing-opentelemetry 0.17.4",
+ "tracing-opentelemetry 0.18.0",
  "tracing-subscriber 0.2.25",
  "tracing-subscriber 0.3.15",
  "tracing-test",
