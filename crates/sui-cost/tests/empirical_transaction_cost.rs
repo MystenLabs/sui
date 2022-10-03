@@ -269,10 +269,10 @@ async fn run_actual_and_estimate_costs(
         let gas_estimate = estimate_transaction_computation_cost(
             tx.signed_data.data,
             state.clone(),
-            1,
-            1,
             None,
-            0,
+            None,
+            None,
+            None,
         )
         .await
         .unwrap();

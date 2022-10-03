@@ -31,10 +31,10 @@ impl EstimatorApiServer for EstimatorApi {
     async fn estimate_transaction_computation_cost(
         &self,
         tx_bytes: Base64,
-        computation_gas_unit_price: u64,
-        storage_gas_unit_price: u64,
+        computation_gas_unit_price: Option<u64>,
+        storage_gas_unit_price: Option<u64>,
         mutated_object_sizes_after: Option<usize>,
-        storage_rebate: u64,
+        storage_rebate: Option<u64>,
     ) -> RpcResult<SuiGasCostSummary> {
         let data = TransactionData::from_signable_bytes(&tx_bytes.to_vec()?)?;
 

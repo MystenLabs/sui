@@ -26,7 +26,10 @@ use sui_types::messages::Transaction;
 use sui_types::messages::TransactionData;
 use sui_types::messages::TransactionKind;
 
-pub const ESTIMATE_FILE: &str = "tests/snapshots/empirical_transaction_cost__good_snapshot.snap";
+const DEFAULT_COMPUTATION_GAS_UNIT_PRICE: u64 = 1;
+const DEFAULT_STORAGE_GAS_UNIT_PRICE: u64 = 1;
+const DEFAULT_STORAGE_REBATE: u64 = 0;
+
 #[derive(
     Debug, Eq, PartialEq, Hash, Serialize, Deserialize, Ord, PartialOrd, Clone, Display, EnumString,
 )]
@@ -61,12 +64,16 @@ impl CommonTransactionCosts {
 // Step 6: charge for mutations, deletions, rebates: cannot be computed precisely, will approx
 fn estimate_transaction_inner<S>(
     tx: TransactionKind,
-    computation_gas_unit_price: u64,
-    storage_gas_unit_price: u64,
+    computation_gas_unit_price: Option<u64>,
+    storage_gas_unit_price: Option<u64>,
     mutated_object_sizes_after: Option<usize>,
     storage_rebate: SuiGas,
     temporary_store: &TemporaryStore<S>,
 ) -> SuiResult<GasCostSummary> {
+    let computation_gas_unit_price =
+        computation_gas_unit_price.unwrap_or(DEFAULT_COMPUTATION_GAS_UNIT_PRICE);
+    let storage_gas_unit_price = storage_gas_unit_price.unwrap_or(DEFAULT_STORAGE_GAS_UNIT_PRICE);
+
     let mut gas_status = start_gas_metering(
         *MAX_GAS_BUDGET,
         computation_gas_unit_price,
@@ -124,10 +131,10 @@ fn estimate_transaction_inner<S>(
 pub async fn estimate_transaction_computation_cost(
     tx_data: TransactionData,
     state: Arc<AuthorityState>,
-    computation_gas_unit_price: u64,
-    storage_gas_unit_price: u64,
+    computation_gas_unit_price: Option<u64>,
+    storage_gas_unit_price: Option<u64>,
     mutated_object_sizes_after: Option<usize>,
-    storage_rebate: u64,
+    storage_rebate: Option<u64>,
 ) -> anyhow::Result<GasCostSummary> {
     // Make a dummy transaction
     let (_, keypair): (_, AccountKeyPair) = get_key_pair();
@@ -144,7 +151,7 @@ pub async fn estimate_transaction_computation_cost(
         computation_gas_unit_price,
         storage_gas_unit_price,
         mutated_object_sizes_after,
-        SuiGas::new(storage_rebate),
+        SuiGas::new(storage_rebate.unwrap_or(DEFAULT_STORAGE_REBATE)),
         &in_mem_temporary_store,
     )
     .map_err(|e| anyhow!("{e}"))
