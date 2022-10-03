@@ -62,7 +62,7 @@ export abstract class SignerWithProvider implements Signer {
   }
 
   /**
-   * @experimental Sign a transaction and submit to the Gateway for execution
+   * Sign a transaction and submit to the Gateway for execution
    */
   async signAndExecuteTransaction(
     transaction: Base64DataBuffer | SignableTransaction
