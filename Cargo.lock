@@ -404,8 +404,7 @@ dependencies = [
 [[package]]
 name = "async-task"
 version = "4.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7a40729d2133846d9ed0ea60a8b9541bccddab49cd30f0715a1da672fe9a2524"
+source = "git+https://github.com/mystenmark/async-task?rev=4e45b26e11126b191701b9b2ce5e2346b8d7682f#4e45b26e11126b191701b9b2ce5e2346b8d7682f"
 
 [[package]]
 name = "async-trait"
@@ -4422,7 +4421,7 @@ dependencies = [
 [[package]]
 name = "msim"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=46aa1b64e3a821928e5212edffc697112e7de4da#46aa1b64e3a821928e5212edffc697112e7de4da"
+source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=e7773753dcb5becda0ea27b10694eb9c11e7af4a#e7773753dcb5becda0ea27b10694eb9c11e7af4a"
 dependencies = [
  "ahash",
  "async-task",
@@ -4436,6 +4435,7 @@ dependencies = [
  "libc",
  "msim-macros",
  "naive-timer",
+ "pin-project-lite",
  "rand 0.8.5",
  "real_tokio",
  "serde 1.0.144",
@@ -4449,7 +4449,7 @@ dependencies = [
 [[package]]
 name = "msim-macros"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=46aa1b64e3a821928e5212edffc697112e7de4da#46aa1b64e3a821928e5212edffc697112e7de4da"
+source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=e7773753dcb5becda0ea27b10694eb9c11e7af4a#e7773753dcb5becda0ea27b10694eb9c11e7af4a"
 dependencies = [
  "darling 0.14.1",
  "proc-macro2 1.0.43",

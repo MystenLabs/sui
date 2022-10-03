@@ -140,10 +140,8 @@ jobs:
       - uses: actions-rs/toolchain@v1
       - uses: taiki-e/install-action@nextest
       - name: cargo simtest
-        # Disable simtest until building with Narwhal is fixed.
         run: |
-          echo "Skipped"
-          # scripts/simtest/cargo-simtest simtest
+          scripts/simtest/cargo-simtest simtest
 
   # This is a no-op job that allows the resulting action names to line up when
   # there are no rust changes in a given PR/commit. This ensures that we can
