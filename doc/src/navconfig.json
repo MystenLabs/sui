@@ -3,17 +3,17 @@
     "title": "QUICK LINKS",
     "items": [
       {
-        "label": "Devnet",
-        "link": "build/devnet"
+        "label": "Sui Doc Updates",
+        "link": "doc-updates"
       },
       {
-        "label": "examples.sui.io",
+        "label": "Sui by Example",
         "link": "https://examples.sui.io/",
         "external": true
       },
       {
-        "label": "Doc updates",
-        "link": "learn/sui-doc-updates"
+        "label": "Connect to Sui Devnet",
+        "link": "build/devnet"
       }
     ]
   },
@@ -58,11 +58,11 @@
           },
           {
             "label": "Objects",
-            "fileName": "build/objects"
+            "fileName": "learn/objects"
           },
           {
             "label": "Transactions",
-            "fileName": "build/transactions"
+            "fileName": "learn/transactions"
           },
           {
             "label": "Single-Writer Apps",
@@ -266,12 +266,6 @@
         "label": "About Mysten Labs",
         "link": "https://mystenlabs.com/",
         "external": true
-      }
-    ],
-      "Doc updates":[
-      {
-      "fileName": "learn/sui-doc-updates",
-      "title": "Sui doc updates"
       }
     ]
   }
