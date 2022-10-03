@@ -89,6 +89,7 @@
         "buffer": "^6.0.3",
         "classnames": "^2.3.1",
         "eslint-plugin-react": "^7.31.8",
+        "events": "^3.3.0",
         "formik": "^2.2.9",
         "framer-motion": "^7.5.1",
         "react": "^18.2.0",
