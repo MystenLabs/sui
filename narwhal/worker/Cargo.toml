@@ -41,7 +41,7 @@ workspace-hack.workspace = true
 [dev-dependencies]
 arc-swap = { version = "1.5.1", features = ["serde"] }
 rand = "0.8.5"
-telemetry-subscribers = "0.1.0"
+telemetry-subscribers.workspace = true
 tempfile = "3.3.0"
 test-utils = { path = "../test-utils", package = "narwhal-test-utils" }
 
