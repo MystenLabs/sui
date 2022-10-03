@@ -72,8 +72,8 @@ jobs:
     - name: retrieve benchmark results
       id: get-comment-body
       run: |
-        owned="Owned $(cat artifacts/owned.txt | grep -e '|' -e '-' -e 'Bench' -e '+')"
-        shared="Shared $(cat artifacts/shared.txt | grep -e '|' -e '-' -e 'Bench' -e '+')"
+        owned="Benchmark Results(owned tx):\n$(cat artifacts/owned.txt | grep -e '+-----' -e 'tps' -e '+=====' -e '|')"
+        shared="Benchmark Results(shared tx):\n$(cat artifacts/shared.txt | grep -e '+-----' -e 'tps' -e '+=====' -e '|')"
         echo ::set-output name=owned::$owned
         echo ::set-output name=shared::$shared
     - name: Create commit comment
