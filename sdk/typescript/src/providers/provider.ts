@@ -45,6 +45,15 @@ export abstract class Provider {
   ): Promise<SuiObjectInfo[]>;
 
   /**
+   * Convenience method for getting all coins objects owned by an address
+   * @param typeArg optional argument for filter by coin type
+   */
+  abstract getCoinBalancesOwnedByAddress(
+    address: string,
+    typeArg?: string
+  ): Promise<GetObjectDataResponse[]>;
+
+  /**
    * Get details about an object
    */
   abstract getObject(objectId: string): Promise<GetObjectDataResponse>;

@@ -65,6 +65,7 @@
     "@size-limit/preset-small-lib": "^7.0.8",
     "@types/bn.js": "^5.1.0",
     "@types/lossless-json": "^1.0.1",
+    "axios": "^0.27.2",
     "eslint": "^8.23.0",
     "eslint-config-prettier": "^8.5.0",
     "eslint-config-react-app": "^7.0.1",
