@@ -28,7 +28,7 @@ rand = { version = "0.8.5", features = ["small_rng"] }
 roaring = "0.10.1"
 serde = { version = "1.0.144", features = ["derive"] }
 thiserror = "1.0.35"
-tokio = { version = "1.20.1", features = ["sync", "rt", "macros"] }
+tokio = { version = "1.20.1", features = ["sync", "rt", "macros", "time", "test-util"] }
 tokio-util = { version = "0.7.4", features = ["codec"] }
 tonic = "0.8.2"
 tower = { version = "0.4.13", features = ["full"] }
