@@ -173,5 +173,25 @@ $main-extra-space: sizing.$main-bottom-space;
         font-weight: 500;
         font-size: 10px;
         letter-spacing: 0;
+    } @else if $type == 'Primary/Heading1-B' {
+        font-size: 28px;
+        font-weight: 700;
+        letter-spacing: 0;
+        text-align: center;
+    } @else if $type == 'Primary/Heading3-SB' {
+        font-size: 20px;
+        font-weight: 600;
+        letter-spacing: 0;
+        text-align: center;
+    } @else if $type == 'ParagraphPrimary/P1-M' {
+        font-size: 14px;
+        font-weight: 500;
+        line-height: 130%;
+        letter-spacing: 0;
+        text-align: center;
+    } @else if $type == 'Primary/Body-SB' {
+        font-size: 14px;
+        font-weight: 600;
+        letter-spacing: 0;
     }
 }
