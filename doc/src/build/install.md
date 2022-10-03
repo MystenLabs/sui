@@ -1,12 +1,12 @@
 ---
-title: Install Sui
+title: Install Sui to Build
 ---
 
-Welcome to the Sui development environment! This site is available in two versions in the menu at top left: the default and stable [Devnet](https://docs.sui.io/devnet/learn) branch and the [Latest build](https://docs.sui.io/learn) upstream `main` branch. Use the `devnet` version for app development on top of Sui. Use the Latest build `main` branch for [contributing to the Sui blockchain](../contribute/index.md). Always check and submit fixes to the `main` branch.
+Learn how to install and configure Sui.
 
-## Summary
+Before you install Sui, you need to install some prerequisite tools and then configure your environment.
 
-To get started using Sui:
+The steps to install Sui include:
 
 1. Install [prerequisites](#prerequisites).
 1. Install Sui [binaries](#binaries).
@@ -14,6 +14,19 @@ To get started using Sui:
 1. Request [SUI tokens](#sui-tokens) to evaluate Devnet and Sui Wallet
 1. Optionally, download the [source code](#source-code) to have local
    access to examples and modify Sui itself.
+
+## Branches of the Sui repo
+
+The Sui repo includes two primary branches, `devnet` and `main`.
+
+ * The `devnet` branch includes the latest stable build of Sui. Choose the `devnet` branch if you want to build or test on Sui. If you encounter an issue or find a bug, it may already be fixed in the `main` branch. To submit a Pull Request (PR), you should push commits to your fork of the `main` branch.
+ * The `main` (Latest build) branch includes the most recent changes and updates. Use the `main` (Latest build) branch if you want to contribute to the Sui project. The `main` branch may include unreleased changes, or introduce changes that cause issues in apps created using an earlier version.
+
+## Choose the documentation branch
+
+This documentation is built from the same branches, `main` and `devnet`. The `main` branch includes the latest additions and updates to the documentation. You can view the content to learn about upcoming updates to the documentation, but the information may not be accurate or up-to-date for the features and functionality available in the `devnet` branch. In most cases, you should view the `devnet` version of the documentation.
+
+To change branches, choose **Latest build** to view the documentation generated from the `main` branch of the repository. You should not use the **Latest build** version to learn how to install, configure, or build on Sui, as the information may change before the content is merged to **Devnet**. 
 
 ## Supported Operating Systems
 
@@ -25,30 +38,89 @@ Sui supports the following operating systems:
 
 ## Prerequisites
 
-Sui requires the following prerequisites, listed by operating system:
+Install the required prerequisites and tools you need to work with Sui. 
 
-|Package/OS |Linux  | macOS| Windows 11|
-| --- | :---: | :---:| :---:|
-|Curl|X|X|X|
-|Rust|X|X|X|
-|Git CLI|X|X|X|
-|CMake|X|X|X|
-|libssl-dev|X| | |
-|libclang-dev|X| | |
-|Brew| |X| |
-|C++ build tools| | |X|
-|LLVM Compiler| | |X|
-|Sui|X|X|X|
+| Package/OS | Linux  | macOS | Windows 11|
+| --- | :---: | :---: | :---: |
+| Curl | X | X | X |
+| Rust | X | X | X |
+| Git CLI | X | X | X |
+| CMake | X | X | X |
+| libssl-dev | X | | |
+| libclang-dev | X | | |
+| Brew | | X | |
+| C++ build tools | | | X |
+| LLVM Compiler | | | X |
+| Cargo | x |   |   |
 
-Follow the instructions below to install them. Then install the Sui [binaries](#binaries).
+## Linux prerequisites
 
-Finally, if you will be altering Sui itself, also obtain the [Sui source code](#source-code).
-For simplicity, we recommend installing in `~/sui` or using an environment variable.
+Install the following additional prerequisites. You should make sure that your system has the latest version of `apt`. Use the following command to update it:
+`sudo apt-get update`
 
->**Important:** You will need to restart your command prompt after installing these prerequisites
->for them to be available in your environment.
+### cURL
+
+Check whether you already have cURL installed with the following command:
+`which curl`
+
+Install cURL with the following command:
+`sudo apt install curl`
+
+Verify that cURL installed correctly with the following command:
+`curl --version`
+
+### Rust and Cargo
+
+Use the following command to install Rust:
+`curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
+
+For additional installation options, see [Install Rust](https://www.rust-lang.org/tools/install).
+
+The `rustup` script to install Rust also installs Cargo.
+
+Sui uses the latest version of the Cargo toolchain to build and manage dependencies. See [Cargo installation] (https://doc.rust-lang.org/cargo/getting-started/installation.html) for more information.
+
+
+### Git CLI
+
+Run the following command to install Git, including the Git CLI:
+
+`sudo apt-get install git-all`
+
+For more information, see [Install Git on Linux](https://github.com/git-guides/install-git#install-git-on-linux)
+
+### CMake
+
+Install CMake with the following command:
+
+`./bootstrap`
+`make`
+`make install`
+
+For more information, see [Install CMake](https://cmake.org/install/)
+
+### libssl-dev
+
+use the following command to install `libssl-dev`:
+`sudo apt-get install libssl-dev`
+
+### libclang-dev
+
+use the following command to install `libclang-dev`:
+`sudo apt-get install libclang-dev`
+
+
+## macOS prerequisites
+
+
+
+
+
+
+## Windows prerequisites
 
 ### Brew
+
 In macOS, first install [Brew](https://brew.sh/) to install other packages:
 ```shell
 $ /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
@@ -59,6 +131,7 @@ $ /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/
 Ensure each of the packages below exist on each OS:
 
 #### Curl
+
 Confirm that you can run the `curl` command to download dependencies.
 
 See whether you already have curl installed by running:
@@ -178,11 +251,13 @@ This will put the following binaries in your `PATH` (ex. under `~/.cargo/bin`) t
 * [`rpc-server`](json-rpc.md) - run a local Sui gateway service accessible via an RPC interface.
 
 ### macOS and Linux
+
 Confirm the binaries are installed with:
 ```
 $ echo $PATH
 ```
 ### Windows
+
 Confirm the binaries are installed with:
 ```
 $ echo %PATH%
