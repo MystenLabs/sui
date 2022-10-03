@@ -1,12 +1,14 @@
+use std::time::Duration;
+
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use config::{Committee, SharedWorkerCache, Stake, WorkerId};
 use crypto::PublicKey;
-use futures::stream::{futures_unordered::FuturesUnordered, StreamExt as _};
+use futures::stream::{futures_unordered::FuturesUnordered, FuturesOrdered, StreamExt as _};
 use network::{CancelOnDropHandler, P2pNetwork, ReliableNetwork};
 use store::Store;
-use tokio::{sync::watch, task::JoinHandle};
+use tokio::{sync::watch, task::JoinHandle, time::timeout};
 use types::{
     metered_channel::Receiver, Batch, BatchDigest, ReconfigureNotification, WorkerBatchMessage,
 };
@@ -72,11 +74,16 @@ impl QuorumWaiter {
 
     /// Main loop.
     async fn run(&mut self) {
+        // 
+        let mut pipeline = FuturesOrdered::new();
+        let mut best_effort_with_timeout = FuturesUnordered::new();
+
         loop {
             tokio::select! {
 
-                Some((batch, opt_channel)) = self.rx_message.recv() => {
-
+                // When a new batch is available, and the pipeline is not full, add a new
+                // task to the pipeline to send this batch to workers. 
+                Some((batch, opt_channel)) = self.rx_message.recv(), if pipeline.len() < 20 => {
                     // Broadcast the batch to the other workers.
                     let workers: Vec<_> = self
                         .worker_cache
@@ -86,7 +93,7 @@ impl QuorumWaiter {
                         .map(|(name, info)| (name, info.name))
                         .collect();
                     let (primary_names, worker_names): (Vec<_>, _) = workers.into_iter().unzip();
-                    let message = WorkerBatchMessage{batch: batch.clone()};
+                    let message  = WorkerBatchMessage{batch: batch.clone()};
                     let handlers = self.network.broadcast(worker_names, &message).await;
 
                     // Collect all the handlers to receive acknowledgements.
@@ -104,35 +111,50 @@ impl QuorumWaiter {
                     // the dag). This should reduce the amount of synching.
                     let threshold = self.committee.quorum_threshold();
                     let mut total_stake = self.committee.stake(&self.name);
-                    loop {
-                        tokio::select! {
-                            Some(stake) = wait_for_quorum.next() => {
+
+                    pipeline.push_back(async move {
+                        // A future that sends to 2/3 stake then returns. Also prints an error
+                        // if we terminate before we have managed to get to the full 2/3 stake.
+                        let _ = &wait_for_quorum;
+                        loop{
+                            if let Some(stake) = wait_for_quorum.next().await {
                                 total_stake += stake;
                                 if total_stake >= threshold {
+
                                     // Notify anyone waiting for this.
                                     if let Some(channel) = opt_channel {
                                         let _ = channel.send(());
                                     }
-                                    break;
+                                    break
                                 }
-                            }
-
-                            result = self.rx_reconfigure.changed() => {
-                                result.expect("Committee channel dropped");
-                                let message = self.rx_reconfigure.borrow().clone();
-                                match message {
-                                    ReconfigureNotification::NewEpoch(new_committee)
-                                        | ReconfigureNotification::UpdateCommittee(new_committee) => {
-                                            self.committee = new_committee;
-                                            tracing::debug!("Dropping batch: committee updated to {}", self.committee);
-                                            break; // Don't wait for acknowledgements.
-                                    },
-                                    ReconfigureNotification::Shutdown => return
-                                }
+                            } else {
+                                tracing::error!("Batch dissemination ended without a quorum.");
+                                break;
                             }
                         }
-                    }
+                        (batch, wait_for_quorum)
+                    });
                 },
+
+                // Process futures in the pipeline. They complete when we have sent to >2/3
+                // of other worker by stake, but after that we still try to send to the remaining
+                // on a best effort basis.
+                Some((_batch, mut remaining)) = pipeline.next() => {
+
+                    // Attempt to send messages to the remaining workers
+                    best_effort_with_timeout.push(async move {
+                        // Bound the attempt to a few seconds to tolerate nodes that are 
+                        // offline and will never succeed.
+                        timeout(Duration::from_secs(5), async move{
+                            while remaining.next().await.is_some() { }
+                        }).await
+                    });
+
+                },
+
+                // Drive the best effort send efforts which may update remaining workers
+                // or timeout.
+                Some(_) = best_effort_with_timeout.next() => {}
 
                 // Trigger reconfigure.
                 result = self.rx_reconfigure.changed() => {
@@ -144,6 +166,13 @@ impl QuorumWaiter {
                         },
                         ReconfigureNotification::UpdateCommittee(new_committee) => {
                             self.committee = new_committee;
+
+                            // Upon reconfiguration we drop all current batches.
+                            //
+                            // TODO: ensure that if the batch has not been distributed to the right
+                            //       commitee we do not propose it?
+                            pipeline = FuturesOrdered::new();
+                            best_effort_with_timeout = FuturesUnordered::new()
 
                         },
                         ReconfigureNotification::Shutdown => return
