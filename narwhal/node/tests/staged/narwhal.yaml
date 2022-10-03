@@ -1,0 +1,157 @@
+---
+Authority:
+  STRUCT:
+    - stake: U64
+    - primary_address: BYTES
+    - network_key:
+        TYPENAME: Ed25519PublicKey
+BLS12381AggregateSignature:
+  STRUCT:
+    - sig:
+        OPTION: BYTES
+BLS12381Signature:
+  STRUCT:
+    - sig: BYTES
+Batch:
+  NEWTYPESTRUCT:
+    SEQ:
+      SEQ: U8
+BatchDigest:
+  NEWTYPESTRUCT:
+    TUPLEARRAY:
+      CONTENT: U8
+      SIZE: 32
+Certificate:
+  STRUCT:
+    - header:
+        TYPENAME: Header
+    - aggregated_signature:
+        TYPENAME: BLS12381AggregateSignature
+    - signed_authorities: BYTES
+CertificateDigest:
+  NEWTYPESTRUCT:
+    TUPLEARRAY:
+      CONTENT: U8
+      SIZE: 32
+Committee:
+  STRUCT:
+    - authorities:
+        MAP:
+          KEY: STR
+          VALUE:
+            TYPENAME: Authority
+    - epoch: U64
+Ed25519PublicKey:
+  NEWTYPESTRUCT: STR
+Header:
+  STRUCT:
+    - author: STR
+    - round: U64
+    - epoch: U64
+    - payload:
+        SEQ:
+          TUPLE:
+            - TYPENAME: BatchDigest
+            - U32
+    - parents:
+        SEQ:
+          TYPENAME: CertificateDigest
+    - id:
+        TYPENAME: HeaderDigest
+    - signature:
+        TYPENAME: BLS12381Signature
+HeaderDigest:
+  NEWTYPESTRUCT:
+    TUPLEARRAY:
+      CONTENT: U8
+      SIZE: 32
+PrimaryWorkerMessage:
+  ENUM:
+    0:
+      Cleanup:
+        NEWTYPE: U64
+    1:
+      Reconfigure:
+        NEWTYPE:
+          TYPENAME: ReconfigureNotification
+    2:
+      RequestBatch:
+        NEWTYPE:
+          TYPENAME: BatchDigest
+    3:
+      DeleteBatches:
+        NEWTYPE:
+          SEQ:
+            TYPENAME: BatchDigest
+ReconfigureNotification:
+  ENUM:
+    0:
+      NewEpoch:
+        NEWTYPE:
+          TYPENAME: Committee
+    1:
+      UpdateCommittee:
+        NEWTYPE:
+          TYPENAME: Committee
+    2:
+      Shutdown: UNIT
+WorkerIndex:
+  NEWTYPESTRUCT:
+    MAP:
+      KEY: U32
+      VALUE:
+        TYPENAME: WorkerInfo
+WorkerInfo:
+  STRUCT:
+    - name:
+        TYPENAME: Ed25519PublicKey
+    - transactions: BYTES
+    - worker_address: BYTES
+WorkerPrimaryError:
+  ENUM:
+    0:
+      RequestedBatchNotFound:
+        NEWTYPE:
+          TYPENAME: BatchDigest
+    1:
+      ErrorWhileDeletingBatches:
+        NEWTYPE:
+          SEQ:
+            TYPENAME: BatchDigest
+WorkerPrimaryMessage:
+  ENUM:
+    0:
+      OurBatch:
+        TUPLE:
+          - TYPENAME: BatchDigest
+          - U32
+    1:
+      OthersBatch:
+        TUPLE:
+          - TYPENAME: BatchDigest
+          - U32
+    2:
+      RequestedBatch:
+        TUPLE:
+          - TYPENAME: BatchDigest
+          - TYPENAME: Batch
+    3:
+      DeletedBatches:
+        NEWTYPE:
+          SEQ:
+            TYPENAME: BatchDigest
+    4:
+      Error:
+        NEWTYPE:
+          TYPENAME: WorkerPrimaryError
+    5:
+      Reconfigure:
+        NEWTYPE:
+          TYPENAME: ReconfigureNotification
+WorkerSynchronizeMessage:
+  STRUCT:
+    - digests:
+        SEQ:
+          TYPENAME: BatchDigest
+    - target: STR
+
