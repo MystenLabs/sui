@@ -571,11 +571,6 @@ impl WalletSyncApi {
         match &*self.0 {
             SuiClientApi::Rpc(_) => {
                 unimplemented!("Rpc SuiClient does not support WalletSyncApi");
-                // if c.is_gateway() {
-                //     c.http.sync_account_state(address).await?
-                // } else {
-                //     unimplemented!("Rpc SuiClient does not support WalletSyncApi");
-                // }
             }
             SuiClientApi::Embedded(c) => c.sync_account_state(address).await?,
         }

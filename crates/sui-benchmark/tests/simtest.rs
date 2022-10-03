@@ -48,17 +48,15 @@ mod test {
 
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load() {
-        // FIXME: use TestClusterBuilder
         let test_cluster = TestClusterBuilder::new().build().await.unwrap();
         let swarm = &test_cluster.swarm;
         let context = &test_cluster.wallet;
         let sender = test_cluster.get_address();
-        // let (swarm, context, sender) = setup_network_and_wallet().await.unwrap();
 
         let keystore_path = swarm.dir().join(SUI_KEYSTORE_FILENAME);
         let ed25519_keypair = get_ed25519_keypair_from_keystore(keystore_path, &sender).unwrap();
 
-        let gas = get_gas_object_with_wallet_context(&context, &sender)
+        let gas = get_gas_object_with_wallet_context(context, &sender)
             .await
             .expect("Expect {sender} to have at least one gas object");
 

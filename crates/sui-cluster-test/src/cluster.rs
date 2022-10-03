@@ -87,7 +87,6 @@ impl Cluster for RemoteRunningCluster {
                 String::from(TESTNET_FULLNODE_ADDR),
                 String::from(TESTNET_FAUCET_ADDR),
             ),
-            // FIXME restart again
             Env::CustomRemote => (
                 options
                     .fullnode_address

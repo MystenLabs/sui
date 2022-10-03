@@ -267,7 +267,6 @@ impl SuiCommand {
 
                 let validator_set = network_config.validator_set();
 
-                // TODO: clean up gateway config
                 GatewayConfig {
                     db_folder_path: gateway_db_folder_path,
                     validator_set: validator_set.to_owned(),

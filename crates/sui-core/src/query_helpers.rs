@@ -15,6 +15,7 @@ pub struct QueryHelpers<S> {
     _s: std::marker::PhantomData<S>,
 }
 
+// TODO: [gateway-deprecation]
 // TODO: QueryHelpers contains query implementations for the Gateway read API that would otherwise
 // be duplicated between AuthorityState and GatewayState. The gateway read API will be removed
 // soon, since nodes will be handling that. At that point we should delete this struct and move the
