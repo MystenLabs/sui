@@ -404,6 +404,84 @@ module sui::test_scenarioTests {
         ts::end(scenario)
     }
 
+    #[test]
+    fun test_take_immutable_by_id() {
+        let sender = @0x0;
+        let scenario = ts::begin(sender);
+        let uid1 = ts::new_object(&mut scenario);
+        let uid2 = ts::new_object(&mut scenario);
+        let uid3 = ts::new_object(&mut scenario);
+        let id1 = object::uid_to_inner(&uid1);
+        let id2 = object::uid_to_inner(&uid2);
+        let id3 = object::uid_to_inner(&uid3);
+        {
+            let obj1 = Object { id: uid1, value: 10 };
+            let obj2 = Object { id: uid2, value: 20 };
+            let obj3 = Object { id: uid3, value: 30 };
+            transfer::freeze_object(obj1);
+            transfer::freeze_object(obj2);
+            transfer::freeze_object(obj3)
+        };
+        ts::next_tx(&mut scenario, sender);
+        {
+            let obj1 = ts::take_immutable_by_id<Object>(id1);
+            let obj3 = ts::take_immutable_by_id<Object>(id3);
+            let obj2 = ts::take_immutable_by_id<Object>(id2);
+            assert!(obj1.value == 10, VALUE_MISMATCH);
+            assert!(obj2.value == 20, VALUE_MISMATCH);
+            assert!(obj3.value == 30, VALUE_MISMATCH);
+            ts::return_immutable(obj1);
+            ts::return_immutable(obj2);
+            ts::return_immutable(obj3);
+        };
+        ts::end(scenario)
+    }
+
+    #[test]
+    fun test_take_immutable() {
+        let sender = @0x0;
+        let scenario = ts::begin(sender);
+        let uid1 = ts::new_object(&mut scenario);
+        {
+            let obj1 = Object { id: uid1, value: 10 };
+            transfer::freeze_object(obj1);
+        };
+        ts::next_tx(&mut scenario, sender);
+        {
+            assert!(ts::has_most_recent_immutable<Object>(), 1);
+            let obj1 = ts::take_immutable<Object>();
+            assert!(obj1.value == 10, VALUE_MISMATCH);
+            ts::return_immutable(obj1);
+        };
+        ts::end(scenario)
+    }
+
+    #[test]
+    fun test_unreturned_objects() {
+        let sender = @0x0;
+        let scenario = ts::begin(sender);
+        let uid1 = ts::new_object(&mut scenario);
+        let uid2 = ts::new_object(&mut scenario);
+        let uid3 = ts::new_object(&mut scenario);
+        {
+            transfer::share_object(Object { id: uid1, value: 10 });
+            transfer::freeze_object(Object { id: uid2, value: 10 });
+            transfer::transfer(Object { id: uid3, value: 10 }, sender);
+        };
+        ts::next_tx(&mut scenario, sender);
+        let shared = ts::take_shared<Object>();
+        let imm = ts::take_immutable<Object>();
+        let owned = ts::take_from_sender<Object>(&scenario);
+        ts::next_tx(&mut scenario, sender);
+        ts::next_epoch(&mut scenario, sender);
+        ts::next_tx(&mut scenario, sender);
+        ts::next_epoch(&mut scenario, sender);
+        ts::end(scenario);
+        transfer::share_object(shared);
+        transfer::freeze_object(imm);
+        transfer::transfer(owned, sender);
+    }
+
     /// Create object and parent. object is a child of parent.
     /// parent is owned by sender of `scenario`.
     fun create_parent_and_object(scenario: &mut Scenario) {

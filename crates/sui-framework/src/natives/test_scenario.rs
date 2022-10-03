@@ -15,6 +15,7 @@ use linked_hash_map::LinkedHashMap;
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
     account_address::AccountAddress,
+    identifier::Identifier,
     language_storage::{StructTag, TypeTag},
     value::{MoveStruct, MoveValue},
     vm_status::StatusCode,
@@ -74,6 +75,11 @@ pub fn end_transaction(
                 .map(|shared_or_imm_owner| shared_or_imm_owner != owner)
                 .unwrap_or(/* not incorrect */ false);
     }
+    for id in object_runtime_ref.state.deleted_ids.keys() {
+        // mark as "incorrect" if the shared/imm owner was deleted
+        incorrect_shared_or_imm_handling =
+            incorrect_shared_or_imm_handling || taken_shared_or_imm.contains_key(id);
+    }
     let mut object_runtime_state = object_runtime_ref.take_state();
     // find all wrapped objects
     let all_wrapped = find_all_wrapped_objects(context, &new_object_values);
@@ -126,6 +132,7 @@ pub fn end_transaction(
         for s in &mut inventories.immutable_inventory.values_mut() {
             s.remove(id);
         }
+        inventories.taken.remove(id);
     }
     // handle transfers
     let mut created = vec![];
@@ -171,7 +178,7 @@ pub fn end_transaction(
     }
 
     // new input objects are remaining taken objects
-    let mut new_input_objects = inventories
+    object_runtime_ref.state.input_objects = inventories
         .taken
         .iter()
         .map(|(id, owner)| {
@@ -179,13 +186,6 @@ pub fn end_transaction(
             (*id, (/* by_value */ false, *owner))
         })
         .collect::<BTreeMap<_, _>>();
-    // remove wrapped objects from taken
-    // remove wrapped objects from inputs as they are no longer taken
-    for wrapped in &all_wrapped {
-        inventories.taken.remove(wrapped);
-        new_input_objects.remove(wrapped);
-    }
-    object_runtime_ref.state.input_objects = new_input_objects;
     let effects = transaction_effects(
         created,
         written,
@@ -569,20 +569,23 @@ fn find_all_wrapped_objects(
         };
         let blob = value.simple_serialize(&layout).unwrap();
         let move_value = MoveValue::simple_deserialize(&blob, &annotated_layout).unwrap();
+        let uid = UID::type_();
         visit_structs(
             &move_value,
-            |tag| tag == &UID::type_(),
-            |depth, uid| {
-                if depth == 0 {
-                    return;
+            |_, _| panic!("unexpected struct without a struct tag. Layout: {}", layout),
+            |_, _| panic!("unexpected struct without a struct tag. Layout: {}", layout),
+            |depth, tag, fields| {
+                if tag != &uid {
+                    return if depth == 0 {
+                        debug_assert!(!fields.is_empty());
+                        // all object values so the first field is a UID that should be skipped
+                        &fields[1..]
+                    } else {
+                        fields
+                    };
                 }
-                let id = match uid {
-                    MoveStruct::Runtime(_) | MoveStruct::WithFields(_) => unreachable!(),
-                    MoveStruct::WithTypes { fields, .. } => {
-                        debug_assert!(fields.len() == 1);
-                        &fields[0].1
-                    }
-                };
+                debug_assert!(fields.len() == 1);
+                let id = &fields[0].1;
                 let addr_field = match &id {
                     MoveValue::Struct(MoveStruct::WithTypes { fields, .. }) => {
                         debug_assert!(fields.len() == 1);
@@ -595,35 +598,53 @@ fn find_all_wrapped_objects(
                     v => unreachable!("Not reachable via Move type system: {:?}", v),
                 };
                 ids.insert(addr.into());
+                fields
             },
-            |_, _| panic!("unexpected struct without a struct tag. Layout: {}", layout),
         )
     }
     ids
 }
 
-fn visit_structs(
+fn visit_structs<FVisitTypes>(
     move_value: &MoveValue,
-    mut should_visit: impl FnMut(&StructTag) -> bool,
-    mut visit: impl FnMut(/* value depth */ usize, &MoveStruct),
-    mut visit_untagged: impl FnMut(/* value depth */ usize, &MoveStruct),
-) {
+    mut visit_runtime: impl FnMut(/* value depth */ usize, &Vec<MoveValue>) -> &[MoveValue],
+    mut visit_with_fields: impl FnMut(
+        /* value depth */ usize,
+        &Vec<(Identifier, MoveValue)>,
+    ) -> &[(Identifier, MoveValue)],
+    mut visit_with_types: FVisitTypes,
+) where
+    for<'a> FVisitTypes: FnMut(
+        /* value depth */ usize,
+        &StructTag,
+        &'a Vec<(Identifier, MoveValue)>,
+    ) -> &'a [(Identifier, MoveValue)],
+{
     visit_structs_impl(
         move_value,
-        &mut should_visit,
-        &mut visit,
-        &mut visit_untagged,
+        &mut visit_runtime,
+        &mut visit_with_fields,
+        &mut visit_with_types,
         0,
     )
 }
 
-fn visit_structs_impl(
+fn visit_structs_impl<FVisitTypes>(
     move_value: &MoveValue,
-    should_visit: &mut impl FnMut(&StructTag) -> bool,
-    visit: &mut impl FnMut(/* value depth */ usize, &MoveStruct),
-    visit_untagged: &mut impl FnMut(/* value depth */ usize, &MoveStruct),
+    visit_runtime: &mut impl FnMut(/* value depth */ usize, &Vec<MoveValue>) -> &[MoveValue],
+    visit_with_fields: &mut impl FnMut(
+        /* value depth */ usize,
+        &Vec<(Identifier, MoveValue)>,
+    ) -> &[(Identifier, MoveValue)],
+    visit_with_types: &mut FVisitTypes,
     depth: usize,
-) {
+) where
+    for<'a> FVisitTypes: FnMut(
+        /* value depth */ usize,
+        &StructTag,
+        &'a Vec<(Identifier, MoveValue)>,
+    ) -> &'a [(Identifier, MoveValue)],
+{
     let next_depth = depth + 1;
     match move_value {
         MoveValue::U8(_)
@@ -634,28 +655,50 @@ fn visit_structs_impl(
         | MoveValue::Signer(_) => (),
         MoveValue::Vector(vs) => {
             for v in vs {
-                visit_structs_impl(v, should_visit, visit, visit_untagged, next_depth)
+                visit_structs_impl(
+                    v,
+                    visit_runtime,
+                    visit_with_fields,
+                    visit_with_types,
+                    next_depth,
+                )
             }
         }
         MoveValue::Struct(s) => match s {
             MoveStruct::Runtime(vs) => {
-                visit_untagged(depth, s);
+                let vs = visit_runtime(depth, vs);
                 for v in vs {
-                    visit_structs_impl(v, should_visit, visit, visit_untagged, next_depth)
+                    visit_structs_impl(
+                        v,
+                        visit_runtime,
+                        visit_with_fields,
+                        visit_with_types,
+                        next_depth,
+                    )
                 }
             }
             MoveStruct::WithFields(fields) => {
-                visit_untagged(depth, s);
+                let fields = visit_with_fields(depth, fields);
                 for (_, v) in fields {
-                    visit_structs_impl(v, should_visit, visit, visit_untagged, next_depth)
+                    visit_structs_impl(
+                        v,
+                        visit_runtime,
+                        visit_with_fields,
+                        visit_with_types,
+                        next_depth,
+                    )
                 }
             }
             MoveStruct::WithTypes { type_, fields } => {
-                if should_visit(type_) {
-                    visit(depth, s)
-                }
+                let fields = visit_with_types(depth, type_, fields);
                 for (_, v) in fields {
-                    visit_structs_impl(v, should_visit, visit, visit_untagged, next_depth)
+                    visit_structs_impl(
+                        v,
+                        visit_runtime,
+                        visit_with_fields,
+                        visit_with_types,
+                        next_depth,
+                    )
                 }
             }
         },

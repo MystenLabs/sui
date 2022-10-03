@@ -53,7 +53,7 @@ pub(crate) struct ObjectRuntimeState {
     // new ids from object::new
     new_ids: Set<ObjectID>,
     // ids passed to object::delete
-    deleted_ids: Set<ObjectID>,
+    pub(crate) deleted_ids: Set<ObjectID>,
     // transfers to a new owner (shared, immutable, object, or account address)
     // TODO these struct tags can be removed if type_to_type_tag was exposed in the session
     pub(crate) transfers: Vec<(ObjectID, Owner, Type, StructTag, Value)>,
@@ -100,17 +100,6 @@ impl<'a> ObjectRuntime<'a> {
 
     pub fn delete_id(&mut self, id: ObjectID) {
         let was_new = self.state.new_ids.remove(&id).is_some();
-        // testing cleanup if it is an address owned or object owned value
-        if !self.test_inventories.taken.is_empty() {
-            let prev_owner = self.test_inventories.taken.get(&id);
-            let is_address_or_object_owned = matches!(
-                prev_owner,
-                Some(Owner::AddressOwner(_) | Owner::ObjectOwner(_))
-            );
-            if is_address_or_object_owned {
-                self.test_inventories.taken.remove(&id);
-            }
-        }
         if !was_new {
             self.state.deleted_ids.insert(id, ());
         }
@@ -126,20 +115,6 @@ impl<'a> ObjectRuntime<'a> {
         let id: ObjectID = get_object_id(obj.copy_value()?)?
             .value_as::<AccountAddress>()?
             .into();
-        // testing cleanup if it is an address owned or object owned value
-        // or if it is a shared/imm object being returned
-        if !self.test_inventories.taken.is_empty() {
-            let prev_owner = self.test_inventories.taken.get(&id);
-            let is_address_or_object_owned = matches!(
-                prev_owner,
-                Some(Owner::AddressOwner(_) | Owner::ObjectOwner(_))
-            );
-            let is_shared_or_imm_returned = matches!(prev_owner ,
-                    Some(a @ (Owner::Shared | Owner::Immutable)) if a == &owner);
-            if is_address_or_object_owned || is_shared_or_imm_returned {
-                self.test_inventories.taken.remove(&id);
-            }
-        }
         self.state.transfers.push((id, owner, ty, tag, obj));
         Ok(())
     }

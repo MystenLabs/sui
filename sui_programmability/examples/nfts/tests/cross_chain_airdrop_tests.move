@@ -74,6 +74,7 @@ module nfts::cross_chain_airdrop_tests {
             );
             test_scenario::return_to_sender(scenario, oracle);
         };
+        test_scenario::next_tx(scenario, oracle_address);
     }
 
     fun owns_object(owner: address): bool{

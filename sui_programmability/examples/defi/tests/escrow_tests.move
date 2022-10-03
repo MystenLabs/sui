@@ -57,7 +57,7 @@ module defi::escrow_tests {
             let item_b = test_scenario::take_from_sender<EscrowedObj<ItemB, ItemA>>(scenario);
             escrow::return_to_sender<ItemB, ItemA>(item_b);
         };
-
+        test_scenario::next_tx(scenario, THIRD_PARTY_ADDRESS);
         // Alice now owns item A, and Bob now owns item B
         assert!(owns_object<ItemA>(ALICE_ADDRESS), EReturnTransferFailed);
         assert!(owns_object<ItemB>(BOB_ADDRESS), EReturnTransferFailed);
@@ -92,6 +92,7 @@ module defi::escrow_tests {
             let item_b = test_scenario::take_from_sender<EscrowedObj<ItemB, ItemA>>(scenario);
             escrow::swap(item_a, item_b);
         };
+        test_scenario::next_tx(scenario, third_party);
     }
 
     fun send_to_escrow(
@@ -157,6 +158,7 @@ module defi::escrow_tests {
                 ctx
             );
         };
+        test_scenario::next_tx(scenario, BOB_ADDRESS);
         new_scenario
     }
 

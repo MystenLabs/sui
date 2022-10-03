@@ -135,6 +135,7 @@ module defi::shared_escrow_tests {
             shared_escrow::cancel(escrow, ctx);
             test_scenario::return_shared(escrow_val);
         };
+        test_scenario::next_tx(scenario, initiator);
     }
 
     fun exchange(scenario: &mut Scenario, bob: address, item_b_verioned_id: UID) {
@@ -149,6 +150,7 @@ module defi::shared_escrow_tests {
             shared_escrow::exchange(item_b, escrow, ctx);
             test_scenario::return_shared(escrow_val);
         };
+        test_scenario::next_tx(scenario, bob);
     }
 
     fun create_escrow(
@@ -179,6 +181,7 @@ module defi::shared_escrow_tests {
                 ctx
             );
         };
+        test_scenario::next_tx(scenario, alice);
         (new_scenario, item_b_versioned_id)
     }
 
