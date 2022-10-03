@@ -133,6 +133,32 @@ impl TransactionBuilder {
         Ok(data)
     }
 
+    pub async fn pay_sui(
+        &self,
+        signer: SuiAddress,
+        input_coins: Vec<ObjectID>,
+        recipients: Vec<SuiAddress>,
+        amounts: Vec<u64>,
+        gas_budget: u64,
+    ) -> anyhow::Result<TransactionData> {
+        // use the first input coin as the gas payment object, estimated gas cost will be added to
+        // this coin in transaction execution and will be deducted upon gas payment.
+        fp_ensure!(!input_coins.is_empty(), SuiError::EmptyInputCoins.into());
+        let gas_object = self.get_object_ref(input_coins[0]).await?;
+        let handles: Vec<_> = input_coins
+            .into_iter()
+            .map(|id| self.get_object_ref(id))
+            .collect();
+        let coins = join_all(handles)
+            .await
+            .into_iter()
+            .map(|c| c.unwrap())
+            .collect();
+        Ok(TransactionData::new_pay_sui(
+            signer, coins, recipients, amounts, gas_object, gas_budget,
+        ))
+    }
+
     pub async fn move_call(
         &self,
         signer: SuiAddress,

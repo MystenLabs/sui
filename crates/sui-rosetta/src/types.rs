@@ -405,6 +405,7 @@ pub enum OperationType {
     // Readonly
     GasSpent,
     Pay,
+    PaySui,
     TransferObject,
     Publish,
     MoveCall,

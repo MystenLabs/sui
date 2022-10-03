@@ -13,8 +13,8 @@ use sui_types::coin::{COIN_JOIN_FUNC_NAME, COIN_MODULE_NAME, COIN_SPLIT_VEC_FUNC
 use sui_types::event::{Event, TransferType};
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::{
-    CallArg, InputObjectKind, MoveCall, ObjectArg, Pay, SingleTransactionKind, TransactionData,
-    TransactionEffects,
+    CallArg, InputObjectKind, MoveCall, ObjectArg, Pay, PaySui, SingleTransactionKind,
+    TransactionData, TransactionEffects,
 };
 use sui_types::move_package::disassemble_modules;
 use sui_types::{parse_sui_struct_tag, SUI_FRAMEWORK_OBJECT_ID};
@@ -340,6 +340,9 @@ fn parse_operations(
             metadata: Some(json!(change)),
         }],
         SingleTransactionKind::Pay(pay) => parse_pay(sender, gas, budget, pay, counter, status),
+        SingleTransactionKind::PaySui(pay_sui) => {
+            parse_pay_sui(sender, gas, budget, pay_sui, counter, status)
+        }
     };
     if !matches!(tx, SingleTransactionKind::TransferSui(..)) {
         if let Some(effects) = effects {
@@ -476,6 +479,29 @@ fn parse_pay(
             amount: None,
             coin_change: None,
             metadata: Some(json!(pay)),
+        },
+        Operation::gas_budget(counter, status, gas, budget, sender),
+    ]
+}
+
+fn parse_pay_sui(
+    sender: SuiAddress,
+    gas: ObjectRef,
+    budget: u64,
+    pay_sui: &PaySui,
+    counter: &mut IndexCounter,
+    status: Option<OperationStatus>,
+) -> Vec<Operation> {
+    vec![
+        Operation {
+            operation_identifier: counter.next_idx().into(),
+            related_operations: vec![],
+            type_: OperationType::Pay,
+            status,
+            account: Some(AccountIdentifier { address: sender }),
+            amount: None,
+            coin_change: None,
+            metadata: Some(json!(pay_sui)),
         },
         Operation::gas_budget(counter, status, gas, budget, sender),
     ]
@@ -678,6 +704,7 @@ impl TryInto<SuiAction> for Vec<Operation> {
                 }
                 OperationType::TransferObject
                 | OperationType::Pay
+                | OperationType::PaySui
                 | OperationType::GasSpent
                 | OperationType::Genesis
                 | OperationType::MoveCall

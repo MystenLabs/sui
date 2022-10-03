@@ -44,8 +44,8 @@ use sui_types::gas::GasCostSummary;
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::{
     CallArg, CertifiedTransaction, CertifiedTransactionEffects, ExecuteTransactionResponse,
-    ExecutionStatus, InputObjectKind, MoveModulePublish, ObjectArg, Pay, SingleTransactionKind,
-    TransactionData, TransactionEffects, TransactionKind,
+    ExecutionStatus, InputObjectKind, MoveModulePublish, ObjectArg, Pay, PaySui,
+    SingleTransactionKind, TransactionData, TransactionEffects, TransactionKind,
 };
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::move_package::{disassemble_modules, MovePackage};
@@ -1389,6 +1389,33 @@ impl From<Pay> for SuiPay {
     }
 }
 
+#[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, Eq, PartialEq)]
+#[serde(rename = "PaySui")]
+pub struct SuiPaySui {
+    /// The coins to be used for payment
+    pub coins: Vec<SuiObjectRef>,
+    /// The addresses that will receive payment
+    pub recipients: Vec<SuiAddress>,
+    /// The amounts each recipient will receive.
+    /// Must be the same length as amounts
+    pub amounts: Vec<u64>,
+    /// This is needed because the first coin to be transferred
+    /// will be used as gas payment coin as well.
+    pub gas_budget: u64,
+}
+
+impl From<PaySui> for SuiPaySui {
+    fn from(p: PaySui) -> Self {
+        let coins = p.coins.into_iter().map(|c| c.into()).collect();
+        SuiPaySui {
+            coins,
+            recipients: p.recipients,
+            amounts: p.amounts,
+            gas_budget: p.gas_budget,
+        }
+    }
+}
+
 #[derive(Debug, Deserialize, Serialize, JsonSchema, Clone)]
 #[serde(rename = "TransactionData", rename_all = "camelCase")]
 pub struct SuiTransactionData {
@@ -1443,6 +1470,9 @@ pub enum SuiTransactionKind {
     TransferObject(SuiTransferObject),
     /// Pay one or more recipients from a set of input coins
     Pay(SuiPay),
+    /// Pay one or more recipients from a set of Sui coins, the input coins
+    /// are also used to for gas payments.
+    PaySui(SuiPaySui),
     /// Publish a new Move module
     Publish(SuiMovePackage),
     /// Call a function in a published Move module
@@ -1493,6 +1523,23 @@ impl Display for SuiTransactionKind {
                     writeln!(writer, "{}", amount)?
                 }
             }
+            Self::PaySui(p) => {
+                writeln!(writer, "Transaction Kind : Pay SUI")?;
+                writeln!(writer, "Coins:")?;
+                for obj_ref in &p.coins {
+                    writeln!(writer, "Object ID : {}", obj_ref.object_id)?;
+                }
+                writeln!(writer, "Recipients:")?;
+                for recipient in &p.recipients {
+                    writeln!(writer, "{}", recipient)?;
+                }
+                writeln!(writer, "Amounts:")?;
+                for amount in &p.amounts {
+                    writeln!(writer, "{}", amount)?
+                }
+                writeln!(writer, "Gas budget:")?;
+                writeln!(writer, "{}", p.gas_budget)?;
+            }
             Self::Publish(_p) => {
                 write!(writer, "Transaction Kind : Publish")?;
             }
@@ -1533,6 +1580,7 @@ impl TryFrom<SingleTransactionKind> for SuiTransactionKind {
                 amount: t.amount,
             }),
             SingleTransactionKind::Pay(p) => Self::Pay(p.into()),
+            SingleTransactionKind::PaySui(p) => Self::PaySui(p.into()),
             SingleTransactionKind::Publish(p) => Self::Publish(p.try_into()?),
             SingleTransactionKind::Call(c) => Self::Call(SuiMoveCall {
                 package: c.package.into(),

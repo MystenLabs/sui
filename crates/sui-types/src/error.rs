@@ -441,6 +441,9 @@ pub enum SuiError {
 
     #[error("Invalid epoch request response: {0}")]
     InvalidEpochResponse(String),
+
+    #[error("Empty input coins for PaySui transaction")]
+    EmptyInputCoins,
 }
 
 pub type SuiResult<T = ()> = Result<T, SuiError>;

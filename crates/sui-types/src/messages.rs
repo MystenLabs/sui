@@ -96,6 +96,21 @@ pub struct TransferSui {
     pub amount: Option<u64>,
 }
 
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub struct PaySui {
+    /// The coins to be used for payment, including coins to be
+    /// transferred and the gas payment.
+    pub coins: Vec<ObjectRef>,
+    /// The addresses that will receive payment
+    pub recipients: Vec<SuiAddress>,
+    /// The amounts each recipient will receive.
+    /// Must be the same length as recipients
+    pub amounts: Vec<u64>,
+    /// This is needed because the first coin to be transferred
+    /// will be used as gas payment coin as well.
+    pub gas_budget: u64,
+}
+
 /// Pay each recipient the corresponding amount using the input coins
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct Pay {
@@ -128,6 +143,9 @@ pub enum SingleTransactionKind {
     Call(MoveCall),
     /// Initiate a SUI coin transfer between addresses
     TransferSui(TransferSui),
+    /// Pay SUI coins to multiple recipients including the gas payment
+    /// with multiple input coins.
+    PaySui(PaySui),
     /// Pay multiple recipients using multiple input coins
     Pay(Pay),
     /// A system transaction that will update epoch information on-chain.
@@ -242,6 +260,10 @@ impl SingleTransactionKind {
                 .iter()
                 .map(|o| InputObjectKind::ImmOrOwnedMoveObject(*o))
                 .collect(),
+            Self::PaySui(PaySui { coins, .. }) => coins
+                .iter()
+                .map(|o| InputObjectKind::ImmOrOwnedMoveObject(*o))
+                .collect(),
             Self::ChangeEpoch(_) => {
                 vec![InputObjectKind::SharedMoveObject(
                     SUI_SYSTEM_STATE_OBJECT_ID,
@@ -300,6 +322,25 @@ impl Display for SingleTransactionKind {
                 for amount in &p.amounts {
                     writeln!(writer, "{}", amount)?
                 }
+            }
+            Self::PaySui(p) => {
+                writeln!(writer, "Transaction Kind : Pay SUI")?;
+                writeln!(writer, "Coins:")?;
+                for (object_id, seq, digest) in &p.coins {
+                    writeln!(writer, "Object ID : {}", &object_id)?;
+                    writeln!(writer, "Sequence Number : {:?}", seq)?;
+                    writeln!(writer, "Object Digest : {}", encode_bytes_hex(digest.0))?;
+                }
+                writeln!(writer, "Recipients:")?;
+                for recipient in &p.recipients {
+                    writeln!(writer, "{}", recipient)?;
+                }
+                writeln!(writer, "Amounts:")?;
+                for amount in &p.amounts {
+                    writeln!(writer, "{}", amount)?
+                }
+                writeln!(writer, "Gas budget:")?;
+                writeln!(writer, "{}", p.gas_budget)?;
             }
             Self::Publish(_p) => {
                 writeln!(writer, "Transaction Kind : Publish")?;
@@ -403,7 +444,8 @@ impl TransactionKind {
                 let valid = self.single_transactions().all(|s| match s {
                     SingleTransactionKind::Call(_)
                     | SingleTransactionKind::TransferObject(_)
-                    | SingleTransactionKind::Pay(_) => true,
+                    | SingleTransactionKind::Pay(_)
+                    | SingleTransactionKind::PaySui(_) => true,
                     SingleTransactionKind::TransferSui(_)
                     | SingleTransactionKind::ChangeEpoch(_)
                     | SingleTransactionKind::Publish(_) => false,
@@ -420,6 +462,7 @@ impl TransactionKind {
                 | SingleTransactionKind::Call(_)
                 | SingleTransactionKind::Publish(_)
                 | SingleTransactionKind::TransferObject(_)
+                | SingleTransactionKind::PaySui(_)
                 | SingleTransactionKind::TransferSui(_)
                 | SingleTransactionKind::ChangeEpoch(_) => (),
             },
@@ -549,6 +592,23 @@ impl TransactionData {
             coins,
             recipients,
             amounts,
+        }));
+        Self::new(kind, sender, gas_payment, gas_budget)
+    }
+
+    pub fn new_pay_sui(
+        sender: SuiAddress,
+        coins: Vec<ObjectRef>,
+        recipients: Vec<SuiAddress>,
+        amounts: Vec<u64>,
+        gas_payment: ObjectRef,
+        gas_budget: u64,
+    ) -> Self {
+        let kind = TransactionKind::Single(SingleTransactionKind::PaySui(PaySui {
+            coins,
+            recipients,
+            amounts,
+            gas_budget,
         }));
         Self::new(kind, sender, gas_payment, gas_budget)
     }
@@ -1107,6 +1167,8 @@ pub enum ExecutionFailureStatus {
     RecipientsAmountsArityMismatch,
     /// Not enough funds to perform the requested payment
     InsufficientBalance,
+    /// Coin balance overflow when converting from i128 to u64.
+    CoinBalanceOverFlow,
 
     //
     // MoveCall errors
@@ -1212,6 +1274,9 @@ impl ExecutionFailureStatus {
 impl std::fmt::Display for ExecutionFailureStatus {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
+            ExecutionFailureStatus::CoinBalanceOverFlow => {
+                write!(f, "Coin balance of i128 cannot fit into u64")
+            }
             ExecutionFailureStatus::EmptyInputCoins => {
                 write!(f, "Expected a non-empty list of input Coin objects")
             }
