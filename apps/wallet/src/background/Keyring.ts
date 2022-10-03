@@ -67,7 +67,7 @@ class Keyring {
         return this.#keypair;
     }
 
-    public get mnemonic() {
+    public mnemonic() {
         return this.#mnemonic;
     }
 
