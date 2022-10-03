@@ -58,11 +58,11 @@
           },
           {
             "label": "Objects",
-            "fileName": "build/objects"
+            "fileName": "learn/objects"
           },
           {
             "label": "Transactions",
-            "fileName": "build/transactions"
+            "fileName": "learn/transactions"
           },
           {
             "label": "Single-Writer Apps",
