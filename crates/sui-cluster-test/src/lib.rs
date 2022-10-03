@@ -10,8 +10,9 @@ use helper::ObjectChecker;
 use std::sync::Arc;
 use sui::client_commands::WalletContext;
 use sui_faucet::CoinInfo;
-use sui_json_rpc_types::SuiTransactionResponse;
+use sui_json_rpc_types::{SuiCertifiedTransaction, SuiTransactionEffects};
 use sui_types::base_types::TransactionDigest;
+use sui_types::messages::ExecuteTransactionRequestType;
 use sui_types::object::Owner;
 use test_utils::messages::make_transactions_with_wallet_context;
 
@@ -80,12 +81,8 @@ impl TestContext {
         &self.client
     }
 
-    fn get_gateway(&self) -> &SuiClient {
-        self.client.get_gateway()
-    }
-
-    fn get_fullnode(&self) -> &SuiClient {
-        self.client.get_fullnode()
+    fn get_fullnode_client(&self) -> &SuiClient {
+        self.client.get_fullnode_client()
     }
 
     fn get_wallet(&self) -> &WalletContext {
@@ -110,13 +107,18 @@ impl TestContext {
         &self,
         txn_data: TransactionData,
         desc: &str,
-    ) -> SuiTransactionResponse {
+    ) -> (SuiCertifiedTransaction, SuiTransactionEffects) {
         let signature = self.get_context().sign(&txn_data, desc);
-        self.get_gateway()
+        let resp = self
+            .get_fullnode_client()
             .quorum_driver()
-            .execute_transaction(Transaction::new(txn_data, signature))
+            .execute_transaction(
+                Transaction::new(txn_data, signature),
+                Some(ExecuteTransactionRequestType::WaitForLocalExecution),
+            )
             .await
-            .unwrap_or_else(|e| panic!("Failed to execute transaction for {}. {}", desc, e))
+            .unwrap_or_else(|e| panic!("Failed to execute transaction for {}. {}", desc, e));
+        (resp.tx_cert.unwrap(), resp.effects.unwrap())
     }
 
     pub async fn setup(options: ClusterTestOpt) -> Result<Self, anyhow::Error> {
@@ -167,7 +169,7 @@ impl TestContext {
     ) -> (bool, TransactionDigest, u64) {
         match self
             .client
-            .get_fullnode()
+            .get_fullnode_client()
             .read_api()
             .get_transaction(digest)
             .await
@@ -191,7 +193,7 @@ impl TestContext {
                 .map(|coin_info| {
                     ObjectChecker::new(coin_info.id)
                         .owner(Owner::AddressOwner(owner))
-                        .check_into_gas_coin(self.get_fullnode())
+                        .check_into_gas_coin(self.get_fullnode_client())
                 })
                 .collect::<Vec<_>>(),
         )

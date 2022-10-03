@@ -35,7 +35,7 @@ impl TestCaseImpl for NativeTransferTest {
         let signer = ctx.get_wallet_address();
         let (recipient_addr, _): (_, AccountKeyPair) = get_key_pair();
         let data = ctx
-            .get_gateway()
+            .get_fullnode_client()
             .transaction_builder()
             .transfer_object(
                 signer,
@@ -47,9 +47,8 @@ impl TestCaseImpl for NativeTransferTest {
             .await
             .expect("Failed to get transaction data for transfer.");
 
-        let response = ctx.sign_and_execute(data, "coin transfer").await;
+        let (tx_cert, mut effects) = ctx.sign_and_execute(data, "coin transfer").await;
 
-        let mut effects = response.effects;
         if !matches!(effects.status, SuiExecutionStatus::Success { .. }) {
             bail!(
                 "Failed to execute transfer tranasction: {:?}",
@@ -77,12 +76,12 @@ impl TestCaseImpl for NativeTransferTest {
             .check(&event);
 
         // Verify fullnode observes the txn
-        ctx.let_fullnode_sync(vec![response.certificate.transaction_digest], 5)
+        ctx.let_fullnode_sync(vec![tx_cert.transaction_digest], 5)
             .await;
 
         let _ = ObjectChecker::new(*obj_to_transfer.id())
             .owner(Owner::AddressOwner(recipient_addr))
-            .check(ctx.get_fullnode())
+            .check(ctx.get_fullnode_client())
             .await;
 
         Ok(())

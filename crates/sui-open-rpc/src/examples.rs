@@ -31,8 +31,8 @@ use sui_types::crypto::{AuthorityQuorumSignInfo, SuiSignature};
 use sui_types::event::TransferType;
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::{
-    CallArg, MoveCall, SingleTransactionKind, Transaction, TransactionData, TransactionKind,
-    TransferObject,
+    CallArg, ExecuteTransactionRequestType, MoveCall, SingleTransactionKind, Transaction,
+    TransactionData, TransactionKind, TransferObject,
 };
 use sui_types::object::Owner;
 use sui_types::sui_serde::Base64;
@@ -188,6 +188,10 @@ impl RpcExampleProvider {
                     (
                         "pub_key",
                         json!(Base64::from_bytes(signature.public_key_bytes())),
+                    ),
+                    (
+                        "request_type",
+                        json!(ExecuteTransactionRequestType::WaitForLocalExecution),
                     ),
                 ],
                 json!(result),

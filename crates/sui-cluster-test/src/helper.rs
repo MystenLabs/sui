@@ -11,7 +11,7 @@ use sui_types::{
 };
 
 use sui_sdk::SuiClient;
-use tracing::debug;
+use tracing::{debug, trace};
 
 /// A util struct that helps verify Sui Object.
 /// Use builder style to construct the conditions.
@@ -79,7 +79,7 @@ impl ObjectChecker {
             .await
             .or_else(|err| bail!("Failed to get object info (id: {}), err: {err}", object_id))?;
 
-        println!("getting object {object_id}, info :: {object_info:?}");
+        trace!("getting object {object_id}, info :: {object_info:?}");
 
         match object_info {
             GetRawObjectDataResponse::NotExists(_) => {

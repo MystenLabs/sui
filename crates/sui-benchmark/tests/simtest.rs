@@ -9,9 +9,7 @@ mod test {
     use std::time::Duration;
     use sui_config::SUI_KEYSTORE_FILENAME;
     use sui_core::test_utils::test_authority_aggregator;
-    use test_utils::{
-        messages::get_gas_object_with_wallet_context, network::setup_network_and_wallet,
-    };
+    use test_utils::{messages::get_gas_object_with_wallet_context, network::TestClusterBuilder};
 
     use sui_benchmark::{
         drivers::{bench_driver::BenchDriver, driver::Driver, Interval},
@@ -50,7 +48,13 @@ mod test {
 
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load() {
-        let (swarm, context, sender) = setup_network_and_wallet().await.unwrap();
+        // FIXME: use TestClusterBuilder
+        let test_cluster = TestClusterBuilder::new().build().await.unwrap();
+        let swarm = &test_cluster.swarm;
+        let context = &test_cluster.wallet;
+        let sender = test_cluster.get_address();
+        // let (swarm, context, sender) = setup_network_and_wallet().await.unwrap();
+
         let keystore_path = swarm.dir().join(SUI_KEYSTORE_FILENAME);
         let ed25519_keypair = get_ed25519_keypair_from_keystore(keystore_path, &sender).unwrap();
 

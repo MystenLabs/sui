@@ -191,10 +191,10 @@
       "name": "sui_executeTransaction",
       "tags": [
         {
-          "name": "Gateway Transaction Execution API"
+          "name": "APIs to execute transactions."
         }
       ],
-      "description": "Execute the transaction using the transaction data, signature and public key.",
+      "description": "Execute the transaction and wait for results if desired. Request types: 1. ImmediateReturn: immediately returns a response to client without waiting     for any execution results.  Note the transaction may fail without being     noticed by client in this mode. After getting the response, the client     may poll the node to check the result of the transaction. 2. WaitForTxCert: waits for TransactionCertificate and then return to client. 3. WaitForEffectsCert: waits for TransactionEffectsCert and then return to client.     This mode is a proxy for transaction finality. 4. WaitForLocalExecution: waits for TransactionEffectsCert and make sure the node     executed the transaction locally before returning the client. The local execution     makes sure this node is aware of this transaction when client fires subsequent queries.     However if the node fails to execute the transaction locally in a timely manner,     a bool type in the response is set to false to indicated the case.",
       "params": [
         {
           "name": "tx_bytes",
@@ -227,13 +227,21 @@
           "schema": {
             "$ref": "#/components/schemas/Base64"
           }
+        },
+        {
+          "name": "request_type",
+          "description": "The request type",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/ExecuteTransactionRequestType"
+          }
         }
       ],
       "result": {
-        "name": "SuiTransactionResponse",
+        "name": "SuiExecuteTransactionResponse",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/SuiTransactionResponse"
+          "$ref": "#/components/schemas/SuiExecuteTransactionResponse"
         }
       },
       "examples": [
@@ -255,6 +263,10 @@
             {
               "name": "pub_key",
               "value": "i4VvPsULQhSm++R+hpszac5EOLnJbh02NAMScP/4+L0="
+            },
+            {
+              "name": "request_type",
+              "value": "WaitForLocalExecution"
             }
           ],
           "result": {
@@ -2974,6 +2986,31 @@
           }
         }
       },
+      "CertifiedTransactionEffects": {
+        "description": "The certified Transaction Effects which has signatures from >= 2/3 of validators",
+        "type": "object",
+        "required": [
+          "authSignInfo",
+          "effects",
+          "transactionEffectsDigest"
+        ],
+        "properties": {
+          "authSignInfo": {
+            "description": "authority signature information signed by the quorum of the validators.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AuthorityQuorumSignInfo"
+              }
+            ]
+          },
+          "effects": {
+            "$ref": "#/components/schemas/TransactionEffects"
+          },
+          "transactionEffectsDigest": {
+            "$ref": "#/components/schemas/TransactionEffectsDigest"
+          }
+        }
+      },
       "Data": {
         "oneOf": [
           {
@@ -3483,6 +3520,15 @@
           "NewObject",
           "EpochChange",
           "Checkpoint"
+        ]
+      },
+      "ExecuteTransactionRequestType": {
+        "type": "string",
+        "enum": [
+          "ImmediateReturn",
+          "WaitForTxCert",
+          "WaitForEffectsCert",
+          "WaitForLocalExecution"
         ]
       },
       "ExecutionStatus": {
@@ -4124,6 +4170,78 @@
           }
         }
       },
+      "SuiExecuteTransactionResponse": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "ImmediateReturn"
+            ],
+            "properties": {
+              "ImmediateReturn": {
+                "type": "object",
+                "required": [
+                  "tx_digest"
+                ],
+                "properties": {
+                  "tx_digest": {
+                    "$ref": "#/components/schemas/TransactionDigest"
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "TxCert"
+            ],
+            "properties": {
+              "TxCert": {
+                "type": "object",
+                "required": [
+                  "certificate"
+                ],
+                "properties": {
+                  "certificate": {
+                    "$ref": "#/components/schemas/CertifiedTransaction"
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "EffectsCert"
+            ],
+            "properties": {
+              "EffectsCert": {
+                "type": "object",
+                "required": [
+                  "certificate",
+                  "confirmed_local_execution",
+                  "effects"
+                ],
+                "properties": {
+                  "certificate": {
+                    "$ref": "#/components/schemas/CertifiedTransaction"
+                  },
+                  "confirmed_local_execution": {
+                    "type": "boolean"
+                  },
+                  "effects": {
+                    "$ref": "#/components/schemas/CertifiedTransactionEffects"
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      },
       "SuiJsonValue": {},
       "SuiMoveAbility": {
         "type": "string",
@@ -4710,6 +4828,9 @@
             }
           }
         }
+      },
+      "TransactionEffectsDigest": {
+        "$ref": "#/components/schemas/Base64"
       },
       "TransactionKind": {
         "oneOf": [
