@@ -164,11 +164,11 @@ importers:
       eslint-config-react-app: ^7.0.1
       eslint-plugin-react: ^7.31.8
       eslint-webpack-plugin: ^3.2.0
-      events: ^3.3.0
       formik: ^2.2.9
       framer-motion: ^7.5.1
       html-webpack-plugin: ^5.5.0
       mini-css-extract-plugin: ^2.6.1
+      mitt: ^3.0.0
       onchange: ^7.1.0
       plausible-tracker: ^0.3.0
       postcss: ^8.4.6
@@ -215,9 +215,9 @@ importers:
       buffer: 6.0.3
       classnames: 2.3.1
       eslint-plugin-react: 7.31.8_eslint@8.23.0
-      events: 3.3.0
       formik: 2.2.9_react@18.2.0
       framer-motion: 7.5.1_biqbaboplfbrettd7655fr4n2y
+      mitt: 3.0.0
       react: 18.2.0
       react-dom: 18.2.0_react@18.2.0
       react-intl: 6.0.8_n4upredruleo7vrbwztywbpoxq
@@ -11819,6 +11819,7 @@ packages:
   /events/3.3.0:
     resolution: {integrity: sha512-mQw+2fkQbALzQ7V0MY0IqdnXNOeTtP4r0lN9z7AAawCXgqea7bDii20AYrIBrFd/Hx0M2Ocz6S111CaFkUcb0Q==}
     engines: {node: '>=0.8.x'}
+    dev: true
 
   /evp_bytestokey/1.0.3:
     resolution: {integrity: sha512-/f2Go4TognH/KvCISP7OUsHn85hT9nUkxxA9BEWxFn+Oj9o8ZNLm/40hdlgSLyuOimsrTKLUMEorQexp/aPQeA==}
@@ -15429,6 +15430,10 @@ packages:
       stream-each: 1.2.3
       through2: 2.0.5
     dev: true
+
+  /mitt/3.0.0:
+    resolution: {integrity: sha512-7dX2/10ITVyqh4aOSVI9gdape+t9l2/8QxHrFmUXu4EEUpdlxl6RudZUPZoc+zuY2hk1j7XxVroIVIan/pD/SQ==}
+    dev: false
 
   /mixin-deep/1.3.2:
     resolution: {integrity: sha512-WRoDn//mXBiJ1H40rqa3vH0toePwSsGb45iInWlTySa+Uu4k3tYUSxa2v1KqAiLtvlrSzaExqS1gtk96A9zvEA==}

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Ed25519Keypair } from '@mysten/sui.js';
-import { EventEmitter } from 'events';
+import mitt from 'mitt';
 import Browser from 'webextension-polyfill';
 
 import { encrypt, decrypt } from '_shared/cryptography/keystore';
@@ -10,17 +10,14 @@ import { generateMnemonic } from '_shared/utils/bip39';
 
 import type { Keypair } from '@mysten/sui.js';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type ListenerFn = (...args: any[]) => void;
-
-export enum KeyringEvent {
-    lockedStatusUpdate = 'lockedStatusUpdate',
-}
+type KeyringEvents = {
+    lockedStatusUpdate: boolean;
+};
 
 const STORAGE_KEY = 'vault';
 
 class Keyring {
-    #events = new EventEmitter();
+    #events = mitt<KeyringEvents>();
     #locked = true;
     #keypair: Keypair | null = null;
     #mnemonic: string | null = null;
@@ -86,17 +83,9 @@ class Keyring {
         return null;
     }
 
-    public addEventListener(
-        event: KeyringEvent.lockedStatusUpdate,
-        listener: (isLocked: boolean) => void
-    ): void;
-    public addEventListener(event: KeyringEvent, listener: ListenerFn): void {
-        this.#events.addListener(event, listener);
-    }
+    public on = this.#events.on;
 
-    public removeEventListener(event: KeyringEvent, listener: ListenerFn) {
-        this.#events.removeListener(event, listener);
-    }
+    public off = this.#events.off;
 
     // pass null to delete it
     private async storeEncryptedMnemonic(encryptedMnemonic: string | null) {
@@ -123,7 +112,7 @@ class Keyring {
     }
 
     private notifyLockedStatusUpdate(isLocked: boolean) {
-        this.#events.emit(KeyringEvent.lockedStatusUpdate, isLocked);
+        this.#events.emit('lockedStatusUpdate', isLocked);
     }
 }
 
