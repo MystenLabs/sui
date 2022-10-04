@@ -1,13 +1,6 @@
 @use '_utils';
 @use '_values/colors';
 
-.walletaddress {
-    a {
-        color: colors.$sui-dark-blue;
-        @include utils.typography('mono-type');
-    }
-}
-
 .txn-response {
     display: block;
     position: relative;
@@ -77,12 +70,13 @@
         padding-top: 0;
     }
 
-    > div:not(:last-child) {
+    > div:not(:last-child, .no-border) {
         border-bottom: 1px solid #9c9fa433;
     }
 
     .no-border {
         border-bottom: 0;
+        padding-bottom: 0;
     }
 
     .status {
@@ -132,6 +126,13 @@
                 font-size: 10px;
                 color: colors.$sui-steel-blue;
             }
+        }
+    }
+
+    .walletaddress {
+        a {
+            color: colors.$sui-dark-blue;
+            @include utils.typography('mono-type');
         }
     }
 }
