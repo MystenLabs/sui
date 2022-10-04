@@ -195,7 +195,7 @@ fn test_basic_args_linter_pure_args() {
             Value::from(good_hex_val),
             MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8)),
             Some(
-                bcs::to_bytes(&hex::decode(&good_hex_val.trim_start_matches(HEX_PREFIX)).unwrap())
+                bcs::to_bytes(&hex::decode(good_hex_val.trim_start_matches(HEX_PREFIX)).unwrap())
                     .unwrap(),
             ),
         ),
