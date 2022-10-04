@@ -62,14 +62,14 @@ function ReceiptCard({ txDigest }: TxResponseProps) {
             transfer: false,
             address: false,
             addressTruncate: false,
-            failedMsg: 'Failed to Mint',
+            failedMsg: txDigest?.error || 'Failed',
         },
         Sent: {
             txName: 'Sent',
             transfer: 'To',
             addressTruncate: toAddrStr,
             address: txDigest.to,
-            failedMsg: 'Failed to Send',
+            failedMsg: txDigest?.error || 'Failed',
         },
         Received: {
             txName: 'Received',

@@ -82,7 +82,6 @@
     }
 
     .no-border {
-        border-bottom: 0;
         padding-bottom: 0;
     }
 
@@ -191,9 +190,10 @@
 
     .nftfields {
         padding-top: 0;
-        height: 49px;
+        height: 40px;
         display: flex;
         flex-flow: column;
+        gap: 4px;
         justify-content: center;
     }
 
