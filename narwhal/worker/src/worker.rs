@@ -28,7 +28,7 @@ use tower::ServiceBuilder;
 use tracing::info;
 use types::{
     error::DagError,
-    metered_channel::{channel, Receiver, Sender},
+    metered_channel::{channel_with_total, Receiver, Sender},
     Batch, BatchDigest, Empty, PrimaryToWorkerServer, ReconfigureNotification, Transaction,
     TransactionProto, Transactions, TransactionsServer, WorkerPrimaryMessage, WorkerToWorkerServer,
 };
@@ -89,16 +89,26 @@ impl Worker {
         let outbound_network_metrics = Arc::new(metrics.outbound_network_metrics.unwrap());
 
         // Spawn all worker tasks.
-        let (tx_primary, rx_primary) = channel(CHANNEL_CAPACITY, &channel_metrics.tx_primary);
+        let (tx_primary, rx_primary) = channel_with_total(
+            CHANNEL_CAPACITY,
+            &channel_metrics.tx_primary,
+            &channel_metrics.tx_primary_total,
+        );
 
         let initial_committee = (*(*(*committee).load()).clone()).clone();
         let (tx_reconfigure, rx_reconfigure) =
             watch::channel(ReconfigureNotification::NewEpoch(initial_committee));
 
-        let (tx_worker_processor, rx_worker_processor) =
-            channel(CHANNEL_CAPACITY, &channel_metrics.tx_worker_processor);
-        let (tx_synchronizer, rx_synchronizer) =
-            channel(CHANNEL_CAPACITY, &channel_metrics.tx_synchronizer);
+        let (tx_worker_processor, rx_worker_processor) = channel_with_total(
+            CHANNEL_CAPACITY,
+            &channel_metrics.tx_worker_processor,
+            &channel_metrics.tx_worker_processor_total,
+        );
+        let (tx_synchronizer, rx_synchronizer) = channel_with_total(
+            CHANNEL_CAPACITY,
+            &channel_metrics.tx_synchronizer,
+            &channel_metrics.tx_synchronizer_total,
+        );
 
         let worker_service = WorkerToWorkerServer::new(WorkerReceiverHandler {
             tx_processor: tx_worker_processor.clone(),
@@ -269,12 +279,21 @@ impl Worker {
         endpoint_metrics: WorkerEndpointMetrics,
         network: anemo::Network,
     ) -> Vec<JoinHandle<()>> {
-        let (tx_batch_maker, rx_batch_maker) =
-            channel(CHANNEL_CAPACITY, &channel_metrics.tx_batch_maker);
-        let (tx_quorum_waiter, rx_quorum_waiter) =
-            channel(CHANNEL_CAPACITY, &channel_metrics.tx_quorum_waiter);
-        let (tx_client_processor, rx_client_processor) =
-            channel(CHANNEL_CAPACITY, &channel_metrics.tx_client_processor);
+        let (tx_batch_maker, rx_batch_maker) = channel_with_total(
+            CHANNEL_CAPACITY,
+            &channel_metrics.tx_batch_maker,
+            &channel_metrics.tx_batch_maker_total,
+        );
+        let (tx_quorum_waiter, rx_quorum_waiter) = channel_with_total(
+            CHANNEL_CAPACITY,
+            &channel_metrics.tx_quorum_waiter,
+            &channel_metrics.tx_quorum_waiter_total,
+        );
+        let (tx_client_processor, rx_client_processor) = channel_with_total(
+            CHANNEL_CAPACITY,
+            &channel_metrics.tx_client_processor,
+            &channel_metrics.tx_client_processor_total,
+        );
 
         // We first receive clients' transactions from the network.
         let address = self
