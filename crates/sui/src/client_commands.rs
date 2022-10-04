@@ -184,15 +184,15 @@ pub enum SuiClientCommands {
     #[clap(name = "pay")]
     Pay {
         /// The input coins to be used for pay recipients, following the specified amounts.
-        #[clap(long)]
+        #[clap(long, multiple_occurrences = false, multiple_values = true)]
         input_coins: Vec<ObjectID>,
 
         /// The recipient addresses, must be of same length as amounts
-        #[clap(long)]
+        #[clap(long, multiple_occurrences = false, multiple_values = true)]
         recipients: Vec<SuiAddress>,
 
         /// The amounts to be transferred, following the order of recipients.
-        #[clap(long)]
+        #[clap(long, multiple_occurrences = false, multiple_values = true)]
         amounts: Vec<u64>,
 
         /// ID of the gas object for gas payment, in 20 bytes Hex string
