@@ -191,7 +191,7 @@ After you install Cargo, use the following command to install Sui binaries:
 $ cargo install --locked --git https://github.com/MystenLabs/sui.git --branch "devnet" sui sui-gateway
 ```
 
-This adds the following binaries in your `PATH` (ex. under `~/.cargo/bin`) that provide these command line interfaces (CLIs):
+The command installs the following Sui components in `~/.cargo/bin`:
 * [`sui`](cli-client.md) - The Sui CLI tool contains subcommands for enabling `genesis` of validators and accounts, starting the Sui network, and [building and testing Move packages](move/index.md), as well as a [client](cli-client.md) for interacting with the Sui network.
 * [`rpc-server`](json-rpc.md) - run a local Sui gateway service accessible via an RPC interface.
 
@@ -224,7 +224,7 @@ See more [IDE options](https://github.com/MystenLabs/awesome-move#ides) in the [
 
 ## SUI tokens
 
-To [experiment with Devnet](../build/devnet.md) or [use the Sui Wallet Browser Extension](../explore/wallet-browser.md), you will need SUI tokens. These coins have no financial value and will disappear each time we reset the network.
+To [experiment with Devnet](../build/devnet.md) or [use the Sui Wallet Browser Extension](../explore/wallet-browser.md), you can add SUI tokens to your account address. 
 
 To request SUI test tokens:
 
@@ -237,11 +237,11 @@ To request SUI test tokens:
       ```shell
       !faucet 0xd72c2c90ed9d923cb0ed2ca91db5be9e1c9b5ccb
       ```
-1. A bot on the channel will distribute tokens to you automatically.
+1. A bot on the channel distributes tokens to you automatically.
 
 ## Source code
 
-If you need to download and understand the Sui source code:
+View the Sui repo on GitHub:
 https://github.com/MystenLabs/sui
 
 Clone the Sui repository:
