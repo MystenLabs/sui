@@ -372,9 +372,9 @@ module sui::test_scenarioTests {
         };
         ts::next_tx(&mut scenario, sender);
         {
-            let obj1 = ts::take_shared_by_id<Object>(id1);
-            let obj3 = ts::take_shared_by_id<Object>(id3);
-            let obj2 = ts::take_shared_by_id<Object>(id2);
+            let obj1 = ts::take_shared_by_id<Object>(&scenario, id1);
+            let obj3 = ts::take_shared_by_id<Object>(&scenario, id3);
+            let obj2 = ts::take_shared_by_id<Object>(&scenario, id2);
             assert!(obj1.value == 10, VALUE_MISMATCH);
             assert!(obj2.value == 20, VALUE_MISMATCH);
             assert!(obj3.value == 30, VALUE_MISMATCH);
@@ -397,7 +397,7 @@ module sui::test_scenarioTests {
         ts::next_tx(&mut scenario, sender);
         {
             assert!(ts::has_most_recent_shared<Object>(), 1);
-            let obj1 = ts::take_shared<Object>();
+            let obj1 = ts::take_shared<Object>(&mut scenario);
             assert!(obj1.value == 10, VALUE_MISMATCH);
             ts::return_shared(obj1);
         };
@@ -424,9 +424,9 @@ module sui::test_scenarioTests {
         };
         ts::next_tx(&mut scenario, sender);
         {
-            let obj1 = ts::take_immutable_by_id<Object>(id1);
-            let obj3 = ts::take_immutable_by_id<Object>(id3);
-            let obj2 = ts::take_immutable_by_id<Object>(id2);
+            let obj1 = ts::take_immutable_by_id<Object>(&scenario, id1);
+            let obj3 = ts::take_immutable_by_id<Object>(&scenario, id3);
+            let obj2 = ts::take_immutable_by_id<Object>(&scenario, id2);
             assert!(obj1.value == 10, VALUE_MISMATCH);
             assert!(obj2.value == 20, VALUE_MISMATCH);
             assert!(obj3.value == 30, VALUE_MISMATCH);
@@ -449,7 +449,7 @@ module sui::test_scenarioTests {
         ts::next_tx(&mut scenario, sender);
         {
             assert!(ts::has_most_recent_immutable<Object>(), 1);
-            let obj1 = ts::take_immutable<Object>();
+            let obj1 = ts::take_immutable<Object>(&mut scenario);
             assert!(obj1.value == 10, VALUE_MISMATCH);
             ts::return_immutable(obj1);
         };
@@ -469,8 +469,8 @@ module sui::test_scenarioTests {
             transfer::transfer(Object { id: uid3, value: 10 }, sender);
         };
         ts::next_tx(&mut scenario, sender);
-        let shared = ts::take_shared<Object>();
-        let imm = ts::take_immutable<Object>();
+        let shared = ts::take_shared<Object>(&scenario);
+        let imm = ts::take_immutable<Object>(&scenario);
         let owned = ts::take_from_sender<Object>(&scenario);
         ts::next_tx(&mut scenario, sender);
         ts::next_epoch(&mut scenario, sender);

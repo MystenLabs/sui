@@ -51,13 +51,16 @@ module sui::test_scenario {
     ///     transfer::transfer(some_object, copy addr2)
     /// };
     /// // end the first transaction and begin a new one where addr2 is the sender
+    /// // Starting a new transaction moves any objects transferred into their respective
+    /// // inventiories. In other words, if you call `take_from_sender` before `next_tx`, `addr2`
+    /// // will not yet have `some_object`
     /// test_scenario::next_tx(scenario, addr2);
     /// {
     ///     // remove the SomeObject value from addr2's inventory
     ///     let obj = test_scenario::take_from_sender<SomeObject>(scenario);
     ///     // use it to test some function that needs this value
     ///     SomeObject::some_function(obj)
-    /// }
+    /// };
     /// ... // more txes
     /// test_scenario::end(scenario);
     /// ```
@@ -66,12 +69,15 @@ module sui::test_scenario {
         ctx: TxContext,
     }
 
+    /// The result of the tranction. The transaction might not have valid results, for example
+    /// if a cycle of objects was created
     struct TransactionResult {
         /// Some if the "transaction" was successful
         /// None otherwise
         effects: Option<TransactionEffects>,
     }
 
+    /// The effects of a transaction
     struct TransactionEffects has drop {
         /// The objects created this transaction
         created: vector<ID>,
@@ -105,6 +111,7 @@ module sui::test_scenario {
     /// functions below, e.g. `take_from_address_by_id`, the transaction must first be ended via
     /// `next_tx`.
     /// Returns the results from the previous transaction
+    /// Will abort if shared or immutable objects were deleted, transferred, or wrapped
     public fun next_tx_result(scenario: &mut Scenario, sender: address): TransactionResult {
         // create a seed for new transaction digest to ensure that this tx has a different
         // digest (and consequently, different object ID's) than the previous tx
@@ -134,9 +141,7 @@ module sui::test_scenario {
     }
 
     /// Ends the test scenario
-    /// Will abort if not all shared and immutable objects were returned
-    /// Ideally, all account owned objects should be returned too, but this check is not possible
-    /// to implement as the objects may have been wrapped (instead of being returned)
+    /// Will abort if shared or immutable objects were deleted, transferred, or wrapped
     /// Returns the results from the final transaction
     public fun end_result(scenario: Scenario): TransactionResult {
         let Scenario { txn_number: _, ctx: _ } = scenario;
@@ -157,8 +162,8 @@ module sui::test_scenario {
         option::destroy_some(effects)
     }
 
-    /// Asserts the transaction resulted in some error. For example, an object was deleted
-    /// while still having children.
+    /// Asserts the transaction resulted in some error. For example, a circular
+    /// ownership of objects was created
     public fun assert_failure(result: TransactionResult) {
         let TransactionResult { effects } = result;
         assert!(option::is_none(&effects), ETransactionSuccessful);
@@ -223,7 +228,6 @@ module sui::test_scenario {
         effects.frozen
     }
 
-
     /// Accessor for `num_user_events` field of `TransactionEffects`
     public fun num_user_events(effects: &TransactionEffects): u64 {
         effects.num_user_events
@@ -232,14 +236,18 @@ module sui::test_scenario {
     // == from address ==
 
     /// Remove the object of type `T` with ID `id` from the inventory of the `account`
-    /// An object is in the address's inventory if:
-    /// - The object was transferred to the `account` in a previous transaction
-    /// - If the object was previously removed, it was subsequently replaced via a call to
-    ///   `return_to_address`.
+    /// An object is in the address's inventory if the object was transferred to the `account`
+    /// in a previous transaction. Using `return_to_address` is similar to `transfer` and you
+    /// must wait until the next transaction to re-take the object.
     /// Aborts if there is no object of type `T` in the inventory with ID `id`
-    public native fun take_from_address_by_id<T: key>(account: address, id: ID): T;
+    public native fun take_from_address_by_id<T: key>(
+        scenario: &Scenario,
+        account: address,
+        id: ID,
+    ): T;
 
-    /// Returns the most recent object of type `T` transferred to address `account`
+    /// Returns the most recent object of type `T` transferred to address `account` that has not
+    /// been taken
     public native fun most_recent_id_for_address<T: key>(account: address): Option<ID>;
 
     /// helper that returns true iff `most_recent_id_for_address` returns some
@@ -249,13 +257,15 @@ module sui::test_scenario {
 
     /// Helper combining `take_from_address_by_id` and `most_recent_id_for_address`
     /// Aborts if there is no object of type `T` in the inventory of `account`
-    public fun take_from_address<T: key>(account: address): T {
+    public fun take_from_address<T: key>(scenario: &Scenario, account: address): T {
         let id_opt = most_recent_id_for_address<T>(account);
         assert!(option::is_some(&id_opt), EEmptyInventory);
-        take_from_address_by_id(account, option::destroy_some(id_opt))
+        take_from_address_by_id(scenario, account, option::destroy_some(id_opt))
     }
 
-    /// Return `t` to the inventory of the `account`
+    /// Return `t` to the inventory of the `account`. `transfer` can be used directly instead,
+    /// but this function is helpful for test cleanliness as it will abort if the object was not
+    /// originally taken from this account
     public fun return_to_address<T: key>(account: address, t: T) {
         let id = object::id(&t);
         assert!(was_taken_from_address(account, id), ECantReturnObject);
@@ -269,7 +279,7 @@ module sui::test_scenario {
 
     /// helper for `take_from_address_by_id` that operates over the transaction sender
     public fun take_from_sender_by_id<T: key>(scenario: &Scenario, id: ID): T {
-        take_from_address_by_id(sender(scenario), id)
+        take_from_address_by_id(scenario, sender(scenario), id)
     }
 
     /// helper for `most_recent_id_for_address` that operates over the transaction sender
@@ -284,7 +294,7 @@ module sui::test_scenario {
 
     /// helper for `take_from_address` that operates over the transaction sender
     public fun take_from_sender<T: key>(scenario: &Scenario): T {
-        take_from_address(sender(scenario))
+        take_from_address(scenario, sender(scenario))
     }
 
     /// helper for `return_to_address` that operates over the transaction sender
@@ -301,9 +311,9 @@ module sui::test_scenario {
 
     /// Remove the immutable object of type `T` with ID `id` from the global inventory
     /// Aborts if there is no object of type `T` in the inventory with ID `id`
-    public native fun take_immutable_by_id<T: key>(id: ID): T;
+    public native fun take_immutable_by_id<T: key>(scenario: &Scenario, id: ID): T;
 
-    /// Returns the most recent immutable object of type `T`
+    /// Returns the most recent immutable object of type `T` that has not been taken
     public native fun most_recent_immutable_id<T: key>(): Option<ID>;
 
     /// helper that returns true iff `most_recent_immutable_id` returns some
@@ -313,10 +323,10 @@ module sui::test_scenario {
 
     /// Helper combining `take_immutable_by_id` and `most_recent_immutable_id`
     /// Aborts if there is no immutable object of type `T` in the global inventory
-    public fun take_immutable<T: key>(): T {
+    public fun take_immutable<T: key>(scenario: &Scenario): T {
         let id_opt = most_recent_immutable_id<T>();
         assert!(option::is_some(&id_opt), EEmptyInventory);
-        take_immutable_by_id(option::destroy_some(id_opt))
+        take_immutable_by_id(scenario, option::destroy_some(id_opt))
     }
 
     /// Return `t` to the global inventory
@@ -333,9 +343,9 @@ module sui::test_scenario {
 
     /// Remove the shared object of type `T` with ID `id` from the global inventory
     /// Aborts if there is no object of type `T` in the inventory with ID `id`
-    public native fun take_shared_by_id<T: key>(id: ID): T;
+    public native fun take_shared_by_id<T: key>(scenario: &Scenario, id: ID): T;
 
-    /// Returns the most recent shared object of type `T`
+    /// Returns the most recent shared object of type `T` that has not been taken
     public native fun most_recent_id_shared<T: key>(): Option<ID>;
 
     /// helper that returns true iff `most_recent_id_shared` returns some
@@ -345,10 +355,10 @@ module sui::test_scenario {
 
     /// Helper combining `take_shared_by_id` and `most_recent_id_shared`
     /// Aborts if there is no shared object of type `T` in the global inventory
-    public fun take_shared<T: key>(): T {
+    public fun take_shared<T: key>(scenario: &Scenario): T {
         let id_opt = most_recent_id_shared<T>();
         assert!(option::is_some(&id_opt), EEmptyInventory);
-        take_shared_by_id(option::destroy_some(id_opt))
+        take_shared_by_id(scenario, option::destroy_some(id_opt))
     }
 
     /// Return `t` to the global inventory

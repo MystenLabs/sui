@@ -219,7 +219,7 @@ module tutorial::color_objectTests {
         let sender2 = @0x2;
         test_scenario::next_tx(scenario, sender2);
         {
-            let object_val = test_scenario::take_immutable<ColorObject>();
+            let object_val = test_scenario::take_immutable<ColorObject>(scenario);
             let object = &object_val;
             let (red, green, blue) = color_object::get_color(object);
             assert!(red == 255 && green == 0 && blue == 255, 0);

@@ -425,7 +425,7 @@ module defi::pool_tests {
 
         next_tx(test, owner);
         {
-            let pool = test::take_shared<Pool<POOLEY, BEEP>>();
+            let pool = test::take_shared<Pool<POOLEY, BEEP>>(test);
             let pool_mut = &mut pool;
             let (amt_sui, amt_tok, lsp_supply) = pool::get_amounts(pool_mut);
 
@@ -445,7 +445,7 @@ module defi::pool_tests {
 
         next_tx(test, theguy);
         {
-            let pool = test::take_shared<Pool<POOLEY, BEEP>>();
+            let pool = test::take_shared<Pool<POOLEY, BEEP>>(test);
             let pool_mut = &mut pool;
             let (amt_sui, amt_tok, lsp_supply) = pool::get_amounts(pool_mut);
 
@@ -471,7 +471,7 @@ module defi::pool_tests {
 
         next_tx(test, the_guy);
         {
-            let pool = test::take_shared<Pool<POOLEY, BEEP>>();
+            let pool = test::take_shared<Pool<POOLEY, BEEP>>(test);
             let pool_mut = &mut pool;
 
             let token = pool::swap_sui(pool_mut, mint<SUI>(5000000, ctx(test)), ctx(test));
@@ -494,7 +494,7 @@ module defi::pool_tests {
 
         next_tx(test, owner);
         {
-            let pool = test::take_shared<Pool<POOLEY, BEEP>>();
+            let pool = test::take_shared<Pool<POOLEY, BEEP>>(test);
             let pool_mut = &mut pool;
 
             let sui = pool::swap_token(pool_mut, mint<BEEP>(1000, ctx(test)), ctx(test));
@@ -516,7 +516,7 @@ module defi::pool_tests {
         next_tx(test, owner);
         {
             let lsp = mint<LSP<POOLEY, BEEP>>(31622000 - 1, ctx(test));
-            let pool = test::take_shared<Pool<POOLEY, BEEP>>();
+            let pool = test::take_shared<Pool<POOLEY, BEEP>>(test);
             let pool_mut = &mut pool;
 
             let (sui, tok) = pool::remove_liquidity(pool_mut, lsp, ctx(test));
@@ -542,7 +542,7 @@ module defi::pool_tests {
         next_tx(test, owner);
         {
             let lsp = mint<LSP<POOLEY, BEEP>>(31622000, ctx(test));
-            let pool = test::take_shared<Pool<POOLEY, BEEP>>();
+            let pool = test::take_shared<Pool<POOLEY, BEEP>>(test);
             let pool_mut = &mut pool;
 
             let (sui, tok) = pool::remove_liquidity(pool_mut, lsp, ctx(test));

@@ -25,7 +25,7 @@ use move_vm_types::{
     loaded_data::runtime_types::Type,
     natives::function::NativeResult,
     pop_arg,
-    values::{self, Value},
+    values::{self, StructRef, Value},
 };
 use smallvec::smallvec;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
@@ -111,10 +111,14 @@ pub fn end_transaction(
     } = match results {
         Ok(res) => res,
         Err(_) => {
-            return Ok(NativeResult::ok(
-                legacy_test_cost(),
-                smallvec![transaction_result(None)],
-            ));
+            // this case is not yet supported as it will require backing out all changes to a
+            // previous state. This might be done by keeping a copy of the previous taken/input
+            // object sets, but I am not sure.
+            unimplemented!("Handling errors from runtime state is not yet supported.")
+            // return Ok(NativeResult::ok(
+            //     legacy_test_cost(),
+            //     smallvec![transaction_result(None)],
+            // ));
         }
     };
     let object_runtime_ref: &mut ObjectRuntime = context.extensions_mut().get_mut();
@@ -208,6 +212,7 @@ pub fn take_from_address_by_id(
     let specified_ty = get_specified_ty(ty_args);
     let id = pop_id(&mut args)?;
     let account: SuiAddress = pop_arg!(args, AccountAddress).into();
+    pop_arg!(args, StructRef);
     assert!(args.is_empty());
     let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
     let inventories = &mut object_runtime.test_inventories;
@@ -280,6 +285,7 @@ pub fn take_immutable_by_id(
 ) -> PartialVMResult<NativeResult> {
     let specified_ty = get_specified_ty(ty_args);
     let id = pop_id(&mut args)?;
+    pop_arg!(args, StructRef);
     assert!(args.is_empty());
     let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
     let inventories = &mut object_runtime.test_inventories;
@@ -350,6 +356,7 @@ pub fn take_shared_by_id(
 ) -> PartialVMResult<NativeResult> {
     let specified_ty = get_specified_ty(ty_args);
     let id = pop_id(&mut args)?;
+    pop_arg!(args, StructRef);
     assert!(args.is_empty());
     let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
     let inventories = &mut object_runtime.test_inventories;

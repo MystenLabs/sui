@@ -165,7 +165,7 @@ module nfts::marketplaceTests {
     // // SELLER lists Kitty at the Marketplace for 100 SUI.
     // fun list_kitty(scenario: &mut Scenario) {
     //     test_scenario::next_tx(scenario, SELLER);
-    //     let mkp_val = test_scenario::take_shared<Marketplace>();
+    //     let mkp_val = test_scenario::take_shared<Marketplace>(scenario);
     //     let mkp = &mut mkp_val;
     //     let bag = test_scenario::take_child_object<Marketplace, Bag>(scenario, mkp);
     //     let nft = test_scenario::take_from_sender<Kitty>(scenario);
@@ -186,7 +186,7 @@ module nfts::marketplaceTests {
 
     //     test_scenario::next_tx(scenario, SELLER);
     //     {
-    //         let mkp_val = test_scenario::take_shared<Marketplace>();
+    //         let mkp_val = test_scenario::take_shared<Marketplace>(scenario);
     //         let mkp = &mut mkp_val;
     //         let bag = test_scenario::take_child_object<Marketplace, Bag>(scenario, mkp);
     //         let listing = test_scenario::take_child_object<Bag, bag::Item<Listing<Kitty, SUI>>>(scenario, &bag);
@@ -216,7 +216,7 @@ module nfts::marketplaceTests {
     //     // BUYER attempts to delist Kitty and he has no right to do so. :(
     //     test_scenario::next_tx(scenario, BUYER);
     //     {
-    //         let mkp_val = test_scenario::take_shared<Marketplace>();
+    //         let mkp_val = test_scenario::take_shared<Marketplace>(scenario);
     //         let mkp = &mut mkp_val;
     //         let bag = test_scenario::take_child_object<Marketplace, Bag>(scenario, mkp);
     //         let listing = test_scenario::take_child_object<Bag, bag::Item<Listing<Kitty, SUI>>>(scenario, &bag);
@@ -244,7 +244,7 @@ module nfts::marketplaceTests {
     //     test_scenario::next_tx(scenario, BUYER);
     //     {
     //         let coin = test_scenario::take_from_sender<Coin<SUI>>(scenario);
-    //         let mkp_val = test_scenario::take_shared<Marketplace>();
+    //         let mkp_val = test_scenario::take_shared<Marketplace>(scenario);
     //         let mkp = &mut mkp_val;
     //         let bag = test_scenario::take_child_object<Marketplace, Bag>(scenario, mkp);
     //         let listing = test_scenario::take_child_object<Bag, bag::Item<Listing<Kitty, SUI>>>(scenario, &bag);
@@ -277,7 +277,7 @@ module nfts::marketplaceTests {
     //     test_scenario::next_tx(scenario, BUYER);
     //     {
     //         let coin = test_scenario::take_from_sender<Coin<SUI>>(scenario);
-    //         let mkp_val = test_scenario::take_shared<Marketplace>();
+    //         let mkp_val = test_scenario::take_shared<Marketplace>(scenario);
     //         let mkp = &mut mkp_val;
     //         let bag = test_scenario::take_child_object<Marketplace, Bag>(scenario, mkp);
     //         let listing = test_scenario::take_child_object<Bag, bag::Item<Listing<Kitty, SUI>>>(scenario, &bag);

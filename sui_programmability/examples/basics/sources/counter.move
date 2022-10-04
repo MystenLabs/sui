@@ -72,7 +72,7 @@ module basics::counter_test {
 
         test_scenario::next_tx(scenario, user1);
         {
-            let counter_val = test_scenario::take_shared<counter::Counter>();
+            let counter_val = test_scenario::take_shared<counter::Counter>(scenario);
             let counter = &mut counter_val;
 
             assert!(counter::owner(counter) == owner, 0);
@@ -86,7 +86,7 @@ module basics::counter_test {
 
         test_scenario::next_tx(scenario, owner);
         {
-            let counter_val = test_scenario::take_shared<counter::Counter>();
+            let counter_val = test_scenario::take_shared<counter::Counter>(scenario);
             let counter = &mut counter_val;
 
             assert!(counter::owner(counter) == owner, 0);
@@ -99,7 +99,7 @@ module basics::counter_test {
 
         test_scenario::next_tx(scenario, user1);
         {
-            let counter_val = test_scenario::take_shared<counter::Counter>();
+            let counter_val = test_scenario::take_shared<counter::Counter>(scenario);
             let counter = &mut counter_val;
 
             assert!(counter::owner(counter) == owner, 0);

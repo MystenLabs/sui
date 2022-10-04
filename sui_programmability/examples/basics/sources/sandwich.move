@@ -135,7 +135,7 @@ module basics::test_sandwich {
 
         test_scenario::next_tx(scenario, the_guy);
         {
-            let grocery_val = test_scenario::take_shared<Grocery>();
+            let grocery_val = test_scenario::take_shared<Grocery>(scenario);
             let grocery = &mut grocery_val;
             let ctx = test_scenario::ctx(scenario);
 
@@ -164,7 +164,7 @@ module basics::test_sandwich {
 
         test_scenario::next_tx(scenario, owner);
         {
-            let grocery_val = test_scenario::take_shared<Grocery>();
+            let grocery_val = test_scenario::take_shared<Grocery>(scenario);
             let grocery = &mut grocery_val;
             let capability = test_scenario::take_from_sender<GroceryOwnerCapability>(scenario);
 

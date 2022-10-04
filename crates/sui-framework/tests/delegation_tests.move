@@ -29,7 +29,7 @@ module sui::delegation_tests {
 
         test_scenario::next_tx(scenario, DELEGATOR_ADDR_1);
         {
-            let system_state = test_scenario::take_shared<SuiSystemState>();
+            let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
             let system_state_mut_ref = &mut system_state;
 
             let ctx = test_scenario::ctx(scenario);
@@ -59,7 +59,7 @@ module sui::delegation_tests {
             assert!(staking_pool::staked_sui_amount(&staked_sui) == 60, 105);
 
 
-            let system_state = test_scenario::take_shared<SuiSystemState>();
+            let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
             let system_state_mut_ref = &mut system_state;
 
             let ctx = test_scenario::ctx(scenario);

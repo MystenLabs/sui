@@ -24,7 +24,7 @@ module defi::flash_lender_tests {
         // borrower requests and repays a loan of 10 coins + the fee
         test_scenario::next_tx(scenario, borrower);
         {
-            let lender_val = test_scenario::take_shared<FlashLender<SUI>>();
+            let lender_val = test_scenario::take_shared<FlashLender<SUI>>(scenario);
             let lender = &mut lender_val;
             let ctx = test_scenario::ctx(scenario);
 
@@ -42,7 +42,7 @@ module defi::flash_lender_tests {
         // admin withdraws the 1 coin profit from lending
         test_scenario::next_tx(scenario, admin);
         {
-            let lender_val = test_scenario::take_shared<FlashLender<SUI>>();
+            let lender_val = test_scenario::take_shared<FlashLender<SUI>>(scenario);
             let lender = &mut lender_val;
             let admin_cap = test_scenario::take_from_sender<AdminCap>(scenario);
             let ctx = test_scenario::ctx(scenario);

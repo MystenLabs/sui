@@ -129,7 +129,7 @@ module defi::shared_escrow_tests {
     fun cancel(scenario: &mut Scenario, initiator: address) {
         test_scenario::next_tx(scenario, initiator);
         {
-            let escrow_val = test_scenario::take_shared<EscrowedObj<ItemA, ItemB>>();
+            let escrow_val = test_scenario::take_shared<EscrowedObj<ItemA, ItemB>>(scenario);
             let escrow = &mut escrow_val;
             let ctx = test_scenario::ctx(scenario);
             shared_escrow::cancel(escrow, ctx);
@@ -141,7 +141,7 @@ module defi::shared_escrow_tests {
     fun exchange(scenario: &mut Scenario, bob: address, item_b_verioned_id: UID) {
         test_scenario::next_tx(scenario, bob);
         {
-            let escrow_val = test_scenario::take_shared<EscrowedObj<ItemA, ItemB>>();
+            let escrow_val = test_scenario::take_shared<EscrowedObj<ItemA, ItemB>>(scenario);
             let escrow = &mut escrow_val;
             let item_b = ItemB {
                 id: item_b_verioned_id

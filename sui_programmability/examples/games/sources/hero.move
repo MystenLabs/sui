@@ -371,7 +371,7 @@ module games::hero {
         // Player purchases a hero with the coins
         test_scenario::next_tx(scenario, player);
         {
-            let game = test_scenario::take_immutable<GameInfo>();
+            let game = test_scenario::take_immutable<GameInfo>(scenario);
             let game_ref = &game;
             let coin = coin::mint_for_testing(500, test_scenario::ctx(scenario));
             acquire_hero(game_ref, coin, test_scenario::ctx(scenario));
@@ -380,7 +380,7 @@ module games::hero {
         // Admin sends a boar to the Player
         test_scenario::next_tx(scenario, admin);
         {
-            let game = test_scenario::take_immutable<GameInfo>();
+            let game = test_scenario::take_immutable<GameInfo>(scenario);
             let game_ref = &game;
             let admin_cap = test_scenario::take_from_sender<GameAdmin>(scenario);
             send_boar(game_ref, &mut admin_cap, 10, 10, player, test_scenario::ctx(scenario));
@@ -390,7 +390,7 @@ module games::hero {
         // Player slays the boar!
         test_scenario::next_tx(scenario, player);
         {
-            let game = test_scenario::take_immutable<GameInfo>();
+            let game = test_scenario::take_immutable<GameInfo>(scenario);
             let game_ref = &game;
             let hero = test_scenario::take_from_sender<Hero>(scenario);
             let boar = test_scenario::take_from_sender<Boar>(scenario);

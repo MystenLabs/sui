@@ -21,7 +21,7 @@ module fungible_tokens::basket_tests {
         };
         test_scenario::next_tx(scenario, user);
         {
-            let reserve_val = test_scenario::take_shared<Reserve>();
+            let reserve_val = test_scenario::take_shared<Reserve>(scenario);
             let reserve = &mut reserve_val;
             let ctx = test_scenario::ctx(scenario);
             assert!(basket::total_supply(reserve) == 0, 0);

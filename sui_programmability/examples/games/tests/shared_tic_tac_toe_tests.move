@@ -215,7 +215,7 @@ module games::shared_tic_tac_toe_tests {
         test_scenario::next_tx(scenario, player);
         let status;
         {
-            let game_val = test_scenario::take_shared<TicTacToe>();
+            let game_val = test_scenario::take_shared<TicTacToe>(scenario);
             let game = &mut game_val;
             shared_tic_tac_toe::place_mark(game, row, col, test_scenario::ctx(scenario));
             status = shared_tic_tac_toe::get_status(game);

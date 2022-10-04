@@ -70,7 +70,7 @@ module nfts::shared_auction_tests {
         test_scenario::next_tx(scenario, bidder1);
         {
             let coin = test_scenario::take_from_sender<Coin<SUI>>(scenario);
-            let auction_val = test_scenario::take_shared<Auction<SomeItemToSell>>();
+            let auction_val = test_scenario::take_shared<Auction<SomeItemToSell>>(scenario);
             let auction = &mut auction_val;
 
             shared_auction::bid(coin, auction, test_scenario::ctx(scenario));
@@ -84,7 +84,7 @@ module nfts::shared_auction_tests {
         test_scenario::next_tx(scenario, bidder2);
         {
             let coin = test_scenario::take_from_sender<Coin<SUI>>(scenario);
-            let auction_val = test_scenario::take_shared<Auction<SomeItemToSell>>();
+            let auction_val = test_scenario::take_shared<Auction<SomeItemToSell>>(scenario);
             let auction = &mut auction_val;
 
             shared_auction::bid(coin, auction, test_scenario::ctx(scenario));
@@ -106,7 +106,7 @@ module nfts::shared_auction_tests {
         // a transaction by the owner to end auction
         test_scenario::next_tx(scenario, owner);
         {
-            let auction_val = test_scenario::take_shared<Auction<SomeItemToSell>>();
+            let auction_val = test_scenario::take_shared<Auction<SomeItemToSell>>(scenario);
             let auction = &mut auction_val;
 
             // pass auction as mutable reference as its a shared
