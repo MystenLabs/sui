@@ -27,20 +27,20 @@ pub fn all_natives(
     sui_framework_addr: AccountAddress,
 ) -> NativeFunctionTable {
     let sui_natives: &[(&str, &str, NativeFunction)] = &[
-        ("crypto", "ecrecover", make_native!(crypto::ecrecover)),
+        ("ecdsa", "ecrecover", make_native!(crypto::ecrecover)),
         (
-            "crypto",
+            "ecdsa",
             "decompress_pubkey",
             make_native!(crypto::decompress_pubkey),
         ),
-        ("crypto", "keccak256", make_native!(crypto::keccak256)),
+        ("ecdsa", "keccak256", make_native!(crypto::keccak256)),
         (
-            "crypto",
+            "ecdsa",
             "secp256k1_verify",
             make_native!(crypto::secp256k1_verify),
         ),
         (
-            "crypto",
+            "bls12381",
             "bls12381_verify_g1_sig",
             make_native!(crypto::bls12381_verify_g1_sig),
         ),
@@ -53,7 +53,7 @@ pub fn all_natives(
         ("object", "delete_impl", make_native!(object::delete_impl)),
         ("object", "borrow_uid", make_native!(object::borrow_uid)),
         (
-            "crypto",
+            "bulletproofs",
             "native_verify_full_range_proof",
             make_native!(crypto::verify_range_proof),
         ),
@@ -83,7 +83,7 @@ pub fn all_natives(
             make_native!(crypto::scalar_from_bytes),
         ),
         (
-            "crypto",
+            "ed25519",
             "ed25519_verify",
             make_native!(crypto::ed25519_verify),
         ),

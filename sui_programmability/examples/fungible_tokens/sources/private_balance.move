@@ -18,7 +18,7 @@ module fungible_tokens::private_balance {
     /// The maximum unsigned bits that the coin value should be
     const MAX_COIN_BIT: u64 = 64;
 
-    use sui::crypto::{verify_full_range_proof};
+    use sui::bulletproofs::{verify_full_range_proof};
     use sui::elliptic_curve::{Self as ec, RistrettoPoint};
     use std::option::{Self, Option};
 

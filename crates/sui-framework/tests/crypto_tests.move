@@ -3,7 +3,9 @@
 
 #[test_only]
 module sui::crypto_tests {
-    use sui::crypto;
+    use sui::ecdsa;
+    use sui::bls12381;
+    use sui::bulletproofs;
     use sui::elliptic_curve as ec;
     use std::vector;
 
@@ -20,7 +22,7 @@ module sui::crypto_tests {
         let pubkey_bytes = vector[2, 2, 87, 224, 47, 124, 255, 117, 223, 91, 188, 190, 151, 23, 241, 173, 148, 107, 20,
         103, 63, 155, 108, 151, 251, 152, 205, 205, 239, 71, 224, 86, 9];
 
-        let pubkey = crypto::ecrecover(&sig, &hashed_msg);
+        let pubkey = ecdsa::ecrecover(&sig, &hashed_msg);
         assert!(pubkey == pubkey_bytes, 0);
     }
 
@@ -38,7 +40,7 @@ module sui::crypto_tests {
         let pubkey_bytes = vector[2, 227, 45, 244, 40, 101, 233, 113, 53, 172, 251, 101, 243, 186, 231, 27, 220, 134,
         244, 212, 145, 80, 173, 106, 68, 11, 111, 21, 135, 129, 9, 136, 10];
 
-        let pubkey = crypto::ecrecover(&sig, &hashed_msg);
+        let pubkey = ecdsa::ecrecover(&sig, &hashed_msg);
         assert!(pubkey == pubkey_bytes, 0);
     }
 
@@ -48,7 +50,7 @@ module sui::crypto_tests {
         let hashed_msg = vector[0];
         let sig = vector[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-        crypto::ecrecover(&sig, &hashed_msg);
+        ecdsa::ecrecover(&sig, &hashed_msg);
     }
 
     #[test]
@@ -58,7 +60,7 @@ module sui::crypto_tests {
         // incorrect length sig
         let sig = vector[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-        crypto::ecrecover(&sig, &hashed_msg);
+        ecdsa::ecrecover(&sig, &hashed_msg);
     }
 
     #[test]
@@ -67,7 +69,7 @@ module sui::crypto_tests {
         let hashed_msg_bytes = vector[87, 202, 161, 118, 175, 26, 192, 67, 60, 93, 243, 14, 141, 171, 205, 46, 193, 175,
         30, 146, 162, 110, 206, 213, 247, 25, 184, 132, 88, 119, 124, 214];
 
-        let hashed_msg = crypto::keccak256(&msg);
+        let hashed_msg = ecdsa::keccak256(&msg);
         assert!(hashed_msg == hashed_msg_bytes, 0);
     }
 
@@ -85,7 +87,7 @@ module sui::crypto_tests {
         188, 165, 33, 36, 120, 125, 60, 202, 20, 28, 54, 66, 157, 118, 82, 67, 90, 130, 12, 114, 153, 45, 94, 238, 99,
         23];
 
-        let verify = crypto::bls12381_verify_g1_sig(&sig, &pk, &msg);
+        let verify = bls12381::bls12381_verify_g1_sig(&sig, &pk, &msg);
         assert!(verify == true, 0)
     }
 
@@ -103,7 +105,7 @@ module sui::crypto_tests {
         188, 165, 33, 36, 120, 125, 60, 202, 20, 28, 54, 66, 157, 118, 82, 67, 90, 130, 12, 114, 153, 45, 94, 238, 99,
         23];
 
-        let verify = crypto::bls12381_verify_g1_sig(&sig, &pk, &msg);
+        let verify = bls12381::bls12381_verify_g1_sig(&sig, &pk, &msg);
         assert!(verify == false, 0)
     }
 
@@ -121,7 +123,7 @@ module sui::crypto_tests {
         188, 165, 33, 36, 120, 125, 60, 202, 20, 28, 54, 66, 157, 118, 82, 67, 90, 130, 12, 114, 153, 45, 94, 238, 99,
         23];
 
-        let verify = crypto::bls12381_verify_g1_sig(&sig, &pk, &msg);
+        let verify = bls12381::bls12381_verify_g1_sig(&sig, &pk, &msg);
         assert!(verify == false, 0)
     }
 
@@ -139,7 +141,7 @@ module sui::crypto_tests {
         188, 165, 33, 36, 120, 125, 60, 202, 20, 28, 54, 66, 157, 118, 82, 67, 90, 130, 12, 114, 153, 45, 94, 238, 99,
         23];
 
-        let verify = crypto::bls12381_verify_g1_sig(&sig, &pk, &msg);
+        let verify = bls12381::bls12381_verify_g1_sig(&sig, &pk, &msg);
         assert!(verify == false, 0)
     }
 
@@ -262,7 +264,7 @@ module sui::crypto_tests {
             ec::new_scalar_from_u64(blinding_factor)
         );
 
-        crypto::verify_full_range_proof(&bulletproof, &point, bit_length);
+        bulletproofs::verify_full_range_proof(&bulletproof, &point, bit_length);
     }
 
     #[test]
@@ -308,7 +310,7 @@ module sui::crypto_tests {
             ec::new_scalar_from_u64(blinding_factor)
         );
 
-        crypto::verify_full_range_proof(&bulletproof, &point, bit_length);
+        bulletproofs::verify_full_range_proof(&bulletproof, &point, bit_length);
     }
 
     #[test]
@@ -323,7 +325,7 @@ module sui::crypto_tests {
         228, 229, 19, 239, 185, 98, 88, 199, 103, 106, 196, 137, 89, 83, 98, 157, 64, 154, 131, 36, 114, 183, 16, 160,
         40, 40, 93, 254, 196, 115, 58, 44, 27, 176, 162, 116, 158, 70, 90, 24, 41, 43, 139, 214, 1];
 
-        let verify = crypto::secp256k1_verify(&sig, &pk, &msg);
+        let verify = ecdsa::secp256k1_verify(&sig, &pk, &msg);
         assert!(verify == true, 0)
     }
 
@@ -340,7 +342,7 @@ module sui::crypto_tests {
         228, 229, 19, 239, 185, 98, 88, 199, 103, 106, 196, 137, 89, 83, 98, 157, 64, 154, 131, 36, 114, 183, 16, 160,
         40, 40, 93, 254, 196, 115, 58, 44, 27, 176, 162, 116, 158, 70, 90, 24, 41, 43, 139, 214, 0];
 
-        let verify = crypto::secp256k1_verify(&sig, &pk, &msg);
+        let verify = ecdsa::secp256k1_verify(&sig, &pk, &msg);
         assert!(verify == false, 0)
     }
 
@@ -354,7 +356,7 @@ module sui::crypto_tests {
         let sig = vector[156, 122, 114, 255, 30, 125, 177, 100, 107, 159, 148, 67, 203, 26, 53, 99, 170, 58, 99, 68,
         228, 229, 19, 239, 185, 98, 88, 199, 103, 106, 196, 137, 89, 83, 98, 157, 64, 154, 131, 36, 114, 183, 16, 160,
         40, 40, 93, 254, 196, 115, 58, 44, 27, 176, 162, 116, 158, 70, 90, 24, 41, 43, 139, 214];
-        let verify = crypto::secp256k1_verify(&sig, &pk, &msg);
+        let verify = ecdsa::secp256k1_verify(&sig, &pk, &msg);
         assert!(verify == false, 0)
     }
 
@@ -369,7 +371,7 @@ module sui::crypto_tests {
         228, 229, 19, 239, 185, 98, 88, 199, 103, 106, 196, 137, 89, 83, 98, 157, 64, 154, 131, 36, 114, 183, 16, 160,
         40, 40, 93, 254, 196, 115, 58, 44, 27, 176, 162, 116, 158, 70, 90, 24, 41, 43, 139, 214];
 
-        let verify = crypto::secp256k1_verify(&sig, &pk, &msg);
+        let verify = ecdsa::secp256k1_verify(&sig, &pk, &msg);
         assert!(verify == false, 0)
     }
 
@@ -385,7 +387,7 @@ module sui::crypto_tests {
         228, 229, 19, 239, 185, 98, 88, 199, 103, 106, 196, 137, 89, 83, 98, 157, 64, 154, 131, 36, 114, 183, 16, 160,
         40, 40, 93, 254, 196, 115, 58, 44, 27, 176, 162, 116, 158, 70, 90, 24, 41, 43, 139, 214, 1];
 
-        let verify = crypto::secp256k1_verify(&sig, &pk, &msg);
+        let verify = ecdsa::secp256k1_verify(&sig, &pk, &msg);
         assert!(verify == false, 0)
     }
 
@@ -453,8 +455,8 @@ module sui::crypto_tests {
             *v = (*v - 1) % 2;
         };
 
-        let pubkey = crypto::ecrecover(&sig, &hashed_msg);
-        let uncompressed = crypto::decompress_pubkey(&pubkey);
+        let pubkey = ecdsa::ecrecover(&sig, &hashed_msg);
+        let uncompressed = ecdsa::decompress_pubkey(&pubkey);
 
         // Take the last 64 bytes of the uncompressed pubkey.
         let uncompressed_64 = vector::empty<u8>();
@@ -466,7 +468,7 @@ module sui::crypto_tests {
         };
 
         // Take the last 20 bytes of the hash of the 64-bytes uncompressed pubkey.
-        let hashed = crypto::keccak256(&uncompressed_64);
+        let hashed = ecdsa::keccak256(&uncompressed_64);
         let addr = vector::empty<u8>();
         let i = 12;
         while (i < 32) {
