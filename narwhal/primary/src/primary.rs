@@ -46,7 +46,7 @@ use tower::ServiceBuilder;
 use tracing::info;
 use types::{
     error::DagError,
-    metered_channel::{channel, Receiver, Sender},
+    metered_channel::{channel_with_total, Receiver, Sender},
     BatchDigest, BatchMessage, Certificate, Header, HeaderDigest, PrimaryToPrimary,
     PrimaryToPrimaryServer, ReconfigureNotification, RoundVoteDigestPair, WorkerInfoResponse,
     WorkerPrimaryError, WorkerPrimaryMessage, WorkerToPrimary, WorkerToPrimaryServer,
@@ -106,54 +106,86 @@ impl Primary {
         let outbound_network_metrics = Arc::new(metrics.outbound_network_metrics.unwrap());
         let node_metrics = Arc::new(metrics.node_metrics.unwrap());
 
-        let (tx_others_digests, rx_others_digests) =
-            channel(CHANNEL_CAPACITY, &primary_channel_metrics.tx_others_digests);
-        let (tx_our_digests, rx_our_digests) =
-            channel(CHANNEL_CAPACITY, &primary_channel_metrics.tx_our_digests);
-        let (tx_parents, rx_parents) =
-            channel(CHANNEL_CAPACITY, &primary_channel_metrics.tx_parents);
-        let (tx_headers, rx_headers) =
-            channel(CHANNEL_CAPACITY, &primary_channel_metrics.tx_headers);
-        let (tx_sync_headers, rx_sync_headers) =
-            channel(CHANNEL_CAPACITY, &primary_channel_metrics.tx_sync_headers);
-        let (tx_sync_certificates, rx_sync_certificates) = channel(
+        let (tx_others_digests, rx_others_digests) = channel_with_total(
+            CHANNEL_CAPACITY,
+            &primary_channel_metrics.tx_others_digests,
+            &primary_channel_metrics.tx_others_digests_total,
+        );
+        let (tx_our_digests, rx_our_digests) = channel_with_total(
+            CHANNEL_CAPACITY,
+            &primary_channel_metrics.tx_our_digests,
+            &primary_channel_metrics.tx_our_digests_total,
+        );
+        let (tx_parents, rx_parents) = channel_with_total(
+            CHANNEL_CAPACITY,
+            &primary_channel_metrics.tx_parents,
+            &primary_channel_metrics.tx_parents_total,
+        );
+        let (tx_headers, rx_headers) = channel_with_total(
+            CHANNEL_CAPACITY,
+            &primary_channel_metrics.tx_headers,
+            &primary_channel_metrics.tx_headers_total,
+        );
+        let (tx_sync_headers, rx_sync_headers) = channel_with_total(
+            CHANNEL_CAPACITY,
+            &primary_channel_metrics.tx_sync_headers,
+            &primary_channel_metrics.tx_sync_headers_total,
+        );
+        let (tx_sync_certificates, rx_sync_certificates) = channel_with_total(
             CHANNEL_CAPACITY,
             &primary_channel_metrics.tx_sync_certificates,
+            &primary_channel_metrics.tx_sync_certificates_total,
         );
-        let (tx_headers_loopback, rx_headers_loopback) = channel(
+        let (tx_headers_loopback, rx_headers_loopback) = channel_with_total(
             CHANNEL_CAPACITY,
             &primary_channel_metrics.tx_headers_loopback,
+            &primary_channel_metrics.tx_headers_loopback_total,
         );
-        let (tx_certificates_loopback, rx_certificates_loopback) = channel(
+        let (tx_certificates_loopback, rx_certificates_loopback) = channel_with_total(
             CHANNEL_CAPACITY,
             &primary_channel_metrics.tx_certificates_loopback,
+            &primary_channel_metrics.tx_certificates_loopback_total,
         );
-        let (tx_primary_messages, rx_primary_messages) = channel(
+        let (tx_primary_messages, rx_primary_messages) = channel_with_total(
             CHANNEL_CAPACITY,
             &primary_channel_metrics.tx_primary_messages,
+            &primary_channel_metrics.tx_primary_messages_total,
         );
-        let (tx_helper_requests, rx_helper_requests) = channel(
+        let (tx_helper_requests, rx_helper_requests) = channel_with_total(
             CHANNEL_CAPACITY,
             &primary_channel_metrics.tx_helper_requests,
+            &primary_channel_metrics.tx_helper_requests_total,
         );
-        let (tx_batches, rx_batches) =
-            channel(CHANNEL_CAPACITY, &primary_channel_metrics.tx_batches);
-        let (tx_block_removal_commands, rx_block_removal_commands) = channel(
+        let (tx_batches, rx_batches) = channel_with_total(
+            CHANNEL_CAPACITY,
+            &primary_channel_metrics.tx_batches,
+            &primary_channel_metrics.tx_batches_total,
+        );
+        let (tx_block_removal_commands, rx_block_removal_commands) = channel_with_total(
             CHANNEL_CAPACITY,
             &primary_channel_metrics.tx_block_removal_commands,
+            &primary_channel_metrics.tx_block_removal_commands_total,
         );
-        let (tx_batch_removal, rx_batch_removal) =
-            channel(CHANNEL_CAPACITY, &primary_channel_metrics.tx_batch_removal);
-        let (tx_block_synchronizer_commands, rx_block_synchronizer_commands) = channel(
+        let (tx_batch_removal, rx_batch_removal) = channel_with_total(
+            CHANNEL_CAPACITY,
+            &primary_channel_metrics.tx_batch_removal,
+            &primary_channel_metrics.tx_batch_removal_total,
+        );
+        let (tx_block_synchronizer_commands, rx_block_synchronizer_commands) = channel_with_total(
             CHANNEL_CAPACITY,
             &primary_channel_metrics.tx_block_synchronizer_commands,
+            &primary_channel_metrics.tx_block_synchronizer_commands_total,
         );
-        let (tx_availability_responses, rx_availability_responses) = channel(
+        let (tx_availability_responses, rx_availability_responses) = channel_with_total(
             CHANNEL_CAPACITY,
             &primary_channel_metrics.tx_availability_responses,
+            &primary_channel_metrics.tx_availability_responses_total,
         );
-        let (tx_state_handler, rx_state_handler) =
-            channel(CHANNEL_CAPACITY, &primary_channel_metrics.tx_state_handler);
+        let (tx_state_handler, rx_state_handler) = channel_with_total(
+            CHANNEL_CAPACITY,
+            &primary_channel_metrics.tx_state_handler,
+            &primary_channel_metrics.tx_state_handler_total,
+        );
 
         // we need to hack the gauge from this consensus channel into the primary registry
         // This avoids a cyclic dependency in the initialization of consensus and primary
