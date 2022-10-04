@@ -71,24 +71,24 @@ name-variant = "0.1.0"
 store = { version = "0.1.0", package = "typed-store" }
 
 # Move dependencies
-move-binary-format = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e" }
-move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e" }
-move-bytecode-verifier = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e" }
-move-cli = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e" }
-move-compiler = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e" }
-move-core-types = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e", features = ["address20"] }
-move-disassembler = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e" }
-move-package = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e" }
-move-stdlib = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e" }
-move-vm-runtime = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e" }
-move-unit-test = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e" }
-move-vm-test-utils = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e" }
-move-vm-types = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e" }
-move-command-line-common = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e" }
-move-transactional-test-runner = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e" }
-move-ir-types = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e" }
-move-prover = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e" }
-move-prover-boogie-backend = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e" }
+move-binary-format = { git = "https://github.com/move-language/move", rev = "05678c0533b6ffd5fcd91a6109648b6b089f55f3" }
+move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "05678c0533b6ffd5fcd91a6109648b6b089f55f3" }
+move-bytecode-verifier = { git = "https://github.com/move-language/move", rev = "05678c0533b6ffd5fcd91a6109648b6b089f55f3" }
+move-cli = { git = "https://github.com/move-language/move", rev = "05678c0533b6ffd5fcd91a6109648b6b089f55f3" }
+move-compiler = { git = "https://github.com/move-language/move", rev = "05678c0533b6ffd5fcd91a6109648b6b089f55f3" }
+move-core-types = { git = "https://github.com/move-language/move", rev = "05678c0533b6ffd5fcd91a6109648b6b089f55f3", features = ["address20"] }
+move-disassembler = { git = "https://github.com/move-language/move", rev = "05678c0533b6ffd5fcd91a6109648b6b089f55f3" }
+move-package = { git = "https://github.com/move-language/move", rev = "05678c0533b6ffd5fcd91a6109648b6b089f55f3" }
+move-stdlib = { git = "https://github.com/move-language/move", rev = "05678c0533b6ffd5fcd91a6109648b6b089f55f3" }
+move-vm-runtime = { git = "https://github.com/move-language/move", rev = "05678c0533b6ffd5fcd91a6109648b6b089f55f3" }
+move-unit-test = { git = "https://github.com/move-language/move", rev = "05678c0533b6ffd5fcd91a6109648b6b089f55f3" }
+move-vm-test-utils = { git = "https://github.com/move-language/move", rev = "05678c0533b6ffd5fcd91a6109648b6b089f55f3" }
+move-vm-types = { git = "https://github.com/move-language/move", rev = "05678c0533b6ffd5fcd91a6109648b6b089f55f3" }
+move-command-line-common = { git = "https://github.com/move-language/move", rev = "05678c0533b6ffd5fcd91a6109648b6b089f55f3" }
+move-transactional-test-runner = { git = "https://github.com/move-language/move", rev = "05678c0533b6ffd5fcd91a6109648b6b089f55f3" }
+move-ir-types = { git = "https://github.com/move-language/move", rev = "05678c0533b6ffd5fcd91a6109648b6b089f55f3" }
+move-prover = { git = "https://github.com/move-language/move", rev = "05678c0533b6ffd5fcd91a6109648b6b089f55f3" }
+move-prover-boogie-backend = { git = "https://github.com/move-language/move", rev = "05678c0533b6ffd5fcd91a6109648b6b089f55f3" }
 
 # Use the same workspace-hack across crates.
 workspace-hack = { path = "crates/workspace-hack" }
