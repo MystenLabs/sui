@@ -62,9 +62,6 @@ async fn get_network_peers_from_admin_server() {
     let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
-    // println!("Primary 1 Information");
-    // dbg!(authority_1.network_keypair().copy().public());
-
     // Spawn Primary 1
     Primary::spawn(
         name_1.clone(),
@@ -103,13 +100,10 @@ async fn get_network_peers_from_admin_server() {
         ..Parameters::default()
     };
 
-    // println!("Worker 1 Information");
-    // dbg!(worker_1_keypair.copy().public());
-
     // Spawn a `Worker` instance for primary 1.
     Worker::spawn(
         name_1,
-        worker_1_keypair,
+        worker_1_keypair.copy(),
         worker_id,
         Arc::new(ArcSwap::from_pointee(committee.clone())),
         worker_cache.clone(),
@@ -129,9 +123,6 @@ async fn get_network_peers_from_admin_server() {
     .await
     .unwrap();
 
-    // println!("Primary 1 Known Peers");
-    // dbg!(resp.clone());
-
     // Assert we returned 19 peers (3 other primaries + 4 workers + 4*3 other workers)
     assert_eq!(19, resp.len());
 
@@ -146,9 +137,6 @@ async fn get_network_peers_from_admin_server() {
     .await
     .unwrap();
 
-    // println!("Primary 1 Conneected Peers");
-    // dbg!(resp.clone());
-
     // Assert we returned 1 peers (only 1 worker spawned)
     assert_eq!(1, resp.len());
 
@@ -161,6 +149,7 @@ async fn get_network_peers_from_admin_server() {
         ..Parameters::default()
     };
 
+    // TODO: Rework test-utils so that macro can be used for the channels below.
     let (tx_new_certificates_2, rx_new_certificates_2) = types::metered_channel::channel(
         CHANNEL_CAPACITY,
         &prometheus::IntGauge::new(
@@ -188,9 +177,6 @@ async fn get_network_peers_from_admin_server() {
     let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
     let (tx_reconfigure_2, _rx_reconfigure_2) = watch::channel(initial_committee);
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-
-    // println!("Primary 2 Information");
-    // dbg!(authority_2.network_keypair().copy().public());
 
     // Spawn Primary 2
     Primary::spawn(
@@ -222,6 +208,10 @@ async fn get_network_peers_from_admin_server() {
     // Wait for tasks to start
     tokio::time::sleep(Duration::from_secs(1)).await;
 
+    let primary_1_peer_id = hex::encode(authority_1.network_keypair().copy().public().0.as_bytes());
+    let primary_2_peer_id = hex::encode(authority_2.network_keypair().copy().public().0.as_bytes());
+    let worker_1_peer_id = hex::encode(worker_1_keypair.copy().public().0.as_bytes());
+
     // Test getting all connected peers for primary 1
     let resp = reqwest::get(format!(
         "http://127.0.0.1:{}/peers",
@@ -233,11 +223,12 @@ async fn get_network_peers_from_admin_server() {
     .await
     .unwrap();
 
-    // println!("Primary 1 Connected Peers");
-    // dbg!(resp.clone());
-
     // Assert we returned 2 peers (1 other primary spawned + 1 worker spawned)
     assert_eq!(2, resp.len());
+
+    // Assert peer ids are correct
+    let expected_peer_ids = vec![&primary_2_peer_id, &worker_1_peer_id];
+    assert!(expected_peer_ids.iter().all(|e| resp.contains(e)));
 
     // Test getting all connected peers for primary 2
     let resp = reqwest::get(format!(
@@ -250,9 +241,10 @@ async fn get_network_peers_from_admin_server() {
     .await
     .unwrap();
 
-    // println!("Primary 2 Connected Peers");
-    // dbg!(resp.clone());
-
     // Assert we returned 2 peers (1 other primary spawned + 1 other worker)
     assert_eq!(2, resp.len());
+
+    // Assert peer ids are correct
+    let expected_peer_ids = vec![&primary_1_peer_id, &worker_1_peer_id];
+    assert!(expected_peer_ids.iter().all(|e| resp.contains(e)));
 }

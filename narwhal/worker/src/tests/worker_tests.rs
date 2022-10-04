@@ -119,9 +119,6 @@ async fn get_network_peers_from_admin_server() {
     let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
-    // println!("Primary 1 Information");
-    // dbg!(authority_1.network_keypair().copy().public());
-
     // Spawn Primary 1
     Primary::spawn(
         name_1.clone(),
@@ -160,13 +157,10 @@ async fn get_network_peers_from_admin_server() {
         ..Parameters::default()
     };
 
-    // println!("Worker 1 Information");
-    // dbg!(worker_1_keypair.copy().public());
-
     // Spawn a `Worker` instance for primary 1.
     Worker::spawn(
         name_1,
-        worker_1_keypair,
+        worker_1_keypair.copy(),
         worker_id,
         Arc::new(ArcSwap::from_pointee(committee.clone())),
         worker_cache.clone(),
@@ -174,6 +168,9 @@ async fn get_network_peers_from_admin_server() {
         store.batch_store.clone(),
         metrics_1.clone(),
     );
+
+    let primary_1_peer_id = hex::encode(authority_1.network_keypair().copy().public().0.as_bytes());
+    let worker_1_peer_id = hex::encode(worker_1_keypair.copy().public().0.as_bytes());
 
     // Wait for tasks to start
     tokio::time::sleep(Duration::from_secs(1)).await;
@@ -188,9 +185,6 @@ async fn get_network_peers_from_admin_server() {
     .json::<Vec<String>>()
     .await
     .unwrap();
-
-    // println!("Worker 1 Known Peers");
-    // dbg!(resp.clone());
 
     // Assert we returned 3 peers (1 primary + 3 other workers)
     assert_eq!(4, resp.len());
@@ -208,6 +202,10 @@ async fn get_network_peers_from_admin_server() {
 
     // Assert we returned 1 peer (only worker's primary spawned)
     assert_eq!(1, resp.len());
+
+    // Assert peer ids are correct
+    let expected_peer_ids = vec![&primary_1_peer_id];
+    assert!(expected_peer_ids.iter().all(|e| resp.contains(e)));
 
     let authority_2 = fixture.authorities().nth(1).unwrap();
     let name_2 = authority_2.public_key();
@@ -228,9 +226,6 @@ async fn get_network_peers_from_admin_server() {
     let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
     let (tx_reconfigure_2, _rx_reconfigure_2) = watch::channel(initial_committee);
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-
-    // println!("Primary 2 Information");
-    // dbg!(authority_2.network_keypair().copy().public());
 
     // Spawn Primary 2
     Primary::spawn(
@@ -270,13 +265,10 @@ async fn get_network_peers_from_admin_server() {
         ..Parameters::default()
     };
 
-    // println!("Worker 2 Information");
-    // dbg!(worker_2_keypair.copy().public());
-
     // Spawn a `Worker` instance for primary 2.
     Worker::spawn(
         name_2,
-        worker_2_keypair,
+        worker_2_keypair.copy(),
         worker_id,
         Arc::new(ArcSwap::from_pointee(committee.clone())),
         worker_cache.clone(),
@@ -289,6 +281,9 @@ async fn get_network_peers_from_admin_server() {
     // have  a chance to connect to each other.
     tokio::time::sleep(Duration::from_secs(5)).await;
 
+    let primary_2_peer_id = hex::encode(authority_2.network_keypair().copy().public().0.as_bytes());
+    let worker_2_peer_id = hex::encode(worker_2_keypair.copy().public().0.as_bytes());
+
     // Test getting all known peers for worker 2 (worker at index 0 for primary 2)
     let resp = reqwest::get(format!(
         "http://127.0.0.1:{}/known_peers",
@@ -299,9 +294,6 @@ async fn get_network_peers_from_admin_server() {
     .json::<Vec<String>>()
     .await
     .unwrap();
-
-    // println!("Worker 2 Known Peers");
-    // dbg!(resp.clone());
 
     // Assert we returned 4 peers (1 primary + 3 other workers)
     assert_eq!(4, resp.len());
@@ -317,11 +309,12 @@ async fn get_network_peers_from_admin_server() {
     .await
     .unwrap();
 
-    // println!("Worker 1 Connected Peers");
-    // dbg!(resp.clone());
-
     // Assert we returned 3 peers (2 primaries spawned + 1 other worker spawned)
     assert_eq!(3, resp.len());
+
+    // Assert peer ids are correct
+    let expected_peer_ids = vec![&primary_1_peer_id, &primary_2_peer_id, &worker_2_peer_id];
+    assert!(expected_peer_ids.iter().all(|e| resp.contains(e)));
 
     // Test getting all connected peers for worker 2 (worker at index 0 for primary 2)
     let resp = reqwest::get(format!(
@@ -334,11 +327,12 @@ async fn get_network_peers_from_admin_server() {
     .await
     .unwrap();
 
-    // println!("Worker 2 Connected Peers");
-    // dbg!(resp.clone());
-
     // Assert we returned 3 peers (2 primaries spawned  + 1 other worker spawned)
     assert_eq!(3, resp.len());
+
+    // Assert peer ids are correct
+    let expected_peer_ids = vec![&primary_1_peer_id, &primary_2_peer_id, &worker_1_peer_id];
+    assert!(expected_peer_ids.iter().all(|e| resp.contains(e)));
 
     // Assert network connectivity metrics are also set as expected
     let mut m = std::collections::HashMap::new();
