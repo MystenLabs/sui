@@ -269,12 +269,10 @@ async fn checkpoint_with_shared_objects() {
     spawn_checkpoint_processes(&configs, &handles).await;
 
     // Publish the move package to all authorities and get the new package ref.
-    tokio::task::yield_now().await;
     let gas = gas_objects.pop().unwrap();
     let package_ref = publish_counter_package(gas, configs.validator_set()).await;
 
     // Make a transaction to create a counter.
-    tokio::task::yield_now().await;
     let create_counter_transaction = move_transaction(
         gas_objects.pop().unwrap(),
         "counter",
@@ -294,7 +292,6 @@ async fn checkpoint_with_shared_objects() {
     let ((counter_id, _, _), _) = effects.effects.created[0];
 
     // We can finally make a valid shared-object transaction (incrementing the counter).
-    tokio::task::yield_now().await;
     let increment_counter_transaction = move_transaction(
         gas_objects.pop().unwrap(),
         "counter",

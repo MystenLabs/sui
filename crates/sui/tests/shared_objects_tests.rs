@@ -38,7 +38,6 @@ async fn shared_object_transaction() {
 
     // Submit the transaction. Note that this transaction is random and we do not expect
     // it to be successfully executed by the Move execution engine.
-    tokio::task::yield_now().await;
     let _effects = submit_shared_object_transaction(transaction, &configs.validator_set()[0..1])
         .await
         .unwrap();
@@ -56,12 +55,10 @@ async fn many_shared_object_transactions() {
     let _handles = spawn_test_authorities(objects, &configs).await;
 
     // Make a test shared object certificate.
-    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
     let transaction = test_shared_object_transactions().pop().unwrap();
 
     // Submit the transaction. Note that this transaction is random and we do not expect
     // it to be successfully executed by the Move execution engine.
-    tokio::task::yield_now().await;
     let _effects = submit_shared_object_transaction(transaction, configs.validator_set())
         .await
         .unwrap();
@@ -77,14 +74,12 @@ async fn call_shared_object_contract() {
     // the handles (or the authorities will stop).
     let configs = test_authority_configs();
     let _handles = spawn_test_authorities(gas_objects.clone(), &configs).await;
+
     // Publish the move package to all authorities and get the new package ref.
-    tokio::task::yield_now().await;
-    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
     let package_ref =
         publish_counter_package(gas_objects.pop().unwrap(), configs.validator_set()).await;
 
     // Make a transaction to create a counter.
-    tokio::task::yield_now().await;
     let transaction = move_transaction(
         gas_objects.pop().unwrap(),
         "counter",
@@ -97,7 +92,6 @@ async fn call_shared_object_contract() {
     let ((counter_id, _, _), _) = effects.created[0];
 
     // Ensure the value of the counter is `0`.
-    tokio::task::yield_now().await;
     let transaction = move_transaction(
         gas_objects.pop().unwrap(),
         "counter",
@@ -114,7 +108,6 @@ async fn call_shared_object_contract() {
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
 
     // Make a transaction to increment the counter.
-    tokio::task::yield_now().await;
     let transaction = move_transaction(
         gas_objects.pop().unwrap(),
         "counter",
@@ -128,7 +121,6 @@ async fn call_shared_object_contract() {
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
 
     // Ensure the value of the counter is `1`.
-    tokio::task::yield_now().await;
     let transaction = move_transaction(
         gas_objects.pop().unwrap(),
         "counter",
@@ -158,12 +150,10 @@ async fn shared_object_flood() {
     let _handles = spawn_test_authorities(gas_objects.clone(), &configs).await;
 
     // Publish the move package to all authorities and get the new package ref.
-    tokio::task::yield_now().await;
     let package_ref =
         publish_counter_package(gas_objects.pop().unwrap(), configs.validator_set()).await;
 
     // Make a transaction to create a counter.
-    tokio::task::yield_now().await;
     let transaction = move_transaction(
         gas_objects.pop().unwrap(),
         "counter",
@@ -176,7 +166,6 @@ async fn shared_object_flood() {
     let ((counter_id, _, _), _) = effects.created[0];
 
     // Ensure the value of the counter is `0`.
-    tokio::task::yield_now().await;
     let transaction = move_transaction(
         gas_objects.pop().unwrap(),
         "counter",
@@ -193,7 +182,6 @@ async fn shared_object_flood() {
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
 
     // Make a transaction to increment the counter.
-    tokio::task::yield_now().await;
     let transaction = move_transaction(
         gas_objects.pop().unwrap(),
         "counter",
@@ -207,7 +195,6 @@ async fn shared_object_flood() {
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
 
     // Ensure the value of the counter is `1`.
-    tokio::task::yield_now().await;
     let transaction = move_transaction(
         gas_objects.pop().unwrap(),
         "counter",
@@ -234,12 +221,10 @@ async fn shared_object_sync() {
     let _handles = spawn_test_authorities(gas_objects.clone(), &configs).await;
 
     // Publish the move package to all authorities and get the new package ref.
-    tokio::task::yield_now().await;
     let package_ref =
         publish_counter_package(gas_objects.pop().unwrap(), configs.validator_set()).await;
 
     // Send a transaction to create a counter, but only to one authority.
-    tokio::task::yield_now().await;
     let create_counter_transaction = move_transaction(
         gas_objects.pop().unwrap(),
         "counter",
@@ -278,7 +263,6 @@ async fn shared_object_sync() {
     }
 
     // Make a transaction to increment the counter.
-    tokio::task::yield_now().await;
     let increment_counter_transaction = move_transaction(
         gas_objects.pop().unwrap(),
         "counter",
@@ -308,13 +292,11 @@ async fn shared_object_sync() {
 
     // Now send the missing certificates to the outdated authorities. We also re-send
     // the transaction to the first authority who should simply ignore it.
-    tokio::task::yield_now().await;
     let effects =
         submit_single_owner_transaction(create_counter_transaction, configs.validator_set()).await;
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
 
     // Now we can try again with the shared-object transaction who failed before.
-    tokio::task::yield_now().await;
     let effects = submit_shared_object_transaction(
         increment_counter_transaction,
         &configs.validator_set()[1..],
@@ -335,12 +317,10 @@ async fn replay_shared_object_transaction() {
     let _handles = spawn_test_authorities(gas_objects.clone(), &configs).await;
 
     // Publish the move package to all authorities and get the new package ref.
-    tokio::task::yield_now().await;
     let package_ref =
         publish_counter_package(gas_objects.pop().unwrap(), configs.validator_set()).await;
 
     // Send a transaction to create a counter (only to one authority) -- twice.
-    tokio::task::yield_now().await;
     let create_counter_transaction = move_transaction(
         gas_objects.pop().unwrap(),
         "counter",
@@ -381,12 +361,10 @@ async fn shared_object_on_gateway() {
     );
 
     // Publish the move package to all authorities and get the new package ref.
-    tokio::task::yield_now().await;
     let package_ref =
         publish_counter_package(gas_objects.pop().unwrap(), configs.validator_set()).await;
 
     // Send a transaction to create a counter.
-    tokio::task::yield_now().await;
     let create_counter_transaction = move_transaction(
         gas_objects.pop().unwrap(),
         "counter",
