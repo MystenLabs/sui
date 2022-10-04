@@ -12,7 +12,8 @@ use sui::client_commands::WalletContext;
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
 use sui_adapter::genesis;
 use sui_json_rpc_types::SuiObjectInfo;
-use sui_sdk::crypto::SuiKeystore;
+use sui_sdk::crypto::AccountKeystore;
+use sui_sdk::crypto::Keystore;
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::{ObjectDigest, ObjectID, SequenceNumber};
 use sui_types::crypto::{
@@ -45,8 +46,8 @@ pub fn random_object_ref() -> ObjectRef {
 pub async fn get_account_and_gas_coins(
     context: &mut WalletContext,
 ) -> Result<Vec<(SuiAddress, Vec<GasCoin>)>, anyhow::Error> {
-    let mut res = Vec::with_capacity(context.keystore.addresses().len());
-    let accounts = context.keystore.addresses();
+    let mut res = Vec::with_capacity(context.config.keystore.addresses().len());
+    let accounts = context.config.keystore.addresses();
     for address in accounts {
         let result = SuiClientCommands::Gas {
             address: Some(address),
@@ -98,6 +99,7 @@ pub async fn get_account_and_gas_objects(
 ) -> Vec<(SuiAddress, Vec<SuiObjectInfo>)> {
     let owned_gas_objects = futures::future::join_all(
         context
+            .config
             .keystore
             .addresses()
             .iter()
@@ -105,6 +107,7 @@ pub async fn get_account_and_gas_objects(
     )
     .await;
     context
+        .config
         .keystore
         .addresses()
         .iter()
@@ -141,7 +144,11 @@ pub async fn make_transactions_with_wallet_context(
                 obj.to_object_ref(),
                 MAX_GAS,
             );
-            let sig = context.keystore.sign(address, &data.to_bytes()).unwrap();
+            let sig = context
+                .config
+                .keystore
+                .sign(address, &data.to_bytes())
+                .unwrap();
 
             res.push(Transaction::new(data, sig));
         }
@@ -172,13 +179,17 @@ pub async fn make_counter_increment_transaction_with_wallet_context(
         vec![CallArg::Object(ObjectArg::SharedObject(counter_id))],
         MAX_GAS,
     );
-    let signature = context.keystore.sign(&sender, &data.to_bytes()).unwrap();
+    let signature = context
+        .config
+        .keystore
+        .sign(&sender, &data.to_bytes())
+        .unwrap();
     Transaction::new(data, signature)
 }
 
 /// Make a few different single-writer test transactions owned by specific addresses.
 pub fn make_transactions_with_pre_genesis_objects(
-    keys: SuiKeystore,
+    keys: Keystore,
 ) -> (Vec<Transaction>, Vec<Object>) {
     // The key pair of the recipient of the transaction.
     let recipient = get_key_pair::<AuthorityKeyPair>().0;
@@ -304,7 +315,11 @@ pub fn make_transfer_object_transaction_with_wallet_context(
     recipient: SuiAddress,
 ) -> Transaction {
     let data = TransactionData::new_transfer(recipient, object_ref, sender, gas_object, MAX_GAS);
-    let sig = context.keystore.sign(&sender, &data.to_bytes()).unwrap();
+    let sig = context
+        .config
+        .keystore
+        .sign(&sender, &data.to_bytes())
+        .unwrap();
     Transaction::new(data, sig)
 }
 
