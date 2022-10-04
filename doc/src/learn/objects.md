@@ -67,6 +67,3 @@ The set of objects that are available to be taken as input by a transaction are 
 
 When this DAG contains all committed transactions in the system, it forms a complete (and crytographically auditable) view of the system's state and history. In addition, we can use the scheme above to construct a DAG of the relevant history for a subset of transactions or objects (e.g., the objects owned by a single address).
 
-## Further reading
-* Objects are modified and created by [transactions](transactions.md).
-* Objects are stored by [validators](../learn/architecture/validators.md).
