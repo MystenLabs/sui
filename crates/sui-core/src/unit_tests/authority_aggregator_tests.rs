@@ -1046,6 +1046,13 @@ async fn test_quorum_once_with_timeout() {
         ) -> Result<CheckpointResponse, SuiError> {
             unreachable!();
         }
+
+        async fn handle_committee_info_request(
+            &self,
+            _request: CommitteeInfoRequest,
+        ) -> Result<CommitteeInfoResponse, SuiError> {
+            unimplemented!();
+        }
     }
 
     let count = Arc::new(Mutex::new(0));

@@ -21,8 +21,8 @@ use sui_types::crypto::{get_key_pair, AuthorityKeyPair};
 use sui_types::error::SuiError;
 use sui_types::messages::{
     AccountInfoRequest, AccountInfoResponse, BatchInfoRequest, BatchInfoResponseItem,
-    CertifiedTransaction, ObjectInfoRequest, ObjectInfoResponse, Transaction,
-    TransactionInfoRequest, TransactionInfoResponse,
+    CertifiedTransaction, CommitteeInfoRequest, CommitteeInfoResponse, ObjectInfoRequest,
+    ObjectInfoResponse, Transaction, TransactionInfoRequest, TransactionInfoResponse,
 };
 use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
 use sui_types::object::Object;
@@ -192,6 +192,13 @@ impl AuthorityAPI for ConfigurableBatchActionClient {
     ) -> Result<CheckpointResponse, SuiError> {
         let state = self.state.clone();
         state.handle_checkpoint_request(&request)
+    }
+
+    async fn handle_committee_info_request(
+        &self,
+        request: CommitteeInfoRequest,
+    ) -> Result<CommitteeInfoResponse, SuiError> {
+        self.state.handle_committee_info_request(&request)
     }
 }
 

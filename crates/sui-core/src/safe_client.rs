@@ -577,6 +577,41 @@ where
         Ok(transaction_info)
     }
 
+    pub async fn handle_committee_info_request(
+        &self,
+        request: CommitteeInfoRequest,
+    ) -> SuiResult<CommitteeInfoResponse> {
+        let requested_epoch = request.epoch;
+        let committee_info = self
+            .authority_client
+            .handle_committee_info_request(request)
+            .await?;
+        self.verify_committee_info_response(requested_epoch, &committee_info)?;
+        Ok(committee_info)
+    }
+
+    fn verify_committee_info_response(
+        &self,
+        requested_epoch: Option<EpochId>,
+        committee_info: &CommitteeInfoResponse,
+    ) -> SuiResult {
+        match requested_epoch {
+            Some(epoch) => {
+                fp_ensure!(
+                    committee_info.epoch == epoch,
+                    SuiError::from("Committee info response epoch doesn't match requested epoch")
+                );
+            }
+            None => {
+                fp_ensure!(
+                    committee_info.committee_info.is_some(),
+                    SuiError::from("A valid latest committee must exist")
+                );
+            }
+        }
+        Ok(())
+    }
+
     fn verify_checkpoint_sequence(
         &self,
         expected_seq: Option<CheckpointSequenceNumber>,
