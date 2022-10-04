@@ -5,7 +5,7 @@ use anyhow::anyhow;
 use bip32::DerivationPath;
 use bip39::{Language, Mnemonic, MnemonicType, Seed};
 use rand::{rngs::StdRng, SeedableRng};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use signature::Signer;
 use std::collections::BTreeMap;
 use std::fmt::Write;
@@ -93,10 +93,36 @@ impl Display for Keystore {
     }
 }
 
-#[derive(Default, Debug, Serialize, Deserialize)]
+#[derive(Default, Debug)]
 pub struct FileBasedKeystore {
     keys: BTreeMap<SuiAddress, SuiKeyPair>,
     path: Option<PathBuf>,
+}
+
+impl Serialize for FileBasedKeystore {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(
+            self.path
+                .as_ref()
+                .unwrap_or(&PathBuf::default())
+                .to_str()
+                .unwrap_or(""),
+        )
+    }
+}
+
+impl<'de> Deserialize<'de> for FileBasedKeystore {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        use serde::de::Error;
+        FileBasedKeystore::new(&PathBuf::from(String::deserialize(deserializer)?))
+            .map_err(D::Error::custom)
+    }
 }
 
 impl AccountKeystore for FileBasedKeystore {
