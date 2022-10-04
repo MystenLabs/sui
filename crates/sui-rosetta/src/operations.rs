@@ -11,7 +11,7 @@ use serde_json::{json, Value};
 use sui_types::{parse_sui_struct_tag, SUI_FRAMEWORK_OBJECT_ID};
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::coin::{COIN_JOIN_FUNC_NAME, COIN_MODULE_NAME, COIN_SPLIT_VEC_FUNC_NAME};
-use sui_types::event::{Event, TransferType};
+use sui_types::event::{Event};
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::{
     CallArg, InputObjectKind, MoveCall, ObjectArg, Pay, SingleTransactionKind, TransactionData,
