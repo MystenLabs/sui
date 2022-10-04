@@ -16,8 +16,6 @@ use prometheus::IntGauge;
 use prometheus::Registry;
 use prometheus::{register_histogram_with_registry, register_int_counter_with_registry, Histogram};
 use std::collections::VecDeque;
-use std::sync::atomic::AtomicU64;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::{
     collections::{hash_map::DefaultHasher, HashMap},
@@ -71,6 +69,7 @@ pub struct ConsensusAdapterMetrics {
     pub sequencing_certificate_attempt: IntCounter,
     pub sequencing_certificate_success: IntCounter,
     pub sequencing_certificate_timeouts: IntCounter,
+    pub sequencing_certificate_failures: IntCounter,
     pub sequencing_certificate_inflight: IntGauge,
     pub sequencing_certificate_latency: Histogram,
 
@@ -80,10 +79,6 @@ pub struct ConsensusAdapterMetrics {
     pub sequencing_fragment_timeouts: IntCounter,
     pub sequencing_fragment_control_delay: IntGauge,
 }
-
-/// Timeout for sequencing a certificate. The value is chosen to be high enough such that during normal operations,
-/// this timeout is not expected to be triggered.
-const SEQUENCING_CERTIFICATE_TIMEOUT: Duration = Duration::from_secs(60);
 
 pub type OptArcConsensusAdapterMetrics = Option<Arc<ConsensusAdapterMetrics>>;
 
@@ -105,6 +100,12 @@ impl ConsensusAdapterMetrics {
             sequencing_certificate_timeouts: register_int_counter_with_registry!(
                 "sequencing_certificate_timeouts",
                 "Counts the number of sequenced certificates that timed out.",
+                registry,
+            )
+            .unwrap(),
+            sequencing_certificate_failures: register_int_counter_with_registry!(
+                "sequencing_certificate_failures",
+                "Counts the number of sequenced certificates that failed other than by timeout.",
                 registry,
             )
             .unwrap(),
@@ -208,8 +209,8 @@ pub struct ConsensusAdapter {
     committee: Committee,
     /// A channel to notify the consensus listener to take action for a transactions.
     tx_consensus_listener: Sender<ConsensusListenerMessage>,
-    /// Number of submitted transactions still inflight at this node.
-    num_inflight_transactions: AtomicU64,
+    /// Retries sending a transaction to consensus after this timeout.
+    timeout: Duration,
     /// A structure to register metrics
     opt_metrics: OptArcConsensusAdapterMetrics,
 }
@@ -220,24 +221,20 @@ impl ConsensusAdapter {
         consensus_address: Multiaddr,
         committee: Committee,
         tx_consensus_listener: Sender<ConsensusListenerMessage>,
+        timeout: Duration,
         opt_metrics: OptArcConsensusAdapterMetrics,
     ) -> Self {
         let consensus_client = TransactionsClient::new(
             mysten_network::client::connect_lazy(&consensus_address)
                 .expect("Failed to connect to consensus"),
         );
-        let num_inflight_transactions = Default::default();
         Self {
             consensus_client,
             committee,
             tx_consensus_listener,
-            num_inflight_transactions,
+            timeout,
             opt_metrics,
         }
-    }
-
-    pub fn num_inflight_transactions(&self) -> u64 {
-        self.num_inflight_transactions.load(Ordering::Relaxed)
     }
 
     /// Check if this authority should submit the transaction to consensus.
@@ -293,21 +290,16 @@ impl ConsensusAdapter {
                 .tap_err(|r| {
                     error!("Submit transaction failed with: {:?}", r);
                 })?;
-            self.num_inflight_transactions
-                .fetch_add(1, Ordering::SeqCst);
             // Increment the attempted certificate sequencing
             self.opt_metrics.as_ref().map(|metrics| {
                 metrics.sequencing_certificate_attempt.inc();
-                metrics
-                    .sequencing_certificate_inflight
-                    .set(self.num_inflight_transactions.load(Ordering::Relaxed) as i64);
+                metrics.sequencing_certificate_inflight.inc();
             });
         }
 
         // TODO: make consensus guarantee delivery after submit_transaction() returns, and avoid the timeout below.
-        let result = match timeout(SEQUENCING_CERTIFICATE_TIMEOUT, waiter.wait_for_result()).await {
-            Ok(_) => {
-                // todo - handle error in Ok(Err(..))
+        let result = match timeout(self.timeout, waiter.wait_for_result()).await {
+            Ok(Ok(_)) => {
                 // Increment the attempted certificate sequencing success
                 self.opt_metrics.as_ref().map(|metrics| {
                     metrics.sequencing_certificate_success.inc();
@@ -315,8 +307,16 @@ impl ConsensusAdapter {
 
                 Ok(())
             }
-            Err(e) => {
+            Ok(Err(e)) => {
                 // Increment the attempted certificate sequencing failure
+                self.opt_metrics.as_ref().map(|metrics| {
+                    metrics.sequencing_certificate_failures.inc();
+                });
+
+                Err(e)
+            }
+            Err(e) => {
+                // Increment the attempted certificate sequencing timeout
                 self.opt_metrics.as_ref().map(|metrics| {
                     metrics.sequencing_certificate_timeouts.inc();
                 });
@@ -328,17 +328,11 @@ impl ConsensusAdapter {
         };
 
         if should_submit {
-            let elapsed_ms = now.elapsed().as_millis() as f64;
-            self.num_inflight_transactions
-                .fetch_sub(1, Ordering::SeqCst);
+            let elapsed_secs = now.elapsed().as_secs_f64();
             // Store the latest latency
             self.opt_metrics.as_ref().map(|metrics| {
-                metrics
-                    .sequencing_certificate_inflight
-                    .set(self.num_inflight_transactions.load(Ordering::Relaxed) as i64);
-                metrics
-                    .sequencing_certificate_latency
-                    .observe(elapsed_ms / 1000.);
+                metrics.sequencing_certificate_inflight.dec();
+                metrics.sequencing_certificate_latency.observe(elapsed_secs);
             });
         }
 
@@ -429,7 +423,7 @@ impl ConsensusListener {
                                     (digest, id)
                                 });
 
-                            } else if replier.send(Err(SuiError::ListenerCapacityExceeded)).is_err() {
+                            } else if replier.send(Err(SuiError::ListenerCapacityExceeded(self.pending.len()))).is_err() {
                                 debug!("No replier to listen to consensus output {digest}");
                             }
                         },

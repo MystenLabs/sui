@@ -162,6 +162,7 @@ async fn submit_transaction_to_consensus() {
         consensus_address.clone(),
         committee,
         tx_consensus_listener,
+        /* timeout */ Duration::from_secs(5),
         metrics,
     );
 
