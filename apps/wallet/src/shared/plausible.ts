@@ -6,16 +6,17 @@ import Browser from 'webextension-polyfill';
 
 const WALLET_URL = Browser.runtime.getURL('').slice(0, -1);
 
-const PLAUSIBLE_ENABLED = true || process.env.NODE_ENV === 'production';
+const PLAUSIBLE_ENABLED = process.env.NODE_ENV === 'production';
 
 const plausible = Plausible({
     domain: WALLET_URL,
 });
 
+// NOTE: Disabled this because it breaks opening new tabs when clicking on anchor elements
 // Plausible's outbound link tracking works by inspecting the document, which doesn't exist in every context.
-if (PLAUSIBLE_ENABLED && typeof document !== 'undefined') {
-    plausible.enableAutoOutboundTracking();
-}
+// if (PLAUSIBLE_ENABLED && typeof document !== 'undefined') {
+//     plausible.enableAutoOutboundTracking();
+// }
 
 export const trackEvent: typeof plausible.trackEvent = (...args) => {
     if (PLAUSIBLE_ENABLED) {
