@@ -1,6 +1,7 @@
+use std::sync::Arc;
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{ExecutionIndices, ExecutionState};
+use crate::{ExecutionIndices, ExecutionState, ExecutorMetrics};
 use consensus::ConsensusOutput;
 use tokio::task::JoinHandle;
 
@@ -16,22 +17,26 @@ pub struct BatchIndex {
 pub struct Notifier<State: ExecutionState> {
     rx_notifier: metered_channel::Receiver<(BatchIndex, Batch)>,
     callback: State,
+    metrics: Arc<ExecutorMetrics>,
 }
 
 impl<State: ExecutionState + Send + Sync + 'static> Notifier<State> {
     pub fn spawn(
         rx_notifier: metered_channel::Receiver<(BatchIndex, Batch)>,
         callback: State,
+        metrics: Arc<ExecutorMetrics>,
     ) -> JoinHandle<()> {
         let notifier = Notifier {
             rx_notifier,
             callback,
+            metrics,
         };
         tokio::spawn(notifier.run())
     }
 
     async fn run(mut self) {
         while let Some((index, batch)) = self.rx_notifier.recv().await {
+            self.metrics.notifier_processed_batches.inc();
             for (transaction_index, transaction) in batch.0.into_iter().enumerate() {
                 let execution_indices = ExecutionIndices {
                     next_certificate_index: index.next_certificate_index,

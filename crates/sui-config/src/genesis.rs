@@ -617,9 +617,7 @@ mod test {
         let dir = tempfile::TempDir::new().unwrap();
 
         let genesis_config = GenesisConfig::for_local_testing();
-        let (_account_keys, objects) = genesis_config
-            .generate_accounts(&mut rand::rngs::OsRng)
-            .unwrap();
+        let (_account_keys, objects) = genesis_config.generate_accounts(rand::rngs::OsRng).unwrap();
 
         let key: AuthorityKeyPair = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
         let worker_key: NetworkKeyPair = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;

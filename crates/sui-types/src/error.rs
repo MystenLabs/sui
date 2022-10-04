@@ -102,10 +102,6 @@ pub enum SuiError {
     },
     #[error("Invalid Authority Bitmap: {}", error)]
     InvalidAuthorityBitmap { error: String },
-    #[error("Conflicting transaction already received: {pending_transaction:?}")]
-    ConflictingTransaction {
-        pending_transaction: TransactionDigest,
-    },
     #[error("Transaction processing failed: {err}")]
     ErrorWhileProcessingTransactionTransaction { err: String },
     #[error("Confirmation transaction processing failed: {err}")]
@@ -267,11 +263,22 @@ pub enum SuiError {
     #[error("Attempt to update state of TxContext from a different instance than original.")]
     InvalidTxUpdate,
     #[error("Attempt to re-initialize a transaction lock for objects {:?}.", refs)]
-    TransactionLockExists { refs: Vec<ObjectRef> },
-    #[error("Attempt to set an non-existing transaction lock.")]
-    TransactionLockDoesNotExist,
-    #[error("Attempt to reset a set transaction lock to a different value.")]
-    TransactionLockReset,
+    ObjectLockAlreadyInitialized { refs: Vec<ObjectRef> },
+    #[error("Object {obj_ref:?} lock has not been initialized.")]
+    ObjectLockUninitialized { obj_ref: ObjectRef },
+    #[error(
+        "Object {obj_ref:?} already locked by a different transaction: {pending_transaction:?}"
+    )]
+    ObjectLockConflict {
+        obj_ref: ObjectRef,
+        pending_transaction: TransactionDigest,
+    },
+    #[error("Objects {obj_refs:?} are already locked by a transaction from a future epoch {locked_epoch:?}), attempt to override with a transaction from epoch {new_epoch:?}")]
+    ObjectLockedAtFutureEpoch {
+        obj_refs: Vec<ObjectRef>,
+        locked_epoch: EpochId,
+        new_epoch: EpochId,
+    },
     #[error("Could not find the referenced transaction [{:?}].", digest)]
     TransactionNotFound { digest: TransactionDigest },
     #[error("Could not find the referenced object {:?}.", object_id)]

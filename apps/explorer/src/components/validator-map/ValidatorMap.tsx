@@ -11,68 +11,66 @@ import { type NodeLocation } from './types';
 
 import styles from './ValidatorMap.module.css';
 
+import { DateFilter, useDateFilterState } from '~/ui/DateFilter';
+
 const HOST = 'https://imgmod.sui.io';
 
-type NodeList = {
-    ip_address: string;
-    city: string;
-    region: string;
-    country: string;
-    location: string;
-}[];
+type CountryNodes = Record<string, { count: number; country: string }>;
 
-type CountryNodes = Record<string, { count: number; countryCode: string }>;
+const regionNamesInEnglish = new Intl.DisplayNames('en', { type: 'region' });
+const numberFormatter = new Intl.NumberFormat('en');
 
-const regionNamesInEnglish = new Intl.DisplayNames(['en'], { type: 'region' });
+const DATE_FILTER_TO_WINDOW = {
+    D: '1d',
+    W: '1w',
+    M: '1m',
+    ALL: 'all',
+};
 
 export default function ValidatorMap() {
-    const { data } = useQuery(['validator-map'], async () => {
-        const res = await fetch(`${HOST}/location`, {
-            method: 'GET',
-        });
+    const [dateFilter, setDateFilter] = useDateFilterState('D');
+
+    const { data } = useQuery(['validator-map', dateFilter], async () => {
+        const res = await fetch(
+            `${HOST}/location?${new URLSearchParams({
+                version: 'v2',
+                window: DATE_FILTER_TO_WINDOW[dateFilter],
+            })}`,
+            {
+                method: 'GET',
+            }
+        );
 
         if (!res.ok) {
             return [];
         }
 
-        return res.json() as Promise<NodeList>;
+        return res.json() as Promise<NodeLocation[]>;
     });
 
-    const { nodes, countryCount, countryNodes } = useMemo<{
-        nodes: NodeLocation[];
-        countryCount?: number;
+    const { totalCount, countryCount, countryNodes } = useMemo<{
+        totalCount: number | null;
+        countryCount: number | null;
         countryNodes: CountryNodes;
     }>(() => {
         if (!data) {
-            return { nodes: [], countryNodes: {} };
+            return { totalCount: null, countryCount: null, countryNodes: {} };
         }
 
-        const nodeLocations: Record<string, NodeLocation> = {};
+        let totalCount = 0;
         const countryNodes: CountryNodes = {};
 
-        data.forEach(({ city, region, country, location }) => {
-            const key = `${city}-${region}-${country}`;
-
+        data.forEach(({ count, country }) => {
+            totalCount += count;
             countryNodes[country] ??= {
                 count: 0,
-                countryCode: country,
+                country,
             };
             countryNodes[country].count += 1;
-
-            nodeLocations[key] ??= {
-                count: 0,
-                city,
-                countryCode: country,
-                location: location
-                    .split(',')
-                    .reverse()
-                    .map((geo) => parseFloat(geo)) as [number, number],
-            };
-            nodeLocations[key].count += 1;
         });
 
         return {
-            nodes: Object.values(nodeLocations),
+            totalCount,
             countryCount: Object.keys(countryNodes).length,
             countryNodes,
         };
@@ -112,14 +110,23 @@ export default function ValidatorMap() {
             <div className={styles.container}>
                 <div className={styles.contents}>
                     <div>
-                        <div className={styles.title}>Total Nodes</div>
-                        <div className={styles.stat}>{data?.length}</div>
+                        <div className={styles.title}>Nodes</div>
+                        <div className={styles.stat}>
+                            {totalCount && numberFormatter.format(totalCount)}
+                        </div>
                     </div>
                     <div>
-                        <div className={styles.title}>Total Countries</div>
-                        <div className={styles.stat}>{countryCount}</div>
+                        <div className={styles.title}>Countries</div>
+                        <div className={styles.stat}>
+                            {countryCount &&
+                                numberFormatter.format(countryCount)}
+                        </div>
                     </div>
                 </div>
+            </div>
+
+            <div className="absolute top-8 right-8 z-10">
+                <DateFilter value={dateFilter} onChange={setDateFilter} />
             </div>
 
             <div className={styles.mapcontainer}>
@@ -127,7 +134,7 @@ export default function ValidatorMap() {
                     <ParentSizeModern>
                         {(parent) => (
                             <WorldMap
-                                nodes={nodes}
+                                nodes={data}
                                 width={parent.width}
                                 height={parent.height}
                                 onMouseOver={handleMouseOver}
@@ -153,8 +160,8 @@ export default function ValidatorMap() {
                     <div className={styles.tipdivider} />
                     <div>
                         {regionNamesInEnglish.of(
-                            countryNodes[tooltipData].countryCode
-                        ) || countryNodes[tooltipData].countryCode}
+                            countryNodes[tooltipData].country
+                        ) || countryNodes[tooltipData].country}
                     </div>
                 </TooltipWithBounds>
             )}

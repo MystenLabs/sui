@@ -7,7 +7,7 @@ use std::{env, process::Command};
 fn main() {
     if env::var("GIT_REVISION").is_err() {
         let output = Command::new("git")
-            .args(["describe", "--always", "--dirty"])
+            .args(["describe", "--always", "--dirty", "--exclude", "*"])
             .output()
             .unwrap();
         if !output.status.success() {

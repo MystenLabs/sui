@@ -3,6 +3,7 @@
 
 import {
   MoveCallTransaction,
+  SignableTransaction,
   SuiAddress,
   SuiTransactionResponse,
 } from "@mysten/sui.js";
@@ -22,7 +23,11 @@ interface SuiWallet {
   executeSerializedMoveCall: (
     transactionBytes: Uint8Array
   ) => Promise<SuiTransactionResponse>;
+  signAndExecuteTransaction: (
+    transaction: SignableTransaction
+  ) => Promise<SuiTransactionResponse>;
 }
+
 interface SuiWalletWindow {
   suiWallet: SuiWallet;
 }
@@ -46,6 +51,11 @@ export class SuiWalletAdapter implements WalletCapabilities {
     transactionBytes: Uint8Array
   ): Promise<SuiTransactionResponse> {
     return window.suiWallet.executeSerializedMoveCall(transactionBytes);
+  }
+  signAndExecuteTransaction(
+    transaction: SignableTransaction
+  ): Promise<SuiTransactionResponse> {
+    return window.suiWallet.signAndExecuteTransaction(transaction);
   }
 
   name = "Sui Wallet";

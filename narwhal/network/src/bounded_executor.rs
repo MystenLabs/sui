@@ -188,7 +188,7 @@ impl BoundedExecutor {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(msim)))]
 mod test {
     use crate::RetryConfig;
 

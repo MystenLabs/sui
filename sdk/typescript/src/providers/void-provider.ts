@@ -40,6 +40,13 @@ export class VoidProvider extends Provider {
     throw this.newError('getGasObjectsOwnedByAddress');
   }
 
+  async getCoinBalancesOwnedByAddress(
+    _address: string,
+    _typeArg?: string
+  ): Promise<GetObjectDataResponse[]> {
+    throw this.newError('getCoinBalancesOwnedByAddress');
+  }
+
   async getObject(_objectId: string): Promise<GetObjectDataResponse> {
     throw this.newError('getObject');
   }

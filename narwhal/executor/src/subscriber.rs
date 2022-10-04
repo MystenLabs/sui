@@ -29,7 +29,7 @@ use tokio::{
     sync::{oneshot, watch},
     task::JoinHandle,
 };
-use tracing::{debug, error};
+use tracing::{debug, error, warn};
 use tracing::{info, instrument};
 use types::{metered_channel, Batch, BatchDigest, Certificate, ReconfigureNotification};
 
@@ -172,6 +172,7 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
         &self,
         deliver: ConsensusOutput,
     ) -> Vec<impl Future<Output = (BatchIndex, Batch)> + '_> {
+        self.metrics.subscriber_processed_certificates.inc();
         debug!("Fetching payload for {:?}", deliver);
         let mut ret = vec![];
         for (batch_index, (digest, worker_id)) in
@@ -215,7 +216,7 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
         for worker in workers {
             let future = self.fetch_from_worker(stagger, worker, digest);
             futures.push(future.boxed());
-            stagger += Duration::from_secs(1);
+            stagger += Duration::from_millis(200);
         }
         let (batch, _, _) = futures::future::select_all(futures).await;
         batch
@@ -251,7 +252,9 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
         tokio::time::sleep(stagger_delay).await;
         let max_timeout = Duration::from_secs(60);
         let mut timeout = Duration::from_secs(10);
+        let mut attempt = 0usize;
         loop {
+            attempt += 1;
             let deadline = Instant::now() + timeout;
             let request_batch_guard =
                 PendingGuard::make_inc(&self.metrics.pending_remote_request_batch);
@@ -265,8 +268,8 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
                     "Error retrieving payload {} from {}: {}",
                     digest, worker, err
                 ),
-                Err(_elapsed) => debug!("Timeout retrieving payload {} from {}",
-                    digest, worker
+                Err(_elapsed) => warn!("Timeout retrieving payload {} from {} attempt {}",
+                    digest, worker, attempt
                 ),
             }
             timeout += timeout / 2;

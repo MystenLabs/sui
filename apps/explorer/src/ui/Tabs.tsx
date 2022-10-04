@@ -20,7 +20,7 @@ export function TabPanel(props: TabPanelProps) {
     return <HeadlessTab.Panel className="my-4" {...props} />;
 }
 
-export type TabGroupProps = ExtractProps<typeof HeadlessTab.List> & {
+export type TabGroupProps = ExtractProps<typeof HeadlessTab.Group> & {
     size?: TabSize;
 };
 
@@ -34,7 +34,7 @@ export function TabGroup({ size, ...props }: TabGroupProps) {
 
 const tabStyles = cva(
     [
-        'border-b border-sui-grey-45 ui-selected:border-sui-grey-65 font-semibold text-sui-grey-70 pb-2 -mb-px',
+        'border-b border-transparent ui-selected:border-sui-grey-65 font-semibold text-sui-grey-70 pb-2 -mb-px',
         // TODO: remove once we have a CSS reset:
         'bg-transparent border-0 border-solid outline-none px-0 cursor-pointer',
     ],
@@ -61,14 +61,20 @@ export function Tab({ ...props }: TabProps) {
 
 export type TabListProps = ExtractProps<typeof HeadlessTab.List> & {
     fullWidth?: boolean;
+    disableBottomBorder?: boolean;
 };
 
-export function TabList({ fullWidth, ...props }: TabListProps) {
+export function TabList({
+    fullWidth,
+    disableBottomBorder,
+    ...props
+}: TabListProps) {
     return (
         <HeadlessTab.List
             className={clsx(
-                'flex gap-6 border-b border-sui-grey-45 border-solid border-0',
-                fullWidth && 'flex-1'
+                'flex gap-6 border-sui-grey-45 border-solid border-0',
+                fullWidth && 'flex-1',
+                !disableBottomBorder && 'border-b'
             )}
             {...props}
         />

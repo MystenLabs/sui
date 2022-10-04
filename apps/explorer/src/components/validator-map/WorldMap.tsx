@@ -44,7 +44,7 @@ function BaseWorldMap({
         <svg width={width} height={height}>
             <Mercator
                 data={filteredLand}
-                scale={100}
+                scale={105}
                 translate={[centerX, centerY + 20]}
             >
                 {({ features, projection }) => (

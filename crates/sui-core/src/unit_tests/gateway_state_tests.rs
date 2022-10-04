@@ -249,7 +249,7 @@ async fn test_coin_split_insufficient_gas() {
     assert_eq!(
         gateway
             .store()
-            .get_transaction_lock(&gas_object.compute_object_reference())
+            .get_object_locking_transaction(&gas_object.compute_object_reference())
             .await
             .unwrap(),
         None
@@ -438,7 +438,7 @@ async fn test_public_transfer_object_with_retry() {
     assert_eq!(
         gateway
             .store()
-            .get_transaction_lock(&coin_object.compute_object_reference())
+            .get_object_locking_transaction(&coin_object.compute_object_reference())
             .await
             .unwrap(),
         None,
@@ -459,7 +459,7 @@ async fn test_public_transfer_object_with_retry() {
     assert_eq!(gateway.store().pending_transactions().iter().count(), 0);
     assert!(gateway
         .store()
-        .get_transaction_lock(&coin_object.compute_object_reference())
+        .get_object_locking_transaction(&coin_object.compute_object_reference())
         .await
         .is_err());
     assert!(gateway.store().effects_exists(&tx_digest).unwrap());

@@ -3,6 +3,7 @@
 
 use rocksdb::Options;
 use std::path::PathBuf;
+use sui_simulator::nondeterministic;
 use sui_storage::default_db_options;
 use sui_types::base_types::ObjectID;
 use sui_types::committee::{Committee, EpochId};
@@ -40,7 +41,7 @@ impl EpochStore {
 
     pub fn new_for_testing(genesis_committee: &Committee) -> Self {
         let dir = std::env::temp_dir();
-        let path = dir.join(format!("DB_{:?}", ObjectID::random()));
+        let path = dir.join(format!("DB_{:?}", nondeterministic!(ObjectID::random())));
         std::fs::create_dir(&path).unwrap();
         Self::new(path, genesis_committee, None)
     }

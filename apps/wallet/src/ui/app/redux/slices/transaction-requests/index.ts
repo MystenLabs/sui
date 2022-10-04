@@ -80,7 +80,11 @@ export const respondToTransactionRequest = createAsyncThunk<
         if (approved) {
             const signer = api.getSignerInstance(keypairVault.getKeyPair());
             try {
-                if (txRequest.tx.type === 'move-call') {
+                if (txRequest.tx.type === 'v2') {
+                    txResult = await signer.signAndExecuteTransaction(
+                        txRequest.tx.data
+                    );
+                } else if (txRequest.tx.type === 'move-call') {
                     txResult = await signer.executeMoveCall(txRequest.tx.data);
                 } else if (txRequest.tx.type === 'serialized-move-call') {
                     const txBytes = new Base64DataBuffer(txRequest.tx.data);

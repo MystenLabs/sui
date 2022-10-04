@@ -170,7 +170,7 @@ export const getDataOnTxDigests = (
                         return {
                             seq,
                             txId: digest,
-                            status: getExecutionStatusType(txEff),
+                            status: getExecutionStatusType(txEff)!,
                             txGas: getTotalGasUsed(txEff),
                             suiAmount: getTransferSuiAmount(txn),
                             kind: txKind,

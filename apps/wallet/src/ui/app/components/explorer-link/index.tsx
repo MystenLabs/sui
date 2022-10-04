@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { memo, useMemo } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 
 import { Explorer } from './Explorer';
 import { ExplorerLinkType } from './ExplorerLinkType';
@@ -9,6 +9,7 @@ import ExternalLink from '_components/external-link';
 import Icon, { SuiIcons } from '_components/icon';
 import { useAppSelector } from '_hooks';
 import { activeAccountSelector } from '_redux/slices/account';
+import { trackEvent } from '_src/shared/plausible';
 
 import type { ObjectId, SuiAddress, TransactionDigest } from '@mysten/sui.js';
 import type { ReactNode } from 'react';
@@ -28,6 +29,7 @@ export type ExplorerLinkProps = (
     | { type: ExplorerLinkType.object; objectID: ObjectId }
     | { type: ExplorerLinkType.transaction; transactionID: TransactionDigest }
 ) & {
+    track?: boolean;
     children?: ReactNode;
     className?: string;
     title?: string;
@@ -66,6 +68,13 @@ function ExplorerLink(props: ExplorerLinkProps) {
                 );
         }
     }, [type, address, objectID, transactionID, selectedApiEnv]);
+
+    const handleclick = useCallback(() => {
+        if (props.track) {
+            trackEvent('ViewExplorerAccount');
+        }
+    }, [props.track]);
+
     if (!explorerHref) {
         return null;
     }
@@ -75,6 +84,7 @@ function ExplorerLink(props: ExplorerLinkProps) {
             className={className}
             title={title}
             showIcon={false}
+            onClick={handleclick}
         >
             <>
                 {children}{' '}

@@ -3,6 +3,7 @@
 
 import {
   MoveCallTransaction,
+  SignableTransaction,
   SuiAddress,
   SuiTransactionResponse,
 } from "@mysten/sui.js";
@@ -15,11 +16,22 @@ export interface WalletCapabilities {
   // Connection Management
   connect: () => Promise<void>;
   disconnect: () => Promise<void>;
-  // DappInterfaces
+
+  /**
+   * Suggest a transaction for the user to sign. Supports all valid transaction types.
+   */
+  signAndExecuteTransaction?(
+    transaction: SignableTransaction
+  ): Promise<SuiTransactionResponse>;
+
   getAccounts: () => Promise<SuiAddress[]>;
+
+  /** @deprecated Prefer `signAndExecuteTransaction` when available. */
   executeMoveCall: (
     transaction: MoveCallTransaction
   ) => Promise<SuiTransactionResponse>;
+
+  /** @deprecated Prefer `signAndExecuteTransaction` when available. */
   executeSerializedMoveCall: (
     transactionBytes: Uint8Array
   ) => Promise<SuiTransactionResponse>;

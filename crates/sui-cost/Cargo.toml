@@ -16,6 +16,9 @@ strum = { version = "0.24", features = ["derive"] }
 strum_macros = "0.24"
 bcs = "0.1.3"
 serde_json = "1.0.83"
+sui-cost-tables = { path = "../sui-cost-tables"}
+sui-adapter = { path = "../sui-adapter"}
+sui-core = { path = "../sui-core" }
 
 [dev-dependencies]
 insta = { version = "1.19.1", features = ["redactions", "json"] }

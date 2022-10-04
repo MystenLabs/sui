@@ -52,7 +52,7 @@ use test_utils::transaction::{wait_for_all_txes, wait_for_tx};
 
 use sui_macros::*;
 
-#[sui_test]
+#[sim_test]
 async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
     let (swarm, mut context, _) = setup_network_and_wallet().await?;
 
@@ -82,7 +82,7 @@ async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[sui_test]
+#[sim_test]
 async fn test_full_node_shared_objects() -> Result<(), anyhow::Error> {
     let (swarm, context, _) = setup_network_and_wallet().await?;
 
@@ -285,7 +285,7 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
 }
 
 // Test for syncing a node to an authority that already has many txes.
-#[sui_test]
+#[sim_test]
 async fn test_full_node_cold_sync() -> Result<(), anyhow::Error> {
     let (swarm, mut context, _) = setup_network_and_wallet().await?;
     let (_, _, _, _) = transfer_coin(&mut context).await?;
@@ -312,7 +312,7 @@ async fn test_full_node_cold_sync() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[sui_test]
+#[sim_test]
 async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
     let (swarm, context, _) = setup_network_and_wallet().await?;
 
@@ -723,7 +723,7 @@ async fn test_full_node_event_read_api_ok() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[sui_test]
+#[sim_test]
 async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::Error> {
     let (swarm, mut context, _address) = setup_network_and_wallet().await.unwrap();
     let config = swarm.config().generate_fullnode_config();

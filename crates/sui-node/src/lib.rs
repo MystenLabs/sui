@@ -55,6 +55,9 @@ use sui_types::crypto::KeypairTraits;
 pub mod admin;
 pub mod metrics;
 
+mod handle;
+pub use handle::SuiNodeHandle;
+
 pub struct SuiNode {
     grpc_server: tokio::task::JoinHandle<Result<()>>,
     _json_rpc_service: Option<HttpServerHandle>,
@@ -68,6 +71,9 @@ pub struct SuiNode {
     active: Arc<ActiveAuthority<NetworkAuthorityClient>>,
     transaction_orchestrator: Option<Arc<TransactiondOrchestrator<NetworkAuthorityClient>>>,
     _prometheus_registry: Registry,
+
+    #[cfg(msim)]
+    sim_node: sui_simulator::runtime::NodeHandle,
 }
 
 impl SuiNode {
@@ -311,6 +317,9 @@ impl SuiNode {
             active: active_authority,
             transaction_orchestrator,
             _prometheus_registry: prometheus_registry,
+
+            #[cfg(msim)]
+            sim_node: sui_simulator::runtime::NodeHandle::current(),
         };
 
         info!("SuiNode started!");

@@ -14,7 +14,6 @@ written: object(106)
 task 3 'view-object'. lines 74-74:
 Owner: Account Address ( A )
 Version: 1
-Child Count: None
 Contents: test::object_basics::Object {id: sui::object::UID {id: sui::object::ID {bytes: fake(107)}}, value: 10u64}
 
 task 4 'run'. lines 76-76:
@@ -23,7 +22,6 @@ written: object(107), object(108)
 task 5 'view-object'. lines 78-78:
 Owner: Account Address ( B )
 Version: 2
-Child Count: None
 Contents: test::object_basics::Object {id: sui::object::UID {id: sui::object::ID {bytes: fake(107)}}, value: 10u64}
 
 task 6 'run'. lines 80-80:

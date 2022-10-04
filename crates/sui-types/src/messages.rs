@@ -349,6 +349,26 @@ impl TransactionKind {
         }
     }
 
+    pub fn input_objects(&self) -> SuiResult<Vec<InputObjectKind>> {
+        let inputs: Vec<_> = self
+            .single_transactions()
+            .map(|s| s.input_objects())
+            .collect::<SuiResult<Vec<_>>>()?
+            .into_iter()
+            .flatten()
+            .collect();
+        Ok(inputs)
+    }
+
+    pub fn shared_input_objects(&self) -> impl Iterator<Item = &ObjectID> {
+        match &self {
+            TransactionKind::Single(s) => Either::Left(s.shared_input_objects()),
+            TransactionKind::Batch(b) => {
+                Either::Right(b.iter().flat_map(|kind| kind.shared_input_objects()))
+            }
+        }
+    }
+
     pub fn batch_size(&self) -> usize {
         match self {
             TransactionKind::Single(_) => 1,
@@ -580,14 +600,8 @@ impl TransactionData {
     }
 
     pub fn input_objects(&self) -> SuiResult<Vec<InputObjectKind>> {
-        let mut inputs: Vec<_> = self
-            .kind
-            .single_transactions()
-            .map(|s| s.input_objects())
-            .collect::<SuiResult<Vec<_>>>()?
-            .into_iter()
-            .flatten()
-            .collect();
+        let mut inputs = self.kind.input_objects()?;
+
         if !self.kind.is_system_tx() {
             inputs.push(InputObjectKind::ImmOrOwnedMoveObject(
                 *self.gas_payment_object_ref(),
@@ -675,12 +689,7 @@ impl<S> TransactionEnvelope<S> {
     }
 
     pub fn shared_input_objects(&self) -> impl Iterator<Item = &ObjectID> {
-        match &self.signed_data.data.kind {
-            TransactionKind::Single(s) => Either::Left(s.shared_input_objects()),
-            TransactionKind::Batch(b) => {
-                Either::Right(b.iter().flat_map(|kind| kind.shared_input_objects()))
-            }
-        }
+        self.signed_data.data.kind.shared_input_objects()
     }
 
     /// Get the transaction digest and write it to the cache

@@ -110,7 +110,7 @@ const transformTransactionResponse = (
 ): TxnState => {
     return {
         ...txObj.certificate,
-        status: getExecutionStatusType(txObj),
+        status: getExecutionStatusType(txObj)!,
         gasFee: getTotalGasUsed(txObj),
         txError: getExecutionStatusError(txObj) ?? '',
         txId: id,

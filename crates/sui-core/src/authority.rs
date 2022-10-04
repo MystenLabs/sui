@@ -44,6 +44,7 @@ use sui_adapter::adapter;
 use sui_adapter::temporary_store::InnerTemporaryStore;
 use sui_config::genesis::Genesis;
 use sui_json_rpc_types::{SuiEventEnvelope, SuiTransactionEffects};
+use sui_simulator::nondeterministic;
 use sui_storage::{
     event_store::{EventStore, EventStoreType, StoredEvent},
     write_ahead_log::{DBTxGuard, TxGuard, WriteAheadLog},
@@ -66,8 +67,8 @@ use tap::TapFallible;
 use thiserror::Error;
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::mpsc::Sender;
-use tracing::Instrument;
 use tracing::{debug, error, instrument, warn};
+use tracing::{trace, Instrument};
 use typed_store::Map;
 
 #[cfg(test)]
@@ -140,6 +141,7 @@ pub struct AuthorityMetrics {
     handle_node_sync_certificate_latency: Histogram,
 
     total_consensus_txns: IntCounter,
+    skipped_consensus_txns: IntCounter,
     handle_consensus_duration_mcs: IntCounter,
     verify_narwhal_transaction_duration_mcs: IntCounter,
 
@@ -280,6 +282,12 @@ impl AuthorityMetrics {
             total_consensus_txns: register_int_counter_with_registry!(
                 "total_consensus_txns",
                 "Total number of consensus transactions received from narwhal",
+                registry,
+            )
+            .unwrap(),
+            skipped_consensus_txns: register_int_counter_with_registry!(
+                "skipped_consensus_txns",
+                "Total number of consensus transactions skipped",
                 registry,
             )
             .unwrap(),
@@ -1338,7 +1346,7 @@ impl AuthorityState {
             Some(path) => path,
             None => {
                 let dir = std::env::temp_dir();
-                let path = dir.join(format!("DB_{:?}", ObjectID::random()));
+                let path = dir.join(format!("DB_{:?}", nondeterministic!(ObjectID::random())));
                 std::fs::create_dir(&path).unwrap();
                 path
             }
@@ -1900,7 +1908,9 @@ impl AuthorityState {
         &self,
         object_ref: &ObjectRef,
     ) -> Result<Option<SignedTransaction>, SuiError> {
-        self.database.get_transaction_lock(object_ref).await
+        self.database
+            .get_object_locking_transaction(object_ref)
+            .await
     }
 
     // Helper functions to manage certificates
@@ -1977,6 +1987,16 @@ impl AuthorityState {
         let tracking_id = transaction.get_tracking_id();
         match transaction.kind {
             ConsensusTransactionKind::UserTransaction(certificate) => {
+                if self
+                    .database
+                    .consensus_message_processed(certificate.digest())
+                    .await
+                    .map_err(NarwhalHandlerError::NodeError)?
+                {
+                    trace!("Already processed {:?}", certificate.digest());
+                    self.metrics.skipped_consensus_txns.inc();
+                    return Ok(());
+                }
                 self.verify_narwhal_transaction(&certificate)
                     .map_err(NarwhalHandlerError::SkipNarwhalTransaction)?;
 

@@ -397,16 +397,17 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         }
     }
 
-    /// Read a transaction envelope via lock or returns Err(TransactionLockDoesNotExist) if the lock does not exist.
-    pub async fn get_transaction_lock(
+    /// Get the transaction envelope that currently locks the given object,
+    /// or returns Err(TransactionLockDoesNotExist) if the lock does not exist.
+    pub async fn get_object_locking_transaction(
         &self,
         object_ref: &ObjectRef,
     ) -> SuiResult<Option<TransactionEnvelope<S>>> {
-        let tx_lock = self
-            .lock_service
-            .get_lock(*object_ref)
-            .await?
-            .ok_or(SuiError::TransactionLockDoesNotExist)?;
+        let tx_lock = self.lock_service.get_lock(*object_ref).await?.ok_or(
+            SuiError::ObjectLockUninitialized {
+                obj_ref: *object_ref,
+            },
+        )?;
 
         // Returns None if either no TX with the lock, or TX present but no entry in transactions table.
         // However we retry a couple times because the TX is written after the lock is acquired, so it might
@@ -1115,9 +1116,21 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         Ok(())
     }
 
+    pub async fn consensus_message_processed(
+        &self,
+        digest: &TransactionDigest,
+    ) -> Result<bool, SuiError> {
+        Ok(self
+            .tables
+            .consensus_message_processed
+            .contains_key(digest)?)
+    }
+
     /// Lock a sequence number for the shared objects of the input transaction. Also update the
     /// last consensus index.
     /// This function must only be called from the consensus task (i.e. from handle_consensus_transaction).
+    ///
+    /// Caller is responsible to call consensus_message_processed before this method
     pub async fn persist_certificate_and_lock_shared_objects(
         &self,
         certificate: CertifiedTransaction,
@@ -1125,16 +1138,6 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     ) -> Result<(), SuiError> {
         // Make an iterator to save the certificate.
         let transaction_digest = *certificate.digest();
-
-        // Ensure that we only advance next_object_versions exactly once for every cert received from
-        // consensus.
-        if self
-            .tables
-            .consensus_message_processed
-            .contains_key(&transaction_digest)?
-        {
-            return Ok(());
-        }
 
         // Make an iterator to update the locks of the transaction's shared objects.
         let ids = certificate.shared_input_objects();

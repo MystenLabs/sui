@@ -55,7 +55,9 @@ export class RpcTxnDataSerializer implements TxnDataSerializer {
       );
       return new Base64DataBuffer(resp.txBytes);
     } catch (err) {
-      throw new Error(`Error transferring object: ${err} with args ${t}`);
+      throw new Error(
+        `Error transferring object: ${err} with args ${JSON.stringify(t)}`
+      );
     }
   }
 
@@ -72,7 +74,9 @@ export class RpcTxnDataSerializer implements TxnDataSerializer {
       );
       return new Base64DataBuffer(resp.txBytes);
     } catch (err) {
-      throw new Error(`Error transferring Sui coin: ${err} with args ${t}`);
+      throw new Error(
+        `Error transferring Sui coin: ${err} with args ${JSON.stringify(t)}`
+      );
     }
   }
 
@@ -96,7 +100,9 @@ export class RpcTxnDataSerializer implements TxnDataSerializer {
       );
       return new Base64DataBuffer(resp.txBytes);
     } catch (err) {
-      throw new Error(`Error executing Pay transaction: ${err} with args ${t}`);
+      throw new Error(
+        `Error executing Pay transaction: ${err} with args ${JSON.stringify(t)}`
+      );
     }
   }
 
@@ -122,7 +128,9 @@ export class RpcTxnDataSerializer implements TxnDataSerializer {
       );
       return new Base64DataBuffer(resp.txBytes);
     } catch (err) {
-      throw new Error(`Error executing a move call: ${err} with args ${t}`);
+      throw new Error(
+        `Error executing a move call: ${err} with args ${JSON.stringify(t)}`
+      );
     }
   }
 
