@@ -179,7 +179,9 @@ impl PseudoBlockProvider {
 
         let f = blocks.clone();
         tokio::spawn(async move {
-            f.update_balance(0, genesis_txs).await.unwrap();
+            if let Err(e) = f.update_balance(0, genesis_txs).await{
+                error!("Error updating balance, cause: {e:?}")
+            }
             loop {
                 if let Err(e) = f.create_next_block(state.clone()).await {
                     error!("Error creating block, cause: {e:?}")
