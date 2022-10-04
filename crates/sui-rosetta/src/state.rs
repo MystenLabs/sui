@@ -179,7 +179,7 @@ impl PseudoBlockProvider {
 
         let f = blocks.clone();
         tokio::spawn(async move {
-            if let Err(e) = f.update_balance(0, genesis_txs).await{
+            if let Err(e) = f.update_balance(0, genesis_txs).await {
                 error!("Error updating balance, cause: {e:?}")
             }
             loop {

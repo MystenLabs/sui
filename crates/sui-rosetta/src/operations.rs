@@ -8,24 +8,24 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::{json, Value};
 
-use sui_types::{parse_sui_struct_tag, SUI_FRAMEWORK_OBJECT_ID};
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::coin::{COIN_JOIN_FUNC_NAME, COIN_MODULE_NAME, COIN_SPLIT_VEC_FUNC_NAME};
-use sui_types::event::{Event};
+use sui_types::event::Event;
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::{
     CallArg, InputObjectKind, MoveCall, ObjectArg, Pay, SingleTransactionKind, TransactionData,
     TransactionEffects,
 };
 use sui_types::move_package::disassemble_modules;
+use sui_types::{parse_sui_struct_tag, SUI_FRAMEWORK_OBJECT_ID};
 
-use crate::{Error, ErrorType, SUI};
-use crate::ErrorType::UnsupportedOperation;
 use crate::types::{
     AccountIdentifier, Amount, CoinAction, CoinChange, CoinID, CoinIdentifier,
     ConstructionMetadata, IndexCounter, OperationIdentifier, OperationStatus, OperationType,
     SignedValue,
 };
+use crate::ErrorType::UnsupportedOperation;
+use crate::{Error, ErrorType, SUI};
 
 #[cfg(test)]
 #[path = "unit_tests/operations_tests.rs"]
@@ -219,7 +219,7 @@ impl Operation {
                 object_id,
             } => {
                 if let Some((coin, (id, version, _))) =
-                new_coins.iter().find(|(_, (id, _, _))| id == object_id)
+                    new_coins.iter().find(|(_, (id, _, _))| id == object_id)
                 {
                     let amount = coin.value();
                     vec![Operation {
