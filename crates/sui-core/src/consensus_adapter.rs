@@ -61,12 +61,17 @@ type ConsensusTransactionDigest = u64;
 type TxSequencedNotifier = oneshot::Sender<SuiResult<()>>;
 type TxSequencedNotifierClose = oneshot::Sender<()>;
 
+const SEQUENCING_CERTIFICATE_LATENCY_SEC_BUCKETS: &[f64] = &[
+    0.1, 0.25, 0.5, 1., 2.5, 5., 7.5, 10., 12.5, 15., 20., 25., 30., 60., 90., 120., 180., 300.,
+    600.,
+];
+
 pub struct ConsensusAdapterMetrics {
     // Certificate sequencing metrics
     pub sequencing_certificate_attempt: IntCounter,
     pub sequencing_certificate_success: IntCounter,
     pub sequencing_certificate_timeouts: IntCounter,
-    pub sequencing_certificate_control_delay: IntGauge,
+    pub sequencing_certificate_inflight: IntGauge,
     pub sequencing_certificate_latency: Histogram,
 
     // Fragment sequencing metrics
@@ -76,10 +81,9 @@ pub struct ConsensusAdapterMetrics {
     pub sequencing_fragment_control_delay: IntGauge,
 }
 
-const MAX_DELAY_MULTIPLIER: u64 = 100;
-fn weighted_average_half(old_average: u64, new_value: u64) -> u64 {
-    (500 * old_average + 500 * new_value) / 1000
-}
+/// Timeout for sequencing a certificate. The value is chosen to be high enough such that during normal operations,
+/// this timeout is not expected to be triggered.
+const SEQUENCING_CERTIFICATE_TIMEOUT: Duration = Duration::from_secs(60);
 
 pub type OptArcConsensusAdapterMetrics = Option<Arc<ConsensusAdapterMetrics>>;
 
@@ -104,15 +108,16 @@ impl ConsensusAdapterMetrics {
                 registry,
             )
             .unwrap(),
-            sequencing_certificate_control_delay: register_int_gauge_with_registry!(
-                "sequencing_certificate_control_delay",
-                "The estimated latency for the certificate sequencer.",
+            sequencing_certificate_inflight: register_int_gauge_with_registry!(
+                "sequencing_certificate_inflight",
+                "The inflight requests to sequence certificates.",
                 registry,
             )
             .unwrap(),
             sequencing_certificate_latency: register_histogram_with_registry!(
                 "sequencing_certificate_latency",
                 "The latency for certificate sequencing.",
+                SEQUENCING_CERTIFICATE_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
@@ -203,15 +208,8 @@ pub struct ConsensusAdapter {
     committee: Committee,
     /// A channel to notify the consensus listener to take action for a transactions.
     tx_consensus_listener: Sender<ConsensusListenerMessage>,
-    /// Additional amount on top of delay_ms to calculate consensus timeout
-    /// Worst case consensus timeout grows linearly by adding delay_step every timeout
-    delay_step: Duration,
-
-    /// Estimation of the consensus delay, to use to dynamically adjust the delay
-    /// before we time out, so that we do not spam the consensus adapter with the
-    /// same transaction.
-    delay_ms: AtomicU64,
-
+    /// Number of submitted transactions still inflight at this node.
+    num_inflight_transactions: AtomicU64,
     /// A structure to register metrics
     opt_metrics: OptArcConsensusAdapterMetrics,
 }
@@ -222,21 +220,24 @@ impl ConsensusAdapter {
         consensus_address: Multiaddr,
         committee: Committee,
         tx_consensus_listener: Sender<ConsensusListenerMessage>,
-        delay_step: Duration,
         opt_metrics: OptArcConsensusAdapterMetrics,
     ) -> Self {
         let consensus_client = TransactionsClient::new(
             mysten_network::client::connect_lazy(&consensus_address)
                 .expect("Failed to connect to consensus"),
         );
+        let num_inflight_transactions = Default::default();
         Self {
             consensus_client,
             committee,
             tx_consensus_listener,
-            delay_step,
-            delay_ms: AtomicU64::new(delay_step.as_millis() as u64),
+            num_inflight_transactions,
             opt_metrics,
         }
+    }
+
+    pub fn num_inflight_transactions(&self) -> u64 {
+        self.num_inflight_transactions.load(Ordering::Relaxed)
     }
 
     /// Check if this authority should submit the transaction to consensus.
@@ -292,21 +293,19 @@ impl ConsensusAdapter {
                 .tap_err(|r| {
                     error!("Submit transaction failed with: {:?}", r);
                 })?;
-
+            self.num_inflight_transactions
+                .fetch_add(1, Ordering::SeqCst);
             // Increment the attempted certificate sequencing
             self.opt_metrics.as_ref().map(|metrics| {
                 metrics.sequencing_certificate_attempt.inc();
+                metrics
+                    .sequencing_certificate_inflight
+                    .set(self.num_inflight_transactions.load(Ordering::Relaxed) as i64);
             });
         }
 
-        // Wait for the consensus to sequence the certificate and assign locks to shared objects.
-        // Since the consensus protocol may drop some messages, it is not guaranteed that our
-        // certificate will be sequenced. So the best we can do is to set a timer and notify the
-        // client to retry if we timeout without hearing back from consensus (this module does not
-        // handle retries). The best timeout value depends on the consensus protocol.
-        let back_off_delay =
-            self.delay_step + Duration::from_millis(self.delay_ms.load(Ordering::Relaxed));
-        let result = match timeout(back_off_delay, waiter.wait_for_result()).await {
+        // TODO: make consensus guarantee delivery after submit_transaction() returns, and avoid the timeout below.
+        let result = match timeout(SEQUENCING_CERTIFICATE_TIMEOUT, waiter.wait_for_result()).await {
             Ok(_) => {
                 // todo - handle error in Ok(Err(..))
                 // Increment the attempted certificate sequencing success
@@ -328,32 +327,19 @@ impl ConsensusAdapter {
             }
         };
 
-        // Adapt the timeout for the next submission based on the delay we have observed so
-        // far using a weighted average, implementing proportional control targeting the observed latency.
-        // Note that if we keep timing out the delay will keep increasing linearly as we constantly
-        // add max_delay to the observe delay to set the
-        // time-out.
         if should_submit {
-            let past_ms = now.elapsed().as_millis() as u64;
-            let current_delay = self.delay_ms.load(Ordering::Relaxed);
-            let new_delay = weighted_average_half(past_ms, current_delay);
-            // clip to a max delay, 100x the self.max_delay. 100x is arbitrary
-            // but all we really need here is some max so that we do not wait for ever
-            // in case consensus if dead.
-            let new_delay =
-                new_delay.min((self.delay_step.as_millis() as u64) * MAX_DELAY_MULTIPLIER);
-
+            let elapsed_ms = now.elapsed().as_millis() as f64;
+            self.num_inflight_transactions
+                .fetch_sub(1, Ordering::SeqCst);
             // Store the latest latency
             self.opt_metrics.as_ref().map(|metrics| {
                 metrics
-                    .sequencing_certificate_control_delay
-                    .set(new_delay as i64);
+                    .sequencing_certificate_inflight
+                    .set(self.num_inflight_transactions.load(Ordering::Relaxed) as i64);
                 metrics
                     .sequencing_certificate_latency
-                    .observe(past_ms as f64);
+                    .observe(elapsed_ms / 1000.);
             });
-
-            self.delay_ms.store(new_delay, Ordering::Relaxed);
         }
 
         result
@@ -501,6 +487,10 @@ impl ConsensusSender for CheckpointSender {
             .try_send(fragment)
             .map_err(|e| SuiError::from(&e.to_string()[..]))
     }
+}
+
+fn weighted_average_half(old_average: u64, new_value: u64) -> u64 {
+    (500 * old_average + 500 * new_value) / 1000
 }
 
 /// Reliably submit checkpoints fragments to consensus.

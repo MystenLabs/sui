@@ -162,7 +162,6 @@ async fn submit_transaction_to_consensus() {
         consensus_address.clone(),
         committee,
         tx_consensus_listener,
-        /* max_delay */ Duration::from_millis(1_000),
         metrics,
     );
 
