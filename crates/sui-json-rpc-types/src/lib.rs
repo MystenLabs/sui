@@ -38,7 +38,7 @@ use sui_types::crypto::{AuthorityStrongQuorumSignInfo, SignableBytes, Signature}
 use sui_types::error::SuiError;
 use sui_types::event::{Event, TransferType};
 use sui_types::event::{EventEnvelope, EventType};
-use sui_types::filter::{EventFilter, TransactionFilter, TransactionQueryCriteria};
+use sui_types::filter::{EventFilter, TransactionFilter};
 use sui_types::gas::GasCostSummary;
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::{
@@ -2377,77 +2377,6 @@ impl TransactionBytes {
 
     pub fn to_data(self) -> Result<TransactionData, anyhow::Error> {
         TransactionData::from_signable_bytes(&self.tx_bytes.to_vec()?)
-    }
-}
-
-#[derive(Clone, Debug, JsonSchema, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum SuiTransactionQueryCriteria {
-    All,
-    MoveFunction {
-        package: ObjectID,
-        module: Option<String>,
-        function: Option<String>,
-    },
-    InputObject {
-        object_id: ObjectID,
-    },
-    MutatedObject {
-        object_id: ObjectID,
-    },
-    FromAddress {
-        address: SuiAddress,
-    },
-    ToAddress {
-        address: SuiAddress,
-    },
-}
-
-impl From<TransactionQueryCriteria> for SuiTransactionQueryCriteria {
-    fn from(filter: TransactionQueryCriteria) -> Self {
-        match filter {
-            TransactionQueryCriteria::MoveFunction {
-                package,
-                module,
-                function,
-            } => Self::MoveFunction {
-                package,
-                module,
-                function,
-            },
-            TransactionQueryCriteria::InputObject { object_id } => Self::InputObject { object_id },
-            TransactionQueryCriteria::MutatedObject { object_id } => {
-                Self::MutatedObject { object_id }
-            }
-            TransactionQueryCriteria::FromAddress { address } => Self::FromAddress { address },
-            TransactionQueryCriteria::ToAddress { address } => Self::ToAddress { address },
-            TransactionQueryCriteria::All => Self::All,
-        }
-    }
-}
-
-impl From<SuiTransactionQueryCriteria> for TransactionQueryCriteria {
-    fn from(filter: SuiTransactionQueryCriteria) -> Self {
-        match filter {
-            SuiTransactionQueryCriteria::MoveFunction {
-                package,
-                module,
-                function,
-            } => Self::MoveFunction {
-                package,
-                module,
-                function,
-            },
-            SuiTransactionQueryCriteria::InputObject { object_id } => {
-                Self::InputObject { object_id }
-            }
-            SuiTransactionQueryCriteria::MutatedObject { object_id } => {
-                Self::MutatedObject { object_id }
-            }
-            SuiTransactionQueryCriteria::FromAddress { address } => Self::FromAddress { address },
-            SuiTransactionQueryCriteria::ToAddress { address } => Self::ToAddress { address },
-            SuiTransactionQueryCriteria::All => Self::All,
-        }
     }
 }
 

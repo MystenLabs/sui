@@ -29,7 +29,7 @@ use sui_sdk::{ClientType, SuiClient};
 use sui_swarm::memory::Swarm;
 use sui_types::base_types::{ObjectRef, SequenceNumber};
 use sui_types::event::TransferType;
-use sui_types::filter::TransactionQueryCriteria;
+use sui_types::filter::TransactionQuery;
 use sui_types::messages::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
 };
@@ -128,52 +128,43 @@ async fn test_full_node_move_function_index() -> Result<(), anyhow::Error> {
     let digest = tx_cert.transaction_digest;
 
     wait_for_tx(digest, node.state().clone()).await;
-    let txes = node
-        .state()
-        .get_transactions(
-            TransactionQueryCriteria::MoveFunction {
-                package: package_ref.0,
-                module: Some("counter".to_string()),
-                function: Some("increment".to_string()),
-            },
-            None,
-            None,
-        )
-        .await?;
+    let txes = node.state().get_transactions(
+        TransactionQuery::MoveFunction {
+            package: package_ref.0,
+            module: Some("counter".to_string()),
+            function: Some("increment".to_string()),
+        },
+        None,
+        None,
+    )?;
 
     assert_eq!(txes.len(), 1);
     assert_eq!(txes[0].1, digest);
 
-    let txes = node
-        .state()
-        .get_transactions(
-            TransactionQueryCriteria::MoveFunction {
-                package: package_ref.0,
-                module: None,
-                function: None,
-            },
-            None,
-            None,
-        )
-        .await?;
+    let txes = node.state().get_transactions(
+        TransactionQuery::MoveFunction {
+            package: package_ref.0,
+            module: None,
+            function: None,
+        },
+        None,
+        None,
+    )?;
 
     // 2 transactions in the package i.e create and increment counter
     assert_eq!(txes.len(), 2);
     assert_eq!(txes[1].1, digest);
 
     eprint!("start...");
-    let txes = node
-        .state()
-        .get_transactions(
-            TransactionQueryCriteria::MoveFunction {
-                package: package_ref.0,
-                module: Some("counter".to_string()),
-                function: None,
-            },
-            None,
-            None,
-        )
-        .await?;
+    let txes = node.state().get_transactions(
+        TransactionQuery::MoveFunction {
+            package: package_ref.0,
+            module: Some("counter".to_string()),
+            function: None,
+        },
+        None,
+        None,
+    )?;
 
     // 2 transactions in the package i.e publish and increment
     assert_eq!(txes.len(), 2);
@@ -193,77 +184,59 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
 
     wait_for_tx(digest, node.state().clone()).await;
 
-    let txes = node
-        .state()
-        .get_transactions(
-            TransactionQueryCriteria::InputObject {
-                object_id: transferred_object,
-            },
-            None,
-            None,
-        )
-        .await?;
+    let txes = node.state().get_transactions(
+        TransactionQuery::InputObject {
+            object_id: transferred_object,
+        },
+        None,
+        None,
+    )?;
 
     assert_eq!(txes.len(), 1);
     assert_eq!(txes[0].1, digest);
 
-    let txes = node
-        .state()
-        .get_transactions(
-            TransactionQueryCriteria::MutatedObject {
-                object_id: transferred_object,
-            },
-            None,
-            None,
-        )
-        .await?;
+    let txes = node.state().get_transactions(
+        TransactionQuery::MutatedObject {
+            object_id: transferred_object,
+        },
+        None,
+        None,
+    )?;
     assert_eq!(txes.len(), 1);
     assert_eq!(txes[0].1, digest);
 
-    let txes = node
-        .state()
-        .get_transactions(
-            TransactionQueryCriteria::FromAddress { address: sender },
-            None,
-            None,
-        )
-        .await?;
+    let txes = node.state().get_transactions(
+        TransactionQuery::FromAddress { address: sender },
+        None,
+        None,
+    )?;
     assert_eq!(txes.len(), 1);
     assert_eq!(txes[0].1, digest);
 
-    let txes = node
-        .state()
-        .get_transactions(
-            TransactionQueryCriteria::ToAddress { address: receiver },
-            None,
-            None,
-        )
-        .await?;
+    let txes = node.state().get_transactions(
+        TransactionQuery::ToAddress { address: receiver },
+        None,
+        None,
+    )?;
     assert_eq!(txes.len(), 1);
     assert_eq!(txes[0].1, digest);
 
     // Note that this is also considered a tx to the sender, because it mutated
     // one or more of the sender's objects.
-    let txes = node
-        .state()
-        .get_transactions(
-            TransactionQueryCriteria::ToAddress { address: sender },
-            None,
-            None,
-        )
-        .await?;
+    let txes = node.state().get_transactions(
+        TransactionQuery::ToAddress { address: sender },
+        None,
+        None,
+    )?;
     assert_eq!(txes.len(), 1);
     assert_eq!(txes[0].1, digest);
 
     // No transactions have originated from the receiver
-    let txes = node
-        .state()
-        .get_transactions(
-            TransactionQueryCriteria::FromAddress { address: receiver },
-            None,
-            None,
-        )
-        .await?;
+    let txes = node.state().get_transactions(
+        TransactionQuery::FromAddress { address: receiver },
+        None,
+        None,
+    )?;
     assert_eq!(txes.len(), 0);
 
     // timestamp is recorded
@@ -636,16 +609,13 @@ async fn test_full_node_event_read_api_ok() -> Result<(), anyhow::Error> {
 
     wait_for_tx(digest, node.state().clone()).await;
 
-    let txes = node
-        .state()
-        .get_transactions(
-            TransactionQueryCriteria::InputObject {
-                object_id: transferred_object,
-            },
-            None,
-            None,
-        )
-        .await?;
+    let txes = node.state().get_transactions(
+        TransactionQuery::InputObject {
+            object_id: transferred_object,
+        },
+        None,
+        None,
+    )?;
 
     assert_eq!(txes.len(), 1);
     assert_eq!(txes[0].1, digest);

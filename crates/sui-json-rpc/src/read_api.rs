@@ -17,12 +17,13 @@ use sui_core::gateway_state::TxSeqNumber;
 use sui_json_rpc_types::{
     GetObjectDataResponse, GetPastObjectDataResponse, MoveFunctionArgType, ObjectValueKind, Page,
     SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiObjectInfo,
-    SuiTransactionEffects, SuiTransactionQueryCriteria, SuiTransactionResponse, TransactionsPage,
+    SuiTransactionEffects, SuiTransactionResponse, TransactionsPage,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::crypto::{SignableBytes, SignatureScheme};
+use sui_types::filter::TransactionQuery;
 use sui_types::messages::{Transaction, TransactionData};
 use sui_types::move_package::normalize_modules;
 use sui_types::object::{Data, ObjectRead, Owner};
@@ -255,25 +256,29 @@ impl RpcFullNodeReadApiServer for FullNodeApi {
 
     async fn get_transactions(
         &self,
-        query: SuiTransactionQueryCriteria,
+        query: TransactionQuery,
         cursor: Option<TxSeqNumber>,
         limit: Option<usize>,
     ) -> RpcResult<TransactionsPage> {
         let limit = limit.unwrap_or(MAX_RESULT_SIZE);
+
+        if limit == 0 {
+            Err(anyhow!("Page result limit must be larger then 0."))?;
+        }
+
+        // Retrieve 1 extra item for next cursor
         let mut data = self
             .state
-            .get_transactions(query.into(), cursor, Some(limit + 1))?;
+            .get_transactions(query, cursor, Some(limit + 1))?;
 
-        Ok(if data.len() == limit + 1 {
-            let next_cursor = Some(data.last().unwrap().0);
-            data.truncate(limit);
-            Page { data, next_cursor }
+        // extract next cursor
+        let next_cursor = if data.len() == limit + 1 {
+            Some(data.last().unwrap().0)
         } else {
-            Page {
-                data,
-                next_cursor: None,
-            }
-        })
+            None
+        };
+        data.truncate(limit);
+        Ok(Page { data, next_cursor })
     }
 
     async fn try_get_past_object(

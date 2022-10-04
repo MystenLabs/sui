@@ -3,6 +3,9 @@
 
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::StructTag;
+use schemars::JsonSchema;
+use serde::Deserialize;
+use serde::Serialize;
 use serde_json::Value;
 
 use crate::base_types::SuiAddress;
@@ -93,8 +96,8 @@ pub trait Filter<T> {
     fn matches(&self, item: &T) -> bool;
 }
 
-#[derive(Clone, Debug)]
-pub enum TransactionQueryCriteria {
+#[derive(Clone, Debug, JsonSchema, Serialize, Deserialize)]
+pub enum TransactionQuery {
     All,
     MoveFunction {
         package: ObjectID,

@@ -18,7 +18,7 @@ use sui_core::quorum_driver::QuorumDriver;
 use sui_types::base_types::{
     SequenceNumber, SuiAddress, TransactionDigest, TRANSACTION_DIGEST_LENGTH,
 };
-use sui_types::filter::TransactionQueryCriteria;
+use sui_types::filter::TransactionQuery;
 use sui_types::gas_coin::GasCoin;
 use sui_types::object::PastObjectRead;
 
@@ -200,13 +200,8 @@ impl PseudoBlockProvider {
             return Ok(());
         }
         if current_block.index < total_tx {
-            // Make sure we don't hit the query limit.
-            // TODO: replace this with pagination when it's available.
-            let tx_digests = state.get_transactions(
-                TransactionQueryCriteria::All,
-                Some(current_block.index),
-                None,
-            )?;
+            let tx_digests =
+                state.get_transactions(TransactionQuery::All, Some(current_block.index), None)?;
             let mut index = current_block.index;
             let mut parent_block_identifier = current_block;
 

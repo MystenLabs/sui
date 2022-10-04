@@ -11,12 +11,13 @@ use sui_json_rpc_types::{
     MoveFunctionArgType, RPCTransactionRequestParams, SuiEventEnvelope, SuiEventFilter,
     SuiExecuteTransactionResponse, SuiGasCostSummary, SuiMoveNormalizedFunction,
     SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiObjectInfo, SuiTransactionEffects,
-    SuiTransactionFilter, SuiTransactionQueryCriteria, SuiTransactionResponse, SuiTypeTag,
-    TransactionBytes, TransactionsPage, TxSeqNumber,
+    SuiTransactionFilter, SuiTransactionResponse, SuiTypeTag, TransactionBytes, TransactionsPage,
+    TxSeqNumber,
 };
 use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress, TransactionDigest};
 use sui_types::crypto::SignatureScheme;
+use sui_types::filter::TransactionQuery;
 use sui_types::messages::ExecuteTransactionRequestType;
 use sui_types::object::Owner;
 use sui_types::sui_serde::Base64;
@@ -25,7 +26,6 @@ use sui_types::sui_serde::Base64;
 /// This is equivalent to EVENT_STORE_QUERY_MAX_LIMIT in `sui-storage` crate.
 /// To avoid unnecessary dependency on that crate, we have a reference here
 /// for document purposes.
-pub const EVENT_QUERY_MAX_LIMIT: usize = 100;
 pub const MAX_RESULT_SIZE: usize = 4096;
 
 #[open_rpc(namespace = "sui", tag = "Gateway Transaction Execution API")]
@@ -166,7 +166,7 @@ pub trait RpcFullNodeReadApi {
     async fn get_transactions(
         &self,
         /// the transaction query criteria.
-        query: SuiTransactionQueryCriteria,
+        query: TransactionQuery,
         cursor: Option<TxSeqNumber>,
         limit: Option<usize>,
     ) -> RpcResult<TransactionsPage>;

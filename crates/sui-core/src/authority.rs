@@ -31,8 +31,8 @@ use tap::TapFallible;
 use thiserror::Error;
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::mpsc::Sender;
-use tracing::Instrument;
 use tracing::{debug, error, instrument, warn};
+use tracing::{trace, Instrument};
 use typed_store::Map;
 
 pub use authority_store::{
@@ -56,7 +56,7 @@ use sui_storage::{
 };
 use sui_types::committee::EpochId;
 use sui_types::crypto::{AuthorityKeyPair, NetworkKeyPair};
-use sui_types::filter::TransactionQueryCriteria;
+use sui_types::filter::TransactionQuery;
 use sui_types::messages_checkpoint::{
     CheckpointRequest, CheckpointRequestType, CheckpointResponse, CheckpointSequenceNumber,
 };
@@ -1691,31 +1691,31 @@ impl AuthorityState {
 
     pub fn get_transactions(
         &self,
-        query: TransactionQueryCriteria,
+        query: TransactionQuery,
         cursor: Option<TxSequenceNumber>,
         limit: Option<usize>,
     ) -> Result<Vec<(TxSequenceNumber, TransactionDigest)>, anyhow::Error> {
         Ok(match query {
-            TransactionQueryCriteria::MoveFunction {
+            TransactionQuery::MoveFunction {
                 package,
                 module,
                 function,
             } => self
                 .get_indexes()?
                 .get_transactions_by_move_function(package, module, function, cursor, limit)?,
-            TransactionQueryCriteria::InputObject { object_id } => self
+            TransactionQuery::InputObject { object_id } => self
                 .get_indexes()?
                 .get_transactions_by_input_object(object_id, cursor, limit)?,
-            TransactionQueryCriteria::MutatedObject { object_id } => self
+            TransactionQuery::MutatedObject { object_id } => self
                 .get_indexes()?
                 .get_transactions_by_mutated_object(object_id, cursor, limit)?,
-            TransactionQueryCriteria::FromAddress { address } => self
+            TransactionQuery::FromAddress { address } => self
                 .get_indexes()?
                 .get_transactions_from_addr(address, cursor, limit)?,
-            TransactionQueryCriteria::ToAddress { address } => self
+            TransactionQuery::ToAddress { address } => self
                 .get_indexes()?
                 .get_transactions_to_addr(address, cursor, limit)?,
-            TransactionQueryCriteria::All => {
+            TransactionQuery::All => {
                 let start = cursor.unwrap_or_default();
                 let iter = self
                     .database

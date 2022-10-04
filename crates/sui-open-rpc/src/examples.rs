@@ -19,8 +19,8 @@ use sui_json_rpc_types::{
     MoveCallParams, OwnedObjectRef, RPCTransactionRequestParams, SuiCertifiedTransaction, SuiData,
     SuiEvent, SuiEventEnvelope, SuiExecutionStatus, SuiGasCostSummary, SuiObject, SuiObjectRead,
     SuiObjectRef, SuiParsedData, SuiPastObjectRead, SuiRawData, SuiRawMoveObject,
-    SuiTransactionData, SuiTransactionEffects, SuiTransactionQueryCriteria, SuiTransactionResponse,
-    TransactionBytes, TransactionsPage, TransferObjectParams, TxSeqNumber,
+    SuiTransactionData, SuiTransactionEffects, SuiTransactionResponse, TransactionBytes,
+    TransactionsPage, TransferObjectParams, TxSeqNumber,
 };
 use sui_open_rpc::ExamplePairing;
 use sui_types::base_types::{
@@ -29,6 +29,7 @@ use sui_types::base_types::{
 use sui_types::crypto::{get_key_pair_from_rng, AccountKeyPair, Signature};
 use sui_types::crypto::{AuthorityQuorumSignInfo, SuiSignature};
 use sui_types::event::TransferType;
+use sui_types::filter::TransactionQuery;
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::{
     CallArg, ExecuteTransactionRequestType, MoveCall, SingleTransactionKind, Transaction,
@@ -384,7 +385,7 @@ impl RpcExampleProvider {
                 vec![
                     (
                         "query",
-                        json!(SuiTransactionQueryCriteria::InputObject {
+                        json!(TransactionQuery::InputObject {
                             object_id: ObjectID::new(self.rng.gen())
                         }),
                     ),

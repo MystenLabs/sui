@@ -1,27 +1,32 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use move_package::BuildConfig;
 use std::{path::Path, str::FromStr};
+
+use move_package::BuildConfig;
+
 use sui_config::utils::get_available_port;
 use sui_config::SUI_KEYSTORE_FILENAME;
 use sui_core::gateway_state::TxSeqNumber;
 use sui_core::test_utils::to_sender_signed_transaction;
 use sui_framework::build_move_package_to_bytes;
 use sui_json::SuiJsonValue;
+use sui_json_rpc::api::RpcFullNodeReadApiClient;
 use sui_json_rpc::api::{
     RpcGatewayApiClient, RpcReadApiClient, RpcTransactionBuilderClient, WalletSyncApiClient,
 };
-use sui_json_rpc_types::{GetObjectDataResponse, SuiTransactionResponse, TransactionBytes};
+use sui_json_rpc_types::{
+    GetObjectDataResponse, SuiTransactionResponse, TransactionBytes, TransactionsPage,
+};
 use sui_sdk::crypto::AccountKeystore;
 use sui_sdk::crypto::FileBasedKeystore;
 use sui_sdk::crypto::Keystore;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::TransactionDigest;
+use sui_types::filter::TransactionQuery;
 use sui_types::gas_coin::GAS;
 use sui_types::sui_serde::Base64;
 use sui_types::SUI_FRAMEWORK_ADDRESS;
-
 use test_utils::network::TestClusterBuilder;
 
 #[tokio::test]
@@ -222,14 +227,16 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
         tx_responses.push(response);
     }
     // test get_transactions_in_range
-    let tx: Vec<(TxSeqNumber, TransactionDigest)> =
-        http_client.get_transactions_in_range(0, 10).await?;
-    assert_eq!(4, tx.len());
+    let tx: TransactionsPage = http_client
+        .get_transactions(TransactionQuery::All, Some(0), Some(10))
+        .await?;
+    assert_eq!(4, tx.data.len());
 
     // test get_transactions_in_range with smaller range
-    let tx: Vec<(TxSeqNumber, TransactionDigest)> =
-        http_client.get_transactions_in_range(1, 3).await?;
-    assert_eq!(2, tx.len());
+    let tx: TransactionsPage = http_client
+        .get_transactions(TransactionQuery::All, Some(1), Some(2))
+        .await?;
+    assert_eq!(2, tx.data.len());
 
     // test get_recent_transactions with smaller range
     let tx: Vec<(TxSeqNumber, TransactionDigest)> = http_client.get_recent_transactions(3).await?;
