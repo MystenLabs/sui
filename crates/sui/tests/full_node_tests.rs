@@ -1034,7 +1034,7 @@ async fn get_obj_read_from_node(
     }
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_get_objects_read() -> Result<(), anyhow::Error> {
     telemetry_subscribers::init_for_testing();
 

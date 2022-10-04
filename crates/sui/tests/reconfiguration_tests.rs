@@ -9,6 +9,7 @@ use sui_config::ValidatorInfo;
 use sui_core::authority_active::checkpoint_driver::{
     checkpoint_process_step, CheckpointProcessControl,
 };
+use sui_macros::sim_test;
 use sui_node::SuiNode;
 use sui_types::base_types::{ObjectRef, SequenceNumber, SuiAddress};
 use sui_types::crypto::{
@@ -25,8 +26,7 @@ use test_utils::objects::{generate_gas_object_with_balance, test_gas_objects};
 use test_utils::test_account_keys;
 use test_utils::transaction::{submit_shared_object_transaction, submit_single_owner_transaction};
 
-#[tokio::test(flavor = "current_thread")]
-#[ignore]
+#[sim_test(flavor = "current_thread")]
 async fn reconfig_end_to_end_tests() {
     telemetry_subscribers::init_for_testing();
 
