@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
     batch_maker::BatchMaker,
-    handlers::{ChildRpcSender, PrimaryReceiverHandler, WorkerReceiverHandler},
+    handlers::{PrimaryReceiverHandler, WorkerReceiverHandler},
     metrics::WorkerChannelMetrics,
     primary_connector::PrimaryConnector,
     processor::Processor,
@@ -99,20 +99,19 @@ impl Worker {
             channel(CHANNEL_CAPACITY, &channel_metrics.tx_worker_processor);
         let (tx_synchronizer, rx_synchronizer) =
             channel(CHANNEL_CAPACITY, &channel_metrics.tx_synchronizer);
-        let (tx_request_batches_rpc, rx_request_batches_rpc) =
-            channel(CHANNEL_CAPACITY, &channel_metrics.tx_request_batches_rpc);
 
         let worker_service = WorkerToWorkerServer::new(WorkerReceiverHandler {
             tx_processor: tx_worker_processor.clone(),
             store: worker.store.clone(),
         });
         let primary_service = PrimaryToWorkerServer::new(PrimaryReceiverHandler {
+            name: worker.primary_name.clone(),
             id: worker.id,
             worker_cache: worker.worker_cache.clone(),
             store: worker.store.clone(),
+            request_batches_timeout: worker.parameters.sync_retry_delay,
             request_batches_retry_nodes: worker.parameters.sync_retry_nodes,
             tx_synchronizer,
-            tx_request_batches_rpc,
             tx_primary: tx_primary.clone(),
             tx_batch_processor: tx_worker_processor,
         });
@@ -198,17 +197,8 @@ impl Worker {
         });
         let primary_connector_handle = PrimaryConnector::spawn(
             primary_network_key,
-            rx_reconfigure.clone(),
-            rx_primary,
-            network::P2pNetwork::new(network.clone()),
-        );
-        let child_rpc_sender_handle = ChildRpcSender::spawn(
-            worker.primary_name.clone(),
-            worker.id,
-            worker.worker_cache.clone(),
-            worker.parameters.sync_retry_delay,
-            rx_request_batches_rpc,
             rx_reconfigure,
+            rx_primary,
             network::P2pNetwork::new(network.clone()),
         );
         let client_flow_handles = worker.handle_clients_transactions(
@@ -239,7 +229,7 @@ impl Worker {
                 .transactions
         );
 
-        let mut handles = vec![primary_connector_handle, child_rpc_sender_handle];
+        let mut handles = vec![primary_connector_handle];
         handles.extend(primary_flow_handles);
         handles.extend(client_flow_handles);
         handles.extend(worker_flow_handles);
