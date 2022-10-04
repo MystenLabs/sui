@@ -20,6 +20,7 @@ async function init() {
     if (process.env.NODE_ENV === 'development') {
         Object.defineProperty(window, 'store', { value: store });
     }
+    await thunkExtras.featureGating.init();
     store.dispatch(initAppType(getFromLocationSearch(window.location.search)));
     await store.dispatch(initNetworkFromStorage()).unwrap();
     await thunkExtras.background.init(store.dispatch);
