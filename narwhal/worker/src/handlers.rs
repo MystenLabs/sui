@@ -243,7 +243,6 @@ impl PrimaryToWorker for PrimaryReceiverHandler {
             .collect();
         while let Some(result) = handles.next().await {
             match result {
-                // TODO: is there a not-icky way to dedupe this code w/ above without async closures?
                 Ok(Ok(response)) => {
                     for batch in response.into_body().batches {
                         let digest = &batch.digest();
