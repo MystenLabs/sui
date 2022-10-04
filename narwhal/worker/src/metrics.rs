@@ -4,8 +4,9 @@ use mysten_network::metrics::MetricsCallbackProvider;
 use network::metrics::NetworkMetrics;
 use prometheus::{
     default_registry, register_histogram_vec_with_registry, register_int_counter_vec_with_registry,
-    register_int_gauge_vec_with_registry, register_int_gauge_with_registry, HistogramVec,
-    IntCounterVec, IntGauge, IntGaugeVec, Registry, IntCounter, register_int_counter_with_registry,
+    register_int_counter_with_registry, register_int_gauge_vec_with_registry,
+    register_int_gauge_with_registry, HistogramVec, IntCounter, IntCounterVec, IntGauge,
+    IntGaugeVec, Registry,
 };
 use std::time::Duration;
 use tonic::Code;
