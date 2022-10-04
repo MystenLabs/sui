@@ -16,6 +16,8 @@ use prometheus::IntGauge;
 use prometheus::Registry;
 use prometheus::{register_histogram_with_registry, register_int_counter_with_registry, Histogram};
 use std::collections::VecDeque;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::{
     collections::{hash_map::DefaultHasher, HashMap},
@@ -211,6 +213,8 @@ pub struct ConsensusAdapter {
     tx_consensus_listener: Sender<ConsensusListenerMessage>,
     /// Retries sending a transaction to consensus after this timeout.
     timeout: Duration,
+    /// Number of submitted transactions still inflight at this node.
+    num_inflight_transactions: AtomicU64,
     /// A structure to register metrics
     opt_metrics: OptArcConsensusAdapterMetrics,
 }
@@ -228,13 +232,19 @@ impl ConsensusAdapter {
             mysten_network::client::connect_lazy(&consensus_address)
                 .expect("Failed to connect to consensus"),
         );
+        let num_inflight_transactions = Default::default();
         Self {
             consensus_client,
             committee,
             tx_consensus_listener,
             timeout,
+            num_inflight_transactions,
             opt_metrics,
         }
+    }
+
+    pub fn num_inflight_transactions(&self) -> u64 {
+        self.num_inflight_transactions.load(Ordering::Relaxed)
     }
 
     /// Check if this authority should submit the transaction to consensus.
@@ -290,10 +300,12 @@ impl ConsensusAdapter {
                 .tap_err(|r| {
                     error!("Submit transaction failed with: {:?}", r);
                 })?;
-            // Increment the attempted certificate sequencing
+            let inflight = self
+                .num_inflight_transactions
+                .fetch_add(1, Ordering::SeqCst);
             self.opt_metrics.as_ref().map(|metrics| {
                 metrics.sequencing_certificate_attempt.inc();
-                metrics.sequencing_certificate_inflight.inc();
+                metrics.sequencing_certificate_inflight.set(inflight as i64);
             });
         }
 
@@ -328,10 +340,13 @@ impl ConsensusAdapter {
         };
 
         if should_submit {
+            let inflight = self
+                .num_inflight_transactions
+                .fetch_sub(1, Ordering::SeqCst);
             let elapsed_secs = now.elapsed().as_secs_f64();
             // Store the latest latency
             self.opt_metrics.as_ref().map(|metrics| {
-                metrics.sequencing_certificate_inflight.dec();
+                metrics.sequencing_certificate_inflight.set(inflight as i64);
                 metrics.sequencing_certificate_latency.observe(elapsed_secs);
             });
         }
@@ -347,13 +362,8 @@ pub struct ConsensusListener {
     rx_consensus_input: Receiver<ConsensusListenerMessage>,
     /// Receive consensus outputs.
     rx_consensus_output: Receiver<Vec<u8>>,
-    /// The maximum number of pending replies. This cap indicates the maximum amount of client
-    /// transactions submitted to consensus for which we keep track. If we submit more transactions
-    /// than this cap, the transactions will be handled by consensus as usual but this module won't
-    /// be keeping track of when they are sequenced. Its only purpose is to ensure the field called
-    /// `pending` has a maximum size.
-    max_pending_transactions: usize,
     /// Keep a map of all consensus inputs that are currently being sequenced.
+    /// Maximum size of the pending notifiers is bounded by the maximum pending transactions of the node.
     pending: HashMap<ConsensusTransactionDigest, Vec<(u64, TxSequencedNotifier)>>,
 }
 
@@ -362,14 +372,12 @@ impl ConsensusListener {
     pub fn spawn(
         rx_consensus_input: Receiver<ConsensusListenerMessage>,
         rx_consensus_output: Receiver<Vec<u8>>,
-        max_pending_transactions: usize,
     ) -> JoinHandle<()> {
         tokio::spawn(
             Self {
                 rx_consensus_input,
                 rx_consensus_output,
-                max_pending_transactions,
-                pending: HashMap::with_capacity(2 * max_pending_transactions),
+                pending: HashMap::new(),
             }
             .run(),
         )
@@ -408,24 +416,19 @@ impl ConsensusListener {
                         // Keep track of this certificates so we can notify the user later.
                         ConsensusListenerMessage::New(transaction, (replier, mut _closer)) => {
                             let digest = Self::hash_serialized_transaction(&transaction);
-                            if self.pending.len() < self.max_pending_transactions {
-                                let id = id_counter;
-                                id_counter += 1;
+                            let id = id_counter;
+                            id_counter += 1;
 
-                                let list = self.pending.entry(digest).or_insert_with(Vec::new);
-                                list.push((id, replier));
+                            let list = self.pending.entry(digest).or_insert_with(Vec::new);
+                            list.push((id, replier));
 
-                                // Register with the close notification.
-                                closed_notifications.push(async move {
-                                    // Wait for the channel to close
-                                    _closer.closed().await;
-                                    // Return he digest concerned
-                                    (digest, id)
-                                });
-
-                            } else if replier.send(Err(SuiError::ListenerCapacityExceeded(self.pending.len()))).is_err() {
-                                debug!("No replier to listen to consensus output {digest}");
-                            }
+                            // Register with the close notification.
+                            closed_notifications.push(async move {
+                                // Wait for the channel to close
+                                _closer.closed().await;
+                                // Return he digest concerned
+                                (digest, id)
+                            });
                         },
                     }
                 },

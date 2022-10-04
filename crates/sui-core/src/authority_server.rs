@@ -42,9 +42,10 @@ mod server_tests;
 
 const MIN_BATCH_SIZE: u64 = 1000;
 const MAX_DELAY_MILLIS: u64 = 5_000; // 5 sec
-                                     // Assuming 200 consensus tps * 5 sec consensus latency = 1000 inflight consensus txns.
-                                     // Leaving a bit more headroom to cap the max inflight consensus txns to 1000*2 = 2000.
-const MAX_PENDING_CONSENSUS_TRANSACTIONS: usize = 2000;
+
+// Assuming 200 consensus tps * 5 sec consensus latency = 1000 inflight consensus txns.
+// Leaving a bit more headroom to cap the max inflight consensus txns to 1000*2 = 2000.
+const MAX_PENDING_CONSENSUS_TRANSACTIONS: u64 = 2000;
 
 pub struct AuthorityServerHandle {
     tx_cancellation: tokio::sync::oneshot::Sender<()>,
@@ -289,11 +290,7 @@ impl ValidatorService {
 
         // Spawn a consensus listener. It listen for consensus outputs and notifies the
         // authority server when a sequenced transaction is ready for execution.
-        ConsensusListener::spawn(
-            rx_sui_to_consensus,
-            rx_consensus_to_sui,
-            MAX_PENDING_CONSENSUS_TRANSACTIONS,
-        );
+        ConsensusListener::spawn(rx_sui_to_consensus, rx_consensus_to_sui);
 
         let timeout = Duration::from_secs(consensus_config.timeout_secs.unwrap_or(60));
         let ca_metrics = ConsensusAdapterMetrics::new(&prometheus_registry);
@@ -419,6 +416,12 @@ impl ValidatorService {
                 .await
                 .map_err(|e| tonic::Status::internal(e.to_string()))?
         {
+            // Note that num_inflight_transactions() only include user submitted transactions, and only user txns can be dropped here.
+            // This backpressure should not affect system transactions, e.g. for checkpointing.
+            if consensus_adapter.num_inflight_transactions() > MAX_PENDING_CONSENSUS_TRANSACTIONS {
+                return Err(tonic::Status::resource_exhausted("Reached {MAX_PENDING_CONSENSUS_TRANSACTIONS} concurrent consensus transactions",
+                ));
+            }
             let _metrics_guard = start_timer(metrics.consensus_latency.clone());
             consensus_adapter
                 .submit(&state.name, &certificate)
