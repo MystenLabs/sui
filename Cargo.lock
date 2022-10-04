@@ -4855,6 +4855,7 @@ dependencies = [
  "proptest",
  "prost 0.10.4",
  "rand 0.8.5",
+ "reqwest",
  "roaring",
  "serde 1.0.144",
  "tap",
@@ -4992,13 +4993,16 @@ dependencies = [
  "multiaddr",
  "mysten-network",
  "narwhal-config",
+ "narwhal-consensus",
  "narwhal-crypto",
  "narwhal-network",
+ "narwhal-node",
  "narwhal-primary",
  "narwhal-test-utils",
  "narwhal-types",
  "prometheus",
  "rand 0.8.5",
+ "reqwest",
  "serde 1.0.144",
  "tap",
  "telemetry-subscribers 0.2.0",
@@ -6552,9 +6556,9 @@ dependencies = [
 
 [[package]]
 name = "reqwest"
-version = "0.11.11"
+version = "0.11.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b75aa69a3f06bbcc66ede33af2af253c6f7a86b1ca0033f60c580a27074fbf92"
+checksum = "431949c384f4e2ae07605ccaa56d1d9d2ecdb5cadd4f9577ccfab29f2e5149fc"
 dependencies = [
  "base64",
  "bytes",
@@ -6568,10 +6572,10 @@ dependencies = [
  "hyper-tls",
  "ipnet",
  "js-sys",
- "lazy_static 1.4.0",
  "log",
  "mime",
  "native-tls",
+ "once_cell",
  "percent-encoding",
  "pin-project-lite",
  "serde 1.0.144",

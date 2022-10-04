@@ -119,6 +119,9 @@ async fn get_network_peers_from_admin_server() {
     let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
+    // println!("Primary 1 Information");
+    // dbg!(authority_1.network_keypair().copy().public());
+
     // Spawn Primary 1
     Primary::spawn(
         name_1.clone(),
@@ -157,6 +160,9 @@ async fn get_network_peers_from_admin_server() {
         ..Parameters::default()
     };
 
+    // println!("Worker 1 Information");
+    // dbg!(worker_1_keypair.copy().public());
+
     // Spawn a `Worker` instance for primary 1.
     Worker::spawn(
         name_1,
@@ -183,7 +189,10 @@ async fn get_network_peers_from_admin_server() {
     .await
     .unwrap();
 
-    // Assert we returned 3 peers (1 primaries + 3 other workers)
+    // println!("Worker 1 Known Peers");
+    // dbg!(resp.clone());
+
+    // Assert we returned 3 peers (1 primary + 3 other workers)
     assert_eq!(4, resp.len());
 
     // Test getting all connected peers for worker 1 (worker at index 0 for primary 1)
@@ -197,7 +206,7 @@ async fn get_network_peers_from_admin_server() {
     .await
     .unwrap();
 
-    // Assert we returned 1 peers (only worker's primary spawned)
+    // Assert we returned 1 peer (only worker's primary spawned)
     assert_eq!(1, resp.len());
 
     let authority_2 = fixture.authorities().nth(1).unwrap();
@@ -219,6 +228,9 @@ async fn get_network_peers_from_admin_server() {
     let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
     let (tx_reconfigure_2, _rx_reconfigure_2) = watch::channel(initial_committee);
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
+
+    // println!("Primary 2 Information");
+    // dbg!(authority_2.network_keypair().copy().public());
 
     // Spawn Primary 2
     Primary::spawn(
@@ -258,6 +270,9 @@ async fn get_network_peers_from_admin_server() {
         ..Parameters::default()
     };
 
+    // println!("Worker 2 Information");
+    // dbg!(worker_2_keypair.copy().public());
+
     // Spawn a `Worker` instance for primary 2.
     Worker::spawn(
         name_2,
@@ -270,8 +285,26 @@ async fn get_network_peers_from_admin_server() {
         metrics_2.clone(),
     );
 
-    // Wait for tasks to start
-    tokio::time::sleep(Duration::from_secs(1)).await;
+    // Wait for tasks to start. Sleeping longer here to ensure all primaries and workers
+    // have  a chance to connect to each other.
+    tokio::time::sleep(Duration::from_secs(5)).await;
+
+    // Test getting all known peers for worker 2 (worker at index 0 for primary 2)
+    let resp = reqwest::get(format!(
+        "http://127.0.0.1:{}/known_peers",
+        worker_2_parameters.network_admin_server_port
+    ))
+    .await
+    .unwrap()
+    .json::<Vec<String>>()
+    .await
+    .unwrap();
+
+    // println!("Worker 2 Known Peers");
+    // dbg!(resp.clone());
+
+    // Assert we returned 4 peers (1 primary + 3 other workers)
+    assert_eq!(4, resp.len());
 
     // Test getting all connected peers for worker 1 (worker at index 0 for primary 1)
     let resp = reqwest::get(format!(
@@ -284,8 +317,11 @@ async fn get_network_peers_from_admin_server() {
     .await
     .unwrap();
 
-    // Assert we returned 2 peers (1 primary spawned + 1 other worker spawned)
-    assert_eq!(2, resp.len());
+    // println!("Worker 1 Connected Peers");
+    // dbg!(resp.clone());
+
+    // Assert we returned 3 peers (2 primaries spawned + 1 other worker spawned)
+    assert_eq!(3, resp.len());
 
     // Test getting all connected peers for worker 2 (worker at index 0 for primary 2)
     let resp = reqwest::get(format!(
@@ -298,8 +334,11 @@ async fn get_network_peers_from_admin_server() {
     .await
     .unwrap();
 
-    // Assert we returned 2 peers (1 primary spawned + 1 other worker spawned)
-    assert_eq!(2, resp.len());
+    // println!("Worker 2 Connected Peers");
+    // dbg!(resp.clone());
+
+    // Assert we returned 3 peers (2 primaries spawned  + 1 other worker spawned)
+    assert_eq!(3, resp.len());
 
     // Assert network connectivity metrics are also set as expected
     let mut m = std::collections::HashMap::new();
