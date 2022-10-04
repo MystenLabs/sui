@@ -68,17 +68,14 @@ HeaderDigest:
 PrimaryWorkerMessage:
   ENUM:
     0:
-      Cleanup:
-        NEWTYPE: U64
-    1:
       Reconfigure:
         NEWTYPE:
           TYPENAME: ReconfigureNotification
-    2:
+    1:
       RequestBatch:
         NEWTYPE:
           TYPENAME: BatchDigest
-    3:
+    2:
       DeleteBatches:
         NEWTYPE:
           SEQ:

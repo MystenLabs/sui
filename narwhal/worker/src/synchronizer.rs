@@ -70,9 +70,6 @@ impl Synchronizer {
             tokio::select! {
                 // Handle primary's messages.
                 Some(message) = self.rx_message.recv() => match message {
-                    PrimaryWorkerMessage::Cleanup(_) => {
-                        // TODO: this message does nothing, remove it.
-                    },
                     PrimaryWorkerMessage::Reconfigure(message) => {
                         // Reconfigure this task and update the shared committee.
                         let shutdown = match &message {

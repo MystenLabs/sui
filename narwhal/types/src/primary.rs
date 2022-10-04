@@ -714,8 +714,6 @@ pub enum ReconfigureNotification {
 #[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum PrimaryWorkerMessage {
-    /// The primary indicates a round update.
-    Cleanup(Round),
     /// Reconfigure the worker.
     Reconfigure(ReconfigureNotification),
     /// The primary requests a batch from the worker
