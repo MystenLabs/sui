@@ -1,5 +1,5 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
-// SPDX-License-Identifier: A&pache-2.0
+// SPDX-License-Identifier: Apache-2.0
 use tokio::task::JoinHandle;
 
 use crate::metrics::NetworkConnectionMetrics;
