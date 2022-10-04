@@ -40,6 +40,10 @@ pub mod configs {
         Duration::from_millis(range.start)..Duration::from_millis(range.end)
     }
 
+    pub fn constant_latency_ms(latency: u64) -> SimConfig {
+        uniform_latency_ms(latency..(latency + 1))
+    }
+
     pub fn uniform_latency_ms(range: Range<u64>) -> SimConfig {
         let range = ms_to_dur(range);
         SimConfig {
