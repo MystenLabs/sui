@@ -26,6 +26,7 @@ use test_utils::test_account_keys;
 use test_utils::transaction::{submit_shared_object_transaction, submit_single_owner_transaction};
 
 #[tokio::test(flavor = "current_thread")]
+#[ignore]
 async fn reconfig_end_to_end_tests() {
     telemetry_subscribers::init_for_testing();
 
