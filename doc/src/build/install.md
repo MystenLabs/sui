@@ -30,15 +30,15 @@ To change branches, choose **Latest build** to view the documentation generated 
 
 ## Supported Operating Systems
 
-Sui supports the following operating systems:
+Sui supports the following operating systems.
 
-* [Linux](#linux-specific) - Ubuntu version 18.04 (Bionic Beaver)
-* [macOS](#macOS-specific) - macOS Monterey
-* [Microsoft Windows](#microsoft-windows-specific) - Windows 11
+* Linux - Ubuntu version 18.04 (Bionic Beaver)
+* macOS - macOS Monterey
+* Microsoft Windows - Windows 11
 
 ## Prerequisites
 
-Install the required prerequisites and tools you need to work with Sui. 
+Install the prerequisites and tools you need to work with Sui. 
 
 | Package/OS | Linux  | macOS | Windows 11|
 | --- | :---: | :---: | :---: |
@@ -51,35 +51,44 @@ Install the required prerequisites and tools you need to work with Sui.
 | Brew | | X | |
 | C++ build tools | | | X |
 | LLVM Compiler | | | X |
-| Cargo | x |   |   |
 
-## Linux prerequisites
-
-Install the following additional prerequisites. You should make sure that your system has the latest version of `apt`. Use the following command to update it:
-`sudo apt-get update`
-
-### cURL
-
-Check whether you already have cURL installed with the following command:
-`which curl`
-
-Install cURL with the following command:
-`sudo apt install curl`
-
-Verify that cURL installed correctly with the following command:
-`curl --version`
 
 ### Rust and Cargo
+
+Sui requires Rust and Cargo on all supported operating systems. 
 
 Use the following command to install Rust:
 `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
 
 For additional installation options, see [Install Rust](https://www.rust-lang.org/tools/install).
 
-The `rustup` script to install Rust also installs Cargo.
+The `rustup` script also installs Cargo.
 
-Sui uses the latest version of the Cargo toolchain to build and manage dependencies. See [Cargo installation] (https://doc.rust-lang.org/cargo/getting-started/installation.html) for more information.
+Sui uses the latest version of Cargo to build and manage dependencies. See the [Cargo installation](https://doc.rust-lang.org/cargo/getting-started/installation.html) page for more information.
 
+Use the following command to update Rust:
+
+```shell
+$ rustup update stable
+```
+
+After you install Rust, proceed to the prerequisites for your operating system.
+ * [Linux prerequisites](#linux-prerequisites)
+ * [macOS prerequisites](#macos-prerequisites)
+ * [Windows prerequisites](#windows-prerequisites)
+
+## Linux prerequisites 
+
+Install the prerequisites listed in this section. You should make sure that your system has the latest version of `apt`. Use the following command to update it:
+`sudo apt-get update`
+
+### cURL
+
+Install cURL with the following command:
+`sudo apt install curl`
+
+Verify that cURL installed correctly with the following command:
+`curl --version`
 
 ### Git CLI
 
@@ -91,7 +100,7 @@ For more information, see [Install Git on Linux](https://github.com/git-guides/i
 
 ### CMake
 
-Install CMake with the following command:
+Install CMake with the following commands:
 
 `./bootstrap`
 `make`
@@ -109,144 +118,80 @@ use the following command to install `libssl-dev`:
 use the following command to install `libclang-dev`:
 `sudo apt-get install libclang-dev`
 
+Proceed to [Install Sui binaries](#binaries) to continue installing Sui.
+
 
 ## macOS prerequisites
 
-
-
-
-
-
-## Windows prerequisites
+macOS includes a version of cURL. Use cURL to install Brew, and then use Brew to install other tools, including a newer version of cURL.
 
 ### Brew
 
-In macOS, first install [Brew](https://brew.sh/) to install other packages:
+Use the following command to install [Brew](https://brew.sh/):
 ```shell
 $ /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 ```
 
-### General packages
+### cURL
 
-Ensure each of the packages below exist on each OS:
+Use the following command to install [cURL](https://curl.se):
+`brew install curl`
 
-#### Curl
+### CMake
 
-Confirm that you can run the `curl` command to download dependencies.
+Use the following command to install CMake:
+`brew install cmake`
 
-See whether you already have curl installed by running:
+### Git CLI
 
-```shell
-$ which curl
-```
+Use the following command to install Git:
+`brew install git`
 
-And if you see no output path, install it with:
+You can also Download and install the [Git command line interface](https://git-scm.com/download/) for your operating system.
 
-*Linux*
-```shell
-$ apt install curl
-```
+Proceed to [Install Sui binaries](#install-sui-binaries) to continue installing Sui.
 
-*macOS*
-```shell
-$ brew install curl
-```
 
-*Microsoft Windows*
-Download and install from: https://curl.se/windows/
+## Windows prerequisites
 
-#### Rust
-Sui is written in Rust, and we are using the latest version of the
-[Cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html) toolchain
-to build and manage the dependencies. You will need Cargo to build and install Sui on your machine.
+Install the prerequisites listed in the following section if to work with Sui on  Microsoft Windows.
 
-Get [rustup](https://rust-lang.github.io/rustup/)
-to install Rust and Cargo:
+### cURL
 
-```shell
-$ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-```
+Download and install [cURL](https://curl.se) from https://curl.se/windows/.
 
-Then update the packages with:
+### Git CLI
 
-```shell
-$ rustup update stable
-```
-
-> **Warning:** If you run into issues, you may un-install Rust and Cargo with:
-> ```shell
-> $ rustup self uninstall
-> ```
-> And then start the Rust install over.
-> For more details, see:
-> https://www.rust-lang.org/tools/install
-
-#### Git CLI
-
-Download and install the [`git` command line interface](https://git-scm.com/download/)
+Download and install the [Git command line interface](https://git-scm.com/download/)
 for your operating system.
 
-#### CMake
+### CMake
 
-Get the `cmake` command to build Sui:
+Download and install [CMake](https://cmake.org/) from: https://cmake.org/download/
 
-*Linux*
-```shell
-$ apt install cmake
-```
+### Additional tools for Windows
 
-*macOS*
-```shell
-$ brew install cmake
-```
-*Microsoft Windows*
+Sui requires the following additional tools on computer running Windows.
 
-Download and install from: https://cmake.org/download/
-
-If you run into issues, follow this detailed [CMake Installation](https://riptutorial.com/cmake/example/4459/cmake-installation) tutorial.
-
-### Linux-specific
-
-In Linux, install:
-
-libssl-dev
-```shell
-$ apt install libssl-dev
-```
-
-libclang-dev
-```shell
-$ apt install libclang-dev
-```
-
-### macOS-specific
-
-In macOS, other than the aforementioned [Brew](#brew) package manager, the general prerequisites are sufficient.
-
-### Microsoft Windows-specific
-
-In Microsoft Windows 11, also install:
-
-For Windows on ARM64 only - [Visual Studio 2022 Preview](https://visualstudio.microsoft.com/vs/preview/)
-
-[C++ build tools](https://visualstudio.microsoft.com/downloads/)
-
-The [LLVM Compiler Infrastructure](https://releases.llvm.org/)
+ * For Windows on ARM64 only - [Visual Studio 2022 Preview](https://visualstudio.microsoft.com/vs/preview/)
+ * [C++ build tools](https://visualstudio.microsoft.com/downloads/)
+ * The [LLVM Compiler Infrastructure](https://releases.llvm.org/)
 
 >**Tip:** The installation progress might appear hanging if the `cmd.exe` window loses focus;
 >press the `enter` key in the command prompt fix the issue.
 
 >**Known Issue:** The `sui console` command does not work in PowerShell.
 
-## Binaries
 
-To develop in Sui, you will need the Sui binaries. After installing `cargo`, run:
+## Install Sui binaries
+
+After you install Cargo, use the following command to install Sui binaries:
 
 ```shell
 $ cargo install --locked --git https://github.com/MystenLabs/sui.git --branch "devnet" sui sui-gateway
 ```
 
-This will put the following binaries in your `PATH` (ex. under `~/.cargo/bin`) that provide these command line interfaces (CLIs):
+This adds the following binaries in your `PATH` (ex. under `~/.cargo/bin`) that provide these command line interfaces (CLIs):
 * [`sui`](cli-client.md) - The Sui CLI tool contains subcommands for enabling `genesis` of validators and accounts, starting the Sui network, and [building and testing Move packages](move/index.md), as well as a [client](cli-client.md) for interacting with the Sui network.
 * [`rpc-server`](json-rpc.md) - run a local Sui gateway service accessible via an RPC interface.
 
