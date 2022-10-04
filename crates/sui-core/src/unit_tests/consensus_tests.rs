@@ -121,7 +121,6 @@ async fn listen_to_sequenced_transaction() {
     ConsensusListener::spawn(
         /* rx_consensus_input */ rx_sui_to_consensus,
         /* rx_consensus_output */ rx_consensus_to_sui,
-        /* max_pending_transactions */ 100,
     );
 
     // Submit a sample consensus transaction.
@@ -162,7 +161,7 @@ async fn submit_transaction_to_consensus() {
         consensus_address.clone(),
         committee,
         tx_consensus_listener,
-        /* max_delay */ Duration::from_millis(1_000),
+        /* timeout */ Duration::from_secs(5),
         metrics,
     );
 

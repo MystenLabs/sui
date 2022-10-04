@@ -43,6 +43,10 @@ mod server_tests;
 const MIN_BATCH_SIZE: u64 = 1000;
 const MAX_DELAY_MILLIS: u64 = 5_000; // 5 sec
 
+// Assuming 200 consensus tps * 5 sec consensus latency = 1000 inflight consensus txns.
+// Leaving a bit more headroom to cap the max inflight consensus txns to 1000*2 = 2000.
+const MAX_PENDING_CONSENSUS_TRANSACTIONS: u64 = 2000;
+
 pub struct AuthorityServerHandle {
     tx_cancellation: tokio::sync::oneshot::Sender<()>,
     local_addr: Multiaddr,
@@ -93,7 +97,7 @@ impl AuthorityServer {
             consensus_address,
             state.clone_committee(),
             tx_consensus_listener,
-            /* max_delay */ Duration::from_millis(20_000),
+            Duration::from_secs(20),
             metrics,
         );
 
@@ -286,21 +290,17 @@ impl ValidatorService {
 
         // Spawn a consensus listener. It listen for consensus outputs and notifies the
         // authority server when a sequenced transaction is ready for execution.
-        ConsensusListener::spawn(
-            rx_sui_to_consensus,
-            rx_consensus_to_sui,
-            /* max_pending_transactions */ 1_000_000,
-        );
+        ConsensusListener::spawn(rx_sui_to_consensus, rx_consensus_to_sui);
 
+        let timeout = Duration::from_secs(consensus_config.timeout_secs.unwrap_or(60));
         let ca_metrics = ConsensusAdapterMetrics::new(&prometheus_registry);
 
-        let delay_step = consensus_config.delay_step.unwrap_or(15_000);
         // The consensus adapter allows the authority to send user certificates through consensus.
         let consensus_adapter = ConsensusAdapter::new(
             consensus_config.address().to_owned(),
             state.clone_committee(),
             tx_sui_to_consensus.clone(),
-            Duration::from_millis(delay_step),
+            timeout,
             ca_metrics.clone(),
         );
 
@@ -318,7 +318,7 @@ impl ValidatorService {
                 /* tx_consensus_listener */ tx_sui_to_consensus,
                 rx_checkpoint_consensus_adapter,
                 /* checkpoint_locals */ state.checkpoints(),
-                /* retry_delay */ Duration::from_millis(5_000),
+                /* retry_delay */ timeout,
                 /* max_pending_transactions */ 10_000,
                 ca_metrics,
             )
@@ -352,7 +352,7 @@ impl ValidatorService {
             .verify()
             .map_err(|e| tonic::Status::invalid_argument(e.to_string()))?;
         drop(tx_verif_metrics_guard);
-        //TODO This is really really bad, we should have different types for signature-verified transactions
+        // TODO This is really really bad, we should have different types for signature-verified transactions
         transaction.is_verified = true;
 
         let tx_digest = transaction.digest();
@@ -381,6 +381,7 @@ impl ValidatorService {
     ) -> Result<tonic::Response<TransactionInfoResponse>, tonic::Status> {
         let mut certificate = request.into_inner();
         let is_consensus_tx = certificate.contains_shared_object();
+
         let _metrics_guard = start_timer(if is_consensus_tx {
             metrics.handle_certificate_consensus_latency.clone()
         } else {
@@ -394,7 +395,7 @@ impl ValidatorService {
             .verify(&state.committee.load())
             .map_err(|e| tonic::Status::invalid_argument(e.to_string()))?;
         drop(cert_verif_metrics_guard);
-        //TODO This is really really bad, we should have different types for signature verified transactions
+        // TODO This is really really bad, we should have different types for signature verified transactions
         certificate.is_verified = true;
 
         // 2) Check idempotency
@@ -415,6 +416,12 @@ impl ValidatorService {
                 .await
                 .map_err(|e| tonic::Status::internal(e.to_string()))?
         {
+            // Note that num_inflight_transactions() only include user submitted transactions, and only user txns can be dropped here.
+            // This backpressure should not affect system transactions, e.g. for checkpointing.
+            if consensus_adapter.num_inflight_transactions() > MAX_PENDING_CONSENSUS_TRANSACTIONS {
+                return Err(tonic::Status::resource_exhausted("Reached {MAX_PENDING_CONSENSUS_TRANSACTIONS} concurrent consensus transactions",
+                ));
+            }
             let _metrics_guard = start_timer(metrics.consensus_latency.clone());
             consensus_adapter
                 .submit(&state.name, &certificate)

@@ -16,7 +16,7 @@ validator_configs:
     consensus-config:
       consensus-address: ""
       consensus-db-path: /tmp/foo/
-      delay-step: 15000
+      timeout-secs: 60
       narwhal-config:
         header_size: 1000
         max_header_delay: 100ms
@@ -59,7 +59,7 @@ validator_configs:
     consensus-config:
       consensus-address: ""
       consensus-db-path: /tmp/foo/
-      delay-step: 15000
+      timeout-secs: 60
       narwhal-config:
         header_size: 1000
         max_header_delay: 100ms
@@ -102,7 +102,7 @@ validator_configs:
     consensus-config:
       consensus-address: ""
       consensus-db-path: /tmp/foo/
-      delay-step: 15000
+      timeout-secs: 60
       narwhal-config:
         header_size: 1000
         max_header_delay: 100ms
@@ -145,7 +145,7 @@ validator_configs:
     consensus-config:
       consensus-address: ""
       consensus-db-path: /tmp/foo/
-      delay-step: 15000
+      timeout-secs: 60
       narwhal-config:
         header_size: 1000
         max_header_delay: 100ms
@@ -188,7 +188,7 @@ validator_configs:
     consensus-config:
       consensus-address: ""
       consensus-db-path: /tmp/foo/
-      delay-step: 15000
+      timeout-secs: 60
       narwhal-config:
         header_size: 1000
         max_header_delay: 100ms
@@ -231,7 +231,7 @@ validator_configs:
     consensus-config:
       consensus-address: ""
       consensus-db-path: /tmp/foo/
-      delay-step: 15000
+      timeout-secs: 60
       narwhal-config:
         header_size: 1000
         max_header_delay: 100ms
@@ -274,7 +274,7 @@ validator_configs:
     consensus-config:
       consensus-address: ""
       consensus-db-path: /tmp/foo/
-      delay-step: 15000
+      timeout-secs: 60
       narwhal-config:
         header_size: 1000
         max_header_delay: 100ms

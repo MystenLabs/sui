@@ -391,8 +391,8 @@ pub enum SuiError {
     FailedToHearBackFromConsensus(String),
     #[error("Failed to execute handle_consensus_transaction on Sui: {0}")]
     HandleConsensusTransactionFailure(String),
-    #[error("Consensus listener is out of capacity")]
-    ListenerCapacityExceeded,
+    #[error("Consensus listener has too many pending transactions and is out of capacity: {0}")]
+    ListenerCapacityExceeded(usize),
     #[error("Failed to serialize/deserialize Narwhal message: {0}")]
     ConsensusSuiSerializationError(String),
     #[error("Only shared object transactions need to be sequenced")]
