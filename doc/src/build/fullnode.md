@@ -155,7 +155,7 @@ issues building and installing the Sui binaries, update all packages above and r
    ```
 1. Download the latest
    [`genesis`](https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob)
-   state for devnet by clicking that link or by running the following in your
+   state for Devnet by clicking that link or by running the following in your
    terminal:
     ```shell
     $ curl -fLJO https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob
@@ -210,7 +210,7 @@ Note the default metrics port is 9184 yet configurable in your `fullnode.yaml` f
 
 ## Updating your full node with new releases
 
-Whenever Sui releases a new version, devnet restarts as a new network with no data. You must update your full node with each Sui release to ensure compatibility with the network.
+Whenever Sui releases a new version, Devnet restarts as a new network with no data. You must update your full node with each Sui release to ensure compatibility with the network.
 
 ### With Docker Compose
 
@@ -244,7 +244,7 @@ Source](#building-from-source), update your full node as follows:
     ```
 1. Download the latest
    [`genesis`](https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob)
-   state for devnet as described above.
+   state for Devnet as described above.
 1. Update your `fullnode.yaml` configuration file if needed.
 1. Restart your Sui full node:
     ```shell

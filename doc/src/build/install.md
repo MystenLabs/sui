@@ -40,7 +40,7 @@ Sui supports the following operating systems.
 
 Install the prerequisites and tools you need to work with Sui. 
 
-| Package/OS | Linux  | macOS | Windows 11|
+| Package/OS | Linux  | macOS | Windows 11 |
 | --- | :---: | :---: | :---: |
 | Curl | X | X | X |
 | Rust | X | X | X |

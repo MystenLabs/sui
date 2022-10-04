@@ -21,7 +21,7 @@ To report an issue with Sui, [create an issue](https://github.com/MystenLabs/sui
 
 ## Updates to docs
 
-To request an update to a specific topic, click the **Source Code** link near the bottom of the page to open the source file in the GitHub repo. To submit a request, first choose the **Latest build** version of the doc site. This opens the main branch of the repo, which may contain a newer version of the topic than the one on Devnet.
+To request an update to a specific topic, click the **Source Code** link near the bottom of the page to open the source file in the GitHub repo. To submit a request, first choose the **Latest build** version of the doc site. This opens the main branch of the repo, which may contain a newer version of the topic than the one on **Devnet**.
 
 Click **Edit this file**, make your changes, and then click **Propose changes** to create a pull request that includes your changes in a new branch.
 
