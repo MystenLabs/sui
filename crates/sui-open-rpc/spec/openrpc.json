@@ -1823,7 +1823,7 @@
           "description": "the transaction query criteria.",
           "required": true,
           "schema": {
-            "$ref": "#/components/schemas/SuiTransactionQueryCriteria"
+            "$ref": "#/components/schemas/TransactionQuery"
           }
         },
         {
@@ -1857,7 +1857,7 @@
             {
               "name": "query",
               "value": {
-                "inputObject": {
+                "InputObject": {
                   "object_id": "0xcccaa97a02cc3a98041670e1609db714e9858c96"
                 }
               }
@@ -4290,128 +4290,6 @@
           }
         ]
       },
-      "SuiTransactionQueryCriteria": {
-        "oneOf": [
-          {
-            "type": "string",
-            "enum": [
-              "all"
-            ]
-          },
-          {
-            "type": "object",
-            "required": [
-              "moveFunction"
-            ],
-            "properties": {
-              "moveFunction": {
-                "type": "object",
-                "required": [
-                  "package"
-                ],
-                "properties": {
-                  "function": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "module": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "package": {
-                    "$ref": "#/components/schemas/ObjectID"
-                  }
-                }
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "required": [
-              "inputObject"
-            ],
-            "properties": {
-              "inputObject": {
-                "type": "object",
-                "required": [
-                  "object_id"
-                ],
-                "properties": {
-                  "object_id": {
-                    "$ref": "#/components/schemas/ObjectID"
-                  }
-                }
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "required": [
-              "mutatedObject"
-            ],
-            "properties": {
-              "mutatedObject": {
-                "type": "object",
-                "required": [
-                  "object_id"
-                ],
-                "properties": {
-                  "object_id": {
-                    "$ref": "#/components/schemas/ObjectID"
-                  }
-                }
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "required": [
-              "fromAddress"
-            ],
-            "properties": {
-              "fromAddress": {
-                "type": "object",
-                "required": [
-                  "address"
-                ],
-                "properties": {
-                  "address": {
-                    "$ref": "#/components/schemas/SuiAddress"
-                  }
-                }
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "required": [
-              "toAddress"
-            ],
-            "properties": {
-              "toAddress": {
-                "type": "object",
-                "required": [
-                  "address"
-                ],
-                "properties": {
-                  "address": {
-                    "$ref": "#/components/schemas/SuiAddress"
-                  }
-                }
-              }
-            },
-            "additionalProperties": false
-          }
-        ]
-      },
       "SuiTransactionResponse": {
         "type": "object",
         "required": [
@@ -4667,6 +4545,128 @@
             "properties": {
               "ChangeEpoch": {
                 "$ref": "#/components/schemas/SuiChangeEpoch"
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      },
+      "TransactionQuery": {
+        "oneOf": [
+          {
+            "type": "string",
+            "enum": [
+              "All"
+            ]
+          },
+          {
+            "type": "object",
+            "required": [
+              "MoveFunction"
+            ],
+            "properties": {
+              "MoveFunction": {
+                "type": "object",
+                "required": [
+                  "package"
+                ],
+                "properties": {
+                  "function": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "module": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "package": {
+                    "$ref": "#/components/schemas/ObjectID"
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "InputObject"
+            ],
+            "properties": {
+              "InputObject": {
+                "type": "object",
+                "required": [
+                  "object_id"
+                ],
+                "properties": {
+                  "object_id": {
+                    "$ref": "#/components/schemas/ObjectID"
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "MutatedObject"
+            ],
+            "properties": {
+              "MutatedObject": {
+                "type": "object",
+                "required": [
+                  "object_id"
+                ],
+                "properties": {
+                  "object_id": {
+                    "$ref": "#/components/schemas/ObjectID"
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "FromAddress"
+            ],
+            "properties": {
+              "FromAddress": {
+                "type": "object",
+                "required": [
+                  "address"
+                ],
+                "properties": {
+                  "address": {
+                    "$ref": "#/components/schemas/SuiAddress"
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "ToAddress"
+            ],
+            "properties": {
+              "ToAddress": {
+                "type": "object",
+                "required": [
+                  "address"
+                ],
+                "properties": {
+                  "address": {
+                    "$ref": "#/components/schemas/SuiAddress"
+                  }
+                }
               }
             },
             "additionalProperties": false

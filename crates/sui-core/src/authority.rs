@@ -57,8 +57,9 @@ use sui_storage::{
 use sui_types::committee::EpochId;
 use sui_types::crypto::{AuthorityKeyPair, NetworkKeyPair};
 use sui_types::filter::TransactionQuery;
+
 use sui_types::messages_checkpoint::{
-    CheckpointRequest, CheckpointRequestType, CheckpointResponse, CheckpointSequenceNumber,
+    CheckpointRequest, CheckpointRequestType, CheckpointResponse,
 };
 use sui_types::object::{Owner, PastObjectRead};
 use sui_types::sui_system_state::SuiSystemState;
