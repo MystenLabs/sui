@@ -3,7 +3,7 @@
 
 import { cva, type VariantProps } from 'class-variance-authority';
 
-import ButtonOrLink from './utils/ButtonOrLink';
+import ButtonOrLink, { type ButtonOrLinkProps } from './utils/ButtonOrLink';
 
 const buttonStyles = cva(
     [
@@ -33,7 +33,9 @@ const buttonStyles = cva(
     }
 );
 
-export interface ButtonProps extends VariantProps<typeof buttonStyles> {}
+export interface ButtonProps
+    extends VariantProps<typeof buttonStyles>,
+        ButtonOrLinkProps {}
 
 export function Button({ variant, size, ...props }: ButtonProps) {
     return (
