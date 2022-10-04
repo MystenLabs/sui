@@ -23,9 +23,10 @@
     }
 
     .date {
-        font-size: 12px;
+        font-weight: 400;
+        font-size: 13px;
         line-height: 130%;
-        color: colors.$gray-60;
+        color: colors.$gray-80;
     }
 
     .amount {
@@ -128,7 +129,8 @@
                 transform: rotate(135deg);
                 font-weight: 300;
                 position: absolute;
-                margin-left: 5px;
+                margin-left: 4px;
+                margin-top: 2px;
                 font-size: 10px;
                 color: colors.$sui-steel-blue;
             }
