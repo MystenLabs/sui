@@ -39,7 +39,7 @@ module defi::shared_escrow_tests {
         assert!(owns_object<ItemB>(ALICE_ADDRESS), ESwapTransferFailed);
         assert!(owns_object<ItemA>(BOB_ADDRESS), ESwapTransferFailed);
 
-        test_scenario::end(scenario_val)
+        test_scenario::end(scenario_val);
     }
 
     #[test]
@@ -57,7 +57,7 @@ module defi::shared_escrow_tests {
         // Alice now owns item A
         assert!(owns_object<ItemA>(ALICE_ADDRESS), EReturnTransferFailed);
 
-        test_scenario::end(scenario_val)
+        test_scenario::end(scenario_val);
     }
 
     #[test]
@@ -71,7 +71,7 @@ module defi::shared_escrow_tests {
         // Bob tries to cancel the escrow that Alice owns and expects failure
         cancel(scenario, BOB_ADDRESS);
 
-        test_scenario::end(scenario_val)
+        test_scenario::end(scenario_val);
     }
 
     #[test]
@@ -88,7 +88,7 @@ module defi::shared_escrow_tests {
         let item_c_versioned_id = object::new(ctx);
         exchange(scenario, BOB_ADDRESS, item_c_versioned_id);
 
-        test_scenario::end(scenario_val)
+        test_scenario::end(scenario_val);
     }
 
     #[test]
@@ -101,7 +101,7 @@ module defi::shared_escrow_tests {
         // Random address tries to exchange item B for the escrowed item A and expects failure
         exchange(scenario, RANDOM_ADDRESS, item_b_versioned_id);
 
-        test_scenario::end(scenario_val)
+        test_scenario::end(scenario_val);
     }
 
     #[test]
@@ -123,7 +123,7 @@ module defi::shared_escrow_tests {
         // Alice tries to cancel the escrow again
         cancel(scenario, ALICE_ADDRESS);
 
-        test_scenario::end(scenario_val)
+        test_scenario::end(scenario_val);
     }
 
     fun cancel(scenario: &mut Scenario, initiator: address) {

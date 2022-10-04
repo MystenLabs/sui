@@ -39,7 +39,7 @@ module defi::escrow_tests {
         assert!(owns_object<ItemB>(ALICE_ADDRESS), ESwapTransferFailed);
         assert!(owns_object<ItemA>(BOB_ADDRESS), ESwapTransferFailed);
 
-        test_scenario::end(scenario_val)
+        test_scenario::end(scenario_val);
     }
 
     #[test]
@@ -62,7 +62,7 @@ module defi::escrow_tests {
         assert!(owns_object<ItemA>(ALICE_ADDRESS), EReturnTransferFailed);
         assert!(owns_object<ItemB>(BOB_ADDRESS), EReturnTransferFailed);
 
-        test_scenario::end(scenario_val)
+        test_scenario::end(scenario_val);
     }
 
     #[test]
@@ -72,7 +72,7 @@ module defi::escrow_tests {
         // for a different object than Bob's
         let scenario = send_to_escrow_with_overrides(ALICE_ADDRESS, BOB_ADDRESS, true, false);
         swap(&mut scenario, THIRD_PARTY_ADDRESS);
-        test_scenario::end(scenario)
+        test_scenario::end(scenario);
     }
 
     #[test]
@@ -82,7 +82,7 @@ module defi::escrow_tests {
         // recipient than Bob
         let scenario = send_to_escrow_with_overrides(ALICE_ADDRESS, BOB_ADDRESS, false, true);
         swap(&mut scenario, THIRD_PARTY_ADDRESS);
-        test_scenario::end(scenario)
+        test_scenario::end(scenario);
     }
 
     fun swap(scenario: &mut Scenario, third_party: address) {

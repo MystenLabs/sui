@@ -86,7 +86,7 @@ module games::tic_tac_toe_tests {
             !test_scenario::has_most_recent_for_sender<Trophy>(scenario),
             1
         );
-        test_scenario::end(scenario_val)
+        test_scenario::end(scenario_val);
     }
 
 

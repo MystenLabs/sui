@@ -123,6 +123,6 @@ module sui::devnet_nftTests {
             let nft = ts::take_from_sender<DevNetNFT>(&mut scenario);
             devnet_nft::burn(nft, ts::ctx(&mut scenario))
         };
-        ts::end(scenario)
+        ts::end(scenario);
     }
 }

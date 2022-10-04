@@ -364,39 +364,39 @@ module defi::pool_tests {
     #[test] fun test_init_pool() {
         let scenario = scenario();
         test_init_pool_(&mut scenario);
-        test::end(scenario)
+        test::end(scenario);
     }
     #[test] fun test_add_liquidity() {
         let scenario = scenario();
         test_add_liquidity_(&mut scenario);
-        test::end(scenario)
+        test::end(scenario);
     }
     #[test] fun test_swap_sui() {
         let scenario = scenario();
         test_swap_sui_(&mut scenario);
-        test::end(scenario)
+        test::end(scenario);
     }
     #[test] fun test_swap_tok() {
         let scenario = scenario();
         test_swap_tok_(&mut scenario);
-        test::end(scenario)
+        test::end(scenario);
     }
     #[test] fun test_withdraw_almost_all() {
         let scenario = scenario();
         test_withdraw_almost_all_(&mut scenario);
-        test::end(scenario)
+        test::end(scenario);
     }
     #[test] fun test_withdraw_all() {
         let scenario = scenario();
         test_withdraw_all_(&mut scenario);
-        test::end(scenario)
+        test::end(scenario);
     }
 
     // Non-sequential tests
     #[test] fun test_math() {
         let scenario = scenario();
         test_math_(&mut scenario);
-        test::end(scenario)
+        test::end(scenario);
     }
 
     /// Init a Pool with a 1_000_000 BEEP and 1_000_000_000 SUI;

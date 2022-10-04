@@ -398,6 +398,6 @@ module games::hero {
             test_scenario::return_to_sender(scenario, hero);
             test_scenario::return_immutable(game);
         };
-        test_scenario::end(scenario_val)
+        test_scenario::end(scenario_val);
     }
 }

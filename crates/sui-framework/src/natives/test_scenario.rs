@@ -36,9 +36,9 @@ use sui_types::{
     storage::WriteKind,
 };
 
-const E_INVALID_SHARED_OR_IMMUTABLE_USAGE: u64 = 2;
-const E_OBJECT_NOT_FOUND_CODE: u64 = 5;
-const E_WRONG_OBJECT_TYPE_CODE: u64 = 6;
+const E_COULD_NOT_GENERATE_EFFECTS: u64 = 0;
+const E_INVALID_SHARED_OR_IMMUTABLE_USAGE: u64 = 1;
+const E_OBJECT_NOT_FOUND_CODE: u64 = 4;
 
 // LinkedHashSet has a bug for accessing the back/last element
 type Set<K> = LinkedHashMap<K, ()>;
@@ -111,14 +111,10 @@ pub fn end_transaction(
     } = match results {
         Ok(res) => res,
         Err(_) => {
-            // this case is not yet supported as it will require backing out all changes to a
-            // previous state. This might be done by keeping a copy of the previous taken/input
-            // object sets, but I am not sure.
-            unimplemented!("Handling errors from runtime state is not yet supported.")
-            // return Ok(NativeResult::ok(
-            //     legacy_test_cost(),
-            //     smallvec![transaction_result(None)],
-            // ));
+            return Ok(NativeResult::err(
+                legacy_test_cost(),
+                E_COULD_NOT_GENERATE_EFFECTS,
+            ));
         }
     };
     let object_runtime_ref: &mut ObjectRuntime = context.extensions_mut().get_mut();
@@ -197,10 +193,7 @@ pub fn end_transaction(
         transferred,
         user_events.len() as u64,
     );
-    Ok(NativeResult::ok(
-        legacy_test_cost(),
-        smallvec![transaction_result(Some(effects))],
-    ))
+    Ok(NativeResult::ok(legacy_test_cost(), smallvec![effects]))
 }
 
 // native fun take_from_address_by_id<T: key>(account: address, id: ID): T;
@@ -548,10 +541,6 @@ fn pack_option(opt: Option<Value>) -> Value {
     Value::struct_(values::Struct::pack(vec![Value::vector_for_testing_only(
         item,
     )]))
-}
-
-fn transaction_result(opt: Option<Value>) -> Value {
-    Value::struct_(values::Struct::pack(vec![pack_option(opt)]))
 }
 
 fn find_all_wrapped_objects(

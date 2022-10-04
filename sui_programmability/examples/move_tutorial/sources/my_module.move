@@ -80,7 +80,7 @@ module my_first_package::my_module {
             // return the Forge object to the object pool
             test_scenario::return_to_sender(scenario, forge);
         };
-        test_scenario::end(scenario_val)
+        test_scenario::end(scenario_val);
     }
 
     #[test]
@@ -125,7 +125,7 @@ module my_first_package::my_module {
             // return the sword to the object pool (it cannot be simply "dropped")
             test_scenario::return_to_sender(scenario, sword)
         };
-        test_scenario::end(scenario_val)
+        test_scenario::end(scenario_val);
     }
 
 

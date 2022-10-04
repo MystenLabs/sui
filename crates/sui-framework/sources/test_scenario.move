@@ -8,32 +8,27 @@ module sui::test_scenario {
     use sui::tx_context::{Self, TxContext};
     use sui::vec_map::VecMap;
 
-    /// Asserted transaction result was a success, but it was not
-    const ETransactionNotSuccessful: u64 = 0;
-
-    /// Asserted transaction result was not successful, but it was
-    const ETransactionSuccessful: u64 = 1;
+    /// the transaction failed when generating these effects. For example, a circular ownership
+    /// of objects was created
+    const ECouldNotGenerateEffects: u64 = 0;
 
     /// Transaction ended without all shared and immutable objects being returned or with those
     /// objects being transferred or wrapped
-    const EInvalidSharedOrImmutableUsage: u64 = 2;
+    const EInvalidSharedOrImmutableUsage: u64 = 1;
 
     /// Attempted to return an object to the inventory that was not previously removed from the
     /// inventory during the current transaction. Can happen if the user attempts to call
     /// `return_to_address` on a locally constructed object rather than one returned from a
     /// `test_scenario` function such as `take_from_address`.
-    const ECantReturnObject: u64 = 3;
+    const ECantReturnObject: u64 = 2;
 
     /// Attempted to retrieve an object of a particular type from the inventory, but it is empty.
     /// Can happen if the user already transferred the object or a previous transaction failed to
     /// transfer the object to the user.
-    const EEmptyInventory: u64 = 4;
+    const EEmptyInventory: u64 = 3;
 
     /// Object of that ID was not found in that inventory. It was possibly already taken
-    const EObjectNotFound: u64 = 5;
-
-    /// Object was found, but the wrong type was specified.
-    const EWrongObjectType: u64 = 6;
+    const EObjectNotFound: u64 = 4;
 
     /// Utility for mocking a multi-transaction Sui execution in a single Move procedure.
     /// A `Scenario` maintains a view of the global object pool built up by the execution.
@@ -67,14 +62,6 @@ module sui::test_scenario {
     struct Scenario {
         txn_number: u64,
         ctx: TxContext,
-    }
-
-    /// The result of the tranction. The transaction might not have valid results, for example
-    /// if a cycle of objects was created
-    struct TransactionResult {
-        /// Some if the "transaction" was successful
-        /// None otherwise
-        effects: Option<TransactionEffects>,
     }
 
     /// The effects of a transaction
@@ -111,8 +98,9 @@ module sui::test_scenario {
     /// functions below, e.g. `take_from_address_by_id`, the transaction must first be ended via
     /// `next_tx`.
     /// Returns the results from the previous transaction
-    /// Will abort if shared or immutable objects were deleted, transferred, or wrapped
-    public fun next_tx_result(scenario: &mut Scenario, sender: address): TransactionResult {
+    /// Will abort if shared or immutable objects were deleted, transferred, or wrapped.
+    /// Will abort if TransactionEffects cannot be generated
+    public fun next_tx(scenario: &mut Scenario, sender: address): TransactionEffects {
         // create a seed for new transaction digest to ensure that this tx has a different
         // digest (and consequently, different object ID's) than the previous tx
         scenario.txn_number = scenario.txn_number + 1;
@@ -122,51 +110,20 @@ module sui::test_scenario {
         end_transaction()
     }
 
-    /// Wrapper around `next_tx_result` that asserts a successful result with `assert_success`
-    public fun next_tx(scenario: &mut Scenario, sender: address) {
-        assert_success(next_tx_result(scenario, sender));
-    }
-
-
     /// Advance the scenario to a new epoch and end the transaction
     /// See `next_transaction` for further details
-    public fun next_epoch_result(scenario: &mut Scenario, sender: address): TransactionResult {
+    public fun next_epoch(scenario: &mut Scenario, sender: address): TransactionEffects {
         tx_context::increment_epoch_number(&mut scenario.ctx);
-        next_tx_result(scenario, sender)
-    }
-
-    /// Wrapper around `next_epoch_result` that asserts a successful result with `assert_success`
-    public fun next_epoch(scenario: &mut Scenario, sender: address) {
-        assert_success(next_epoch_result(scenario, sender));
+        next_tx(scenario, sender)
     }
 
     /// Ends the test scenario
-    /// Will abort if shared or immutable objects were deleted, transferred, or wrapped
     /// Returns the results from the final transaction
-    public fun end_result(scenario: Scenario): TransactionResult {
+    /// Will abort if shared or immutable objects were deleted, transferred, or wrapped.
+    /// Will abort if TransactionEffects cannot be generated
+    public fun end(scenario: Scenario): TransactionEffects {
         let Scenario { txn_number: _, ctx: _ } = scenario;
         end_transaction()
-    }
-
-    /// Wrapper around `end_result` that asserts a successful result with `assert_success`
-    public fun end(scenario: Scenario) {
-        assert_success(end_result(scenario));
-    }
-
-    /// Returns the effects from the transaction
-    /// Errors if the transaction failed when generating these effects. For example, a circular
-    /// ownership of objects was created
-    public fun assert_success(result: TransactionResult): TransactionEffects {
-        let TransactionResult { effects } = result;
-        assert!(option::is_some(&effects), ETransactionNotSuccessful);
-        option::destroy_some(effects)
-    }
-
-    /// Asserts the transaction resulted in some error. For example, a circular
-    /// ownership of objects was created
-    public fun assert_failure(result: TransactionResult) {
-        let TransactionResult { effects } = result;
-        assert!(option::is_none(&effects), ETransactionSuccessful);
     }
 
     // == accessors and helpers ==
@@ -396,7 +353,7 @@ module sui::test_scenario {
     // == internal ==
 
     // internal function that ends the transaction, realizing changes
-    native fun end_transaction(): TransactionResult;
+    native fun end_transaction(): TransactionEffects;
 
 
     // TODO: Add API's for inspecting user events, printing the user's inventory, ...

@@ -233,7 +233,7 @@ module fungible_tokens::private_coin_tests {
     #[test] fun test_init_pool() {
         let scenario = scenario();
         test_transfer_private_coin(&mut scenario);
-        test::end(scenario)
+        test::end(scenario);
     }
 
     fun test_transfer_private_coin(scenario: &mut Scenario) {

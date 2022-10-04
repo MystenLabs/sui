@@ -306,37 +306,37 @@ module abc::tests {
     fun test_minting() {
         let scenario = scenario();
         test_minting_(&mut scenario);
-        test_scenario::end(scenario)
+        test_scenario::end(scenario);
     }
     fun test_creation() {
         let scenario = scenario();
         test_creation_(&mut scenario);
-        test_scenario::end(scenario)
+        test_scenario::end(scenario);
     }
     fun test_transfer() {
         let scenario = scenario();
         test_transfer_(&mut scenario);
-        test_scenario::end(scenario)
+        test_scenario::end(scenario);
     }
     fun test_burn() {
         let scenario = scenario();
         test_burn_(&mut scenario);
-        test_scenario::end(scenario)
+        test_scenario::end(scenario);
     }
     fun test_take() {
         let scenario = scenario();
         test_take_(&mut scenario);
-        test_scenario::end(scenario)
+        test_scenario::end(scenario);
     }
     fun test_put_back() {
         let scenario = scenario();
         test_put_back_(&mut scenario);
-        test_scenario::end(scenario)
+        test_scenario::end(scenario);
     }
     fun test_ban() {
         let scenario = scenario();
         test_ban_(&mut scenario);
-        test_scenario::end(scenario)
+        test_scenario::end(scenario);
     }
 
     #[test]
@@ -344,7 +344,7 @@ module abc::tests {
     fun test_address_banned_fail() {
         let scenario = scenario();
         test_address_banned_fail_(&mut scenario);
-        test_scenario::end(scenario)
+        test_scenario::end(scenario);
     }
 
     #[test]
@@ -352,7 +352,7 @@ module abc::tests {
     fun test_different_account_fail() {
         let scenario = scenario();
         test_different_account_fail_(&mut scenario);
-        test_scenario::end(scenario)
+        test_scenario::end(scenario);
     }
 
     #[test]
@@ -360,7 +360,7 @@ module abc::tests {
     fun test_not_owned_balance_fail() {
         let scenario = scenario();
         test_not_owned_balance_fail_(&mut scenario);
-        test_scenario::end(scenario)
+        test_scenario::end(scenario);
     }
 
     // === Helpers and basic test organization ===

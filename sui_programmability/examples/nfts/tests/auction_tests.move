@@ -126,6 +126,6 @@ module nfts::auction_tests {
 
             test_scenario::return_to_sender(scenario, acquired_item);
         };
-        test_scenario::end(scenario_val)
+        test_scenario::end(scenario_val);
     }
 }

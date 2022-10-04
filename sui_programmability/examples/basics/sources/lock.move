@@ -144,6 +144,6 @@ module basics::lockTest {
             test_scenario::return_shared(lock_val);
             test_scenario::return_to_sender(scenario, key);
         };
-        test_scenario::end(scenario_val)
+        test_scenario::end(scenario_val);
     }
 }
