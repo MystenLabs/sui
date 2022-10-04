@@ -9,6 +9,10 @@ use tokio::sync::mpsc::{
     error::{SendError, TryRecvError, TrySendError},
 };
 
+#[cfg(test)]
+#[path = "tests/metered_channel_tests.rs"]
+mod metered_channel_tests;
+
 /// An [`mpsc::Sender`](tokio::sync::mpsc::Sender) with an [`IntGauge`]
 /// counting the number of currently queued items.
 #[derive(Debug)]
@@ -32,6 +36,7 @@ impl<T> Clone for Sender<T> {
 pub struct Receiver<T> {
     inner: mpsc::Receiver<T>,
     gauge: IntGauge,
+    total: Option<IntGauge>,
 }
 
 impl<T> Receiver<T> {
@@ -43,6 +48,9 @@ impl<T> Receiver<T> {
             .inspect(|opt| {
                 if opt.is_some() {
                     self.gauge.dec();
+                    if let Some(total_gauge) = &self.total {
+                        total_gauge.inc();
+                    }
                 }
             })
             .await
@@ -53,6 +61,9 @@ impl<T> Receiver<T> {
     pub fn try_recv(&mut self) -> Result<T, TryRecvError> {
         self.inner.try_recv().map(|val| {
             self.gauge.dec();
+            if let Some(total_gauge) = &self.total {
+                total_gauge.inc();
+            }
             val
         })
     }
@@ -70,6 +81,9 @@ impl<T> Receiver<T> {
         match self.inner.poll_recv(cx) {
             res @ Poll::Ready(Some(_)) => {
                 self.gauge.dec();
+                if let Some(total_gauge) = &self.total {
+                    total_gauge.inc();
+                }
                 res
             }
             s => s,
@@ -267,6 +281,29 @@ pub fn channel<T>(size: usize, gauge: &IntGauge) -> (Sender<T>, Receiver<T>) {
         Receiver {
             inner: receiver,
             gauge: gauge.clone(),
+            total: None,
+        },
+    )
+}
+
+#[track_caller]
+pub fn channel_with_total<T>(
+    size: usize,
+    gauge: &IntGauge,
+    total_gauge: &IntGauge,
+) -> (Sender<T>, Receiver<T>) {
+    gauge.set(0);
+    total_gauge.set(0);
+    let (sender, receiver) = mpsc::channel(size);
+    (
+        Sender {
+            inner: sender,
+            gauge: gauge.clone(),
+        },
+        Receiver {
+            inner: receiver,
+            gauge: gauge.clone(),
+            total: Some(total_gauge.clone()),
         },
     )
 }
