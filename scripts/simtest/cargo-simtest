@@ -79,6 +79,16 @@ fi
 
 RUST_FLAGS=$(IFS=, ; echo "${RUST_FLAGS[*]}")
 
+if ! cargo nextest --help > /dev/null 2>&1; then
+  echo "nextest (https://nexte.st) does not appear to be installed. Please install before proceeding."
+  echo "You can install it by running:"
+  echo ""
+  echo "   \$ cargo install cargo-nextest --locked"
+  echo ""
+  echo "or see https://nexte.st for other installation options"
+  exit 1
+fi
+
 CARGO_COMMAND=(nextest run --cargo-profile simulator)
 if [ "$1" = "build" ]; then
   shift
