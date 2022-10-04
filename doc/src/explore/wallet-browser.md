@@ -62,7 +62,7 @@ It's near the top of the wallet and starts with 0x.
    `!faucet 0x6c04ed5110554acf59ff1b535129548dd9a0c741`
    Replace the address in the command with your wallet address.
 
-The channel bot displays a message that "5 test SUI objects are heading to your wallet". You can then see 50,000,000 SUI tokens in your wallet, nice!
+The channel bot displays a message that starts with "5 test SUI objects are heading to your wallet..."
 
 ## View your account balance
 
