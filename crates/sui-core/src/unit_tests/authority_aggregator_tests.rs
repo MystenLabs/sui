@@ -434,6 +434,7 @@ async fn execute_transaction_with_fault_configs(
 /// terminating the connection does not stop server from completing
 /// execution on its side
 #[tokio::test]
+#[ignore]
 async fn test_quorum_map_and_reduce_timeout() {
     let build_config = BuildConfig::default();
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
