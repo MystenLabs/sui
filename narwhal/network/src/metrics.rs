@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use anemo_tower::callback::{MakeCallbackHandler, ResponseHandler};
 use prometheus::{
-    default_registry, register_histogram_vec_with_registry, register_int_counter_vec_with_registry,
+    register_histogram_vec_with_registry, register_int_counter_vec_with_registry,
     register_int_gauge_vec_with_registry, HistogramTimer, HistogramVec, IntCounterVec, IntGaugeVec,
     Registry,
 };
@@ -15,22 +15,16 @@ pub struct NetworkConnectionMetrics {
 }
 
 impl NetworkConnectionMetrics {
-    pub fn new(registry: &Registry) -> Self {
+    pub fn new(node: &'static str, registry: &Registry) -> Self {
         Self {
             network_peer_connected: register_int_gauge_vec_with_registry!(
-                "network_peer_connected",
+                format!("{node}_network_peer_connected"),
                 "The connection status of a peer. 0 if not connected, 1 if connected",
                 &["peer_id"],
                 registry
             )
             .unwrap(),
         }
-    }
-}
-
-impl Default for NetworkConnectionMetrics {
-    fn default() -> Self {
-        Self::new(default_registry())
     }
 }
 

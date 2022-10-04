@@ -37,7 +37,7 @@ pub fn initialise_metrics(metrics_registry: &Registry) -> Metrics {
     let outbound_network_metrics = NetworkMetrics::new("worker", "outbound", metrics_registry);
 
     // Network metrics for the worker connection
-    let network_connection_metrics = NetworkConnectionMetrics::new(metrics_registry);
+    let network_connection_metrics = NetworkConnectionMetrics::new("worker", metrics_registry);
 
     Metrics {
         worker_metrics: Some(node_metrics),

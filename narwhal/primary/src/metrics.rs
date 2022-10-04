@@ -39,7 +39,7 @@ pub(crate) fn initialise_metrics(metrics_registry: &Registry) -> Metrics {
     let node_metrics = PrimaryMetrics::new(metrics_registry);
 
     // Network metrics for the primary connection
-    let network_connection_metrics = NetworkConnectionMetrics::new(metrics_registry);
+    let network_connection_metrics = NetworkConnectionMetrics::new("primary", metrics_registry);
 
     Metrics {
         node_metrics: Some(node_metrics),
