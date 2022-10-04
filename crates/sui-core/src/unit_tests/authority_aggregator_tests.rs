@@ -30,6 +30,9 @@ use crate::gateway_state::GatewayState;
 
 use tokio::time::Instant;
 
+#[cfg(msim)]
+use sui_simulator::configs::constant_latency_ms;
+
 pub async fn init_network_authorities(
     committee_size: usize,
     genesis_objects: Vec<Object>,
@@ -433,8 +436,7 @@ async fn execute_transaction_with_fault_configs(
 /// we spawn a tokio task on the server, client timing out and
 /// terminating the connection does not stop server from completing
 /// execution on its side
-#[tokio::test]
-#[ignore]
+#[sim_test(config = "constant_latency_ms(1)")]
 async fn test_quorum_map_and_reduce_timeout() {
     let build_config = BuildConfig::default();
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -452,8 +454,8 @@ async fn test_quorum_map_and_reduce_timeout() {
     assert!(certified_tx.is_ok());
     let certificate = certified_tx.unwrap();
     // Send request with a very small timeout to trigger timeout error
-    authorities.timeouts.pre_quorum_timeout = Duration::from_millis(1);
-    authorities.timeouts.post_quorum_timeout = Duration::from_millis(1);
+    authorities.timeouts.pre_quorum_timeout = Duration::from_millis(2);
+    authorities.timeouts.post_quorum_timeout = Duration::from_millis(2);
     let certified_effects = authorities.process_certificate(certificate.clone()).await;
     // Ensure it is an error
     assert!(certified_effects.is_err());
