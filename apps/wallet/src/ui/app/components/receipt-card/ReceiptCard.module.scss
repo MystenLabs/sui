@@ -174,36 +174,6 @@
     }
 }
 
-.status-icon {
-    position: relative;
-    height: 46px;
-    width: 46px;
-    display: flex;
-}
-
-.success {
-    .response-card,
-    .response-card::after {
-        background-color: colors.$receipt-card-bg-success;
-    }
-
-    .status-icon {
-        background: url('_assets/images/sucess-thumbs-up.svg') no-repeat center;
-    }
-}
-
-.failed {
-    .response-card,
-    .response-card::after {
-        background-color: colors.$error-light;
-    }
-
-    .status-icon {
-        background: url('_assets/images/failure-thumbs-down.svg') no-repeat
-            center;
-    }
-}
-
 .wideview {
     display: flex;
     align-items: center;

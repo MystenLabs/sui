@@ -9,7 +9,6 @@ import ExternalLink from '_components/external-link';
 import { useMiddleEllipsis } from '_hooks';
 import { trackEvent } from '_src/shared/plausible';
 
-
 import st from './SuiApp.module.scss';
 
 type Displaytype = {
