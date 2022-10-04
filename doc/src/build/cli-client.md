@@ -2,11 +2,11 @@
 title: Sui CLI client
 ---
 
-Learn how to set up, configure, and use the Sui Command Line Interface.
+Learn how to set up, configure, and use the Sui Command Line Interface (CLI).
 
-## Set up
+## Install the CLI
 
-Follow the instructions to [install Sui binaries](install.md#binaries).
+To install the Sui Client CLI installs with Sui binaries. Follow the instructions to [install Sui binaries](install.md#binaries).
 
 ## Sui CLI client commands
 
@@ -54,27 +54,18 @@ accepted the default location for configuration:
 $ sui console
 ```
 
-This command will look for the client configuration file
-`client.yaml` in the `~/.sui/sui_config` directory. But you can
-override this setting by providing a path to the directory where this
-file is stored:
+This command checks for the client configuration file
+`client.yaml` in the `~/.sui/sui_config` directory. To use a different configuration file, specify the path to it using the --config switch:
 
 ```shell
 $ sui console --config /path/to/client/config/file
 ```
 
-The Sui interactive client console supports the following shell functionality:
+The Sui console supports the following shell functionality:
 
-- _Command history_ -
-  The `history` command can be used to print the interactive shell's command history;
-  you can also use Up, Down or Ctrl-P, Ctrl-N to navigate previous or next matches from history.
-  History search is also supported using Ctrl-R.
-- _Tab completion_ -
-  Tab completion is supported for all commands using Tab and Ctrl-I keys.
-- _Environment variable substitution_ -
-  The Sui console will substitute inputs prefixed with `$` with environment variables,
-  you can use the `env` command to print out the entire list of variables and
-  use `echo` to preview the substitution without invoking any commands.
+ * **Command history** - Use the `history` command to list recently used commands. Use up or down arrow keys to scroll through the list.
+ * **Tab completion** - Use the Tab key to complete am command after typing part of it. Use Ctrl+I to cycle through the commands supported in the console. 
+ * **Environment variable substitution** - The Sui console substitutes environment variable for input prefixed with `$`. Use the `env` command to view environment variables. Use `echo` to view the substitution without running the command.
 
 ## Command line mode
 
