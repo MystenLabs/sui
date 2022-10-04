@@ -13,8 +13,9 @@ use clap::Parser;
 use clap::Subcommand;
 use serde::Deserialize;
 
+use sui_sdk::crypto::{AccountKeystore, FileBasedKeystore};
 use sui_sdk::{
-    crypto::{KeystoreType, SuiKeystore},
+    crypto::Keystore,
     json::SuiJsonValue,
     rpc_types::SuiData,
     types::{
@@ -29,7 +30,7 @@ use sui_sdk::{
 async fn main() -> Result<(), anyhow::Error> {
     let opts: TicTacToeOpts = TicTacToeOpts::parse();
     let keystore_path = opts.keystore_path.unwrap_or_else(default_keystore_path);
-    let keystore = KeystoreType::File(keystore_path).init()?;
+    let keystore = Keystore::File(FileBasedKeystore::new(&keystore_path)?);
 
     let game = TicTacToe {
         game_package_id: opts.game_package_id,
@@ -55,7 +56,7 @@ async fn main() -> Result<(), anyhow::Error> {
 struct TicTacToe {
     game_package_id: ObjectID,
     client: SuiClient,
-    keystore: SuiKeystore,
+    keystore: Keystore,
 }
 
 impl TicTacToe {

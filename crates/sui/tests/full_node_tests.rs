@@ -37,7 +37,9 @@ use sui_json_rpc_types::{
     SuiEvent, SuiEventEnvelope, SuiEventFilter, SuiExecuteTransactionResponse, SuiExecutionStatus,
     SuiMoveStruct, SuiMoveValue, SuiTransactionFilter, SuiTransactionResponse,
 };
+use sui_macros::*;
 use sui_node::SuiNode;
+use sui_sdk::crypto::AccountKeystore;
 use sui_swarm::memory::Swarm;
 use sui_types::messages::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
@@ -49,8 +51,6 @@ use sui_types::{
 use test_utils::messages::make_transactions_with_wallet_context;
 use test_utils::network::setup_network_and_wallet;
 use test_utils::transaction::{wait_for_all_txes, wait_for_tx};
-
-use sui_macros::*;
 
 #[sim_test]
 async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
@@ -89,7 +89,7 @@ async fn test_full_node_shared_objects() -> Result<(), anyhow::Error> {
     let config = swarm.config().generate_fullnode_config();
     let node = SuiNode::start(&config, Registry::new()).await?;
 
-    let sender = context.keystore.addresses().get(0).cloned().unwrap();
+    let sender = context.config.keystore.addresses().get(0).cloned().unwrap();
 
     let (package_ref, counter_id) = publish_basics_package_and_make_counter(&context, sender).await;
 
@@ -109,7 +109,7 @@ async fn test_full_node_move_function_index() -> Result<(), anyhow::Error> {
 
     let config = swarm.config().generate_fullnode_config();
     let node = SuiNode::start(&config, Registry::new()).await?;
-    let sender = context.keystore.addresses().get(0).cloned().unwrap();
+    let sender = context.config.keystore.addresses().get(0).cloned().unwrap();
     let (package_ref, counter_id) = publish_basics_package_and_make_counter(&context, sender).await;
     let effects = increment_counter(&context, sender, None, package_ref, counter_id).await;
     let digest = effects.certificate.transaction_digest;
@@ -321,7 +321,7 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
 
     let mut futures = Vec::new();
 
-    let sender = context.keystore.addresses().get(0).cloned().unwrap();
+    let sender = context.config.keystore.addresses().get(0).cloned().unwrap();
     let (package_ref, counter_id) = publish_basics_package_and_make_counter(&context, sender).await;
 
     let context = Arc::new(Mutex::new(context));
@@ -333,7 +333,7 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
         tokio::task::spawn(async move {
             let (sender, object_to_split) = {
                 let context = &mut context.lock().await;
-                let address = context.keystore.addresses()[i];
+                let address = context.config.keystore.addresses()[i];
                 SuiClientCommands::SyncClientState {
                     address: Some(address),
                 }
@@ -341,7 +341,7 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
                 .await
                 .unwrap();
 
-                let sender = context.keystore.addresses().get(0).cloned().unwrap();
+                let sender = context.config.keystore.addresses().get(0).cloned().unwrap();
 
                 let coins = context.gas_objects(sender).await.unwrap();
                 let object_to_split = coins.first().unwrap().1.reference.to_object_ref();
@@ -586,8 +586,8 @@ async fn test_full_node_sub_and_query_move_event_ok() -> Result<(), anyhow::Erro
 async fn test_full_node_event_read_api_ok() -> Result<(), anyhow::Error> {
     let (swarm, mut context, _address) = setup_network_and_wallet().await?;
     let (node, jsonrpc_client, _) = set_up_jsonrpc(&swarm, None).await?;
-    let sender = context.keystore.addresses().get(0).cloned().unwrap();
-    let receiver = context.keystore.addresses().get(1).cloned().unwrap();
+    let sender = context.config.keystore.addresses().get(0).cloned().unwrap();
+    let receiver = context.config.keystore.addresses().get(1).cloned().unwrap();
     let (transferred_object, _, _, digest) = transfer_coin(&mut context).await?;
 
     wait_for_tx(digest, node.state().clone()).await;
@@ -1044,7 +1044,7 @@ async fn test_get_objects_read() -> Result<(), anyhow::Error> {
 
     // Create the object
     let (sender, object_id, _) = create_devnet_nft(&mut context).await?;
-    let recipient = context.keystore.addresses().get(1).cloned().unwrap();
+    let recipient = context.config.keystore.addresses().get(1).cloned().unwrap();
     assert_ne!(sender, recipient);
     sleep(Duration::from_millis(1000)).await;
     let (object_ref_v1, object_v1, _) = get_obj_read_from_node(&node, object_id, None).await?;
