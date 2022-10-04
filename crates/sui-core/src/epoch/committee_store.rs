@@ -14,6 +14,8 @@ use sui_types::fp_ensure;
 use typed_store::Map;
 use typed_store_derive::DBMapUtils;
 
+use sui_simulator::nondeterministic;
+
 #[derive(DBMapUtils)]
 pub struct CommitteeStore {
     /// Map from each epoch ID to the committee information.
@@ -41,7 +43,7 @@ impl CommitteeStore {
 
     pub fn new_for_testing(genesis_committee: &Committee) -> Self {
         let dir = std::env::temp_dir();
-        let path = dir.join(format!("DB_{:?}", ObjectID::random()));
+        let path = dir.join(format!("DB_{:?}", nondeterministic!(ObjectID::random())));
         Self::new(path, genesis_committee, None)
     }
 
