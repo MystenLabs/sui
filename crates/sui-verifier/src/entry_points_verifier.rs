@@ -140,7 +140,7 @@ fn verify_init_function(module: &CompiledModule, fdef: &FunctionDefinition) -> R
         Ok(())
     } else {
         Err(format!(
-            "Expected last parameter for {}::{} to be &mut {}::{}::{}, but found {}",
+            "Expected last (and at most second) parameter for {}::{} to be &mut {}::{}::{}, but found {}",
             module.self_id(),
             INIT_FN_NAME,
             SUI_FRAMEWORK_ADDRESS,
