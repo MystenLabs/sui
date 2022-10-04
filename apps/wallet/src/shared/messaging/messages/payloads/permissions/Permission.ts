@@ -10,7 +10,7 @@ export interface Permission {
     name?: string;
     id: string;
     origin: string;
-    pagelink?: string;
+    pagelink?: string | undefined;
     favIcon: string | undefined;
     accounts: SuiAddress[];
     allowed: boolean | null;
