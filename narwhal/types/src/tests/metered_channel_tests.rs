@@ -7,7 +7,7 @@ use futures::{
     task::{noop_waker, Context, Poll},
     FutureExt,
 };
-use prometheus::IntGauge;
+use prometheus::{IntCounter, IntGauge};
 use tokio::sync::mpsc::error::TrySendError;
 
 #[test]
@@ -27,7 +27,7 @@ fn test_send() {
 #[test]
 fn test_total() {
     let counter = IntGauge::new("TEST_COUNTER", "test").unwrap();
-    let counter_total = IntGauge::new("TEST_TOTAL", "test_total").unwrap();
+    let counter_total = IntCounter::new("TEST_TOTAL", "test_total").unwrap();
     let (tx, mut rx) = channel_with_total(8, &counter, &counter_total);
 
     assert_eq!(counter.get(), 0);

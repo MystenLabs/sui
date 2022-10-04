@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #![allow(dead_code)] // TODO: complete tests - This kinda sorta facades the whole tokio::mpsc::{Sender, Receiver}: without tests, this will be fragile to maintain.
 use futures::{FutureExt, Stream, TryFutureExt};
-use prometheus::IntGauge;
+use prometheus::{IntCounter, IntGauge};
 use std::task::{Context, Poll};
 use tokio::sync::mpsc::{
     self,
@@ -36,7 +36,7 @@ impl<T> Clone for Sender<T> {
 pub struct Receiver<T> {
     inner: mpsc::Receiver<T>,
     gauge: IntGauge,
-    total: Option<IntGauge>,
+    total: Option<IntCounter>,
 }
 
 impl<T> Receiver<T> {
@@ -290,10 +290,9 @@ pub fn channel<T>(size: usize, gauge: &IntGauge) -> (Sender<T>, Receiver<T>) {
 pub fn channel_with_total<T>(
     size: usize,
     gauge: &IntGauge,
-    total_gauge: &IntGauge,
+    total_gauge: &IntCounter,
 ) -> (Sender<T>, Receiver<T>) {
     gauge.set(0);
-    total_gauge.set(0);
     let (sender, receiver) = mpsc::channel(size);
     (
         Sender {
