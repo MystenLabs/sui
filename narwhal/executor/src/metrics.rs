@@ -15,6 +15,10 @@ pub struct ExecutorMetrics {
     pub subscriber_remote_fetch_latency: Histogram,
     /// Number of times certificate was found locally
     pub subscriber_local_hit: IntCounter,
+    /// Number of batches processed by notifier
+    pub notifier_processed_batches: IntCounter,
+    /// Number of certificates processed by subscriber
+    pub subscriber_processed_certificates: IntCounter,
     /// The number of certificates processed by Subscriber
     /// during the recovery period to fetch their payloads.
     pub subscriber_recovered_certificates_count: IntCounter,
@@ -63,6 +67,16 @@ impl ExecutorMetrics {
             subscriber_local_hit: register_int_counter_with_registry!(
                 "subscriber_local_hit",
                 "Number of times certificate was found locally",
+                registry
+            ).unwrap(),
+            notifier_processed_batches: register_int_counter_with_registry!(
+                "notifier_processed_batches",
+                "Number of batches processed by notifier",
+                registry
+            ).unwrap(),
+            subscriber_processed_certificates: register_int_counter_with_registry!(
+                "subscriber_processed_certificates",
+                "Number of certificates processed by subscriber",
                 registry
             ).unwrap(),
             pending_remote_request_batch: register_int_gauge_with_registry!(
