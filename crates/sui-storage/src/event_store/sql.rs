@@ -329,28 +329,28 @@ impl From<SqliteRow> for StoredEvent {
 }
 
 const TS_QUERY: &str =
-    "SELECT * FROM events WHERE timestamp >= ? AND timestamp < ? ORDER BY timestamp DESC LIMIT ?";
+    "SELECT * FROM events WHERE timestamp >= ? AND timestamp < ? ORDER BY timestamp ASC LIMIT ?";
 
 const TX_QUERY: &str = "SELECT * FROM events WHERE tx_digest = ? LIMIT ?";
 
-// TODO: do we really need `DESC`?
+// ASC is used so there's a way to fetch from last one to NOW
 const QUERY_BY_TYPE: &str = "SELECT * FROM events WHERE timestamp >= ? AND \
-    timestamp < ? AND event_type = ? ORDER BY timestamp DESC LIMIT ?";
+    timestamp < ? AND event_type = ? ORDER BY timestamp ASC LIMIT ?";
 
 const QUERY_BY_MODULE: &str = "SELECT * FROM events WHERE timestamp >= ? AND \
-    timestamp < ? AND package_id = ? AND module_name = ? ORDER BY timestamp DESC LIMIT ?";
+    timestamp < ? AND package_id = ? AND module_name = ? ORDER BY timestamp ASC LIMIT ?";
 
 const QUERY_BY_MOVE_EVENT_STRUCT_NAME: &str = "SELECT * FROM events WHERE timestamp >= ? AND \
-    timestamp < ? AND move_event_name = ? ORDER BY timestamp DESC LIMIT ?";
+    timestamp < ? AND move_event_name = ? ORDER BY timestamp ASC LIMIT ?";
 
 const QUERY_BY_SENDER: &str = "SELECT * FROM events WHERE timestamp >= ? AND \
-    timestamp < ? AND sender = ? ORDER BY timestamp DESC LIMIT ?";
+    timestamp < ? AND sender = ? ORDER BY timestamp ASC LIMIT ?";
 
 const QUERY_BY_RECIPIENT: &str = "SELECT * FROM events WHERE timestamp >= ? AND \
-    timestamp < ? AND recipient = ? ORDER BY timestamp DESC LIMIT ?";
+    timestamp < ? AND recipient = ? ORDER BY timestamp ASC LIMIT ?";
 
 const QUERY_BY_OBJECT_ID: &str = "SELECT * FROM events WHERE timestamp >= ? AND \
-    timestamp < ? AND object_id = ? ORDER BY timestamp DESC LIMIT ?";
+    timestamp < ? AND object_id = ? ORDER BY timestamp ASC LIMIT ?";
 
 #[async_trait]
 impl EventStore for SqlEventStore {

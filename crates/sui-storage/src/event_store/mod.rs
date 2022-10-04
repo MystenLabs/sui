@@ -37,7 +37,7 @@ pub use sql::SqlEventStore;
 use flexstr::SharedStr;
 
 /// Maximum number of events one can ask for right now
-pub const EVENT_STORE_QUERY_MAX_LIMIT: usize = 100;
+pub const EVENT_STORE_QUERY_MAX_LIMIT: usize = 1000;
 
 pub const TRANSFER_TYPE_KEY: &str = "xfer_type";
 pub const OBJECT_VERSION_KEY: &str = "obj_ver";
