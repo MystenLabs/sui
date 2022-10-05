@@ -170,12 +170,12 @@ fn read_prefunded_account(path: &Path) -> Result<Vec<PrefundedAccount>, anyhow::
 
 #[test]
 fn test_read_keystore() {
-    use sui_sdk::crypto::KeystoreType;
+    use sui_sdk::crypto::{AccountKeystore, FileBasedKeystore, Keystore};
     use sui_types::crypto::SignatureScheme;
 
     let temp_dir = tempfile::tempdir().unwrap();
     let path = temp_dir.path().join("sui.keystore");
-    let mut ks = KeystoreType::File(path.clone()).init().unwrap();
+    let mut ks = Keystore::from(FileBasedKeystore::new(&path).unwrap());
     let key1 = ks.generate_new_key(SignatureScheme::ED25519, None).unwrap();
     let key2 = ks
         .generate_new_key(SignatureScheme::Secp256k1, None)
