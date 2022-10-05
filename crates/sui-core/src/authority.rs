@@ -1366,7 +1366,7 @@ impl AuthorityState {
         let mut checkpoints = CheckpointStore::open(
             &path.join("checkpoints"),
             None,
-            genesis_committee.epoch,
+            &genesis_committee,
             secret.public().into(),
             secret.clone(),
         )
@@ -2012,7 +2012,12 @@ impl AuthorityState {
 
                 let mut checkpoint = self.checkpoints.lock();
                 checkpoint
-                    .handle_internal_fragment(consensus_index, *fragment, self.database.clone())
+                    .handle_internal_fragment(
+                        consensus_index,
+                        *fragment,
+                        self.database.clone(),
+                        &self.committee.load(),
+                    )
                     .map_err(NarwhalHandlerError::NodeError)?;
 
                 // NOTE: The method `handle_internal_fragment` is idempotent, so we don't need
