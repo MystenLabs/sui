@@ -196,10 +196,10 @@ pub enum SuiError {
     #[error("Checkpointing error: {}", error)]
     CheckpointingError { error: String },
     #[error(
-        "ExecutionDriver error for {:?}: {} - Caused by : {:#?}",
+        "ExecutionDriver error for {:?}: {} - Caused by : {}",
         digest,
         msg,
-        errors.iter().map(|e| ToString::to_string(&e)).collect::<Vec<String>>()
+        format!("[ {} ]", errors.iter().map(|e| ToString::to_string(&e)).collect::<Vec<String>>().join("; ")),
     )]
     ExecutionDriverError {
         digest: TransactionDigest,
