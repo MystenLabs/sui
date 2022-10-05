@@ -404,6 +404,15 @@ impl SuiClientCommands {
                 let sender = context.try_get_object_owner(&gas).await?;
                 let sender = sender.unwrap_or(context.active_address()?);
 
+                let compiled_package = match build_config
+                    .clone()
+                    .compile_package(&package_path, &mut Vec::new()) {
+                        Ok(compiled) => compiled,
+                        Err(err) => {
+                            eprintln!("error compiling package {:?}", err);
+                            return Err(err);
+                        },
+                    };
                 let compiled_modules = build_move_package_to_bytes(&package_path, build_config.clone())?;
 
                 // verify that all dependency packages have the correct on-chain bytecode
@@ -411,9 +420,9 @@ impl SuiClientCommands {
                 match BytecodeSourceVerifier::new(node_url).await {
                     Ok(verifier) => {
                         let result = verifier.verify_deployed_dependencies
-                            (&build_config, &package_path, &compiled_modules).await;
+                            (&build_config, &package_path, compiled_package).await;
 
-                        println!("on-chain bytecode verification result:\n{:?}", result);
+                        println!("on-chain bytecode verification result:\n{:#?}", result);
                     },
                     Err(err) => eprintln!("Error verifying on-chain bytecode:\n{:?}", err),
                 };
