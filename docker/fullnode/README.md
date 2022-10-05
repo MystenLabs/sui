@@ -11,7 +11,6 @@ Run a Sui DevNet [fullnode](../../doc/src/build/fullnode.md) locally for testing
 Install Docker / Docker Compose:
 - https://docs.docker.com/get-docker/
 - https://docs.docker.com/compose/install/
-- https://github.com/MystenLabs/sui/blob/main/docker/fullnode/docker-compose.yaml
 
 ## Running
 
@@ -29,6 +28,29 @@ Get the latest version of the Sui DevNet genesis [genesis.blob](https://github.c
 
 ```wget https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob```
 
+
+### docker compose 
+
+Download the latest version of docker compose
+
+```wget https://github.com/MystenLabs/sui/blob/main/docker/fullnode/docker-compose.yaml```
+
+Configure physical resource constraints and logging options
+
+```yml
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 8g
+        reservations:
+          cpus: '1'
+          memory: 4g
+    logging:
+      options:
+        max-file: 3
+        max-size: 50m
+```
 
 ## Start the fullnode
 
