@@ -6,6 +6,7 @@ use config::{Committee, Epoch, WorkerId};
 use crypto::{PublicKey, Signature};
 use fastcrypto::{Digest, Hash as _, SignatureService};
 use std::{cmp::Ordering, sync::Arc};
+use storage::ProposerStore;
 use tokio::{
     sync::watch,
     task::JoinHandle,
@@ -46,6 +47,8 @@ pub struct Proposer {
     /// Sends newly created headers to the `Core`.
     tx_core: Sender<Header>,
 
+    /// The proposer store for persisting the last header.
+    proposer_store: ProposerStore,
     /// The current round of the dag.
     round: Round,
     /// Holds the certificates' ids waiting to be included in the next header.
@@ -67,6 +70,7 @@ impl Proposer {
         name: PublicKey,
         committee: Committee,
         signature_service: SignatureService<Signature>,
+        proposer_store: ProposerStore,
         header_size: usize,
         max_header_delay: Duration,
         network_model: NetworkModel,
@@ -89,6 +93,7 @@ impl Proposer {
                 rx_core,
                 rx_workers,
                 tx_core,
+                proposer_store,
                 round: 0,
                 last_parents: genesis,
                 last_leader: None,
@@ -103,7 +108,7 @@ impl Proposer {
 
     async fn make_header(&mut self) -> DagResult<()> {
         // Make a new header.
-        let header = Header::new(
+        let mut header = Header::new(
             self.name.clone(),
             self.round,
             self.committee.epoch(),
@@ -113,6 +118,21 @@ impl Proposer {
         )
         .await;
         debug!("Created {header:?}");
+
+        // Equivocation protection using the proposer store
+        if let Some((_, last_header)) = self.proposer_store.get_last_header()? {
+            if last_header.round == header.round && last_header.epoch == header.epoch {
+                // We have already produced a header for the current round, idempotent re-send
+                if last_header != header {
+                    debug!("Equivocation protection was enacted in the proposer");
+                    header = last_header;
+                }
+            } else {
+                // We have not yet produced a header for the current round, so store the new header
+                self.proposer_store
+                    .write_last_proposed(header.round, header.clone())?;
+            }
+        }
 
         #[cfg(feature = "benchmark")]
         for digest in header.payload.keys() {

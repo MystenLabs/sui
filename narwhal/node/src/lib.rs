@@ -16,7 +16,7 @@ use network::P2pNetwork;
 use primary::{NetworkModel, PayloadToken, Primary, PrimaryChannelMetrics};
 use prometheus::{IntGauge, Registry};
 use std::sync::Arc;
-use storage::{CertificateStore, CertificateToken};
+use storage::{CertificateStore, CertificateToken, ProposerStore};
 use store::{
     reopen,
     rocks::{open_cf, DBMap},
@@ -37,6 +37,7 @@ pub mod restarter;
 
 /// All the data stores of the node.
 pub struct NodeStorage {
+    pub proposer_store: ProposerStore,
     pub vote_digest_store: Store<PublicKey, RoundVoteDigestPair>,
     pub header_store: Store<HeaderDigest, Header>,
     pub certificate_store: CertificateStore,
@@ -48,6 +49,7 @@ pub struct NodeStorage {
 
 impl NodeStorage {
     /// The datastore column family names.
+    const LAST_PROPOSED_CF: &'static str = "last_proposed";
     const VOTES_CF: &'static str = "votes";
     const HEADERS_CF: &'static str = "headers";
     const CERTIFICATES_CF: &'static str = "certificates";
@@ -64,6 +66,7 @@ impl NodeStorage {
             store_path,
             None,
             &[
+                Self::LAST_PROPOSED_CF,
                 Self::VOTES_CF,
                 Self::HEADERS_CF,
                 Self::CERTIFICATES_CF,
@@ -78,6 +81,7 @@ impl NodeStorage {
         .expect("Cannot open database");
 
         let (
+            last_proposed_map,
             votes_map,
             header_map,
             certificate_map,
@@ -88,6 +92,7 @@ impl NodeStorage {
             sequence_map,
             temp_batch_map,
         ) = reopen!(&rocksdb,
+            Self::LAST_PROPOSED_CF;<Round, Header>,
             Self::VOTES_CF;<PublicKey, RoundVoteDigestPair>,
             Self::HEADERS_CF;<HeaderDigest, Header>,
             Self::CERTIFICATES_CF;<CertificateDigest, Certificate>,
@@ -99,6 +104,7 @@ impl NodeStorage {
             Self::TEMP_BATCH_CF;<(CertificateDigest, BatchDigest), Batch>
         );
 
+        let proposer_store = ProposerStore::new(last_proposed_map);
         let vote_digest_store = Store::new(votes_map);
         let header_store = Store::new(header_map);
         let certificate_store = CertificateStore::new(certificate_map, certificate_id_by_round_map);
@@ -108,6 +114,7 @@ impl NodeStorage {
         let temp_batch_store = Store::new(temp_batch_map);
 
         Self {
+            proposer_store,
             vote_digest_store,
             header_store,
             certificate_store,
@@ -240,6 +247,7 @@ impl Node {
             parameters.clone(),
             store.header_store.clone(),
             store.certificate_store.clone(),
+            store.proposer_store.clone(),
             store.payload_store.clone(),
             store.vote_digest_store.clone(),
             tx_new_certificates,

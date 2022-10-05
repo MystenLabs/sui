@@ -6,7 +6,9 @@ license = "Apache-2.0"
 authors = ["Mysten Labs <build@mystenlabs.com>"]
 publish = false
 
+
 [dependencies]
+tempfile = "3.3.0"
 dashmap = "5.4.0"
 fastcrypto = "0.1.2"
 futures = "0.3.24"
@@ -22,3 +24,4 @@ workspace-hack.workspace = true
 
 [dev-dependencies]
 test-utils = { path = "../test-utils", package = "narwhal-test-utils" }
+

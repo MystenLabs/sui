@@ -36,7 +36,7 @@ use network::metrics::MetricsMakeCallbackHandler;
 use network::P2pNetwork;
 use prometheus::Registry;
 use std::{collections::BTreeMap, net::Ipv4Addr, sync::Arc};
-use storage::CertificateStore;
+use storage::{CertificateStore, ProposerStore};
 use store::Store;
 use tokio::sync::oneshot;
 use tokio::{sync::watch, task::JoinHandle};
@@ -83,6 +83,7 @@ impl Primary {
         parameters: Parameters,
         header_store: Store<HeaderDigest, Header>,
         certificate_store: CertificateStore,
+        proposer_store: ProposerStore,
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
         vote_digest_store: Store<PublicKey, RoundVoteDigestPair>,
         tx_consensus: Sender<Certificate>,
@@ -448,6 +449,7 @@ impl Primary {
             name.clone(),
             (**committee.load()).clone(),
             signature_service,
+            proposer_store,
             parameters.header_size,
             parameters.max_header_delay,
             network_model,

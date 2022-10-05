@@ -28,6 +28,7 @@ async fn propose_empty() {
         name,
         committee.clone(),
         signature_service,
+        ProposerStore::new_for_tests(),
         /* header_size */ 1_000,
         /* max_header_delay */ Duration::from_millis(20),
         NetworkModel::PartiallySynchronous,
@@ -67,6 +68,7 @@ async fn propose_payload() {
         name.clone(),
         committee.clone(),
         signature_service,
+        ProposerStore::new_for_tests(),
         /* header_size */ 32,
         /* max_header_delay */
         Duration::from_millis(1_000_000), // Ensure it is not triggered.
