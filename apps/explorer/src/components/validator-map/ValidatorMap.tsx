@@ -4,7 +4,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { ParentSizeModern } from '@visx/responsive';
 import { TooltipWithBounds, useTooltip } from '@visx/tooltip';
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 
 import placeholdertheme from '../../styles/placeholder.module.css';
 import { WorldMap } from './WorldMap';
@@ -30,23 +30,31 @@ const DATE_FILTER_TO_WINDOW = {
 
 export default function ValidatorMap() {
     const [dateFilter, setDateFilter] = useDateFilterState('D');
+    const [isFail, setIsFail] = useState(false);
 
     const { data } = useQuery(['validator-map', dateFilter], async () => {
-        const res = await fetch(
-            `${HOST}/location?${new URLSearchParams({
-                version: 'v2',
-                window: DATE_FILTER_TO_WINDOW[dateFilter],
-            })}`,
-            {
-                method: 'GET',
-            }
-        );
+        try {
+            const res = await fetch(
+                `${HOST}/location?${new URLSearchParams({
+                    version: 'v2',
+                    window: DATE_FILTER_TO_WINDOW[dateFilter],
+                })}`,
+                {
+                    method: 'GET',
+                }
+            );
 
-        if (!res.ok) {
+            if (!res.ok) {
+                setIsFail(true);
+                return [];
+            }
+
+            return res.json() as Promise<NodeLocation[]>;
+        } catch (error) {
+            console.error('Error in Validator Map data retrieval', error);
+            setIsFail(true);
             return [];
         }
-
-        return res.json() as Promise<NodeLocation[]>;
     });
 
     const { totalCount, countryCount, countryNodes } = useMemo<{
@@ -119,7 +127,9 @@ export default function ValidatorMap() {
                     <div>
                         <div className={styles.title}>Nodes</div>
                         <div className={styles.stat}>
-                            {totalCount ? (
+                            {isFail ? (
+                                <></>
+                            ) : totalCount ? (
                                 numberFormatter.format(totalCount)
                             ) : (
                                 <Placeholder />
@@ -129,7 +139,9 @@ export default function ValidatorMap() {
                     <div>
                         <div className={styles.title}>Countries</div>
                         <div className={styles.stat}>
-                            {countryCount ? (
+                            {isFail ? (
+                                <></>
+                            ) : countryCount ? (
                                 numberFormatter.format(countryCount)
                             ) : (
                                 <Placeholder />
