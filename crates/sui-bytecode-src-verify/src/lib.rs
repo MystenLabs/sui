@@ -139,12 +139,12 @@ impl<'a> BytecodeSourceVerifier<'a> {
 
                     // compare local bytecode to on-chain bytecode to ensure integrity of our dependencies
                     if *local_bytes != *oc_bytes {
-                        return Err(Self::get_mismatch_error(
-                            &pkg_symbol,
-                            &oc_symbol,
-                            &addr,
-                            local_bytes,
-                            &oc_bytes,
+                        return Err(DependencyVerificationError::ModuleBytecodeMismatch(
+                            pkg_symbol.to_string(),
+                            oc_symbol.to_string(),
+                            addr.clone(),
+                            local_bytes.clone(),
+                            oc_bytes.clone()
                         ));
                     }
 
@@ -247,21 +247,5 @@ impl<'a> BytecodeSourceVerifier<'a> {
                 ));
             }
         }
-    }
-
-    fn get_mismatch_error(
-        pkg_symbol: &Symbol,
-        module: &Symbol,
-        addr: &AccountAddress,
-        local_bytes: &Vec<u8>,
-        chain_bytes: &Vec<u8>,
-    ) -> DependencyVerificationError {
-        DependencyVerificationError::ModuleBytecodeMismatch(
-            pkg_symbol.to_string(),
-            module.to_string(),
-            addr.clone(),
-            local_bytes.clone(),
-            chain_bytes.clone(),
-        )
     }
 }
