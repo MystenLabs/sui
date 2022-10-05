@@ -13,6 +13,7 @@ import {
     type WalletEvents,
 } from '@mysten/wallet-standard';
 import { filter, map, type Observable } from 'rxjs';
+import mitt, { Emitter } from 'mitt';
 
 import icon from '../manifest/icons/sui-icon-128.png';
 import { mapToPromise } from './utils';
@@ -32,9 +33,13 @@ import type {
     ExecuteTransactionResponse,
 } from '_payloads/transactions';
 
+type WalletEventsMap = {
+    [E in WalletEventNames]: Parameters<WalletEvents[E]>[0];
+};
+
 // TODO: rebuild event interface with Mitt.
 export class SuiWallet implements Wallet {
-    readonly #listeners: { [E in WalletEventNames]?: WalletEvents[E][] } = {};
+    readonly #events: Emitter<WalletEventsMap>;
     readonly #version = '1.0.0' as const;
     readonly #name = 'Sui Wallet' as const;
     #account: ReadonlyWalletAccount | null;
@@ -77,6 +82,7 @@ export class SuiWallet implements Wallet {
     }
 
     constructor() {
+        this.#events = mitt();
         this.#account = null;
         this.#messagesStream = new WindowMessageStream(
             'sui_in-page',
@@ -90,26 +96,8 @@ export class SuiWallet implements Wallet {
         event: E,
         listener: WalletEvents[E]
     ): () => void {
-        this.#listeners[event]?.push(listener) ||
-            (this.#listeners[event] = [listener]);
-        return (): void => this.#off(event, listener);
-    }
-
-    #emit<E extends WalletEventNames>(
-        event: E,
-        ...args: Parameters<WalletEvents[E]>
-    ): void {
-        // @ts-expect-error: Incorrectly thinking the spread is bad.
-        this.#listeners[event]?.forEach((listener) => listener(...args));
-    }
-
-    #off<E extends WalletEventNames>(
-        event: E,
-        listener: WalletEvents[E]
-    ): void {
-        this.#listeners[event] = this.#listeners[event]?.filter(
-            (existingListener) => listener !== existingListener
-        );
+        this.#events.on('standard:change', listener);
+        return () => this.#events.off(event, listener);
     }
 
     #connected = async () => {
@@ -142,7 +130,7 @@ export class SuiWallet implements Wallet {
         }
 
         if (properties.length) {
-            this.#emit('standard:change', properties);
+            this.#events.emit('standard:change', properties);
         }
     };
 
