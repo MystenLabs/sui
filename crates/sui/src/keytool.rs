@@ -13,7 +13,7 @@ use signature::rand_core::OsRng;
 use tracing::info;
 
 use fastcrypto::ed25519::{Ed25519KeyPair, Ed25519PrivateKey, Ed25519PublicKey};
-use sui_sdk::crypto::{AccountKeystore, Keystore};
+use sui_sdk::crypto::SuiKeystore;
 use sui_types::base_types::SuiAddress;
 use sui_types::base_types::{decode_bytes_hex, encode_bytes_hex};
 use sui_types::crypto::{
@@ -68,7 +68,7 @@ pub enum KeyToolCommand {
 }
 
 impl KeyToolCommand {
-    pub fn execute(self, keystore: &mut Keystore) -> Result<(), anyhow::Error> {
+    pub fn execute(self, keystore: &mut SuiKeystore) -> Result<(), anyhow::Error> {
         match self {
             KeyToolCommand::Generate {
                 key_scheme,

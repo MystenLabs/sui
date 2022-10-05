@@ -11,9 +11,7 @@ use sui_json_rpc::api::{
     RpcGatewayApiClient, RpcReadApiClient, RpcTransactionBuilderClient, WalletSyncApiClient,
 };
 use sui_json_rpc_types::{GetObjectDataResponse, SuiTransactionResponse, TransactionBytes};
-use sui_sdk::crypto::AccountKeystore;
-use sui_sdk::crypto::FileBasedKeystore;
-use sui_sdk::crypto::Keystore;
+use sui_sdk::crypto::KeystoreType;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::TransactionDigest;
 use sui_types::gas_coin::GAS;
@@ -54,7 +52,7 @@ async fn test_public_transfer_object() -> Result<(), anyhow::Error> {
         .await?;
 
     let keystore_path = test_network.network.dir().join(SUI_KEYSTORE_FILENAME);
-    let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
+    let keystore = KeystoreType::File(keystore_path).init()?;
 
     let signature = keystore.sign(address, &transaction_bytes.tx_bytes.to_vec()?)?;
     let tx = Transaction::new(transaction_bytes.to_data().unwrap(), signature);
@@ -93,7 +91,7 @@ async fn test_publish() -> Result<(), anyhow::Error> {
         .await?;
 
     let keystore_path = test_network.network.dir().join(SUI_KEYSTORE_FILENAME);
-    let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
+    let keystore = KeystoreType::File(keystore_path).init()?;
     let signature = keystore.sign(address, &transaction_bytes.tx_bytes.to_vec()?)?;
 
     let tx = Transaction::new(transaction_bytes.to_data().unwrap(), signature);
@@ -141,7 +139,7 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
         .await?;
 
     let keystore_path = test_network.network.dir().join(SUI_KEYSTORE_FILENAME);
-    let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
+    let keystore = KeystoreType::File(keystore_path).init()?;
 
     let signature = keystore.sign(address, &transaction_bytes.tx_bytes.to_vec()?)?;
 
@@ -194,7 +192,7 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
             .await?;
 
         let keystore_path = test_network.network.dir().join(SUI_KEYSTORE_FILENAME);
-        let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
+        let keystore = KeystoreType::File(keystore_path).init()?;
 
         let signature = keystore.sign(address, &transaction_bytes.tx_bytes.to_vec()?)?;
 

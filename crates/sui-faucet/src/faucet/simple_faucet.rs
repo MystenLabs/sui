@@ -1,11 +1,11 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::metrics::FaucetMetrics;
 use anyhow::anyhow;
 use async_trait::async_trait;
+
+use crate::metrics::FaucetMetrics;
 use prometheus::Registry;
-use sui_sdk::crypto::AccountKeystore;
 
 // HashSet is in fact used but linter does not think so
 #[allow(unused_imports)]
@@ -259,7 +259,7 @@ impl SimpleFaucet {
             .construct_transfer_sui_txn_with_retry(coin_id, signer, recipient, budget, amount, uuid)
             .await?;
 
-        let signature = context.config.keystore.sign(&signer, &data.to_bytes())?;
+        let signature = context.keystore.sign(&signer, &data.to_bytes())?;
 
         let tx = Transaction::new(data, signature);
         info!(tx_digest = ?tx.digest(), ?recipient, ?coin_id, ?uuid, "Broadcasting transfer obj txn");

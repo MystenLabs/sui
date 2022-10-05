@@ -89,7 +89,7 @@ async fn main() -> Result<(), anyhow::Error> {
         .await?;
 
     // Sign transaction
-    let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
+    let keystore = KeystoreType::File(keystore_path).init()?;
     let signature = keystore.sign(&my_address, &transfer_tx)?;
     
     // Execute the transaction

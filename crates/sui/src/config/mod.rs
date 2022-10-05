@@ -5,8 +5,7 @@
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use std::fmt::{Display, Formatter, Write};
-use sui_sdk::crypto::AccountKeystore;
-use sui_sdk::crypto::Keystore;
+use sui_sdk::crypto::KeystoreType;
 use sui_types::base_types::*;
 
 pub use sui_config::Config;
@@ -18,7 +17,7 @@ use sui_sdk::ClientType;
 #[serde_as]
 #[derive(Serialize, Deserialize)]
 pub struct SuiClientConfig {
-    pub keystore: Keystore,
+    pub keystore: KeystoreType,
     pub client_type: ClientType,
     pub active_address: Option<SuiAddress>,
 }
@@ -32,7 +31,7 @@ impl Display for SuiClientConfig {
         writeln!(
             writer,
             "Managed addresses : {}",
-            self.keystore.addresses().len()
+            self.keystore.init().unwrap().addresses().len()
         )?;
         write!(writer, "Active address: ")?;
         match self.active_address {

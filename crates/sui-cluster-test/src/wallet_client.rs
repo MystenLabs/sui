@@ -5,7 +5,6 @@ use crate::cluster::new_wallet_context_from_cluster;
 
 use super::Cluster;
 use sui::client_commands::WalletContext;
-use sui_sdk::crypto::AccountKeystore;
 use sui_sdk::SuiClient;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{KeypairTraits, Signature};
@@ -69,7 +68,6 @@ impl WalletClient {
 
     pub fn sign(&self, txn_data: &TransactionData, desc: &str) -> Signature {
         self.get_wallet()
-            .config
             .keystore
             .sign(&self.address, &txn_data.to_bytes())
             .unwrap_or_else(|e| panic!("Failed to sign transaction for {}. {}", desc, e))
