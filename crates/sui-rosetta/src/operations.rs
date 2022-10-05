@@ -8,13 +8,15 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::{json, Value};
 
+use serde_with::serde_as;
+use serde_with::DisplayFromStr;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::coin::{COIN_JOIN_FUNC_NAME, COIN_MODULE_NAME, COIN_SPLIT_VEC_FUNC_NAME};
 use sui_types::event::Event;
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::{
     CallArg, InputObjectKind, MoveCall, ObjectArg, Pay, SingleTransactionKind, TransactionData,
-    TransactionEffects,
+    TransactionEffects, TransferObject,
 };
 use sui_types::move_package::disassemble_modules;
 use sui_types::{parse_sui_struct_tag, SUI_FRAMEWORK_OBJECT_ID};
@@ -153,7 +155,7 @@ impl Operation {
                 sender,
                 recipient,
                 object_id,
-                version,
+                version: _,
                 type_: _,
                 amount: Some(amount),
                 ..
@@ -178,7 +180,7 @@ impl Operation {
                     Operation {
                         operation_identifier: counter.next_idx().into(),
                         related_operations: vec![],
-                        type_: OperationType::TransferSUI,
+                        type_: OperationType::SuiBalanceChange,
                         status,
                         account: Some(AccountIdentifier { address: *sender }),
                         amount: Some(Amount {
@@ -191,22 +193,14 @@ impl Operation {
                     Operation {
                         operation_identifier: counter.next_idx().into(),
                         related_operations: vec![],
-                        type_: OperationType::TransferSUI,
+                        type_: OperationType::SuiBalanceChange,
                         status,
                         account: recipient.get_owner_address().ok().map(|addr| addr.into()),
                         amount: Some(Amount {
                             value: (*amount).into(),
                             currency: SUI.clone(),
                         }),
-                        coin_change: Some(CoinChange {
-                            coin_identifier: CoinIdentifier {
-                                identifier: CoinID {
-                                    id: *object_id,
-                                    version: *version,
-                                },
-                            },
-                            coin_action: CoinAction::CoinCreated,
-                        }),
+                        coin_change: None,
                         metadata: None,
                     },
                 ]
@@ -225,7 +219,7 @@ impl Operation {
                     vec![Operation {
                         operation_identifier: counter.next_idx().into(),
                         related_operations: vec![],
-                        type_: OperationType::TransferSUI,
+                        type_: OperationType::SuiBalanceChange,
                         status,
                         account: recipient.get_owner_address().ok().map(|addr| addr.into()),
                         amount: Some(Amount {
@@ -341,17 +335,15 @@ fn parse_operations(
         }],
         SingleTransactionKind::Pay(pay) => parse_pay(sender, gas, budget, pay, counter, status),
     };
-    if !matches!(tx, SingleTransactionKind::TransferSui(..)) {
-        if let Some(effects) = effects {
-            let coin_change_operations = Operation::get_coin_operation_from_events(
-                &tx.input_objects()?,
-                new_coins,
-                &effects.events,
-                status,
-                counter,
-            );
-            operations.extend(coin_change_operations);
-        }
+    if let Some(effects) = effects {
+        let coin_change_operations = Operation::get_coin_operation_from_events(
+            &tx.input_objects()?,
+            new_coins,
+            &effects.events,
+            status,
+            counter,
+        );
+        operations.extend(coin_change_operations);
     }
     Ok(operations)
 }
@@ -365,6 +357,7 @@ fn transfer_sui_operations(
     counter: &mut IndexCounter,
     status: Option<OperationStatus>,
 ) -> Vec<Operation> {
+    let transfer_sui = TransferSuiMetadata { recipient, amount };
     vec![
         Operation {
             operation_identifier: counter.next_idx().into(),
@@ -372,44 +365,40 @@ fn transfer_sui_operations(
             type_: OperationType::TransferSUI,
             status,
             account: Some(AccountIdentifier { address: sender }),
-            amount: amount.map(|amount| Amount {
-                value: SignedValue::neg(amount.try_into().unwrap()),
-                currency: SUI.clone(),
-            }),
+            amount: None,
             coin_change: Some(CoinChange {
                 coin_identifier: CoinIdentifier {
                     identifier: coin.into(),
                 },
                 coin_action: CoinAction::CoinSpent,
             }),
-            metadata: None,
-        },
-        Operation {
-            operation_identifier: counter.next_idx().into(),
-            related_operations: vec![],
-            type_: OperationType::TransferSUI,
-            status,
-            account: Some(AccountIdentifier { address: recipient }),
-            amount: amount.map(|amount| Amount {
-                value: amount.into(),
-                currency: SUI.clone(),
-            }),
-            coin_change: None,
-            metadata: None,
+            metadata: Some(json!(transfer_sui)),
         },
         Operation::gas_budget(counter, status, coin, budget, sender),
     ]
 }
 
+#[serde_as]
+#[derive(Serialize, Deserialize)]
+struct TransferSuiMetadata {
+    pub recipient: SuiAddress,
+    #[serde_as(as = "Option<DisplayFromStr>")]
+    pub amount: Option<u64>,
+}
+
 fn transfer_object_operations(
     budget: u64,
-    object_id: ObjectRef,
+    object_ref: ObjectRef,
     gas: ObjectRef,
     sender: SuiAddress,
     recipient: SuiAddress,
     counter: &mut IndexCounter,
     status: Option<OperationStatus>,
 ) -> Vec<Operation> {
+    let transfer_object = TransferObject {
+        recipient,
+        object_ref,
+    };
     vec![
         Operation {
             operation_identifier: counter.next_idx().into(),
@@ -419,17 +408,7 @@ fn transfer_object_operations(
             account: Some(AccountIdentifier { address: sender }),
             amount: None,
             coin_change: None,
-            metadata: Some(json!({ "object_id": object_id.0, "version": object_id.1 })),
-        },
-        Operation {
-            operation_identifier: counter.next_idx().into(),
-            related_operations: vec![],
-            type_: OperationType::TransferObject,
-            status,
-            account: Some(AccountIdentifier { address: recipient }),
-            amount: None,
-            coin_change: None,
-            metadata: None,
+            metadata: Some(json!(transfer_object)),
         },
         Operation::gas_budget(counter, status, gas, budget, sender),
     ]
@@ -638,23 +617,19 @@ impl TryInto<SuiAction> for Vec<Operation> {
                         .ok_or_else(|| Error::missing_input("operation.account"))?;
                     let address = account.address;
                     builder.operation_type = Some(op.type_);
-                    if let Some(amount) = op.amount.as_ref() {
-                        if amount.value.is_negative() {
-                            builder.sender = Some(address);
-                            builder.send_amount = Some(amount.value.abs().try_into()?);
-                            if let Some(coin) = op.coin_change.as_ref() {
-                                builder.gas = Some(coin.coin_identifier.identifier.id);
-                            }
-                        } else {
-                            builder.recipient = Some(address);
-                        }
-                    } else if let Some(coin) = op.coin_change.as_ref() {
-                        // no amount specified, sending the whole coin
-                        builder.sender = Some(address);
-                        builder.coin = Some(coin.coin_identifier.identifier.id);
-                    } else {
-                        builder.recipient = Some(address);
-                    }
+                    let transfer_sui = op
+                        .metadata
+                        .ok_or_else(|| Error::missing_input("operation.metadata"))?;
+                    let transfer_sui: TransferSuiMetadata = serde_json::from_value(transfer_sui)
+                        .map_err(|e| {
+                            Error::new_with_cause(ErrorType::MalformedOperationError, e)
+                        })?;
+                    builder.coin = op
+                        .coin_change
+                        .map(|coin| coin.coin_identifier.identifier.id);
+                    builder.sender = Some(address);
+                    builder.recipient = Some(transfer_sui.recipient);
+                    builder.send_amount = transfer_sui.amount;
                 }
                 OperationType::GasBudget => {
                     if let Some(coin) = op.coin_change.as_ref() {
@@ -677,6 +652,7 @@ impl TryInto<SuiAction> for Vec<Operation> {
                     builder.gas_budget = Some(budget);
                 }
                 OperationType::TransferObject
+                | OperationType::SuiBalanceChange
                 | OperationType::Pay
                 | OperationType::GasSpent
                 | OperationType::Genesis

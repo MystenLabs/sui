@@ -400,10 +400,12 @@ pub struct ConstructionPayloadsRequest {
 
 #[derive(Deserialize, Serialize, Copy, Clone, Debug, EnumIter)]
 pub enum OperationType {
+    // Balance changing operations from TransactionEffect
+    GasSpent,
+    SuiBalanceChange,
+    // Sui transaction types, readonly
     GasBudget,
     TransferSUI,
-    // Readonly
-    GasSpent,
     Pay,
     TransferObject,
     Publish,
