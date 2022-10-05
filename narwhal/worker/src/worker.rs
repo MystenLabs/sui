@@ -195,20 +195,18 @@ impl Worker {
             network.known_peers().insert(peer_info);
         }
 
+        let network_admin_server_base_port = parameters
+            .network_admin_server
+            .worker_network_admin_server_base_port
+            .checked_add(id as u16)
+            .unwrap();
         info!(
-            "Worker {} listening to worker admin messages on {}",
-            id,
-            parameters
-                .network_admin_server
-                .worker_network_admin_server_base_port
-                + id as u16
+            "Worker {} listening to network admin messages on 127.0.0.1:{}",
+            id, network_admin_server_base_port
         );
 
         network::admin::start_admin_server(
-            parameters
-                .network_admin_server
-                .worker_network_admin_server_base_port
-                + id as u16,
+            network_admin_server_base_port,
             network.clone(),
             tx_reconfigure.subscribe(),
         );

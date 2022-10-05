@@ -301,7 +301,7 @@ impl Primary {
         }
 
         info!(
-            "Primary {} listening on {}",
+            "Primary {} listening to network admin messages on 127.0.0.1:{}",
             name.encode_base64(),
             parameters
                 .network_admin_server
