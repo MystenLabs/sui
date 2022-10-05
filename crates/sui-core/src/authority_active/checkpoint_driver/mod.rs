@@ -836,9 +836,7 @@ where
         "Going through remaining validators to generate fragments",
     );
 
-    let result = checkpoint_db
-        .lock()
-        .attempt_to_construct_checkpoint(committee);
+    let result = checkpoint_db.lock().attempt_to_construct_checkpoint();
 
     match result {
         Err(err) => {

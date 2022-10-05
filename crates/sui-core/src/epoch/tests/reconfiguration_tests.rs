@@ -20,6 +20,7 @@ use sui_types::{
     SUI_SYSTEM_STATE_OBJECT_ID,
 };
 
+use crate::checkpoints::reconstruction::SpanGraph;
 use crate::{
     authority::TemporaryStore,
     authority_active::ActiveAuthority,
@@ -54,6 +55,11 @@ async fn test_start_epoch_change() {
             next_transaction_sequence: 0,
             no_more_fragments: true,
             current_proposal: None,
+            checkpoint_to_be_constructed: SpanGraph::mew(
+                &genesis_committee,
+                CHECKPOINT_COUNT_PER_EPOCH,
+                &[],
+            ),
         })
         .unwrap();
     // Create an active authority for the first authority state.
@@ -180,6 +186,7 @@ async fn test_finish_epoch_change() {
         .zip(actives.iter())
         .map(|(state, active)| {
             async {
+                let genesis_committee = state.committee_store().get_latest_committee();
                 // Set the checkpoint number to be near the end of epoch.
                 let mut locals = CheckpointLocals {
                     next_checkpoint: CHECKPOINT_COUNT_PER_EPOCH,
@@ -187,6 +194,11 @@ async fn test_finish_epoch_change() {
                     next_transaction_sequence: 0,
                     no_more_fragments: true,
                     current_proposal: None,
+                    checkpoint_to_be_constructed: SpanGraph::mew(
+                        &genesis_committee,
+                        CHECKPOINT_COUNT_PER_EPOCH,
+                        &[],
+                    ),
                 };
                 state
                     .checkpoints

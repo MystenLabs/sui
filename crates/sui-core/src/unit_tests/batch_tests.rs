@@ -65,7 +65,7 @@ pub(crate) async fn init_state(
     let (tx_reconfigure_consensus, _rx_reconfigure_consensus) = tokio::sync::mpsc::channel(10);
     let committee_store = Arc::new(CommitteeStore::new(epoch_path, &committee, None));
     let checkpoint_store = Arc::new(parking_lot::Mutex::new(
-        CheckpointStore::open(&checkpoint_path, None, 0, name, secrete.clone()).unwrap(),
+        CheckpointStore::open(&checkpoint_path, None, &committee, name, secrete.clone()).unwrap(),
     ));
     AuthorityState::new(
         name,

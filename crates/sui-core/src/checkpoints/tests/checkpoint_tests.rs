@@ -85,7 +85,7 @@ fn random_ckpoint_store_num(
             let cps = CheckpointStore::open(
                 &path,
                 None,
-                committee.epoch,
+                &committee,
                 k.public().into(),
                 Arc::pin(k.copy()),
             )
@@ -114,7 +114,7 @@ fn crash_recovery() {
     let mut cps = CheckpointStore::open(
         &path,
         None,
-        committee.epoch,
+        &committee,
         k.public().into(),
         Arc::pin(k.copy()),
     )
@@ -158,7 +158,7 @@ fn crash_recovery() {
     let mut cps_new = CheckpointStore::open(
         &path,
         None,
-        committee.epoch,
+        &committee,
         k.public().into(),
         Arc::pin(k.copy()),
     )
@@ -838,7 +838,7 @@ fn checkpoint_integration() {
     let mut cps = CheckpointStore::open(
         &path,
         None,
-        committee.epoch,
+        &committee,
         k.public().into(),
         Arc::pin(k.copy()),
     )
@@ -1254,19 +1254,13 @@ fn set_fragment_reconstruct() {
     let fragment12 = p1.fragment_with(&p2);
     let fragment34 = p3.fragment_with(&p4);
 
-    let attempt1 = FragmentReconstruction::construct(
-        0,
-        committee.clone(),
-        &[fragment12.clone(), fragment34.clone()],
-    );
-    assert!(matches!(attempt1, Err(_)));
+    let span = SpanGraph::mew(&committee, 0, &[fragment12.clone(), fragment34.clone()]);
+    assert!(!span.is_completed());
 
     let fragment41 = p4.fragment_with(&p1);
-    let attempt2 =
-        FragmentReconstruction::construct(0, committee, &[fragment12, fragment34, fragment41]);
-    assert!(attempt2.is_ok());
-
-    let reconstruction = attempt2.unwrap();
+    let span = SpanGraph::mew(&committee, 0, &[fragment12, fragment34, fragment41]);
+    assert!(span.is_completed());
+    let reconstruction = span.construct_checkpoint();
     assert_eq!(reconstruction.global.authority_waypoints.len(), 4);
 }
 
@@ -1294,8 +1288,8 @@ fn set_fragment_reconstruct_two_components() {
 
     let fragment_xy = p_x.fragment_with(&p_y);
 
-    let attempt1 = FragmentReconstruction::construct(0, committee.clone(), &[fragment_xy.clone()]);
-    assert!(matches!(attempt1, Err(_)));
+    let span = SpanGraph::mew(&committee, 0, &[fragment_xy.clone()]);
+    assert!(!span.is_completed());
 
     // Make a daisy chain of the other proposals
     let mut fragments = vec![fragment_xy];
@@ -1310,15 +1304,15 @@ fn set_fragment_reconstruct_two_components() {
             break;
         }
 
-        let attempt2 = FragmentReconstruction::construct(0, committee.clone(), &fragments);
-        // Error until we have the full 5 others
-        assert!(matches!(attempt2, Err(_)));
+        let span = SpanGraph::mew(&committee, 0, &fragments);
+        // Incomplete until we have the full 5 others
+        assert!(!span.is_completed());
     }
 
-    let attempt2 = FragmentReconstruction::construct(0, committee, &fragments);
-    assert!(attempt2.is_ok());
+    let span = SpanGraph::mew(&committee, 0, &fragments);
+    assert!(span.is_completed());
 
-    let reconstruction = attempt2.unwrap();
+    let reconstruction = span.construct_checkpoint();
     assert_eq!(reconstruction.global.authority_waypoints.len(), 5);
 }
 
@@ -1346,8 +1340,8 @@ fn set_fragment_reconstruct_two_mutual() {
     let fragment_xy = p_x.fragment_with(&p_y);
     let fragment_yx = p_y.fragment_with(&p_x);
 
-    let attempt1 = FragmentReconstruction::construct(0, committee, &[fragment_xy, fragment_yx]);
-    assert!(matches!(attempt1, Err(_)));
+    let span = SpanGraph::mew(&committee, 0, &[fragment_xy, fragment_yx]);
+    assert!(!span.is_completed());
 }
 
 #[derive(Clone)]
@@ -1456,11 +1450,16 @@ fn test_fragment_full_flow() {
     while let Ok(fragment) = rx.try_recv() {
         all_fragments.push(fragment.clone());
         assert!(cps0
-            .handle_internal_fragment(seq.clone(), fragment, PendCertificateForExecutionNoop)
+            .handle_internal_fragment(
+                seq.clone(),
+                fragment,
+                PendCertificateForExecutionNoop,
+                &committee
+            )
             .is_ok());
         seq.next_transaction_index += 1;
     }
-    let transactions = cps0.attempt_to_construct_checkpoint(&committee).unwrap();
+    let transactions = cps0.attempt_to_construct_checkpoint().unwrap();
     cps0.sign_new_checkpoint(0, 0, transactions.iter(), TestCausalOrderPendCertNoop, None)
         .unwrap();
 
@@ -1489,6 +1488,7 @@ fn test_fragment_full_flow() {
             seq.clone(),
             fragment.clone(),
             PendCertificateForExecutionNoop,
+            &committee,
         );
         seq.next_transaction_index += 100;
     }
@@ -1507,6 +1507,7 @@ fn test_fragment_full_flow() {
             seq.clone(),
             fragment.clone(),
             PendCertificateForExecutionNoop,
+            &committee,
         );
         seq.next_transaction_index += 100;
     }
@@ -1658,6 +1659,7 @@ pub async fn checkpoint_tests_setup(
         .iter()
         .map(|a| (a.authority.clone(), a.checkpoint.clone()))
         .collect();
+    let c = committee.clone();
     let _join = tokio::task::spawn(async move {
         let mut seq = ExecutionIndices::default();
         while let Some(msg) = _rx.recv().await {
@@ -1667,6 +1669,7 @@ pub async fn checkpoint_tests_setup(
                         seq.clone(),
                         msg.clone(),
                         PendCertificateForExecutionNoop,
+                        &c,
                     ) {
                         println!("Error: {:?}", err);
                     }
@@ -1674,6 +1677,7 @@ pub async fn checkpoint_tests_setup(
                     seq.clone(),
                     msg.clone(),
                     authority.database.clone(),
+                    &c,
                 ) {
                     println!("Error: {:?}", err);
                 }
@@ -1811,7 +1815,7 @@ async fn checkpoint_messaging_flow() {
         let transactions = auth
             .checkpoint
             .lock()
-            .attempt_to_construct_checkpoint(&setup.committee)
+            .attempt_to_construct_checkpoint()
             .unwrap();
         auth.checkpoint
             .lock()
@@ -1956,7 +1960,7 @@ async fn test_no_more_fragments() {
     assert!(setup.authorities[0]
         .checkpoint
         .lock()
-        .attempt_to_construct_checkpoint(&setup.committee)
+        .attempt_to_construct_checkpoint()
         .is_ok());
 
     // Expecting more fragments
@@ -1972,7 +1976,7 @@ async fn test_no_more_fragments() {
     assert!(setup.authorities[3]
         .checkpoint
         .lock()
-        .attempt_to_construct_checkpoint(&setup.committee)
+        .attempt_to_construct_checkpoint()
         .is_err());
 
     // Expecting more fragments
@@ -1994,6 +1998,6 @@ async fn test_no_more_fragments() {
     assert!(setup.authorities[3]
         .checkpoint
         .lock()
-        .attempt_to_construct_checkpoint(&setup.committee)
+        .attempt_to_construct_checkpoint()
         .is_ok());
 }
