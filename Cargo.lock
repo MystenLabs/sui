@@ -7363,6 +7363,7 @@ dependencies = [
  "serde_with 1.14.0",
  "shell-words",
  "signature",
+ "sui-bytecode-src-verifier",
  "sui-config",
  "sui-core",
  "sui-framework",
@@ -7456,6 +7457,26 @@ dependencies = [
  "tokio-util 0.7.4",
  "tracing",
  "tracing-subscriber 0.3.15",
+ "workspace-hack 0.1.0",
+]
+
+[[package]]
+name = "sui-bytecode-src-verifier"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap 3.2.17",
+ "move-binary-format",
+ "move-bytecode-utils",
+ "move-bytecode-verifier",
+ "move-compiler",
+ "move-core-types",
+ "move-package",
+ "move-symbol-pool",
+ "sui-framework",
+ "sui-sdk",
+ "sui-types",
+ "tokio",
  "workspace-hack 0.1.0",
 ]
 
