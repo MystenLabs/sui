@@ -6,6 +6,7 @@ import { ParentSizeModern } from '@visx/responsive';
 import { TooltipWithBounds, useTooltip } from '@visx/tooltip';
 import React, { useCallback, useMemo } from 'react';
 
+import placeholdertheme from '../../styles/placeholder.module.css';
 import { WorldMap } from './WorldMap';
 import { type NodeLocation } from './types';
 
@@ -105,6 +106,12 @@ export default function ValidatorMap() {
         [showTooltip, countryNodes, hideTooltip]
     );
 
+    const Placeholder = () => (
+        <div
+            className={`${placeholdertheme.placeholder} ${styles.placeholder}`}
+        />
+    );
+
     return (
         <div data-testid="fullnode-map" className={styles.card}>
             <div className={styles.container}>
@@ -112,14 +119,21 @@ export default function ValidatorMap() {
                     <div>
                         <div className={styles.title}>Nodes</div>
                         <div className={styles.stat}>
-                            {totalCount && numberFormatter.format(totalCount)}
+                            {totalCount ? (
+                                numberFormatter.format(totalCount)
+                            ) : (
+                                <Placeholder />
+                            )}
                         </div>
                     </div>
                     <div>
                         <div className={styles.title}>Countries</div>
                         <div className={styles.stat}>
-                            {countryCount &&
-                                numberFormatter.format(countryCount)}
+                            {countryCount ? (
+                                numberFormatter.format(countryCount)
+                            ) : (
+                                <Placeholder />
+                            )}
                         </div>
                     </div>
                 </div>
