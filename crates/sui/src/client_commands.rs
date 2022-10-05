@@ -313,7 +313,7 @@ impl SuiClientCommands {
                         let result = verifier.verify_deployed_dependencies
                             (&build_config, &package_path, compiled_package).await;
 
-                        println!("on-chain bytecode verification result:\n{:#?}", result);
+                        println!("\nbytecode verification result:\n{:?}", result);
                     },
                     Err(err) => eprintln!("Error verifying on-chain bytecode:\n{:?}", err),
                 };
