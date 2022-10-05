@@ -6,9 +6,9 @@ edition = "2021"
 [lib]
 path = "src/lib.rs"
 
-[[bin]]
-name = "sui-bytecode-src-verify-cli"
-path = "src/main.rs"
+#[[bin]]
+#name = "sui-bytecode-src-verify-cli"
+#path = "src/main.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

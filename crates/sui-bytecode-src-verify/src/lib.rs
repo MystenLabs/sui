@@ -2,7 +2,7 @@ use std::{path::Path, str::FromStr, collections::{HashSet, HashMap, BTreeMap}};
 
 use move_core_types::account_address::AccountAddress;
 use move_symbol_pool::Symbol;
-use move_package::{BuildConfig, compilation::compiled_package::CompiledPackage};
+use move_package::{BuildConfig, compilation::compiled_package::{CompiledPackage, CompiledUnitWithSource}};
 
 use sui_sdk::{SuiClient, rpc_types::{SuiRawData, SuiRawMoveObject}};
 use sui_types::{base_types::{ObjectID, ObjectIDParseError}, error::SuiError, sui_serde::{Hex, Encoding}};
@@ -48,6 +48,34 @@ impl BytecodeSourceVerifier {
         Ok(BytecodeSourceVerifier { rpc_client })
     }
 
+    fn get_module_bytes_map(units: Vec<(Symbol, CompiledUnitWithSource)>, compiled_package: &CompiledPackage)
+        -> HashMap<Symbol, HashMap<Symbol, Vec<u8>>> {
+
+        let mut map: HashMap<Symbol, HashMap<Symbol, Vec<u8>>> = HashMap::new();
+        compiled_package.deps_compiled_units
+            .iter()
+            .for_each(|dep_pair| {
+                let unit_src = &dep_pair.1;
+                let symbol = dep_pair.0;
+                let name = unit_src.unit.name();
+                // in the future, this probably needs to specify the compiler version instead of None
+                let bytes = unit_src.unit.serialize(None);
+
+                match map.get_mut(&symbol) {
+                    Some(existing_modules) => {
+                        existing_modules.insert(name, bytes);
+                    },
+                    None => {
+                        let mut new_map = HashMap::new();
+                        new_map.insert(name, bytes);
+                        map.insert(symbol, new_map);
+                    },
+                }
+            });
+
+        map
+    }
+
     pub async fn verify_deployed_dependencies(&self, build_config: &BuildConfig, path: &Path, compiled_package: CompiledPackage)
         -> Result<VerificationResult, VerificationError> {
 
@@ -61,42 +89,24 @@ impl BytecodeSourceVerifier {
                 }
             };
 
-        let mut compiled_dep_map: HashMap<Symbol, HashMap<Symbol, Vec<u8>>> = HashMap::new();
-        compiled_package.deps_compiled_units
-            .iter()
-            .for_each(|dep_pair| {
-                let unit_src = &dep_pair.1;
-                let symbol = dep_pair.0;
-                let name = unit_src.unit.name();
-                let bytes = unit_src.unit.serialize(None);
-
-                match compiled_dep_map.get_mut(&symbol) {
-                    Some(existing_modules) => {
-                        // TODO - check for existing here ? will silently overwrite
-                        existing_modules.insert(name, bytes);
-                    },
-                    None => {
-                        let mut new_map = HashMap::new();
-                        new_map.insert(name, bytes);
-                        compiled_dep_map.insert(symbol, new_map);
-                    },
-                }
-            });
+        let compiled_dep_map = Self::get_module_bytes_map
+            (compiled_package.deps_compiled_units.clone(), &compiled_package);
 
         let mut on_chain_module_count = 0usize;
         let mut verified_deps: HashMap<AccountAddress, Dependency> = HashMap::new();
 
         for symbol_package in resolution_graph.package_table {
             let resolution_package = symbol_package.1;
-            let outer_symbol = symbol_package.0;
+            let pkg_symbol = symbol_package.0;
 
-            let local_pkg_bytes = match compiled_dep_map.get(&outer_symbol) {
+            let local_pkg_bytes = match compiled_dep_map.get(&pkg_symbol) {
                 Some(bytes) => {
-                    println!("\nlocal package dependency {} : {} modules\n", outer_symbol.to_string(), bytes.len());
+                    println!("\nlocal package dependency {} : {} modules\n", pkg_symbol.to_string(), bytes.len());
                     bytes
                 },
                 None => {
-                    eprintln!("no local compiled package found for {}", outer_symbol);
+                    // TODO - this should only pass if pkg_symbol is the package we're checking dependencies for
+                    println!("no local compiled package found for {}", pkg_symbol);
                     continue;
                 },
             };
@@ -137,8 +147,8 @@ impl BytecodeSourceVerifier {
 
                 //println!("\nfetched data for Move package @ {}:\n{:#?}\n", addr, &obj.data);
 
-                for oc_pair in &raw_package.module_map {
-                    let pair = oc_pair.clone();
+                for on_chain_pair in &raw_package.module_map {
+                    let pair = on_chain_pair.clone();
                     let oc_name = pair.0;
                     let oc_bytes = pair.1;
                     let oc_symbol = Symbol::from(oc_name.as_str());
@@ -146,18 +156,18 @@ impl BytecodeSourceVerifier {
                     let local_bytes = match local_pkg_bytes.get(&oc_symbol) {
                         Some(bytes) => bytes,
                         None => {
-                            eprintln!("no local module '{}::{}' found", outer_symbol, oc_name);
-                            return Err(VerificationError::LocalDependencyNotFound(outer_symbol, oc_symbol))
+                            eprintln!("no local module '{}::{}' found", pkg_symbol, oc_name);
+                            return Err(VerificationError::LocalDependencyNotFound(pkg_symbol, oc_symbol))
                         },
                     };
 
-                    // compare local bytes to on-chain bytes
+                    // compare local bytecode to on-chain bytecode to ensure integrity of our dependencies
                     if *local_bytes != *oc_bytes {
                         return Err(Self::get_mismatch_error
-                            (&outer_symbol, &oc_symbol, &addr, local_bytes, &oc_bytes));
+                            (&pkg_symbol, &oc_symbol, &addr, local_bytes, &oc_bytes));
                     }
 
-                    println!("{}::{} - {} bytes, MATCH", outer_symbol, oc_name, oc_bytes.len())
+                    println!("{}::{} - {} bytes, MATCH", pkg_symbol, oc_name, oc_bytes.len())
                 }
 
                 on_chain_module_count += raw_package.module_map.len();
@@ -186,8 +196,8 @@ impl BytecodeSourceVerifier {
         Ok(VerificationResult { verified_dependencies })
     }
 
-    fn get_mismatch_error(outer_symbol: &Symbol, module: &Symbol, addr: &AccountAddress, local_bytes: &Vec<u8>, chain_bytes: &Vec<u8>) -> VerificationError {
-        let pkg = outer_symbol.to_string();
+    fn get_mismatch_error(pkg_symbol: &Symbol, module: &Symbol, addr: &AccountAddress, local_bytes: &Vec<u8>, chain_bytes: &Vec<u8>) -> VerificationError {
+        let pkg = pkg_symbol.to_string();
         let module = module.to_string();
         let l_bytes = local_bytes.clone();
         let c_bytes = chain_bytes.clone();
