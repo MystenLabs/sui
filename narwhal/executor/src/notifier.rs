@@ -37,12 +37,14 @@ impl<State: ExecutionState + Send + Sync + 'static> Notifier<State> {
     async fn run(mut self) {
         while let Some((index, batch)) = self.rx_notifier.recv().await {
             self.metrics.notifier_processed_batches.inc();
+            let mut bytes = 0usize;
             for (transaction_index, transaction) in batch.0.into_iter().enumerate() {
                 let execution_indices = ExecutionIndices {
                     next_certificate_index: index.next_certificate_index,
                     next_batch_index: index.batch_index + 1,
                     next_transaction_index: transaction_index as u64 + 1,
                 };
+                bytes += transaction.len();
                 self.callback
                     .handle_consensus_transaction(
                         &index.consensus_output,
@@ -51,6 +53,7 @@ impl<State: ExecutionState + Send + Sync + 'static> Notifier<State> {
                     )
                     .await;
             }
+            self.metrics.notifier_processed_bytes.inc_by(bytes as u64);
         }
     }
 }
