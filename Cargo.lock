@@ -3958,7 +3958,7 @@ dependencies = [
  "move-command-line-common",
  "move-core-types",
  "move-ir-types",
- "move-symbol-pool",
+ "move-symbol-pool 0.1.0 (git+https://github.com/move-language/move?rev=1ffd0a3e7bdc4bba7dafb8c814279e750113d030)",
  "serde 1.0.147",
 ]
 
@@ -4032,7 +4032,7 @@ dependencies = [
  "move-prover",
  "move-resource-viewer",
  "move-stdlib",
- "move-symbol-pool",
+ "move-symbol-pool 0.1.0 (git+https://github.com/move-language/move?rev=1ffd0a3e7bdc4bba7dafb8c814279e750113d030)",
  "move-unit-test",
  "move-vm-runtime",
  "move-vm-test-utils",
@@ -4085,7 +4085,7 @@ dependencies = [
  "move-core-types",
  "move-ir-to-bytecode",
  "move-ir-types",
- "move-symbol-pool",
+ "move-symbol-pool 0.1.0 (git+https://github.com/move-language/move?rev=1ffd0a3e7bdc4bba7dafb8c814279e750113d030)",
  "num-bigint",
  "once_cell",
  "petgraph 0.5.1",
@@ -4195,7 +4195,7 @@ dependencies = [
  "move-core-types",
  "move-ir-to-bytecode",
  "move-ir-types",
- "move-symbol-pool",
+ "move-symbol-pool 0.1.0 (git+https://github.com/move-language/move?rev=1ffd0a3e7bdc4bba7dafb8c814279e750113d030)",
  "serde_json",
 ]
 
@@ -4213,7 +4213,7 @@ dependencies = [
  "move-core-types",
  "move-ir-to-bytecode-syntax",
  "move-ir-types",
- "move-symbol-pool",
+ "move-symbol-pool 0.1.0 (git+https://github.com/move-language/move?rev=1ffd0a3e7bdc4bba7dafb8c814279e750113d030)",
  "ouroboros",
  "thiserror",
 ]
@@ -4228,7 +4228,7 @@ dependencies = [
  "move-command-line-common",
  "move-core-types",
  "move-ir-types",
- "move-symbol-pool",
+ "move-symbol-pool 0.1.0 (git+https://github.com/move-language/move?rev=1ffd0a3e7bdc4bba7dafb8c814279e750113d030)",
 ]
 
 [[package]]
@@ -4240,7 +4240,7 @@ dependencies = [
  "hex",
  "move-command-line-common",
  "move-core-types",
- "move-symbol-pool",
+ "move-symbol-pool 0.1.0 (git+https://github.com/move-language/move?rev=1ffd0a3e7bdc4bba7dafb8c814279e750113d030)",
  "once_cell",
  "serde 1.0.147",
 ]
@@ -4264,7 +4264,7 @@ dependencies = [
  "move-core-types",
  "move-disassembler",
  "move-ir-types",
- "move-symbol-pool",
+ "move-symbol-pool 0.1.0 (git+https://github.com/move-language/move?rev=1ffd0a3e7bdc4bba7dafb8c814279e750113d030)",
  "num",
  "once_cell",
  "regex",
@@ -4291,7 +4291,7 @@ dependencies = [
  "move-core-types",
  "move-docgen",
  "move-model",
- "move-symbol-pool",
+ "move-symbol-pool 0.1.0 (git+https://github.com/move-language/move?rev=1ffd0a3e7bdc4bba7dafb8c814279e750113d030)",
  "named-lock",
  "once_cell",
  "petgraph 0.5.1",
@@ -4475,6 +4475,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "move-symbol-pool"
+version = "0.1.0"
+source = "git+https://github.com/move-language/move?rev=e1e647b73dbd3652aabb2020728a4a517c26e28e#e1e647b73dbd3652aabb2020728a4a517c26e28e"
+dependencies = [
+ "once_cell",
+ "serde 1.0.147",
+]
+
+[[package]]
 name = "move-table-extension"
 version = "0.1.0"
 source = "git+https://github.com/move-language/move?rev=1ffd0a3e7bdc4bba7dafb8c814279e750113d030#1ffd0a3e7bdc4bba7dafb8c814279e750113d030"
@@ -4512,7 +4521,7 @@ dependencies = [
  "move-resource-viewer",
  "move-stackless-bytecode-interpreter",
  "move-stdlib",
- "move-symbol-pool",
+ "move-symbol-pool 0.1.0 (git+https://github.com/move-language/move?rev=1ffd0a3e7bdc4bba7dafb8c814279e750113d030)",
  "move-vm-runtime",
  "move-vm-test-utils",
  "move-vm-types",
@@ -4543,7 +4552,7 @@ dependencies = [
  "move-resource-viewer",
  "move-stackless-bytecode-interpreter",
  "move-stdlib",
- "move-symbol-pool",
+ "move-symbol-pool 0.1.0 (git+https://github.com/move-language/move?rev=1ffd0a3e7bdc4bba7dafb8c814279e750113d030)",
  "move-table-extension",
  "move-vm-runtime",
  "move-vm-test-utils",
@@ -7934,7 +7943,7 @@ dependencies = [
  "serde_with 1.14.0",
  "shell-words",
  "signature",
- "sui-bytecode-src-verify",
+ "sui-bytecode-src-verifier",
  "sui-config",
  "sui-core",
  "sui-framework",
@@ -8037,7 +8046,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "sui-bytecode-src-verify"
+name = "sui-bytecode-src-verifier"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -8048,6 +8057,8 @@ dependencies = [
  "move-compiler",
  "move-core-types",
  "move-package",
+ "move-symbol-pool 0.1.0 (git+https://github.com/move-language/move?rev=e1e647b73dbd3652aabb2020728a4a517c26e28e)",
+ "sui-framework",
  "sui-sdk",
  "sui-types",
  "tokio",
@@ -10733,7 +10744,7 @@ dependencies = [
  "move-stackless-bytecode",
  "move-stackless-bytecode-interpreter",
  "move-stdlib",
- "move-symbol-pool",
+ "move-symbol-pool 0.1.0 (git+https://github.com/move-language/move?rev=1ffd0a3e7bdc4bba7dafb8c814279e750113d030)",
  "move-table-extension",
  "move-transactional-test-runner",
  "move-unit-test",
