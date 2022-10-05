@@ -23,7 +23,6 @@ function Pagination({
     stats?: {
         stats_text: string;
         count: number;
-        loadState?: string;
     };
 }) {
     const NUMBER_OF_TX_PER_PAGE_OPTIONS = [20, 40, 60];
@@ -112,25 +111,12 @@ function Pagination({
     );
 
     const Stats = stats ? (
-        !stats.loadState ? (
-            <div>
-                {typeof stats.count === 'number'
-                    ? numberSuffix(stats.count)
-                    : stats.count}{' '}
-                {stats.stats_text}
-            </div>
-        ) : stats.loadState === 'pending' ? (
-            <div>Pending</div>
-        ) : stats.loadState === 'fail' ? (
-            <div>Fail</div>
-        ) : (
-            <div>
-                {typeof stats.count === 'number'
-                    ? numberSuffix(stats.count)
-                    : stats.count}{' '}
-                {stats.stats_text}
-            </div>
-        )
+        <div>
+            {typeof stats.count === 'number'
+                ? numberSuffix(stats.count)
+                : stats.count}{' '}
+            {stats.stats_text}
+        </div>
     ) : (
         <></>
     );
