@@ -5,7 +5,7 @@ use anyhow::anyhow;
 use bip32::DerivationPath;
 use bip39::{Language, Mnemonic, MnemonicType, Seed};
 use rand::{rngs::StdRng, SeedableRng};
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 use signature::Signer;
 use std::collections::BTreeMap;
 use std::fmt::Write;
@@ -17,75 +17,45 @@ use std::path::{Path, PathBuf};
 
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{
-    derive_key_pair_from_path, enum_dispatch, get_key_pair_from_rng, EncodeDecodeBase64, PublicKey,
-    Signature, SignatureScheme, SuiKeyPair,
+    derive_key_pair_from_path, get_key_pair_from_rng, EncodeDecodeBase64, PublicKey, Signature,
+    SignatureScheme, SuiKeyPair,
 };
 
 #[derive(Serialize, Deserialize)]
-#[enum_dispatch(AccountKeystore)]
-pub enum Keystore {
-    File(FileBasedKeystore),
-    InMem(InMemKeystore),
+#[non_exhaustive]
+// This will work on user signatures, but not suitable for authority signatures.
+pub enum KeystoreType {
+    File(PathBuf),
+    InMem(usize),
 }
-#[enum_dispatch]
+
 pub trait AccountKeystore: Send + Sync {
     fn sign(&self, address: &SuiAddress, msg: &[u8]) -> Result<Signature, signature::Error>;
     fn add_key(&mut self, keypair: SuiKeyPair) -> Result<(), anyhow::Error>;
     fn keys(&self) -> Vec<PublicKey>;
-    fn get_key(&self, address: &SuiAddress) -> Result<&SuiKeyPair, anyhow::Error>;
+}
 
-    fn addresses(&self) -> Vec<SuiAddress> {
-        self.keys().iter().map(|k| k.into()).collect()
-    }
-
-    fn generate_new_key(
-        &mut self,
-        key_scheme: SignatureScheme,
-        derivation_path: Option<DerivationPath>,
-    ) -> Result<(SuiAddress, String, SignatureScheme), anyhow::Error> {
-        let mnemonic = Mnemonic::new(MnemonicType::Words12, Language::English);
-        match derive_key_pair_from_path(
-            Seed::new(&mnemonic, "").as_bytes(),
-            derivation_path,
-            &key_scheme,
-        ) {
-            Ok((address, keypair)) => {
-                self.add_key(keypair)?;
-                Ok((address, mnemonic.phrase().to_string(), key_scheme))
+impl KeystoreType {
+    pub fn init(&self) -> Result<SuiKeystore, anyhow::Error> {
+        Ok(match self {
+            KeystoreType::File(path) => SuiKeystore::from(FileBasedKeystore::load_or_create(path)?),
+            KeystoreType::InMem(initial_key_number) => {
+                SuiKeystore::from(InMemKeystore::new(*initial_key_number))
             }
-            Err(e) => Err(anyhow!("error generating key {:?}", e)),
-        }
-    }
-
-    fn import_from_mnemonic(
-        &mut self,
-        phrase: &str,
-        key_scheme: SignatureScheme,
-        derivation_path: Option<DerivationPath>,
-    ) -> Result<SuiAddress, anyhow::Error> {
-        let mnemonic = Mnemonic::from_phrase(phrase, Language::English)
-            .map_err(|e| anyhow::anyhow!("Invalid mnemonic phrase: {:?}", e))?;
-        let seed = Seed::new(&mnemonic, "");
-        match derive_key_pair_from_path(seed.as_bytes(), derivation_path, &key_scheme) {
-            Ok((address, kp)) => {
-                self.add_key(kp)?;
-                Ok(address)
-            }
-            Err(e) => Err(anyhow!("error getting keypair {:?}", e)),
-        }
+        })
     }
 }
 
-impl Display for Keystore {
+impl Display for KeystoreType {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut writer = String::new();
         match self {
-            Keystore::File(path) => {
+            KeystoreType::File(path) => {
                 writeln!(writer, "Keystore Type : File")?;
                 write!(writer, "Keystore Path : {:?}", path)?;
                 write!(f, "{}", writer)
             }
-            Keystore::InMem(_) => {
+            KeystoreType::InMem(_) => {
                 writeln!(writer, "Keystore Type : InMem")?;
                 write!(f, "{}", writer)
             }
@@ -93,36 +63,10 @@ impl Display for Keystore {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Default)]
 pub struct FileBasedKeystore {
     keys: BTreeMap<SuiAddress, SuiKeyPair>,
     path: Option<PathBuf>,
-}
-
-impl Serialize for FileBasedKeystore {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_str(
-            self.path
-                .as_ref()
-                .unwrap_or(&PathBuf::default())
-                .to_str()
-                .unwrap_or(""),
-        )
-    }
-}
-
-impl<'de> Deserialize<'de> for FileBasedKeystore {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        use serde::de::Error;
-        FileBasedKeystore::new(&PathBuf::from(String::deserialize(deserializer)?))
-            .map_err(D::Error::custom)
-    }
 }
 
 impl AccountKeystore for FileBasedKeystore {
@@ -145,17 +89,10 @@ impl AccountKeystore for FileBasedKeystore {
     fn keys(&self) -> Vec<PublicKey> {
         self.keys.values().map(|key| key.public()).collect()
     }
-
-    fn get_key(&self, address: &SuiAddress) -> Result<&SuiKeyPair, anyhow::Error> {
-        match self.keys.get(address) {
-            Some(key) => Ok(key),
-            None => Err(anyhow!("Cannot find key for address: [{address}]")),
-        }
-    }
 }
 
 impl FileBasedKeystore {
-    pub fn new(path: &PathBuf) -> Result<Self, anyhow::Error> {
+    pub fn load_or_create(path: &Path) -> Result<Self, anyhow::Error> {
         let keys = if path.exists() {
             let reader = BufReader::new(File::open(path)?);
             let kp_strings: Vec<String> = serde_json::from_reader(reader)?;
@@ -201,8 +138,69 @@ impl FileBasedKeystore {
     }
 }
 
-#[derive(Default, Serialize, Deserialize)]
-pub struct InMemKeystore {
+pub struct SuiKeystore(Box<dyn AccountKeystore>);
+
+impl SuiKeystore {
+    fn from<S: AccountKeystore + 'static>(keystore: S) -> Self {
+        Self(Box::new(keystore))
+    }
+
+    pub fn add_key(&mut self, keypair: SuiKeyPair) -> Result<(), anyhow::Error> {
+        self.0.add_key(keypair)
+    }
+
+    pub fn generate_new_key(
+        &mut self,
+        key_scheme: SignatureScheme,
+        derivation_path: Option<DerivationPath>,
+    ) -> Result<(SuiAddress, String, SignatureScheme), anyhow::Error> {
+        let mnemonic = Mnemonic::new(MnemonicType::Words12, Language::English);
+        match derive_key_pair_from_path(
+            Seed::new(&mnemonic, "").as_bytes(),
+            derivation_path,
+            &key_scheme,
+        ) {
+            Ok((address, keypair)) => {
+                self.add_key(keypair)?;
+                Ok((address, mnemonic.phrase().to_string(), key_scheme))
+            }
+            Err(e) => Err(anyhow!("error generating key {:?}", e)),
+        }
+    }
+
+    pub fn keys(&self) -> Vec<PublicKey> {
+        self.0.keys()
+    }
+
+    pub fn addresses(&self) -> Vec<SuiAddress> {
+        self.keys().iter().map(|k| k.into()).collect()
+    }
+
+    pub fn import_from_mnemonic(
+        &mut self,
+        phrase: &str,
+        key_scheme: SignatureScheme,
+        derivation_path: Option<DerivationPath>,
+    ) -> Result<SuiAddress, anyhow::Error> {
+        let mnemonic = Mnemonic::from_phrase(phrase, Language::English)
+            .map_err(|e| anyhow::anyhow!("Invalid mnemonic phrase: {:?}", e))?;
+        let seed = Seed::new(&mnemonic, "");
+        match derive_key_pair_from_path(seed.as_bytes(), derivation_path, &key_scheme) {
+            Ok((address, kp)) => {
+                self.0.add_key(kp)?;
+                Ok(address)
+            }
+            Err(e) => Err(anyhow!("error getting keypair {:?}", e)),
+        }
+    }
+
+    pub fn sign(&self, address: &SuiAddress, msg: &[u8]) -> Result<Signature, signature::Error> {
+        self.0.sign(address, msg)
+    }
+}
+
+#[derive(Default)]
+struct InMemKeystore {
     keys: BTreeMap<SuiAddress, SuiKeyPair>,
 }
 
@@ -225,13 +223,6 @@ impl AccountKeystore for InMemKeystore {
     fn keys(&self) -> Vec<PublicKey> {
         self.keys.values().map(|key| key.public()).collect()
     }
-
-    fn get_key(&self, address: &SuiAddress) -> Result<&SuiKeyPair, anyhow::Error> {
-        match self.keys.get(address) {
-            Some(key) => Ok(key),
-            None => Err(anyhow!("Cannot find key for address: [{address}]")),
-        }
-    }
 }
 
 impl InMemKeystore {
@@ -243,5 +234,19 @@ impl InMemKeystore {
             .collect::<BTreeMap<SuiAddress, SuiKeyPair>>();
 
         Self { keys }
+    }
+}
+
+impl AccountKeystore for Box<dyn AccountKeystore> {
+    fn sign(&self, address: &SuiAddress, msg: &[u8]) -> Result<Signature, signature::Error> {
+        (**self).sign(address, msg)
+    }
+
+    fn add_key(&mut self, keypair: SuiKeyPair) -> Result<(), anyhow::Error> {
+        (**self).add_key(keypair)
+    }
+
+    fn keys(&self) -> Vec<PublicKey> {
+        (**self).keys()
     }
 }

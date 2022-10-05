@@ -1,6 +1,10 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
+use std::fs::File;
+use std::io::Write;
+
 use clap::ArgEnum;
 use clap::Parser;
 use hyper::body::Buf;
@@ -9,11 +13,7 @@ use move_package::BuildConfig;
 use pretty_assertions::assert_str_eq;
 use serde::Serialize;
 use serde_json::{json, Map, Value};
-use std::collections::BTreeMap;
-use std::fs::File;
-use std::io::Write;
 use sui_json_rpc::api::EventReadApiOpenRpc;
-use sui_sdk::crypto::AccountKeystore;
 use sui_types::messages::Transaction;
 
 use crate::examples::RpcExampleProvider;
@@ -136,13 +136,7 @@ async fn create_response_sample() -> Result<
     let config = working_dir.join(SUI_CLIENT_CONFIG);
 
     let mut context = WalletContext::new(&config).await?;
-    let address = context
-        .config
-        .keystore
-        .addresses()
-        .first()
-        .cloned()
-        .unwrap();
+    let address = context.keystore.addresses().first().cloned().unwrap();
 
     context
         .client
@@ -409,7 +403,6 @@ async fn create_error_response(
         .await?;
 
     let signature = context
-        .config
         .keystore
         .sign(&address, &response.tx_bytes.to_vec()?)?;
 

@@ -3,7 +3,7 @@
 
 use std::str::FromStr;
 use sui_sdk::{
-    crypto::{AccountKeystore, FileBasedKeystore, Keystore},
+    crypto::KeystoreType,
     types::{
         base_types::{ObjectID, SuiAddress},
         messages::Transaction,
@@ -30,8 +30,8 @@ async fn main() -> Result<(), anyhow::Error> {
         .transfer_sui(my_address, gas_object_id, 1000, recipient, Some(1000))
         .await?;
 
-    // Sign transaction
-    let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
+    // Get signer from keystore
+    let keystore = KeystoreType::File(keystore_path).init()?;
     let signature = keystore.sign(&my_address, &transfer_tx.to_bytes())?;
 
     // Execute the transaction
