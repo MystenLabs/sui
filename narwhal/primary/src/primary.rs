@@ -53,6 +53,10 @@ use types::{
 };
 pub use types::{PrimaryMessage, PrimaryWorkerMessage};
 
+#[cfg(any(test))]
+#[path = "tests/primary_tests.rs"]
+pub mod primary_tests;
+
 /// The default channel capacity for each channel of the primary.
 pub const CHANNEL_CAPACITY: usize = 1_000;
 
@@ -105,6 +109,7 @@ impl Primary {
         let inbound_network_metrics = Arc::new(metrics.inbound_network_metrics.unwrap());
         let outbound_network_metrics = Arc::new(metrics.outbound_network_metrics.unwrap());
         let node_metrics = Arc::new(metrics.node_metrics.unwrap());
+        let network_connection_metrics = metrics.network_connection_metrics.unwrap();
 
         let (tx_others_digests, rx_others_digests) = channel_with_total(
             CHANNEL_CAPACITY,
@@ -272,6 +277,12 @@ impl Primary {
             });
         info!("Primary {} listening on {}", name.encode_base64(), address);
 
+        let connection_monitor_handle = network::connectivity::ConnectionMonitor::spawn(
+            network.clone(),
+            network_connection_metrics,
+            tx_reconfigure.subscribe(),
+        );
+
         let primaries = committee
             .load()
             .others_primaries(&name)
@@ -288,6 +299,22 @@ impl Primary {
             };
             network.known_peers().insert(peer_info);
         }
+
+        info!(
+            "Primary {} listening to network admin messages on 127.0.0.1:{}",
+            name.encode_base64(),
+            parameters
+                .network_admin_server
+                .primary_network_admin_server_port
+        );
+
+        network::admin::start_admin_server(
+            parameters
+                .network_admin_server
+                .primary_network_admin_server_port,
+            network.clone(),
+            tx_reconfigure.subscribe(),
+        );
 
         // The `Synchronizer` provides auxiliary methods helping the `Core` to sync.
         let synchronizer = Synchronizer::new(
@@ -515,6 +542,7 @@ impl Primary {
             proposer_handle,
             helper_handle,
             state_handler_handle,
+            connection_monitor_handle,
         ];
 
         if let Some(h) = consensus_api_handle {

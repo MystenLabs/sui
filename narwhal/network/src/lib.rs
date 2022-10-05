@@ -9,7 +9,9 @@
 )]
 #![allow(clippy::async_yields_async)]
 
+pub mod admin;
 mod bounded_executor;
+pub mod connectivity;
 pub mod metrics;
 mod p2p;
 mod retry;

@@ -29,7 +29,7 @@ use types::{
     ReadCausalRequest, ReconfigureNotification, RemoveCollectionsRequest, RetrievalResult,
     Transaction, ValidatorClient,
 };
-use worker::Worker;
+use worker::{metrics::initialise_metrics, Worker};
 
 #[tokio::test]
 async fn test_get_collections() {
@@ -132,7 +132,7 @@ async fn test_get_collections() {
     );
 
     let registry = Registry::new();
-    let metrics = worker::metrics::initialise_metrics(&registry);
+    let metrics = initialise_metrics(&registry);
 
     // Spawn a `Worker` instance.
     Worker::spawn(
@@ -349,7 +349,7 @@ async fn test_remove_collections() {
     );
 
     let registry = Registry::new();
-    let metrics = worker::metrics::initialise_metrics(&registry);
+    let metrics = initialise_metrics(&registry);
 
     // Spawn a `Worker` instance.
     Worker::spawn(
@@ -954,7 +954,7 @@ async fn test_get_collections_with_missing_certificates() {
     );
 
     let registry_1 = Registry::new();
-    let metrics_1 = worker::metrics::initialise_metrics(&registry_1);
+    let metrics_1 = initialise_metrics(&registry_1);
 
     // Spawn a `Worker` instance for primary 1.
     Worker::spawn(
@@ -1003,7 +1003,7 @@ async fn test_get_collections_with_missing_certificates() {
     );
 
     let registry_2 = Registry::new();
-    let metrics_2 = worker::metrics::initialise_metrics(&registry_2);
+    let metrics_2 = initialise_metrics(&registry_2);
 
     // Spawn a `Worker` instance for primary 2.
     Worker::spawn(

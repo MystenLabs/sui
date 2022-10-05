@@ -158,6 +158,7 @@ async fn run_client(
 
 #[tokio::test]
 async fn restart() {
+    telemetry_subscribers::init_for_testing();
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
     let worker_cache = fixture.shared_worker_cache();

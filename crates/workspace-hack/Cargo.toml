@@ -45,6 +45,7 @@ atomicwrites = { version = "0.3", default-features = false }
 atty = { version = "0.2", default-features = false }
 axum = { version = "0.5", features = ["form", "http1", "json", "matched-path", "original-uri", "query", "serde_json", "serde_urlencoded", "tower-log"] }
 axum-core = { version = "0.2", default-features = false }
+axum-server = { version = "0.4" }
 backoff = { version = "0.4", features = ["futures", "futures-core", "pin-project-lite", "tokio", "tokio_1"] }
 backtrace = { version = "0.3", features = ["std"] }
 base16ct = { version = "0.1", default-features = false, features = ["alloc"] }
@@ -648,6 +649,7 @@ atty = { version = "0.2", default-features = false }
 autocfg = { version = "1", default-features = false }
 axum = { version = "0.5", features = ["form", "http1", "json", "matched-path", "original-uri", "query", "serde_json", "serde_urlencoded", "tower-log"] }
 axum-core = { version = "0.2", default-features = false }
+axum-server = { version = "0.4" }
 backoff = { version = "0.4", features = ["futures", "futures-core", "pin-project-lite", "tokio", "tokio_1"] }
 backtrace = { version = "0.3", features = ["std"] }
 base16ct = { version = "0.1", default-features = false, features = ["alloc"] }
