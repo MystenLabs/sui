@@ -7,7 +7,7 @@ import {
     TopValidatorsCardAPI,
     TopValidatorsCardStatic,
 } from '../../components/top-validators-card/TopValidatorsCard';
-import LastestTxCard from '../../components/transaction-card/RecentTxCard';
+import LatestTxCard from '../../components/transaction-card/RecentTxCard';
 import { IS_STATIC_ENV } from '../../utils/envUtil';
 
 import styles from './Home.module.css';
@@ -26,7 +26,7 @@ function HomeStatic() {
             className={cl([styles.home, styles.container])}
         >
             <section className="left-item">
-                <LastestTxCard />
+                <LatestTxCard />
             </section>
             <section className="right-item">
                 <TopValidatorsCardStatic />
@@ -43,7 +43,7 @@ function HomeAPI() {
             className={cl([styles.home, styles.container])}
         >
             <section className="left-item">
-                <LastestTxCard
+                <LatestTxCard
                     txPerPage={TXN_PER_PAGE}
                     paginationtype="more button"
                 />
