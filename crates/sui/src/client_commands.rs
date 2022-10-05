@@ -416,24 +416,25 @@ impl SuiClientCommands {
                 let sender = context.try_get_object_owner(&gas).await?;
                 let sender = sender.unwrap_or(context.active_address()?);
 
-                let compiled_modules = build_move_package(
+                let compiled_package = build_move_package(
                     &package_path,
                     BuildConfig {
                         config: build_config,
                         run_bytecode_verifier: true,
                         print_diags_to_stderr: true,
                     },
-                )?
-                .get_package_bytes();
+                )?;
+
+                let compiled_modules = compiled_package.get_package_bytes();
 
                 // verify that all dependency packages have the correct on-chain bytecode
                 let node_url = "http://localhost:9000";
                 match BytecodeSourceVerifier::new(node_url).await {
                     Ok(verifier) => {
                         let result = verifier.verify_deployed_dependencies
-                            (&build_config, &package_path, &compiled_modules).await;
+                            (&build_config, &package_path, compiled_package).await;
 
-                        println!("on-chain bytecode verification result:\n{:?}", result);
+                        println!("on-chain bytecode verification result:\n{:#?}", result);
                     },
                     Err(err) => eprintln!("Error verifying on-chain bytecode:\n{:?}", err),
                 };
