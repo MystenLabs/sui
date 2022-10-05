@@ -1,15 +1,15 @@
-use std::sync::Arc;
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{ExecutionIndices, ExecutionState, ExecutorMetrics};
 use consensus::ConsensusOutput;
+use std::sync::Arc;
 use tokio::task::JoinHandle;
 
 use types::{metered_channel, Batch};
 
 #[derive(Clone, Debug)]
 pub struct BatchIndex {
-    pub consensus_output: ConsensusOutput,
+    pub consensus_output: Arc<ConsensusOutput>,
     pub next_certificate_index: u64,
     pub batch_index: u64,
 }
