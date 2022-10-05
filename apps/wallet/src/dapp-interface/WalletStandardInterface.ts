@@ -12,8 +12,8 @@ import {
     type WalletEventNames,
     type WalletEvents,
 } from '@mysten/wallet-standard';
+import mitt, { type Emitter } from 'mitt';
 import { filter, map, type Observable } from 'rxjs';
-import mitt, { Emitter } from 'mitt';
 
 import icon from '../manifest/icons/sui-icon-128.png';
 import { mapToPromise } from './utils';
