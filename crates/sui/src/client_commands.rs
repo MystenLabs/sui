@@ -405,14 +405,18 @@ impl SuiClientCommands {
                 let sender = sender.unwrap_or(context.active_address()?);
 
                 // TODO - get these bytes from compile_package, don't build twice
-                let compiled_modules = build_move_package_to_bytes(&package_path, build_config.clone())?;
+                let compiled_modules =
+                    build_move_package_to_bytes(&package_path, build_config.clone())?;
                 let compiled_package = build_config
                     .clone()
                     .compile_package(&package_path, &mut Vec::new())?;
 
                 // verify that all dependency packages have the correct on-chain bytecode
-                let verifier = BytecodeSourceVerifier::new(context.client.read_api(), false);
-                match verifier.verify_deployed_dependencies(&build_config, &package_path, compiled_package).await {
+                let verifier = BytecodeSourceVerifier::new(context.client.read_api(), true);
+                match verifier
+                    .verify_deployed_dependencies(&build_config, &package_path, compiled_package)
+                    .await
+                {
                     Ok(_vr) => println!("dependencies' on-chain bytecode successfully verified\n"),
                     Err(err) => {
                         eprintln!("Error verifying on-chain bytecode:\n{:?}", err);
