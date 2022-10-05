@@ -2,27 +2,19 @@
 title: Explore Sui
 ---
 
-Now that you've [learned](../learn/index.md) about Sui and started [building](../build/index.md) it, use the contents of this section to delve into Sui more deeply.
-
 Find answers to common questions about our [roadmap](https://github.com/MystenLabs/sui/blob/main/ROADMAP.md) and more in our [FAQ](../contribute/faq.md).
 
-## Devnet and Testnet
+## Tutorials
 
-Experiment with:
+View the [Tic Tac Toe tutorial](../explore/tutorials.md) to learn how to create a Tic Tac Toe game on Sui.
 
-* [Sui Devnet](../build/devnet.md) - to gain operational experience with the Sui software in a public setting
+## Sui examples
 
-## Tutorial
+View [examples](../explore/examples.md) Sui projects that help you how to work with Sui.
 
-Taking an end-to-end [tutorial](../explore/tutorials.md) from starting a Sui network locally to publishing a TicTacToe game on Sui and playing it.
+## Sui prototypes
 
-## Examples
-
-Try out [examples](../explore/examples.md) supplied by the Sui team to help you understand how objects are structured and manipulated.
-
-## Prototypes
-
-View projects built by third parties demonstrating the power of Sui.
+See some project prototypes that demonstrate Sui functionality.
 
 [Prototypes](../explore/prototypes.md) - pre-alpha game prototypes that showcase the power of NFTs on Sui:
 <section class="sui-dev-video">
