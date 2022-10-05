@@ -118,13 +118,9 @@ impl<'a> BytecodeSourceVerifier<'a> {
 
             for (symbol, addr) in resolution_package.resolution_table {
                 // zero address is the package we're checking dependencies for
-                if addr.eq(&AccountAddress::ZERO) {
-                    continue;
-                }
+                if addr.eq(&AccountAddress::ZERO) { continue; }
                 // package addresses may show up many times, but we only need to verify them once
-                if verified_deps.contains_key(&addr) {
-                    continue;
-                }
+                if verified_deps.contains_key(&addr) { continue; }
 
                 // fetch the Sui object at the address specified for the package in the local resolution table
                 let raw_package = self.pkg_for_address(&addr).await?;
