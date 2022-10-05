@@ -58,7 +58,7 @@ impl Container {
 
         let node = builder
             .ip(ip)
-            .name(format!("{}", config.protocol_public_key()))
+            .name(&format!("{}", config.protocol_public_key()).as_str()[0..8])
             .init(|| async {
                 tracing::info!("node restarted");
             })
