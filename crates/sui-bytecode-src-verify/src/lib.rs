@@ -138,7 +138,7 @@ impl<'a> BytecodeSourceVerifier<'a> {
                     };
 
                     // compare local bytecode to on-chain bytecode to ensure integrity of our dependencies
-                    if *local_bytes != *oc_bytes {
+                    if local_bytes != oc_bytes {
                         return Err(DependencyVerificationError::ModuleBytecodeMismatch(
                             pkg_symbol.to_string(),
                             oc_symbol.to_string(),
