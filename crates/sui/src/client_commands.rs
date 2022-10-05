@@ -428,8 +428,11 @@ impl SuiClientCommands {
                 let compiled_modules = compiled_package.get_package_bytes();
 
                 // verify that all dependency packages have the correct on-chain bytecode
-                let verifier = BytecodeSourceVerifier::new(context.client.read_api(), false);
-                match verifier.verify_deployed_dependencies(&build_config, &package_path, compiled_package).await {
+                let verifier = BytecodeSourceVerifier::new(context.client.read_api(), true);
+                match verifier
+                    .verify_deployed_dependencies(&build_config, &package_path, compiled_package)
+                    .await
+                {
                     Ok(_vr) => println!("dependencies' on-chain bytecode successfully verified\n"),
                     Err(err) => {
                         eprintln!("Error verifying on-chain bytecode:\n{:?}", err);
