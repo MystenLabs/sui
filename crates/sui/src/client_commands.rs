@@ -428,15 +428,13 @@ impl SuiClientCommands {
                 let compiled_modules = compiled_package.get_package_bytes();
 
                 // verify that all dependency packages have the correct on-chain bytecode
-                let node_url = "http://localhost:9000";
-                match BytecodeSourceVerifier::new(node_url).await {
-                    Ok(verifier) => {
-                        let result = verifier.verify_deployed_dependencies
-                            (&build_config, &package_path, compiled_package).await;
-
-                        println!("\nbytecode verification result:\n{:?}", result);
-                    },
-                    Err(err) => eprintln!("Error verifying on-chain bytecode:\n{:?}", err),
+                let verifier = BytecodeSourceVerifier::new(context.client.read_api(), false);
+                match verifier.verify_deployed_dependencies(&build_config, &package_path, compiled_package).await {
+                    Ok(_vr) => println!("dependencies' on-chain bytecode successfully verified\n"),
+                    Err(err) => {
+                        eprintln!("Error verifying on-chain bytecode:\n{:?}", err);
+                        return Err(anyhow::Error::msg(err.to_string()));
+                    }
                 };
 
                 let data = context
