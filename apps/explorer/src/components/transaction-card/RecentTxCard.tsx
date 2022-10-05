@@ -286,7 +286,7 @@ function LatestTxCard({ ...data }: RecentTx) {
                                     '80px',
                                     '90px',
                                     '204px',
-                                    '90',
+                                    '90px',
                                     '38px',
                                 ]}
                             />
