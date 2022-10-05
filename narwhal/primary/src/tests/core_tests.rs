@@ -657,7 +657,7 @@ async fn recover_core() {
         /* tx_certificate_waiter */ tx_sync_certificates.clone(),
         None,
     );
-    let (_tx_primary_messages, rx_primary_messages) = test_utils::test_channel!(3);
+    let (tx_primary_messages, rx_primary_messages) = test_utils::test_channel!(3);
     let (_tx_headers_loopback, rx_headers_loopback) = test_utils::test_channel!(1);
     let (_tx_certificates_loopback, rx_certificates_loopback) = test_utils::test_channel!(1);
     let (_tx_headers, rx_headers) = test_utils::test_channel!(1);
