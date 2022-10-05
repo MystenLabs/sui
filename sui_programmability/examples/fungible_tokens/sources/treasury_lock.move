@@ -30,7 +30,7 @@ module fungible_tokens::treasury_lock {
     }
 
     /// Admin capability for `TreasuryLock`. Bearer has the power to create, ban,
-    /// and unban mint capaibilties (`MintCap`)
+    /// and unban mint capabilities (`MintCap`)
     struct LockAdminCap<phantom T> has key, store {
         id: UID
     }
