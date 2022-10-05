@@ -33,7 +33,7 @@ pub struct BytecodeSourceVerifier {
 pub struct Dependency {
     pub symbol: String,
     pub address: AccountAddress,
-    pub module_bytes: Vec<Vec<u8>>
+    pub module_bytes: Vec<(String, Vec<u8>)>
 }
 
 impl BytecodeSourceVerifier {
@@ -60,7 +60,7 @@ impl BytecodeSourceVerifier {
                 }
             };
 
-        println!("\ncompiled package dependency bytecode:  {:#?}", compiled_package.deps_compiled_units);
+        //println!("\ncompiled package dependency bytecode:  {:#?}", compiled_package.deps_compiled_units);
 
         let compiled_dep_modules = compiled_package.deps_compiled_units;
 
@@ -86,22 +86,6 @@ impl BytecodeSourceVerifier {
                 }
             });
 
-        println!("");
-        compiled_dep_map
-            .iter()
-            .for_each(|d| {
-                let mut total_bytes: usize = 0;
-                d.1
-                .iter()
-                .for_each(|m| {
-                    total_bytes += m.1.len();
-                });
-
-                println!("local package dependency {} : {} modules, total {} bytes",
-                    d.0.to_string(), d.1.len(), total_bytes);
-            });
-        println!("");
-
         let mut on_chain_module_count = 0usize;
         let mut verified_deps: HashMap<AccountAddress, Dependency> = HashMap::new();
 
@@ -111,7 +95,7 @@ impl BytecodeSourceVerifier {
 
             let local_pkg_bytes = match compiled_dep_map.get(&outer_symbol) {
                 Some(bytes) => {
-                    //println!("found local dependency bytes for {}", outer_symbol);
+                    println!("\nlocal package dependency {} : {} modules\n", outer_symbol.to_string(), bytes.len());
                     bytes
                 },
                 None => {
@@ -157,15 +141,19 @@ impl BytecodeSourceVerifier {
                 };
 
                 // TODO - is it possible not to rely on the order here ?
-                let on_chain_modules: Vec<(&String, &Vec<u8>)> = raw_package.module_map
+                let on_chain_modules: Vec<(String, Vec<u8>)> = raw_package.module_map
                     .iter()
+                    .map(|pair| {
+                        (pair.0.to_owned(), (pair.1).clone())
+                    })
                     .collect();
 
                 on_chain_module_count += on_chain_modules.len();
 
-                for oc_pair in on_chain_modules {
-                    let oc_name = oc_pair.0;
-                    let oc_bytes = oc_pair.1;
+                for oc_pair in &on_chain_modules {
+                    let pair = oc_pair.clone();
+                    let oc_name = pair.0;
+                    let oc_bytes = pair.1;
                     let oc_symbol = Symbol::from(oc_name.as_str());
 
                     match local_pkg_bytes.get(&oc_symbol) {
@@ -193,7 +181,7 @@ impl BytecodeSourceVerifier {
                 verified_deps.insert(address, Dependency {
                     symbol: symbol.to_string(),
                     address,
-                    module_bytes: vec![]
+                    module_bytes: on_chain_modules
                 });
             }
 
