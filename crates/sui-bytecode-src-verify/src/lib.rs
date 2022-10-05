@@ -145,7 +145,6 @@ impl BytecodeSourceVerifier {
                     .map(|p| (p.0.to_owned(), (p.1).clone()))
                     .collect();
 
-                on_chain_module_count += on_chain_modules.len();
 
                 for oc_pair in &on_chain_modules {
                     let pair = oc_pair.clone();
@@ -168,6 +167,8 @@ impl BytecodeSourceVerifier {
                         },
                     }
                 }
+
+                on_chain_module_count += on_chain_modules.len();
 
                 let address = addr.clone();
                 verified_deps.insert(address, Dependency {
