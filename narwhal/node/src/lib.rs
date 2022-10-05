@@ -183,7 +183,6 @@ impl Node {
         let (tx_get_block_commands, rx_get_block_commands) =
             metered_channel::channel(Self::CHANNEL_CAPACITY, &tx_get_block_commands_counter);
 
-        let mut consensus_recovery_token = false;
         // Compute the public key of this authority.
         let name = keypair.public().clone();
         let mut handles = Vec::new();
@@ -197,7 +196,7 @@ impl Node {
 
             (Some(Arc::new(dag)), NetworkModel::Asynchronous)
         } else {
-            let (consensus_handles, recovery_token) = Self::spawn_consensus(
+            let consensus_handles = Self::spawn_consensus(
                 name.clone(),
                 tx_executor_network,
                 worker_cache.clone(),
@@ -211,8 +210,6 @@ impl Node {
                 registry,
             )
             .await?;
-
-            consensus_recovery_token = recovery_token;
 
             handles.extend(consensus_handles);
             (None, NetworkModel::PartiallySynchronous)
@@ -232,14 +229,6 @@ impl Node {
                     .build(),
             )
         };
-
-        // We check the recovery token here which is always true if the consensus is enabled.
-        // This allows us to ensure that the primary is spawned only after the
-        // consensus is guaranteed to be in a state where it can process messages it
-        // receives from the primary when the primary starts up.
-        if consensus_recovery_token {
-            info!("Consensus is ready for messages, now starting the primary");
-        }
 
         // Spawn the primary.
         let primary_handles = Primary::spawn(
@@ -299,7 +288,7 @@ impl Node {
         rx_new_certificates: metered_channel::Receiver<Certificate>,
         tx_feedback: metered_channel::Sender<Certificate>,
         registry: &Registry,
-    ) -> SubscriberResult<(Vec<JoinHandle<()>>, bool)>
+    ) -> SubscriberResult<Vec<JoinHandle<()>>>
     where
         PublicKey: VerifyingKey,
         State: ExecutionState + Send + Sync + 'static,
@@ -338,7 +327,7 @@ impl Node {
             store.consensus_store.clone(),
             parameters.gc_depth,
         );
-        let (consensus_handles, recovery_token) = Consensus::spawn(
+        let consensus_handles = Consensus::spawn(
             (**committee.load()).clone(),
             store.consensus_store.clone(),
             store.certificate_store.clone(),
@@ -365,13 +354,10 @@ impl Node {
             restored_consensus_output,
         )?;
 
-        Ok((
-            executor_handles
-                .into_iter()
-                .chain(std::iter::once(consensus_handles))
-                .collect(),
-            recovery_token,
-        ))
+        Ok(executor_handles
+            .into_iter()
+            .chain(std::iter::once(consensus_handles))
+            .collect())
     }
 
     /// Spawn a specified number of workers.
