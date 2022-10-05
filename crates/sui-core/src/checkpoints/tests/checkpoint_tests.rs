@@ -975,10 +975,10 @@ async fn test_batch_to_checkpointing() {
     let mut rx = authority_state.subscribe_batch();
 
     {
-        let t0 = &authority_state.batch_notifier.ticket().expect("ok");
-        let t1 = &authority_state.batch_notifier.ticket().expect("ok");
-        let t2 = &authority_state.batch_notifier.ticket().expect("ok");
-        let t3 = &authority_state.batch_notifier.ticket().expect("ok");
+        let t0 = authority_state.batch_notifier.ticket().expect("ok");
+        let t1 = authority_state.batch_notifier.ticket().expect("ok");
+        let t2 = authority_state.batch_notifier.ticket().expect("ok");
+        let t3 = authority_state.batch_notifier.ticket().expect("ok");
 
         authority_state
             .database
@@ -992,6 +992,11 @@ async fn test_batch_to_checkpointing() {
         authority_state
             .database
             .side_sequence(t0.seq(), &ExecutionDigests::random());
+
+        t3.notify();
+        t2.notify();
+        t1.notify();
+        t0.notify();
     }
 
     // Get transactions in order then batch.
@@ -1073,10 +1078,10 @@ async fn test_batch_to_checkpointing_init_crash() {
         let mut rx = authority_state.subscribe_batch();
 
         {
-            let t0 = &authority_state.batch_notifier.ticket().expect("ok");
-            let t1 = &authority_state.batch_notifier.ticket().expect("ok");
-            let t2 = &authority_state.batch_notifier.ticket().expect("ok");
-            let t3 = &authority_state.batch_notifier.ticket().expect("ok");
+            let t0 = authority_state.batch_notifier.ticket().expect("ok");
+            let t1 = authority_state.batch_notifier.ticket().expect("ok");
+            let t2 = authority_state.batch_notifier.ticket().expect("ok");
+            let t3 = authority_state.batch_notifier.ticket().expect("ok");
 
             authority_state
                 .database
@@ -1090,6 +1095,11 @@ async fn test_batch_to_checkpointing_init_crash() {
             authority_state
                 .database
                 .side_sequence(t0.seq(), &ExecutionDigests::random());
+
+            t3.notify();
+            t2.notify();
+            t1.notify();
+            t0.notify();
         }
 
         // Get transactions in order then batch.

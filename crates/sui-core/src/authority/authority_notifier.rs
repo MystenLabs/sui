@@ -211,12 +211,7 @@ impl TransactionNotifierTicket {
     pub fn seq(&self) -> u64 {
         self.seq
     }
-}
-
-/// A custom drop to notify authority state's transaction_notifier
-/// that a new certified transaction's has just been executed and committed.
-impl Drop for TransactionNotifierTicket {
-    fn drop(&mut self) {
+    pub fn notify(self) {
         let mut inner = self.transaction_notifier.inner.lock();
         inner.live_tickets.remove(&self.seq);
 
@@ -259,18 +254,21 @@ mod tests {
         // TEST 1: Happy sequence
 
         {
-            let t0 = &notifier.ticket().expect("ok");
+            let t0 = notifier.ticket().expect("ok");
             store.side_sequence(t0.seq(), &ExecutionDigests::random());
+            t0.notify();
         }
 
         {
-            let t0 = &notifier.ticket().expect("ok");
+            let t0 = notifier.ticket().expect("ok");
             store.side_sequence(t0.seq(), &ExecutionDigests::random());
+            t0.notify();
         }
 
         {
-            let t0 = &notifier.ticket().expect("ok");
+            let t0 = notifier.ticket().expect("ok");
             store.side_sequence(t0.seq(), &ExecutionDigests::random());
+            t0.notify();
         }
 
         let mut iter = notifier.iter_from(0).unwrap();
@@ -292,13 +290,15 @@ mod tests {
         // TEST 2: Drop a ticket
 
         {
-            let t0 = &notifier.ticket().expect("ok");
+            let t0 = notifier.ticket().expect("ok");
             assert!(t0.seq() == 3);
+            t0.notify();
         }
 
         {
-            let t0 = &notifier.ticket().expect("ok");
+            let t0 = notifier.ticket().expect("ok");
             store.side_sequence(t0.seq(), &ExecutionDigests::random());
+            t0.notify();
         }
 
         let x = iter.next().await;
@@ -316,15 +316,15 @@ mod tests {
         let t8 = notifier.ticket().expect("ok");
 
         store.side_sequence(t6.seq(), &ExecutionDigests::random());
-        drop(t6);
+        t6.notify();
 
         store.side_sequence(t5.seq(), &ExecutionDigests::random());
-        drop(t5);
+        t5.notify();
 
-        drop(t7);
+        t7.notify();
 
         store.side_sequence(t8.seq(), &ExecutionDigests::random());
-        drop(t8);
+        t8.notify();
 
         assert!(matches!(iter.next().await, Some((5, _))));
         assert!(matches!(iter.next().await, Some((6, _))));
