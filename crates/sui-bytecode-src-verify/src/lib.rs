@@ -140,12 +140,9 @@ impl BytecodeSourceVerifier {
                     },
                 };
 
-                // TODO - is it possible not to rely on the order here ?
                 let on_chain_modules: Vec<(String, Vec<u8>)> = raw_package.module_map
                     .iter()
-                    .map(|pair| {
-                        (pair.0.to_owned(), (pair.1).clone())
-                    })
+                    .map(|p| (p.0.to_owned(), (p.1).clone()))
                     .collect();
 
                 on_chain_module_count += on_chain_modules.len();
@@ -160,13 +157,8 @@ impl BytecodeSourceVerifier {
                         Some(local_mod_bytes) => {
                             // compare local bytes to on-chain bytes
                             if *local_mod_bytes != *oc_bytes {
-                                let pkg = outer_symbol.to_string();
-                                let module = oc_name.to_string();
-                                let l_bytes = local_mod_bytes.clone();
-                                let c_bytes = oc_bytes.clone();
-
-                                return Err(VerificationError::ModuleBytecodeMismatch
-                                    (pkg, module, addr.clone(), l_bytes, c_bytes));
+                                return Err(Self::get_mismatch_error
+                                    (&outer_symbol, &oc_symbol, &addr, local_mod_bytes, &oc_bytes));
                             }
 
                             println!("{}::{} - {} bytes, MATCH", outer_symbol, oc_name, oc_bytes.len());
@@ -197,5 +189,13 @@ impl BytecodeSourceVerifier {
             .map(|(_addr, dep)| dep.clone() ));
 
         Ok(VerificationResult { verified_dependencies })
+    }
+
+    fn get_mismatch_error(outer_symbol: &Symbol, module: &Symbol, addr: &AccountAddress, local_bytes: &Vec<u8>, chain_bytes: &Vec<u8>) -> VerificationError {
+        let pkg = outer_symbol.to_string();
+        let module = module.to_string();
+        let l_bytes = local_bytes.clone();
+        let c_bytes = chain_bytes.clone();
+        VerificationError::ModuleBytecodeMismatch(pkg, module, addr.clone(), l_bytes, c_bytes)
     }
 }
