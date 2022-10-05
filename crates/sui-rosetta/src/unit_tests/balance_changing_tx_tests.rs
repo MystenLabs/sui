@@ -1,3 +1,6 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 use move_core_types::identifier::Identifier;
 use std::str::FromStr;
 use sui_types::base_types::{
