@@ -78,10 +78,7 @@ function fetchTransactionData(
         }
         return rpc(network)
             .getTransactionWithEffects(txId)
-            .then((txEff: SuiTransactionResponse) => {
-                console.log(txEff);
-                return txEff;
-            });
+            .then((txEff: SuiTransactionResponse) => txEff);
     } catch (error) {
         throw error;
     }
