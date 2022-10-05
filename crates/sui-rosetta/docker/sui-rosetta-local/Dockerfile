@@ -17,7 +17,7 @@ ENV PATH="/root/.cargo/bin:${PATH}"
 FROM chef AS planner
 COPY Cargo.toml Cargo.lock ./
 COPY crates/workspace-hack crates/workspace-hack
-RUN sed -i '/crates\/workspace-hack/b; /crates/d' Cargo.toml \
+RUN sed -i '/crates\/workspace-hack/b; /crates/d; /narwhal/d' Cargo.toml \
     && cargo metadata -q >/dev/null
 
 # Build and cache all dependencies.
@@ -31,7 +31,6 @@ COPY --from=planner /sui/Cargo.lock Cargo.lock
 COPY --from=planner /sui/crates/workspace-hack crates/workspace-hack
 RUN cargo build --release
 RUN curl -sSfL https://raw.githubusercontent.com/coinbase/rosetta-cli/master/scripts/install.sh | sh -s
-RUN curl -fLJO https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob
 
 # Build application
 #
@@ -40,6 +39,7 @@ RUN curl -fLJO https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis
 # built as they were built and cached by the previous layer.
 COPY Cargo.toml Cargo.lock ./
 COPY crates crates
+COPY narwhal narwhal
 RUN cargo build --release --bin sui --bin sui-rosetta
 
 # Production Image
@@ -49,7 +49,6 @@ COPY --from=builder /sui/target/release/sui /usr/local/bin
 COPY --from=builder /sui/target/release/sui-rosetta /usr/local/bin
 COPY --from=builder /sui/bin/rosetta-cli /usr/local/bin
 COPY --from=builder /sui/crates/sui-config/data/fullnode-template.yaml /sui/devnet/fullnode.yaml
-COPY --from=builder /sui/genesis.blob /sui/devnet/genesis.blob
 RUN /usr/local/bin/sui genesis
 
 ARG BUILD_DATE
