@@ -13,7 +13,6 @@ use std::io::{stderr, stdout, Write};
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::{fs, io};
-use sui_types::base_types::SuiAddress;
 
 use anyhow::{anyhow, bail};
 use clap::*;
@@ -253,7 +252,7 @@ impl SuiCommand {
                 for key in &network_config.account_keys {
                     keystore.add_key(SuiKeyPair::Ed25519SuiKeyPair(key.copy()))?;
                 }
-                let active_address: Option<SuiAddress> = Some(keystore.addresses()[0]);
+                let active_address = keystore.addresses().pop();
 
                 network_config.genesis.save(&genesis_path)?;
                 for validator in &mut network_config.validator_configs {
