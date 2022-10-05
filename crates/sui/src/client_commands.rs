@@ -21,7 +21,7 @@ use move_core_types::language_storage::TypeTag;
 use move_package::BuildConfig as MoveBuildConfig;
 use serde::Serialize;
 use serde_json::json;
-use sui_bytecode_src_verify::BytecodeSourceVerifier;
+use sui_bytecode_src_verifier::BytecodeSourceVerifier;
 use tracing::info;
 
 use sui_framework::build_move_package;
@@ -428,7 +428,7 @@ impl SuiClientCommands {
                 let compiled_modules = compiled_package.get_package_bytes();
 
                 // verify that all dependency packages have the correct on-chain bytecode
-                let verifier = BytecodeSourceVerifier::new(context.client.read_api(), true);
+                let verifier = BytecodeSourceVerifier::new(context.client.read_api(), false);
                 match verifier
                     .verify_deployed_dependencies(&build_config, &package_path, compiled_package)
                     .await
