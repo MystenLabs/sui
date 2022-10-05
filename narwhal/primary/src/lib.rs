@@ -34,7 +34,7 @@ mod metrics;
 mod certificate_tests;
 
 pub use crate::{
-    block_remover::{BlockRemover, BlockRemoverCommand, DeleteBatchMessage},
+    block_remover::BlockRemover,
     block_synchronizer::{
         mock::MockBlockSynchronizer,
         responses::{CertificatesResponse, PayloadAvailabilityResponse},

@@ -4,24 +4,20 @@ use std::{sync::Arc, time::Duration};
 
 use crate::{
     block_synchronizer::handler::Handler, block_waiter::GetBlockResponse, BlockCommand,
-    BlockRemoverCommand,
+    BlockRemover,
 };
 use consensus::dag::Dag;
-use tokio::{
-    sync::{mpsc::channel, oneshot},
-    time::timeout,
-};
+use tokio::{sync::oneshot, time::timeout};
 use tonic::{Request, Response, Status};
 use types::{
-    metered_channel::Sender, BlockError, BlockRemoverErrorKind, CertificateDigest,
-    CertificateDigestProto, Collection, CollectionRetrievalResult, Empty, GetCollectionsRequest,
-    GetCollectionsResponse, ReadCausalRequest, ReadCausalResponse, RemoveCollectionsRequest,
-    TransactionProto, Validator,
+    metered_channel::Sender, BlockError, CertificateDigest, CertificateDigestProto, Collection,
+    CollectionRetrievalResult, Empty, GetCollectionsRequest, GetCollectionsResponse,
+    ReadCausalRequest, ReadCausalResponse, RemoveCollectionsRequest, TransactionProto, Validator,
 };
 
 pub struct NarwhalValidator<SynchronizerHandler: Handler + Send + Sync + 'static> {
     tx_get_block_commands: Sender<BlockCommand>,
-    tx_block_removal_commands: Sender<BlockRemoverCommand>,
+    block_remover: BlockRemover,
     get_collections_timeout: Duration,
     remove_collections_timeout: Duration,
     block_synchronizer_handler: Arc<SynchronizerHandler>,
@@ -31,7 +27,7 @@ pub struct NarwhalValidator<SynchronizerHandler: Handler + Send + Sync + 'static
 impl<SynchronizerHandler: Handler + Send + Sync + 'static> NarwhalValidator<SynchronizerHandler> {
     pub fn new(
         tx_get_block_commands: Sender<BlockCommand>,
-        tx_block_removal_commands: Sender<BlockRemoverCommand>,
+        block_remover: BlockRemover,
         get_collections_timeout: Duration,
         remove_collections_timeout: Duration,
         block_synchronizer_handler: Arc<SynchronizerHandler>,
@@ -39,7 +35,7 @@ impl<SynchronizerHandler: Handler + Send + Sync + 'static> NarwhalValidator<Sync
     ) -> Self {
         Self {
             tx_get_block_commands,
-            tx_block_removal_commands,
+            block_remover,
             get_collections_timeout,
             remove_collections_timeout,
             block_synchronizer_handler,
@@ -94,36 +90,16 @@ impl<SynchronizerHandler: Handler + Send + Sync + 'static> Validator
     ) -> Result<Response<Empty>, Status> {
         let collection_ids = request.into_inner().collection_ids;
         let remove_collections_response = if !collection_ids.is_empty() {
-            let (tx_remove_block, mut rx_remove_block) = channel(1);
             let ids = parse_certificate_digests(collection_ids)?;
-            self.tx_block_removal_commands
-                .send(BlockRemoverCommand::RemoveBlocks {
-                    ids,
-                    sender: tx_remove_block,
-                })
-                .await
-                .map_err(|err| Status::internal(format!("Send Error: {err:?}")))?;
-            match timeout(self.remove_collections_timeout, rx_remove_block.recv())
-                .await
-                .map_err(|_err| Status::internal("Timeout, no result has been received in time"))?
+            match timeout(
+                self.remove_collections_timeout,
+                self.block_remover.remove_blocks(ids),
+            )
+            .await
+            .map_err(|_err| Status::internal("Timeout, no result has been received in time"))?
             {
-                Some(result) => match result {
-                    Ok(_) => Ok(Empty {}),
-                    Err(remove_block_error)
-                        if remove_block_error.error == BlockRemoverErrorKind::Timeout =>
-                    {
-                        Err(Status::internal(
-                            "Timeout, no result has been received in time",
-                        ))
-                    }
-                    Err(remove_block_error) => Err(Status::internal(format!(
-                        "Removal Error: {:?}",
-                        remove_block_error.error
-                    ))),
-                },
-                None => Err(Status::internal(
-                    "Removal channel closed, no result has been received.",
-                )),
+                Ok(_) => Ok(Empty {}),
+                Err(e) => Err(Status::internal(format!("Removal Error: {e:?}"))),
             }
         } else {
             Err(Status::invalid_argument(

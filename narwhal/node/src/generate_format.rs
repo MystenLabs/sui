@@ -112,7 +112,6 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_value(&mut samples, &worker_index)?;
 
     let request_batch = PrimaryWorkerMessage::RequestBatch(BatchDigest([0u8; 32]));
-    let delete_batch = PrimaryWorkerMessage::DeleteBatches(vec![BatchDigest([0u8; 32])]);
     let sync = WorkerSynchronizeMessage {
         digests: vec![BatchDigest([0u8; 32])],
         target: pk,
@@ -123,7 +122,6 @@ fn get_registry() -> Result<Registry> {
         PrimaryWorkerMessage::Reconfigure(ReconfigureNotification::NewEpoch(committee));
     let shutdown = PrimaryWorkerMessage::Reconfigure(ReconfigureNotification::Shutdown);
     tracer.trace_value(&mut samples, &request_batch)?;
-    tracer.trace_value(&mut samples, &delete_batch)?;
     tracer.trace_value(&mut samples, &sync)?;
     tracer.trace_value(&mut samples, &epoch_change)?;
     tracer.trace_value(&mut samples, &update_committee)?;

@@ -1,35 +1,25 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{
-    block_remover::{
-        BlockRemover, BlockRemoverCommand, BlockRemoverErrorKind, BlockRemoverResult,
-        DeleteBatchMessage, DeleteBatchResult, RemoveBlocksResponse, RequestKey,
-    },
-    common::create_db_stores,
-    PrimaryWorkerMessage,
-};
+use crate::{block_remover::BlockRemover, common::create_db_stores, PrimaryWorkerMessage};
 
+use anemo::async_trait;
 use anemo::PeerId;
+use anyhow::Result;
 use config::{Committee, WorkerId};
 use consensus::{dag::Dag, metrics::ConsensusMetrics};
-use crypto::{traits::KeyPair, NetworkKeyPair};
+use crypto::traits::KeyPair;
 use fastcrypto::Hash;
-use futures::{
-    future::{join_all, try_join_all},
-    stream::FuturesUnordered,
-};
+use futures::future::join_all;
 use network::P2pNetwork;
 use prometheus::Registry;
 use std::{borrow::Borrow, collections::HashMap, sync::Arc, time::Duration};
-use test_utils::{
-    fixture_batch_with_transactions, test_network, CommitteeFixture, PrimaryToWorkerMockServer,
+use test_utils::CommitteeFixture;
+use test_utils::WorkerFixture;
+use tokio::time::timeout;
+use types::{
+    BatchDigest, Certificate, PrimaryToWorker, PrimaryToWorkerServer, RequestBatchRequest,
+    RequestBatchResponse, WorkerDeleteBatchesMessage, WorkerSynchronizeMessage,
 };
-use tokio::{
-    sync::{mpsc, watch},
-    task::JoinHandle,
-    time::{sleep, timeout},
-};
-use types::{metered_channel, BatchDigest, Certificate, ReconfigureNotification};
 
 #[tokio::test]
 async fn test_successful_blocks_delete() {
@@ -37,9 +27,6 @@ async fn test_successful_blocks_delete() {
     let (header_store, certificate_store, payload_store) = create_db_stores();
     let (_tx_consensus, rx_consensus) = test_utils::test_channel!(1);
     let (tx_removed_certificates, mut rx_removed_certificates) = test_utils::test_channel!(10);
-    let (tx_commands, rx_commands) = test_utils::test_channel!(10);
-    let (tx_remove_block, mut rx_remove_block) = mpsc::channel(1);
-    let (tx_delete_batches, rx_delete_batches) = test_utils::test_channel!(10);
 
     // AND the necessary keys
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
@@ -48,32 +35,25 @@ async fn test_successful_blocks_delete() {
     let author = fixture.authorities().next().unwrap();
     let primary = fixture.authorities().nth(1).unwrap();
     let name = primary.public_key();
-    let (_tx_reconfigure, rx_reconfigure) =
-        watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
     // AND a Dag with genesis populated
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
     let dag = Arc::new(Dag::new(&committee, rx_consensus, consensus_metrics).1);
     populate_genesis(&dag, &committee).await;
 
-    let network = test_network(primary.network_keypair(), primary.address());
-    let _remover_handler = BlockRemover::spawn(
+    let network = test_utils::test_network(primary.network_keypair(), primary.address());
+    let block_remover = BlockRemover::new(
         name.clone(),
-        committee.clone(),
         worker_cache.clone(),
         certificate_store.clone(),
         header_store.clone(),
         payload_store.clone(),
         Some(dag.clone()),
         P2pNetwork::new(network.clone()),
-        rx_reconfigure,
-        rx_commands,
-        rx_delete_batches,
         tx_removed_certificates,
     );
 
     let mut block_ids = Vec::new();
     let mut header_ids = Vec::new();
-    let handlers = FuturesUnordered::new();
 
     let mut worker_batches: HashMap<WorkerId, Vec<BatchDigest>> = HashMap::new();
 
@@ -82,8 +62,8 @@ async fn test_successful_blocks_delete() {
 
     // AND generate headers with distributed batches between 2 workers (0 and 1)
     for _headers in 0..5 {
-        let batch_1 = fixture_batch_with_transactions(10);
-        let batch_2 = fixture_batch_with_transactions(10);
+        let batch_1 = test_utils::fixture_batch_with_transactions(10);
+        let batch_2 = test_utils::fixture_batch_with_transactions(10);
 
         let header = author
             .header_builder(&committee)
@@ -127,18 +107,12 @@ async fn test_successful_blocks_delete() {
     }
 
     // AND bootstrap the workers
+    let mut worker_networks = Vec::new();
     for (worker_id, batch_digests) in worker_batches.clone() {
         let worker = primary.worker(worker_id);
-        let network_key = worker.keypair();
         let address = &worker.info().worker_address;
 
-        let handle = worker_listener(
-            network_key,
-            address.to_owned(),
-            batch_digests,
-            tx_delete_batches.clone(),
-        );
-        handlers.push(handle);
+        worker_networks.push(worker_listener(worker, batch_digests, Ok(())));
 
         let address = network::multiaddr_to_address(address).unwrap();
         let peer_id = PeerId(worker.keypair().public().0.to_bytes());
@@ -148,52 +122,38 @@ async fn test_successful_blocks_delete() {
             .unwrap();
     }
 
-    tx_commands
-        .send(BlockRemoverCommand::RemoveBlocks {
-            ids: block_ids.clone(),
-            sender: tx_remove_block,
-        })
+    block_remover
+        .remove_blocks(block_ids.clone())
         .await
         .unwrap();
 
-    if timeout(Duration::from_millis(4_000), try_join_all(handlers))
-        .await
-        .is_err()
-    {
-        panic!("workers haven't received expected delete batch requests")
+    // ensure that certificates have been deleted from store
+    for block_id in block_ids.clone() {
+        assert!(
+            certificate_store.read(block_id).unwrap().is_none(),
+            "Certificate shouldn't exist"
+        );
     }
 
-    // THEN we should expect to get back the result
-    let timer = sleep(Duration::from_millis(5_000));
-    tokio::pin!(timer);
+    // ensure that headers have been deleted from store
+    for header_id in header_ids {
+        assert!(
+            header_store.read(header_id).await.unwrap().is_none(),
+            "Header shouldn't exist"
+        );
+    }
 
-    tokio::select! {
-        Some(result) = rx_remove_block.recv() => {
-            assert!(result.is_ok(), "Expected to receive a successful result, instead got error: {:?}", result.err().unwrap());
-
-            let block = result.unwrap();
-
-            assert_eq!(block.ids.len(), block_ids.len());
-
-            // ensure that certificates have been deleted from store
-            for block_id in block_ids.clone() {
-                assert!(certificate_store.read(block_id).unwrap().is_none(), "Certificate shouldn't exist");
-            }
-
-            // ensure that headers have been deleted from store
-            for header_id in header_ids {
-                assert!(header_store.read(header_id).await.unwrap().is_none(), "Header shouldn't exist");
-            }
-
-            // ensure that batches have been deleted from the payload store
-            for (worker_id, batch_digests) in worker_batches {
-                for digest in batch_digests {
-                   assert!(payload_store.read((digest, worker_id)).await.unwrap().is_none(), "Payload shouldn't exist");
-                }
-            }
-        },
-        () = &mut timer => {
-            panic!("Timeout, no result has been received in time")
+    // ensure that batches have been deleted from the payload store
+    for (worker_id, batch_digests) in worker_batches {
+        for digest in batch_digests {
+            assert!(
+                payload_store
+                    .read((digest, worker_id))
+                    .await
+                    .unwrap()
+                    .is_none(),
+                "Payload shouldn't exist"
+            );
         }
     }
 
@@ -211,42 +171,33 @@ async fn test_successful_blocks_delete() {
 }
 
 #[tokio::test]
-async fn test_timeout() {
+async fn test_failed_blocks_delete() {
     // GIVEN
     let (header_store, certificate_store, payload_store) = create_db_stores();
-    let (tx_commands, rx_commands) = test_utils::test_channel!(10);
-    let (tx_remove_block, mut rx_remove_block) = mpsc::channel(1);
     let (_tx_consensus, rx_consensus) = test_utils::test_channel!(1);
-    let (_tx_delete_batches, rx_delete_batches) = test_utils::test_channel!(10);
-    let (tx_removed_certificates, _rx_removed_certificates) = test_utils::test_channel!(10);
+    let (tx_removed_certificates, mut rx_removed_certificates) = test_utils::test_channel!(10);
 
     // AND the necessary keys
-    let fixture = CommitteeFixture::builder().build();
+    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
     let worker_cache = fixture.shared_worker_cache();
     let author = fixture.authorities().next().unwrap();
     let primary = fixture.authorities().nth(1).unwrap();
     let name = primary.public_key();
-    let (_tx_reconfigure, rx_reconfigure) =
-        watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
     // AND a Dag with genesis populated
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
     let dag = Arc::new(Dag::new(&committee, rx_consensus, consensus_metrics).1);
     populate_genesis(&dag, &committee).await;
 
-    let network = test_network(primary.network_keypair(), primary.address());
-    let _remover_handler = BlockRemover::spawn(
+    let network = test_utils::test_network(primary.network_keypair(), primary.address());
+    let block_remover = BlockRemover::new(
         name.clone(),
-        committee.clone(),
-        worker_cache,
+        worker_cache.clone(),
         certificate_store.clone(),
         header_store.clone(),
         payload_store.clone(),
         Some(dag.clone()),
         P2pNetwork::new(network.clone()),
-        rx_reconfigure,
-        rx_commands,
-        rx_delete_batches,
         tx_removed_certificates,
     );
 
@@ -255,18 +206,18 @@ async fn test_timeout() {
 
     let mut worker_batches: HashMap<WorkerId, Vec<BatchDigest>> = HashMap::new();
 
-    let worker_id_2 = 2;
-    let worker_id_3 = 3;
+    let worker_id_0 = 0;
+    let worker_id_1 = 1;
 
-    // AND generate headers with distributed batches between 2 workers (2 and 3)
+    // AND generate headers with distributed batches between 2 workers (0 and 1)
     for _headers in 0..5 {
-        let batch_1 = fixture_batch_with_transactions(10);
-        let batch_2 = fixture_batch_with_transactions(10);
+        let batch_1 = test_utils::fixture_batch_with_transactions(10);
+        let batch_2 = test_utils::fixture_batch_with_transactions(10);
 
         let header = author
             .header_builder(&committee)
-            .with_payload_batch(batch_1.clone(), worker_id_2)
-            .with_payload_batch(batch_2.clone(), worker_id_3)
+            .with_payload_batch(batch_1.clone(), worker_id_0)
+            .with_payload_batch(batch_2.clone(), worker_id_1)
             .build(author.keypair())
             .unwrap();
 
@@ -285,8 +236,8 @@ async fn test_timeout() {
         // write the batches to payload store
         payload_store
             .write_all(vec![
-                ((batch_1.clone().digest(), worker_id_2), 0),
-                ((batch_2.clone().digest(), worker_id_3), 0),
+                ((batch_1.clone().digest(), worker_id_0), 0),
+                ((batch_2.clone().digest(), worker_id_1), 0),
             ])
             .await
             .expect("couldn't store batches");
@@ -294,214 +245,121 @@ async fn test_timeout() {
         block_ids.push(block_id);
 
         worker_batches
-            .entry(worker_id_2)
+            .entry(worker_id_0)
             .or_insert_with(Vec::new)
             .push(batch_1.digest());
 
         worker_batches
-            .entry(worker_id_3)
+            .entry(worker_id_1)
             .or_insert_with(Vec::new)
             .push(batch_2.digest());
     }
 
-    // AND Don't bootstrap any worker nodes
+    // AND bootstrap the workers
+    let mut worker_networks = Vec::new();
+    for (worker_id, batch_digests) in worker_batches.clone() {
+        let worker = primary.worker(worker_id);
+        let address = &worker.info().worker_address;
 
-    // AND send the removal command
-    tx_commands
-        .send(BlockRemoverCommand::RemoveBlocks {
-            ids: block_ids.clone(),
-            sender: tx_remove_block,
-        })
+        worker_networks.push(worker_listener(
+            worker,
+            batch_digests,
+            if worker_id == 0 {
+                Err(anyhow::anyhow!("failed"))
+            } else {
+                Ok(())
+            },
+        ));
+
+        let address = network::multiaddr_to_address(address).unwrap();
+        let peer_id = PeerId(worker.keypair().public().0.to_bytes());
+        network
+            .connect_with_peer_id(address, peer_id)
+            .await
+            .unwrap();
+    }
+
+    assert!(block_remover
+        .remove_blocks(block_ids.clone())
         .await
-        .unwrap();
+        .is_err());
 
-    // THEN we should expect to get back the result
-    let timer = sleep(Duration::from_millis(5_000));
-    tokio::pin!(timer);
-
-    tokio::select! {
-        Some(result) = rx_remove_block.recv() => {
-            assert!(result.is_err(), "Expected to receive an error result, instead got: {:?}", result.ok().unwrap());
-
-            let block_error = result.err().unwrap();
-
-            assert_eq!(block_error.error, BlockRemoverErrorKind::Timeout);
-
-            assert_eq!(block_error.ids.len(), block_ids.len());
-
-            // ensure that certificates have NOT been deleted from store
-            for block_id in block_ids {
-                assert!(certificate_store.read(block_id).unwrap().is_some(), "Certificate should exist");
-            }
-
-            // ensure that headers have NOT been deleted from store
-            for header_id in header_ids {
-                assert!(header_store.read(header_id).await.unwrap().is_some(), "Header should exist");
-            }
-
-            // ensure that batches have NOT been deleted from the payload store
-            for (worker_id, batch_digests) in worker_batches {
-                for digest in batch_digests {
-                   assert!(payload_store.read((digest, worker_id)).await.unwrap().is_some(), "Payload should exist");
-                }
-            }
-        },
-        () = &mut timer => {
-            panic!("Timeout, no result has been received in time")
+    // Ensure that nothing else is deleted after failed worker batch delete.
+    for block_id in block_ids.clone() {
+        assert!(certificate_store.read(block_id).unwrap().is_some());
+    }
+    for header_id in header_ids {
+        assert!(header_store.read(header_id).await.unwrap().is_some());
+    }
+    for (worker_id, batch_digests) in worker_batches {
+        for digest in batch_digests {
+            assert!(payload_store
+                .read((digest, worker_id))
+                .await
+                .unwrap()
+                .is_some());
         }
     }
-}
-
-#[tokio::test]
-async fn test_unlocking_pending_requests() {
-    // GIVEN
-    let (header_store, certificate_store, payload_store) = create_db_stores();
-    let (_tx_commands, rx_commands) = test_utils::test_channel!(10);
-    let (_tx_consensus, rx_consensus) = test_utils::test_channel!(1);
-    let (_tx_delete_batches, rx_delete_batches) = test_utils::test_channel!(10);
-    let (tx_removed_certificates, _rx_removed_certificates) = test_utils::test_channel!(10);
-
-    // AND the necessary keys
-    let fixture = CommitteeFixture::builder().build();
-    let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
-    let author = fixture.authorities().next().unwrap();
-    let primary = fixture.authorities().nth(1).unwrap();
-    let name = primary.public_key();
-    let (_, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
-
-    // AND a Dag with genesis populated
-    let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-    let dag = Arc::new(Dag::new(&committee, rx_consensus, consensus_metrics).1);
-    populate_genesis(&dag, &committee).await;
-
-    let network = test_network(primary.network_keypair(), primary.address());
-    let mut remover = BlockRemover {
-        name,
-        committee: committee.clone(),
-        worker_cache,
-        certificate_store: certificate_store.clone(),
-        header_store: header_store.clone(),
-        payload_store: payload_store.clone(),
-        dag: Some(dag.clone()),
-        worker_network: P2pNetwork::new(network.clone()),
-        rx_reconfigure,
-        rx_commands,
-        pending_removal_requests: HashMap::new(),
-        map_tx_removal_results: HashMap::new(),
-        map_tx_worker_removal_results: HashMap::new(),
-        rx_delete_batches,
-        tx_removed_certificates,
-    };
-
-    let mut block_ids = Vec::new();
-    let mut header_ids = Vec::new();
-
-    let worker_id_0 = 0;
-
-    let batch = fixture_batch_with_transactions(10);
-    let header = author
-        .header_builder(&committee)
-        .with_payload_batch(batch.clone(), worker_id_0)
-        .build(author.keypair())
-        .unwrap();
-
-    let certificate = fixture.certificate(&header);
-    let block_id = certificate.digest();
-
-    // write the certificate
-    certificate_store.write(certificate.clone()).unwrap();
-    dag.insert(certificate).await.unwrap();
-
-    // write the header
-    header_store.write(header.clone().id, header.clone()).await;
-
-    header_ids.push(header.clone().id);
-
-    // write the batches to payload store
-    payload_store
-        .write_all(vec![((batch.clone().digest(), worker_id_0), 0)])
-        .await
-        .expect("couldn't store batches");
-
-    block_ids.push(block_id);
-
-    // AND Don't bootstrap any worker nodes
-
-    // AND send the removal command
-    let get_mock_sender = || {
-        let (tx, _) = mpsc::channel(1);
-        tx
-    };
-
-    // AND we send a few commands
-    for _ in 0..3 {
-        remover
-            .handle_command(BlockRemoverCommand::RemoveBlocks {
-                ids: block_ids.clone(),
-                sender: get_mock_sender(),
-            })
-            .await;
+    let mut total_deleted = 0;
+    while let Ok(Some(_)) = timeout(Duration::from_secs(1), rx_removed_certificates.recv()).await {
+        total_deleted += 1;
     }
-
-    // AND we confirm that we have an internal pending request with 3 different senders
-    let request_key: RequestKey = BlockRemover::construct_blocks_request_key(&block_ids);
-
-    assert_eq!(remover.pending_removal_requests.len(), 1);
-    assert_eq!(
-        remover
-            .map_tx_removal_results
-            .get(&request_key)
-            .unwrap()
-            .len(),
-        3
-    );
-
-    assert_eq!(remover.map_tx_removal_results.len(), 1);
-
-    // WHEN we send the delete response
-    let result = BlockRemoverResult::Ok(RemoveBlocksResponse {
-        ids: block_ids.clone(),
-    });
-
-    remover.handle_remove_waiting_result(result).await;
-
-    // THEN ensure that internal state has been unlocked
-
-    assert!(remover.pending_removal_requests.is_empty());
-    assert!(remover.map_tx_removal_results.is_empty());
+    assert_eq!(total_deleted, 0);
 }
 
 #[must_use]
 pub fn worker_listener(
-    keypair: NetworkKeyPair,
-    address: multiaddr::Multiaddr,
+    worker: &WorkerFixture,
     expected_batch_ids: Vec<BatchDigest>,
-    tx_delete_batches: metered_channel::Sender<DeleteBatchResult>,
-) -> JoinHandle<()> {
-    let pubkey = keypair.public().clone();
-    println!("[{}] Setting up server", pubkey);
-    let (mut recv, _, network) = PrimaryToWorkerMockServer::spawn(keypair, address);
-    tokio::spawn(async move {
-        let _network = network;
-        let message = recv.recv().await.unwrap();
-        match message {
-            PrimaryWorkerMessage::DeleteBatches(ids) => {
-                assert_eq!(
-                    ids.clone(),
-                    expected_batch_ids,
-                    "Expected batch ids not the same for [{}]",
-                    pubkey
-                );
-
-                tx_delete_batches
-                    .send(Ok(DeleteBatchMessage { ids }))
-                    .await
-                    .unwrap();
+    response: Result<()>,
+) -> anemo::Network {
+    struct MockPrimaryToWorker {
+        expected_request: Vec<BatchDigest>,
+        response: Result<()>,
+    }
+    #[async_trait]
+    impl PrimaryToWorker for MockPrimaryToWorker {
+        async fn send_message(
+            &self,
+            _request: anemo::Request<PrimaryWorkerMessage>,
+        ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
+            unimplemented!()
+        }
+        async fn synchronize(
+            &self,
+            _request: anemo::Request<WorkerSynchronizeMessage>,
+        ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
+            unimplemented!()
+        }
+        async fn request_batch(
+            &self,
+            _request: anemo::Request<RequestBatchRequest>,
+        ) -> Result<anemo::Response<RequestBatchResponse>, anemo::rpc::Status> {
+            unimplemented!()
+        }
+        async fn delete_batches(
+            &self,
+            request: anemo::Request<WorkerDeleteBatchesMessage>,
+        ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
+            assert_eq!(
+                request.into_body(),
+                WorkerDeleteBatchesMessage {
+                    digests: self.expected_request.clone()
+                }
+            );
+            match &self.response {
+                Ok(_) => Ok(anemo::Response::new(())),
+                Err(e) => Err(anemo::rpc::Status::unknown(format!("{e:?}"))),
             }
-            _ => panic!("Unexpected request received"),
-        };
-    })
+        }
+    }
+
+    let routes =
+        anemo::Router::new().add_rpc_service(PrimaryToWorkerServer::new(MockPrimaryToWorker {
+            expected_request: expected_batch_ids,
+            response,
+        }));
+    worker.new_network(routes)
 }
 
 async fn populate_genesis<K: Borrow<Dag>>(dag: &K, committee: &Committee) {

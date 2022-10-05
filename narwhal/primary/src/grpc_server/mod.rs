@@ -5,7 +5,7 @@ use self::{configuration::NarwhalConfiguration, validator::NarwhalValidator};
 use crate::{
     block_synchronizer::handler::Handler,
     grpc_server::{metrics::EndpointMetrics, proposer::NarwhalProposer},
-    BlockCommand, BlockRemoverCommand,
+    BlockCommand, BlockRemover,
 };
 use config::SharedCommittee;
 use consensus::dag::Dag;
@@ -27,7 +27,7 @@ pub struct ConsensusAPIGrpc<SynchronizerHandler: Handler + Send + Sync + 'static
     // Multiaddr of gRPC server
     socket_address: Multiaddr,
     tx_get_block_commands: Sender<BlockCommand>,
-    tx_block_removal_commands: Sender<BlockRemoverCommand>,
+    block_remover: BlockRemover,
     get_collections_timeout: Duration,
     remove_collections_timeout: Duration,
     block_synchronizer_handler: Arc<SynchronizerHandler>,
@@ -42,7 +42,7 @@ impl<SynchronizerHandler: Handler + Send + Sync + 'static> ConsensusAPIGrpc<Sync
         name: PublicKey,
         socket_address: Multiaddr,
         tx_get_block_commands: Sender<BlockCommand>,
-        tx_block_removal_commands: Sender<BlockRemoverCommand>,
+        block_remover: BlockRemover,
         get_collections_timeout: Duration,
         remove_collections_timeout: Duration,
         block_synchronizer_handler: Arc<SynchronizerHandler>,
@@ -55,7 +55,7 @@ impl<SynchronizerHandler: Handler + Send + Sync + 'static> ConsensusAPIGrpc<Sync
                 name,
                 socket_address,
                 tx_get_block_commands,
-                tx_block_removal_commands,
+                block_remover,
                 get_collections_timeout,
                 remove_collections_timeout,
                 block_synchronizer_handler,
@@ -69,17 +69,17 @@ impl<SynchronizerHandler: Handler + Send + Sync + 'static> ConsensusAPIGrpc<Sync
         })
     }
 
-    async fn run(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+    async fn run(self) -> Result<(), Box<dyn std::error::Error>> {
         let narwhal_validator = NarwhalValidator::new(
-            self.tx_get_block_commands.to_owned(),
-            self.tx_block_removal_commands.to_owned(),
+            self.tx_get_block_commands,
+            self.block_remover,
             self.get_collections_timeout,
             self.remove_collections_timeout,
-            self.block_synchronizer_handler.clone(),
+            self.block_synchronizer_handler,
             self.dag.clone(),
         );
 
-        let narwhal_proposer = NarwhalProposer::new(self.dag.clone(), Arc::clone(&self.committee));
+        let narwhal_proposer = NarwhalProposer::new(self.dag, Arc::clone(&self.committee));
         let narwhal_configuration = NarwhalConfiguration::new(
             self.committee
                 .load()

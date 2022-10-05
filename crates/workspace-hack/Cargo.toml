@@ -19,8 +19,8 @@ addr2line = { version = "0.17", default-features = false }
 adler = { version = "1", default-features = false }
 ahash = { version = "0.7", features = ["std"] }
 aho-corasick = { version = "0.7", features = ["std"] }
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "302ff6f98fffa30a3a18e919766cd63f5b4c5aa8", default-features = false }
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "302ff6f98fffa30a3a18e919766cd63f5b4c5aa8", default-features = false }
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "dd5d32549f03f51e16843ab91530727392894eb3", default-features = false }
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "dd5d32549f03f51e16843ab91530727392894eb3", default-features = false }
 ansi_term = { version = "0.12", default-features = false }
 anyhow = { version = "1", features = ["backtrace", "std"] }
 arc-swap = { version = "1", default-features = false, features = ["serde"] }
@@ -612,9 +612,9 @@ addr2line = { version = "0.17", default-features = false }
 adler = { version = "1", default-features = false }
 ahash = { version = "0.7", features = ["std"] }
 aho-corasick = { version = "0.7", features = ["std"] }
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "302ff6f98fffa30a3a18e919766cd63f5b4c5aa8", default-features = false }
-anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "302ff6f98fffa30a3a18e919766cd63f5b4c5aa8", default-features = false }
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "302ff6f98fffa30a3a18e919766cd63f5b4c5aa8", default-features = false }
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "dd5d32549f03f51e16843ab91530727392894eb3", default-features = false }
+anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "dd5d32549f03f51e16843ab91530727392894eb3", default-features = false }
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "dd5d32549f03f51e16843ab91530727392894eb3", default-features = false }
 ansi_term = { version = "0.12", default-features = false }
 anyhow = { version = "1", features = ["backtrace", "std"] }
 arc-swap = { version = "1", default-features = false, features = ["serde"] }

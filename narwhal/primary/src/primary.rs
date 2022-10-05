@@ -2,7 +2,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
-    block_remover::DeleteBatchResult,
     block_synchronizer::{
         handler::BlockSynchronizerHandler,
         responses::{AvailabilityResponse, CertificateDigestsResponse},
@@ -19,8 +18,7 @@ use crate::{
     proposer::Proposer,
     state_handler::StateHandler,
     synchronizer::Synchronizer,
-    BlockCommand, BlockRemover, CertificatesResponse, DeleteBatchMessage,
-    PayloadAvailabilityResponse,
+    BlockCommand, BlockRemover, CertificatesResponse, PayloadAvailabilityResponse,
 };
 
 use anemo::{types::PeerInfo, PeerId};
@@ -166,16 +164,6 @@ impl Primary {
             &primary_channel_metrics.tx_batches,
             &primary_channel_metrics.tx_batches_total,
         );
-        let (tx_block_removal_commands, rx_block_removal_commands) = channel_with_total(
-            CHANNEL_CAPACITY,
-            &primary_channel_metrics.tx_block_removal_commands,
-            &primary_channel_metrics.tx_block_removal_commands_total,
-        );
-        let (tx_batch_removal, rx_batch_removal) = channel_with_total(
-            CHANNEL_CAPACITY,
-            &primary_channel_metrics.tx_batch_removal,
-            &primary_channel_metrics.tx_batch_removal_total,
-        );
         let (tx_block_synchronizer_commands, rx_block_synchronizer_commands) = channel_with_total(
             CHANNEL_CAPACITY,
             &primary_channel_metrics.tx_block_synchronizer_commands,
@@ -238,7 +226,6 @@ impl Primary {
             tx_our_digests,
             tx_others_digests,
             tx_batches,
-            tx_batch_removal,
             tx_state_handler,
             our_workers,
             metrics: node_metrics.clone(),
@@ -395,23 +382,6 @@ impl Primary {
         // Indicator variable for the gRPC server
         let internal_consensus = dag.is_none();
 
-        // Orchestrates the removal of blocks across the primary and worker nodes.
-        let block_remover_primary_network = P2pNetwork::new(network.clone());
-        let block_remover_handle = BlockRemover::spawn(
-            name.clone(),
-            (**committee.load()).clone(),
-            worker_cache.clone(),
-            certificate_store.clone(),
-            header_store,
-            payload_store.clone(),
-            dag.clone(),
-            block_remover_primary_network,
-            tx_reconfigure.subscribe(),
-            rx_block_removal_commands,
-            rx_batch_removal,
-            tx_committed_certificates,
-        );
-
         // Responsible for finding missing blocks (certificates) and fetching
         // them from the primary peers by synchronizing also their batches.
         let block_synchronizer_network = P2pNetwork::new(network.clone());
@@ -484,8 +454,8 @@ impl Primary {
         let helper_handle = Helper::spawn(
             name.clone(),
             (**committee.load()).clone(),
-            certificate_store,
-            payload_store,
+            certificate_store.clone(),
+            payload_store.clone(),
             tx_reconfigure.subscribe(),
             rx_helper_requests,
             helper_primary_network,
@@ -495,21 +465,34 @@ impl Primary {
         let state_handler_handle = StateHandler::spawn(
             name.clone(),
             committee.clone(),
-            worker_cache,
+            worker_cache.clone(),
             rx_consensus,
             tx_consensus_round_updates,
             rx_state_handler,
             tx_reconfigure,
-            P2pNetwork::new(network),
+            P2pNetwork::new(network.clone()),
         );
 
         let consensus_api_handle = if !internal_consensus {
+            // Orchestrates the removal of blocks across the primary and worker nodes.
+            let block_remover_primary_network = P2pNetwork::new(network);
+            let block_remover = BlockRemover::new(
+                name.clone(),
+                worker_cache,
+                certificate_store,
+                header_store,
+                payload_store,
+                dag.clone(),
+                block_remover_primary_network,
+                tx_committed_certificates,
+            );
+
             // Spawn a grpc server to accept requests from external consensus layer.
             Some(ConsensusAPIGrpc::spawn(
                 name.clone(),
                 parameters.consensus_api_grpc.socket_addr,
                 tx_get_block_commands,
-                tx_block_removal_commands,
+                block_remover,
                 parameters.consensus_api_grpc.get_collections_timeout,
                 parameters.consensus_api_grpc.remove_collections_timeout,
                 block_synchronizer_handler,
@@ -536,7 +519,6 @@ impl Primary {
             payload_receiver_handle,
             block_synchronizer_handle,
             block_waiter_handle,
-            block_remover_handle,
             header_waiter_handle,
             certificate_waiter_handle,
             proposer_handle,
@@ -634,7 +616,6 @@ struct WorkerReceiverHandler {
     tx_our_digests: Sender<(BatchDigest, WorkerId)>,
     tx_others_digests: Sender<(BatchDigest, WorkerId)>,
     tx_batches: Sender<BatchResult>,
-    tx_batch_removal: Sender<DeleteBatchResult>,
     tx_state_handler: Sender<ReconfigureNotification>,
     our_workers: BTreeMap<WorkerId, WorkerInfo>,
     metrics: Arc<PrimaryMetrics>,
@@ -677,20 +658,10 @@ impl WorkerToPrimary for WorkerReceiverHandler {
                 }))
                 .await
                 .map_err(|_| DagError::ShuttingDown),
-            WorkerPrimaryMessage::DeletedBatches(batch_ids) => self
-                .tx_batch_removal
-                .send(Ok(DeleteBatchMessage { ids: batch_ids }))
-                .await
-                .map_err(|_| DagError::ShuttingDown),
             WorkerPrimaryMessage::Error(error) => match error.clone() {
                 WorkerPrimaryError::RequestedBatchNotFound(digest) => self
                     .tx_batches
                     .send(Err(BatchMessageError { id: digest }))
-                    .await
-                    .map_err(|_| DagError::ShuttingDown),
-                WorkerPrimaryError::ErrorWhileDeletingBatches(batch_ids) => self
-                    .tx_batch_removal
-                    .send(Err(DeleteBatchMessage { ids: batch_ids }))
                     .await
                     .map_err(|_| DagError::ShuttingDown),
             },

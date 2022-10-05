@@ -17,8 +17,8 @@ use tracing::{debug, error, info, trace};
 use types::{
     error::DagError, metered_channel::Sender, Batch, BatchDigest, PrimaryToWorker,
     PrimaryWorkerMessage, RequestBatchRequest, RequestBatchResponse, WorkerBatchRequest,
-    WorkerBatchResponse, WorkerMessage, WorkerPrimaryMessage, WorkerSynchronizeMessage,
-    WorkerToWorker, WorkerToWorkerClient,
+    WorkerBatchResponse, WorkerDeleteBatchesMessage, WorkerMessage, WorkerPrimaryMessage,
+    WorkerSynchronizeMessage, WorkerToWorker, WorkerToWorkerClient,
 };
 
 #[cfg(test)]
@@ -286,5 +286,18 @@ impl PrimaryToWorker for PrimaryReceiverHandler {
             .map_err(|e| anemo::rpc::Status::from_error(Box::new(e)))?;
 
         Ok(anemo::Response::new(RequestBatchResponse { batch }))
+    }
+
+    async fn delete_batches(
+        &self,
+        request: anemo::Request<WorkerDeleteBatchesMessage>,
+    ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
+        let digests = request.into_body().digests;
+        self.store
+            .remove_all(digests)
+            .await
+            .map_err(|e| anemo::rpc::Status::from_error(Box::new(e)))?;
+
+        Ok(anemo::Response::new(()))
     }
 }
