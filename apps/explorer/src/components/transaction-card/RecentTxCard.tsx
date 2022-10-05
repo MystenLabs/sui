@@ -160,7 +160,6 @@ function LatestTxCard({ ...data }: RecentTx) {
         },
         [setSearchParams]
     );
-    const defaultActiveTab = 0;
 
     const stats = {
         count: txCount.data,
@@ -262,36 +261,41 @@ function LatestTxCard({ ...data }: RecentTx) {
 
     return (
         <div className={cl(styles.txlatestresults, styles[paginationtype])}>
-            <Tab selected={defaultActiveTab}>
-                <div title="Transactions">
-                    {recentTx ? (
-                        <TableCard tabledata={recentTx} />
-                    ) : (
-                        <PlaceholderTable
-                            rowCount={15}
-                            rowHeight="16px"
-                            colHeadings={[
-                                'Time',
-                                'Type',
-                                'Transaction ID',
-                                'Addresses',
-                                'Amount',
-                                'Gas',
-                            ]}
-                            colWidths={[
-                                '85px',
-                                '80px',
-                                '90px',
-                                '204px',
-                                '90',
-                                '38px',
-                            ]}
-                        />
-                    )}
-                    {paginationtype !== 'none' &&
-                        PaginationWithStatsOrStatsWithLink}
-                </div>
-            </Tab>
+            <TabGroup size="lg">
+                <TabList>
+                    <Tab>Transactions</Tab>
+                </TabList>
+                <TabPanels>
+                    <TabPanel>
+                        {recentTx ? (
+                            <TableCard tabledata={recentTx} />
+                        ) : (
+                            <PlaceholderTable
+                                rowCount={15}
+                                rowHeight="16px"
+                                colHeadings={[
+                                    'Time',
+                                    'Type',
+                                    'Transaction ID',
+                                    'Addresses',
+                                    'Amount',
+                                    'Gas',
+                                ]}
+                                colWidths={[
+                                    '85px',
+                                    '80px',
+                                    '90px',
+                                    '204px',
+                                    '90',
+                                    '38px',
+                                ]}
+                            />
+                        )}
+                        {paginationtype !== 'none' &&
+                            PaginationWithStatsOrStatsWithLink}
+                    </TabPanel>
+                </TabPanels>
+            </TabGroup>
         </div>
     );
 }

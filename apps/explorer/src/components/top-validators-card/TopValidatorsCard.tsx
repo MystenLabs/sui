@@ -73,22 +73,34 @@ export const TopValidatorsCardAPI = (): JSX.Element => {
     }
     if (loadState === 'pending') {
         return (
-            <div className={styles.validators}>
-                <Tabs selected={0}>
-                    <div title="Top Validators">
-                        <PlaceholderTable
-                            rowCount={4}
-                            rowHeight="13px"
-                            colHeadings={[
-                                '#',
-                                'Name',
-                                'Address',
-                                'Pubkey Bytes',
-                            ]}
-                            colWidths={['25px', '70px', '260px', '260px']}
-                        />
-                    </div>
-                </Tabs>
+            <div data-testid="validators-table">
+                <TabGroup>
+                    <TabList>
+                        <Tab>Top Validators</Tab>
+                    </TabList>
+                    <TabPanels>
+                        <TabPanel>
+                            <div title="Top Validators">
+                                <PlaceholderTable
+                                    rowCount={4}
+                                    rowHeight="13px"
+                                    colHeadings={[
+                                        '#',
+                                        'Name',
+                                        'Address',
+                                        'Pubkey Bytes',
+                                    ]}
+                                    colWidths={[
+                                        '25px',
+                                        '70px',
+                                        '260px',
+                                        '260px',
+                                    ]}
+                                />
+                            </div>
+                        </TabPanel>
+                    </TabPanels>
+                </TabGroup>
             </div>
         );
     }
