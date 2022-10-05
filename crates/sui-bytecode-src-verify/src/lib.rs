@@ -1,4 +1,4 @@
-use std::{path::Path, str::FromStr, collections::{HashSet, HashMap}};
+use std::{path::Path, str::FromStr, collections::{HashSet, HashMap, BTreeMap}};
 
 use move_core_types::account_address::AccountAddress;
 use move_symbol_pool::Symbol;
@@ -20,6 +20,7 @@ pub enum VerificationError {
     DependencyObjectReadFailure(anyhow::Error),
     SuiObjectRefFailure(SuiError),
     ObjectFoundWhenPackageExpected(ObjectID, SuiRawMoveObject),
+    LocalDependencyNotFound(Symbol, Symbol),                            // package, module
     ModuleCountMismatch(usize, usize),                                      // expected, found
     // package, module, address, expected, found
     ModuleBytecodeMismatch(String, String, AccountAddress, Vec<u8>, Vec<u8>)
@@ -33,7 +34,7 @@ pub struct BytecodeSourceVerifier {
 pub struct Dependency {
     pub symbol: String,
     pub address: AccountAddress,
-    pub module_bytes: Vec<(String, Vec<u8>)>
+    pub module_bytes: BTreeMap<String, Vec<u8>>
 }
 
 impl BytecodeSourceVerifier {
@@ -60,12 +61,8 @@ impl BytecodeSourceVerifier {
                 }
             };
 
-        //println!("\ncompiled package dependency bytecode:  {:#?}", compiled_package.deps_compiled_units);
-
-        let compiled_dep_modules = compiled_package.deps_compiled_units;
-
         let mut compiled_dep_map: HashMap<Symbol, HashMap<Symbol, Vec<u8>>> = HashMap::new();
-        compiled_dep_modules
+        compiled_package.deps_compiled_units
             .iter()
             .for_each(|dep_pair| {
                 let unit_src = &dep_pair.1;
@@ -107,7 +104,8 @@ impl BytecodeSourceVerifier {
             for dep in resolution_package.resolution_table {
                 let symbol = dep.0;
                 let addr = dep.1;
-                // zero address is the package we're checking
+
+                // zero address is the package we're checking dependencies for
                 if addr.eq(&AccountAddress::ZERO) { continue; }
                 // package addresses may show up many times, but we only need to verify them once
                 if verified_deps.contains_key(&addr) { continue; }
@@ -119,20 +117,17 @@ impl BytecodeSourceVerifier {
                     Err(err) => return Err(VerificationError::ObjectIdFromAddressFailure(err))
                 };
 
+                // fetch the Sui object at the address specified for the package in the local resolution table
                 let obj_read = match self.rpc_client
                     .read_api()
                     .get_object(obj_id).await {
                     Ok(raw) => raw,
                     Err(err) => return Err(VerificationError::DependencyObjectReadFailure(err))
                 };
-
                 let obj = match obj_read.object() {
                     Ok(sui_obj) => sui_obj,
                     Err(err) => return Err(VerificationError::SuiObjectRefFailure(err))
                 };
-
-                //println!("\nfetched data for Move package @ {}:\n{:#?}\n", addr, &obj.data);
-
                 let raw_package = match &obj.data {
                     SuiRawData::Package(pkg) => pkg,
                     SuiRawData::MoveObject(move_obj) => {
@@ -140,49 +135,48 @@ impl BytecodeSourceVerifier {
                     },
                 };
 
-                let on_chain_modules: Vec<(String, Vec<u8>)> = raw_package.module_map
-                    .iter()
-                    .map(|p| (p.0.to_owned(), (p.1).clone()))
-                    .collect();
+                //println!("\nfetched data for Move package @ {}:\n{:#?}\n", addr, &obj.data);
 
-
-                for oc_pair in &on_chain_modules {
+                for oc_pair in &raw_package.module_map {
                     let pair = oc_pair.clone();
                     let oc_name = pair.0;
                     let oc_bytes = pair.1;
                     let oc_symbol = Symbol::from(oc_name.as_str());
 
-                    match local_pkg_bytes.get(&oc_symbol) {
-                        Some(local_mod_bytes) => {
-                            // compare local bytes to on-chain bytes
-                            if *local_mod_bytes != *oc_bytes {
-                                return Err(Self::get_mismatch_error
-                                    (&outer_symbol, &oc_symbol, &addr, local_mod_bytes, &oc_bytes));
-                            }
-
-                            println!("{}::{} - {} bytes, MATCH", outer_symbol, oc_name, oc_bytes.len());
-                        },
+                    let local_bytes = match local_pkg_bytes.get(&oc_symbol) {
+                        Some(bytes) => bytes,
                         None => {
                             eprintln!("no local module '{}::{}' found", outer_symbol, oc_name);
+                            return Err(VerificationError::LocalDependencyNotFound(outer_symbol, oc_symbol))
                         },
+                    };
+
+                    // compare local bytes to on-chain bytes
+                    if *local_bytes != *oc_bytes {
+                        return Err(Self::get_mismatch_error
+                            (&outer_symbol, &oc_symbol, &addr, local_bytes, &oc_bytes));
                     }
+
+                    println!("{}::{} - {} bytes, MATCH", outer_symbol, oc_name, oc_bytes.len())
                 }
 
-                on_chain_module_count += on_chain_modules.len();
+                on_chain_module_count += raw_package.module_map.len();
 
                 let address = addr.clone();
                 verified_deps.insert(address, Dependency {
                     symbol: symbol.to_string(),
                     address,
-                    module_bytes: on_chain_modules
+                    module_bytes: raw_package.module_map.clone()
                 });
             }
 
             println!("");
         }
 
-        if compiled_dep_modules.len() != on_chain_module_count {
-            return Err(VerificationError::ModuleCountMismatch(compiled_dep_modules.len(), on_chain_module_count))
+        // total number of modules in packages must match, in addition to each individual module matching
+        if compiled_package.deps_compiled_units.len() != on_chain_module_count {
+            let len = compiled_package.deps_compiled_units.len();
+            return Err(VerificationError::ModuleCountMismatch(len, on_chain_module_count))
         }
 
         let verified_dependencies: HashSet<Dependency> = HashSet::from_iter(verified_deps
