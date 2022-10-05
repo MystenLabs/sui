@@ -300,8 +300,18 @@ impl Primary {
             network.known_peers().insert(peer_info);
         }
 
+        info!(
+            "Primary {} listening on {}",
+            name.encode_base64(),
+            parameters
+                .network_admin_server
+                .primary_network_admin_server_port
+        );
+
         network::admin::start_admin_server(
-            parameters.network_admin_server_port,
+            parameters
+                .network_admin_server
+                .primary_network_admin_server_port,
             network.clone(),
             tx_reconfigure.subscribe(),
         );

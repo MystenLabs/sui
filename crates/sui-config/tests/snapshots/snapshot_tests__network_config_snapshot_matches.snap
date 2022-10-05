@@ -38,7 +38,9 @@ validator_configs:
         max_concurrent_requests: 500000
         prometheus_metrics:
           socket_addr: /ip4/127.0.0.1/tcp/1234
-        network_admin_server_port: 5678
+        network_admin_server:
+          primary_network_admin_server_port: 5678
+          worker_network_admin_server_base_port: 8765
     enable-event-processing: false
     enable-gossip: true
     enable-checkpoint: true
@@ -82,7 +84,9 @@ validator_configs:
         max_concurrent_requests: 500000
         prometheus_metrics:
           socket_addr: /ip4/127.0.0.1/tcp/1234
-        network_admin_server_port: 5678
+        network_admin_server:
+          primary_network_admin_server_port: 5678
+          worker_network_admin_server_base_port: 8765
     enable-event-processing: false
     enable-gossip: true
     enable-checkpoint: true
@@ -126,7 +130,9 @@ validator_configs:
         max_concurrent_requests: 500000
         prometheus_metrics:
           socket_addr: /ip4/127.0.0.1/tcp/1234
-        network_admin_server_port: 5678
+        network_admin_server:
+          primary_network_admin_server_port: 5678
+          worker_network_admin_server_base_port: 8765
     enable-event-processing: false
     enable-gossip: true
     enable-checkpoint: true
@@ -170,7 +176,9 @@ validator_configs:
         max_concurrent_requests: 500000
         prometheus_metrics:
           socket_addr: /ip4/127.0.0.1/tcp/1234
-        network_admin_server_port: 5678
+        network_admin_server:
+          primary_network_admin_server_port: 5678
+          worker_network_admin_server_base_port: 8765
     enable-event-processing: false
     enable-gossip: true
     enable-checkpoint: true
@@ -214,7 +222,9 @@ validator_configs:
         max_concurrent_requests: 500000
         prometheus_metrics:
           socket_addr: /ip4/127.0.0.1/tcp/1234
-        network_admin_server_port: 5678
+        network_admin_server:
+          primary_network_admin_server_port: 5678
+          worker_network_admin_server_base_port: 8765
     enable-event-processing: false
     enable-gossip: true
     enable-checkpoint: true
@@ -258,7 +268,9 @@ validator_configs:
         max_concurrent_requests: 500000
         prometheus_metrics:
           socket_addr: /ip4/127.0.0.1/tcp/1234
-        network_admin_server_port: 5678
+        network_admin_server:
+          primary_network_admin_server_port: 5678
+          worker_network_admin_server_base_port: 8765
     enable-event-processing: false
     enable-gossip: true
     enable-checkpoint: true
@@ -302,7 +314,9 @@ validator_configs:
         max_concurrent_requests: 500000
         prometheus_metrics:
           socket_addr: /ip4/127.0.0.1/tcp/1234
-        network_admin_server_port: 5678
+        network_admin_server:
+          primary_network_admin_server_port: 5678
+          worker_network_admin_server_base_port: 8765
     enable-event-processing: false
     enable-gossip: true
     enable-checkpoint: true

@@ -26,5 +26,8 @@ expression: parameters
   "prometheus_metrics": {
     "socket_addr": "/ip4/127.0.0.1/tcp/8081/http"
   },
-  "network_admin_server_port": 1234
+  "network_admin_server": {
+    "primary_network_admin_server_port": 1234,
+    "worker_network_admin_server_base_port": 5678
+  }
 }

@@ -195,8 +195,20 @@ impl Worker {
             network.known_peers().insert(peer_info);
         }
 
+        info!(
+            "Worker {} listening to worker admin messages on {}",
+            id,
+            parameters
+                .network_admin_server
+                .worker_network_admin_server_base_port
+                + id as u16
+        );
+
         network::admin::start_admin_server(
-            parameters.network_admin_server_port,
+            parameters
+                .network_admin_server
+                .worker_network_admin_server_base_port
+                + id as u16,
             network.clone(),
             tx_reconfigure.subscribe(),
         );

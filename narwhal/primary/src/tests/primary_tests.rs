@@ -115,7 +115,9 @@ async fn get_network_peers_from_admin_server() {
     // Test getting all known peers for primary 1
     let resp = reqwest::get(format!(
         "http://127.0.0.1:{}/known_peers",
-        primary_1_parameters.network_admin_server_port
+        primary_1_parameters
+            .network_admin_server
+            .primary_network_admin_server_port
     ))
     .await
     .unwrap()
@@ -129,7 +131,9 @@ async fn get_network_peers_from_admin_server() {
     // Test getting all connected peers for primary 1
     let resp = reqwest::get(format!(
         "http://127.0.0.1:{}/peers",
-        primary_1_parameters.network_admin_server_port
+        primary_1_parameters
+            .network_admin_server
+            .primary_network_admin_server_port
     ))
     .await
     .unwrap()
@@ -215,7 +219,9 @@ async fn get_network_peers_from_admin_server() {
     // Test getting all connected peers for primary 1
     let resp = reqwest::get(format!(
         "http://127.0.0.1:{}/peers",
-        primary_1_parameters.network_admin_server_port
+        primary_1_parameters
+            .network_admin_server
+            .primary_network_admin_server_port
     ))
     .await
     .unwrap()
@@ -233,7 +239,9 @@ async fn get_network_peers_from_admin_server() {
     // Test getting all connected peers for primary 2
     let resp = reqwest::get(format!(
         "http://127.0.0.1:{}/peers",
-        primary_2_parameters.network_admin_server_port
+        primary_2_parameters
+            .network_admin_server
+            .primary_network_admin_server_port
     ))
     .await
     .unwrap()
