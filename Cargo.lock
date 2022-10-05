@@ -8066,6 +8066,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-bytecode-src-verifier"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap 3.2.17",
+ "move-binary-format",
+ "move-bytecode-utils",
+ "move-bytecode-verifier",
+ "move-compiler",
+ "move-core-types",
+ "move-package",
+ "move-symbol-pool",
+ "sui-framework",
+ "sui-sdk",
+ "sui-types",
+ "tokio",
+ "workspace-hack 0.1.0",
+]
+
+[[package]]
 name = "sui-cluster-test"
 version = "0.1.0"
 dependencies = [
