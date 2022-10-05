@@ -451,8 +451,10 @@ pub struct PrimaryMetrics {
     pub gc_core_latency: HistogramVec,
     /// Number of cancel handlers for core module
     pub core_cancel_handlers_total: IntGaugeVec,
-    /// The current Narwhal round
+    /// The current Narwhal round in proposer
     pub current_round: IntGaugeVec,
+    /// The highest Narwhal round that has been processed.
+    pub highest_processed_round: IntGaugeVec,
     /// Latency to perform a garbage collection in header_waiter
     pub gc_header_waiter_latency: HistogramVec,
     /// Number of elements in pending list of header_waiter
@@ -537,7 +539,14 @@ impl PrimaryMetrics {
             .unwrap(),
             current_round: register_int_gauge_vec_with_registry!(
                 "current_round",
-                "Current round the node is in",
+                "Current round the node will propose",
+                &["epoch"],
+                registry
+            )
+            .unwrap(),
+            highest_processed_round: register_int_gauge_vec_with_registry!(
+                "highest_processed_round",
+                "Highest round processed (stored) by the primary",
                 &["epoch"],
                 registry
             )
