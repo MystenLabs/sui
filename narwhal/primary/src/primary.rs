@@ -280,6 +280,7 @@ impl Primary {
         let connection_monitor_handle = network::connectivity::ConnectionMonitor::spawn(
             network.clone(),
             network_connection_metrics,
+            tx_reconfigure.subscribe(),
         );
 
         let primaries = committee
@@ -299,7 +300,11 @@ impl Primary {
             network.known_peers().insert(peer_info);
         }
 
-        network::admin::start_admin_server(parameters.network_admin_server_port, network.clone());
+        network::admin::start_admin_server(
+            parameters.network_admin_server_port,
+            network.clone(),
+            tx_reconfigure.subscribe(),
+        );
 
         // The `Synchronizer` provides auxiliary methods helping the `Core` to sync.
         let synchronizer = Synchronizer::new(

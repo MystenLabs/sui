@@ -31,6 +31,7 @@ anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "302ff6f98fffa3
 anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "302ff6f98fffa30a3a18e919766cd63f5b4c5aa8" }
 anyhow = "1.0.65"
 axum = "0.5.16"
+axum-server = "0.4.2"
 
 [dev-dependencies]
 bincode = "1.3.3"

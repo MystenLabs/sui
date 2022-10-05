@@ -169,6 +169,7 @@ impl Worker {
         let connection_monitor_handle = network::connectivity::ConnectionMonitor::spawn(
             network.clone(),
             network_connection_metrics,
+            tx_reconfigure.subscribe(),
         );
 
         let other_workers = worker
@@ -194,7 +195,11 @@ impl Worker {
             network.known_peers().insert(peer_info);
         }
 
-        network::admin::start_admin_server(parameters.network_admin_server_port, network.clone());
+        network::admin::start_admin_server(
+            parameters.network_admin_server_port,
+            network.clone(),
+            tx_reconfigure.subscribe(),
+        );
 
         // Connect worker to its corresponding primary.
         let primary_address = network::multiaddr_to_address(
