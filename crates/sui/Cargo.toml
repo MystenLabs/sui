@@ -30,7 +30,7 @@ sui-json = { path = "../sui-json" }
 sui-swarm = { path = "../sui-swarm" }
 sui-json-rpc-types = { path = "../sui-json-rpc-types" }
 sui-sdk = { path = "../sui-sdk" }
-sui-bytecode-src-verify = { path = "../sui-bytecode-src-verify" }
+sui-bytecode-src-verifier = { path = "../sui-bytecode-src-verifier" }
 
 fastcrypto = { version = "0.1.1" }
 
