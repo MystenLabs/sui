@@ -17,6 +17,8 @@ pub struct ExecutorMetrics {
     pub subscriber_local_hit: IntCounter,
     /// Number of batches processed by notifier
     pub notifier_processed_batches: IntCounter,
+    /// Number of bytes processed by notifier
+    pub notifier_processed_bytes: IntCounter,
     /// Number of certificates processed by subscriber
     pub subscriber_processed_certificates: IntCounter,
     /// Round of last certificate seen by subscriber
@@ -74,6 +76,11 @@ impl ExecutorMetrics {
             notifier_processed_batches: register_int_counter_with_registry!(
                 "notifier_processed_batches",
                 "Number of batches processed by notifier",
+                registry
+            ).unwrap(),
+            notifier_processed_bytes: register_int_counter_with_registry!(
+                "notifier_processed_bytes",
+                "Number of bytes processed by notifier",
                 registry
             ).unwrap(),
             subscriber_processed_certificates: register_int_counter_with_registry!(
