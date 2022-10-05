@@ -85,7 +85,6 @@ async fn commit_one() {
     let gc_depth = 50;
     let tusk = Tusk::new(committee.clone(), store.clone(), gc_depth);
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-    let (tx_recovery_token, _tr_recovery_token) = tokio::sync::oneshot::channel();
 
     let _consensus_handle = Consensus::spawn(
         committee,
@@ -98,7 +97,6 @@ async fn commit_one() {
         tusk,
         metrics,
         gc_depth,
-        tx_recovery_token,
     );
     tokio::spawn(async move { while rx_primary.recv().await.is_some() {} });
 
@@ -150,7 +148,6 @@ async fn dead_node() {
     let gc_depth = 50;
     let tusk = Tusk::new(committee.clone(), store.clone(), gc_depth);
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-    let (tx_recovery_token, _tr_recovery_token) = tokio::sync::oneshot::channel();
 
     let _consensus_handle = Consensus::spawn(
         committee,
@@ -163,7 +160,6 @@ async fn dead_node() {
         tusk,
         metrics,
         gc_depth,
-        tx_recovery_token,
     );
     tokio::spawn(async move { while rx_primary.recv().await.is_some() {} });
 
@@ -262,7 +258,6 @@ async fn not_enough_support() {
     let gc_depth = 50;
     let tusk = Tusk::new(committee.clone(), store.clone(), gc_depth);
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-    let (tx_recovery_token, _tr_recovery_token) = tokio::sync::oneshot::channel();
 
     let _consensus_handle = Consensus::spawn(
         committee,
@@ -275,7 +270,6 @@ async fn not_enough_support() {
         tusk,
         metrics,
         gc_depth,
-        tx_recovery_token,
     );
     tokio::spawn(async move { while rx_primary.recv().await.is_some() {} });
 
@@ -345,7 +339,6 @@ async fn missing_leader() {
     let gc_depth = 50;
     let tusk = Tusk::new(committee.clone(), store.clone(), gc_depth);
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-    let (tx_recovery_token, _tr_recovery_token) = tokio::sync::oneshot::channel();
 
     let _consensus_handle = Consensus::spawn(
         committee,
@@ -358,7 +351,6 @@ async fn missing_leader() {
         tusk,
         metrics,
         gc_depth,
-        tx_recovery_token,
     );
     tokio::spawn(async move { while rx_primary.recv().await.is_some() {} });
 
@@ -406,7 +398,6 @@ async fn epoch_change() {
     let gc_depth = 50;
     let tusk = Tusk::new(committee.clone(), store.clone(), gc_depth);
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-    let (tx_recovery_token, _tr_recovery_token) = tokio::sync::oneshot::channel();
 
     let _consensus_handle = Consensus::spawn(
         committee.clone(),
@@ -419,7 +410,6 @@ async fn epoch_change() {
         tusk,
         metrics,
         gc_depth,
-        tx_recovery_token,
     );
     tokio::spawn(async move { while rx_primary.recv().await.is_some() {} });
 
@@ -490,7 +480,6 @@ async fn restart_with_new_committee() {
         let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
         let gc_depth = 50;
         let tusk = Tusk::new(committee.clone(), store.clone(), gc_depth);
-        let (tx_recovery_token, _tr_recovery_token) = tokio::sync::oneshot::channel();
 
         let handle = Consensus::spawn(
             committee.clone(),
@@ -503,7 +492,6 @@ async fn restart_with_new_committee() {
             tusk,
             metrics.clone(),
             gc_depth,
-            tx_recovery_token,
         );
         tokio::spawn(async move { while rx_primary.recv().await.is_some() {} });
 
@@ -548,6 +536,6 @@ async fn restart_with_new_committee() {
         tx_reconfigure.send(message).unwrap();
 
         // Ensure consensus stopped.
-        handle.await.unwrap();
+        handle.0.await.unwrap();
     }
 }
