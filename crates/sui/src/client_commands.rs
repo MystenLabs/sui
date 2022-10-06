@@ -436,7 +436,10 @@ impl SuiClientCommands {
                 {
                     Ok(_vr) => println!("dependencies' on-chain bytecode successfully verified\n"),
                     Err(err) => {
-                        eprintln!("Error verifying dependencies' on-chain bytecode:\n{:?}", err);
+                        eprintln!(
+                            "Error verifying dependencies' on-chain bytecode:\n{:?}",
+                            err
+                        );
                         return Err(anyhow::Error::msg(err.to_string()));
                     }
                 };

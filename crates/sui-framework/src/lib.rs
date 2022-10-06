@@ -148,10 +148,9 @@ pub fn build_move_package_to_bytes(
 }
 
 /// `build_move_package_to_bytes()`, for when you already have a CompiledPackage
-pub fn compiled_move_package_to_bytes(
-    package: &CompiledPackage,
-) -> Vec<Vec<u8>> {
-    package.root_modules()
+pub fn compiled_move_package_to_bytes(package: &CompiledPackage) -> Vec<Vec<u8>> {
+    package
+        .root_modules()
         .map(|m| m.unit.serialize(None))
         .collect()
 }
