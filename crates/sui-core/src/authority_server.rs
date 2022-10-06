@@ -408,7 +408,15 @@ impl ValidatorService {
             return Ok(tonic::Response::new(response));
         }
 
-        // 3) If it's a shared object transaction and requires consensus, we need to do so.
+        // 3) If the validator is already halted, we stop here, to avoid
+        // sending the transaction to consensus.
+        if state.is_halted() && !certificate.signed_data.data.kind.is_system_tx() {
+            return Err(tonic::Status::internal(
+                SuiError::ValidatorHaltedAtEpochEnd.to_string(),
+            ));
+        }
+
+        // 4) If it's a shared object transaction and requires consensus, we need to do so.
         // This will wait until either timeout or we have heard back from consensus.
         if is_consensus_tx
             && !state
@@ -429,7 +437,7 @@ impl ValidatorService {
                 .map_err(|e| tonic::Status::internal(e.to_string()))?;
         }
 
-        // 4) Execute the certificate.
+        // 5) Execute the certificate.
         let span = tracing::debug_span!(
             "validator_state_process_cert",
             ?tx_digest,

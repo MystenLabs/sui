@@ -836,6 +836,21 @@ impl CheckpointStore {
         next_seq % CHECKPOINT_COUNT_PER_EPOCH == 1 && next_seq != 1
     }
 
+    /// Checks whether we should reject consensus transaction.
+    /// We stop accepting consensus transactions after we received the last fragment needed to
+    /// create the second last checkpoint of the epoch. We continue to reject consensus transactions
+    /// until we finish the last checkpoint.
+    pub fn should_reject_consensus_transaction(&mut self) -> bool {
+        let next_seq = self.next_checkpoint();
+        // Either we just finished constructing the second last checkpoint,
+        // or just finished constructing the last checkpoint.
+        ((next_seq + 1) % CHECKPOINT_COUNT_PER_EPOCH == 0 || self.is_ready_to_start_epoch_change())
+            && self
+                .memory_locals
+                .checkpoint_to_be_constructed
+                .is_completed()
+    }
+
     pub fn validators_already_fragmented_with(
         &mut self,
         next_seq: CheckpointSequenceNumber,
