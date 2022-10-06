@@ -53,6 +53,8 @@ function TransactionCard({ txn }: { txn: TxResultState }) {
     const transferType =
         txn.kind === 'Call' ? 'Call' : txn.isSender ? 'Sent' : 'Received';
 
+    const amount = txn?.balance || txn?.amount || txn?.txGas || 0;
+
     const transferMeta = {
         Call: {
             // For NFT with name and image use Mint else use Call (Function Name)
@@ -61,7 +63,7 @@ function TransactionCard({ txn }: { txn: TxResultState }) {
             address: false,
             icon: SuiIcons.Buy,
             iconClassName: cl(st.arrowActionIcon, st.buyIcon),
-            amount: txn?.balance || txn?.amount || txn?.txGas || 0,
+            amount: amount,
         },
         Sent: {
             txName: 'Sent',
@@ -69,7 +71,7 @@ function TransactionCard({ txn }: { txn: TxResultState }) {
             address: toAddrStr,
             icon: SuiIcons.ArrowLeft,
             iconClassName: cl(st.arrowActionIcon, st.angledArrow),
-            amount: txn?.amount || txn?.txGas || 0,
+            amount: amount,
         },
         Received: {
             txName: 'Received',
@@ -77,7 +79,7 @@ function TransactionCard({ txn }: { txn: TxResultState }) {
             address: fromAddrStr,
             icon: SuiIcons.ArrowLeft,
             iconClassName: cl(st.arrowActionIcon, st.angledArrow, st.received),
-            amount: txn?.amount || txn?.txGas || 0,
+            amount: amount,
         },
     };
 
