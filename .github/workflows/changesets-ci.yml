@@ -27,9 +27,17 @@ jobs:
         with:
           files: |
             .changeset/**
-      - name: Log if no changesets and public package changes.
+      - name: Create missing changeset note if there are missing changesets
         if: steps.has-changesets.outputs.any_changed != 'true' && steps.diff.outputs.hasChanges == 'true'
         run: |
-          echo "Release has changesets"
+          echo "true" > missing-changeset.txt
+      - name: Upload missing changeset artifact
+        uses: actions/upload-artifact@v3
+        if: steps.has-changesets.outputs.any_changed != 'true' && steps.diff.outputs.hasChanges == 'true'
+        with:
+          name: missing-changeset
+          path: missing-changeset.txt
+          if-no-files-found: error
+          retention-days: 1
       - name: Attempt to create snapshots.
         run: pnpm changeset version --snapshot test-do-not-publish
