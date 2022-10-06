@@ -254,8 +254,7 @@ impl ValidatorService {
         prometheus_registry: Registry,
         rx_reconfigure_consensus: Receiver<ReconfigConsensusMessage>,
     ) -> Result<Self> {
-        let (tx_consensus_to_sui, rx_consensus_to_sui) = channel(1_000);
-        let (tx_sui_to_consensus, rx_sui_to_consensus) = channel(1_000);
+        let (tx_consensus_listener, rx_consensus_listener) = channel(1_000);
 
         // Spawn the consensus node of this authority.
         let consensus_config = config
@@ -266,7 +265,8 @@ impl ValidatorService {
         let consensus_committee = config.genesis()?.narwhal_committee().load();
         let consensus_worker_cache = config.genesis()?.narwhal_worker_cache();
         let consensus_storage_base_path = consensus_config.db_path().to_path_buf();
-        let consensus_execution_state = ConsensusHandler::new(state.clone(), tx_consensus_to_sui);
+        let consensus_execution_state =
+            ConsensusHandler::new(state.clone(), tx_consensus_listener.clone());
         let consensus_execution_state = Arc::new(consensus_execution_state);
         let consensus_parameters = consensus_config.narwhal_config().to_owned();
         let network_keypair = config.network_key_pair.copy();
@@ -290,7 +290,7 @@ impl ValidatorService {
 
         // Spawn a consensus listener. It listen for consensus outputs and notifies the
         // authority server when a sequenced transaction is ready for execution.
-        ConsensusListener::spawn(rx_sui_to_consensus, rx_consensus_to_sui);
+        ConsensusListener::spawn(rx_consensus_listener);
 
         let timeout = Duration::from_secs(consensus_config.timeout_secs.unwrap_or(60));
         let ca_metrics = ConsensusAdapterMetrics::new(&prometheus_registry);
@@ -299,7 +299,7 @@ impl ValidatorService {
         let consensus_adapter = ConsensusAdapter::new(
             consensus_config.address().to_owned(),
             state.clone_committee(),
-            tx_sui_to_consensus.clone(),
+            tx_consensus_listener.clone(),
             timeout,
             ca_metrics.clone(),
         );
@@ -315,7 +315,7 @@ impl ValidatorService {
         let checkpoint_consensus_handle = Some(
             CheckpointConsensusAdapter::new(
                 /* consensus_address */ consensus_config.address().to_owned(),
-                /* tx_consensus_listener */ tx_sui_to_consensus,
+                /* tx_consensus_listener */ tx_consensus_listener,
                 rx_checkpoint_consensus_adapter,
                 /* checkpoint_locals */ state.checkpoints(),
                 /* retry_delay */ timeout,

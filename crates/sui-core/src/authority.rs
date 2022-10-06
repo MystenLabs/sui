@@ -92,6 +92,7 @@ pub use sui_adapter::temporary_store::TemporaryStore;
 pub mod authority_store_tables;
 
 mod authority_store;
+use crate::consensus_adapter::ConsensusListenerMessage;
 use crate::epoch::committee_store::CommitteeStore;
 use crate::metrics::TaskUtilizationExt;
 pub use authority_store::{
@@ -2051,12 +2052,11 @@ impl AuthorityState {
 
 pub struct ConsensusHandler {
     state: Arc<AuthorityState>,
-    // todo - change Vec<u8> to Box<CertifiedTransaction> and use tx id as consensus adapter hash
-    sender: Sender<Vec<u8>>,
+    sender: Sender<ConsensusListenerMessage>,
 }
 
 impl ConsensusHandler {
-    pub fn new(state: Arc<AuthorityState>, sender: Sender<Vec<u8>>) -> Self {
+    pub fn new(state: Arc<AuthorityState>, sender: Sender<ConsensusListenerMessage>) -> Self {
         Self { state, sender }
     }
 }
@@ -2089,7 +2089,12 @@ impl ExecutionState for ConsensusHandler {
             .await
         {
             Ok(()) => {
-                if self.sender.send(serialized_transaction).await.is_err() {
+                if self
+                    .sender
+                    .send(ConsensusListenerMessage::Processed(serialized_transaction))
+                    .await
+                    .is_err()
+                {
                     warn!("Consensus handler outbound channel closed");
                 }
             }
