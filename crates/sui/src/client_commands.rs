@@ -20,7 +20,6 @@ use serde_json::json;
 use sui_bytecode_src_verifier::BytecodeSourceVerifier;
 use tracing::info;
 
-use sui_framework::build_move_package_to_bytes;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::SuiData;
 use sui_json_rpc_types::{
