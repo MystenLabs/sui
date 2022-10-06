@@ -247,12 +247,9 @@ impl<'a> BytecodeSourceVerifier<'a> {
         };
         match obj.data.clone() {
             SuiRawData::Package(pkg) => Ok(pkg),
-            SuiRawData::MoveObject(move_obj) => {
-                Err(DependencyVerificationError::ObjectFoundWhenPackageExpected(
-                    obj_id,
-                    move_obj,
-                ))
-            }
+            SuiRawData::MoveObject(move_obj) => Err(
+                DependencyVerificationError::ObjectFoundWhenPackageExpected(obj_id, move_obj),
+            ),
         }
     }
 }
