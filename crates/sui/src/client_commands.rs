@@ -429,7 +429,7 @@ impl SuiClientCommands {
                 let compiled_modules = compiled_package.get_package_bytes();
 
                 // verify that all dependency packages have the correct on-chain bytecode
-                let mut verifier = BytecodeSourceVerifier::new(context.client.read_api(), true);
+                let mut verifier = BytecodeSourceVerifier::new(context.client.read_api(), false);
                 match verifier
                     .verify_deployed_dependencies(compiled_package)
                     .await
