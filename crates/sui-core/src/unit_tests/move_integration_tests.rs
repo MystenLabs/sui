@@ -3,9 +3,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
-use crate::authority::authority_tests::{
-    call_move, call_move_with_shared, init_state_with_ids, send_and_confirm_transaction,
-    TestCallArg,
+use crate::{
+    authority::authority_tests::{
+        call_move, call_move_with_shared, init_state_with_ids, send_and_confirm_transaction,
+        TestCallArg,
+    },
+    test_utils::to_sender_signed_transaction,
 };
 
 use move_core_types::{
@@ -14,7 +17,7 @@ use move_core_types::{
 };
 use move_package::BuildConfig;
 use sui_types::{
-    crypto::{get_key_pair, AccountKeyPair, Signature},
+    crypto::{get_key_pair, AccountKeyPair},
     event::{Event, EventType, TransferType},
     messages::ExecutionStatus,
     object::OBJECT_START_VERSION,
@@ -1605,8 +1608,8 @@ pub async fn build_and_try_publish_test_package(
     let gas_object_ref = gas_object.unwrap().compute_object_reference();
 
     let data = TransactionData::new_module(*sender, gas_object_ref, all_module_bytes, gas_budget);
-    let signature = Signature::new(&data, sender_key);
-    let transaction = Transaction::new(data, signature);
+    let transaction = to_sender_signed_transaction(data, sender_key);
+
     send_and_confirm_transaction(authority, transaction)
         .await
         .unwrap()

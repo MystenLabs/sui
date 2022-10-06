@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 use crate::authority::{authority_tests::init_state_with_objects, AuthorityState};
+use crate::test_utils::to_sender_signed_transaction;
 use move_core_types::{account_address::AccountAddress, ident_str};
 use narwhal_executor::ExecutionIndices;
 use narwhal_types::Transactions;
@@ -10,11 +11,10 @@ use narwhal_types::{Empty, TransactionProto};
 use sui_network::tonic;
 use sui_types::{
     base_types::{ObjectID, TransactionDigest},
-    crypto::Signature,
     gas_coin::GasCoin,
     messages::{
         CallArg, CertifiedTransaction, ConsensusTransactionKind, ObjectArg, SignatureAggregator,
-        Transaction, TransactionData,
+        TransactionData,
     },
     object::{MoveObject, Object, Owner, OBJECT_START_VERSION},
 };
@@ -69,8 +69,8 @@ pub async fn test_certificates(authority: &AuthorityState) -> Vec<CertifiedTrans
             ],
             /* max_gas */ 10_000,
         );
-        let signature = Signature::new(&data, &keypair);
-        let transaction = Transaction::new(data, signature);
+
+        let transaction = to_sender_signed_transaction(data, &keypair);
 
         // Submit the transaction and assemble a certificate.
         let response = authority

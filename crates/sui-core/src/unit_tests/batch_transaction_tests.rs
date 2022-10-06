@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority::authority_tests::init_state_with_ids_and_object_basics;
+use crate::{
+    authority::authority_tests::init_state_with_ids_and_object_basics,
+    test_utils::to_sender_signed_transaction,
+};
 
 use super::*;
 use bcs;
@@ -10,8 +13,7 @@ use authority_tests::{init_state_with_ids, send_and_confirm_transaction};
 use move_binary_format::file_format;
 use move_core_types::{account_address::AccountAddress, ident_str};
 use sui_types::{
-    crypto::{get_key_pair, AccountKeyPair, Signature},
-    messages::Transaction,
+    crypto::{get_key_pair, AccountKeyPair},
     object::Owner,
 };
 
@@ -61,8 +63,8 @@ async fn test_batch_transaction_ok() -> anyhow::Result<()> {
             .compute_object_reference(),
         100000,
     );
-    let signature = Signature::new(&data, &sender_key);
-    let tx = Transaction::new(data, signature);
+
+    let tx = to_sender_signed_transaction(data, &sender_key);
     let response = send_and_confirm_transaction(&authority_state, tx).await?;
     let effects = response.signed_effects.unwrap().effects;
     assert!(effects.status.is_ok());
@@ -125,8 +127,9 @@ async fn test_batch_transaction_last_one_fail() -> anyhow::Result<()> {
             .compute_object_reference(),
         100000,
     );
-    let signature = Signature::new(&data, &sender_key);
-    let tx = Transaction::new(data, signature);
+
+    let tx = to_sender_signed_transaction(data, &sender_key);
+
     let response = send_and_confirm_transaction(&authority_state, tx).await?;
     let effects = response.signed_effects.unwrap().effects;
     assert!(effects.status.is_err());
@@ -158,8 +161,7 @@ async fn test_batch_contains_publish() -> anyhow::Result<()> {
             .compute_object_reference(),
         100000,
     );
-    let signature = Signature::new(&data, &sender_key);
-    let tx = Transaction::new(data, signature);
+    let tx = to_sender_signed_transaction(data, &sender_key);
     let response = send_and_confirm_transaction(&authority_state, tx).await;
     assert!(matches!(
         response.unwrap_err(),
@@ -188,8 +190,8 @@ async fn test_batch_contains_transfer_sui() -> anyhow::Result<()> {
             .compute_object_reference(),
         100000,
     );
-    let signature = Signature::new(&data, &sender_key);
-    let tx = Transaction::new(data, signature);
+
+    let tx = to_sender_signed_transaction(data, &sender_key);
     let response = send_and_confirm_transaction(&authority_state, tx).await;
     assert!(matches!(
         response.unwrap_err(),
@@ -234,8 +236,8 @@ async fn test_batch_insufficient_gas_balance() -> anyhow::Result<()> {
         gas_object.compute_object_reference(),
         100000,
     );
-    let signature = Signature::new(&data, &sender_key);
-    let tx = Transaction::new(data, signature);
+
+    let tx = to_sender_signed_transaction(data, &sender_key);
     let response = send_and_confirm_transaction(&authority_state, tx).await;
     assert!(matches!(
         response.unwrap_err(),
