@@ -16,7 +16,7 @@ use network::P2pNetwork;
 use primary::{NetworkModel, PayloadToken, Primary, PrimaryChannelMetrics};
 use prometheus::{IntGauge, Registry};
 use std::sync::Arc;
-use storage::{CertificateStore, CertificateToken, ProposerStore};
+use storage::{CertificateStore, CertificateToken, ProposerKey, ProposerStore};
 use store::{
     reopen,
     rocks::{open_cf, DBMap},
@@ -92,7 +92,7 @@ impl NodeStorage {
             sequence_map,
             temp_batch_map,
         ) = reopen!(&rocksdb,
-            Self::LAST_PROPOSED_CF;<Round, Header>,
+            Self::LAST_PROPOSED_CF;<ProposerKey, Header>,
             Self::VOTES_CF;<PublicKey, RoundVoteDigestPair>,
             Self::HEADERS_CF;<HeaderDigest, Header>,
             Self::CERTIFICATES_CF;<CertificateDigest, Certificate>,
