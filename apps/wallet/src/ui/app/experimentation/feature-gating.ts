@@ -3,7 +3,8 @@
 
 import { GrowthBook } from '@growthbook/growthbook';
 
-const DEFAULT_DEV_API_KEY = 'key_dev_dc2872e15e0c5f95';
+const GROWTHBOOK_API_KEY =
+    process.env.GROWTH_BOOK_API_KEY ?? 'key_dev_dc2872e15e0c5f95';
 
 export default class FeatureGating {
     #growthBook: GrowthBook;
@@ -14,9 +15,10 @@ export default class FeatureGating {
     }
 
     public async init() {
-        const apiKey = process.env.GROWTH_BOOK_API_KEY ?? DEFAULT_DEV_API_KEY;
         // Load feature definitions
-        await fetch(`https://cdn.growthbook.io/api/features/${apiKey}`)
+        await fetch(
+            `https://cdn.growthbook.io/api/features/${GROWTHBOOK_API_KEY}`
+        )
             .then((res) => {
                 if (res.ok) {
                     return res.json();
