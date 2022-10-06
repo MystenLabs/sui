@@ -44,12 +44,12 @@ pub enum DependencyVerificationError {
     LocalDependencyNotFound(Symbol, Option<Symbol>),
     /// Local dependencies have a different number of modules than on-chain
     ///
-    /// params:  expected count, on-chain count
-    ModuleCountMismatch(usize, usize),
+    /// params:  expected count, on-chain count, missing
+    ModuleCountMismatch(usize, usize, Vec<String>),
     /// A local dependency module did not match its on-chain version
     ///
-    /// params:  package, module, address, expected, found
-    ModuleBytecodeMismatch(String, String, AccountAddress, Vec<u8>, Vec<u8>),
+    /// params:  package, module, address
+    ModuleBytecodeMismatch(String, String, AccountAddress),
 }
 
 impl Display for DependencyVerificationError {
@@ -149,8 +149,6 @@ impl<'a> BytecodeSourceVerifier<'a> {
                             pkg_symbol.to_string(),
                             on_chain_module_symbol.to_string(),
                             addr,
-                            local_bytes.clone(),
-                            on_chain_bytes.clone(),
                         ));
                     }
 
@@ -177,17 +175,39 @@ impl<'a> BytecodeSourceVerifier<'a> {
         }
 
         // total number of modules in packages must match, in addition to each individual module matching
-        if compiled_package.deps_compiled_units.len() != on_chain_module_count {
-            let len = compiled_package.deps_compiled_units.len();
+        let len = compiled_package.deps_compiled_units.len();
+        // only need to check for greater than, because if on-chain modules are missing locally we've already errored out
+        if len > on_chain_module_count {
+            let missing_modules = Self::get_missing_modules(&compiled_package, &verified_dependencies);
             return Err(DependencyVerificationError::ModuleCountMismatch(
                 len,
                 on_chain_module_count,
+                missing_modules
             ));
         }
 
         Ok(DependencyVerificationResult {
             verified_dependencies,
         })
+    }
+
+    fn get_missing_modules(package: &CompiledPackage, verified_dependencies: &HashMap<AccountAddress, Dependency>) -> Vec<String> {
+        let mut missing_modules: Vec<String> = vec![];
+        for (local_pkg_symbol, local_unit) in &package.deps_compiled_units {
+            let local_pkg_symbol_str = local_pkg_symbol.to_string();
+            let local_mod_name = local_unit.unit.name().to_string();
+            let mod_str = local_mod_name.as_str();
+
+            if !verified_dependencies
+                .iter()
+                .any(|(_, dep)| {
+                    dep.symbol == local_pkg_symbol_str && dep.module_bytes.contains_key(mod_str)
+                })
+            {
+                missing_modules.push(format!("{}::{}", local_pkg_symbol_str, mod_str))
+            }
+        }
+        missing_modules
     }
 
     fn get_module_bytes_map(
