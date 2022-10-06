@@ -46,7 +46,7 @@ pub fn test_and_configure_authority_configs(committee_size: usize) -> NetworkCon
         let parameters = &mut config.consensus_config.as_mut().unwrap().narwhal_config;
         // NOTE: the following parameters are important to ensure tests run fast. Using the default
         // Narwhal parameters may result in tests taking >60 seconds.
-        parameters.header_size = 1;
+        parameters.header_num_of_batches_threshold = 1;
         parameters.max_header_delay = Duration::from_millis(200);
         parameters.batch_size = 1;
         parameters.max_batch_delay = Duration::from_millis(200);

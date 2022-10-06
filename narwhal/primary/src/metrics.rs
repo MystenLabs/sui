@@ -415,6 +415,8 @@ pub struct PrimaryMetrics {
     pub waiting_elements_certificate_waiter: IntGaugeVec,
     /// Number of votes that were requested but not sent due to previously having voted differently
     pub votes_dropped_equivocation_protection: IntCounterVec,
+    /// Number of pending batches in proposer
+    pub num_of_pending_batches_in_proposer: IntGaugeVec,
 }
 
 impl PrimaryMetrics {
@@ -560,6 +562,12 @@ impl PrimaryMetrics {
                 registry
             )
             .unwrap(),
+            num_of_pending_batches_in_proposer: register_int_gauge_vec_with_registry!(
+                "num_of_pending_batches_in_proposer",
+                "Number of batch digests pending in proposer for next header proposal",
+                &["epoch"],
+                registry
+            ).unwrap()
         }
     }
 }
