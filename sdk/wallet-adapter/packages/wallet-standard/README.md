@@ -100,7 +100,7 @@ class YourWallet implements Wallet {
 
 ### Registering in the window
 
-Once you have a compatible interface for your wallet, you can register it in the window under the `window.navigator.wallets` interface. This is an array-like interface where all wallets self-register by pushing their wallet into.
+Once you have a compatible interface for your wallet, you can register it in the window under the `window.navigator.wallets` interface. Wallets self-register by pushing their standard wallet interface to this array-like interface.
 
 ```typescript
 // This makes TypeScript aware of the `window.navigator.wallets` interface.
