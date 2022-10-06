@@ -52,7 +52,6 @@ jobs:
         with:
           crate: cargo-hakari
           locked: true
-      - run: scripts/license_check.sh
       - run: cargo xlint
       - run: |
           cargo hakari generate --diff  # workspace-hack Cargo.toml is up-to-date
