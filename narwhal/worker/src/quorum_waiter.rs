@@ -9,8 +9,9 @@ use network::{CancelOnDropHandler, P2pNetwork, ReliableNetwork};
 use store::Store;
 use tokio::{sync::watch, task::JoinHandle};
 use types::{
-    error::DagError,
-    metered_channel::{Receiver, Sender},
+
+
+    metered_channel::{Receiver, },
     Batch, BatchDigest, ReconfigureNotification, WorkerBatchMessage, WorkerOurBatchMessage,
 };
 
@@ -33,9 +34,7 @@ pub struct QuorumWaiter {
     /// Receive reconfiguration updates.
     rx_reconfigure: watch::Receiver<ReconfigureNotification>,
     /// Input Channel to receive commands.
-    rx_quorum_waiter: Receiver<Batch>,
-    /// Channel to deliver batches for which we have enough acknowledgments.
-    tx_our_batch: Sender<WorkerOurBatchMessage>,
+    rx_message: Receiver<(Batch, Option<tokio::sync::oneshot::Sender<()>>)>,
     /// A network sender to broadcast the batches to the other workers.
     network: P2pNetwork,
 }
@@ -50,8 +49,7 @@ impl QuorumWaiter {
         committee: Committee,
         worker_cache: SharedWorkerCache,
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
-        rx_quorum_waiter: Receiver<Batch>,
-        tx_our_batch: Sender<WorkerOurBatchMessage>,
+        rx_message: Receiver<(Batch, Option<tokio::sync::oneshot::Sender<()>>)>,
         network: P2pNetwork,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
@@ -62,8 +60,7 @@ impl QuorumWaiter {
                 committee,
                 worker_cache,
                 rx_reconfigure,
-                rx_quorum_waiter,
-                tx_our_batch,
+                rx_message,
                 network,
             }
             .run()
@@ -84,7 +81,9 @@ impl QuorumWaiter {
     async fn run(&mut self) {
         loop {
             tokio::select! {
-                Some(batch) = self.rx_quorum_waiter.recv() => {
+
+                Some((batch, opt_channel)) = self.rx_message.recv() => {
+
                     // Broadcast the batch to the other workers.
                     let workers: Vec<_> = self
                         .worker_cache
@@ -117,15 +116,9 @@ impl QuorumWaiter {
                             Some(stake) = wait_for_quorum.next() => {
                                 total_stake += stake;
                                 if total_stake >= threshold {
-                                    let digest = batch.digest();
-                                    let metadata = batch.metadata.clone();
-                                    self.store.write(digest, batch).await;
-                                    if self.tx_our_batch.send(WorkerOurBatchMessage{
-                                        digest,
-                                        worker_id: self.id,
-                                        metadata
-                                    }).await.is_err() {
-                                        tracing::debug!("{}", DagError::ShuttingDown);
+                                    // Notify anyone waiting for this.
+                                    if let Some(channel) = opt_channel {
+                                        let _ = channel.send(());
                                     }
                                     break;
                                 }

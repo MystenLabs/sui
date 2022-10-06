@@ -324,6 +324,7 @@ impl Worker {
         // (in a reliable manner) the batches to all other workers that share the same `id` as us. Finally, it
         // gathers the 'cancel handlers' of the messages and send them to the `QuorumWaiter`.
         let batch_maker_handle = BatchMaker::spawn(
+            self.id,
             (*(*(*self.committee).load()).clone()).clone(),
             self.parameters.batch_size,
             self.parameters.max_batch_delay,
@@ -331,6 +332,8 @@ impl Worker {
             rx_batch_maker,
             tx_quorum_waiter,
             node_metrics,
+            self.store.clone(),
+            tx_our_batch,
         );
 
         // The `QuorumWaiter` waits for 2f authorities to acknowledge reception of the batch. It then forwards
@@ -341,9 +344,11 @@ impl Worker {
             self.store.clone(),
             (*(*(*self.committee).load()).clone()).clone(),
             self.worker_cache.clone(),
+
             rx_reconfigure,
-            rx_quorum_waiter,
-            tx_our_batch,
+
+            /* rx_message */ rx_quorum_waiter,
+
             P2pNetwork::new(network),
         );
 
@@ -352,8 +357,14 @@ impl Worker {
             self.id, address
         );
 
-        vec![batch_maker_handle, quorum_waiter_handle, tx_receiver_handle]
+
+        vec![
+            batch_maker_handle,
+            quorum_waiter_handle,
+            tx_receiver_handle,
+        ]
     }
+
 }
 
 /// Defines how the network receiver handles incoming transactions.

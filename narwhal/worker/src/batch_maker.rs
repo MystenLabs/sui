@@ -5,6 +5,11 @@ use crate::metrics::WorkerMetrics;
 #[cfg(feature = "trace_transaction")]
 use byteorder::{BigEndian, ReadBytesExt};
 use config::Committee;
+use fastcrypto::hash::Hash;
+use store::Store;
+
+use config::WorkerId;
+
 #[cfg(feature = "benchmark")]
 use std::convert::TryInto;
 use std::sync::Arc;
@@ -16,7 +21,7 @@ use tokio::{
 use types::{
     error::DagError,
     metered_channel::{Receiver, Sender},
-    Batch, ReconfigureNotification, Transaction,
+    Batch, BatchDigest, ReconfigureNotification, Transaction, WorkerOurBatchMessage,
 };
 
 #[cfg(test)]
@@ -25,6 +30,8 @@ pub mod batch_maker_tests;
 
 /// Assemble clients transactions into batches.
 pub struct BatchMaker {
+    // Our worker's id.
+    id: WorkerId,
     /// The committee information.
     committee: Committee,
     /// The preferred batch size (in bytes).
@@ -36,7 +43,7 @@ pub struct BatchMaker {
     /// Channel to receive transactions from the network.
     rx_batch_maker: Receiver<Transaction>,
     /// Output channel to deliver sealed batches to the `QuorumWaiter`.
-    tx_quorum_waiter: Sender<Batch>,
+    tx_message: Sender<(Batch, Option<tokio::sync::oneshot::Sender<()>>)>,
     /// Holds the current batch.
     current_batch: Batch,
     /// Holds the size of the current batch (in bytes).
@@ -46,31 +53,42 @@ pub struct BatchMaker {
     /// The timestamp of the first transaction received
     /// to be included on the next batch
     batch_start_timestamp: Instant,
+    /// The batch store to store our own batches.
+    store: Store<BatchDigest, Batch>,
+    // Output channel to send out batches' digests.
+    tx_digest: Sender<WorkerOurBatchMessage>,
+
 }
 
 impl BatchMaker {
     #[must_use]
     pub fn spawn(
+        id: WorkerId,
         committee: Committee,
         batch_size: usize,
         max_batch_delay: Duration,
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
         rx_batch_maker: Receiver<Transaction>,
-        tx_quorum_waiter: Sender<Batch>,
+        tx_message: Sender<(Batch, Option<tokio::sync::oneshot::Sender<()>>)>,
         node_metrics: Arc<WorkerMetrics>,
+        store: Store<BatchDigest, Batch>,
+        tx_digest: Sender<WorkerOurBatchMessage>,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
             Self {
+                id,
                 committee,
                 batch_size,
                 max_batch_delay,
                 rx_reconfigure,
                 rx_batch_maker,
-                tx_quorum_waiter,
+                tx_message,
                 current_batch: Batch::new(Vec::with_capacity(batch_size * 2)),
                 current_batch_size: 0,
                 batch_start_timestamp: Instant::now(),
                 node_metrics,
+                store,
+                tx_digest,
             }
             .run()
             .await;
@@ -141,6 +159,7 @@ impl BatchMaker {
         // Serialize the batch.
         self.current_batch_size = 0;
         let batch: Batch = Batch::new(self.current_batch.transactions.drain(..).collect());
+        let metadata = batch.metadata.clone();
 
         #[cfg(feature = "benchmark")]
         {
@@ -200,7 +219,13 @@ impl BatchMaker {
             .observe(size as f64);
 
         // Send the batch through the deliver channel for further processing.
-        if self.tx_quorum_waiter.send(batch).await.is_err() {
+        let (notify_done, done_sending) = tokio::sync::oneshot::channel();
+        if self
+            .tx_message
+            .send((batch.clone(), Some(notify_done)))
+            .await
+            .is_err()
+        {
             tracing::debug!("{}", DagError::ShuttingDown);
         }
 
@@ -211,5 +236,21 @@ impl BatchMaker {
             .created_batch_latency
             .with_label_values(&[self.committee.epoch.to_string().as_str(), reason])
             .observe(self.batch_start_timestamp.elapsed().as_secs_f64());
+
+        // Now save it to disk
+        let digest = batch.digest();
+        self.store.write(digest, batch).await;
+        // Wait until the batch was written
+        let _ = self.store.notify_read(digest).await;
+
+        // Also wait for sending to be done here
+        // (TODO: sending to others is an optimization, no need to wait.)
+        let _ = done_sending.await;
+
+        // Finally send to primary
+        let message = WorkerOurBatchMessage { digest, worker_id: self.id, metadata  };
+        if self.tx_digest.send(message).await.is_err() {
+            tracing::debug!("{}", DagError::ShuttingDown);
+        };
     }
 }

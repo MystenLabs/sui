@@ -39,9 +39,7 @@ pub type SerializedTransactionDigest = u64;
 
 #[async_trait]
 pub trait ExecutionState {
-    /// Execute the transaction and atomically persist the consensus index. This function
-    /// returns an execution outcome that will be output by the executor channel. It may
-    /// also return a new committee to reconfigure the system.
+    /// Execute the transaction and atomically persist the consensus index.
     async fn handle_consensus_transaction(
         &self,
         consensus_output: &Arc<ConsensusOutput>,

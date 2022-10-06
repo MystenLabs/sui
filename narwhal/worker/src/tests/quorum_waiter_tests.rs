@@ -8,7 +8,6 @@ use test_utils::{batch, test_network, CommitteeFixture, WorkerToWorkerMockServer
 async fn wait_for_quorum() {
     let store = test_utils::open_batch_store();
     let (tx_message, rx_message) = test_utils::test_channel!(1);
-    let (tx_batch, mut rx_batch) = test_utils::test_channel!(1);
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
     let worker_cache = fixture.shared_worker_cache();
@@ -29,7 +28,6 @@ async fn wait_for_quorum() {
         worker_cache.clone(),
         rx_reconfiguration,
         rx_message,
-        tx_batch,
         P2pNetwork::new(network.clone()),
     );
 
@@ -54,19 +52,15 @@ async fn wait_for_quorum() {
     }
 
     // Forward the batch along with the handlers to the `QuorumWaiter`.
-    tx_message.send(batch.clone()).await.unwrap();
+    let (s, r) = tokio::sync::oneshot::channel();
+    tx_message.send((batch.clone(), Some(s))).await.unwrap();
 
     // Wait for the `QuorumWaiter` to gather enough acknowledgements and output the batch.
-    let output = rx_batch.recv().await.unwrap();
-    assert_eq!(
-        output,
-        WorkerOurBatchMessage {
-            digest: batch.digest(),
-            worker_id: 0,
-            metadata: batch.metadata.clone()
-        }
-    );
+
     assert_eq!(store.read(batch.digest()).await.unwrap().unwrap(), batch);
+
+    r.await.unwrap();
+
 
     // Ensure the other listeners correctly received the batch.
     for (mut handle, _network) in listener_handles {
