@@ -14,14 +14,15 @@ use sui_config::genesis_config::GenesisConfig;
 use sui_config::{Config, SUI_CLIENT_CONFIG, SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG};
 use sui_config::{PersistedConfig, SUI_KEYSTORE_FILENAME};
 use sui_core::gateway_state::GatewayState;
-
 use sui_json_rpc::bcs_api::BcsApiImpl;
 use sui_json_rpc::gateway_api::{
     GatewayReadApiImpl, GatewayWalletSyncApiImpl, RpcGatewayImpl, TransactionBuilderImpl,
 };
+use sui_sdk::crypto::AccountKeystore;
+use sui_sdk::crypto::FileBasedKeystore;
 
 use sui_json_rpc::{JsonRpcServerBuilder, ServerHandle};
-use sui_sdk::crypto::KeystoreType;
+use sui_sdk::crypto::Keystore;
 use sui_sdk::{ClientType, SuiClient};
 use sui_swarm::memory::{Swarm, SwarmBuilder};
 use sui_types::base_types::SuiAddress;
@@ -68,7 +69,7 @@ pub async fn start_test_network_with_fullnodes(
     let gateway_path = dir.join(SUI_GATEWAY_CONFIG);
 
     swarm.config().save(&network_path)?;
-    let mut keystore = KeystoreType::File(keystore_path.clone()).init()?;
+    let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
     for key in &swarm.config().account_keys {
         keystore.add_key(Ed25519SuiKeyPair(key.copy()))?;
     }
@@ -85,7 +86,7 @@ pub async fn start_test_network_with_fullnodes(
 
     // Create wallet config with stated authorities port
     SuiClientConfig {
-        keystore: KeystoreType::File(keystore_path),
+        keystore: Keystore::from(FileBasedKeystore::new(&keystore_path)?),
         client_type: ClientType::Embedded(GatewayConfig {
             db_folder_path,
             validator_set: validators,
@@ -107,7 +108,13 @@ pub async fn setup_network_and_wallet() -> Result<(Swarm, WalletContext, SuiAddr
     // Create Wallet context.
     let wallet_conf = swarm.dir().join(SUI_CLIENT_CONFIG);
     let mut context = WalletContext::new(&wallet_conf).await?;
-    let address = context.keystore.addresses().first().cloned().unwrap();
+    let address = context
+        .config
+        .keystore
+        .addresses()
+        .first()
+        .cloned()
+        .unwrap();
 
     // Sync client to retrieve objects from the network.
     SuiClientCommands::SyncClientState {
@@ -162,7 +169,7 @@ pub async fn start_rpc_test_network_with_fullnode(
     let mut wallet_conf: SuiClientConfig =
         PersistedConfig::read(&working_dir.join(SUI_CLIENT_CONFIG))?;
     let rpc_url = format!("http://{}", rpc_server_handle.local_addr());
-    let accounts = wallet_conf.keystore.init()?.addresses();
+    let accounts = wallet_conf.keystore.addresses();
     wallet_conf.client_type = ClientType::RPC(rpc_url.clone(), None);
     wallet_conf
         .persisted(&working_dir.join(SUI_CLIENT_CONFIG))

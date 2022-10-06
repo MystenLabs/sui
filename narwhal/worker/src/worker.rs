@@ -78,7 +78,7 @@ impl Worker {
             id,
             committee: committee.clone(),
             worker_cache,
-            parameters,
+            parameters: parameters.clone(),
             store,
         };
 
@@ -87,6 +87,7 @@ impl Worker {
         let channel_metrics: Arc<WorkerChannelMetrics> = Arc::new(metrics.channel_metrics.unwrap());
         let inbound_network_metrics = Arc::new(metrics.inbound_network_metrics.unwrap());
         let outbound_network_metrics = Arc::new(metrics.outbound_network_metrics.unwrap());
+        let network_connection_metrics = metrics.network_connection_metrics.unwrap();
 
         // Spawn all worker tasks.
         let (tx_primary, rx_primary) = channel_with_total(
@@ -165,6 +166,12 @@ impl Worker {
 
         info!("Worker {} listening to worker messages on {}", id, address);
 
+        let connection_monitor_handle = network::connectivity::ConnectionMonitor::spawn(
+            network.clone(),
+            network_connection_metrics,
+            tx_reconfigure.subscribe(),
+        );
+
         let other_workers = worker
             .worker_cache
             .load()
@@ -187,6 +194,22 @@ impl Worker {
             };
             network.known_peers().insert(peer_info);
         }
+
+        let network_admin_server_base_port = parameters
+            .network_admin_server
+            .worker_network_admin_server_base_port
+            .checked_add(id as u16)
+            .unwrap();
+        info!(
+            "Worker {} listening to network admin messages on 127.0.0.1:{}",
+            id, network_admin_server_base_port
+        );
+
+        network::admin::start_admin_server(
+            network_admin_server_base_port,
+            network.clone(),
+            tx_reconfigure.subscribe(),
+        );
 
         // Connect worker to its corresponding primary.
         let primary_address = network::multiaddr_to_address(
@@ -239,7 +262,7 @@ impl Worker {
                 .transactions
         );
 
-        let mut handles = vec![primary_connector_handle];
+        let mut handles = vec![primary_connector_handle, connection_monitor_handle];
         handles.extend(primary_flow_handles);
         handles.extend(client_flow_handles);
         handles.extend(worker_flow_handles);

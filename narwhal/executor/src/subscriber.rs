@@ -172,6 +172,9 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
         &self,
         deliver: ConsensusOutput,
     ) -> Vec<impl Future<Output = (BatchIndex, Batch)> + '_> {
+        self.metrics
+            .subscriber_current_round
+            .set(deliver.certificate.round() as i64);
         self.metrics.subscriber_processed_certificates.inc();
         debug!("Fetching payload for {:?}", deliver);
         let mut ret = vec![];

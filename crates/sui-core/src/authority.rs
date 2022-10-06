@@ -1366,7 +1366,7 @@ impl AuthorityState {
         let mut checkpoints = CheckpointStore::open(
             &path.join("checkpoints"),
             None,
-            genesis_committee.epoch,
+            &genesis_committee,
             secret.public().into(),
             secret.clone(),
         )
@@ -1968,6 +1968,13 @@ impl AuthorityState {
         match transaction.kind {
             ConsensusTransactionKind::UserTransaction(certificate) => {
                 if self
+                    .checkpoints
+                    .lock()
+                    .should_reject_consensus_transaction()
+                {
+                    return Err(NarwhalHandlerError::ValidatorHalted);
+                }
+                if self
                     .database
                     .consensus_message_processed(certificate.digest())
                     .await
@@ -2012,7 +2019,12 @@ impl AuthorityState {
 
                 let mut checkpoint = self.checkpoints.lock();
                 checkpoint
-                    .handle_internal_fragment(consensus_index, *fragment, self.database.clone())
+                    .handle_internal_fragment(
+                        consensus_index,
+                        *fragment,
+                        self.database.clone(),
+                        &self.committee.load(),
+                    )
                     .map_err(NarwhalHandlerError::NodeError)?;
 
                 // NOTE: The method `handle_internal_fragment` is idempotent, so we don't need
@@ -2087,6 +2099,9 @@ impl ExecutionState for ConsensusHandler {
                     consensus_output.certificate.header.author, err
                 );
             }
+            Err(NarwhalHandlerError::ValidatorHalted) => {
+                debug!("Validator has stopped accepting consensus transactions, skipping");
+            }
             Err(NarwhalHandlerError::NodeError(err)) => {
                 Err(err).expect("Unrecoverable error in consensus handler")
             }
@@ -2111,4 +2126,6 @@ pub enum NarwhalHandlerError {
     /// narwhal can continue streaming next transactions to SUI
     #[error("Invalid transaction {}", 0)]
     SkipNarwhalTransaction(SuiError),
+    #[error("Validator halted and no longer accepts sequenced transactions")]
+    ValidatorHalted,
 }

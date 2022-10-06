@@ -135,6 +135,26 @@ pub struct Parameters {
     pub max_concurrent_requests: usize,
     /// Properties for the prometheus metrics
     pub prometheus_metrics: PrometheusMetricsParameters,
+    /// Network admin server ports for primary & worker.
+    pub network_admin_server: NetworkAdminServerParameters,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct NetworkAdminServerParameters {
+    /// Primary network admin server port number
+    pub primary_network_admin_server_port: u16,
+    /// Worker network admin server base port number
+    pub worker_network_admin_server_base_port: u16,
+}
+
+impl Default for NetworkAdminServerParameters {
+    fn default() -> Self {
+        let host = "127.0.0.1";
+        Self {
+            primary_network_admin_server_port: get_available_port(host),
+            worker_network_admin_server_base_port: get_available_port(host),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -270,6 +290,7 @@ impl Default for Parameters {
             consensus_api_grpc: ConsensusAPIGrpcParameters::default(),
             max_concurrent_requests: 500_000,
             prometheus_metrics: PrometheusMetricsParameters::default(),
+            network_admin_server: NetworkAdminServerParameters::default(),
         }
     }
 }
@@ -341,6 +362,15 @@ impl Parameters {
         info!(
             "Prometheus metrics server will run on {}",
             self.prometheus_metrics.socket_addr
+        );
+        info!(
+            "Primary network admin server will run on 127.0.0.1:{}",
+            self.network_admin_server.primary_network_admin_server_port
+        );
+        info!(
+            "Worker network admin server will run starting on base port 127.0.0.1:{}",
+            self.network_admin_server
+                .worker_network_admin_server_base_port
         );
     }
 }
@@ -735,6 +765,12 @@ mod tests {
         assert!(logs_contain("Max concurrent requests set to 500000"));
         assert!(logs_contain(
             "Prometheus metrics server will run on /ip4/127.0.0.1/tcp"
+        ));
+        assert!(logs_contain(
+            "Primary network admin server will run on 127.0.0.1:"
+        ));
+        assert!(logs_contain(
+            "Worker network admin server will run starting on base port 127.0.0.1:"
         ));
     }
 }

@@ -105,6 +105,7 @@
 
                 color: colors.$gray-90;
                 line-height: 100%;
+                text-transform: capitalize;
             }
         }
     }
@@ -112,8 +113,9 @@
     .transfer-failed {
         @include utils.typography('page-ex-small');
 
-        text-align: right;
         color: colors.$issue;
+        width: 100%;
+        font-size: 12px;
     }
 
     .tx-address {

@@ -100,7 +100,7 @@ impl SuiNode {
         let checkpoint_store = Arc::new(Mutex::new(CheckpointStore::open(
             &config.db_path().join("checkpoints"),
             None,
-            committee.epoch,
+            &committee,
             config.protocol_public_key(),
             secret.clone(),
         )?));

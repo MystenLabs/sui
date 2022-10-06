@@ -298,7 +298,7 @@ mod tests {
         let mut cps = CheckpointStore::open(
             &path,
             None,
-            committee.epoch,
+            &committee,
             k.public().into(),
             Arc::pin(k.copy()),
         )

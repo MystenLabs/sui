@@ -6,7 +6,7 @@ import { memo, useState, useCallback } from 'react';
 
 import DisconnectApp from './DisconnectApp';
 import ExternalLink from '_components/external-link';
-import Icon, { SuiIcons } from '_components/icon';
+import { useMiddleEllipsis } from '_hooks';
 import { trackEvent } from '_src/shared/plausible';
 
 import st from './SuiApp.module.scss';
@@ -27,6 +27,8 @@ type SuiAppProps = {
     permissions: string[];
     disconnect?: boolean;
 };
+
+const TRUNCATE_MAX_LENGTH = 18;
 
 function SuiAppEmpty({ displaytype }: Displaytype) {
     return (
@@ -65,6 +67,13 @@ function SuiApp({
         id,
         permissions,
     };
+
+    const originLabel = useMiddleEllipsis(
+        new URL(link).hostname,
+        TRUNCATE_MAX_LENGTH,
+        TRUNCATE_MAX_LENGTH - 1
+    );
+
     const AppDetails = (
         <div className={cl(st.suiApp, st[displaytype])}>
             <div className={st.icon}>
@@ -73,33 +82,15 @@ function SuiApp({
                 ) : (
                     <div className={st.defaultImg}></div>
                 )}
-                {displaytype === 'card' && (
-                    <Icon
-                        icon={SuiIcons.ArrowRight}
-                        className={cl(
-                            st.arrowActionIcon,
-                            st.angledArrow,
-                            st.externalLinkIcon
-                        )}
-                    />
-                )}
             </div>
             <div className={st.info}>
-                <div className={st.title}>
-                    {name}{' '}
-                    {displaytype === 'full' && (
-                        <Icon
-                            icon={SuiIcons.ArrowRight}
-                            className={cl(st.arrowActionIcon, st.angledArrow)}
-                        />
-                    )}
-                </div>
+                <div className={st.title}>{name} </div>
                 {displaytype === 'full' && (
                     <div className={st.description}>{description}</div>
                 )}
 
                 {displaytype === 'card' && (
-                    <div className={st.link}>{link}</div>
+                    <div className={st.link}>{originLabel}</div>
                 )}
 
                 {displaytype === 'full' && tags?.length && (

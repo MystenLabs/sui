@@ -2,19 +2,21 @@
 title: Connect to Sui Devnet
 ---
 
-Welcome to the Sui Devnet. We are hosting a public Devnet for the community to experiment with our tech and help to shape the future of the Sui network. It exists to gain operational experience with the Sui software in a public setting prior to our Mainnet launch.
+We are hosting a public Devnet for the community to experiment with Sui and provide feedback to help to shape the future of the Sui network.
 
-The Sui Devnet currently consists of:
+The Sui Devnet network currently consists of:
 
-* A four-validator network with all nodes operated by Mysten Labs. Clients send transactions and read requests via this endpoint: gateway.devnet.sui.io:443 using [JSON-RPC](../build/json-rpc.md)
+* Four validator nodes operated by Mysten Labs. Clients send transactions and read requests via this endpoint: gateway.devnet.sui.io:443 using [JSON-RPC](../build/json-rpc.md)
 * A public network [Sui Explorer](https://explorer.devnet.sui.io) for browsing transaction history.
 * A [Discord channel](https://discordapp.com/channels/916379725201563759/971488439931392130) for requesting test coins that can be used to pay for gas on the test network. These coins have no financial value and will disappear each time we reset the network.
 
-Many improvements to the Sui Devnet are underway, such as the ability to run full nodes and use a browser-based wallet. See the [Sui Devnet blog post](https://medium.com/mysten-labs/sui-devnet-public-release-a2be304ff36b) announcement for full details on upcoming features. All Devnet usage is subject to our [terms of service](https://sui.io/terms/).
+Watch for update announcements in the [#devnet-updates](https://discord.com/channels/916379725201563759/1004638487078772736) Discord channel.
+
+See the [terms of service](https://sui.io/terms/) for using the Devnet network.
 
 ## Tools
 
-We provide the following tools for users to interact with the Sui Devnet:
+We provide the following tools for users to interact with Sui Devnet:
 
 * The [Sui command line interface (CLI)](../build/cli-client.md)
     * create and manage your private keys
@@ -38,9 +40,7 @@ $ which sui
 ```
 You should see the path to the command. Otherwise, reinstall.
 
-> **Tip:** To reliably test Devnet with the latest Sui binaries, re-install them at least weekly.
-
-In addition, to conduct advanced work such as publishing a Move module or making a Move call, also obtain the [Sui source code](../build/install.md#source-code); for simplicity, we recommend installing in `~/sui` or using an environment variable.
+> **Tip:** Check the [Sui Releases](https://github.com/MystenLabs/sui/releases) page to make sure you have the latest release.
 
 ## Configure the Sui client
 
@@ -58,11 +58,9 @@ Type `y` and then press `Enter`. You should see the following output:
 ```shell
 Sui RPC server Url (Default to Sui Devnet if not specified) :
 ```
-The Sui client will prompt for the RPC server URL; press 'Enter' and it will default to Devnet.
-Or enter a custom URL to connect to a server hosted elsewhere.
+The Sui client prompts you for the RPC server URL; press 'Enter' and it defaults to Devnet. You can also enter a custom URL to connect to a custom RPC endpoint.
 
-If you have used the Sui client before with a local network, you will have an existing `client.yaml` configuration
-file needing update. Change the configured RPC server URL to Devnet by using:
+If you previously installed a Sui client with a local network, modify your existing  `client.yaml` to change the RPC endpoint with the following command:
 ```shell
 $ sui client switch --rpc https://gateway.devnet.sui.io:443
 ```

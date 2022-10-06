@@ -501,6 +501,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "axum-server"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "87ba6170b61f7b086609dabcae68d2e07352539c6ef04a7c82980bdfa01a159d"
+dependencies = [
+ "bytes",
+ "futures-util",
+ "http",
+ "http-body",
+ "hyper",
+ "tokio",
+ "tower-service",
+]
+
+[[package]]
 name = "backoff"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4403,7 +4418,7 @@ dependencies = [
 [[package]]
 name = "msim"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=e7773753dcb5becda0ea27b10694eb9c11e7af4a#e7773753dcb5becda0ea27b10694eb9c11e7af4a"
+source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=305f0ca15fe77df5b92b7f4bb57b5472e568edc3#305f0ca15fe77df5b92b7f4bb57b5472e568edc3"
 dependencies = [
  "ahash",
  "async-task",
@@ -4431,7 +4446,7 @@ dependencies = [
 [[package]]
 name = "msim-macros"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=e7773753dcb5becda0ea27b10694eb9c11e7af4a#e7773753dcb5becda0ea27b10694eb9c11e7af4a"
+source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=305f0ca15fe77df5b92b7f4bb57b5472e568edc3#305f0ca15fe77df5b92b7f4bb57b5472e568edc3"
 dependencies = [
  "darling 0.14.1",
  "proc-macro2 1.0.43",
@@ -4745,6 +4760,8 @@ dependencies = [
  "anemo-tower",
  "anyhow",
  "async-trait",
+ "axum",
+ "axum-server",
  "backoff",
  "bincode",
  "bytes",
@@ -4834,6 +4851,7 @@ dependencies = [
  "dhat",
  "fastcrypto",
  "futures",
+ "hex",
  "indexmap",
  "itertools",
  "mockall",
@@ -4854,6 +4872,7 @@ dependencies = [
  "proptest",
  "prost 0.10.4",
  "rand 0.8.5",
+ "reqwest",
  "roaring",
  "serde 1.0.144",
  "tap",
@@ -4988,16 +5007,20 @@ dependencies = [
  "bytes",
  "fastcrypto",
  "futures",
+ "hex",
  "multiaddr",
  "mysten-network",
  "narwhal-config",
+ "narwhal-consensus",
  "narwhal-crypto",
  "narwhal-network",
+ "narwhal-node",
  "narwhal-primary",
  "narwhal-test-utils",
  "narwhal-types",
  "prometheus",
  "rand 0.8.5",
+ "reqwest",
  "serde 1.0.144",
  "tap",
  "telemetry-subscribers 0.2.0",
@@ -6551,9 +6574,9 @@ dependencies = [
 
 [[package]]
 name = "reqwest"
-version = "0.11.11"
+version = "0.11.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b75aa69a3f06bbcc66ede33af2af253c6f7a86b1ca0033f60c580a27074fbf92"
+checksum = "431949c384f4e2ae07605ccaa56d1d9d2ecdb5cadd4f9577ccfab29f2e5149fc"
 dependencies = [
  "base64",
  "bytes",
@@ -6567,10 +6590,10 @@ dependencies = [
  "hyper-tls",
  "ipnet",
  "js-sys",
- "lazy_static 1.4.0",
  "log",
  "mime",
  "native-tls",
+ "once_cell",
  "percent-encoding",
  "pin-project-lite",
  "serde 1.0.144",
@@ -7978,6 +8001,7 @@ dependencies = [
  "sui-config",
  "sui-json-rpc-types",
  "sui-node",
+ "sui-sdk",
  "sui-types",
  "telemetry-subscribers 0.2.0",
  "test-utils",
@@ -8210,6 +8234,7 @@ dependencies = [
  "sui-json",
  "sui-json-rpc",
  "sui-json-rpc-types",
+ "sui-sdk",
  "sui-types",
  "test-utils",
  "tokio",
@@ -10162,6 +10187,7 @@ dependencies = [
  "autocfg",
  "axum",
  "axum-core",
+ "axum-server",
  "backoff",
  "backtrace",
  "base16ct",

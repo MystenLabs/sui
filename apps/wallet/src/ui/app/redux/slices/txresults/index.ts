@@ -10,10 +10,13 @@ import {
     getTotalGasUsed,
     getTransferSuiTransaction,
     getExecutionStatusError,
+    getMoveCallTransaction,
 } from '@mysten/sui.js';
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 
+import { notEmpty } from '_helpers';
 import { batchFetchObject } from '_redux/slices/sui-objects';
+import { Coin } from '_redux/slices/sui-objects/Coin';
 
 import type {
     GetTxnDigestsResponse,
@@ -40,6 +43,9 @@ export type TxResultState = {
     name?: string;
     isSender?: boolean;
     error?: string;
+    balance?: number;
+    callFunctionName?: string;
+    coinSymbol?: string;
 };
 
 interface TransactionManualState {
@@ -125,6 +131,8 @@ export const getTransactionsByAddress = createAsyncThunk<
                                 transferSui?.recipient ??
                                 txTransferObject?.recipient;
 
+                            const moveCallTxn = getMoveCallTransaction(txn);
+
                             const callObjectId = getCreatedObjectID(
                                 txEff.effects
                             );
@@ -135,6 +143,11 @@ export const getTransactionsByAddress = createAsyncThunk<
                                 status: getExecutionStatusType(txEff),
                                 txGas: getTotalGasUsed(txEff),
                                 kind: txKind,
+                                // gasUsed: txEff?.gasUsed,
+                                callFunctionName: `Call (${moveCallTxn?.function?.replace(
+                                    /_/g,
+                                    ' '
+                                )})`,
                                 from: res.data.sender,
                                 ...(txTransferObject || callObjectId
                                     ? {
@@ -179,6 +192,10 @@ export const getTransactionsByAddress = createAsyncThunk<
                       )
                     : null;
 
+            const coinType =
+                objectTxObj?.data?.type &&
+                Coin.getCoinTypeArg(objectTxObj.data);
+
             return {
                 ...itm,
                 ...(objectTxObj
@@ -186,6 +203,8 @@ export const getTransactionsByAddress = createAsyncThunk<
                           description: objectTxObj.data.fields.description,
                           name: objectTxObj.data.fields.name,
                           url: objectTxObj.data.fields.url,
+                          balance: objectTxObj.data.fields.balance,
+                          coinSymbol: coinType && Coin.getCoinSymbol(coinType),
                       }
                     : {}),
             };
@@ -194,10 +213,6 @@ export const getTransactionsByAddress = createAsyncThunk<
         return txnResp as TxResultByAddress;
     }
 );
-
-function notEmpty<TValue>(value: TValue | null | undefined): value is TValue {
-    return value !== null && value !== undefined;
-}
 
 const txSlice = createSlice({
     name: 'txresult',

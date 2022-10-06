@@ -18,7 +18,10 @@
 // 1. Run `cargo insta test --review` under `./config`.
 // 2. Review, accept or reject changes.
 
-use config::{ConsensusAPIGrpcParameters, Import, Parameters, PrometheusMetricsParameters, Stake};
+use config::{
+    ConsensusAPIGrpcParameters, Import, NetworkAdminServerParameters, Parameters,
+    PrometheusMetricsParameters, Stake,
+};
 use crypto::PublicKey;
 use insta::assert_json_snapshot;
 use multiaddr::Multiaddr;
@@ -151,10 +154,15 @@ fn parameters_snapshot_matches() {
     let prometheus_metrics_parameters = PrometheusMetricsParameters {
         socket_addr: "/ip4/127.0.0.1/tcp/8081/http".parse().unwrap(),
     };
+    let network_admin_server_parameters = NetworkAdminServerParameters {
+        primary_network_admin_server_port: 1234,
+        worker_network_admin_server_base_port: 5678,
+    };
 
     let parameters = Parameters {
         consensus_api_grpc: consensus_api_grpc_parameters,
         prometheus_metrics: prometheus_metrics_parameters,
+        network_admin_server: network_admin_server_parameters,
         ..Parameters::default()
     };
     assert_json_snapshot!("parameters", parameters)
@@ -185,6 +193,10 @@ fn parameters_import_snapshot_matches() {
          "max_concurrent_requests": 500000,
          "prometheus_metrics": {
             "socket_addr": "/ip4/127.0.0.1/tcp/0/http"
+         },
+         "network_admin_server": {
+           "primary_network_admin_server_port": 0,
+           "worker_network_admin_server_base_port": 0
          }
       }"#;
 

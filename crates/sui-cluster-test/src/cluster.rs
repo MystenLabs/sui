@@ -9,7 +9,9 @@ use sui::config::SuiClientConfig;
 use sui_config::genesis_config::GenesisConfig;
 use sui_config::Config;
 use sui_config::SUI_KEYSTORE_FILENAME;
-use sui_sdk::crypto::KeystoreType;
+use sui_sdk::crypto::AccountKeystore;
+use sui_sdk::crypto::FileBasedKeystore;
+use sui_sdk::crypto::Keystore;
 use sui_sdk::ClientType;
 use sui_swarm::memory::Node;
 use sui_swarm::memory::Swarm;
@@ -285,11 +287,9 @@ pub async fn new_wallet_context_from_cluster(
     let rpc_url = cluster.rpc_url();
     info!("Use gateway: {}", &rpc_url);
     let keystore_path = temp_dir.path().join(SUI_KEYSTORE_FILENAME);
-    let keystore = KeystoreType::File(keystore_path);
+    let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
     let address: SuiAddress = key_pair.public().into();
     keystore
-        .init()
-        .unwrap()
         .add_key(SuiKeyPair::Ed25519SuiKeyPair(key_pair))
         .unwrap();
     SuiClientConfig {

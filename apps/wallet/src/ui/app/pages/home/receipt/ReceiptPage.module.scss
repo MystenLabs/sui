@@ -1,45 +1,9 @@
 @use '_utils';
 @use '_values/colors';
 
-.container {
-    display: flex;
-    flex-flow: column nowrap;
-    overflow-x: visible;
-    height: 100%;
-
-    .arrow-icon {
-        margin-left: 6px;
-        font-size: 10px;
-    }
-
-    .action {
-        flex-grow: 1;
-        flex-basis: 0;
-    }
-
-    .arrow-action-icon {
-        font-size: 10px;
-        color: #adcadd;
-        margin-left: 12px;
-    }
-
-    .done {
-        @include utils.typography('table/text-lg');
-
-        background-color: colors.$gray-45;
-        border-radius: 10px;
-        display: flex;
-        justify-content: center;
-
-        &:visited,
-        &:active {
-            color: colors.$gray-80;
-        }
-
-        i {
-            margin-right: 10px;
-            color: colors.$gray-65;
-            font-size: 10px;
-        }
+.receipt-overlay {
+    > div {
+        color: colors.$gray-90;
+        background-color: colors.$gray-40;
     }
 }

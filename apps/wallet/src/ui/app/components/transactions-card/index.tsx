@@ -19,7 +19,7 @@ import st from './TransactionsCard.module.scss';
 const TRUNCATE_MAX_LENGTH = 8;
 const TRUNCATE_PREFIX_LENGTH = 4;
 
-// Truncatte text after one line (~ 35 characters)
+// Truncate text after one line (~ 35 characters)
 const TRUNCATE_MAX_CHAR = 35;
 
 function TransactionCard({ txn }: { txn: TxResultState }) {
@@ -41,11 +41,13 @@ function TransactionCard({ txn }: { txn: TxResultState }) {
         TRUNCATE_MAX_CHAR,
         TRUNCATE_MAX_CHAR - 1
     );
-    const truncatedNftDiscription = useMiddleEllipsis(
+    const truncatedNftDescription = useMiddleEllipsis(
         txn?.description || '',
         TRUNCATE_MAX_CHAR,
         TRUNCATE_MAX_CHAR - 1
     );
+
+    const coinSymbol = txn.coinSymbol || GAS_SYMBOL;
 
     // TODO: update to account for bought, minted, swapped, etc
     const transferType =
@@ -53,11 +55,13 @@ function TransactionCard({ txn }: { txn: TxResultState }) {
 
     const transferMeta = {
         Call: {
-            txName: 'Minted',
+            // For NFT with name and image use Mint else use Call (Function Name)
+            txName: txn.name && txn.url ? 'Minted' : txn?.callFunctionName,
             transfer: false,
             address: false,
             icon: SuiIcons.Buy,
             iconClassName: cl(st.arrowActionIcon, st.buyIcon),
+            amount: txn?.balance || txn?.amount || txn?.txGas || 0,
         },
         Sent: {
             txName: 'Sent',
@@ -65,6 +69,7 @@ function TransactionCard({ txn }: { txn: TxResultState }) {
             address: toAddrStr,
             icon: SuiIcons.ArrowLeft,
             iconClassName: cl(st.arrowActionIcon, st.angledArrow),
+            amount: txn?.amount || txn?.txGas || 0,
         },
         Received: {
             txName: 'Received',
@@ -72,6 +77,7 @@ function TransactionCard({ txn }: { txn: TxResultState }) {
             address: fromAddrStr,
             icon: SuiIcons.ArrowLeft,
             iconClassName: cl(st.arrowActionIcon, st.angledArrow, st.received),
+            amount: txn?.amount || txn?.txGas || 0,
         },
     };
 
@@ -79,13 +85,12 @@ function TransactionCard({ txn }: { txn: TxResultState }) {
         ? formatDate(txn.timestampMs, ['month', 'day', 'hour', 'minute'])
         : false;
 
-    const TransferSuiTxn = txn.kind === 'TransferSui' ? <span>SUI</span> : null;
-    const TransferFailed =
-        txn.status !== 'success' ? (
-            <div className={st.transferFailed}>Failed</div>
-        ) : null;
+    const transferSuiTxn = txn.kind === 'TransferSui' ? <span>SUI</span> : null;
+    const transferFailed = txn.error ? (
+        <div className={st.transferFailed}>{txn.error}</div>
+    ) : null;
 
-    const TxnsAddress = transferMeta[transferType]?.address ? (
+    const txnsAddress = transferMeta[transferType]?.address ? (
         <div className={st.address}>
             <div className={st.txTypeName}>
                 {transferMeta[transferType].transfer}
@@ -113,24 +118,27 @@ function TransactionCard({ txn }: { txn: TxResultState }) {
                 <div className={st.cardContent}>
                     <div className={st.txResult}>
                         <div className={cl(st.txTypeName, st.kind)}>
-                            {transferMeta[transferType].txName} {TransferSuiTxn}
+                            {txn.error
+                                ? 'Transaction failed'
+                                : transferMeta[transferType].txName}{' '}
+                            {transferSuiTxn}
                         </div>
 
                         <div className={st.txTransferred}>
                             <div className={st.txAmount}>
                                 {intl.formatNumber(
-                                    BigInt(txn?.amount || txn?.txGas || 0),
+                                    BigInt(transferMeta[transferType].amount),
                                     balanceFormatOptions
                                 )}{' '}
-                                <span>{GAS_SYMBOL}</span>
+                                <span>{coinSymbol}</span>
                             </div>
                         </div>
                     </div>
 
-                    {TxnsAddress || TransferFailed ? (
+                    {txnsAddress || transferFailed ? (
                         <div className={st.txResult}>
-                            {TxnsAddress}
-                            {TransferFailed}
+                            {txnsAddress}
+                            {transferFailed}
                         </div>
                     ) : null}
 
@@ -148,7 +156,7 @@ function TransactionCard({ txn }: { txn: TxResultState }) {
                                     {truncatedNftName}
                                 </div>
                                 <div className={st.nftDescription}>
-                                    {truncatedNftDiscription}
+                                    {truncatedNftDescription}
                                 </div>
                             </div>
                         </div>
