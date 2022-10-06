@@ -10,36 +10,14 @@ View the [Tic Tac Toe tutorial](../explore/tutorials.md) to learn how to create 
 
 ## Sui examples
 
-View [examples](../explore/examples.md) Sui projects that help you how to work with Sui.
+View [example](../explore/examples.md) Sui projects that help you learn how to work with Sui.
 
 ## Sui prototypes
 
-See some project prototypes that demonstrate Sui functionality.
+To learn about how the implementation details for the Sui Monstar example prototype, see [Sui Prototypes](../explore/prototypes.md).
 
-[Prototypes](../explore/prototypes.md) - pre-alpha game prototypes that showcase the power of NFTs on Sui:
-<section class="sui-dev-video">
-
-<iframe id="ytplayer" type="text/html" src="https://www.youtube.com/embed/sAMT5x8W3B8?autoplay=0"  frameborder="0"></iframe>
-</section>
-
-<br/>
-<br/>
-
+To view the example prototypes, see:
 [Panzerdogs x Sui](../explore/panzerdogs.md) - an example of how the Sui infrastructure delivers a more integrated feedback loop between gameplay and NFT ownership.
-<section class="sui-dev-video">
-
-<iframe id="ytplayer" type="text/html" src="https://www.youtube.com/embed/Nx7hTb8dOb4?autoplay=0" frameborder="0"></iframe>
-</section>
-
-<br/>
-<br/>
 
 [SoWork x Sui](../explore/sowork.md) - building features on Sui to power creative employee rewards and custom NFT mints via SoWork's mapmaker.
-<section class="sui-dev-video">
 
- <iframe id="ytplayer" type="text/html" src="https://www.youtube.com/embed/lwPMhpiyfmE?autoplay=0"  frameborder="0"></iframe>
-</section>
-
-## Sui Explorer
-
-Navigate the [Sui Explorer](https://explorer.devnet.sui.io/) to see transaction and object details. Read the [Sui Explorer README](https://github.com/MystenLabs/sui/tree/main/apps/explorer#readme) for instructions on how to run the Explorer locally.
