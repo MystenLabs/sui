@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import cl from 'classnames';
 import { useMemo, useCallback } from 'react';
 import { useIntl } from 'react-intl';
 import { useNavigate, Link } from 'react-router-dom';
@@ -65,6 +66,9 @@ function ActiveCoinsCard({
 
     const IconName = activeCoin?.coinIconName || SuiIcons.SuiLogoIcon;
 
+    const defaultIconClass =
+        GAS_TYPE_ARG !== activeCoin?.coinSymbol ? st.defaultCoin : '';
+
     const SelectedCoinCard = activeCoin ? (
         <div className={st.selectCoin}>
             <Link
@@ -73,7 +77,7 @@ function ActiveCoinsCard({
                 }).toString()}`}
                 className={st.coin}
             >
-                <div className={st.suiIcon}>
+                <div className={cl(st.suiIcon, defaultIconClass)}>
                     <Icon icon={IconName} />
                 </div>
                 <div className={st.coinLabel}>
@@ -97,7 +101,7 @@ function ActiveCoinsCard({
 
     const navigate = useNavigate();
 
-    const changeConType = useCallback(
+    const changeCoinType = useCallback(
         (event: React.MouseEvent<HTMLDivElement>) => {
             const cointype = event.currentTarget.dataset.cointype as string;
             navigate(
@@ -115,10 +119,10 @@ function ActiveCoinsCard({
                 <div
                     className={st.coinDetail}
                     key={index}
-                    onClick={changeConType}
+                    onClick={changeCoinType}
                     data-cointype={coin.coinType}
                 >
-                    <div className={st.coinIcon}>
+                    <div className={cl(st.coinIcon, defaultIconClass)}>
                         <Icon icon={coin.coinIconName} />
                     </div>
                     <div className={st.coinLabel}>

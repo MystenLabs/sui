@@ -42,7 +42,6 @@ function TransactionsPage() {
                         </Content>
                     </div>
                 ) : null}
-                ;
             </Loading>
         </>
     );
