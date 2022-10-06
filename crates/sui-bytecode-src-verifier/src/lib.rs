@@ -105,15 +105,15 @@ impl<'a> BytecodeSourceVerifier<'a> {
             };
 
             let local_pkg_bytes = match compiled_dep_map.get(&pkg_symbol) {
-                Some(bytes) => {
+                Some(module_bytes) => {
                     if self.verbose {
                         println!(
                             "\nlocal package dependency {} : {} modules",
                             pkg_symbol,
-                            bytes.len()
+                            module_bytes.len()
                         );
                     }
-                    bytes
+                    module_bytes
                 }
                 None => {
                     return Err(DependencyVerificationError::LocalDependencyNotFound(
