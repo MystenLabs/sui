@@ -2,8 +2,7 @@
 title: Sui Prototypes
 ---
 
-Here are two short gaming pre-alpha prototypes that demonstrate the speed, scalability, and rich interactions made possible with mutable, expressive NFTs. You can try out the [Sui Monstars](https://sui.io/monstar) game today.
-
+Here are two short gaming pre-alpha prototypes that demonstrate the speed, scalability, and rich interactions made possible with mutable, expressive NFTs.
 
 ## Sui and gaming
 
@@ -189,7 +188,7 @@ GET /object_info?objectId={{monster_id}}
 
 ## Sui Monstar prototype
 
-[Sui Monstar](https://sui.io/monstar) is a pet simulation game.
+Sui Monstar is an example of a pet simulation game.
 
 Gameplay:
 
@@ -211,7 +210,7 @@ That’s not all! As your Monstars become stronger, you can use them to help you
 
 ## Sui Battler prototype
 
-Welcome to Sui Battler, where your cute monstars transform into warriors!
+Sui Battler is an example game where your cute monstars transform into warriors!
 
 Gameplay:
 
