@@ -213,7 +213,7 @@ def remote(ctx, debug=False):
         },
         'max_concurrent_requests': 500_000,
         'prometheus_metrics': {
-            "socket_addr": "/ip4/0.0.0.0/tcp/6666/http"
+            "socket_addr": "/ip4/0.0.0.0/tcp/0/http"
         },
         "network_admin_server": {
             "primary_network_admin_server_port": 6564,
