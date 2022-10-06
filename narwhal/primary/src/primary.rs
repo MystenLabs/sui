@@ -262,6 +262,7 @@ impl Primary {
                 )
             });
         info!("Primary {} listening on {}", name.encode_base64(), address);
+        types::random_state_log!();
 
         let connection_monitor_handle = network::connectivity::ConnectionMonitor::spawn(
             network.clone(),
@@ -275,6 +276,7 @@ impl Primary {
             .into_iter()
             .map(|(_, address, network_key)| (network_key, address));
         let workers = worker_cache.load().all_workers().into_iter();
+        types::random_state_log!();
         for (public_key, address) in primaries.chain(workers) {
             let peer_id = PeerId(public_key.0.to_bytes());
             let address = network::multiaddr_to_address(&address).unwrap();
@@ -285,6 +287,7 @@ impl Primary {
             };
             network.known_peers().insert(peer_info);
         }
+        types::random_state_log!();
 
         info!(
             "Primary {} listening to network admin messages on 127.0.0.1:{}",
@@ -312,9 +315,11 @@ impl Primary {
             /* tx_certificate_waiter */ tx_sync_certificates,
             dag.clone(),
         );
+        types::random_state_log!();
 
         // The `SignatureService` is used to require signatures on specific digests.
         let signature_service = SignatureService::new(signer);
+        types::random_state_log!();
 
         if let Some(rx_executor_network) = rx_executor_network {
             let executor_network = P2pNetwork::new(network.clone());
@@ -322,6 +327,7 @@ impl Primary {
                 panic!("Executor shut down before primary has a chance to start");
             }
         }
+        types::random_state_log!();
 
         // TODO (Laura): if we are restarting and not advancing, for the headers in the header
         // TODO (Laura): store that do not have a matching certificate, re-create and send a vote
@@ -349,11 +355,13 @@ impl Primary {
             core_primary_network,
         );
 
+        types::random_state_log!();
         // Receives batch digests from other workers. They are only used to validate headers.
         let payload_receiver_handle = PayloadReceiver::spawn(
             payload_store.clone(),
             /* rx_workers */ rx_others_digests,
         );
+        types::random_state_log!();
 
         let block_synchronizer_handler = Arc::new(BlockSynchronizerHandler::new(
             tx_block_synchronizer_commands,
@@ -363,6 +371,7 @@ impl Primary {
                 .block_synchronizer
                 .handler_certificate_deliver_timeout,
         ));
+        types::random_state_log!();
 
         // Indicator variable for the gRPC server
         let internal_consensus = dag.is_none();

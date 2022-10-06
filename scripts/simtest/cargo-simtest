@@ -50,6 +50,13 @@ cargo_patch_args=(
   --config 'patch.crates-io.hyper.rev = "2b2eca1e983376294c84c93385ebe848ccf9a99f"'
 )
 
+if [ -n "$LOCAL_ANEMO_PATH" ]; then
+  cargo_patch_args+=(
+    --config "patch.'https://github.com/mystenlabs/anemo.git'.anemo.path = \"$LOCAL_ANEMO_PATH/crates/anemo\""
+  )
+fi
+
+
 if [ -n "$LOCAL_MSIM_PATH" ]; then
   cargo_patch_args+=(
     --config "patch.crates-io.tokio.path = \"$LOCAL_MSIM_PATH/msim-tokio\""

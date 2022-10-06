@@ -160,6 +160,7 @@ pub async fn checkpoint_process<A>(
 ) where
     A: AuthorityAPI + Send + Sync + 'static + Clone + Reconfigurable,
 {
+    sui_simulator::random_state_log!();
     info!("Start active checkpoint process.");
 
     tokio::time::sleep(timing.long_pause_between_checkpoints).await;

@@ -58,7 +58,7 @@ debug = true
 debug-assertions = true
 overflow-checks = true
 # opt-level 1 gives >5x speedup for simulator tests without slowing down build times very much.
-opt-level = 1
+opt-level = 0
 
 # Dependencies that should be kept in sync through the whole workspace
 [workspace.dependencies]

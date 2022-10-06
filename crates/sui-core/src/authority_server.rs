@@ -255,6 +255,7 @@ impl ValidatorService {
         prometheus_registry: Registry,
         rx_reconfigure_consensus: Receiver<ReconfigConsensusMessage>,
     ) -> Result<Self> {
+        sui_simulator::random_state_log!();
         let (tx_consensus_listener, rx_consensus_listener) = channel(1_000);
 
         // Spawn the consensus node of this authority.
@@ -271,9 +272,12 @@ impl ValidatorService {
         let consensus_execution_state = Arc::new(consensus_execution_state);
         let consensus_parameters = consensus_config.narwhal_config().to_owned();
         let network_keypair = config.network_key_pair.copy();
+        sui_simulator::random_state_log!();
 
         let registry = prometheus_registry.clone();
+        sui_simulator::random_state_log!();
         tokio::spawn(async move {
+            sui_simulator::random_state_log!();
             narwhal_node::restarter::NodeRestarter::watch(
                 consensus_keypair,
                 network_keypair,

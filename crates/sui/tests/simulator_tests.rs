@@ -95,6 +95,11 @@ async fn test_select_unbiased() {
 }
 
 #[sim_test(check_determinism)]
+async fn test_temp_file() {
+    dbg!(tempfile::tempdir().unwrap().into_path());
+}
+
+#[sim_test(check_determinism)]
 async fn test_hash_collections() {
     telemetry_subscribers::init_for_testing();
 

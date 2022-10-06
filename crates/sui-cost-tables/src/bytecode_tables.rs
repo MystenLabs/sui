@@ -554,6 +554,7 @@ pub fn zero_cost_instruction_table() -> Vec<(Bytecode, GasCost)> {
 // Only used for genesis and for tests where we need a cost table and
 // don't have a genesis storage state.
 pub fn zero_cost_schedule() -> CostTable {
+    dbg!("zero_cost_schedule");
     // The actual costs for the instructions in this table _DO NOT MATTER_. This is only used
     // for genesis and testing, and for these cases we don't need to worry
     // about the actual gas for instructions.  The only thing we care about is having an entry
@@ -679,6 +680,7 @@ pub fn legacy_bytecode_instruction_costs() -> Vec<(Bytecode, GasCost)> {
 }
 
 pub static INITIAL_COST_SCHEDULE: Lazy<CostTable> = Lazy::new(|| {
+    dbg!("INITIAL_COST_SCHEDULE");
     let mut instrs = legacy_bytecode_instruction_costs();
     // Note that the DiemVM is expecting the table sorted by instruction order.
     instrs.sort_by_key(|cost| instruction_key(&cost.0));

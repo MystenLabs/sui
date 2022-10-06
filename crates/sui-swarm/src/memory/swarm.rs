@@ -107,7 +107,7 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
         let dir = if let Some(dir) = self.dir {
             SwarmDirectory::Persistent(dir)
         } else {
-            SwarmDirectory::Temporary(TempDir::new().unwrap())
+            SwarmDirectory::Temporary(dbg!(TempDir::new().unwrap()))
         };
 
         let mut config_builder = ConfigBuilder::new(dir.as_ref());
@@ -196,9 +196,13 @@ impl Swarm {
 
     /// Start all of the Validators associated with this Swarm
     pub async fn launch(&mut self) -> Result<()> {
+        sui_simulator::random_state_log!();
         let start_handles = self
             .nodes_iter_mut()
-            .map(|node| node.spawn())
+            .map(|node| {
+                sui_simulator::random_state_log!();
+                node.spawn()
+            })
             .collect::<Result<Vec<_>>>()?;
 
         try_join_all(start_handles).await?;

@@ -17,7 +17,7 @@ pub use telemetry_subscribers;
 #[macro_export]
 macro_rules! nondeterministic {
     ($expr: expr) => {
-        std::thread::spawn(move || $expr).join()
+        std::thread::spawn(move || $expr).join().unwrap()
     };
 }
 
@@ -28,6 +28,21 @@ macro_rules! nondeterministic {
     ($expr: expr) => {
         $expr
     };
+}
+
+#[macro_export]
+macro_rules! random_state_log {
+    () => {{
+        use std::hash::BuildHasher;
+        use std::hash::Hash;
+        use std::hash::Hasher;
+
+        let s = std::collections::hash_map::RandomState::new();
+        let mut h1 = s.build_hasher();
+        1_u64.hash(&mut h1);
+        let random_state = h1.finish();
+        dbg!(random_state);
+    }};
 }
 
 #[cfg(msim)]

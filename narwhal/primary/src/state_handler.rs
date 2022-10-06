@@ -74,6 +74,7 @@ impl StateHandler {
     }
 
     async fn run(&mut self) {
+        types::random_state_log!();
         info!(
             "StateHandler on node {} has started successfully.",
             self.name

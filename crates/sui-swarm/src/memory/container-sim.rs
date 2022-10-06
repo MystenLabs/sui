@@ -43,10 +43,12 @@ impl Container {
         config: NodeConfig,
         _runtime: RuntimeType,
     ) -> (tokio::sync::oneshot::Receiver<()>, Self) {
+        sui_simulator::random_state_log!();
         let (startup_sender, startup_reciever) = tokio::sync::oneshot::channel();
         let (cancel_sender, cancel_reciever) = tokio::sync::oneshot::channel();
 
         let handle = sui_simulator::runtime::Handle::current();
+        sui_simulator::random_state_log!();
         let builder = handle.create_node();
 
         let socket_addr =
@@ -56,6 +58,7 @@ impl Container {
             _ => panic!("unsupported protocol"),
         };
 
+        sui_simulator::random_state_log!();
         let node = builder
             .ip(ip)
             .name(&format!("{}", config.protocol_public_key()).as_str()[0..8])
@@ -64,7 +67,9 @@ impl Container {
             })
             .build();
 
+        sui_simulator::random_state_log!();
         let task_handle = node.spawn(async move {
+            sui_simulator::random_state_log!();
             let _server = SuiNode::start(&config, Registry::new()).await.unwrap();
             // Notify that we've successfully started the node
             error!("node started, sending oneshot");
@@ -73,6 +78,7 @@ impl Container {
             cancel_reciever.map(|_| ()).await;
             trace!("cancellation received; shutting down thread");
         });
+        sui_simulator::random_state_log!();
 
         (
             startup_reciever,

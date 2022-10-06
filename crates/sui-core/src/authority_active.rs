@@ -65,6 +65,8 @@ pub mod execution_driver;
 
 use self::{checkpoint_driver::CheckpointProcessControl, execution_driver::execution_process};
 
+use sui_simulator::nondeterministic;
+
 // TODO: Make these into a proper config
 const MAX_RETRIES_RECORDED: u32 = 10;
 const DELAY_FOR_1_RETRY_MS: u64 = 2_000;
@@ -150,13 +152,14 @@ impl<A> ActiveAuthority<A> {
 
         let net = Arc::new(net);
 
+        let initial = committee
+            .names()
+            .map(|name| (*name, AuthorityHealth::default()))
+            .collect();
+
+        sui_simulator::random_state_log!();
         Ok(ActiveAuthority {
-            health: Arc::new(Mutex::new(
-                committee
-                    .names()
-                    .map(|name| (*name, AuthorityHealth::default()))
-                    .collect(),
-            )),
+            health: Arc::new(Mutex::new(dbg!(initial))),
             state: authority,
             node_sync_store,
             node_sync_handle: OnceCell::new(),
@@ -175,7 +178,9 @@ impl<A> ActiveAuthority<A> {
         authority: Arc<AuthorityState>,
         net: AuthorityAggregator<A>,
     ) -> SuiResult<Self> {
+        //let working_dir = nondeterministic!(tempfile::tempdir().unwrap());
         let working_dir = tempfile::tempdir().unwrap();
+        dbg!(&working_dir);
         let sync_db_path = working_dir.path().join("node_sync_db");
 
         let node_sync_store = Arc::new(NodeSyncStore::open_tables_read_write(
@@ -218,6 +223,7 @@ impl<A> ActiveAuthority<A> {
     /// the`no contact` value to DELAY_FOR_1_RETRY_MS * EXPONENTIAL_DELAY_BASIS ^ retries, up to
     /// a maximum delay of MAX_RETRY_DELAY_MS.
     pub async fn set_failure_backoff(&self, name: AuthorityName) {
+        debug!(?name, "set_failure_backoff");
         let mut lock = self.health.lock().await;
         let mut entry = lock.entry(name).or_default();
         entry.retries = u32::min(entry.retries + 1, MAX_RETRIES_RECORDED);
@@ -230,6 +236,7 @@ impl<A> ActiveAuthority<A> {
 
     /// Resets retries to zero and sets no contact to zero delay.
     pub async fn set_success_backoff(&self, name: AuthorityName) {
+        debug!(?name, "set_success_backoff");
         let mut lock = self.health.lock().await;
         let mut entry = lock.entry(name).or_default();
         entry.retries = 0;
@@ -239,6 +246,7 @@ impl<A> ActiveAuthority<A> {
     /// Checks given the current time if we should contact this authority, ie
     /// if we are past any `no contact` delay.
     pub async fn can_contact(&self, name: AuthorityName) -> bool {
+        debug!(?name, "can_contact");
         let mut lock = self.health.lock().await;
         let entry = lock.entry(name).or_default();
         entry.can_initiate_contact_now()
@@ -313,7 +321,9 @@ where
         let committee = self.state.committee.load().deref().clone();
         let target_num_tasks = usize::min(committee.num_members() - 1, degree);
 
+        sui_simulator::random_state_log!();
         tokio::task::spawn(async move {
+            sui_simulator::random_state_log!();
             gossip_process(&self, target_num_tasks).await;
         })
     }
@@ -422,8 +432,10 @@ where
         metrics: CheckpointMetrics,
         enable_reconfig: bool,
     ) -> JoinHandle<()> {
+        sui_simulator::random_state_log!();
         // Spawn task to take care of checkpointing
         tokio::task::spawn(async move {
+            sui_simulator::random_state_log!();
             checkpoint_process(self, &checkpoint_process_control, metrics, enable_reconfig).await;
         })
     }

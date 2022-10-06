@@ -79,6 +79,7 @@ pub struct SuiNode {
 
 impl SuiNode {
     pub async fn start(config: &NodeConfig, prometheus_registry: Registry) -> Result<SuiNode> {
+        sui_simulator::random_state_log!();
         // TODO: maybe have a config enum that takes care of this for us.
         let is_validator = config.consensus_config().is_some();
         let is_full_node = !is_validator;
@@ -91,6 +92,7 @@ impl SuiNode {
 
         let secret = Arc::pin(config.protocol_key_pair().copy());
         let committee = genesis.committee()?;
+        dbg!(config.db_path());
         let store = Arc::new(AuthorityStore::open(&config.db_path().join("store"), None));
         let committee_store = Arc::new(CommitteeStore::new(
             config.db_path().join("epochs"),
@@ -116,6 +118,7 @@ impl SuiNode {
             )))
         };
 
+        sui_simulator::random_state_log!();
         let event_store = if config.enable_event_processing {
             let path = config.db_path().join("events.db");
             let db = SqlEventStore::new_from_file(&path).await?;
@@ -131,6 +134,7 @@ impl SuiNode {
             .websocket_address
             .map(|_| Arc::new(TransactionStreamer::new()));
 
+        sui_simulator::random_state_log!();
         let state = Arc::new(
             AuthorityState::new(
                 config.protocol_public_key(),
@@ -190,6 +194,7 @@ impl SuiNode {
             GossipMetrics::new(&prometheus_registry),
             network_metrics.clone(),
         )?);
+        sui_simulator::random_state_log!();
 
         let arc_net = active_authority.agg_aggregator();
 
@@ -275,25 +280,35 @@ impl SuiNode {
         } else {
             None
         };
+        sui_simulator::random_state_log!();
 
         let grpc_server = {
+            sui_simulator::random_state_log!();
             let mut server_conf = mysten_network::config::Config::new();
+            sui_simulator::random_state_log!();
             server_conf.global_concurrency_limit = config.grpc_concurrency_limit;
+            sui_simulator::random_state_log!();
             server_conf.load_shed = config.grpc_load_shed;
+            sui_simulator::random_state_log!();
             let mut server_builder =
                 ServerBuilder::from_config(&server_conf, GrpcMetrics::new(&prometheus_registry));
 
+            sui_simulator::random_state_log!();
             if let Some(validator_service) = validator_service {
+                sui_simulator::random_state_log!();
                 server_builder =
                     server_builder.add_service(ValidatorServer::new(validator_service));
             }
 
+            sui_simulator::random_state_log!();
             let server = server_builder
                 .bind(config.network_address())
                 .await
                 .map_err(|err| anyhow!(err.to_string()))?;
+            sui_simulator::random_state_log!();
             let local_addr = server.local_addr();
             info!("Listening to traffic on {local_addr}");
+            sui_simulator::random_state_log!();
             tokio::spawn(server.serve().map_err(Into::into))
         };
 
@@ -324,6 +339,7 @@ impl SuiNode {
         };
 
         info!("SuiNode started!");
+        sui_simulator::random_state_log!();
 
         Ok(node)
     }

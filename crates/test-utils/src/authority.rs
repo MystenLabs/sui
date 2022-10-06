@@ -21,6 +21,7 @@ use sui_core::{
 use sui_types::{committee::Committee, object::Object};
 
 pub use sui_node::{SuiNode, SuiNodeHandle};
+use sui_simulator::nondeterministic;
 use sui_types::base_types::ObjectID;
 use sui_types::messages::{ObjectInfoRequest, ObjectInfoRequestKind};
 
@@ -33,7 +34,9 @@ pub fn test_authority_configs() -> NetworkConfig {
 }
 
 pub fn test_and_configure_authority_configs(committee_size: usize) -> NetworkConfig {
+    //let config_dir = nondeterministic!(tempfile::tempdir().unwrap().into_path());
     let config_dir = tempfile::tempdir().unwrap().into_path();
+    dbg!(&config_dir);
     let rng = StdRng::from_seed([0; 32]);
     let mut configs = NetworkConfig::generate_with_rng(&config_dir, committee_size, rng);
     for config in configs.validator_configs.iter_mut() {

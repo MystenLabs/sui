@@ -130,6 +130,7 @@ pub async fn gossip_process<A>(active_authority: &ActiveAuthority<A>, degree: us
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
+    sui_simulator::random_state_log!();
     follower_process(
         active_authority,
         degree,
@@ -146,6 +147,7 @@ async fn follower_process<A, Handler: DigestHandler<A> + Clone>(
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
     // Make a clone of the active authority and committee, and keep using it until epoch changes.
+    sui_simulator::random_state_log!();
     let mut local_active = Arc::new(active_authority.clone());
     let mut committee = local_active.state.committee.load().deref().clone();
 
@@ -157,10 +159,12 @@ async fn follower_process<A, Handler: DigestHandler<A> + Clone>(
         info!("Turning off gossip mechanism");
         return;
     }
+    sui_simulator::random_state_log!();
     info!("Turning on gossip mechanism");
 
     // Keep track of names of active peers
     let mut peer_names = HashSet::new();
+    sui_simulator::random_state_log!();
     let mut gossip_tasks = FuturesUnordered::new();
     let metrics_concurrent_followed_validators = &active_authority
         .gossip_metrics

@@ -38,16 +38,23 @@ impl NodeRestarter {
     ) where
         State: ExecutionState + Send + Sync + 'static,
     {
+        types::random_state_log!();
         let mut primary_keypair = primary_keypair;
+        types::random_state_log!();
         let mut primary_network_keypair = primary_network_keypair;
+        types::random_state_log!();
         let mut name = primary_keypair.public().clone();
+        types::random_state_log!();
         let mut worker_ids_and_keypairs = worker_ids_and_keypairs;
+        types::random_state_log!();
         let mut committee = committee.clone();
+        types::random_state_log!();
 
         // construct a p2p network that we can use to send reconfigure messages to our primary and
         // workers. We generate a random key simply to construct the network. Also, ideally this
         // would be done via a different interface.
         let mut handles = Vec::new();
+        types::random_state_log!();
         let network = anemo::Network::bind("127.0.0.1:0")
             .server_name("narwhal")
             .private_key(
@@ -61,6 +68,7 @@ impl NodeRestarter {
 
         // Listen for new committees.
         loop {
+            types::random_state_log!();
             tracing::info!("Starting epoch E{}", committee.epoch());
 
             // Get a fresh store for the new epoch.
@@ -69,6 +77,7 @@ impl NodeRestarter {
             let store = NodeStorage::reopen(store_path);
 
             // Restart the relevant components.
+            types::random_state_log!();
             let primary_handles = Node::spawn_primary(
                 primary_keypair,
                 primary_network_keypair,
@@ -83,6 +92,7 @@ impl NodeRestarter {
             .await
             .unwrap();
 
+            types::random_state_log!();
             let worker_handles = Node::spawn_workers(
                 name.clone(),
                 worker_ids_and_keypairs,
@@ -96,6 +106,7 @@ impl NodeRestarter {
             handles.extend(primary_handles);
             handles.extend(worker_handles);
 
+            types::random_state_log!();
             // Wait for a committee change.
             let (
                 new_keypair,

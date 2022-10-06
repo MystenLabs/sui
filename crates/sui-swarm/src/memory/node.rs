@@ -50,6 +50,7 @@ impl Node {
     /// Start this Node, returning a handle that will resolve when the node has completed starting
     /// up.
     pub fn spawn(&mut self) -> Result<tokio::sync::oneshot::Receiver<()>> {
+        sui_simulator::random_state_log!();
         trace!(name =% self.name(), "starting in-memory node");
         let (startup_reciever, node_handle) =
             Container::spawn(self.config.clone(), self.runtime_type);

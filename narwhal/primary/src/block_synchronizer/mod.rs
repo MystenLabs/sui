@@ -291,6 +291,7 @@ impl BlockSynchronizer {
         // processing.
         let mut waiting = FuturesUnordered::new();
 
+        types::random_state_log!();
         info!(
             "BlockSynchronizer on node {} has started successfully.",
             self.name
