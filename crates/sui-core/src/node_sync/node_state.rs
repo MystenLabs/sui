@@ -1085,3 +1085,29 @@ impl NodeSyncHandle {
         Ok(Self::map_rx(rx))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_display_execution_driver_error() {
+        let digest = TransactionDigest::new([11u8; 32]);
+        let err0 = SuiError::ExecutionDriverError {
+            digest,
+            msg: "test 0".into(),
+            errors: Vec::new(),
+        };
+        let err1 = SuiError::ExecutionDriverError {
+            digest,
+            msg: "test 1".into(),
+            errors: vec![err0],
+        };
+        let err2 = SuiError::ExecutionDriverError {
+            digest,
+            msg: "test 2".into(),
+            errors: vec![err1],
+        };
+        assert_eq!(format!("{}", err2), "ExecutionDriver error for CwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCws=: test 2 - Caused by : [ ExecutionDriver error for CwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCws=: test 1 - Caused by : [ ExecutionDriver error for CwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCws=: test 0 - Caused by : [  ] ] ]");
+    }
+}
