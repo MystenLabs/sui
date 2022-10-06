@@ -123,12 +123,9 @@ impl<'a> BytecodeSourceVerifier<'a> {
             };
 
             for (symbol, addr) in resolution_package.resolution_table {
-                // zero address is the package we're checking dependencies for
-                if addr.eq(&AccountAddress::ZERO) {
-                    continue;
-                }
                 // package addresses may show up many times, but we only need to verify them once
-                if verified_deps.contains_key(&addr) {
+                // zero address is the package we're checking dependencies for
+                if verified_deps.contains_key(&addr) || addr.eq(&AccountAddress::ZERO) {
                     continue;
                 }
 
