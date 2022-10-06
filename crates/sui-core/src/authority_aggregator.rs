@@ -1543,7 +1543,10 @@ where
                                         tx_digest = ?tx_digest,
                                         "Got quorum for validators handle_certificate."
                                     );
-                                    return Ok(ReduceOutput::End(state));
+                                    return Ok(ReduceOutput::ContinueWithTimeout(
+                                        state,
+                                        timeout_after_quorum,
+                                    ));
                                 }
                             }
                             Err(err) => {
