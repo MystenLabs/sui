@@ -16,4 +16,4 @@ anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "57c4af7d6cdbf4
 fastcrypto = "0.1.2"
 
 [target.'cfg(msim)'.dependencies]
-msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "305f0ca15fe77df5b92b7f4bb57b5472e568edc3", package = "msim" }
+msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "982cf1a544ebd1e2818330f9b1247a4c3dd26c13", package = "msim" }
