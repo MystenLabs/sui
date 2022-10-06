@@ -75,7 +75,7 @@ RUN cargo build --${BUILD_MODE}
 COPY . .
 
 # Build the binary named "node"
-RUN cargo build --${BUILD_MODE} --features ${FEATURES} --bin node --bin benchmark_client
+RUN cargo build --${BUILD_MODE} --features ${FEATURES} --bin narwhal-node --bin narwhal-benchmark-client
 
 
 #################################################################
@@ -89,11 +89,11 @@ ARG BUILD_MODE
 WORKDIR "$WORKDIR/sui"
 
 # Copy the Narwhal node binary to bin folder
-COPY --from=builder sui/target/${BUILD_MODE}/node bin/
+COPY --from=builder sui/target/${BUILD_MODE}/narwhal-node bin/
 
 # This is used for testing a cluster by generating load.
 # We use this in our k8s cluster deployed alongside the workers and validators.
-COPY --from=builder sui/target/${BUILD_MODE}/benchmark_client bin/
+COPY --from=builder sui/target/${BUILD_MODE}/narwhal-benchmark-client bin/
 
 # Copy the entry point file
 COPY narwhal/Docker/entry.sh ./

@@ -61,11 +61,11 @@ dhat-heap = ["dhat"]    # if you are doing heap profiling
 trace_transaction = ["worker/trace_transaction"]
 
 [[bin]]
-name = "node"
+name = "narwhal-node"
 path = "src/main.rs"
 
 [[bin]]
-name = "benchmark_client"
+name = "narwhal-benchmark-client"
 path = "src/benchmark_client.rs"
 required-features = ["benchmark"]
 
