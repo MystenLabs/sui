@@ -87,7 +87,7 @@ You can also install individual wallet adapters that you plan on using in your p
 
 ### Wallet Standard
 
-Wallets that adhere to the cross-chain [Wallet Standard](https://github.com/wallet-standard/wallet-standard/) are automatically supported using the `WalletStandardAdapterProvider` adapter (published under `@mysten/wallet-adapter-wallet-standard`). This adapter detects wallets that are available in the users' browser without the need for additional configured adapters.
+The `WalletStandardAdapterProvider` adapter (published under `@mysten/wallet-adapter-wallet-standard`) automatically supports wallets that adhere to the cross-chain [Wallet Standard](https://github.com/wallet-standard/wallet-standard/). This adapter detects the available wallets in users' browsers. You do not need to configure additional adapters.
 
 The following wallets are known to work with the Wallet Standard:
 
