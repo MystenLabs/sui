@@ -289,11 +289,11 @@ export function isSuiMoveNormalizedType(obj: any, _argumentName?: string): obj i
             (obj !== null &&
                 typeof obj === "object" ||
                 typeof obj === "function") &&
-            isSuiMoveNormalizedStructType(obj.Reference) as boolean ||
+            isSuiMoveNormalizedType(obj.Reference) as boolean ||
             (obj !== null &&
                 typeof obj === "object" ||
                 typeof obj === "function") &&
-            isSuiMoveNormalizedStructType(obj.MutableReference) as boolean ||
+            isSuiMoveNormalizedType(obj.MutableReference) as boolean ||
             (obj !== null &&
                 typeof obj === "object" ||
                 typeof obj === "function") &&
@@ -324,7 +324,7 @@ export function isSuiMoveNormalizedStructType(obj: any, _argumentName?: string):
         isTransactionDigest(obj.Struct.name) as boolean &&
         Array.isArray(obj.Struct.type_arguments) &&
         obj.Struct.type_arguments.every((e: any) =>
-            isSuiMoveNormalizedTypeParameterType(e) as boolean
+            isSuiMoveNormalizedType(e) as boolean
         )
     )
 }

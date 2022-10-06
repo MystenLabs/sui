@@ -159,8 +159,9 @@ export class CallArgSerializer {
   }
 
   private isTxContext(param: SuiMoveNormalizedType): boolean {
-    const struct = extractMutableReference(param)?.Struct;
+    const struct = extractStructTag(param)?.Struct;
     return (
+      extractMutableReference(param) != null &&
       struct?.address === '0x2' &&
       struct?.module === 'tx_context' &&
       struct?.name === 'TxContext'

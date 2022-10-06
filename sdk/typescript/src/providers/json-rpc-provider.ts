@@ -88,61 +88,63 @@ export class JsonRpcProvider extends Provider {
 
   // Move info
   async getMoveFunctionArgTypes(
-    objectId: string,
+    packageId: string,
     moduleName: string,
     functionName: string
   ): Promise<SuiMoveFunctionArgTypes> {
     try {
       return await this.client.requestWithType(
         'sui_getMoveFunctionArgTypes',
-        [objectId, moduleName, functionName],
+        [packageId, moduleName, functionName],
         isSuiMoveFunctionArgTypes,
         this.skipDataValidation
       );
     } catch (err) {
       throw new Error(
-        `Error fetching Move function arg types with package object ID: ${objectId}, module name: ${moduleName}, function name: ${functionName}`
+        `Error fetching Move function arg types with package object ID: ${packageId}, module name: ${moduleName}, function name: ${functionName}`
       );
     }
   }
 
   async getNormalizedMoveModulesByPackage(
-    objectId: string
+    packageId: string
   ): Promise<SuiMoveNormalizedModules> {
     // TODO: Add caching since package object does not change
     try {
       return await this.client.requestWithType(
         'sui_getNormalizedMoveModulesByPackage',
-        [objectId],
+        [packageId],
         isSuiMoveNormalizedModules,
         this.skipDataValidation
       );
     } catch (err) {
-      throw new Error(`Error fetching package: ${err} for package ${objectId}`);
+      throw new Error(
+        `Error fetching package: ${err} for package ${packageId}`
+      );
     }
   }
 
   async getNormalizedMoveModule(
-    objectId: string,
+    packageId: string,
     moduleName: string
   ): Promise<SuiMoveNormalizedModule> {
     // TODO: Add caching since package object does not change
     try {
       return await this.client.requestWithType(
         'sui_getNormalizedMoveModule',
-        [objectId, moduleName],
+        [packageId, moduleName],
         isSuiMoveNormalizedModule,
         this.skipDataValidation
       );
     } catch (err) {
       throw new Error(
-        `Error fetching module: ${err} for package ${objectId}, module ${moduleName}}`
+        `Error fetching module: ${err} for package ${packageId}, module ${moduleName}}`
       );
     }
   }
 
   async getNormalizedMoveFunction(
-    objectId: string,
+    packageId: string,
     moduleName: string,
     functionName: string
   ): Promise<SuiMoveNormalizedFunction> {
@@ -150,32 +152,32 @@ export class JsonRpcProvider extends Provider {
     try {
       return await this.client.requestWithType(
         'sui_getNormalizedMoveFunction',
-        [objectId, moduleName, functionName],
+        [packageId, moduleName, functionName],
         isSuiMoveNormalizedFunction,
         this.skipDataValidation
       );
     } catch (err) {
       throw new Error(
-        `Error fetching function: ${err} for package ${objectId}, module ${moduleName} and function ${functionName}}`
+        `Error fetching function: ${err} for package ${packageId}, module ${moduleName} and function ${functionName}}`
       );
     }
   }
 
   async getNormalizedMoveStruct(
-    objectId: string,
+    packageId: string,
     moduleName: string,
     structName: string
   ): Promise<SuiMoveNormalizedStruct> {
     try {
       return await this.client.requestWithType(
         'sui_getNormalizedMoveStruct',
-        [objectId, moduleName, structName],
+        [packageId, moduleName, structName],
         isSuiMoveNormalizedStruct,
         this.skipDataValidation
       );
     } catch (err) {
       throw new Error(
-        `Error fetching struct: ${err} for package ${objectId}, module ${moduleName} and struct ${structName}}`
+        `Error fetching struct: ${err} for package ${packageId}, module ${moduleName} and struct ${structName}}`
       );
     }
   }

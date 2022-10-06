@@ -45,8 +45,8 @@ export function getProvider(
   const url =
     rpcType === 'fullnode' ? DEFAULT_FULLNODE_URL : DEFAULT_GATEWAY_URL;
   return providerType === 'rpc'
-    ? new JsonRpcProvider(url)
-    : new JsonRpcProviderWithCache(url);
+    ? new JsonRpcProvider(url, false)
+    : new JsonRpcProviderWithCache(url, false);
 }
 
 export async function setup(
