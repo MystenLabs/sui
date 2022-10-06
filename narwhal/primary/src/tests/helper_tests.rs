@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{common::create_db_stores, helper::Helper, primary::PrimaryMessage, PayloadToken};
 use anemo::{types::PeerInfo, PeerId};
