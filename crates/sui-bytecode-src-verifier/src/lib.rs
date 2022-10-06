@@ -100,25 +100,37 @@ impl<'a> BytecodeSourceVerifier<'a> {
         let mut verified_deps: HashMap<AccountAddress, Dependency> = HashMap::new();
 
         for (pkg_symbol, resolution_package) in resolution_graph.package_table {
-            if pkg_symbol == compiled_package.compiled_package_info.package_name { continue };
+            if pkg_symbol == compiled_package.compiled_package_info.package_name {
+                continue;
+            };
 
             let local_pkg_bytes = match compiled_dep_map.get(&pkg_symbol) {
                 Some(bytes) => {
                     if self.verbose {
-                        println!("\nlocal package dependency {} : {} modules", pkg_symbol, bytes.len());
+                        println!(
+                            "\nlocal package dependency {} : {} modules",
+                            pkg_symbol,
+                            bytes.len()
+                        );
                     }
                     bytes
                 }
                 None => {
-                    return Err(DependencyVerificationError::LocalDependencyNotFound(pkg_symbol, None));
+                    return Err(DependencyVerificationError::LocalDependencyNotFound(
+                        pkg_symbol, None,
+                    ));
                 }
             };
 
             for (symbol, addr) in resolution_package.resolution_table {
                 // zero address is the package we're checking dependencies for
-                if addr.eq(&AccountAddress::ZERO) { continue; }
+                if addr.eq(&AccountAddress::ZERO) {
+                    continue;
+                }
                 // package addresses may show up many times, but we only need to verify them once
-                if verified_deps.contains_key(&addr) { continue; }
+                if verified_deps.contains_key(&addr) {
+                    continue;
+                }
 
                 // fetch the Sui object at the address specified for the package in the local resolution table
                 let on_chain_package = self.pkg_for_address(&addr).await?;
@@ -142,7 +154,7 @@ impl<'a> BytecodeSourceVerifier<'a> {
                             on_chain_module_symbol.to_string(),
                             addr.clone(),
                             local_bytes.clone(),
-                            on_chain_bytes.clone()
+                            on_chain_bytes.clone(),
                         ));
                     }
 
@@ -180,11 +192,11 @@ impl<'a> BytecodeSourceVerifier<'a> {
         }
 
         let verified_dependencies: HashSet<Dependency> =
-            HashSet::from_iter(verified_deps
-                .iter()
-                .map(|(_addr, dep)| dep.clone()));
+            HashSet::from_iter(verified_deps.iter().map(|(_addr, dep)| dep.clone()));
 
-        Ok(DependencyVerificationResult { verified_dependencies })
+        Ok(DependencyVerificationResult {
+            verified_dependencies,
+        })
     }
 
     fn get_module_bytes_map(
@@ -229,7 +241,9 @@ impl<'a> BytecodeSourceVerifier<'a> {
         let obj_read = match self.rpc_client.get_object(obj_id).await {
             Ok(raw) => raw,
             Err(err) => {
-                return Err(DependencyVerificationError::DependencyObjectReadFailure(err))
+                return Err(DependencyVerificationError::DependencyObjectReadFailure(
+                    err,
+                ))
             }
         };
         let obj = match obj_read.object() {
