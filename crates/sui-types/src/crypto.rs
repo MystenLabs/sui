@@ -333,6 +333,24 @@ impl AuthorityPublicKeyBytes {
         write!(f, "k#{}", s)?;
         Ok(())
     }
+
+    /// Get a ConciseAuthorityPublicKeyBytes. Usage:
+    ///
+    ///   debug!(name = ?authority.concise());
+    ///   format!("{:?}", authority.concise());
+    pub fn concise(&self) -> ConciseAuthorityPublicKeyBytes<'_> {
+        ConciseAuthorityPublicKeyBytes(self)
+    }
+}
+
+/// A wrapper around AuthorityPublicKeyBytes that provides a concise Debug impl.
+pub struct ConciseAuthorityPublicKeyBytes<'a>(&'a AuthorityPublicKeyBytes);
+
+impl std::fmt::Debug for ConciseAuthorityPublicKeyBytes<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        let s = hex::encode(&self.0 .0[0..4]);
+        write!(f, "k#{}..", s)
+    }
 }
 
 impl TryFrom<AuthorityPublicKeyBytes> for AuthorityPublicKey {
