@@ -123,28 +123,28 @@ impl<'a> BytecodeSourceVerifier<'a> {
                 if verified_deps.contains_key(&addr) { continue; }
 
                 // fetch the Sui object at the address specified for the package in the local resolution table
-                let raw_package = self.pkg_for_address(&addr).await?;
+                let on_chain_package = self.pkg_for_address(&addr).await?;
 
-                for (oc_name, oc_bytes) in &raw_package.module_map {
-                    let oc_symbol = Symbol::from(oc_name.as_str());
-                    let local_bytes = match local_pkg_bytes.get(&oc_symbol) {
+                for (oc_name, on_chain_bytes) in &on_chain_package.module_map {
+                    let on_chain_module_symbol = Symbol::from(oc_name.as_str());
+                    let local_bytes = match local_pkg_bytes.get(&on_chain_module_symbol) {
                         Some(bytes) => bytes,
                         None => {
                             return Err(DependencyVerificationError::LocalDependencyNotFound(
                                 pkg_symbol,
-                                Some(oc_symbol),
+                                Some(on_chain_module_symbol),
                             ))
                         }
                     };
 
                     // compare local bytecode to on-chain bytecode to ensure integrity of our dependencies
-                    if local_bytes != oc_bytes {
+                    if local_bytes != on_chain_bytes {
                         return Err(DependencyVerificationError::ModuleBytecodeMismatch(
                             pkg_symbol.to_string(),
-                            oc_symbol.to_string(),
+                            on_chain_module_symbol.to_string(),
                             addr.clone(),
                             local_bytes.clone(),
-                            oc_bytes.clone()
+                            on_chain_bytes.clone()
                         ));
                     }
 
@@ -153,12 +153,12 @@ impl<'a> BytecodeSourceVerifier<'a> {
                             "{}::{} - {} bytes, code matches",
                             pkg_symbol,
                             oc_name,
-                            oc_bytes.len()
+                            on_chain_bytes.len()
                         );
                     }
                 }
 
-                on_chain_module_count += raw_package.module_map.len();
+                on_chain_module_count += on_chain_package.module_map.len();
 
                 let address = addr.clone();
                 verified_deps.insert(
@@ -166,7 +166,7 @@ impl<'a> BytecodeSourceVerifier<'a> {
                     Dependency {
                         symbol: symbol.to_string(),
                         address,
-                        module_bytes: raw_package.module_map.clone(),
+                        module_bytes: on_chain_package.module_map.clone(),
                     },
                 );
             }
