@@ -19,6 +19,7 @@ use move_package::BuildConfig;
 use serde::Serialize;
 use serde_json::json;
 use sui_bytecode_src_verifier::BytecodeSourceVerifier;
+use sui_framework::compiled_move_package_to_bytes;
 use tracing::info;
 
 use sui_json::SuiJsonValue;
@@ -406,10 +407,7 @@ impl SuiClientCommands {
                     .clone()
                     .compile_package(&package_path, &mut Vec::new())?;
 
-                let compiled_modules: Vec<Vec<u8>> = compiled_package
-                    .root_modules()
-                    .map(|m| m.unit.serialize(None))
-                    .collect();
+                let compiled_modules: Vec<Vec<u8>> = compiled_move_package_to_bytes(&compiled_package);
 
                 // verify that all dependency packages have the correct on-chain bytecode
                 let verifier = BytecodeSourceVerifier::new(context.client.read_api(), false);
