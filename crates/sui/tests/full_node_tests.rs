@@ -717,8 +717,8 @@ async fn test_full_node_event_read_api_ok() -> Result<(), anyhow::Error> {
         .iter()
         .map(|envelope| envelope.tx_digest.unwrap())
         .collect();
-    // Sorted in descending time
-    assert_eq!(tx_digests, vec![digest2, digest2, digest]);
+    // Sorted in ascending time
+    assert_eq!(tx_digests, vec![digest, digest2, digest2]);
 
     Ok(())
 }

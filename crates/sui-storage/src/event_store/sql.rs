@@ -671,8 +671,8 @@ mod tests {
         // Query for records in time range, end should be exclusive - should get 2
         let queried_events = db.event_iterator(1_000_000, 1_002_000, 20).await?;
         assert_eq!(queried_events.len(), 2);
-        for i in 0..2 {
-            // DESCENDING order
+        for i in 2..0 {
+            // ASCENDING order
             test_queried_event_vs_test_envelope(&queried_events[1 - i], &to_insert[i]);
         }
 
@@ -787,15 +787,15 @@ mod tests {
         assert_eq!(queried_events.len(), 2);
 
         // Desc timestamp order, so the last transfer event should be first
-        test_queried_event_vs_test_envelope(&queried_events[0], &to_insert[4]);
-        test_queried_event_vs_test_envelope(&queried_events[1], &to_insert[2]);
+        test_queried_event_vs_test_envelope(&queried_events[0], &to_insert[2]);
+        test_queried_event_vs_test_envelope(&queried_events[1], &to_insert[4]);
 
         // Query again with limit of 1, it should return only the last transfer event
         let queried_events = db
             .events_by_type(1_000_000, 1_005_000, EventType::TransferObject, 1)
             .await?;
         assert_eq!(queried_events.len(), 1);
-        test_queried_event_vs_test_envelope(&queried_events[0], &to_insert[4]);
+        test_queried_event_vs_test_envelope(&queried_events[0], &to_insert[2]);
         assert_eq!(queried_events[0].fields.len(), 3);
 
         // Query with wrong time range, return 0 events
@@ -911,8 +911,8 @@ mod tests {
         assert_eq!(queried_events.len(), 2);
 
         // results are sorted in DESC order
-        test_queried_event_vs_test_envelope(&queried_events[0], &to_insert[6]);
-        test_queried_event_vs_test_envelope(&queried_events[1], &to_insert[5]);
+        test_queried_event_vs_test_envelope(&queried_events[0], &to_insert[5]);
+        test_queried_event_vs_test_envelope(&queried_events[1], &to_insert[6]);
         assert_eq!(queried_events[0].fields.len(), 2);
         assert_eq!(queried_events[1].fields.len(), 2);
 
@@ -966,8 +966,8 @@ mod tests {
             .await?;
         assert_eq!(events.len(), 2);
 
-        test_queried_event_vs_test_envelope(&events[0], &to_insert[1]);
-        test_queried_event_vs_test_envelope(&events[1], &to_insert[0]);
+        test_queried_event_vs_test_envelope(&events[0], &to_insert[0]);
+        test_queried_event_vs_test_envelope(&events[1], &to_insert[1]);
         assert_eq!(events[0].fields.len(), 2);
         assert_eq!(events[1].fields.len(), 2);
 
@@ -1059,11 +1059,11 @@ mod tests {
             .await?;
         assert_eq!(events.len(), 5);
 
-        test_queried_event_vs_test_envelope(&events[0], &to_insert[7]);
-        test_queried_event_vs_test_envelope(&events[1], &to_insert[5]);
+        test_queried_event_vs_test_envelope(&events[0], &to_insert[0]);
+        test_queried_event_vs_test_envelope(&events[1], &to_insert[1]);
         test_queried_event_vs_test_envelope(&events[2], &to_insert[4]);
-        test_queried_event_vs_test_envelope(&events[3], &to_insert[1]);
-        test_queried_event_vs_test_envelope(&events[4], &to_insert[0]);
+        test_queried_event_vs_test_envelope(&events[3], &to_insert[5]);
+        test_queried_event_vs_test_envelope(&events[4], &to_insert[7]);
 
         // Query by recipient
         let events = db
@@ -1071,9 +1071,9 @@ mod tests {
             .await?;
         assert_eq!(events.len(), 3);
 
-        test_queried_event_vs_test_envelope(&events[0], &to_insert[3]);
+        test_queried_event_vs_test_envelope(&events[0], &to_insert[0]);
         test_queried_event_vs_test_envelope(&events[1], &to_insert[2]);
-        test_queried_event_vs_test_envelope(&events[2], &to_insert[0]);
+        test_queried_event_vs_test_envelope(&events[2], &to_insert[3]);
 
         // Query by object
         let events = db
@@ -1081,10 +1081,10 @@ mod tests {
             .await?;
         assert_eq!(events.len(), 4);
 
-        test_queried_event_vs_test_envelope(&events[0], &to_insert[4]);
-        test_queried_event_vs_test_envelope(&events[1], &to_insert[3]);
-        test_queried_event_vs_test_envelope(&events[2], &to_insert[1]);
-        test_queried_event_vs_test_envelope(&events[3], &to_insert[0]);
+        test_queried_event_vs_test_envelope(&events[0], &to_insert[0]);
+        test_queried_event_vs_test_envelope(&events[1], &to_insert[1]);
+        test_queried_event_vs_test_envelope(&events[2], &to_insert[3]);
+        test_queried_event_vs_test_envelope(&events[3], &to_insert[4]);
 
         Ok(())
     }
