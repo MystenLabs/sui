@@ -63,14 +63,16 @@ $main-extra-space: sizing.$main-bottom-space;
 
     &::after {
         content: '';
-        background-image: url('_assets/images/nft-detail-bg.png');
+        mask: url('_assets/images/receipt_bottom.svg');
+        background-color: colors.$gray-40;
         background-repeat: no-repeat;
         background-position: center bottom;
         background-size: 100%;
-        width: 100%;
-        height: 15px;
+        width: 320px;
+        height: 20px;
         display: flex;
-        top: 12px;
+        left: -20px;
+        top: 25px;
         position: relative;
     }
 }
@@ -193,5 +195,12 @@ $main-extra-space: sizing.$main-bottom-space;
         font-size: 14px;
         font-weight: 600;
         letter-spacing: 0;
+    } @else if $type == 'mono-type' {
+        // TODO chanage to mono font
+        font-style: normal;
+        font-weight: 500;
+        font-size: 14px;
+        text-decoration: none;
+        line-height: 90%;
     }
 }

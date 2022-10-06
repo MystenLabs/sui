@@ -89,6 +89,11 @@
 .response-card {
     @include utils.receipt-details-bg;
 
+    &::after {
+        left: 0;
+        top: 20px;
+    }
+
     margin-top: 15px;
 
     .tx-info {
