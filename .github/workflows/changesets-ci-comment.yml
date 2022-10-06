@@ -69,21 +69,16 @@ jobs:
               issue_number: process.env.ISSUE_NUMBER
             });
 
-            console.log(resp);
-
-            const comments = resp.data.filter(it => it.body_text.startsWith('⚠️ 🦋 **Changesets Warning:**'));
+            const comments = resp.data.filter(it => it.body.startsWith('⚠️ 🦋 **Changesets Warning:**'));
 
             for (const comment of comments) {
               console.log(
-                `Processing issue ${comment.issue_url} user: ${comment.user} comment: ${comment.body_text}`
+                `Removing issue ${comment.issue_url}`
               );
 
-              await github.rest.request(
-                'DELETE /repos/{owner}/{repo}/issues/comments/{comment_id}',
-                {
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  comment_id: comment.id
-                }
-              );
+              await github.rest.issues.deleteComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: comment.id
+              });
             }
