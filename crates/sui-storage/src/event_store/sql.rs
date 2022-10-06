@@ -671,9 +671,9 @@ mod tests {
         // Query for records in time range, end should be exclusive - should get 2
         let queried_events = db.event_iterator(1_000_000, 1_002_000, 20).await?;
         assert_eq!(queried_events.len(), 2);
-        for i in 2..0 {
+        for i in 0..2 {
             // ASCENDING order
-            test_queried_event_vs_test_envelope(&queried_events[1 - i], &to_insert[i]);
+            test_queried_event_vs_test_envelope(&queried_events[i], &to_insert[i]);
         }
 
         Ok(())
