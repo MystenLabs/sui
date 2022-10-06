@@ -2,7 +2,7 @@
 from collections import OrderedDict
 from fabric import Connection, ThreadingGroup as Group
 from fabric.exceptions import GroupException
-from paramiko import Ed25519Key
+from paramiko.rsakey import RSAKey
 from paramiko.ssh_exception import PasswordRequiredException, SSHException
 from os.path import basename, splitext
 from time import sleep
@@ -35,7 +35,7 @@ class Bench:
         self.manager = InstanceManager.make()
         self.settings = self.manager.settings
         try:
-            ctx.connect_kwargs.pkey = Ed25519Key.from_private_key_file(
+            ctx.connect_kwargs.pkey = RSAKey.from_private_key_file(
                 self.manager.settings.key_path
             )
             self.connect = ctx.connect_kwargs
@@ -69,6 +69,8 @@ class Bench:
 
             # This is missing from the Rocksdb installer (needed for Rocksdb).
             'sudo apt-get install -y clang',
+            'sudo apt-get install pkg-config',
+            'sudo apt-get install libssl-dev',
 
             # Clone the repo.
             f'(git clone {self.settings.repo_url} || (cd {self.settings.repo_name} ; git pull))'
@@ -152,7 +154,7 @@ class Bench:
             f'(cd {self.settings.repo_name} && git checkout -f {self.settings.branch} --)',
             f'(cd {self.settings.repo_name} && git pull -f)',
             'source $HOME/.cargo/env',
-            f'(cd {self.settings.repo_name}/node && {compile_cmd})',
+            f'(cd {self.settings.repo_name}/narwhal/node && {compile_cmd})',
             CommandMaker.alias_binaries(
                 f'./{self.settings.repo_name}/target/release/'
             )
@@ -199,7 +201,7 @@ class Bench:
 
         if bench_parameters.collocate:
             addresses = OrderedDict(
-                (x, [y] * (bench_parameters.workers + 1)) for x, y in zip(primary_names, hosts)
+                (x, (y, [z] * (bench_parameters.workers + 1))) for x, y, z in zip(primary_names, primary_network_names, hosts)
             )
         else:
             addresses = OrderedDict(
@@ -212,7 +214,7 @@ class Bench:
         worker_key_files = [PathMaker.worker_key_file(
             i) for i in range(bench_parameters.workers*len(hosts))]
         for filename in worker_key_files:
-            cmd = CommandMaker.generate_key(filename).split()
+            cmd = CommandMaker.generate_network_key(filename).split()
             subprocess.run(cmd, check=True)
             worker_keys += [Key.from_file(filename)]
         worker_names = [x.name for x in worker_keys]
