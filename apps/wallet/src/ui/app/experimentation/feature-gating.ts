@@ -3,21 +3,20 @@
 
 import { GrowthBook } from '@growthbook/growthbook';
 
+const DEFAULT_DEV_API_KEY = 'key_dev_dc2872e15e0c5f95';
+
 export default class FeatureGating {
-    private _growthBook: GrowthBook;
+    #growthBook: GrowthBook;
+
     constructor() {
         // Create a GrowthBook context
-        this._growthBook = new GrowthBook();
+        this.#growthBook = new GrowthBook();
     }
 
     public async init() {
-        if (process.env.NODE_ENV !== 'production') {
-            return;
-        }
+        const apiKey = process.env.GROWTH_BOOK_API_KEY ?? DEFAULT_DEV_API_KEY;
         // Load feature definitions
-        await fetch(
-            `https://cdn.growthbook.io/api/features/${process.env.GROWTH_BOOK_API_KEY}`
-        )
+        await fetch(`https://cdn.growthbook.io/api/features/${apiKey}`)
             .then((res) => {
                 if (res.ok) {
                     return res.json();
@@ -25,9 +24,10 @@ export default class FeatureGating {
                 throw new Error(res.statusText);
             })
             .then((parsed) => {
-                this._growthBook.setFeatures(parsed.features);
+                this.#growthBook.setFeatures(parsed.features);
             })
             .catch(() => {
+                // eslint-disable-next-line no-console
                 console.warn(
                     `Failed to fetch feature definitions from GrowthBook with API_KEY ${process.env.GROWTH_BOOK_API_KEY}`
                 );
@@ -35,6 +35,6 @@ export default class FeatureGating {
     }
 
     public isOn(featureName: string): boolean {
-        return this._growthBook.isOn(featureName);
+        return this.#growthBook.isOn(featureName);
     }
 }
