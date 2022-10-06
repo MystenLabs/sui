@@ -1215,7 +1215,7 @@ checksum = "e57ff02e8ad8e06ab9731d5dc72dc23bef9200778eae1a89d555d8c42e5d4a86"
 dependencies = [
  "prost 0.11.0",
  "prost-types 0.11.1",
- "tonic 0.8.1",
+ "tonic 0.8.2",
  "tracing-core",
 ]
 
@@ -1237,7 +1237,7 @@ dependencies = [
  "thread_local",
  "tokio",
  "tokio-stream",
- "tonic 0.8.1",
+ "tonic 0.8.2",
  "tracing",
  "tracing-core",
  "tracing-subscriber 0.3.15",
@@ -8553,9 +8553,9 @@ dependencies = [
 
 [[package]]
 name = "symbolic-common"
-version = "9.2.0"
+version = "9.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "22ac918361561a44589e312ecb85601759e32bd18548af021bacd2b3c2648661"
+checksum = "800963ba330b09a2ae4a4f7c6392b81fbc2784099a98c1eac68c3437aa9382b2"
 dependencies = [
  "debugid",
  "memmap2",
@@ -8565,9 +8565,9 @@ dependencies = [
 
 [[package]]
 name = "symbolic-demangle"
-version = "9.2.0"
+version = "9.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "57fb30c9264e410c5ab721df6a341600424f54a1f42bb1ec1414e7cda759814c"
+checksum = "2b940a1fdbc72bb3369e38714efe6cd332dbbe46d093cf03d668b9ac390d1ad0"
 dependencies = [
  "cpp_demangle",
  "rustc-demangle",
@@ -9212,9 +9212,9 @@ dependencies = [
 
 [[package]]
 name = "tonic"
-version = "0.8.1"
+version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "11cd56bdb54ef93935a6a79dbd1d91f1ebd4c64150fd61654031fd6b8b775c91"
+checksum = "55b9af819e54b8f33d453655bef9b9acc171568fb49523078d0cc4e7484200ec"
 dependencies = [
  "async-stream",
  "async-trait",
@@ -10829,7 +10829,7 @@ dependencies = [
  "toml_edit 0.13.4",
  "toml_edit 0.14.4",
  "tonic 0.7.2",
- "tonic 0.8.1",
+ "tonic 0.8.2",
  "tonic-build 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "tonic-build 0.7.2 (git+https://github.com/hyperium/tonic.git?rev=de2e4ac077c076736dc451f3415ea7da1a61a560)",
  "tonic-health",
