@@ -107,6 +107,11 @@ impl Proposer {
     }
 
     async fn make_header(&mut self) -> DagResult<()> {
+        // Backup digests and payload size, clear payload size
+        let digest_backup = self.digests.clone();
+        let payload_size_backup = self.payload_size;
+        self.payload_size = 0;
+
         // Make a new header.
         let mut header = Header::new(
             self.name.clone(),
@@ -120,17 +125,18 @@ impl Proposer {
         debug!("Created {header:?}");
 
         // Equivocation protection using the proposer store
-        if let Some((_, last_header)) = self.proposer_store.get_last_header()? {
+        if let Some(last_header) = self.proposer_store.get_last_proposed()? {
             if last_header.round == header.round && last_header.epoch == header.epoch {
                 // We have already produced a header for the current round, idempotent re-send
                 if last_header != header {
                     debug!("Equivocation protection was enacted in the proposer");
+                    self.digests = digest_backup;
+                    self.payload_size = payload_size_backup;
                     header = last_header;
                 }
             } else {
                 // We have not yet produced a header for the current round, so store the new header
-                self.proposer_store
-                    .write_last_proposed(header.round, header.clone())?;
+                self.proposer_store.write_last_proposed(header.clone())?;
             }
         }
 
@@ -280,7 +286,6 @@ impl Proposer {
                     Err(e) => panic!("Unexpected error: {e}"),
                     Ok(()) => (),
                 }
-                self.payload_size = 0;
 
                 // Reschedule the timer.
                 let deadline = self.timeout_value();

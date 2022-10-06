@@ -1,19 +1,22 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use std::iter;
 use store::rocks::open_cf;
 use store::{reopen, rocks::DBMap, Map};
-use types::{Header, Round, StoreResult};
+use types::{Header, StoreResult};
+
+pub type ProposerKey = u32;
+
+pub const LAST_PROPOSAL_KEY: ProposerKey = 0;
 
 /// The storage for the proposer
 #[derive(Clone)]
 pub struct ProposerStore {
     /// Holds the Last Header that was proposed by the Proposer.
-    last_proposed: DBMap<Round, Header>,
+    last_proposed: DBMap<ProposerKey, Header>,
 }
 
 impl ProposerStore {
-    pub fn new(last_proposed: DBMap<Round, Header>) -> ProposerStore {
+    pub fn new(last_proposed: DBMap<ProposerKey, Header>) -> ProposerStore {
         Self { last_proposed }
     }
 
@@ -21,46 +24,24 @@ impl ProposerStore {
         const LAST_PROPOSED_CF: &str = "last_proposed";
         let rocksdb = open_cf(tempfile::tempdir().unwrap(), None, &[LAST_PROPOSED_CF])
             .expect("Cannot open database");
-        let last_proposed_map = reopen!(&rocksdb, LAST_PROPOSED_CF;<Round, Header>);
+        let last_proposed_map = reopen!(&rocksdb, LAST_PROPOSED_CF;<ProposerKey, Header>);
         ProposerStore::new(last_proposed_map)
     }
 
     /// Inserts a proposed header into the store
-    pub fn write_last_proposed(&self, round: Round, header: Header) -> StoreResult<()> {
-        let mut batch = self.last_proposed.batch();
-
-        // clear the existing headers since we don't need them
-        self.last_proposed.clear()?;
-
-        // write the new header
-        batch = batch.insert_batch(&self.last_proposed, iter::once((round, header)))?;
-
-        // execute the batch (atomically) and return the result
-        batch.write()
+    pub fn write_last_proposed(&self, header: Header) -> StoreResult<()> {
+        self.last_proposed.insert(&LAST_PROPOSAL_KEY, &header)
     }
 
     /// Get the last header
-    pub fn get_last_header(&self) -> StoreResult<Option<(Round, Header)>> {
-        let mut results: Vec<(Round, Header)> = Vec::new();
-
-        let res = self.last_proposed.iter();
-        for (round, header) in res {
-            results.push((round, header));
-        }
-        // Return the header corresponding to the largest round.
-        // In practice there should only be one entry here.
-        results.sort_by_key(|k| k.0);
-        let output: Option<(Round, Header)> = match results.len() {
-            0 => None,
-            n => Some(results[n - 1].clone()),
-        };
-        Ok(output)
+    pub fn get_last_proposed(&self) -> StoreResult<Option<Header>> {
+        self.last_proposed.get(&LAST_PROPOSAL_KEY)
     }
 }
 
 #[cfg(test)]
 mod test {
-    use crate::ProposerStore;
+    use crate::{ProposerStore, LAST_PROPOSAL_KEY};
     use store::Map;
     use test_utils::{fixture_batch_with_transactions, CommitteeFixture};
     use types::{CertificateDigest, Header, Round};
@@ -85,22 +66,18 @@ mod test {
     async fn test_writes() {
         let store = ProposerStore::new_for_tests();
         let header_1 = create_header_for_round(1);
-        let round_1: Round = 1;
-        let out = store.write_last_proposed(round_1, header_1.clone());
+
+        let out = store.write_last_proposed(header_1.clone());
         assert!(out.is_ok());
 
-        let result = store.last_proposed.get(&round_1).unwrap();
+        let result = store.last_proposed.get(&LAST_PROPOSAL_KEY).unwrap();
         assert_eq!(result.unwrap(), header_1);
 
         let header_2 = create_header_for_round(2);
-        let round_2: Round = 2;
-        let out = store.write_last_proposed(round_2, header_2.clone());
+        let out = store.write_last_proposed(header_2.clone());
         assert!(out.is_ok());
 
-        let should_not_exist = store.last_proposed.get(&round_1).unwrap();
-        assert_eq!(should_not_exist, None);
-
-        let should_exist = store.last_proposed.get(&round_2).unwrap();
+        let should_exist = store.last_proposed.get(&LAST_PROPOSAL_KEY).unwrap();
         assert_eq!(should_exist.unwrap(), header_2);
     }
 
@@ -108,15 +85,14 @@ mod test {
     async fn test_reads() {
         let store = ProposerStore::new_for_tests();
 
-        let should_not_exist = store.get_last_header().unwrap();
+        let should_not_exist = store.get_last_proposed().unwrap();
         assert_eq!(should_not_exist, None);
 
         let header_1 = create_header_for_round(1);
-        let round_1: Round = 1;
-        let out = store.write_last_proposed(round_1, header_1.clone());
+        let out = store.write_last_proposed(header_1.clone());
         assert!(out.is_ok());
 
-        let should_exist = store.get_last_header().unwrap();
-        assert_eq!(should_exist.unwrap(), (round_1, header_1));
+        let should_exist = store.get_last_proposed().unwrap();
+        assert_eq!(should_exist.unwrap(), header_1);
     }
 }
