@@ -25,3 +25,5 @@ export * from './signers/signer-with-provider';
 
 export * from './types';
 export * from './types/index.guard';
+
+export {};
