@@ -334,7 +334,7 @@ impl SuiClientCommands {
                 {
                     Ok(_vr) => println!("dependencies' on-chain bytecode successfully verified\n"),
                     Err(err) => {
-                        return Err(anyhow!(err.to_string()));
+                        return Err(anyhow!(err));
                     }
                 };
 
