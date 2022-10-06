@@ -5064,7 +5064,7 @@ checksum = "ca2b420f638f07fe83056b55ea190bb815f609ec5a35e7017884a10f78839c9e"
 [[package]]
 name = "nexlint"
 version = "0.1.0"
-source = "git+https://github.com/nextest-rs/nexlint.git?rev=bff03c566c9e22b1f4e67f516d0fd592a5a88f20#bff03c566c9e22b1f4e67f516d0fd592a5a88f20"
+source = "git+https://github.com/nextest-rs/nexlint.git?rev=5926141c20414814290bb1b04bd3b2238bbbc90e#5926141c20414814290bb1b04bd3b2238bbbc90e"
 dependencies = [
  "camino",
  "debug-ignore",
@@ -5079,7 +5079,7 @@ dependencies = [
 [[package]]
 name = "nexlint-lints"
 version = "0.1.0"
-source = "git+https://github.com/nextest-rs/nexlint.git?rev=bff03c566c9e22b1f4e67f516d0fd592a5a88f20#bff03c566c9e22b1f4e67f516d0fd592a5a88f20"
+source = "git+https://github.com/nextest-rs/nexlint.git?rev=5926141c20414814290bb1b04bd3b2238bbbc90e#5926141c20414814290bb1b04bd3b2238bbbc90e"
 dependencies = [
  "anyhow",
  "camino",
