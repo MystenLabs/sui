@@ -37,7 +37,7 @@ Features are standard methods that can be used by consumers to interact with the
 - `standard:connect` - Used to initiate a connection to the wallet.
 - `sui:signAndExecuteTransaction` - Used to prompt the user to sign a transaction, then submit it for execution to the blockchain.
 
-These features can be implemented in your wallet class under the `features` property:
+You can implement these features in your wallet class under the `features` property:
 
 ```typescript
 import {
