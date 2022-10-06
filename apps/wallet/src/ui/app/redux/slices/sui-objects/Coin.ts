@@ -1,11 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-    getCoinAfterMerge,
-    getMoveObject,
-    isSuiMoveObject,
-} from '@mysten/sui.js';
+import { isSuiMoveObject, Coin as CoinAPI, SUI_TYPE_ARG } from '@mysten/sui.js';
 
 import type {
     ObjectId,
@@ -23,6 +19,7 @@ export const DEFAULT_GAS_BUDGET_FOR_SPLIT = 10000;
 export const DEFAULT_GAS_BUDGET_FOR_MERGE = 10000;
 export const DEFAULT_GAS_BUDGET_FOR_TRANSFER = 100;
 export const DEFAULT_GAS_BUDGET_FOR_TRANSFER_SUI = 100;
+export const DEFAULT_GAS_BUDGET_FOR_PAY = 150;
 export const DEFAULT_GAS_BUDGET_FOR_STAKE = 10000;
 export const GAS_TYPE_ARG = '0x2::sui::SUI';
 export const GAS_SYMBOL = 'SUI';
@@ -77,9 +74,20 @@ export class Coin {
         recipient: SuiAddress
     ): Promise<SuiTransactionResponse> {
         await signer.syncAccountState();
-        const coin = await Coin.selectCoin(signer, coins, amount);
+        const inputCoins =
+            await CoinAPI.selectCoinSetWithCombinedBalanceGreaterThanOrEqual(
+                coins,
+                amount
+            );
+        if (inputCoins.length === 0) {
+            const totalBalance = CoinAPI.totalBalance(coins);
+            throw new Error(
+                `Coin balance ${totalBalance.toString()} is not sufficient to cover the transfer amount ` +
+                    `${amount.toString()}. Try reducing the transfer amount to ${totalBalance}.`
+            );
+        }
         return await signer.pay({
-            inputCoins: [coin],
+            inputCoins: inputCoins.map((c) => CoinAPI.getID(c)),
             recipients: [recipient],
             amounts: [Number(amount)],
             gasBudget: DEFAULT_GAS_BUDGET_FOR_TRANSFER,
@@ -101,17 +109,105 @@ export class Coin {
         recipient: SuiAddress
     ): Promise<SuiTransactionResponse> {
         await signer.syncAccountState();
-        const coin = await Coin.prepareCoinWithEnoughBalance(
-            signer,
+        const targetAmount =
+            amount + BigInt(DEFAULT_GAS_BUDGET_FOR_TRANSFER_SUI);
+        const coinsWithSufficientAmount =
+            await CoinAPI.selectCoinsWithBalanceGreaterThanOrEqual(
+                coins,
+                targetAmount
+            );
+        if (coinsWithSufficientAmount.length > 0) {
+            return await signer.transferSui({
+                suiObjectId: CoinAPI.getID(coinsWithSufficientAmount[0]),
+                gasBudget: DEFAULT_GAS_BUDGET_FOR_TRANSFER_SUI,
+                recipient: recipient,
+                amount: Number(amount),
+            });
+        }
+
+        // TODO: use PaySui Transaction when it is ready
+        // If there is not a coin with sufficient balance, use the pay API
+        const gasCostForPay =
+            // TODO: improve the gas budget estimation
+            DEFAULT_GAS_BUDGET_FOR_PAY *
+            Math.max(2, Math.min(100, coins.length / 2));
+        let inputCoins = await Coin.assertAndGetCoinsWithBalanceGte(
             coins,
-            amount + BigInt(DEFAULT_GAS_BUDGET_FOR_TRANSFER_SUI)
+            amount,
+            gasCostForPay
         );
-        return await signer.transferSui({
-            suiObjectId: Coin.getID(coin),
-            gasBudget: DEFAULT_GAS_BUDGET_FOR_TRANSFER_SUI,
-            recipient: recipient,
-            amount: Number(amount),
+
+        // In this case, all coins are needed to cover the transfer amount plus gas budget, leaving
+        // no coins for gas payment. This won't be a problem once we introduce `PaySui`. But for now,
+        // we address this case by splitting an extra coin.
+        if (inputCoins.length === coins.length) {
+            // We need to pay for an additional `transferSui` transaction now, assert that we have sufficient balance
+            // to cover the additional cost
+            await Coin.assertAndGetCoinsWithBalanceGte(
+                coins,
+                amount,
+                gasCostForPay + DEFAULT_GAS_BUDGET_FOR_TRANSFER_SUI
+            );
+
+            // Split the gas budget from the coin with largest balance for simplicity. We can also use any coin
+            // that has amount greater than or equal to `DEFAULT_GAS_BUDGET_FOR_TRANSFER_SUI * 2`
+            const coinWithLargestBalance = inputCoins[inputCoins.length - 1];
+
+            if (
+                // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+                CoinAPI.getBalance(coinWithLargestBalance)! <
+                gasCostForPay + DEFAULT_GAS_BUDGET_FOR_TRANSFER_SUI
+            ) {
+                throw new Error(
+                    `None of the coins has sufficient balance to cover gas fee`
+                );
+            }
+
+            await signer.transferSui({
+                suiObjectId: CoinAPI.getID(coinWithLargestBalance),
+                gasBudget: DEFAULT_GAS_BUDGET_FOR_TRANSFER_SUI,
+                recipient: await signer.getAddress(),
+                amount: gasCostForPay,
+            });
+
+            inputCoins =
+                await signer.provider.selectCoinSetWithCombinedBalanceGreaterThanOrEqual(
+                    await signer.getAddress(),
+                    amount,
+                    SUI_TYPE_ARG,
+                    []
+                );
+        }
+
+        return await signer.pay({
+            inputCoins: inputCoins.map((c) => CoinAPI.getID(c)),
+            recipients: [recipient],
+            amounts: [Number(amount)],
+            gasBudget: gasCostForPay,
         });
+    }
+
+    private static async assertAndGetCoinsWithBalanceGte(
+        coins: SuiMoveObject[],
+        amount: bigint,
+        gasBudget?: number
+    ) {
+        const inputCoins =
+            await CoinAPI.selectCoinSetWithCombinedBalanceGreaterThanOrEqual(
+                coins,
+                amount + BigInt(gasBudget ?? 0)
+            );
+        if (inputCoins.length === 0) {
+            const totalBalance = CoinAPI.totalBalance(coins);
+            const maxTransferAmount = totalBalance - BigInt(gasBudget ?? 0);
+            const gasText = gasBudget ? ` plus gas budget ${gasBudget}` : '';
+            throw new Error(
+                `Coin balance ${totalBalance.toString()} is not sufficient to cover the transfer amount ` +
+                    `${amount.toString()}${gasText}. ` +
+                    `Try reducing the transfer amount to ${maxTransferAmount.toString()}.`
+            );
+        }
+        return inputCoins;
     }
 
     /**
@@ -129,8 +225,12 @@ export class Coin {
         amount: bigint,
         validator: SuiAddress
     ): Promise<SuiTransactionResponse> {
-        const coin = await Coin.selectCoin(signer, coins, amount);
         await signer.syncAccountState();
+        const coin = await Coin.requestSuiCoinWithExactAmount(
+            signer,
+            coins,
+            amount
+        );
         return await signer.executeMoveCall({
             packageObjectId: '0x2',
             module: 'sui_system',
@@ -141,72 +241,66 @@ export class Coin {
         });
     }
 
-    private static async selectCoin(
+    private static async requestSuiCoinWithExactAmount(
         signer: RawSigner,
         coins: SuiMoveObject[],
         amount: bigint
     ): Promise<ObjectId> {
-        const coin = await Coin.prepareCoinWithEnoughBalance(
+        const coinWithExactAmount = await Coin.selectSuiCoinWithExactAmount(
             signer,
             coins,
             amount
         );
-        const coinID = Coin.getID(coin);
-        const balance = Coin.getBalance(coin);
-        if (balance === amount) {
-            return coinID;
-        } else if (balance > amount) {
-            await signer.splitCoin({
-                coinObjectId: coinID,
-                gasBudget: DEFAULT_GAS_BUDGET_FOR_SPLIT,
-                splitAmounts: [Number(balance - amount)],
-            });
-            return coinID;
-        } else {
-            throw new Error(`Insufficient balance`);
+        if (coinWithExactAmount) {
+            return coinWithExactAmount;
         }
+        // use transferSui API to get a coin with the exact amount
+        await Coin.transferSui(
+            signer,
+            coins,
+            amount,
+            await signer.getAddress()
+        );
+
+        const coinWithExactAmount2 = await Coin.selectSuiCoinWithExactAmount(
+            signer,
+            coins,
+            amount,
+            true
+        );
+        if (!coinWithExactAmount2) {
+            throw new Error(`requestCoinWithExactAmount failed unexpectedly`);
+        }
+        return coinWithExactAmount2;
     }
 
-    private static async prepareCoinWithEnoughBalance(
+    private static async selectSuiCoinWithExactAmount(
         signer: RawSigner,
         coins: SuiMoveObject[],
-        amount: bigint
-    ): Promise<SuiMoveObject> {
-        // Sort coins by balance in an ascending order
-        coins.sort((a, b) =>
-            Coin.getBalance(a) - Coin.getBalance(b) > 0 ? 1 : -1
-        );
+        amount: bigint,
+        refreshData = false
+    ): Promise<ObjectId | undefined> {
+        const coinsWithSufficientAmount = refreshData
+            ? await signer.provider.selectCoinsWithBalanceGreaterThanOrEqual(
+                  await signer.getAddress(),
+                  amount,
+                  SUI_TYPE_ARG,
+                  []
+              )
+            : await CoinAPI.selectCoinsWithBalanceGreaterThanOrEqual(
+                  coins,
+                  amount
+              );
 
-        // return the coin with the smallest balance that is greater than or equal to the amount
-        const coinWithSufficientBalance = coins.find(
-            (c) => Coin.getBalance(c) >= amount
-        );
-        if (coinWithSufficientBalance) {
-            return coinWithSufficientBalance;
-        }
-
-        // merge coins to have a coin with sufficient balance
-        // we will start from the coins with the largest balance
-        // and end with the coin with the second smallest balance(i.e., i > 0 instead of i >= 0)
-        // we cannot merge coins with the smallest balance because we
-        // need to have a separate coin to pay for the gas
-        // TODO: there's some edge cases here. e.g., the total balance is enough before spliting/merging
-        // but not enough if we consider the cost of splitting and merging.
-        let primaryCoin = coins[coins.length - 1];
-        for (let i = coins.length - 2; i > 0; i--) {
-            const mergeTxn = await signer.mergeCoin({
-                primaryCoin: Coin.getID(primaryCoin),
-                coinToMerge: Coin.getID(coins[i]),
-                gasBudget: DEFAULT_GAS_BUDGET_FOR_MERGE,
-            });
+        if (
+            coinsWithSufficientAmount.length > 0 &&
             // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-            primaryCoin = getMoveObject(getCoinAfterMerge(mergeTxn)!)!;
-            if (Coin.getBalance(primaryCoin) >= amount) {
-                return primaryCoin;
-            }
+            CoinAPI.getBalance(coinsWithSufficientAmount[0])! === amount
+        ) {
+            return CoinAPI.getID(coinsWithSufficientAmount[0]);
         }
-        // primary coin might have a balance smaller than the `amount`
-        return primaryCoin;
+
+        return undefined;
     }
 
     public static async getActiveValidators(

@@ -4,8 +4,6 @@
 import { ObjectOwner, SuiAddress, TransactionDigest } from './common';
 import { SuiMovePackage, SuiObject, SuiObjectRef } from './objects';
 
-import BN from 'bn.js';
-
 export type TransferObject = {
   recipient: SuiAddress;
   objectRef: SuiObjectRef;
@@ -293,9 +291,9 @@ export function getTransactions(
   return data.data.transactions;
 }
 
-export function getTransferSuiAmount(data: SuiTransactionKind): BN | null {
+export function getTransferSuiAmount(data: SuiTransactionKind): bigint | null {
   return 'TransferSui' in data && data.TransferSui.amount
-    ? new BN.BN(data.TransferSui.amount, 10)
+    ? BigInt(data.TransferSui.amount)
     : null;
 }
 

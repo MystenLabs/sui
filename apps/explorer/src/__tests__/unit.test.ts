@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import BN from 'bn.js';
 import { describe, it, expect } from 'vitest';
 
 import { presentBN } from '../utils/stringUtils';
@@ -39,7 +38,7 @@ describe('Unit Tests', () => {
             [1000000, '1,000,000'],
             [10000000, '10,000,000'],
         ])('handles increasing numbers', (input, output) => {
-            expect(presentBN(new BN(input, 10))).toEqual(output);
+            expect(presentBN(BigInt(input))).toEqual(output);
         });
     });
 });

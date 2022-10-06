@@ -47,6 +47,24 @@ export class VoidProvider extends Provider {
     throw this.newError('getCoinBalancesOwnedByAddress');
   }
 
+  async selectCoinsWithBalanceGreaterThanOrEqual(
+    _address: string,
+    _amount: bigint,
+    _typeArg: string,
+    _exclude: ObjectId[] = []
+  ): Promise<GetObjectDataResponse[]> {
+    throw this.newError('selectCoinsWithBalanceGreaterThanOrEqual');
+  }
+
+  async selectCoinSetWithCombinedBalanceGreaterThanOrEqual(
+    _address: string,
+    _amount: bigint,
+    _typeArg: string,
+    _exclude: ObjectId[]
+  ): Promise<GetObjectDataResponse[]> {
+    throw this.newError('selectCoinSetWithCombinedBalanceGreaterThanOrEqual');
+  }
+
   async getObject(_objectId: string): Promise<GetObjectDataResponse> {
     throw this.newError('getObject');
   }
