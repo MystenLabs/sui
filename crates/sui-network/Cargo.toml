@@ -8,7 +8,7 @@ edition = "2021"
 
 [dependencies]
 async-trait = "0.1.57"
-tonic = "0.7"
+tonic = "0.8"
 
 sui-types = { path = "../sui-types" }
 
@@ -16,4 +16,4 @@ mysten-network.workspace = true
 workspace-hack.workspace = true
 
 [build-dependencies]
-tonic-build = { git = "https://github.com/hyperium/tonic.git", rev = "de2e4ac077c076736dc451f3415ea7da1a61a560", default-features = false, features = [ "transport" ] }
+tonic-build = { version = "0.8.2", features = [ "transport" ] }

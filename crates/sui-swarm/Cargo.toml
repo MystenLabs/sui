@@ -13,7 +13,7 @@ tracing = "0.1.36"
 tokio = { version = "1.20.1", features = ["full"] }
 futures = "0.3.23"
 tempfile = "3.3.0"
-tonic-health = "0.6.0"
+tonic-health = "0.7.0"
 tap = "1.0.1"
 prometheus = "0.13.2"
 

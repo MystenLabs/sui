@@ -454,6 +454,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d468802bab17cbc0cc575e9b053f41e72aa36bfa6b7f55e3529ffa43161b97fa"
 
 [[package]]
+name = "autotools"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c8138adefca3e5d2e73bfba83bd6eeaf904b26a7ac1b4a19892cfe16cc7e1701"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "axum"
 version = "0.5.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1098,15 +1107,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cmake"
-version = "0.1.48"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e8ad8cef104ac57b68b89df3208164d228503abbdce70f6880ffa3d970e7443a"
-dependencies = [
- "cc",
-]
-
-[[package]]
 name = "codespan"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1214,8 +1214,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e57ff02e8ad8e06ab9731d5dc72dc23bef9200778eae1a89d555d8c42e5d4a86"
 dependencies = [
  "prost 0.11.0",
- "prost-types 0.11.1",
- "tonic 0.8.1",
+ "prost-types",
+ "tonic",
  "tracing-core",
 ]
 
@@ -1231,13 +1231,13 @@ dependencies = [
  "futures",
  "hdrhistogram",
  "humantime",
- "prost-types 0.11.1",
+ "prost-types",
  "serde 1.0.144",
  "serde_json",
  "thread_local",
  "tokio",
  "tokio-stream",
- "tonic 0.8.1",
+ "tonic",
  "tracing",
  "tracing-core",
  "tracing-subscriber 0.3.15",
@@ -4505,9 +4505,9 @@ checksum = "e5ce46fe64a9d73be07dcbe690a38ce1b293be448fd8ce1e6c1b8062c9f72c6a"
 
 [[package]]
 name = "mysten-network"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e706e64bf9aeab7958ccc2de336e358c89869099f4e268d26833d5afd19f23fa"
+checksum = "51afa8dfc86c5d7bf4f3f9ec3b0a4e3235691fd15fcc4122118fb7f330f721c0"
 dependencies = [
  "bincode",
  "bytes",
@@ -4518,7 +4518,7 @@ dependencies = [
  "serde 1.0.144",
  "tokio",
  "tokio-stream",
- "tonic 0.7.2",
+ "tonic",
  "tonic-health",
  "tower",
  "tower-http",
@@ -4706,10 +4706,11 @@ version = "0.1.0"
 dependencies = [
  "base64",
  "clap 2.34.0",
- "prost 0.10.4",
+ "prost 0.11.0",
+ "protobuf-src",
  "tokio",
- "tonic 0.7.2",
- "tonic-build 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tonic",
+ "tonic-build",
  "workspace-hack",
 ]
 
@@ -4746,7 +4747,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-util 0.7.4",
- "tonic 0.7.2",
+ "tonic",
  "tracing",
  "typed-store",
  "workspace-hack",
@@ -4778,7 +4779,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-util 0.7.4",
- "tonic 0.7.2",
+ "tonic",
  "tracing",
  "workspace-hack",
 ]
@@ -4881,7 +4882,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-util 0.7.4",
- "tonic 0.7.2",
+ "tonic",
  "tower",
  "tracing",
  "tracing-test",
@@ -4901,7 +4902,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-util 0.7.4",
- "tonic 0.7.2",
+ "tonic",
  "tracing",
  "typed-store",
  "workspace-hack",
@@ -4941,7 +4942,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-util 0.7.4",
- "tonic 0.7.2",
+ "tonic",
  "tower",
  "tracing",
  "typed-store",
@@ -4973,8 +4974,9 @@ dependencies = [
  "prometheus",
  "proptest",
  "proptest-derive",
- "prost 0.10.4",
+ "prost 0.11.0",
  "prost-build",
+ "protobuf-src",
  "rand 0.8.5",
  "roaring",
  "rustversion",
@@ -4985,8 +4987,8 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-util 0.7.4",
- "tonic 0.7.2",
- "tonic-build 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tonic",
+ "tonic-build",
  "tracing",
  "typed-store",
  "workspace-hack",
@@ -5028,7 +5030,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tokio-util 0.7.4",
- "tonic 0.7.2",
+ "tonic",
  "tower",
  "tracing",
  "typed-store",
@@ -6109,21 +6111,19 @@ dependencies = [
 
 [[package]]
 name = "prost-build"
-version = "0.10.4"
+version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ae5a4388762d5815a9fc0dea33c56b021cdc8dde0c55e0c9ca57197254b0cab"
+checksum = "7f835c582e6bd972ba8347313300219fed5bfa52caf175298d860b61ff6069bb"
 dependencies = [
  "bytes",
- "cfg-if 1.0.0",
- "cmake",
  "heck 0.4.0",
  "itertools",
  "lazy_static 1.4.0",
  "log",
  "multimap",
  "petgraph 0.6.2",
- "prost 0.10.4",
- "prost-types 0.10.1",
+ "prost 0.11.0",
+ "prost-types",
  "regex",
  "tempfile",
  "which",
@@ -6157,16 +6157,6 @@ dependencies = [
 
 [[package]]
 name = "prost-types"
-version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d0a014229361011dc8e69c8a1ec6c2e8d0f2af7c91e3ea3f5b2170298461e68"
-dependencies = [
- "bytes",
- "prost 0.10.4",
-]
-
-[[package]]
-name = "prost-types"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4dfaa718ad76a44b3415e6c4d53b17c8f99160dcb3a99b10470fce8ad43f6e3e"
@@ -6180,6 +6170,15 @@ name = "protobuf"
 version = "2.27.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf7e6d18738ecd0902d30d1ad232c9125985a3422929b16c65517b38adc14f96"
+
+[[package]]
+name = "protobuf-src"
+version = "1.1.0+21.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c7ac8852baeb3cc6fb83b93646fb93c0ffe5d14bf138c945ceb4b9948ee0e3c1"
+dependencies = [
+ "autotools",
+]
 
 [[package]]
 name = "ptree"
@@ -8180,8 +8179,8 @@ dependencies = [
  "async-trait",
  "mysten-network",
  "sui-types",
- "tonic 0.7.2",
- "tonic-build 0.7.2 (git+https://github.com/hyperium/tonic.git?rev=de2e4ac077c076736dc451f3415ea7da1a61a560)",
+ "tonic",
+ "tonic-build",
  "workspace-hack",
 ]
 
@@ -8524,7 +8523,7 @@ dependencies = [
  "sui-cost-tables",
  "test-utils",
  "thiserror",
- "tonic 0.7.2",
+ "tonic",
  "tracing",
  "typed-store",
  "workspace-hack",
@@ -9178,43 +9177,9 @@ dependencies = [
 
 [[package]]
 name = "tonic"
-version = "0.7.2"
+version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5be9d60db39854b30b835107500cf0aca0b0d14d6e1c3de124217c23a29c2ddb"
-dependencies = [
- "async-stream",
- "async-trait",
- "axum",
- "base64",
- "bytes",
- "futures-core",
- "futures-util",
- "h2",
- "http",
- "http-body",
- "hyper",
- "hyper-timeout",
- "percent-encoding",
- "pin-project",
- "prost 0.10.4",
- "prost-derive 0.10.1",
- "rustls-pemfile 1.0.0",
- "tokio",
- "tokio-rustls",
- "tokio-stream",
- "tokio-util 0.7.4",
- "tower",
- "tower-layer",
- "tower-service",
- "tracing",
- "tracing-futures",
-]
-
-[[package]]
-name = "tonic"
-version = "0.8.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "11cd56bdb54ef93935a6a79dbd1d91f1ebd4c64150fd61654031fd6b8b775c91"
+checksum = "55b9af819e54b8f33d453655bef9b9acc171568fb49523078d0cc4e7484200ec"
 dependencies = [
  "async-stream",
  "async-trait",
@@ -9232,7 +9197,9 @@ dependencies = [
  "pin-project",
  "prost 0.11.0",
  "prost-derive 0.11.0",
+ "rustls-pemfile 1.0.0",
  "tokio",
+ "tokio-rustls",
  "tokio-stream",
  "tokio-util 0.7.4",
  "tower",
@@ -9244,9 +9211,9 @@ dependencies = [
 
 [[package]]
 name = "tonic-build"
-version = "0.7.2"
+version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d9263bf4c9bfaae7317c1c2faf7f18491d2fe476f70c414b73bf5d445b00ffa1"
+checksum = "48c6fd7c2581e36d63388a9e04c350c21beb7a8b059580b2e93993c526899ddc"
 dependencies = [
  "prettyplease",
  "proc-macro2 1.0.43",
@@ -9256,29 +9223,17 @@ dependencies = [
 ]
 
 [[package]]
-name = "tonic-build"
-version = "0.7.2"
-source = "git+https://github.com/hyperium/tonic.git?rev=de2e4ac077c076736dc451f3415ea7da1a61a560#de2e4ac077c076736dc451f3415ea7da1a61a560"
-dependencies = [
- "prettyplease",
- "proc-macro2 1.0.43",
- "quote 1.0.21",
- "syn 1.0.99",
-]
-
-[[package]]
 name = "tonic-health"
-version = "0.6.0"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9da1806c3ff2f02fb6d9b62fc72a2f3b6429c7f2f5d87861f548156708afcd71"
+checksum = "632faf60b81a5b5f439d9635102b2b2921ee39171faf14f3e0008d99f98689f1"
 dependencies = [
  "async-stream",
  "bytes",
- "prost 0.10.4",
+ "prost 0.11.0",
  "tokio",
  "tokio-stream",
- "tonic 0.7.2",
- "tonic-build 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tonic",
 ]
 
 [[package]]
@@ -10185,6 +10140,7 @@ dependencies = [
  "atomicwrites",
  "atty",
  "autocfg",
+ "autotools",
  "axum",
  "axum-core",
  "axum-server",
@@ -10244,7 +10200,6 @@ dependencies = [
  "clap_lex",
  "clear_on_drop",
  "clipboard-win",
- "cmake",
  "codespan",
  "codespan-reporting",
  "collectable",
@@ -10637,9 +10592,9 @@ dependencies = [
  "prost-build",
  "prost-derive 0.10.1",
  "prost-derive 0.11.0",
- "prost-types 0.10.1",
- "prost-types 0.11.1",
+ "prost-types",
  "protobuf",
+ "protobuf-src",
  "ptree",
  "quick-error 1.2.3",
  "quick-error 2.0.1",
@@ -10828,10 +10783,8 @@ dependencies = [
  "toml",
  "toml_edit 0.13.4",
  "toml_edit 0.14.4",
- "tonic 0.7.2",
- "tonic 0.8.1",
- "tonic-build 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "tonic-build 0.7.2 (git+https://github.com/hyperium/tonic.git?rev=de2e4ac077c076736dc451f3415ea7da1a61a560)",
+ "tonic",
+ "tonic-build",
  "tonic-health",
  "toolchain_find",
  "tower",
