@@ -54,13 +54,21 @@ module fungible_tokens::treasury_lock {
         };
         transfer::share_object(lock);
 
-        return LockAdminCap<T> {
+        LockAdminCap<T> {
             id: object::new(ctx),
         }
     }
 
+    /// Entry function. Creates a new `TreasuryLock` for `TreasuryCap`. Invokes `new_lock`.
+    public entry fun new_lock_<T>(cap: TreasuryCap<T>, ctx: &mut TxContext) {
+        transfer::transfer(
+            new_lock(cap, ctx),
+            tx_context::sender(ctx)
+        )
+    }
+
     /// Create a new mint capability whose bearer will be allowed to mint
-    /// max_mint_per_epoch coins per epoch.
+    /// `max_mint_per_epoch` coins per epoch.
     public fun create_mint_cap<T>(
         _cap: &LockAdminCap<T>, max_mint_per_epoch: u64, ctx: &mut TxContext
     ): MintCap<T> {
@@ -72,11 +80,29 @@ module fungible_tokens::treasury_lock {
         }
     }
 
+    /// Entry function. Creates a new mint capability whose bearer will be allowed
+    /// to mint `max_mint_per_epoch` coins per epoch. Sends it to `recipient`.
+    public fun create_and_transfer_mint_cap<T>(
+        cap: &LockAdminCap<T>, max_mint_per_epoch: u64, recipient: address, ctx: &mut TxContext
+    ) {
+        transfer::transfer(
+            create_mint_cap(cap, max_mint_per_epoch, ctx),
+            recipient
+        )
+    }
+
     /// Ban a `MintCap`.
     public fun ban_mint_cap_id<T>(
         _cap: &LockAdminCap<T>, lock: &mut TreasuryLock<T>, id: ID
     ) {
         vec_set::insert(&mut lock.banned_mint_authorities, id)
+    }
+
+    /// Entry function. Bans a `MintCap`.
+    public entry fun ban_mint_cap_id_<T>(
+        cap: &LockAdminCap<T>, lock: &mut TreasuryLock<T>, id: ID
+    ) {
+        ban_mint_cap_id(cap, lock, id);
     }
 
     /// Unban a previously banned `MintCap`.
@@ -86,8 +112,15 @@ module fungible_tokens::treasury_lock {
         vec_set::remove(&mut lock.banned_mint_authorities, &id)
     }
 
+    /// Entry function. Unbans a previously banned `MintCap`.
+    public entry fun unban_mint_cap_id_<T>(
+        cap: &LockAdminCap<T>, lock: &mut TreasuryLock<T>, id: ID
+    ) {
+        unban_mint_cap_id(cap, lock, id);
+    }
+
     /// Borrow the `TreasuryCap` to use directly.
-    public fun borrow_treasury_cap<T>(
+    public fun treasury_cap_mut<T>(
         _cap: &LockAdminCap<T>, lock: &mut TreasuryLock<T>
     ): &mut TreasuryCap<T> {
         &mut lock.treasury_cap
@@ -115,6 +148,22 @@ module fungible_tokens::treasury_lock {
         cap.minted_in_epoch = cap.minted_in_epoch + amount;
         coin::mint_balance(&mut lock.treasury_cap, amount)
     }
+
+    /// Entry function. Mint a `Coin` from a `TreasuryLock` providing a `MintCap`
+    /// and transfer it to recipient.
+    public entry fun mint_and_transfer<T>(
+        lock: &mut TreasuryLock<T>,
+        cap: &mut MintCap<T>,
+        amount: u64,
+        recipient: address,
+        ctx: &mut TxContext
+    ) {
+        let balance = mint_balance(lock, cap, amount, ctx);
+        transfer::transfer(
+            coin::from_balance(balance, ctx),
+            recipient
+        )
+    }
 }
 
 #[test_only]
@@ -124,7 +173,7 @@ module fungible_tokens::treasury_lock_tests {
     use sui::transfer;
     use sui::coin;
     use sui::object::{Self};
-    use fungible_tokens::treasury_lock::{Self, TreasuryLock, LockAdminCap, MintCap, create_mint_cap, new_lock, mint_balance};
+    use fungible_tokens::treasury_lock::{Self, TreasuryLock, LockAdminCap, MintCap, create_and_transfer_mint_cap, new_lock, mint_balance};
 
     const ADMIN: address = @0xABBA;
     const USER: address = @0xB0B;
@@ -151,11 +200,7 @@ module fungible_tokens::treasury_lock_tests {
         test_scenario::next_tx(scenario, &ADMIN);
         {
             let admin_cap = test_scenario::take_owned<LockAdminCap<TREASURY_LOCK_TESTS>>(scenario);
-            let mint_cap = create_mint_cap(&admin_cap, 500, test_scenario::ctx(scenario));
-            transfer::transfer(
-                mint_cap,
-                USER
-            );
+            create_and_transfer_mint_cap(&admin_cap, 500, USER, test_scenario::ctx(scenario));
             test_scenario::return_owned(scenario, admin_cap);
         };
 
@@ -176,7 +221,7 @@ module fungible_tokens::treasury_lock_tests {
         test_scenario::return_owned(scenario, mint_cap);
         test_scenario::return_shared(scenario, lock);
 
-        return balance
+        balance
     }
 
 
