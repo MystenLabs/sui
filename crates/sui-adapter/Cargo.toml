@@ -21,7 +21,7 @@ sui-framework = { path = "../sui-framework" }
 sui-verifier = { path = "../sui-verifier" }
 sui-json = { path = "../sui-json" }
 sui-types = { path = "../sui-types" }
-workspace-hack = { path = "../workspace-hack"}
+workspace-hack.workspace = true
 
 [dev-dependencies]
 move-package.workspace = true

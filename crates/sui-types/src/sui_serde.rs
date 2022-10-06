@@ -146,8 +146,18 @@ pub trait Encoding {
     fn encode<T: AsRef<[u8]>>(data: T) -> String;
 }
 
-#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+#[derive(Serialize, Deserialize, Debug, JsonSchema, Clone)]
 pub struct Hex(String);
+
+impl Hex {
+    pub fn to_vec(&self) -> Result<Vec<u8>, anyhow::Error> {
+        Self::decode(&self.0)
+    }
+    pub fn from_bytes(bytes: &[u8]) -> Self {
+        Self(Self::encode(bytes))
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, JsonSchema)]
 #[serde(try_from = "String")]
 pub struct Base64(String);

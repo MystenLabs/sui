@@ -593,6 +593,7 @@ fn test_user_signature_committed_in_checkpoints() {
             [execution_digest_a].into_iter(),
         ),
         None,
+        None,
     );
     let checkpoint_summary_b = CheckpointSummary::new(
         0,
@@ -600,6 +601,7 @@ fn test_user_signature_committed_in_checkpoints() {
         &CheckpointContents::new_with_causally_ordered_transactions(
             [execution_digest_b].into_iter(),
         ),
+        None,
         None,
     );
 

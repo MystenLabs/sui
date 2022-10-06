@@ -58,7 +58,7 @@ if [ -n "$LOCAL_MSIM_PATH" ]; then
 else
   cargo_patch_args+=(
     --config 'patch.crates-io.tokio.git = "https://github.com/MystenLabs/mysten-sim.git"'
-    --config 'patch.crates-io.tokio.rev = "dad61af1709543ec31529a78c489bc4b9c973375"'
+    --config 'patch.crates-io.tokio.rev = "305f0ca15fe77df5b92b7f4bb57b5472e568edc3"'
   )
 fi
 
@@ -78,6 +78,16 @@ if [ -n "$USE_MOCK_CRYPTO" ]; then
 fi
 
 RUST_FLAGS=$(IFS=, ; echo "${RUST_FLAGS[*]}")
+
+if ! cargo nextest --help > /dev/null 2>&1; then
+  echo "nextest (https://nexte.st) does not appear to be installed. Please install before proceeding."
+  echo "You can install it by running:"
+  echo ""
+  echo "   \$ cargo install cargo-nextest --locked"
+  echo ""
+  echo "or see https://nexte.st for other installation options"
+  exit 1
+fi
 
 CARGO_COMMAND=(nextest run --cargo-profile simulator)
 if [ "$1" = "build" ]; then

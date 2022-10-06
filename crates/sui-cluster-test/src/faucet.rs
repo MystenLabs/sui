@@ -63,7 +63,7 @@ impl FaucetClient for RemoteFaucetClient {
     async fn request_sui_coins(&self, request_address: SuiAddress) -> FaucetResponse {
         let gas_url = format!("{}/gas", self.remote_url);
         debug!("Getting coin from remote faucet {}", gas_url);
-        let data = HashMap::from([("recipient", encode_bytes_hex(&request_address))]);
+        let data = HashMap::from([("recipient", encode_bytes_hex(request_address))]);
         let map = HashMap::from([("FixedAmountRequest", data)]);
 
         let response = reqwest::Client::new()

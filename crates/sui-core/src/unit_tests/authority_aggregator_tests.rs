@@ -14,8 +14,8 @@ use sui_types::crypto::{
     AuthorityPublicKeyBytes, NetworkKeyPair, SuiKeyPair,
 };
 use sui_types::crypto::{KeypairTraits, Signature};
-use test_utils::authority::SuiNode;
 
+use sui_macros::sim_test;
 use sui_types::messages::*;
 use sui_types::object::{Object, GAS_VALUE_FOR_TESTING};
 use test_utils::authority::{spawn_test_authorities, test_and_configure_authority_configs};
@@ -30,12 +30,15 @@ use crate::gateway_state::GatewayState;
 
 use tokio::time::Instant;
 
+#[cfg(msim)]
+use sui_simulator::configs::constant_latency_ms;
+
 pub async fn init_network_authorities(
     committee_size: usize,
     genesis_objects: Vec<Object>,
 ) -> AuthorityAggregator<NetworkAuthorityClient> {
     let configs = test_and_configure_authority_configs(committee_size);
-    let _nodes: Vec<SuiNode> = spawn_test_authorities(genesis_objects, &configs).await;
+    let _nodes = spawn_test_authorities(genesis_objects, &configs).await;
     let gateway_config = GatewayConfig {
         epoch: 0,
         validator_set: configs.validator_set().to_vec(),
@@ -45,7 +48,7 @@ pub async fn init_network_authorities(
         db_folder_path: PathBuf::from("/tmp/client_db"),
     };
     let committee = GatewayState::make_committee(&gateway_config).unwrap();
-    let epoch_store = Arc::new(EpochStore::new_for_testing(&committee));
+    let committee_store = Arc::new(CommitteeStore::new_for_testing(&committee));
     let auth_clients = GatewayState::make_authority_clients(
         &gateway_config,
         NetworkAuthorityClientMetrics::new_for_tests(),
@@ -53,7 +56,7 @@ pub async fn init_network_authorities(
     let registry = prometheus::Registry::new();
     AuthorityAggregator::new(
         committee,
-        epoch_store,
+        committee_store,
         auth_clients,
         AuthAggMetrics::new(&registry),
         SafeClientMetrics::new(&registry),
@@ -139,11 +142,11 @@ pub async fn init_local_authorities_with_genesis(
         serial_authority_request_timeout: Duration::from_secs(1),
         serial_authority_request_interval: Duration::from_secs(1),
     };
-    let epoch_store = Arc::new(EpochStore::new_for_testing(&committee));
+    let committee_store = Arc::new(CommitteeStore::new_for_testing(&committee));
     (
         AuthorityAggregator::new_with_timeouts(
             committee,
-            epoch_store,
+            committee_store,
             clients,
             AuthAggMetrics::new_for_tests(),
             SafeClientMetrics::new_for_tests(),
@@ -433,7 +436,7 @@ async fn execute_transaction_with_fault_configs(
 /// we spawn a tokio task on the server, client timing out and
 /// terminating the connection does not stop server from completing
 /// execution on its side
-#[tokio::test(flavor = "multi_thread", worker_threads = 6)]
+#[sim_test(config = "constant_latency_ms(1)")]
 async fn test_quorum_map_and_reduce_timeout() {
     let build_config = BuildConfig::default();
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -451,8 +454,8 @@ async fn test_quorum_map_and_reduce_timeout() {
     assert!(certified_tx.is_ok());
     let certificate = certified_tx.unwrap();
     // Send request with a very small timeout to trigger timeout error
-    authorities.timeouts.pre_quorum_timeout = Duration::from_millis(1);
-    authorities.timeouts.post_quorum_timeout = Duration::from_millis(1);
+    authorities.timeouts.pre_quorum_timeout = Duration::from_millis(2);
+    authorities.timeouts.post_quorum_timeout = Duration::from_millis(2);
     let certified_effects = authorities.process_certificate(certificate.clone()).await;
     // Ensure it is an error
     assert!(certified_effects.is_err());
@@ -475,7 +478,7 @@ async fn test_quorum_map_and_reduce_timeout() {
     }
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_map_reducer() {
     let (authorities, _, _) = init_local_authorities(4, vec![]).await;
 
@@ -607,7 +610,7 @@ async fn test_map_reducer() {
     assert!(!res.as_ref().unwrap().contains(&bad_auth));
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_get_all_owned_objects() {
     let (addr1, key1): (_, AccountKeyPair) = get_key_pair();
     let (addr2, _): (_, AccountKeyPair) = get_key_pair();
@@ -693,7 +696,7 @@ async fn test_get_all_owned_objects() {
     assert_eq!(1, owned_object.len());
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_sync_all_owned_objects() {
     let (addr1, key1): (_, AccountKeyPair) = get_key_pair();
     let (addr2, _): (_, AccountKeyPair) = get_key_pair();
@@ -808,7 +811,7 @@ async fn get_owned_objects(
     owned_objects
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_process_certificate() {
     let (addr1, key1): (_, AccountKeyPair) = get_key_pair();
     let gas_object1 = Object::with_owner_for_testing(addr1);
@@ -861,7 +864,7 @@ async fn test_process_certificate() {
     assert_eq!(SequenceNumber::from(2), new_object_version);
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_execute_cert_to_true_effects() {
     let (addr1, key1): (_, AccountKeyPair) = get_key_pair();
     let gas_object1 = Object::with_owner_for_testing(addr1);
@@ -900,7 +903,7 @@ async fn test_execute_cert_to_true_effects() {
     assert!(count >= 2);
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_process_transaction_fault_success() {
     // This test exercises the 4 different possible fauling case when one authority is faulty.
     // A transaction is sent to all authories, however one of them will error out either before or after processing the transaction.
@@ -928,7 +931,7 @@ async fn test_process_transaction_fault_success() {
     }
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_process_transaction_fault_fail() {
     // This test exercises the cases when there are 2 authorities faulty,
     // and hence no quorum could be formed. This is tested on both the
@@ -1044,8 +1047,11 @@ async fn test_quorum_once_with_timeout() {
             unreachable!();
         }
 
-        async fn handle_epoch(&self, _request: EpochRequest) -> Result<EpochResponse, SuiError> {
-            unreachable!()
+        async fn handle_committee_info_request(
+            &self,
+            _request: CommitteeInfoRequest,
+        ) -> Result<CommitteeInfoResponse, SuiError> {
+            unimplemented!();
         }
     }
 
@@ -1067,11 +1073,11 @@ async fn test_quorum_once_with_timeout() {
     }
 
     let committee = Committee::new(0, authorities).unwrap();
-    let epoch_store = Arc::new(EpochStore::new_for_testing(&committee));
+    let committee_store = Arc::new(CommitteeStore::new_for_testing(&committee));
 
     let agg = AuthorityAggregator::new_with_timeouts(
         committee,
-        epoch_store,
+        committee_store,
         clients,
         AuthAggMetrics::new_for_tests(),
         SafeClientMetrics::new_for_tests(),

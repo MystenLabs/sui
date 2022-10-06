@@ -1,10 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
-use std::fs::File;
-use std::io::Write;
-
 use clap::ArgEnum;
 use clap::Parser;
 use hyper::body::Buf;
@@ -13,7 +9,11 @@ use move_package::BuildConfig;
 use pretty_assertions::assert_str_eq;
 use serde::Serialize;
 use serde_json::{json, Map, Value};
+use std::collections::BTreeMap;
+use std::fs::File;
+use std::io::Write;
 use sui_json_rpc::api::EventReadApiOpenRpc;
+use sui_sdk::crypto::AccountKeystore;
 use sui_types::messages::Transaction;
 
 use crate::examples::RpcExampleProvider;
@@ -136,7 +136,13 @@ async fn create_response_sample() -> Result<
     let config = working_dir.join(SUI_CLIENT_CONFIG);
 
     let mut context = WalletContext::new(&config).await?;
-    let address = context.keystore.addresses().first().cloned().unwrap();
+    let address = context
+        .config
+        .keystore
+        .addresses()
+        .first()
+        .cloned()
+        .unwrap();
 
     context
         .client
@@ -163,6 +169,7 @@ async fn create_response_sample() -> Result<
     let (hero_package, hero) = create_hero_response(&mut context, &coins).await?;
     let transfer = create_transfer_response(&mut context, address, &coins).await?;
     let transfer_sui = create_transfer_sui_response(&mut context, address, &coins).await?;
+    let pay = create_pay_response(&mut context, address, &coins).await?;
     let coin_split = create_coin_split_response(&mut context, &coins).await?;
     let error = create_error_response(address, hero_package, context, &network).await?;
 
@@ -192,6 +199,7 @@ async fn create_response_sample() -> Result<
         move_call: example_nft_tx,
         transfer,
         transfer_sui,
+        pay,
         coin_split,
         publish,
         error,
@@ -294,6 +302,34 @@ async fn create_transfer_sui_response(
     }
 }
 
+async fn create_pay_response(
+    context: &mut WalletContext,
+    address: SuiAddress,
+    coins: &[SuiObjectInfo],
+) -> Result<SuiTransactionResponse, anyhow::Error> {
+    let coins = vec![coins.first().unwrap().object_id];
+    let response = SuiClientCommands::Pay {
+        input_coins: coins,
+        recipients: vec![address],
+        amounts: vec![100],
+        gas: None,
+        gas_budget: 1000,
+    }
+    .execute(context)
+    .await?;
+
+    if let SuiClientCommandResult::Pay(certificate, effects) = response {
+        Ok(SuiTransactionResponse {
+            certificate,
+            effects,
+            timestamp_ms: None,
+            parsed_data: None,
+        })
+    } else {
+        panic!()
+    }
+}
+
 async fn create_hero_response(
     context: &mut WalletContext,
     coins: &[SuiObjectInfo],
@@ -373,6 +409,7 @@ async fn create_error_response(
         .await?;
 
     let signature = context
+        .config
         .keystore
         .sign(&address, &response.tx_bytes.to_vec()?)?;
 
@@ -482,6 +519,7 @@ struct TransactionResponseSample {
     pub move_call: SuiTransactionResponse,
     pub transfer: SuiTransactionResponse,
     pub transfer_sui: SuiTransactionResponse,
+    pub pay: SuiTransactionResponse,
     pub coin_split: SuiTransactionResponse,
     pub publish: SuiTransactionResponse,
     pub error: Value,

@@ -31,8 +31,7 @@ use sui_core::authority_client::NetworkAuthorityClient;
 use sui_core::quorum_driver::{QuorumDriverHandler, QuorumDriverMetrics};
 use sui_types::crypto::EmptySignInfo;
 use sui_types::messages::{
-    ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
-    TransactionEnvelope,
+    QuorumDriverRequest, QuorumDriverRequestType, QuorumDriverResponse, TransactionEnvelope,
 };
 use tokio::sync::Barrier;
 use tokio::time;
@@ -183,15 +182,16 @@ impl BenchDriver {
     pub async fn make_workers(
         &self,
         workload_info: &WorkloadInfo,
-        aggregator: &AuthorityAggregator<NetworkAuthorityClient>,
+        aggregator: Arc<AuthorityAggregator<NetworkAuthorityClient>>,
     ) -> Vec<BenchWorker> {
         let mut num_requests = workload_info.max_in_flight_ops / workload_info.num_workers;
         let mut target_qps = workload_info.target_qps / workload_info.num_workers;
         let mut workers = vec![];
         for i in 0..workload_info.num_workers {
             if i == workload_info.num_workers - 1 {
-                num_requests += workload_info.max_in_flight_ops % workload_info.num_workers;
-                target_qps += workload_info.target_qps % workload_info.num_workers;
+                num_requests =
+                    workload_info.max_in_flight_ops - workers.len() as u64 * num_requests;
+                target_qps = workload_info.target_qps - workers.len() as u64 * target_qps;
             }
             if num_requests > 0 && target_qps > 0 {
                 workers.push(BenchWorker {
@@ -199,7 +199,7 @@ impl BenchDriver {
                     target_qps,
                     payload: workload_info
                         .workload
-                        .make_test_payloads(num_requests, aggregator)
+                        .make_test_payloads(num_requests, aggregator.clone())
                         .await,
                 });
             }
@@ -224,7 +224,7 @@ impl Driver<BenchmarkStats> for BenchDriver {
     async fn run(
         &self,
         workloads: Vec<WorkloadInfo>,
-        aggregator: AuthorityAggregator<NetworkAuthorityClient>,
+        aggregator: Arc<AuthorityAggregator<NetworkAuthorityClient>>,
         registry: &Registry,
         show_progress: bool,
         run_duration: Interval,
@@ -234,7 +234,7 @@ impl Driver<BenchmarkStats> for BenchDriver {
         let (tx, mut rx) = tokio::sync::mpsc::channel(100);
         let mut bench_workers = vec![];
         for workload in workloads.iter() {
-            bench_workers.extend(self.make_workers(workload, &aggregator).await);
+            bench_workers.extend(self.make_workers(workload, aggregator.clone()).await);
         }
         let num_workers = bench_workers.len() as u64;
         if num_workers == 0 {
@@ -330,13 +330,13 @@ impl Driver<BenchmarkStats> for BenchDriver {
                                 let committee_cloned = committee.clone();
                                 let start = Instant::now();
                                 let res = qd
-                                    .execute_transaction(ExecuteTransactionRequest {
+                                    .execute_transaction(QuorumDriverRequest {
                                         transaction: b.0.clone(),
-                                        request_type: ExecuteTransactionRequestType::WaitForEffectsCert,
+                                        request_type: QuorumDriverRequestType::WaitForEffectsCert,
                                     })
                                     .map(move |res| {
                                         match res {
-                                            Ok(ExecuteTransactionResponse::EffectsCert(result)) => {
+                                            Ok(QuorumDriverResponse::EffectsCert(result)) => {
                                                 let (cert, effects) = *result;
                                                 let new_version = effects.effects.mutated.iter().find(|(object_ref, _)| {
                                                     object_ref.0 == b.1.get_object_id()
@@ -383,13 +383,13 @@ impl Driver<BenchmarkStats> for BenchDriver {
                                 let metrics_cloned = metrics_cloned.clone();
                                 let committee_cloned = committee.clone();
                                 let res = qd
-                                    .execute_transaction(ExecuteTransactionRequest {
+                                    .execute_transaction(QuorumDriverRequest {
                                         transaction: tx.clone(),
-                                    request_type: ExecuteTransactionRequestType::WaitForEffectsCert,
+                                    request_type: QuorumDriverRequestType::WaitForEffectsCert,
                                 })
                                 .map(move |res| {
                                     match res {
-                                        Ok(ExecuteTransactionResponse::EffectsCert(result)) => {
+                                        Ok(QuorumDriverResponse::EffectsCert(result)) => {
                                             let (cert, effects) = *result;
                                             let new_version = effects.effects.mutated.iter().find(|(object_ref, _)| {
                                                 object_ref.0 == payload.get_object_id()

@@ -111,16 +111,16 @@ impl TransferObjectWorkload {
 
 #[async_trait]
 impl Workload<dyn Payload> for TransferObjectWorkload {
-    async fn init(&mut self, _aggregator: &AuthorityAggregator<NetworkAuthorityClient>) {
+    async fn init(&mut self, _aggregator: Arc<AuthorityAggregator<NetworkAuthorityClient>>) {
         return;
     }
     async fn make_test_payloads(
         &self,
         count: u64,
-        aggregator: &AuthorityAggregator<NetworkAuthorityClient>,
+        aggregator: Arc<AuthorityAggregator<NetworkAuthorityClient>>,
     ) -> Vec<Box<dyn Payload>> {
         // Read latest test gas object
-        let primary_gas = get_latest(self.test_gas, aggregator).await.unwrap();
+        let primary_gas = get_latest(self.test_gas, aggregator.clone()).await.unwrap();
         let mut primary_gas_ref = primary_gas.compute_object_reference();
         let owner = *self
             .transfer_keypairs
@@ -138,7 +138,7 @@ impl Workload<dyn Payload> for TransferObjectWorkload {
                     &self.test_gas_keypair,
                     MAX_GAS_FOR_TESTING,
                     *owner,
-                    aggregator,
+                    aggregator.clone(),
                 )
                 .await
                 {
@@ -157,7 +157,7 @@ impl Workload<dyn Payload> for TransferObjectWorkload {
                 &self.test_gas_keypair,
                 1,
                 owner,
-                aggregator,
+                aggregator.clone(),
             )
             .await
             {

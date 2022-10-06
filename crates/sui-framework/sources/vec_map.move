@@ -35,13 +35,13 @@ module sui::vec_map {
         key: K,
         value: V,
     }
-    
+
     /// Create an empty `VecMap`
     public fun empty<K: copy, V>(): VecMap<K,V> {
         VecMap { contents: vector::empty() }
     }
 
-    /// Insert the entry `key` |-> `value` into self.
+    /// Insert the entry `key` |-> `value` into `self`.
     /// Aborts if `key` is already bound in `self`.
     public fun insert<K: copy, V>(self: &mut VecMap<K,V>, key: K, value: V) {
         assert!(!contains(self, &key), EKeyAlreadyExists);
@@ -58,7 +58,7 @@ module sui::vec_map {
     /// Pop the most recently inserted entry from the map. Aborts if the map is empty.
     public fun pop<K: copy, V>(self: &mut VecMap<K,V>): (K, V) {
         assert!(!vector::is_empty(&self.contents), EMapEmpty);
-        let Entry { key, value } = vector::pop_back(&mut self.contents);        
+        let Entry { key, value } = vector::pop_back(&mut self.contents);
         (key, value)
     }
 
@@ -92,7 +92,7 @@ module sui::vec_map {
     public fun is_empty<K: copy, V>(self: &VecMap<K,V>): bool {
         size(self) == 0
     }
-   
+
     /// Destroy an empty map. Aborts if `self` is not empty
     public fun destroy_empty<K: copy, V>(self: VecMap<K, V>) {
         let VecMap { contents } = self;
@@ -120,7 +120,7 @@ module sui::vec_map {
         (keys, values)
     }
 
-    /// Find the index of `key` in `self. Return `None` if `key` is not in `self`.
+    /// Find the index of `key` in `self`. Return `None` if `key` is not in `self`.
     /// Note that map entries are stored in insertion order, *not* sorted by key.
     public fun get_idx_opt<K: copy, V>(self: &VecMap<K,V>, key: &K): Option<u64> {
         let i = 0;
@@ -134,7 +134,7 @@ module sui::vec_map {
         option::none()
     }
 
-    /// Find the index of `key` in `self. Aborts if `key` is not in `self`.
+    /// Find the index of `key` in `self`. Aborts if `key` is not in `self`.
     /// Note that map entries are stored in insertion order, *not* sorted by key.
     public fun get_idx<K: copy, V>(self: &VecMap<K,V>, key: &K): u64 {
         let idx_opt = get_idx_opt(self, key);

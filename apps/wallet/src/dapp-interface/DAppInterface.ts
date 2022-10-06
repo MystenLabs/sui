@@ -8,7 +8,11 @@ import { WindowMessageStream } from '_messaging/WindowMessageStream';
 import { isErrorPayload } from '_payloads';
 import { ALL_PERMISSION_TYPES } from '_payloads/permissions';
 
-import type { SuiAddress, MoveCallTransaction } from '@mysten/sui.js';
+import type {
+    SuiAddress,
+    MoveCallTransaction,
+    SignableTransaction,
+} from '@mysten/sui.js';
 import type { Payload } from '_payloads';
 import type { GetAccount } from '_payloads/account/GetAccount';
 import type { GetAccountResponse } from '_payloads/account/GetAccountResponse';
@@ -83,6 +87,19 @@ export class DAppInterface {
                 type: 'get-account',
             }),
             (response) => response.accounts
+        );
+    }
+
+    public signAndExecuteTransaction(transaction: SignableTransaction) {
+        return mapToPromise(
+            this.send<ExecuteTransactionRequest, ExecuteTransactionResponse>({
+                type: 'execute-transaction-request',
+                transaction: {
+                    type: 'v2',
+                    data: transaction,
+                },
+            }),
+            (response) => response.result
         );
     }
 

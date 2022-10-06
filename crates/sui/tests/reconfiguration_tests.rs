@@ -17,6 +17,7 @@ use sui_types::crypto::{
 };
 use sui_types::error::SuiResult;
 use sui_types::messages::{CallArg, ObjectArg, TransactionEffects};
+use sui_types::messages_checkpoint::AuthenticatedCheckpoint;
 use sui_types::object::Object;
 use sui_types::SUI_SYSTEM_STATE_OBJECT_ID;
 use test_utils::authority::{get_object, test_authority_configs};
@@ -82,6 +83,7 @@ async fn reconfig_end_to_end_tests() {
 
     let sui_system_state = states[0].get_sui_system_state_object().await.unwrap();
     let new_committee_size = sui_system_state.validators.next_epoch_validators.len();
+    let expected_committee = sui_system_state.get_next_epoch_committee().voting_rights;
     assert_eq!(old_committee_size + 1, new_committee_size);
 
     fast_forward_to_ready_for_reconfig_start(&nodes).await;
@@ -92,6 +94,25 @@ async fn reconfig_end_to_end_tests() {
     }
 
     fast_forward_to_ready_for_reconfig_finish(&nodes).await;
+
+    for node in &nodes {
+        // Check that the last checkpoint contains the committee of the next epoch.
+        if let AuthenticatedCheckpoint::Certified(cert) = node
+            .active()
+            .state
+            .checkpoints
+            .lock()
+            .latest_stored_checkpoint()
+            .unwrap()
+        {
+            assert_eq!(
+                cert.summary.next_epoch_committee.unwrap(),
+                expected_committee
+            );
+        } else {
+            unreachable!("Expecting checkpoint cert");
+        }
+    }
 
     let results: Vec<_> = nodes
         .iter()
@@ -163,14 +184,7 @@ async fn reconfig_last_checkpoint_sync_missing_tx() {
 
     // Create a proposal on validator 0, which ensures that the transaction above will be included
     // in the checkpoint.
-    nodes[0]
-        .state()
-        .checkpoints
-        .as_ref()
-        .unwrap()
-        .lock()
-        .set_proposal(0)
-        .unwrap();
+    nodes[0].state().checkpoints.lock().set_proposal(0).unwrap();
     let mut checkpoint_processes = vec![];
     // Only validator 1 and 2 will participate the checkpoint progress, which will use fragments
     // involving validator 0, 1, 2. Since validator 1 and 2 don't have the above transaction
@@ -182,13 +196,15 @@ async fn reconfig_last_checkpoint_sync_missing_tx() {
             while !active
                 .state
                 .checkpoints
-                .as_ref()
-                .unwrap()
                 .lock()
                 .is_ready_to_finish_epoch_change()
             {
-                let _ =
-                    checkpoint_process_step(&active, &CheckpointProcessControl::default()).await;
+                let _ = checkpoint_process_step(
+                    active.clone(),
+                    &CheckpointProcessControl::default(),
+                    true,
+                )
+                .await;
             }
         });
         checkpoint_processes.push(handle);
@@ -203,13 +219,15 @@ async fn reconfig_last_checkpoint_sync_missing_tx() {
     while !nodes[3]
         .state()
         .checkpoints
-        .as_ref()
-        .unwrap()
         .lock()
         .is_ready_to_finish_epoch_change()
     {
-        let _ =
-            checkpoint_process_step(nodes[3].active(), &CheckpointProcessControl::default()).await;
+        let _ = checkpoint_process_step(
+            nodes[3].active().clone(),
+            &CheckpointProcessControl::default(),
+            true,
+        )
+        .await;
     }
 }
 
@@ -276,13 +294,15 @@ async fn fast_forward_to_ready_for_reconfig_start(nodes: &[SuiNode]) {
             while !active
                 .state
                 .checkpoints
-                .as_ref()
-                .unwrap()
                 .lock()
                 .is_ready_to_start_epoch_change()
             {
-                let _ =
-                    checkpoint_process_step(&active, &CheckpointProcessControl::default()).await;
+                let _ = checkpoint_process_step(
+                    active.clone(),
+                    &CheckpointProcessControl::default(),
+                    true,
+                )
+                .await;
             }
         });
         checkpoint_processes.push(handle);
@@ -299,13 +319,15 @@ async fn fast_forward_to_ready_for_reconfig_finish(nodes: &[SuiNode]) {
             while !active
                 .state
                 .checkpoints
-                .as_ref()
-                .unwrap()
                 .lock()
                 .is_ready_to_finish_epoch_change()
             {
-                let _ =
-                    checkpoint_process_step(&active, &CheckpointProcessControl::default()).await;
+                let _ = checkpoint_process_step(
+                    active.clone(),
+                    &CheckpointProcessControl::default(),
+                    true,
+                )
+                .await;
             }
         });
         checkpoint_processes.push(handle);

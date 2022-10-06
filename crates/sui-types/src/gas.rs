@@ -20,7 +20,7 @@ use std::{
     ops::{Add, Deref, Mul},
 };
 use sui_cost_tables::{
-    bytecode_tables::{GasStatus, INITIAL_COST_SCHEDULE},
+    bytecode_tables::{GasStatus, INITIAL_COST_SCHEDULE, VM_FLAT_FEE},
     non_execution_tables::{
         BASE_TX_COST_FIXED, CONSENSUS_COST, MAXIMUM_TX_GAS, OBJ_ACCESS_COST_MUTATE_PER_BYTE,
         OBJ_ACCESS_COST_READ_PER_BYTE, OBJ_DATA_COST_REFUNDABLE, PACKAGE_PUBLISH_COST_PER_BYTE,
@@ -212,6 +212,10 @@ impl<'a> SuiGasStatus<'a> {
 
     pub fn get_move_gas_status(&mut self) -> &mut GasStatus<'a> {
         &mut self.gas_status
+    }
+
+    pub fn charge_vm_gas(&mut self) -> Result<(), ExecutionError> {
+        self.deduct_computation_cost(&VM_FLAT_FEE.to_unit())
     }
 
     pub fn charge_min_tx_gas(&mut self) -> Result<(), ExecutionError> {

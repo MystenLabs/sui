@@ -16,4 +16,4 @@ name = "tests"
 harness = false
 
 [dependencies]
-workspace-hack = { path = "../workspace-hack"}
+workspace-hack.workspace = true

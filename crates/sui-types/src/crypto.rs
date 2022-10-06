@@ -291,6 +291,23 @@ impl PublicKey {
             PublicKey::Secp256k1KeyPair(_) => Secp256k1SuiSignature::SCHEME.flag(),
         }
     }
+
+    pub fn try_from_bytes(
+        curve: SignatureScheme,
+        key_bytes: &[u8],
+    ) -> Result<PublicKey, eyre::Report> {
+        Ok(match curve {
+            SignatureScheme::ED25519 => {
+                PublicKey::Ed25519KeyPair(Ed25519PublicKey::from_bytes(key_bytes)?)
+            }
+            SignatureScheme::Secp256k1 => {
+                PublicKey::Secp256k1KeyPair(Secp256k1PublicKey::from_bytes(key_bytes)?)
+            }
+            SignatureScheme::BLS12381 => {
+                return Err(eyre::Report::msg(format!("Unsupported scheme {curve:?}.")))
+            }
+        })
+    }
     pub fn scheme(&self) -> SignatureScheme {
         match self {
             PublicKey::Ed25519KeyPair(_) => Ed25519SuiSignature::SCHEME,
@@ -312,7 +329,7 @@ impl AuthorityPublicKeyBytes {
         &self,
         f: &mut std::fmt::Formatter<'_>,
     ) -> std::result::Result<(), std::fmt::Error> {
-        let s = hex::encode(&self.0);
+        let s = hex::encode(self.0);
         write!(f, "k#{}", s)?;
         Ok(())
     }
@@ -513,7 +530,7 @@ pub fn derive_key_pair_from_path(
             Ok((kp.public().into(), SuiKeyPair::Ed25519SuiKeyPair(kp)))
         }
         SignatureScheme::Secp256k1 => {
-            let child_xprv = XPrv::derive_from_path(&seed, &path)
+            let child_xprv = XPrv::derive_from_path(seed, &path)
                 .map_err(|e| SuiError::SignatureKeyGenError(e.to_string()))?;
             let kp = Secp256k1KeyPair::from(
                 Secp256k1PrivateKey::from_bytes(child_xprv.private_key().to_bytes().as_slice())
@@ -1277,7 +1294,6 @@ mod bcs_signable {
     impl BcsSignable for crate::messages::TransactionEffects {}
     impl BcsSignable for crate::messages::TransactionData {}
     impl BcsSignable for crate::messages::SenderSignedData {}
-    impl BcsSignable for crate::messages::EpochInfo {}
     impl BcsSignable for crate::object::Object {}
 
     impl BcsSignable for super::bcs_signable_test::Foo {}

@@ -1,6 +1,6 @@
 [package]
 name = "sui-node"
-version = "0.9.0"
+version = "0.10.0"
 authors = ["Mysten Labs <build@mystenlabs.com>"]
 license = "Apache-2.0"
 publish = false
@@ -29,7 +29,10 @@ sui-types = { path = "../sui-types" }
 
 telemetry-subscribers.workspace = true
 mysten-network.workspace = true
-workspace-hack = { path = "../workspace-hack"}
+workspace-hack.workspace = true
+
+[target.'cfg(msim)'.dependencies]
+sui-simulator = { path = "../sui-simulator" }
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemallocator = { version = "^0.5", features = ["profiling"] }

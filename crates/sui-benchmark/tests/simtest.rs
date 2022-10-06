@@ -72,10 +72,10 @@ mod test {
             1,  // transfer_object_weight
         )];
 
-        let aggregator = test_authority_aggregator(swarm.config());
+        let aggregator = Arc::new(test_authority_aggregator(swarm.config()));
 
         for w in workloads.iter_mut() {
-            w.workload.init(&aggregator).await;
+            w.workload.init(aggregator.clone()).await;
         }
 
         let driver = BenchDriver::new(5);

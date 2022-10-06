@@ -28,11 +28,10 @@ use sui_core::authority_aggregator::AuthAggMetrics;
 use sui_core::authority_aggregator::AuthorityAggregator;
 use sui_core::authority_client::AuthorityAPI;
 use sui_core::authority_client::NetworkAuthorityClient;
-use sui_core::epoch::epoch_store::EpochStore;
+use sui_core::epoch::committee_store::CommitteeStore;
 use sui_core::gateway_state::GatewayState;
 use sui_core::safe_client::SafeClientMetrics;
 use sui_node::metrics;
-use sui_node::SuiNode;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress;
 use sui_types::batch::UpdateItem;
@@ -67,6 +66,8 @@ struct Opts {
     /// ideally same as number of workers
     #[clap(long, default_value = "3", global = true)]
     pub num_client_threads: u64,
+    #[clap(long, default_value = "", global = true)]
+    pub log_path: String,
     /// Path where gateway config is stored when running remote benchmark
     /// This is also the path where gateway config is stored during local
     /// benchmark
@@ -244,11 +245,13 @@ pub async fn follow(authority_client: NetworkAuthorityClient, download_txes: boo
 /// --transfer-object 50```
 #[tokio::main]
 async fn main() -> Result<()> {
+    let opts: Opts = Opts::parse();
     let mut config = telemetry_subscribers::TelemetryConfig::new("stress");
     config.log_string = Some("warn".to_string());
-    config.log_file = Some("/tmp/stress.log".to_string());
+    if !opts.log_path.is_empty() {
+        config.log_file = Some(opts.log_path);
+    }
     let _guard = config.with_env().init();
-    let opts: Opts = Opts::parse();
 
     let barrier = Arc::new(Barrier::new(2));
     let cloned_barrier = barrier.clone();
@@ -296,7 +299,7 @@ async fn main() -> Result<()> {
                 .unwrap();
             server_runtime.block_on(async move {
                 // Setup the network
-                let nodes: Vec<SuiNode> = spawn_test_authorities(cloned_gas, &cloned_config).await;
+                let nodes: Vec<_> = spawn_test_authorities(cloned_gas, &cloned_config).await;
                 let handles: Vec<_> = nodes.into_iter().map(move |node| node.wait()).collect();
                 cloned_barrier.wait().await;
                 let mut follower_handles = vec![];
@@ -345,10 +348,10 @@ async fn main() -> Result<()> {
             &config,
             NetworkAuthorityClientMetrics::new(&registry),
         );
-        let epoch_store = Arc::new(EpochStore::new_for_testing(&committee));
+        let committee_store = Arc::new(CommitteeStore::new_for_testing(&committee));
         let aggregator = AuthorityAggregator::new(
             committee,
-            epoch_store,
+            committee_store,
             authority_clients,
             AuthAggMetrics::new(&registry),
             SafeClientMetrics::new(&registry),
@@ -356,7 +359,7 @@ async fn main() -> Result<()> {
         let offset = ObjectID::from_hex_literal(&opts.primary_gas_id)?;
         let ids = ObjectID::in_range(offset, opts.primary_gas_objects)?;
         let primary_gas_id = ids.choose(&mut rand::thread_rng()).unwrap();
-        let primary_gas = get_latest(*primary_gas_id, &aggregator)
+        let primary_gas = get_latest(*primary_gas_id, Arc::new(aggregator))
             .await
             .ok_or_else(|| {
                 anyhow!(format!(
@@ -406,14 +409,15 @@ async fn main() -> Result<()> {
                 NetworkAuthorityClientMetrics::new(&registry),
             );
 
-            let epoch_store = Arc::new(EpochStore::new_for_testing(&committee));
+            let committee_store = Arc::new(CommitteeStore::new_for_testing(&committee));
             let aggregator = AuthorityAggregator::new(
                 committee,
-                epoch_store,
+                committee_store,
                 authority_clients,
                 AuthAggMetrics::new(&registry),
                 SafeClientMetrics::new(&registry),
             );
+            let arc_agg = Arc::new(aggregator);
             match opts.run_spec {
                 RunSpec::Bench {
                     target_qps,
@@ -436,7 +440,7 @@ async fn main() -> Result<()> {
                             shared_counter,
                             transfer_object,
                         );
-                        combination_workload.workload.init(&aggregator).await;
+                        combination_workload.workload.init(arc_agg.clone()).await;
                         vec![combination_workload]
                     } else {
                         let mut workloads = vec![];
@@ -454,25 +458,28 @@ async fn main() -> Result<()> {
                             owner,
                             keypair.clone(),
                         ) {
-                            shared_counter_workload.workload.init(&aggregator).await;
+                            shared_counter_workload.workload.init(arc_agg.clone()).await;
                             workloads.push(shared_counter_workload);
                         }
                         let transfer_object_weight = 1.0 - shared_counter_weight;
                         let transfer_object_qps = target_qps - shared_counter_qps;
-                        let trasnfer_object_num_workers =
+                        let transfer_object_num_workers =
                             (transfer_object_weight * num_workers as f32).ceil() as u64;
-                        let trasnfer_object_max_ops =
+                        let transfer_object_max_ops =
                             (transfer_object_qps * in_flight_ratio) as u64;
                         if let Some(mut transfer_object_workload) = make_transfer_object_workload(
                             transfer_object_qps,
-                            trasnfer_object_num_workers,
-                            trasnfer_object_max_ops,
+                            transfer_object_num_workers,
+                            transfer_object_max_ops,
                             opts.num_transfer_accounts,
                             &primary_gas_id,
                             owner,
                             keypair,
                         ) {
-                            transfer_object_workload.workload.init(&aggregator).await;
+                            transfer_object_workload
+                                .workload
+                                .init(arc_agg.clone())
+                                .await;
                             workloads.push(transfer_object_workload);
                         }
                         workloads
@@ -485,7 +492,7 @@ async fn main() -> Result<()> {
                     let show_progress = interval.is_unbounded();
                     let driver = BenchDriver::new(stat_collection_interval);
                     driver
-                        .run(workloads, aggregator, &registry, show_progress, interval)
+                        .run(workloads, arc_agg, &registry, show_progress, interval)
                         .await
                 }
             }

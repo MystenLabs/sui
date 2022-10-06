@@ -12,7 +12,7 @@ const TEST_MODULE_DATA_DIR: &str = "../sui-framework/tests";
 
 // Execute every entry function in Move framework and examples and ensure costs don't change
 // To review snapshot changes, and fix snapshot differences,
-// 0. Install cargo-insta
+// 0. Install cargo-insta (`cargo install cargo-insta`)
 // 1. Run `cargo insta test --review` under `./sui-cost`.
 // 2. Review, accept or reject changes.
 

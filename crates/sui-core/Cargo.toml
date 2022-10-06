@@ -1,6 +1,6 @@
 [package]
 name = "sui-core"
-version = "0.9.0"
+version = "0.10.0"
 authors = ["Mysten Labs <build@mystenlabs.com>"]
 license = "Apache-2.0"
 publish = false
@@ -50,16 +50,19 @@ typed-store.workspace = true
 typed-store-derive.workspace = true
 mysten-network.workspace = true
 
-narwhal-config = { git = "https://github.com/MystenLabs/narwhal", rev = "0c7ff6cbeaa2995bb9034ebdbeb1ecd93caf967e" }
-narwhal-consensus = { git = "https://github.com/MystenLabs/narwhal", rev = "0c7ff6cbeaa2995bb9034ebdbeb1ecd93caf967e" }
-narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "0c7ff6cbeaa2995bb9034ebdbeb1ecd93caf967e" }
-narwhal-types = { git = "https://github.com/MystenLabs/narwhal", rev = "0c7ff6cbeaa2995bb9034ebdbeb1ecd93caf967e" }
-narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "0c7ff6cbeaa2995bb9034ebdbeb1ecd93caf967e", features = ["trace_transaction"] }
+narwhal-config = { path = "../../narwhal/config" }
+narwhal-consensus = { path = "../../narwhal/consensus" }
+narwhal-executor = { path = "../../narwhal/executor" }
+narwhal-node = { path = "../../narwhal/node" }
+narwhal-types = { path = "../../narwhal/types" }
 
 fastcrypto = "0.1.2"
-workspace-hack = { path = "../workspace-hack"}
+workspace-hack.workspace = true
 thiserror = "1.0.34"
 eyre = "0.6.8"
+
+sui-simulator = { path = "../sui-simulator" }
+sui-macros = { path = "../sui-macros" }
 
 [dev-dependencies]
 clap = { version = "3.2.17", features = ["derive"] }
@@ -70,6 +73,8 @@ serde-reflection = "0.3.6"
 serde_yaml = "0.8.26"
 pretty_assertions = "1.2.1"
 telemetry-subscribers.workspace = true
+
+sui-macros = { path = "../sui-macros" }
 
 test-fuzz = "3.0.4"
 test-utils = { path = "../test-utils" }

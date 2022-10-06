@@ -9,7 +9,7 @@ use std::{
     time::Instant,
 };
 
-use anyhow::anyhow;
+use anyhow::{anyhow, ensure};
 use bip32::DerivationPath;
 use clap::*;
 use colored::Colorize;
@@ -22,20 +22,19 @@ use sui_framework::compiled_move_package_to_bytes;
 use tracing::info;
 
 use sui_json::SuiJsonValue;
-use sui_json_rpc_types::SuiData;
 use sui_json_rpc_types::{
     GetObjectDataResponse, SuiExecuteTransactionResponse, SuiObjectInfo, SuiParsedObject,
     SuiTransactionResponse,
 };
+use sui_json_rpc_types::{GetRawObjectDataResponse, SuiData};
 use sui_json_rpc_types::{SuiCertifiedTransaction, SuiExecutionStatus, SuiTransactionEffects};
-use sui_sdk::crypto::SuiKeystore;
+use sui_sdk::crypto::AccountKeystore;
 use sui_sdk::{ClientType, SuiClient};
 use sui_types::crypto::SignatureScheme;
 use sui_types::sui_serde::{Base64, Encoding};
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     gas_coin::GasCoin,
-    messages::ExecuteTransactionRequestType,
     messages::Transaction,
     object::Owner,
     parse_sui_type_tag, SUI_FRAMEWORK_ADDRESS,
@@ -181,6 +180,31 @@ pub enum SuiClientCommands {
         #[clap(long)]
         amount: Option<u64>,
     },
+    /// Pay SUI to recipients following specified amounts, with input coins.
+    /// Length of recipients must be the same as that of amounts.
+    #[clap(name = "pay")]
+    Pay {
+        /// The input coins to be used for pay recipients, following the specified amounts.
+        #[clap(long, multiple_occurrences = false, multiple_values = true)]
+        input_coins: Vec<ObjectID>,
+
+        /// The recipient addresses, must be of same length as amounts
+        #[clap(long, multiple_occurrences = false, multiple_values = true)]
+        recipients: Vec<SuiAddress>,
+
+        /// The amounts to be transferred, following the order of recipients.
+        #[clap(long, multiple_occurrences = false, multiple_values = true)]
+        amounts: Vec<u64>,
+
+        /// ID of the gas object for gas payment, in 20 bytes Hex string
+        /// If not provided, a gas object with at least gas_budget value will be selected
+        #[clap(long)]
+        gas: Option<ObjectID>,
+
+        /// Gas budget for this transfer
+        #[clap(long)]
+        gas_budget: u64,
+    },
     /// Synchronize client state with authorities.
     #[clap(name = "sync")]
     SyncClientState {
@@ -319,7 +343,7 @@ impl SuiClientCommands {
                     .transaction_builder()
                     .publish(sender, compiled_modules, gas, gas_budget)
                     .await?;
-                let signature = context.keystore.sign(&sender, &data.to_bytes())?;
+                let signature = context.config.keystore.sign(&sender, &data.to_bytes())?;
                 let response = context
                     .execute_transaction(Transaction::new(data, signature))
                     .await?;
@@ -362,7 +386,7 @@ impl SuiClientCommands {
                     .transaction_builder()
                     .transfer_object(from, object_id, gas, gas_budget, to)
                     .await?;
-                let signature = context.keystore.sign(&from, &data.to_bytes())?;
+                let signature = context.config.keystore.sign(&from, &data.to_bytes())?;
                 let response = context
                     .execute_transaction(Transaction::new(data, signature))
                     .await?;
@@ -389,7 +413,7 @@ impl SuiClientCommands {
                     .transaction_builder()
                     .transfer_sui(from, object_id, gas_budget, to, amount)
                     .await?;
-                let signature = context.keystore.sign(&from, &data.to_bytes())?;
+                let signature = context.config.keystore.sign(&from, &data.to_bytes())?;
                 let response = context
                     .execute_transaction(Transaction::new(data, signature))
                     .await?;
@@ -402,8 +426,52 @@ impl SuiClientCommands {
                 SuiClientCommandResult::TransferSui(cert, effects)
             }
 
+            SuiClientCommands::Pay {
+                input_coins,
+                recipients,
+                amounts,
+                gas,
+                gas_budget,
+            } => {
+                ensure!(
+                    !input_coins.is_empty(),
+                    "Pay transaction requires a non-empty list of input coins"
+                );
+                ensure!(
+                    !recipients.is_empty(),
+                    "Pay transaction requires a non-empty list of recipient addresses"
+                );
+                ensure!(
+                    recipients.len() == amounts.len(),
+                    format!(
+                        "Found {:?} recipient addresses, but {:?} recipient amounts",
+                        recipients.len(),
+                        amounts.len()
+                    ),
+                );
+                let from = context.get_object_owner(&input_coins[0]).await?;
+                let data = context
+                    .client
+                    .transaction_builder()
+                    .pay(from, input_coins, recipients, amounts, gas, gas_budget)
+                    .await?;
+                let signature = context.config.keystore.sign(&from, &data.to_bytes())?;
+                let response = context
+                    .execute_transaction(Transaction::new(data, signature))
+                    .await?;
+                let cert = response.certificate;
+                let effects = response.effects;
+                if matches!(effects.status, SuiExecutionStatus::Failure { .. }) {
+                    return Err(anyhow!(
+                        "Error executing Pay transaction: {:#?}",
+                        effects.status
+                    ));
+                }
+                SuiClientCommandResult::Pay(cert, effects)
+            }
+
             SuiClientCommands::Addresses => {
-                SuiClientCommandResult::Addresses(context.keystore.addresses())
+                SuiClientCommandResult::Addresses(context.config.keystore.addresses())
             }
 
             SuiClientCommands::Objects { address } => {
@@ -438,6 +506,7 @@ impl SuiClientCommands {
                 derivation_path,
             } => {
                 let (address, phrase, scheme) = context
+                    .config
                     .keystore
                     .generate_new_key(key_scheme, derivation_path)?;
                 SuiClientCommandResult::NewAddress((address, phrase, scheme))
@@ -477,7 +546,7 @@ impl SuiClientCommands {
                         .split_coin_equal(signer, coin_id, count, gas, gas_budget)
                         .await?
                 };
-                let signature = context.keystore.sign(&signer, &data.to_bytes())?;
+                let signature = context.config.keystore.sign(&signer, &data.to_bytes())?;
                 let response = context
                     .execute_transaction(Transaction::new(data, signature))
                     .await?;
@@ -495,7 +564,7 @@ impl SuiClientCommands {
                     .transaction_builder()
                     .merge_coins(signer, primary_coin, coin_to_merge, gas, gas_budget)
                     .await?;
-                let signature = context.keystore.sign(&signer, &data.to_bytes())?;
+                let signature = context.config.keystore.sign(&signer, &data.to_bytes())?;
                 let response = context
                     .execute_transaction(Transaction::new(data, signature))
                     .await?;
@@ -504,7 +573,7 @@ impl SuiClientCommands {
             }
             SuiClientCommands::Switch { address, rpc, ws } => {
                 if let Some(addr) = address {
-                    if !context.keystore.addresses().contains(&addr) {
+                    if !context.config.keystore.addresses().contains(&addr) {
                         return Err(anyhow!("Address {} not managed by wallet", addr));
                     }
                     context.config.active_address = Some(addr);
@@ -589,7 +658,6 @@ impl SuiClientCommands {
 
 pub struct WalletContext {
     pub config: PersistedConfig<SuiClientConfig>,
-    pub keystore: SuiKeystore,
     pub client: SuiClient,
 }
 
@@ -601,20 +669,15 @@ impl WalletContext {
                 config_path
             ))
         })?;
-        let keystore = config.keystore.init()?;
-        let client = config.client_type.init().await?;
 
+        let client = config.client_type.init().await?;
         let config = config.persisted(config_path);
-        let context = Self {
-            config,
-            keystore,
-            client,
-        };
+        let context = Self { config, client };
         Ok(context)
     }
 
     pub fn active_address(&mut self) -> Result<SuiAddress, anyhow::Error> {
-        if self.keystore.addresses().is_empty() {
+        if self.config.keystore.addresses().is_empty() {
             return Err(anyhow!(
                 "No managed addresses. Create new address with `new-address` command."
             ));
@@ -625,10 +688,18 @@ impl WalletContext {
         self.config.active_address = Some(
             self.config
                 .active_address
-                .unwrap_or(*self.keystore.addresses().get(0).unwrap()),
+                .unwrap_or(*self.config.keystore.addresses().get(0).unwrap()),
         );
 
         Ok(self.config.active_address.unwrap())
+    }
+
+    /// Get the latest object reference given a object id
+    pub async fn get_object_ref(
+        &self,
+        object_id: ObjectID,
+    ) -> Result<GetRawObjectDataResponse, anyhow::Error> {
+        self.client.read_api().get_object(object_id).await
     }
 
     /// Get all the gas objects (and conveniently, gas amounts) for the address
@@ -717,13 +788,15 @@ impl WalletContext {
                 .quorum_driver()
                 .execute_transaction_by_fullnode(
                     tx,
-                    ExecuteTransactionRequestType::WaitForEffectsCert,
+                    sui_types::messages::ExecuteTransactionRequestType::WaitForLocalExecution,
                 )
                 .await;
             match result {
+                // TODO: if confirmed_local_execution is false, poll fullnode until it's confirmed
                 Ok(SuiExecuteTransactionResponse::EffectsCert {
                     certificate,
                     effects,
+                    confirmed_local_execution: _,
                 }) => Ok(SuiTransactionResponse {
                     certificate,
                     effects: effects.effects,
@@ -767,6 +840,9 @@ impl Display for SuiClientCommandResult {
                 write!(writer, "{}", write_cert_and_effects(cert, effects)?)?;
             }
             SuiClientCommandResult::TransferSui(cert, effects) => {
+                write!(writer, "{}", write_cert_and_effects(cert, effects)?)?;
+            }
+            SuiClientCommandResult::Pay(cert, effects) => {
                 write!(writer, "{}", write_cert_and_effects(cert, effects)?)?;
             }
             SuiClientCommandResult::Addresses(addresses) => {
@@ -893,7 +969,7 @@ pub async fn call_move(
             gas_budget,
         )
         .await?;
-    let signature = context.keystore.sign(&sender, &data.to_bytes())?;
+    let signature = context.config.keystore.sign(&sender, &data.to_bytes())?;
     let transaction = Transaction::new(data, signature);
 
     let response = context.execute_transaction(transaction).await?;
@@ -974,6 +1050,7 @@ pub enum SuiClientCommandResult {
         SuiTransactionEffects,
     ),
     TransferSui(SuiCertifiedTransaction, SuiTransactionEffects),
+    Pay(SuiCertifiedTransaction, SuiTransactionEffects),
     Addresses(Vec<SuiAddress>),
     Objects(Vec<SuiObjectInfo>),
     SyncClientState,

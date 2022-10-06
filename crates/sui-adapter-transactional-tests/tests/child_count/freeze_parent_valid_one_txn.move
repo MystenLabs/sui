@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+// DEPRECATED child count no longer tracked
 // tests valid freezing of an object that has children
 // child is deleted and parent is frozen in one transaction
 

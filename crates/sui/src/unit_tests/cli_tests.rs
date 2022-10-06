@@ -21,7 +21,7 @@ use sui_config::{
 };
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{GetObjectDataResponse, SuiData, SuiParsedObject, SuiTransactionEffects};
-use sui_sdk::crypto::KeystoreType;
+use sui_sdk::crypto::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_sdk::ClientType;
 use sui_types::crypto::{
     AccountKeyPair, AuthorityKeyPair, Ed25519SuiSignature, KeypairTraits, NetworkKeyPair,
@@ -31,9 +31,11 @@ use sui_types::{base_types::ObjectID, crypto::get_key_pair, gas_coin::GasCoin};
 use sui_types::{sui_framework_address_concat_string, SUI_FRAMEWORK_ADDRESS};
 use test_utils::network::{setup_network_and_wallet, start_test_network};
 
+use sui_macros::sim_test;
+
 const TEST_DATA_DIR: &str = "src/unit_tests/data/";
 
-#[tokio::test]
+#[sim_test]
 async fn test_genesis() -> Result<(), anyhow::Error> {
     let temp_dir = tempfile::tempdir()?;
     let working_dir = temp_dir.path();
@@ -86,7 +88,7 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
         panic!()
     }
 
-    assert_eq!(5, wallet_conf.keystore.init().unwrap().addresses().len());
+    assert_eq!(5, wallet_conf.keystore.addresses().len());
 
     // Genesis 2nd time should fail
     let result = SuiCommand::Genesis {
@@ -103,7 +105,7 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_addresses_command() -> Result<(), anyhow::Error> {
     let temp_dir = tempfile::tempdir().unwrap();
     let working_dir = temp_dir.path();
@@ -113,7 +115,9 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
     let account_keypair: SuiKeyPair = get_key_pair::<AccountKeyPair>().1.into();
 
     let wallet_config = SuiClientConfig {
-        keystore: KeystoreType::File(working_dir.join(SUI_KEYSTORE_FILENAME)),
+        keystore: Keystore::from(FileBasedKeystore::new(
+            &working_dir.join(SUI_KEYSTORE_FILENAME),
+        )?),
         client_type: ClientType::Embedded(GatewayConfig {
             db_folder_path: working_dir.join("client_db"),
             validator_set: vec![ValidatorInfo {
@@ -142,6 +146,7 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
     // Add 3 accounts
     for _ in 0..3 {
         context
+            .config
             .keystore
             .add_key(SuiKeyPair::Ed25519SuiKeyPair(get_key_pair().1))?;
     }
@@ -156,7 +161,7 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_objects_command() -> Result<(), anyhow::Error> {
     let (_network, mut context, address) = setup_network_and_wallet().await?;
 
@@ -177,7 +182,7 @@ async fn test_objects_command() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_create_example_nft_command() {
     let (_network, mut context, address) = setup_network_and_wallet().await.unwrap();
 
@@ -208,7 +213,7 @@ async fn test_create_example_nft_command() {
     .unwrap();
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_custom_genesis() -> Result<(), anyhow::Error> {
     // Create and save genesis config file
     // Create 4 authorities, 1 account with 1 gas object with custom id
@@ -229,8 +234,14 @@ async fn test_custom_genesis() -> Result<(), anyhow::Error> {
 
     // Wallet config
     let mut context = WalletContext::new(&network.dir().join(SUI_CLIENT_CONFIG)).await?;
-    assert_eq!(1, context.keystore.addresses().len());
-    let address = context.keystore.addresses().first().cloned().unwrap();
+    assert_eq!(1, context.config.keystore.addresses().len());
+    let address = context
+        .config
+        .keystore
+        .addresses()
+        .first()
+        .cloned()
+        .unwrap();
 
     // Sync client to retrieve objects from the network.
     SuiClientCommands::SyncClientState {
@@ -251,7 +262,7 @@ async fn test_custom_genesis() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_object_info_get_command() -> Result<(), anyhow::Error> {
     let (_network, mut context, address) = setup_network_and_wallet().await?;
 
@@ -272,10 +283,10 @@ async fn test_object_info_get_command() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_gas_command() -> Result<(), anyhow::Error> {
     let (_network, mut context, address) = setup_network_and_wallet().await?;
-    let recipient = context.keystore.addresses().get(1).cloned().unwrap();
+    let recipient = context.config.keystore.addresses().get(1).cloned().unwrap();
 
     let object_refs = context
         .client
@@ -317,10 +328,10 @@ async fn test_gas_command() -> Result<(), anyhow::Error> {
 }
 
 #[allow(clippy::assertions_on_constants)]
-#[tokio::test]
+#[sim_test]
 async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     let (_network, mut context, address1) = setup_network_and_wallet().await?;
-    let address2 = context.keystore.addresses().get(1).cloned().unwrap();
+    let address2 = context.config.keystore.addresses().get(1).cloned().unwrap();
 
     // publish the object basics package
     let object_refs = context
@@ -489,7 +500,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
 }
 
 #[allow(clippy::assertions_on_constants)]
-#[tokio::test]
+#[sim_test]
 async fn test_package_publish_command() -> Result<(), anyhow::Error> {
     let (_network, mut context, address) = setup_network_and_wallet().await?;
 
@@ -553,10 +564,10 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
 }
 
 #[allow(clippy::assertions_on_constants)]
-#[tokio::test]
+#[sim_test]
 async fn test_native_transfer() -> Result<(), anyhow::Error> {
     let (_network, mut context, address) = setup_network_and_wallet().await?;
-    let recipient = context.keystore.addresses().get(1).cloned().unwrap();
+    let recipient = context.config.keystore.addresses().get(1).cloned().unwrap();
 
     let object_refs = context
         .client
@@ -697,7 +708,7 @@ fn test_bug_1078() {
 }
 
 #[allow(clippy::assertions_on_constants)]
-#[tokio::test]
+#[sim_test]
 async fn test_switch_command() -> Result<(), anyhow::Error> {
     let network = start_test_network(None).await?;
 
@@ -739,7 +750,7 @@ async fn test_switch_command() -> Result<(), anyhow::Error> {
     assert_eq!(cmd_objs, actual_objs);
 
     // Switch the address
-    let addr2 = context.keystore.addresses().get(1).cloned().unwrap();
+    let addr2 = context.config.keystore.addresses().get(1).cloned().unwrap();
     let resp = SuiClientCommands::Switch {
         address: Some(addr2),
         rpc: None,
@@ -801,7 +812,7 @@ async fn test_switch_command() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_new_address_command_by_flag() -> Result<(), anyhow::Error> {
     // Create Wallet context.
     let network = start_test_network(None).await?;
@@ -811,6 +822,7 @@ async fn test_new_address_command_by_flag() -> Result<(), anyhow::Error> {
     // keypairs loaded from config are Ed25519
     assert_eq!(
         context
+            .config
             .keystore
             .keys()
             .iter()
@@ -829,6 +841,7 @@ async fn test_new_address_command_by_flag() -> Result<(), anyhow::Error> {
     // new keypair generated is Secp256k1
     assert_eq!(
         context
+            .config
             .keystore
             .keys()
             .iter()
@@ -841,7 +854,7 @@ async fn test_new_address_command_by_flag() -> Result<(), anyhow::Error> {
 }
 
 #[allow(clippy::assertions_on_constants)]
-#[tokio::test]
+#[sim_test]
 async fn test_active_address_command() -> Result<(), anyhow::Error> {
     let network = start_test_network(None).await?;
 
@@ -872,7 +885,7 @@ async fn test_active_address_command() -> Result<(), anyhow::Error> {
     };
     assert_eq!(a, addr1);
 
-    let addr2 = context.keystore.addresses().get(1).cloned().unwrap();
+    let addr2 = context.config.keystore.addresses().get(1).cloned().unwrap();
     let resp = SuiClientCommands::Switch {
         address: Some(addr2),
         rpc: None,
@@ -913,7 +926,7 @@ async fn get_object(id: ObjectID, context: &mut WalletContext) -> Option<SuiPars
 }
 
 #[allow(clippy::assertions_on_constants)]
-#[tokio::test]
+#[sim_test]
 async fn test_merge_coin() -> Result<(), anyhow::Error> {
     let (_network, mut context, address) = setup_network_and_wallet().await?;
 
@@ -997,7 +1010,7 @@ async fn test_merge_coin() -> Result<(), anyhow::Error> {
 }
 
 #[allow(clippy::assertions_on_constants)]
-#[tokio::test]
+#[sim_test]
 async fn test_split_coin() -> Result<(), anyhow::Error> {
     let (_network, mut context, address) = setup_network_and_wallet().await?;
     let object_refs = context
@@ -1125,7 +1138,7 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_signature_flag() -> Result<(), anyhow::Error> {
     let res = SignatureScheme::from_flag("0");
     assert!(res.is_ok());

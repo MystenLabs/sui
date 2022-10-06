@@ -8,3 +8,14 @@ CHANGELOG.md
 
 # When snapshot changes, most likely we will need to recreate the genesis blob.
 /crates/sui-config/tests/snapshot_tests.rs @tharbert @huitseeker
+
+# Notify Narwhal changes to interested folks.
+/narwhal/crypto/ @huitseeker @kchalkias
+/narwhal/executor/ @asonnino @akichidis
+/narwhal/examples/ @arun-koshy
+/narwhal/network/ @bmwill
+/narwhal/config/tests/snapshots/ @huitseeker
+/narwhal/dag/ @huitseeker
+/narwhal/storage/ @akichidis
+/narwhal/primary/src/block_synchronizer/ @akichidis
+/narwhal/primary/src/block_waiter.rs @akichidis

@@ -8,6 +8,25 @@ pub use msim::*;
 pub use sui_framework;
 pub use telemetry_subscribers;
 
+/// Evaluates an expression in a new thread which will not be subject to interception of
+/// getrandom(), clock_gettime(), etc.
+#[cfg(msim)]
+#[macro_export]
+macro_rules! nondeterministic {
+    ($expr: expr) => {
+        std::thread::spawn(move || $expr).join()
+    };
+}
+
+/// Simply evaluates expr.
+#[cfg(not(msim))]
+#[macro_export]
+macro_rules! nondeterministic {
+    ($expr: expr) => {
+        $expr
+    };
+}
+
 #[cfg(msim)]
 pub mod configs {
     use msim::*;
@@ -21,6 +40,12 @@ pub mod configs {
         Duration::from_millis(range.start)..Duration::from_millis(range.end)
     }
 
+    /// A network with constant uniform latency.
+    pub fn constant_latency_ms(latency: u64) -> SimConfig {
+        uniform_latency_ms(latency..(latency + 1))
+    }
+
+    /// A network with latency sampled uniformly from a range.
     pub fn uniform_latency_ms(range: Range<u64>) -> SimConfig {
         let range = ms_to_dur(range);
         SimConfig {
@@ -34,9 +59,13 @@ pub mod configs {
         }
     }
 
+    /// A network with bimodal latency.
     pub fn bimodal_latency_ms(
+        // The typical latency.
         baseline: Range<u64>,
+        // The exceptional latency.
         degraded: Range<u64>,
+        // The frequency (from 0.0 to 1.0) with which the exceptional distribution is sampled.
         degraded_freq: f64,
     ) -> SimConfig {
         let baseline = ms_to_dur(baseline);
@@ -58,7 +87,10 @@ pub mod configs {
 
     /// Select from among a number of configs using the SUI_SIM_CONFIG env var.
     pub fn env_config(
+        // Config to use when SUI_SIM_CONFIG is not set.
         default: SimConfig,
+        // List of (&str, SimConfig) pairs - the SimConfig associated with the value
+        // of the SUI_SIM_CONFIG var is chosen.
         env_configs: impl IntoIterator<Item = (&'static str, SimConfig)>,
     ) -> SimConfig {
         let mut env_configs = HashMap::<&'static str, SimConfig>::from_iter(env_configs);

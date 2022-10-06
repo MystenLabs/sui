@@ -30,8 +30,11 @@ use sui_types::{
 };
 
 use crate::authority_aggregator::AuthAggMetrics;
-use crate::epoch::epoch_store::EpochStore;
+use crate::epoch::committee_store::CommitteeStore;
 use parking_lot::Mutex;
+
+use sui_macros::sim_test;
+use sui_simulator::nondeterministic;
 
 pub struct TestCausalOrderPendCertNoop;
 
@@ -82,7 +85,7 @@ fn random_ckpoint_store_num(
             let cps = CheckpointStore::open(
                 &path,
                 None,
-                committee.epoch,
+                &committee,
                 k.public().into(),
                 Arc::pin(k.copy()),
             )
@@ -111,7 +114,7 @@ fn crash_recovery() {
     let mut cps = CheckpointStore::open(
         &path,
         None,
-        committee.epoch,
+        &committee,
         k.public().into(),
         Arc::pin(k.copy()),
     )
@@ -155,7 +158,7 @@ fn crash_recovery() {
     let mut cps_new = CheckpointStore::open(
         &path,
         None,
-        committee.epoch,
+        &committee,
         k.public().into(),
         Arc::pin(k.copy()),
     )
@@ -490,7 +493,13 @@ fn latest_proposal() {
 
     // Fail to set if transactions not processed.
     assert!(cps1
-        .sign_new_checkpoint(epoch, 0, ckp_items.iter(), TestCausalOrderPendCertNoop,)
+        .sign_new_checkpoint(
+            epoch,
+            0,
+            ckp_items.iter(),
+            TestCausalOrderPendCertNoop,
+            None
+        )
         .is_err());
 
     // Set the transactions as executed.
@@ -505,14 +514,38 @@ fn latest_proposal() {
     cps4.handle_internal_batch(0, &batch).unwrap();
 
     // Try to get checkpoint
-    cps1.sign_new_checkpoint(epoch, 0, ckp_items.iter(), TestCausalOrderPendCertNoop)
-        .unwrap();
-    cps2.sign_new_checkpoint(epoch, 0, ckp_items.iter(), TestCausalOrderPendCertNoop)
-        .unwrap();
-    cps3.sign_new_checkpoint(epoch, 0, ckp_items.iter(), TestCausalOrderPendCertNoop)
-        .unwrap();
-    cps4.sign_new_checkpoint(epoch, 0, ckp_items.iter(), TestCausalOrderPendCertNoop)
-        .unwrap();
+    cps1.sign_new_checkpoint(
+        epoch,
+        0,
+        ckp_items.iter(),
+        TestCausalOrderPendCertNoop,
+        None,
+    )
+    .unwrap();
+    cps2.sign_new_checkpoint(
+        epoch,
+        0,
+        ckp_items.iter(),
+        TestCausalOrderPendCertNoop,
+        None,
+    )
+    .unwrap();
+    cps3.sign_new_checkpoint(
+        epoch,
+        0,
+        ckp_items.iter(),
+        TestCausalOrderPendCertNoop,
+        None,
+    )
+    .unwrap();
+    cps4.sign_new_checkpoint(
+        epoch,
+        0,
+        ckp_items.iter(),
+        TestCausalOrderPendCertNoop,
+        None,
+    )
+    .unwrap();
 
     // --- TEST3 ---
 
@@ -653,7 +686,13 @@ fn set_get_checkpoint() {
 
     // Need to load the transactions as processed, before getting a checkpoint.
     assert!(cps1
-        .sign_new_checkpoint(epoch, 0, ckp_items.iter(), TestCausalOrderPendCertNoop,)
+        .sign_new_checkpoint(
+            epoch,
+            0,
+            ckp_items.iter(),
+            TestCausalOrderPendCertNoop,
+            None
+        )
         .is_err());
     let batch: Vec<_> = ckp_items
         .iter()
@@ -664,12 +703,30 @@ fn set_get_checkpoint() {
     cps2.handle_internal_batch(0, &batch).unwrap();
     cps3.handle_internal_batch(0, &batch).unwrap();
 
-    cps1.sign_new_checkpoint(epoch, 0, ckp_items.iter(), TestCausalOrderPendCertNoop)
-        .unwrap();
-    cps2.sign_new_checkpoint(epoch, 0, ckp_items.iter(), TestCausalOrderPendCertNoop)
-        .unwrap();
-    cps3.sign_new_checkpoint(epoch, 0, ckp_items.iter(), TestCausalOrderPendCertNoop)
-        .unwrap();
+    cps1.sign_new_checkpoint(
+        epoch,
+        0,
+        ckp_items.iter(),
+        TestCausalOrderPendCertNoop,
+        None,
+    )
+    .unwrap();
+    cps2.sign_new_checkpoint(
+        epoch,
+        0,
+        ckp_items.iter(),
+        TestCausalOrderPendCertNoop,
+        None,
+    )
+    .unwrap();
+    cps3.sign_new_checkpoint(
+        epoch,
+        0,
+        ckp_items.iter(),
+        TestCausalOrderPendCertNoop,
+        None,
+    )
+    .unwrap();
     // cps4.handle_internal_set_checkpoint(summary, &transactions)
     //     .unwrap();
 
@@ -781,7 +838,7 @@ fn checkpoint_integration() {
     let mut cps = CheckpointStore::open(
         &path,
         None,
-        committee.epoch,
+        &committee,
         k.public().into(),
         Arc::pin(k.copy()),
     )
@@ -821,6 +878,7 @@ fn checkpoint_integration() {
                     old_checkpoint,
                     transactions.iter(),
                     TestCausalOrderPendCertNoop,
+                    None,
                 )
                 .is_ok());
 
@@ -866,7 +924,8 @@ fn checkpoint_integration() {
                 committee.epoch,
                 next_checkpoint,
                 transactions.iter(),
-                TestCausalOrderPendCertNoop
+                TestCausalOrderPendCertNoop,
+                None
             )
             .is_err());
 
@@ -885,7 +944,7 @@ fn checkpoint_integration() {
 
 // Now check the connection between state / bacth and checkpoint mechanism
 
-#[tokio::test]
+#[sim_test]
 async fn test_batch_to_checkpointing() {
     // Create an authority
     // Make a test key pair
@@ -916,10 +975,10 @@ async fn test_batch_to_checkpointing() {
     let mut rx = authority_state.subscribe_batch();
 
     {
-        let t0 = &authority_state.batch_notifier.ticket().expect("ok");
-        let t1 = &authority_state.batch_notifier.ticket().expect("ok");
-        let t2 = &authority_state.batch_notifier.ticket().expect("ok");
-        let t3 = &authority_state.batch_notifier.ticket().expect("ok");
+        let t0 = authority_state.batch_notifier.ticket().expect("ok");
+        let t1 = authority_state.batch_notifier.ticket().expect("ok");
+        let t2 = authority_state.batch_notifier.ticket().expect("ok");
+        let t3 = authority_state.batch_notifier.ticket().expect("ok");
 
         authority_state
             .database
@@ -933,6 +992,11 @@ async fn test_batch_to_checkpointing() {
         authority_state
             .database
             .side_sequence(t0.seq(), &ExecutionDigests::random());
+
+        t3.notify();
+        t2.notify();
+        t1.notify();
+        t0.notify();
     }
 
     // Get transactions in order then batch.
@@ -961,8 +1025,6 @@ async fn test_batch_to_checkpointing() {
     assert_eq!(
         authority_state
             .checkpoints
-            .as_ref()
-            .unwrap()
             .lock()
             .next_transaction_sequence_expected(),
         4
@@ -974,11 +1036,11 @@ async fn test_batch_to_checkpointing() {
     _join.await.expect("No errors in task").expect("ok");
 }
 
-#[tokio::test(flavor = "current_thread", start_paused = true)]
+#[sim_test]
 async fn test_batch_to_checkpointing_init_crash() {
     // Create a random directory to store the DB
     let dir = env::temp_dir();
-    let path = dir.join(format!("DB_{:?}", ObjectID::random()));
+    let path = dir.join(format!("DB_{:?}", nondeterministic!(ObjectID::random())));
     fs::create_dir(&path).unwrap();
 
     // Make a test key pair
@@ -1009,17 +1071,17 @@ async fn test_batch_to_checkpointing_init_crash() {
                 .await
         });
 
-        tokio::time::advance(Duration::from_millis(10)).await;
+        tokio::time::sleep(Duration::from_millis(10)).await;
         tokio::task::yield_now().await;
 
         // Send transactions out of order
         let mut rx = authority_state.subscribe_batch();
 
         {
-            let t0 = &authority_state.batch_notifier.ticket().expect("ok");
-            let t1 = &authority_state.batch_notifier.ticket().expect("ok");
-            let t2 = &authority_state.batch_notifier.ticket().expect("ok");
-            let t3 = &authority_state.batch_notifier.ticket().expect("ok");
+            let t0 = authority_state.batch_notifier.ticket().expect("ok");
+            let t1 = authority_state.batch_notifier.ticket().expect("ok");
+            let t2 = authority_state.batch_notifier.ticket().expect("ok");
+            let t3 = authority_state.batch_notifier.ticket().expect("ok");
 
             authority_state
                 .database
@@ -1033,6 +1095,11 @@ async fn test_batch_to_checkpointing_init_crash() {
             authority_state
                 .database
                 .side_sequence(t0.seq(), &ExecutionDigests::random());
+
+            t3.notify();
+            t2.notify();
+            t1.notify();
+            t0.notify();
         }
 
         // Get transactions in order then batch.
@@ -1080,8 +1147,6 @@ async fn test_batch_to_checkpointing_init_crash() {
         assert_eq!(
             authority_state
                 .checkpoints
-                .as_ref()
-                .unwrap()
                 .lock()
                 .next_transaction_sequence_expected(),
             4
@@ -1199,19 +1264,13 @@ fn set_fragment_reconstruct() {
     let fragment12 = p1.fragment_with(&p2);
     let fragment34 = p3.fragment_with(&p4);
 
-    let attempt1 = FragmentReconstruction::construct(
-        0,
-        committee.clone(),
-        &[fragment12.clone(), fragment34.clone()],
-    );
-    assert!(matches!(attempt1, Err(_)));
+    let span = SpanGraph::mew(&committee, 0, &[fragment12.clone(), fragment34.clone()]);
+    assert!(!span.is_completed());
 
     let fragment41 = p4.fragment_with(&p1);
-    let attempt2 =
-        FragmentReconstruction::construct(0, committee, &[fragment12, fragment34, fragment41]);
-    assert!(attempt2.is_ok());
-
-    let reconstruction = attempt2.unwrap();
+    let span = SpanGraph::mew(&committee, 0, &[fragment12, fragment34, fragment41]);
+    assert!(span.is_completed());
+    let reconstruction = span.construct_checkpoint();
     assert_eq!(reconstruction.global.authority_waypoints.len(), 4);
 }
 
@@ -1239,8 +1298,8 @@ fn set_fragment_reconstruct_two_components() {
 
     let fragment_xy = p_x.fragment_with(&p_y);
 
-    let attempt1 = FragmentReconstruction::construct(0, committee.clone(), &[fragment_xy.clone()]);
-    assert!(matches!(attempt1, Err(_)));
+    let span = SpanGraph::mew(&committee, 0, &[fragment_xy.clone()]);
+    assert!(!span.is_completed());
 
     // Make a daisy chain of the other proposals
     let mut fragments = vec![fragment_xy];
@@ -1255,15 +1314,15 @@ fn set_fragment_reconstruct_two_components() {
             break;
         }
 
-        let attempt2 = FragmentReconstruction::construct(0, committee.clone(), &fragments);
-        // Error until we have the full 5 others
-        assert!(matches!(attempt2, Err(_)));
+        let span = SpanGraph::mew(&committee, 0, &fragments);
+        // Incomplete until we have the full 5 others
+        assert!(!span.is_completed());
     }
 
-    let attempt2 = FragmentReconstruction::construct(0, committee, &fragments);
-    assert!(attempt2.is_ok());
+    let span = SpanGraph::mew(&committee, 0, &fragments);
+    assert!(span.is_completed());
 
-    let reconstruction = attempt2.unwrap();
+    let reconstruction = span.construct_checkpoint();
     assert_eq!(reconstruction.global.authority_waypoints.len(), 5);
 }
 
@@ -1291,8 +1350,8 @@ fn set_fragment_reconstruct_two_mutual() {
     let fragment_xy = p_x.fragment_with(&p_y);
     let fragment_yx = p_y.fragment_with(&p_x);
 
-    let attempt1 = FragmentReconstruction::construct(0, committee, &[fragment_xy, fragment_yx]);
-    assert!(matches!(attempt1, Err(_)));
+    let span = SpanGraph::mew(&committee, 0, &[fragment_xy, fragment_yx]);
+    assert!(!span.is_completed());
 }
 
 #[derive(Clone)]
@@ -1401,14 +1460,17 @@ fn test_fragment_full_flow() {
     while let Ok(fragment) = rx.try_recv() {
         all_fragments.push(fragment.clone());
         assert!(cps0
-            .handle_internal_fragment(seq.clone(), fragment, PendCertificateForExecutionNoop)
+            .handle_internal_fragment(
+                seq.clone(),
+                fragment,
+                PendCertificateForExecutionNoop,
+                &committee
+            )
             .is_ok());
-        seq.next(
-            /* total_batches */ 100, /* total_transactions */ 100,
-        );
+        seq.next_transaction_index += 1;
     }
-    let transactions = cps0.attempt_to_construct_checkpoint(&committee).unwrap();
-    cps0.sign_new_checkpoint(0, 0, transactions.iter(), TestCausalOrderPendCertNoop)
+    let transactions = cps0.attempt_to_construct_checkpoint().unwrap();
+    cps0.sign_new_checkpoint(0, 0, transactions.iter(), TestCausalOrderPendCertNoop, None)
         .unwrap();
 
     // Two fragments for 5-6, and then 0-1, 1-2, 2-3, 3-4
@@ -1436,10 +1498,9 @@ fn test_fragment_full_flow() {
             seq.clone(),
             fragment.clone(),
             PendCertificateForExecutionNoop,
+            &committee,
         );
-        seq.next(
-            /* total_batches */ 100, /* total_transactions */ 100,
-        );
+        seq.next_transaction_index += 100;
     }
 
     // Two fragments for 5-6, and then 0-1, 1-2, 2-3, 3-4
@@ -1456,10 +1517,9 @@ fn test_fragment_full_flow() {
             seq.clone(),
             fragment.clone(),
             PendCertificateForExecutionNoop,
+            &committee,
         );
-        seq.next(
-            /* total_batches */ 100, /* total_transactions */ 100,
-        );
+        seq.next_transaction_index += 100;
     }
 
     // Two fragments for 5-6, and then 0-1, 1-2, 2-3, 3-4
@@ -1596,7 +1656,7 @@ pub async fn checkpoint_tests_setup(
                 async move { inner_state.run_batch_service(1000, batch_interval).await },
             );
 
-        let checkpoint = authority.checkpoints.as_ref().unwrap().clone();
+        let checkpoint = authority.checkpoints.clone();
         authorities.push(TestAuthority {
             store: authority.database.clone(),
             authority,
@@ -1609,6 +1669,7 @@ pub async fn checkpoint_tests_setup(
         .iter()
         .map(|a| (a.authority.clone(), a.checkpoint.clone()))
         .collect();
+    let c = committee.clone();
     let _join = tokio::task::spawn(async move {
         let mut seq = ExecutionIndices::default();
         while let Some(msg) = _rx.recv().await {
@@ -1618,6 +1679,7 @@ pub async fn checkpoint_tests_setup(
                         seq.clone(),
                         msg.clone(),
                         PendCertificateForExecutionNoop,
+                        &c,
                     ) {
                         println!("Error: {:?}", err);
                     }
@@ -1625,13 +1687,12 @@ pub async fn checkpoint_tests_setup(
                     seq.clone(),
                     msg.clone(),
                     authority.database.clone(),
+                    &c,
                 ) {
                     println!("Error: {:?}", err);
                 }
             }
-            seq.next(
-                /* total_batches */ 100, /* total_transactions */ 100,
-            );
+            seq.next_transaction_index += 100;
         }
         println!("CHANNEL EXIT.");
     });
@@ -1639,7 +1700,7 @@ pub async fn checkpoint_tests_setup(
     // Now make an authority aggregator
     let aggregator = AuthorityAggregator::new(
         committee.clone(),
-        Arc::new(EpochStore::new_for_testing(&committee)),
+        Arc::new(CommitteeStore::new_for_testing(&committee)),
         authorities
             .iter()
             .map(|a| {
@@ -1764,11 +1825,11 @@ async fn checkpoint_messaging_flow() {
         let transactions = auth
             .checkpoint
             .lock()
-            .attempt_to_construct_checkpoint(&setup.committee)
+            .attempt_to_construct_checkpoint()
             .unwrap();
         auth.checkpoint
             .lock()
-            .sign_new_checkpoint(0, 0, transactions.iter(), TestCausalOrderPendCertNoop)
+            .sign_new_checkpoint(0, 0, transactions.iter(), TestCausalOrderPendCertNoop, None)
             .unwrap();
     }
 
@@ -1909,7 +1970,7 @@ async fn test_no_more_fragments() {
     assert!(setup.authorities[0]
         .checkpoint
         .lock()
-        .attempt_to_construct_checkpoint(&setup.committee)
+        .attempt_to_construct_checkpoint()
         .is_ok());
 
     // Expecting more fragments
@@ -1925,7 +1986,7 @@ async fn test_no_more_fragments() {
     assert!(setup.authorities[3]
         .checkpoint
         .lock()
-        .attempt_to_construct_checkpoint(&setup.committee)
+        .attempt_to_construct_checkpoint()
         .is_err());
 
     // Expecting more fragments
@@ -1947,6 +2008,6 @@ async fn test_no_more_fragments() {
     assert!(setup.authorities[3]
         .checkpoint
         .lock()
-        .attempt_to_construct_checkpoint(&setup.committee)
+        .attempt_to_construct_checkpoint()
         .is_ok());
 }

@@ -1,6 +1,6 @@
 .copy16,
 .copy24 {
-    @apply cursor-pointer stroke-sui-blue-steel leading-[100%] self-start sm:self-end;
+    @apply cursor-pointer stroke-sui-steel leading-[100%] self-start sm:self-end;
 }
 
 .copy16 {

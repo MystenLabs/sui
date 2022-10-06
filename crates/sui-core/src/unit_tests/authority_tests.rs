@@ -2422,7 +2422,7 @@ async fn test_consensus_message_processed() {
             handle_cert(&authority2, &certificate).await
         } else {
             authority2
-                .handle_certificate_with_effects(certificate.clone(), effects1.clone())
+                .handle_certificate_with_effects(&certificate, &effects1)
                 .await
                 .unwrap();
             authority2

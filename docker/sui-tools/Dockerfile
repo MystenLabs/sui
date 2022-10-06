@@ -15,7 +15,7 @@ RUN apt-get update && apt-get install -y cmake clang
 FROM chef AS planner
 COPY Cargo.toml Cargo.lock ./
 COPY crates/workspace-hack crates/workspace-hack
-RUN sed -i '/crates\/workspace-hack/b; /crates/d' Cargo.toml \
+RUN sed -i '/crates\/workspace-hack/b; /crates/d; /narwhal/d' Cargo.toml \
     && cargo metadata -q >/dev/null
 
 # Build and cache all dependencies.
@@ -36,12 +36,14 @@ RUN cargo build --release
 # built as they were built and cached by the previous layer.
 COPY Cargo.toml Cargo.lock ./
 COPY crates crates
+COPY narwhal narwhal
 RUN cargo build --release \
     --bin sui-node \
     --bin sui \
     --bin rpc-server \
     --bin sui-faucet \
-    --bin stress
+    --bin stress \
+    --bin sui-cluster-test
 
 # Production Image
 FROM debian:bullseye-slim AS runtime
@@ -51,6 +53,7 @@ COPY --from=builder /sui/target/release/sui /usr/local/bin
 COPY --from=builder /sui/target/release/rpc-server /usr/local/bin
 COPY --from=builder /sui/target/release/sui-faucet /usr/local/bin
 COPY --from=builder /sui/target/release/stress /usr/local/bin
+COPY --from=builder /sui/target/release/sui-cluster-test /usr/local/bin
 
 ARG BUILD_DATE
 LABEL build-date=$BUILD_DATE

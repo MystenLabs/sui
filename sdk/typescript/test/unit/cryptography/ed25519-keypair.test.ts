@@ -9,6 +9,8 @@ const VALID_SECRET_KEY =
   'mdqVWeFekT7pqy5T49+tV12jO0m+ESW7ki4zSU9JiCgbL0kJbj5dvQ/PqcDAzZLZqzshVEs01d1KZdmLh4uZIg==';
 const INVALID_SECRET_KEY =
   'mdqVWeFekT7pqy5T49+tV12jO0m+ESW7ki4zSU9JiCgbL0kJbj5dvQ/PqcDAzZLZqzshVEs01d1KZdmLh4uZIG==';
+const TEST_MNEMONIC =
+  'result crisp session latin must fruit genuine question prevent start coconut brave speak student dismiss';
 
 describe('ed25519-keypair', () => {
   it('new keypair', () => {
@@ -61,5 +63,34 @@ describe('ed25519-keypair', () => {
       keypair.getPublicKey().toBytes()
     );
     expect(isValid).toBeTruthy();
+  });
+
+  it('derive ed25519 keypair from path and mnemonics', () => {
+    // Test case generated against rust: /sui/crates/sui/src/unit_tests/keytool_tests.rs#L149
+    const keypair = Ed25519Keypair.deriveKeypair(TEST_MNEMONIC);
+    expect(keypair.getPublicKey().toBase64()).toEqual(
+      'aFstb5h4TddjJJryHJL1iMob6AxAqYxVv3yRt05aweI='
+    );
+    expect(keypair.getPublicKey().toSuiAddress()).toEqual(
+      '1a4623343cd42be47d67314fce0ad042f3c82685'
+    );
+  });
+
+  it('incorrect coin type node for ed25519 derivation path', () => {
+    expect(() => {
+      Ed25519Keypair.deriveKeypair(`m/44'/0'/0'/0'/0'`, TEST_MNEMONIC);
+    }).toThrow('Invalid derivation path');
+  });
+
+  it('incorrect purpose node for ed25519 derivation path', () => {
+    expect(() => {
+      Ed25519Keypair.deriveKeypair(`m/54'/784'/0'/0'/0'`, TEST_MNEMONIC);
+    }).toThrow('Invalid derivation path');
+  });
+
+  it('invalid mnemonics to derive ed25519 keypair', () => {
+    expect(() => {
+      Ed25519Keypair.deriveKeypair('aaa');
+    }).toThrow('Invalid mnemonic');
   });
 });

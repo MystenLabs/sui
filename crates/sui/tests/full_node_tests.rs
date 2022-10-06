@@ -37,7 +37,9 @@ use sui_json_rpc_types::{
     SuiEvent, SuiEventEnvelope, SuiEventFilter, SuiExecuteTransactionResponse, SuiExecutionStatus,
     SuiMoveStruct, SuiMoveValue, SuiTransactionFilter, SuiTransactionResponse,
 };
+use sui_macros::*;
 use sui_node::SuiNode;
+use sui_sdk::crypto::AccountKeystore;
 use sui_swarm::memory::Swarm;
 use sui_types::messages::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
@@ -50,9 +52,7 @@ use test_utils::messages::make_transactions_with_wallet_context;
 use test_utils::network::setup_network_and_wallet;
 use test_utils::transaction::{wait_for_all_txes, wait_for_tx};
 
-use sui_macros::*;
-
-#[sui_test]
+#[sim_test]
 async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
     let (swarm, mut context, _) = setup_network_and_wallet().await?;
 
@@ -64,9 +64,10 @@ async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
     wait_for_tx(digest, node.state().clone()).await;
 
     // verify that the intermediate sync data is cleared.
-    let sync_store = node.active().node_sync_state.store();
-    assert!(sync_store.get_cert(&digest).unwrap().is_none());
-    assert!(sync_store.get_effects(&digest).unwrap().is_none());
+    let sync_store = node.active().node_sync_store.clone();
+    let epoch_id = 0;
+    assert!(sync_store.get_cert(epoch_id, &digest).unwrap().is_none());
+    assert!(sync_store.get_effects(epoch_id, &digest).unwrap().is_none());
 
     // verify that the node has seen the transfer
     let object_read = node.state().get_object_read(&transferred_object).await?;
@@ -81,14 +82,14 @@ async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[sui_test]
+#[sim_test]
 async fn test_full_node_shared_objects() -> Result<(), anyhow::Error> {
     let (swarm, context, _) = setup_network_and_wallet().await?;
 
     let config = swarm.config().generate_fullnode_config();
     let node = SuiNode::start(&config, Registry::new()).await?;
 
-    let sender = context.keystore.addresses().get(0).cloned().unwrap();
+    let sender = context.config.keystore.addresses().get(0).cloned().unwrap();
 
     let (package_ref, counter_id) = publish_basics_package_and_make_counter(&context, sender).await;
 
@@ -108,7 +109,7 @@ async fn test_full_node_move_function_index() -> Result<(), anyhow::Error> {
 
     let config = swarm.config().generate_fullnode_config();
     let node = SuiNode::start(&config, Registry::new()).await?;
-    let sender = context.keystore.addresses().get(0).cloned().unwrap();
+    let sender = context.config.keystore.addresses().get(0).cloned().unwrap();
     let (package_ref, counter_id) = publish_basics_package_and_make_counter(&context, sender).await;
     let effects = increment_counter(&context, sender, None, package_ref, counter_id).await;
     let digest = effects.certificate.transaction_digest;
@@ -284,7 +285,7 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
 }
 
 // Test for syncing a node to an authority that already has many txes.
-#[sui_test]
+#[sim_test]
 async fn test_full_node_cold_sync() -> Result<(), anyhow::Error> {
     let (swarm, mut context, _) = setup_network_and_wallet().await?;
     let (_, _, _, _) = transfer_coin(&mut context).await?;
@@ -311,7 +312,7 @@ async fn test_full_node_cold_sync() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[sui_test]
+#[sim_test]
 async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
     let (swarm, context, _) = setup_network_and_wallet().await?;
 
@@ -320,7 +321,7 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
 
     let mut futures = Vec::new();
 
-    let sender = context.keystore.addresses().get(0).cloned().unwrap();
+    let sender = context.config.keystore.addresses().get(0).cloned().unwrap();
     let (package_ref, counter_id) = publish_basics_package_and_make_counter(&context, sender).await;
 
     let context = Arc::new(Mutex::new(context));
@@ -332,7 +333,7 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
         tokio::task::spawn(async move {
             let (sender, object_to_split) = {
                 let context = &mut context.lock().await;
-                let address = context.keystore.addresses()[i];
+                let address = context.config.keystore.addresses()[i];
                 SuiClientCommands::SyncClientState {
                     address: Some(address),
                 }
@@ -340,7 +341,7 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
                 .await
                 .unwrap();
 
-                let sender = context.keystore.addresses().get(0).cloned().unwrap();
+                let sender = context.config.keystore.addresses().get(0).cloned().unwrap();
 
                 let coins = context.gas_objects(sender).await.unwrap();
                 let object_to_split = coins.first().unwrap().1.reference.to_object_ref();
@@ -585,8 +586,8 @@ async fn test_full_node_sub_and_query_move_event_ok() -> Result<(), anyhow::Erro
 async fn test_full_node_event_read_api_ok() -> Result<(), anyhow::Error> {
     let (swarm, mut context, _address) = setup_network_and_wallet().await?;
     let (node, jsonrpc_client, _) = set_up_jsonrpc(&swarm, None).await?;
-    let sender = context.keystore.addresses().get(0).cloned().unwrap();
-    let receiver = context.keystore.addresses().get(1).cloned().unwrap();
+    let sender = context.config.keystore.addresses().get(0).cloned().unwrap();
+    let receiver = context.config.keystore.addresses().get(1).cloned().unwrap();
     let (transferred_object, _, _, digest) = transfer_coin(&mut context).await?;
 
     wait_for_tx(digest, node.state().clone()).await;
@@ -716,35 +717,68 @@ async fn test_full_node_event_read_api_ok() -> Result<(), anyhow::Error> {
         .iter()
         .map(|envelope| envelope.tx_digest.unwrap())
         .collect();
-    // Sorted in descending time
-    assert_eq!(tx_digests, vec![digest2, digest2, digest]);
+    // Sorted in ascending time
+    assert_eq!(tx_digests, vec![digest, digest2, digest2]);
 
     Ok(())
 }
 
-#[sui_test]
-async fn test_full_node_quorum_driver_basic() -> Result<(), anyhow::Error> {
+#[sim_test]
+async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::Error> {
     let (swarm, mut context, _address) = setup_network_and_wallet().await.unwrap();
     let config = swarm.config().generate_fullnode_config();
     let node = SuiNode::start(&config, Registry::new()).await?;
 
-    let quorum_driver = node
-        .quorum_driver()
-        .expect("Fullnode should have quorum driver toggled on.");
+    let transaction_orchestrator = node
+        .transaction_orchestrator()
+        .expect("Fullnode should have transaction orchestrator toggled on.");
     let mut rx = node
-        .subscribe_to_quorum_driver_effects()
-        .expect("Fullnode should have quorum driver toggled on.");
+        .subscribe_to_transaction_orchestrator_effects()
+        .expect("Fullnode should have transaction orchestrator toggled on.");
 
-    let mut txns = make_transactions_with_wallet_context(&mut context, 3).await;
+    let txn_count = 4;
+    let mut txns = make_transactions_with_wallet_context(&mut context, txn_count).await;
     assert!(
-        txns.len() >= 3,
-        "Expect at least 3 txns. Do we generate enough gas objects during genesis?"
+        txns.len() >= txn_count,
+        "Expect at least {} txns. Do we generate enough gas objects during genesis?",
+        txn_count,
     );
+
+    // Test WaitForLocalExecution
+    let txn = txns.swap_remove(0);
+    let digest = *txn.digest();
+    let res = transaction_orchestrator
+        .execute_transaction(ExecuteTransactionRequest {
+            transaction: txn,
+            request_type: ExecuteTransactionRequestType::WaitForLocalExecution,
+        })
+        .await
+        .unwrap_or_else(|e| panic!("Failed to execute transaction {:?}: {:?}", digest, e));
+
+    match res {
+        ExecuteTransactionResponse::EffectsCert(res) => {
+            let (certified_txn, certified_txn_effects) = rx.recv().await.unwrap();
+            let (ct, cte, is_executed_locally) = *res;
+            assert_eq!(*ct.digest(), digest);
+            assert_eq!(*certified_txn.digest(), digest);
+            assert_eq!(*cte.digest(), *certified_txn_effects.digest());
+            assert!(is_executed_locally);
+            // verify that the node has sequenced and executed the txn
+            node.state().get_transaction(digest).await
+                .unwrap_or_else(|e| panic!("Fullnode does not know about the txn {:?} that was executed with WaitForLocalExecution: {:?}", digest, e));
+        }
+        other => {
+            panic!(
+                "WaitForLocalExecution should get EffectCerts, but got: {:?}",
+                other
+            );
+        }
+    };
 
     // Test WaitForEffectsCert
     let txn = txns.swap_remove(0);
     let digest = *txn.digest();
-    let res = quorum_driver
+    let res = transaction_orchestrator
         .execute_transaction(ExecuteTransactionRequest {
             transaction: txn,
             request_type: ExecuteTransactionRequestType::WaitForEffectsCert,
@@ -755,10 +789,14 @@ async fn test_full_node_quorum_driver_basic() -> Result<(), anyhow::Error> {
     match res {
         ExecuteTransactionResponse::EffectsCert(res) => {
             let (certified_txn, certified_txn_effects) = rx.recv().await.unwrap();
-            let (ct, cte) = *res;
+            let (ct, cte, is_executed_locally) = *res;
             assert_eq!(*ct.digest(), digest);
             assert_eq!(*certified_txn.digest(), digest);
             assert_eq!(*cte.digest(), *certified_txn_effects.digest());
+            assert!(!is_executed_locally);
+            wait_for_tx(digest, node.state().clone()).await;
+            node.state().get_transaction(digest).await
+                .unwrap_or_else(|e| panic!("Fullnode does not know about the txn {:?} that was executed with WaitForEffectsCert: {:?}", digest, e));
         }
         other => {
             panic!(
@@ -771,7 +809,7 @@ async fn test_full_node_quorum_driver_basic() -> Result<(), anyhow::Error> {
     // Test WaitForTxCert
     let txn = txns.swap_remove(0);
     let digest = *txn.digest();
-    let res = quorum_driver
+    let res = transaction_orchestrator
         .execute_transaction(ExecuteTransactionRequest {
             transaction: txn,
             request_type: ExecuteTransactionRequestType::WaitForTxCert,
@@ -785,6 +823,9 @@ async fn test_full_node_quorum_driver_basic() -> Result<(), anyhow::Error> {
             let ct = *res;
             assert_eq!(*ct.digest(), digest);
             assert_eq!(*certified_txn.digest(), digest);
+            wait_for_tx(digest, node.state().clone()).await;
+            node.state().get_transaction(digest).await
+                .unwrap_or_else(|e| panic!("Fullnode does not know about the txn {:?} that was executed with WaitForTxCert: {:?}", digest, e));
         }
         other => {
             panic!("WaitForTxCert should get TxCert, but got: {:?}", other);
@@ -794,7 +835,7 @@ async fn test_full_node_quorum_driver_basic() -> Result<(), anyhow::Error> {
     // Test ImmediateReturn
     let txn = txns.swap_remove(0);
     let digest = *txn.digest();
-    let res = quorum_driver
+    let res = transaction_orchestrator
         .execute_transaction(ExecuteTransactionRequest {
             transaction: txn,
             request_type: ExecuteTransactionRequestType::ImmediateReturn,
@@ -806,6 +847,10 @@ async fn test_full_node_quorum_driver_basic() -> Result<(), anyhow::Error> {
         ExecuteTransactionResponse::ImmediateReturn => {
             let (certified_txn, _certified_txn_effects) = rx.recv().await.unwrap();
             assert_eq!(*certified_txn.digest(), digest);
+
+            wait_for_tx(digest, node.state().clone()).await;
+            node.state().get_transaction(digest).await
+                .unwrap_or_else(|e| panic!("Fullnode does not know about the txn {:?} that was executed with ImmediateReturn: {:?}", digest, e));
         }
         other => {
             panic!(
@@ -814,40 +859,70 @@ async fn test_full_node_quorum_driver_basic() -> Result<(), anyhow::Error> {
             );
         }
     };
-    wait_for_tx(digest, node.state().clone()).await;
-
-    // verify that the node has seen the transaction
-    node.state().get_transaction(digest).await
-        .unwrap_or_else(|e| panic!("Fullnode does not know about the txn {:?} that was executed with ImmediateReturn: {:?}", digest, e));
 
     Ok(())
 }
 
-/// Test a validator node does not have quorum driver
+/// Test a validator node does not have transaction orchestrator
 #[tokio::test]
-async fn test_validator_node_has_no_quorum_driver() {
+async fn test_validator_node_has_no_transaction_orchestrator() {
     let configs = test_and_configure_authority_configs(1);
     let validator_config = &configs.validator_configs()[0];
     let node = SuiNode::start(validator_config, Registry::new())
         .await
         .unwrap();
-    assert!(node.quorum_driver().is_none());
-    assert!(node.subscribe_to_quorum_driver_effects().is_err());
+    assert!(node.transaction_orchestrator().is_none());
+    assert!(node
+        .subscribe_to_transaction_orchestrator_effects()
+        .is_err());
 }
 
 #[tokio::test]
-async fn test_full_node_quorum_driver_rpc_ok() -> Result<(), anyhow::Error> {
+async fn test_full_node_transaction_orchestrator_rpc_ok() -> Result<(), anyhow::Error> {
     let (swarm, mut context, _address) = setup_network_and_wallet().await?;
     let (_node, jsonrpc_client, _) = set_up_jsonrpc(&swarm, None).await?;
 
-    let mut txns = make_transactions_with_wallet_context(&mut context, 3).await;
+    let txn_count = 4;
+    let mut txns = make_transactions_with_wallet_context(&mut context, txn_count).await;
     assert!(
-        txns.len() >= 3,
-        "Expect at least 3 txns but only got {}. Do we generate enough gas objects during genesis?",
-        txns.len(),
+        txns.len() >= txn_count,
+        "Expect at least {} txns. Do we generate enough gas objects during genesis?",
+        txn_count,
     );
+
     let txn = txns.swap_remove(0);
     let tx_digest = txn.digest();
+
+    // Test request with ExecuteTransactionRequestType::WaitForLocalExecution
+    let (tx_bytes, flag, signature, pub_key) = txn.to_network_data_for_execution();
+    let params = rpc_params![
+        tx_bytes,
+        flag,
+        signature,
+        pub_key,
+        ExecuteTransactionRequestType::WaitForLocalExecution
+    ];
+    let response: SuiExecuteTransactionResponse = jsonrpc_client
+        .request("sui_executeTransaction", params)
+        .await
+        .unwrap();
+
+    if let SuiExecuteTransactionResponse::EffectsCert {
+        certificate,
+        effects: _,
+        confirmed_local_execution,
+    } = response
+    {
+        assert_eq!(&certificate.transaction_digest, tx_digest);
+        assert!(confirmed_local_execution);
+    } else {
+        panic!("Expect EffectsCert but got {:?}", response);
+    }
+
+    let _response: SuiTransactionResponse = jsonrpc_client
+        .request("sui_getTransaction", rpc_params![*tx_digest])
+        .await
+        .unwrap();
 
     // Test request with ExecuteTransactionRequestType::WaitForEffectsCert
     let (tx_bytes, flag, signature, pub_key) = txn.to_network_data_for_execution();
@@ -866,9 +941,11 @@ async fn test_full_node_quorum_driver_rpc_ok() -> Result<(), anyhow::Error> {
     if let SuiExecuteTransactionResponse::EffectsCert {
         certificate,
         effects: _,
+        confirmed_local_execution,
     } = response
     {
         assert_eq!(&certificate.transaction_digest, tx_digest);
+        assert!(!confirmed_local_execution);
     } else {
         panic!("Expect EffectsCert but got {:?}", response);
     }
@@ -967,7 +1044,7 @@ async fn test_get_objects_read() -> Result<(), anyhow::Error> {
 
     // Create the object
     let (sender, object_id, _) = create_devnet_nft(&mut context).await?;
-    let recipient = context.keystore.addresses().get(1).cloned().unwrap();
+    let recipient = context.config.keystore.addresses().get(1).cloned().unwrap();
     assert_ne!(sender, recipient);
     sleep(Duration::from_millis(1000)).await;
     let (object_ref_v1, object_v1, _) = get_obj_read_from_node(&node, object_id, None).await?;
@@ -988,7 +1065,7 @@ async fn test_get_objects_read() -> Result<(), anyhow::Error> {
         recipient,
     );
     context.execute_transaction(nft_transfer_tx).await.unwrap();
-    sleep(Duration::from_millis(500)).await;
+    sleep(Duration::from_millis(1000)).await;
     let (object_ref_v2, object_v2, _) = get_obj_read_from_node(&node, object_id, None).await?;
     assert_ne!(object_ref_v2, object_ref_v1);
 

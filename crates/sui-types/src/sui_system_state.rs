@@ -1,11 +1,15 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use fastcrypto::traits::ToFromBytes;
 use move_core_types::{
     account_address::AccountAddress, ident_str, identifier::IdentStr, language_storage::StructTag,
 };
 use serde::{Deserialize, Serialize};
 
+use crate::base_types::AuthorityName;
+use crate::committee::{Committee, StakeUnit};
+use crate::crypto::AuthorityPublicKeyBytes;
 use crate::{
     balance::{Balance, Supply},
     id::UID,
@@ -42,6 +46,17 @@ pub struct ValidatorMetadata {
     pub next_epoch_stake: u64,
     pub next_epoch_delegation: u64,
     pub next_epoch_gas_price: u64,
+}
+
+impl ValidatorMetadata {
+    pub fn to_validator_and_stake_pair(&self) -> (AuthorityName, StakeUnit) {
+        (
+            // TODO: Make sure we are actually verifying this on-chain.
+            AuthorityPublicKeyBytes::from_bytes(self.pubkey_bytes.as_ref())
+                .expect("Validity of public key bytes should be verified on-chain"),
+            self.next_epoch_stake + self.next_epoch_delegation,
+        )
+    }
 }
 
 /// Rust version of the Move sui::validator::Validator type
@@ -107,5 +122,19 @@ impl SuiSystemState {
             module: SUI_SYSTEM_MODULE_NAME.to_owned(),
             type_params: vec![],
         }
+    }
+
+    pub fn get_next_epoch_committee(&self) -> Committee {
+        Committee::new(
+            self.epoch + 1,
+            self.validators
+                .next_epoch_validators
+                .iter()
+                .map(ValidatorMetadata::to_validator_and_stake_pair)
+                .collect(),
+        )
+        // unwrap is safe because we should have verified the committee on-chain.
+        // TODO: Make sure we actually verify it.
+        .unwrap()
     }
 }

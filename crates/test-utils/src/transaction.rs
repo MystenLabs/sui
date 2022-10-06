@@ -19,6 +19,7 @@ use sui_core::authority::AuthorityState;
 use sui_core::authority_client::AuthorityAPI;
 use sui_json_rpc_types::SuiObjectRead;
 use sui_json_rpc_types::{SuiParsedTransactionResponse, SuiTransactionResponse};
+use sui_sdk::crypto::AccountKeystore;
 use sui_sdk::json::SuiJsonValue;
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
@@ -34,6 +35,16 @@ use tokio::time::{sleep, Duration};
 use tracing::debug;
 use tracing::info;
 
+pub fn make_publish_package(gas_object: Object, path: PathBuf) -> Transaction {
+    let (sender, keypair) = test_account_keys().pop().unwrap();
+    create_publish_move_package_transaction(
+        gas_object.compute_object_reference(),
+        path,
+        sender,
+        &keypair,
+    )
+}
+
 pub async fn publish_package(
     gas_object: Object,
     path: PathBuf,
@@ -48,14 +59,7 @@ pub async fn publish_package_for_effects(
     path: PathBuf,
     configs: &[ValidatorInfo],
 ) -> TransactionEffects {
-    let (sender, keypair) = test_account_keys().pop().unwrap();
-    let transaction = create_publish_move_package_transaction(
-        gas_object.compute_object_reference(),
-        path,
-        sender,
-        &keypair,
-    );
-    submit_single_owner_transaction(transaction, configs).await
+    submit_single_owner_transaction(make_publish_package(gas_object, path), configs).await
 }
 
 /// Helper function to publish the move package of a simple shared counter.
@@ -90,7 +94,11 @@ pub async fn publish_basics_package(context: &WalletContext, sender: SuiAddress)
             .await
             .unwrap();
 
-        let signature = context.keystore.sign(&sender, &data.to_bytes()).unwrap();
+        let signature = context
+            .config
+            .keystore
+            .sign(&sender, &data.to_bytes())
+            .unwrap();
         Transaction::new(data, signature)
     };
 
@@ -136,7 +144,11 @@ pub async fn submit_move_transaction(
         .await
         .unwrap();
 
-    let signature = context.keystore.sign(&sender, &data.to_bytes()).unwrap();
+    let signature = context
+        .config
+        .keystore
+        .sign(&sender, &data.to_bytes())
+        .unwrap();
     let tx = Transaction::new(data, signature);
     let tx_digest = tx.digest();
     debug!(?tx_digest, "submitting move transaction");
@@ -224,11 +236,46 @@ pub async fn create_devnet_nft(
     Ok((sender, object_id, digest))
 }
 
+pub async fn transfer_sui(
+    context: &mut WalletContext,
+    sender: Option<SuiAddress>,
+    receiver: Option<SuiAddress>,
+) -> Result<(ObjectID, SuiAddress, SuiAddress, TransactionDigest), anyhow::Error> {
+    let sender = match sender {
+        None => context.config.keystore.addresses().get(0).cloned().unwrap(),
+        Some(addr) => addr,
+    };
+    let receiver = match receiver {
+        None => context.config.keystore.addresses().get(1).cloned().unwrap(),
+        Some(addr) => addr,
+    };
+    let gas_ref = get_gas_object_with_wallet_context(context, &sender)
+        .await
+        .unwrap();
+
+    let res = SuiClientCommands::TransferSui {
+        to: receiver,
+        amount: None,
+        sui_coin_object_id: gas_ref.0,
+        gas_budget: 50000,
+    }
+    .execute(context)
+    .await?;
+
+    let digest = if let SuiClientCommandResult::TransferSui(tx_cert, _effects) = res {
+        tx_cert.transaction_digest
+    } else {
+        panic!("transfer command did not return WalletCommandResult::TransferSui");
+    };
+
+    Ok((gas_ref.0, sender, receiver, digest))
+}
+
 pub async fn transfer_coin(
     context: &mut WalletContext,
 ) -> Result<(ObjectID, SuiAddress, SuiAddress, TransactionDigest), anyhow::Error> {
-    let sender = context.keystore.addresses().get(0).cloned().unwrap();
-    let receiver = context.keystore.addresses().get(1).cloned().unwrap();
+    let sender = context.config.keystore.addresses().get(0).cloned().unwrap();
+    let receiver = context.config.keystore.addresses().get(1).cloned().unwrap();
 
     let object_refs = context
         .client
@@ -260,6 +307,19 @@ pub async fn transfer_coin(
     Ok((object_to_send, sender, receiver, digest))
 }
 
+pub async fn split_coin_with_wallet_context(context: &mut WalletContext, coin_id: ObjectID) {
+    SuiClientCommands::SplitCoin {
+        coin_id,
+        amounts: None,
+        count: 2,
+        gas: None,
+        gas_budget: MAX_GAS,
+    }
+    .execute(context)
+    .await
+    .unwrap();
+}
+
 pub async fn delete_devnet_nft(
     context: &mut WalletContext,
     sender: &SuiAddress,
@@ -280,7 +340,11 @@ pub async fn delete_devnet_nft(
         MAX_GAS,
     );
 
-    let signature = context.keystore.sign(sender, &data.to_bytes()).unwrap();
+    let signature = context
+        .config
+        .keystore
+        .sign(sender, &data.to_bytes())
+        .unwrap();
     let tx = Transaction::new(data, signature);
 
     context
@@ -464,4 +528,9 @@ pub async fn wait_for_all_txes(wait_digests: Vec<TransactionDigest>, state: Arc<
             },
         }
     }
+
+    // A small delay is needed so that the batch process can finish notifying other subscribers,
+    // which tests may depend on. Otherwise tests can pass or fail depending on whether the
+    // subscriber in this function was notified first or last.
+    sleep(Duration::from_millis(10)).await;
 }

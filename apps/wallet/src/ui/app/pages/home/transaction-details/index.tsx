@@ -30,6 +30,7 @@ const txKindToTxt: Record<TransactionKindName, string> = {
     Publish: 'Publish',
     TransferSui: 'Sui transfer',
     ChangeEpoch: 'Change epoch',
+    Pay: 'Pay',
 };
 
 function TransactionDetailsPage() {

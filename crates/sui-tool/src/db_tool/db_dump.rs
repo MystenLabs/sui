@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use strum_macros::EnumString;
 use sui_core::authority::authority_store_tables::AuthorityStoreTables;
 use sui_core::checkpoints::CheckpointStoreTables;
-use sui_core::epoch::epoch_store::EpochStore;
+use sui_core::epoch::committee_store::CommitteeStore;
 use sui_storage::default_db_options;
 use sui_storage::{lock_service::LockServiceImpl, node_sync_store::NodeSyncStore, IndexStore};
 use sui_types::crypto::{AuthoritySignInfo, EmptySignInfo};
@@ -86,7 +86,7 @@ pub fn dump_table(
         StoreName::Wal => Err(eyre!(
             "Dumping WAL not yet supported. It requires kmowing the value type"
         )),
-        StoreName::Epoch => EpochStore::get_read_only_handle(db_path, None, None).dump(
+        StoreName::Epoch => CommitteeStore::get_read_only_handle(db_path, None, None).dump(
             table_name,
             page_size,
             page_number,

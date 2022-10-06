@@ -10,16 +10,20 @@ import {
     getTotalGasUsed,
     getTransferSuiTransaction,
     getExecutionStatusError,
+    getMoveCallTransaction,
 } from '@mysten/sui.js';
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 
+import { notEmpty } from '_helpers';
 import { batchFetchObject } from '_redux/slices/sui-objects';
+import { Coin } from '_redux/slices/sui-objects/Coin';
 
 import type {
     GetTxnDigestsResponse,
     CertifiedTransaction,
     TransactionKindName,
     ExecutionStatusType,
+    TransactionEffects,
 } from '@mysten/sui.js';
 import type { AppThunkConfig } from '_store/thunk-extras';
 
@@ -39,6 +43,9 @@ export type TxResultState = {
     name?: string;
     isSender?: boolean;
     error?: string;
+    balance?: number;
+    callFunctionName?: string;
+    coinSymbol?: string;
 };
 
 interface TransactionManualState {
@@ -63,6 +70,13 @@ const deduplicate = (results: [number, string][] | undefined) =>
               .map((result) => result[1])
               .filter((value, index, self) => self.indexOf(value) === index)
         : [];
+
+// TODO: This is a temporary solution to get the NFT data from Call txn
+const getCreatedObjectID = (txEffects: TransactionEffects): string | null => {
+    return txEffects?.created
+        ? txEffects?.created.map((item) => item.reference)[0]?.objectId
+        : null;
+};
 
 export const getTransactionsByAddress = createAsyncThunk<
     TxResultByAddress,
@@ -93,7 +107,7 @@ export const getTransactionsByAddress = createAsyncThunk<
             .then(async (txEffs) => {
                 return (
                     txEffs
-                        .map((txEff, i) => {
+                        .map((txEff) => {
                             const [seq, digest] = transactions.filter(
                                 (transactionId) =>
                                     transactionId[1] ===
@@ -117,18 +131,29 @@ export const getTransactionsByAddress = createAsyncThunk<
                                 transferSui?.recipient ??
                                 txTransferObject?.recipient;
 
+                            const moveCallTxn = getMoveCallTransaction(txn);
+
+                            const callObjectId = getCreatedObjectID(
+                                txEff.effects
+                            );
+
                             return {
                                 seq,
                                 txId: digest,
                                 status: getExecutionStatusType(txEff),
                                 txGas: getTotalGasUsed(txEff),
                                 kind: txKind,
+                                // gasUsed: txEff?.gasUsed,
+                                callFunctionName: `Call (${moveCallTxn?.function?.replace(
+                                    /_/g,
+                                    ' '
+                                )})`,
                                 from: res.data.sender,
-                                ...(txTransferObject
+                                ...(txTransferObject || callObjectId
                                     ? {
                                           objectId:
                                               txTransferObject?.objectRef
-                                                  .objectId,
+                                                  .objectId ?? callObjectId,
                                       }
                                     : {}),
                                 error: getExecutionStatusError(txEff),
@@ -167,6 +192,10 @@ export const getTransactionsByAddress = createAsyncThunk<
                       )
                     : null;
 
+            const coinType =
+                objectTxObj?.data?.type &&
+                Coin.getCoinTypeArg(objectTxObj.data);
+
             return {
                 ...itm,
                 ...(objectTxObj
@@ -174,6 +203,8 @@ export const getTransactionsByAddress = createAsyncThunk<
                           description: objectTxObj.data.fields.description,
                           name: objectTxObj.data.fields.name,
                           url: objectTxObj.data.fields.url,
+                          balance: objectTxObj.data.fields.balance,
+                          coinSymbol: coinType && Coin.getCoinSymbol(coinType),
                       }
                     : {}),
             };
@@ -182,10 +213,6 @@ export const getTransactionsByAddress = createAsyncThunk<
         return txnResp as TxResultByAddress;
     }
 );
-
-function notEmpty<TValue>(value: TValue | null | undefined): value is TValue {
-    return value !== null && value !== undefined;
-}
 
 const txSlice = createSlice({
     name: 'txresult',

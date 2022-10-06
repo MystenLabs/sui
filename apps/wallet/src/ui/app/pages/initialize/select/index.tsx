@@ -10,17 +10,17 @@ import st from './Select.module.scss';
 
 const selections = [
     {
-        title: 'Yes, let’s get set up!',
-        desc: 'This will create a new wallet and a seed phrase.',
+        title: 'Yes, let’s create one!',
+        desc: 'This creates a new wallet and a 12-word recovery phrase.',
         url: '../create',
-        action: 'Create new wallet',
+        action: 'Create a New Wallet',
         icon: SuiIcons.Plus,
     },
     {
         title: 'No, I already have one',
-        desc: 'Import your existing wallet by entering the 12-word seed phrase',
+        desc: 'Import your existing wallet by entering the 12-word recovery phrase.',
         url: '../import',
-        action: 'Import a wallet',
+        action: 'Import an Existing Wallet',
         icon: SuiIcons.Download,
     },
 ];

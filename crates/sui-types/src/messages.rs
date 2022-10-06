@@ -10,7 +10,7 @@ use crate::crypto::{
     VerificationObligation,
 };
 use crate::gas::GasCostSummary;
-use crate::messages_checkpoint::{CheckpointFragment, CheckpointSequenceNumber};
+use crate::messages_checkpoint::CheckpointFragment;
 use crate::object::{Object, ObjectFormatOptions, Owner, OBJECT_START_VERSION};
 use crate::storage::{DeleteKind, WriteKind};
 use crate::sui_serde::Base64;
@@ -349,6 +349,26 @@ impl TransactionKind {
         }
     }
 
+    pub fn input_objects(&self) -> SuiResult<Vec<InputObjectKind>> {
+        let inputs: Vec<_> = self
+            .single_transactions()
+            .map(|s| s.input_objects())
+            .collect::<SuiResult<Vec<_>>>()?
+            .into_iter()
+            .flatten()
+            .collect();
+        Ok(inputs)
+    }
+
+    pub fn shared_input_objects(&self) -> impl Iterator<Item = &ObjectID> {
+        match &self {
+            TransactionKind::Single(s) => Either::Left(s.shared_input_objects()),
+            TransactionKind::Batch(b) => {
+                Either::Right(b.iter().flat_map(|kind| kind.shared_input_objects()))
+            }
+        }
+    }
+
     pub fn batch_size(&self) -> usize {
         match self {
             TransactionKind::Single(_) => 1,
@@ -517,6 +537,22 @@ impl TransactionData {
         Self::new(kind, sender, gas_payment, gas_budget)
     }
 
+    pub fn new_pay(
+        sender: SuiAddress,
+        coins: Vec<ObjectRef>,
+        recipients: Vec<SuiAddress>,
+        amounts: Vec<u64>,
+        gas_payment: ObjectRef,
+        gas_budget: u64,
+    ) -> Self {
+        let kind = TransactionKind::Single(SingleTransactionKind::Pay(Pay {
+            coins,
+            recipients,
+            amounts,
+        }));
+        Self::new(kind, sender, gas_payment, gas_budget)
+    }
+
     pub fn new_module(
         sender: SuiAddress,
         gas_payment: ObjectRef,
@@ -564,14 +600,8 @@ impl TransactionData {
     }
 
     pub fn input_objects(&self) -> SuiResult<Vec<InputObjectKind>> {
-        let mut inputs: Vec<_> = self
-            .kind
-            .single_transactions()
-            .map(|s| s.input_objects())
-            .collect::<SuiResult<Vec<_>>>()?
-            .into_iter()
-            .flatten()
-            .collect();
+        let mut inputs = self.kind.input_objects()?;
+
         if !self.kind.is_system_tx() {
             inputs.push(InputObjectKind::ImmOrOwnedMoveObject(
                 *self.gas_payment_object_ref(),
@@ -659,12 +689,7 @@ impl<S> TransactionEnvelope<S> {
     }
 
     pub fn shared_input_objects(&self) -> impl Iterator<Item = &ObjectID> {
-        match &self.signed_data.data.kind {
-            TransactionKind::Single(s) => Either::Left(s.shared_input_objects()),
-            TransactionKind::Batch(b) => {
-                Either::Right(b.iter().flat_map(|kind| kind.shared_input_objects()))
-            }
-        }
+        self.signed_data.data.kind.shared_input_objects()
     }
 
     /// Get the transaction digest and write it to the cache
@@ -1911,6 +1936,10 @@ impl CertifiedTransaction {
 
         obligation.verify_all().map(|_| ())
     }
+
+    pub fn epoch(&self) -> EpochId {
+        self.auth_sign_info.epoch
+    }
 }
 
 impl Display for CertifiedTransaction {
@@ -2003,6 +2032,7 @@ pub enum ExecuteTransactionRequestType {
     ImmediateReturn,
     WaitForTxCert,
     WaitForEffectsCert,
+    WaitForLocalExecution,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -2011,221 +2041,56 @@ pub struct ExecuteTransactionRequest {
     pub request_type: ExecuteTransactionRequestType,
 }
 
+/// When requested to execute a transaction with WaitForLocalExecution,
+/// TransactionOrchestrator attempts to execute this transaction locally
+/// after it is finalized. This value represents whether the transaction
+/// is confirmed to be executed on this node before the response returns.
+pub type IsTransactionExecutedLocally = bool;
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum ExecuteTransactionResponse {
+    ImmediateReturn,
+    TxCert(Box<CertifiedTransaction>),
+    // TODO: Change to CertifiedTransactionEffects eventually.
+    EffectsCert(
+        Box<(
+            CertifiedTransaction,
+            CertifiedTransactionEffects,
+            IsTransactionExecutedLocally,
+        )>,
+    ),
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, schemars::JsonSchema)]
+pub enum QuorumDriverRequestType {
+    ImmediateReturn,
+    WaitForTxCert,
+    WaitForEffectsCert,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct QuorumDriverRequest {
+    pub transaction: Transaction,
+    pub request_type: QuorumDriverRequestType,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum QuorumDriverResponse {
     ImmediateReturn,
     TxCert(Box<CertifiedTransaction>),
     // TODO: Change to CertifiedTransactionEffects eventually.
     EffectsCert(Box<(CertifiedTransaction, CertifiedTransactionEffects)>),
 }
 
-// Epoch related data structures.
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct EpochInfo {
-    /// The committee of this epoch.
-    committee: Committee,
-    /// The first checkpoint included in this epoch.
-    first_checkpoint: CheckpointSequenceNumber,
-    /// Digest of the epoch info from the previous epoch.
-    prev_digest: EpochInfoDigest,
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct CommitteeInfoRequest {
+    pub epoch: Option<EpochId>,
 }
 
-impl EpochInfo {
-    pub fn new(
-        committee: Committee,
-        first_checkpoint: CheckpointSequenceNumber,
-        prev_digest: EpochInfoDigest,
-    ) -> Self {
-        Self {
-            committee,
-            first_checkpoint,
-            prev_digest,
-        }
-    }
-
-    pub fn epoch(&self) -> EpochId {
-        self.committee.epoch
-    }
-
-    pub fn committee(&self) -> &Committee {
-        &self.committee
-    }
-
-    pub fn into_committee(self) -> Committee {
-        self.committee
-    }
-
-    pub fn first_checkpoint(&self) -> &CheckpointSequenceNumber {
-        &self.first_checkpoint
-    }
-
-    pub fn prev_epoch_info_digest(&self) -> &EpochInfoDigest {
-        &self.prev_digest
-    }
-
-    pub fn digest(&self) -> EpochInfoDigest {
-        sha3_hash(self)
-    }
-}
-
-pub type EpochInfoDigest = [u8; 32];
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct EpochEnvelop<S> {
-    pub epoch_info: EpochInfo,
-    pub auth_sign_info: S,
-}
-
-pub type GenesisEpoch = EpochEnvelop<EmptySignInfo>;
-pub type SignedEpoch = EpochEnvelop<AuthoritySignInfo>;
-pub type CertifiedEpoch = EpochEnvelop<AuthorityStrongQuorumSignInfo>;
-
-impl GenesisEpoch {
-    pub fn new(committee: Committee) -> Self {
-        Self {
-            epoch_info: EpochInfo::new(committee, 0, EpochInfoDigest::default()),
-            auth_sign_info: EmptySignInfo {},
-        }
-    }
-
-    pub fn verify(&self, genesis_committee: &Committee) -> SuiResult {
-        fp_ensure!(
-            self.epoch_info.first_checkpoint == 0,
-            SuiError::InvalidAuthenticatedEpoch(
-                "Genesis epoch's first checkpoint must be 0".to_string()
-            )
-        );
-        fp_ensure!(
-            self.epoch_info.epoch() == 0,
-            SuiError::InvalidAuthenticatedEpoch("Genesis epoch must be epoch 0".to_string())
-        );
-        fp_ensure!(
-            &self.epoch_info.committee == genesis_committee,
-            SuiError::InvalidAuthenticatedEpoch("Genesis epoch committee mismatch".to_string())
-        );
-        Ok(())
-    }
-}
-
-impl SignedEpoch {
-    pub fn new(
-        committee: Committee,
-        authority: AuthorityName,
-        secret: &dyn signature::Signer<AuthoritySignature>,
-        first_checkpoint: CheckpointSequenceNumber,
-        prev_epoch_info: &EpochInfo,
-    ) -> Self {
-        let epoch = committee.epoch;
-        let epoch_info = EpochInfo::new(committee, first_checkpoint, prev_epoch_info.digest());
-        let signature = AuthoritySignature::new(&epoch_info, secret);
-        Self {
-            epoch_info,
-            auth_sign_info: AuthoritySignInfo {
-                // A epoch is always authenticated by validators from the previous epoch.
-                // This is critical: we won't be able to use the same committee to verify itself,
-                // hence we rely on the committee from the previous epoch to verify the current
-                // epoch data structure.
-                epoch: epoch - 1,
-                authority,
-                signature,
-            },
-        }
-    }
-
-    /// Verify the signature of this signed epoch. The committee to verify this must be the
-    /// committee from the previous epoch, as this is signed by a validator from the previous epoch.
-    pub fn verify(&self, prev_epoch_committee: &Committee) -> SuiResult {
-        let epoch = self.epoch_info.epoch();
-        fp_ensure!(
-            epoch != 0 && epoch - 1 == self.auth_sign_info.epoch,
-            SuiError::InvalidAuthenticatedEpoch(
-                "Epoch number in the committee inconsistent with signature".to_string()
-            )
-        );
-        self.auth_sign_info
-            .verify(&self.epoch_info, prev_epoch_committee)?;
-        Ok(())
-    }
-}
-
-impl CertifiedEpoch {
-    pub fn new(
-        epoch_info: &EpochInfo,
-        signatures: Vec<(AuthorityName, AuthoritySignature)>,
-        prev_epoch_committee: &Committee,
-    ) -> SuiResult<Self> {
-        Ok(Self {
-            epoch_info: epoch_info.clone(),
-            auth_sign_info: AuthorityStrongQuorumSignInfo::new_with_signatures(
-                signatures,
-                prev_epoch_committee,
-            )?,
-        })
-    }
-
-    /// Verify the signature of this certified epoch. The committee to verify this must be the
-    /// committee from the previous epoch, as this is signed by a quorum from the previous epoch.
-    pub fn verify(&self, committee: &Committee) -> SuiResult {
-        let epoch = self.epoch_info.epoch();
-        fp_ensure!(
-            epoch != 0 && epoch - 1 == self.auth_sign_info.epoch,
-            SuiError::InvalidAuthenticatedEpoch(
-                "Epoch number in the committee inconsistent with signature".to_string()
-            )
-        );
-        self.auth_sign_info.verify(&self.epoch_info, committee)?;
-        Ok(())
-    }
-}
-
-/// An AuthenticatedEpoch is an epoch data structure that's verifiable.
-/// The genesis epoch is the only one that doesn't require a committee to verify it, as there is
-/// only one genesis trusted from start. For a Signed or Certified epoch, it can be verified by
-/// the committee from the previous epoch.
-#[derive(Clone, Serialize, Deserialize, Debug)]
-pub enum AuthenticatedEpoch {
-    Genesis(GenesisEpoch),
-    Signed(SignedEpoch),
-    Certified(CertifiedEpoch),
-}
-
-impl AuthenticatedEpoch {
-    pub fn epoch(&self) -> EpochId {
-        match self {
-            Self::Signed(s) => s.epoch_info.epoch(),
-            Self::Certified(c) => c.epoch_info.epoch(),
-            Self::Genesis(g) => {
-                let epoch = g.epoch_info.epoch();
-                debug_assert_eq!(epoch, 0);
-                epoch
-            }
-        }
-    }
-
-    pub fn epoch_info(&self) -> &EpochInfo {
-        match self {
-            Self::Signed(s) => &s.epoch_info,
-            Self::Certified(c) => &c.epoch_info,
-            Self::Genesis(g) => &g.epoch_info,
-        }
-    }
-
-    pub fn into_epoch_info(self) -> EpochInfo {
-        match self {
-            Self::Signed(s) => s.epoch_info,
-            Self::Certified(c) => c.epoch_info,
-            Self::Genesis(g) => g.epoch_info,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct EpochRequest {
-    pub epoch_id: Option<EpochId>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct EpochResponse {
-    pub epoch_info: Option<AuthenticatedEpoch>,
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct CommitteeInfoResponse {
+    pub epoch: EpochId,
+    pub committee_info: Option<Vec<(AuthorityName, StakeUnit)>>,
+    // TODO: We could also return the certified checkpoint that contains this committee.
+    // This would allows a client to verify the authenticity of the committee.
 }

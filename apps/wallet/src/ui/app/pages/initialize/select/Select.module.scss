@@ -1,89 +1,68 @@
 @use '_values/colors';
+@use '_values';
 @use '_utils';
+@use 'sass:color';
+
+.header-title {
+    margin: 0;
+    margin-bottom: 30px;
+    color: colors.$gray-90;
+
+    @include utils.typography('Primary/Heading1-B');
+}
+
+.selector {
+    display: flex;
+    flex-flow: column nowrap;
+    gap: 30px;
+}
 
 .card {
     display: flex;
     flex-flow: column nowrap;
     align-items: center;
     justify-content: center;
-    border-radius: 10px;
-    padding: 25px;
-    margin-bottom: 8px;
-    width: 350px;
-    height: 202px;
-    cursor: pointer;
-    background: #f7f8f8;
+    border-radius: 15px;
+    padding: 40px 30px;
+    background: rgba(colors.$sui-blue, $alpha: 0.1);
+    max-width: values.$sizing-popup-width;
+    border: 1px solid rgba(colors.$sui-blue, $alpha: 0.1);
+}
 
-    &:last-child() {
-        margin-bottom: 0;
+.title {
+    margin: 0 0 12px;
+    color: colors.$gray-90;
+
+    @include utils.typography('Primary/Heading3-SB');
+}
+
+.desc {
+    color: colors.$gray-85;
+    margin-bottom: 30px;
+
+    @include utils.typography('ParagraphPrimary/P1-M');
+}
+
+:global(.btn).action {
+    display: flex;
+    flex-flow: row nowrap;
+    align-items: center;
+    justify-content: center;
+    background: colors.$hero;
+    color: colors.$white;
+    border-radius: 12px;
+    padding: 15px 20px;
+    align-self: stretch;
+    gap: 10px;
+
+    @include utils.typography('Primary/Body-SB');
+
+    &:visited,
+    &:active {
+        color: colors.$white;
     }
 
     &:hover {
-        background: #f7f8f8;
+        background: colors.$hero-dark;
     }
-
-    .title {
-        margin: 0 0 8px;
-        font-size: 20px;
-        color: colors.$gray-100;
-        font-weight: 600;
-        line-height: 24px;
-    }
-
-    .desc {
-        color: colors.$gray-80;
-        font-size: 16px;
-        line-height: 21px;
-        font-weight: 500;
-        margin-bottom: 16px;
-        text-align: center;
-    }
-
-    .action {
-        @include utils.typography('page-title');
-
-        align-self: flex-start;
-        background: colors.$cta-blue;
-        color: colors.$white;
-        width: 100%;
-        height: 44px;
-        max-width: 290px;
-        margin: auto;
-        text-align: center;
-        border-radius: 10px;
-        font-weight: 400;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        padding: 5px;
-
-        &:visited,
-        &:active {
-            color: colors.$white;
-        }
-
-        &:hover {
-            background: colors.$cta-blue-hover;
-        }
-    }
-}
-
-.selector {
-    display: flex;
-    gap: 20px;
-
-    .icon {
-        margin-right: 10px;
-        color: colors.$cta-light-blue;
-        font-size: 14px;
-    }
-}
-
-.header-title {
-    text-align: center;
-    margin-bottom: 40px;
-    color: colors.$gray-100;
-    font-size: 30px;
-    font-weight: 700;
-    line-height: 36px;
 }

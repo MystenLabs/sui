@@ -2,6 +2,13 @@
   "name": "sui-monorepo",
   "private": true,
   "license": "Apache-2.0",
+  "scripts": {
+    "explorer": "pnpm --filter ./apps/explorer",
+    "wallet": "pnpm --filter ./apps/wallet",
+    "wallet-adapter": "pnpm --filter ./sdk/wallet-adapter",
+    "sdk": "pnpm --filter ./sdk/typescript",
+    "bcs": "pnpm --filter ./sdk/bcs"
+  },
   "pnpm": {
     "overrides": {
       "node-notifier": "10.0.0",

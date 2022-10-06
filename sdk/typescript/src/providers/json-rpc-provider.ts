@@ -14,7 +14,7 @@ import {
   isSuiMoveNormalizedFunction,
   isSuiMoveNormalizedStruct,
   isSuiExecuteTransactionResponse,
-  isSuiEvents
+  isSuiEvents,
 } from '../types/index.guard';
 import {
   GatewayTxSeqNumber,
@@ -45,11 +45,14 @@ import {
   DEFAULT_END_TIME,
 } from '../types';
 import { SignatureScheme } from '../cryptography/publickey';
-import { DEFAULT_CLIENT_OPTIONS, WebsocketClient, WebsocketClientOptions } from '../rpc/websocket-client';
+import {
+  DEFAULT_CLIENT_OPTIONS,
+  WebsocketClient,
+  WebsocketClientOptions,
+} from '../rpc/websocket-client';
 
 const isNumber = (val: any): val is number => typeof val === 'number';
 const isAny = (_val: any): _val is any => true;
-
 
 export class JsonRpcProvider extends Provider {
   protected client: JsonRpcClient;
@@ -58,82 +61,90 @@ export class JsonRpcProvider extends Provider {
    * Establish a connection to a Sui RPC endpoint
    *
    * @param endpoint URL to the Sui RPC endpoint
-   * @param skipDataValidation default to `false`. If set to `true`, the rpc
-   * client will not check if the responses from the RPC server conform to the schema
-   * defined in the TypeScript SDK. The mismatches often happen when the SDK
-   * is in a different version than the RPC server. Skipping the validation
-   * can maximize the version compatibility of the SDK, as not all the schema
+   * @param skipDataValidation default to `true`. If set to `false`, the rpc
+   * client will throw an error if the responses from the RPC server do not
+   * conform to the schema defined in the TypeScript SDK. If set to `true`, the
+   * rpc client will log the mismatch as a warning message instead of throwing an
+   * error. The mismatches often happen when the SDK is in a different version than
+   * the RPC server. Skipping the validation can maximize
+   * the version compatibility of the SDK, as not all the schema
    * changes in the RPC response will affect the caller, but the caller needs to
    * understand that the data may not match the TypeSrcript definitions.
    */
   constructor(
     public endpoint: string,
-    public skipDataValidation: boolean = false,
+    public skipDataValidation: boolean = true,
     public socketOptions: WebsocketClientOptions = DEFAULT_CLIENT_OPTIONS
   ) {
     super();
 
     this.client = new JsonRpcClient(endpoint);
-    this.wsClient = new WebsocketClient(endpoint, skipDataValidation, socketOptions);
+    this.wsClient = new WebsocketClient(
+      endpoint,
+      skipDataValidation,
+      socketOptions
+    );
   }
 
   // Move info
   async getMoveFunctionArgTypes(
-    objectId: string,
+    packageId: string,
     moduleName: string,
     functionName: string
   ): Promise<SuiMoveFunctionArgTypes> {
     try {
       return await this.client.requestWithType(
         'sui_getMoveFunctionArgTypes',
-        [objectId, moduleName, functionName],
+        [packageId, moduleName, functionName],
         isSuiMoveFunctionArgTypes,
         this.skipDataValidation
       );
     } catch (err) {
       throw new Error(
-        `Error fetching Move function arg types with package object ID: ${objectId}, module name: ${moduleName}, function name: ${functionName}`
+        `Error fetching Move function arg types with package object ID: ${packageId}, module name: ${moduleName}, function name: ${functionName}`
       );
     }
   }
 
   async getNormalizedMoveModulesByPackage(
-    objectId: string
+    packageId: string
   ): Promise<SuiMoveNormalizedModules> {
     // TODO: Add caching since package object does not change
     try {
       return await this.client.requestWithType(
         'sui_getNormalizedMoveModulesByPackage',
-        [objectId],
+        [packageId],
         isSuiMoveNormalizedModules,
         this.skipDataValidation
       );
     } catch (err) {
-      throw new Error(`Error fetching package: ${err} for package ${objectId}`);
+      throw new Error(
+        `Error fetching package: ${err} for package ${packageId}`
+      );
     }
   }
 
   async getNormalizedMoveModule(
-    objectId: string,
+    packageId: string,
     moduleName: string
   ): Promise<SuiMoveNormalizedModule> {
     // TODO: Add caching since package object does not change
     try {
       return await this.client.requestWithType(
         'sui_getNormalizedMoveModule',
-        [objectId, moduleName],
+        [packageId, moduleName],
         isSuiMoveNormalizedModule,
         this.skipDataValidation
       );
     } catch (err) {
       throw new Error(
-        `Error fetching module: ${err} for package ${objectId}, module ${moduleName}}`
+        `Error fetching module: ${err} for package ${packageId}, module ${moduleName}}`
       );
     }
   }
 
   async getNormalizedMoveFunction(
-    objectId: string,
+    packageId: string,
     moduleName: string,
     functionName: string
   ): Promise<SuiMoveNormalizedFunction> {
@@ -141,32 +152,32 @@ export class JsonRpcProvider extends Provider {
     try {
       return await this.client.requestWithType(
         'sui_getNormalizedMoveFunction',
-        [objectId, moduleName, functionName],
+        [packageId, moduleName, functionName],
         isSuiMoveNormalizedFunction,
         this.skipDataValidation
       );
     } catch (err) {
       throw new Error(
-        `Error fetching function: ${err} for package ${objectId}, module ${moduleName} and function ${functionName}}`
+        `Error fetching function: ${err} for package ${packageId}, module ${moduleName} and function ${functionName}}`
       );
     }
   }
 
   async getNormalizedMoveStruct(
-    objectId: string,
+    packageId: string,
     moduleName: string,
     structName: string
   ): Promise<SuiMoveNormalizedStruct> {
     try {
       return await this.client.requestWithType(
         'sui_getNormalizedMoveStruct',
-        [objectId, moduleName, structName],
+        [packageId, moduleName, structName],
         isSuiMoveNormalizedStruct,
         this.skipDataValidation
       );
     } catch (err) {
       throw new Error(
-        `Error fetching struct: ${err} for package ${objectId}, module ${moduleName} and struct ${structName}}`
+        `Error fetching struct: ${err} for package ${packageId}, module ${moduleName} and struct ${structName}}`
       );
     }
   }
@@ -190,6 +201,22 @@ export class JsonRpcProvider extends Provider {
   async getGasObjectsOwnedByAddress(address: string): Promise<SuiObjectInfo[]> {
     const objects = await this.getObjectsOwnedByAddress(address);
     return objects.filter((obj: SuiObjectInfo) => Coin.isSUI(obj));
+  }
+
+  async getCoinBalancesOwnedByAddress(
+    address: string,
+    typeArg?: string
+  ): Promise<GetObjectDataResponse[]> {
+    const objects = await this.getObjectsOwnedByAddress(address);
+    const coinIds = objects
+      .filter(
+        (obj: SuiObjectInfo) =>
+          Coin.isCoin(obj) &&
+          (typeArg === undefined || typeArg === Coin.getCoinTypeArg(obj))
+      )
+      .map((c) => c.objectId);
+
+    return await this.getObjectBatch(coinIds);
   }
 
   async getObjectsOwnedByObject(objectId: string): Promise<SuiObjectInfo[]> {

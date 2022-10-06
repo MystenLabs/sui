@@ -1,5 +1,5 @@
 header {
-    @apply grid grid-cols-12 py-[2vh] mx-[5vw] bg-header;
+    @apply grid grid-cols-12 py-[2vh] mx-[5vw] bg-headerNav;
 }
 
 .suititle {

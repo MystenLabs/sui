@@ -92,10 +92,11 @@ export class Coin {
     ): Promise<SuiTransactionResponse> {
         await signer.syncAccountState();
         const coin = await Coin.selectCoin(signer, coins, amount);
-        return await signer.transferObject({
-            objectId: coin,
+        return await signer.pay({
+            inputCoins: [coin],
+            recipients: [recipient],
+            amounts: [Number(amount)],
             gasBudget: DEFAULT_GAS_BUDGET_FOR_TRANSFER,
-            recipient: recipient,
         });
     }
 

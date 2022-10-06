@@ -16,7 +16,7 @@ module examples::trusted_coin {
     fun init(ctx: &mut TxContext) {
         // Get a treasury cap for the coin and give it to the transaction
         // sender
-        let treasury_cap = coin::create_currency<EXAMPLE>(EXAMPLE{}, ctx);
+        let treasury_cap = coin::create_currency<EXAMPLE>(EXAMPLE{}, 2, ctx);
         transfer::transfer(treasury_cap, tx_context::sender(ctx))
     }
 

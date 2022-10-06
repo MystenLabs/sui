@@ -22,6 +22,12 @@ export type SuiChangeEpoch = {
   computation_charge: number;
 };
 
+export type Pay = {
+  coins: SuiObjectRef[];
+  recipients: SuiAddress[];
+  amounts: number[];
+};
+
 export type ExecuteTransactionRequestType =
   | 'ImmediateReturn'
   | 'WaitForTxCert'
@@ -32,13 +38,16 @@ export type TransactionKindName =
   | 'Publish'
   | 'Call'
   | 'TransferSui'
-  | 'ChangeEpoch';
+  | 'ChangeEpoch'
+  | 'Pay';
+
 export type SuiTransactionKind =
   | { TransferObject: TransferObject }
   | { Publish: SuiMovePackage }
   | { Call: MoveCall }
   | { TransferSui: SuiTransferSui }
-  | { ChangeEpoch: SuiChangeEpoch };
+  | { ChangeEpoch: SuiChangeEpoch }
+  | { Pay: Pay };
 export type SuiTransactionData = {
   transactions: SuiTransactionKind[];
   sender: SuiAddress;
@@ -48,7 +57,9 @@ export type SuiTransactionData = {
 
 // TODO: support u64
 export type EpochId = number;
-export type GenericAuthoritySignature = AuthoritySignature[] | AuthoritySignature;
+export type GenericAuthoritySignature =
+  | AuthoritySignature[]
+  | AuthoritySignature;
 
 export type AuthorityQuorumSignInfo = {
   epoch: EpochId;
@@ -265,6 +276,10 @@ export function getTransferSuiTransaction(
   return 'TransferSui' in data ? data.TransferSui : undefined;
 }
 
+export function getPayTransaction(data: SuiTransactionKind): Pay | undefined {
+  return 'Pay' in data ? data.Pay : undefined;
+}
+
 export function getChangeEpochTransaction(
   data: SuiTransactionKind
 ): SuiChangeEpoch | undefined {
@@ -292,21 +307,26 @@ export function getTransactionKindName(
 /* ----------------------------- ExecutionStatus ---------------------------- */
 
 export function getExecutionStatusType(
-  data: SuiTransactionResponse
-): ExecutionStatusType {
-  return getExecutionStatus(data).status;
+  data: SuiTransactionResponse | SuiExecuteTransactionResponse
+): ExecutionStatusType | undefined {
+  return getExecutionStatus(data)?.status;
 }
 
 export function getExecutionStatus(
-  data: SuiTransactionResponse
-): ExecutionStatus {
-  return data.effects.status;
+  data: SuiTransactionResponse | SuiExecuteTransactionResponse
+): ExecutionStatus | undefined {
+  if ('effects' in data) {
+    return data.effects.status;
+  } else if ('EffectsCert' in data) {
+    return data.EffectsCert.effects.effects.status;
+  }
+  return undefined;
 }
 
 export function getExecutionStatusError(
   data: SuiTransactionResponse
 ): string | undefined {
-  return getExecutionStatus(data).error;
+  return getExecutionStatus(data)?.error;
 }
 
 export function getExecutionStatusGasSummary(
