@@ -295,7 +295,7 @@ where
         let mut attempted_certificates: HashSet<TransactionDigest> = HashSet::new();
 
         while let Some(target_cert) = missing_certificates.pop() {
-            let cert_digest = *cert.digest();
+            let cert_digest = *target_cert.digest();
 
             if processed_certificates.contains(&cert_digest) {
                 continue;
