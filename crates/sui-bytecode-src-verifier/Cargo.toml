@@ -16,12 +16,11 @@ sui-types = { path = "../sui-types" }
 sui-sdk = { path = "../../crates/sui-sdk" }
 sui-framework = { path = "../../crates/sui-framework" }
 
-move-symbol-pool = { git = "https://github.com/move-language/move", default-features = false, rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e" }
-
 move-binary-format.workspace = true
 move-bytecode-utils.workspace = true
 move-bytecode-verifier.workspace = true
 move-compiler.workspace = true
 move-core-types.workspace = true
 move-package.workspace = true
+move-symbol-pool.workspace = true
 workspace-hack = { path = "../workspace-hack"}
