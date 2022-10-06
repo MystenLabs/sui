@@ -15,6 +15,10 @@ use tokio::time::{sleep, Duration, Instant};
 use tracing::{debug, trace};
 
 use sui_macros::*;
+use test_utils::{
+    network::{init_cluster_builder_env_aware, start_a_fullnode},
+    transaction::{transfer_coin, wait_for_tx},
+};
 
 async fn make_fut(i: usize) -> usize {
     let count_dist = Uniform::from(1..5);
@@ -117,4 +121,20 @@ async fn test_hash_collections() {
     }
 
     debug!("final rng state: {}", OsRng.gen::<u32>());
+}
+
+// Test that starting up a network + fullnode, and sending one transaction through that network is
+// repeatable and deterministic.
+#[sim_test(check_determinism)]
+async fn test_net_determinism() {
+    let mut test_cluster = init_cluster_builder_env_aware().build().await.unwrap();
+    let context = &mut test_cluster.wallet;
+
+    let (_transferred_object, _, _, digest) = transfer_coin(context).await.unwrap();
+
+    sleep(Duration::from_millis(1000)).await;
+
+    let node = start_a_fullnode(&test_cluster.swarm, false).await.unwrap();
+
+    wait_for_tx(digest, node.state().clone()).await;
 }
