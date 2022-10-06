@@ -71,7 +71,7 @@ class YourWallet implements Wallet {
 
 ### Exposing accounts
 
-The last requirement of the wallet interface is to expose an `acccounts` interface. This should expose all of the accounts that a dapp has access to once it has connected. It can be empty prior to initiating a connection through the `standard:connect` feature.
+The last requirement of the wallet interface is to expose an `acccounts` interface. This should expose all of the accounts that a connected dapp has access to. It can be empty prior to initiating a connection through the `standard:connect` feature.
 
 The accounts can use the `ReadonlyWalletAccount` class to easily construct an account matching the required interface.
 
