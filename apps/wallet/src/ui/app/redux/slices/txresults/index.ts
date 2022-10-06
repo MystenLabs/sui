@@ -144,10 +144,9 @@ export const getTransactionsByAddress = createAsyncThunk<
                                 txGas: getTotalGasUsed(txEff),
                                 kind: txKind,
                                 // gasUsed: txEff?.gasUsed,
-                                callFunctionName: `Call (${moveCallTxn?.function?.replace(
-                                    /_/g,
-                                    ' '
-                                )})`,
+                                callFunctionName:
+                                    moveCallTxn?.function &&
+                                    moveCallTxn?.function?.replace(/_/g, ' '),
                                 from: res.data.sender,
                                 ...(txTransferObject || callObjectId
                                     ? {

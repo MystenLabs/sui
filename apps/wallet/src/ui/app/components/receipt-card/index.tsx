@@ -51,13 +51,8 @@ function ReceiptCard({ txDigest }: TxResponseProps) {
         TRUNCATE_MAX_CHAR - 1
     );
 
-    const callTitle =
-        txDigest.name && txDigest.url
-            ? 'Minted'
-            : txDigest?.callFunctionName || 'Call';
-
     const transferType =
-        txDigest.kind === 'Call'
+        txDigest?.kind === 'Call'
             ? 'Call'
             : txDigest.isSender
             ? 'Sent'
@@ -65,7 +60,14 @@ function ReceiptCard({ txDigest }: TxResponseProps) {
 
     const transferMeta = {
         Call: {
-            txName: callTitle,
+            txName:
+                txDigest.name && txDigest.url
+                    ? 'Minted'
+                    : `Call ${
+                          txDigest?.callFunctionName &&
+                          '(' + txDigest?.callFunctionName + ')'
+                      }`,
+
             transfer: txDigest.isSender ? 'To' : 'From',
             address: false,
             addressTruncate: false,
@@ -148,7 +150,7 @@ function ReceiptCard({ txDigest }: TxResponseProps) {
                                         ),
                                         balanceFormatOptions
                                     )}
-                                    <sup>{txDigest.coinSymbol}</sup>
+                                    <span>{txDigest.coinSymbol}</span>
                                 </div>
                             )}
                         </div>

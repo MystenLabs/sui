@@ -11,7 +11,10 @@ import Button from '_app/shared/button';
 import AddressInput from '_components/address-input';
 import Icon, { SuiIcons } from '_components/icon';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
-import { DEFAULT_GAS_BUDGET_FOR_TRANSFER } from '_redux/slices/sui-objects/Coin';
+import {
+    DEFAULT_GAS_BUDGET_FOR_TRANSFER,
+    GAS_SYMBOL,
+} from '_redux/slices/sui-objects/Coin';
 import { balanceFormatOptions } from '_shared/formatting';
 
 import type { FormValues } from '../';
@@ -48,7 +51,9 @@ function StepTwo({
         onClearRef.current();
     }, [amount, to]);
 
-    const totalAmount = parseFloat(amount) + DEFAULT_GAS_BUDGET_FOR_TRANSFER;
+    const totalAmount =
+        (GAS_SYMBOL === coinSymbol ? parseFloat(amount) : 0) +
+        DEFAULT_GAS_BUDGET_FOR_TRANSFER;
 
     const validAddressBtn = !isValid || to === '' || isSubmitting;
 
@@ -84,7 +89,7 @@ function StepTwo({
                         <div className={st.txFees}>
                             <div className={st.txInfoLabel}>Gas Fee</div>
                             <div className={st.walletInfoValue}>
-                                {DEFAULT_GAS_BUDGET_FOR_TRANSFER} {coinSymbol}
+                                {DEFAULT_GAS_BUDGET_FOR_TRANSFER} {GAS_SYMBOL}
                             </div>
                         </div>
 
@@ -95,7 +100,7 @@ function StepTwo({
                                     BigInt(totalAmount || 0),
                                     balanceFormatOptions
                                 )}{' '}
-                                {coinSymbol}
+                                {GAS_SYMBOL}
                             </div>
                         </div>
                     </div>

@@ -56,7 +56,7 @@ function TransactionCard({ txn }: { txn: TxResultState }) {
     const transferMeta = {
         Call: {
             // For NFT with name and image use Mint else use Call (Function Name)
-            txName: txn.name && txn.url ? 'Minted' : txn?.callFunctionName,
+            txName: txn.name && txn.url ? 'Minted' : 'Call',
             transfer: false,
             address: false,
             icon: SuiIcons.Buy,
@@ -101,6 +101,10 @@ function TransactionCard({ txn }: { txn: TxResultState }) {
         </div>
     ) : null;
 
+    const callFnName = txn?.callFunctionName ? (
+        <span className={st.callFnName}>({txn?.callFunctionName})</span>
+    ) : null;
+
     return (
         <Link
             to={`/receipt?${new URLSearchParams({
@@ -121,6 +125,7 @@ function TransactionCard({ txn }: { txn: TxResultState }) {
                             {txn.error
                                 ? 'Transaction failed'
                                 : transferMeta[transferType].txName}{' '}
+                            {callFnName}
                             {transferSuiTxn}
                         </div>
 
