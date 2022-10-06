@@ -67,7 +67,6 @@ pub struct BytecodeSourceVerifier<'a> {
 #[derive(PartialEq, Eq, Hash, Clone, Debug)]
 pub struct Dependency {
     pub symbol: String,
-    pub address: AccountAddress,
     pub module_bytes: BTreeMap<String, Vec<u8>>,
 }
 
@@ -171,7 +170,6 @@ impl<'a> BytecodeSourceVerifier<'a> {
                     addr,
                     Dependency {
                         symbol: symbol.to_string(),
-                        address: addr,
                         module_bytes: on_chain_package.module_map.clone(),
                     },
                 );
