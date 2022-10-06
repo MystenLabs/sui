@@ -407,7 +407,8 @@ impl SuiClientCommands {
                     .clone()
                     .compile_package(&package_path, &mut Vec::new())?;
 
-                let compiled_modules: Vec<Vec<u8>> = compiled_move_package_to_bytes(&compiled_package);
+                let compiled_modules: Vec<Vec<u8>> =
+                    compiled_move_package_to_bytes(&compiled_package);
 
                 // verify that all dependency packages have the correct on-chain bytecode
                 let verifier = BytecodeSourceVerifier::new(context.client.read_api(), false);
@@ -417,7 +418,10 @@ impl SuiClientCommands {
                 {
                     Ok(_vr) => println!("dependencies' on-chain bytecode successfully verified\n"),
                     Err(err) => {
-                        eprintln!("Error verifying dependencies' on-chain bytecode:\n{:?}", err);
+                        eprintln!(
+                            "Error verifying dependencies' on-chain bytecode:\n{:?}",
+                            err
+                        );
                         return Err(anyhow::Error::msg(err.to_string()));
                     }
                 };
