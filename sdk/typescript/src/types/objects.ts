@@ -98,8 +98,8 @@ export type SuiMoveAbilitySet = {
 export type SuiMoveNormalizedType =
   | string
   | SuiMoveNormalizedTypeParameterType
-  | { Reference: SuiMoveNormalizedStructType }
-  | { MutableReference: SuiMoveNormalizedStructType }
+  | { Reference: SuiMoveNormalizedType }
+  | { MutableReference: SuiMoveNormalizedType }
   | { Vector: SuiMoveNormalizedType }
   | SuiMoveNormalizedStructType;
 
@@ -112,7 +112,7 @@ export type SuiMoveNormalizedStructType = {
     address: string;
     module: string;
     name: string;
-    type_arguments: SuiMoveNormalizedTypeParameterType[];
+    type_arguments: SuiMoveNormalizedType[];
   };
 };
 
@@ -276,7 +276,7 @@ export function getMovePackageContent(
 
 export function extractMutableReference(
   normalizedType: SuiMoveNormalizedType
-): SuiMoveNormalizedStructType | undefined {
+): SuiMoveNormalizedType | undefined {
   return typeof normalizedType === 'object' &&
     'MutableReference' in normalizedType
     ? normalizedType.MutableReference
@@ -285,7 +285,7 @@ export function extractMutableReference(
 
 export function extractReference(
   normalizedType: SuiMoveNormalizedType
-): SuiMoveNormalizedStructType | undefined {
+): SuiMoveNormalizedType | undefined {
   return typeof normalizedType === 'object' && 'Reference' in normalizedType
     ? normalizedType.Reference
     : undefined;
@@ -298,9 +298,15 @@ export function extractStructTag(
     return normalizedType;
   }
 
-  return (
-    (extractReference(normalizedType) ||
-      extractMutableReference(normalizedType)) ??
-    undefined
-  );
+  const ref = extractReference(normalizedType);
+  const mutRef = extractMutableReference(normalizedType);
+
+  if (typeof ref === 'object' && 'Struct' in ref) {
+    return ref;
+  }
+
+  if (typeof mutRef === 'object' && 'Struct' in mutRef) {
+    return mutRef;
+  }
+  return undefined;
 }
