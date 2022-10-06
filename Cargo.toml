@@ -66,7 +66,7 @@ opt-level = 1
 typed-store = "0.1.0"
 typed-store-derive = "0.1.0"
 telemetry-subscribers = { version = "0.2.0", features = ["jaeger", "tokio-console"] }
-mysten-network = "0.1.0"
+mysten-network = "0.2.0"
 name-variant = "0.1.0"
 store = { version = "0.1.0", package = "typed-store" }
 
