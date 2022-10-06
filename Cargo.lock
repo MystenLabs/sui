@@ -8205,7 +8205,7 @@ dependencies = [
  "sui-sdk",
  "sui-types",
  "tokio",
- "workspace-hack 0.1.0",
+ "workspace-hack",
 ]
 
 [[package]]
