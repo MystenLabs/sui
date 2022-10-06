@@ -178,7 +178,7 @@ Sui requires the following additional tools on computer running Windows.
  * The [LLVM Compiler Infrastructure](https://releases.llvm.org/)
 
 >**Tip:** The installation progress might appear hanging if the `cmd.exe` window loses focus;
->press the `enter` key in the command prompt fix the issue.
+>press the Enter key in the command prompt fix the issue.
 
 >**Known Issue:** The `sui console` command does not work in PowerShell.
 
