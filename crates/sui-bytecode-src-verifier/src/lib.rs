@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{BTreeMap, HashMap},
     fmt::{Debug, Display},
     path::Path,
     str::FromStr,
@@ -23,7 +23,7 @@ use sui_types::{
 
 #[derive(Clone, Debug)]
 pub struct DependencyVerificationResult {
-    pub verified_dependencies: HashSet<Dependency>,
+    pub verified_dependencies: HashMap<AccountAddress, Dependency>,
 }
 
 #[derive(Debug)]
@@ -97,7 +97,7 @@ impl<'a> BytecodeSourceVerifier<'a> {
         let compiled_dep_map = Self::get_module_bytes_map(&compiled_package);
 
         let mut on_chain_module_count = 0usize;
-        let mut verified_deps: HashMap<AccountAddress, Dependency> = HashMap::new();
+        let mut verified_dependencies: HashMap<AccountAddress, Dependency> = HashMap::new();
 
         for (pkg_symbol, resolution_package) in resolution_graph.package_table {
             if pkg_symbol == compiled_package.compiled_package_info.package_name {
@@ -125,7 +125,7 @@ impl<'a> BytecodeSourceVerifier<'a> {
             for (symbol, addr) in resolution_package.resolution_table {
                 // package addresses may show up many times, but we only need to verify them once
                 // zero address is the package we're checking dependencies for
-                if verified_deps.contains_key(&addr) || addr.eq(&AccountAddress::ZERO) {
+                if verified_dependencies.contains_key(&addr) || addr.eq(&AccountAddress::ZERO) {
                     continue;
                 }
 
@@ -168,7 +168,7 @@ impl<'a> BytecodeSourceVerifier<'a> {
                 on_chain_module_count += on_chain_package.module_map.len();
 
                 let address = addr.clone();
-                verified_deps.insert(
+                verified_dependencies.insert(
                     address,
                     Dependency {
                         symbol: symbol.to_string(),
@@ -187,9 +187,6 @@ impl<'a> BytecodeSourceVerifier<'a> {
                 on_chain_module_count,
             ));
         }
-
-        let verified_dependencies: HashSet<Dependency> =
-            HashSet::from_iter(verified_deps.iter().map(|(_addr, dep)| dep.clone()));
 
         Ok(DependencyVerificationResult {
             verified_dependencies,
