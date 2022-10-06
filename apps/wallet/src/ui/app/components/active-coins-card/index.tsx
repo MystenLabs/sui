@@ -8,10 +8,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import Icon, { SuiIcons } from '_components/icon';
 import { useAppSelector } from '_hooks';
 import { accountAggregateBalancesSelector } from '_redux/slices/account';
-import {
-    GAS_TYPE_ARG,
-    SUPPORTED_COINS_LIST,
-} from '_redux/slices/sui-objects/Coin';
+import { GAS_TYPE_ARG, Coin } from '_redux/slices/sui-objects/Coin';
 import { balanceFormatOptions } from '_shared/formatting';
 
 import st from './ActiveCoinsCard.module.scss';
@@ -29,10 +26,30 @@ function ActiveCoinsCard({
     const intl = useIntl();
     const aggregateBalances = useAppSelector(accountAggregateBalancesSelector);
 
+    const allCoins = useMemo(
+        () =>
+            Object.keys(aggregateBalances).map((aType) => {
+                const name = Coin.getCoinSymbol(aType);
+                return {
+                    coinName: `${name} Coin`,
+                    coinSymbol: name,
+                    coinType: aType,
+                    //TODO: default coin icon switch to on chain metadata
+                    coinIconName:
+                        GAS_TYPE_ARG === aType
+                            ? SuiIcons.SuiLogoIcon
+                            : SuiIcons.Tokens,
+                    type: aType,
+                    balance: aggregateBalances[aType],
+                };
+            }),
+        [aggregateBalances]
+    );
+
     const coins = useMemo(() => {
-        return SUPPORTED_COINS_LIST.map((coin) => {
+        return allCoins.map((coin) => {
             const balance = intl.formatNumber(
-                BigInt(aggregateBalances[coin.coinType] || 0),
+                BigInt(coin.balance || 0),
                 balanceFormatOptions
             );
             return {
@@ -40,15 +57,15 @@ function ActiveCoinsCard({
                 balance,
             };
         });
-    }, [aggregateBalances, intl]);
+    }, [allCoins, intl]);
 
     const activeCoin = useMemo(() => {
         return coins.filter((coin) => coin.coinType === activeCoinType)[0];
     }, [activeCoinType, coins]);
 
-    const IconName = activeCoin.coinIconName;
+    const IconName = activeCoin?.coinIconName || SuiIcons.SuiLogoIcon;
 
-    const SelectedCoinCard = (
+    const SelectedCoinCard = activeCoin ? (
         <div className={st.selectCoin}>
             <Link
                 to={`/send/select?${new URLSearchParams({
@@ -60,7 +77,7 @@ function ActiveCoinsCard({
                     <Icon icon={IconName} />
                 </div>
                 <div className={st.coinLabel}>
-                    {activeCoin.coinName}{' '}
+                    {activeCoin?.coinName}{' '}
                     <span className={st.coinSymbol}>
                         {activeCoin.coinSymbol}
                     </span>
@@ -76,7 +93,7 @@ function ActiveCoinsCard({
                 </div>
             </div>
         </div>
-    );
+    ) : null;
 
     const navigate = useNavigate();
 
