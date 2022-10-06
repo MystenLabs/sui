@@ -103,7 +103,7 @@ impl<'a> BytecodeSourceVerifier<'a> {
             let local_pkg_bytes = match compiled_dep_map.get(&pkg_symbol) {
                 Some(bytes) => {
                     if self.verbose {
-                        println!("\nlocal package dependency {} : {} modules", pkg_symbol.to_string(), bytes.len());
+                        println!("\nlocal package dependency {} : {} modules", pkg_symbol, bytes.len());
                     }
                     bytes
                 }
@@ -111,7 +111,7 @@ impl<'a> BytecodeSourceVerifier<'a> {
                     // package we're verifying dependencies for won't be in dependency map, which is fine
                     if pkg_symbol != compiled_package.compiled_package_info.package_name {
                         return Err(DependencyVerificationError::LocalDependencyNotFound(
-                            pkg_symbol.clone(),
+                            pkg_symbol,
                             None,
                         ));
                     }
