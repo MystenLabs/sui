@@ -7,18 +7,11 @@ use config::{SharedCommittee, SharedWorkerCache, WorkerCache, WorkerIndex};
 use network::P2pNetwork;
 use primary::PrimaryWorkerMessage;
 use std::{collections::BTreeMap, sync::Arc};
-use store::Store;
+
 use tap::TapOptional;
 use tokio::{sync::watch, task::JoinHandle};
 use tracing::warn;
-use types::{
-    metered_channel::{Receiver, Sender},
-    Batch, BatchDigest, ReconfigureNotification, WorkerPrimaryError, WorkerPrimaryMessage,
-};
-
-#[cfg(test)]
-#[path = "tests/synchronizer_tests.rs"]
-pub mod synchronizer_tests;
+use types::{metered_channel::Receiver, ReconfigureNotification};
 
 // The `Synchronizer` is responsible to keep the worker in sync with the others.
 pub struct Synchronizer {
@@ -26,16 +19,12 @@ pub struct Synchronizer {
     committee: SharedCommittee,
     /// The worker information cache.
     worker_cache: SharedWorkerCache,
-    // The persistent storage.
-    store: Store<BatchDigest, Batch>,
     /// Input channel to receive the commands from the primary.
     rx_message: Receiver<PrimaryWorkerMessage>,
     /// A network sender to send requests to the other workers.
     network: P2pNetwork,
     /// Send reconfiguration update to other tasks.
     tx_reconfigure: watch::Sender<ReconfigureNotification>,
-    /// Output channel to send out the batch requests.
-    tx_primary: Sender<WorkerPrimaryMessage>,
 }
 
 impl Synchronizer {
@@ -43,21 +32,17 @@ impl Synchronizer {
     pub fn spawn(
         committee: SharedCommittee,
         worker_cache: SharedWorkerCache,
-        store: Store<BatchDigest, Batch>,
         rx_message: Receiver<PrimaryWorkerMessage>,
         tx_reconfigure: watch::Sender<ReconfigureNotification>,
-        tx_primary: Sender<WorkerPrimaryMessage>,
         network: P2pNetwork,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
             Self {
                 committee,
                 worker_cache,
-                store,
                 rx_message,
                 network,
                 tx_reconfigure,
-                tx_primary,
             }
             .run()
             .await;
@@ -134,23 +119,8 @@ impl Synchronizer {
                             return;
                         }
                     }
-                    PrimaryWorkerMessage::RequestBatch(digest) => {
-                        self.handle_request_batch(digest).await;
-                    },
                 },
             }
         }
-    }
-
-    async fn handle_request_batch(&mut self, digest: BatchDigest) {
-        let message = match self.store.read(digest).await {
-            Ok(Some(batch)) => WorkerPrimaryMessage::RequestedBatch(digest, batch),
-            _ => WorkerPrimaryMessage::Error(WorkerPrimaryError::RequestedBatchNotFound(digest)),
-        };
-
-        self.tx_primary
-            .send(message)
-            .await
-            .expect("Failed to send message to primary channel");
     }
 }

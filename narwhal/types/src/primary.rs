@@ -716,8 +716,6 @@ pub enum ReconfigureNotification {
 pub enum PrimaryWorkerMessage {
     /// Reconfigure the worker.
     Reconfigure(ReconfigureNotification),
-    /// The primary requests a batch from the worker
-    RequestBatch(BatchDigest),
 }
 
 /// Used by the primary to request that the worker sync the target missing batches.
@@ -736,8 +734,8 @@ pub struct WorkerDeleteBatchesMessage {
 #[derive(Clone, Default, Debug, Eq, PartialEq)]
 pub struct BatchMessage {
     // TODO: revisit including the id here [see #188]
-    pub id: BatchDigest,
-    pub transactions: Batch,
+    pub digest: BatchDigest,
+    pub batch: Batch,
 }
 
 pub type BlockRemoverResult<T> = Result<T, BlockRemoverError>;
@@ -767,7 +765,7 @@ pub type BlockResult<T> = Result<T, BlockError>;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct BlockError {
-    pub id: CertificateDigest,
+    pub digest: CertificateDigest,
     pub error: BlockErrorKind,
 }
 
@@ -779,7 +777,11 @@ impl<T> From<BlockError> for BlockResult<T> {
 
 impl fmt::Display for BlockError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "block id: {}, error type: {}", self.id, self.error)
+        write!(
+            f,
+            "block digest: {}, error type: {}",
+            self.digest, self.error
+        )
     }
 }
 
@@ -796,18 +798,8 @@ pub enum WorkerPrimaryMessage {
     OurBatch(BatchDigest, WorkerId),
     /// The worker indicates it received a batch's digest from another authority.
     OthersBatch(BatchDigest, WorkerId),
-    /// The worker sends a requested batch
-    RequestedBatch(BatchDigest, Batch),
-    /// An error has been returned by worker
-    Error(WorkerPrimaryError),
     /// Reconfiguration message sent by the executor (usually upon epoch change).
     Reconfigure(ReconfigureNotification),
-}
-
-#[derive(Debug, Serialize, Deserialize, thiserror::Error, Clone, Eq, PartialEq)]
-pub enum WorkerPrimaryError {
-    #[error("Batch with id {0} has not been found")]
-    RequestedBatchNotFound(BatchDigest),
 }
 
 #[derive(Clone, Serialize, Deserialize, Eq, PartialEq, Debug)]

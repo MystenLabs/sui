@@ -5,7 +5,7 @@ use self::{configuration::NarwhalConfiguration, validator::NarwhalValidator};
 use crate::{
     block_synchronizer::handler::Handler,
     grpc_server::{metrics::EndpointMetrics, proposer::NarwhalProposer},
-    BlockCommand, BlockRemover,
+    BlockRemover, BlockWaiter,
 };
 use config::SharedCommittee;
 use consensus::dag::Dag;
@@ -15,7 +15,7 @@ use multiaddr::Multiaddr;
 use std::{sync::Arc, time::Duration};
 use tokio::task::JoinHandle;
 use tracing::{error, info};
-use types::{metered_channel::Sender, ConfigurationServer, ProposerServer, ValidatorServer};
+use types::{ConfigurationServer, ProposerServer, ValidatorServer};
 
 mod configuration;
 pub mod metrics;
@@ -26,7 +26,7 @@ pub struct ConsensusAPIGrpc<SynchronizerHandler: Handler + Send + Sync + 'static
     name: PublicKey,
     // Multiaddr of gRPC server
     socket_address: Multiaddr,
-    tx_get_block_commands: Sender<BlockCommand>,
+    block_waiter: BlockWaiter<SynchronizerHandler>,
     block_remover: BlockRemover,
     get_collections_timeout: Duration,
     remove_collections_timeout: Duration,
@@ -41,7 +41,7 @@ impl<SynchronizerHandler: Handler + Send + Sync + 'static> ConsensusAPIGrpc<Sync
     pub fn spawn(
         name: PublicKey,
         socket_address: Multiaddr,
-        tx_get_block_commands: Sender<BlockCommand>,
+        block_waiter: BlockWaiter<SynchronizerHandler>,
         block_remover: BlockRemover,
         get_collections_timeout: Duration,
         remove_collections_timeout: Duration,
@@ -54,7 +54,7 @@ impl<SynchronizerHandler: Handler + Send + Sync + 'static> ConsensusAPIGrpc<Sync
             let _ = Self {
                 name,
                 socket_address,
-                tx_get_block_commands,
+                block_waiter,
                 block_remover,
                 get_collections_timeout,
                 remove_collections_timeout,
@@ -71,7 +71,7 @@ impl<SynchronizerHandler: Handler + Send + Sync + 'static> ConsensusAPIGrpc<Sync
 
     async fn run(self) -> Result<(), Box<dyn std::error::Error>> {
         let narwhal_validator = NarwhalValidator::new(
-            self.tx_get_block_commands,
+            self.block_waiter,
             self.block_remover,
             self.get_collections_timeout,
             self.remove_collections_timeout,

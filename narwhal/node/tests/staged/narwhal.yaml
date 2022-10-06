@@ -71,10 +71,6 @@ PrimaryWorkerMessage:
       Reconfigure:
         NEWTYPE:
           TYPENAME: ReconfigureNotification
-    1:
-      RequestBatch:
-        NEWTYPE:
-          TYPENAME: BatchDigest
 ReconfigureNotification:
   ENUM:
     0:
@@ -99,12 +95,6 @@ WorkerInfo:
         TYPENAME: Ed25519PublicKey
     - transactions: BYTES
     - worker_address: BYTES
-WorkerPrimaryError:
-  ENUM:
-    0:
-      RequestedBatchNotFound:
-        NEWTYPE:
-          TYPENAME: BatchDigest
 WorkerPrimaryMessage:
   ENUM:
     0:
@@ -118,15 +108,6 @@ WorkerPrimaryMessage:
           - TYPENAME: BatchDigest
           - U32
     2:
-      RequestedBatch:
-        TUPLE:
-          - TYPENAME: BatchDigest
-          - TYPENAME: Batch
-    3:
-      Error:
-        NEWTYPE:
-          TYPENAME: WorkerPrimaryError
-    4:
       Reconfigure:
         NEWTYPE:
           TYPENAME: ReconfigureNotification
@@ -136,4 +117,3 @@ WorkerSynchronizeMessage:
         SEQ:
           TYPENAME: BatchDigest
     - target: STR
-

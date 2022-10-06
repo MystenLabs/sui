@@ -68,7 +68,7 @@ impl From<TransactionProto> for Transaction {
 impl From<BlockError> for CollectionError {
     fn from(error: BlockError) -> Self {
         CollectionError {
-            id: Some(error.id.into()),
+            id: Some(error.digest.into()),
             error: CollectionErrorType::from(error.error).into(),
         }
     }
