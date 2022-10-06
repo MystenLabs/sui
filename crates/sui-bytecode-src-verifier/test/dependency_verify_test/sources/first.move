@@ -1,3 +1,6 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 // code from the Move package tutorial: https://docs.sui.io/build/move/write-package
 module dependency_verify_test::first {
     use sui::object::{Self, UID};
