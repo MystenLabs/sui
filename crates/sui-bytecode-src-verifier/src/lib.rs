@@ -232,6 +232,8 @@ impl<'a> BytecodeSourceVerifier<'a> {
         };
 
         // fetch the Sui object at the address specified for the package in the local resolution table
+        // if future packages with a large set of dependency packages prove too slow to verify,
+        // batched object fetching should be added to the ReadApi & used here
         let obj_read = match self.rpc_client.get_object(obj_id).await {
             Ok(raw) => raw,
             Err(err) => {
