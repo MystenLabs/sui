@@ -98,6 +98,7 @@ move-transactional-test-runner = { git = "https://github.com/move-language/move"
 move-ir-types = { git = "https://github.com/move-language/move", rev = "1ffd0a3e7bdc4bba7dafb8c814279e750113d030" }
 move-prover = { git = "https://github.com/move-language/move", rev = "1ffd0a3e7bdc4bba7dafb8c814279e750113d030" }
 move-prover-boogie-backend = { git = "https://github.com/move-language/move", rev = "1ffd0a3e7bdc4bba7dafb8c814279e750113d030" }
+move-symbol-pool = { git = "https://github.com/move-language/move", rev = "1ffd0a3e7bdc4bba7dafb8c814279e750113d030" }
 
 fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "7766b1ef23f6bed6da9ff9e50dc2a0d1957d344d" }
 
