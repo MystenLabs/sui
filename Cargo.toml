@@ -87,3 +87,4 @@ move-transactional-test-runner = { git = "https://github.com/move-language/move"
 move-ir-types = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e" }
 move-prover = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e" }
 move-prover-boogie-backend = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e" }
+move-symbol-pool = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e" }
