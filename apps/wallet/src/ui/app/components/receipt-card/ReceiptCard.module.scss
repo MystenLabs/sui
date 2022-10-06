@@ -1,7 +1,7 @@
 @use '_utils';
 @use '_values/colors';
 
-.walletaddress {
+.wallet-address {
     a {
         color: colors.$sui-dark-blue;
         @include utils.typography('mono-type');
@@ -137,7 +137,7 @@
         }
     }
 
-    .walletaddress {
+    .wallet-address {
         a {
             color: colors.$sui-dark-blue;
             @include utils.typography('mono-type');
@@ -224,7 +224,7 @@
     }
 }
 
-.amount-transfered {
+.amount-transferred {
     display: flex;
     gap: 10px;
     justify-content: space-between;

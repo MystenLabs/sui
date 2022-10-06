@@ -17,7 +17,7 @@ import st from './ReceiptCard.module.scss';
 
 type TxResponseProps = {
     txDigest: TxResultState;
-    tranferType?: 'nft' | 'coin' | null;
+    transferType?: 'nft' | 'coin' | null;
 };
 
 const TRUNCATE_MAX_LENGTH = 8;
@@ -32,6 +32,7 @@ function ReceiptCard({ txDigest }: TxResponseProps) {
         TRUNCATE_MAX_LENGTH,
         TRUNCATE_PREFIX_LENGTH
     );
+
     const fromAddrStr = useMiddleEllipsis(
         txDigest.from || '',
         TRUNCATE_MAX_LENGTH,
@@ -43,11 +44,17 @@ function ReceiptCard({ txDigest }: TxResponseProps) {
         TRUNCATE_MAX_CHAR,
         TRUNCATE_MAX_CHAR - 1
     );
-    const truncatedNftDiscription = useMiddleEllipsis(
+
+    const truncatedNftDescription = useMiddleEllipsis(
         txDigest?.description || '',
         TRUNCATE_MAX_CHAR,
         TRUNCATE_MAX_CHAR - 1
     );
+
+    const callTitle =
+        txDigest.name && txDigest.url
+            ? 'Minted'
+            : txDigest?.callFunctionName || 'Call';
 
     const transferType =
         txDigest.kind === 'Call'
@@ -58,8 +65,8 @@ function ReceiptCard({ txDigest }: TxResponseProps) {
 
     const transferMeta = {
         Call: {
-            txName: 'Minted',
-            transfer: false,
+            txName: callTitle,
+            transfer: txDigest.isSender ? 'To' : 'From',
             address: false,
             addressTruncate: false,
             failedMsg: txDigest?.error || 'Failed',
@@ -105,7 +112,7 @@ function ReceiptCard({ txDigest }: TxResponseProps) {
             />
             <div className={st.nftfields}>
                 <div className={st.nftName}>{truncatedNftName}</div>
-                <div className={st.nftType}>{truncatedNftDiscription}</div>
+                <div className={st.nftType}>{truncatedNftDescription}</div>
             </div>
         </div>
     );
@@ -125,19 +132,23 @@ function ReceiptCard({ txDigest }: TxResponseProps) {
 
                 <div className={st.responseCard}>
                     <div className={st.status}>
-                        <div className={st.amountTransfered}>
+                        <div className={st.amountTransferred}>
                             <div className={st.label}>
                                 {txDigest.status === 'success'
                                     ? transferMeta[transferType].txName
                                     : transferMeta[transferType].failedMsg}
                             </div>
-                            {txDigest.amount && (
+                            {(txDigest.amount || txDigest.balance) && (
                                 <div className={st.amount}>
                                     {intl.formatNumber(
-                                        BigInt(txDigest.amount || 0),
+                                        BigInt(
+                                            txDigest.amount ||
+                                                txDigest.balance ||
+                                                0
+                                        ),
                                         balanceFormatOptions
                                     )}
-                                    <sup>{GAS_SYMBOL}</sup>
+                                    <sup>{txDigest.coinSymbol}</sup>
                                 </div>
                             )}
                         </div>
@@ -150,7 +161,7 @@ function ReceiptCard({ txDigest }: TxResponseProps) {
                             <div className={st.label}>
                                 {transferMeta[transferType].transfer}
                             </div>
-                            <div className={cl(st.value, st.walletaddress)}>
+                            <div className={cl(st.value, st.walletAddress)}>
                                 <ExplorerLink
                                     type={ExplorerLinkType.address}
                                     address={

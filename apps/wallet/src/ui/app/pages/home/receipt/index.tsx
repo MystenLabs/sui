@@ -22,7 +22,7 @@ function ReceiptPage() {
     // get tx results from url params
     const txDigest = searchParams.get('txdigest');
 
-    const tranferType = searchParams.get('transfer') as 'nft' | 'coin';
+    const transferType = searchParams.get('transfer') as 'nft' | 'coin';
 
     const txResults: TxResultState[] = useAppSelector(
         ({ txresults }) => txresults.latestTx
@@ -41,8 +41,8 @@ function ReceiptPage() {
     }, [txResults, txDigest]);
 
     //TODO: redo the CTA links
-    const ctaLinks = tranferType === 'nft' ? '/nfts' : '/';
-    const linkTo = tranferType ? ctaLinks : '/transactions';
+    const ctaLinks = transferType === 'nft' ? '/nfts' : '/';
+    const linkTo = transferType ? ctaLinks : '/transactions';
 
     const navigate = useNavigate();
     const closeReceipt = useCallback(() => {
@@ -53,11 +53,14 @@ function ReceiptPage() {
         return <Navigate to={linkTo} replace={true} />;
     }
 
+    const callMeta =
+        txnItem?.name && txnItem?.url ? 'Minted Successfully!' : 'Move Call';
+
     //TODO : add more transfer types and messages
     const transfersTxt = {
         Call: {
-            sender: 'Minted Successfully!',
-            receiver: '',
+            sender: callMeta || 'Call',
+            receiver: callMeta || 'Call',
         },
         TransferObject: {
             sender: 'Successfully Sent!',
@@ -75,7 +78,11 @@ function ReceiptPage() {
         : '';
 
     const transferStatus =
-        txnItem?.status === 'success' ? headerCopy : 'Transaction Failed';
+        txnItem?.status === 'success'
+            ? headerCopy
+            : txnItem?.status
+            ? 'Transaction Failed'
+            : '';
 
     return (
         <Overlay
