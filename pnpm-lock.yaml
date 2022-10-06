@@ -137,6 +137,7 @@ importers:
   apps/wallet:
     specifiers:
       '@floating-ui/react-dom-interactions': ^0.10.1
+      '@growthbook/growthbook': ^0.18.1
       '@metamask/browser-passworder': ^3.0.0
       '@mysten/sui.js': workspace:*
       '@reduxjs/toolkit': ^1.8.3
@@ -206,6 +207,7 @@ importers:
       yup: ^0.32.11
     dependencies:
       '@floating-ui/react-dom-interactions': 0.10.1_7ey2zzynotv32rpkwno45fsx4e
+      '@growthbook/growthbook': 0.18.1
       '@metamask/browser-passworder': 3.0.0
       '@mysten/sui.js': link:../../sdk/typescript
       '@reduxjs/toolkit': 1.8.5_kkwg4cbsojnjnupd3btipussee
@@ -3643,6 +3645,11 @@ packages:
       graphql: 15.8.0
       tslib: 2.2.0
     dev: true
+
+  /@growthbook/growthbook/0.18.1:
+    resolution: {integrity: sha512-hNNh515lleAUzTch+ezYYVHBteYTIAF1Xxh6+dLJk+BjbhPXUo6X9qNcryIN1b/IMLVnO1ZfE5zbAzVGEQai2w==}
+    engines: {node: '>=10'}
+    dev: false
 
   /@hapi/hoek/9.3.0:
     resolution: {integrity: sha512-/c6rf4UJlmHlC9b5BaNvzAcFv7HZ2QHaV0D4/HNlBdvFnvQq8RI4kYdhyPCl7Xj+oWvTWQ8ujhqS53LIgAe6KQ==}
@@ -19891,7 +19898,7 @@ packages:
       schema-utils: 3.1.1
       serialize-javascript: 6.0.0
       terser: 5.14.2
-      webpack: 5.74.0_webpack-cli@4.10.0
+      webpack: 5.74.0
     dev: true
 
   /terser/4.8.1:

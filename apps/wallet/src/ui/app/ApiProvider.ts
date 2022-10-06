@@ -3,6 +3,7 @@
 
 import { RawSigner, JsonRpcProvider } from '@mysten/sui.js';
 
+import type FeatureGating from './experimentation/feature-gating';
 import type { Ed25519Keypair } from '@mysten/sui.js';
 
 export enum API_ENV {
@@ -62,22 +63,18 @@ function getDefaultAPI(env: API_ENV) {
 }
 
 export const DEFAULT_API_ENV = getDefaultApiEnv();
-export const DEFAULT_API_ENDPOINT = getDefaultAPI(DEFAULT_API_ENV);
 
 export default class ApiProvider {
-    private _apiProvider: JsonRpcProvider;
-    private _apiFullNodeProvider: JsonRpcProvider;
+    private _apiProvider?: JsonRpcProvider;
+    private _apiFullNodeProvider?: JsonRpcProvider;
     private _signer: RawSigner | null = null;
 
-    constructor() {
-        this._apiProvider = new JsonRpcProvider(DEFAULT_API_ENDPOINT.gateway);
-        this._apiFullNodeProvider = new JsonRpcProvider(
-            DEFAULT_API_ENDPOINT.fullNode
-        );
-    }
+    constructor(private _featureGating: FeatureGating) {}
 
-    public setNewJsonRpcProvider(apiEnv: API_ENV) {
+    public setNewJsonRpcProvider(apiEnv: API_ENV = DEFAULT_API_ENV) {
         this._apiProvider = new JsonRpcProvider(getDefaultAPI(apiEnv).gateway);
+        // TODO: based on _featureGating.isOn('deprecate-gateway') value,
+        // construct the transaction using local serializer or remote serializer
         this._apiFullNodeProvider = new JsonRpcProvider(
             getDefaultAPI(apiEnv).fullNode
         );
@@ -85,13 +82,21 @@ export default class ApiProvider {
     }
 
     public get instance() {
+        if (!this._apiFullNodeProvider) {
+            this.setNewJsonRpcProvider();
+        }
         return {
-            gateway: this._apiProvider,
-            fullNode: this._apiFullNodeProvider,
+            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+            gateway: this._apiProvider!,
+            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+            fullNode: this._apiFullNodeProvider!,
         };
     }
 
     public getSignerInstance(keypair: Ed25519Keypair): RawSigner {
+        if (!this._apiFullNodeProvider) {
+            this.setNewJsonRpcProvider();
+        }
         if (!this._signer) {
             this._signer = new RawSigner(keypair, this._apiProvider);
         }
