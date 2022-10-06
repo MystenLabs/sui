@@ -7,8 +7,6 @@ import {
     isSuiMoveObject,
 } from '@mysten/sui.js';
 
-import { SuiIcons } from '_font-icons/output/sui-icons';
-
 import type {
     ObjectId,
     SuiObject,
@@ -31,18 +29,6 @@ export const GAS_SYMBOL = 'SUI';
 export const DEFAULT_NFT_TRANSFER_GAS_FEE = 450;
 export const SUI_SYSTEM_STATE_OBJECT_ID =
     '0x0000000000000000000000000000000000000005';
-
-// List of all supported coins
-// TODO: Extend this list as needed
-// Supported coins icons should be included
-export const SUPPORTED_COINS_LIST = [
-    {
-        coinName: 'SUI Coin',
-        coinSymbol: GAS_SYMBOL,
-        coinType: GAS_TYPE_ARG,
-        coinIconName: SuiIcons.SuiLogoIcon,
-    },
-];
 
 // TODO use sdk
 export class Coin {

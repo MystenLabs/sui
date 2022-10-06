@@ -61,14 +61,14 @@ function ReceiptCard({ txDigest }: TxResponseProps) {
     const transferMeta = {
         Call: {
             txName:
-                txDigest.name && txDigest.url
+                txDigest?.name && txDigest?.url
                     ? 'Minted'
                     : `Call ${
                           txDigest?.callFunctionName &&
                           '(' + txDigest?.callFunctionName + ')'
                       }`,
 
-            transfer: txDigest.isSender ? 'To' : 'From',
+            transfer: txDigest?.isSender ? 'To' : 'From',
             address: false,
             addressTruncate: false,
             failedMsg: txDigest?.error || 'Failed',
