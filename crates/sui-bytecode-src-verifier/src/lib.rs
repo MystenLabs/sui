@@ -149,7 +149,7 @@ impl<'a> BytecodeSourceVerifier<'a> {
                         return Err(DependencyVerificationError::ModuleBytecodeMismatch(
                             pkg_symbol.to_string(),
                             on_chain_module_symbol.to_string(),
-                            addr.clone(),
+                            addr,
                             local_bytes.clone(),
                             on_chain_bytes.clone(),
                         ));
@@ -167,12 +167,11 @@ impl<'a> BytecodeSourceVerifier<'a> {
 
                 on_chain_module_count += on_chain_package.module_map.len();
 
-                let address = addr.clone();
                 verified_dependencies.insert(
-                    address,
+                    addr,
                     Dependency {
                         symbol: symbol.to_string(),
-                        address,
+                        address: addr,
                         module_bytes: on_chain_package.module_map.clone(),
                     },
                 );
@@ -205,7 +204,7 @@ impl<'a> BytecodeSourceVerifier<'a> {
                 // in the future, this probably needs to specify the compiler version instead of None
                 let bytes = unit_src.unit.serialize(None);
 
-                match map.get_mut(&symbol) {
+                match map.get_mut(symbol) {
                     Some(existing_modules) => {
                         existing_modules.insert(name, bytes);
                     }
@@ -249,10 +248,10 @@ impl<'a> BytecodeSourceVerifier<'a> {
         match obj.data.clone() {
             SuiRawData::Package(pkg) => Ok(pkg),
             SuiRawData::MoveObject(move_obj) => {
-                return Err(DependencyVerificationError::ObjectFoundWhenPackageExpected(
+                Err(DependencyVerificationError::ObjectFoundWhenPackageExpected(
                     obj_id,
-                    move_obj.clone(),
-                ));
+                    move_obj,
+                ))
             }
         }
     }
