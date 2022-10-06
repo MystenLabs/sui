@@ -1,8 +1,10 @@
 [package]
 name = "sui-bytecode-src-verifier"
 version = "0.1.0"
-edition = "2021"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
 publish = false
+edition = "2021"
 
 [lib]
 path = "src/lib.rs"
