@@ -120,6 +120,51 @@ pub fn legacy_length_cost() -> InternalGas {
     InternalGas::new(98)
 }
 
+/// Given a `path` and a `build_config`, build the package in that path and return the compiled modules as base64.
+/// This is useful for when publishing via JSON
+pub fn build_move_package_to_base64(
+    path: &Path,
+    build_config: BuildConfig,
+) -> Result<Vec<String>, SuiError> {
+    build_move_package_to_bytes(path, build_config)
+        .map(|mods| mods.iter().map(Base64::encode).collect::<Vec<_>>())
+}
+
+/// Given a `path` and a `build_config`, build the package in that path and return the compiled modules as Vec<Vec<u8>>.
+/// This is useful for when publishing
+pub fn build_move_package_to_bytes(
+    path: &Path,
+    build_config: BuildConfig,
+) -> Result<Vec<Vec<u8>>, SuiError> {
+    build_move_package(path, build_config).map(|mods| {
+        mods.iter()
+            .map(|m| {
+                let mut bytes = Vec::new();
+                m.serialize(&mut bytes).unwrap();
+                bytes
+            })
+            .collect::<Vec<_>>()
+    })
+}
+
+/// `build_move_package_to_bytes()`, for when you already have a CompiledPackage
+pub fn compiled_move_package_to_bytes(
+    package: &CompiledPackage,
+) -> Vec<Vec<u8>> {
+    package.root_modules()
+        .map(|m| m.unit.serialize(None))
+        .collect()
+}
+
+pub fn build_and_verify_package(
+    path: &Path,
+    build_config: BuildConfig,
+) -> SuiResult<Vec<CompiledModule>> {
+    let modules = build_move_package(path, build_config)?;
+    verify_modules(&modules)?;
+    Ok(modules)
+}
+
 /// This function returns a result of UnitTestResult. The outer result indicates whether it
 /// successfully started running the test, and the inner result indicatests whether all tests pass.
 pub fn run_move_unit_tests(

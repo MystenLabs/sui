@@ -22,6 +22,7 @@ use move_package::BuildConfig as MoveBuildConfig;
 use serde::Serialize;
 use serde_json::json;
 use sui_bytecode_src_verifier::BytecodeSourceVerifier;
+use sui_framework::compiled_move_package_to_bytes;
 use tracing::info;
 
 use sui_framework::build_move_package;
