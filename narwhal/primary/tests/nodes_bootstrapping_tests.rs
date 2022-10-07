@@ -134,12 +134,9 @@ async fn test_second_node_restart() {
 #[tokio::test]
 /// We are testing the loss of liveness of a healthy cluster. While 3f+1 nodes run
 /// we are shutting down f+1 nodes. Then we are bringing the f+1 nodes back again
-/// but we are not expecting now the cluster to be able to make progress. We expect
-/// the restarted nodes to not be able to make new proposals and effectively make
-/// the system stall. This is due to the issue that is described here
-/// https://github.com/MystenLabs/narwhal/issues/664 .
-/// Once this is fixed we would expect this test to fail as all the nodes should be
-/// able to propose from where they left of at last round.
+/// We expect the restarted nodes to be able to make new proposals, and all the nodes
+/// should be able to propose from where they left of at last round, and the rounds should
+/// all advance.
 async fn test_loss_of_liveness_without_recovery() {
     // Enabled debug tracing so we can easily observe the
     // nodes logs.
@@ -180,9 +177,12 @@ async fn test_loss_of_liveness_without_recovery() {
 
     // wait and fetch the latest commit round
     tokio::time::sleep(node_advance_delay).await;
-    let rounds_3 = cluster.assert_progress(2, 0).await;
+    let rounds_3 = cluster.assert_progress(4, 0).await;
 
-    assert_eq!(rounds_2, rounds_3);
+    assert!(rounds_3.get(&0) > rounds_2.get(&0));
+    assert!(rounds_3.get(&1) > rounds_2.get(&1));
+    assert_eq!(rounds_3.get(&0), rounds_3.get(&2));
+    assert_eq!(rounds_3.get(&0), rounds_3.get(&3));
 }
 
 #[ignore]
