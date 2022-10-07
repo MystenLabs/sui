@@ -618,12 +618,19 @@ impl CheckpointStore {
         // When receiving the fragments, we have verified that all certs are valid.
         // However, we did not verify that all transactions have not been checkpointed.
         // Here we filter out any transaction that has already been checkpointed.
+        self.filter_already_checkpointed_transactions(candidate_transactions.iter())
+    }
+
+    pub fn filter_already_checkpointed_transactions<'a>(
+        &mut self,
+        transactions: impl Iterator<Item = &'a ExecutionDigests> + Clone,
+    ) -> SuiResult<BTreeSet<ExecutionDigests>> {
         let new_transactions: BTreeSet<_> = self
             .tables
             .transactions_to_checkpoint
-            .multi_get(candidate_transactions.iter())?
+            .multi_get(transactions.clone())?
             .into_iter()
-            .zip(candidate_transactions.iter())
+            .zip(transactions)
             .filter_map(
                 |(opt_seq, tx)| {
                     if opt_seq.is_none() {

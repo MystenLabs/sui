@@ -67,7 +67,15 @@ where
                 "finish_epoch_change called at the wrong checkpoint",
             );
 
-            for (tx_digest, _) in checkpoints.tables.extra_transactions.iter() {
+            let pending_tx: BTreeSet<_> = checkpoints
+                .tables
+                .extra_transactions
+                .iter()
+                .map(|(digest, _)| digest)
+                .collect();
+            let extra_tx =
+                checkpoints.filter_already_checkpointed_transactions(pending_tx.iter())?;
+            for tx_digest in extra_tx {
                 warn!(?epoch, tx_digest=?tx_digest.transaction, "Reverting local transaction effects");
                 self.state
                     .database
