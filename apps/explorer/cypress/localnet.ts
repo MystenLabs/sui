@@ -23,9 +23,15 @@ export async function createLocalnetTasks() {
                 throw new Error('missing keypair');
             }
             const provider = new JsonRpcProvider('http://localhost:9000');
-            const signer = new RawSigner(keypair, provider, new LocalTxnDataSerializer(provider))
+            const signer = new RawSigner(
+                keypair,
+                provider,
+                new LocalTxnDataSerializer(provider)
+            );
 
-            const [gasPayment] = await provider.getGasObjectsOwnedByAddress(keypair.getPublicKey().toSuiAddress());
+            const [gasPayment] = await provider.getGasObjectsOwnedByAddress(
+                keypair.getPublicKey().toSuiAddress()
+            );
 
             const tx = await signer.executeMoveCall({
                 packageObjectId: '0x2',
