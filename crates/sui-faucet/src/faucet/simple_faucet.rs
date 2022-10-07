@@ -7,14 +7,14 @@ use async_trait::async_trait;
 use prometheus::Registry;
 use sui_sdk::crypto::AccountKeystore;
 
-// HashSet is in fact used but linter does not think so
-#[allow(unused_imports)]
+#[cfg(test)]
 use std::collections::HashSet;
 
 use sui::client_commands::{SuiClientCommands, WalletContext};
 use sui_json_rpc_types::{
-    SuiExecutionStatus, SuiTransactionKind, SuiTransactionResponse, SuiTransferSui,
+    SuiExecutionStatus, SuiObjectRead, SuiTransactionKind, SuiTransactionResponse, SuiTransferSui,
 };
+use sui_types::object::Owner;
 use sui_types::{
     base_types::{ObjectID, SuiAddress, TransactionDigest},
     gas_coin::GasCoin,
@@ -39,6 +39,7 @@ pub struct SimpleFaucet {
 }
 
 const DEFAULT_GAS_BUDGET: u64 = 1000;
+const TRANSFER_SUI_GAS: u64 = 100;
 
 impl SimpleFaucet {
     pub async fn new(
@@ -87,7 +88,11 @@ impl SimpleFaucet {
         })
     }
 
-    async fn select_coins(&self, number_of_coins: usize) -> Vec<ObjectID> {
+    async fn select_coins(
+        &self,
+        number_of_coins: usize,
+        transfer_amount: u64,
+    ) -> anyhow::Result<Vec<ObjectID>> {
         assert!(number_of_coins > 0);
         // If the gas candidate queue is exhausted, the request will be
         // suspended indefinitely until a producer puts in more candidate
@@ -95,16 +100,65 @@ impl SimpleFaucet {
         // lock acquisition as well.
         let mut consumer = self.consumer.lock().await;
         let mut coins = Vec::with_capacity(number_of_coins);
+        let mut coins_to_immediately_recycle = Vec::new();
         while let Some(coin) = consumer.recv().await {
-            // TODO: for now we assume each SUI object is enough to cover the split
-            // but this may not be true, if we run the faucet for really really long time or
-            // due to some other unexpected issues.
-            coins.push(coin);
-            if coins.len() == number_of_coins {
-                break;
+            let gas_coin = self.get_gas_coin(coin).await?;
+            if let Some(gas_coin) = gas_coin {
+                if gas_coin.value() >= transfer_amount + TRANSFER_SUI_GAS {
+                    coins.push(coin);
+                    if coins.len() == number_of_coins {
+                        break;
+                    }
+                } else {
+                    // If amount is not big enough, we still put it back to the queue
+                    coins_to_immediately_recycle.push(coin);
+                }
+            } else {
+                // Invalid gas, do not put it back to the queue.
             }
         }
-        coins
+        if !coins_to_immediately_recycle.is_empty() {
+            // Immediately release consumer lock to prevent deadlock
+            drop(consumer);
+            // Put coins that are not selected (e.g. balance not enough) back to the queue
+            let producer = self.producer.lock().await;
+            for coin in coins_to_immediately_recycle {
+                if let Err(e) = producer.send(coin).await {
+                    panic!("Failed to put coin {:?} back to queue: {:?}", coin, e);
+                }
+            }
+            drop(producer);
+        }
+
+        Ok(coins)
+    }
+
+    /// Check if the gas coin is still valid. A valid gas coin is
+    /// 1. existent presently
+    /// 2. is a GasCoin
+    /// 3. still belongs to facuet account
+    /// If the coin is valid, return Ok(Some(GasCoin))
+    /// If the coin invalid, return Ok(None)
+    async fn get_gas_coin(&self, coin_id: ObjectID) -> anyhow::Result<Option<GasCoin>> {
+        let gas_obj = self
+            .wallet
+            .client
+            .read_api()
+            .get_parsed_object(coin_id)
+            .await?;
+        Ok(match gas_obj {
+            SuiObjectRead::NotExists(_) | SuiObjectRead::Deleted(_) => None,
+            SuiObjectRead::Exists(obj) => match &obj.owner {
+                Owner::AddressOwner(owner_addr) => {
+                    if owner_addr == &self.active_address {
+                        GasCoin::try_from(&obj).ok()
+                    } else {
+                        None
+                    }
+                }
+                _ => None,
+            },
+        })
     }
 
     async fn transfer_gases(
@@ -114,7 +168,13 @@ impl SimpleFaucet {
         uuid: Uuid,
     ) -> Result<Vec<(TransactionDigest, ObjectID, u64, ObjectID)>, FaucetError> {
         let number_of_coins = amounts.len();
-        let coins = self.select_coins(number_of_coins).await;
+        // We assume the amounts are the same
+        let coins = self
+            .select_coins(number_of_coins, amounts[0])
+            .await
+            .map_err(|err| {
+                FaucetError::Internal(format!("Failed to select coins: {:?}", err.to_string()))
+            })?;
         debug!(recipient=?to, ?uuid, "Planning to use coins: {:?}", coins);
 
         let futures: Vec<_> = coins
@@ -295,6 +355,11 @@ impl SimpleFaucet {
         }
         candidates
     }
+
+    #[cfg(test)]
+    pub fn wallet_mut(&mut self) -> &mut WalletContext {
+        &mut self.wallet
+    }
 }
 
 #[async_trait]
@@ -346,8 +411,6 @@ impl Faucet for SimpleFaucet {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
-
     use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
     use test_utils::network::setup_network_and_wallet;
 
@@ -365,16 +428,8 @@ mod tests {
     #[tokio::test]
     async fn test_init_gas_queue() {
         let (_network, mut context, address) = setup_network_and_wallet().await.unwrap();
-        let results = SuiClientCommands::Gas {
-            address: Some(address),
-        }
-        .execute(&mut context)
-        .await
-        .unwrap();
-        let gases = match results {
-            SuiClientCommandResult::Gas(gases) => gases,
-            other => panic!("Expect SuiClientCommandResult::Gas, but got {:?}", other),
-        };
+        let gases = get_current_gases(address, &mut context).await;
+
         let gases = HashSet::from_iter(gases.into_iter().map(|gas| *gas.id()));
         let prom_registry = prometheus::Registry::new();
         let mut faucet = SimpleFaucet::new(context, &prom_registry).await.unwrap();
@@ -390,16 +445,8 @@ mod tests {
     #[tokio::test]
     async fn test_transfer_state() {
         let (_network, mut context, address) = setup_network_and_wallet().await.unwrap();
-        let results = SuiClientCommands::Gas {
-            address: Some(address),
-        }
-        .execute(&mut context)
-        .await
-        .unwrap();
-        let gases = match results {
-            SuiClientCommandResult::Gas(gases) => gases,
-            other => panic!("Expect SuiClientCommandResult::Gas, but got {:?}", other),
-        };
+        let gases = get_current_gases(address, &mut context).await;
+
         let gases = HashSet::from_iter(gases.into_iter().map(|gas| *gas.id()));
 
         let prom_registry = prometheus::Registry::new();
@@ -419,7 +466,125 @@ mod tests {
         .map(|res| res.unwrap())
         .collect::<Vec<_>>();
 
-        // After all transfer reuqests settle, we still have the original candidates gas in queue.
+        // After all transfer requests settle, we still have the original candidates gas in queue.
+        let candidates = faucet.drain_gas_queue(gases.len()).await;
+        assert_eq!(
+            candidates, gases,
+            "gases: {:?}, candidates: {:?}",
+            gases, candidates
+        );
+    }
+
+    #[tokio::test]
+    async fn test_discard_invalid_gas() {
+        let (_network, mut context, address) = setup_network_and_wallet().await.unwrap();
+        let mut gases = get_current_gases(address, &mut context).await;
+
+        let bad_gas = gases.swap_remove(0);
+        let gases = HashSet::from_iter(gases.into_iter().map(|gas| *gas.id()));
+
+        let prom_registry = prometheus::Registry::new();
+        let mut faucet = SimpleFaucet::new(context, &prom_registry).await.unwrap();
+
+        // Now we transfer one gas out
+        let res = SuiClientCommands::TransferSui {
+            to: SuiAddress::random_for_testing_only(),
+            sui_coin_object_id: *bad_gas.id(),
+            amount: None,
+            gas_budget: 50000,
+        }
+        .execute(faucet.wallet_mut())
+        .await
+        .unwrap();
+
+        if let SuiClientCommandResult::TransferSui(_tx_cert, effects) = res {
+            assert!(matches!(effects.status, SuiExecutionStatus::Success));
+        } else {
+            panic!("transfer command did not return SuiClientCommandResult::TransferSui");
+        };
+
+        let number_of_coins = gases.len();
+        let amounts = &vec![1; number_of_coins];
+        // We traverse the the list twice, which must trigger the transferred gas to be kicked out
+        let _ = futures::future::join_all([0..2].iter().map(|_| {
+            faucet.send(
+                Uuid::new_v4(),
+                SuiAddress::random_for_testing_only(),
+                amounts,
+            )
+        }))
+        .await
+        .into_iter()
+        .map(|res| res.unwrap())
+        .collect::<Vec<_>>();
+
+        // Verify that the bad gas is no longer in the queue.
+        // Note `gases` does not contain the bad gas.
+        let candidates = faucet.drain_gas_queue(gases.len()).await;
+        assert_eq!(
+            candidates, gases,
+            "gases: {:?}, candidates: {:?}",
+            gases, candidates
+        );
+    }
+
+    #[tokio::test]
+    async fn test_recycle_smaller_amount_gas() {
+        let (_network, mut context, address) = setup_network_and_wallet().await.unwrap();
+        let gases = get_current_gases(address, &mut context).await;
+
+        // split out a coin that has a very small balance such that
+        // this coin will be not used later on.
+        let tiny_value = 1;
+        let res = SuiClientCommands::SplitCoin {
+            coin_id: *gases[0].id(),
+            amounts: Some(vec![tiny_value + TRANSFER_SUI_GAS]),
+            gas_budget: 50000,
+            gas: None,
+            count: 0,
+        }
+        .execute(&mut context)
+        .await
+        .unwrap();
+
+        let tiny_coin_id = if let SuiClientCommandResult::SplitCoin(resp) = res {
+            assert!(matches!(resp.effects.status, SuiExecutionStatus::Success));
+            resp.effects.created[0].reference.object_id
+        } else {
+            panic!("transfer command did not return SuiClientCommandResult::TransferSui");
+        };
+
+        // Get the latest list of gas
+        let gases = get_current_gases(address, &mut context).await;
+        let tiny_amount = gases
+            .iter()
+            .find(|gas| gas.id() == &tiny_coin_id)
+            .unwrap()
+            .value();
+        assert_eq!(tiny_amount, tiny_value + TRANSFER_SUI_GAS);
+
+        let gases = HashSet::from_iter(gases.into_iter().map(|gas| *gas.id()));
+
+        let prom_registry = prometheus::Registry::new();
+        let mut faucet = SimpleFaucet::new(context, &prom_registry).await.unwrap();
+
+        let number_of_coins = gases.len();
+        // Ask for a value higher than tiny coin + TRANSFER_SUI_GAS
+        let amounts = &vec![tiny_value + 1; number_of_coins - 1];
+        // We traverse the the list twice, which must trigger the tiny gas to be examined but not used
+        let _ = futures::future::join_all([0..2].iter().map(|_| {
+            faucet.send(
+                Uuid::new_v4(),
+                SuiAddress::random_for_testing_only(),
+                amounts,
+            )
+        }))
+        .await
+        .into_iter()
+        .map(|res| res.unwrap())
+        .collect::<Vec<_>>();
+
+        // Verify that the tiny gas is still in the queue.
         let candidates = faucet.drain_gas_queue(gases.len()).await;
         assert_eq!(
             candidates, gases,
@@ -439,5 +604,19 @@ mod tests {
         let mut actual_amounts: Vec<u64> = sent.iter().map(|c| c.amount).collect();
         actual_amounts.sort_unstable();
         assert_eq!(actual_amounts, amounts);
+    }
+
+    async fn get_current_gases(address: SuiAddress, context: &mut WalletContext) -> Vec<GasCoin> {
+        // Get the latest list of gas
+        let results = SuiClientCommands::Gas {
+            address: Some(address),
+        }
+        .execute(context)
+        .await
+        .unwrap();
+        match results {
+            SuiClientCommandResult::Gas(gases) => gases,
+            other => panic!("Expect SuiClientCommandResult::Gas, but got {:?}", other),
+        }
     }
 }
