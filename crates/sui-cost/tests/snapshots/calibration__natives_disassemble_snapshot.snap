@@ -61,6 +61,54 @@ B3:
 B4:
 	15: Ret
 }
+entry public test_calibrate_id_address_from_bytes() {
+L0:	bytes: vector<u8>
+L1:	trials: u64
+B0:
+	0: LdConst[0](U64: [1, 0, 0, 0, 0, 0, 0, 0])
+	1: StLoc[1](trials: u64)
+B1:
+	2: CopyLoc[1](trials: u64)
+	3: LdU64(0)
+	4: Gt
+	5: BrTrue(7)
+B2:
+	6: Branch(14)
+B3:
+	7: LdConst[1](Vector(U8): [20, 58, 152, 93, 167, 79, 226, 37, 178, 4, 92, 23, 45, 107, 211, 144, 189, 133, 95, 8, 110])
+	8: Call[19](calibrate_address_from_bytes(vector<u8>))
+	9: MoveLoc[1](trials: u64)
+	10: LdU64(1)
+	11: Sub
+	12: StLoc[1](trials: u64)
+	13: Branch(2)
+B4:
+	14: Ret
+}
+entry public test_calibrate_id_address_from_bytes__baseline() {
+L0:	bytes: vector<u8>
+L1:	trials: u64
+B0:
+	0: LdConst[0](U64: [1, 0, 0, 0, 0, 0, 0, 0])
+	1: StLoc[1](trials: u64)
+B1:
+	2: CopyLoc[1](trials: u64)
+	3: LdU64(0)
+	4: Gt
+	5: BrTrue(7)
+B2:
+	6: Branch(14)
+B3:
+	7: LdConst[1](Vector(U8): [20, 58, 152, 93, 167, 79, 226, 37, 178, 4, 92, 23, 45, 107, 211, 144, 189, 133, 95, 8, 110])
+	8: Call[20](calibrate_address_from_bytes_nop(vector<u8>))
+	9: MoveLoc[1](trials: u64)
+	10: LdU64(1)
+	11: Sub
+	12: StLoc[1](trials: u64)
+	13: Branch(2)
+B4:
+	14: Ret
+}
 entry public test_calibrate_id_borrow_uid() {
 L0:	%#1: Scenario
 L1:	id: UID
@@ -71,10 +119,10 @@ L5:	trials: u64
 B0:
 	0: LdConst[0](U64: [1, 0, 0, 0, 0, 0, 0, 0])
 	1: StLoc[5](trials: u64)
-	2: LdConst[1](Address: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+	2: LdConst[2](Address: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
 	3: StLoc[4](sender: address)
 	4: ImmBorrowLoc[4](sender: address)
-	5: Call[19](begin(&address): Scenario)
+	5: Call[21](begin(&address): Scenario)
 	6: StLoc[0](%#1: Scenario)
 	7: MutBorrowLoc[0](%#1: Scenario)
 	8: StLoc[3](scenario: &mut Scenario)
@@ -87,8 +135,8 @@ B2:
 	13: Branch(31)
 B3:
 	14: CopyLoc[3](scenario: &mut Scenario)
-	15: Call[20](ctx(&mut Scenario): &mut TxContext)
-	16: Call[21](new(&mut TxContext): UID)
+	15: Call[22](ctx(&mut Scenario): &mut TxContext)
+	16: Call[23](new(&mut TxContext): UID)
 	17: Pack[1](ObjectWithID)
 	18: StLoc[2](obj: ObjectWithID)
 	19: ImmBorrowLoc[2](obj: ObjectWithID)
@@ -97,7 +145,7 @@ B3:
 	22: Unpack[1](ObjectWithID)
 	23: StLoc[1](id: UID)
 	24: MoveLoc[1](id: UID)
-	25: Call[23](delete(UID))
+	25: Call[25](delete(UID))
 	26: MoveLoc[5](trials: u64)
 	27: LdU64(1)
 	28: Sub
@@ -118,10 +166,10 @@ L5:	trials: u64
 B0:
 	0: LdConst[0](U64: [1, 0, 0, 0, 0, 0, 0, 0])
 	1: StLoc[5](trials: u64)
-	2: LdConst[1](Address: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+	2: LdConst[2](Address: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
 	3: StLoc[4](sender: address)
 	4: ImmBorrowLoc[4](sender: address)
-	5: Call[19](begin(&address): Scenario)
+	5: Call[21](begin(&address): Scenario)
 	6: StLoc[0](%#1: Scenario)
 	7: MutBorrowLoc[0](%#1: Scenario)
 	8: StLoc[3](scenario: &mut Scenario)
@@ -134,8 +182,8 @@ B2:
 	13: Branch(33)
 B3:
 	14: CopyLoc[3](scenario: &mut Scenario)
-	15: Call[20](ctx(&mut Scenario): &mut TxContext)
-	16: Call[21](new(&mut TxContext): UID)
+	15: Call[22](ctx(&mut Scenario): &mut TxContext)
+	16: Call[23](new(&mut TxContext): UID)
 	17: Pack[1](ObjectWithID)
 	18: StLoc[2](obj: ObjectWithID)
 	19: ImmBorrowLoc[2](obj: ObjectWithID)
@@ -146,7 +194,7 @@ B3:
 	24: Unpack[1](ObjectWithID)
 	25: StLoc[1](id: UID)
 	26: MoveLoc[1](id: UID)
-	27: Call[23](delete(UID))
+	27: Call[25](delete(UID))
 	28: MoveLoc[5](trials: u64)
 	29: LdU64(1)
 	30: Sub
@@ -156,54 +204,6 @@ B4:
 	33: MoveLoc[3](scenario: &mut Scenario)
 	34: Pop
 	35: Ret
-}
-entry public test_calibrate_id_bytes_to_address() {
-L0:	bytes: vector<u8>
-L1:	trials: u64
-B0:
-	0: LdConst[0](U64: [1, 0, 0, 0, 0, 0, 0, 0])
-	1: StLoc[1](trials: u64)
-B1:
-	2: CopyLoc[1](trials: u64)
-	3: LdU64(0)
-	4: Gt
-	5: BrTrue(7)
-B2:
-	6: Branch(14)
-B3:
-	7: LdConst[2](Vector(U8): [20, 58, 152, 93, 167, 79, 226, 37, 178, 4, 92, 23, 45, 107, 211, 144, 189, 133, 95, 8, 110])
-	8: Call[24](calibrate_bytes_to_address(vector<u8>))
-	9: MoveLoc[1](trials: u64)
-	10: LdU64(1)
-	11: Sub
-	12: StLoc[1](trials: u64)
-	13: Branch(2)
-B4:
-	14: Ret
-}
-entry public test_calibrate_id_bytes_to_address__baseline() {
-L0:	bytes: vector<u8>
-L1:	trials: u64
-B0:
-	0: LdConst[0](U64: [1, 0, 0, 0, 0, 0, 0, 0])
-	1: StLoc[1](trials: u64)
-B1:
-	2: CopyLoc[1](trials: u64)
-	3: LdU64(0)
-	4: Gt
-	5: BrTrue(7)
-B2:
-	6: Branch(14)
-B3:
-	7: LdConst[2](Vector(U8): [20, 58, 152, 93, 167, 79, 226, 37, 178, 4, 92, 23, 45, 107, 211, 144, 189, 133, 95, 8, 110])
-	8: Call[25](calibrate_bytes_to_address_nop(vector<u8>))
-	9: MoveLoc[1](trials: u64)
-	10: LdU64(1)
-	11: Sub
-	12: StLoc[1](trials: u64)
-	13: Branch(2)
-B4:
-	14: Ret
 }
 entry public test_calibrate_pop() {
 L0:	_k: bool
@@ -368,7 +368,7 @@ B2:
 B3:
 	7: LdFalse
 	8: Pack[0](ObjectSimple)
-	9: LdConst[1](Address: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+	9: LdConst[2](Address: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
 	10: LdFalse
 	11: Call[7](calibrate_transfer_internal<ObjectSimple>(ObjectSimple, address, bool))
 	12: MoveLoc[3](trials: u64)
@@ -397,7 +397,7 @@ B2:
 B3:
 	7: LdFalse
 	8: Pack[0](ObjectSimple)
-	9: LdConst[1](Address: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+	9: LdConst[2](Address: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
 	10: LdFalse
 	11: Call[8](calibrate_transfer_internal_nop<ObjectSimple>(ObjectSimple, address, bool))
 	12: MoveLoc[3](trials: u64)

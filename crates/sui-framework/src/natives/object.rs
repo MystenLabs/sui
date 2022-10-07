@@ -14,7 +14,7 @@ use move_vm_types::{
 use smallvec::smallvec;
 use std::collections::VecDeque;
 
-pub fn bytes_to_address(
+pub fn address_from_bytes(
     _context: &mut NativeContext,
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,

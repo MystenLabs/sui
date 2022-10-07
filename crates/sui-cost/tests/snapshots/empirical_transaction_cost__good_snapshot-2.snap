@@ -9,8 +9,8 @@ expression: common_costs_estimate
     "storage_rebate": 0
   },
   "Publish": {
-    "computation_cost": 4972,
-    "storage_cost": 5806,
+    "computation_cost": 4973,
+    "storage_cost": 5807,
     "storage_rebate": 0
   },
   "SharedCounterAssertValue": {
@@ -30,7 +30,7 @@ expression: common_costs_estimate
   },
   "SplitCoin": {
     "computation_cost": 4962,
-    "storage_cost": 5838,
+    "storage_cost": 5839,
     "storage_rebate": 0
   },
   "TransferPortionSuiCoin": {

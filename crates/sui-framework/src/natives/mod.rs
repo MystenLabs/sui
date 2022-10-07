@@ -47,8 +47,8 @@ pub fn all_natives(
         ("event", "emit", make_native!(event::emit)),
         (
             "object",
-            "bytes_to_address",
-            make_native!(object::bytes_to_address),
+            "address_from_bytes",
+            make_native!(object::address_from_bytes),
         ),
         ("object", "delete_impl", make_native!(object::delete_impl)),
         ("object", "borrow_uid", make_native!(object::borrow_uid)),

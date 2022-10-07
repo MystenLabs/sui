@@ -39,6 +39,11 @@ module sui::object {
         id: ID,
     }
 
+    // === address ===
+
+    /// Convert raw bytes into an address
+    public native fun address_from_bytes(bytes: vector<u8>): address;
+
     // === id ===
 
     /// Get the raw bytes of a `ID`
@@ -142,16 +147,13 @@ module sui::object {
     // generic is used to pass type information to the runtime
     native fun delete_impl<UID>(id: UID);
 
-    /// Convert raw bytes into an address
-    native fun bytes_to_address(bytes: vector<u8>): address;
-
     // Cost calibration functions
     #[test_only]
-    public fun calibrate_bytes_to_address(bytes: vector<u8>) {
-        bytes_to_address(bytes);
+    public fun calibrate_address_from_bytes(bytes: vector<u8>) {
+        address_from_bytes(bytes);
     }
     #[test_only]
-    public fun calibrate_bytes_to_address_nop(bytes: vector<u8>) {
+    public fun calibrate_address_from_bytes_nop(bytes: vector<u8>) {
         let _ = bytes;
     }
 
