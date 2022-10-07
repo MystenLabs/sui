@@ -7128,6 +7128,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde_repr"
+version = "0.1.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1fe39d9fbb0ebf5eb2c7cb7e2a47e4f462fad1379f1166b8ae49ad9eae89a7ca"
+dependencies = [
+ "proc-macro2 1.0.43",
+ "quote 1.0.21",
+ "syn 1.0.99",
+]
+
+[[package]]
 name = "serde_test"
 version = "1.0.145"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8514,6 +8525,7 @@ dependencies = [
  "serde-name",
  "serde_bytes",
  "serde_json",
+ "serde_repr",
  "serde_with 1.14.0",
  "sha2 0.9.9",
  "sha3 0.10.5",
@@ -10682,6 +10694,7 @@ dependencies = [
  "serde_derive",
  "serde_derive_internals",
  "serde_json",
+ "serde_repr",
  "serde_test",
  "serde_urlencoded",
  "serde_with 1.14.0",
