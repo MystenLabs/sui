@@ -21,14 +21,16 @@ use tokio::{
 use types::{
     error::DagError,
     metered_channel::{Receiver, Sender},
+
     Batch, BatchDigest, ReconfigureNotification, Transaction, WorkerOurBatchMessage,
+
+    PrimaryResponse, TxResponse,
+
 };
 
 #[cfg(test)]
 #[path = "tests/batch_maker_tests.rs"]
 pub mod batch_maker_tests;
-
-pub type TxResponse = tokio::sync::oneshot::Sender<BatchDigest>;
 
 /// Assemble clients transactions into batches.
 pub struct BatchMaker {
@@ -54,8 +56,7 @@ pub struct BatchMaker {
     /// The batch store to store our own batches.
     store: Store<BatchDigest, Batch>,
     // Output channel to send out batches' digests.
-    tx_digest: Sender<WorkerOurBatchMessage>,
-
+    tx_digest: Sender<(WorkerOurBatchMessage, PrimaryResponse)>,
 }
 
 impl BatchMaker {
@@ -70,7 +71,7 @@ impl BatchMaker {
         tx_message: Sender<(Batch, Option<tokio::sync::oneshot::Sender<()>>)>,
         node_metrics: Arc<WorkerMetrics>,
         store: Store<BatchDigest, Batch>,
-        tx_digest: Sender<WorkerOurBatchMessage>,
+        tx_digest: Sender<(WorkerOurBatchMessage, PrimaryResponse)>,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
             Self {
@@ -224,7 +225,7 @@ impl BatchMaker {
         // Note: the code below waits on the WAN to send messages to all others, the store
         // to write and confirm the write, and then the primary to respond to being notified
         // of a batch. While all this is going on the other batches are not being created and
-        // processed leading to an under utimization of resources.
+        // processed leading to an under utilization of resources.
 
         // Send the batch through the deliver channel for further processing.
         let (notify_done, done_sending) = tokio::sync::oneshot::channel();
@@ -256,10 +257,25 @@ impl BatchMaker {
         let _ = done_sending.await;
 
         // Finally send to primary
-        let message = WorkerOurBatchMessage { digest, worker_id: self.id, metadata  };
-        if self.tx_digest.send(message).await.is_err() {
+        let (primary_response, batch_done) = tokio::sync::oneshot::channel();
+        let message = WorkerOurBatchMessage { digest, worker_id: self.id, metadata };
+        if self
+            .tx_digest
+            .send((message, Some(primary_response)))
+            .await
+            .is_err()
+        {
             tracing::debug!("{}", DagError::ShuttingDown);
         };
+
+        // Wait for a primary response
+        if batch_done.await.is_err() {
+            // If there is an error it means the channel closed,
+            // and therefore we drop all response handers since we
+            // cannot ensure the primary has actually signaled the
+            // batch will eventually be sent.
+            return;
+        }
 
         // We now signal back to the transaction sender that the transaction is in a
         // batch and also the digest of the batch.
