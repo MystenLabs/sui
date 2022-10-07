@@ -10,7 +10,7 @@ use std::{collections::BTreeMap, sync::Arc};
 use store::Store;
 use tap::TapOptional;
 use tokio::{sync::watch, task::JoinHandle};
-use tracing::{error, warn};
+use tracing::warn;
 use types::{
     metered_channel::{Receiver, Sender},
     Batch, BatchDigest, ReconfigureNotification, WorkerPrimaryError, WorkerPrimaryMessage,
@@ -136,9 +136,6 @@ impl Synchronizer {
                     PrimaryWorkerMessage::RequestBatch(digest) => {
                         self.handle_request_batch(digest).await;
                     },
-                    PrimaryWorkerMessage::DeleteBatches(digests) => {
-                        self.handle_delete_batches(digests).await;
-                    }
                 },
             }
         }
@@ -148,23 +145,6 @@ impl Synchronizer {
         let message = match self.store.read(digest).await {
             Ok(Some(batch)) => WorkerPrimaryMessage::RequestedBatch(digest, batch),
             _ => WorkerPrimaryMessage::Error(WorkerPrimaryError::RequestedBatchNotFound(digest)),
-        };
-
-        self.tx_primary
-            .send(message)
-            .await
-            .expect("Failed to send message to primary channel");
-    }
-
-    async fn handle_delete_batches(&mut self, digests: Vec<BatchDigest>) {
-        let message = match self.store.remove_all(digests.clone()).await {
-            Ok(_) => WorkerPrimaryMessage::DeletedBatches(digests),
-            Err(err) => {
-                error!("{err}");
-                WorkerPrimaryMessage::Error(WorkerPrimaryError::ErrorWhileDeletingBatches(
-                    digests.clone(),
-                ))
-            }
         };
 
         self.tx_primary

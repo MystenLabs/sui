@@ -154,3 +154,45 @@ async fn synchronize_when_batch_exists() {
         .unwrap();
     responder_handle.await.unwrap();
 }
+
+#[tokio::test]
+async fn delete_batches() {
+    telemetry_subscribers::init_for_testing();
+
+    let (tx_synchronizer, _rx_synchronizer) = test_utils::test_channel!(1);
+    let (tx_primary, _rx_primary) = test_utils::test_channel!(1);
+    let (tx_batch_processor, _rx_batch_processor) = test_utils::test_channel!(1);
+
+    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let worker_cache = fixture.shared_worker_cache();
+    let name = fixture.authorities().next().unwrap().public_key();
+    let id = 0;
+
+    // Create a new test store.
+    let store = test_utils::open_batch_store();
+    let batch = test_utils::batch();
+    let digest = batch.digest();
+    store.write(digest, batch.clone()).await;
+
+    // Send a delete request.
+    let handler = PrimaryReceiverHandler {
+        name,
+        id,
+        worker_cache,
+        store: store.clone(),
+        request_batches_timeout: Duration::from_secs(999),
+        request_batches_retry_nodes: 3, // Not used in this test.
+        tx_synchronizer,
+        tx_primary,
+        tx_batch_processor,
+    };
+    let message = WorkerDeleteBatchesMessage {
+        digests: vec![digest],
+    };
+    handler
+        .delete_batches(anemo::Request::new(message))
+        .await
+        .unwrap();
+
+    assert!(store.read(digest).await.unwrap().is_none());
+}
