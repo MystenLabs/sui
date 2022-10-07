@@ -14,6 +14,7 @@ import { setTransactionRequests } from '_redux/slices/transaction-requests';
 
 import type { SuiAddress, SuiTransactionResponse } from '@mysten/sui.js';
 import type { Message } from '_messages';
+import type { KeyringPayload } from '_payloads/keyring';
 import type {
     GetPermissionRequests,
     PermissionResponse,
@@ -99,6 +100,19 @@ export class BackgroundClient {
         await lastValueFrom(
             this.sendMessage(
                 createMessage<DisconnectApp>({ type: 'disconnect-app', origin })
+            ).pipe(take(1))
+        );
+    }
+
+    public async createMnemonic(password: string) {
+        return await lastValueFrom(
+            this.sendMessage(
+                createMessage<KeyringPayload<'createMnemonic'>>({
+                    type: 'keyring',
+                    method: 'createMnemonic',
+                    args: password,
+                    return: undefined,
+                })
             ).pipe(take(1))
         );
     }

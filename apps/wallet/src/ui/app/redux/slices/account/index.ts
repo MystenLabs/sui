@@ -8,13 +8,15 @@ import {
 } from '@reduxjs/toolkit';
 import Browser from 'webextension-polyfill';
 
+import { isErrorPayload } from '_payloads';
+import { isKeyringPayload } from '_payloads/keyring';
 import { suiObjectsAdapterSelectors } from '_redux/slices/sui-objects';
 import { Coin } from '_redux/slices/sui-objects/Coin';
-import { generateMnemonic } from '_src/shared/utils/bip39';
 
 import type { SuiAddress, SuiMoveObject } from '@mysten/sui.js';
-import type { PayloadAction } from '@reduxjs/toolkit';
+import type { PayloadAction, Reducer } from '@reduxjs/toolkit';
 import type { RootState } from '_redux/RootReducer';
+import type { AppThunkConfig } from '_store/thunk-extras';
 
 export const loadAccountFromStorage = createAsyncThunk(
     'account/loadAccount',
@@ -24,10 +26,31 @@ export const loadAccountFromStorage = createAsyncThunk(
     }
 );
 
-export const createMnemonic = createAsyncThunk(
+export const createMnemonic = createAsyncThunk<
+    string,
+    {
+        existingMnemonic?: string;
+        password?: string;
+    },
+    AppThunkConfig
+>(
     'account/createMnemonic',
-    async (existingMnemonic?: string): Promise<string> => {
-        const mnemonic = existingMnemonic || generateMnemonic();
+    async ({ existingMnemonic, password }, { extra: { background } }) => {
+        let mnemonic = existingMnemonic;
+        if (!mnemonic) {
+            const { payload } = await background.createMnemonic(password || '');
+            if (isKeyringPayload<'createMnemonic'>(payload)) {
+                if (!payload.return) {
+                    throw new Error('Empty mnemonic in payload');
+                }
+                mnemonic = payload.return;
+            } else if (isErrorPayload(payload)) {
+                throw new Error(payload.message);
+            } else {
+                throw new Error('Unknown payload');
+            }
+        }
+        // TODO: store it unencrypted until everything switches to using the encrypted one (#encrypt-wallet)
         await Browser.storage.local.set({ mnemonic });
         return mnemonic;
     }
@@ -89,7 +112,8 @@ const accountSlice = createSlice({
 
 export const { setMnemonic, setAddress } = accountSlice.actions;
 
-export default accountSlice.reducer;
+const reducer: Reducer<typeof initialState> = accountSlice.reducer;
+export default reducer;
 
 export const activeAccountSelector = ({ account }: RootState) =>
     account.address;

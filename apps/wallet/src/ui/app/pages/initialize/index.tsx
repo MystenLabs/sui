@@ -12,13 +12,9 @@ import st from './InitializePage.module.scss';
 const InitializePage = () => {
     const checkingInitialized = useInitializedGuard(false);
     return (
-        <PageLayout forceFullscreen={true}>
+        <PageLayout forceFullscreen={true} className={st.container}>
             <Loading loading={checkingInitialized}>
-                <div className={st.container}>
-                    <div className={st.content}>
-                        <Outlet />
-                    </div>
-                </div>
+                <Outlet />
             </Loading>
         </PageLayout>
     );

@@ -1,25 +1,87 @@
 @use '_values/colors';
+@use '_values/sizing';
 @use '_utils';
+@use 'sass:color';
+
+.content {
+    $color: color.change(colors.$sui-blue, $alpha: 0.1);
+
+    display: flex;
+    flex-flow: column nowrap;
+    align-items: center;
+    padding: 40px 30px;
+    background: $color;
+    border: 1px solid $color;
+    border-radius: 20px;
+    max-width: sizing.$popup-width;
+    max-height: sizing.$popup-height;
+    flex: 1;
+}
+
+.caption {
+    text-transform: uppercase;
+    color: colors.$gray-75;
+    margin: 0;
+    margin-bottom: 5px;
+
+    @include utils.typography('Primary/CAPTION-SB');
+}
+
+.header-title {
+    color: colors.$gray-90;
+    text-transform: capitalize;
+    margin: 0;
+    margin-bottom: 30px;
+    text-align: center;
+
+    @include utils.typography('Primary/Heading1-B');
+}
 
 .desc {
     color: colors.$gray-80;
     font-size: 16px;
     line-height: 21px;
     font-weight: 500;
-    margin-bottom: 16px;
     text-align: left;
+}
+
+.label {
+    display: flex;
+    flex-flow: column nowrap;
+    gap: 10px;
+
+    & + & {
+        margin-top: 30px;
+    }
+}
+
+.label-text {
+    color: colors.$gray-85;
+
+    @include utils.typography('ParagraphPrimary/P1-SB');
+}
+
+.label-text,
+.info {
+    padding-left: 10px;
+}
+
+.info {
+    color: colors.$gray-75;
+
+    @include utils.typography('ParagraphPrimary/P2-M');
 }
 
 .terms {
     display: flex;
     align-items: center;
-    margin-bottom: 8px;
+    margin: 20px 0;
     color: colors.$gray-75;
-    font-size: 13px;
     gap: 5px;
     position: relative;
-    line-height: 150%;
     cursor: pointer;
+
+    @include utils.typography('Primary/BodySmall-M');
 
     > input {
         margin: 0 8px 0 0;
@@ -70,33 +132,26 @@
 
     a {
         text-decoration: none;
-        color: #1f6493;
+        color: colors.$sui-dark-blue;
     }
 }
 
-.header-title {
-    text-align: left;
-    margin-bottom: 20px;
-    color: colors.$gray-100;
-    font-size: 30px;
-    font-weight: 700;
-    line-height: 36px;
+.next {
+    margin-left: 10px;
+    font-weight: 500;
+    font-size: 12px;
 }
 
-.content {
+.match-parent {
     display: flex;
-    gap: 20px;
-    width: 420px;
+    flex-flow: column nowrap;
+    flex: 1;
 }
 
-.btn {
-    width: 100%;
-    max-width: 300px;
-    margin-top: 20px;
+.fieldset {
+    display: contents;
+}
 
-    i {
-        margin-left: 10px;
-        font-weight: 500;
-        font-size: 12px;
-    }
+.space {
+    flex: 1;
 }

@@ -37,7 +37,7 @@ const ImportPage = () => {
     const dispatch = useAppDispatch();
     const onHandleSubmit = useCallback(
         async ({ mnemonic }: ValuesType) => {
-            await dispatch(createMnemonic(mnemonic));
+            await dispatch(createMnemonic({ existingMnemonic: mnemonic }));
             await dispatch(setMnemonic(mnemonic));
         },
         [dispatch]
