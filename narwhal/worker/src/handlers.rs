@@ -172,10 +172,7 @@ impl PrimaryToWorker for PrimaryReceiverHandler {
         let network = request
             .extensions()
             .get::<anemo::NetworkRef>()
-            .ok_or_else(|| {
-                anemo::rpc::Status::internal("Unable to access network to send child RPCs")
-            })?
-            .upgrade()
+            .and_then(anemo::NetworkRef::upgrade)
             .ok_or_else(|| {
                 anemo::rpc::Status::internal("Unable to access network to send child RPCs")
             })?;
