@@ -28,6 +28,8 @@ use types::{
 #[path = "tests/batch_maker_tests.rs"]
 pub mod batch_maker_tests;
 
+pub type TxResponse = tokio::sync::oneshot::Sender<BatchDigest>;
+
 /// Assemble clients transactions into batches.
 pub struct BatchMaker {
     // Our worker's id.
@@ -41,13 +43,9 @@ pub struct BatchMaker {
     /// Receive reconfiguration updates.
     rx_reconfigure: watch::Receiver<ReconfigureNotification>,
     /// Channel to receive transactions from the network.
-    rx_batch_maker: Receiver<Transaction>,
+    rx_transaction: Receiver<(Transaction, TxResponse)>,
     /// Output channel to deliver sealed batches to the `QuorumWaiter`.
     tx_message: Sender<(Batch, Option<tokio::sync::oneshot::Sender<()>>)>,
-    /// Holds the current batch.
-    current_batch: Batch,
-    /// Holds the size of the current batch (in bytes).
-    current_batch_size: usize,
     /// Metrics handler
     node_metrics: Arc<WorkerMetrics>,
     /// The timestamp of the first transaction received
@@ -68,7 +66,7 @@ impl BatchMaker {
         batch_size: usize,
         max_batch_delay: Duration,
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
-        rx_batch_maker: Receiver<Transaction>,
+        rx_transaction: Receiver<(Transaction, TxResponse)>,
         tx_message: Sender<(Batch, Option<tokio::sync::oneshot::Sender<()>>)>,
         node_metrics: Arc<WorkerMetrics>,
         store: Store<BatchDigest, Batch>,
@@ -81,10 +79,8 @@ impl BatchMaker {
                 batch_size,
                 max_batch_delay,
                 rx_reconfigure,
-                rx_batch_maker,
+                rx_transaction,
                 tx_message,
-                current_batch: Batch::new(Vec::with_capacity(batch_size * 2)),
-                current_batch_size: 0,
                 batch_start_timestamp: Instant::now(),
                 node_metrics,
                 store,
@@ -100,11 +96,17 @@ impl BatchMaker {
         let timer = sleep(self.max_batch_delay);
         tokio::pin!(timer);
 
+        let mut current_batch = Batch::default();
+        let mut current_responses = Vec::new();
+        let mut current_batch_size = 0;
+
         loop {
             tokio::select! {
                 // Assemble client transactions into batches of preset size.
-                Some(transaction) = self.rx_batch_maker.recv() => {
-                    if self.current_batch.transactions.is_empty() {
+
+                Some((transaction, response_sender)) = self.rx_transaction.recv() => {
+
+                    if current_batch.transactions.is_empty() {
                         // We are interested to measure the time to seal a batch
                         // only when we do have transactions to include. Thus we reset
                         // the timer on the first transaction we receive to include on
@@ -112,18 +114,25 @@ impl BatchMaker {
                         self.batch_start_timestamp = Instant::now();
                     }
 
-                    self.current_batch_size += transaction.len();
-                    self.current_batch.transactions.push(transaction);
-                    if self.current_batch_size >= self.batch_size {
-                        self.seal(false).await;
+                    current_batch_size += transaction.len();
+                    current_batch.transactions.push(transaction);
+                    current_responses.push(response_sender);
+                    if current_batch_size >= self.batch_size {
+                        self.seal(false, current_batch, current_batch_size, current_responses).await;
                         timer.as_mut().reset(Instant::now() + self.max_batch_delay);
+                        current_batch = Batch::default();
+                        current_responses = Vec::new();
+                        current_batch_size = 0;
                     }
                 },
 
                 // If the timer triggers, seal the batch even if it contains few transactions.
                 () = &mut timer => {
-                    if !self.current_batch.transactions.is_empty() {
-                        self.seal(true).await;
+                    if !current_batch.transactions.is_empty() {
+                        self.seal(true, current_batch, current_batch_size, current_responses).await;
+                        current_batch = Batch::default();
+                        current_responses = Vec::new();
+                        current_batch_size = 0;
                     }
                     timer.as_mut().reset(Instant::now() + self.max_batch_delay);
                 }
@@ -153,14 +162,8 @@ impl BatchMaker {
     }
 
     /// Seal and broadcast the current batch.
-    async fn seal(&mut self, timeout: bool) {
-        let size = self.current_batch_size;
-
-        // Serialize the batch.
-        self.current_batch_size = 0;
-        let batch: Batch = Batch::new(self.current_batch.transactions.drain(..).collect());
+    async fn seal(&self, timeout: bool, batch: Batch, size: usize, responses: Vec<TxResponse>) {
         let metadata = batch.metadata.clone();
-
         #[cfg(feature = "benchmark")]
         {
             use fastcrypto::hash::Hash;
@@ -218,6 +221,11 @@ impl BatchMaker {
             .with_label_values(&[self.committee.epoch.to_string().as_str(), reason])
             .observe(size as f64);
 
+        // Note: the code below waits on the WAN to send messages to all others, the store
+        // to write and confirm the write, and then the primary to respond to being notified
+        // of a batch. While all this is going on the other batches are not being created and
+        // processed leading to an under utimization of resources.
+
         // Send the batch through the deliver channel for further processing.
         let (notify_done, done_sending) = tokio::sync::oneshot::channel();
         if self
@@ -252,5 +260,11 @@ impl BatchMaker {
         if self.tx_digest.send(message).await.is_err() {
             tracing::debug!("{}", DagError::ShuttingDown);
         };
+
+        // We now signal back to the transaction sender that the transaction is in a
+        // batch and also the digest of the batch.
+        for response in responses {
+            let _ = response.send(digest);
+        }
     }
 }

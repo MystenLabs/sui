@@ -42,8 +42,10 @@ async fn make_batch() {
 
     // Send enough transactions to seal a batch.
     let tx = transaction();
-    tx_batch_maker.send(tx.clone()).await.unwrap();
-    tx_batch_maker.send(tx.clone()).await.unwrap();
+    let (s0, r0) = tokio::sync::oneshot::channel();
+    let (s1, r1) = tokio::sync::oneshot::channel();
+    tx_transaction.send((tx.clone(), s0)).await.unwrap();
+    tx_transaction.send((tx.clone(), s1)).await.unwrap();
 
     // Ensure the batch is as expected.
     let expected_batch = Batch::new(vec![tx.clone(), tx.clone()]);
@@ -57,6 +59,8 @@ async fn make_batch() {
 
     // Now we send to primary
     let _message = rx_digest.recv().await.unwrap();
+    assert!(r0.await.is_ok());
+    assert!(r1.await.is_ok());
 }
 
 #[tokio::test]
@@ -89,9 +93,17 @@ async fn batch_timeout() {
 
     // Do not send enough transactions to seal a batch.
     let tx = transaction();
-    tx_batch_maker.send(tx.clone()).await.unwrap();
+    let (s0, r0) = tokio::sync::oneshot::channel();
+    tx_transaction.send((tx.clone(), s0)).await.unwrap();
 
     // Ensure the batch is as expected.
     let batch = rx_message.recv().await.unwrap();
     assert_eq!(batch.transactions, expected_batch);
+
+    // Eventually deliver message
+    if let Some(resp) = batch.1 {
+        assert!(resp.send(()).is_ok());
+    }
+
+    assert!(r0.await.is_ok());
 }
