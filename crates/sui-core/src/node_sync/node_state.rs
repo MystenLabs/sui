@@ -63,7 +63,7 @@ macro_rules! check_epoch {
 
         if expected_epoch != observed_epoch {
             // Most likely indicates a reconfiguration bug.
-            error!(?expected_epoch, ?observed_epoch, "Epoch mis-match");
+            error!(?expected_epoch, ?observed_epoch, "Epoch mismatch");
             return Err(SuiError::WrongEpoch { expected_epoch });
         }
     };
@@ -833,10 +833,9 @@ where
             // able to start.
             rx.recv()
                 .await
-                .map(|_| ())
                 .map_err(|e| SuiError::GenericAuthorityError {
                     error: format!("{:?}", e),
-                })?
+                })??;
         }
 
         if cfg!(debug_assertions) {
