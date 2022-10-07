@@ -28,22 +28,20 @@ function TransactionsPage() {
     }, [dispatch]);
 
     return (
-        <>
-            <Loading loading={loading} className={st.centerLoading}>
-                {txByAddress && txByAddress.length ? (
-                    <div className={st.container}>
-                        <PageTitle title="Your Activity" />
-                        <Content>
-                            <section className={st.txContent}>
-                                {txByAddress.map((txn) => (
-                                    <TransactionCard txn={txn} key={txn.txId} />
-                                ))}
-                            </section>
-                        </Content>
-                    </div>
-                ) : null}
-            </Loading>
-        </>
+        <Loading loading={loading} className={st.centerLoading}>
+            {txByAddress && txByAddress.length ? (
+                <div className={st.container}>
+                    <PageTitle title="Your Activity" />
+                    <Content>
+                        <section className={st.txContent}>
+                            {txByAddress.map((txn) => (
+                                <TransactionCard txn={txn} key={txn.txId} />
+                            ))}
+                        </section>
+                    </Content>
+                </div>
+            ) : null}
+        </Loading>
     );
 }
 
