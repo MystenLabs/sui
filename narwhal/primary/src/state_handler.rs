@@ -90,6 +90,7 @@ impl StateHandler {
                             // Cleanup the network.
                             self.network.cleanup(self.worker_cache.load().network_diff(committee.keys()));
 
+                            // TODO: Duplicated code in the same file.
                             // Update the worker cache.
                             self.worker_cache.swap(Arc::new(WorkerCache {
                                 epoch: committee.epoch,

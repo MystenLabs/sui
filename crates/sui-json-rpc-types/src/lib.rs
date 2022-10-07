@@ -344,7 +344,7 @@ impl SuiParsedTransactionResponse {
 }
 
 impl Display for SuiParsedTransactionResponse {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             SuiParsedTransactionResponse::Publish(r) => r.fmt(f),
             SuiParsedTransactionResponse::MergeCoin(r) => r.fmt(f),
@@ -367,7 +367,7 @@ pub enum SuiExecuteTransactionResponse {
         certificate: SuiCertifiedTransaction,
         effects: SuiCertifiedTransactionEffects,
         // If the transaction is confirmed to be executed locally
-        // before this reponse.
+        // before this response.
         confirmed_local_execution: bool,
     },
 }
@@ -414,7 +414,7 @@ pub struct SuiParsedSplitCoinResponse {
 }
 
 impl Display for SuiParsedSplitCoinResponse {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let mut writer = String::new();
         writeln!(writer, "{}", "----- Split Coin Results ----".bold())?;
 
@@ -446,7 +446,7 @@ pub struct SuiParsedMergeCoinResponse {
 }
 
 impl Display for SuiParsedMergeCoinResponse {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let mut writer = String::new();
         writeln!(writer, "{}", "----- Merge Coin Results ----".bold())?;
 
@@ -532,7 +532,7 @@ impl From<ObjectRef> for SuiObjectRef {
 }
 
 impl Display for SuiParsedObject {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let type_ = if self.data.type_().is_some() {
             "Move Object"
         } else {
@@ -916,7 +916,7 @@ pub struct SuiParsedPublishResponse {
 }
 
 impl Display for SuiParsedPublishResponse {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let mut writer = String::new();
         writeln!(writer, "{}", "----- Publish Results ----".bold())?;
         writeln!(
@@ -1399,7 +1399,7 @@ pub struct SuiTransactionData {
 }
 
 impl Display for SuiTransactionData {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let mut writer = String::new();
         if self.transactions.len() == 1 {
             writeln!(writer, "{}", self.transactions.first().unwrap())?;
@@ -1455,7 +1455,7 @@ pub enum SuiTransactionKind {
 }
 
 impl Display for SuiTransactionKind {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let mut writer = String::new();
         match &self {
             Self::TransferObject(t) => {
@@ -1601,7 +1601,7 @@ pub struct SuiCertifiedTransaction {
 }
 
 impl Display for SuiCertifiedTransaction {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let mut writer = String::new();
         writeln!(writer, "Transaction Hash: {:?}", self.transaction_digest)?;
         writeln!(writer, "Transaction Signature: {:?}", self.tx_signature)?;
@@ -1639,7 +1639,7 @@ pub struct SuiCertifiedTransactionEffects {
 }
 
 impl Display for SuiCertifiedTransactionEffects {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let mut writer = String::new();
         writeln!(
             writer,
@@ -1744,7 +1744,7 @@ impl SuiTransactionEffects {
 }
 
 impl Display for SuiTransactionEffects {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let mut writer = String::new();
         writeln!(writer, "Status : {:?}", self.status)?;
         if !self.created.is_empty() {

@@ -36,6 +36,7 @@ impl ParentSync for InMemoryStorage {
 impl ModuleResolver for InMemoryStorage {
     type Error = SuiError;
 
+    // TODO: duplicated code with ModuleResolver for SuiDataStore in authority_store.rs.
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
         Ok(self
             .get_package(&ObjectID::from(*module_id.address()))?

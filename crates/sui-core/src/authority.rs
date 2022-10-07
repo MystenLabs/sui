@@ -1401,7 +1401,7 @@ impl AuthorityState {
 
     // Continually pop in-progress txes from the WAL and try to drive them to completion.
     pub async fn process_tx_recovery_log(&self, limit: Option<usize>) -> SuiResult {
-        let mut limit = limit.unwrap_or(usize::max_value());
+        let mut limit = limit.unwrap_or(usize::MAX);
         while limit > 0 {
             limit -= 1;
             if let Some((cert, tx_guard)) = self.database.wal.read_one_recoverable_tx().await? {

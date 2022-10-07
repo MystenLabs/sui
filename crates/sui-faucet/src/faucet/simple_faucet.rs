@@ -420,7 +420,7 @@ mod tests {
     async fn simple_faucet_basic_interface_should_work() {
         telemetry_subscribers::init_for_testing();
         let (_network, context, _address) = setup_network_and_wallet().await.unwrap();
-        let prom_registry = prometheus::Registry::new();
+        let prom_registry = Registry::new();
         let faucet = SimpleFaucet::new(context, &prom_registry).await.unwrap();
         test_basic_interface(faucet).await;
     }
@@ -431,7 +431,7 @@ mod tests {
         let gases = get_current_gases(address, &mut context).await;
 
         let gases = HashSet::from_iter(gases.into_iter().map(|gas| *gas.id()));
-        let prom_registry = prometheus::Registry::new();
+        let prom_registry = Registry::new();
         let mut faucet = SimpleFaucet::new(context, &prom_registry).await.unwrap();
 
         let candidates = faucet.drain_gas_queue(gases.len()).await;
@@ -565,7 +565,7 @@ mod tests {
 
         let gases = HashSet::from_iter(gases.into_iter().map(|gas| *gas.id()));
 
-        let prom_registry = prometheus::Registry::new();
+        let prom_registry = Registry::new();
         let mut faucet = SimpleFaucet::new(context, &prom_registry).await.unwrap();
 
         let number_of_coins = gases.len();

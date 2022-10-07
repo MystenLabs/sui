@@ -84,6 +84,8 @@ impl ConsensusProtocol for Bullshark {
         // Get an ordered list of past leaders that are linked to the current leader.
         debug!("Leader {:?} has enough support", leader);
         let mut sequence = Vec::new();
+
+        // TODO: duplicated in tusk.rs
         for leader in utils::order_leaders(&self.committee, leader, state, Self::leader)
             .iter()
             .rev()
@@ -140,6 +142,7 @@ impl Bullshark {
         }
     }
 
+    // TODO: duplicated in tusk.rs
     /// Returns the certificate (and the certificate's digest) originated by the leader of the
     /// specified round (if any).
     fn leader<'a>(

@@ -286,7 +286,7 @@ mod tests {
         digest: TestDigest,
     }
 
-    impl fastcrypto::Hash for TestNode {
+    impl Hash for TestNode {
         type TypedDigest = TestDigest;
 
         fn digest(&self) -> Self::TypedDigest {
@@ -295,7 +295,7 @@ mod tests {
     }
 
     impl Affiliated for TestNode {
-        fn parents(&self) -> Vec<<Self as fastcrypto::Hash>::TypedDigest> {
+        fn parents(&self) -> Vec<<Self as Hash>::TypedDigest> {
             self.parents.clone()
         }
 
@@ -494,6 +494,7 @@ mod tests {
             prop_assume!(!compressibles.is_empty());
 
             let mut heads = HashSet::new();
+            // TODO: duplicated in this file.
             for hash in digests {
                 if node_dag.has_head(hash).unwrap() {
                     heads.insert(hash);

@@ -3,7 +3,7 @@
 use crate::{
     block_synchronizer::{handler, handler::MockHandler},
     block_waiter::{
-        BatchResult, BlockError, BlockErrorKind, BlockResult, GetBlockResponse, GetBlocksResponse,
+        BatchResult, BlockError, BlockErrorKind, GetBlockResponse, GetBlocksResponse,
         BATCH_RETRIEVE_TIMEOUT,
     },
     BlockCommand, BlockWaiter, PrimaryWorkerMessage,
@@ -523,7 +523,7 @@ async fn test_unlocking_pending_get_block_request_after_response() {
     }
 
     // WHEN
-    let result = BlockResult::Ok(GetBlockResponse {
+    let result = Ok(GetBlockResponse {
         id: block_id,
         batches: vec![],
     });

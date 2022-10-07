@@ -43,7 +43,7 @@ pub const CELO_BLS_SIGNATURE_LENGTH: usize = 48;
 
 #[derive(Debug, Clone)]
 pub struct BLS12377PublicKey {
-    pub pubkey: celo_bls::PublicKey,
+    pub pubkey: PublicKey,
     pub bytes: OnceCell<[u8; CELO_BLS_PUBLIC_KEY_LENGTH]>,
 }
 
@@ -283,7 +283,7 @@ impl VerifyingKey for BLS12377PublicKey {
         pks.iter()
             .zip(sigs)
             .for_each(|(pk, sig)| batch.add(pk.pubkey.clone(), sig.sig.clone()));
-        let hash_to_g1 = &*celo_bls::hash_to_curve::try_and_increment::COMPOSITE_HASH_TO_G1;
+        let hash_to_g1 = &*try_and_increment::COMPOSITE_HASH_TO_G1;
         batch
             .verify(hash_to_g1)
             .map_err(|_| eyre!("Signature verification failed"))
@@ -346,7 +346,7 @@ impl SigningKey for BLS12377PrivateKey {
 
 impl Signer<BLS12377Signature> for BLS12377PrivateKey {
     fn try_sign(&self, msg: &[u8]) -> Result<BLS12377Signature, signature::Error> {
-        let hash_to_g1 = &*celo_bls::hash_to_curve::try_and_increment::COMPOSITE_HASH_TO_G1;
+        let hash_to_g1 = &*try_and_increment::COMPOSITE_HASH_TO_G1;
 
         let celo_bls_sig = self
             .privkey
@@ -376,7 +376,7 @@ impl EncodeDecodeBase64 for BLS12377KeyPair {
         let mut bytes: Vec<u8> = Vec::new();
         bytes.extend_from_slice(self.secret.as_ref());
         bytes.extend_from_slice(self.name.as_ref());
-        base64ct::Base64::encode_string(&bytes[..])
+        Base64::encode_string(&bytes[..])
     }
 
     fn decode_base64(value: &str) -> Result<Self, eyre::Report> {
@@ -422,7 +422,7 @@ impl KeyPair for BLS12377KeyPair {
 
 impl Signer<BLS12377Signature> for BLS12377KeyPair {
     fn try_sign(&self, msg: &[u8]) -> Result<BLS12377Signature, signature::Error> {
-        let hash_to_g1 = &*celo_bls::hash_to_curve::try_and_increment::COMPOSITE_HASH_TO_G1;
+        let hash_to_g1 = &*try_and_increment::COMPOSITE_HASH_TO_G1;
 
         let celo_bls_sig = self
             .secret

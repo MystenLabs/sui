@@ -165,10 +165,7 @@ impl TransactionNotifier {
                             ));
                         } else {
                             // If the notifier is closed, then exit
-                            if transaction_notifier
-                                .is_closed
-                                .load(std::sync::atomic::Ordering::SeqCst)
-                            {
+                            if transaction_notifier.is_closed.load(Ordering::SeqCst) {
                                 return None;
                             }
                         }
@@ -185,8 +182,7 @@ impl TransactionNotifier {
 
     /// Signal we want to close this channel.
     pub fn close(&self) {
-        self.is_closed
-            .store(true, std::sync::atomic::Ordering::SeqCst);
+        self.is_closed.store(true, Ordering::SeqCst);
         self.notify.notify_one();
     }
 }
@@ -195,9 +191,7 @@ struct IterUniquenessGuard(Arc<TransactionNotifier>);
 
 impl Drop for IterUniquenessGuard {
     fn drop(&mut self) {
-        self.0
-            .has_stream
-            .store(false, std::sync::atomic::Ordering::SeqCst);
+        self.0.has_stream.store(false, Ordering::SeqCst);
     }
 }
 
@@ -225,7 +219,7 @@ impl TransactionNotifierTicket {
 
         self.transaction_notifier
             .low_watermark
-            .store(new_low_watermark, std::sync::atomic::Ordering::SeqCst);
+            .store(new_low_watermark, Ordering::SeqCst);
         self.transaction_notifier.notify.notify_one();
     }
 }
@@ -291,7 +285,7 @@ mod tests {
 
         {
             let t0 = notifier.ticket().expect("ok");
-            assert!(t0.seq() == 3);
+            assert_eq!(t0.seq(), 3);
             t0.notify();
         }
 

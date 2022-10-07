@@ -974,6 +974,7 @@ async fn test_batch_to_checkpointing() {
     // Send transactions out of order
     let mut rx = authority_state.subscribe_batch();
 
+    // TODO: duplicated code in this file, in `test_batch_to_checkpointing_init_crash`
     {
         let t0 = authority_state.batch_notifier.ticket().expect("ok");
         let t1 = authority_state.batch_notifier.ticket().expect("ok");

@@ -164,7 +164,7 @@ impl GatewayMetrics {
     }
 
     pub fn new_for_tests() -> Self {
-        let registry = prometheus::Registry::new();
+        let registry = Registry::new();
         Self::new(&registry)
     }
 }
@@ -192,7 +192,7 @@ impl<A> GatewayState<A> {
     ) -> SuiResult<Self> {
         let gateway_metrics = GatewayMetrics::new(prometheus_registry);
         let auth_agg_metrics = AuthAggMetrics::new(prometheus_registry);
-        let safe_client_metrics = SafeClientMetrics::new(&prometheus::Registry::new());
+        let safe_client_metrics = SafeClientMetrics::new(&Registry::new());
         let gateway_store = Arc::new(GatewayStore::open(&base_path.join("store"), None));
         let committee_store = Arc::new(CommitteeStore::new(
             base_path.join("epochs"),
@@ -1229,6 +1229,7 @@ where
         let mut objects = BTreeMap::new();
         let mut args = Vec::with_capacity(json_args.len());
 
+        // TODO: duplicated code in transaction_builder.rs
         for json_arg in json_args {
             args.push(match json_arg {
                 SuiJsonCallArg::Object(id) => {

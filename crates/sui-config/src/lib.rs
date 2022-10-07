@@ -48,7 +48,7 @@ pub fn sui_config_dir() -> Result<PathBuf, anyhow::Error> {
     }
     .and_then(|dir| {
         if !dir.exists() {
-            std::fs::create_dir_all(dir.clone())?;
+            fs::create_dir_all(dir.clone())?;
         }
         Ok(dir)
     })

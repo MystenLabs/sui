@@ -23,6 +23,7 @@ pub async fn test_gossip_plain() {
     let _active_authorities = start_gossip_process(states.clone(), net.clone()).await;
     tokio::time::sleep(Duration::from_secs(20)).await;
 
+    // TODO: duplicated code in this file `test_gossip_error`
     // Expected outcome of gossip: each digest's tx signature and cert is now on every authority.
     for client in net.clone_inner_clients().values() {
         for digest in &digests {

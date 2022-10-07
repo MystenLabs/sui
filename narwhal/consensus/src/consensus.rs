@@ -135,7 +135,7 @@ impl ConsensusState {
             .and_modify(|r| *r = max(*r, certificate.round()))
             .or_insert_with(|| certificate.round());
 
-        let last_committed_round = *std::iter::Iterator::max(self.last_committed.values()).unwrap();
+        let last_committed_round = *Iterator::max(self.last_committed.values()).unwrap();
         self.last_committed_round = last_committed_round;
 
         self.metrics

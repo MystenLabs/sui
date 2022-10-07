@@ -268,7 +268,7 @@ fn respan_token_stream(stream: TokenStream2, span: Span) -> TokenStream2 {
         .collect()
 }
 
-fn extract_doc_comments(attrs: &[syn::Attribute]) -> String {
+fn extract_doc_comments(attrs: &[Attribute]) -> String {
     let s = attrs
         .iter()
         .filter(|attr| {
@@ -303,7 +303,7 @@ impl OpenRpcAttributes {
 
 #[derive(Parse, Debug)]
 struct OpenRpcAttribute {
-    label: syn::Ident,
+    label: Ident,
     _eq_token: Token![=],
     value: syn::LitStr,
 }

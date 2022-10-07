@@ -381,7 +381,7 @@ fn get_total_transaction_count_and_size(result: Vec<CollectionRetrievalResult>) 
 ////////////////////////////////////////////////////////////////////////
 /// Formatting the requests and responses                             //
 ////////////////////////////////////////////////////////////////////////
-impl std::fmt::Display for GetCollectionsRequest {
+impl Display for GetCollectionsRequest {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let mut result = "*** GetCollectionsRequest ***".to_string();
         for id in &self.collection_ids {
@@ -391,7 +391,7 @@ impl std::fmt::Display for GetCollectionsRequest {
     }
 }
 
-impl std::fmt::Display for RemoveCollectionsRequest {
+impl Display for RemoveCollectionsRequest {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let mut result = "*** RemoveCollectionsRequest ***".to_string();
         for id in &self.collection_ids {
@@ -401,14 +401,14 @@ impl std::fmt::Display for RemoveCollectionsRequest {
     }
 }
 
-impl std::fmt::Display for Empty {
+impl Display for Empty {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let result = "*** Empty ***".to_string();
         write!(f, "{}", result)
     }
 }
 
-impl std::fmt::Display for GetCollectionsResponse {
+impl Display for GetCollectionsResponse {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let mut result = "*** GetCollectionsResponse ***".to_string();
 
@@ -444,7 +444,7 @@ impl std::fmt::Display for GetCollectionsResponse {
     }
 }
 
-impl std::fmt::Display for NodeReadCausalResponse {
+impl Display for NodeReadCausalResponse {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let mut result = "*** NodeReadCausalResponse ***".to_string();
 
@@ -456,7 +456,7 @@ impl std::fmt::Display for NodeReadCausalResponse {
     }
 }
 
-impl std::fmt::Display for NodeReadCausalRequest {
+impl Display for NodeReadCausalRequest {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let mut result = "**** NodeReadCausalRequest ***".to_string();
 
@@ -471,7 +471,7 @@ impl std::fmt::Display for NodeReadCausalRequest {
     }
 }
 
-impl std::fmt::Display for ReadCausalResponse {
+impl Display for ReadCausalResponse {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let mut result = "*** ReadCausalResponse ***".to_string();
 
@@ -483,7 +483,7 @@ impl std::fmt::Display for ReadCausalResponse {
     }
 }
 
-impl std::fmt::Display for ReadCausalRequest {
+impl Display for ReadCausalRequest {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let mut result = "**** ReadCausalRequest ***".to_string();
 
@@ -497,7 +497,7 @@ impl std::fmt::Display for ReadCausalRequest {
     }
 }
 
-impl std::fmt::Display for RoundsRequest {
+impl Display for RoundsRequest {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let mut result = "**** RoundsRequest ***".to_string();
 
@@ -511,7 +511,7 @@ impl std::fmt::Display for RoundsRequest {
     }
 }
 
-impl std::fmt::Display for RoundsResponse {
+impl Display for RoundsResponse {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let mut result = "**** RoundsResponse ***".to_string();
         result = format!(
@@ -523,7 +523,7 @@ impl std::fmt::Display for RoundsResponse {
     }
 }
 
-impl std::fmt::Display for CertificateDigest {
+impl Display for CertificateDigest {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{}", base64::encode(&self.digest))
     }

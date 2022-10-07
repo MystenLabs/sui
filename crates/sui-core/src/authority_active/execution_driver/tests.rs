@@ -36,6 +36,7 @@ async fn pending_exec_storage_notify() {
 
     let authority_state = authorities[0].authority.clone();
 
+    // TODO: duplicated with checkpoint_driver/tests.rs
     // Start active part of authority.
     for inner_state in authorities.clone() {
         let inner_agg = aggregator.clone();

@@ -246,6 +246,7 @@ impl TransactionBuilder {
         )?;
         let mut args = Vec::new();
         let mut objects = BTreeMap::new();
+        // TODO: duplicated code with gateway_state.rs
         for arg in json_args {
             args.push(match arg {
                 SuiJsonCallArg::Object(id) => {

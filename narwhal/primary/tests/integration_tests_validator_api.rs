@@ -402,15 +402,15 @@ async fn test_remove_collections() {
 
     assert_eq!(Empty {}, actual_result);
 
-    assert!(
+    assert_eq!(
         store
             .certificate_store
             .read_all(collection_ids.clone())
             .unwrap()
             .iter()
             .filter(|c| c.is_some())
-            .count()
-            == 0,
+            .count(),
+        0,
         "Certificate shouldn't exist"
     );
 

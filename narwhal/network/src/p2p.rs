@@ -79,7 +79,7 @@ impl P2pNetwork {
             .start(routes)
             .unwrap();
         network
-            .connect_with_peer_id(address, anemo::PeerId(name.0.to_bytes()))
+            .connect_with_peer_id(address, PeerId(name.0.to_bytes()))
             .await
             .unwrap();
         Self::new(network)

@@ -508,7 +508,7 @@ mod test {
 
             let metrics = GossipMetrics::new_for_tests();
 
-            let (_cancel_tx, cancel_rx) = tokio::sync::oneshot::channel();
+            let (_cancel_tx, cancel_rx) = oneshot::channel();
 
             let test_handler_clone = test_handler.clone();
             let net_clone = net.clone();

@@ -93,7 +93,7 @@ fn test_reserve_and_drop() {
     let permit = block_on(tx.reserve()).unwrap();
     assert_eq!(counter.get(), 1);
 
-    std::mem::drop(permit);
+    drop(permit);
 
     assert_eq!(counter.get(), 0);
 }

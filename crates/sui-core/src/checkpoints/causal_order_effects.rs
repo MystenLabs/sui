@@ -356,9 +356,9 @@ mod tests {
 
         let x = effect_map.causal_order_from_effects(input[..2].iter(), &mut cps);
 
-        assert!(x.clone().unwrap().len() == 1);
+        assert_eq!(x.clone().unwrap().len(), 1);
         // Its in the correct order
-        assert!(x.unwrap() == vec![input[1]]);
+        assert_eq!(x.unwrap(), vec![input[1]]);
 
         // Test4
         // Many dependencies
@@ -380,7 +380,7 @@ mod tests {
         cps.tables.extra_transactions.insert(&input[1], &3).unwrap();
         cps.tables.extra_transactions.insert(&input[2], &4).unwrap();
 
-        assert!(input[1..].len() == 3);
+        assert_eq!(input[1..].len(), 3);
         let x = effect_map.causal_order_from_effects(input[1..].iter(), &mut cps);
 
         println!("result: {:?}", x);

@@ -42,6 +42,7 @@ impl MetricsCallbackProvider for EndpointMetrics {
         // For now we just do nothing
     }
 
+    // TODO: duplicated code (3 times in our repo).
     fn on_response(&self, path: String, latency: Duration, status: u16, grpc_status_code: Code) {
         let code: i32 = grpc_status_code.into();
         let labels = [path.as_str(), &status.to_string(), &code.to_string()];

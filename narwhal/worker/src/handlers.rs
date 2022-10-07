@@ -184,6 +184,7 @@ impl PrimaryToWorker for PrimaryReceiverHandler {
                 WorkerToWorkerClient::new(peer).request_batches(message),
             )
             .await
+            // TODO: duplicated code in the same file.
             {
                 Ok(Ok(response)) => {
                     for batch in response.into_body().batches {

@@ -487,6 +487,7 @@ pub async fn wait_for_all_txes(wait_digests: Vec<TransactionDigest>, state: Arc<
             .unwrap(),
     );
 
+    // TODO: Duplicated code in test_utils
     loop {
         tokio::select! {
             _ = &mut timeout => panic!("wait_for_tx timed out"),

@@ -67,6 +67,7 @@ where
         .collect()
 }
 
+// TODO: duplicated in consensus_tests
 /// make a test shared object.
 pub fn test_shared_object() -> Object {
     let seed = "0x6666666666666660";

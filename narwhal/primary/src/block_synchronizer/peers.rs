@@ -20,7 +20,7 @@ pub struct Peer<Value: Hash + Clone> {
 
 impl<Value: Hash + Clone> Peer<Value> {
     pub fn new(name: PublicKey, values_able_to_serve: Vec<Value>) -> Self {
-        let certs: HashMap<<Value as fastcrypto::Hash>::TypedDigest, Value> = values_able_to_serve
+        let certs: HashMap<<Value as Hash>::TypedDigest, Value> = values_able_to_serve
             .into_iter()
             .map(|c| (c.digest(), c))
             .collect();

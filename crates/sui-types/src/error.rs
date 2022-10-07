@@ -443,7 +443,7 @@ pub enum SuiError {
 pub type SuiResult<T = ()> = Result<T, SuiError>;
 
 // TODO these are both horribly wrong, categorization needs to be considered
-impl std::convert::From<PartialVMError> for SuiError {
+impl From<PartialVMError> for SuiError {
     fn from(error: PartialVMError) -> Self {
         SuiError::ModuleVerificationFailure {
             error: error.to_string(),
@@ -451,13 +451,13 @@ impl std::convert::From<PartialVMError> for SuiError {
     }
 }
 
-impl std::convert::From<ExecutionError> for SuiError {
+impl From<ExecutionError> for SuiError {
     fn from(error: ExecutionError) -> Self {
         SuiError::ExecutionError(error.to_string())
     }
 }
 
-impl std::convert::From<VMError> for SuiError {
+impl From<VMError> for SuiError {
     fn from(error: VMError) -> Self {
         SuiError::ModuleVerificationFailure {
             error: error.to_string(),
@@ -465,7 +465,7 @@ impl std::convert::From<VMError> for SuiError {
     }
 }
 
-impl std::convert::From<SubscriberError> for SuiError {
+impl From<SubscriberError> for SuiError {
     fn from(error: SubscriberError) -> Self {
         SuiError::HandleConsensusTransactionFailure(error.to_string())
     }
@@ -483,7 +483,7 @@ impl From<ExecutionErrorKind> for SuiError {
     }
 }
 
-impl std::convert::From<&str> for SuiError {
+impl From<&str> for SuiError {
     fn from(error: &str) -> Self {
         SuiError::GenericAuthorityError {
             error: error.to_string(),

@@ -37,6 +37,7 @@ pub fn test_authority_aggregator(
     let validators_info = config.validator_set();
     let committee = Committee::new(0, ValidatorInfo::voting_rights(validators_info)).unwrap();
     let committee_store = Arc::new(CommitteeStore::new_for_testing(&committee));
+    // TODO: duplicated code in authority.rs
     let clients: BTreeMap<_, _> = validators_info
         .iter()
         .map(|config| {
@@ -81,6 +82,7 @@ pub async fn wait_for_all_txes(wait_digests: Vec<TransactionDigest>, state: Arc<
             .unwrap(),
     );
 
+    // TODO: duplicated code with transaction.rs
     loop {
         tokio::select! {
             _ = &mut timeout => panic!("wait_for_tx timed out"),

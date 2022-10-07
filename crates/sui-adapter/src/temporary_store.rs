@@ -455,8 +455,11 @@ impl<S> ResourceResolver for TemporaryStore<S> {
 
         match &object.data {
             Data::Move(m) => {
-                assert!(struct_tag == &m.type_, "Invariant violation: ill-typed object in storage or bad object request from caller\
-");
+                assert_eq!(
+                    struct_tag, &m.type_,
+                    "Invariant violation: ill-typed object in storage \
+                or bad object request from caller"
+                );
                 Ok(Some(m.contents().to_vec()))
             }
             other => unimplemented!(

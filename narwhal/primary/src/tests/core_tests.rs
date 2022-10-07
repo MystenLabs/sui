@@ -364,6 +364,7 @@ async fn process_votes() {
         .start(anemo::Router::new())
         .unwrap();
 
+    // TODO: duplicated code (3 times in our repo).
     for (_pubkey, addresses, network_pubkey) in committee.others_primaries(&name) {
         let peer_id = PeerId(network_pubkey.0.to_bytes());
         let address = network::multiaddr_to_address(&addresses).unwrap();

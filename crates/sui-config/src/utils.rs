@@ -18,7 +18,7 @@ pub fn get_available_port() -> u16 {
     panic!("Error: could not find an available port");
 }
 
-fn get_ephemeral_port() -> ::std::io::Result<u16> {
+fn get_ephemeral_port() -> std::io::Result<u16> {
     // Request a random available port from the OS
     let listener = TcpListener::bind(("localhost", 0))?;
     let addr = listener.local_addr()?;

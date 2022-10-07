@@ -81,20 +81,26 @@ fn add_address_and_identifier() {
     assert!(!m.address_identifiers.contains(addr));
 
     let addr_idx = ModuleHandleRewriter::get_or_create_address(addr, &mut m);
-    assert!(m.address_identifiers.len() == old_addrs_len + 1);
-    assert!(m.address_identifier_at(addr_idx) == addr);
+    assert_eq!(m.address_identifiers.len(), old_addrs_len + 1);
+    assert_eq!(m.address_identifier_at(addr_idx), addr);
     // after addition, should look up existing index instead of adding a new one
-    assert!(ModuleHandleRewriter::get_or_create_address(addr, &mut m) == addr_idx);
+    assert_eq!(
+        ModuleHandleRewriter::get_or_create_address(addr, &mut m),
+        addr_idx
+    );
 
     // add identifier
     let old_ids_len = m.identifiers.len();
     assert!(!m.identifiers.contains(&name.to_owned()));
 
     let id_idx = ModuleHandleRewriter::get_or_create_identifier(name, &mut m);
-    assert!(m.identifiers.len() == old_ids_len + 1);
-    assert!(m.identifier_at(id_idx) == name);
+    assert_eq!(m.identifiers.len(), old_ids_len + 1);
+    assert_eq!(m.identifier_at(id_idx), name);
     // after addition, should look up existing index instead of adding a new one
-    assert!(ModuleHandleRewriter::get_or_create_identifier(name, &mut m) == id_idx);
+    assert_eq!(
+        ModuleHandleRewriter::get_or_create_identifier(name, &mut m),
+        id_idx
+    );
 }
 
 // Check enforcement of the internal "sub map domain and range are disjoint" invariant
@@ -150,8 +156,11 @@ fn sub_friend_only() {
     };
     rewriter.sub_module_ids(&mut m);
 
-    assert!(m.address_identifier_at(m.friend_decls[0].address) == id2.address());
-    assert!(m.identifier_at(m.friend_decls[0].name) == id2.name());
+    assert_eq!(
+        m.address_identifier_at(m.friend_decls[0].address),
+        id2.address()
+    );
+    assert_eq!(m.identifier_at(m.friend_decls[0].name), id2.name());
 }
 
 // substitution where the new ID does not yet exist in the module table
@@ -189,16 +198,25 @@ fn sub_non_existing() {
     };
     rewriter.sub_module_ids(&mut m);
     // module handles and friends tables should not change in size
-    assert!(m.module_handles.len() == old_handles_len);
-    assert!(m.friend_decls.len() == old_friends_len);
+    assert_eq!(m.module_handles.len(), old_handles_len);
+    assert_eq!(m.friend_decls.len(), old_friends_len);
     // substituted handles and friends should have new id's
-    assert!(m.module_id_for_handle(m.module_handle_at(old_idx1)) == new_id);
-    assert!(m.address_identifier_at(m.friend_decls[1].address) == new_id.address());
-    assert!(m.identifier_at(m.friend_decls[1].name) == new_id.name());
+    assert_eq!(m.module_id_for_handle(m.module_handle_at(old_idx1)), new_id);
+    assert_eq!(
+        m.address_identifier_at(m.friend_decls[1].address),
+        new_id.address()
+    );
+    assert_eq!(m.identifier_at(m.friend_decls[1].name), new_id.name());
     // unrelated handles and friends should not have changed
-    assert!(m.module_id_for_handle(m.module_handle_at(old_idx2)) == old_id2);
-    assert!(m.address_identifier_at(m.friend_decls[0].address) == old_id2.address());
-    assert!(m.identifier_at(m.friend_decls[0].name) == old_id2.name());
+    assert_eq!(
+        m.module_id_for_handle(m.module_handle_at(old_idx2)),
+        old_id2
+    );
+    assert_eq!(
+        m.address_identifier_at(m.friend_decls[0].address),
+        old_id2.address()
+    );
+    assert_eq!(m.identifier_at(m.friend_decls[0].name), old_id2.name());
 }
 
 // Substitution between two module ID's that already exist in the module table.

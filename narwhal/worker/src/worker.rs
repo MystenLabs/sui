@@ -224,7 +224,7 @@ impl Worker {
             .network_key(&primary_name)
             .expect("Our primary is not in the committee");
         network.known_peers().insert(PeerInfo {
-            peer_id: anemo::PeerId(primary_network_key.0.to_bytes()),
+            peer_id: PeerId(primary_network_key.0.to_bytes()),
             affinity: anemo::types::PeerAffinity::High,
             address: vec![primary_address],
         });
@@ -232,7 +232,7 @@ impl Worker {
             primary_network_key,
             rx_reconfigure,
             rx_primary,
-            network::P2pNetwork::new(network.clone()),
+            P2pNetwork::new(network.clone()),
         );
         let client_flow_handles = worker.handle_clients_transactions(
             &tx_reconfigure,
@@ -389,7 +389,7 @@ impl Worker {
         &self,
         tx_reconfigure: &watch::Sender<ReconfigureNotification>,
         tx_primary: Sender<WorkerPrimaryMessage>,
-        rx_worker_processor: types::metered_channel::Receiver<Batch>,
+        rx_worker_processor: Receiver<Batch>,
     ) -> Vec<JoinHandle<()>> {
         // This `Processor` hashes and stores the batches we receive from the other workers. It then forwards the
         // batch's digest to the `PrimaryConnector` that will send it to our primary.
@@ -466,8 +466,8 @@ impl Transactions for TxReceiverHandler {
 
     async fn submit_transaction_stream(
         &self,
-        request: tonic::Request<tonic::Streaming<types::TransactionProto>>,
-    ) -> Result<tonic::Response<types::Empty>, tonic::Status> {
+        request: Request<tonic::Streaming<types::TransactionProto>>,
+    ) -> Result<Response<types::Empty>, Status> {
         let mut transactions = request.into_inner();
 
         while let Some(Ok(txn)) = transactions.next().await {

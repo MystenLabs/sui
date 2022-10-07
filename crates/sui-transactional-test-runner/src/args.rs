@@ -70,7 +70,7 @@ pub enum SuiValue {
 
 impl SuiExtraValueArgs {
     fn parse_value_impl<'a, I: Iterator<Item = (ValueToken, &'a str)>>(
-        parser: &mut MoveCLParser<'a, move_command_line_common::values::ValueToken, I>,
+        parser: &mut MoveCLParser<'a, ValueToken, I>,
     ) -> anyhow::Result<Self> {
         let contents = parser.advance(ValueToken::Ident)?;
         ensure!(contents == "object");
@@ -120,7 +120,7 @@ impl ParsableValue for SuiExtraValueArgs {
     type ConcreteValue = SuiValue;
 
     fn parse_value<'a, I: Iterator<Item = (ValueToken, &'a str)>>(
-        parser: &mut MoveCLParser<'a, move_command_line_common::values::ValueToken, I>,
+        parser: &mut MoveCLParser<'a, ValueToken, I>,
     ) -> Option<anyhow::Result<Self>> {
         match parser.peek()? {
             (ValueToken::Ident, "object") => Some(Self::parse_value_impl(parser)),

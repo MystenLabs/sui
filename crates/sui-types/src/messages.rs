@@ -1209,7 +1209,7 @@ impl ExecutionFailureStatus {
     }
 }
 
-impl std::fmt::Display for ExecutionFailureStatus {
+impl Display for ExecutionFailureStatus {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             ExecutionFailureStatus::EmptyInputCoins => {

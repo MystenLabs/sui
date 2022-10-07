@@ -89,6 +89,7 @@ async fn test_process_certificates_stream_mode() {
 
     // Wait for connectivity
     let (mut events, mut peers) = network.subscribe();
+    // TODO: duplicated code in this file (4 times).
     while peers.len() != 1 {
         let event = events.recv().await.unwrap();
         match event {
@@ -413,8 +414,7 @@ async fn test_process_payload_availability_when_failures() {
         PAYLOAD_CF;<(BatchDigest, WorkerId), PayloadToken>);
 
     let certificate_store = CertificateStore::new(certificate_map, certificate_id_by_round_map);
-    let payload_store: Store<(types::BatchDigest, WorkerId), PayloadToken> =
-        Store::new(payload_map);
+    let payload_store: Store<(BatchDigest, WorkerId), PayloadToken> = Store::new(payload_map);
 
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();

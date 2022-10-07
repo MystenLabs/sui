@@ -140,9 +140,7 @@ impl IndexStore {
         Ok(ts)
     }
 
-    fn get_transactions_by_object<
-        KeyT: Clone + Serialize + DeserializeOwned + std::cmp::PartialEq,
-    >(
+    fn get_transactions_by_object<KeyT: Clone + Serialize + DeserializeOwned + PartialEq>(
         index: &DBMap<(KeyT, TxSequenceNumber), TransactionDigest>,
         object_id: KeyT,
     ) -> SuiResult<Vec<(TxSequenceNumber, TransactionDigest)>> {

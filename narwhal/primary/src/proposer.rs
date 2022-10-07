@@ -117,7 +117,7 @@ impl Proposer {
         #[cfg(feature = "benchmark")]
         for digest in header.payload.keys() {
             // NOTE: This log entry is used to compute performance.
-            tracing::info!("Created {} -> {:?}", header, digest);
+            info!("Created {} -> {:?}", header, digest);
         }
 
         // Send the new header to the `Core` that will broadcast and process it.

@@ -504,7 +504,7 @@ fn test_basic_args_linter_top_level() {
     assert!(matches!(args[0], SuiJsonCallArg::ObjVec { .. }));
 
     if let SuiJsonCallArg::ObjVec(vec) = &args[0] {
-        assert!(vec.len() == 2);
+        assert_eq!(vec.len(), 2);
         assert_eq!(
             vec[0],
             ObjectID::from_hex_literal(&format!("0x{:02x}", object_id_raw1)).unwrap()

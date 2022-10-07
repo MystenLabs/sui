@@ -546,7 +546,7 @@ where
         let effects = self.get_true_effects(epoch_id, &cert).await?;
 
         // Must release permit before enqueuing new work to prevent deadlock.
-        std::mem::drop(permit);
+        drop(permit);
 
         let missing_parents = self.get_missing_parents(&effects.effects)?;
         self.enqueue_parent_execution_requests(epoch_id, digest, &missing_parents, false)
@@ -589,7 +589,7 @@ where
                 let effects = self.get_true_effects(epoch_id, &cert).await?;
 
                 // Must release permit before enqueuing new work to prevent deadlock.
-                std::mem::drop(permit);
+                drop(permit);
 
                 let missing_parents = self.get_missing_parents(&effects.effects)?;
                 self.enqueue_parent_execution_requests(epoch_id, digest, &missing_parents, true)
@@ -819,7 +819,7 @@ where
         effects: &SignedTransactionEffects,
     ) -> SuiResult {
         // Must drop the permit before waiting to avoid deadlock.
-        std::mem::drop(permit);
+        drop(permit);
 
         for parent in effects.effects.dependencies.iter() {
             let (_, mut rx) = self.pending_parents.wait(parent);

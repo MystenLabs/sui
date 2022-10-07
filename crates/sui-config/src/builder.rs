@@ -93,7 +93,7 @@ impl<R> ConfigBuilder<R> {
         self
     }
 
-    pub fn rng<N: ::rand::RngCore + ::rand::CryptoRng>(self, rng: N) -> ConfigBuilder<N> {
+    pub fn rng<N: rand::RngCore + rand::CryptoRng>(self, rng: N) -> ConfigBuilder<N> {
         ConfigBuilder {
             rng: Some(rng),
             config_directory: self.config_directory,
@@ -106,7 +106,7 @@ impl<R> ConfigBuilder<R> {
     }
 }
 
-impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
+impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
     //TODO right now we always randomize ports, we may want to have a default port configuration
     pub fn build(mut self) -> NetworkConfig {
         let committee = self.committee.take().unwrap();

@@ -156,7 +156,7 @@ async fn main() -> Result<(), eyre::Report> {
 fn setup_telemetry(
     tracing_level: &str,
     network_tracing_level: &str,
-    prom_registry: Option<&prometheus::Registry>,
+    prom_registry: Option<&Registry>,
 ) -> TelemetryGuards {
     let log_filter = format!("{tracing_level},h2={network_tracing_level},tower={network_tracing_level},hyper={network_tracing_level},tonic::transport={network_tracing_level},quinn={network_tracing_level}");
 
