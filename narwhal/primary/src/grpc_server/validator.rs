@@ -124,7 +124,7 @@ impl<SynchronizerHandler: Handler + Send + Sync + 'static> Validator
             let result: Vec<_> = blocks_response
                 .blocks
                 .into_iter()
-                .map(|block| get_collection_retrieval_results(block))
+                .map(get_collection_retrieval_results)
                 .collect();
             Ok(GetCollectionsResponse { result })
         } else {
