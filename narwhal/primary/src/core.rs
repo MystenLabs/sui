@@ -69,6 +69,10 @@ pub struct Core {
 
     /// The last garbage collected round.
     gc_round: Round,
+    /// The highest certificates round received by this node.
+    highest_received_round: Round,
+    /// The highest certificates round processed by this node.
+    highest_processed_round: Round,
     /// The set of headers we are currently processing.
     processing: HashMap<Round, HashSet<HeaderDigest>>,
     /// The last header we proposed (for which we are waiting votes).
@@ -130,6 +134,8 @@ impl Core {
                 tx_consensus,
                 tx_proposer,
                 gc_round: 0,
+                highest_received_round: 0,
+                highest_processed_round: 0,
                 processing: HashMap::with_capacity(2 * gc_depth as usize),
                 current_header: Header::default(),
                 vote_digest_store,
@@ -403,6 +409,17 @@ impl Core {
             certificate.round()
         );
 
+        let certificate_source = if self.name.eq(&certificate.header.author) {
+            "own"
+        } else {
+            "other"
+        };
+        self.highest_received_round = self.highest_received_round.max(certificate.round());
+        self.metrics
+            .highest_received_round
+            .with_label_values(&[&certificate.epoch().to_string(), certificate_source])
+            .set(self.highest_received_round as i64);
+
         // Let the proposer draw early conclusions from a certificate at this round and epoch, without its
         // parents or payload (which we may not have yet).
         //
@@ -448,11 +465,12 @@ impl Core {
         // Store the certificate.
         self.certificate_store.write(certificate.clone())?;
 
-        let certificate_source = if self.name.eq(&certificate.header.author) {
-            "own"
-        } else {
-            "other"
-        };
+        // Update metrics for processed certificates.
+        self.highest_processed_round = self.highest_processed_round.max(certificate.round());
+        self.metrics
+            .highest_processed_round
+            .with_label_values(&[&certificate.epoch().to_string(), certificate_source])
+            .set(self.highest_processed_round as i64);
         self.metrics
             .certificates_processed
             .with_label_values(&[&certificate.epoch().to_string(), certificate_source])

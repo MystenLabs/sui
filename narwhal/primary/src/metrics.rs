@@ -451,8 +451,14 @@ pub struct PrimaryMetrics {
     pub gc_core_latency: HistogramVec,
     /// Number of cancel handlers for core module
     pub core_cancel_handlers_total: IntGaugeVec,
-    /// The current Narwhal round
+    /// The current Narwhal round in proposer
     pub current_round: IntGaugeVec,
+    /// The last received Narwhal round.
+    pub last_parent_missing_round: IntGaugeVec,
+    /// The highest Narwhal round that has been received.
+    pub highest_received_round: IntGaugeVec,
+    /// The highest Narwhal round that has been processed.
+    pub highest_processed_round: IntGaugeVec,
     /// Latency to perform a garbage collection in header_waiter
     pub gc_header_waiter_latency: HistogramVec,
     /// Number of elements in pending list of header_waiter
@@ -537,8 +543,29 @@ impl PrimaryMetrics {
             .unwrap(),
             current_round: register_int_gauge_vec_with_registry!(
                 "current_round",
-                "Current round the node is in",
+                "Current round the node will propose",
                 &["epoch"],
+                registry
+            )
+            .unwrap(),
+            last_parent_missing_round: register_int_gauge_vec_with_registry!(
+                "last_parent_missing_round",
+                "The round of the last certificate which misses parent",
+                &["epoch"],
+                registry
+            )
+            .unwrap(),
+            highest_received_round: register_int_gauge_vec_with_registry!(
+                "highest_received_round",
+                "Highest round received by the primary",
+                &["epoch", "source"],
+                registry
+            )
+            .unwrap(),
+            highest_processed_round: register_int_gauge_vec_with_registry!(
+                "highest_processed_round",
+                "Highest round processed (stored) by the primary",
+                &["epoch", "source"],
                 registry
             )
             .unwrap(),
