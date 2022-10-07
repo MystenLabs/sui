@@ -33,6 +33,7 @@ use types::{
     Batch, BatchDigest, Empty, PrimaryToWorkerServer, ReconfigureNotification, Transaction,
     TransactionProto, Transactions, TransactionsServer, WorkerOurBatchMessage,
     WorkerToWorkerServer,
+   TxResponse,
 };
 
 #[cfg(test)]
@@ -287,7 +288,7 @@ impl Worker {
     fn handle_clients_transactions(
         &self,
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
-        tx_our_batch: Sender<WorkerOurBatchMessage>,
+        tx_our_batch: Sender<(WorkerOurBatchMessage, Option<tokio::sync::oneshot::Sender<()>>)>,
         node_metrics: Arc<WorkerMetrics>,
         channel_metrics: Arc<WorkerChannelMetrics>,
         endpoint_metrics: WorkerEndpointMetrics,
@@ -370,7 +371,7 @@ impl Worker {
 /// Defines how the network receiver handles incoming transactions.
 #[derive(Clone)]
 struct TxReceiverHandler {
-    tx_batch_maker: Sender<(Transaction, crate::batch_maker::TxResponse)>,
+    tx_batch_maker: Sender<(Transaction, TxResponse)>,
 }
 
 impl TxReceiverHandler {

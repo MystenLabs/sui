@@ -71,10 +71,13 @@ async fn synchronize() {
         .insert(send_network.downgrade())
         .is_none());
     handler.synchronize(request).await.unwrap();
-    assert_eq!(store.read(digest).await.unwrap().unwrap(), batch);
 
-    // let recv_batch = rx_primary.recv().await.unwrap();
-    // assert!(matches!(recv_batch, WorkerPrimaryMessage::OthersBatch(..)));
+    let recv_batch = rx_primary.recv().await.unwrap();
+    assert!(matches!(
+        recv_batch,
+        ( WorkerPrimaryMessage::OthersBatch(..), None)
+    ));
+
 }
 
 #[tokio::test]
@@ -116,6 +119,19 @@ async fn synchronize_when_batch_exists() {
         digests: missing.clone(),
         target,
     };
+
+
+    let responder_handle = tokio::spawn(async move {
+        if let (WorkerOthersBatchMessage { digest: recv_digest, worker_id: recv_id}, _) =
+            rx_primary.recv().await.unwrap()
+        {
+            assert_eq!(recv_digest, batch_id);
+            assert_eq!(recv_id, id);
+        } else {
+            panic!("received unexpected WorkerPrimaryMessage");
+        }
+    });
+
 
     // Send a sync request.
     // Don't bother to inject a fake network because handler shouldn't need it.

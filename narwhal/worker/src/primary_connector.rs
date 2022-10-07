@@ -4,11 +4,12 @@
 
 use crypto::NetworkPublicKey;
 use futures::{stream::FuturesUnordered, StreamExt};
-use network::{P2pNetwork, ReliableNetwork};
+use network::{P2pNetwork, ReliableNetwork, CancelOnDropHandler};
 use tokio::{sync::watch, task::JoinHandle};
 use types::{
     metered_channel::Receiver, ReconfigureNotification, WorkerOthersBatchMessage,
     WorkerOurBatchMessage,
+   PrimaryResponse, 
 };
 
 /// The maximum number of digests kept in memory waiting to be sent to the primary.
@@ -21,7 +22,7 @@ pub struct PrimaryConnector {
     /// Receive reconfiguration updates.
     rx_reconfigure: watch::Receiver<ReconfigureNotification>,
     /// Input channels to receive the messages to send to the primary.
-    rx_our_batch: Receiver<WorkerOurBatchMessage>,
+    rx_our_batch: Receiver<(WorkerOurBatchMessage, PrimaryResponse)>,
     rx_others_batch: Receiver<WorkerOthersBatchMessage>,
     /// A network sender to send the batches' digests to the primary.
     primary_client: P2pNetwork,
@@ -32,7 +33,7 @@ impl PrimaryConnector {
     pub fn spawn(
         primary_name: NetworkPublicKey,
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
-        rx_our_batch: Receiver<WorkerOurBatchMessage>,
+        rx_our_batch: Receiver<(WorkerOurBatchMessage, PrimaryResponse)>,
         rx_others_batch: Receiver<WorkerOthersBatchMessage>,
         primary_client: P2pNetwork,
     ) -> JoinHandle<()> {
@@ -53,15 +54,15 @@ impl PrimaryConnector {
         let mut futures = FuturesUnordered::new();
         loop {
             tokio::select! {
-                // Send the batches through the network.
-                Some(batch) = self.rx_our_batch.recv() => {
+                // Send the digest through the network.
+                Some((batch, _response)) = self.rx_our_batch.recv() => {
                     if futures.len() >= MAX_PENDING_DIGESTS {
                         tracing::warn!("Primary unreachable: dropping {batch:?}");
                         continue;
                     }
 
                     let handle = self.primary_client.send(self.primary_name.to_owned(), &batch).await;
-                    futures.push(handle);
+                    futures.push( handle_future(handle, _response) );
                 },
                 Some(batch) = self.rx_others_batch.recv() => {
                     if futures.len() >= MAX_PENDING_DIGESTS {
@@ -70,7 +71,7 @@ impl PrimaryConnector {
                     }
 
                     let handle = self.primary_client.send(self.primary_name.to_owned(), &batch).await;
-                    futures.push(handle);
+                    futures.push( handle_future(handle, None) );
                 },
 
                 // Trigger reconfigure.
@@ -87,4 +88,12 @@ impl PrimaryConnector {
             }
         }
     }
+}
+
+async fn handle_future(handle: CancelOnDropHandler<Result<anemo::Response<()>, anemo::Error>> , _response: PrimaryResponse) {
+    if handle.await.is_ok(){
+        if let Some(response_channel) = _response {
+            let _ = response_channel.send(());
+        }
+    };
 }
