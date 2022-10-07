@@ -145,9 +145,9 @@ export const getDataOnTxDigests = (
             return (
                 txEffs
                     .map((txEff) => {
-                        const [seq, digest] = transactions.filter(
+                        const digest = transactions.filter(
                             (transactionId) =>
-                                transactionId[1] ===
+                                transactionId ===
                                 getTransactionDigest(txEff.certificate)
                         )[0];
                         const res: CertifiedTransaction = txEff.certificate;
@@ -167,7 +167,6 @@ export const getDataOnTxDigests = (
                             getTransferSuiTransaction(txn)?.recipient;
 
                         return {
-                            seq,
                             txId: digest,
                             status: getExecutionStatusType(txEff)!,
                             txGas: getTotalGasUsed(txEff),
@@ -184,6 +183,5 @@ export const getDataOnTxDigests = (
                     })
                     // Remove failed transactions and sort by sequence number
                     .filter((itm) => itm)
-                    .sort((a, b) => b!.seq - a!.seq)
             );
         });

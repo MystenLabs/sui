@@ -205,7 +205,7 @@ impl PseudoBlockProvider {
             } else {
                 let cursor = Some(TransactionDigest::new(current_block.hash.0));
                 let mut tx_digests = state.get_transactions(TransactionQuery::All, cursor, None)?;
-                if tx_digests.remove(0) != last_tx {
+                if tx_digests.remove(0) != cursor {
                     return Err(Error::new_with_msg(
                         ErrorType::InternalError,
                         "Incorrect data returned from state.",
