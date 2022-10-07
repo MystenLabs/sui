@@ -5,10 +5,16 @@ import { Ed25519Keypair } from '@mysten/sui.js';
 import mitt from 'mitt';
 import Browser from 'webextension-polyfill';
 
+import { createMessage } from '_messages';
+import { isKeyringPayload } from '_payloads/keyring';
 import { encrypt, decrypt } from '_shared/cryptography/keystore';
 import { generateMnemonic } from '_shared/utils/bip39';
 
 import type { Keypair } from '@mysten/sui.js';
+import type { Message } from '_messages';
+import type { ErrorPayload } from '_payloads';
+import type { KeyringPayload } from '_payloads/keyring';
+import type { Connection } from '_src/background/connections/Connection';
 
 type KeyringEvents = {
     lockedStatusUpdate: boolean;
@@ -86,6 +92,39 @@ class Keyring {
     public on = this.#events.on;
 
     public off = this.#events.off;
+
+    public async handleUiMessage(msg: Message, uiConnection: Connection) {
+        const { id, payload } = msg;
+        try {
+            if (
+                isKeyringPayload<'createMnemonic'>(payload) &&
+                payload.args !== undefined
+            ) {
+                await this.createMnemonic(payload.args);
+                await this.unlock(payload.args);
+                if (!this.#mnemonic) {
+                    throw new Error('Error created mnemonic is empty');
+                }
+                uiConnection.send(
+                    createMessage<KeyringPayload<'createMnemonic'>>(
+                        {
+                            type: 'keyring',
+                            method: 'createMnemonic',
+                            return: this.#mnemonic,
+                        },
+                        id
+                    )
+                );
+            }
+        } catch (e) {
+            uiConnection.send(
+                createMessage<ErrorPayload>(
+                    { code: -1, error: true, message: (e as Error).message },
+                    id
+                )
+            );
+        }
+    }
 
     // pass null to delete it
     private async storeEncryptedMnemonic(encryptedMnemonic: string | null) {

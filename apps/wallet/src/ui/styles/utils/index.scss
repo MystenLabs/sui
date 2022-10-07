@@ -167,6 +167,11 @@ $main-extra-space: sizing.$main-bottom-space;
         font-size: 11px;
         font-weight: 500;
         letter-spacing: 0.05em;
+    } @else if $type == 'Primary/CAPTION-SB' {
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-align: center;
     } @else if $type == 'ParagraphPrimary/P2-R' {
         font-size: 13px;
         font-weight: 400;
@@ -191,6 +196,16 @@ $main-extra-space: sizing.$main-bottom-space;
         line-height: 130%;
         letter-spacing: 0;
         text-align: center;
+    } @else if $type == 'ParagraphPrimary/P1-SB' {
+        font-size: 14px;
+        font-weight: 600;
+        line-height: 18px;
+        letter-spacing: 0;
+    } @else if $type == 'ParagraphPrimary/P2-M' {
+        font-size: 13px;
+        font-weight: 500;
+        line-height: 17px;
+        letter-spacing: 0;
     } @else if $type == 'Primary/Body-SB' {
         font-size: 14px;
         font-weight: 600;
