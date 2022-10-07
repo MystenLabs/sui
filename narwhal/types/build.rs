@@ -42,9 +42,13 @@ fn main() -> Result<()> {
 }
 
 fn build_anemo_services(out_dir: &Path) {
+    let mut automock_attribute = anemo_build::Attributes::default();
+    automock_attribute.push_trait(".", r#"#[mockall::automock]"#);
+
     let primary_to_primary = anemo_build::manual::Service::builder()
         .name("PrimaryToPrimary")
         .package("narwhal")
+        .attributes(automock_attribute.clone())
         .method(
             anemo_build::manual::Method::builder()
                 .name("send_message")
@@ -59,6 +63,7 @@ fn build_anemo_services(out_dir: &Path) {
     let primary_to_worker = anemo_build::manual::Service::builder()
         .name("PrimaryToWorker")
         .package("narwhal")
+        .attributes(automock_attribute.clone())
         .method(
             anemo_build::manual::Method::builder()
                 .name("send_message")
@@ -100,6 +105,7 @@ fn build_anemo_services(out_dir: &Path) {
     let worker_to_primary = anemo_build::manual::Service::builder()
         .name("WorkerToPrimary")
         .package("narwhal")
+        .attributes(automock_attribute.clone())
         .method(
             anemo_build::manual::Method::builder()
                 .name("send_message")
@@ -123,6 +129,7 @@ fn build_anemo_services(out_dir: &Path) {
     let worker_to_worker = anemo_build::manual::Service::builder()
         .name("WorkerToWorker")
         .package("narwhal")
+        .attributes(automock_attribute)
         .method(
             anemo_build::manual::Method::builder()
                 .name("send_message")
