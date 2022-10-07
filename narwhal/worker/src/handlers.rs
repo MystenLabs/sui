@@ -12,7 +12,6 @@ use rand::seq::SliceRandom;
 use std::{collections::HashSet, time::Duration};
 use store::Store;
 use tap::TapFallible;
-use tokio::time::{self};
 use tracing::{debug, error, info, trace};
 use types::{
     error::DagError, metered_channel::Sender, Batch, BatchDigest, PrimaryToWorker,
@@ -161,9 +160,10 @@ impl PrimaryToWorker for PrimaryReceiverHandler {
                 )));
             }
         };
-        let message = WorkerBatchRequest {
+        let request = anemo::Request::new(WorkerBatchRequest {
             digests: missing.iter().cloned().collect(),
-        };
+        })
+        .with_timeout(self.request_batches_timeout);
         debug!(
             "Sending WorkerBatchRequest message to {worker_name} for missing batches {:?}",
             message.digests
@@ -172,21 +172,18 @@ impl PrimaryToWorker for PrimaryReceiverHandler {
         let network = request
             .extensions()
             .get::<anemo::NetworkRef>()
-            .unwrap()
-            .upgrade()
+            .and_then(anemo::NetworkRef::upgrade)
             .ok_or_else(|| {
                 anemo::rpc::Status::internal("Unable to access network to send child RPCs")
             })?;
         let peer_id = anemo::PeerId(worker_name.0.to_bytes());
         if let Some(peer) = network.peer(peer_id) {
-            match time::timeout(
-                self.request_batches_timeout,
-                WorkerToWorkerClient::new(peer).request_batches(message),
-            )
-            .await
+            match WorkerToWorkerClient::new(peer)
+                .request_batches(request)
+                .await
             // TODO: duplicated code in the same file.
             {
-                Ok(Ok(response)) => {
+                Ok(response) => {
                     for batch in response.into_body().batches {
                         let digest = &batch.digest();
                         if missing.remove(digest) {
@@ -199,11 +196,8 @@ impl PrimaryToWorker for PrimaryReceiverHandler {
                         }
                     }
                 }
-                Ok(Err(e)) => {
+                Err(e) => {
                     info!("WorkerBatchRequest to first target {worker_name} failed: {e:?}");
-                }
-                Err(_) => {
-                    debug!("WorkerBatchRequest to first target {worker_name} timed out");
                 }
             }
         } else {
@@ -236,15 +230,14 @@ impl PrimaryToWorker for PrimaryReceiverHandler {
         let mut handles: FuturesUnordered<_> = clients
             .iter_mut()
             .map(|client| {
-                time::timeout(
-                    self.request_batches_timeout,
-                    client.request_batches(message.clone()),
+                client.request_batches(
+                    anemo::Request::new(message.clone()).with_timeout(self.request_batches_timeout),
                 )
             })
             .collect();
         while let Some(result) = handles.next().await {
             match result {
-                Ok(Ok(response)) => {
+                Ok(response) => {
                     for batch in response.into_body().batches {
                         let digest = &batch.digest();
                         if missing.remove(digest) {
@@ -256,12 +249,12 @@ impl PrimaryToWorker for PrimaryReceiverHandler {
                             }
                         }
                     }
+                    if missing.is_empty() {
+                        break;
+                    }
                 }
-                Ok(Err(e)) => {
-                    info!("WorkerBatchRequest to first target {worker_name} failed: {e:?}");
-                }
-                Err(_) => {
-                    debug!("WorkerBatchRequest to first target {worker_name} timed out");
+                Err(e) => {
+                    info!("WorkerBatchRequest to retry target {worker_name} failed: {e:?}");
                 }
             }
             if missing.is_empty() {
