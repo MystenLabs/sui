@@ -15,6 +15,7 @@ use std::{
     },
 };
 
+use anyhow::anyhow;
 use arc_swap::ArcSwap;
 use async_trait::async_trait;
 use chrono::prelude::*;
@@ -57,7 +58,6 @@ use sui_storage::{
 use sui_types::committee::EpochId;
 use sui_types::crypto::{AuthorityKeyPair, NetworkKeyPair};
 use sui_types::filter::TransactionQuery;
-
 use sui_types::messages_checkpoint::{
     CheckpointRequest, CheckpointRequestType, CheckpointResponse,
 };
@@ -1693,9 +1693,19 @@ impl AuthorityState {
     pub fn get_transactions(
         &self,
         query: TransactionQuery,
-        cursor: Option<TxSequenceNumber>,
+        cursor: Option<TransactionDigest>,
         limit: Option<usize>,
-    ) -> Result<Vec<(TxSequenceNumber, TransactionDigest)>, anyhow::Error> {
+    ) -> Result<Vec<TransactionDigest>, anyhow::Error> {
+        let cursor = if let Some(cursor) = cursor {
+            let seq = self
+                .get_indexes()?
+                .get_transaction_seq(&cursor)?
+                .ok_or_else(|| anyhow!("Transaction [{cursor:?}] not found."))?;
+            Some(seq)
+        } else {
+            None
+        };
+
         Ok(match query {
             TransactionQuery::MoveFunction {
                 package,
@@ -1733,7 +1743,10 @@ impl AuthorityState {
                         .collect()
                 }
             }
-        })
+        }
+        .into_iter()
+        .map(|(_, digest)| digest)
+        .collect())
     }
 
     pub async fn get_timestamp_ms(

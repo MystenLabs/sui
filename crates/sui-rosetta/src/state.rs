@@ -29,7 +29,7 @@ use crate::types::{
     TransactionIdentifier,
 };
 use crate::ErrorType::{BlockNotFound, InternalError};
-use crate::{Error, SUI};
+use crate::{Error, ErrorType, SUI};
 
 pub struct OnlineServerContext {
     pub state: Arc<AuthorityState>,
@@ -200,12 +200,24 @@ impl PseudoBlockProvider {
             return Ok(());
         }
         if current_block.index < total_tx {
-            let tx_digests =
-                state.get_transactions(TransactionQuery::All, Some(current_block.index), None)?;
+            let tx_digests = if current_block.index == 0 {
+                state.get_transactions(TransactionQuery::All, None, None)?
+            } else {
+                let cursor = Some(TransactionDigest::new(current_block.hash.0));
+                let mut tx_digests = state.get_transactions(TransactionQuery::All, cursor, None)?;
+                if tx_digests.remove(0) != last_tx {
+                    return Err(Error::new_with_msg(
+                        ErrorType::InternalError,
+                        "Incorrect data returned from state.",
+                    ));
+                }
+                tx_digests
+            };
+
             let mut index = current_block.index;
             let mut parent_block_identifier = current_block;
 
-            for (_, digest) in tx_digests {
+            for digest in tx_digests {
                 index += 1;
                 let block_identifier = BlockIdentifier {
                     index,

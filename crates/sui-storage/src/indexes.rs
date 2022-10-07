@@ -49,9 +49,16 @@ pub struct IndexStore {
     /// The timestamping happens when the node sees a txn certificate for the first time.
     #[default_options_override_fn = "timestamps_table_default_config"]
     timestamps: DBMap<TransactionDigest, u64>,
+
+    /// Index from transaction digest to sequence number.
+    #[default_options_override_fn = "transactions_seq_table_default_config"]
+    transactions_seq: DBMap<TransactionDigest, TxSequenceNumber>,
 }
 
 // These functions are used to initialize the DB tables
+fn transactions_seq_table_default_config() -> Options {
+    default_db_options(None, Some(1_000_000)).0
+}
 fn transactions_from_addr_table_default_config() -> Options {
     default_db_options(None, Some(1_000_000)).0
 }
@@ -83,6 +90,9 @@ impl IndexStore {
         timestamp_ms: u64,
     ) -> SuiResult {
         let batch = self.transactions_from_addr.batch();
+
+        let batch =
+            batch.insert_batch(&self.transactions_seq, std::iter::once((*digest, sequence)))?;
 
         let batch = batch.insert_batch(
             &self.transactions_from_addr,
@@ -236,5 +246,12 @@ impl IndexStore {
         limit: Option<usize>,
     ) -> SuiResult<Vec<(TxSequenceNumber, TransactionDigest)>> {
         Self::get_transactions_by_object(&self.transactions_to_addr, addr, cursor, limit)
+    }
+
+    pub fn get_transaction_seq(
+        &self,
+        digest: &TransactionDigest,
+    ) -> SuiResult<Option<TxSequenceNumber>> {
+        Ok(self.transactions_seq.get(digest)?)
     }
 }

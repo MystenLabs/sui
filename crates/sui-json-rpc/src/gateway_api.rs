@@ -10,7 +10,7 @@ use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee_core::server::rpc_module::RpcModule;
 use signature::Signature;
-use sui_core::gateway_state::{GatewayClient, TxSeqNumber};
+use sui_core::gateway_state::GatewayClient;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
     GetObjectDataResponse, RPCTransactionRequestParams, SuiObjectInfo, SuiTransactionResponse,
@@ -140,10 +140,7 @@ impl RpcReadApiServer for GatewayReadApiImpl {
         Ok(self.client.get_object(object_id).await?)
     }
 
-    async fn get_recent_transactions(
-        &self,
-        count: u64,
-    ) -> RpcResult<Vec<(TxSeqNumber, TransactionDigest)>> {
+    async fn get_recent_transactions(&self, count: u64) -> RpcResult<Vec<TransactionDigest>> {
         Ok(self.client.get_recent_transactions(count)?)
     }
 

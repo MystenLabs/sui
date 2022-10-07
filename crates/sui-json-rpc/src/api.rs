@@ -12,7 +12,6 @@ use sui_json_rpc_types::{
     SuiExecuteTransactionResponse, SuiGasCostSummary, SuiMoveNormalizedFunction,
     SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiObjectInfo, SuiTransactionEffects,
     SuiTransactionFilter, SuiTransactionResponse, SuiTypeTag, TransactionBytes, TransactionsPage,
-    TxSeqNumber,
 };
 use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress, TransactionDigest};
@@ -87,7 +86,7 @@ pub trait RpcReadApi {
         &self,
         /// maximum size of the result
         count: u64,
-    ) -> RpcResult<Vec<(TxSeqNumber, TransactionDigest)>>;
+    ) -> RpcResult<Vec<TransactionDigest>>;
 
     /// Return the transaction response object.
     #[method(name = "getTransaction")]
@@ -167,7 +166,7 @@ pub trait RpcFullNodeReadApi {
         &self,
         /// the transaction query criteria.
         query: TransactionQuery,
-        cursor: Option<TxSeqNumber>,
+        cursor: Option<TransactionDigest>,
         limit: Option<usize>,
     ) -> RpcResult<TransactionsPage>;
 

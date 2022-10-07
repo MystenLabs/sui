@@ -60,7 +60,7 @@ mod rpc_types_tests;
 
 pub type TxSeqNumber = u64;
 pub type SuiMoveTypeParameterIndex = u16;
-pub type TransactionsPage = Page<(TxSeqNumber, TransactionDigest), TxSeqNumber>;
+pub type TransactionsPage = Page<TransactionDigest, TransactionDigest>;
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
 pub enum SuiMoveAbility {

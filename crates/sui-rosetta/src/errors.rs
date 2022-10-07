@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fmt::{Debug, Display};
+use std::fmt::{Debug, Display, Formatter};
 use std::num::TryFromIntError;
 
 use axum::http::StatusCode;
@@ -45,6 +45,16 @@ pub enum ErrorType {
 pub struct Error {
     type_: ErrorType,
     detail: Option<Value>,
+}
+
+impl Display for Error {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if let Some(detail) = &self.detail {
+            write!(f, "{:?} : {}", self.type_, detail)
+        } else {
+            write!(f, "{:?}", self.type_)
+        }
+    }
 }
 
 impl Error {

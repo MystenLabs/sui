@@ -332,7 +332,7 @@ async fn test_recent_transactions() -> Result<(), anyhow::Error> {
         let response = gateway
             .execute_transaction(Transaction::new(data, signature))
             .await?;
-        digests.push((cnt, response.certificate.transaction_digest));
+        digests.push(response.certificate.transaction_digest);
         cnt += 1;
         assert_eq!(gateway.get_total_transaction_number()?, cnt);
     }

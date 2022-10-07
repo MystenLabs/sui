@@ -13,7 +13,6 @@ use move_core_types::identifier::Identifier;
 use signature::Signature;
 
 use sui_core::authority::AuthorityState;
-use sui_core::gateway_state::TxSeqNumber;
 use sui_json_rpc_types::{
     GetObjectDataResponse, GetPastObjectDataResponse, MoveFunctionArgType, ObjectValueKind, Page,
     SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiObjectInfo,
@@ -96,11 +95,13 @@ impl RpcReadApiServer for ReadApi {
         Ok(self.state.get_total_transaction_number()?)
     }
 
-    async fn get_recent_transactions(
-        &self,
-        count: u64,
-    ) -> RpcResult<Vec<(TxSeqNumber, TransactionDigest)>> {
-        Ok(self.state.get_recent_transactions(count)?)
+    async fn get_recent_transactions(&self, count: u64) -> RpcResult<Vec<TransactionDigest>> {
+        Ok(self
+            .state
+            .get_recent_transactions(count)?
+            .into_iter()
+            .map(|(_, digest)| digest)
+            .collect())
     }
 
     async fn get_transaction(
@@ -257,7 +258,7 @@ impl RpcFullNodeReadApiServer for FullNodeApi {
     async fn get_transactions(
         &self,
         query: TransactionQuery,
-        cursor: Option<TxSeqNumber>,
+        cursor: Option<TransactionDigest>,
         limit: Option<usize>,
     ) -> RpcResult<TransactionsPage> {
         let limit = limit.unwrap_or(MAX_RESULT_SIZE);
@@ -272,11 +273,7 @@ impl RpcFullNodeReadApiServer for FullNodeApi {
             .get_transactions(query, cursor, Some(limit + 1))?;
 
         // extract next cursor
-        let next_cursor = if data.len() == limit + 1 {
-            Some(data.last().unwrap().0)
-        } else {
-            None
-        };
+        let next_cursor = data.get(limit).cloned();
         data.truncate(limit);
         Ok(Page { data, next_cursor })
     }

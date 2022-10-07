@@ -20,7 +20,7 @@ use sui_json_rpc_types::{
     SuiEvent, SuiEventEnvelope, SuiExecutionStatus, SuiGasCostSummary, SuiObject, SuiObjectRead,
     SuiObjectRef, SuiParsedData, SuiPastObjectRead, SuiRawData, SuiRawMoveObject,
     SuiTransactionData, SuiTransactionEffects, SuiTransactionResponse, TransactionBytes,
-    TransactionsPage, TransferObjectParams, TxSeqNumber,
+    TransactionsPage, TransferObjectParams,
 };
 use sui_open_rpc::ExamplePairing;
 use sui_types::base_types::{
@@ -373,11 +373,10 @@ impl RpcExampleProvider {
     }
 
     fn get_transactions(&mut self) -> Examples {
-        let data = self.get_transaction_digests(5..8);
-        let result = TransactionsPage {
-            data,
-            next_cursor: Some(9),
-        };
+        let mut data = self.get_transaction_digests(5..9);
+        let next_cursor = data.pop();
+
+        let result = TransactionsPage { data, next_cursor };
         Examples::new(
             "sui_getTransactions",
             vec![ExamplePairing::new(
@@ -397,13 +396,10 @@ impl RpcExampleProvider {
         )
     }
 
-    fn get_transaction_digests(
-        &mut self,
-        range: Range<u64>,
-    ) -> Vec<(TxSeqNumber, TransactionDigest)> {
+    fn get_transaction_digests(&mut self, range: Range<u64>) -> Vec<TransactionDigest> {
         range
             .into_iter()
-            .map(|seq| (seq, TransactionDigest::new(self.rng.gen())))
+            .map(|_| TransactionDigest::new(self.rng.gen()))
             .collect()
     }
 

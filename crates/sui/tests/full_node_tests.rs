@@ -139,7 +139,7 @@ async fn test_full_node_move_function_index() -> Result<(), anyhow::Error> {
     )?;
 
     assert_eq!(txes.len(), 1);
-    assert_eq!(txes[0].1, digest);
+    assert_eq!(txes[0], digest);
 
     let txes = node.state().get_transactions(
         TransactionQuery::MoveFunction {
@@ -153,7 +153,7 @@ async fn test_full_node_move_function_index() -> Result<(), anyhow::Error> {
 
     // 2 transactions in the package i.e create and increment counter
     assert_eq!(txes.len(), 2);
-    assert_eq!(txes[1].1, digest);
+    assert_eq!(txes[1], digest);
 
     eprint!("start...");
     let txes = node.state().get_transactions(
@@ -168,7 +168,7 @@ async fn test_full_node_move_function_index() -> Result<(), anyhow::Error> {
 
     // 2 transactions in the package i.e publish and increment
     assert_eq!(txes.len(), 2);
-    assert_eq!(txes[1].1, digest);
+    assert_eq!(txes[1], digest);
 
     Ok(())
 }
@@ -193,7 +193,7 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
     )?;
 
     assert_eq!(txes.len(), 1);
-    assert_eq!(txes[0].1, digest);
+    assert_eq!(txes[0], digest);
 
     let txes = node.state().get_transactions(
         TransactionQuery::MutatedObject {
@@ -203,7 +203,7 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
         None,
     )?;
     assert_eq!(txes.len(), 1);
-    assert_eq!(txes[0].1, digest);
+    assert_eq!(txes[0], digest);
 
     let txes = node.state().get_transactions(
         TransactionQuery::FromAddress { address: sender },
@@ -211,7 +211,7 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
         None,
     )?;
     assert_eq!(txes.len(), 1);
-    assert_eq!(txes[0].1, digest);
+    assert_eq!(txes[0], digest);
 
     let txes = node.state().get_transactions(
         TransactionQuery::ToAddress { address: receiver },
@@ -219,7 +219,7 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
         None,
     )?;
     assert_eq!(txes.len(), 1);
-    assert_eq!(txes[0].1, digest);
+    assert_eq!(txes[0], digest);
 
     // Note that this is also considered a tx to the sender, because it mutated
     // one or more of the sender's objects.
@@ -229,7 +229,7 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
         None,
     )?;
     assert_eq!(txes.len(), 1);
-    assert_eq!(txes[0].1, digest);
+    assert_eq!(txes[0], digest);
 
     // No transactions have originated from the receiver
     let txes = node.state().get_transactions(
@@ -618,7 +618,7 @@ async fn test_full_node_event_read_api_ok() -> Result<(), anyhow::Error> {
     )?;
 
     assert_eq!(txes.len(), 1);
-    assert_eq!(txes[0].1, digest);
+    assert_eq!(txes[0], digest);
 
     // timestamp is recorded
     let ts = node.state().get_timestamp_ms(&digest).await?;
