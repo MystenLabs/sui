@@ -164,6 +164,7 @@ pub enum ConsensusListenerMessage {
         SerializedConsensusTransaction,
         (TxSequencedNotifier, TxSequencedNotifierClose),
     ),
+    Processed(Vec<u8>),
 }
 
 pub struct ConsensusWaiter {
@@ -282,7 +283,7 @@ impl ConsensusAdapter {
         // Notify the consensus listener that we are expecting to process this certificate.
         let (waiter, signals) = ConsensusWaiter::new();
 
-        let consensus_input = ConsensusListenerMessage::New(serialized.clone(), signals);
+        let consensus_input = ConsensusListenerMessage::New(serialized, signals);
         self.tx_consensus_listener
             .send(consensus_input)
             .await
@@ -360,8 +361,6 @@ impl ConsensusAdapter {
 pub struct ConsensusListener {
     /// Receive messages input to the consensus.
     rx_consensus_input: Receiver<ConsensusListenerMessage>,
-    /// Receive consensus outputs.
-    rx_consensus_output: Receiver<Vec<u8>>,
     /// Keep a map of all consensus inputs that are currently being sequenced.
     /// Maximum size of the pending notifiers is bounded by the maximum pending transactions of the node.
     pending: HashMap<ConsensusTransactionDigest, Vec<(u64, TxSequencedNotifier)>>,
@@ -369,14 +368,10 @@ pub struct ConsensusListener {
 
 impl ConsensusListener {
     /// Spawn a new consensus adapter in a dedicated tokio task.
-    pub fn spawn(
-        rx_consensus_input: Receiver<ConsensusListenerMessage>,
-        rx_consensus_output: Receiver<Vec<u8>>,
-    ) -> JoinHandle<()> {
+    pub fn spawn(rx_consensus_input: Receiver<ConsensusListenerMessage>) -> JoinHandle<()> {
         tokio::spawn(
             Self {
                 rx_consensus_input,
-                rx_consensus_output,
                 pending: HashMap::new(),
             }
             .run(),
@@ -430,20 +425,18 @@ impl ConsensusListener {
                                 (digest, id)
                             });
                         },
-                    }
-                },
-
-                // Notify the caller that the transaction has been sequenced (if there is a caller).
-                Some(serialized) = self.rx_consensus_output.recv() => {
-                    let digest = Self::hash_serialized_transaction(&serialized);
-                    if let Some(repliers) = self.pending.remove(&digest) {
-                        for (_, replier) in repliers {
-                            if replier.send(Ok(())).is_err() {
-                                debug!("No replier to listen to consensus output {digest}");
+                        ConsensusListenerMessage::Processed(serialized) => {
+                            let digest = Self::hash_serialized_transaction(&serialized);
+                            if let Some(repliers) = self.pending.remove(&digest) {
+                                for (_, replier) in repliers {
+                                    if replier.send(Ok(())).is_err() {
+                                        debug!("No replier to listen to consensus output {digest}");
+                                    }
+                                }
                             }
                         }
                     }
-                }
+                },
 
                 Some((digest, id)) = closed_notifications.next() => {
                     let should_delete = if let Some(list) = self.pending.get_mut(&digest) {

@@ -91,7 +91,6 @@ pub async fn test_certificates(authority: &AuthorityState) -> Vec<CertifiedTrans
 #[tokio::test]
 async fn listen_to_sequenced_transaction() {
     let (tx_sui_to_consensus, rx_sui_to_consensus) = channel(1);
-    let (tx_consensus_to_sui, rx_consensus_to_sui) = channel(1);
 
     // Make an authority state.
     let mut objects = test_gas_objects();
@@ -118,10 +117,7 @@ async fn listen_to_sequenced_transaction() {
         .unwrap();
 
     // Spawn a consensus listener.
-    ConsensusListener::spawn(
-        /* rx_consensus_input */ rx_sui_to_consensus,
-        /* rx_consensus_output */ rx_consensus_to_sui,
-    );
+    ConsensusListener::spawn(/* rx_consensus_input */ rx_sui_to_consensus);
 
     // Submit a sample consensus transaction.
     let (waiter, signals) = ConsensusWaiter::new();
@@ -131,7 +127,10 @@ async fn listen_to_sequenced_transaction() {
 
     // Notify the consensus listener that the transaction has been sequenced.
     tokio::task::yield_now().await;
-    tx_consensus_to_sui.send(serialized.clone()).await.unwrap();
+    tx_sui_to_consensus
+        .send(ConsensusListenerMessage::Processed(serialized.clone()))
+        .await
+        .unwrap();
 
     // Ensure the caller get notified from the consensus listener.
     assert!(waiter.wait_for_result().await.is_ok());
@@ -173,6 +172,7 @@ async fn submit_transaction_to_consensus() {
         while let Some(message) = rx_consensus_listener.recv().await {
             let (serialized, replier) = match message {
                 ConsensusListenerMessage::New(serialized, replier) => (serialized, replier),
+                _ => panic!("Unexpected message {message:?}"),
             };
 
             let message: ConsensusTransaction =
