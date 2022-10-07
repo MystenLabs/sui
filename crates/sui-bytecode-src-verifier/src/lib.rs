@@ -241,13 +241,12 @@ impl<'a> BytecodeSourceVerifier<'a> {
             Ok(sui_obj) => sui_obj,
             Err(err) => return Err(DependencyVerificationError::SuiObjectRefFailure(err)),
         };
-        let raw = match obj.data.clone() {
-            SuiRawData::Package(pkg) => pkg,
+
+        match obj.data.clone() {
+            SuiRawData::Package(pkg) => Ok(pkg),
             SuiRawData::MoveObject(move_obj) => return Err(
                 DependencyVerificationError::ObjectFoundWhenPackageExpected(obj_id, move_obj),
             ),
-        };
-
-        Ok(raw)
+        }
     }
 }
