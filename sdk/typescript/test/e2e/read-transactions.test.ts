@@ -22,4 +22,9 @@ describe('Transaction Reading API', () => {
     const txn = await toolbox.provider.getTransactionWithEffects(digest);
     expect(txn.certificate.transactionDigest).toEqual(digest);
   });
+
+  it('Get Transactions for address', async () => {
+    const resp = await toolbox.provider.getTransactionsForAddress(toolbox.address());
+    expect(resp.length).toEqual(1);
+  });
 });

@@ -21,6 +21,7 @@ use sui_json_rpc_types::{
 use sui_open_rpc::Module;
 use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
+use sui_types::batch::TxSequenceNumber;
 use sui_types::crypto::{SignableBytes, SignatureScheme};
 use sui_types::filter::TransactionQuery;
 use sui_types::messages::{Transaction, TransactionData};
@@ -93,6 +94,19 @@ impl RpcReadApiServer for ReadApi {
 
     async fn get_total_transaction_number(&self) -> RpcResult<u64> {
         Ok(self.state.get_total_transaction_number()?)
+    }
+
+    async fn get_transactions_in_range(
+        &self,
+        start: TxSequenceNumber,
+        end: TxSequenceNumber,
+    ) -> RpcResult<Vec<TransactionDigest>> {
+        Ok(self
+            .state
+            .get_transactions_in_range(start, end)?
+            .into_iter()
+            .map(|(_, digest)| digest)
+            .collect())
     }
 
     async fn get_recent_transactions(&self, count: u64) -> RpcResult<Vec<TransactionDigest>> {

@@ -58,7 +58,6 @@ use sui_types::{parse_sui_struct_tag, parse_sui_type_tag};
 #[path = "unit_tests/rpc_types_tests.rs"]
 mod rpc_types_tests;
 
-pub type TxSeqNumber = u64;
 pub type SuiMoveTypeParameterIndex = u16;
 pub type TransactionsPage = Page<TransactionDigest, TransactionDigest>;
 

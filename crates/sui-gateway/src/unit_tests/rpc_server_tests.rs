@@ -7,7 +7,6 @@ use move_package::BuildConfig;
 
 use sui_config::utils::get_available_port;
 use sui_config::SUI_KEYSTORE_FILENAME;
-use sui_core::gateway_state::TxSeqNumber;
 use sui_core::test_utils::to_sender_signed_transaction;
 use sui_framework::build_move_package_to_bytes;
 use sui_json::SuiJsonValue;

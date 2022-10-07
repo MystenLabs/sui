@@ -27,7 +27,6 @@ import styles from './RecentTxCard.module.css';
 
 export type TxnData = {
     To?: string;
-    seq: number;
     txId: string;
     status: ExecutionStatusType;
     txGas: number;

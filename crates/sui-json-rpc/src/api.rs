@@ -15,6 +15,7 @@ use sui_json_rpc_types::{
 };
 use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress, TransactionDigest};
+use sui_types::batch::TxSequenceNumber;
 use sui_types::crypto::SignatureScheme;
 use sui_types::filter::TransactionQuery;
 use sui_types::messages::ExecuteTransactionRequestType;
@@ -79,6 +80,16 @@ pub trait RpcReadApi {
     /// Return the total number of transactions known to the server.
     #[method(name = "getTotalTransactionNumber")]
     async fn get_total_transaction_number(&self) -> RpcResult<u64>;
+
+    /// Return list of transaction digests within the queried range.
+    #[method(name = "getTransactionsInRange")]
+    async fn get_transactions_in_range(
+        &self,
+        /// the matching transactions' sequence number will be greater than or equals to the starting sequence number
+        start: TxSequenceNumber,
+        /// the matching transactions' sequence number will be less than the ending sequence number
+        end: TxSequenceNumber,
+    ) -> RpcResult<Vec<TransactionDigest>>;
 
     /// Return list of recent transaction digest.
     #[method(name = "getRecentTransactions")]

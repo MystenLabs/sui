@@ -15,6 +15,7 @@ import {
   isSuiMoveNormalizedStruct,
   isSuiExecuteTransactionResponse,
   isSuiEvents,
+  isTransactionPage,
 } from '../types/index.guard';
 import {
   GatewayTxSeqNumber,
@@ -305,21 +306,21 @@ export class JsonRpcProvider extends Provider {
     const requests = [
       {
         method: 'sui_getTransactions',
-        args: [{ InputObject: objectID }],
+        args: [{ InputObject: objectID }, null, null],
       },
       {
         method: 'sui_getTransactions',
-        args: [{ MutatedObject: objectID }],
+        args: [{ MutatedObject: objectID }, null, null],
       },
     ];
 
     try {
       const results = await this.client.batchRequestWithType(
         requests,
-        isGetTxnDigestsResponse,
+        isTransactionPage,
         this.skipDataValidation
       );
-      return [...results[0], ...results[1]];
+      return [...results[0].data, ...results[1].data];
     } catch (err) {
       throw new Error(
         `Error getting transactions for object: ${err} for id ${objectID}`
@@ -333,21 +334,21 @@ export class JsonRpcProvider extends Provider {
     const requests = [
       {
         method: 'sui_getTransactions',
-        args: [{ ToAddress: addressID }],
+        args: [{ ToAddress: addressID }, null, null],
       },
       {
         method: 'sui_getTransactions',
-        args: [{ FromAddress: addressID }],
+        args: [{ FromAddress: addressID }, null, null],
       },
     ];
 
     try {
       const results = await this.client.batchRequestWithType(
         requests,
-        isGetTxnDigestsResponse,
+        isTransactionPage,
         this.skipDataValidation
       );
-      return [...results[0], ...results[1]];
+      return [...results[0].data, ...results[1].data];
     } catch (err) {
       throw new Error(
         `Error getting transactions for address: ${err} for id ${addressID}`

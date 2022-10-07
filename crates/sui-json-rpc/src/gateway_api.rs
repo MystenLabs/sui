@@ -17,6 +17,7 @@ use sui_json_rpc_types::{
     SuiTypeTag, TransactionBytes,
 };
 use sui_open_rpc::Module;
+use sui_types::batch::TxSequenceNumber;
 use sui_types::crypto::SignatureScheme;
 use sui_types::sui_serde::Base64;
 use sui_types::{
@@ -153,6 +154,14 @@ impl RpcReadApiServer for GatewayReadApiImpl {
 
     async fn get_total_transaction_number(&self) -> RpcResult<u64> {
         Ok(self.client.get_total_transaction_number()?)
+    }
+
+    async fn get_transactions_in_range(
+        &self,
+        start: TxSequenceNumber,
+        end: TxSequenceNumber,
+    ) -> RpcResult<Vec<TransactionDigest>> {
+        Ok(self.client.get_transactions_in_range(start, end)?)
     }
 }
 

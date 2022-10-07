@@ -10,7 +10,7 @@ use std::{
     collections::{HashMap, VecDeque},
     pin::Pin,
     sync::{
-        atomic::{AtomicBool, AtomicUsize, Ordering},
+        atomic::{AtomicUsize, Ordering},
         Arc,
     },
 };
@@ -82,7 +82,6 @@ use crate::authority::authority_store_tables::ExecutionIndicesWithHash;
 use crate::checkpoints::ConsensusSender;
 use crate::consensus_adapter::ConsensusListenerMessage;
 use crate::epoch::committee_store::CommitteeStore;
-use crate::epoch::epoch_store::EpochStore;
 use crate::metrics::TaskUtilizationExt;
 use crate::{
     authority_batch::{BroadcastReceiver, BroadcastSender},
@@ -1665,6 +1664,14 @@ impl AuthorityState {
 
     pub fn get_total_transaction_number(&self) -> Result<u64, anyhow::Error> {
         QueryHelpers::get_total_transaction_number(&self.database)
+    }
+
+    pub fn get_transactions_in_range(
+        &self,
+        start: TxSequenceNumber,
+        end: TxSequenceNumber,
+    ) -> Result<Vec<(TxSequenceNumber, TransactionDigest)>, anyhow::Error> {
+        QueryHelpers::get_transactions_in_range(&self.database, start, end)
     }
 
     pub fn get_recent_transactions(

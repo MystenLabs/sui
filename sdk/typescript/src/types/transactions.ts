@@ -154,6 +154,11 @@ export type GatewayTxSeqNumber = number;
 
 export type GetTxnDigestsResponse = TransactionDigest[];
 
+export type TransactionPage = {
+  data: TransactionDigest[];
+  nextCursor: TransactionDigest | null;
+};
+
 export type MoveCall = {
   package: SuiObjectRef;
   module: string;
