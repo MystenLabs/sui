@@ -1,5 +1,6 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
 use store::rocks::open_cf;
 use store::{reopen, rocks::DBMap, Map};
 use types::{Header, StoreResult};
@@ -29,8 +30,8 @@ impl ProposerStore {
     }
 
     /// Inserts a proposed header into the store
-    pub fn write_last_proposed(&self, header: Header) -> StoreResult<()> {
-        self.last_proposed.insert(&LAST_PROPOSAL_KEY, &header)
+    pub fn write_last_proposed(&self, header: &Header) -> StoreResult<()> {
+        self.last_proposed.insert(&LAST_PROPOSAL_KEY, header)
     }
 
     /// Get the last header
@@ -67,14 +68,14 @@ mod test {
         let store = ProposerStore::new_for_tests();
         let header_1 = create_header_for_round(1);
 
-        let out = store.write_last_proposed(header_1.clone());
+        let out = store.write_last_proposed(&header_1);
         assert!(out.is_ok());
 
         let result = store.last_proposed.get(&LAST_PROPOSAL_KEY).unwrap();
         assert_eq!(result.unwrap(), header_1);
 
         let header_2 = create_header_for_round(2);
-        let out = store.write_last_proposed(header_2.clone());
+        let out = store.write_last_proposed(&header_2);
         assert!(out.is_ok());
 
         let should_exist = store.last_proposed.get(&LAST_PROPOSAL_KEY).unwrap();
@@ -89,7 +90,7 @@ mod test {
         assert_eq!(should_not_exist, None);
 
         let header_1 = create_header_for_round(1);
-        let out = store.write_last_proposed(header_1.clone());
+        let out = store.write_last_proposed(&header_1);
         assert!(out.is_ok());
 
         let should_exist = store.get_last_proposed().unwrap();

@@ -134,11 +134,10 @@ impl Proposer {
                     self.payload_size = payload_size_backup;
                     header = last_header;
                 }
-            } else {
-                // We have not yet produced a header for the current round, so store the new header
-                self.proposer_store.write_last_proposed(header.clone())?;
             }
         }
+        // Store the last header.
+        self.proposer_store.write_last_proposed(&header)?;
 
         #[cfg(feature = "benchmark")]
         for digest in header.payload.keys() {

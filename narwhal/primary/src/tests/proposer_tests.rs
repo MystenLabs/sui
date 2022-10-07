@@ -94,3 +94,118 @@ async fn propose_payload() {
     assert_eq!(header.payload.get(&digest), Some(&worker_id));
     assert!(header.verify(&committee, shared_worker_cache).is_ok());
 }
+
+#[tokio::test]
+async fn equivocation_protection() {
+    let fixture = CommitteeFixture::builder().build();
+    let committee = fixture.committee();
+    let shared_worker_cache = fixture.shared_worker_cache();
+    let primary = fixture.authorities().next().unwrap();
+    let name = primary.public_key();
+    let signature_service = SignatureService::new(primary.keypair().copy());
+    let proposer_store = ProposerStore::new_for_tests();
+
+    let (tx_reconfigure, rx_reconfigure) =
+        watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
+    let (tx_parents, rx_parents) = test_utils::test_channel!(1);
+    let (tx_our_digests, rx_our_digests) = test_utils::test_channel!(1);
+    let (tx_headers, mut rx_headers) = test_utils::test_channel!(1);
+
+    let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
+
+    // Spawn the proposer.
+    let proposer_handle = Proposer::spawn(
+        name.clone(),
+        committee.clone(),
+        signature_service.clone(),
+        proposer_store.clone(),
+        /* header_size */ 32,
+        /* max_header_delay */
+        Duration::from_millis(1_000_000), // Ensure it is not triggered.
+        NetworkModel::PartiallySynchronous,
+        rx_reconfigure,
+        /* rx_core */ rx_parents,
+        /* rx_workers */ rx_our_digests,
+        /* tx_core */ tx_headers,
+        metrics,
+    );
+
+    // Send enough digests for the header payload.
+    let mut name_bytes = [0u8; 32];
+    name_bytes.copy_from_slice(&name.as_ref()[..32]);
+
+    let digest = BatchDigest(name_bytes);
+    let worker_id = 0;
+    tx_our_digests.send((digest, worker_id)).await.unwrap();
+
+    // Create and send parents
+    let parents: Vec<_> = fixture
+        .headers()
+        .iter()
+        .take(3)
+        .map(|h| fixture.certificate(h))
+        .collect();
+
+    let result = tx_parents.send((parents, 1, 0)).await;
+    assert!(result.is_ok());
+
+    // Ensure the proposer makes a correct header from the provided payload.
+    let header = rx_headers.recv().await.unwrap();
+    assert_eq!(header.round, 2);
+    assert_eq!(header.payload.get(&digest), Some(&worker_id));
+    assert!(header.verify(&committee, shared_worker_cache).is_ok());
+
+    // restart the proposer.
+    let shutdown = ReconfigureNotification::Shutdown;
+    tx_reconfigure.send(shutdown).unwrap();
+    assert!(proposer_handle.await.is_ok());
+
+    let (_tx_reconfigure, rx_reconfigure) =
+        watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
+    let (tx_parents, rx_parents) = test_utils::test_channel!(1);
+    let (tx_our_digests, rx_our_digests) = test_utils::test_channel!(1);
+    let (tx_headers, mut rx_headers) = test_utils::test_channel!(1);
+
+    let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
+
+    let _proposer_handle = Proposer::spawn(
+        name.clone(),
+        committee.clone(),
+        signature_service,
+        proposer_store,
+        /* header_size */ 32,
+        /* max_header_delay */
+        Duration::from_millis(1_000_000), // Ensure it is not triggered.
+        NetworkModel::PartiallySynchronous,
+        rx_reconfigure,
+        /* rx_core */ rx_parents,
+        /* rx_workers */ rx_our_digests,
+        /* tx_core */ tx_headers,
+        metrics,
+    );
+
+    // Send enough digests for the header payload.
+    let mut name_bytes = [0u8; 32];
+    name_bytes.copy_from_slice(&name.as_ref()[..32]);
+
+    let digest = BatchDigest(name_bytes);
+    let worker_id = 0;
+    tx_our_digests.send((digest, worker_id)).await.unwrap();
+
+    // Create and send a superset parents, same round but different set from before
+    let parents: Vec<_> = fixture
+        .headers()
+        .iter()
+        .take(4)
+        .map(|h| fixture.certificate(h))
+        .collect();
+
+    let result = tx_parents.send((parents, 1, 0)).await;
+    assert!(result.is_ok());
+
+    // Ensure the proposer makes the same header as before
+    let new_header = rx_headers.recv().await.unwrap();
+    if new_header.round == header.round {
+        assert_eq!(header, new_header);
+    }
+}
