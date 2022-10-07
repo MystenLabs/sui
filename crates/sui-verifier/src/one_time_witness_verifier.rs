@@ -175,12 +175,14 @@ fn verify_init_single_param(
         return Err(format!(
             "Expected last (and at most second) parameter for {}::{} to be &mut {}::{}::{}; \
              optional first parameter must be of one-time witness type whose name is \
-             the same as the capitalized module name",
+             the same as the capitalized module name: {}::{}",
             module.self_id(),
             INIT_FN_NAME,
             SUI_FRAMEWORK_ADDRESS,
             TX_CONTEXT_MODULE_NAME,
             TX_CONTEXT_STRUCT_NAME,
+            module.self_id(),
+            module.self_id().name().as_str().to_uppercase(),
         ));
     }
 
