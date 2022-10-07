@@ -24,9 +24,9 @@ use sui_json_rpc::bcs_api::BcsApiImpl;
 use sui_json_rpc::gateway_api::{
     GatewayReadApiImpl, GatewayWalletSyncApiImpl, RpcGatewayImpl, TransactionBuilderImpl,
 };
+use sui_json_rpc::{JsonRpcServerBuilder, ServerHandle};
 use sui_sdk::crypto::AccountKeystore;
 use sui_sdk::crypto::FileBasedKeystore;
-use sui_json_rpc::{JsonRpcServerBuilder, ServerHandle};
 use sui_sdk::crypto::Keystore;
 use sui_sdk::{ClientType, SuiClient};
 use sui_swarm::memory::{Swarm, SwarmBuilder};
@@ -81,12 +81,24 @@ impl TestCluster {
 
     // Helper function to get the 0th address in WalletContext
     pub fn get_address_0(&self) -> SuiAddress {
-        self.wallet.keystore.addresses().get(0).cloned().unwrap()
+        self.wallet
+            .config
+            .keystore
+            .addresses()
+            .get(0)
+            .cloned()
+            .unwrap()
     }
 
     // Helper function to get the 1st address in WalletContext
     pub fn get_address_1(&self) -> SuiAddress {
-        self.wallet.keystore.addresses().get(1).cloned().unwrap()
+        self.wallet
+            .config
+            .keystore
+            .addresses()
+            .get(1)
+            .cloned()
+            .unwrap()
     }
 }
 

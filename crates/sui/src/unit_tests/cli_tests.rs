@@ -20,13 +20,11 @@ use sui_config::{
     SUI_GATEWAY_CONFIG, SUI_GENESIS_FILENAME, SUI_KEYSTORE_FILENAME, SUI_NETWORK_CONFIG,
 };
 use sui_json::SuiJsonValue;
-use sui_json_rpc_types::{GetObjectDataResponse, SuiData, SuiParsedObject, SuiTransactionEffects};
-use sui_sdk::crypto::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_json_rpc_types::{
     GetObjectDataResponse, SuiData, SuiObject, SuiParsedData, SuiParsedObject,
     SuiTransactionEffects,
 };
-use sui_sdk::crypto::KeystoreType;
+use sui_sdk::crypto::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_sdk::ClientType;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{
@@ -246,7 +244,7 @@ async fn test_custom_genesis() -> Result<(), anyhow::Error> {
     let address = cluster.get_address_0();
     let context = cluster.wallet_mut();
 
-    assert_eq!(1, context.keystore.addresses().len());
+    assert_eq!(1, context.config.keystore.addresses().len());
 
     // Print objects owned by `address`
     SuiClientCommands::Objects {
@@ -561,7 +559,6 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
 #[allow(clippy::assertions_on_constants)]
 #[sim_test]
 async fn test_native_transfer() -> Result<(), anyhow::Error> {
-
     let mut test_cluster = TestClusterBuilder::new().build().await?;
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;

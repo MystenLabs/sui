@@ -13,8 +13,8 @@ use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::Write;
 use sui_json_rpc::api::EventReadApiOpenRpc;
-use sui_sdk::crypto::AccountKeystore;
 use sui_json_rpc::transaction_execution_api::FullNodeTransactionExecutionApi;
+use sui_sdk::crypto::AccountKeystore;
 use sui_types::messages::ExecuteTransactionRequestType;
 use sui_types::messages::Transaction;
 
@@ -139,7 +139,13 @@ async fn create_response_sample() -> Result<
         .await?;
 
     let context = cluster.wallet_mut();
-    let address = context.keystore.addresses().first().cloned().unwrap();
+    let address = context
+        .config
+        .keystore
+        .addresses()
+        .first()
+        .cloned()
+        .unwrap();
 
     context
         .client
@@ -404,7 +410,10 @@ async fn create_error_response(
         )
         .await?;
 
-    let signature = context.config.keystore.sign(&address, &tx_data.to_bytes())?;
+    let signature = context
+        .config
+        .keystore
+        .sign(&address, &tx_data.to_bytes())?;
 
     let tx = Transaction::new(tx_data, signature);
 

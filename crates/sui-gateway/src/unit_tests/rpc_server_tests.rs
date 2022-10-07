@@ -208,7 +208,7 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
         let transaction_bytes: TransactionBytes = http_client
             .transfer_object(*address, oref.object_id, Some(gas_id), 1000, *address)
             .await?;
-
+        let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
         let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
         let tx =
             to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);

@@ -160,7 +160,7 @@ async fn test_local_execution_with_missing_parents() -> Result<(), anyhow::Error
         TransactiondOrchestrator::new(net, node.state(), node_sync_handle, &Registry::new());
 
     let signer = context.config.keystore.addresses().get(0).cloned().unwrap();
-    let (pkg_ref, counter_id) = publish_basics_package_and_make_counter(&context, signer).await;
+    let (pkg_ref, counter_id) = publish_basics_package_and_make_counter(context, signer).await;
 
     // 0. Execute transaction through another fullnode (the one in WalletContext)
     let digests0 = increment(context, &signer, counter_id, 20, pkg_ref).await;

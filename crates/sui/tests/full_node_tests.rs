@@ -36,7 +36,6 @@ use sui_json_rpc_types::{
 use sui_macros::*;
 use sui_node::SuiNode;
 use sui_sdk::crypto::AccountKeystore;
-use sui_swarm::memory::Swarm;
 use sui_types::messages::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
 };
@@ -80,7 +79,6 @@ async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
 async fn test_full_node_shared_objects() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await?;
     let node = &test_cluster.fullnode_handle.sui_node;
-    let sender = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
 
     let sender = context.config.keystore.addresses().get(0).cloned().unwrap();
@@ -104,10 +102,7 @@ async fn test_full_node_move_function_index() -> Result<(), anyhow::Error> {
     let sender = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
 
-    let config = swarm.config().generate_fullnode_config();
-    let node = SuiNode::start(&config, Registry::new()).await?;
-    let sender = context.config.keystore.addresses().get(0).cloned().unwrap();
-    let (package_ref, counter_id) = publish_basics_package_and_make_counter(&context, sender).await;
+    let (package_ref, counter_id) = publish_basics_package_and_make_counter(context, sender).await;
     let (tx_cert, _effects_cert) =
         increment_counter(context, sender, None, package_ref, counter_id).await;
     let digest = tx_cert.transaction_digest;
@@ -1017,7 +1012,7 @@ async fn test_get_objects_read() -> Result<(), anyhow::Error> {
     let node = &test_cluster.fullnode_handle.sui_node;
 
     // Create the object
-    let (sender, object_id, _) = create_devnet_nft(&mut context).await?;
+    let (sender, object_id, _) = create_devnet_nft(context).await?;
     let recipient = context.config.keystore.addresses().get(1).cloned().unwrap();
     assert_ne!(sender, recipient);
 
