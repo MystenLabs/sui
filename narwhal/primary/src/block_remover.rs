@@ -13,7 +13,7 @@ use std::{collections::HashMap, sync::Arc};
 use storage::CertificateStore;
 use store::{rocks::TypedStoreError, Store};
 
-use tracing::{debug, warn};
+use tracing::{debug, instrument, warn};
 use types::{
     metered_channel::Sender, BatchDigest, Certificate, CertificateDigest, Header, HeaderDigest,
 };
@@ -77,6 +77,9 @@ impl BlockRemover {
         }
     }
 
+    /// Deletes all batches from worker storage that are part of the given certificates.
+    /// Returns an error unless *all* batches were successfully deleted.
+    #[instrument(level = "debug", skip_all, fields(ids = ?ids), err)]
     pub async fn remove_blocks(&self, ids: Vec<CertificateDigest>) -> Result<()> {
         // Look up certificates requested for removal.
         let certificates = self.certificate_store.read_all(ids.clone())?;
@@ -119,6 +122,7 @@ impl BlockRemover {
         Ok(())
     }
 
+    #[instrument(level = "debug", skip_all, err)]
     async fn cleanup_internal_state(
         &self,
         certificates: Vec<Certificate>,
