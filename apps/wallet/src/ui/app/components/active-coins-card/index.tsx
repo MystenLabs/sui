@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import cl from 'classnames';
 import { useMemo, useCallback } from 'react';
 import { useIntl } from 'react-intl';
 import { useNavigate, Link } from 'react-router-dom';
@@ -8,10 +9,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import Icon, { SuiIcons } from '_components/icon';
 import { useAppSelector } from '_hooks';
 import { accountAggregateBalancesSelector } from '_redux/slices/account';
-import {
-    GAS_TYPE_ARG,
-    SUPPORTED_COINS_LIST,
-} from '_redux/slices/sui-objects/Coin';
+import { GAS_TYPE_ARG, Coin } from '_redux/slices/sui-objects/Coin';
 import { balanceFormatOptions } from '_shared/formatting';
 
 import st from './ActiveCoinsCard.module.scss';
@@ -29,10 +27,30 @@ function ActiveCoinsCard({
     const intl = useIntl();
     const aggregateBalances = useAppSelector(accountAggregateBalancesSelector);
 
+    const allCoins = useMemo(
+        () =>
+            Object.entries(aggregateBalances).map((aType) => {
+                const name = Coin.getCoinSymbol(aType[0]);
+                return {
+                    coinName: name,
+                    coinSymbol: name,
+                    coinType: aType[0],
+                    //TODO: default coin icon switch to on chain metadata
+                    coinIconName:
+                        GAS_TYPE_ARG === aType[0]
+                            ? SuiIcons.SuiLogoIcon
+                            : SuiIcons.Tokens,
+                    type: aType,
+                    balance: aType[1],
+                };
+            }),
+        [aggregateBalances]
+    );
+
     const coins = useMemo(() => {
-        return SUPPORTED_COINS_LIST.map((coin) => {
+        return allCoins.map((coin) => {
             const balance = intl.formatNumber(
-                BigInt(aggregateBalances[coin.coinType] || 0),
+                BigInt(coin.balance || 0),
                 balanceFormatOptions
             );
             return {
@@ -40,15 +58,18 @@ function ActiveCoinsCard({
                 balance,
             };
         });
-    }, [aggregateBalances, intl]);
+    }, [allCoins, intl]);
 
     const activeCoin = useMemo(() => {
         return coins.filter((coin) => coin.coinType === activeCoinType)[0];
     }, [activeCoinType, coins]);
 
-    const IconName = activeCoin.coinIconName;
+    const IconName = activeCoin?.coinIconName || SuiIcons.SuiLogoIcon;
 
-    const SelectedCoinCard = (
+    const defaultIconClass =
+        GAS_TYPE_ARG !== activeCoin?.coinSymbol ? st.defaultCoin : '';
+
+    const SelectedCoinCard = activeCoin ? (
         <div className={st.selectCoin}>
             <Link
                 to={`/send/select?${new URLSearchParams({
@@ -56,11 +77,11 @@ function ActiveCoinsCard({
                 }).toString()}`}
                 className={st.coin}
             >
-                <div className={st.suiIcon}>
+                <div className={cl(st.suiIcon, defaultIconClass)}>
                     <Icon icon={IconName} />
                 </div>
                 <div className={st.coinLabel}>
-                    {activeCoin.coinName}{' '}
+                    {activeCoin?.coinName}{' '}
                     <span className={st.coinSymbol}>
                         {activeCoin.coinSymbol}
                     </span>
@@ -76,11 +97,11 @@ function ActiveCoinsCard({
                 </div>
             </div>
         </div>
-    );
+    ) : null;
 
     const navigate = useNavigate();
 
-    const changeConType = useCallback(
+    const changeCoinType = useCallback(
         (event: React.MouseEvent<HTMLDivElement>) => {
             const cointype = event.currentTarget.dataset.cointype as string;
             navigate(
@@ -98,10 +119,10 @@ function ActiveCoinsCard({
                 <div
                     className={st.coinDetail}
                     key={index}
-                    onClick={changeConType}
+                    onClick={changeCoinType}
                     data-cointype={coin.coinType}
                 >
-                    <div className={st.coinIcon}>
+                    <div className={cl(st.coinIcon, defaultIconClass)}>
                         <Icon icon={coin.coinIconName} />
                     </div>
                     <div className={st.coinLabel}>

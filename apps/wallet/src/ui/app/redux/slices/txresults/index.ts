@@ -78,6 +78,9 @@ const getCreatedObjectID = (txEffects: TransactionEffects): string | null => {
         : null;
 };
 
+const moveCallTxnName = (moveCallFunctionName?: string): string | null =>
+    moveCallFunctionName ? moveCallFunctionName.replace(/_/g, ' ') : null;
+
 export const getTransactionsByAddress = createAsyncThunk<
     TxResultByAddress,
     void,
@@ -143,11 +146,9 @@ export const getTransactionsByAddress = createAsyncThunk<
                                 status: getExecutionStatusType(txEff),
                                 txGas: getTotalGasUsed(txEff),
                                 kind: txKind,
-                                // gasUsed: txEff?.gasUsed,
-                                callFunctionName: `Call (${moveCallTxn?.function?.replace(
-                                    /_/g,
-                                    ' '
-                                )})`,
+                                callFunctionName: moveCallTxnName(
+                                    moveCallTxn?.function
+                                ),
                                 from: res.data.sender,
                                 ...(txTransferObject || callObjectId
                                     ? {

@@ -23,6 +23,11 @@ function TokensPage() {
         () => Object.keys(balances).filter((aType) => aType !== GAS_TYPE_ARG),
         [balances]
     );
+
+    // Send only coins that have a balance
+    // deactivate send for wallet with no balance
+    const activeCoinType = suiBalance > 0 ? GAS_TYPE_ARG : otherCoinTypes[0];
+
     return (
         <div className={st.container}>
             {showError && error ? (
@@ -51,8 +56,9 @@ function TokensPage() {
                 <IconLink
                     icon={SuiIcons.ArrowLeft}
                     to={`/send?${new URLSearchParams({
-                        type: GAS_TYPE_ARG,
+                        type: activeCoinType,
                     }).toString()}`}
+                    disabled={!activeCoinType}
                     text="Send"
                 />
                 <IconLink
@@ -70,28 +76,44 @@ function TokensPage() {
                     text="Stake & Earn SUI"
                 />
             </div>
-            <div className={st.title}>OTHER COINS</div>
-            <div className={st.otherCoins}>
-                <Loading loading={loading} className={st.othersLoader}>
-                    {otherCoinTypes.length ? (
-                        otherCoinTypes.map((aCoinType) => {
-                            const aCoinBalance = balances[aCoinType];
-                            return (
-                                <CoinBalance
-                                    type={aCoinType}
-                                    balance={aCoinBalance}
-                                    key={aCoinType}
-                                />
-                            );
-                        })
-                    ) : (
-                        <div className={st.empty}>
-                            No coins have added. When you have multiple coins in
-                            your wallet, they will be listed here.
-                        </div>
-                    )}
-                </Loading>
-            </div>
+            {activeCoinType ? (
+                <>
+                    <div className={st.title}>MY COINS</div>
+                    <div className={st.otherCoins}>
+                        <Loading loading={loading} className={st.othersLoader}>
+                            {otherCoinTypes.length ? (
+                                otherCoinTypes.map((aCoinType) => {
+                                    const aCoinBalance = balances[aCoinType];
+                                    return (
+                                        <CoinBalance
+                                            type={aCoinType}
+                                            balance={aCoinBalance}
+                                            key={aCoinType}
+                                        />
+                                    );
+                                })
+                            ) : (
+                                <div className={st.empty}>
+                                    No coins have added. When you have multiple
+                                    coins in your wallet, they will be listed
+                                    here.
+                                </div>
+                            )}
+                        </Loading>
+                    </div>
+                </>
+            ) : (
+                <div className={st.emptyWallet}>
+                    <div className={st.emptyWalletIcon}></div>
+                    <div className={st.emptyWalletTitle}>
+                        Your wallet is empty
+                    </div>
+                    <div className={st.emptyWalletDescription}>
+                        To conduct transactions on the SUI network, you’ll need
+                        SUI in your wallet.
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

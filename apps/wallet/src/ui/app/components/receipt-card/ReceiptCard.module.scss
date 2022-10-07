@@ -34,8 +34,10 @@
         font-size: 24px;
         line-height: 19px;
         color: colors.$gray-90;
+        display: flex;
+        align-content: flex-start;
 
-        sup {
+        span {
             color: colors.$gray-90;
             font-weight: 400;
             font-size: 14px;
@@ -229,4 +231,8 @@
     gap: 10px;
     justify-content: space-between;
     align-content: center;
+
+    .label {
+        text-transform: capitalize;
+    }
 }
