@@ -102,8 +102,10 @@ impl<SynchronizerHandler: Handler + Send + Sync + 'static> BlockWaiter<Synchroni
     async fn get_block(
         &self,
         certificate_digest: CertificateDigest,
+        // Immediately reports an error for this block if the certificate is not available.
         certificate: Option<Certificate>,
-        synced: bool,
+        // Immediately reports an error for this block if payloads could not be synced.
+        synced_payloads: bool,
     ) -> BlockResult<GetBlockResponse> {
         if certificate.is_none() {
             return Err(BlockError {
@@ -111,7 +113,7 @@ impl<SynchronizerHandler: Handler + Send + Sync + 'static> BlockWaiter<Synchroni
                 error: BlockErrorKind::BlockNotFound,
             });
         }
-        if !synced {
+        if !synced_payloads {
             return Err(BlockError {
                 digest: certificate_digest,
                 error: BlockErrorKind::BatchError,
