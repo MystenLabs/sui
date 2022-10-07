@@ -184,33 +184,12 @@
             "fileName": "build/rust-sdk"
           },
           {
-            "label": "Use TypeScript/JavaScript SDK",
-            "link": "https://github.com/MystenLabs/sui/tree/main/sdk/typescript",
-            "external": true
-          },
-          {
             "label": "Run a Fullnode",
             "fileName": "build/fullnode"
           },
           {
             "label": "Subscribe to Events",
             "fileName": "build/pubsub"
-          }
-        ]
-      },
-      {
-        "label": "Reference",
-        "fileName": "build/reference",
-        "title": "Reference",
-        "items": [
-          {
-            "label": "JSON-RPC API Reference",
-            "link": "https://docs.sui.io/sui-jsonrpc",
-            "external": true
-          },
-          {
-            "label": "SuiJSON Format",
-            "fileName": "build/sui-json"
           }
         ]
       }

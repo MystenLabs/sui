@@ -1,0 +1,128 @@
+"reference": [
+    {
+        "label": "TypeScript/JavaScript SDK",
+        "link": "https://github.com/MystenLabs/sui/tree/main/sdk/typescript",
+        "external": true
+      },
+    {
+        "label": "SuiJSON Format",
+        "fileName": "reference/sui-json"
+      },
+    {
+        "label": "Sui Framework Reference",
+        "fileName": "reference/sui-framework",
+        "title": "Sui Reference Framework",
+        "items": [
+            {
+            "label": "balance",
+            "fileName": "reference/balance"
+            },
+            {
+                "label": "bls12381",
+                "fileName": "reference/bls12381"
+            },
+            {
+                "label": "bulletproofs",
+                "fileName": "reference/bulletproofs"
+            },
+            {
+                "label": "coin",
+                "fileName": "reference/coin"
+            },
+            {
+                "label": "devnet_nft",
+                "fileName": "reference/devnet_nft"
+            },
+            {
+                "label": "ecdsa",
+                "fileName": "reference/ecdsa"
+            },
+            {
+                "label": "ed25519",
+                "fileName": "reference/ed25519"
+            },
+            {
+                "label": "elliptic_curve",
+                "fileName": "reference/elliptic_curve"
+            },
+            {
+                "label": "epoch_time_lock",
+                "fileName": "reference/epoch_time_lock"
+            },
+            {
+                "label": "erc721_metadata",
+                "fileName": "reference/erc721_metadata"
+            },
+            {
+                "label": "event",
+                "fileName": "reference/event"
+            },
+            {
+                "label": "genesis",
+                "fileName": "reference/genesis"
+            },
+            {
+                "label": "locked_coin",
+                "fileName": "reference/locked_coin"
+            },
+            {
+                "label": "object",
+                "fileName": "reference/object"
+            },
+            {
+                "label": "priority_queue",
+                "fileName": "reference/priority_queue"
+            },
+            {
+                "label": "stake",
+                "fileName": "reference/stake"
+            },
+            {
+                "label": "staking_pool",
+                "fileName": "reference/staking_pool"
+            },
+            {
+                "label": "sui",
+                "fileName": "reference/sui"
+            },
+            {
+                "label": "sui_system",
+                "fileName": "reference/sui_system"
+            },
+            {
+                "label": "transfer",
+                "fileName": "reference/transfer"
+            },
+            {
+                "label": "tx_context",
+                "fileName": "reference/tx_context"
+            },
+            {
+                "label": "typed_id",
+                "fileName": "reference/typed_id"
+            },
+            {
+                "label": "types",
+                "fileName": "reference/types"
+            },
+            {
+                "label": "url",
+                "fileName": "reference/url"
+            },
+            {
+                "label": "validator",
+                "fileName": "reference/validator"
+            },
+            {
+                "label": "validator_set",
+                "fileName": "reference/validator_set"
+            },
+            {
+                "label": "vec_map",
+                "fileName": "reference/vec_map"
+            },
+            {
+                "label": "vec_set",
+                "fileName": "reference/vec_set"
+            }
+  ]
