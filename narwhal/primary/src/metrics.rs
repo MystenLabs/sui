@@ -453,6 +453,8 @@ pub struct PrimaryMetrics {
     pub core_cancel_handlers_total: IntGaugeVec,
     /// The current Narwhal round in proposer
     pub current_round: IntGaugeVec,
+    /// The last received Narwhal round.
+    pub last_parent_missing_round: IntGaugeVec,
     /// The highest Narwhal round that has been received.
     pub highest_received_round: IntGaugeVec,
     /// The highest Narwhal round that has been processed.
@@ -542,6 +544,13 @@ impl PrimaryMetrics {
             current_round: register_int_gauge_vec_with_registry!(
                 "current_round",
                 "Current round the node will propose",
+                &["epoch"],
+                registry
+            )
+            .unwrap(),
+            last_parent_missing_round: register_int_gauge_vec_with_registry!(
+                "last_parent_missing_round",
+                "The round of the last certificate which misses parent",
                 &["epoch"],
                 registry
             )
