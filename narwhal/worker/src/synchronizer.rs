@@ -77,6 +77,7 @@ impl Synchronizer {
                                 self.network.cleanup(self.worker_cache.load().network_diff(new_committee.keys()));
                                 self.committee.swap(Arc::new(new_committee.clone()));
 
+                                // TODO: duplicated code in this file.
                                 // Update the worker cache.
                                 self.worker_cache.swap(Arc::new(WorkerCache {
                                     epoch: new_committee.epoch,

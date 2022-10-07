@@ -393,11 +393,11 @@ impl Builder {
         let path = path.as_ref();
         trace!("Writing Genesis Builder to {}", path.display());
 
-        std::fs::create_dir_all(path)?;
+        fs::create_dir_all(path)?;
 
         // Write Objects
         let object_dir = path.join(GENESIS_BUILDER_OBJECT_DIR);
-        std::fs::create_dir_all(&object_dir)?;
+        fs::create_dir_all(&object_dir)?;
 
         for (_id, object) in self.objects {
             let object_bytes = serde_yaml::to_vec(&object)?;
@@ -407,7 +407,7 @@ impl Builder {
 
         // Write validator infos
         let committee_dir = path.join(GENESIS_BUILDER_COMMITTEE_DIR);
-        std::fs::create_dir_all(&committee_dir)?;
+        fs::create_dir_all(&committee_dir)?;
 
         for (_pubkey, validator) in self.validators {
             let validator_info_bytes = serde_yaml::to_vec(&validator)?;

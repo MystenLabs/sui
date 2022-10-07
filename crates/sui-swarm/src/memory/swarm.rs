@@ -45,7 +45,7 @@ impl SwarmBuilder {
 }
 
 impl<R> SwarmBuilder<R> {
-    pub fn rng<N: ::rand::RngCore + ::rand::CryptoRng>(self, rng: N) -> SwarmBuilder<N> {
+    pub fn rng<N: rand::RngCore + rand::CryptoRng>(self, rng: N) -> SwarmBuilder<N> {
         SwarmBuilder {
             rng,
             dir: self.dir,
@@ -101,7 +101,7 @@ impl<R> SwarmBuilder<R> {
     }
 }
 
-impl<R: ::rand::RngCore + ::rand::CryptoRng> SwarmBuilder<R> {
+impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
     /// Create the configured Swarm.
     pub fn build(self) -> Swarm {
         let dir = if let Some(dir) = self.dir {

@@ -15,7 +15,7 @@ use tokio::task::JoinHandle;
 use tokio::time::Instant;
 use tracing::info;
 
-type InnerLockTable<K> = HashMap<K, Arc<tokio::sync::Mutex<()>>>;
+type InnerLockTable<K> = HashMap<K, Arc<Mutex<()>>>;
 // MutexTable supports mutual exclusion on keys such as TransactionDigest or ObjectDigest
 pub struct MutexTable<K: Hash> {
     random_state: RandomState,
@@ -42,7 +42,7 @@ impl Error for TryAcquireLockError {}
 // Opaque struct to hide tokio::sync::MutexGuard.
 pub struct LockGuard(tokio::sync::OwnedMutexGuard<()>);
 
-impl<K: Hash + std::cmp::Eq + Send + Sync + 'static> MutexTable<K> {
+impl<K: Hash + Eq + Send + Sync + 'static> MutexTable<K> {
     pub fn new_with_cleanup(
         num_shards: usize,
         shard_size: usize,

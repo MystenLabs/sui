@@ -98,6 +98,7 @@ impl BatchMaker {
                     timer.as_mut().reset(Instant::now() + self.max_batch_delay);
                 }
 
+                // TODO: duplicated code in quorum_waiter.rs
                 // Trigger reconfigure.
                 result = self.rx_reconfigure.changed() => {
                     result.expect("Committee channel dropped");

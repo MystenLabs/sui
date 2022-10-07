@@ -22,7 +22,7 @@ use futures::stream::{self, Stream};
 use futures::StreamExt;
 use typed_store::Map;
 
-use tokio::sync::broadcast::{error::RecvError, Receiver};
+use tokio::sync::broadcast::{error::RecvError, Receiver, Sender};
 use tracing::{debug, error};
 
 #[cfg(test)]
@@ -51,8 +51,8 @@ The architecture is as follows:
 
 */
 
-pub type BroadcastSender = tokio::sync::broadcast::Sender<UpdateItem>;
-pub type BroadcastReceiver = tokio::sync::broadcast::Receiver<UpdateItem>;
+pub type BroadcastSender = Sender<UpdateItem>;
+pub type BroadcastReceiver = Receiver<UpdateItem>;
 
 pub type BroadcastPair = (BroadcastSender, BroadcastReceiver);
 
@@ -330,7 +330,7 @@ impl crate::authority::AuthorityState {
                     None
                 } else {
                     loop {
-                        match local_state.subscriber.recv().await {
+                        return match local_state.subscriber.recv().await {
                             Ok(item) => {
                                 match &item {
                                     UpdateItem::Transaction((seq, _)) => {
@@ -357,13 +357,13 @@ impl crate::authority::AuthorityState {
                                 }
 
                                 local_state.metrics.follower_items_streamed.inc();
-                                return Some((Ok(BatchInfoResponseItem(item)), local_state));
+                                Some((Ok(BatchInfoResponseItem(item)), local_state))
                             }
                             Err(RecvError::Closed) => {
                                 // The service closed the channel, so we tell the client.
                                 let err_response = Err(SuiError::SubscriptionServiceClosed);
                                 local_state.exit = true;
-                                return Some((err_response, local_state));
+                                Some((err_response, local_state))
                             }
                             Err(RecvError::Lagged(number_skipped)) => {
                                 // We tell the client they are too slow to consume, and
@@ -371,9 +371,9 @@ impl crate::authority::AuthorityState {
                                 let err_response =
                                     Err(SuiError::SubscriptionItemsDroppedError(number_skipped));
                                 local_state.exit = true;
-                                return Some((err_response, local_state));
+                                Some((err_response, local_state))
                             }
-                        }
+                        };
                     }
                 }
             }

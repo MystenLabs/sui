@@ -142,9 +142,9 @@ impl BlockSynchronizerHandler {
         )
         .await
         {
-            result.map_err(|_| Error::Internal { block_id })
+            result.map_err(|_| Internal { block_id })
         } else {
-            Err(Error::BlockDeliveryTimeout { block_id })
+            Err(BlockDeliveryTimeout { block_id })
         }
     }
 }
@@ -280,12 +280,10 @@ impl Handler for BlockSynchronizerHandler {
 
         // We want to block and wait until we get all the results back.
         while let Some(result) = rx.recv().await {
-            let r = result
-                .map(|h| h.certificate)
-                .map_err(|e| Error::PayloadSyncError {
-                    block_id: e.block_id(),
-                    error: e,
-                });
+            let r = result.map(|h| h.certificate).map_err(|e| PayloadSyncError {
+                block_id: e.block_id(),
+                error: e,
+            });
 
             if let Err(err) = r {
                 error!(

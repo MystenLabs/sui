@@ -67,7 +67,7 @@ pub enum ValidatorDagError {
     NoCertificateForCoordinates(PublicKey, Round),
     // an invariant violation at the level of the generic DAG (unrelated to Certificate specifics)
     #[error("Dag invariant violation {0}")]
-    DagInvariantViolation(#[from] dag::node_dag::NodeDagError),
+    DagInvariantViolation(#[from] NodeDagError),
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -80,7 +80,7 @@ enum DagCommand {
     HasEverContained(CertificateDigest, oneshot::Sender<bool>),
     Rounds(
         PublicKey,
-        oneshot::Sender<Result<std::ops::RangeInclusive<Round>, ValidatorDagError>>,
+        oneshot::Sender<Result<RangeInclusive<Round>, ValidatorDagError>>,
     ),
     ReadCausal(
         CertificateDigest,
@@ -216,10 +216,7 @@ impl InnerDag {
 
     /// Returns the oldest and newest rounds for which a validator has (live) certificates in the DAG
     #[instrument(level = "trace", skip_all, fields(origin = ?origin), err)]
-    fn rounds(
-        &mut self,
-        origin: PublicKey,
-    ) -> Result<std::ops::RangeInclusive<Round>, ValidatorDagError> {
+    fn rounds(&mut self, origin: PublicKey) -> Result<RangeInclusive<Round>, ValidatorDagError> {
         // Our garbage collection is a mark-and-sweep algorithm, where the mark part is in `make_compressible` and
         // `read_causal` triggers a sweep.
         // To make sure we don't return rounds as live when wouldn't be seen as such from a subsequent `read_causal`
@@ -418,7 +415,7 @@ impl Dag {
     pub async fn rounds(
         &self,
         origin: PublicKey,
-    ) -> Result<std::ops::RangeInclusive<Round>, ValidatorDagError> {
+    ) -> Result<RangeInclusive<Round>, ValidatorDagError> {
         let (sender, receiver) = oneshot::channel();
         if let Err(e) = self
             .tx_commands

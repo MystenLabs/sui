@@ -50,25 +50,25 @@ const MAX_PENDING_CONSENSUS_TRANSACTIONS: u64 = 2000;
 pub struct AuthorityServerHandle {
     tx_cancellation: tokio::sync::oneshot::Sender<()>,
     local_addr: Multiaddr,
-    handle: tokio::task::JoinHandle<Result<(), tonic::transport::Error>>,
+    handle: JoinHandle<Result<(), tonic::transport::Error>>,
 }
 
 impl AuthorityServerHandle {
-    pub async fn join(self) -> Result<(), std::io::Error> {
+    pub async fn join(self) -> Result<(), io::Error> {
         // Note that dropping `self.complete` would terminate the server.
         self.handle
             .await?
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
         Ok(())
     }
 
-    pub async fn kill(self) -> Result<(), std::io::Error> {
+    pub async fn kill(self) -> Result<(), io::Error> {
         self.tx_cancellation.send(()).map_err(|_e| {
-            std::io::Error::new(io::ErrorKind::Other, "could not send cancellation signal!")
+            io::Error::new(io::ErrorKind::Other, "could not send cancellation signal!")
         })?;
         self.handle
             .await?
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
         Ok(())
     }
 
@@ -116,7 +116,7 @@ impl AuthorityServer {
         &self,
         min_batch_size: u64,
         max_delay: Duration,
-    ) -> SuiResult<tokio::task::JoinHandle<SuiResult<()>>> {
+    ) -> SuiResult<JoinHandle<SuiResult<()>>> {
         // Start the batching subsystem, and register the handles with the authority.
         let state = self.state.clone();
         let _batch_join_handle =
@@ -233,7 +233,7 @@ impl ValidatorServiceMetrics {
     }
 
     pub fn new_for_tests() -> Self {
-        let registry = prometheus::Registry::new();
+        let registry = Registry::new();
         Self::new(&registry)
     }
 }

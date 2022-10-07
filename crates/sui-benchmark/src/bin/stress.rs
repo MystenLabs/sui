@@ -343,7 +343,7 @@ async fn main() -> Result<()> {
             })?;
         let config: GatewayConfig = PersistedConfig::read(&config_path)?;
         let committee = GatewayState::make_committee(&config)?;
-        let registry = prometheus::Registry::new();
+        let registry = Registry::new();
         let authority_clients = GatewayState::make_authority_clients(
             &config,
             NetworkAuthorityClientMetrics::new(&registry),

@@ -63,6 +63,7 @@ async fn test_successful_range_synchronization() {
         .start(anemo::Router::new())
         .unwrap();
 
+    // TODO: quite duplicated code (3 times in our repo)
     for (_pubkey, address, network_pubkey) in committee.others_primaries(&name) {
         let peer_id = PeerId(network_pubkey.0.to_bytes());
         let address = network::multiaddr_to_address(&address).unwrap();
@@ -256,6 +257,7 @@ async fn test_successful_headers_synchronization() {
     let worker_id_0 = 0;
     let worker_id_1 = 1;
 
+    // TODO: duplicated code in this file.
     // AND generate headers with distributed batches between 2 workers (0 and 1)
     for _ in 0..8 {
         let batch_1 = fixture_batch_with_transactions(10);
@@ -281,6 +283,7 @@ async fn test_successful_headers_synchronization() {
         .start(anemo::Router::new())
         .unwrap();
 
+    // TODO: quite duplicated in our repo (3 times).
     for (_pubkey, address, network_pubkey) in committee.others_primaries(&name) {
         let peer_id = PeerId(network_pubkey.0.to_bytes());
         let address = network::multiaddr_to_address(&address).unwrap();
@@ -961,6 +964,7 @@ async fn test_reply_with_certificates_already_in_storage() {
         "Number of expected missing certificates differ."
     );
 
+    // TODO: duplicated in this file.
     // AND should have received all the block headers
     for _ in 0..8 - NUM_OF_MISSING_CERTIFICATES {
         let result = timeout(Duration::from_secs(1), rx.recv())

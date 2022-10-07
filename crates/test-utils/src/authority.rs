@@ -156,6 +156,7 @@ pub fn test_authority_aggregator(
 ) -> AuthorityAggregator<NetworkAuthorityClient> {
     let validators_info = config.validator_set();
     let committee = Committee::new(0, ValidatorInfo::voting_rights(validators_info)).unwrap();
+    // TODO: duplicated at test_utils.rs
     let clients: BTreeMap<_, _> = validators_info
         .iter()
         .map(|config| {
@@ -169,7 +170,7 @@ pub fn test_authority_aggregator(
             )
         })
         .collect();
-    let registry = prometheus::Registry::new();
+    let registry = Registry::new();
     AuthorityAggregator::new(
         committee,
         committee_store,

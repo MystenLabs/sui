@@ -188,7 +188,7 @@ fn test_certificates() {
 
 #[test]
 fn test_new_with_signatures() {
-    let message: messages_tests::Foo = Foo("some data".to_string());
+    let message: Foo = Foo("some data".to_string());
     let mut signatures: Vec<(AuthorityName, AuthoritySignature)> = Vec::new();
     let mut authorities: BTreeMap<AuthorityPublicKeyBytes, u64> = BTreeMap::new();
 
@@ -228,7 +228,7 @@ fn test_new_with_signatures() {
 
 #[test]
 fn test_handle_reject_malicious_signature() {
-    let message: messages_tests::Foo = Foo("some data".to_string());
+    let message: Foo = Foo("some data".to_string());
     let mut signatures: Vec<(AuthorityName, AuthoritySignature)> = Vec::new();
     let mut authorities: BTreeMap<AuthorityPublicKeyBytes, u64> = BTreeMap::new();
 
@@ -258,7 +258,7 @@ fn test_handle_reject_malicious_signature() {
 
 #[test]
 fn test_bitmap_out_of_range() {
-    let message: messages_tests::Foo = Foo("some data".to_string());
+    let message: Foo = Foo("some data".to_string());
     let mut signatures: Vec<(AuthorityName, AuthoritySignature)> = Vec::new();
     let mut authorities: BTreeMap<AuthorityPublicKeyBytes, u64> = BTreeMap::new();
     for _ in 0..5 {
@@ -283,9 +283,10 @@ fn test_bitmap_out_of_range() {
 
 #[test]
 fn test_reject_extra_public_key() {
-    let message: messages_tests::Foo = Foo("some data".to_string());
+    let message: Foo = Foo("some data".to_string());
     let mut signatures: Vec<(AuthorityName, AuthoritySignature)> = Vec::new();
     let mut authorities: BTreeMap<AuthorityPublicKeyBytes, u64> = BTreeMap::new();
+    // TODO: quite duplicated code in this file (4 times).
     for _ in 0..5 {
         let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
         let sig = AuthoritySignature::new(&Foo("some data".to_string()), &sec);
@@ -316,7 +317,7 @@ fn test_reject_extra_public_key() {
 
 #[test]
 fn test_reject_reuse_signatures() {
-    let message: messages_tests::Foo = Foo("some data".to_string());
+    let message: Foo = Foo("some data".to_string());
     let mut signatures: Vec<(AuthorityName, AuthoritySignature)> = Vec::new();
     let mut authorities: BTreeMap<AuthorityPublicKeyBytes, u64> = BTreeMap::new();
     for _ in 0..5 {
@@ -345,7 +346,7 @@ fn test_reject_reuse_signatures() {
 
 #[test]
 fn test_empty_bitmap() {
-    let message: messages_tests::Foo = Foo("some data".to_string());
+    let message: Foo = Foo("some data".to_string());
     let mut signatures: Vec<(AuthorityName, AuthoritySignature)> = Vec::new();
     let mut authorities: BTreeMap<AuthorityPublicKeyBytes, u64> = BTreeMap::new();
     for _ in 0..5 {

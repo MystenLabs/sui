@@ -131,7 +131,7 @@ fn seed_zeroize_on_drop() {
         secret_ptr = seed.0.as_ptr();
     }
 
-    let memory: &[u8] = unsafe { ::std::slice::from_raw_parts(secret_ptr, 32) };
+    let memory: &[u8] = unsafe { std::slice::from_raw_parts(secret_ptr, 32) };
     assert!(!memory.contains(&0x15));
 }
 

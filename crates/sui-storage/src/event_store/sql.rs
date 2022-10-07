@@ -497,6 +497,7 @@ impl EventStore for SqlEventStore {
         limit: usize,
     ) -> Result<Vec<StoredEvent>, SuiError> {
         let limit = Self::cap_limit(limit);
+        // TODO: duplication: these 10 lines are repetitive (4 times) in this file.
         let rows = sqlx::query(QUERY_BY_MOVE_EVENT_STRUCT_NAME)
             .persistent(true)
             .bind(start_time as i64)
@@ -1132,6 +1133,7 @@ mod tests {
         let db = SqlEventStore::new_from_file(&db_file).await?;
         db.initialize().await?;
 
+        // TODO: these 30 lines are quite duplicated in this file (4 times).
         // Write in some events, all should succeed
         let to_insert = vec![
             test_utils::new_test_newobj_event(1_000_000, 1, None, None, None),

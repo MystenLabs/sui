@@ -31,7 +31,7 @@ pub struct GenesisConfig {
 impl Config for GenesisConfig {}
 
 impl GenesisConfig {
-    pub fn generate_accounts<R: ::rand::RngCore + ::rand::CryptoRng>(
+    pub fn generate_accounts<R: rand::RngCore + rand::CryptoRng>(
         &self,
         mut rng: R,
     ) -> Result<(Vec<AccountKeyPair>, Vec<Object>)> {

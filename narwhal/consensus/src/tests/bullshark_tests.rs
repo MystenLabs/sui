@@ -18,6 +18,7 @@ use tokio::sync::mpsc::channel;
 use tokio::sync::watch;
 use types::{CertificateDigest, ReconfigureNotification};
 
+// TODO: duplicated in tusk_tests.rs
 pub fn make_consensus_store(store_path: &std::path::Path) -> Arc<ConsensusStore> {
     const LAST_COMMITTED_CF: &str = "last_committed";
     const SEQUENCE_CF: &str = "sequence";
@@ -33,6 +34,7 @@ pub fn make_consensus_store(store_path: &std::path::Path) -> Arc<ConsensusStore>
     Arc::new(ConsensusStore::new(last_committed_map, sequence_map))
 }
 
+// TODO: dulpicated in tusk_tests.rs
 pub fn make_certificate_store(store_path: &std::path::Path) -> CertificateStore {
     const CERTIFICATES_CF: &str = "certificates";
     const CERTIFICATE_ID_BY_ROUND_CF: &str = "certificate_id_by_round";

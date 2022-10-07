@@ -46,7 +46,7 @@ pub trait LuckyNetwork<Request> {
         peers: Vec<NetworkPublicKey>,
         message: &Request,
         num_nodes: usize,
-    ) -> Vec<Result<JoinHandle<anyhow::Result<anemo::Response<Self::Response>>>>>;
+    ) -> Vec<Result<JoinHandle<Result<anemo::Response<Self::Response>>>>>;
 }
 
 impl<T, M> LuckyNetwork<M> for T
@@ -76,13 +76,13 @@ pub trait ReliableNetwork<Request: Clone + Send + Sync> {
         &mut self,
         peer: NetworkPublicKey,
         message: &Request,
-    ) -> CancelOnDropHandler<anyhow::Result<anemo::Response<Self::Response>>>;
+    ) -> CancelOnDropHandler<Result<anemo::Response<Self::Response>>>;
 
     async fn broadcast(
         &mut self,
         peers: Vec<NetworkPublicKey>,
         message: &Request,
-    ) -> Vec<CancelOnDropHandler<anyhow::Result<anemo::Response<Self::Response>>>> {
+    ) -> Vec<CancelOnDropHandler<Result<anemo::Response<Self::Response>>>> {
         let mut handlers = Vec::new();
         for peer in peers {
             let handle = self.send(peer, message).await;

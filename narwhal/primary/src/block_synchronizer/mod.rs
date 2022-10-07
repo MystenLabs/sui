@@ -157,7 +157,7 @@ impl PendingIdentifier {
     #[allow(dead_code)]
     fn id(&self) -> CertificateDigest {
         match self {
-            PendingIdentifier::Header(id) | PendingIdentifier::Payload(id) => *id,
+            Header(id) | Payload(id) => *id,
         }
     }
 }
@@ -165,7 +165,7 @@ impl PendingIdentifier {
 // Tracks the responses from the inflight synchronize range request.
 #[derive(Default)]
 struct SyncRangeState {
-    // Wehther there is an active range sync request.
+    // Whether there is an active range sync request.
     // When active, both item_sender and result_sender are valid. And both are None when inactive.
     running: bool,
     // Keeps track of peers that have responded, to avoid processing duplicated responses.

@@ -128,6 +128,7 @@ async fn checkpoint_active_flow_crash_client_with_gossip() {
     }
 
     let sender_aggregator = aggregator.clone();
+    // TODO: duplicated code in the same file `_end_of_sending_join`
     let _end_of_sending_join = tokio::task::spawn(async move {
         while let Some(t) = transactions.pop() {
             // Get a cert

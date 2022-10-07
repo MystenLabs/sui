@@ -110,7 +110,7 @@ impl AuthorityHealth {
     }
 }
 
-struct NodeSyncProcessHandle(tokio::task::JoinHandle<()>, oneshot::Sender<()>);
+struct NodeSyncProcessHandle(JoinHandle<()>, oneshot::Sender<()>);
 
 pub struct ActiveAuthority<A> {
     // The local authority state
@@ -202,13 +202,7 @@ impl<A> ActiveAuthority<A> {
 
         let health_overview: Vec<_> = lock
             .iter()
-            .map(|(name, h)| {
-                (
-                    *name,
-                    h.retries,
-                    h.no_contact_before - tokio::time::Instant::now(),
-                )
-            })
+            .map(|(name, h)| (*name, h.retries, h.no_contact_before - Instant::now()))
             .collect();
         debug!(health_overview = ?health_overview, "Current validator health metrics");
 

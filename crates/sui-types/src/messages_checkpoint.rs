@@ -709,6 +709,7 @@ mod tests {
             [ExecutionDigests::random()].into_iter(),
         );
 
+        // TODO: duplicated in a test below.
         let signed_checkpoints: Vec<_> = keys
             .iter()
             .map(|k| {

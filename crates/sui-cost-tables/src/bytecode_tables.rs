@@ -199,10 +199,6 @@ impl<'b> GasMeter for GasStatus<'b> {
         self.charge_instr(get_simple_instruction_opcode(instr))
     }
 
-    fn charge_native_function(&mut self, amount: InternalGas) -> PartialVMResult<()> {
-        self.deduct_gas(amount)
-    }
-
     fn charge_call(
         &mut self,
         _module_id: &ModuleId,
@@ -297,10 +293,6 @@ impl<'b> GasMeter for GasStatus<'b> {
             Opcodes::NEQ,
             lhs.legacy_abstract_memory_size() + rhs.legacy_abstract_memory_size(),
         )
-    }
-
-    fn charge_load_resource(&mut self, _loaded: Option<NumBytes>) -> PartialVMResult<()> {
-        Ok(())
     }
 
     fn charge_borrow_global(
@@ -411,6 +403,14 @@ impl<'b> GasMeter for GasStatus<'b> {
 
     fn charge_vec_swap(&mut self, _ty: impl TypeView) -> PartialVMResult<()> {
         self.charge_instr(Opcodes::VEC_SWAP)
+    }
+
+    fn charge_load_resource(&mut self, _loaded: Option<NumBytes>) -> PartialVMResult<()> {
+        Ok(())
+    }
+
+    fn charge_native_function(&mut self, amount: InternalGas) -> PartialVMResult<()> {
+        self.deduct_gas(amount)
     }
 }
 

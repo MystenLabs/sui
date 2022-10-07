@@ -625,7 +625,7 @@ struct WorkerReceiverHandler {
 impl WorkerToPrimary for WorkerReceiverHandler {
     async fn send_message(
         &self,
-        request: anemo::Request<types::WorkerPrimaryMessage>,
+        request: anemo::Request<WorkerPrimaryMessage>,
     ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
         let message = request.into_body();
 
