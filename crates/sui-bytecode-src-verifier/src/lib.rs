@@ -4,13 +4,12 @@
 use std::{
     collections::{BTreeMap, HashMap},
     fmt::{Debug, Display},
-    path::Path,
     str::FromStr,
 };
 
 use move_compiler::compiled_unit::CompiledUnitEnum;
 use move_core_types::account_address::AccountAddress;
-use move_package::{compilation::compiled_package::CompiledPackage, BuildConfig};
+use move_package::{compilation::compiled_package::CompiledPackage};
 use move_symbol_pool::Symbol;
 
 use sui_sdk::{
