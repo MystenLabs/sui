@@ -47,36 +47,3 @@ td:nth-child(1) {
 .table tbody tr:hover td:last-child {
     @apply rounded-r-[4px];
 }
-
-.addresses {
-    @apply flex flex-wrap items-center p-0 gap-[4px];
-}
-
-.table tbody tr td:hover .addresses {
-    @apply bg-sui-light rounded-[4px];
-}
-
-.addresses a {
-    @apply font-mono;
-}
-
-.addresses svg {
-    @apply fill-sui-grey-60;
-}
-
-.success svg {
-    @apply fill-success;
-}
-
-.fail svg {
-    @apply fill-issue-dark;
-}
-
-.statuswrapper {
-    @apply flex flex-col justify-center items-start;
-}
-
-.success,
-.fail {
-    @apply flex items-center gap-[6px] justify-center;
-}

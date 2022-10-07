@@ -4,8 +4,6 @@
 import { useContext, useEffect, useState } from 'react';
 
 import Longtext from '../../components/longtext/Longtext';
-import PlaceholderTable from '../../components/placeholder/Table';
-import TableCard from '../../components/table/TableCard';
 import { NetworkContext } from '../../context';
 import {
     getValidatorState,
@@ -16,6 +14,8 @@ import {
 import { mockState } from '../../pages/validators/mockData';
 import { truncate } from '../../utils/stringUtils';
 
+import PlaceholderTable from '~/ui/PlaceholderTable';
+import TableCard from '~/ui/TableCard';
 import { TabGroup, TabList, Tab, TabPanels, TabPanel } from '~/ui/Tabs';
 
 export const STATE_DEFAULT: ValidatorState = {

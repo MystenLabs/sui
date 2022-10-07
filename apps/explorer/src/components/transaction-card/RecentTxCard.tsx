@@ -11,7 +11,6 @@ import { useEffect, useState, useContext, useCallback } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 
 import { ReactComponent as ArrowRight } from '../../assets/SVGIcons/12px/ArrowRight.svg';
-import TableCard, { type TableType } from '../../components/table/TableCard';
 import TabFooter from '../../components/tabs/TabFooter';
 import { NetworkContext } from '../../context';
 import {
@@ -22,7 +21,6 @@ import { IS_STATIC_ENV } from '../../utils/envUtil';
 import { getAllMockTransaction } from '../../utils/static/searchUtil';
 import ErrorResult from '../error-result/ErrorResult';
 import Pagination from '../pagination/Pagination';
-import PlaceholderTable from '../placeholder/Table';
 import {
     type TxnData,
     genTableDataFromTxData,
@@ -31,6 +29,8 @@ import {
 
 import styles from './RecentTxCard.module.css';
 
+import PlaceholderTable from '~/ui/PlaceholderTable';
+import TableCard, { type TableType } from '~/ui/TableCard';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 
 const TRUNCATE_LENGTH = 10;

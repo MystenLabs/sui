@@ -6,11 +6,11 @@ import { ParentSizeModern } from '@visx/responsive';
 import { TooltipWithBounds, useTooltip } from '@visx/tooltip';
 import React, { useCallback, useMemo, useState } from 'react';
 
-import placeholdertheme from '../../styles/placeholder.module.css';
 import { WorldMap } from './WorldMap';
 import { type NodeLocation } from './types';
 
 import styles from './ValidatorMap.module.css';
+import placeholdertheme from './placeholder.module.css';
 
 import { DateFilter, useDateFilterState } from '~/ui/DateFilter';
 

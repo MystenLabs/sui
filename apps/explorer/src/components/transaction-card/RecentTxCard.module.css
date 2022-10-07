@@ -62,14 +62,6 @@ div.txadd {
     @apply md:w-1/12 w-20 bg-offblack text-offwhite hover:text-offblack hover:bg-sui h-16 shadow-sm border-solid border border-gray-100;
 }
 
-.failure {
-    @apply text-red-300;
-}
-
-.success {
-    @apply text-green-400;
-}
-
 .txlatestresults .tab {
     @apply text-lg !important;
 }
@@ -83,8 +75,20 @@ div.txadd {
     text-decoration: none;
 }
 
+.addresses svg {
+    @apply fill-sui-grey-60;
+}
+
 .moretxbtn svg {
     @apply fill-sui-grey-75;
+}
+
+.success svg {
+    @apply fill-success;
+}
+
+.fail svg {
+    @apply fill-issue-dark;
 }
 
 .moretxbtn:hover svg,
@@ -98,4 +102,25 @@ div.txadd {
 
 .suisuffix {
     @apply text-[10px] ml-[2px];
+}
+
+.addresses {
+    @apply flex flex-wrap items-center p-0 gap-[4px];
+}
+
+tbody tr td:hover .addresses {
+    @apply bg-sui-light rounded-[4px];
+}
+
+.addresses a {
+    @apply font-mono;
+}
+
+.statuswrapper {
+    @apply flex flex-col justify-center items-start;
+}
+
+.success,
+.fail {
+    @apply flex items-center gap-[6px] justify-center;
 }
