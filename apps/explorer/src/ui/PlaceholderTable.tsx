@@ -12,6 +12,24 @@ type DataType = {
     colWidths: string[];
 };
 
+export function PlaceholderBox({
+    width,
+    height,
+}: {
+    width: string;
+    height: string;
+}) {
+    return (
+        <div
+            className={placeholdertheme.placeholder}
+            style={{
+                width,
+                height,
+            }}
+        />
+    );
+}
+
 export default function PlaceholderTable({
     rowCount,
     rowHeight,
@@ -21,13 +39,10 @@ export default function PlaceholderTable({
     const rowEntry = Object.fromEntries(
         colHeadings.map((header, index) => [
             `a${index}`,
-            <div
+            <PlaceholderBox
                 key={index}
-                className={placeholdertheme.placeholder}
-                style={{
-                    width: colWidths[index],
-                    height: rowHeight,
-                }}
+                width={colWidths[index]}
+                height={rowHeight}
             />,
         ])
     );
