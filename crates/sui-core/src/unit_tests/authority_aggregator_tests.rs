@@ -1,5 +1,6 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
 use bcs::to_bytes;
 use move_core_types::{account_address::AccountAddress, ident_str};
 use move_package::BuildConfig;
