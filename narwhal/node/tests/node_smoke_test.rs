@@ -52,7 +52,7 @@ fn test_primary_no_consensus() {
 
     let mut child = std::process::Command::new("cargo")
         .current_dir("..")
-        .args(["run", "--bin", "node", "--"])
+        .args(["run", "--bin", "narwhal-node", "--"])
         .args([
             "run",
             "--committee",
@@ -136,7 +136,7 @@ fn test_primary_with_consensus() {
 
     let mut child = std::process::Command::new("cargo")
         .current_dir("..")
-        .args(["run", "--bin", "node", "--"])
+        .args(["run", "--bin", "narwhal-node", "--"])
         .args([
             "run",
             "--committee",
