@@ -463,8 +463,7 @@ impl<'a> SuiTestAdapter<'a> {
         let objects_by_kind = transaction
             .signed_data
             .data
-            .input_objects()
-            .unwrap()
+            .input_objects()?
             .into_iter()
             .flat_map(|kind| {
                 let id = kind.object_id();
