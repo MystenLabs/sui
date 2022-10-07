@@ -25,6 +25,6 @@ describe('Transaction Reading API', () => {
 
   it('Get Transactions for address', async () => {
     const resp = await toolbox.provider.getTransactionsForAddress(toolbox.address());
-    expect(resp.length).toEqual(1);
+    expect(resp.length).toEqual(5);
   });
 });

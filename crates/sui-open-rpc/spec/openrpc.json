@@ -1855,6 +1855,47 @@
       ]
     },
     {
+      "name": "sui_getTransactionsInRange",
+      "tags": [
+        {
+          "name": "Read API"
+        }
+      ],
+      "description": "Return list of transaction digests within the queried range.",
+      "params": [
+        {
+          "name": "start",
+          "description": "the matching transactions' sequence number will be greater than or equals to the starting sequence number",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        },
+        {
+          "name": "end",
+          "description": "the matching transactions' sequence number will be less than the ending sequence number",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        }
+      ],
+      "result": {
+        "name": "Vec<TransactionDigest>",
+        "required": true,
+        "schema": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/TransactionDigest"
+          }
+        }
+      }
+    },
+    {
       "name": "sui_mergeCoins",
       "tags": [
         {
