@@ -235,7 +235,7 @@ impl<'a> BytecodeSourceVerifier<'a> {
         match self.package_cache.get(addr) {
             Some(raw_pkg) => return Ok(raw_pkg.clone()),
             None => {},
-        }
+        };
         // Move packages are specified with an AccountAddress, but are
         // fetched from a sui network via sui_getObject, which takes an object ID
         let obj_id = match ObjectID::from_str(addr.to_string().as_str()) {
