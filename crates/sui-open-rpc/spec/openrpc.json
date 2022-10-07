@@ -473,16 +473,16 @@
             "value": [
               {
                 "timestamp": 0,
-                "txDigest": "O6PzkAMyBBtKN//q0Dce75JPRyIVn7sG4XH5nCe30PQ=",
+                "txDigest": "GoMyiLnqV1c1MhJGwS9EkxttHEOO7T3JRHoA8ljFNyo=",
                 "event": {
                   "transferObject": {
                     "packageId": "0x0000000000000000000000000000000000000002",
                     "transactionModule": "native",
-                    "sender": "0x7715917eb0196da21feb102a11803b581bb66074",
+                    "sender": "0xbb4fa19d228beca5e98850f2ce11afc4f84c7657",
                     "recipient": {
-                      "AddressOwner": "0x71ea08ffdb2fd0ea41696ca3ea204b350ed513f8"
+                      "AddressOwner": "0x86a866efa6db5c1bd60446af9ce59a85cd194e47"
                     },
-                    "objectId": "0x0254082f1fadc9347718cef986a866efa6db5c1b",
+                    "objectId": "0x15701e55e66b092d67b54aea5028bed04c46a29b",
                     "version": 2,
                     "type": "ToAddress",
                     "amount": 100
@@ -578,7 +578,7 @@
             "value": [
               {
                 "timestamp": 0,
-                "txDigest": "1ulEuJ5PToMa/ey+R9Jovt1O6x4eFQEgVGeYvHaldGI=",
+                "txDigest": "Qp8yq31APG+JGGF++uG5kzKW9bGyGdGE1/49WxDMsXY=",
                 "event": {
                   "moveEvent": {
                     "packageId": "0x0000000000000000000000000000000000000002",
@@ -658,7 +658,7 @@
           "params": [
             {
               "name": "object",
-              "value": "0x703ac8666d06aecc4ddf7e7926a361970c65a5b1"
+              "value": "0xbdec549c7cdea06bc4a1d339a22521eea933b889"
             },
             {
               "name": "count",
@@ -678,16 +678,16 @@
             "value": [
               {
                 "timestamp": 0,
-                "txDigest": "Wf4LCMD8bLNgE6PSdWE4WVbjf7mK+WkbgqIPqXdFsg4=",
+                "txDigest": "Hnzx5pqSWf6SSK4iYkU0ID0UN6/6LVAMVDOv7Tpy9Nc=",
                 "event": {
                   "transferObject": {
                     "packageId": "0x0000000000000000000000000000000000000002",
                     "transactionModule": "native",
-                    "sender": "0xb92fb8366a7f2e2d6dc15ff4527af5ae19fa04b9",
+                    "sender": "0x23806221284475899703e19ebb71f5c98a509494",
                     "recipient": {
-                      "AddressOwner": "0x48b3e0103ba9bbed6a06153b9fc486e101f0e9e2"
+                      "AddressOwner": "0x26a361970c65a5b12c43805d0d6f5402a7ad0da5"
                     },
-                    "objectId": "0x703ac8666d06aecc4ddf7e7926a361970c65a5b1",
+                    "objectId": "0xbdec549c7cdea06bc4a1d339a22521eea933b889",
                     "version": 2,
                     "type": "ToAddress",
                     "amount": 100
@@ -764,7 +764,7 @@
             {
               "name": "recipient",
               "value": {
-                "AddressOwner": "0x0b5d72879b091d6d6d8f832ef94830cb8e133a93"
+                "AddressOwner": "0x8581e7115f3d762b5057bc2a187b79e31a5ccbc4"
               }
             },
             {
@@ -785,16 +785,16 @@
             "value": [
               {
                 "timestamp": 0,
-                "txDigest": "xeLQrwjQCLk7X6LyxvzZJcH/20uG9YA+jiaSqJI2pM0=",
+                "txDigest": "wUUUMKe4LH83LUD79mCF/BXIPwVp2iPHKgRBmv+aIs0=",
                 "event": {
                   "transferObject": {
                     "packageId": "0x0000000000000000000000000000000000000002",
                     "transactionModule": "native",
-                    "sender": "0x37cc2ef8e213beb3d8a6a7b61ce09bf2fa9b43ee",
+                    "sender": "0x6ad5da5d137026b83f3be64dd6dc76f3cca22375",
                     "recipient": {
-                      "AddressOwner": "0x0b5d72879b091d6d6d8f832ef94830cb8e133a93"
+                      "AddressOwner": "0x8581e7115f3d762b5057bc2a187b79e31a5ccbc4"
                     },
-                    "objectId": "0x3152e034d51c788dc5ebd6c28581e7115f3d762b",
+                    "objectId": "0x74eecfc5ce1ef691c14c027b6aa764377981bafd",
                     "version": 2,
                     "type": "ToAddress",
                     "amount": 100
@@ -870,7 +870,7 @@
           "params": [
             {
               "name": "sender",
-              "value": "0xe5053c6c857a950e770092f60f3750a769944c2b"
+              "value": "0xbbe4b8234b099cdfb3277c5e4df7b72c366bb7c7"
             },
             {
               "name": "count",
@@ -890,16 +890,16 @@
             "value": [
               {
                 "timestamp": 0,
-                "txDigest": "8xevzpFiIsAEbZ1ZXwvxy0/tlbZuInHH7R77pjVF5IM=",
+                "txDigest": "ag3RA2mE7vqHXAJ9hiitgpf1DLGgMmNwShD64Ng0IWE=",
                 "event": {
                   "transferObject": {
                     "packageId": "0x0000000000000000000000000000000000000002",
                     "transactionModule": "native",
-                    "sender": "0xe5053c6c857a950e770092f60f3750a769944c2b",
+                    "sender": "0xbbe4b8234b099cdfb3277c5e4df7b72c366bb7c7",
                     "recipient": {
-                      "AddressOwner": "0xcf1f75675a9b385f479fea7c2ddad0b77b758036"
+                      "AddressOwner": "0x45e3e1415579352c128b4d1a2f42fdfbc9c5a73a"
                     },
-                    "objectId": "0xa74fdb6fdbea46a3ebc7779c45e3e1415579352c",
+                    "objectId": "0x441193e99ab6cc2a92f7d37948898292d7042041",
                     "version": 2,
                     "type": "ToAddress",
                     "amount": 100
@@ -983,16 +983,16 @@
             "value": [
               {
                 "timestamp": 0,
-                "txDigest": "5kTrpC9q6IG2CB/KkKrFwflwYNH3aOf5ywBEbrQJERc=",
+                "txDigest": "F0wkDp/8VWs3RGkz+ly2X30lhxEwW2Y+JPGhkiKKevI=",
                 "event": {
                   "transferObject": {
                     "packageId": "0x0000000000000000000000000000000000000002",
                     "transactionModule": "native",
-                    "sender": "0xc2c3716a94024b4c46ff4f794d7c9068e50c9f3d",
+                    "sender": "0x636a37efd526f38da079eb35644961e93c869b16",
                     "recipient": {
-                      "AddressOwner": "0x436d8f0f47b7f8b9927ec3f8975a1dcbf9b25564"
+                      "AddressOwner": "0x53a8771e448930bc95a0369fad43a9870a2e5878"
                     },
-                    "objectId": "0x861c5e055605b2bb1199faf653a8771e448930bc",
+                    "objectId": "0x91825debff541cf4e08b5c5f7296ff9840e6f0b1",
                     "version": 2,
                     "type": "ToAddress",
                     "amount": 100
@@ -1048,7 +1048,7 @@
           "params": [
             {
               "name": "digest",
-              "value": "EwrXTuhTAElLCQoYVhTYBnsXbaznA7b1ihyUbO8uuIY="
+              "value": "gA8fELgirLI/JDKVpMfsOtvDRO4FvjFTQhnc2CGIHXw="
             },
             {
               "name": "count",
@@ -1060,16 +1060,16 @@
             "value": [
               {
                 "timestamp": 0,
-                "txDigest": "EwrXTuhTAElLCQoYVhTYBnsXbaznA7b1ihyUbO8uuIY=",
+                "txDigest": "gA8fELgirLI/JDKVpMfsOtvDRO4FvjFTQhnc2CGIHXw=",
                 "event": {
                   "transferObject": {
                     "packageId": "0x0000000000000000000000000000000000000002",
                     "transactionModule": "native",
-                    "sender": "0x36ff9aef9fdd10b1618ef0602b03ecb18f51ee6c",
+                    "sender": "0xd084dad8fc6cc86a71b0df0c98c5b71c4184d9b2",
                     "recipient": {
-                      "AddressOwner": "0xdf97e865b10c0046e293c08cec0f40783d9ac4bf"
+                      "AddressOwner": "0xdee7c7ff955697fe2b704c9540a3846e9298b75d"
                     },
-                    "objectId": "0x4abb4d7f820647fd85d19183dee7c7ff955697fe",
+                    "objectId": "0xb725c1ee3027b783ea689e1a38eb476c6efc44ed",
                     "version": 2,
                     "type": "ToAddress",
                     "amount": 100
@@ -1580,24 +1580,12 @@
         }
       ],
       "result": {
-        "name": "Vec<(TxSeqNumber,TransactionDigest)>",
+        "name": "Vec<TransactionDigest>",
         "required": true,
         "schema": {
           "type": "array",
           "items": {
-            "type": "array",
-            "items": [
-              {
-                "type": "integer",
-                "format": "uint64",
-                "minimum": 0.0
-              },
-              {
-                "$ref": "#/components/schemas/TransactionDigest"
-              }
-            ],
-            "maxItems": 2,
-            "minItems": 2
+            "$ref": "#/components/schemas/TransactionDigest"
           }
         }
       },
@@ -1613,26 +1601,11 @@
           "result": {
             "name": "Result",
             "value": [
-              [
-                5,
-                "a77K+UV8mvd6kfYxdghTk004NjS898MmVQCaYfHeDq4="
-              ],
-              [
-                6,
-                "QgouSuG7dyqy3V1affqUnA7waQjnpUkA8nm+TGoQHpo="
-              ],
-              [
-                7,
-                "OvXIBwES+Ahkizbvv43uihqC3kbZUE6WoRCKF473b1Y="
-              ],
-              [
-                8,
-                "w5ljOi6zELypEk5fLzjOc56qy7ZgBoiATgeESJ+Q9/g="
-              ],
-              [
-                9,
-                "Zswp37HaY3POlPnZXcpaQPThdpkY7r+fuuAL045Xhy8="
-              ]
+              "a77K+UV8mvd6kfYxdghTk004NjS898MmVQCaYfHeDq4=",
+              "QgouSuG7dyqy3V1affqUnA7waQjnpUkA8nm+TGoQHpo=",
+              "OvXIBwES+Ahkizbvv43uihqC3kbZUE6WoRCKF473b1Y=",
+              "w5ljOi6zELypEk5fLzjOc56qy7ZgBoiATgeESJ+Q9/g=",
+              "Zswp37HaY3POlPnZXcpaQPThdpkY7r+fuuAL045Xhy8="
             ]
           }
         }
@@ -1829,9 +1802,7 @@
         {
           "name": "cursor",
           "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
+            "$ref": "#/components/schemas/TransactionDigest"
           }
         },
         {
@@ -1847,7 +1818,7 @@
         "name": "TransactionsPage",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/Page_for_Tuple_of_uint64_and_TransactionDigest_and_uint64"
+          "$ref": "#/components/schemas/Page_for_TransactionDigest_and_TransactionDigest"
         }
       },
       "examples": [
@@ -1857,9 +1828,7 @@
             {
               "name": "query",
               "value": {
-                "InputObject": {
-                  "object_id": "0xcccaa97a02cc3a98041670e1609db714e9858c96"
-                }
+                "InputObject": "0xb10c0046e293c08cec0f40783d9ac4bf4abb4d7f"
               }
             },
             {
@@ -1875,20 +1844,11 @@
             "name": "Result",
             "value": {
               "data": [
-                [
-                  5,
-                  "e6kd3H5xfPcIyTcGDwQEhzbsM/sXRtmZpeWM1cZ37YA="
-                ],
-                [
-                  6,
-                  "T4LxyFh7mNZMAL+0bDhDvYv2zPp8ZahhOGmM0f3Kw9w="
-                ],
-                [
-                  7,
-                  "6NjHzoY/MT2j29kqg+8m0Si4j+Zr8m4ODQnNr3J9HYQ="
-                ]
+                "e6kd3H5xfPcIyTcGDwQEhzbsM/sXRtmZpeWM1cZ37YA=",
+                "T4LxyFh7mNZMAL+0bDhDvYv2zPp8ZahhOGmM0f3Kw9w=",
+                "6NjHzoY/MT2j29kqg+8m0Si4j+Zr8m4ODQnNr3J9HYQ="
               ],
-              "nextCursor": 9
+              "nextCursor": "zMqpegLMOpgEFnDhYJ23FOmFjJbp5GmFXxzzv9+X6GU="
             }
           }
         }
@@ -3640,7 +3600,7 @@
           }
         ]
       },
-      "Page_for_Tuple_of_uint64_and_TransactionDigest_and_uint64": {
+      "Page_for_TransactionDigest_and_TransactionDigest": {
         "type": "object",
         "required": [
           "data"
@@ -3649,28 +3609,18 @@
           "data": {
             "type": "array",
             "items": {
-              "type": "array",
-              "items": [
-                {
-                  "type": "integer",
-                  "format": "uint64",
-                  "minimum": 0.0
-                },
-                {
-                  "$ref": "#/components/schemas/TransactionDigest"
-                }
-              ],
-              "maxItems": 2,
-              "minItems": 2
+              "$ref": "#/components/schemas/TransactionDigest"
             }
           },
           "nextCursor": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "uint64",
-            "minimum": 0.0
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TransactionDigest"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         }
       },
@@ -4598,15 +4548,7 @@
             ],
             "properties": {
               "InputObject": {
-                "type": "object",
-                "required": [
-                  "object_id"
-                ],
-                "properties": {
-                  "object_id": {
-                    "$ref": "#/components/schemas/ObjectID"
-                  }
-                }
+                "$ref": "#/components/schemas/ObjectID"
               }
             },
             "additionalProperties": false
@@ -4618,15 +4560,7 @@
             ],
             "properties": {
               "MutatedObject": {
-                "type": "object",
-                "required": [
-                  "object_id"
-                ],
-                "properties": {
-                  "object_id": {
-                    "$ref": "#/components/schemas/ObjectID"
-                  }
-                }
+                "$ref": "#/components/schemas/ObjectID"
               }
             },
             "additionalProperties": false
@@ -4638,15 +4572,7 @@
             ],
             "properties": {
               "FromAddress": {
-                "type": "object",
-                "required": [
-                  "address"
-                ],
-                "properties": {
-                  "address": {
-                    "$ref": "#/components/schemas/SuiAddress"
-                  }
-                }
+                "$ref": "#/components/schemas/SuiAddress"
               }
             },
             "additionalProperties": false
@@ -4658,15 +4584,7 @@
             ],
             "properties": {
               "ToAddress": {
-                "type": "object",
-                "required": [
-                  "address"
-                ],
-                "properties": {
-                  "address": {
-                    "$ref": "#/components/schemas/SuiAddress"
-                  }
-                }
+                "$ref": "#/components/schemas/SuiAddress"
               }
             },
             "additionalProperties": false
