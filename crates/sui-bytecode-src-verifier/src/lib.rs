@@ -9,7 +9,7 @@ use std::{
 
 use move_compiler::compiled_unit::CompiledUnitEnum;
 use move_core_types::account_address::AccountAddress;
-use move_package::{compilation::compiled_package::CompiledPackage};
+use move_package::compilation::compiled_package::CompiledPackage;
 use move_symbol_pool::Symbol;
 
 use sui_sdk::{
@@ -113,10 +113,12 @@ impl<'a> BytecodeSourceVerifier<'a> {
                 let mod_str = module_symbol.to_string();
                 let on_chain_bytes = match on_chain_package.module_map.get(&mod_str) {
                     Some(oc_bytes) => oc_bytes.clone(),
-                    None => return Err(DependencyVerificationError::OnChainDependencyNotFound(
-                        pkg_symbol,
-                        Some(module_symbol),
-                    )),
+                    None => {
+                        return Err(DependencyVerificationError::OnChainDependencyNotFound(
+                            pkg_symbol,
+                            Some(module_symbol),
+                        ))
+                    }
                 };
 
                 // compare local bytecode to on-chain bytecode to ensure integrity of our dependencies
@@ -153,11 +155,12 @@ impl<'a> BytecodeSourceVerifier<'a> {
         let len = compiled_package.deps_compiled_units.len();
         // only need to check for less than, because if local modules are missing on-chain we've already errored out
         if len < on_chain_module_count {
-            let missing_modules = Self::get_missing_modules(&compiled_package, &verified_dependencies);
+            let missing_modules =
+                Self::get_missing_modules(&compiled_package, &verified_dependencies);
             return Err(DependencyVerificationError::ModuleCountMismatch(
                 len,
                 on_chain_module_count,
-                missing_modules
+                missing_modules,
             ));
         }
 
@@ -166,19 +169,19 @@ impl<'a> BytecodeSourceVerifier<'a> {
         })
     }
 
-    fn get_missing_modules(package: &CompiledPackage, verified_dependencies: &HashMap<AccountAddress, Dependency>) -> Vec<String> {
+    fn get_missing_modules(
+        package: &CompiledPackage,
+        verified_dependencies: &HashMap<AccountAddress, Dependency>,
+    ) -> Vec<String> {
         let mut missing_modules: Vec<String> = vec![];
         for (local_pkg_symbol, local_unit) in &package.deps_compiled_units {
             let local_pkg_symbol_str = local_pkg_symbol.to_string();
             let local_mod_name = local_unit.unit.name().to_string();
             let mod_str = local_mod_name.as_str();
 
-            if !verified_dependencies
-                .iter()
-                .any(|(_, dep)| {
-                    dep.symbol == local_pkg_symbol_str && dep.module_bytes.contains_key(mod_str)
-                })
-            {
+            if !verified_dependencies.iter().any(|(_, dep)| {
+                dep.symbol == local_pkg_symbol_str && dep.module_bytes.contains_key(mod_str)
+            }) {
                 missing_modules.push(format!("{}::{}", local_pkg_symbol_str, mod_str))
             }
         }
@@ -243,9 +246,11 @@ impl<'a> BytecodeSourceVerifier<'a> {
 
         match obj.data.clone() {
             SuiRawData::Package(pkg) => Ok(pkg),
-            SuiRawData::MoveObject(move_obj) => return Err(
-                DependencyVerificationError::ObjectFoundWhenPackageExpected(obj_id, move_obj),
-            ),
+            SuiRawData::MoveObject(move_obj) => {
+                return Err(DependencyVerificationError::ObjectFoundWhenPackageExpected(
+                    obj_id, move_obj,
+                ))
+            }
         }
     }
 }
