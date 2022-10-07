@@ -36,7 +36,7 @@ config = { path = "../config", package = "narwhal-config" }
 fastcrypto = "0.1.2"
 crypto = { path = "../crypto", package = "narwhal-crypto" }
 dag = { path = "../dag", package = "narwhal-dag" }
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "dd5d32549f03f51e16843ab91530727392894eb3" }
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "57c4af7d6cdbf47633e6715bcd67d98f300e2fd8" }
 workspace-hack.workspace = true
 
 [dev-dependencies]
@@ -50,7 +50,7 @@ prost-build = "0.11.1"
 protobuf-src = "1.1.0"
 rustversion = "1.0.9"
 tonic-build = { version = "0.8.2", features = [ "prost", "transport" ] }
-anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "dd5d32549f03f51e16843ab91530727392894eb3" }
+anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "57c4af7d6cdbf47633e6715bcd67d98f300e2fd8" }
 
 [features]
 default = []
