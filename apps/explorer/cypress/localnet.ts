@@ -33,7 +33,7 @@ export async function createLocalnetTasks() {
                 keypair.getPublicKey().toSuiAddress()
             );
 
-            const tx = await signer.executeMoveCall({
+            const tx = await signer.executeMoveCallWithRequestType({
                 packageObjectId: '0x2',
                 module: 'devnet_nft',
                 function: 'mint',

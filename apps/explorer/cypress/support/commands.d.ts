@@ -11,6 +11,6 @@ declare namespace Cypress {
         task(
             name: 'mint',
             address?: string
-        ): Chainable<import('@mysten/sui.js').SuiTransactionResponse>;
+        ): Chainable<import('@mysten/sui.js').SuiExecuteTransactionResponse>;
     }
 }

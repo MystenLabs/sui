@@ -7,8 +7,12 @@ describe('Objects', () => {
     it('can be reached through URL', () => {
         cy.task('faucet')
             .then((address) => cy.task('mint', address))
-            .then(({ effects }) => {
-                const { objectId } = effects.created![0].reference;
+            .then((tx) => {
+                if (!('EffectsCert' in tx)) {
+                    throw new Error('Missing effects cert');
+                }
+                const { objectId } =
+                    tx.EffectsCert.effects.effects.created![0].reference;
                 cy.visit(`/objects/${objectId}`);
                 cy.get('#objectID').contains(objectId);
             });
@@ -23,9 +27,13 @@ describe('Objects', () => {
         it('link going from address to object and back', () => {
             cy.task('faucet')
                 .then((address) => cy.task('mint', address))
-                .then(({ certificate, effects }) => {
-                    const address = certificate.data.sender;
-                    const [nft] = effects.created!;
+                .then((tx) => {
+                    if (!('EffectsCert' in tx)) {
+                        throw new Error('Missing effects cert');
+                    }
+
+                    const address = tx.EffectsCert.certificate.data.sender;
+                    const [nft] = tx.EffectsCert.effects.effects.created!;
                     cy.visit(`/addresses/${address}`);
 
                     // Find a reference to the NFT:
