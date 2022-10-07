@@ -36,7 +36,7 @@ use std::{
     collections::{HashMap, VecDeque},
     pin::Pin,
     sync::{
-        atomic::{AtomicBool, AtomicUsize, Ordering},
+        atomic::{AtomicUsize, Ordering},
         Arc,
     },
 };
@@ -381,8 +381,6 @@ pub struct AuthorityState {
     // Epoch related information.
     /// Committee of this Sui instance.
     pub committee: ArcSwap<Committee>,
-    /// A global lock to halt all transaction/cert processing.
-    halted: AtomicBool,
 
     /// Move native functions that are available to invoke
     pub(crate) _native_functions: NativeFunctionTable,
@@ -700,7 +698,7 @@ impl AuthorityState {
         &self,
         tx_guard: CertTxGuard<'_>,
         certificate: &CertifiedTransaction,
-        bypass_validator_halt: bool,
+        mut bypass_validator_halt: bool,
     ) -> SuiResult<TransactionInfoResponse> {
         let digest = *certificate.digest();
         // The cert could have been processed by a concurrent attempt of the same cert, so check if
@@ -710,12 +708,12 @@ impl AuthorityState {
             return Ok(info);
         }
 
-        if self.is_halted()
-            && !bypass_validator_halt
-            && !certificate.signed_data.data.kind.is_system_tx()
-        {
+        // We also bypass validator halt if this is the system transaction.
+        // TODO: Shared object transactions should also bypass validator halt.
+        bypass_validator_halt |= certificate.signed_data.data.kind.is_system_tx();
+
+        if self.is_halted() && !bypass_validator_halt {
             tx_guard.release();
-            // TODO: Do we want to include the new validator set?
             return Err(SuiError::ValidatorHaltedAtEpochEnd);
         }
 
@@ -747,9 +745,14 @@ impl AuthorityState {
 
         // If commit_certificate returns an error, tx_guard will be dropped and the certificate
         // will be persisted in the log for later recovery.
-        self.commit_certificate(inner_temporary_store, certificate, &signed_effects)
-            .await
-            .tap_err(|e| error!(?digest, "commit_certificate failed: {}", e))?;
+        self.commit_certificate(
+            inner_temporary_store,
+            certificate,
+            &signed_effects,
+            bypass_validator_halt,
+        )
+        .await
+        .tap_err(|e| error!(?digest, "commit_certificate failed: {}", e))?;
 
         // commit_certificate finished, the tx is fully committed to the store.
         tx_guard.commit_tx();
@@ -1266,7 +1269,6 @@ impl AuthorityState {
             name,
             secret,
             committee: ArcSwap::from(Arc::new(committee)),
-            halted: AtomicBool::new(false),
             _native_functions: native_functions,
             move_vm,
             database: store.clone(),
@@ -1454,15 +1456,15 @@ impl AuthorityState {
     }
 
     pub(crate) fn is_halted(&self) -> bool {
-        self.halted.load(Ordering::Relaxed)
+        self.batch_notifier.is_paused()
     }
 
     pub(crate) fn halt_validator(&self) {
-        self.halted.store(true, Ordering::Relaxed);
+        self.batch_notifier.pause();
     }
 
     pub(crate) fn unhalt_validator(&self) {
-        self.halted.store(false, Ordering::Relaxed);
+        self.batch_notifier.unpause();
     }
 
     pub fn db(&self) -> Arc<AuthorityStore> {
@@ -1839,16 +1841,11 @@ impl AuthorityState {
         inner_temporary_store: InnerTemporaryStore,
         certificate: &CertifiedTransaction,
         signed_effects: &SignedTransactionEffects,
+        bypass_validator_halt: bool,
     ) -> SuiResult {
         let _metrics_guard = start_timer(self.metrics.commit_certificate_latency.clone());
 
-        if self.is_halted() && !certificate.signed_data.data.kind.is_system_tx() {
-            // TODO: Here we should allow consensus transaction to continue.
-            // TODO: Do we want to include the new validator set?
-            return Err(SuiError::ValidatorHaltedAtEpochEnd);
-        }
-
-        let notifier_ticket = self.batch_notifier.ticket()?;
+        let notifier_ticket = self.batch_notifier.ticket(bypass_validator_halt)?;
         let seq = notifier_ticket.seq();
 
         let digest = certificate.digest();

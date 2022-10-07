@@ -128,7 +128,7 @@ async fn test_subscription() {
 
     let tx_zero = ExecutionDigests::random();
     for _i in 0u64..105 {
-        let ticket = state.batch_notifier.ticket().expect("all good");
+        let ticket = state.batch_notifier.ticket(false).expect("all good");
         db.tables
             .executed_sequence
             .insert(&ticket.seq(), &tx_zero)
@@ -180,7 +180,10 @@ async fn test_subscription() {
     let _handle2 = tokio::spawn(async move {
         for i in 105..120 {
             tokio::time::sleep(Duration::from_millis(20)).await;
-            let ticket = inner_server2.batch_notifier.ticket().expect("all good");
+            let ticket = inner_server2
+                .batch_notifier
+                .ticket(false)
+                .expect("all good");
             db2.tables
                 .executed_sequence
                 .insert(&ticket.seq(), &tx_zero)
@@ -255,7 +258,10 @@ async fn test_subscription() {
 
     loop {
         // Send a transaction
-        let ticket = inner_server2.batch_notifier.ticket().expect("all good");
+        let ticket = inner_server2
+            .batch_notifier
+            .ticket(false)
+            .expect("all good");
         db3.tables
             .executed_sequence
             .insert(&ticket.seq(), &tx_zero)
@@ -331,7 +337,7 @@ async fn test_subscription_safe_client() {
 
     let tx_zero = ExecutionDigests::random();
     for _i in 0u64..105 {
-        let ticket = server.state.batch_notifier.ticket().expect("all good");
+        let ticket = server.state.batch_notifier.ticket(false).expect("all good");
         db.tables
             .executed_sequence
             .insert(&ticket.seq(), &tx_zero)
@@ -393,7 +399,7 @@ async fn test_subscription_safe_client() {
             let ticket = inner_server2
                 .state
                 .batch_notifier
-                .ticket()
+                .ticket(false)
                 .expect("all good");
             db2.tables
                 .executed_sequence
@@ -467,7 +473,7 @@ async fn test_subscription_safe_client() {
         let ticket = inner_server2
             .state
             .batch_notifier
-            .ticket()
+            .ticket(false)
             .expect("all good");
         db3.tables
             .executed_sequence
