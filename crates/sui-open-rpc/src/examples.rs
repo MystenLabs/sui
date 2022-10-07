@@ -384,9 +384,7 @@ impl RpcExampleProvider {
                 vec![
                     (
                         "query",
-                        json!(TransactionQuery::InputObject {
-                            object_id: ObjectID::new(self.rng.gen())
-                        }),
+                        json!(TransactionQuery::InputObject(ObjectID::new(self.rng.gen()))),
                     ),
                     ("cursor", json!(10)),
                     ("limit", json!(100)),

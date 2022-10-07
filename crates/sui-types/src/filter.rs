@@ -104,16 +104,8 @@ pub enum TransactionQuery {
         module: Option<String>,
         function: Option<String>,
     },
-    InputObject {
-        object_id: ObjectID,
-    },
-    MutatedObject {
-        object_id: ObjectID,
-    },
-    FromAddress {
-        address: SuiAddress,
-    },
-    ToAddress {
-        address: SuiAddress,
-    },
+    InputObject(ObjectID),
+    MutatedObject(ObjectID),
+    FromAddress(SuiAddress),
+    ToAddress(SuiAddress),
 }

@@ -185,9 +185,7 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
     wait_for_tx(digest, node.state().clone()).await;
 
     let txes = node.state().get_transactions(
-        TransactionQuery::InputObject {
-            object_id: transferred_object,
-        },
+        TransactionQuery::InputObject(transferred_object),
         None,
         None,
     )?;
@@ -196,47 +194,37 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
     assert_eq!(txes[0], digest);
 
     let txes = node.state().get_transactions(
-        TransactionQuery::MutatedObject {
-            object_id: transferred_object,
-        },
+        TransactionQuery::MutatedObject(transferred_object),
         None,
         None,
     )?;
     assert_eq!(txes.len(), 1);
     assert_eq!(txes[0], digest);
 
-    let txes = node.state().get_transactions(
-        TransactionQuery::FromAddress { address: sender },
-        None,
-        None,
-    )?;
+    let txes = node
+        .state()
+        .get_transactions(TransactionQuery::FromAddress(sender), None, None)?;
     assert_eq!(txes.len(), 1);
     assert_eq!(txes[0], digest);
 
-    let txes = node.state().get_transactions(
-        TransactionQuery::ToAddress { address: receiver },
-        None,
-        None,
-    )?;
+    let txes = node
+        .state()
+        .get_transactions(TransactionQuery::ToAddress(receiver), None, None)?;
     assert_eq!(txes.len(), 1);
     assert_eq!(txes[0], digest);
 
     // Note that this is also considered a tx to the sender, because it mutated
     // one or more of the sender's objects.
-    let txes = node.state().get_transactions(
-        TransactionQuery::ToAddress { address: sender },
-        None,
-        None,
-    )?;
+    let txes = node
+        .state()
+        .get_transactions(TransactionQuery::ToAddress(sender), None, None)?;
     assert_eq!(txes.len(), 1);
     assert_eq!(txes[0], digest);
 
     // No transactions have originated from the receiver
-    let txes = node.state().get_transactions(
-        TransactionQuery::FromAddress { address: receiver },
-        None,
-        None,
-    )?;
+    let txes =
+        node.state()
+            .get_transactions(TransactionQuery::FromAddress(receiver), None, None)?;
     assert_eq!(txes.len(), 0);
 
     // timestamp is recorded
@@ -610,9 +598,7 @@ async fn test_full_node_event_read_api_ok() -> Result<(), anyhow::Error> {
     wait_for_tx(digest, node.state().clone()).await;
 
     let txes = node.state().get_transactions(
-        TransactionQuery::InputObject {
-            object_id: transferred_object,
-        },
+        TransactionQuery::InputObject(transferred_object),
         None,
         None,
     )?;

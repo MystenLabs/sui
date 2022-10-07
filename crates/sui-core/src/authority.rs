@@ -1714,16 +1714,16 @@ impl AuthorityState {
             } => self
                 .get_indexes()?
                 .get_transactions_by_move_function(package, module, function, cursor, limit)?,
-            TransactionQuery::InputObject { object_id } => self
+            TransactionQuery::InputObject(object_id) => self
                 .get_indexes()?
                 .get_transactions_by_input_object(object_id, cursor, limit)?,
-            TransactionQuery::MutatedObject { object_id } => self
+            TransactionQuery::MutatedObject(object_id) => self
                 .get_indexes()?
                 .get_transactions_by_mutated_object(object_id, cursor, limit)?,
-            TransactionQuery::FromAddress { address } => self
+            TransactionQuery::FromAddress(address) => self
                 .get_indexes()?
                 .get_transactions_from_addr(address, cursor, limit)?,
-            TransactionQuery::ToAddress { address } => self
+            TransactionQuery::ToAddress(address) => self
                 .get_indexes()?
                 .get_transactions_to_addr(address, cursor, limit)?,
             TransactionQuery::All => {

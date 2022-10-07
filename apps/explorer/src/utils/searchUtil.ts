@@ -5,8 +5,7 @@ import { IS_STATIC_ENV } from './envUtil';
 
 const deduplicate = (results: string[] | undefined) =>
     results
-        ? results
-              .filter((value, index, self) => self.indexOf(value) === index)
+        ? results.filter((value, index, self) => self.indexOf(value) === index)
         : [];
 
 let navigateWithUnknown: Function;

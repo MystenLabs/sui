@@ -203,8 +203,9 @@ impl PseudoBlockProvider {
             let tx_digests = if current_block.index == 0 {
                 state.get_transactions(TransactionQuery::All, None, None)?
             } else {
-                let cursor = Some(TransactionDigest::new(current_block.hash.0));
-                let mut tx_digests = state.get_transactions(TransactionQuery::All, cursor, None)?;
+                let cursor = TransactionDigest::new(current_block.hash.0);
+                let mut tx_digests =
+                    state.get_transactions(TransactionQuery::All, Some(cursor), None)?;
                 if tx_digests.remove(0) != cursor {
                     return Err(Error::new_with_msg(
                         ErrorType::InternalError,
