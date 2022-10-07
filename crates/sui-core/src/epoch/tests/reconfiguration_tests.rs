@@ -67,7 +67,7 @@ async fn test_start_epoch_change() {
     let active =
         ActiveAuthority::new_with_ephemeral_storage_for_test(state.clone(), net.clone()).unwrap();
     // Make the high watermark differ from low watermark.
-    let ticket = state.batch_notifier.ticket().unwrap();
+    let ticket = state.batch_notifier.ticket(false).unwrap();
 
     // Invoke start_epoch_change on the active authority.
     let epoch_change_started = Arc::new(AtomicBool::new(false));
@@ -161,7 +161,7 @@ async fn test_start_epoch_change() {
     let signed_effects = effects.to_sign_effects(0, &state.name, &*state.secret);
     assert_eq!(
         state
-            .commit_certificate(inner_temporary_store, &certificate, &signed_effects)
+            .commit_certificate(inner_temporary_store, &certificate, &signed_effects, false)
             .await
             .unwrap_err(),
         SuiError::ValidatorHaltedAtEpochEnd

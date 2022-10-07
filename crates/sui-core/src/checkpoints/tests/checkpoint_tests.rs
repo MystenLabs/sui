@@ -886,10 +886,10 @@ async fn test_batch_to_checkpointing() {
 
     // TODO: duplicated code in this file, in `test_batch_to_checkpointing_init_crash`
     {
-        let t0 = authority_state.batch_notifier.ticket().expect("ok");
-        let t1 = authority_state.batch_notifier.ticket().expect("ok");
-        let t2 = authority_state.batch_notifier.ticket().expect("ok");
-        let t3 = authority_state.batch_notifier.ticket().expect("ok");
+        let t0 = authority_state.batch_notifier.ticket(false).expect("ok");
+        let t1 = authority_state.batch_notifier.ticket(false).expect("ok");
+        let t2 = authority_state.batch_notifier.ticket(false).expect("ok");
+        let t3 = authority_state.batch_notifier.ticket(false).expect("ok");
 
         authority_state
             .database
@@ -989,10 +989,10 @@ async fn test_batch_to_checkpointing_init_crash() {
         let mut rx = authority_state.subscribe_batch();
 
         {
-            let t0 = authority_state.batch_notifier.ticket().expect("ok");
-            let t1 = authority_state.batch_notifier.ticket().expect("ok");
-            let t2 = authority_state.batch_notifier.ticket().expect("ok");
-            let t3 = authority_state.batch_notifier.ticket().expect("ok");
+            let t0 = authority_state.batch_notifier.ticket(false).expect("ok");
+            let t1 = authority_state.batch_notifier.ticket(false).expect("ok");
+            let t2 = authority_state.batch_notifier.ticket(false).expect("ok");
+            let t3 = authority_state.batch_notifier.ticket(false).expect("ok");
 
             authority_state
                 .database
