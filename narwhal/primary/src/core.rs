@@ -69,7 +69,9 @@ pub struct Core {
 
     /// The last garbage collected round.
     gc_round: Round,
-    /// The highest round for certificates processed by this node.
+    /// The highest certificates round received by this node.
+    highest_received_round: Round,
+    /// The highest certificates round processed by this node.
     highest_processed_round: Round,
     /// The set of headers we are currently processing.
     processing: HashMap<Round, HashSet<HeaderDigest>>,
@@ -132,6 +134,7 @@ impl Core {
                 tx_consensus,
                 tx_proposer,
                 gc_round: 0,
+                highest_received_round: 0,
                 highest_processed_round: 0,
                 processing: HashMap::with_capacity(2 * gc_depth as usize),
                 current_header: Header::default(),
@@ -406,6 +409,17 @@ impl Core {
             certificate.round()
         );
 
+        let certificate_source = if self.name.eq(&certificate.header.author) {
+            "own"
+        } else {
+            "other"
+        };
+        self.highest_received_round = self.highest_received_round.max(certificate.round());
+        self.metrics
+            .highest_received_round
+            .with_label_values(&[&certificate.epoch().to_string(), certificate_source])
+            .set(self.highest_received_round as i64);
+
         // Let the proposer draw early conclusions from a certificate at this round and epoch, without its
         // parents or payload (which we may not have yet).
         //
@@ -451,16 +465,12 @@ impl Core {
         // Store the certificate.
         self.certificate_store.write(certificate.clone())?;
 
+        // Update metrics for processed certificates.
         self.highest_processed_round = self.highest_processed_round.max(certificate.round());
         self.metrics
             .highest_processed_round
-            .with_label_values(&[&certificate.epoch().to_string()])
+            .with_label_values(&[&certificate.epoch().to_string(), certificate_source])
             .set(self.highest_processed_round as i64);
-        let certificate_source = if self.name.eq(&certificate.header.author) {
-            "own"
-        } else {
-            "other"
-        };
         self.metrics
             .certificates_processed
             .with_label_values(&[&certificate.epoch().to_string(), certificate_source])

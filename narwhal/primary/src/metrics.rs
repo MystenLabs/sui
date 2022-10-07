@@ -453,6 +453,8 @@ pub struct PrimaryMetrics {
     pub core_cancel_handlers_total: IntGaugeVec,
     /// The current Narwhal round in proposer
     pub current_round: IntGaugeVec,
+    /// The highest Narwhal round that has been received.
+    pub highest_received_round: IntGaugeVec,
     /// The highest Narwhal round that has been processed.
     pub highest_processed_round: IntGaugeVec,
     /// Latency to perform a garbage collection in header_waiter
@@ -544,10 +546,17 @@ impl PrimaryMetrics {
                 registry
             )
             .unwrap(),
+            highest_received_round: register_int_gauge_vec_with_registry!(
+                "highest_received_round",
+                "Highest round received by the primary",
+                &["epoch", "source"],
+                registry
+            )
+            .unwrap(),
             highest_processed_round: register_int_gauge_vec_with_registry!(
                 "highest_processed_round",
                 "Highest round processed (stored) by the primary",
-                &["epoch"],
+                &["epoch", "source"],
                 registry
             )
             .unwrap(),
