@@ -242,11 +242,8 @@ impl Worker {
             endpoint_metrics,
             network.clone(),
         );
-        let worker_flow_handles = worker.handle_workers_messages(
-            &tx_reconfigure,
-            tx_primary.clone(),
-            rx_worker_processor,
-        );
+        let worker_flow_handles =
+            worker.handle_workers_messages(&tx_reconfigure, tx_primary, rx_worker_processor);
         let primary_flow_handles =
             worker.handle_primary_messages(rx_synchronizer, tx_reconfigure, network);
 
