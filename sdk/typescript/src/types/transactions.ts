@@ -28,10 +28,11 @@ export type Pay = {
   amounts: number[];
 };
 
-export type ExecuteTransactionRequestType =
-  | 'ImmediateReturn'
-  | 'WaitForTxCert'
-  | 'WaitForEffectsCert';
+export enum ExecuteTransactionRequestType {
+  ImmediateReturn = 'ImmediateReturn',
+  WaitForTxCert = 'WaitForTxCert',
+  WaitForEffectsCert = 'WaitForEffectsCert',
+}
 
 export type TransactionKindName =
   | 'TransferObject'
@@ -137,19 +138,27 @@ export type SuiCertifiedTransactionEffects = {
   effects: TransactionEffects;
 };
 
+export type SuiExecuteTransactionResponseImmediateReturn = {
+  ImmediateReturn: {
+    tx_digest: string;
+  };
+};
+
+export type SuiExecuteTransactionResponseWaitForTxCert = {
+  TxCert: { certificate: CertifiedTransaction };
+};
+
+export type SuiExecuteTransactionResponseWaitForEffectsCert = {
+  EffectsCert: {
+    certificate: CertifiedTransaction;
+    effects: SuiCertifiedTransactionEffects;
+  };
+};
+
 export type SuiExecuteTransactionResponse =
-  | {
-      ImmediateReturn: {
-        tx_digest: string;
-      };
-    }
-  | { TxCert: { certificate: CertifiedTransaction } }
-  | {
-      EffectsCert: {
-        certificate: CertifiedTransaction;
-        effects: SuiCertifiedTransactionEffects;
-      };
-    };
+  | SuiExecuteTransactionResponseImmediateReturn
+  | SuiExecuteTransactionResponseWaitForTxCert
+  | SuiExecuteTransactionResponseWaitForEffectsCert;
 
 export type GatewayTxSeqNumber = number;
 

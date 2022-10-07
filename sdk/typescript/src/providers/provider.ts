@@ -18,13 +18,13 @@ import {
   SuiEventEnvelope,
   SubscriptionId,
   ExecuteTransactionRequestType,
-  SuiExecuteTransactionResponse,
   TransactionDigest,
   ObjectId,
   SuiAddress,
   ObjectOwner,
   SuiEvents,
 } from '../types';
+import { SuiExecuteTransactionResponseTyped } from '../types/autoguard-workaround';
 
 ///////////////////////////////
 // Exported Abstracts
@@ -100,13 +100,15 @@ export abstract class Provider {
    * replace the other `executeTransaction` that's only available on the
    * Gateway
    */
-  abstract executeTransactionWithRequestType(
+  abstract executeTransactionWithRequestType<
+    RequestType extends ExecuteTransactionRequestType = ExecuteTransactionRequestType.WaitForEffectsCert
+  >(
     txnBytes: string,
     signatureScheme: SignatureScheme,
     signature: string,
     pubkey: string,
-    requestType: ExecuteTransactionRequestType
-  ): Promise<SuiExecuteTransactionResponse>;
+    requestType?: RequestType
+  ): Promise<SuiExecuteTransactionResponseTyped<RequestType>>;
 
   // Move info
   /**

@@ -29,10 +29,12 @@ async function main() {
       writeFile(
         fileName,
         LICENSE +
-          file.replace(
-            /import { BN } from ".*";\n/g,
-            'import { BN } from "bn.js";\nimport { Buffer } from "buffer";\n'
-          )
+          file
+            // Fix incorrect enum import:
+            .replace(
+              'import { ExecuteTransactionRequestType } from "./transactions";\n',
+              ''
+            )
       );
     })
   );

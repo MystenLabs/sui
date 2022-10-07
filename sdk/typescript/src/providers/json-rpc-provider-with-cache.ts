@@ -12,10 +12,10 @@ import {
   TransactionEffects,
   normalizeSuiObjectId,
   ExecuteTransactionRequestType,
-  SuiExecuteTransactionResponse,
   getTransactionEffects,
 } from '../types';
 import { JsonRpcProvider } from './json-rpc-provider';
+import { SuiExecuteTransactionResponseTyped } from '../types/autoguard-workaround';
 
 export class JsonRpcProviderWithCache extends JsonRpcProvider {
   /**
@@ -83,14 +83,19 @@ export class JsonRpcProviderWithCache extends JsonRpcProvider {
     return resp;
   }
 
-  async executeTransactionWithRequestType(
+  async executeTransactionWithRequestType<
+    RequestType extends ExecuteTransactionRequestType = ExecuteTransactionRequestType.WaitForEffectsCert
+  >(
     txnBytes: string,
     signatureScheme: SignatureScheme,
     signature: string,
     pubkey: string,
-    requestType: ExecuteTransactionRequestType = 'WaitForEffectsCert'
-  ): Promise<SuiExecuteTransactionResponse> {
-    if (requestType !== 'WaitForEffectsCert') {
+    requestType?: RequestType
+  ): Promise<SuiExecuteTransactionResponseTyped<RequestType>> {
+    if (
+      requestType &&
+      requestType !== ExecuteTransactionRequestType.WaitForEffectsCert
+    ) {
       console.warn(
         `It's not recommended to use JsonRpcProviderWithCache with the request ` +
           `type other than 'WaitForEffectsCert' for executeTransactionWithRequestType. Using ` +

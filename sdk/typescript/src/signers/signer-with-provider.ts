@@ -8,9 +8,9 @@ import { Base64DataBuffer } from '../serialization/base64';
 import {
   ExecuteTransactionRequestType,
   SuiAddress,
-  SuiExecuteTransactionResponse,
   SuiTransactionResponse,
 } from '../types';
+import { SuiExecuteTransactionResponseTyped } from '../types/autoguard-workaround';
 import { SignaturePubkeyPair, Signer } from './signer';
 import { RpcTxnDataSerializer } from './txn-data-serializers/rpc-txn-data-serializer';
 import {
@@ -109,10 +109,12 @@ export abstract class SignerWithProvider implements Signer {
   /**
    * @experimental Sign a transaction and submit to the Fullnode for execution
    */
-  async signAndExecuteTransactionWithRequestType(
+  async signAndExecuteTransactionWithRequestType<
+    RequestType extends ExecuteTransactionRequestType = ExecuteTransactionRequestType.WaitForEffectsCert
+  >(
     transaction: Base64DataBuffer | SignableTransaction,
-    requestType: ExecuteTransactionRequestType
-  ): Promise<SuiExecuteTransactionResponse> {
+    requestType?: RequestType
+  ): Promise<SuiExecuteTransactionResponseTyped<RequestType>> {
     // Handle submitting raw transaction bytes:
     if (
       transaction instanceof Base64DataBuffer ||
@@ -124,7 +126,7 @@ export abstract class SignerWithProvider implements Signer {
           : new Base64DataBuffer(transaction.data);
 
       const sig = await this.signData(txBytes);
-      return await this.provider.executeTransactionWithRequestType(
+      return await this.provider.executeTransactionWithRequestType<RequestType>(
         txBytes.toString(),
         sig.signatureScheme,
         sig.signature.toString(),
@@ -135,7 +137,7 @@ export abstract class SignerWithProvider implements Signer {
 
     switch (transaction.kind) {
       case 'moveCall':
-        return this.executeMoveCallWithRequestType(
+        return this.executeMoveCallWithRequestType<RequestType>(
           transaction.data,
           requestType
         );
@@ -267,10 +269,12 @@ export abstract class SignerWithProvider implements Signer {
    * @experimental Serialize and sign a `TransferObject` transaction and submit to the Fullnode
    * for execution
    */
-  async transferObjectWithRequestType(
+  async transferObjectWithRequestType<
+    RequestType extends ExecuteTransactionRequestType = ExecuteTransactionRequestType.WaitForEffectsCert
+  >(
     transaction: TransferObjectTransaction,
-    requestType: ExecuteTransactionRequestType = 'WaitForEffectsCert'
-  ): Promise<SuiExecuteTransactionResponse> {
+    requestType?: RequestType
+  ): Promise<SuiExecuteTransactionResponseTyped<RequestType>> {
     const signerAddress = await this.getAddress();
     const txBytes = await this.serializer.newTransferObject(
       signerAddress,
@@ -286,10 +290,12 @@ export abstract class SignerWithProvider implements Signer {
    * @experimental Serialize and sign a `TransferSui` transaction and submit to the Fullnode
    * for execution
    */
-  async transferSuiWithRequestType(
+  async transferSuiWithRequestType<
+    RequestType extends ExecuteTransactionRequestType = ExecuteTransactionRequestType.WaitForEffectsCert
+  >(
     transaction: TransferSuiTransaction,
-    requestType: ExecuteTransactionRequestType = 'WaitForEffectsCert'
-  ): Promise<SuiExecuteTransactionResponse> {
+    requestType?: RequestType
+  ): Promise<SuiExecuteTransactionResponseTyped<RequestType>> {
     const signerAddress = await this.getAddress();
     const txBytes = await this.serializer.newTransferSui(
       signerAddress,
@@ -304,10 +310,12 @@ export abstract class SignerWithProvider implements Signer {
   /**
    * @experimental Serialize and Sign a `Pay` transaction and submit to the fullnode for execution
    */
-  async payWithRequestType(
+  async payWithRequestType<
+    RequestType extends ExecuteTransactionRequestType = ExecuteTransactionRequestType.WaitForEffectsCert
+  >(
     transaction: PayTransaction,
-    requestType: ExecuteTransactionRequestType = 'WaitForEffectsCert'
-  ): Promise<SuiExecuteTransactionResponse> {
+    requestType?: RequestType
+  ): Promise<SuiExecuteTransactionResponseTyped<RequestType>> {
     const signerAddress = await this.getAddress();
     const txBytes = await this.serializer.newPay(signerAddress, transaction);
     return await this.signAndExecuteTransactionWithRequestType(
@@ -320,10 +328,12 @@ export abstract class SignerWithProvider implements Signer {
    * @experimental Serialize and sign a `MergeCoin` transaction and submit to the Fullnode
    * for execution
    */
-  async mergeCoinWithRequestType(
+  async mergeCoinWithRequestType<
+    RequestType extends ExecuteTransactionRequestType = ExecuteTransactionRequestType.WaitForEffectsCert
+  >(
     transaction: MergeCoinTransaction,
-    requestType: ExecuteTransactionRequestType = 'WaitForEffectsCert'
-  ): Promise<SuiExecuteTransactionResponse> {
+    requestType?: RequestType
+  ): Promise<SuiExecuteTransactionResponseTyped<RequestType>> {
     const signerAddress = await this.getAddress();
     const txBytes = await this.serializer.newMergeCoin(
       signerAddress,
@@ -339,10 +349,12 @@ export abstract class SignerWithProvider implements Signer {
    * @experimental Serialize and sign a `SplitCoin` transaction and submit to the Fullnode
    * for execution
    */
-  async splitCoinWithRequestType(
+  async splitCoinWithRequestType<
+    RequestType extends ExecuteTransactionRequestType = ExecuteTransactionRequestType.WaitForEffectsCert
+  >(
     transaction: SplitCoinTransaction,
-    requestType: ExecuteTransactionRequestType = 'WaitForEffectsCert'
-  ): Promise<SuiExecuteTransactionResponse> {
+    requestType?: RequestType
+  ): Promise<SuiExecuteTransactionResponseTyped<RequestType>> {
     const signerAddress = await this.getAddress();
     const txBytes = await this.serializer.newSplitCoin(
       signerAddress,
@@ -358,10 +370,12 @@ export abstract class SignerWithProvider implements Signer {
    * @experimental Serialize and sign a `MoveCall` transaction and submit to the Fullnode
    * for execution
    */
-  async executeMoveCallWithRequestType(
+  async executeMoveCallWithRequestType<
+    RequestType extends ExecuteTransactionRequestType = ExecuteTransactionRequestType.WaitForEffectsCert
+  >(
     transaction: MoveCallTransaction,
-    requestType: ExecuteTransactionRequestType = 'WaitForEffectsCert'
-  ): Promise<SuiExecuteTransactionResponse> {
+    requestType?: RequestType
+  ): Promise<SuiExecuteTransactionResponseTyped<RequestType>> {
     const signerAddress = await this.getAddress();
     const txBytes = await this.serializer.newMoveCall(
       signerAddress,
@@ -377,10 +391,12 @@ export abstract class SignerWithProvider implements Signer {
    * @experimental Serialize and sign a `Publish` transaction and submit to the Fullnode
    * for execution
    */
-  async publishWithRequestType(
+  async publishWithRequestType<
+    RequestType extends ExecuteTransactionRequestType = ExecuteTransactionRequestType.WaitForEffectsCert
+  >(
     transaction: PublishTransaction,
-    requestType: ExecuteTransactionRequestType = 'WaitForEffectsCert'
-  ): Promise<SuiExecuteTransactionResponse> {
+    requestType?: RequestType
+  ): Promise<SuiExecuteTransactionResponseTyped<RequestType>> {
     const signerAddress = await this.getAddress();
     const txBytes = await this.serializer.newPublish(
       signerAddress,

@@ -20,12 +20,12 @@ import {
   SuiEventEnvelope,
   SubscriptionId,
   ExecuteTransactionRequestType,
-  SuiExecuteTransactionResponse,
   ObjectOwner,
   SuiAddress,
   ObjectId,
   SuiEvents,
 } from '../types';
+import { SuiExecuteTransactionResponseTyped } from '../types/autoguard-workaround';
 import { Provider } from './provider';
 
 export class VoidProvider extends Provider {
@@ -71,13 +71,15 @@ export class VoidProvider extends Provider {
     throw this.newError('executeTransaction');
   }
 
-  async executeTransactionWithRequestType(
+  async executeTransactionWithRequestType<
+    RequestType extends ExecuteTransactionRequestType = ExecuteTransactionRequestType.WaitForEffectsCert
+  >(
     _txnBytes: string,
     _signatureScheme: SignatureScheme,
     _signature: string,
     _pubkey: string,
-    _requestType: ExecuteTransactionRequestType
-  ): Promise<SuiExecuteTransactionResponse> {
+    _requestType?: RequestType
+  ): Promise<SuiExecuteTransactionResponseTyped<RequestType>> {
     throw this.newError('executeTransaction with request Type');
   }
 

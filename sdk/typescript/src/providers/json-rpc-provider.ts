@@ -35,7 +35,6 @@ import {
   SuiEventEnvelope,
   SubscriptionId,
   ExecuteTransactionRequestType,
-  SuiExecuteTransactionResponse,
   SuiAddress,
   ObjectOwner,
   ObjectId,
@@ -50,6 +49,7 @@ import {
   WebsocketClient,
   WebsocketClientOptions,
 } from '../rpc/websocket-client';
+import { SuiExecuteTransactionResponseTyped } from '../types/autoguard-workaround';
 
 const isNumber = (val: any): val is number => typeof val === 'number';
 const isAny = (_val: any): _val is any => true;
@@ -384,21 +384,30 @@ export class JsonRpcProvider extends Provider {
     }
   }
 
-  async executeTransactionWithRequestType(
+  async executeTransactionWithRequestType<
+    RequestType extends ExecuteTransactionRequestType = ExecuteTransactionRequestType.WaitForEffectsCert
+  >(
     txnBytes: string,
     signatureScheme: SignatureScheme,
     signature: string,
     pubkey: string,
-    requestType: ExecuteTransactionRequestType = 'WaitForEffectsCert'
-  ): Promise<SuiExecuteTransactionResponse> {
+    requestType?: RequestType
+  ): Promise<SuiExecuteTransactionResponseTyped<RequestType>> {
     try {
       const resp = await this.client.requestWithType(
         'sui_executeTransaction',
-        [txnBytes, signatureScheme, signature, pubkey, requestType],
+        [
+          txnBytes,
+          signatureScheme,
+          signature,
+          pubkey,
+          requestType ?? ExecuteTransactionRequestType.WaitForEffectsCert,
+        ],
         isSuiExecuteTransactionResponse,
         this.skipDataValidation
       );
-      return resp;
+
+      return resp as SuiExecuteTransactionResponseTyped<RequestType>;
     } catch (err) {
       throw new Error(`Error executing transaction with request type: ${err}}`);
     }
