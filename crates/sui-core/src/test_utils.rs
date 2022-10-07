@@ -1,10 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, HashSet};
-use std::sync::Arc;
-use std::time::Duration;
-
 use crate::{
     authority::AuthorityState,
     authority_aggregator::{AuthAggMetrics, AuthorityAggregator},
@@ -12,6 +8,10 @@ use crate::{
     epoch::committee_store::CommitteeStore,
     safe_client::SafeClientMetrics,
 };
+use signature::Signer;
+use std::collections::{BTreeMap, HashSet};
+use std::sync::Arc;
+use std::time::Duration;
 
 use sui_config::{NetworkConfig, ValidatorInfo};
 use sui_types::{
@@ -140,6 +140,15 @@ pub fn create_fake_transaction() -> Transaction {
         object.compute_object_reference(),
         10000,
     );
-    let signature = Signature::new(&data, &sender_key);
+    to_sender_signed_transaction(data, &sender_key)
+}
+
+// This is used to sign transaction with signer using default Intent.
+pub fn to_sender_signed_transaction(
+    data: TransactionData,
+    signer: &dyn Signer<Signature>,
+) -> Transaction {
+    let signature = Signature::new_temp(&data.to_bytes(), signer);
+    // let signature = Signature::new_secure(&data, Intent::default(), signer).unwrap();
     Transaction::new(data, signature)
 }

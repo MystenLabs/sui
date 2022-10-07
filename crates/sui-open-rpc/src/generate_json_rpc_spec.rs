@@ -12,9 +12,9 @@ use serde_json::{json, Map, Value};
 use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::Write;
+use sui_core::test_utils::to_sender_signed_transaction;
 use sui_json_rpc::api::EventReadApiOpenRpc;
 use sui_sdk::crypto::AccountKeystore;
-use sui_types::messages::Transaction;
 
 use crate::examples::RpcExampleProvider;
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands, WalletContext};
@@ -408,13 +408,10 @@ async fn create_error_response(
         )
         .await?;
 
-    let signature = context
-        .config
-        .keystore
-        .sign(&address, &response.tx_bytes.to_vec()?)?;
-
-    let tx = Transaction::new(response.to_data().unwrap(), signature);
-
+    let tx = to_sender_signed_transaction(
+        response.to_data()?,
+        context.config.keystore.get_key(&address)?,
+    );
     let (tx_data, sig_scheme, signature_bytes, pub_key) = tx.to_network_data_for_execution();
 
     let client = Client::new();

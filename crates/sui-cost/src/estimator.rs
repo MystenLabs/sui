@@ -8,13 +8,13 @@ use strum_macros::Display;
 use strum_macros::EnumString;
 use sui_adapter::temporary_store::TemporaryStore;
 use sui_core::authority::AuthorityState;
+use sui_core::test_utils::to_sender_signed_transaction;
 use sui_core::transaction_input_checker;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::TransactionDigest;
 use sui_types::crypto::get_key_pair;
 use sui_types::crypto::AccountKeyPair;
-use sui_types::crypto::Signature as SuiSignature;
 use sui_types::error::SuiResult;
 use sui_types::gas::start_gas_metering;
 use sui_types::gas::GasCostSummary;
@@ -22,7 +22,6 @@ use sui_types::gas::SuiGas;
 use sui_types::gas::MAX_GAS_BUDGET;
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::SingleTransactionKind;
-use sui_types::messages::Transaction;
 use sui_types::messages::TransactionData;
 use sui_types::messages::TransactionKind;
 
@@ -138,8 +137,7 @@ pub async fn estimate_transaction_computation_cost(
 ) -> anyhow::Result<GasCostSummary> {
     // Make a dummy transaction
     let (_, keypair): (_, AccountKeyPair) = get_key_pair();
-    let dummy_sig = SuiSignature::new(&tx_data, &keypair);
-    let tx = Transaction::new(tx_data, dummy_sig);
+    let tx = to_sender_signed_transaction(tx_data, &keypair);
 
     let (_gas_status, input_objects) =
         transaction_input_checker::check_transaction_input(&state.db(), &tx).await?;

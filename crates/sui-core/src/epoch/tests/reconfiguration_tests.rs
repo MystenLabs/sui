@@ -12,10 +12,10 @@ use std::{
 
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
-    crypto::{get_key_pair, AccountKeyPair, AuthoritySignature, Signature, SuiAuthoritySignature},
+    crypto::{get_key_pair, AccountKeyPair, AuthoritySignature, SuiAuthoritySignature},
     error::SuiError,
     gas::SuiGasStatus,
-    messages::{InputObjects, SignatureAggregator, Transaction, TransactionData},
+    messages::{InputObjects, SignatureAggregator, TransactionData},
     object::Object,
     SUI_SYSTEM_STATE_OBJECT_ID,
 };
@@ -27,6 +27,7 @@ use crate::{
     authority_aggregator::authority_aggregator_tests::init_local_authorities,
     checkpoints::{CheckpointLocals, CHECKPOINT_COUNT_PER_EPOCH},
     execution_engine,
+    test_utils::to_sender_signed_transaction,
 };
 
 #[tokio::test]
@@ -100,8 +101,7 @@ async fn test_start_epoch_change() {
         gas_object.compute_object_reference(),
         1000,
     );
-    let signature = Signature::new(&tx_data, &sender_key);
-    let transaction = Transaction::new(tx_data, signature);
+    let transaction = to_sender_signed_transaction(tx_data, &sender_key);
     assert_eq!(
         state
             .handle_transaction(transaction.clone())

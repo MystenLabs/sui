@@ -8243,6 +8243,7 @@ dependencies = [
  "serde_json",
  "sui",
  "sui-config",
+ "sui-core",
  "sui-json",
  "sui-json-rpc",
  "sui-json-rpc-types",

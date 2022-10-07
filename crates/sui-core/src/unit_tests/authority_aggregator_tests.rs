@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 use move_core_types::{account_address::AccountAddress, ident_str};
 use move_package::BuildConfig;
-use signature::Signer;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -27,6 +26,7 @@ use crate::authority_client::{
     LocalAuthorityClientFaultConfig, NetworkAuthorityClient, NetworkAuthorityClientMetrics,
 };
 use crate::gateway_state::GatewayState;
+use crate::test_utils::to_sender_signed_transaction;
 
 use tokio::time::Instant;
 
@@ -176,7 +176,7 @@ pub fn transfer_coin_transaction(
     object_ref: ObjectRef,
     gas_object_ref: ObjectRef,
 ) -> Transaction {
-    to_transaction(
+    to_sender_signed_transaction(
         TransactionData::new_transfer(
             dest,
             object_ref,
@@ -201,7 +201,7 @@ pub fn transfer_object_move_transaction(
         CallArg::Pure(bcs::to_bytes(&AccountAddress::from(dest)).unwrap()),
     ];
 
-    to_transaction(
+    to_sender_signed_transaction(
         TransactionData::new_move_call(
             src,
             framework_obj_ref,
@@ -230,7 +230,7 @@ pub fn crate_object_move_transaction(
         CallArg::Pure(bcs::to_bytes(&AccountAddress::from(dest)).unwrap()),
     ];
 
-    to_transaction(
+    to_sender_signed_transaction(
         TransactionData::new_move_call(
             src,
             framework_obj_ref,
@@ -252,7 +252,7 @@ pub fn delete_object_move_transaction(
     framework_obj_ref: ObjectRef,
     gas_object_ref: ObjectRef,
 ) -> Transaction {
-    to_transaction(
+    to_sender_signed_transaction(
         TransactionData::new_move_call(
             src,
             framework_obj_ref,
@@ -280,7 +280,7 @@ pub fn set_object_move_transaction(
         CallArg::Pure(bcs::to_bytes(&value).unwrap()),
     ];
 
-    to_transaction(
+    to_sender_signed_transaction(
         TransactionData::new_move_call(
             src,
             framework_obj_ref,
@@ -293,11 +293,6 @@ pub fn set_object_move_transaction(
         ),
         secret,
     )
-}
-
-pub fn to_transaction(data: TransactionData, signer: &dyn Signer<Signature>) -> Transaction {
-    let signature = Signature::new(&data, signer);
-    Transaction::new(data, signature)
 }
 
 pub async fn do_transaction<A>(authority: &SafeClient<A>, transaction: &Transaction)

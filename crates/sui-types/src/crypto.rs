@@ -756,7 +756,6 @@ impl<'de> Deserialize<'de> for Signature {
     }
 }
 
-// Can refactor this with a library
 impl Signature {
     pub fn new<T>(value: &T, secret: &dyn Signer<Signature>) -> Signature
     where
@@ -779,6 +778,9 @@ impl Signature {
             &bcs::to_bytes(&IntentMessage::new(intent, value))
                 .expect("Message serialization should not fail"),
         )
+    }
+    pub fn new_temp(value: &[u8], secret: &dyn signature::Signer<Signature>) -> Signature {
+        secret.sign(value)
     }
 }
 

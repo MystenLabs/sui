@@ -6,6 +6,7 @@ use super::*;
 use super::authority_tests::{init_state_with_ids, send_and_confirm_transaction};
 use super::move_integration_tests::build_and_try_publish_test_package;
 use crate::authority::authority_tests::{init_state, init_state_with_ids_and_object_basics};
+use crate::test_utils::to_sender_signed_transaction;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use sui_adapter::genesis;
@@ -14,9 +15,8 @@ use sui_types::gas_coin::GasCoin;
 use sui_types::object::GAS_VALUE_FOR_TESTING;
 use sui_types::{
     base_types::dbg_addr,
-    crypto::{get_key_pair, Signature},
+    crypto::get_key_pair,
     gas::{SuiGasStatus, MAX_GAS_BUDGET, MIN_GAS_BUDGET},
-    messages::Transaction,
 };
 
 #[tokio::test]
@@ -172,8 +172,7 @@ async fn test_transfer_sui_insufficient_gas() {
         amount: None,
     }));
     let data = TransactionData::new_with_gas_price(kind, sender, gas_object_ref, 50, 1);
-    let signature = Signature::new(&data, &sender_key);
-    let tx = Transaction::new(data, signature);
+    let tx = to_sender_signed_transaction(data, &sender_key);
 
     let effects = send_and_confirm_transaction(&authority_state, tx)
         .await
@@ -391,9 +390,9 @@ async fn test_move_call_gas() -> SuiResult {
         args.clone(),
         GAS_VALUE_FOR_TESTING,
     );
-    let signature = Signature::new(&data, &sender_key);
-    let transaction = Transaction::new(data, signature);
-    let response = send_and_confirm_transaction(&authority_state, transaction).await?;
+
+    let tx = to_sender_signed_transaction(data, &sender_key);
+    let response = send_and_confirm_transaction(&authority_state, tx).await?;
     let effects = response.signed_effects.unwrap().effects;
     let created_object_ref = effects.created[0].0;
     assert!(effects.status.is_ok());
@@ -454,8 +453,8 @@ async fn test_move_call_gas() -> SuiResult {
         ))],
         expected_gas_balance,
     );
-    let signature = Signature::new(&data, &sender_key);
-    let transaction = Transaction::new(data, signature);
+
+    let transaction = to_sender_signed_transaction(data, &sender_key);
     let response = send_and_confirm_transaction(&authority_state, transaction).await?;
     let effects = response.signed_effects.unwrap().effects;
     assert!(effects.status.is_ok());
@@ -480,8 +479,8 @@ async fn test_move_call_gas() -> SuiResult {
         args,
         budget,
     );
-    let signature = Signature::new(&data, &sender_key);
-    let transaction = Transaction::new(data, signature);
+
+    let transaction = to_sender_signed_transaction(data, &sender_key);
     let response = send_and_confirm_transaction(&authority_state, transaction).await?;
     let effects = response.signed_effects.unwrap().effects;
     let gas_cost = effects.gas_used;
@@ -551,8 +550,7 @@ async fn execute_transfer_with_price(
     }));
     let data =
         TransactionData::new_with_gas_price(kind, sender, gas_object_ref, gas_budget, gas_price);
-    let signature = Signature::new(&data, &sender_key);
-    let tx = Transaction::new(data, signature);
+    let tx = to_sender_signed_transaction(data, &sender_key);
 
     let response = if run_confirm {
         send_and_confirm_transaction(&authority_state, tx).await
