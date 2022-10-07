@@ -33,8 +33,8 @@ types = { path = "../types", package = "narwhal-types" }
 mysten-network.workspace = true
 prometheus = "0.13.2"
 
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "dd5d32549f03f51e16843ab91530727392894eb3" }
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "dd5d32549f03f51e16843ab91530727392894eb3" }
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "57c4af7d6cdbf47633e6715bcd67d98f300e2fd8" }
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "57c4af7d6cdbf47633e6715bcd67d98f300e2fd8" }
 anyhow = "1.0.65"
 
 store.workspace = true

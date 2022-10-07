@@ -45,7 +45,7 @@ worker = { path = "../worker", package = "narwhal-worker" }
 workspace-hack.workspace = true
 eyre = "0.6.8"
 
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "dd5d32549f03f51e16843ab91530727392894eb3" }
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "57c4af7d6cdbf47633e6715bcd67d98f300e2fd8" }
 
 [dev-dependencies]
 hex = "0.4.3"
