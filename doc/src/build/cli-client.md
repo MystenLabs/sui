@@ -19,8 +19,8 @@ Follow the instructions to [install Sui binaries](install.md#binaries).
 ## Genesis
 
 The `genesis` command creates four validators and five user accounts
-each with five gas objects. These are Sui [objects](objects.md) used
-to pay for Sui [transactions](transactions.md#transaction-metadata),
+each with five gas objects. These are Sui [objects](../learn/objects.md) used
+to pay for Sui [transactions](../learn/transactions.md#transaction-metadata),
 such other object transfers or smart contract (Move) calls. These
 numbers represent a sample configuration and have been chosen somewhat
 arbitrarily; the process of generating the genesis state can be
