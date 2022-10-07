@@ -120,8 +120,8 @@ impl<Network: SubscriberNetwork> Subscriber<Network> {
             for future in futures {
                 // todo - limit number pending futures on startup
                 waiting.push_back(future);
-                self.metrics.subscriber_recovered_certificates_count.inc();
             }
+            self.metrics.subscriber_recovered_certificates_count.inc();
         }
 
         // Listen to sequenced consensus message and process them.
@@ -177,7 +177,8 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
             .set(deliver.certificate.round() as i64);
         self.metrics.subscriber_processed_certificates.inc();
         debug!("Fetching payload for {:?}", deliver);
-        let mut ret = vec![];
+        let mut ret = Vec::with_capacity(deliver.certificate.header.payload.len());
+        let deliver = Arc::new(deliver);
         for (batch_index, (digest, worker_id)) in
             deliver.certificate.header.payload.iter().enumerate()
         {
@@ -219,6 +220,8 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
         for worker in workers {
             let future = self.fetch_from_worker(stagger, worker, digest);
             futures.push(future.boxed());
+            // TODO: Make this a parameter, and also record workers / authorities that are down
+            //       to request from them batches later.
             stagger += Duration::from_millis(200);
         }
         let (batch, _, _) = futures::future::select_all(futures).await;
@@ -253,6 +256,7 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
         digest: BatchDigest,
     ) -> Batch {
         tokio::time::sleep(stagger_delay).await;
+        // TODO: Make these config parameters
         let max_timeout = Duration::from_secs(60);
         let mut timeout = Duration::from_secs(10);
         let mut attempt = 0usize;
