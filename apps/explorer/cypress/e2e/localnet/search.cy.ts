@@ -15,8 +15,12 @@ describe('search', () => {
     it('can search for objects', () => {
         cy.task('faucet')
             .then((address) => cy.task('mint', address))
-            .then(({ effects }) => {
-                const { objectId } = effects.created![0].reference;
+            .then((tx) => {
+                if (!('EffectsCert' in tx)) {
+                    throw new Error('Missing effects cert');
+                }
+                const { objectId } =
+                    tx.EffectsCert.effects.effects.created![0].reference;
                 cy.visit('/');
                 cy.get('[data-testid=search]').type(objectId).type('{enter}');
                 cy.url().should('include', `/objects/${objectId}`);

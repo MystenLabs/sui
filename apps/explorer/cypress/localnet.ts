@@ -9,6 +9,7 @@ import {
     Ed25519Keypair,
     JsonRpcProvider,
     RawSigner,
+    LocalTxnDataSerializer,
     type Keypair,
 } from '../../../sdk/typescript/src';
 
@@ -21,10 +22,18 @@ export async function createLocalnetTasks() {
             if (!keypair) {
                 throw new Error('missing keypair');
             }
-            const provider = new JsonRpcProvider('http://localhost:5001');
-            const signer = new RawSigner(keypair, provider);
+            const provider = new JsonRpcProvider('http://localhost:9000');
+            const signer = new RawSigner(
+                keypair,
+                provider,
+                new LocalTxnDataSerializer(provider)
+            );
 
-            const tx = await signer.executeMoveCall({
+            const [gasPayment] = await provider.getGasObjectsOwnedByAddress(
+                keypair.getPublicKey().toSuiAddress()
+            );
+
+            const tx = await signer.executeMoveCallWithRequestType({
                 packageObjectId: '0x2',
                 module: 'devnet_nft',
                 function: 'mint',
@@ -34,6 +43,7 @@ export async function createLocalnetTasks() {
                     'An example NFT.',
                     'ipfs://bafkreibngqhl3gaa7daob4i2vccziay2jjlp435cf66vhono7nrvww53ty',
                 ],
+                gasPayment: gasPayment.objectId,
                 gasBudget: 30000,
             });
 
