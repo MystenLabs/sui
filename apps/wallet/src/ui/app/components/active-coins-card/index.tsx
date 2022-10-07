@@ -29,19 +29,19 @@ function ActiveCoinsCard({
 
     const allCoins = useMemo(
         () =>
-            Object.keys(aggregateBalances).map((aType) => {
-                const name = Coin.getCoinSymbol(aType);
+            Object.entries(aggregateBalances).map((aType) => {
+                const name = Coin.getCoinSymbol(aType[0]);
                 return {
-                    coinName: `${name} Coin`,
+                    coinName: name,
                     coinSymbol: name,
-                    coinType: aType,
+                    coinType: aType[0],
                     //TODO: default coin icon switch to on chain metadata
                     coinIconName:
-                        GAS_TYPE_ARG === aType
+                        GAS_TYPE_ARG === aType[0]
                             ? SuiIcons.SuiLogoIcon
                             : SuiIcons.Tokens,
                     type: aType,
-                    balance: aggregateBalances[aType],
+                    balance: aType[1],
                 };
             }),
         [aggregateBalances]
