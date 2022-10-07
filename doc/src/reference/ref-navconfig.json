@@ -6,123 +6,123 @@
       },
     {
         "label": "SuiJSON Format",
-        "fileName": "reference/sui-json"
+        "fileName": "reference/framework/sui-json"
       },
     {
         "label": "Sui Framework Reference",
-        "fileName": "reference/sui-framework",
+        "fileName": "reference/framework/sui-framework",
         "title": "Sui Reference Framework",
         "items": [
             {
             "label": "balance",
-            "fileName": "reference/balance"
+            "fileName": "reference/framework/balance"
             },
             {
                 "label": "bls12381",
-                "fileName": "reference/bls12381"
+                "fileName": "reference/framework/bls12381"
             },
             {
                 "label": "bulletproofs",
-                "fileName": "reference/bulletproofs"
+                "fileName": "reference/framework/bulletproofs"
             },
             {
                 "label": "coin",
-                "fileName": "reference/coin"
+                "fileName": "reference/framework/coin"
             },
             {
                 "label": "devnet_nft",
-                "fileName": "reference/devnet_nft"
+                "fileName": "reference/framework/devnet_nft"
             },
             {
                 "label": "ecdsa",
-                "fileName": "reference/ecdsa"
+                "fileName": "reference/framework/ecdsa"
             },
             {
                 "label": "ed25519",
-                "fileName": "reference/ed25519"
+                "fileName": "reference/framework/ed25519"
             },
             {
                 "label": "elliptic_curve",
-                "fileName": "reference/elliptic_curve"
+                "fileName": "reference/framework/elliptic_curve"
             },
             {
                 "label": "epoch_time_lock",
-                "fileName": "reference/epoch_time_lock"
+                "fileName": "reference/framework/epoch_time_lock"
             },
             {
                 "label": "erc721_metadata",
-                "fileName": "reference/erc721_metadata"
+                "fileName": "reference/framework/erc721_metadata"
             },
             {
                 "label": "event",
-                "fileName": "reference/event"
+                "fileName": "reference/framework/event"
             },
             {
                 "label": "genesis",
-                "fileName": "reference/genesis"
+                "fileName": "reference/framework/genesis"
             },
             {
                 "label": "locked_coin",
-                "fileName": "reference/locked_coin"
+                "fileName": "reference/framework/locked_coin"
             },
             {
                 "label": "object",
-                "fileName": "reference/object"
+                "fileName": "reference/framework/object"
             },
             {
                 "label": "priority_queue",
-                "fileName": "reference/priority_queue"
+                "fileName": "reference/framework/priority_queue"
             },
             {
                 "label": "stake",
-                "fileName": "reference/stake"
+                "fileName": "reference/framework/stake"
             },
             {
                 "label": "staking_pool",
-                "fileName": "reference/staking_pool"
+                "fileName": "reference/framework/staking_pool"
             },
             {
                 "label": "sui",
-                "fileName": "reference/sui"
+                "fileName": "reference/framework/sui"
             },
             {
                 "label": "sui_system",
-                "fileName": "reference/sui_system"
+                "fileName": "reference/framework/sui_system"
             },
             {
                 "label": "transfer",
-                "fileName": "reference/transfer"
+                "fileName": "reference/framework/transfer"
             },
             {
                 "label": "tx_context",
-                "fileName": "reference/tx_context"
+                "fileName": "reference/framework/tx_context"
             },
             {
                 "label": "typed_id",
-                "fileName": "reference/typed_id"
+                "fileName": "reference/framework/typed_id"
             },
             {
                 "label": "types",
-                "fileName": "reference/types"
+                "fileName": "reference/framework/types"
             },
             {
                 "label": "url",
-                "fileName": "reference/url"
+                "fileName": "reference/framework/url"
             },
             {
                 "label": "validator",
-                "fileName": "reference/validator"
+                "fileName": "reference/framework/validator"
             },
             {
                 "label": "validator_set",
-                "fileName": "reference/validator_set"
+                "fileName": "reference/framework/validator_set"
             },
             {
                 "label": "vec_map",
-                "fileName": "reference/vec_map"
+                "fileName": "reference/framework/vec_map"
             },
             {
                 "label": "vec_set",
-                "fileName": "reference/vec_set"
+                "fileName": "reference/framework/vec_set"
             }
   ]

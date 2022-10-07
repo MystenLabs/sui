@@ -7,13 +7,13 @@
         "link": "doc-updates"
       },
       {
+        "label": "Sui Framework Reference",
+        "link": "reference/sui-framework"
+      },
+      {
         "label": "Sui by Example",
         "link": "https://examples.sui.io/",
         "external": true
-      },
-      {
-        "label": "Connect to Sui Devnet",
-        "link": "build/devnet"
       }
     ]
   },
@@ -200,7 +200,7 @@
         "fileName": "explore/sui-explorer"
       },
       {
-        "label": "Wallet in Browser",
+        "label": "Sui Wallet",
         "fileName": "explore/wallet-browser"
       },
       {
@@ -240,11 +240,6 @@
       {
         "label": "Code of Conduct",
         "fileName": "contribute/code-of-conduct"
-      },
-      {
-        "label": "About Mysten Labs",
-        "link": "https://mystenlabs.com/",
-        "external": true
       }
     ]
   }
