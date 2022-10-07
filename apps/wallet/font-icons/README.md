@@ -26,6 +26,7 @@ It will be useful to also document here the source of each icon.
 -   [close.svg](./svgs/close.svg) - exported from [figma](https://www.figma.com/file/rkFrheddol8YO7HQaHgIfF/Sui-Systematize?node-id=3421%3A2392)
 -   [arrow-right.svg](./svgs/arrow-right.svg) - exported from [figma](https://www.figma.com/file/rkFrheddol8YO7HQaHgIfF/Sui-Systematize?node-id=3421%3A2392)
 -   [info.svg](./svgs/info.svg) - figma
+-   [copy.svg](./svgs/copy.svg) - figma
 
 # Troubleshooting
 
