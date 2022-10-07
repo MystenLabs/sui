@@ -4968,6 +4968,7 @@ dependencies = [
  "futures",
  "hex",
  "indexmap",
+ "mockall",
  "mysten-util-mem",
  "narwhal-config",
  "narwhal-crypto",

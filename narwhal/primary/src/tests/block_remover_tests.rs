@@ -1,10 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{block_remover::BlockRemover, common::create_db_stores, PrimaryWorkerMessage};
-
-use anemo::async_trait;
+use crate::{block_remover::BlockRemover, common::create_db_stores};
 use anemo::PeerId;
-use anyhow::Result;
 use config::{Committee, WorkerId};
 use consensus::{dag::Dag, metrics::ConsensusMetrics};
 use crypto::traits::KeyPair;
@@ -14,11 +11,10 @@ use network::P2pNetwork;
 use prometheus::Registry;
 use std::{borrow::Borrow, collections::HashMap, sync::Arc, time::Duration};
 use test_utils::CommitteeFixture;
-use test_utils::WorkerFixture;
 use tokio::time::timeout;
 use types::{
-    BatchDigest, Certificate, PrimaryToWorker, PrimaryToWorkerServer, RequestBatchRequest,
-    RequestBatchResponse, WorkerDeleteBatchesMessage, WorkerSynchronizeMessage,
+    BatchDigest, Certificate, MockPrimaryToWorker, PrimaryToWorkerServer,
+    WorkerDeleteBatchesMessage,
 };
 
 #[tokio::test]
@@ -112,7 +108,19 @@ async fn test_successful_blocks_delete() {
         let worker = primary.worker(worker_id);
         let address = &worker.info().worker_address;
 
-        worker_networks.push(worker_listener(worker, batch_digests, Ok(())));
+        let mut mock_server = MockPrimaryToWorker::new();
+        mock_server
+            .expect_delete_batches()
+            .withf(move |request| {
+                request.body()
+                    == &WorkerDeleteBatchesMessage {
+                        digests: batch_digests.clone(),
+                    }
+            })
+            .returning(|_| Ok(anemo::Response::new(())));
+        let routes = anemo::Router::new().add_rpc_service(PrimaryToWorkerServer::new(mock_server));
+        worker_networks.push(worker.new_network(routes));
+        // worker_networks.push(worker_listener(worker, batch_digests, Ok(())));
 
         let address = network::multiaddr_to_address(address).unwrap();
         let peer_id = PeerId(worker.keypair().public().0.to_bytes());
@@ -261,15 +269,24 @@ async fn test_failed_blocks_delete() {
         let worker = primary.worker(worker_id);
         let address = &worker.info().worker_address;
 
-        worker_networks.push(worker_listener(
-            worker,
-            batch_digests,
-            if worker_id == 0 {
-                Err(anyhow::anyhow!("failed"))
-            } else {
-                Ok(())
-            },
-        ));
+        let mut mock_server = MockPrimaryToWorker::new();
+        mock_server
+            .expect_delete_batches()
+            .withf(move |request| {
+                request.body()
+                    == &WorkerDeleteBatchesMessage {
+                        digests: batch_digests.clone(),
+                    }
+            })
+            .returning(move |_| {
+                if worker_id == 0 {
+                    Err(anemo::rpc::Status::internal("failed"))
+                } else {
+                    Ok(anemo::Response::new(()))
+                }
+            });
+        let routes = anemo::Router::new().add_rpc_service(PrimaryToWorkerServer::new(mock_server));
+        worker_networks.push(worker.new_network(routes));
 
         let address = network::multiaddr_to_address(address).unwrap();
         let peer_id = PeerId(worker.keypair().public().0.to_bytes());
@@ -305,61 +322,6 @@ async fn test_failed_blocks_delete() {
         total_deleted += 1;
     }
     assert_eq!(total_deleted, 0);
-}
-
-#[must_use]
-pub fn worker_listener(
-    worker: &WorkerFixture,
-    expected_batch_ids: Vec<BatchDigest>,
-    response: Result<()>,
-) -> anemo::Network {
-    struct MockPrimaryToWorker {
-        expected_request: Vec<BatchDigest>,
-        response: Result<()>,
-    }
-    #[async_trait]
-    impl PrimaryToWorker for MockPrimaryToWorker {
-        async fn send_message(
-            &self,
-            _request: anemo::Request<PrimaryWorkerMessage>,
-        ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
-            unimplemented!()
-        }
-        async fn synchronize(
-            &self,
-            _request: anemo::Request<WorkerSynchronizeMessage>,
-        ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
-            unimplemented!()
-        }
-        async fn request_batch(
-            &self,
-            _request: anemo::Request<RequestBatchRequest>,
-        ) -> Result<anemo::Response<RequestBatchResponse>, anemo::rpc::Status> {
-            unimplemented!()
-        }
-        async fn delete_batches(
-            &self,
-            request: anemo::Request<WorkerDeleteBatchesMessage>,
-        ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
-            assert_eq!(
-                request.into_body(),
-                WorkerDeleteBatchesMessage {
-                    digests: self.expected_request.clone()
-                }
-            );
-            match &self.response {
-                Ok(_) => Ok(anemo::Response::new(())),
-                Err(e) => Err(anemo::rpc::Status::unknown(format!("{e:?}"))),
-            }
-        }
-    }
-
-    let routes =
-        anemo::Router::new().add_rpc_service(PrimaryToWorkerServer::new(MockPrimaryToWorker {
-            expected_request: expected_batch_ids,
-            response,
-        }));
-    worker.new_network(routes)
 }
 
 async fn populate_genesis<K: Borrow<Dag>>(dag: &K, committee: &Committee) {

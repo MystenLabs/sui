@@ -15,6 +15,7 @@ dashmap = "5.4.0"
 derive_builder = "0.11.2"
 futures = "0.3.24"
 indexmap = { version = "1.9.1", features = ["serde"] }
+mockall = "0.11.2"
 mysten-util-mem = { git = "https://github.com/MystenLabs/mysten-infra" }
 prometheus = "0.13.2"
 proptest = "1.0.0"
