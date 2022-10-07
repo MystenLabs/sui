@@ -1,7 +1,6 @@
 .placeholder {
-    @apply rounded-[3px];
+    @apply rounded-[3px] animate-shimmer;
 
-    animation: shimmer 2s infinite linear;
     background: linear-gradient(
         90deg,
         #ecf1f4 -24.18%,
@@ -10,14 +9,4 @@
         #ecf1f4 114.82%
     );
     background-size: 1000px 100%;
-}
-
-@keyframes shimmer {
-    0% {
-        background-position: -1000px 0;
-    }
-
-    100% {
-        background-position: 1000px 0;
-    }
 }
