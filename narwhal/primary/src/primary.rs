@@ -251,9 +251,19 @@ impl Primary {
             )))
             .into_inner();
 
+        let anemo_config = {
+            let mut quic_config = anemo::QuicConfig::default();
+            // Enable keep alives every 5s
+            quic_config.keep_alive_interval_ms = Some(5_000);
+            let mut config = anemo::Config::default();
+            config.quic = Some(quic_config);
+            config
+        };
+
         let network = anemo::Network::bind(addr.clone())
             .server_name("narwhal")
             .private_key(network_signer.copy().private().0.to_bytes())
+            .config(anemo_config)
             .outbound_request_layer(outbound_layer)
             .start(service)
             .unwrap_or_else(|_| {
