@@ -147,17 +147,20 @@ impl ObjectRuntimeState {
             transfers,
             events: user_events,
         } = self;
-        let owner_map = input_objects
+        let input_owner_map = input_objects
             .iter()
             .filter_map(|(id, (_by_value, owner))| match owner {
                 Owner::AddressOwner(_) | Owner::Shared | Owner::Immutable => None,
                 Owner::ObjectOwner(parent) => Some((*id, (*parent).into())),
             })
             .collect();
-        check_for_owner_cycles(
-            owner_map,
+        // update the input owners with the new owners from transfers
+        // reports an error on cycles
+        update_owner_map(
+            input_owner_map,
             transfers.iter().map(|(id, owner, _, _, _)| (*id, *owner)),
         )?;
+        // determine write kinds
         let writes: LinkedHashMap<_, _> = transfers
             .into_iter()
             .map(|(id, owner, type_, tag, value)| {
@@ -172,6 +175,7 @@ impl ObjectRuntimeState {
                 (id, (write_kind, owner, type_, tag, value))
             })
             .collect();
+        // determine delete kinds
         let mut deletions: LinkedHashMap<_, _> = deleted_ids
             .into_iter()
             .map(|(id, ())| {
@@ -184,6 +188,7 @@ impl ObjectRuntimeState {
                 (id, delete_kind)
             })
             .collect();
+        // remaining by value objects must be wrapped
         let remaining_by_value_objects = input_objects
             .into_iter()
             .filter(|(id, (by_value, _))| {
@@ -204,7 +209,7 @@ impl ObjectRuntimeState {
     }
 }
 
-fn check_for_owner_cycles(
+fn update_owner_map(
     mut object_owner_map: BTreeMap<ObjectID, ObjectID>,
     transfers: impl IntoIterator<Item = (ObjectID, Owner)>,
 ) -> Result<(), ExecutionError> {
@@ -214,12 +219,16 @@ fn check_for_owner_cycles(
             Owner::AddressOwner(_) | Owner::Shared | Owner::Immutable => (),
             Owner::ObjectOwner(new_owner) => {
                 let new_owner: ObjectID = new_owner.into();
-                let mut parent = new_owner;
-                while parent != id && object_owner_map.contains_key(&parent) {
-                    parent = *object_owner_map.get(&parent).unwrap();
-                }
-                if parent == id {
-                    return Err(ExecutionErrorKind::circular_object_ownership(parent).into());
+                let mut cur = new_owner;
+                loop {
+                    if cur == id {
+                        return Err(ExecutionErrorKind::circular_object_ownership(cur).into());
+                    }
+                    if let Some(parent) = object_owner_map.get(&cur) {
+                        cur = *parent;
+                    } else {
+                        break;
+                    }
                 }
                 object_owner_map.insert(id, new_owner);
             }

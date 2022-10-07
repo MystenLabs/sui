@@ -1,9 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// TODO remove once used
-#![allow(dead_code)]
-
 use crate::{
     legacy_test_cost,
     natives::{
@@ -43,6 +40,8 @@ const E_OBJECT_NOT_FOUND_CODE: u64 = 4;
 // LinkedHashSet has a bug for accessing the back/last element
 type Set<K> = LinkedHashMap<K, ()>;
 
+// This function updates the inventories based on the transfers and deletes that occurred in the
+// transaction
 // native fun end_transaction(): TransactionResult;
 pub fn end_transaction(
     context: &mut NativeContext,
@@ -62,6 +61,7 @@ pub fn end_transaction(
     // set to true if a shared or imm object was:
     // - transferred in a way that changes it from its original shared/imm state
     // - wraps the object
+    // if true, we will "abort"
     let mut incorrect_shared_or_imm_handling = false;
     let mut new_object_values = LinkedHashMap::new();
     let mut transferred = vec![];
@@ -103,6 +103,7 @@ pub fn end_transaction(
             .entry(*wrapped)
             .and_modify(|(by_value, _owner)| *by_value = true);
     }
+    // Determine writes and deletes
     let results = object_runtime_state.finish();
     let RuntimeResults {
         writes,
@@ -120,6 +121,9 @@ pub fn end_transaction(
     let object_runtime_ref: &mut ObjectRuntime = context.extensions_mut().get_mut();
     let inventories = &mut object_runtime_ref.test_inventories;
     // cleanup inventories
+    // we will remove all changed objects
+    // - deleted objects need to be removed to mark deletions
+    // - written objects are removed and later replaced to mark new values and new owners
     for id in deletions.keys().chain(writes.keys()) {
         for addr_inventory in inventories.address_inventories.values_mut() {
             for s in addr_inventory.values_mut() {
@@ -134,7 +138,7 @@ pub fn end_transaction(
         }
         inventories.taken.remove(id);
     }
-    // handle transfers
+    // handle transfers, inserting transferred/written objects into their respective inventory
     let mut created = vec![];
     let mut written = vec![];
     for (id, (kind, owner, ty, _, _)) in writes {
@@ -171,13 +175,13 @@ pub fn end_transaction(
             }
         }
     }
-    // handle deletions
+    // deletions already handled above, but we drop the delete kind for the effects
     let mut deleted = vec![];
     for (id, _) in deletions {
         deleted.push(id);
     }
 
-    // new input objects are remaining taken objects
+    // new input objects are remaining taken objects not written/deleted
     object_runtime_ref.state.input_objects = inventories
         .taken
         .iter()

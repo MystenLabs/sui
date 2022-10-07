@@ -50,6 +50,17 @@ use sui_verifier::{
 use crate::bytecode_rewriter::ModuleHandleRewriter;
 use crate::object_root_ancestor_map::ObjectRootAncestorMap;
 
+macro_rules! assert_invariant {
+    ($cond:expr, $msg:expr) => {
+        if !$cond {
+            return Err(ExecutionError::new_with_source(
+                ExecutionErrorKind::InvariantViolation,
+                $msg,
+            ));
+        }
+    };
+}
+
 pub fn new_move_vm(natives: NativeFunctionTable) -> Result<MoveVM, SuiError> {
     MoveVM::new(natives).map_err(|_| SuiError::ExecutionInvariantViolation)
 }
@@ -189,20 +200,24 @@ fn execute_internal<
             gas_status.get_move_gas_status(),
         )
         .and_then(|ret| Ok((ret, session.finish_with_extensions()?)))?;
-    debug_assert!(return_values.is_empty());
+    assert_invariant!(return_values.is_empty(), "Return values must be empty");
     let object_runtime: ObjectRuntime = native_context_extensions.remove();
     std::mem::drop(native_context_extensions);
 
     // Sui Move programs should never touch global state, so ChangeSet should be empty
-    debug_assert!(change_set.accounts().is_empty());
-    debug_assert!(events.is_empty());
+    assert_invariant!(change_set.accounts().is_empty(), "Change set must be empty");
+    // Sui Move no longer uses Move's internal event system
+    assert_invariant!(events.is_empty(), "Events must be empty");
     // Input ref parameters we put in should be the same number we get out, plus one for the &mut TxContext
     let num_mut_objects = if has_ctx_arg {
         mutable_ref_objects.len() + 1
     } else {
         mutable_ref_objects.len()
     };
-    debug_assert!(num_mut_objects == mutable_reference_outputs.len());
+    assert_invariant!(
+        num_mut_objects == mutable_reference_outputs.len(),
+        "Number of mutable references returned does not match input"
+    );
 
     // When this function is used during publishing, it
     // may be executed several times, with objects being
@@ -225,8 +240,10 @@ fn execute_internal<
             (object_id, bytes)
         })
         .collect();
-    // All mutable references should have been marked as updated
-    debug_assert!(mutable_ref_objects.is_empty());
+    assert_invariant!(
+        mutable_ref_objects.is_empty(),
+        "All mutable references should have been marked as updated"
+    );
     let by_value_object_map = object_data
         .into_iter()
         .filter(|(id, _obj)| by_value_objects.contains(id))
@@ -513,17 +530,17 @@ fn process_successful_execution<S: Storage + ParentSync>(
                 .expect("object contents should start with an id")
         );
         let old_object = by_value_objects.get(&id);
-        let (write_kind, version) = match (old_object, write_kind) {
-            (Some((_, version)), _) => {
+        let (write_kind, version) = match (write_kind, old_object) {
+            (_, Some((_, version))) => {
                 debug_assert!(write_kind == WriteKind::Mutate);
                 (WriteKind::Mutate, *version)
             }
-            // When an object was wrapped at version `v`, we added an record into `parent_sync`
+            // When an object was wrapped at version `v`, we added a record into `parent_sync`
             // with version `v+1` along with OBJECT_DIGEST_WRAPPED. Now when the object is unwrapped,
             // it will also have version `v+1`, leading to a violation of the invariant that any
             // object_id and version pair must be unique. We use the version from parent_sync and
             // increment it (below), so we will have `(v+1)+1`, thus preserving the uniqueness
-            (None, WriteKind::Unwrap) => match state_view.get_latest_parent_entry_ref(id) {
+            (WriteKind::Unwrap, None) => match state_view.get_latest_parent_entry_ref(id) {
                 Ok(Some((_, last_version, _))) => (WriteKind::Unwrap, last_version),
                 // if the object is not in parent sync, it was wrapped before ever being stored into
                 // storage.
@@ -538,7 +555,7 @@ fn process_successful_execution<S: Storage + ParentSync>(
                     ));
                 }
             },
-            (None, _) => {
+            (_, None) => {
                 debug_assert!(write_kind == WriteKind::Create);
                 (WriteKind::Create, SequenceNumber::new())
             }
