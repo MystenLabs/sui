@@ -362,11 +362,11 @@ impl CheckpointStore {
         epoch: EpochId,
         sequence_number: CheckpointSequenceNumber,
         transactions: impl Iterator<Item = &'a ExecutionDigests> + Clone,
-        effects_store: impl CausalOrder + PendCertificateForExecution,
+        effects_store: impl CausalOrder,
         next_epoch_committee: Option<Committee>,
     ) -> SuiResult {
         // Make sure that all transactions in the checkpoint have been executed locally.
-        self.check_checkpoint_transactions(transactions.clone(), &effects_store)?;
+        self.check_checkpoint_transactions(transactions.clone())?;
 
         let previous_digest = self.get_prev_checkpoint_digest(sequence_number)?;
 
@@ -758,14 +758,14 @@ impl CheckpointStore {
     /// Processes a checkpoint certificate that this validator just learned about.
     /// Such certificate may either be created locally based on a quorum of signed checkpoints,
     /// or downloaded from other validators to sync local checkpoint state.
+    #[cfg(test)]
     pub fn process_new_checkpoint_certificate(
         &mut self,
         checkpoint: &CertifiedCheckpointSummary,
         contents: &CheckpointContents,
         committee: &Committee,
-        effects_store: impl CausalOrder + PendCertificateForExecution,
     ) -> SuiResult {
-        self.check_checkpoint_transactions(contents.iter(), &effects_store)?;
+        self.check_checkpoint_transactions(contents.iter())?;
         self.process_synced_checkpoint_certificate(checkpoint, contents, committee)
     }
 
@@ -914,36 +914,19 @@ impl CheckpointStore {
     fn check_checkpoint_transactions<'a>(
         &self,
         transactions: impl Iterator<Item = &'a ExecutionDigests> + Clone,
-        pending_execution: &impl PendCertificateForExecution,
     ) -> SuiResult {
-        let extra_tx = self
-            .tables
-            .extra_transactions
-            .multi_get(transactions.clone())?;
-        let tx_to_execute: Vec<_> = extra_tx
-            .iter()
-            .zip(transactions)
-            .filter_map(|(opt_seq, digest)| {
-                if opt_seq.is_none() {
-                    Some(digest.transaction)
-                } else {
-                    None
-                }
-            })
-            .collect();
-
-        if tx_to_execute.is_empty() {
-            Ok(())
-        } else {
-            debug!("Scheduled transactions for execution: {:?}", tx_to_execute);
-            pending_execution.add_pending_certificates(
-                tx_to_execute
-                    .into_iter()
-                    .map(|digest| (digest, None))
-                    .collect(),
-            )?;
-            Err(SuiError::from("Checkpoint blocked by pending certificates"))
-        }
+        fp_ensure!(
+            self.tables
+                .extra_transactions
+                .multi_get(transactions)?
+                .into_iter()
+                .all(|s| s.is_some()),
+            // This should never happen (unless called directly from tests).
+            SuiError::CheckpointingError {
+                error: "Some transactions are not in extra_transactions".to_string()
+            }
+        );
+        Ok(())
     }
 
     #[cfg(test)]
@@ -951,10 +934,9 @@ impl CheckpointStore {
         &mut self,
         seq: CheckpointSequenceNumber,
         transactions: &CheckpointContents,
-        effects_store: impl PendCertificateForExecution,
     ) -> Result<(), SuiError> {
         // Ensure we have processed all transactions contained in this checkpoint.
-        self.check_checkpoint_transactions(transactions.iter(), &effects_store)?;
+        self.check_checkpoint_transactions(transactions.iter())?;
 
         let batch = self.tables.transactions_to_checkpoint.batch();
         self.update_new_checkpoint_inner(seq, transactions, batch)?;
