@@ -1743,17 +1743,33 @@ impl AuthorityState {
                     .skip_to(&start)?;
                 if let Some(limit) = limit {
                     iter.take(limit)
-                        .map(|(seq, digest)| (seq, digest.transaction))
+                        .map(|(_, digest)| digest.transaction)
                         .collect()
                 } else {
-                    iter.map(|(seq, digest)| (seq, digest.transaction))
-                        .collect()
+                    iter.map(|(_, digest)| digest.transaction).collect()
                 }
             }
-        }
-        .into_iter()
-        .map(|(_, digest)| digest)
-        .collect())
+            TransactionQuery::Latest => {
+                let end = if let Some(cursor) = cursor {
+                    cursor
+                } else {
+                    self.database.next_sequence_number()?
+                };
+
+                let start = limit
+                    .and_then(|limit| u64::try_from(limit).ok())
+                    .and_then(|limit| end.checked_sub(limit))
+                    .unwrap_or_default();
+
+                self.database
+                    .tables
+                    .executed_sequence
+                    .iter()
+                    .skip_to(&start)?
+                    .map(|(_, digest)| digest.transaction)
+                    .collect()
+            }
+        })
     }
 
     pub async fn get_timestamp_ms(

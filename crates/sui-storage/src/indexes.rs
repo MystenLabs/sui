@@ -153,7 +153,7 @@ impl IndexStore {
         object_id: KeyT,
         cursor: Option<TxSequenceNumber>,
         limit: Option<usize>,
-    ) -> SuiResult<Vec<(TxSequenceNumber, TransactionDigest)>> {
+    ) -> SuiResult<Vec<TransactionDigest>> {
         let cursor = cursor.unwrap_or(TxSequenceNumber::MIN);
         let iter = index
             .iter()
@@ -161,11 +161,9 @@ impl IndexStore {
             .take_while(|((id, _), _)| *id == object_id);
 
         Ok(if let Some(limit) = limit {
-            iter.take(limit)
-                .map(|((_, seq), digest)| (seq, digest))
-                .collect()
+            iter.take(limit).map(|(_, digest)| digest).collect()
         } else {
-            iter.map(|((_, seq), digest)| (seq, digest)).collect()
+            iter.map(|(_, digest)| digest).collect()
         })
     }
 
@@ -174,7 +172,7 @@ impl IndexStore {
         input_object: ObjectID,
         cursor: Option<TxSequenceNumber>,
         limit: Option<usize>,
-    ) -> SuiResult<Vec<(TxSequenceNumber, TransactionDigest)>> {
+    ) -> SuiResult<Vec<TransactionDigest>> {
         Self::get_transactions_by_object(
             &self.transactions_by_input_object_id,
             input_object,
@@ -188,7 +186,7 @@ impl IndexStore {
         mutated_object: ObjectID,
         cursor: Option<TxSequenceNumber>,
         limit: Option<usize>,
-    ) -> SuiResult<Vec<(TxSequenceNumber, TransactionDigest)>> {
+    ) -> SuiResult<Vec<TransactionDigest>> {
         Self::get_transactions_by_object(
             &self.transactions_by_mutated_object_id,
             mutated_object,
@@ -202,7 +200,7 @@ impl IndexStore {
         addr: SuiAddress,
         cursor: Option<TxSequenceNumber>,
         limit: Option<usize>,
-    ) -> SuiResult<Vec<(TxSequenceNumber, TransactionDigest)>> {
+    ) -> SuiResult<Vec<TransactionDigest>> {
         Self::get_transactions_by_object(&self.transactions_from_addr, addr, cursor, limit)
     }
 
@@ -213,7 +211,7 @@ impl IndexStore {
         function: Option<String>,
         cursor: Option<TxSequenceNumber>,
         limit: Option<usize>,
-    ) -> SuiResult<Vec<(TxSequenceNumber, TransactionDigest)>> {
+    ) -> SuiResult<Vec<TransactionDigest>> {
         let cursor = cursor.unwrap_or(TxSequenceNumber::MIN);
         let iter = self
             .transactions_by_move_function
@@ -231,11 +229,9 @@ impl IndexStore {
             });
 
         Ok(if let Some(limit) = limit {
-            iter.take(limit)
-                .map(|((_, _, _, seq), digest)| (seq, digest))
-                .collect()
+            iter.take(limit).map(|(_, digest)| digest).collect()
         } else {
-            iter.map(|((_, _, _, seq), digest)| (seq, digest)).collect()
+            iter.map(|(_, digest)| digest).collect()
         })
     }
 
@@ -244,7 +240,7 @@ impl IndexStore {
         addr: SuiAddress,
         cursor: Option<TxSequenceNumber>,
         limit: Option<usize>,
-    ) -> SuiResult<Vec<(TxSequenceNumber, TransactionDigest)>> {
+    ) -> SuiResult<Vec<TransactionDigest>> {
         Self::get_transactions_by_object(&self.transactions_to_addr, addr, cursor, limit)
     }
 

@@ -99,6 +99,7 @@ pub trait Filter<T> {
 #[derive(Clone, Debug, JsonSchema, Serialize, Deserialize)]
 pub enum TransactionQuery {
     All,
+    Latest,
     MoveFunction {
         package: ObjectID,
         module: Option<String>,
