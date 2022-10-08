@@ -9,8 +9,6 @@ import { useAppDispatch } from '_hooks';
 import CardLayout from '_pages/initialize/shared/card-layout';
 import { createMnemonic } from '_redux/slices/account';
 
-import st from './Import.module.scss';
-
 const initialValues = {
     mnemonic: '',
     password: '',
@@ -42,9 +40,10 @@ const ImportPage = () => {
     const totalSteps = allSteps.length;
     const StepForm = step < totalSteps ? allSteps[step] : null;
     return (
-        <CardLayout>
-            <h3 className={st.headerSubTitle}>Wallet Setup</h3>
-            <h1 className={st.headerTitle}>Import an Existing Wallet</h1>
+        <CardLayout
+            title="Import an Existing Wallet"
+            headerCaption="Wallet Setup"
+        >
             {StepForm ? (
                 <StepForm
                     next={async (data, stepIncrement) => {

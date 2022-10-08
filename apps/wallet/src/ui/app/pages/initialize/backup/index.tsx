@@ -37,14 +37,11 @@ const BackupPage = () => {
         })();
     }, [dispatch]);
     return (
-        <CardLayout>
-            <div className={st.successIcon}>
-                <div className={st.successBg}>
-                    <Icon icon={SuiIcons.ThumbsUp} className={st.thumbsUp} />
-                </div>
-            </div>
-            <h1 className={st.headerTitle}>Wallet Created Successfully!</h1>
-            <h2 className={st.subTitle}>Recovery Phrase</h2>
+        <CardLayout
+            icon="success"
+            title="Wallet Created Successfully!"
+            subtitle="Recovery Phrase"
+        >
             <Loading loading={loading}>
                 {mnemonic ? (
                     <div className={st.mnemonic}>
