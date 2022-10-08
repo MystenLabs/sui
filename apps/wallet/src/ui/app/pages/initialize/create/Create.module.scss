@@ -1,41 +1,5 @@
 @use '_values/colors';
-@use '_values/sizing';
 @use '_utils';
-@use 'sass:color';
-
-.content {
-    $color: color.change(colors.$sui-blue, $alpha: 0.1);
-
-    display: flex;
-    flex-flow: column nowrap;
-    align-items: center;
-    padding: 40px 30px;
-    background: $color;
-    border: 1px solid $color;
-    border-radius: 20px;
-    max-width: sizing.$popup-width;
-    max-height: sizing.$popup-height;
-    flex: 1;
-}
-
-.caption {
-    text-transform: uppercase;
-    color: colors.$gray-75;
-    margin: 0;
-    margin-bottom: 5px;
-
-    @include utils.typography('Primary/CAPTION-SB');
-}
-
-.header-title {
-    color: colors.$gray-90;
-    text-transform: capitalize;
-    margin: 0;
-    margin-bottom: 30px;
-    text-align: center;
-
-    @include utils.typography('Primary/Heading1-B');
-}
 
 .desc {
     color: colors.$gray-80;
