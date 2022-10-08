@@ -12,32 +12,31 @@ use serde_json::{json, Map, Value};
 use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::Write;
-use sui_core::test_utils::to_sender_signed_transaction;
 use sui_json_rpc::api::EventReadApiOpenRpc;
+use sui_json_rpc::transaction_execution_api::FullNodeTransactionExecutionApi;
 use sui_sdk::crypto::AccountKeystore;
+use sui_types::messages::ExecuteTransactionRequestType;
+use sui_types::messages::Transaction;
 
 use crate::examples::RpcExampleProvider;
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands, WalletContext};
 use sui::client_commands::{EXAMPLE_NFT_DESCRIPTION, EXAMPLE_NFT_NAME, EXAMPLE_NFT_URL};
 use sui_config::genesis_config::GenesisConfig;
-use sui_config::SUI_CLIENT_CONFIG;
 use sui_json::SuiJsonValue;
 use sui_json_rpc::api::EventStreamingApiOpenRpc;
 use sui_json_rpc::api::RpcReadApiClient;
-use sui_json_rpc::api::RpcTransactionBuilderClient;
-use sui_json_rpc::api::WalletSyncApiClient;
 use sui_json_rpc::bcs_api::BcsApiImpl;
-use sui_json_rpc::gateway_api::{GatewayWalletSyncApiImpl, RpcGatewayImpl, TransactionBuilderImpl};
+use sui_json_rpc::gateway_api::{GatewayWalletSyncApiImpl, TransactionBuilderImpl};
 use sui_json_rpc::read_api::{FullNodeApi, ReadApi};
 use sui_json_rpc::sui_rpc_doc;
 use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_types::{
     GetObjectDataResponse, MoveFunctionArgType, ObjectValueKind, SuiData, SuiObjectInfo,
-    SuiTransactionResponse, TransactionBytes,
+    SuiTransactionResponse,
 };
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::SUI_FRAMEWORK_ADDRESS;
-use test_utils::network::{start_rpc_test_network, TestNetwork};
+use test_utils::network::{TestCluster, TestClusterBuilder};
 
 mod examples;
 
@@ -76,13 +75,13 @@ async fn main() {
 
     let mut open_rpc = sui_rpc_doc();
     open_rpc.add_module(TransactionBuilderImpl::rpc_doc_module());
-    open_rpc.add_module(RpcGatewayImpl::rpc_doc_module());
     open_rpc.add_module(ReadApi::rpc_doc_module());
     open_rpc.add_module(FullNodeApi::rpc_doc_module());
     open_rpc.add_module(BcsApiImpl::rpc_doc_module());
     open_rpc.add_module(EventStreamingApiOpenRpc::module_doc());
     open_rpc.add_module(EventReadApiOpenRpc::module_doc());
     open_rpc.add_module(GatewayWalletSyncApiImpl::rpc_doc_module());
+    open_rpc.add_module(FullNodeTransactionExecutionApi::rpc_doc_module());
 
     open_rpc.add_examples(RpcExampleProvider::new().examples());
 
@@ -131,11 +130,15 @@ async fn create_response_sample() -> Result<
     ),
     anyhow::Error,
 > {
-    let network = start_rpc_test_network(Some(GenesisConfig::custom_genesis(1, 4, 30))).await?;
-    let working_dir = network.network.dir();
-    let config = working_dir.join(SUI_CLIENT_CONFIG);
+    // Set up wallet that uses an embedded gateway, such that we can
+    // get parsed data below.
+    let mut cluster = TestClusterBuilder::new()
+        .set_genesis_config(GenesisConfig::custom_genesis(1, 4, 30))
+        .use_embedded_gateway()
+        .build()
+        .await?;
 
-    let mut context = WalletContext::new(&config).await?;
+    let context = cluster.wallet_mut();
     let address = context
         .config
         .keystore
@@ -164,24 +167,25 @@ async fn create_response_sample() -> Result<
 
     let example_move_function_arg_types = create_move_function_arg_type_response()?;
 
-    let (example_nft_tx, example_nft) = get_nft_response(&mut context).await?;
-    let (move_package, publish) = create_package_object_response(&mut context).await?;
-    let (hero_package, hero) = create_hero_response(&mut context, &coins).await?;
-    let transfer = create_transfer_response(&mut context, address, &coins).await?;
-    let transfer_sui = create_transfer_sui_response(&mut context, address, &coins).await?;
-    let pay = create_pay_response(&mut context, address, &coins).await?;
-    let coin_split = create_coin_split_response(&mut context, &coins).await?;
-    let error = create_error_response(address, hero_package, context, &network).await?;
+    let (example_nft_tx, example_nft) = get_nft_response(context).await?;
+    let (move_package, publish) = create_package_object_response(context).await?;
+    let (hero_package, hero) = create_hero_response(context, &coins).await?;
+    let transfer = create_transfer_response(context, address, &coins).await?;
+    let transfer_sui = create_transfer_sui_response(context, address, &coins).await?;
+    let pay = create_pay_response(context, address, &coins).await?;
+    let coin_split = create_coin_split_response(context, &coins).await?;
+    let context = &cluster.wallet;
+    let error = create_error_response(address, hero_package, context, &cluster).await?;
 
     // address and owned objects
     let mut owned_objects = BTreeMap::new();
-    for account in network.accounts {
-        network.http_client.sync_account_state(account).await?;
-        let objects: Vec<SuiObjectInfo> = network
-            .http_client
-            .get_objects_owned_by_address(account)
+    for account in &cluster.accounts {
+        let objects: Vec<SuiObjectInfo> = cluster
+            .rpc_client()
+            .unwrap()
+            .get_objects_owned_by_address(*account)
             .await?;
-        owned_objects.insert(account, objects);
+        owned_objects.insert(*account, objects);
     }
 
     let move_info = MoveResponseSample {
@@ -389,18 +393,17 @@ async fn create_hero_response(
 async fn create_error_response(
     address: SuiAddress,
     hero_package: ObjectID,
-    context: WalletContext,
-    network: &TestNetwork,
+    context: &WalletContext,
+    network: &TestCluster,
 ) -> Result<Value, anyhow::Error> {
-    // Cannot use wallet command as it will return Err if tx status is Error
-    // Using hyper to get the raw response instead
-    let response: TransactionBytes = network
-        .http_client
+    let tx_data = context
+        .client
+        .transaction_builder()
         .move_call(
             address,
             hero_package,
-            "hero".to_string(),
-            "new_game".to_string(),
+            "hero",
+            "new_game",
             vec![],
             vec![],
             None,
@@ -408,23 +411,27 @@ async fn create_error_response(
         )
         .await?;
 
-    let tx = to_sender_signed_transaction(
-        response.to_data()?,
-        context.config.keystore.get_key(&address)?,
-    );
+    let signature = context
+        .config
+        .keystore
+        .sign(&address, &tx_data.to_bytes())?;
+
+    let tx = Transaction::new(tx_data, signature);
+
     let (tx_data, sig_scheme, signature_bytes, pub_key) = tx.to_network_data_for_execution();
 
     let client = Client::new();
     let request = Request::builder()
-        .uri(network.rpc_url.clone())
+        .uri(network.rpc_url().unwrap().to_string())
         .method(Method::POST)
         .header("Content-Type", "application/json")
         .body(Body::from(format!(
-            "{{ \"jsonrpc\": \"2.0\",\"method\": \"sui_executeTransaction\",\"params\": [{}, {}, {}, {}],\"id\": 1 }}",
+            "{{ \"jsonrpc\": \"2.0\",\"method\": \"sui_executeTransaction\",\"params\": [{}, {}, {}, {}, {}],\"id\": 1 }}",
             json![tx_data],
             json![sig_scheme],
             json![signature_bytes],
-            json![pub_key]
+            json![pub_key],
+            json![ExecuteTransactionRequestType::WaitForLocalExecution]
         )))?;
 
     let res = client.request(request).await?;

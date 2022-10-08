@@ -111,7 +111,7 @@ impl TestCaseImpl for CallContractTest {
 
         let object = ObjectChecker::new(nft_id)
             .owner(Owner::AddressOwner(signer))
-            .check_into_object(ctx.get_fullnode())
+            .check_into_object(ctx.get_fullnode_client())
             .await;
 
         assert_eq!(

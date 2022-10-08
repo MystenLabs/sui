@@ -3,7 +3,7 @@
 
 use crate::{TestCaseImpl, TestContext};
 use async_trait::async_trait;
-use sui_json_rpc_types::{SuiExecuteTransactionResponse, SuiExecutionStatus};
+use sui_json_rpc_types::SuiExecutionStatus;
 use sui_sdk::SuiClient;
 use sui_types::{base_types::TransactionDigest, messages::ExecuteTransactionRequestType};
 use tracing::info;
@@ -47,7 +47,7 @@ impl TestCaseImpl for FullNodeExecuteTransactionTest {
             txns.len(),
         );
 
-        let fullnode = ctx.get_fullnode();
+        let fullnode = ctx.get_fullnode_client();
 
         // Test WaitForEffectsCert
         let txn = txns.swap_remove(0);
@@ -56,41 +56,33 @@ impl TestCaseImpl for FullNodeExecuteTransactionTest {
         info!("Test execution with ImmediateReturn");
         let response = fullnode
             .quorum_driver()
-            .execute_transaction_by_fullnode(
+            .execute_transaction(
                 txn.clone(),
-                ExecuteTransactionRequestType::ImmediateReturn,
+                Some(ExecuteTransactionRequestType::ImmediateReturn),
             )
             .await?;
-        if let SuiExecuteTransactionResponse::ImmediateReturn { tx_digest } = response {
-            assert_eq!(txn_digest, tx_digest);
+        assert_eq!(txn_digest, response.tx_digest);
 
-            // Verify fullnode observes the txn
-            ctx.let_fullnode_sync(vec![tx_digest], 5).await;
-            Self::verify_transaction(fullnode, tx_digest).await;
-        } else {
-            panic!("Expect ImmediateReturn but got {:?}", response);
-        }
+        // Verify fullnode observes the txn
+        ctx.let_fullnode_sync(vec![txn_digest], 5).await;
+        Self::verify_transaction(fullnode, txn_digest).await;
 
         info!("Test execution with WaitForTxCert");
         let txn = txns.swap_remove(0);
         let txn_digest = *txn.digest();
         let response = fullnode
             .quorum_driver()
-            .execute_transaction_by_fullnode(
+            .execute_transaction(
                 txn.clone(),
-                ExecuteTransactionRequestType::WaitForTxCert,
+                Some(ExecuteTransactionRequestType::WaitForTxCert),
             )
             .await?;
-        if let SuiExecuteTransactionResponse::TxCert { certificate } = response {
-            assert_eq!(txn_digest, certificate.transaction_digest);
+        assert_eq!(txn_digest, response.tx_digest);
+        response.tx_cert.unwrap();
 
-            // Verify fullnode observes the txn
-            ctx.let_fullnode_sync(vec![txn_digest], 5).await;
-
-            Self::verify_transaction(fullnode, txn_digest).await;
-        } else {
-            panic!("Expect TxCert but got {:?}", response);
-        }
+        // Verify fullnode observes the txn
+        ctx.let_fullnode_sync(vec![txn_digest], 5).await;
+        Self::verify_transaction(fullnode, txn_digest).await;
 
         info!("Test execution with WaitForEffectsCert");
         let txn = txns.swap_remove(0);
@@ -98,28 +90,22 @@ impl TestCaseImpl for FullNodeExecuteTransactionTest {
 
         let response = fullnode
             .quorum_driver()
-            .execute_transaction_by_fullnode(txn, ExecuteTransactionRequestType::WaitForEffectsCert)
+            .execute_transaction(txn, Some(ExecuteTransactionRequestType::WaitForEffectsCert))
             .await?;
-        if let SuiExecuteTransactionResponse::EffectsCert {
-            certificate,
-            effects,
-            confirmed_local_execution,
-        } = response
-        {
-            assert!(!confirmed_local_execution);
-            assert_eq!(txn_digest, certificate.transaction_digest);
-            if !matches!(effects.effects.status, SuiExecutionStatus::Success { .. }) {
-                panic!(
-                    "Failed to execute transfer tranasction {:?}: {:?}",
-                    txn_digest, effects.effects.status
-                )
-            }
-            // Verify fullnode observes the txn
-            ctx.let_fullnode_sync(vec![txn_digest], 5).await;
-            Self::verify_transaction(fullnode, txn_digest).await;
-        } else {
-            panic!("Expect EffectsCert but got {:?}", response);
+
+        assert!(!response.confirmed_local_execution);
+        assert_eq!(txn_digest, response.tx_digest);
+        response.tx_cert.unwrap();
+        let effects = response.effects.unwrap();
+        if !matches!(effects.status, SuiExecutionStatus::Success { .. }) {
+            panic!(
+                "Failed to execute transfer tranasction {:?}: {:?}",
+                txn_digest, effects.status
+            )
         }
+        // Verify fullnode observes the txn
+        ctx.let_fullnode_sync(vec![txn_digest], 5).await;
+        Self::verify_transaction(fullnode, txn_digest).await;
 
         info!("Test execution with WaitForLocalExecution");
         let txn = txns.swap_remove(0);
@@ -127,30 +113,23 @@ impl TestCaseImpl for FullNodeExecuteTransactionTest {
 
         let response = fullnode
             .quorum_driver()
-            .execute_transaction_by_fullnode(
+            .execute_transaction(
                 txn,
-                ExecuteTransactionRequestType::WaitForLocalExecution,
+                Some(ExecuteTransactionRequestType::WaitForLocalExecution),
             )
             .await?;
-        if let SuiExecuteTransactionResponse::EffectsCert {
-            certificate,
-            effects,
-            confirmed_local_execution,
-        } = response
-        {
-            assert!(confirmed_local_execution);
-            assert_eq!(txn_digest, certificate.transaction_digest);
-            if !matches!(effects.effects.status, SuiExecutionStatus::Success { .. }) {
-                panic!(
-                    "Failed to execute transfer tranasction {:?}: {:?}",
-                    txn_digest, effects.effects.status
-                )
-            }
-            // Unlike in other execution modes, there's no need to wait for the node to sync
-            Self::verify_transaction(fullnode, txn_digest).await;
-        } else {
-            panic!("Expect EffectsCert but got {:?}", response);
+        response.tx_cert.unwrap();
+        assert!(response.confirmed_local_execution);
+        assert_eq!(txn_digest, response.tx_digest);
+        let effects = response.effects.unwrap();
+        if !matches!(effects.status, SuiExecutionStatus::Success { .. }) {
+            panic!(
+                "Failed to execute transfer tranasction {:?}: {:?}",
+                txn_digest, effects.status
+            )
         }
+        // Unlike in other execution modes, there's no need to wait for the node to sync
+        Self::verify_transaction(fullnode, txn_digest).await;
 
         Ok(())
     }

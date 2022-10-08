@@ -56,7 +56,7 @@ pub async fn start_console(
         if context.client.is_gateway() {
             writeln!(
                 out,
-                "Connecting to Sui Gateway. API version {}",
+                "Connecting to Sui Embedded Gateway. API version {}",
                 context.client.api_version()
             )?;
         } else {

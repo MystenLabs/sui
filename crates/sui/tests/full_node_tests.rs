@@ -2,19 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use futures::future;
-use jsonrpsee::core::client::{Client, ClientT, Subscription, SubscriptionClientT};
-use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
+use jsonrpsee::core::client::{ClientT, Subscription, SubscriptionClientT};
 use jsonrpsee::rpc_params;
-use jsonrpsee::ws_client::WsClientBuilder;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::ModuleId;
 use move_core_types::value::MoveStructLayout;
 use prometheus::Registry;
-use std::net::SocketAddr;
 use std::str::FromStr;
 use std::{collections::BTreeMap, sync::Arc};
-use sui_sdk::{ClientType, SuiClient};
 use sui_types::base_types::{ObjectRef, SequenceNumber};
 use sui_types::event::TransferType;
 use sui_types::object::{Object, ObjectRead, Owner, PastObjectRead};
@@ -22,6 +18,9 @@ use sui_types::sui_framework_address_concat_string;
 use test_utils::authority::test_and_configure_authority_configs;
 use test_utils::messages::{
     get_gas_object_with_wallet_context, make_transfer_object_transaction_with_wallet_context,
+};
+use test_utils::network::{
+    init_cluster_builder_env_aware, start_a_fullnode, start_a_fullnode_with_handle,
 };
 use test_utils::transaction::{
     create_devnet_nft, delete_devnet_nft, increment_counter,
@@ -32,7 +31,6 @@ use tokio::time::timeout;
 use tokio::time::{sleep, Duration};
 
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
-use sui_config::utils::get_available_port;
 use sui_json_rpc_types::{
     SuiEvent, SuiEventEnvelope, SuiEventFilter, SuiExecuteTransactionResponse, SuiExecutionStatus,
     SuiMoveStruct, SuiMoveValue, SuiTransactionFilter, SuiTransactionResponse,
@@ -40,7 +38,6 @@ use sui_json_rpc_types::{
 use sui_macros::*;
 use sui_node::SuiNode;
 use sui_sdk::crypto::AccountKeystore;
-use sui_swarm::memory::Swarm;
 use sui_types::messages::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
 };
@@ -49,17 +46,21 @@ use sui_types::{
     messages::TransactionInfoRequest,
 };
 use test_utils::messages::make_transactions_with_wallet_context;
-use test_utils::network::setup_network_and_wallet;
 use test_utils::transaction::{wait_for_all_txes, wait_for_tx};
 
 #[sim_test]
 async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
-    let (swarm, mut context, _) = setup_network_and_wallet().await?;
+    let mut test_cluster = init_cluster_builder_env_aware().build().await?;
+    let sui_node = start_a_fullnode(&test_cluster.swarm, false).await?;
+    let node = if cfg!(msim) {
+        &sui_node
+    } else {
+        &test_cluster.fullnode_handle.as_ref().unwrap().sui_node
+    };
 
-    let config = swarm.config().generate_fullnode_config();
-    let node = SuiNode::start(&config, Registry::new()).await?;
+    let context = &mut test_cluster.wallet;
 
-    let (transferred_object, _, receiver, digest) = transfer_coin(&mut context).await?;
+    let (transferred_object, _, receiver, digest) = transfer_coin(context).await?;
 
     wait_for_tx(digest, node.state().clone()).await;
 
@@ -84,17 +85,22 @@ async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_full_node_shared_objects() -> Result<(), anyhow::Error> {
-    let (swarm, context, _) = setup_network_and_wallet().await?;
+    let mut test_cluster = init_cluster_builder_env_aware().build().await?;
+    let sui_node = start_a_fullnode(&test_cluster.swarm, false).await?;
+    let node = if cfg!(msim) {
+        &sui_node
+    } else {
+        &test_cluster.fullnode_handle.as_ref().unwrap().sui_node
+    };
 
-    let config = swarm.config().generate_fullnode_config();
-    let node = SuiNode::start(&config, Registry::new()).await?;
+    let context = &mut test_cluster.wallet;
 
     let sender = context.config.keystore.addresses().get(0).cloned().unwrap();
+    let (package_ref, counter_id) = publish_basics_package_and_make_counter(context, sender).await;
 
-    let (package_ref, counter_id) = publish_basics_package_and_make_counter(&context, sender).await;
-
-    let effects = increment_counter(&context, sender, None, package_ref, counter_id).await;
-    let digest = effects.certificate.transaction_digest;
+    let (tx_cert, _effects_cert) =
+        increment_counter(context, sender, None, package_ref, counter_id).await;
+    let digest = tx_cert.transaction_digest;
     wait_for_tx(digest, node.state().clone()).await;
 
     Ok(())
@@ -105,14 +111,15 @@ const HOUR_MS: u64 = 3_600_000;
 #[tokio::test]
 async fn test_full_node_move_function_index() -> Result<(), anyhow::Error> {
     telemetry_subscribers::init_for_testing();
-    let (swarm, context, _) = setup_network_and_wallet().await?;
+    let mut test_cluster = init_cluster_builder_env_aware().build().await?;
+    let node = &test_cluster.fullnode_handle.as_ref().unwrap().sui_node;
+    let sender = test_cluster.get_address_0();
+    let context = &mut test_cluster.wallet;
 
-    let config = swarm.config().generate_fullnode_config();
-    let node = SuiNode::start(&config, Registry::new()).await?;
-    let sender = context.config.keystore.addresses().get(0).cloned().unwrap();
-    let (package_ref, counter_id) = publish_basics_package_and_make_counter(&context, sender).await;
-    let effects = increment_counter(&context, sender, None, package_ref, counter_id).await;
-    let digest = effects.certificate.transaction_digest;
+    let (package_ref, counter_id) = publish_basics_package_and_make_counter(context, sender).await;
+    let (tx_cert, _effects_cert) =
+        increment_counter(context, sender, None, package_ref, counter_id).await;
+    let digest = tx_cert.transaction_digest;
 
     wait_for_tx(digest, node.state().clone()).await;
     let txes = node
@@ -152,12 +159,11 @@ async fn test_full_node_move_function_index() -> Result<(), anyhow::Error> {
 #[tokio::test]
 async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
     telemetry_subscribers::init_for_testing();
-    let (swarm, mut context, _) = setup_network_and_wallet().await?;
+    let mut test_cluster = init_cluster_builder_env_aware().build().await?;
+    let node = &test_cluster.fullnode_handle.as_ref().unwrap().sui_node;
+    let context = &mut test_cluster.wallet;
 
-    let config = swarm.config().generate_fullnode_config();
-    let node = SuiNode::start(&config, Registry::new()).await?;
-
-    let (transferred_object, sender, receiver, digest) = transfer_coin(&mut context).await?;
+    let (transferred_object, sender, receiver, digest) = transfer_coin(context).await?;
 
     wait_for_tx(digest, node.state().clone()).await;
 
@@ -287,17 +293,19 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
 // Test for syncing a node to an authority that already has many txes.
 #[sim_test]
 async fn test_full_node_cold_sync() -> Result<(), anyhow::Error> {
-    let (swarm, mut context, _) = setup_network_and_wallet().await?;
-    let (_, _, _, _) = transfer_coin(&mut context).await?;
-    let (_, _, _, _) = transfer_coin(&mut context).await?;
-    let (_, _, _, _) = transfer_coin(&mut context).await?;
-    let (_transferred_object, _, _, digest) = transfer_coin(&mut context).await?;
+    let mut test_cluster = init_cluster_builder_env_aware().build().await?;
+
+    let context = &mut test_cluster.wallet;
+    let (_, _, _, _) = transfer_coin(context).await?;
+    let (_, _, _, _) = transfer_coin(context).await?;
+    let (_, _, _, _) = transfer_coin(context).await?;
+    let (_transferred_object, _, _, digest) = transfer_coin(context).await?;
 
     // Make sure the validators are quiescent before bringing up the node.
     sleep(Duration::from_millis(1000)).await;
 
-    let config = swarm.config().generate_fullnode_config();
-    let node = SuiNode::start(&config, Registry::new()).await?;
+    // Start a new fullnode that is not on the write path
+    let node = start_a_fullnode(&test_cluster.swarm, false).await.unwrap();
 
     wait_for_tx(digest, node.state().clone()).await;
 
@@ -314,43 +322,38 @@ async fn test_full_node_cold_sync() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
-    let (swarm, context, _) = setup_network_and_wallet().await?;
+    let test_cluster = init_cluster_builder_env_aware().build().await?;
+    let sender = test_cluster.get_address_0();
+    let context = test_cluster.wallet;
 
-    let config = swarm.config().generate_fullnode_config();
-    let node = SuiNode::start(&config, Registry::new()).await?;
+    // Start a new fullnode that is not on the write path
+    let node = start_a_fullnode(&test_cluster.swarm, false).await.unwrap();
 
     let mut futures = Vec::new();
 
-    let sender = context.config.keystore.addresses().get(0).cloned().unwrap();
     let (package_ref, counter_id) = publish_basics_package_and_make_counter(&context, sender).await;
 
     let context = Arc::new(Mutex::new(context));
 
     // Start up 5 different tasks that all spam txs at the authorities.
-    for i in 0..5 {
+    for _i in 0..5 {
         let (tx, rx) = tokio::sync::oneshot::channel();
         let context = context.clone();
         tokio::task::spawn(async move {
-            let (sender, object_to_split) = {
+            let (sender, object_to_split, gas_obj) = {
                 let context = &mut context.lock().await;
-                let address = context.config.keystore.addresses()[i];
-                SuiClientCommands::SyncClientState {
-                    address: Some(address),
-                }
-                .execute(context)
-                .await
-                .unwrap();
 
                 let sender = context.config.keystore.addresses().get(0).cloned().unwrap();
 
-                let coins = context.gas_objects(sender).await.unwrap();
-                let object_to_split = coins.first().unwrap().1.reference.to_object_ref();
-                (sender, object_to_split)
+                let mut coins = context.gas_objects(sender).await.unwrap();
+                let object_to_split = coins.swap_remove(0).1.reference.to_object_ref();
+                let gas_obj = coins.swap_remove(0).1.reference.to_object_ref();
+                (sender, object_to_split, gas_obj)
             };
 
             let mut owned_tx_digest = None;
             let mut shared_tx_digest = None;
-            let mut gas_object = None;
+            let gas_object_id = gas_obj.0;
             for _ in 0..10 {
                 let res = {
                     let context = &mut context.lock().await;
@@ -358,7 +361,7 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
                         amounts: Some(vec![1]),
                         count: 0,
                         coin_id: object_to_split.0,
-                        gas: gas_object,
+                        gas: Some(gas_object_id),
                         gas_budget: 50000,
                     }
                     .execute(context)
@@ -367,23 +370,23 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
                 };
 
                 owned_tx_digest = if let SuiClientCommandResult::SplitCoin(resp) = res {
-                    let digest = resp.certificate.transaction_digest;
-                    let split_coin_resp =
-                        resp.parsed_data.unwrap().to_split_coin_response().unwrap();
-                    // Re-use the same gas id next time to avoid O(n^2) fetches due to automatic
-                    // gas selection.
-                    gas_object = Some(split_coin_resp.updated_gas.id());
-                    Some(digest)
+                    Some(resp.certificate.transaction_digest)
                 } else {
                     panic!("transfer command did not return WalletCommandResult::Transfer");
                 };
 
                 let context = &context.lock().await;
                 shared_tx_digest = Some(
-                    increment_counter(context, sender, gas_object, package_ref, counter_id)
-                        .await
-                        .certificate
-                        .transaction_digest,
+                    increment_counter(
+                        context,
+                        sender,
+                        Some(gas_object_id),
+                        package_ref,
+                        counter_id,
+                    )
+                    .await
+                    .0
+                    .transaction_digest,
                 );
             }
             tx.send((owned_tx_digest.unwrap(), shared_tx_digest.unwrap()))
@@ -404,52 +407,17 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-/// Call this function to set up a network and a fullnode with subscription enabled.
-async fn set_up_subscription(swarm: &Swarm) -> Result<(SuiNode, Client), anyhow::Error> {
-    let port = get_available_port();
-    let ws_server_url = format!("127.0.0.1:{}", port);
-    let ws_addr: SocketAddr = ws_server_url.parse().unwrap();
-
-    let mut config = swarm.config().generate_fullnode_config();
-    config.websocket_address = Some(ws_addr);
-
-    let node = SuiNode::start(&config, Registry::new()).await?;
-
-    let client = WsClientBuilder::default()
-        .build(&format!("ws://{}", ws_server_url))
-        .await?;
-    Ok((node, client))
-}
-
-/// Call this function to set up a network and a fullnode and return a jsonrpc client.
-/// The fullnode does not have websocket enabled.
-async fn set_up_jsonrpc(
-    swarm: &Swarm,
-    fullnode_db_path: Option<&str>,
-) -> Result<(SuiNode, HttpClient, SuiClient), anyhow::Error> {
-    let port = get_available_port();
-    let jsonrpc_server_url = format!("127.0.0.1:{}", port);
-    let jsonrpc_addr: SocketAddr = jsonrpc_server_url.parse().unwrap();
-
-    let mut config = swarm
-        .config()
-        .generate_fullnode_config_with_custom_db_path(fullnode_db_path, false);
-    config.json_rpc_address = jsonrpc_addr;
-
-    let node = SuiNode::start(&config, Registry::new()).await?;
-
-    let url = format!("http://{}", jsonrpc_server_url);
-    let http_client = HttpClientBuilder::default().build(&url)?;
-    let sui_client = ClientType::RPC(url, None);
-    // Check url is valid
-    let sui_client = sui_client.init().await?;
-    Ok((node, http_client, sui_client))
-}
-
 #[tokio::test]
 async fn test_full_node_transaction_streaming_basic() -> Result<(), anyhow::Error> {
-    let (swarm, mut context, _) = setup_network_and_wallet().await?;
-    let (node, ws_client) = set_up_subscription(&swarm).await?;
+    let mut test_cluster = init_cluster_builder_env_aware().build().await?;
+    let context = &mut test_cluster.wallet;
+
+    // Start a new fullnode that is not on the write path
+    let fullnode = start_a_fullnode_with_handle(&test_cluster.swarm, None, None, false)
+        .await
+        .unwrap();
+    let ws_client = fullnode.ws_client.as_ref().unwrap();
+    let node = fullnode.sui_node;
 
     let mut sub: Subscription<SuiTransactionResponse> = ws_client
         .subscribe(
@@ -461,7 +429,7 @@ async fn test_full_node_transaction_streaming_basic() -> Result<(), anyhow::Erro
         .unwrap();
     let mut digests = Vec::with_capacity(3);
     for _i in 0..3 {
-        let (_, _, _, digest) = transfer_coin(&mut context).await?;
+        let (_, _, _, digest) = transfer_coin(context).await?;
         digests.push(digest);
     }
     wait_for_all_txes(digests.clone(), node.state().clone()).await;
@@ -489,16 +457,23 @@ async fn test_full_node_transaction_streaming_basic() -> Result<(), anyhow::Erro
     }
 
     // Node Config without websocket_address does not create a transaction streamer
-    let (node, _, _) = set_up_jsonrpc(&swarm, Some("another_folder")).await?;
-    assert!(node.state().transaction_streamer.is_none());
+    let full_node = start_a_fullnode_with_handle(&test_cluster.swarm, None, None, true).await?;
+    assert!(full_node.sui_node.state().transaction_streamer.is_none());
 
     Ok(())
 }
 
 #[tokio::test]
 async fn test_full_node_sub_and_query_move_event_ok() -> Result<(), anyhow::Error> {
-    let (swarm, mut context, _) = setup_network_and_wallet().await?;
-    let (node, ws_client) = set_up_subscription(&swarm).await?;
+    let mut test_cluster = init_cluster_builder_env_aware().build().await?;
+    let context = &mut test_cluster.wallet;
+
+    // Start a new fullnode that is not on the write path
+    let fullnode = start_a_fullnode_with_handle(&test_cluster.swarm, None, None, false)
+        .await
+        .unwrap();
+    let node = fullnode.sui_node;
+    let ws_client = fullnode.ws_client.as_ref().unwrap();
 
     let mut sub: Subscription<SuiEventEnvelope> = ws_client
         .subscribe(
@@ -511,7 +486,7 @@ async fn test_full_node_sub_and_query_move_event_ok() -> Result<(), anyhow::Erro
         .await
         .unwrap();
 
-    let (sender, object_id, digest) = create_devnet_nft(&mut context).await?;
+    let (sender, object_id, digest) = create_devnet_nft(context).await?;
     wait_for_tx(digest, node.state().clone()).await;
 
     let struct_tag_str = sui_framework_address_concat_string("::devnet_nft::MintNFTEvent");
@@ -584,11 +559,14 @@ async fn test_full_node_sub_and_query_move_event_ok() -> Result<(), anyhow::Erro
 // Test fullnode has event read jsonrpc endpoints working
 #[tokio::test]
 async fn test_full_node_event_read_api_ok() -> Result<(), anyhow::Error> {
-    let (swarm, mut context, _address) = setup_network_and_wallet().await?;
-    let (node, jsonrpc_client, _) = set_up_jsonrpc(&swarm, None).await?;
-    let sender = context.config.keystore.addresses().get(0).cloned().unwrap();
-    let receiver = context.config.keystore.addresses().get(1).cloned().unwrap();
-    let (transferred_object, _, _, digest) = transfer_coin(&mut context).await?;
+    let mut test_cluster = init_cluster_builder_env_aware().build().await?;
+    let sender = test_cluster.get_address_0();
+    let receiver = test_cluster.get_address_1();
+    let context = &mut test_cluster.wallet;
+    let node = &test_cluster.fullnode_handle.as_ref().unwrap().sui_node;
+    let jsonrpc_client = &test_cluster.fullnode_handle.as_ref().unwrap().rpc_client;
+
+    let (transferred_object, _, _, digest) = transfer_coin(context).await?;
 
     wait_for_tx(digest, node.state().clone()).await;
 
@@ -684,7 +662,7 @@ async fn test_full_node_event_read_api_ok() -> Result<(), anyhow::Error> {
     assert_eq!(events_by_module[0].event, expected_event);
     assert_eq!(events_by_module[0].tx_digest.unwrap(), digest);
 
-    let (_sender, _object_id, digest2) = create_devnet_nft(&mut context).await?;
+    let (_sender, _object_id, digest2) = create_devnet_nft(context).await?;
     wait_for_tx(digest2, node.state().clone()).await;
 
     let struct_tag_str = sui_framework_address_concat_string("::devnet_nft::MintNFTEvent");
@@ -725,10 +703,15 @@ async fn test_full_node_event_read_api_ok() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::Error> {
-    let (swarm, mut context, _address) = setup_network_and_wallet().await.unwrap();
-    let config = swarm.config().generate_fullnode_config();
-    let node = SuiNode::start(&config, Registry::new()).await?;
+    let mut test_cluster = init_cluster_builder_env_aware().build().await?;
+    let sui_node = start_a_fullnode(&test_cluster.swarm, false).await?;
+    let node = if cfg!(msim) {
+        &sui_node
+    } else {
+        &test_cluster.fullnode_handle.as_ref().unwrap().sui_node
+    };
 
+    let context = &mut test_cluster.wallet;
     let transaction_orchestrator = node
         .transaction_orchestrator()
         .expect("Fullnode should have transaction orchestrator toggled on.");
@@ -737,7 +720,7 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
         .expect("Fullnode should have transaction orchestrator toggled on.");
 
     let txn_count = 4;
-    let mut txns = make_transactions_with_wallet_context(&mut context, txn_count).await;
+    let mut txns = make_transactions_with_wallet_context(context, txn_count).await;
     assert!(
         txns.len() >= txn_count,
         "Expect at least {} txns. Do we generate enough gas objects during genesis?",
@@ -879,11 +862,12 @@ async fn test_validator_node_has_no_transaction_orchestrator() {
 
 #[tokio::test]
 async fn test_full_node_transaction_orchestrator_rpc_ok() -> Result<(), anyhow::Error> {
-    let (swarm, mut context, _address) = setup_network_and_wallet().await?;
-    let (_node, jsonrpc_client, _) = set_up_jsonrpc(&swarm, None).await?;
+    let mut test_cluster = init_cluster_builder_env_aware().build().await?;
+    let context = &mut test_cluster.wallet;
+    let jsonrpc_client = &test_cluster.fullnode_handle.as_ref().unwrap().rpc_client;
 
     let txn_count = 4;
-    let mut txns = make_transactions_with_wallet_context(&mut context, txn_count).await;
+    let mut txns = make_transactions_with_wallet_context(context, txn_count).await;
     assert!(
         txns.len() >= txn_count,
         "Expect at least {} txns. Do we generate enough gas objects during genesis?",
@@ -1037,42 +1021,42 @@ async fn get_obj_read_from_node(
 #[tokio::test]
 async fn test_get_objects_read() -> Result<(), anyhow::Error> {
     telemetry_subscribers::init_for_testing();
-
-    let (swarm, mut context, _) = setup_network_and_wallet().await?;
-
-    let (node, _jsonrpc_client, _sui_client) = set_up_jsonrpc(&swarm, None).await?;
+    let mut test_cluster = init_cluster_builder_env_aware().build().await?;
+    let context = &mut test_cluster.wallet;
+    let node = &test_cluster.fullnode_handle.as_ref().unwrap().sui_node;
 
     // Create the object
-    let (sender, object_id, _) = create_devnet_nft(&mut context).await?;
+    let (sender, object_id, _) = create_devnet_nft(context).await?;
     let recipient = context.config.keystore.addresses().get(1).cloned().unwrap();
     assert_ne!(sender, recipient);
-    sleep(Duration::from_millis(1000)).await;
-    let (object_ref_v1, object_v1, _) = get_obj_read_from_node(&node, object_id, None).await?;
+
+    let (object_ref_v1, object_v1, _) = get_obj_read_from_node(node, object_id, None).await?;
 
     // Transfer some SUI to recipient
-    transfer_coin(&mut context)
+    transfer_coin(context)
         .await
         .expect("Failed to transfer coins to recipient");
     // Transfer the object from sender to recipient
-    let gas_ref = get_gas_object_with_wallet_context(&context, &sender)
+    let gas_ref = get_gas_object_with_wallet_context(context, &sender)
         .await
         .expect("Expect at least one available gas object");
     let nft_transfer_tx = make_transfer_object_transaction_with_wallet_context(
         object_ref_v1,
         gas_ref,
-        &context,
+        context,
         sender,
         recipient,
     );
     context.execute_transaction(nft_transfer_tx).await.unwrap();
-    sleep(Duration::from_millis(1000)).await;
-    let (object_ref_v2, object_v2, _) = get_obj_read_from_node(&node, object_id, None).await?;
+
+    let (object_ref_v2, object_v2, _) = get_obj_read_from_node(node, object_id, None).await?;
     assert_ne!(object_ref_v2, object_ref_v1);
 
     // Delete the object
     let package_ref = node.state().get_framework_object_ref().await.unwrap();
-    let resp = delete_devnet_nft(&mut context, &recipient, object_ref_v2, package_ref).await;
-    assert_eq!(resp.effects.status, SuiExecutionStatus::Success);
+    let (_tx_cert, effects) =
+        delete_devnet_nft(context, &recipient, object_ref_v2, package_ref).await;
+    assert_eq!(effects.status, SuiExecutionStatus::Success);
 
     // Now test get_object_read
     let object_ref_v3 = match node.state().get_object_read(&object_id).await? {
@@ -1091,12 +1075,12 @@ async fn test_get_objects_read() -> Result<(), anyhow::Error> {
     assert_eq!(object_ref_v3, obj_ref_v3);
 
     let (obj_ref_v2, obj_v2, _) =
-        get_obj_read_from_node(&node, object_id, Some(SequenceNumber::from_u64(2))).await?;
+        get_obj_read_from_node(node, object_id, Some(SequenceNumber::from_u64(2))).await?;
     assert_eq!(object_ref_v2, obj_ref_v2);
     assert_eq!(object_v2, obj_v2);
     assert_eq!(obj_v2.owner, Owner::AddressOwner(recipient));
     let (obj_ref_v1, obj_v1, _) =
-        get_obj_read_from_node(&node, object_id, Some(SequenceNumber::from_u64(1))).await?;
+        get_obj_read_from_node(node, object_id, Some(SequenceNumber::from_u64(1))).await?;
     assert_eq!(object_ref_v1, obj_ref_v1);
     assert_eq!(object_v1, obj_v1);
     assert_eq!(obj_v1.owner, Owner::AddressOwner(sender));

@@ -17,14 +17,16 @@ use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
 use sui_config::ValidatorInfo;
 use sui_core::authority::AuthorityState;
 use sui_core::authority_client::AuthorityAPI;
+use sui_json_rpc_types::SuiCertifiedTransaction;
 use sui_json_rpc_types::SuiObjectRead;
-use sui_json_rpc_types::{SuiParsedTransactionResponse, SuiTransactionResponse};
+use sui_json_rpc_types::SuiTransactionEffects;
 use sui_sdk::crypto::AccountKeystore;
 use sui_sdk::json::SuiJsonValue;
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::batch::UpdateItem;
 use sui_types::error::SuiResult;
+use sui_types::messages::ExecuteTransactionRequestType;
 use sui_types::messages::{
     BatchInfoRequest, BatchInfoResponseItem, CallArg, ObjectArg, ObjectInfoRequest,
     ObjectInfoResponse, Transaction, TransactionData, TransactionEffects, TransactionInfoResponse,
@@ -69,7 +71,8 @@ pub async fn publish_counter_package(gas_object: Object, configs: &[ValidatorInf
     publish_package(gas_object, path, configs).await
 }
 
-/// A helper function to publish basic package using gateway API
+/// Helper function to publish basic package.
+/// Returns the published package's ObjectRef.
 pub async fn publish_basics_package(context: &WalletContext, sender: SuiAddress) -> ObjectRef {
     let transaction = {
         let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -105,15 +108,22 @@ pub async fn publish_basics_package(context: &WalletContext, sender: SuiAddress)
     let resp = context
         .client
         .quorum_driver()
-        .execute_transaction(transaction)
+        .execute_transaction(
+            transaction,
+            Some(ExecuteTransactionRequestType::WaitForLocalExecution),
+        )
         .await
         .unwrap();
 
-    if let Some(SuiParsedTransactionResponse::Publish(resp)) = resp.parsed_data {
-        resp.package.to_object_ref()
-    } else {
-        panic!()
-    }
+    assert!(resp.confirmed_local_execution);
+    resp.effects
+        .unwrap()
+        .created
+        .iter()
+        .find(|obj_ref| obj_ref.owner == Owner::Immutable)
+        .unwrap()
+        .reference
+        .to_object_ref()
 }
 
 /// A helper function to submit a move transaction using gateway API
@@ -125,7 +135,7 @@ pub async fn submit_move_transaction(
     arguments: Vec<SuiJsonValue>,
     sender: SuiAddress,
     gas_object: Option<ObjectID>,
-) -> SuiTransactionResponse {
+) -> (SuiCertifiedTransaction, SuiTransactionEffects) {
     debug!(?package_ref, ?arguments, "move_transaction");
 
     let data = context
@@ -153,12 +163,17 @@ pub async fn submit_move_transaction(
     let tx_digest = tx.digest();
     debug!(?tx_digest, "submitting move transaction");
 
-    context
+    let resp = context
         .client
         .quorum_driver()
-        .execute_transaction(tx)
+        .execute_transaction(
+            tx,
+            Some(ExecuteTransactionRequestType::WaitForLocalExecution),
+        )
         .await
-        .unwrap()
+        .unwrap();
+    assert!(resp.confirmed_local_execution);
+    (resp.tx_cert.unwrap(), resp.effects.unwrap())
 }
 
 /// A helper function to publish the basics package and make counter objects
@@ -170,7 +185,7 @@ pub async fn publish_basics_package_and_make_counter(
 
     debug!(?package_ref);
 
-    let create_shared_obj_resp = submit_move_transaction(
+    let (_tx_cert, effects) = submit_move_transaction(
         context,
         "counter",
         "create",
@@ -181,8 +196,11 @@ pub async fn publish_basics_package_and_make_counter(
     )
     .await;
 
-    let counter_id = create_shared_obj_resp.effects.created[0]
-        .clone()
+    let counter_id = effects
+        .created
+        .iter()
+        .find(|obj_ref| obj_ref.owner == Owner::Shared)
+        .unwrap()
         .reference
         .object_id;
     debug!(?counter_id);
@@ -195,7 +213,7 @@ pub async fn increment_counter(
     gas_object: Option<ObjectID>,
     package_ref: ObjectRef,
     counter_id: ObjectID,
-) -> SuiTransactionResponse {
+) -> (SuiCertifiedTransaction, SuiTransactionEffects) {
     submit_move_transaction(
         context,
         "counter",
@@ -325,7 +343,7 @@ pub async fn delete_devnet_nft(
     sender: &SuiAddress,
     nft_to_delete: ObjectRef,
     package_ref: ObjectRef,
-) -> SuiTransactionResponse {
+) -> (SuiCertifiedTransaction, SuiTransactionEffects) {
     let gas = get_gas_object_with_wallet_context(context, sender)
         .await
         .unwrap_or_else(|| panic!("Expect {sender} to have at least one gas object"));
@@ -347,12 +365,18 @@ pub async fn delete_devnet_nft(
         .unwrap();
     let tx = Transaction::new(data, signature);
 
-    context
+    let resp = context
         .client
         .quorum_driver()
-        .execute_transaction(tx)
+        .execute_transaction(
+            tx,
+            Some(ExecuteTransactionRequestType::WaitForLocalExecution),
+        )
         .await
-        .unwrap()
+        .unwrap();
+
+    assert!(resp.confirmed_local_execution);
+    (resp.tx_cert.unwrap(), resp.effects.unwrap())
 }
 
 /// Submit a certificate containing only owned-objects to all authorities.

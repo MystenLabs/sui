@@ -269,7 +269,7 @@ export abstract class SignerWithProvider implements Signer {
    */
   async transferObjectWithRequestType(
     transaction: TransferObjectTransaction,
-    requestType: ExecuteTransactionRequestType = 'WaitForEffectsCert'
+    requestType: ExecuteTransactionRequestType = 'WaitForLocalExecution'
   ): Promise<SuiExecuteTransactionResponse> {
     const signerAddress = await this.getAddress();
     const txBytes = await this.serializer.newTransferObject(
@@ -288,7 +288,7 @@ export abstract class SignerWithProvider implements Signer {
    */
   async transferSuiWithRequestType(
     transaction: TransferSuiTransaction,
-    requestType: ExecuteTransactionRequestType = 'WaitForEffectsCert'
+    requestType: ExecuteTransactionRequestType = 'WaitForLocalExecution'
   ): Promise<SuiExecuteTransactionResponse> {
     const signerAddress = await this.getAddress();
     const txBytes = await this.serializer.newTransferSui(
@@ -306,7 +306,7 @@ export abstract class SignerWithProvider implements Signer {
    */
   async payWithRequestType(
     transaction: PayTransaction,
-    requestType: ExecuteTransactionRequestType = 'WaitForEffectsCert'
+    requestType: ExecuteTransactionRequestType = 'WaitForLocalExecution'
   ): Promise<SuiExecuteTransactionResponse> {
     const signerAddress = await this.getAddress();
     const txBytes = await this.serializer.newPay(signerAddress, transaction);
@@ -322,7 +322,7 @@ export abstract class SignerWithProvider implements Signer {
    */
   async mergeCoinWithRequestType(
     transaction: MergeCoinTransaction,
-    requestType: ExecuteTransactionRequestType = 'WaitForEffectsCert'
+    requestType: ExecuteTransactionRequestType = 'WaitForLocalExecution'
   ): Promise<SuiExecuteTransactionResponse> {
     const signerAddress = await this.getAddress();
     const txBytes = await this.serializer.newMergeCoin(
@@ -341,7 +341,7 @@ export abstract class SignerWithProvider implements Signer {
    */
   async splitCoinWithRequestType(
     transaction: SplitCoinTransaction,
-    requestType: ExecuteTransactionRequestType = 'WaitForEffectsCert'
+    requestType: ExecuteTransactionRequestType = 'WaitForLocalExecution'
   ): Promise<SuiExecuteTransactionResponse> {
     const signerAddress = await this.getAddress();
     const txBytes = await this.serializer.newSplitCoin(
@@ -360,7 +360,7 @@ export abstract class SignerWithProvider implements Signer {
    */
   async executeMoveCallWithRequestType(
     transaction: MoveCallTransaction,
-    requestType: ExecuteTransactionRequestType = 'WaitForEffectsCert'
+    requestType: ExecuteTransactionRequestType = 'WaitForLocalExecution'
   ): Promise<SuiExecuteTransactionResponse> {
     const signerAddress = await this.getAddress();
     const txBytes = await this.serializer.newMoveCall(
@@ -379,7 +379,7 @@ export abstract class SignerWithProvider implements Signer {
    */
   async publishWithRequestType(
     transaction: PublishTransaction,
-    requestType: ExecuteTransactionRequestType = 'WaitForEffectsCert'
+    requestType: ExecuteTransactionRequestType = 'WaitForLocalExecution'
   ): Promise<SuiExecuteTransactionResponse> {
     const signerAddress = await this.getAddress();
     const txBytes = await this.serializer.newPublish(
