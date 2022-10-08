@@ -4547,7 +4547,8 @@
           {
             "type": "string",
             "enum": [
-              "All"
+              "All",
+              "Latest"
             ]
           },
           {
