@@ -29,14 +29,14 @@ export const loadAccountFromStorage = createAsyncThunk(
 export const createMnemonic = createAsyncThunk<
     string,
     {
-        existingMnemonic?: string;
+        importedMnemonic?: string;
         password?: string;
     },
     AppThunkConfig
 >(
     'account/createMnemonic',
-    async ({ existingMnemonic, password }, { extra: { background } }) => {
-        let mnemonic = existingMnemonic;
+    async ({ importedMnemonic, password }, { extra: { background } }) => {
+        let mnemonic = importedMnemonic;
         if (!mnemonic) {
             const { payload } = await background.createMnemonic(password || '');
             if (isKeyringPayload<'createMnemonic'>(payload, 'createMnemonic')) {

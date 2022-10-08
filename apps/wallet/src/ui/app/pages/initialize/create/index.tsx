@@ -13,6 +13,7 @@ import ExternalLink from '_components/external-link';
 import Icon, { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
 import { useAppDispatch } from '_hooks';
+import CardLayout from '_pages/initialize/shared/card-layout';
 import { createMnemonic } from '_redux/slices/account';
 import { PRIVACY_POLICY_LINK, ToS_LINK } from '_shared/constants';
 
@@ -25,7 +26,7 @@ const CreatePage = () => {
     const dispatch = useAppDispatch();
     const navigate = useNavigate();
     return (
-        <div className={st.content}>
+        <CardLayout>
             <h3
                 className={
                     WALLET_ENCRYPTION_ENABLED ? st.caption : st.headerTitle
@@ -152,7 +153,7 @@ const CreatePage = () => {
                     </Form>
                 )}
             </Formik>
-        </div>
+        </CardLayout>
     );
 };
 

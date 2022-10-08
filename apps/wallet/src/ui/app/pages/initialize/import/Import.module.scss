@@ -1,53 +1,21 @@
 @use '_values/colors';
 @use '_utils';
 
-.mnemonic {
-    resize: none;
-    padding: 14px;
-    margin-bottom: 3px;
-    background: colors.$white;
-    border: 1px solid #e9eaeb;
-    border-radius: 15px;
-    font-family: Inter, sans-serif;
-    width: 320px;
-    height: 90px;
+.header-sub-title {
+    color: colors.$gray-75;
+    margin: 0;
+    margin-bottom: 10px;
+    text-transform: uppercase;
 
-    @include utils.typography('page-title');
-
-    font-weight: 500;
-    line-height: 130%;
-    color: colors.$gray-100;
-
-    &::placeholder {
-        color: colors.$gray-65;
-        font-weight: 500;
-    }
-}
-
-.error {
-    @include utils.error-message-box;
-}
-
-.btn {
-    width: 100%;
-    font-style: normal;
-    font-weight: 400;
-    font-size: 14px;
-    line-height: 12px;
-    margin-top: 20px;
-
-    .next {
-        margin-left: 5px;
-        font-size: 12px;
-        font-weight: 500;
-    }
+    @include utils.typography('Primary/CAPTION-SB');
 }
 
 .header-title {
-    text-align: left;
-    margin-bottom: 20px;
     color: colors.$gray-90;
-    font-size: 30px;
-    font-weight: 700;
-    line-height: 36px;
+    text-transform: capitalize;
+    margin: 0;
+    margin-bottom: 30px;
+    text-align: center;
+
+    @include utils.typography('Primary/Heading1-B');
 }
