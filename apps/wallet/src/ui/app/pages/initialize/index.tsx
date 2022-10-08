@@ -12,7 +12,7 @@ import st from './InitializePage.module.scss';
 const InitializePage = () => {
     const { pathname } = useLocation();
     const checkingInitialized = useInitializedGuard(
-        /^\/initialize\/backup(\/)?$/.test(pathname)
+        /^\/initialize\/backup(-imported)?(\/)?$/.test(pathname)
     );
     return (
         <PageLayout forceFullscreen={true} className={st.container}>

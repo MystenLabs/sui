@@ -15,7 +15,11 @@ import { loadMnemonicFromKeyring } from '_redux/slices/account';
 
 import st from './Backup.module.scss';
 
-const BackupPage = () => {
+export type BackupPageProps = {
+    mode?: 'created' | 'imported';
+};
+
+const BackupPage = ({ mode = 'created' }: BackupPageProps) => {
     const [loading, setLoading] = useState(true);
     const [mnemonic, setLocalMnemonic] = useState<string | null>(null);
     const navigate = useNavigate();
@@ -24,6 +28,9 @@ const BackupPage = () => {
         // TODO: this assumes that the Keyring in bg service is unlocked. It should be fix
         // when we add a locked status guard. (#encrypt-wallet)
         (async () => {
+            if (mode !== 'created') {
+                return;
+            }
             setLoading(true);
             try {
                 setLocalMnemonic(
@@ -35,38 +42,47 @@ const BackupPage = () => {
                 setLoading(false);
             }
         })();
-    }, [dispatch]);
+    }, [dispatch, mode]);
     return (
         <CardLayout
             icon="success"
-            title="Wallet Created Successfully!"
-            subtitle="Recovery Phrase"
+            title={`Wallet ${
+                mode === 'imported' ? 'Imported' : 'Created'
+            } Successfully!`}
+            subtitle={mode === 'created' ? 'Recovery Phrase' : undefined}
         >
-            <Loading loading={loading}>
-                {mnemonic ? (
-                    <div className={st.mnemonic}>
-                        {mnemonic}
-                        <CopyToClipboard
-                            txt={mnemonic}
-                            className={st.copy}
-                            mode="plain"
-                        >
-                            COPY
-                        </CopyToClipboard>
+            {mode === 'created' ? (
+                <>
+                    <Loading loading={loading}>
+                        {mnemonic ? (
+                            <div className={st.mnemonic}>
+                                {mnemonic}
+                                <CopyToClipboard
+                                    txt={mnemonic}
+                                    className={st.copy}
+                                    mode="plain"
+                                >
+                                    COPY
+                                </CopyToClipboard>
+                            </div>
+                        ) : (
+                            <Alert>
+                                Something is wrong, Recovery Phrase is empty.
+                            </Alert>
+                        )}
+                    </Loading>
+                    <div className={st.info}>
+                        Your recovery phrase makes it easy to back up and
+                        restore your account.
                     </div>
-                ) : (
-                    <Alert>Something is wrong, Recovery Phrase is empty.</Alert>
-                )}
-            </Loading>
-            <div className={st.info}>
-                Your recovery phrase makes it easy to back up and restore your
-                account.
-            </div>
-            <div className={st.info}>
-                <div className={st.infoCaption}>WARNING</div>
-                Never disclose your secret recovery phrase. Anyone with the
-                passphrase can take over your account forever.
-            </div>
+                    <div className={st.info}>
+                        <div className={st.infoCaption}>WARNING</div>
+                        Never disclose your secret recovery phrase. Anyone with
+                        the passphrase can take over your account forever.
+                    </div>
+                </>
+            ) : null}
+            <div className={st.fill} />
             <Button
                 type="button"
                 className={st.btn}
