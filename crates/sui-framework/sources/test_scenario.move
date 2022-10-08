@@ -207,6 +207,9 @@ module sui::test_scenario {
     /// been taken
     public native fun most_recent_id_for_address<T: key>(account: address): Option<ID>;
 
+    /// Returns all ids of type `T` transferred to address `account`.
+    public native fun ids_for_address<T: key>(account: address): vector<ID>;
+
     /// helper that returns true iff `most_recent_id_for_address` returns some
     public fun has_most_recent_for_address<T: key>(account: address): bool {
         option::is_some(&most_recent_id_for_address<T>(account))
@@ -262,6 +265,11 @@ module sui::test_scenario {
     /// Returns true if the object with `ID` id was in the inventory for the sender
     public fun was_taken_from_sender(scenario: &Scenario, id: ID): bool {
         was_taken_from_address(sender(scenario), id)
+    }
+
+    /// Returns all ids of type `T` transferred to the sender.
+    public fun ids_for_sender<T: key>(scenario: &Scenario): vector<ID> {
+        ids_for_address<T>(sender(scenario))
     }
 
     // == immutable ==
