@@ -42,6 +42,10 @@
     @include utils.typography('Primary/CAPTION-M');
 }
 
+.fill {
+    flex: 1;
+}
+
 .btn {
     display: flex;
     flex-flow: row nowrap;

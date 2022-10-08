@@ -98,6 +98,10 @@ const App = () => {
                 <Route path="create" element={<CreatePage />} />
                 <Route path="import" element={<ImportPage />} />
                 <Route path="backup" element={<BackupPage />} />
+                <Route
+                    path="backup-imported"
+                    element={<BackupPage mode="imported" />}
+                />
             </Route>
         </Routes>
     );

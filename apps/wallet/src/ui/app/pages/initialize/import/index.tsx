@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useCallback, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 import StepOne from './steps/StepOne';
 import StepTwo from './steps/StepTwo';
@@ -28,13 +29,19 @@ const ImportPage = () => {
     const [data, setData] = useState<ImportValuesType>(initialValues);
     const [step, setStep] = useState(0);
     const dispatch = useAppDispatch();
+    const navigate = useNavigate();
     const onHandleSubmit = useCallback(
         async ({ mnemonic, password }: ImportValuesType) => {
-            await dispatch(
-                createMnemonic({ importedMnemonic: mnemonic, password })
-            );
+            try {
+                await dispatch(
+                    createMnemonic({ importedMnemonic: mnemonic, password })
+                ).unwrap();
+                navigate('../backup-imported');
+            } catch (e) {
+                // Do nothing
+            }
         },
-        [dispatch]
+        [dispatch, navigate]
     );
     const totalSteps = allSteps.length;
     const StepForm = step < totalSteps ? allSteps[step] : null;
