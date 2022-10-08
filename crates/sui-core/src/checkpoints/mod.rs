@@ -469,7 +469,7 @@ impl CheckpointStore {
         self.update_new_checkpoint_inner(checkpoint_sequence_number, contents, batch)?;
 
         if let AuthenticatedCheckpoint::Certified(summary) = checkpoint {
-            self.notify_new_checkpoint(summary.clone())?;
+            self.notify_new_checkpoint(summary.clone());
         }
 
         // TODO: Make the following atomic with above db writes.
@@ -775,7 +775,7 @@ impl CheckpointStore {
         self.tables
             .checkpoints
             .insert(seq, &AuthenticatedCheckpoint::Certified(checkpoint.clone()))?;
-        self.notify_new_checkpoint(checkpoint.clone())?;
+        self.notify_new_checkpoint(checkpoint.clone());
         self.clear_proposal(*seq + 1)?;
         Ok(())
     }
@@ -801,18 +801,14 @@ impl CheckpointStore {
         Ok(())
     }
 
-    fn notify_new_checkpoint(&self, ckpt: CertifiedCheckpointSummary) -> SuiResult {
+    fn notify_new_checkpoint(&self, ckpt: CertifiedCheckpointSummary) {
         let sequence = ckpt.summary.sequence_number;
-        self.notify_new_checkpoint_tx
-            .send(ckpt)
-            .map_err(|e| SuiError::GenericAuthorityError {
-                error: format!(
-                    "failed to notify subscribers of checkpoint {}: {}",
-                    sequence, e
-                ),
-            })
-            .tap_err(|e| error!("error: {}", e))?;
-        Ok(())
+        let _ = self.notify_new_checkpoint_tx.send(ckpt).tap_err(|_| {
+            debug!(
+                ?sequence,
+                "notify_new_checkpoint failed - no subscribers at this time"
+            )
+        });
     }
 
     fn clear_proposal(

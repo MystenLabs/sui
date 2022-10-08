@@ -1295,8 +1295,8 @@ impl AuthorityState {
 
     pub async fn handle_checkpoint_streaming(
         &self,
-        _request: CheckpointInfoRequest,
-    ) -> Result<impl Stream<Item = Result<CheckpointInfoResponseItem, SuiError>>, SuiError> {
+        _request: CheckpointStreamRequest,
+    ) -> Result<impl Stream<Item = Result<CheckpointStreamResponseItem, SuiError>>, SuiError> {
         struct Locals {
             from_db: Option<AuthenticatedCheckpoint>,
             latest_sequence_sent: Option<CheckpointSequenceNumber>,
@@ -1320,7 +1320,7 @@ impl AuthorityState {
         Ok(stream::unfold(locals, move |mut locals| async move {
             if let Some(checkpoint) = locals.from_db.take() {
                 Some((
-                    Ok(CheckpointInfoResponseItem {
+                    Ok(CheckpointStreamResponseItem {
                         first_available_sequence: 0,
                         checkpoint,
                     }),
@@ -1335,7 +1335,7 @@ impl AuthorityState {
                         {
                             locals.latest_sequence_sent = Some(sequence_number);
                             Some((
-                                Ok(CheckpointInfoResponseItem {
+                                Ok(CheckpointStreamResponseItem {
                                     first_available_sequence: 0,
                                     checkpoint: AuthenticatedCheckpoint::Certified(checkpoint),
                                 }),

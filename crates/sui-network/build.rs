@@ -87,8 +87,8 @@ fn main() -> Result<()> {
             Method::builder()
                 .name("checkpoint_info")
                 .route_name("FollowCheckpointStream")
-                .input_type("sui_types::messages::CheckpointInfoRequest")
-                .output_type("sui_types::messages::CheckpointInfoResponseItem")
+                .input_type("sui_types::messages::CheckpointStreamRequest")
+                .output_type("sui_types::messages::CheckpointStreamResponseItem")
                 .server_streaming()
                 .codec_path(codec_path)
                 .build(),

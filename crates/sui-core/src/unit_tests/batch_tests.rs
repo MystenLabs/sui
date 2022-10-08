@@ -17,7 +17,9 @@ use crate::authority::authority_tests::*;
 use crate::authority::*;
 use crate::safe_client::SafeClient;
 
-use crate::authority_client::{AuthorityAPI, BatchInfoResponseItemStream};
+use crate::authority_client::{
+    AuthorityAPI, BatchInfoResponseItemStream, CheckpointStreamResponseItemStream,
+};
 use crate::checkpoints::CheckpointStore;
 use crate::epoch::committee_store::CommitteeStore;
 use crate::safe_client::SafeClientMetrics;
@@ -30,8 +32,9 @@ use std::fs;
 use std::sync::Arc;
 use sui_types::messages::{
     AccountInfoRequest, AccountInfoResponse, BatchInfoRequest, BatchInfoResponseItem,
-    CertifiedTransaction, CommitteeInfoRequest, CommitteeInfoResponse, ObjectInfoRequest,
-    ObjectInfoResponse, Transaction, TransactionInfoRequest, TransactionInfoResponse,
+    CertifiedTransaction, CheckpointStreamRequest, CommitteeInfoRequest, CommitteeInfoResponse,
+    ObjectInfoRequest, ObjectInfoResponse, Transaction, TransactionInfoRequest,
+    TransactionInfoResponse,
 };
 
 pub(crate) fn init_state_parameters_from_rng<R>(
@@ -599,6 +602,13 @@ impl AuthorityAPI for TrustworthyAuthorityClient {
         unimplemented!();
     }
 
+    async fn handle_checkpoint_stream(
+        &self,
+        _request: CheckpointStreamRequest,
+    ) -> Result<CheckpointStreamResponseItemStream, SuiError> {
+        unimplemented!();
+    }
+
     /// Handle Batch information requests for this authority.
     async fn handle_batch_stream(
         &self,
@@ -719,6 +729,13 @@ impl AuthorityAPI for ByzantineAuthorityClient {
         _request: CheckpointRequest,
     ) -> Result<CheckpointResponse, SuiError> {
         unimplemented!()
+    }
+
+    async fn handle_checkpoint_stream(
+        &self,
+        _request: CheckpointStreamRequest,
+    ) -> Result<CheckpointStreamResponseItemStream, SuiError> {
+        unimplemented!();
     }
 
     /// Handle Batch information requests for this authority.
