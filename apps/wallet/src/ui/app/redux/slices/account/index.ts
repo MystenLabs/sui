@@ -36,20 +36,20 @@ export const createMnemonic = createAsyncThunk<
 >(
     'account/createMnemonic',
     async ({ importedMnemonic, password }, { extra: { background } }) => {
-        let mnemonic = importedMnemonic;
-        if (!mnemonic) {
-            const { payload } = await background.createMnemonic(password || '');
-            if (isKeyringPayload<'createMnemonic'>(payload, 'createMnemonic')) {
-                if (!payload.return) {
-                    throw new Error('Empty mnemonic in payload');
-                }
-                mnemonic = payload.return;
-            } else if (isErrorPayload(payload)) {
-                throw new Error(payload.message);
-            } else {
-                throw new Error('Unknown payload');
-            }
+        const { payload } = await background.createMnemonic(
+            password,
+            importedMnemonic
+        );
+        if (isErrorPayload(payload)) {
+            throw new Error(payload.message);
         }
+        if (!isKeyringPayload<'createMnemonic'>(payload, 'createMnemonic')) {
+            throw new Error('Unknown payload');
+        }
+        if (!payload.return?.mnemonic) {
+            throw new Error('Empty mnemonic in payload');
+        }
+        const mnemonic = payload.return.mnemonic;
         // TODO: store it unencrypted until everything switches to using the encrypted one (#encrypt-wallet)
         await Browser.storage.local.set({ mnemonic });
         return mnemonic;

@@ -29,7 +29,8 @@ class Keyring {
     #mnemonic: string | null = null;
 
     // Creates a new mnemonic and saves it to storage encrypted
-    public async createMnemonic(password: string) {
+    // if importedMnemonic is provided it uses that one instead
+    public async createMnemonic(password: string, importedMnemonic?: string) {
         if (await this.isWalletInitialized()) {
             throw new Error(
                 'Mnemonic already exists, creating a new one will override it. Clear the existing one first.'
@@ -37,7 +38,7 @@ class Keyring {
         }
         const encryptedMnemonic = await encrypt(
             password,
-            Buffer.from(generateMnemonic(), 'utf8')
+            Buffer.from(importedMnemonic || generateMnemonic(), 'utf8')
         );
         await this.storeEncryptedMnemonic(encryptedMnemonic);
     }
@@ -100,8 +101,9 @@ class Keyring {
                 isKeyringPayload<'createMnemonic'>(payload, 'createMnemonic') &&
                 payload.args !== undefined
             ) {
-                await this.createMnemonic(payload.args);
-                await this.unlock(payload.args);
+                const { password, importedMnemonic } = payload.args;
+                await this.createMnemonic(password, importedMnemonic);
+                await this.unlock(password);
                 if (!this.#mnemonic) {
                     throw new Error('Error created mnemonic is empty');
                 }
@@ -110,7 +112,7 @@ class Keyring {
                         {
                             type: 'keyring',
                             method: 'createMnemonic',
-                            return: this.#mnemonic,
+                            return: { mnemonic: this.#mnemonic },
                         },
                         id
                     )
