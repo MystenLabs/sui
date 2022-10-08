@@ -145,6 +145,12 @@ impl Cluster for LocalNewCluster {
         // Let the faucet account hold 1000 gas objects on genesis
         let genesis_config = GenesisConfig::custom_genesis(4, 1, 1000);
 
+        let gateway_port = options.gateway_address.as_ref().map(|addr| {
+            addr.parse::<SocketAddr>()
+                .expect("Unable to parse gateway address")
+                .port()
+        });
+
         // TODO: options should contain port instead of address
         let fullnode_port = options.fullnode_address.as_ref().map(|addr| {
             addr.parse::<SocketAddr>()
@@ -159,6 +165,10 @@ impl Cluster for LocalNewCluster {
         });
 
         let mut cluster_builder = TestClusterBuilder::new().set_genesis_config(genesis_config);
+
+        if let Some(rpc_port) = gateway_port {
+            cluster_builder = cluster_builder.set_gateway_rpc_port(rpc_port);
+        }
         if let Some(rpc_port) = fullnode_port {
             cluster_builder = cluster_builder.set_fullnode_rpc_port(rpc_port);
         }

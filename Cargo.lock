@@ -8431,6 +8431,7 @@ dependencies = [
  "sui-cluster-test",
  "sui-faucet",
  "sui-types",
+ "telemetry-subscribers 0.2.0",
  "tokio",
  "tower",
  "tower-http",

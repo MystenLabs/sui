@@ -51,7 +51,7 @@ mod test {
         let test_cluster = TestClusterBuilder::new().build().await.unwrap();
         let swarm = &test_cluster.swarm;
         let context = &test_cluster.wallet;
-        let sender = test_cluster.get_address();
+        let sender = test_cluster.get_address_0();
 
         let keystore_path = swarm.dir().join(SUI_KEYSTORE_FILENAME);
         let ed25519_keypair = get_ed25519_keypair_from_keystore(keystore_path, &sender).unwrap();

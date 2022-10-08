@@ -29,6 +29,10 @@ struct Args {
     // #[clap(short, long, parse(from_os_str), value_hint = ValueHint::DirPath)]
     // config: Option<std::path::PathBuf>,
     /// Port to start the Fullnode RPC server on
+    /// Port to start the Gateway RPC server on
+    #[clap(long, default_value = "5001")]
+    gateway_rpc_port: u16,
+
     #[clap(long, default_value = "9000")]
     fullnode_rpc_port: u16,
 
@@ -43,10 +47,16 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    let (_guard, _filter_handle) =
+        telemetry_subscribers::TelemetryConfig::new(env!("CARGO_BIN_NAME"))
+            .with_env()
+            .init();
+
     let args = Args::parse();
 
     let cluster = LocalNewCluster::start(&ClusterTestOpt {
         env: Env::NewLocal,
+        gateway_address: Some(format!("127.0.0.1:{}", args.gateway_rpc_port)),
         fullnode_address: Some(format!("127.0.0.1:{}", args.fullnode_rpc_port)),
         websocket_address: Some(format!("127.0.0.1:{}", args.websocket_rpc_port)),
         faucet_address: None,

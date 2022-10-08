@@ -18,6 +18,8 @@ pub struct ClusterTestOpt {
     #[clap(arg_enum)]
     pub env: Env,
     #[clap(long)]
+    pub gateway_address: Option<String>,
+    #[clap(long)]
     pub faucet_address: Option<String>,
     #[clap(long)]
     pub fullnode_address: Option<String>,
@@ -29,6 +31,7 @@ impl ClusterTestOpt {
     pub fn new_local() -> Self {
         Self {
             env: Env::NewLocal,
+            gateway_address: None,
             faucet_address: None,
             fullnode_address: None,
             websocket_address: None,
