@@ -1,5 +1,6 @@
 @use '_values/colors';
 @use '_values/sizing';
+@use '_utils';
 @use 'sass:color';
 
 .container {
@@ -15,4 +16,59 @@
     max-width: sizing.$popup-width;
     max-height: sizing.$popup-height;
     flex: 1;
+}
+
+.success-icon {
+    border-radius: 50%;
+    width: 48px;
+    height: 48px;
+    min-height: 48px;
+    border: 3px dotted colors.$success;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 10px;
+}
+
+.success-bg {
+    background-color: colors.$success;
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.thumbs-up {
+    color: colors.$white;
+    font-size: 25px;
+}
+
+.caption {
+    text-transform: uppercase;
+    color: colors.$gray-75;
+    margin: 0;
+    margin-bottom: 5px;
+
+    @include utils.typography('Primary/CAPTION-SB');
+}
+
+.header-title {
+    text-align: center;
+    margin: 0;
+    margin-bottom: 30px;
+    color: colors.$gray-90;
+    text-transform: capitalize;
+
+    @include utils.typography('Primary/Heading1-B');
+}
+
+.sub-title {
+    margin: 0;
+    margin-bottom: 15px;
+    color: colors.$gray-75;
+    text-transform: uppercase;
+
+    @include utils.typography('Primary/CAPTION-B');
 }

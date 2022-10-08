@@ -25,15 +25,12 @@ const PASSWORD_INFO_ERROR =
 const CreatePage = () => {
     const dispatch = useAppDispatch();
     const navigate = useNavigate();
+    const headerObj = {
+        [WALLET_ENCRYPTION_ENABLED ? 'headerCaption' : 'title']:
+            'Create New wallet',
+    };
     return (
-        <CardLayout>
-            <h3
-                className={
-                    WALLET_ENCRYPTION_ENABLED ? st.caption : st.headerTitle
-                }
-            >
-                Create New wallet
-            </h3>
+        <CardLayout title="Create Password for This Wallet" {...headerObj}>
             <Formik
                 initialValues={{
                     terms: false,
@@ -55,11 +52,6 @@ const CreatePage = () => {
             >
                 {({ isValid, isSubmitting, errors, touched }) => (
                     <Form className={st.matchParent}>
-                        {WALLET_ENCRYPTION_ENABLED ? (
-                            <h1 className={st.headerTitle}>
-                                Create Password for This Wallet
-                            </h1>
-                        ) : null}
                         <div className={st.matchParent}>
                             <fieldset
                                 disabled={isSubmitting}
