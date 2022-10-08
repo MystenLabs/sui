@@ -32,7 +32,7 @@ async fn test_get_objects() -> Result<(), anyhow::Error> {
         .build()
         .await?;
 
-    let http_client = cluster.rpc_client();
+    let http_client = cluster.rpc_client().unwrap();
     let address = cluster.accounts.first().unwrap();
 
     http_client.sync_account_state(*address).await?;
@@ -48,7 +48,7 @@ async fn test_public_transfer_object() -> Result<(), anyhow::Error> {
         .set_gateway_rpc_port(port)
         .build()
         .await?;
-    let http_client = cluster.rpc_client();
+    let http_client = cluster.rpc_client().unwrap();
     let address = cluster.accounts.first().unwrap();
     http_client.sync_account_state(*address).await?;
     let objects = http_client.get_objects_owned_by_address(*address).await?;
@@ -85,7 +85,7 @@ async fn test_publish() -> Result<(), anyhow::Error> {
         .set_gateway_rpc_port(port)
         .build()
         .await?;
-    let http_client = cluster.rpc_client();
+    let http_client = cluster.rpc_client().unwrap();
     let address = cluster.accounts.first().unwrap();
     http_client.sync_account_state(*address).await?;
     let objects = http_client.get_objects_owned_by_address(*address).await?;
@@ -122,7 +122,7 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
         .set_gateway_rpc_port(port)
         .build()
         .await?;
-    let http_client = cluster.rpc_client();
+    let http_client = cluster.rpc_client().unwrap();
     let address = cluster.accounts.first().unwrap();
     http_client.sync_account_state(*address).await?;
     let objects = http_client.get_objects_owned_by_address(*address).await?;
@@ -173,7 +173,7 @@ async fn test_get_object_info() -> Result<(), anyhow::Error> {
         .set_gateway_rpc_port(port)
         .build()
         .await?;
-    let http_client = cluster.rpc_client();
+    let http_client = cluster.rpc_client().unwrap();
     let address = cluster.accounts.first().unwrap();
     http_client.sync_account_state(*address).await?;
     let objects = http_client.get_objects_owned_by_address(*address).await?;
@@ -194,7 +194,7 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
         .set_gateway_rpc_port(port)
         .build()
         .await?;
-    let http_client = cluster.rpc_client();
+    let http_client = cluster.rpc_client().unwrap();
     let address = cluster.accounts.first().unwrap();
 
     http_client.sync_account_state(*address).await?;

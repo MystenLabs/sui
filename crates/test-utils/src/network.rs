@@ -53,25 +53,29 @@ pub struct GatewayHandle {
 pub struct TestCluster {
     pub swarm: Swarm,
     pub gateway_handle: Option<GatewayHandle>,
-    pub fullnode_handle: FullNodeHandle,
+    pub fullnode_handle: Option<FullNodeHandle>,
     pub accounts: Vec<SuiAddress>,
     pub wallet: WalletContext,
 }
 
 impl TestCluster {
-    pub fn rpc_client(&self) -> &HttpClient {
+    pub fn rpc_client(&self) -> Option<&HttpClient> {
         if let Some(gateway_handle) = &self.gateway_handle {
-            &gateway_handle.http_client
+            Some(&gateway_handle.http_client)
+        } else if let Some(fullnode_handle) = &self.fullnode_handle {
+            Some(&fullnode_handle.rpc_client)
         } else {
-            &self.fullnode_handle.rpc_client
+            None
         }
     }
 
-    pub fn rpc_url(&self) -> &str {
+    pub fn rpc_url(&self) -> Option<&str> {
         if let Some(gateway_handle) = &self.gateway_handle {
-            &gateway_handle.url
+            Some(&gateway_handle.url)
+        } else if let Some(fullnode_handle) = &self.fullnode_handle {
+            Some(&fullnode_handle.rpc_url)
         } else {
-            &self.fullnode_handle.rpc_url
+            None
         }
     }
 
@@ -108,6 +112,7 @@ pub struct TestClusterBuilder {
     fullnode_rpc_port: Option<u16>,
     fullnode_ws_port: Option<u16>,
     gateway_rpc_port: Option<u16>,
+    do_not_build_fullnode: bool,
 }
 
 impl TestClusterBuilder {
@@ -118,6 +123,7 @@ impl TestClusterBuilder {
             fullnode_rpc_port: None,
             fullnode_ws_port: None,
             gateway_rpc_port: None,
+            do_not_build_fullnode: false,
         }
     }
 
@@ -143,9 +149,15 @@ impl TestClusterBuilder {
         self
     }
 
+    pub fn do_not_build_fullnode(mut self) -> Self {
+        self.do_not_build_fullnode = true;
+        self
+    }
+
     // Let WalltContext to use an embedded Gateway
-    // If set to false, WalletContext connects to an RPC endpoint,
-    // which is either Gateway (when gateway_rpc_port is set) or FullNode
+    // If set to false (default), WalletContext connects to an RPC endpoint,
+    // which will be Gateway if `set_gateway_rpc_port` is set, otherwise
+    // FullNode.
     pub fn use_embedded_gateway(mut self) -> Self {
         self.use_embedded_gateway = true;
         self
@@ -170,11 +182,24 @@ impl TestClusterBuilder {
         let swarm = Self::start_test_swarm_with_fullnodes(self.genesis_config).await?;
         let working_dir = swarm.dir();
 
-        let fullnode_handle =
-            start_a_fullnode(&swarm, self.fullnode_rpc_port, self.fullnode_ws_port, false).await?;
-
         let mut wallet_conf: SuiClientConfig =
             PersistedConfig::read(&working_dir.join(SUI_CLIENT_CONFIG))?;
+
+        // Before simtest support jsonrpc/websocket, keep the fullnode handle optional
+        let fullnode_handle = if self.do_not_build_fullnode {
+            None
+        } else {
+            let handle = start_a_fullnode_with_handle(
+                &swarm,
+                self.fullnode_rpc_port,
+                self.fullnode_ws_port,
+                false,
+            )
+            .await?;
+            wallet_conf.client_type =
+                ClientType::RPC(handle.rpc_url.clone(), handle.ws_url.clone());
+            Some(handle)
+        };
 
         let gateway_handle = if let Some(gateway_port) = self.gateway_rpc_port {
             let handle =
@@ -191,12 +216,6 @@ impl TestClusterBuilder {
                 url,
             })
         } else {
-            if !self.use_embedded_gateway {
-                wallet_conf.client_type = ClientType::RPC(
-                    fullnode_handle.rpc_url.clone(),
-                    fullnode_handle.ws_url.clone(),
-                );
-            }
             None
         };
 
@@ -297,8 +316,31 @@ impl Default for TestClusterBuilder {
     }
 }
 
+/// Note: the initial purpose of thi function is to make tests compatible with
+/// simtest before it supports jsonrpc/ws. We should use `start_a_fullnode_with_handle`
+/// once the support is added.
 /// Start a fullnode for an existing Swarm and return FullNodeHandle
-pub async fn start_a_fullnode(
+pub async fn start_a_fullnode(swarm: &Swarm, disable_ws: bool) -> Result<SuiNode, anyhow::Error> {
+    let jsonrpc_server_url = format!("127.0.0.1:{}", get_available_port());
+    let jsonrpc_addr: SocketAddr = jsonrpc_server_url.parse().unwrap();
+
+    let mut config = swarm
+        .config()
+        .generate_fullnode_config_with_random_dir_name(true, false);
+    config.json_rpc_address = jsonrpc_addr;
+
+    if !disable_ws {
+        let ws_server_url = format!("127.0.0.1:{}", get_available_port());
+        let ws_addr: SocketAddr = ws_server_url.parse().unwrap();
+        config.websocket_address = Some(ws_addr);
+    };
+
+    SuiNode::start(&config, Registry::new()).await
+}
+
+/// Note: before simtest supports jsonrpc/ws, use `start_a_fullnode` instead.
+/// Start a fullnode for an existing Swarm and return FullNodeHandle
+pub async fn start_a_fullnode_with_handle(
     swarm: &Swarm,
     rpc_port: Option<u16>,
     ws_port: Option<u16>,
@@ -343,4 +385,15 @@ pub async fn start_a_fullnode(
         ws_client,
         ws_url,
     })
+}
+
+/// A helper function to init a TestClusterBuilder depending on how the
+/// test runs. Before simtest supports jsonrpc/ws, we use an embedded
+/// Gateway.
+pub fn init_cluster_builder_env_aware() -> TestClusterBuilder {
+    let mut builder = TestClusterBuilder::new();
+    if cfg!(msim) {
+        builder = builder.use_embedded_gateway().do_not_build_fullnode();
+    }
+    builder
 }

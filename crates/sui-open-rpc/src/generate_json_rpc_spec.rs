@@ -182,6 +182,7 @@ async fn create_response_sample() -> Result<
     for account in &cluster.accounts {
         let objects: Vec<SuiObjectInfo> = cluster
             .rpc_client()
+            .unwrap()
             .get_objects_owned_by_address(*account)
             .await?;
         owned_objects.insert(*account, objects);
@@ -421,7 +422,7 @@ async fn create_error_response(
 
     let client = Client::new();
     let request = Request::builder()
-        .uri(network.rpc_url().to_string())
+        .uri(network.rpc_url().unwrap().to_string())
         .method(Method::POST)
         .header("Content-Type", "application/json")
         .body(Body::from(format!(

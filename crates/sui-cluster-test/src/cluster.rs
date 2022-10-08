@@ -183,7 +183,13 @@ impl Cluster for LocalNewCluster {
         let faucet_address = SuiAddress::from(faucet_key.public());
         info!(?faucet_address, "faucet_address");
 
-        let fullnode_url = test_cluster.fullnode_handle.rpc_url.clone();
+        // This cluster has fullnode handle, safe to unwrap
+        let fullnode_url = test_cluster
+            .fullnode_handle
+            .as_ref()
+            .unwrap()
+            .rpc_url
+            .clone();
 
         // Let nodes connect to one another
         tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
