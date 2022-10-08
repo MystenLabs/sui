@@ -258,6 +258,8 @@ impl Primary {
             quic_config.keep_alive_interval_ms = Some(5_000);
             let mut config = anemo::Config::default();
             config.quic = Some(quic_config);
+            // Set a default timeout of 30s for all outbound RPC requests
+            config.outbound_request_timeout_ms = Some(30_000);
             config
         };
 
