@@ -115,6 +115,25 @@ class Keyring {
                         id
                     )
                 );
+            } else if (
+                isKeyringPayload<'getMnemonic'>(payload, 'getMnemonic')
+            ) {
+                if (this.#locked) {
+                    throw new Error('Keyring is locked. Unlock it first.');
+                }
+                if (!this.#mnemonic) {
+                    throw new Error('Error mnemonic is empty');
+                }
+                uiConnection.send(
+                    createMessage<KeyringPayload<'getMnemonic'>>(
+                        {
+                            type: 'keyring',
+                            method: 'getMnemonic',
+                            return: this.#mnemonic,
+                        },
+                        id
+                    )
+                );
             }
         } catch (e) {
             uiConnection.send(

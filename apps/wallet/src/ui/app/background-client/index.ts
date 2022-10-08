@@ -1,10 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { lastValueFrom, take } from 'rxjs';
+import { lastValueFrom, map, take } from 'rxjs';
 
 import { createMessage } from '_messages';
 import { PortStream } from '_messaging/PortStream';
+import { isKeyringPayload } from '_payloads/keyring';
 import { isPermissionRequests } from '_payloads/permissions';
 import { isUpdateActiveOrigin } from '_payloads/tabs/updateActiveOrigin';
 import { isGetTransactionRequestsResponse } from '_payloads/transactions/ui/GetTransactionRequestsResponse';
@@ -114,6 +115,33 @@ export class BackgroundClient {
                     return: undefined,
                 })
             ).pipe(take(1))
+        );
+    }
+
+    public async getMnemonic(password?: string) {
+        return await lastValueFrom(
+            this.sendMessage(
+                createMessage<KeyringPayload<'getMnemonic'>>({
+                    type: 'keyring',
+                    method: 'getMnemonic',
+                    args: password,
+                    return: undefined,
+                })
+            ).pipe(
+                take(1),
+                map(({ payload }) => {
+                    if (
+                        isKeyringPayload<'getMnemonic'>(
+                            payload,
+                            'getMnemonic'
+                        ) &&
+                        payload.return
+                    ) {
+                        return payload.return;
+                    }
+                    throw new Error('Mnemonic not found');
+                })
+            )
         );
     }
 

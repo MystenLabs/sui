@@ -1,77 +1,122 @@
 @use '_values/colors';
+@use '_values/sizing';
 @use '_utils';
+@use 'sass:color';
 
 .wallet-created {
-    .mnemonic {
-        padding: 14px;
-        border-radius: 15px;
-        margin: auto;
-        margin-bottom: 16px;
-        background: colors.$white;
-        border: 1px solid #e9eaeb;
-        font-family: Inter, sans-serif;
-        width: 320px;
-        height: 90px;
+    $color: color.change(colors.$sui-blue, $alpha: 0.1);
 
-        @include utils.typography('header/search-text');
+    display: flex;
+    flex-flow: column nowrap;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 30px;
+    background: $color;
+    border: 1px solid $color;
+    border-radius: 20px;
+    max-width: sizing.$popup-width;
+    max-height: sizing.$popup-height;
+    flex: 1;
+}
 
-        line-height: 130%;
-        color: colors.$gray-85;
-    }
+.success-icon {
+    border-radius: 50%;
+    width: 48px;
+    height: 48px;
+    min-height: 48px;
+    border: 3px dotted colors.$success;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 10px;
+}
 
-    .header-title {
-        text-align: left;
-        margin-bottom: 20px;
-        color: colors.$gray-100;
-        font-size: 30px;
-        font-weight: 700;
-        line-height: 36px;
-    }
+.success-bg {
+    background-color: colors.$success;
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
 
-    .sub-title {
-        text-align: center;
-        color: colors.$gray-90;
-        font-weight: 600;
-        font-size: 18px;
-        line-height: 100%;
-    }
+.thumbs-up {
+    color: colors.$white;
+    font-size: 25px;
+}
 
-    .success-icon {
-        border-radius: 50%;
-        width: 46px;
-        height: 46px;
-        margin: auto;
-        border: 3px dotted colors.$success;
-        display: flex;
-        align-items: center;
-        justify-content: center;
+.header-title {
+    text-align: center;
+    margin: 0;
+    margin-bottom: 30px;
+    color: colors.$gray-90;
+    text-transform: capitalize;
 
-        .success-bg {
-            background-color: colors.$success;
-            border-radius: 50%;
-            width: 32px;
-            height: 32px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
+    @include utils.typography('Primary/Heading1-B');
+}
 
-        i {
-            color: colors.$white;
-            font-size: 25px;
-        }
-    }
+.sub-title {
+    margin: 0;
+    margin-bottom: 15px;
+    color: colors.$gray-75;
+    text-transform: uppercase;
 
-    .btn {
-        width: 100%;
-        margin: auto;
-        max-width: 320px;
-        margin-top: 20px;
+    @include utils.typography('Primary/CAPTION-B');
+}
 
-        i {
-            margin-right: 10px;
-            font-weight: 500;
-            font-size: 12px;
-        }
-    }
+.mnemonic {
+    display: flex;
+    flex-flow: column nowrap;
+    gap: 8px;
+    align-self: stretch;
+    font-weight: 600;
+    font-size: 17px;
+    line-height: 140%;
+    padding: 14px;
+    border-radius: 15px;
+    background: colors.$white;
+    border: 1px solid #e9eaeb;
+    box-shadow: 0 1px 2px rgba(16 24 40 / 5%);
+    color: colors.$gray-85;
+}
+
+.copy {
+    margin-top: 10px;
+    color: colors.$sui-dark-blue;
+    align-self: flex-end;
+    cursor: pointer;
+
+    @include utils.typography('Primary/CAPTION-SB');
+}
+
+.info {
+    text-align: center;
+    color: colors.$gray-75;
+    margin-top: 15px;
+
+    @include utils.typography('ParagraphPrimary/P2-R');
+}
+
+.info-caption {
+    text-align: center;
+    color: colors.$gray-75;
+    margin-bottom: 5px;
+
+    @include utils.typography('Primary/CAPTION-M');
+}
+
+.btn {
+    display: flex;
+    flex-flow: row nowrap;
+    gap: 8px;
+    margin-top: 45px;
+    align-self: stretch;
+    padding: 14px 20px;
+}
+
+.arrow-up {
+    font-size: 12px;
+    font-weight: 300;
+    transform: rotate(135deg);
 }
