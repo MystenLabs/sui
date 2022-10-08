@@ -6,21 +6,17 @@ import { useNavigate } from 'react-router-dom';
 
 import { createMnemonicValidation } from './validation';
 import Button from '_app/shared/button';
-import PasswordInput from '_app/shared/input/password';
 import { WALLET_ENCRYPTION_ENABLED } from '_app/wallet/constants';
-import Alert from '_components/alert';
 import ExternalLink from '_components/external-link';
 import Icon, { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
 import { useAppDispatch } from '_hooks';
 import CardLayout from '_pages/initialize/shared/card-layout';
+import PasswordFields from '_pages/initialize/shared/password-fields';
 import { createMnemonic } from '_redux/slices/account';
 import { PRIVACY_POLICY_LINK, ToS_LINK } from '_shared/constants';
 
 import st from './Create.module.scss';
-
-const PASSWORD_INFO_ERROR =
-    'Minimum 8 characters. Password must include at least one number and uppercase letter.';
 
 const CreatePage = () => {
     const dispatch = useAppDispatch();
@@ -58,42 +54,7 @@ const CreatePage = () => {
                                 className={st.fieldset}
                             >
                                 {WALLET_ENCRYPTION_ENABLED ? (
-                                    <>
-                                        <label className={st.label}>
-                                            <span className={st.labelText}>
-                                                Create Password
-                                            </span>
-                                            <Field
-                                                name="password"
-                                                component={PasswordInput}
-                                            />
-                                            {touched['password'] &&
-                                            errors['password'] ? (
-                                                <Alert>
-                                                    {PASSWORD_INFO_ERROR}
-                                                </Alert>
-                                            ) : (
-                                                <div className={st.info}>
-                                                    {PASSWORD_INFO_ERROR}
-                                                </div>
-                                            )}
-                                        </label>
-                                        <label className={st.label}>
-                                            <span className={st.labelText}>
-                                                Confirm Password
-                                            </span>
-                                            <Field
-                                                name="confirmPassword"
-                                                component={PasswordInput}
-                                            />
-                                            {touched['confirmPassword'] &&
-                                            errors['confirmPassword'] ? (
-                                                <Alert>
-                                                    {errors['confirmPassword']}
-                                                </Alert>
-                                            ) : null}
-                                        </label>
-                                    </>
+                                    <PasswordFields />
                                 ) : (
                                     <>
                                         <div className={st.space} />

@@ -9,33 +9,6 @@
     text-align: left;
 }
 
-.label {
-    display: flex;
-    flex-flow: column nowrap;
-    gap: 10px;
-
-    & + & {
-        margin-top: 30px;
-    }
-}
-
-.label-text {
-    color: colors.$gray-85;
-
-    @include utils.typography('ParagraphPrimary/P1-SB');
-}
-
-.label-text,
-.info {
-    padding-left: 10px;
-}
-
-.info {
-    color: colors.$gray-75;
-
-    @include utils.typography('ParagraphPrimary/P2-M');
-}
-
 .terms {
     display: flex;
     align-items: center;
@@ -101,7 +74,6 @@
 }
 
 .next {
-    margin-left: 10px;
     font-weight: 500;
     font-size: 12px;
 }

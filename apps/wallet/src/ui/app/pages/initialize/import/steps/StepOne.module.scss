@@ -1,5 +1,4 @@
 @use '_values/colors';
-@use '_utils';
 
 .mnemonic {
     resize: none;
@@ -29,14 +28,6 @@
     flex: 1;
 }
 
-.label {
-    margin-bottom: 10px;
-    color: colors.$gray-85;
-    padding-left: 10px;
-
-    @include utils.typography('ParagraphPrimary/P1-SB');
-}
-
 .fill {
     flex: 1;
 }
@@ -51,7 +42,6 @@
 }
 
 .next {
-    margin-left: 5px;
     font-size: 12px;
     font-weight: 500;
 }
