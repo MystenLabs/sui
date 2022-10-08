@@ -7,8 +7,8 @@ import type { BasePayload, Payload } from '_payloads';
 
 type MethodToPayloads = {
     createMnemonic: {
-        args: string;
-        return: string;
+        args: { password: string; importedMnemonic?: string };
+        return: { mnemonic: string };
     };
     getMnemonic: {
         args: string | undefined;
