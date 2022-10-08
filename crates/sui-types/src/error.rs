@@ -92,8 +92,13 @@ pub enum SuiError {
     #[error("Value was not signed by a known authority")]
     UnknownSigner,
     // Certificate verification
-    #[error("Signature or certificate from wrong epoch, expected {expected_epoch}")]
-    WrongEpoch { expected_epoch: EpochId },
+    #[error(
+        "Signature or certificate from wrong epoch, expected {expected_epoch}, got {actual_epoch}"
+    )]
+    WrongEpoch {
+        expected_epoch: EpochId,
+        actual_epoch: EpochId,
+    },
     #[error("Signatures in a certificate must form a quorum")]
     CertificateRequiresQuorum,
     #[error("Authority {authority_name:?} could not sync certificate: {err:?}")]

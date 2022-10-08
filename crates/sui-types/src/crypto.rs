@@ -1235,7 +1235,8 @@ impl<const STRONG_THRESHOLD: bool> AuthoritySignInfoTrait
         fp_ensure!(
             self.epoch == committee.epoch(),
             SuiError::WrongEpoch {
-                expected_epoch: committee.epoch()
+                expected_epoch: committee.epoch(),
+                actual_epoch: self.epoch,
             }
         );
 

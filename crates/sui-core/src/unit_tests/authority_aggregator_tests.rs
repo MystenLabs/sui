@@ -5,7 +5,6 @@ use bcs::to_bytes;
 use move_core_types::{account_address::AccountAddress, ident_str};
 use move_package::BuildConfig;
 use multiaddr::Multiaddr;
-use signature::Signer;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};

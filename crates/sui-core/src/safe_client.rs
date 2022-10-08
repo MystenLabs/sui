@@ -441,15 +441,6 @@ impl<C> SafeClient<C> {
     }
 }
 
-#[macro_export]
-macro_rules! report_client_error {
-    ($addr: expr, $error: expr) => {{
-        let error = $error;
-        let addr = $addr;
-        error!(?error, authority =?addr, "Client error");
-    }};
-}
-
 impl<C> SafeClient<C>
 where
     C: AuthorityAPI + Send + Sync + Clone + 'static,
@@ -466,7 +457,7 @@ where
             .handle_transaction(transaction)
             .await?;
         if let Err(err) = self.check_transaction_response(&digest, None, &transaction_info) {
-            report_client_error!(self.address, &err);
+            error!(?err, authority=?self.address, "Client error in handle_transaction");
             return Err(err);
         }
         Ok(transaction_info)
@@ -501,7 +492,7 @@ where
             .await?;
 
         if let Err(err) = self.verify_certificate_response(&digest, &transaction_info) {
-            report_client_error!(self.address, &err);
+            error!(?err, authority=?self.address, "Client error in handle_certificate");
             return Err(err);
         }
         Ok(transaction_info)
@@ -533,7 +524,7 @@ where
         if let Err(err) =
             self.check_object_response(&request, &response, skip_committee_check_during_reconfig)
         {
-            report_client_error!(self.address, &err);
+            error!(?err, authority=?self.address, "Client error in handle_object_info_request");
             return Err(err);
         }
         self.metrics_total_ok_responses_handle_object_info_request
@@ -558,7 +549,7 @@ where
             .await?;
 
         if let Err(err) = self.check_transaction_response(&digest, None, &transaction_info) {
-            report_client_error!(self.address, &err);
+            error!(?err, authority=?self.address, "Client error in handle_transaction_info_request");
             return Err(err);
         }
         self.metrics_total_ok_responses_handle_transaction_info_request
@@ -583,7 +574,7 @@ where
             Some(&digests.effects),
             &transaction_info,
         ) {
-            report_client_error!(self.address, &err);
+            error!(?err, authority=?self.address, "Client error in handle_transaction_and_effects_info_request");
             return Err(err);
         }
         self.metrics_total_ok_responses_handle_transaction_and_effects_info_request
@@ -744,7 +735,7 @@ where
             .await?;
         self.verify_checkpoint_response(&request, &resp)
             .map_err(|err| {
-                report_client_error!(self.address, &err);
+                error!(?err, authority=?self.address, "Client error in handle_checkpoint");
                 err
             })?;
         Ok(resp)
@@ -783,7 +774,7 @@ where
                             signed_batch,
                             txs_and_last_batch,
                         ) {
-                            report_client_error!(client.address, &err);
+                            error!(?err, authority=?address, "Client error in handle_batch_stream");
                             Some(Err(err))
                         } else {
                             // Insert a fresh vector for the new batch of transactions
@@ -801,7 +792,7 @@ where
                                     authority: address,
                                     reason: "Stream does not start with a batch".to_string(),
                                 };
-                                report_client_error!(client.address, &err);
+                                error!(?err, authority=?address, "Client error in handle_batch_stream");
                                 Some(Err(err))
                             }
                             Some(txs) => {

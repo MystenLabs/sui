@@ -133,6 +133,7 @@ async fn test_update_validators() {
     let quorum_driver_handler =
         QuorumDriverHandler::new(arc_aggregator.clone(), QuorumDriverMetrics::new_for_tests());
     let quorum_driver = quorum_driver_handler.clone_quorum_driver();
+    let quorum_driver_clone = quorum_driver.clone();
     let handle = tokio::task::spawn(async move {
         // Wait till the epoch/committee is updated.
         tokio::time::sleep(Duration::from_secs(3)).await;
@@ -149,10 +150,14 @@ async fn test_update_validators() {
 
     // Update authority aggregator with a new epoch number, and let quorum driver know.
     aggregator.committee.epoch = 10;
-    quorum_driver_handler
+    quorum_driver_clone
         .update_validators(Arc::new(aggregator))
         .await
         .unwrap();
+    assert_eq!(
+        quorum_driver_handler.clone_quorum_driver().current_epoch(),
+        10
+    );
 
     handle.await.unwrap();
 }

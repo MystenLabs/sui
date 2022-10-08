@@ -6,7 +6,6 @@ use crate::authority_client::{
     make_network_authority_client_sets_from_committee, AuthorityAPI, NetworkAuthorityClient,
     NetworkAuthorityClientMetrics,
 };
-use crate::report_client_error;
 use crate::safe_client::{SafeClient, SafeClientMetrics};
 use async_trait::async_trait;
 
@@ -270,8 +269,12 @@ impl<A> AuthorityAggregator<A> {
                 )
             }
         );
-
-        self.committee_store.insert_new_committee(&new_committee)?;
+        // This call may return error if this committee is already inserted,
+        // which is fine. We should continue to construct the new aggregator.
+        // This is because there may be multiple AuthorityAggregators
+        // or its containers (e.g. Quorum Drivers)  share the same committee
+        // store and all of them need to reconfigure.
+        let _ = self.committee_store.insert_new_committee(&new_committee);
         Ok(AuthorityAggregator {
             committee: new_committee,
             authority_clients: safe_clients,
@@ -621,8 +624,16 @@ where
                         let source_client = &authority_clients[&source_authority];
                         let destination_client = &authority_clients[&destination_authority];
 
-                        report_client_error!(source_client.address(), &inner_err);
-                        report_client_error!(destination_client.address(), &inner_err);
+                        error!(
+                            ?inner_err,
+                            source =? source_client.address(),
+                            "sync_certificate_to_authority_with_timeout_inner"
+                        );
+                        error!(
+                            ?inner_err,
+                            destination =? destination_client.address(),
+                            "sync_certificate_to_authority_with_timeout_inner"
+                        );
 
                         debug!(
                             ?source_authority,
