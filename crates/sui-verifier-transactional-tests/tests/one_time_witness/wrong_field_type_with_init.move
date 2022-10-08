@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// correct, wrong struct field type but not one-time witness candidate
+// invalid, wrong struct field type
 
 //# init --addresses test=0x0
 
@@ -10,6 +10,6 @@ module test::m {
 
     struct M has drop { value: u64 }
 
-    fun init(_ctx: &mut sui::tx_context::TxContext) {
+    fun init(_: M, _ctx: &mut sui::tx_context::TxContext) {
     }
 }
