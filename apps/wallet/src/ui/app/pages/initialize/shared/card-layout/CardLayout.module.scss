@@ -1,0 +1,18 @@
+@use '_values/colors';
+@use '_values/sizing';
+@use 'sass:color';
+
+.container {
+    $color: color.change(colors.$sui-blue, $alpha: 0.1);
+
+    display: flex;
+    flex-flow: column nowrap;
+    align-items: center;
+    padding: 40px 30px;
+    background: $color;
+    border: 1px solid $color;
+    border-radius: 20px;
+    max-width: sizing.$popup-width;
+    max-height: sizing.$popup-height;
+    flex: 1;
+}
