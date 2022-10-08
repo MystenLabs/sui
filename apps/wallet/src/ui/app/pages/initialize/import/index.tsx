@@ -4,6 +4,7 @@
 import { useCallback, useState } from 'react';
 
 import StepOne from './steps/StepOne';
+import StepTwo from './steps/StepTwo';
 import { WALLET_ENCRYPTION_ENABLED } from '_app/wallet/constants';
 import { useAppDispatch } from '_hooks';
 import CardLayout from '_pages/initialize/shared/card-layout';
@@ -18,7 +19,7 @@ const initialValues = {
 const allSteps = [StepOne];
 
 if (WALLET_ENCRYPTION_ENABLED) {
-    // TODO: add more steps
+    allSteps.push(StepTwo);
 }
 
 export type ImportValuesType = typeof initialValues;
@@ -29,8 +30,6 @@ const ImportPage = () => {
     const dispatch = useAppDispatch();
     const onHandleSubmit = useCallback(
         async ({ mnemonic, password }: ImportValuesType) => {
-            //TODO
-            await new Promise((r) => setTimeout(r, 3000));
             await dispatch(
                 createMnemonic({ importedMnemonic: mnemonic, password })
             );

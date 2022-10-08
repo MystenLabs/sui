@@ -1,4 +1,5 @@
 @use '_values/colors';
+@use '_utils';
 
 .container {
     display: flex;
@@ -22,7 +23,7 @@
 
     &.neutral {
         background: colors.$gray-45;
-        color: colors.$gray-85;
+        color: colors.$gray-75;
     }
 
     &.outline {
@@ -54,9 +55,10 @@
     }
 
     &.large {
-        font-weight: 600;
-        font-size: 14px;
         padding: 12px 20px;
-        border-radius: 10px;
+        border-radius: 12px;
+        gap: 8px;
+
+        @include utils.typography('Primary/Body-SB');
     }
 }

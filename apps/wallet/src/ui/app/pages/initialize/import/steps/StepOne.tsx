@@ -10,8 +10,9 @@ import Alert from '_components/alert';
 import Icon, { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
 import { mnemonicValidation } from '_pages/initialize/import/validation';
+import FieldLabel from '_pages/initialize/shared/field-label';
 
-import type { ImportValuesType } from '_pages/initialize/import/index';
+import type { StepProps } from '.';
 
 import st from './StepOne.module.scss';
 
@@ -19,12 +20,7 @@ const validationSchema = Yup.object({
     mnemonic: mnemonicValidation,
 });
 
-export type StepOneProps = {
-    next: (data: ImportValuesType, step: 1 | -1) => Promise<void>;
-    data: ImportValuesType;
-};
-
-export default function StepOne({ next, data }: StepOneProps) {
+export default function StepOne({ next, data }: StepProps) {
     const btnTxt = WALLET_ENCRYPTION_ENABLED ? 'Continue' : 'Import wallet Now';
     return (
         <Formik
@@ -47,29 +43,32 @@ export default function StepOne({ next, data }: StepOneProps) {
                 handleBlur,
             }) => (
                 <Form className={st.form}>
-                    <label className={st.label} htmlFor="importMnemonicTxt">
-                        Enter Recovery Phrase
-                    </label>
-                    <textarea
-                        id="importMnemonicTxt"
-                        onChange={handleChange}
-                        value={mnemonic}
-                        onBlur={async (e) => {
-                            const adjMnemonic =
-                                await validationSchema.fields.mnemonic.cast(
-                                    mnemonic
+                    <FieldLabel txt="Enter Recovery Phrase">
+                        <textarea
+                            id="importMnemonicTxt"
+                            onChange={handleChange}
+                            value={mnemonic}
+                            onBlur={async (e) => {
+                                const adjMnemonic =
+                                    await validationSchema.fields.mnemonic.cast(
+                                        mnemonic
+                                    );
+                                await setFieldValue(
+                                    'mnemonic',
+                                    adjMnemonic,
+                                    false
                                 );
-                            await setFieldValue('mnemonic', adjMnemonic, false);
-                            handleBlur(e);
-                        }}
-                        className={st.mnemonic}
-                        placeholder="Enter your 12-word recovery phrase"
-                        name="mnemonic"
-                        disabled={isSubmitting}
-                    />
-                    {touched.mnemonic && errors?.mnemonic && (
-                        <Alert>{errors?.mnemonic}</Alert>
-                    )}
+                                handleBlur(e);
+                            }}
+                            className={st.mnemonic}
+                            placeholder="Enter your 12-word recovery phrase"
+                            name="mnemonic"
+                            disabled={isSubmitting}
+                        />
+                        {touched.mnemonic && errors?.mnemonic && (
+                            <Alert>{errors?.mnemonic}</Alert>
+                        )}
+                    </FieldLabel>
                     <div className={st.fill} />
                     <Button
                         type="submit"
