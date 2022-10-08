@@ -1,49 +1,83 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import Button from '_app/shared/button';
+import Alert from '_components/alert';
+import CopyToClipboard from '_components/copy-to-clipboard';
 import Icon, { SuiIcons } from '_components/icon';
-import { useAppDispatch, useAppSelector } from '_src/ui/app/hooks';
-import { setMnemonic } from '_src/ui/app/redux/slices/account';
+import Loading from '_components/loading';
+import { useAppDispatch } from '_hooks';
+import { loadMnemonicFromKeyring } from '_redux/slices/account';
 
 import st from './Backup.module.scss';
 
 const BackupPage = () => {
-    const mnemonic = useAppSelector(
-        ({ account }) => account.createdMnemonic || account.mnemonic
-    );
+    const [loading, setLoading] = useState(true);
+    const [mnemonic, setLocalMnemonic] = useState<string | null>(null);
     const navigate = useNavigate();
     const dispatch = useAppDispatch();
-    const handleOnClick = useCallback(() => {
-        if (mnemonic) {
-            navigate('/');
-            dispatch(setMnemonic(mnemonic));
-        }
-    }, [navigate, dispatch, mnemonic]);
+    useEffect(() => {
+        // TODO: this assumes that the Keyring in bg service is unlocked. It should be fix
+        // when we add a locked status guard. (#encrypt-wallet)
+        (async () => {
+            setLoading(true);
+            try {
+                setLocalMnemonic(
+                    await dispatch(loadMnemonicFromKeyring({})).unwrap()
+                );
+            } catch (e) {
+                // Do nothing
+            } finally {
+                setLoading(false);
+            }
+        })();
+    }, [dispatch]);
     return (
         <div className={st.walletCreated}>
             <div className={st.successIcon}>
                 <div className={st.successBg}>
-                    <Icon icon={SuiIcons.ThumbsUp} />
+                    <Icon icon={SuiIcons.ThumbsUp} className={st.thumbsUp} />
                 </div>
             </div>
-
-            <h1 className={st.headerTitle}>Wallet Successfully Created!</h1>
-            <h2 className={st.subTitle}>Backup Recovery Passphrase</h2>
-            <div className={st.mnemonic}>{mnemonic}</div>
-
+            <h1 className={st.headerTitle}>Wallet Created Successfully!</h1>
+            <h2 className={st.subTitle}>Recovery Phrase</h2>
+            <Loading loading={loading}>
+                {mnemonic ? (
+                    <div className={st.mnemonic}>
+                        {mnemonic}
+                        <CopyToClipboard
+                            txt={mnemonic}
+                            className={st.copy}
+                            mode="plain"
+                        >
+                            COPY
+                        </CopyToClipboard>
+                    </div>
+                ) : (
+                    <Alert>Something is wrong, Recovery Phrase is empty.</Alert>
+                )}
+            </Loading>
+            <div className={st.info}>
+                Your recovery phrase makes it easy to back up and restore your
+                account.
+            </div>
+            <div className={st.info}>
+                <div className={st.infoCaption}>WARNING</div>
+                Never disclose your secret recovery phrase. Anyone with the
+                passphrase can take over your account forever.
+            </div>
             <Button
                 type="button"
                 className={st.btn}
                 size="large"
                 mode="primary"
-                onClick={handleOnClick}
+                onClick={() => navigate('/')}
             >
-                <Icon icon={SuiIcons.Checkmark} className={st.success} />
-                Done
+                Open Sui Wallet
+                <Icon icon={SuiIcons.ArrowLeft} className={st.arrowUp} />
             </Button>
         </div>
     );

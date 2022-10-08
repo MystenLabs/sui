@@ -10,6 +10,10 @@ type MethodToPayloads = {
         args: string;
         return: string;
     };
+    getMnemonic: {
+        args: string | undefined;
+        return: string;
+    };
 };
 
 export interface KeyringPayload<Method extends keyof MethodToPayloads>

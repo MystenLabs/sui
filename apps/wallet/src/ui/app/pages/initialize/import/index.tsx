@@ -8,7 +8,7 @@ import * as Yup from 'yup';
 import Button from '_app/shared/button';
 import Icon, { SuiIcons } from '_components/icon';
 import { useAppDispatch, useAppSelector } from '_hooks';
-import { createMnemonic, setMnemonic } from '_redux/slices/account';
+import { createMnemonic } from '_redux/slices/account';
 import { normalizeMnemonics, validateMnemonics } from '_src/shared/utils/bip39';
 
 import type { FocusEventHandler } from 'react';
@@ -38,7 +38,6 @@ const ImportPage = () => {
     const onHandleSubmit = useCallback(
         async ({ mnemonic }: ValuesType) => {
             await dispatch(createMnemonic({ existingMnemonic: mnemonic }));
-            await dispatch(setMnemonic(mnemonic));
         },
         [dispatch]
     );
