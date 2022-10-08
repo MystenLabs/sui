@@ -56,6 +56,16 @@ export const createMnemonic = createAsyncThunk<
     }
 );
 
+export const loadMnemonicFromKeyring = createAsyncThunk<
+    string,
+    { password?: string }, // can be undefined when we know Keyring is unlocked
+    AppThunkConfig
+>(
+    'account/loadMnemonicFromKeyring',
+    async ({ password }, { extra: { background } }) =>
+        await background.getMnemonic(password)
+);
+
 export const logout = createAsyncThunk(
     'account/logout',
     async (): Promise<void> => {
@@ -68,7 +78,6 @@ type AccountState = {
     loading: boolean;
     mnemonic: string | null;
     creating: boolean;
-    createdMnemonic: string | null;
     address: SuiAddress | null;
 };
 
@@ -76,7 +85,6 @@ const initialState: AccountState = {
     loading: true,
     mnemonic: null,
     creating: false,
-    createdMnemonic: null,
     address: null,
 };
 
@@ -84,9 +92,6 @@ const accountSlice = createSlice({
     name: 'account',
     initialState,
     reducers: {
-        setMnemonic: (state, action: PayloadAction<string>) => {
-            state.mnemonic = action.payload;
-        },
         setAddress: (state, action: PayloadAction<string | null>) => {
             state.address = action.payload;
         },
@@ -102,15 +107,15 @@ const accountSlice = createSlice({
             })
             .addCase(createMnemonic.fulfilled, (state, action) => {
                 state.creating = false;
-                state.createdMnemonic = action.payload;
+                state.mnemonic = action.payload;
             })
             .addCase(createMnemonic.rejected, (state) => {
                 state.creating = false;
-                state.createdMnemonic = null;
+                state.mnemonic = null;
             }),
 });
 
-export const { setMnemonic, setAddress } = accountSlice.actions;
+export const { setAddress } = accountSlice.actions;
 
 const reducer: Reducer<typeof initialState> = accountSlice.reducer;
 export default reducer;
