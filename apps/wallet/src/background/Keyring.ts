@@ -97,7 +97,7 @@ class Keyring {
         const { id, payload } = msg;
         try {
             if (
-                isKeyringPayload<'createMnemonic'>(payload) &&
+                isKeyringPayload<'createMnemonic'>(payload, 'createMnemonic') &&
                 payload.args !== undefined
             ) {
                 await this.createMnemonic(payload.args);

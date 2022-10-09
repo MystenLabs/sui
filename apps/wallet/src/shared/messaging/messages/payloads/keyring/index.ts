@@ -21,7 +21,13 @@ export interface KeyringPayload<Method extends keyof MethodToPayloads>
 }
 
 export function isKeyringPayload<Method extends keyof MethodToPayloads>(
-    payload: Payload
+    payload: Payload,
+    method: Method
 ): payload is KeyringPayload<Method> {
-    return isBasePayload(payload) && payload.type === 'keyring';
+    return (
+        isBasePayload(payload) &&
+        payload.type === 'keyring' &&
+        'method' in payload &&
+        payload['method'] === method
+    );
 }
