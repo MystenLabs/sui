@@ -174,9 +174,8 @@ impl Worker {
         info!("Worker {} listening to worker messages on {}", id, address);
 
         let connection_monitor_handle = network::connectivity::ConnectionMonitor::spawn(
-            network.clone(),
+            network.downgrade(),
             network_connection_metrics,
-            rx_reconfigure.clone(),
         );
 
         let other_workers = worker
