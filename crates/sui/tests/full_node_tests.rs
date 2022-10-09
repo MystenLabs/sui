@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::net::SocketAddr;
 use std::str::FromStr;
 use std::{collections::BTreeMap, sync::Arc};
 
@@ -25,8 +24,6 @@ use sui_json_rpc_types::{
 use sui_macros::*;
 use sui_node::SuiNode;
 use sui_sdk::crypto::AccountKeystore;
-use sui_sdk::{ClientType, SuiClient};
-use sui_swarm::memory::Swarm;
 use sui_types::base_types::{ObjectRef, SequenceNumber};
 use sui_types::event::TransferType;
 use sui_types::filter::TransactionQuery;
@@ -44,7 +41,6 @@ use test_utils::messages::make_transactions_with_wallet_context;
 use test_utils::messages::{
     get_gas_object_with_wallet_context, make_transfer_object_transaction_with_wallet_context,
 };
-use test_utils::network::setup_network_and_wallet;
 use test_utils::network::{
     init_cluster_builder_env_aware, start_a_fullnode, start_a_fullnode_with_handle,
 };
