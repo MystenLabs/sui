@@ -57,11 +57,11 @@ use sui_storage::{
 };
 use sui_types::committee::EpochId;
 use sui_types::crypto::{AuthorityKeyPair, NetworkKeyPair};
-use sui_types::filter::TransactionQuery;
 use sui_types::messages_checkpoint::{
     CheckpointRequest, CheckpointRequestType, CheckpointResponse,
 };
 use sui_types::object::{Owner, PastObjectRead};
+use sui_types::query::TransactionQuery;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::temporary_store::InnerTemporaryStore;
 pub use sui_types::temporary_store::TemporaryStore;
@@ -1702,15 +1702,20 @@ impl AuthorityState {
         query: TransactionQuery,
         cursor: Option<TransactionDigest>,
         limit: Option<usize>,
+        reverse: bool,
     ) -> Result<Vec<TransactionDigest>, anyhow::Error> {
+        // Lookup TransactionDigest sequence number,
+        // also default cursor to 0 or the current sequence number depends on ordering.
         let cursor = if let Some(cursor) = cursor {
-            let seq = self
-                .get_indexes()?
+            self.get_indexes()?
                 .get_transaction_seq(&cursor)?
-                .ok_or_else(|| anyhow!("Transaction [{cursor:?}] not found."))?;
-            Some(seq)
+                .ok_or_else(|| anyhow!("Transaction [{cursor:?}] not found."))?
         } else {
-            None
+            if reverse {
+                TxSequenceNumber::MAX
+            } else {
+                TxSequenceNumber::MIN
+            }
         };
 
         Ok(match query {
@@ -1718,59 +1723,47 @@ impl AuthorityState {
                 package,
                 module,
                 function,
-            } => self
-                .get_indexes()?
-                .get_transactions_by_move_function(package, module, function, cursor, limit)?,
+            } => self.get_indexes()?.get_transactions_by_move_function(
+                package, module, function, cursor, limit, reverse,
+            )?,
             TransactionQuery::InputObject(object_id) => self
                 .get_indexes()?
-                .get_transactions_by_input_object(object_id, cursor, limit)?,
+                .get_transactions_by_input_object(object_id, cursor, limit, reverse)?,
             TransactionQuery::MutatedObject(object_id) => self
                 .get_indexes()?
-                .get_transactions_by_mutated_object(object_id, cursor, limit)?,
+                .get_transactions_by_mutated_object(object_id, cursor, limit, reverse)?,
             TransactionQuery::FromAddress(address) => self
                 .get_indexes()?
-                .get_transactions_from_addr(address, cursor, limit)?,
+                .get_transactions_from_addr(address, cursor, limit, reverse)?,
             TransactionQuery::ToAddress(address) => self
                 .get_indexes()?
-                .get_transactions_to_addr(address, cursor, limit)?,
+                .get_transactions_to_addr(address, cursor, limit, reverse)?,
             TransactionQuery::All => {
-                let start = cursor.unwrap_or_default();
                 let iter = self
                     .database
                     .tables
                     .executed_sequence
                     .iter()
-                    .skip_to(&start)?;
-                if let Some(limit) = limit {
-                    iter.take(limit)
-                        .map(|(_, digest)| digest.transaction)
-                        .collect()
+                    .skip_prior_to(&cursor)?;
+
+                if reverse {
+                    let iter = iter.reverse();
+                    if let Some(limit) = limit {
+                        iter.take(limit)
+                            .map(|(_, digest)| digest.transaction)
+                            .collect()
+                    } else {
+                        iter.map(|(_, digest)| digest.transaction).collect()
+                    }
                 } else {
-                    iter.map(|(_, digest)| digest.transaction).collect()
+                    if let Some(limit) = limit {
+                        iter.take(limit)
+                            .map(|(_, digest)| digest.transaction)
+                            .collect()
+                    } else {
+                        iter.map(|(_, digest)| digest.transaction).collect()
+                    }
                 }
-            }
-            TransactionQuery::Latest => {
-                let end = if let Some(cursor) = cursor {
-                    cursor
-                } else {
-                    self.database.next_sequence_number()?
-                };
-
-                let start = limit
-                    .and_then(|limit| u64::try_from(limit).ok())
-                    .and_then(|limit| end.checked_sub(limit))
-                    .unwrap_or_default();
-
-                let mut txs = self
-                    .database
-                    .tables
-                    .executed_sequence
-                    .iter()
-                    .skip_to(&start)?
-                    .map(|(_, digest)| digest.transaction)
-                    .collect::<Vec<_>>();
-                txs.reverse();
-                txs
             }
         })
     }

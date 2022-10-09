@@ -151,57 +151,69 @@ impl IndexStore {
     fn get_transactions_by_object<KeyT: Clone + Serialize + DeserializeOwned + PartialEq>(
         index: &DBMap<(KeyT, TxSequenceNumber), TransactionDigest>,
         object_id: KeyT,
-        cursor: Option<TxSequenceNumber>,
+        cursor: TxSequenceNumber,
         limit: Option<usize>,
+        reverse: bool,
     ) -> SuiResult<Vec<TransactionDigest>> {
-        let cursor = cursor.unwrap_or(TxSequenceNumber::MIN);
-        let iter = index
-            .iter()
-            .skip_to(&(object_id.clone(), cursor))?
-            .take_while(|((id, _), _)| *id == object_id);
+        let iter = index.iter().skip_prior_to(&(object_id.clone(), cursor))?;
 
-        Ok(if let Some(limit) = limit {
-            iter.take(limit).map(|(_, digest)| digest).collect()
+        Ok(if reverse {
+            let iter = iter.reverse().take_while(|((id, _), _)| *id == object_id);
+            if let Some(limit) = limit {
+                iter.take(limit).map(|(_, digest)| digest).collect()
+            } else {
+                iter.map(|(_, digest)| digest).collect()
+            }
         } else {
-            iter.map(|(_, digest)| digest).collect()
+            let iter = iter.take_while(|((id, _), _)| *id == object_id);
+            if let Some(limit) = limit {
+                iter.take(limit).map(|(_, digest)| digest).collect()
+            } else {
+                iter.map(|(_, digest)| digest).collect()
+            }
         })
     }
 
     pub fn get_transactions_by_input_object(
         &self,
         input_object: ObjectID,
-        cursor: Option<TxSequenceNumber>,
+        cursor: TxSequenceNumber,
         limit: Option<usize>,
+        reverse: bool,
     ) -> SuiResult<Vec<TransactionDigest>> {
         Self::get_transactions_by_object(
             &self.transactions_by_input_object_id,
             input_object,
             cursor,
             limit,
+            reverse,
         )
     }
 
     pub fn get_transactions_by_mutated_object(
         &self,
         mutated_object: ObjectID,
-        cursor: Option<TxSequenceNumber>,
+        cursor: TxSequenceNumber,
         limit: Option<usize>,
+        reverse: bool,
     ) -> SuiResult<Vec<TransactionDigest>> {
         Self::get_transactions_by_object(
             &self.transactions_by_mutated_object_id,
             mutated_object,
             cursor,
             limit,
+            reverse,
         )
     }
 
     pub fn get_transactions_from_addr(
         &self,
         addr: SuiAddress,
-        cursor: Option<TxSequenceNumber>,
+        cursor: TxSequenceNumber,
         limit: Option<usize>,
+        reverse: bool,
     ) -> SuiResult<Vec<TransactionDigest>> {
-        Self::get_transactions_by_object(&self.transactions_from_addr, addr, cursor, limit)
+        Self::get_transactions_by_object(&self.transactions_from_addr, addr, cursor, limit, reverse)
     }
 
     pub fn get_transactions_by_move_function(
@@ -209,39 +221,50 @@ impl IndexStore {
         package: ObjectID,
         module: Option<String>,
         function: Option<String>,
-        cursor: Option<TxSequenceNumber>,
+        cursor: TxSequenceNumber,
         limit: Option<usize>,
+        reverse: bool,
     ) -> SuiResult<Vec<TransactionDigest>> {
-        let cursor = cursor.unwrap_or(TxSequenceNumber::MIN);
-        let iter = self
-            .transactions_by_move_function
-            .iter()
-            .skip_to(&(
-                package,
-                module.clone().unwrap_or_default(),
-                function.clone().unwrap_or_default(),
-                cursor,
-            ))?
-            .take_while(|((id, m, f, _), _)| {
+        let iter = self.transactions_by_move_function.iter().skip_prior_to(&(
+            package,
+            module.clone().unwrap_or_default(),
+            function.clone().unwrap_or_default(),
+            cursor,
+        ))?;
+
+        Ok(if reverse {
+            let iter = iter.reverse().take_while(|((id, m, f, _), _)| {
                 *id == package
                     && module.as_ref().map(|x| x == m).unwrap_or(true)
                     && function.as_ref().map(|x| x == f).unwrap_or(true)
             });
-
-        Ok(if let Some(limit) = limit {
-            iter.take(limit).map(|(_, digest)| digest).collect()
+            if let Some(limit) = limit {
+                iter.take(limit).map(|(_, digest)| digest).collect()
+            } else {
+                iter.map(|(_, digest)| digest).collect()
+            }
         } else {
-            iter.map(|(_, digest)| digest).collect()
+            let iter = iter.take_while(|((id, m, f, _), _)| {
+                *id == package
+                    && module.as_ref().map(|x| x == m).unwrap_or(true)
+                    && function.as_ref().map(|x| x == f).unwrap_or(true)
+            });
+            if let Some(limit) = limit {
+                iter.take(limit).map(|(_, digest)| digest).collect()
+            } else {
+                iter.map(|(_, digest)| digest).collect()
+            }
         })
     }
 
     pub fn get_transactions_to_addr(
         &self,
         addr: SuiAddress,
-        cursor: Option<TxSequenceNumber>,
+        cursor: TxSequenceNumber,
         limit: Option<usize>,
+        reverse: bool,
     ) -> SuiResult<Vec<TransactionDigest>> {
-        Self::get_transactions_by_object(&self.transactions_to_addr, addr, cursor, limit)
+        Self::get_transactions_by_object(&self.transactions_to_addr, addr, cursor, limit, reverse)
     }
 
     pub fn get_transaction_seq(

@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 
 use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
+
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
     GetObjectDataResponse, GetPastObjectDataResponse, GetRawObjectDataResponse,
@@ -17,9 +18,9 @@ use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress, TransactionDigest};
 use sui_types::batch::TxSequenceNumber;
 use sui_types::crypto::SignatureScheme;
-use sui_types::filter::TransactionQuery;
 use sui_types::messages::ExecuteTransactionRequestType;
 use sui_types::object::Owner;
+use sui_types::query::{Ordering, TransactionQuery};
 use sui_types::sui_serde::Base64;
 
 /// Maximum number of events returned in an event query.
@@ -177,8 +178,12 @@ pub trait RpcFullNodeReadApi {
         &self,
         /// the transaction query criteria.
         query: TransactionQuery,
+        /// Optional paging cursor
         cursor: Option<TransactionDigest>,
+        /// Maximum item returned per page
         limit: Option<usize>,
+        /// Transaction query ordering
+        order: Ordering,
     ) -> RpcResult<TransactionsPage>;
 
     /// Note there is no software-level guarantee/SLA that objects with past versions

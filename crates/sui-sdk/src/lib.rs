@@ -38,8 +38,8 @@ use sui_json_rpc_types::{
 use sui_transaction_builder::{DataReader, TransactionBuilder};
 pub use sui_types as types;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
-use sui_types::filter::TransactionQuery;
 use sui_types::messages::Transaction;
+use sui_types::query::{Ordering, TransactionQuery};
 use types::base_types::SequenceNumber;
 use types::error::TRANSACTION_NOT_FOUND_MSG_PREFIX;
 use types::messages::ExecuteTransactionRequestType;
@@ -335,9 +335,10 @@ impl FullNodeApi {
         query: TransactionQuery,
         cursor: Option<TransactionDigest>,
         limit: Option<usize>,
+        order: Ordering,
     ) -> anyhow::Result<TransactionsPage> {
         Ok(match &*self.0 {
-            SuiClientApi::Rpc(c) => c.http.get_transactions(query, cursor, limit).await?,
+            SuiClientApi::Rpc(c) => c.http.get_transactions(query, cursor, limit, order).await?,
             SuiClientApi::Embedded(_) => {
                 return Err(anyhow!("Method not supported by embedded gateway client."))
             }
