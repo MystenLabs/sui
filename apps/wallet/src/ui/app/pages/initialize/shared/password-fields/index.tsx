@@ -3,9 +3,9 @@
 
 import { useFormikContext, Field } from 'formik';
 
+import FieldLabel from '_app/shared/field-label';
 import PasswordInput from '_app/shared/input/password';
 import Alert from '_components/alert';
-import FieldLabel from '_pages/initialize/shared/field-label';
 
 import st from './PasswordFields.module.scss';
 

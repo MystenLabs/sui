@@ -119,6 +119,11 @@ export class BackgroundClient {
         );
     }
 
+    public async unlockWallet(password: string) {
+        // TODO: implement
+        throw new Error('Not implemented yet');
+    }
+
     public async getMnemonic(password?: string) {
         return await lastValueFrom(
             this.sendMessage(

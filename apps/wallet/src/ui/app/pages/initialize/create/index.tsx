@@ -6,12 +6,12 @@ import { useNavigate } from 'react-router-dom';
 
 import { createMnemonicValidation } from './validation';
 import Button from '_app/shared/button';
+import CardLayout from '_app/shared/card-layout';
 import { WALLET_ENCRYPTION_ENABLED } from '_app/wallet/constants';
 import ExternalLink from '_components/external-link';
 import Icon, { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
 import { useAppDispatch } from '_hooks';
-import CardLayout from '_pages/initialize/shared/card-layout';
 import PasswordFields from '_pages/initialize/shared/password-fields';
 import { createMnemonic } from '_redux/slices/account';
 import { PRIVACY_POLICY_LINK, ToS_LINK } from '_shared/constants';

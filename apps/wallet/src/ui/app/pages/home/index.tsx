@@ -1,22 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import cl from 'classnames';
 import { useEffect } from 'react';
-import { Link, Outlet } from 'react-router-dom';
+import { Outlet } from 'react-router-dom';
 import { of, filter, switchMap, from, defer, repeat } from 'rxjs';
 
-import DappStatus from '_app/shared/dapp-status';
+import PageMainLayout from '_app/shared/page-main-layout';
 import Loading from '_components/loading';
-import Logo from '_components/logo';
-import { MenuButton, MenuContent } from '_components/menu';
-import Navigation from '_components/navigation';
 import { useInitializedGuard, useAppDispatch } from '_hooks';
 import PageLayout from '_pages/layout';
 import { fetchAllOwnedAndRequiredObjects } from '_redux/slices/sui-objects';
 import { usePageView } from '_shared/utils';
-
-import st from './Home.module.scss';
 
 const POLL_SUI_OBJECTS_INTERVAL = 4000;
 
@@ -46,35 +40,14 @@ const HomePage = ({ disableNavigation, limitToPopUpSize = true }: Props) => {
     return (
         <PageLayout limitToPopUpSize={limitToPopUpSize}>
             <Loading loading={guardChecking}>
-                <div className={st.container}>
-                    <div
-                        className={cl(st.header, {
-                            [st.center]: disableNavigation,
-                        })}
-                    >
-                        <Link to="/tokens" className={st.logoLink}>
-                            <Logo className={st.logo} txt={true} />
-                        </Link>
-                        {disableNavigation ? null : (
-                            <>
-                                <DappStatus />
-                                <MenuButton className={st.menuButton} />
-                            </>
-                        )}
-                    </div>
-                    <div className={st.content}>
-                        <main
-                            className={cl(
-                                st.main,
-                                !disableNavigation && st.withNav
-                            )}
-                        >
-                            <Outlet />
-                        </main>
-                        {!disableNavigation && <Navigation />}
-                        <MenuContent />
-                    </div>
-                </div>
+                <PageMainLayout
+                    bottomNavEnabled={!disableNavigation}
+                    dappStatusEnabled={!disableNavigation}
+                    topNavMenuEnabled={!disableNavigation}
+                    centerLogo={true}
+                >
+                    <Outlet />
+                </PageMainLayout>
             </Loading>
         </PageLayout>
     );
