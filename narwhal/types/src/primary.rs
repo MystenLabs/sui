@@ -738,22 +738,6 @@ pub struct BatchMessage {
     pub batch: Batch,
 }
 
-pub type BlockRemoverResult<T> = Result<T, BlockRemoverError>;
-
-#[derive(Clone, Debug)]
-pub struct BlockRemoverError {
-    pub ids: Vec<CertificateDigest>,
-    pub error: BlockRemoverErrorKind,
-}
-
-// TODO: refactor BlockError & BlockRemoverError to be one type shared by get/remove collections.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum BlockRemoverErrorKind {
-    Timeout,
-    Failed,
-    StorageFailure,
-}
-
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum BlockErrorKind {
     BlockNotFound,
