@@ -264,9 +264,8 @@ impl Primary {
         info!("Primary {} listening on {}", name.encode_base64(), address);
 
         let connection_monitor_handle = network::connectivity::ConnectionMonitor::spawn(
-            network.clone(),
+            network.downgrade(),
             network_connection_metrics,
-            tx_reconfigure.subscribe(),
         );
 
         let primaries = committee
