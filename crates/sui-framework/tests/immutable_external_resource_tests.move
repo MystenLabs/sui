@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
-module sui::external_resource_tests {
-    use sui::external_resource;
+module sui::immutable_external_resource_tests {
+    use sui::immutable_external_resource;
     use sui::url;
     use std::ascii::Self;
     use sui::digest;
@@ -20,15 +20,15 @@ module sui::external_resource_tests {
 
         let url = url::new_unsafe(url_str);
         let digest = digest::new_sha256_digest(hash);
-        let resource = external_resource::new_immutable_external_resource(url, digest);
+        let resource = immutable_external_resource::new(url, digest);
 
-        assert!(external_resource::immutable_external_resource_url(&resource) == url, 0);
-        assert!(external_resource::immutable_external_resource_digest(&resource) == digest, 0);
+        assert!(immutable_external_resource::url(&resource) == url, 0);
+        assert!(immutable_external_resource::digest(&resource) == digest, 0);
 
         let new_url_str = ascii::string(x"37414243454647");
         let new_url = url::new_unsafe(new_url_str);
 
-        external_resource::immutable_external_resource_update(&mut resource, new_url);
-        assert!(external_resource::immutable_external_resource_url(&resource) == new_url, 0);
+        immutable_external_resource::update(&mut resource, new_url);
+        assert!(immutable_external_resource::url(&resource) == new_url, 0);
     }
 }
