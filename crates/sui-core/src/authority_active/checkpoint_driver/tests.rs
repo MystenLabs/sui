@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
@@ -12,9 +12,11 @@ use crate::authority_active::checkpoint_driver::CheckpointMetrics;
 use std::{collections::BTreeSet, sync::Arc, time::Duration};
 use sui_types::messages::ExecutionStatus;
 
+use sui_macros::*;
+
 use crate::checkpoints::checkpoint_tests::checkpoint_tests_setup;
 
-#[tokio::test(flavor = "current_thread", start_paused = true)]
+#[sim_test]
 async fn checkpoint_active_flow_happy_path() {
     use telemetry_subscribers::init_for_testing;
     init_for_testing();
@@ -85,7 +87,7 @@ async fn checkpoint_active_flow_happy_path() {
     }
 }
 
-#[tokio::test(flavor = "current_thread", start_paused = true)]
+#[sim_test]
 async fn checkpoint_active_flow_crash_client_with_gossip() {
     use telemetry_subscribers::init_for_testing;
     init_for_testing();
@@ -126,6 +128,7 @@ async fn checkpoint_active_flow_crash_client_with_gossip() {
     }
 
     let sender_aggregator = aggregator.clone();
+    // TODO: duplicated code in the same file `_end_of_sending_join`
     let _end_of_sending_join = tokio::task::spawn(async move {
         while let Some(t) = transactions.pop() {
             // Get a cert
@@ -176,7 +179,7 @@ async fn checkpoint_active_flow_crash_client_with_gossip() {
     }
 }
 
-#[tokio::test(flavor = "current_thread", start_paused = true)]
+#[sim_test]
 async fn checkpoint_active_flow_crash_client_no_gossip() {
     use telemetry_subscribers::init_for_testing;
     init_for_testing();
@@ -267,7 +270,7 @@ async fn checkpoint_active_flow_crash_client_no_gossip() {
     }
 }
 
-#[tokio::test(flavor = "current_thread", start_paused = true)]
+#[sim_test]
 async fn test_empty_checkpoint() {
     use telemetry_subscribers::init_for_testing;
     init_for_testing();

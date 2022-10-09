@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use arc_swap::ArcSwap;
 use config::{BlockSynchronizerParameters, Committee, Parameters, WorkerId};
@@ -29,7 +29,7 @@ use types::{
     ReadCausalRequest, ReconfigureNotification, RemoveCollectionsRequest, RetrievalResult,
     Transaction, ValidatorClient,
 };
-use worker::Worker;
+use worker::{metrics::initialise_metrics, Worker};
 
 #[tokio::test]
 async fn test_get_collections() {
@@ -114,6 +114,7 @@ async fn test_get_collections() {
         parameters.clone(),
         store.header_store.clone(),
         store.certificate_store.clone(),
+        store.proposer_store.clone(),
         store.payload_store.clone(),
         store.vote_digest_store,
         /* tx_consensus */ tx_new_certificates,
@@ -132,7 +133,7 @@ async fn test_get_collections() {
     );
 
     let registry = Registry::new();
-    let metrics = worker::metrics::initialise_metrics(&registry);
+    let metrics = initialise_metrics(&registry);
 
     // Spawn a `Worker` instance.
     Worker::spawn(
@@ -307,6 +308,7 @@ async fn test_remove_collections() {
         parameters.clone(),
         store.header_store.clone(),
         store.certificate_store.clone(),
+        store.proposer_store.clone(),
         store.payload_store.clone(),
         store.vote_digest_store.clone(),
         /* tx_consensus */ tx_new_certificates,
@@ -349,7 +351,7 @@ async fn test_remove_collections() {
     );
 
     let registry = Registry::new();
-    let metrics = worker::metrics::initialise_metrics(&registry);
+    let metrics = initialise_metrics(&registry);
 
     // Spawn a `Worker` instance.
     Worker::spawn(
@@ -402,15 +404,15 @@ async fn test_remove_collections() {
 
     assert_eq!(Empty {}, actual_result);
 
-    assert!(
+    assert_eq!(
         store
             .certificate_store
             .read_all(collection_ids.clone())
             .unwrap()
             .iter()
             .filter(|c| c.is_some())
-            .count()
-            == 0,
+            .count(),
+        0,
         "Certificate shouldn't exist"
     );
 
@@ -522,6 +524,7 @@ async fn test_read_causal_signed_certificates() {
         primary_1_parameters.clone(),
         primary_store_1.header_store.clone(),
         primary_store_1.certificate_store.clone(),
+        primary_store_1.proposer_store.clone(),
         primary_store_1.payload_store.clone(),
         primary_store_1.vote_digest_store.clone(),
         /* tx_consensus */ tx_new_certificates,
@@ -564,6 +567,7 @@ async fn test_read_causal_signed_certificates() {
         primary_2_parameters.clone(),
         primary_store_2.header_store,
         primary_store_2.certificate_store,
+        primary_store_2.proposer_store,
         primary_store_2.payload_store,
         primary_store_2.vote_digest_store,
         /* tx_consensus */ tx_new_certificates_2,
@@ -737,6 +741,7 @@ async fn test_read_causal_unsigned_certificates() {
         primary_1_parameters.clone(),
         primary_store_1.header_store.clone(),
         primary_store_1.certificate_store.clone(),
+        primary_store_1.proposer_store.clone(),
         primary_store_1.payload_store.clone(),
         primary_store_1.vote_digest_store.clone(),
         /* tx_consensus */ tx_new_certificates,
@@ -772,6 +777,7 @@ async fn test_read_causal_unsigned_certificates() {
         primary_2_parameters.clone(),
         primary_store_2.header_store,
         primary_store_2.certificate_store,
+        primary_store_2.proposer_store,
         primary_store_2.payload_store,
         primary_store_2.vote_digest_store,
         /* tx_consensus */ tx_new_certificates_2,
@@ -936,6 +942,7 @@ async fn test_get_collections_with_missing_certificates() {
         parameters.clone(),
         store_primary_1.header_store,
         store_primary_1.certificate_store,
+        store_primary_1.proposer_store,
         store_primary_1.payload_store,
         store_primary_1.vote_digest_store,
         /* tx_consensus */ tx_new_certificates_1,
@@ -954,7 +961,7 @@ async fn test_get_collections_with_missing_certificates() {
     );
 
     let registry_1 = Registry::new();
-    let metrics_1 = worker::metrics::initialise_metrics(&registry_1);
+    let metrics_1 = initialise_metrics(&registry_1);
 
     // Spawn a `Worker` instance for primary 1.
     Worker::spawn(
@@ -987,6 +994,7 @@ async fn test_get_collections_with_missing_certificates() {
         parameters.clone(),
         store_primary_2.header_store,
         store_primary_2.certificate_store,
+        store_primary_2.proposer_store,
         store_primary_2.payload_store,
         store_primary_2.vote_digest_store,
         /* tx_consensus */ tx_new_certificates_2,
@@ -1003,7 +1011,7 @@ async fn test_get_collections_with_missing_certificates() {
     );
 
     let registry_2 = Registry::new();
-    let metrics_2 = worker::metrics::initialise_metrics(&registry_2);
+    let metrics_2 = initialise_metrics(&registry_2);
 
     // Spawn a `Worker` instance for primary 2.
     Worker::spawn(

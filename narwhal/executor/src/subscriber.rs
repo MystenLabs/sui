@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::notifier::BatchIndex;
 use crate::{errors::SubscriberResult, metrics::ExecutorMetrics};
@@ -29,7 +29,7 @@ use tokio::{
     sync::{oneshot, watch},
     task::JoinHandle,
 };
-use tracing::{debug, error};
+use tracing::{debug, error, warn};
 use tracing::{info, instrument};
 use types::{metered_channel, Batch, BatchDigest, Certificate, ReconfigureNotification};
 
@@ -120,8 +120,8 @@ impl<Network: SubscriberNetwork> Subscriber<Network> {
             for future in futures {
                 // todo - limit number pending futures on startup
                 waiting.push_back(future);
-                self.metrics.subscriber_recovered_certificates_count.inc();
             }
+            self.metrics.subscriber_recovered_certificates_count.inc();
         }
 
         // Listen to sequenced consensus message and process them.
@@ -172,8 +172,13 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
         &self,
         deliver: ConsensusOutput,
     ) -> Vec<impl Future<Output = (BatchIndex, Batch)> + '_> {
+        self.metrics
+            .subscriber_current_round
+            .set(deliver.certificate.round() as i64);
+        self.metrics.subscriber_processed_certificates.inc();
         debug!("Fetching payload for {:?}", deliver);
-        let mut ret = vec![];
+        let mut ret = Vec::with_capacity(deliver.certificate.header.payload.len());
+        let deliver = Arc::new(deliver);
         for (batch_index, (digest, worker_id)) in
             deliver.certificate.header.payload.iter().enumerate()
         {
@@ -215,7 +220,9 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
         for worker in workers {
             let future = self.fetch_from_worker(stagger, worker, digest);
             futures.push(future.boxed());
-            stagger += Duration::from_secs(1);
+            // TODO: Make this a parameter, and also record workers / authorities that are down
+            //       to request from them batches later.
+            stagger += Duration::from_millis(200);
         }
         let (batch, _, _) = futures::future::select_all(futures).await;
         batch
@@ -249,9 +256,12 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
         digest: BatchDigest,
     ) -> Batch {
         tokio::time::sleep(stagger_delay).await;
+        // TODO: Make these config parameters
         let max_timeout = Duration::from_secs(60);
         let mut timeout = Duration::from_secs(10);
+        let mut attempt = 0usize;
         loop {
+            attempt += 1;
             let deadline = Instant::now() + timeout;
             let request_batch_guard =
                 PendingGuard::make_inc(&self.metrics.pending_remote_request_batch);
@@ -265,8 +275,8 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
                     "Error retrieving payload {} from {}: {}",
                     digest, worker, err
                 ),
-                Err(_elapsed) => debug!("Timeout retrieving payload {} from {}",
-                    digest, worker
+                Err(_elapsed) => warn!("Timeout retrieving payload {} from {} attempt {}",
+                    digest, worker, attempt
                 ),
             }
             timeout += timeout / 2;

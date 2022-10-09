@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 mod errors;
 mod state;
@@ -90,11 +90,11 @@ impl Executor {
             tx_reconfigure.subscribe(),
             rx_consensus,
             tx_notifier,
-            arc_metrics,
+            arc_metrics.clone(),
             restored_consensus_output,
         );
 
-        let notifier_handler = Notifier::spawn(rx_notifier, execution_state);
+        let notifier_handler = Notifier::spawn(rx_notifier, execution_state, arc_metrics);
 
         // Return the handle.
         info!("Consensus subscriber successfully started");

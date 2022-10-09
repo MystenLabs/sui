@@ -29,9 +29,16 @@
 
         &::before {
             position: absolute;
-            right: 3vw;
+            right: 0;
+            margin-right: 30px;
             margin-top: 12px;
             color: colors.$gray-70;
         }
+    }
+}
+
+.default-coin {
+    i {
+        font-size: 24px;
     }
 }

@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::anyhow;
@@ -41,7 +41,7 @@ use tracing::{error, info, warn};
 
 use crate::metrics::GrpcMetrics;
 use sui_core::authority_client::NetworkAuthorityClientMetrics;
-use sui_core::epoch::epoch_store::EpochStore;
+use sui_core::epoch::committee_store::CommitteeStore;
 use sui_json_rpc::event_api::EventReadApiImpl;
 use sui_json_rpc::event_api::EventStreamingApiImpl;
 use sui_json_rpc::http_server::HttpServerHandle;
@@ -54,6 +54,9 @@ use sui_types::crypto::KeypairTraits;
 
 pub mod admin;
 pub mod metrics;
+
+mod handle;
+pub use handle::SuiNodeHandle;
 
 pub struct SuiNode {
     grpc_server: tokio::task::JoinHandle<Result<()>>,
@@ -68,6 +71,9 @@ pub struct SuiNode {
     active: Arc<ActiveAuthority<NetworkAuthorityClient>>,
     transaction_orchestrator: Option<Arc<TransactiondOrchestrator<NetworkAuthorityClient>>>,
     _prometheus_registry: Registry,
+
+    #[cfg(msim)]
+    sim_node: sui_simulator::runtime::NodeHandle,
 }
 
 impl SuiNode {
@@ -85,7 +91,7 @@ impl SuiNode {
         let secret = Arc::pin(config.protocol_key_pair().copy());
         let committee = genesis.committee()?;
         let store = Arc::new(AuthorityStore::open(&config.db_path().join("store"), None));
-        let epoch_store = Arc::new(EpochStore::new(
+        let committee_store = Arc::new(CommitteeStore::new(
             config.db_path().join("epochs"),
             &committee,
             None,
@@ -94,7 +100,7 @@ impl SuiNode {
         let checkpoint_store = Arc::new(Mutex::new(CheckpointStore::open(
             &config.db_path().join("checkpoints"),
             None,
-            committee.epoch,
+            &committee,
             config.protocol_public_key(),
             secret.clone(),
         )?));
@@ -129,7 +135,7 @@ impl SuiNode {
                 config.protocol_public_key(),
                 secret,
                 store,
-                epoch_store.clone(),
+                committee_store.clone(),
                 index_store.clone(),
                 event_store,
                 transaction_streamer,
@@ -165,7 +171,7 @@ impl SuiNode {
         }?;
         let net = AuthorityAggregator::new(
             state.clone_committee(),
-            epoch_store,
+            committee_store,
             authority_clients,
             AuthAggMetrics::new(&prometheus_registry),
             SafeClientMetrics::new(&prometheus_registry),
@@ -311,6 +317,9 @@ impl SuiNode {
             active: active_authority,
             transaction_orchestrator,
             _prometheus_registry: prometheus_registry,
+
+            #[cfg(msim)]
+            sim_node: sui_simulator::runtime::NodeHandle::current(),
         };
 
         info!("SuiNode started!");

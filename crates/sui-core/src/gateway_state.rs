@@ -1,5 +1,5 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use futures::future::join_all;
@@ -58,7 +58,7 @@ use sui_json_rpc_types::{
 };
 use sui_types::error::SuiError::ObjectLockConflict;
 
-use crate::epoch::epoch_store::EpochStore;
+use crate::epoch::committee_store::CommitteeStore;
 use tap::TapFallible;
 
 #[cfg(test)]
@@ -164,7 +164,7 @@ impl GatewayMetrics {
     }
 
     pub fn new_for_tests() -> Self {
-        let registry = prometheus::Registry::new();
+        let registry = Registry::new();
         Self::new(&registry)
     }
 }
@@ -192,14 +192,18 @@ impl<A> GatewayState<A> {
     ) -> SuiResult<Self> {
         let gateway_metrics = GatewayMetrics::new(prometheus_registry);
         let auth_agg_metrics = AuthAggMetrics::new(prometheus_registry);
-        let safe_client_metrics = SafeClientMetrics::new(&prometheus::Registry::new());
+        let safe_client_metrics = SafeClientMetrics::new(&Registry::new());
         let gateway_store = Arc::new(GatewayStore::open(&base_path.join("store"), None));
-        let epoch_store = Arc::new(EpochStore::new(base_path.join("epochs"), &committee, None));
+        let committee_store = Arc::new(CommitteeStore::new(
+            base_path.join("epochs"),
+            &committee,
+            None,
+        ));
         Self::new_with_authorities(
             gateway_store,
             AuthorityAggregator::new(
                 committee,
-                epoch_store,
+                committee_store,
                 authority_clients,
                 auth_agg_metrics,
                 safe_client_metrics,
@@ -1225,6 +1229,7 @@ where
         let mut objects = BTreeMap::new();
         let mut args = Vec::with_capacity(json_args.len());
 
+        // TODO: duplicated code in transaction_builder.rs
         for json_arg in json_args {
             args.push(match json_arg {
                 SuiJsonCallArg::Object(id) => {

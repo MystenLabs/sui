@@ -1,5 +1,5 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 #![warn(
     future_incompatible,
@@ -9,7 +9,9 @@
 )]
 #![allow(clippy::async_yields_async)]
 
+pub mod admin;
 mod bounded_executor;
+pub mod connectivity;
 pub mod metrics;
 mod p2p;
 mod retry;

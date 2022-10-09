@@ -4,11 +4,14 @@ jobs:
   diff:
     runs-on: [ubuntu-latest]
     outputs:
-      isClient: ${{ contains(fromJson(steps.diff.outputs.packages), 'sui-explorer') }}
+      isClient: ${{ contains(fromJson(steps.pnpm.outputs.packages), 'sui-explorer') || steps.diff.outputs.isRust }}
     steps:
       - uses: actions/checkout@v3
-      - name: Detect Changes
+      - name: Detect Changes (pnpm)
         uses: "./.github/actions/pnpm-diffs"
+        id: pnpm
+      - name: Detect Changes (diff)
+        uses: "./.github/actions/diffs"
         id: diff
   client_checks:
     name: Lint, Test & Build

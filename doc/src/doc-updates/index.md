@@ -4,7 +4,7 @@ title: Sui Documentation Updates
 
 This topic lists the significant updates to the [Sui documentation](https://docs.sui.io) site so that you can easily identify new or updated information. 
 
-## Week ending 10/07/22
+## Week ending 10/08/22
 
 | Topic | Update | 
 | :------ | :------- |

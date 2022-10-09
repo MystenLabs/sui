@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::{anyhow, bail};
@@ -486,10 +486,11 @@ fn resolve_call_arg(
             idx,
             &arg.to_json_value(),
         )?)),
-        SignatureToken::Vector(inner) => {
-            if let SignatureToken::Struct(_) = &**inner {
+        SignatureToken::Vector(inner) => match &**inner {
+            SignatureToken::Struct(_) | SignatureToken::StructInstantiation(_, _) => {
                 Ok(SuiJsonCallArg::ObjVec(resolve_object_vec_arg(idx, arg)?))
-            } else {
+            }
+            _ => {
                 bail!(
                     "Unexpected non-primitive vector arg {:?} at {} with value {:?}",
                     param,
@@ -497,7 +498,7 @@ fn resolve_call_arg(
                     arg
                 );
             }
-        }
+        },
         _ => bail!(
             "Unexpected non-primitive arg {:?} at {} with value {:?}",
             param,

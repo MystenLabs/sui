@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use std::path::Path;
@@ -195,7 +195,7 @@ fn test_basic_args_linter_pure_args() {
             Value::from(good_hex_val),
             MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8)),
             Some(
-                bcs::to_bytes(&hex::decode(&good_hex_val.trim_start_matches(HEX_PREFIX)).unwrap())
+                bcs::to_bytes(&hex::decode(good_hex_val.trim_start_matches(HEX_PREFIX)).unwrap())
                     .unwrap(),
             ),
         ),
@@ -504,7 +504,7 @@ fn test_basic_args_linter_top_level() {
     assert!(matches!(args[0], SuiJsonCallArg::ObjVec { .. }));
 
     if let SuiJsonCallArg::ObjVec(vec) = &args[0] {
-        assert!(vec.len() == 2);
+        assert_eq!(vec.len(), 2);
         assert_eq!(
             vec[0],
             ObjectID::from_hex_literal(&format!("0x{:02x}", object_id_raw1)).unwrap()

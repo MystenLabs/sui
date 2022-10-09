@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 import { exec } from 'child_process';
@@ -172,7 +172,10 @@ const commonConfig: () => Promise<Configuration> = async () => {
                 expand: true,
             }),
             new DefinePlugin({
-                'typeof window': JSON.stringify(typeof {}),
+                // This brakes bg service, js-sha3 checks if window is defined,
+                // but it's not defined in background service.
+                // TODO: check if this is worth investigating a fix and maybe do a separate build for UI and bg?
+                // 'typeof window': JSON.stringify(typeof {}),
                 'process.env.NODE_DEBUG': false,
             }),
             new ProvidePlugin({

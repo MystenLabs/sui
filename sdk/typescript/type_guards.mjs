@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 import { readFile, writeFile } from 'fs/promises';
@@ -6,7 +6,7 @@ import { generate } from 'ts-auto-guard';
 
 const GUARD_FILES = ['src/rpc/client.guard.ts', 'src/types/index.guard.ts'];
 const LICENSE =
-  '// Copyright (c) 2022, Mysten Labs, Inc.\n// SPDX-License-Identifier: Apache-2.0\n\n/* eslint-disable */\n\n';
+  '// Copyright (c) Mysten Labs, Inc.\n// SPDX-License-Identifier: Apache-2.0\n\n/* eslint-disable */\n\n';
 
 async function main() {
   const tsconfig = new URL('./tsconfig.json', import.meta.url);

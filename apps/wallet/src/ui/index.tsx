@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 import { createRoot } from 'react-dom/client';
@@ -20,6 +20,7 @@ async function init() {
     if (process.env.NODE_ENV === 'development') {
         Object.defineProperty(window, 'store', { value: store });
     }
+    await thunkExtras.featureGating.init();
     store.dispatch(initAppType(getFromLocationSearch(window.location.search)));
     await store.dispatch(initNetworkFromStorage()).unwrap();
     await thunkExtras.background.init(store.dispatch);

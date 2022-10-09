@@ -1,5 +1,5 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 #![warn(
     future_incompatible,
@@ -34,7 +34,7 @@ mod metrics;
 mod certificate_tests;
 
 pub use crate::{
-    block_remover::{BlockRemover, BlockRemoverCommand, DeleteBatchMessage},
+    block_remover::BlockRemover,
     block_synchronizer::{
         mock::MockBlockSynchronizer,
         responses::{CertificatesResponse, PayloadAvailabilityResponse},

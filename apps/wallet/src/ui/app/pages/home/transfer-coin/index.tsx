@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 import { Formik } from 'formik';
@@ -121,11 +121,11 @@ function TransferCoinPage() {
 
                 resetForm();
                 const txDigest = response.certificate.transactionDigest;
-                const recieptUrl = `/receipt?txdigest=${encodeURIComponent(
+                const receiptUrl = `/receipt?txdigest=${encodeURIComponent(
                     txDigest
                 )}&transfer=coin`;
 
-                navigate(recieptUrl);
+                navigate(receiptUrl);
             } catch (e) {
                 setSendError((e as SerializedError).message || null);
             }

@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
@@ -63,7 +63,7 @@ macro_rules! check_epoch {
 
         if expected_epoch != observed_epoch {
             // Most likely indicates a reconfiguration bug.
-            error!(?expected_epoch, ?observed_epoch, "Epoch mis-match");
+            error!(?expected_epoch, ?observed_epoch, "Epoch mismatch");
             return Err(SuiError::WrongEpoch { expected_epoch });
         }
     };
@@ -546,7 +546,7 @@ where
         let effects = self.get_true_effects(epoch_id, &cert).await?;
 
         // Must release permit before enqueuing new work to prevent deadlock.
-        std::mem::drop(permit);
+        drop(permit);
 
         let missing_parents = self.get_missing_parents(&effects.effects)?;
         self.enqueue_parent_execution_requests(epoch_id, digest, &missing_parents, false)
@@ -589,7 +589,7 @@ where
                 let effects = self.get_true_effects(epoch_id, &cert).await?;
 
                 // Must release permit before enqueuing new work to prevent deadlock.
-                std::mem::drop(permit);
+                drop(permit);
 
                 let missing_parents = self.get_missing_parents(&effects.effects)?;
                 self.enqueue_parent_execution_requests(epoch_id, digest, &missing_parents, true)
@@ -819,7 +819,7 @@ where
         effects: &SignedTransactionEffects,
     ) -> SuiResult {
         // Must drop the permit before waiting to avoid deadlock.
-        std::mem::drop(permit);
+        drop(permit);
 
         for parent in effects.effects.dependencies.iter() {
             let (_, mut rx) = self.pending_parents.wait(parent);
@@ -833,10 +833,9 @@ where
             // able to start.
             rx.recv()
                 .await
-                .map(|_| ())
                 .map_err(|e| SuiError::GenericAuthorityError {
                     error: format!("{:?}", e),
-                })?
+                })??;
         }
 
         if cfg!(debug_assertions) {
@@ -1083,5 +1082,31 @@ impl NodeSyncHandle {
         let sender = self.sender.clone();
         Self::send_msg_with_tx(sender, DigestsMessage::new(epoch_id, &digests, peer, tx)).await?;
         Ok(Self::map_rx(rx))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_display_execution_driver_error() {
+        let digest = TransactionDigest::new([11u8; 32]);
+        let err0 = SuiError::ExecutionDriverError {
+            digest,
+            msg: "test 0".into(),
+            errors: Vec::new(),
+        };
+        let err1 = SuiError::ExecutionDriverError {
+            digest,
+            msg: "test 1".into(),
+            errors: vec![err0],
+        };
+        let err2 = SuiError::ExecutionDriverError {
+            digest,
+            msg: "test 2".into(),
+            errors: vec![err1],
+        };
+        assert_eq!(format!("{}", err2), "ExecutionDriver error for CwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCws=: test 2 - Caused by : [ ExecutionDriver error for CwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCws=: test 1 - Caused by : [ ExecutionDriver error for CwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCws=: test 0 - Caused by : [  ] ] ]");
     }
 }

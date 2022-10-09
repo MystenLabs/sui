@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 #![warn(
     future_incompatible,
@@ -26,6 +26,7 @@ pub mod event;
 pub mod gas;
 pub mod gas_coin;
 pub mod id;
+pub mod intent;
 pub mod message_envelope;
 pub mod messages;
 pub mod messages_checkpoint;

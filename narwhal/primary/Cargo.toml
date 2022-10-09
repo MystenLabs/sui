@@ -28,9 +28,9 @@ rand = { version = "0.8.5", features = ["small_rng"] }
 roaring = "0.10.1"
 serde = { version = "1.0.144", features = ["derive"] }
 thiserror = "1.0.35"
-tokio = { version = "1.20.1", features = ["sync", "rt", "macros"] }
+tokio = { version = "1.20.1", features = ["sync", "rt", "macros", "time", "test-util"] }
 tokio-util = { version = "0.7.4", features = ["codec"] }
-tonic = "0.7.2"
+tonic = "0.8.2"
 tower = { version = "0.4.13", features = ["full"] }
 tracing = "0.1.36"
 tap = "1.0.1"
@@ -45,8 +45,8 @@ mysten-network.workspace = true
 store.workspace = true
 workspace-hack.workspace = true
 
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "b145cbcf4a1917197e2b9ee6a1523afdb623dbf2" }
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "b145cbcf4a1917197e2b9ee6a1523afdb623dbf2" }
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "57c4af7d6cdbf47633e6715bcd67d98f300e2fd8" }
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "57c4af7d6cdbf47633e6715bcd67d98f300e2fd8" }
 
 [dev-dependencies]
 arc-swap = { version = "1.5.1", features = ["serde"] }
@@ -65,6 +65,8 @@ tracing = "0.1.36"
 tracing-test = "0.2.3"
 worker = { path = "../worker", package = "narwhal-worker" }
 storage = { path = "../storage", package = "narwhal-storage" }
+reqwest = { version = "0.11.12", features = ["json"] }
+hex = "0.4.3"
 
 [features]
 benchmark = []

@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use anyhow::{anyhow, Result};
 use clap::*;
@@ -28,11 +28,10 @@ use sui_core::authority_aggregator::AuthAggMetrics;
 use sui_core::authority_aggregator::AuthorityAggregator;
 use sui_core::authority_client::AuthorityAPI;
 use sui_core::authority_client::NetworkAuthorityClient;
-use sui_core::epoch::epoch_store::EpochStore;
+use sui_core::epoch::committee_store::CommitteeStore;
 use sui_core::gateway_state::GatewayState;
 use sui_core::safe_client::SafeClientMetrics;
 use sui_node::metrics;
-use sui_node::SuiNode;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress;
 use sui_types::batch::UpdateItem;
@@ -300,7 +299,7 @@ async fn main() -> Result<()> {
                 .unwrap();
             server_runtime.block_on(async move {
                 // Setup the network
-                let nodes: Vec<SuiNode> = spawn_test_authorities(cloned_gas, &cloned_config).await;
+                let nodes: Vec<_> = spawn_test_authorities(cloned_gas, &cloned_config).await;
                 let handles: Vec<_> = nodes.into_iter().map(move |node| node.wait()).collect();
                 cloned_barrier.wait().await;
                 let mut follower_handles = vec![];
@@ -344,15 +343,15 @@ async fn main() -> Result<()> {
             })?;
         let config: GatewayConfig = PersistedConfig::read(&config_path)?;
         let committee = GatewayState::make_committee(&config)?;
-        let registry = prometheus::Registry::new();
+        let registry = Registry::new();
         let authority_clients = GatewayState::make_authority_clients(
             &config,
             NetworkAuthorityClientMetrics::new(&registry),
         );
-        let epoch_store = Arc::new(EpochStore::new_for_testing(&committee));
+        let committee_store = Arc::new(CommitteeStore::new_for_testing(&committee));
         let aggregator = AuthorityAggregator::new(
             committee,
-            epoch_store,
+            committee_store,
             authority_clients,
             AuthAggMetrics::new(&registry),
             SafeClientMetrics::new(&registry),
@@ -410,10 +409,10 @@ async fn main() -> Result<()> {
                 NetworkAuthorityClientMetrics::new(&registry),
             );
 
-            let epoch_store = Arc::new(EpochStore::new_for_testing(&committee));
+            let committee_store = Arc::new(CommitteeStore::new_for_testing(&committee));
             let aggregator = AuthorityAggregator::new(
                 committee,
-                epoch_store,
+                committee_store,
                 authority_clients,
                 AuthAggMetrics::new(&registry),
                 SafeClientMetrics::new(&registry),
@@ -464,14 +463,14 @@ async fn main() -> Result<()> {
                         }
                         let transfer_object_weight = 1.0 - shared_counter_weight;
                         let transfer_object_qps = target_qps - shared_counter_qps;
-                        let trasnfer_object_num_workers =
+                        let transfer_object_num_workers =
                             (transfer_object_weight * num_workers as f32).ceil() as u64;
-                        let trasnfer_object_max_ops =
+                        let transfer_object_max_ops =
                             (transfer_object_qps * in_flight_ratio) as u64;
                         if let Some(mut transfer_object_workload) = make_transfer_object_workload(
                             transfer_object_qps,
-                            trasnfer_object_num_workers,
-                            trasnfer_object_max_ops,
+                            transfer_object_num_workers,
+                            transfer_object_max_ops,
                             opts.num_transfer_accounts,
                             &primary_gas_id,
                             owner,

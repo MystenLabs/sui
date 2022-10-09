@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::block_synchronizer::handler::Handler;
 use config::{Committee, SharedWorkerCache};
@@ -160,8 +160,8 @@ type RequestKey = Vec<u8>;
 ///
 /// #[tokio::main(flavor = "current_thread")]
 /// # async fn main() {
-///     let (tx_commands, rx_commands) = test_utils::test_channel!(1);
-///     let (tx_batches, rx_batches) = test_utils::test_channel!(1);
+///     let (tx_commands, rx_commands) = test_channel!(1);
+///     let (tx_batches, rx_batches) = test_channel!(1);
 ///     let (tx_get_block, mut rx_get_block) = oneshot::channel();
 ///
 ///     let name = PublicKey::default();

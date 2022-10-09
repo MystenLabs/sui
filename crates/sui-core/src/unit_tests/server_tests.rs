@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
@@ -128,11 +128,12 @@ async fn test_subscription() {
 
     let tx_zero = ExecutionDigests::random();
     for _i in 0u64..105 {
-        let ticket = state.batch_notifier.ticket().expect("all good");
+        let ticket = state.batch_notifier.ticket(false).expect("all good");
         db.tables
             .executed_sequence
             .insert(&ticket.seq(), &tx_zero)
             .expect("Failed to write.");
+        ticket.notify();
     }
     println!("Sent tickets.");
 
@@ -179,12 +180,16 @@ async fn test_subscription() {
     let _handle2 = tokio::spawn(async move {
         for i in 105..120 {
             tokio::time::sleep(Duration::from_millis(20)).await;
-            let ticket = inner_server2.batch_notifier.ticket().expect("all good");
+            let ticket = inner_server2
+                .batch_notifier
+                .ticket(false)
+                .expect("all good");
             db2.tables
                 .executed_sequence
                 .insert(&ticket.seq(), &tx_zero)
                 .expect("Failed to write.");
             println!("Send item {i}");
+            ticket.notify();
         }
     });
 
@@ -253,7 +258,10 @@ async fn test_subscription() {
 
     loop {
         // Send a transaction
-        let ticket = inner_server2.batch_notifier.ticket().expect("all good");
+        let ticket = inner_server2
+            .batch_notifier
+            .ticket(false)
+            .expect("all good");
         db3.tables
             .executed_sequence
             .insert(&ticket.seq(), &tx_zero)
@@ -278,6 +286,7 @@ async fn test_subscription() {
                 }
             }
         }
+        ticket.notify();
     }
 
     assert!(num_batches >= 2);
@@ -314,7 +323,7 @@ async fn test_subscription_safe_client() {
             state: state.clone(),
             fault_config: LocalAuthorityClientFaultConfig::default(),
         },
-        state.epoch_store().clone(),
+        state.committee_store().clone(),
         state.name,
         SafeClientMetrics::new_for_tests(),
     );
@@ -328,13 +337,13 @@ async fn test_subscription_safe_client() {
 
     let tx_zero = ExecutionDigests::random();
     for _i in 0u64..105 {
-        let ticket = server.state.batch_notifier.ticket().expect("all good");
+        let ticket = server.state.batch_notifier.ticket(false).expect("all good");
         db.tables
             .executed_sequence
             .insert(&ticket.seq(), &tx_zero)
             .expect("Failed to write.");
-        drop(ticket);
         tokio::time::sleep(Duration::from_millis(10)).await;
+        ticket.notify();
     }
     println!("Sent tickets.");
 
@@ -390,13 +399,14 @@ async fn test_subscription_safe_client() {
             let ticket = inner_server2
                 .state
                 .batch_notifier
-                .ticket()
+                .ticket(false)
                 .expect("all good");
             db2.tables
                 .executed_sequence
                 .insert(&ticket.seq(), &tx_zero)
                 .expect("Failed to write.");
             println!("Send item {i}");
+            ticket.notify();
         }
     });
 
@@ -463,7 +473,7 @@ async fn test_subscription_safe_client() {
         let ticket = inner_server2
             .state
             .batch_notifier
-            .ticket()
+            .ticket(false)
             .expect("all good");
         db3.tables
             .executed_sequence
@@ -472,6 +482,7 @@ async fn test_subscription_safe_client() {
         println!("Send item {i}");
         i += 1;
         tokio::time::sleep(Duration::from_millis(20)).await;
+        ticket.notify();
 
         // Then we wait to receive
         if let Some(data) = stream1.next().await {

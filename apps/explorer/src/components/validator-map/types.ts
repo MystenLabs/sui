@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 export interface Feature {
@@ -11,6 +11,7 @@ export interface Feature {
 export interface NodeLocation {
     count: number;
     city: string;
-    countryCode: string;
-    location: [lat: number, long: number];
+    region: string;
+    country: string;
+    location: string;
 }

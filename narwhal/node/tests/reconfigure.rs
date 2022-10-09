@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use arc_swap::ArcSwap;
 use bytes::Bytes;
@@ -158,6 +158,7 @@ async fn run_client(
 
 #[tokio::test]
 async fn restart() {
+    telemetry_subscribers::init_for_testing();
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
     let worker_cache = fixture.shared_worker_cache();

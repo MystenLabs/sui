@@ -1,5 +1,5 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority::AuthorityState;
@@ -67,14 +67,17 @@ pub trait AuthorityAPI {
         request: CheckpointRequest,
     ) -> Result<CheckpointResponse, SuiError>;
 
-    async fn handle_epoch(&self, request: EpochRequest) -> Result<EpochResponse, SuiError>;
+    async fn handle_committee_info_request(
+        &self,
+        request: CommitteeInfoRequest,
+    ) -> Result<CommitteeInfoResponse, SuiError>;
 }
 
 pub type BatchInfoResponseItemStream = BoxStream<'static, Result<BatchInfoResponseItem, SuiError>>;
 
 #[derive(Clone)]
 pub struct NetworkAuthorityClient {
-    client: ValidatorClient<tonic::transport::Channel>,
+    client: ValidatorClient<Channel>,
     metrics: Arc<NetworkAuthorityClientMetrics>,
 }
 
@@ -98,17 +101,14 @@ impl NetworkAuthorityClient {
         Ok(Self::new(channel, metrics))
     }
 
-    pub fn new(
-        channel: tonic::transport::Channel,
-        metrics: Arc<NetworkAuthorityClientMetrics>,
-    ) -> Self {
+    pub fn new(channel: Channel, metrics: Arc<NetworkAuthorityClientMetrics>) -> Self {
         Self {
             client: ValidatorClient::new(channel),
             metrics,
         }
     }
 
-    fn client(&self) -> ValidatorClient<tonic::transport::Channel> {
+    fn client(&self) -> ValidatorClient<Channel> {
         self.client.clone()
     }
 }
@@ -119,10 +119,7 @@ impl Reconfigurable for NetworkAuthorityClient {
         true
     }
 
-    fn recreate(
-        channel: tonic::transport::Channel,
-        metrics: Arc<NetworkAuthorityClientMetrics>,
-    ) -> Self {
+    fn recreate(channel: Channel, metrics: Arc<NetworkAuthorityClientMetrics>) -> Self {
         NetworkAuthorityClient::new(channel, metrics)
     }
 }
@@ -241,9 +238,17 @@ impl AuthorityAPI for NetworkAuthorityClient {
             .map_err(Into::into)
     }
 
-    async fn handle_epoch(&self, request: EpochRequest) -> Result<EpochResponse, SuiError> {
+    async fn handle_committee_info_request(
+        &self,
+        request: CommitteeInfoRequest,
+    ) -> Result<CommitteeInfoResponse, SuiError> {
+        let _timer = self
+            .metrics
+            .handle_committee_info_request_latency
+            .start_timer();
+
         self.client()
-            .epoch_info(request)
+            .committee_info(request)
             .await
             .map(tonic::Response::into_inner)
             .map_err(Into::into)
@@ -391,10 +396,13 @@ impl AuthorityAPI for LocalAuthorityClient {
         state.handle_checkpoint_request(&request)
     }
 
-    async fn handle_epoch(&self, request: EpochRequest) -> Result<EpochResponse, SuiError> {
+    async fn handle_committee_info_request(
+        &self,
+        request: CommitteeInfoRequest,
+    ) -> Result<CommitteeInfoResponse, SuiError> {
         let state = self.state.clone();
 
-        state.handle_epoch_request(&request)
+        state.handle_committee_info_request(&request)
     }
 }
 
@@ -468,6 +476,7 @@ pub struct NetworkAuthorityClientMetrics {
     pub handle_object_info_request_latency: Histogram,
     pub handle_transaction_info_request_latency: Histogram,
     pub handle_checkpoint_request_latency: Histogram,
+    pub handle_committee_info_request_latency: Histogram,
 }
 
 const LATENCY_SEC_BUCKETS: &[f64] = &[
@@ -515,6 +524,13 @@ impl NetworkAuthorityClientMetrics {
             handle_checkpoint_request_latency: register_histogram_with_registry!(
                 "handle_checkpoint_request_latency",
                 "Latency of handle checkpoint request",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry
+            )
+            .unwrap(),
+            handle_committee_info_request_latency: register_histogram_with_registry!(
+                "handle_committee_info_request_latency",
+                "Latency of handle committee info request",
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry
             )

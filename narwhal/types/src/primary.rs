@@ -1,5 +1,5 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
     error::{DagError, DagResult},
@@ -714,14 +714,10 @@ pub enum ReconfigureNotification {
 #[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum PrimaryWorkerMessage {
-    /// The primary indicates a round update.
-    Cleanup(Round),
     /// Reconfigure the worker.
     Reconfigure(ReconfigureNotification),
     /// The primary requests a batch from the worker
     RequestBatch(BatchDigest),
-    /// Delete the batches, dictated from the provided vector of digest, from the worker node
-    DeleteBatches(Vec<BatchDigest>),
 }
 
 /// Used by the primary to request that the worker sync the target missing batches.
@@ -729,6 +725,12 @@ pub enum PrimaryWorkerMessage {
 pub struct WorkerSynchronizeMessage {
     pub digests: Vec<BatchDigest>,
     pub target: PublicKey,
+}
+
+/// Used by the primary to request that the worker delete the specified batches.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct WorkerDeleteBatchesMessage {
+    pub digests: Vec<BatchDigest>,
 }
 
 #[derive(Clone, Default, Debug, Eq, PartialEq)]
@@ -796,9 +798,6 @@ pub enum WorkerPrimaryMessage {
     OthersBatch(BatchDigest, WorkerId),
     /// The worker sends a requested batch
     RequestedBatch(BatchDigest, Batch),
-    /// When batches are successfully deleted, this message is sent dictating the
-    /// batches that have been deleted from the worker.
-    DeletedBatches(Vec<BatchDigest>),
     /// An error has been returned by worker
     Error(WorkerPrimaryError),
     /// Reconfiguration message sent by the executor (usually upon epoch change).
@@ -809,9 +808,6 @@ pub enum WorkerPrimaryMessage {
 pub enum WorkerPrimaryError {
     #[error("Batch with id {0} has not been found")]
     RequestedBatchNotFound(BatchDigest),
-
-    #[error("An error occurred while deleting batches. None deleted")]
-    ErrorWhileDeletingBatches(Vec<BatchDigest>),
 }
 
 #[derive(Clone, Serialize, Deserialize, Eq, PartialEq, Debug)]

@@ -1,10 +1,9 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::primary::PrimaryWorkerMessage;
 use config::{SharedCommittee, SharedWorkerCache, WorkerCache, WorkerIndex};
 use crypto::PublicKey;
-use network::{P2pNetwork, UnreliableNetwork};
+use network::P2pNetwork;
 use std::{collections::BTreeMap, sync::Arc};
 use tap::TapOptional;
 use tokio::{sync::watch, task::JoinHandle};
@@ -71,18 +70,6 @@ impl StateHandler {
 
             // Trigger cleanup on the primary.
             let _ = self.tx_consensus_round_updates.send(round); // ignore error when receivers dropped.
-
-            // Trigger cleanup on the workers..
-            let addresses = self
-                .worker_cache
-                .load()
-                .our_workers(&self.name)
-                .expect("Our public key or worker id is not in the worker cache")
-                .into_iter()
-                .map(|x| x.name)
-                .collect();
-            let message = PrimaryWorkerMessage::Cleanup(round);
-            self.network.unreliable_broadcast(addresses, &message);
         }
     }
 
@@ -103,6 +90,7 @@ impl StateHandler {
                             // Cleanup the network.
                             self.network.cleanup(self.worker_cache.load().network_diff(committee.keys()));
 
+                            // TODO: Duplicated code in the same file.
                             // Update the worker cache.
                             self.worker_cache.swap(Arc::new(WorkerCache {
                                 epoch: committee.epoch,

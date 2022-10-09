@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 import { Mercator } from '@visx/geo';
@@ -44,7 +44,7 @@ function BaseWorldMap({
         <svg width={width} height={height}>
             <Mercator
                 data={filteredLand}
-                scale={100}
+                scale={105}
                 translate={[centerX, centerY + 20]}
             >
                 {({ features, projection }) => (
