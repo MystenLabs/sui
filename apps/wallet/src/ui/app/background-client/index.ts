@@ -120,8 +120,16 @@ export class BackgroundClient {
     }
 
     public async unlockWallet(password: string) {
-        // TODO: implement
-        throw new Error('Not implemented yet');
+        return await lastValueFrom(
+            this.sendMessage(
+                createMessage<KeyringPayload<'unlock'>>({
+                    type: 'keyring',
+                    method: 'unlock',
+                    args: { password: password },
+                    return: undefined,
+                })
+            ).pipe(take(1))
+        );
     }
 
     public async getMnemonic(password?: string) {

@@ -136,6 +136,12 @@ class Keyring {
                         id
                     )
                 );
+            } else if (
+                isKeyringPayload<'unlock'>(payload, 'unlock') &&
+                payload.args
+            ) {
+                await this.unlock(payload.args.password);
+                uiConnection.send(createMessage({ type: 'done' }, id));
             }
         } catch (e) {
             uiConnection.send(

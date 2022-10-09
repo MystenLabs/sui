@@ -14,6 +14,10 @@ type MethodToPayloads = {
         args: string | undefined;
         return: string;
     };
+    unlock: {
+        args: { password: string };
+        return: never;
+    };
 };
 
 export interface KeyringPayload<Method extends keyof MethodToPayloads>
