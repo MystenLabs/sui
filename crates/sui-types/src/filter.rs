@@ -98,15 +98,22 @@ pub trait Filter<T> {
 
 #[derive(Clone, Debug, JsonSchema, Serialize, Deserialize)]
 pub enum TransactionQuery {
+    // All transaction hashes in ascending order (oldest transaction first), transactions are causal ordered.
     All,
+    // All transaction hashes in descending order (latest transaction first), transactions are causal ordered.
     Latest,
+    // Query by move function.
     MoveFunction {
         package: ObjectID,
         module: Option<String>,
         function: Option<String>,
     },
+    // Query by input object.
     InputObject(ObjectID),
+    // Query by mutated object.
     MutatedObject(ObjectID),
+    // Query by sender address.
     FromAddress(SuiAddress),
+    // Query by recipient address.
     ToAddress(SuiAddress),
 }

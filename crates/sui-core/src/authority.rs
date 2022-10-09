@@ -1761,13 +1761,16 @@ impl AuthorityState {
                     .and_then(|limit| end.checked_sub(limit))
                     .unwrap_or_default();
 
-                self.database
+                let mut txs = self
+                    .database
                     .tables
                     .executed_sequence
                     .iter()
                     .skip_to(&start)?
                     .map(|(_, digest)| digest.transaction)
-                    .collect()
+                    .collect::<Vec<_>>();
+                txs.reverse();
+                txs
             }
         })
     }

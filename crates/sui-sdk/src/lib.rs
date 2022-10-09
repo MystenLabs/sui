@@ -23,7 +23,7 @@ use rpc_types::{
 };
 pub use sui_config::gateway;
 use sui_config::gateway::GatewayConfig;
-use sui_core::gateway_state::{GatewayClient, GatewayState};
+use sui_core::gateway_state::{GatewayClient, GatewayState, TxSeqNumber};
 pub use sui_json as json;
 use sui_json_rpc::api::EventStreamingApiClient;
 use sui_json_rpc::api::RpcBcsApiClient;
@@ -302,6 +302,17 @@ impl ReadApi {
         Ok(match &*self.api {
             SuiClientApi::Rpc(c) => c.http.get_recent_transactions(count).await?,
             SuiClientApi::Embedded(c) => c.get_recent_transactions(count)?,
+        })
+    }
+
+    pub async fn get_transactions_in_range(
+        &self,
+        start: TxSeqNumber,
+        end: TxSeqNumber,
+    ) -> anyhow::Result<Vec<TransactionDigest>> {
+        Ok(match &*self.api {
+            SuiClientApi::Rpc(c) => c.http.get_transactions_in_range(start, end).await?,
+            SuiClientApi::Embedded(c) => c.get_transactions_in_range(start, end)?,
         })
     }
 
