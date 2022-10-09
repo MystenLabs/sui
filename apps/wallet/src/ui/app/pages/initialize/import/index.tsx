@@ -6,9 +6,9 @@ import { useNavigate } from 'react-router-dom';
 
 import StepOne from './steps/StepOne';
 import StepTwo from './steps/StepTwo';
+import CardLayout from '_app/shared/card-layout';
 import { WALLET_ENCRYPTION_ENABLED } from '_app/wallet/constants';
 import { useAppDispatch } from '_hooks';
-import CardLayout from '_pages/initialize/shared/card-layout';
 import { createMnemonic } from '_redux/slices/account';
 
 const initialValues = {
