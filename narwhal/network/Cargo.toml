@@ -27,8 +27,8 @@ serde = "1.0.144"
 workspace-hack.workspace = true
 eyre = "0.6.8"
 
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "57c4af7d6cdbf47633e6715bcd67d98f300e2fd8" }
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "57c4af7d6cdbf47633e6715bcd67d98f300e2fd8" }
+anemo.workspace = true
+anemo-tower.workspace = true
 anyhow = "1.0.65"
 axum = "0.5.16"
 axum-server = "0.4.2"
