@@ -6,6 +6,8 @@ import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 
 import { AppType } from './redux/slices/app/AppType';
 import { routes as stakeRoutes } from './staking';
+import { WALLET_ENCRYPTION_ENABLED } from './wallet/constants';
+import LockedPage from '_app/wallet/locked-page';
 import { useAppDispatch, useAppSelector } from '_hooks';
 import { DappTxApprovalPage } from '_pages/dapp-tx-approval';
 import HomePage, {
@@ -103,6 +105,9 @@ const App = () => {
                     element={<BackupPage mode="imported" />}
                 />
             </Route>
+            {WALLET_ENCRYPTION_ENABLED ? (
+                <Route path="locked" element={<LockedPage />} />
+            ) : null}
         </Routes>
     );
 };

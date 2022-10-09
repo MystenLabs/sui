@@ -13,9 +13,10 @@ export type CardLayoutProps = {
     title?: string;
     subtitle?: string;
     headerCaption?: string;
-    icon?: 'success';
+    icon?: 'success' | 'sui';
     children: ReactNode | ReactNode[];
     className?: string;
+    mode?: 'box' | 'plain';
 };
 
 export default function CardLayout({
@@ -25,9 +26,10 @@ export default function CardLayout({
     subtitle,
     headerCaption,
     icon,
+    mode = 'box',
 }: CardLayoutProps) {
     return (
-        <div className={cn(className, st.container)}>
+        <div className={cn(className, st.container, st[mode])}>
             {icon === 'success' ? (
                 <div className={st.successIcon}>
                     <div className={st.successBg}>
@@ -36,6 +38,11 @@ export default function CardLayout({
                             className={st.thumbsUp}
                         />
                     </div>
+                </div>
+            ) : null}
+            {icon === 'sui' ? (
+                <div className={st.suiIconContainer}>
+                    <Icon icon={SuiIcons.SuiLogoIcon} className={st.suiIcon} />
                 </div>
             ) : null}
             {headerCaption ? (

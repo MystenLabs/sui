@@ -5,12 +5,12 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import Button from '_app/shared/button';
+import CardLayout from '_app/shared/card-layout';
 import Alert from '_components/alert';
 import CopyToClipboard from '_components/copy-to-clipboard';
 import Icon, { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
 import { useAppDispatch } from '_hooks';
-import CardLayout from '_pages/initialize/shared/card-layout';
 import { loadMnemonicFromKeyring } from '_redux/slices/account';
 
 import st from './Backup.module.scss';

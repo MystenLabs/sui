@@ -10,12 +10,15 @@
     flex-flow: column nowrap;
     align-items: center;
     padding: 40px 30px;
-    background: $color;
-    border: 1px solid $color;
-    border-radius: 20px;
-    max-width: sizing.$popup-width;
-    max-height: sizing.$popup-height;
     flex: 1;
+
+    &.box {
+        background: $color;
+        max-width: sizing.$popup-width;
+        max-height: sizing.$popup-height;
+        border: 1px solid $color;
+        border-radius: 20px;
+    }
 }
 
 .success-icon {
@@ -38,6 +41,23 @@
     display: flex;
     align-items: center;
     justify-content: center;
+}
+
+.sui-icon-container {
+    display: flex;
+    flex-flow: column nowrap;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    width: 60px;
+    height: 60px;
+    background-color: colors.$sui-blue;
+    margin-bottom: 30px;
+}
+
+.sui-icon {
+    color: colors.$white;
+    font-size: 34px;
 }
 
 .thumbs-up {

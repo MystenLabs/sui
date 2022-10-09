@@ -5,12 +5,12 @@ import { Formik, Form } from 'formik';
 import * as Yup from 'yup';
 
 import Button from '_app/shared/button';
+import FieldLabel from '_app/shared/field-label';
 import { WALLET_ENCRYPTION_ENABLED } from '_app/wallet/constants';
 import Alert from '_components/alert';
 import Icon, { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
 import { mnemonicValidation } from '_pages/initialize/import/validation';
-import FieldLabel from '_pages/initialize/shared/field-label';
 
 import type { StepProps } from '.';
 

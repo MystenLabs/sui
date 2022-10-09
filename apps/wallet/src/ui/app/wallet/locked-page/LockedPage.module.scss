@@ -1,0 +1,22 @@
+@use '_values/colors';
+
+.main {
+    display: flex;
+}
+
+.form {
+    display: flex;
+    flex-flow: column nowrap;
+    align-items: stretch;
+    align-self: stretch;
+    flex: 1;
+}
+
+.fill {
+    flex: 1;
+}
+
+.btn-icon {
+    color: colors.$sui-blue-light;
+    font-size: 16px;
+}
