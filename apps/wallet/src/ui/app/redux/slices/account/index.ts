@@ -39,7 +39,7 @@ export const createMnemonic = createAsyncThunk<
         let mnemonic = existingMnemonic;
         if (!mnemonic) {
             const { payload } = await background.createMnemonic(password || '');
-            if (isKeyringPayload<'createMnemonic'>(payload)) {
+            if (isKeyringPayload<'createMnemonic'>(payload, 'createMnemonic')) {
                 if (!payload.return) {
                     throw new Error('Empty mnemonic in payload');
                 }

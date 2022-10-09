@@ -5,7 +5,7 @@ import { BehaviorSubject, filter, switchMap, takeUntil } from 'rxjs';
 
 import { Connection } from './Connection';
 import { createMessage } from '_messages';
-import { isKeyringPayload } from '_payloads/keyring';
+import { isBasePayload } from '_payloads';
 import {
     isGetPermissionRequests,
     isPermissionResponse,
@@ -76,7 +76,7 @@ export class UiConnection extends Connection {
             } else if (isDisconnectApp(payload)) {
                 await Permissions.delete(payload.origin);
                 this.send(createMessage({ type: 'done' }, id));
-            } else if (isKeyringPayload(payload)) {
+            } else if (isBasePayload(payload) && payload.type === 'keyring') {
                 await Keyring.handleUiMessage(msg, this);
             }
         } catch (e) {
