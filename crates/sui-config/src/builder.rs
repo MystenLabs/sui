@@ -4,6 +4,7 @@
 use crate::{
     genesis,
     genesis_config::{GenesisConfig, ValidatorGenesisInfo},
+    p2p::P2pConfig,
     utils, ConsensusConfig, NetworkConfig, NodeConfig, ValidatorInfo, AUTHORITIES_DB_NAME,
     CONSENSUS_DB_NAME,
 };
@@ -262,6 +263,11 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                     narwhal_config: Default::default(),
                 };
 
+                let p2p_config = P2pConfig {
+                    listen_address: utils::available_local_socket_address(),
+                    ..Default::default()
+                };
+
                 NodeConfig {
                     protocol_key_pair: Arc::new(validator.key_pair),
                     worker_key_pair: Arc::new(validator.worker_key_pair),
@@ -281,6 +287,7 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                     genesis: crate::node::Genesis::new(genesis.clone()),
                     grpc_load_shed: initial_accounts_config.grpc_load_shed,
                     grpc_concurrency_limit: initial_accounts_config.grpc_concurrency_limit,
+                    p2p_config,
                 }
             })
             .collect();

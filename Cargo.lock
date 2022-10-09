@@ -8006,6 +8006,7 @@ dependencies = [
 name = "sui-config"
 version = "0.0.0"
 dependencies = [
+ "anemo",
  "anyhow",
  "arc-swap",
  "bcs",

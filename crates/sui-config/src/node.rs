@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::genesis;
+use crate::p2p::P2pConfig;
 use crate::Config;
 use anyhow::Result;
 use multiaddr::Multiaddr;
@@ -78,6 +79,9 @@ pub struct NodeConfig {
 
     #[serde(default = "default_concurrency_limit")]
     pub grpc_concurrency_limit: Option<usize>,
+
+    #[serde(default)]
+    pub p2p_config: P2pConfig,
 
     pub genesis: Genesis,
 }

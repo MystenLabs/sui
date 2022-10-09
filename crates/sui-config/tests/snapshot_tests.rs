@@ -113,6 +113,7 @@ fn network_config_snapshot_matches() {
         let fake_socket = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 1);
         validator_config.json_rpc_address = fake_socket;
         validator_config.metrics_address = fake_socket;
+        validator_config.p2p_config.listen_address = fake_socket;
         validator_config.admin_interface_port = 8888;
         let metrics_addr: Multiaddr = "/ip4/127.0.0.1/tcp/1234".parse().unwrap();
         let primary_network_admin_server_port = 5678;
