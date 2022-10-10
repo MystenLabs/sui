@@ -1,8 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { filter, fromEventPattern, share, take, takeUntil, tap } from 'rxjs';
+import {
+    filter,
+    fromEventPattern,
+    map,
+    share,
+    take,
+    takeUntil,
+    tap,
+} from 'rxjs';
 import Browser from 'webextension-polyfill';
+
+import { isErrorPayload } from './messages/payloads';
 
 import type { PortChannelName } from './PortChannelName';
 import type { Message } from './messages';
@@ -63,7 +73,13 @@ export class PortStream {
         requestMsgID: string
     ): Observable<Message> {
         return this._messagesStream.pipe(
-            filter((msg) => msg.id === requestMsgID)
+            filter((msg) => msg.id === requestMsgID),
+            map((msg) => {
+                if (isErrorPayload(msg.payload)) {
+                    throw new Error(msg.payload.message);
+                }
+                return msg;
+            })
         );
     }
 }
