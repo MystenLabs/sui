@@ -33,6 +33,13 @@
         border-radius: 12px;
     }
 
+    &.secondary {
+        background: none;
+        color: colors.$sui-blue-steel-dark;
+        border: 1px solid colors.$gray-55;
+        border-radius: 12px;
+    }
+
     &.primary {
         background: colors.$cta-blue;
         color: colors.$white;

@@ -12,3 +12,10 @@ export const unlockWallet = createAsyncThunk<
 >('wallet-unlock-wallet', async ({ password }, { extra: { background } }) => {
     await background.unlockWallet(password);
 });
+
+export const lockWallet = createAsyncThunk<void, void, AppThunkConfig>(
+    'wallet-unlock-wallet',
+    async (_, { extra: { background } }) => {
+        await background.lockWallet();
+    }
+);
