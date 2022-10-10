@@ -450,7 +450,11 @@ impl AuthorityState {
     ) -> Result<TransactionInfoResponse, SuiError> {
         let transaction_digest = *transaction.digest();
         // Ensure an idempotent answer.
-        if self.database.transaction_exists(&transaction_digest)? {
+        // If a transaction was signed in a previous epoch, we should no longer reuse it.
+        if self
+            .database
+            .transaction_exists(self.epoch(), &transaction_digest)?
+        {
             self.metrics.tx_already_processed.inc();
             let transaction_info = self.make_transaction_info(&transaction_digest).await?;
             return Ok(transaction_info);
