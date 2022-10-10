@@ -16,7 +16,7 @@ derive_builder = "0.11.2"
 fdlimit = "0.2"
 futures = "0.3.24"
 indexmap = { version = "1.9.1", features = ["serde"] }
-itertools = "0.10.4"
+itertools = "0.10.5"
 multiaddr = "0.14.0"
 prometheus = "0.13.2"
 rand = "0.8.5"
