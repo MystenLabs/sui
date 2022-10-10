@@ -448,7 +448,7 @@ async fn create_coin_split_response(
     let result = SuiClientCommands::SplitCoin {
         coin_id: coins.first().unwrap().object_id,
         amounts: Some(vec![20, 20, 20, 20, 20]),
-        count: 0,
+        count: None,
         gas: None,
         gas_budget: 1000,
     }
