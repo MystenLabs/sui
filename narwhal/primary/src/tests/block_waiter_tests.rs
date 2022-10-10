@@ -3,22 +3,20 @@
 use crate::{
     block_synchronizer::{handler, handler::MockHandler},
     block_waiter::{BlockError, BlockErrorKind, GetBlockResponse, GetBlocksResponse},
-    BlockWaiter, PrimaryWorkerMessage,
+    BlockWaiter,
 };
-use anemo::{async_trait, PeerId};
+use anemo::PeerId;
 use crypto::traits::KeyPair as _;
 use fastcrypto::Hash;
 use mockall::*;
 use network::P2pNetwork;
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 use test_utils::{
-    fixture_batch_with_transactions, fixture_payload, test_network, CommitteeFixture, WorkerFixture,
+    fixture_batch_with_transactions, fixture_payload, test_network, CommitteeFixture,
 };
-
 use types::{
-    Batch, BatchDigest, BatchMessage, Certificate, CertificateDigest, PrimaryToWorker,
-    PrimaryToWorkerServer, RequestBatchRequest, RequestBatchResponse, WorkerDeleteBatchesMessage,
-    WorkerSynchronizeMessage,
+    Batch, BatchMessage, Certificate, CertificateDigest, MockPrimaryToWorker,
+    PrimaryToWorkerServer, RequestBatchResponse,
 };
 
 #[tokio::test]
@@ -40,15 +38,6 @@ async fn test_successfully_retrieve_block() {
     let certificate = fixture.certificate(&header);
     let block_id = certificate.digest();
 
-    // AND "mock" the batch responses
-    let mut expected_batch_messages = HashMap::new();
-    for (batch_id, _) in header.payload {
-        expected_batch_messages.insert(
-            batch_id,
-            Batch(vec![vec![10u8, 5u8, 2u8], vec![8u8, 2u8, 3u8]]),
-        );
-    }
-
     let network = test_network(primary.network_keypair(), primary.address());
 
     // AND spin up a worker node
@@ -57,8 +46,22 @@ async fn test_successfully_retrieve_block() {
     let network_key = worker.keypair();
     let worker_name = network_key.public().clone();
     let worker_address = &worker.info().worker_address;
+    let mut mock_server = MockPrimaryToWorker::new();
 
-    let _worker_network = worker_listener(worker, expected_batch_messages.clone());
+    // Mock the batch responses.
+    let expected_block_count = header.payload.len();
+    for (batch_id, _) in header.payload {
+        mock_server
+            .expect_request_batch()
+            .withf(move |request| request.body().batch == batch_id)
+            .returning(|_| {
+                Ok(anemo::Response::new(RequestBatchResponse {
+                    batch: Some(Batch(vec![vec![10u8, 5u8, 2u8], vec![8u8, 2u8, 3u8]])),
+                }))
+            });
+    }
+    let routes = anemo::Router::new().add_rpc_service(PrimaryToWorkerServer::new(mock_server));
+    let _worker_network = worker.new_network(routes);
 
     let address = network::multiaddr_to_address(worker_address).unwrap();
     let peer_id = PeerId(worker_name.0.to_bytes());
@@ -93,11 +96,10 @@ async fn test_successfully_retrieve_block() {
     // THEN we should expect to get back the correct result
     assert_eq!(1, response.blocks.len());
     let block = response.blocks.remove(0).unwrap();
-    assert_eq!(block.batches.len(), expected_batch_messages.len());
+    assert_eq!(block.batches.len(), expected_block_count);
     assert_eq!(block.digest, block_id.clone());
-
-    for (_, batch) in expected_batch_messages {
-        assert_eq!(batch.0.len(), 2);
+    for batch in block.batches {
+        assert_eq!(batch.batch.0.len(), 2);
     }
 }
 
@@ -112,7 +114,7 @@ async fn test_successfully_retrieve_multiple_blocks() {
     let name = primary.public_key();
 
     let mut block_ids = Vec::new();
-    let mut expected_batch_messages = HashMap::new();
+    let mut mock_server = MockPrimaryToWorker::new();
     let worker_id = 0;
     let mut expected_get_block_responses = Vec::new();
     let mut certificates = Vec::new();
@@ -133,9 +135,17 @@ async fn test_successfully_retrieve_multiple_blocks() {
             .with_payload_batch(batch_1.clone(), worker_id)
             .with_payload_batch(batch_2.clone(), worker_id);
 
-        expected_batch_messages.insert(batch_1.digest(), batch_1.clone());
-
-        expected_batch_messages.insert(batch_2.digest(), batch_2.clone());
+        for b in [batch_1.clone(), batch_2.clone()] {
+            let digest = b.digest();
+            mock_server
+                .expect_request_batch()
+                .withf(move |request| request.body().batch == digest)
+                .returning(move |_| {
+                    Ok(anemo::Response::new(RequestBatchResponse {
+                        batch: Some(b.clone()),
+                    }))
+                });
+        }
 
         let mut batches = vec![
             BatchMessage {
@@ -156,9 +166,17 @@ async fn test_successfully_retrieve_multiple_blocks() {
                 .with_payload_batch(common_batch_1.clone(), worker_id)
                 .with_payload_batch(common_batch_2.clone(), worker_id);
 
-            expected_batch_messages.insert(common_batch_1.digest(), common_batch_1.clone());
-
-            expected_batch_messages.insert(common_batch_2.digest(), common_batch_2.clone());
+            for b in [common_batch_1.clone(), common_batch_2.clone()] {
+                let digest = b.digest();
+                mock_server
+                    .expect_request_batch()
+                    .withf(move |request| request.body().batch == digest)
+                    .returning(move |_| {
+                        Ok(anemo::Response::new(RequestBatchResponse {
+                            batch: Some(b.clone()),
+                        }))
+                    });
+            }
 
             batches.push(BatchMessage {
                 digest: common_batch_1.digest(),
@@ -207,8 +225,8 @@ async fn test_successfully_retrieve_multiple_blocks() {
     let network_key = worker.keypair();
     let worker_name = network_key.public().clone();
     let worker_address = &worker.info().worker_address;
-
-    let _worker_network = worker_listener(worker, expected_batch_messages.clone());
+    let routes = anemo::Router::new().add_rpc_service(PrimaryToWorkerServer::new(mock_server));
+    let _worker_network = worker.new_network(routes);
 
     let address = network::multiaddr_to_address(worker_address).unwrap();
     let peer_id = PeerId(worker_name.0.to_bytes());
@@ -339,50 +357,4 @@ async fn test_return_error_when_certificate_is_missing_when_get_blocks() {
 
     assert_eq!(block_error.digest, block_id.clone());
     assert_eq!(block_error.error, BlockErrorKind::BlockNotFound);
-}
-
-// Fake worker responds to RequestBatch requests with the provided expected_batches.
-#[must_use]
-pub fn worker_listener(
-    worker: &WorkerFixture,
-    expected_batches: HashMap<BatchDigest, Batch>,
-) -> anemo::Network {
-    struct MockPrimaryToWorker {
-        expected_batches: HashMap<BatchDigest, Batch>,
-    }
-    #[async_trait]
-    impl PrimaryToWorker for MockPrimaryToWorker {
-        async fn send_message(
-            &self,
-            _request: anemo::Request<PrimaryWorkerMessage>,
-        ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
-            unimplemented!()
-        }
-        async fn synchronize(
-            &self,
-            _request: anemo::Request<WorkerSynchronizeMessage>,
-        ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
-            unimplemented!()
-        }
-        async fn request_batch(
-            &self,
-            request: anemo::Request<RequestBatchRequest>,
-        ) -> Result<anemo::Response<RequestBatchResponse>, anemo::rpc::Status> {
-            Ok(anemo::Response::new(RequestBatchResponse {
-                batch: self.expected_batches.get(&request.body().batch).cloned(),
-            }))
-        }
-        async fn delete_batches(
-            &self,
-            _request: anemo::Request<WorkerDeleteBatchesMessage>,
-        ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
-            unimplemented!()
-        }
-    }
-
-    let routes =
-        anemo::Router::new().add_rpc_service(PrimaryToWorkerServer::new(MockPrimaryToWorker {
-            expected_batches,
-        }));
-    worker.new_network(routes)
 }
