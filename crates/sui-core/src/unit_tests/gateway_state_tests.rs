@@ -464,7 +464,11 @@ async fn test_public_transfer_object_with_retry() {
         .is_err());
     assert!(gateway.store().effects_exists(&tx_digest).unwrap());
     // The transaction is deleted after this is done.
-    assert!(!gateway.store().transaction_exists(&tx_digest).unwrap());
+    assert!(gateway
+        .store()
+        .get_transaction(&tx_digest)
+        .unwrap()
+        .is_none());
     assert_eq!(gateway.store().next_sequence_number().unwrap(), 1);
     assert_eq!(
         gateway

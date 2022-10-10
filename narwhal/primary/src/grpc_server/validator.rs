@@ -3,20 +3,19 @@
 use std::{sync::Arc, time::Duration};
 
 use crate::{
-    block_synchronizer::handler::Handler, block_waiter::GetBlockResponse, BlockCommand,
-    BlockRemover,
+    block_synchronizer::handler::Handler, block_waiter::GetBlockResponse, BlockRemover, BlockWaiter,
 };
 use consensus::dag::Dag;
-use tokio::{sync::oneshot, time::timeout};
+use tokio::time::timeout;
 use tonic::{Request, Response, Status};
 use types::{
-    metered_channel::Sender, BlockError, CertificateDigest, CertificateDigestProto, Collection,
-    CollectionRetrievalResult, Empty, GetCollectionsRequest, GetCollectionsResponse,
-    ReadCausalRequest, ReadCausalResponse, RemoveCollectionsRequest, TransactionProto, Validator,
+    BlockError, CertificateDigest, CertificateDigestProto, Collection, CollectionRetrievalResult,
+    Empty, GetCollectionsRequest, GetCollectionsResponse, ReadCausalRequest, ReadCausalResponse,
+    RemoveCollectionsRequest, TransactionProto, Validator,
 };
 
 pub struct NarwhalValidator<SynchronizerHandler: Handler + Send + Sync + 'static> {
-    tx_get_block_commands: Sender<BlockCommand>,
+    block_waiter: BlockWaiter<SynchronizerHandler>,
     block_remover: BlockRemover,
     get_collections_timeout: Duration,
     remove_collections_timeout: Duration,
@@ -26,7 +25,7 @@ pub struct NarwhalValidator<SynchronizerHandler: Handler + Send + Sync + 'static
 
 impl<SynchronizerHandler: Handler + Send + Sync + 'static> NarwhalValidator<SynchronizerHandler> {
     pub fn new(
-        tx_get_block_commands: Sender<BlockCommand>,
+        block_waiter: BlockWaiter<SynchronizerHandler>,
         block_remover: BlockRemover,
         get_collections_timeout: Duration,
         remove_collections_timeout: Duration,
@@ -34,7 +33,7 @@ impl<SynchronizerHandler: Handler + Send + Sync + 'static> NarwhalValidator<Sync
         dag: Option<Arc<Dag>>,
     ) -> Self {
         Self {
-            tx_get_block_commands,
+            block_waiter,
             block_remover,
             get_collections_timeout,
             remove_collections_timeout,
@@ -115,33 +114,19 @@ impl<SynchronizerHandler: Handler + Send + Sync + 'static> Validator
     ) -> Result<Response<GetCollectionsResponse>, Status> {
         let collection_ids = request.into_inner().collection_ids;
         let get_collections_response = if !collection_ids.is_empty() {
-            let (tx_get_blocks, rx_get_blocks) = oneshot::channel();
             let ids = parse_certificate_digests(collection_ids)?;
-            self.tx_get_block_commands
-                .send(BlockCommand::GetBlocks {
-                    ids,
-                    sender: tx_get_blocks,
-                })
-                .await
-                .map_err(|err| Status::internal(format!("Send Error: {err:?}")))?;
-            match timeout(self.get_collections_timeout, rx_get_blocks)
+            let blocks_response = timeout(self.get_collections_timeout, self.block_waiter.get_blocks(ids))
                 .await
                 .map_err(|_err| Status::internal("Timeout, no result has been received in time"))?
-                .map_err(|_err| Status::internal("Fetch Error, no result has been received"))?
-            {
-                Ok(blocks_response) => {
-                    let mut retrieval_results = vec![];
-                    for block_result in blocks_response.blocks {
-                        retrieval_results.push(get_collection_retrieval_results(block_result));
-                    }
-                    Ok(GetCollectionsResponse {
-                        result: retrieval_results,
-                    })
-                }
-                Err(err) => Err(Status::internal(format!(
+                .map_err(|err| Status::internal(format!(
                     "Expected to receive a successful get blocks result, instead got error: {err:?}",
-                ))),
-            }
+                )))?;
+            let result: Vec<_> = blocks_response
+                .blocks
+                .into_iter()
+                .map(get_collection_retrieval_results)
+                .collect();
+            Ok(GetCollectionsResponse { result })
         } else {
             Err(Status::invalid_argument(
                 "Attempted fetch of no collections!",
@@ -160,7 +145,7 @@ fn get_collection_retrieval_results(
             for batch in block_response.batches {
                 transactions.extend(
                     batch
-                        .transactions
+                        .batch
                         .0
                         .into_iter()
                         .map(Into::into)
@@ -169,7 +154,7 @@ fn get_collection_retrieval_results(
             }
             CollectionRetrievalResult {
                 retrieval_result: Some(types::RetrievalResult::Collection(Collection {
-                    id: Some(CertificateDigestProto::from(block_response.id)),
+                    id: Some(CertificateDigestProto::from(block_response.digest)),
                     transactions,
                 })),
             }

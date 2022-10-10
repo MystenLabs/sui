@@ -2,30 +2,23 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
     block_synchronizer::{handler, handler::MockHandler},
-    block_waiter::{
-        BatchResult, BlockError, BlockErrorKind, GetBlockResponse, GetBlocksResponse,
-        BATCH_RETRIEVE_TIMEOUT,
-    },
-    BlockCommand, BlockWaiter, PrimaryWorkerMessage,
+    block_waiter::{BlockError, BlockErrorKind, GetBlockResponse, GetBlocksResponse},
+    BlockWaiter, PrimaryWorkerMessage,
 };
-use anemo::PeerId;
-use crypto::{traits::KeyPair as _, NetworkKeyPair};
+use anemo::{async_trait, PeerId};
+use crypto::traits::KeyPair as _;
 use fastcrypto::Hash;
 use mockall::*;
 use network::P2pNetwork;
 use std::{collections::HashMap, sync::Arc};
 use test_utils::{
-    fixture_batch_with_transactions, fixture_payload, test_network, CommitteeFixture,
-    PrimaryToWorkerMockServer,
+    fixture_batch_with_transactions, fixture_payload, test_network, CommitteeFixture, WorkerFixture,
 };
-use tokio::{
-    sync::{oneshot, watch},
-    task::JoinHandle,
-    time::{sleep, timeout, Duration},
-};
+
 use types::{
-    metered_channel, Batch, BatchDigest, BatchMessage, Certificate, CertificateDigest,
-    ReconfigureNotification,
+    Batch, BatchDigest, BatchMessage, Certificate, CertificateDigest, PrimaryToWorker,
+    PrimaryToWorkerServer, RequestBatchRequest, RequestBatchResponse, WorkerDeleteBatchesMessage,
+    WorkerSynchronizeMessage,
 };
 
 #[tokio::test]
@@ -47,22 +40,12 @@ async fn test_successfully_retrieve_block() {
     let certificate = fixture.certificate(&header);
     let block_id = certificate.digest();
 
-    // AND spawn a new blocks waiter
-    let (_tx_reconfigure, rx_reconfigure) =
-        watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
-    let (tx_commands, rx_commands) = test_utils::test_channel!(1);
-    let (tx_get_block, rx_get_block) = oneshot::channel();
-    let (tx_batch_messages, rx_batch_messages) = test_utils::test_channel!(10);
-
     // AND "mock" the batch responses
     let mut expected_batch_messages = HashMap::new();
     for (batch_id, _) in header.payload {
         expected_batch_messages.insert(
             batch_id,
-            BatchMessage {
-                id: batch_id,
-                transactions: Batch(vec![vec![10u8, 5u8, 2u8], vec![8u8, 2u8, 3u8]]),
-            },
+            Batch(vec![vec![10u8, 5u8, 2u8], vec![8u8, 2u8, 3u8]]),
         );
     }
 
@@ -75,12 +58,7 @@ async fn test_successfully_retrieve_block() {
     let worker_name = network_key.public().clone();
     let worker_address = &worker.info().worker_address;
 
-    let handle = worker_listener(
-        network_key,
-        worker_address.to_owned(),
-        expected_batch_messages.clone(),
-        tx_batch_messages,
-    );
+    let _worker_network = worker_listener(worker, expected_batch_messages.clone());
 
     let address = network::multiaddr_to_address(worker_address).unwrap();
     let peer_id = PeerId(worker_name.0.to_bytes());
@@ -103,53 +81,23 @@ async fn test_successfully_retrieve_block() {
         .times(1)
         .return_const(vec![Ok(certificate)]);
 
-    let _waiter_handler = BlockWaiter::spawn(
-        name.clone(),
-        committee.clone(),
-        worker_cache,
-        rx_reconfigure,
-        rx_commands,
-        rx_batch_messages,
-        Arc::new(mock_handler),
-        P2pNetwork::new(network),
-    );
-
     // WHEN we send a request to get a block
-    tx_commands
-        .send(BlockCommand::GetBlock {
-            id: block_id,
-            sender: tx_get_block,
-        })
-        .await
-        .unwrap();
+    let block_waiter = BlockWaiter::new(
+        name.clone(),
+        worker_cache,
+        P2pNetwork::new(network),
+        Arc::new(mock_handler),
+    );
+    let mut response = block_waiter.get_blocks(vec![block_id]).await.unwrap();
 
-    // Wait for the worker server to complete before continue.
-    // Then we'll be confident that the expected batch responses
-    // have been sent (via the tx_batch_messages channel though)
-    if timeout(Duration::from_millis(4_000), handle).await.is_err() {
-        panic!("worker hasn't received expected batch requests")
-    }
+    // THEN we should expect to get back the correct result
+    assert_eq!(1, response.blocks.len());
+    let block = response.blocks.remove(0).unwrap();
+    assert_eq!(block.batches.len(), expected_batch_messages.len());
+    assert_eq!(block.digest, block_id.clone());
 
-    // THEN we should expect to get back the result
-    let timer = sleep(Duration::from_millis(5_000));
-    tokio::pin!(timer);
-
-    tokio::select! {
-        Ok(result) = rx_get_block => {
-            assert!(result.is_ok(), "Expected to receive a successful result, instead got error: {}", result.err().unwrap());
-
-            let block = result.unwrap();
-
-            assert_eq!(block.batches.len(), expected_batch_messages.len());
-            assert_eq!(block.id, block_id.clone());
-
-            for (_, batch) in expected_batch_messages {
-                assert_eq!(batch.transactions.0.len(), 2);
-            }
-        },
-        () = &mut timer => {
-            panic!("Timeout, no result has been received in time")
-        }
+    for (_, batch) in expected_batch_messages {
+        assert_eq!(batch.0.len(), 2);
     }
 }
 
@@ -185,30 +133,18 @@ async fn test_successfully_retrieve_multiple_blocks() {
             .with_payload_batch(batch_1.clone(), worker_id)
             .with_payload_batch(batch_2.clone(), worker_id);
 
-        expected_batch_messages.insert(
-            batch_1.digest(),
-            BatchMessage {
-                id: batch_1.digest(),
-                transactions: batch_1.clone(),
-            },
-        );
+        expected_batch_messages.insert(batch_1.digest(), batch_1.clone());
 
-        expected_batch_messages.insert(
-            batch_2.digest(),
-            BatchMessage {
-                id: batch_2.digest(),
-                transactions: batch_2.clone(),
-            },
-        );
+        expected_batch_messages.insert(batch_2.digest(), batch_2.clone());
 
         let mut batches = vec![
             BatchMessage {
-                id: batch_1.digest(),
-                transactions: batch_1.clone(),
+                digest: batch_1.digest(),
+                batch: batch_1.clone(),
             },
             BatchMessage {
-                id: batch_2.digest(),
-                transactions: batch_2.clone(),
+                digest: batch_2.digest(),
+                batch: batch_2.clone(),
             },
         ];
 
@@ -220,34 +156,22 @@ async fn test_successfully_retrieve_multiple_blocks() {
                 .with_payload_batch(common_batch_1.clone(), worker_id)
                 .with_payload_batch(common_batch_2.clone(), worker_id);
 
-            expected_batch_messages.insert(
-                common_batch_1.digest(),
-                BatchMessage {
-                    id: common_batch_1.digest(),
-                    transactions: common_batch_1.clone(),
-                },
-            );
+            expected_batch_messages.insert(common_batch_1.digest(), common_batch_1.clone());
 
-            expected_batch_messages.insert(
-                common_batch_2.digest(),
-                BatchMessage {
-                    id: common_batch_2.digest(),
-                    transactions: common_batch_2.clone(),
-                },
-            );
+            expected_batch_messages.insert(common_batch_2.digest(), common_batch_2.clone());
 
             batches.push(BatchMessage {
-                id: common_batch_1.digest(),
-                transactions: common_batch_1.clone(),
+                digest: common_batch_1.digest(),
+                batch: common_batch_1.clone(),
             });
             batches.push(BatchMessage {
-                id: common_batch_2.digest(),
-                transactions: common_batch_2.clone(),
+                digest: common_batch_2.digest(),
+                batch: common_batch_2.clone(),
             });
         }
 
         // sort the batches to make sure that the response is the expected one.
-        batches.sort_by(|a, b| a.id.cmp(&b.id));
+        batches.sort_by(|a, b| a.digest.cmp(&b.digest));
 
         let header = builder.build(author.keypair()).unwrap();
 
@@ -257,7 +181,7 @@ async fn test_successfully_retrieve_multiple_blocks() {
         block_ids.push(certificate.digest());
 
         expected_get_block_responses.push(Ok(GetBlockResponse {
-            id: certificate.digest(),
+            digest: certificate.digest(),
             batches,
         }));
     }
@@ -265,7 +189,7 @@ async fn test_successfully_retrieve_multiple_blocks() {
     // AND add a missing block as well
     let missing_block_id = CertificateDigest::default();
     expected_get_block_responses.push(Err(BlockError {
-        id: missing_block_id,
+        digest: missing_block_id,
         error: BlockErrorKind::BlockNotFound,
     }));
 
@@ -276,13 +200,6 @@ async fn test_successfully_retrieve_multiple_blocks() {
         blocks: expected_get_block_responses,
     };
 
-    // AND spawn a new blocks waiter
-    let (_tx_reconfigure, rx_reconfigure) =
-        watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
-    let (tx_commands, rx_commands) = test_utils::test_channel!(1);
-    let (tx_get_blocks, rx_get_blocks) = oneshot::channel();
-    let (tx_batch_messages, rx_batch_messages) = test_utils::test_channel!(10);
-
     let network = test_network(primary.network_keypair(), primary.address());
 
     // AND spin up a worker node
@@ -291,12 +208,7 @@ async fn test_successfully_retrieve_multiple_blocks() {
     let worker_name = network_key.public().clone();
     let worker_address = &worker.info().worker_address;
 
-    let handle = worker_listener(
-        network_key,
-        worker_address.to_owned(),
-        expected_batch_messages.clone(),
-        tx_batch_messages,
-    );
+    let _worker_network = worker_listener(worker, expected_batch_messages.clone());
 
     let address = network::multiaddr_to_address(worker_address).unwrap();
     let peer_id = PeerId(worker_name.0.to_bytes());
@@ -326,301 +238,23 @@ async fn test_successfully_retrieve_multiple_blocks() {
         .times(1)
         .return_const(expected_result);
 
-    let _waiter_handler = BlockWaiter::spawn(
-        name.clone(),
-        committee.clone(),
-        worker_cache,
-        rx_reconfigure,
-        rx_commands,
-        rx_batch_messages,
-        Arc::new(mock_handler),
-        P2pNetwork::new(network),
-    );
-
     // WHEN we send a request to get a block
-    tx_commands
-        .send(BlockCommand::GetBlocks {
-            ids: block_ids.clone(),
-            sender: tx_get_blocks,
-        })
-        .await
-        .unwrap();
-
-    // Wait for the worker server to complete before continue.
-    // Then we'll be confident that the expected batch responses
-    // have been sent (via the tx_batch_messages channel though)
-    if timeout(Duration::from_millis(4_000), handle).await.is_err() {
-        panic!("worker hasn't received expected batch requests")
-    }
-
-    // THEN we should expect to get back the result
-    let timer = sleep(Duration::from_millis(5_000));
-    tokio::pin!(timer);
-
-    tokio::select! {
-        Ok(result) = rx_get_blocks => {
-            assert!(result.is_ok(), "Expected to receive a successful get blocks result, instead got error: {:?}", result.err().unwrap());
-            assert_eq!(result.unwrap(), expected_get_blocks_response);
-        },
-        () = &mut timer => {
-            panic!("Timeout, no result has been received in time")
-        }
-    }
-}
-
-#[tokio::test]
-async fn test_one_pending_request_for_block_at_time() {
-    // GIVEN
-    let fixture = CommitteeFixture::builder().build();
-    let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
-    let author = fixture.authorities().next().unwrap();
-    let primary = fixture.authorities().nth(1).unwrap();
-    let name = primary.public_key();
-
-    // AND store certificate
-    let header = author
-        .header_builder(&committee)
-        .payload(fixture_payload(2))
-        .build(author.keypair())
-        .unwrap();
-    let certificate = fixture.certificate(&header);
-    let block_id = certificate.digest();
-
-    // AND
-    let (_, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
-    let (_, rx_commands) = test_utils::test_channel!(1);
-    let (_, rx_batch_messages) = test_utils::test_channel!(1);
-
-    let get_mock_sender = || {
-        let (tx, _) = oneshot::channel();
-        tx
-    };
-
-    // AND mock the responses from the BlockSynchronizer
-    let mut mock_handler = MockHandler::new();
-    mock_handler
-        .expect_get_and_synchronize_block_headers()
-        .with(predicate::eq(vec![block_id]))
-        .times(4)
-        .return_const(vec![Ok(certificate.clone())]);
-
-    mock_handler
-        .expect_synchronize_block_payloads()
-        .with(predicate::eq(vec![certificate.clone()]))
-        .times(4)
-        .return_const(vec![Ok(certificate)]);
-
-    let network = test_network(primary.network_keypair(), primary.address());
-    let mut waiter = BlockWaiter {
-        name: name.clone(),
-        committee: committee.clone(),
-        worker_cache,
-        rx_commands,
-        pending_get_block: HashMap::new(),
-        worker_network: P2pNetwork::new(network),
-        rx_reconfigure,
-        rx_batch_receiver: rx_batch_messages,
-        pending_batch_by_digest: HashMap::new(),
-        get_block_map_requesters: HashMap::new(),
-        get_blocks_map_requesters: HashMap::new(),
-        block_synchronizer_handler: Arc::new(mock_handler),
-    };
-
-    // WHEN we send GetBlock command
-    let result_some = waiter
-        .handle_get_block_command(block_id, get_mock_sender())
-        .await;
-
-    // AND we send more GetBlock commands
-    let mut results_none = Vec::new();
-    for _ in 0..3 {
-        results_none.push(
-            waiter
-                .handle_get_block_command(block_id, get_mock_sender())
-                .await,
-        );
-    }
-
-    // THEN
-    assert!(
-        result_some.is_some(),
-        "Expected to have a future to do some further work"
-    );
-
-    for result in results_none {
-        assert!(
-            result.is_none(),
-            "Expected to not get a future for further work"
-        );
-    }
-}
-
-#[tokio::test]
-async fn test_unlocking_pending_get_block_request_after_response() {
-    // GIVEN
-    let fixture = CommitteeFixture::builder().build();
-    let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
-    let author = fixture.authorities().next().unwrap();
-    let primary = fixture.authorities().nth(1).unwrap();
-    let name = primary.public_key();
-
-    // AND store certificate
-    let header = author
-        .header_builder(&committee)
-        .payload(fixture_payload(2))
-        .build(author.keypair())
-        .unwrap();
-    let certificate = fixture.certificate(&header);
-    let block_id = certificate.digest();
-
-    // AND spawn a new blocks waiter
-    let (_, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
-    let (_, rx_commands) = test_utils::test_channel!(1);
-    let (_, rx_batch_messages) = test_utils::test_channel!(1);
-
-    // AND mock the responses of the BlockSynchronizer
-    let mut mock_handler = MockHandler::new();
-    mock_handler
-        .expect_get_and_synchronize_block_headers()
-        .with(predicate::eq(vec![block_id]))
-        .times(3)
-        .return_const(vec![Ok(certificate.clone())]);
-
-    mock_handler
-        .expect_synchronize_block_payloads()
-        .with(predicate::eq(vec![certificate.clone()]))
-        .times(3)
-        .return_const(vec![Ok(certificate)]);
-
-    let network = test_network(primary.network_keypair(), primary.address());
-    let mut waiter = BlockWaiter {
-        name: name.clone(),
-        committee: committee.clone(),
-        worker_cache,
-        rx_commands,
-        pending_get_block: HashMap::new(),
-        worker_network: P2pNetwork::new(network),
-        rx_reconfigure,
-        rx_batch_receiver: rx_batch_messages,
-        pending_batch_by_digest: HashMap::new(),
-        get_block_map_requesters: HashMap::new(),
-        get_blocks_map_requesters: HashMap::new(),
-        block_synchronizer_handler: Arc::new(mock_handler),
-    };
-
-    let get_mock_sender = || {
-        let (tx, _) = oneshot::channel();
-        tx
-    };
-
-    // AND we send GetBlock commands
-    for _ in 0..3 {
-        waiter
-            .handle_get_block_command(block_id, get_mock_sender())
-            .await;
-    }
-
-    // WHEN
-    let result = Ok(GetBlockResponse {
-        id: block_id,
-        batches: vec![],
-    });
-
-    waiter.handle_batch_waiting_result(result).await;
-
-    // THEN
-    assert!(!waiter.pending_get_block.contains_key(&block_id));
-    assert!(!waiter.get_block_map_requesters.contains_key(&block_id));
-}
-
-#[tokio::test]
-async fn test_batch_timeout() {
-    // GIVEN
-    let fixture = CommitteeFixture::builder().build();
-    let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
-    let author = fixture.authorities().next().unwrap();
-    let primary = fixture.authorities().nth(1).unwrap();
-    let name = primary.public_key();
-
-    // AND store certificate
-    let header = author
-        .header_builder(&committee)
-        .payload(fixture_payload(2))
-        .build(author.keypair())
-        .unwrap();
-    let certificate = fixture.certificate(&header);
-    let block_id = certificate.digest();
-
-    // AND spawn a new blocks waiter
-    let (_tx_reconfigure, rx_reconfigure) =
-        watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
-    let (tx_commands, rx_commands) = test_utils::test_channel!(1);
-    let (tx_get_block, rx_get_block) = oneshot::channel();
-    let (_, rx_batch_messages) = test_utils::test_channel!(10);
-
-    // AND mock the responses of the BlockSynchronizer
-    let mut mock_handler = MockHandler::new();
-    mock_handler
-        .expect_get_and_synchronize_block_headers()
-        .with(predicate::eq(vec![block_id]))
-        .times(1)
-        .return_const(vec![Ok(certificate.clone())]);
-
-    mock_handler
-        .expect_synchronize_block_payloads()
-        .with(predicate::eq(vec![certificate.clone()]))
-        .times(1)
-        .return_const(vec![Ok(certificate)]);
-
-    let network = test_network(primary.network_keypair(), primary.address());
-    let _waiter_handle = BlockWaiter::spawn(
+    let block_waiter = BlockWaiter::new(
         name.clone(),
-        committee.clone(),
         worker_cache,
-        rx_reconfigure,
-        rx_commands,
-        rx_batch_messages,
-        Arc::new(mock_handler),
         P2pNetwork::new(network),
+        Arc::new(mock_handler),
     );
+    let response = block_waiter.get_blocks(block_ids).await.unwrap();
 
-    // WHEN we send a request to get a block
-    tx_commands
-        .send(BlockCommand::GetBlock {
-            id: block_id,
-            sender: tx_get_block,
-        })
-        .await
-        .unwrap();
-
-    // THEN we should expect to get back the result
-    // TODO: make sure we can run this test in less than the actual timeout range
-    let timer = sleep(BATCH_RETRIEVE_TIMEOUT + Duration::from_secs(2));
-    tokio::pin!(timer);
-
-    tokio::select! {
-        Ok(result) = rx_get_block => {
-            assert!(result.is_err(), "Expected to receive an error result");
-
-            let block_error = result.err().unwrap();
-
-            assert_eq!(block_error.id, block_id.clone());
-            assert_eq!(block_error.error, BlockErrorKind::BatchTimeout);
-        },
-        () = &mut timer => {
-            panic!("Timeout, no result has been received in time")
-        }
-    }
+    // THEN we should expect to get back the correct result
+    assert_eq!(response, expected_get_blocks_response);
 }
 
 #[tokio::test]
 async fn test_return_error_when_certificate_is_missing() {
     // GIVEN
     let fixture = CommitteeFixture::builder().build();
-    let committee = fixture.committee();
     let worker_cache = fixture.shared_worker_cache();
     let primary = fixture.authorities().nth(1).unwrap();
     let name = primary.public_key();
@@ -628,13 +262,6 @@ async fn test_return_error_when_certificate_is_missing() {
     // AND create a certificate but don't store it
     let certificate = Certificate::default();
     let block_id = certificate.digest();
-
-    // AND spawn a new blocks waiter
-    let (_tx_reconfigure, rx_reconfigure) =
-        watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
-    let (tx_commands, rx_commands) = test_utils::test_channel!(1);
-    let (tx_get_block, rx_get_block) = oneshot::channel();
-    let (_, rx_batch_messages) = test_utils::test_channel!(10);
 
     // AND mock the responses of the BlockSynchronizer
     let mut mock_handler = MockHandler::new();
@@ -643,52 +270,36 @@ async fn test_return_error_when_certificate_is_missing() {
         .with(predicate::eq(vec![block_id]))
         .times(1)
         .return_const(vec![Err(handler::Error::BlockDeliveryTimeout { block_id })]);
+    mock_handler
+        .expect_synchronize_block_payloads()
+        .with(predicate::eq(vec![]))
+        .times(1)
+        .return_const(vec![]);
 
     let network = test_network(primary.network_keypair(), primary.address());
-    let _waiter_handle = BlockWaiter::spawn(
-        name.clone(),
-        committee.clone(),
-        worker_cache,
-        rx_reconfigure,
-        rx_commands,
-        rx_batch_messages,
-        Arc::new(mock_handler),
-        P2pNetwork::new(network),
-    );
 
     // WHEN we send a request to get a block
-    tx_commands
-        .send(BlockCommand::GetBlock {
-            id: block_id,
-            sender: tx_get_block,
-        })
-        .await
-        .unwrap();
+    let block_waiter = BlockWaiter::new(
+        name.clone(),
+        worker_cache,
+        P2pNetwork::new(network),
+        Arc::new(mock_handler),
+    );
+    let mut response = block_waiter.get_blocks(vec![block_id]).await.unwrap();
 
     // THEN we should expect to get back the error
-    let timer = sleep(Duration::from_millis(5_000));
-    tokio::pin!(timer);
-
-    tokio::select! {
-        Ok(result) = rx_get_block => {
-            assert!(result.is_err(), "Expected to receive an error result");
-
-            let block_error = result.err().unwrap();
-
-            assert_eq!(block_error.id, block_id.clone());
-            assert_eq!(block_error.error, BlockErrorKind::BlockNotFound);
-        },
-        () = &mut timer => {
-            panic!("Timeout, no result has been received in time")
-        }
-    }
+    assert_eq!(1, response.blocks.len());
+    let block = response.blocks.remove(0);
+    assert!(block.is_err());
+    let block_error = block.err().unwrap();
+    assert_eq!(block_error.digest, block_id.clone());
+    assert_eq!(block_error.error, BlockErrorKind::BlockNotFound);
 }
 
 #[tokio::test]
 async fn test_return_error_when_certificate_is_missing_when_get_blocks() {
     // GIVEN
     let fixture = CommitteeFixture::builder().build();
-    let committee = fixture.committee();
     let worker_cache = fixture.shared_worker_cache();
     let primary = fixture.authorities().nth(1).unwrap();
     let name = primary.public_key();
@@ -696,13 +307,6 @@ async fn test_return_error_when_certificate_is_missing_when_get_blocks() {
     // AND create a certificate but don't store it
     let certificate = Certificate::default();
     let block_id = certificate.digest();
-
-    // AND spawn a new blocks waiter
-    let (_tx_reconfigure, rx_reconfigure) =
-        watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
-    let (tx_commands, rx_commands) = test_utils::test_channel!(1);
-    let (tx_get_blocks, rx_get_blocks) = oneshot::channel();
-    let (_, rx_batch_messages) = test_utils::test_channel!(10);
 
     // AND mock the responses of the BlockSynchronizer
     let mut mock_handler = MockHandler::new();
@@ -721,81 +325,64 @@ async fn test_return_error_when_certificate_is_missing_when_get_blocks() {
         .return_const(vec![]);
 
     let network = test_network(primary.network_keypair(), primary.address());
-    let _waiter_handle = BlockWaiter::spawn(
-        name.clone(),
-        committee.clone(),
-        worker_cache,
-        rx_reconfigure,
-        rx_commands,
-        rx_batch_messages,
-        Arc::new(mock_handler),
-        P2pNetwork::new(network),
-    );
 
     // WHEN we send a request to get a block
-    tx_commands
-        .send(BlockCommand::GetBlocks {
-            ids: vec![block_id],
-            sender: tx_get_blocks,
-        })
-        .await
-        .unwrap();
+    let block_waiter = BlockWaiter::new(
+        name.clone(),
+        worker_cache,
+        P2pNetwork::new(network),
+        Arc::new(mock_handler),
+    );
+    let response = block_waiter.get_blocks(vec![block_id]).await.unwrap();
+    let r = response.blocks.get(0).unwrap().to_owned();
+    let block_error = r.err().unwrap();
 
-    // THEN we should expect to get back the error
-    let timer = sleep(Duration::from_millis(5_000));
-    tokio::pin!(timer);
-
-    tokio::select! {
-        Ok(result) = rx_get_blocks => {
-            let results = result.unwrap();
-            let r = results.blocks.get(0).unwrap().to_owned();
-            let block_error = r.err().unwrap();
-
-            assert_eq!(block_error.id, block_id.clone());
-            assert_eq!(block_error.error, BlockErrorKind::BlockNotFound);
-        },
-        () = &mut timer => {
-            panic!("Timeout, no result has been received in time")
-        }
-    }
+    assert_eq!(block_error.digest, block_id.clone());
+    assert_eq!(block_error.error, BlockErrorKind::BlockNotFound);
 }
 
-// worker_listener listens to TCP requests. The worker responds to the
-// RequestBatch requests for the provided expected_batches.
+// Fake worker responds to RequestBatch requests with the provided expected_batches.
 #[must_use]
 pub fn worker_listener(
-    keypair: NetworkKeyPair,
-    address: multiaddr::Multiaddr,
-    expected_batches: HashMap<BatchDigest, BatchMessage>,
-    tx_batch_messages: metered_channel::Sender<BatchResult>,
-) -> JoinHandle<()> {
-    tokio::spawn(async move {
-        let (mut recv, _, _network) = PrimaryToWorkerMockServer::spawn(keypair, address);
-        let mut counter = 0;
-        loop {
-            let message = recv
-                .recv()
-                .await
-                .expect("Failed to receive network message");
-            match message {
-                PrimaryWorkerMessage::RequestBatch(id) => {
-                    if expected_batches.contains_key(&id) {
-                        tx_batch_messages
-                            .send(Ok(expected_batches.get(&id).cloned().unwrap()))
-                            .await
-                            .unwrap();
-
-                        counter += 1;
-
-                        // Once all the expected requests have been received, break the loop
-                        // of the server.
-                        if counter == expected_batches.len() {
-                            break;
-                        }
-                    }
-                }
-                _ => panic!("Unexpected request received"),
-            };
+    worker: &WorkerFixture,
+    expected_batches: HashMap<BatchDigest, Batch>,
+) -> anemo::Network {
+    struct MockPrimaryToWorker {
+        expected_batches: HashMap<BatchDigest, Batch>,
+    }
+    #[async_trait]
+    impl PrimaryToWorker for MockPrimaryToWorker {
+        async fn send_message(
+            &self,
+            _request: anemo::Request<PrimaryWorkerMessage>,
+        ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
+            unimplemented!()
         }
-    })
+        async fn synchronize(
+            &self,
+            _request: anemo::Request<WorkerSynchronizeMessage>,
+        ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
+            unimplemented!()
+        }
+        async fn request_batch(
+            &self,
+            request: anemo::Request<RequestBatchRequest>,
+        ) -> Result<anemo::Response<RequestBatchResponse>, anemo::rpc::Status> {
+            Ok(anemo::Response::new(RequestBatchResponse {
+                batch: self.expected_batches.get(&request.body().batch).cloned(),
+            }))
+        }
+        async fn delete_batches(
+            &self,
+            _request: anemo::Request<WorkerDeleteBatchesMessage>,
+        ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
+            unimplemented!()
+        }
+    }
+
+    let routes =
+        anemo::Router::new().add_rpc_service(PrimaryToWorkerServer::new(MockPrimaryToWorker {
+            expected_batches,
+        }));
+    worker.new_network(routes)
 }

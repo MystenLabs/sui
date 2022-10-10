@@ -96,7 +96,7 @@ pub trait ReliableNetwork<Request: Clone + Send + Sync> {
 pub trait PrimaryToWorkerRpc {
     async fn request_batch(
         &self,
-        peer: &NetworkPublicKey,
+        peer: NetworkPublicKey,
         batch: BatchDigest,
     ) -> Result<Option<Batch>>;
     async fn delete_batches(&self, peer: NetworkPublicKey, digests: Vec<BatchDigest>)
