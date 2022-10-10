@@ -133,6 +133,16 @@ export class BackgroundClient {
             ).pipe(take(1))
         );
     }
+    public async lockWallet() {
+        return await lastValueFrom(
+            this.sendMessage(
+                createMessage<KeyringPayload<'lock'>>({
+                    type: 'keyring',
+                    method: 'lock',
+                })
+            ).pipe(take(1))
+        );
+    }
 
     public async getMnemonic(password?: string) {
         return await lastValueFrom(
