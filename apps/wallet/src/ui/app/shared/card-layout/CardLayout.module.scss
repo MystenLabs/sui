@@ -11,6 +11,7 @@
     align-items: center;
     padding: 40px 30px;
     flex: 1;
+    overflow: auto;
 
     &.box {
         background: $color;
