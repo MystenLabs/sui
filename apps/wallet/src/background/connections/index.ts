@@ -52,4 +52,12 @@ export class Connections {
             }
         }
     }
+
+    notifyForLockedStatusUpdate(isLocked: boolean) {
+        for (const aConnection of this._connections) {
+            if (aConnection instanceof UiConnection) {
+                aConnection.sendLockedStatusUpdate(isLocked);
+            }
+        }
+    }
 }

@@ -23,5 +23,5 @@ Permissions.permissionReply.subscribe((permission) => {
 });
 
 Keyring.on('lockedStatusUpdate', (isLocked: boolean) => {
-    // TODO notify UI
+    connections.notifyForLockedStatusUpdate(isLocked);
 });

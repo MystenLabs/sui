@@ -142,6 +142,25 @@ class Keyring {
             ) {
                 await this.unlock(payload.args.password);
                 uiConnection.send(createMessage({ type: 'done' }, id));
+            } else if (
+                isKeyringPayload<'walletStatusUpdate'>(
+                    payload,
+                    'walletStatusUpdate'
+                )
+            ) {
+                uiConnection.send(
+                    createMessage<KeyringPayload<'walletStatusUpdate'>>(
+                        {
+                            type: 'keyring',
+                            method: 'walletStatusUpdate',
+                            return: {
+                                isLocked: this.isLocked,
+                                isInitialized: await this.isWalletInitialized(),
+                            },
+                        },
+                        id
+                    )
+                );
             }
         } catch (e) {
             uiConnection.send(

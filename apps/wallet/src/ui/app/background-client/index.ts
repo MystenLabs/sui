@@ -9,6 +9,7 @@ import { isKeyringPayload } from '_payloads/keyring';
 import { isPermissionRequests } from '_payloads/permissions';
 import { isUpdateActiveOrigin } from '_payloads/tabs/updateActiveOrigin';
 import { isGetTransactionRequestsResponse } from '_payloads/transactions/ui/GetTransactionRequestsResponse';
+import { setKeyringStatus } from '_redux/slices/account';
 import { setActiveOrigin } from '_redux/slices/app';
 import { setPermissions } from '_redux/slices/permissions';
 import { setTransactionRequests } from '_redux/slices/transaction-requests';
@@ -40,6 +41,7 @@ export class BackgroundClient {
         return Promise.all([
             this.sendGetPermissionRequests(),
             this.sendGetTransactionRequests(),
+            this.getWalletStatus(),
         ]).then(() => undefined);
     }
 
@@ -159,6 +161,17 @@ export class BackgroundClient {
         );
     }
 
+    private async getWalletStatus() {
+        return await lastValueFrom(
+            this.sendMessage(
+                createMessage<KeyringPayload<'walletStatusUpdate'>>({
+                    type: 'keyring',
+                    method: 'walletStatusUpdate',
+                })
+            ).pipe(take(1))
+        );
+    }
+
     private handleIncomingMessage(msg: Message) {
         if (!this._initialized || !this._dispatch) {
             throw new Error(
@@ -173,6 +186,14 @@ export class BackgroundClient {
             action = setTransactionRequests(payload.txRequests);
         } else if (isUpdateActiveOrigin(payload)) {
             action = setActiveOrigin(payload);
+        } else if (
+            isKeyringPayload<'walletStatusUpdate'>(
+                payload,
+                'walletStatusUpdate'
+            ) &&
+            payload.return
+        ) {
+            action = setKeyringStatus(payload.return);
         }
         if (action) {
             this._dispatch(action);
