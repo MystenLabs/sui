@@ -260,7 +260,7 @@ impl Proposer {
             // Check if we can propose a new header. We propose a new header when we have a quorum of parents
             // and one of the following conditions is met:
             // (i) the timer expired (we timed out on the leader or gave up gather votes for the leader),
-            // (ii) we have enough digests (minimum header size) and we are on the happy path (we can vote for
+            // (ii) we have enough digests (header_num_of_batches_threshold) and we are on the happy path (we can vote for
             // the leader or the leader has enough votes to enable a commit). The latter condition only matters
             // in partially synchrony. We guarantee that no more than max_header_num_of_batches are included in
             let enough_parents = !self.last_parents.is_empty();

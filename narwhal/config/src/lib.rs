@@ -107,9 +107,11 @@ pub type WorkerId = u32;
 pub struct Parameters {
     /// When the primary has at least `header_num_of_batches_threshold` num of batch digests
     /// available, then it can propose a new header.
+    #[serde(default = "Parameters::default_header_num_of_batches_threshold")]
     pub header_num_of_batches_threshold: usize,
 
     /// The maximum number of batch digests included in a header.
+    #[serde(default = "Parameters::default_max_header_num_of_batches")]
     pub max_header_num_of_batches: usize,
 
     /// The maximum delay that the primary waits between generating two headers, even if the header
@@ -141,6 +143,16 @@ pub struct Parameters {
     pub prometheus_metrics: PrometheusMetricsParameters,
     /// Network admin server ports for primary & worker.
     pub network_admin_server: NetworkAdminServerParameters,
+}
+
+impl Parameters {
+    fn default_header_num_of_batches_threshold() -> usize {
+        32
+    }
+
+    fn default_max_header_num_of_batches() -> usize {
+        1000
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
