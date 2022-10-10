@@ -98,7 +98,7 @@ impl<SynchronizerHandler: Handler + Send + Sync + 'static> BlockWaiter<Synchroni
         })
     }
 
-    #[instrument(level = "debug", skip_all, err)]
+    #[instrument(level = "debug", skip_all, fields(certificate_digest = ?certificate_digest), err)]
     async fn get_block(
         &self,
         certificate_digest: CertificateDigest,

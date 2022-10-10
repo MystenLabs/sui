@@ -73,8 +73,6 @@ pub struct PrimaryChannelMetrics {
     pub tx_primary_messages: IntGauge,
     /// occupancy of the channel from the `primary::PrimaryReceiverHandler` to the `primary::Helper`
     pub tx_helper_requests: IntGauge,
-    /// occupancy of the channel from the `primary::WorkerReceiverHandler` to the `primary::BlockWaiter`
-    pub tx_batches: IntGauge,
     /// occupancy of the channel from the `primary::ConsensusAPIGrpc` to the `primary::BlockRemover`
     pub tx_block_removal_commands: IntGauge,
     /// occupancy of the channel from the `primary::WorkerReceiverHandler` to the `primary::BlockRemover`
@@ -113,8 +111,6 @@ pub struct PrimaryChannelMetrics {
     pub tx_primary_messages_total: IntCounter,
     /// total received on channel from the `primary::PrimaryReceiverHandler` to the `primary::Helper`
     pub tx_helper_requests_total: IntCounter,
-    /// total received on channel from the `primary::WorkerReceiverHandler` to the `primary::BlockWaiter`
-    pub tx_batches_total: IntCounter,
     /// total received on channel from the `primary::ConsensusAPIGrpc` to the `primary::BlockRemover`
     pub tx_block_removal_commands_total: IntCounter,
     /// total received on channel from the `primary::WorkerReceiverHandler` to the `primary::BlockRemover`
@@ -208,11 +204,6 @@ impl PrimaryChannelMetrics {
                 "occupancy of the channel from the `primary::PrimaryReceiverHandler` to the `primary::Helper`",
                 registry
             ).unwrap(),
-            tx_batches: register_int_gauge_with_registry!(
-                "tx_batches",
-                "occupancy of the channel from the `primary::WorkerReceiverHandler` to the `primary::BlockWaiter`",
-                registry
-            ).unwrap(),
             tx_block_removal_commands: register_int_gauge_with_registry!(
                 "tx_block_removal_commands",
                 "occupancy of the channel from the `primary::ConsensusAPIGrpc` to the `primary::BlockRemover`",
@@ -303,11 +294,6 @@ impl PrimaryChannelMetrics {
             tx_helper_requests_total: register_int_counter_with_registry!(
                 "tx_helper_requests_total",
                 "total received on channel from the `primary::PrimaryReceiverHandler` to the `primary::Helper`",
-                registry
-            ).unwrap(),
-            tx_batches_total: register_int_counter_with_registry!(
-                "tx_batches_total",
-                "total received on channel from the `primary::WorkerReceiverHandler` to the `primary::BlockWaiter`",
                 registry
             ).unwrap(),
             tx_block_removal_commands_total: register_int_counter_with_registry!(
