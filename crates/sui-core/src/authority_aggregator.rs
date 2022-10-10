@@ -1,5 +1,5 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority_client::AuthorityAPI;
@@ -295,7 +295,7 @@ where
         let mut attempted_certificates: HashSet<TransactionDigest> = HashSet::new();
 
         while let Some(target_cert) = missing_certificates.pop() {
-            let cert_digest = *cert.digest();
+            let cert_digest = *target_cert.digest();
 
             if processed_certificates.contains(&cert_digest) {
                 continue;
@@ -425,7 +425,7 @@ where
                 retries,
             )
             .await?;
-            client.handle_certificate(cert).instrument(tracing::trace_span!("handle_cert_after_sync", authority =? destination_authority, retry = true)).await
+            client.handle_certificate(cert).instrument(tracing::trace_span!("handle_cert_after_sync", authority =? destination_authority.concise(), retry = true)).await
         })).await {
             res.map_err(|e| SuiError::CertificateSyncError {
                 authority_name: destination_authority.to_string(),
@@ -649,7 +649,7 @@ where
                     (
                         *name,
                         execute(*name, client)
-                            .instrument(tracing::trace_span!("quorum_map_auth", authority =? name))
+                            .instrument(tracing::trace_span!("quorum_map_auth", authority =? name.concise()))
                             .await,
                     )
                 }
@@ -1476,13 +1476,13 @@ where
 
                         let res =
                             client.handle_certificate(cert_ref.clone())
-                                .instrument(tracing::trace_span!("handle_certificate", authority =? name))
+                                .instrument(tracing::trace_span!("handle_certificate", authority =? name.concise()))
                                 .await;
 
                         if res.is_ok() {
                             debug!(
                                 tx_digest = ?tx_digest,
-                                ?name,
+                                name = ?name.concise(),
                                 "Validator handled certificate successfully",
                             );
                             // We got an ok answer, so returning the result of processing
@@ -1496,7 +1496,7 @@ where
                         if !matches!(res, Err(SuiError::ObjectErrors { .. })) {
                             debug!(
                                 tx_digest = ?tx_digest,
-                                ?name,
+                                name = ?name.concise(),
                                 "Error from validator handle_confirmation_transaction: {:?}",
                                 res
                             );
@@ -1512,7 +1512,7 @@ where
                                 self.timeouts.authority_request_timeout,
                                 self.timeouts.pre_quorum_timeout,
                             )
-                            .instrument(tracing::trace_span!("sync_cert", authority =? name))
+                            .instrument(tracing::trace_span!("sync_cert", authority =? name.concise()))
                             .await
                             .map_err(|e| { info!(err =? e, "Error from sync_certificate"); e})
                     })

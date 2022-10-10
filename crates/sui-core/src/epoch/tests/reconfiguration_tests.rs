@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
@@ -12,20 +12,22 @@ use std::{
 
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
-    crypto::{get_key_pair, AccountKeyPair, AuthoritySignature, Signature, SuiAuthoritySignature},
+    crypto::{get_key_pair, AccountKeyPair, AuthoritySignature, SuiAuthoritySignature},
     error::SuiError,
     gas::SuiGasStatus,
-    messages::{InputObjects, SignatureAggregator, Transaction, TransactionData},
+    messages::{InputObjects, SignatureAggregator, TransactionData},
     object::Object,
     SUI_SYSTEM_STATE_OBJECT_ID,
 };
 
+use crate::checkpoints::reconstruction::SpanGraph;
 use crate::{
     authority::TemporaryStore,
     authority_active::ActiveAuthority,
     authority_aggregator::authority_aggregator_tests::init_local_authorities,
     checkpoints::{CheckpointLocals, CHECKPOINT_COUNT_PER_EPOCH},
     execution_engine,
+    test_utils::to_sender_signed_transaction,
 };
 
 #[tokio::test]
@@ -54,13 +56,18 @@ async fn test_start_epoch_change() {
             next_transaction_sequence: 0,
             no_more_fragments: true,
             current_proposal: None,
+            checkpoint_to_be_constructed: SpanGraph::mew(
+                &genesis_committee,
+                CHECKPOINT_COUNT_PER_EPOCH,
+                &[],
+            ),
         })
         .unwrap();
     // Create an active authority for the first authority state.
     let active =
         ActiveAuthority::new_with_ephemeral_storage_for_test(state.clone(), net.clone()).unwrap();
     // Make the high watermark differ from low watermark.
-    let ticket = state.batch_notifier.ticket().unwrap();
+    let ticket = state.batch_notifier.ticket(false).unwrap();
 
     // Invoke start_epoch_change on the active authority.
     let epoch_change_started = Arc::new(AtomicBool::new(false));
@@ -94,8 +101,7 @@ async fn test_start_epoch_change() {
         gas_object.compute_object_reference(),
         1000,
     );
-    let signature = Signature::new(&tx_data, &sender_key);
-    let transaction = Transaction::new(tx_data, signature);
+    let transaction = to_sender_signed_transaction(tx_data, &sender_key);
     assert_eq!(
         state
             .handle_transaction(transaction.clone())
@@ -155,7 +161,7 @@ async fn test_start_epoch_change() {
     let signed_effects = effects.to_sign_effects(0, &state.name, &*state.secret);
     assert_eq!(
         state
-            .commit_certificate(inner_temporary_store, &certificate, &signed_effects)
+            .commit_certificate(inner_temporary_store, &certificate, &signed_effects, false)
             .await
             .unwrap_err(),
         SuiError::ValidatorHaltedAtEpochEnd
@@ -180,6 +186,7 @@ async fn test_finish_epoch_change() {
         .zip(actives.iter())
         .map(|(state, active)| {
             async {
+                let genesis_committee = state.committee_store().get_latest_committee();
                 // Set the checkpoint number to be near the end of epoch.
                 let mut locals = CheckpointLocals {
                     next_checkpoint: CHECKPOINT_COUNT_PER_EPOCH,
@@ -187,6 +194,11 @@ async fn test_finish_epoch_change() {
                     next_transaction_sequence: 0,
                     no_more_fragments: true,
                     current_proposal: None,
+                    checkpoint_to_be_constructed: SpanGraph::mew(
+                        &genesis_committee,
+                        CHECKPOINT_COUNT_PER_EPOCH,
+                        &[],
+                    ),
                 };
                 state
                     .checkpoints

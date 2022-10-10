@@ -1,11 +1,12 @@
 // Copyright(C) Facebook, Inc. and its affiliates.
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{metrics::PrimaryMetrics, NetworkModel};
 use config::{Committee, Epoch, WorkerId};
 use crypto::{PublicKey, Signature};
 use fastcrypto::{Digest, Hash as _, SignatureService};
 use std::{cmp::Ordering, sync::Arc};
+use storage::ProposerStore;
 use tokio::{
     sync::watch,
     task::JoinHandle,
@@ -46,6 +47,8 @@ pub struct Proposer {
     /// Sends newly created headers to the `Core`.
     tx_core: Sender<Header>,
 
+    /// The proposer store for persisting the last header.
+    proposer_store: ProposerStore,
     /// The current round of the dag.
     round: Round,
     /// Holds the certificates' ids waiting to be included in the next header.
@@ -67,6 +70,7 @@ impl Proposer {
         name: PublicKey,
         committee: Committee,
         signature_service: SignatureService<Signature>,
+        proposer_store: ProposerStore,
         header_size: usize,
         max_header_delay: Duration,
         network_model: NetworkModel,
@@ -89,6 +93,7 @@ impl Proposer {
                 rx_core,
                 rx_workers,
                 tx_core,
+                proposer_store,
                 round: 0,
                 last_parents: genesis,
                 last_leader: None,
@@ -102,8 +107,13 @@ impl Proposer {
     }
 
     async fn make_header(&mut self) -> DagResult<()> {
+        // Backup digests and payload size, clear payload size
+        let digest_backup = self.digests.clone();
+        let payload_size_backup = self.payload_size;
+        self.payload_size = 0;
+
         // Make a new header.
-        let header = Header::new(
+        let mut header = Header::new(
             self.name.clone(),
             self.round,
             self.committee.epoch(),
@@ -114,10 +124,25 @@ impl Proposer {
         .await;
         debug!("Created {header:?}");
 
+        // Equivocation protection using the proposer store
+        if let Some(last_header) = self.proposer_store.get_last_proposed()? {
+            if last_header.round == header.round && last_header.epoch == header.epoch {
+                // We have already produced a header for the current round, idempotent re-send
+                if last_header != header {
+                    debug!("Equivocation protection was enacted in the proposer");
+                    self.digests = digest_backup;
+                    self.payload_size = payload_size_backup;
+                    header = last_header;
+                }
+            }
+        }
+        // Store the last header.
+        self.proposer_store.write_last_proposed(&header)?;
+
         #[cfg(feature = "benchmark")]
         for digest in header.payload.keys() {
             // NOTE: This log entry is used to compute performance.
-            tracing::info!("Created {} -> {:?}", header, digest);
+            info!("Created {} -> {:?}", header, digest);
         }
 
         // Send the new header to the `Core` that will broadcast and process it.
@@ -260,7 +285,6 @@ impl Proposer {
                     Err(e) => panic!("Unexpected error: {e}"),
                     Ok(()) => (),
                 }
-                self.payload_size = 0;
 
                 // Reschedule the timer.
                 let deadline = self.timeout_value();

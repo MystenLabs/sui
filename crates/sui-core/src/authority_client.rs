@@ -1,5 +1,5 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority::AuthorityState;
@@ -77,7 +77,7 @@ pub type BatchInfoResponseItemStream = BoxStream<'static, Result<BatchInfoRespon
 
 #[derive(Clone)]
 pub struct NetworkAuthorityClient {
-    client: ValidatorClient<tonic::transport::Channel>,
+    client: ValidatorClient<Channel>,
     metrics: Arc<NetworkAuthorityClientMetrics>,
 }
 
@@ -101,17 +101,14 @@ impl NetworkAuthorityClient {
         Ok(Self::new(channel, metrics))
     }
 
-    pub fn new(
-        channel: tonic::transport::Channel,
-        metrics: Arc<NetworkAuthorityClientMetrics>,
-    ) -> Self {
+    pub fn new(channel: Channel, metrics: Arc<NetworkAuthorityClientMetrics>) -> Self {
         Self {
             client: ValidatorClient::new(channel),
             metrics,
         }
     }
 
-    fn client(&self) -> ValidatorClient<tonic::transport::Channel> {
+    fn client(&self) -> ValidatorClient<Channel> {
         self.client.clone()
     }
 }
@@ -122,10 +119,7 @@ impl Reconfigurable for NetworkAuthorityClient {
         true
     }
 
-    fn recreate(
-        channel: tonic::transport::Channel,
-        metrics: Arc<NetworkAuthorityClientMetrics>,
-    ) -> Self {
+    fn recreate(channel: Channel, metrics: Arc<NetworkAuthorityClientMetrics>) -> Self {
         NetworkAuthorityClient::new(channel, metrics)
     }
 }

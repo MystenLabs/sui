@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
@@ -35,6 +35,7 @@ use slip10_ed25519::derive_ed25519_private_key;
 use crate::base_types::{AuthorityName, SuiAddress};
 use crate::committee::{Committee, EpochId};
 use crate::error::{SuiError, SuiResult};
+use crate::intent::{Intent, IntentMessage};
 use crate::sui_serde::{AggrAuthSignature, Base64, Readable, SuiBitmap};
 pub use enum_dispatch::enum_dispatch;
 
@@ -114,7 +115,7 @@ impl SuiKeyPair {
     }
 }
 
-impl signature::Signer<Signature> for SuiKeyPair {
+impl Signer<Signature> for SuiKeyPair {
     fn try_sign(&self, msg: &[u8]) -> Result<Signature, signature::Error> {
         match self {
             SuiKeyPair::Ed25519SuiKeyPair(kp) => kp.try_sign(msg),
@@ -325,13 +326,28 @@ pub struct AuthorityPublicKeyBytes(
 );
 
 impl AuthorityPublicKeyBytes {
-    fn fmt_impl(
-        &self,
-        f: &mut std::fmt::Formatter<'_>,
-    ) -> std::result::Result<(), std::fmt::Error> {
+    fn fmt_impl(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         let s = hex::encode(self.0);
         write!(f, "k#{}", s)?;
         Ok(())
+    }
+
+    /// Get a ConciseAuthorityPublicKeyBytes. Usage:
+    ///
+    ///   debug!(name = ?authority.concise());
+    ///   format!("{:?}", authority.concise());
+    pub fn concise(&self) -> ConciseAuthorityPublicKeyBytes<'_> {
+        ConciseAuthorityPublicKeyBytes(self)
+    }
+}
+
+/// A wrapper around AuthorityPublicKeyBytes that provides a concise Debug impl.
+pub struct ConciseAuthorityPublicKeyBytes<'a>(&'a AuthorityPublicKeyBytes);
+
+impl std::fmt::Debug for ConciseAuthorityPublicKeyBytes<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        let s = hex::encode(&self.0 .0[0..4]);
+        write!(f, "k#{}..", s)
     }
 }
 
@@ -356,13 +372,13 @@ impl AsRef<[u8]> for AuthorityPublicKeyBytes {
 }
 
 impl std::fmt::Debug for AuthorityPublicKeyBytes {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         self.fmt_impl(f)
     }
 }
 
 impl Display for AuthorityPublicKeyBytes {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         self.fmt_impl(f)
     }
 }
@@ -393,7 +409,7 @@ where {
 }
 
 impl FromStr for AuthorityPublicKeyBytes {
-    type Err = anyhow::Error;
+    type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let s = s.strip_prefix("0x").unwrap_or(s);
@@ -407,17 +423,30 @@ impl FromStr for AuthorityPublicKeyBytes {
 //
 
 pub trait SuiAuthoritySignature {
-    fn new<T>(value: &T, secret: &dyn signature::Signer<Self>) -> Self
+    fn new<T>(value: &T, secret: &dyn Signer<Self>) -> Self
     where
         T: Signable<Vec<u8>>;
 
     fn verify<T>(&self, value: &T, author: AuthorityPublicKeyBytes) -> Result<(), SuiError>
     where
         T: Signable<Vec<u8>>;
+
+    fn verify_secure<T>(
+        &self,
+        value: &T,
+        intent: Intent,
+        author: AuthorityPublicKeyBytes,
+    ) -> Result<(), SuiError>
+    where
+        T: Serialize;
+
+    fn new_secure<T>(value: &T, intent: Intent, secret: &dyn signature::Signer<Self>) -> Self
+    where
+        T: Serialize;
 }
 
 impl SuiAuthoritySignature for AuthoritySignature {
-    fn new<T>(value: &T, secret: &dyn signature::Signer<Self>) -> Self
+    fn new<T>(value: &T, secret: &dyn Signer<Self>) -> Self
     where
         T: Signable<Vec<u8>>,
     {
@@ -445,6 +474,39 @@ impl SuiAuthoritySignature for AuthoritySignature {
             .verify(&message, self)
             .map_err(|error| SuiError::InvalidSignature {
                 error: error.to_string(),
+            })
+    }
+
+    fn new_secure<T>(value: &T, intent: Intent, secret: &dyn signature::Signer<Self>) -> Self
+    where
+        T: Serialize,
+    {
+        secret.sign(
+            &bcs::to_bytes(&IntentMessage::new(intent, value))
+                .expect("Message serialization should not fail"),
+        )
+    }
+
+    fn verify_secure<T>(
+        &self,
+        value: &T,
+        intent: Intent,
+        author: AuthorityPublicKeyBytes,
+    ) -> Result<(), SuiError>
+    where
+        T: Serialize,
+    {
+        let message = bcs::to_bytes(&IntentMessage::new(intent, value))
+            .expect("Message serialization should not fail");
+        let public_key = AuthorityPublicKey::try_from(author).map_err(|_| {
+            SuiError::KeyConversionError(
+                "Failed to serialize public key bytes to valid public key".to_string(),
+            )
+        })?;
+        public_key
+            .verify(&message[..], self)
+            .map_err(|e| SuiError::InvalidSignature {
+                error: format!("{}", e),
             })
     }
 }
@@ -479,7 +541,7 @@ where
 /// Wrapper function to return SuiKeypair based on key scheme string
 pub fn random_key_pair_by_type(
     key_scheme: SignatureScheme,
-) -> Result<(SuiAddress, SuiKeyPair), anyhow::Error> {
+) -> Result<(SuiAddress, SuiKeyPair), Error> {
     match key_scheme.to_string().as_ref() {
         "secp256k1" => {
             let (addr, key_pair): (_, Secp256k1KeyPair) = get_key_pair();
@@ -615,7 +677,7 @@ pub fn validate_path(
 pub fn random_key_pair_by_type_from_rng<R>(
     key_scheme: SignatureScheme,
     csprng: &mut R,
-) -> Result<(SuiAddress, SuiKeyPair), anyhow::Error>
+) -> Result<(SuiAddress, SuiKeyPair), Error>
 where
     R: rand::CryptoRng + rand::RngCore,
 {
@@ -694,15 +756,31 @@ impl<'de> Deserialize<'de> for Signature {
     }
 }
 
-// Can refactor this with a library
 impl Signature {
-    pub fn new<T>(value: &T, secret: &dyn signature::Signer<Signature>) -> Signature
+    pub fn new<T>(value: &T, secret: &dyn Signer<Signature>) -> Signature
     where
         T: Signable<Vec<u8>>,
     {
         let mut message = Vec::new();
         value.write(&mut message);
         secret.sign(&message)
+    }
+
+    pub fn new_secure<T>(
+        value: &T,
+        intent: Intent,
+        secret: &dyn signature::Signer<Signature>,
+    ) -> Self
+    where
+        T: Serialize,
+    {
+        secret.sign(
+            &bcs::to_bytes(&IntentMessage::new(intent, value))
+                .expect("Message serialization should not fail"),
+        )
+    }
+    pub fn new_temp(value: &[u8], secret: &dyn signature::Signer<Signature>) -> Signature {
+        secret.sign(value)
     }
 }
 
@@ -737,7 +815,7 @@ impl signature::Signature for Signature {
 }
 
 impl std::fmt::Debug for Signature {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         let flag = base64ct::Base64::encode_string(&[self.scheme().flag()]);
         let s = base64ct::Base64::encode_string(self.signature_bytes());
         let p = base64ct::Base64::encode_string(self.public_key_bytes());
@@ -794,7 +872,7 @@ impl signature::Signature for Ed25519SuiSignature {
     }
 }
 
-impl signature::Signer<Signature> for Ed25519KeyPair {
+impl Signer<Signature> for Ed25519KeyPair {
     fn try_sign(&self, msg: &[u8]) -> Result<Signature, signature::Error> {
         Ok(Ed25519SuiSignature::new(self, msg)
             .map_err(|_| signature::Error::new())?
@@ -845,7 +923,7 @@ impl signature::Signature for Secp256k1SuiSignature {
     }
 }
 
-impl signature::Signer<Signature> for Secp256k1KeyPair {
+impl Signer<Signature> for Secp256k1KeyPair {
     fn try_sign(&self, msg: &[u8]) -> Result<Signature, signature::Error> {
         Ok(Secp256k1SuiSignature::new(self, msg)
             .map_err(|_| signature::Error::new())?
@@ -918,6 +996,10 @@ pub trait SuiSignature: Sized + signature::Signature {
     where
         T: Signable<Vec<u8>>;
 
+    fn verify_secure<T>(&self, value: &T, intent: Intent, author: SuiAddress) -> SuiResult<()>
+    where
+        T: Serialize;
+
     fn add_to_verification_obligation_or_verify(
         &self,
         author: SuiAddress,
@@ -927,6 +1009,18 @@ pub trait SuiSignature: Sized + signature::Signature {
 }
 
 impl<S: SuiSignatureInner + Sized> SuiSignature for S {
+    fn signature_bytes(&self) -> &[u8] {
+        &self.as_ref()[1..1 + S::Sig::LENGTH]
+    }
+
+    fn public_key_bytes(&self) -> &[u8] {
+        &self.as_ref()[S::Sig::LENGTH + 1..]
+    }
+
+    fn scheme(&self) -> SignatureScheme {
+        S::PubKey::SIGNATURE_SCHEME
+    }
+
     fn verify<T>(&self, value: &T, author: SuiAddress) -> SuiResult<()>
     where
         T: Signable<Vec<u8>>,
@@ -936,8 +1030,26 @@ impl<S: SuiSignatureInner + Sized> SuiSignature for S {
         let mut message = Vec::new();
         value.write(&mut message);
         pk.verify(&message[..], sig)
-            .map_err(|_| SuiError::InvalidSignature {
-                error: "hello".to_string(),
+            .map_err(|e| SuiError::InvalidSignature {
+                error: format!("{}", e),
+            })
+    }
+
+    fn verify_secure<T>(
+        &self,
+        value: &T,
+        intent: Intent,
+        author: SuiAddress,
+    ) -> Result<(), SuiError>
+    where
+        T: Serialize,
+    {
+        let message = bcs::to_bytes(&IntentMessage::new(intent, value))
+            .expect("Message serialization should not fail");
+        let (sig, pk) = &self.get_verification_inputs(author)?;
+        pk.verify(&message[..], sig)
+            .map_err(|e| SuiError::InvalidSignature {
+                error: format!("{}", e),
             })
     }
 
@@ -958,18 +1070,6 @@ impl<S: SuiSignatureInner + Sized> SuiSignature for S {
                     })
             }
         }
-    }
-
-    fn signature_bytes(&self) -> &[u8] {
-        &self.as_ref()[1..1 + S::Sig::LENGTH]
-    }
-
-    fn public_key_bytes(&self) -> &[u8] {
-        &self.as_ref()[S::Sig::LENGTH + 1..]
-    }
-
-    fn scheme(&self) -> SignatureScheme {
-        S::PubKey::SIGNATURE_SCHEME
     }
 }
 
@@ -1268,7 +1368,7 @@ pub trait SignableBytes
 where
     Self: Sized,
 {
-    fn from_signable_bytes(bytes: &[u8]) -> Result<Self, anyhow::Error>;
+    fn from_signable_bytes(bytes: &[u8]) -> Result<Self, Error>;
 }
 /// Activate the blanket implementation of `Signable` based on serde and BCS.
 /// * We use `serde_name` to extract a seed from the name of structs and enums.

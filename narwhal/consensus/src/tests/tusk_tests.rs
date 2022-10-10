@@ -1,5 +1,5 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 
@@ -339,6 +339,7 @@ async fn missing_leader() {
     let gc_depth = 50;
     let tusk = Tusk::new(committee.clone(), store.clone(), gc_depth);
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
+
     let _consensus_handle = Consensus::spawn(
         committee,
         store,
@@ -397,6 +398,7 @@ async fn epoch_change() {
     let gc_depth = 50;
     let tusk = Tusk::new(committee.clone(), store.clone(), gc_depth);
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
+
     let _consensus_handle = Consensus::spawn(
         committee.clone(),
         store,

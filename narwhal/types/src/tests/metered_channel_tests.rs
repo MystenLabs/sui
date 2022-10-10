@@ -1,5 +1,5 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use super::{channel, channel_with_total};
 use futures::{
@@ -93,7 +93,7 @@ fn test_reserve_and_drop() {
     let permit = block_on(tx.reserve()).unwrap();
     assert_eq!(counter.get(), 1);
 
-    std::mem::drop(permit);
+    drop(permit);
 
     assert_eq!(counter.get(), 0);
 }

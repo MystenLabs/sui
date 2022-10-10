@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 //# init --addresses t1=0x0 t2=0x0 t3=0x0 A=0x42

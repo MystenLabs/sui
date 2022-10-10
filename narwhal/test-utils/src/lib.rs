@@ -1,5 +1,5 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use anemo::async_trait;
@@ -28,9 +28,10 @@ use types::{
     Batch, BatchDigest, Certificate, CertificateDigest, ConsensusStore, Header, HeaderBuilder,
     PrimaryMessage, PrimaryToPrimary, PrimaryToPrimaryServer, PrimaryToWorker,
     PrimaryToWorkerServer, PrimaryWorkerMessage, RequestBatchRequest, RequestBatchResponse, Round,
-    SequenceNumber, Transaction, Vote, WorkerBatchRequest, WorkerBatchResponse, WorkerInfoResponse,
-    WorkerMessage, WorkerPrimaryMessage, WorkerSynchronizeMessage, WorkerToPrimary,
-    WorkerToPrimaryServer, WorkerToWorker, WorkerToWorkerServer,
+    SequenceNumber, Transaction, Vote, WorkerBatchRequest, WorkerBatchResponse,
+    WorkerDeleteBatchesMessage, WorkerInfoResponse, WorkerMessage, WorkerPrimaryMessage,
+    WorkerSynchronizeMessage, WorkerToPrimary, WorkerToPrimaryServer, WorkerToWorker,
+    WorkerToWorkerServer,
 };
 
 pub mod cluster;
@@ -313,6 +314,13 @@ impl PrimaryToWorker for PrimaryToWorkerMockServer {
         _request: anemo::Request<RequestBatchRequest>,
     ) -> Result<anemo::Response<RequestBatchResponse>, anemo::rpc::Status> {
         tracing::error!("Not implemented PrimaryToWorkerMockServer::request_batch");
+        Err(anemo::rpc::Status::internal("Unimplemented"))
+    }
+    async fn delete_batches(
+        &self,
+        _request: anemo::Request<WorkerDeleteBatchesMessage>,
+    ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
+        tracing::error!("Not implemented PrimaryToWorkerMockServer::delete_batches");
         Err(anemo::rpc::Status::internal("Unimplemented"))
     }
 }

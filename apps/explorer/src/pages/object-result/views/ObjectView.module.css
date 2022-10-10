@@ -81,7 +81,7 @@ div.display {
 }
 
 div.display > div > img {
-    @apply max-h-[120px] w-full sm:max-w-[120px] ml-auto;
+    @apply max-h-[120px] w-[120px] ml-auto;
 }
 
 div.display > div > div > div,

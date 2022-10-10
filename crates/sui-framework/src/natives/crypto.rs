@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{legacy_emit_cost, legacy_empty_cost};
 use curve25519_dalek_ng::scalar::Scalar;

@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 import { ObjectOwner, SuiAddress, TransactionDigest } from './common';
@@ -31,7 +31,8 @@ export type Pay = {
 export type ExecuteTransactionRequestType =
   | 'ImmediateReturn'
   | 'WaitForTxCert'
-  | 'WaitForEffectsCert';
+  | 'WaitForEffectsCert'
+  | 'WaitForLocalExecution';
 
 export type TransactionKindName =
   | 'TransferObject'

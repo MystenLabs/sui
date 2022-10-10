@@ -1,5 +1,5 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
     batch_maker::BatchMaker,
@@ -157,9 +157,22 @@ impl Worker {
                 outbound_network_metrics,
             )))
             .into_inner();
+
+        let anemo_config = {
+            let mut quic_config = anemo::QuicConfig::default();
+            // Enable keep alives every 5s
+            quic_config.keep_alive_interval_ms = Some(5_000);
+            let mut config = anemo::Config::default();
+            config.quic = Some(quic_config);
+            // Set a default timeout of 30s for all outbound RPC requests
+            config.outbound_request_timeout_ms = Some(30_000);
+            config
+        };
+
         let network = anemo::Network::bind(addr)
             .server_name("narwhal")
             .private_key(worker.keypair.copy().private().0.to_bytes())
+            .config(anemo_config)
             .outbound_request_layer(outbound_layer)
             .start(service)
             .unwrap();
@@ -224,7 +237,7 @@ impl Worker {
             .network_key(&primary_name)
             .expect("Our primary is not in the committee");
         network.known_peers().insert(PeerInfo {
-            peer_id: anemo::PeerId(primary_network_key.0.to_bytes()),
+            peer_id: PeerId(primary_network_key.0.to_bytes()),
             affinity: anemo::types::PeerAffinity::High,
             address: vec![primary_address],
         });
@@ -232,7 +245,7 @@ impl Worker {
             primary_network_key,
             rx_reconfigure,
             rx_primary,
-            network::P2pNetwork::new(network.clone()),
+            P2pNetwork::new(network.clone()),
         );
         let client_flow_handles = worker.handle_clients_transactions(
             &tx_reconfigure,
@@ -389,7 +402,7 @@ impl Worker {
         &self,
         tx_reconfigure: &watch::Sender<ReconfigureNotification>,
         tx_primary: Sender<WorkerPrimaryMessage>,
-        rx_worker_processor: types::metered_channel::Receiver<Batch>,
+        rx_worker_processor: Receiver<Batch>,
     ) -> Vec<JoinHandle<()>> {
         // This `Processor` hashes and stores the batches we receive from the other workers. It then forwards the
         // batch's digest to the `PrimaryConnector` that will send it to our primary.
@@ -466,8 +479,8 @@ impl Transactions for TxReceiverHandler {
 
     async fn submit_transaction_stream(
         &self,
-        request: tonic::Request<tonic::Streaming<types::TransactionProto>>,
-    ) -> Result<tonic::Response<types::Empty>, tonic::Status> {
+        request: Request<tonic::Streaming<types::TransactionProto>>,
+    ) -> Result<Response<types::Empty>, Status> {
         let mut transactions = request.into_inner();
 
         while let Some(Ok(txn)) = transactions.next().await {

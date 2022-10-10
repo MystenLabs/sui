@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use std::sync::Arc;
@@ -341,6 +341,7 @@ async fn replay_shared_object_transaction() {
     }
 }
 
+// TODO [gateway-deprecation] remove test case
 #[sim_test]
 async fn shared_object_on_gateway() {
     let mut gas_objects = test_gas_objects();

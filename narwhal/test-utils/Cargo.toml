@@ -16,7 +16,7 @@ derive_builder = "0.11.2"
 fdlimit = "0.2"
 futures = "0.3.24"
 indexmap = { version = "1.9.1", features = ["serde"] }
-itertools = "0.10.4"
+itertools = "0.10.5"
 multiaddr = "0.14.0"
 prometheus = "0.13.2"
 rand = "0.8.5"
@@ -25,7 +25,7 @@ tempfile = "3.3.0"
 thiserror = "1.0.35"
 tokio = { version = "1.20.1", features = ["sync", "rt", "macros"] }
 tokio-util = { version = "0.7.4", features = ["codec"] }
-tonic = "0.7.2"
+tonic = "0.8.2"
 tracing = "0.1.36"
 
 config = { path = "../config", package = "narwhal-config" }
@@ -43,5 +43,5 @@ store = { version = "0.1.0", package = "typed-store"}
 workspace-hack.workspace = true
 telemetry-subscribers.workspace = true
 
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "302ff6f98fffa30a3a18e919766cd63f5b4c5aa8" }
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "57c4af7d6cdbf47633e6715bcd67d98f300e2fd8" }
 tower = { version = "0.4.13", features = ["full"] }

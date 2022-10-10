@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use std::ops::Deref;
@@ -836,9 +836,7 @@ where
         "Going through remaining validators to generate fragments",
     );
 
-    let result = checkpoint_db
-        .lock()
-        .attempt_to_construct_checkpoint(committee);
+    let result = checkpoint_db.lock().attempt_to_construct_checkpoint();
 
     match result {
         Err(err) => {

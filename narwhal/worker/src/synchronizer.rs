@@ -1,5 +1,5 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use config::{SharedCommittee, SharedWorkerCache, WorkerCache, WorkerIndex};
@@ -10,7 +10,7 @@ use std::{collections::BTreeMap, sync::Arc};
 use store::Store;
 use tap::TapOptional;
 use tokio::{sync::watch, task::JoinHandle};
-use tracing::{error, warn};
+use tracing::warn;
 use types::{
     metered_channel::{Receiver, Sender},
     Batch, BatchDigest, ReconfigureNotification, WorkerPrimaryError, WorkerPrimaryMessage,
@@ -77,6 +77,7 @@ impl Synchronizer {
                                 self.network.cleanup(self.worker_cache.load().network_diff(new_committee.keys()));
                                 self.committee.swap(Arc::new(new_committee.clone()));
 
+                                // TODO: duplicated code in this file.
                                 // Update the worker cache.
                                 self.worker_cache.swap(Arc::new(WorkerCache {
                                     epoch: new_committee.epoch,
@@ -136,9 +137,6 @@ impl Synchronizer {
                     PrimaryWorkerMessage::RequestBatch(digest) => {
                         self.handle_request_batch(digest).await;
                     },
-                    PrimaryWorkerMessage::DeleteBatches(digests) => {
-                        self.handle_delete_batches(digests).await;
-                    }
                 },
             }
         }
@@ -148,23 +146,6 @@ impl Synchronizer {
         let message = match self.store.read(digest).await {
             Ok(Some(batch)) => WorkerPrimaryMessage::RequestedBatch(digest, batch),
             _ => WorkerPrimaryMessage::Error(WorkerPrimaryError::RequestedBatchNotFound(digest)),
-        };
-
-        self.tx_primary
-            .send(message)
-            .await
-            .expect("Failed to send message to primary channel");
-    }
-
-    async fn handle_delete_batches(&mut self, digests: Vec<BatchDigest>) {
-        let message = match self.store.remove_all(digests.clone()).await {
-            Ok(_) => WorkerPrimaryMessage::DeletedBatches(digests),
-            Err(err) => {
-                error!("{err}");
-                WorkerPrimaryMessage::Error(WorkerPrimaryError::ErrorWhileDeletingBatches(
-                    digests.clone(),
-                ))
-            }
         };
 
         self.tx_primary

@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 import axios from 'axios';
@@ -45,8 +45,8 @@ export function getProvider(
   const url =
     rpcType === 'fullnode' ? DEFAULT_FULLNODE_URL : DEFAULT_GATEWAY_URL;
   return providerType === 'rpc'
-    ? new JsonRpcProvider(url)
-    : new JsonRpcProviderWithCache(url);
+    ? new JsonRpcProvider(url, false)
+    : new JsonRpcProviderWithCache(url, false);
 }
 
 export async function setup(

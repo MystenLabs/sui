@@ -1,5 +1,5 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{base_types::*, committee::EpochId, messages::ExecutionFailureStatus};
@@ -10,6 +10,8 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use thiserror::Error;
 use typed_store::rocks::TypedStoreError;
+
+pub const TRANSACTION_NOT_FOUND_MSG_PREFIX: &str = "Could not find the referenced transaction";
 
 #[macro_export]
 macro_rules! fp_bail {
@@ -196,10 +198,10 @@ pub enum SuiError {
     #[error("Checkpointing error: {}", error)]
     CheckpointingError { error: String },
     #[error(
-        "ExecutionDriver error for {:?}: {} - Caused by : {:#?}",
+        "ExecutionDriver error for {:?}: {} - Caused by : {}",
         digest,
         msg,
-        errors.iter().map(|e| ToString::to_string(&e)).collect::<Vec<String>>()
+        format!("[ {} ]", errors.iter().map(|e| ToString::to_string(&e)).collect::<Vec<String>>().join("; ")),
     )]
     ExecutionDriverError {
         digest: TransactionDigest,
@@ -279,7 +281,7 @@ pub enum SuiError {
         locked_epoch: EpochId,
         new_epoch: EpochId,
     },
-    #[error("Could not find the referenced transaction [{:?}].", digest)]
+    #[error("{TRANSACTION_NOT_FOUND_MSG_PREFIX} [{:?}].", digest)]
     TransactionNotFound { digest: TransactionDigest },
     #[error("Could not find the referenced object {:?}.", object_id)]
     ObjectNotFound { object_id: ObjectID },
@@ -443,7 +445,7 @@ pub enum SuiError {
 pub type SuiResult<T = ()> = Result<T, SuiError>;
 
 // TODO these are both horribly wrong, categorization needs to be considered
-impl std::convert::From<PartialVMError> for SuiError {
+impl From<PartialVMError> for SuiError {
     fn from(error: PartialVMError) -> Self {
         SuiError::ModuleVerificationFailure {
             error: error.to_string(),
@@ -451,13 +453,13 @@ impl std::convert::From<PartialVMError> for SuiError {
     }
 }
 
-impl std::convert::From<ExecutionError> for SuiError {
+impl From<ExecutionError> for SuiError {
     fn from(error: ExecutionError) -> Self {
         SuiError::ExecutionError(error.to_string())
     }
 }
 
-impl std::convert::From<VMError> for SuiError {
+impl From<VMError> for SuiError {
     fn from(error: VMError) -> Self {
         SuiError::ModuleVerificationFailure {
             error: error.to_string(),
@@ -465,7 +467,7 @@ impl std::convert::From<VMError> for SuiError {
     }
 }
 
-impl std::convert::From<SubscriberError> for SuiError {
+impl From<SubscriberError> for SuiError {
     fn from(error: SubscriberError) -> Self {
         SuiError::HandleConsensusTransactionFailure(error.to_string())
     }
@@ -483,7 +485,7 @@ impl From<ExecutionErrorKind> for SuiError {
     }
 }
 
-impl std::convert::From<&str> for SuiError {
+impl From<&str> for SuiError {
     fn from(error: &str) -> Self {
         SuiError::GenericAuthorityError {
             error: error.to_string(),

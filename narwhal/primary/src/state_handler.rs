@@ -1,5 +1,5 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use config::{SharedCommittee, SharedWorkerCache, WorkerCache, WorkerIndex};
 use crypto::PublicKey;
@@ -90,6 +90,7 @@ impl StateHandler {
                             // Cleanup the network.
                             self.network.cleanup(self.worker_cache.load().network_diff(committee.keys()));
 
+                            // TODO: Duplicated code in the same file.
                             // Update the worker cache.
                             self.worker_cache.swap(Arc::new(WorkerCache {
                                 epoch: committee.epoch,

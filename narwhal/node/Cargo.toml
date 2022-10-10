@@ -29,7 +29,7 @@ tracing-log = "0.1.3"
 tracing-subscriber = { version = "0.3.15", features = ["time", "env-filter"] }
 url = "2.3.1"
 axum = "0.5.16"
-itertools = "0.10.4"
+itertools = "0.10.5"
 
 config = { path = "../config", package = "narwhal-config" }
 consensus = { path = "../consensus", package = "narwhal-consensus" }
@@ -45,7 +45,7 @@ worker = { path = "../worker", package = "narwhal-worker" }
 workspace-hack.workspace = true
 eyre = "0.6.8"
 
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "302ff6f98fffa30a3a18e919766cd63f5b4c5aa8" }
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "57c4af7d6cdbf47633e6715bcd67d98f300e2fd8" }
 
 [dev-dependencies]
 hex = "0.4.3"

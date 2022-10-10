@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 /*
@@ -225,7 +225,7 @@ where
 
     pub fn subscribe_to_effects_queue(
         &self,
-    ) -> tokio::sync::broadcast::Receiver<(CertifiedTransaction, CertifiedTransactionEffects)> {
+    ) -> Receiver<(CertifiedTransaction, CertifiedTransactionEffects)> {
         self.quorum_driver_handler.subscribe()
     }
 

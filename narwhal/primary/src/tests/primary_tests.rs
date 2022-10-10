@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use super::{NetworkModel, Primary, CHANNEL_CAPACITY};
 use crate::metrics::PrimaryChannelMetrics;
@@ -72,6 +72,7 @@ async fn get_network_peers_from_admin_server() {
         primary_1_parameters.clone(),
         store.header_store.clone(),
         store.certificate_store.clone(),
+        store.proposer_store.clone(),
         store.payload_store.clone(),
         store.vote_digest_store.clone(),
         /* tx_consensus */ tx_new_certificates,
@@ -192,6 +193,7 @@ async fn get_network_peers_from_admin_server() {
         primary_2_parameters.clone(),
         store.header_store.clone(),
         store.certificate_store.clone(),
+        store.proposer_store.clone(),
         store.payload_store.clone(),
         store.vote_digest_store.clone(),
         /* tx_consensus */ tx_new_certificates_2,
