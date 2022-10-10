@@ -179,6 +179,14 @@ impl TestClusterBuilder {
     }
 
     async fn start_test_network_with_customized_ports(self) -> Result<TestCluster, anyhow::Error> {
+        // Where does wallet client connect to?
+        // 1. `start_test_swarm_with_fullnodes` init the wallet to use an embedded
+        //  Gateway. If `use_embedded_gateway` is true, the config remains intact.
+        // 2. If `use_embedded_gateway` is false, and `gateway_rpc_port` is set,
+        //  wallet connects to the Gateway rpc server.
+        // 3. Otherwise, the wallet connects to Fullnode rpc server, unless
+        //   `do_not_build_fullnode` is false, in which case the wallet is connected
+        //  with the initial embedded Gateway.
         let swarm = Self::start_test_swarm_with_fullnodes(self.genesis_config).await?;
         let working_dir = swarm.dir();
 
@@ -196,8 +204,10 @@ impl TestClusterBuilder {
                 false,
             )
             .await?;
-            wallet_conf.client_type =
-                ClientType::RPC(handle.rpc_url.clone(), handle.ws_url.clone());
+            if !self.use_embedded_gateway {
+                wallet_conf.client_type =
+                    ClientType::RPC(handle.rpc_url.clone(), handle.ws_url.clone());
+            }
             Some(handle)
         };
 
