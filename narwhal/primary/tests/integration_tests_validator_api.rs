@@ -845,7 +845,7 @@ async fn test_get_collections_with_missing_certificates() {
     let authority_1 = fixture.authorities().next().unwrap();
     let authority_2 = fixture.authorities().nth(1).unwrap();
 
-    let parameters = Parameters {
+    let parameters_1 = Parameters {
         batch_size: 200, // Two transactions.
         block_synchronizer: BlockSynchronizerParameters {
             range_synchronize_timeout: Duration::from_secs(10),
@@ -914,7 +914,7 @@ async fn test_get_collections_with_missing_certificates() {
         authority_1.network_keypair().copy(),
         Arc::new(ArcSwap::from_pointee(committee.clone())),
         worker_cache.clone(),
-        parameters.clone(),
+        parameters_1.clone(),
         store_primary_1.header_store,
         store_primary_1.certificate_store,
         store_primary_1.proposer_store,
@@ -943,7 +943,7 @@ async fn test_get_collections_with_missing_certificates() {
         worker_id,
         Arc::new(ArcSwap::from_pointee(committee.clone())),
         worker_cache.clone(),
-        parameters.clone(),
+        parameters_1.clone(),
         store_primary_1.batch_store,
         metrics_1,
     );
@@ -956,13 +956,25 @@ async fn test_get_collections_with_missing_certificates() {
     let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
     let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
 
+    let parameters_2 = Parameters {
+        batch_size: 200, // Two transactions.
+        block_synchronizer: BlockSynchronizerParameters {
+            range_synchronize_timeout: Duration::from_secs(10),
+            certificates_synchronize_timeout: Duration::from_secs(1),
+            payload_synchronize_timeout: Duration::from_secs(1),
+            payload_availability_timeout: Duration::from_secs(1),
+            handler_certificate_deliver_timeout: Duration::from_secs(1),
+        },
+        ..Parameters::default()
+    };
+
     Primary::spawn(
         name_2.clone(),
         authority_2.keypair().copy(),
         authority_2.network_keypair().copy(),
         Arc::new(ArcSwap::from_pointee(committee.clone())),
         worker_cache.clone(),
-        parameters.clone(),
+        parameters_2.clone(),
         store_primary_2.header_store,
         store_primary_2.certificate_store,
         store_primary_2.proposer_store,
@@ -989,7 +1001,7 @@ async fn test_get_collections_with_missing_certificates() {
         worker_id,
         Arc::new(ArcSwap::from_pointee(committee.clone())),
         worker_cache.clone(),
-        parameters.clone(),
+        parameters_2.clone(),
         store_primary_2.batch_store,
         metrics_2,
     );
@@ -998,7 +1010,7 @@ async fn test_get_collections_with_missing_certificates() {
     tokio::time::sleep(Duration::from_secs(1)).await;
 
     // Test gRPC server with client call
-    let mut client = connect_to_validator_client(parameters.clone());
+    let mut client = connect_to_validator_client(parameters_1.clone());
 
     let collection_ids = block_ids;
 
