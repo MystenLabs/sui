@@ -29,13 +29,14 @@ use sui_types::base_types::{
 use sui_types::crypto::{get_key_pair_from_rng, AccountKeyPair, Signature};
 use sui_types::crypto::{AuthorityQuorumSignInfo, SuiSignature};
 use sui_types::event::TransferType;
-use sui_types::filter::TransactionQuery;
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::{
     CallArg, ExecuteTransactionRequestType, MoveCall, SingleTransactionKind, Transaction,
     TransactionData, TransactionKind, TransferObject,
 };
 use sui_types::object::Owner;
+use sui_types::query::Ordering;
+use sui_types::query::TransactionQuery;
 use sui_types::sui_serde::Base64;
 use sui_types::SUI_FRAMEWORK_OBJECT_ID;
 
@@ -388,6 +389,7 @@ impl RpcExampleProvider {
                     ),
                     ("cursor", json!(10)),
                     ("limit", json!(100)),
+                    ("order", json!(Ordering::Ascending)),
                 ],
                 json!(result),
             )],

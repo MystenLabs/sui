@@ -1801,16 +1801,26 @@
         },
         {
           "name": "cursor",
+          "description": "Optional paging cursor",
           "schema": {
             "$ref": "#/components/schemas/TransactionDigest"
           }
         },
         {
           "name": "limit",
+          "description": "Maximum item returned per page",
           "schema": {
             "type": "integer",
             "format": "uint",
             "minimum": 0.0
+          }
+        },
+        {
+          "name": "order",
+          "description": "Transaction query ordering",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/Ordering"
           }
         }
       ],
@@ -1838,6 +1848,10 @@
             {
               "name": "limit",
               "value": 100
+            },
+            {
+              "name": "order",
+              "value": "Ascending"
             }
           ],
           "result": {
@@ -3604,6 +3618,13 @@
           "ByValue"
         ]
       },
+      "Ordering": {
+        "type": "string",
+        "enum": [
+          "Ascending",
+          "Descending"
+        ]
+      },
       "Owner": {
         "oneOf": [
           {
@@ -4547,8 +4568,7 @@
           {
             "type": "string",
             "enum": [
-              "All",
-              "Latest"
+              "All"
             ]
           },
           {
