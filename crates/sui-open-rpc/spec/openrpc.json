@@ -143,6 +143,60 @@
       ]
     },
     {
+      "name": "sui_batchTransaction",
+      "tags": [
+        {
+          "name": "Transaction Builder API"
+        }
+      ],
+      "description": "Create an unsigned batched transaction.",
+      "params": [
+        {
+          "name": "signer",
+          "description": "the transaction signer's Sui address",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        },
+        {
+          "name": "single_transaction_params",
+          "description": "list of transaction request parameters",
+          "required": true,
+          "schema": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RPCTransactionRequestParams"
+            }
+          }
+        },
+        {
+          "name": "gas",
+          "description": "gas object to be used in this transaction, the gateway will pick one from the signer's possession if not provided",
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        },
+        {
+          "name": "gas_budget",
+          "description": "the gas budget, the transaction will fail if the gas cost exceed the budget",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        }
+      ],
+      "result": {
+        "name": "TransactionBytes",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/TransactionBytes"
+        }
+      }
+    },
+    {
       "name": "sui_dryRunTransaction",
       "tags": [
         {
@@ -2325,6 +2379,154 @@
       }
     },
     {
+      "name": "sui_mergeCoins",
+      "tags": [
+        {
+          "name": "Transaction Builder API"
+        }
+      ],
+      "description": "Create an unsigned transaction to merge multiple coins into one coin.",
+      "params": [
+        {
+          "name": "signer",
+          "description": "the transaction signer's Sui address",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        },
+        {
+          "name": "primary_coin",
+          "description": "the coin object to merge into, this coin will remain after the transaction",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        },
+        {
+          "name": "coin_to_merge",
+          "description": "the coin object to be merged, this coin will be destroyed, the balance will be added to `primary_coin`",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        },
+        {
+          "name": "gas",
+          "description": "gas object to be used in this transaction, the gateway will pick one from the signer's possession if not provided",
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        },
+        {
+          "name": "gas_budget",
+          "description": "the gas budget, the transaction will fail if the gas cost exceed the budget",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        }
+      ],
+      "result": {
+        "name": "TransactionBytes",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/TransactionBytes"
+        }
+      }
+    },
+    {
+      "name": "sui_moveCall",
+      "tags": [
+        {
+          "name": "Transaction Builder API"
+        }
+      ],
+      "description": "Create an unsigned transaction to execute a Move call on the network, by calling the specified function in the module of a given package.",
+      "params": [
+        {
+          "name": "signer",
+          "description": "the transaction signer's Sui address",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        },
+        {
+          "name": "package_object_id",
+          "description": "the Move package ID, e.g. `0x2`",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        },
+        {
+          "name": "module",
+          "description": "the Move module name, e.g. `devnet_nft`",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "function",
+          "description": "the move function name, e.g. `mint`",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "type_arguments",
+          "description": "the type arguments of the Move function",
+          "required": true,
+          "schema": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TypeTag"
+            }
+          }
+        },
+        {
+          "name": "arguments",
+          "description": "the arguments to be passed into the Move function, in [SuiJson](https://docs.sui.io/build/sui-json) format",
+          "required": true,
+          "schema": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SuiJsonValue"
+            }
+          }
+        },
+        {
+          "name": "gas",
+          "description": "gas object to be used in this transaction, the gateway will pick one from the signer's possession if not provided",
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        },
+        {
+          "name": "gas_budget",
+          "description": "the gas budget, the transaction will fail if the gas cost exceed the budget",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        }
+      ],
+      "result": {
+        "name": "TransactionBytes",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/TransactionBytes"
+        }
+      }
+    },
+    {
       "name": "sui_moveCall",
       "tags": [
         {
@@ -2491,6 +2693,137 @@
       }
     },
     {
+      "name": "sui_pay",
+      "tags": [
+        {
+          "name": "Transaction Builder API"
+        }
+      ],
+      "params": [
+        {
+          "name": "signer",
+          "description": "the transaction signer's Sui address",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        },
+        {
+          "name": "input_coins",
+          "description": "the Sui coins to be used in this transaction",
+          "required": true,
+          "schema": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ObjectID"
+            }
+          }
+        },
+        {
+          "name": "recipients",
+          "description": "the recipients' addresses, the length of this vector must be the same as amounts.",
+          "required": true,
+          "schema": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SuiAddress"
+            }
+          }
+        },
+        {
+          "name": "amounts",
+          "description": "the amounts to be transferred to recipients, following the same order",
+          "required": true,
+          "schema": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0.0
+            }
+          }
+        },
+        {
+          "name": "gas",
+          "description": "gas object to be used in this transaction, the gateway will pick one from the signer's possession if not provided",
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        },
+        {
+          "name": "gas_budget",
+          "description": "the gas budget, the transaction will fail if the gas cost exceed the budget",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        }
+      ],
+      "result": {
+        "name": "TransactionBytes",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/TransactionBytes"
+        }
+      }
+    },
+    {
+      "name": "sui_publish",
+      "tags": [
+        {
+          "name": "Transaction Builder API"
+        }
+      ],
+      "description": "Create an unsigned transaction to publish Move module.",
+      "params": [
+        {
+          "name": "sender",
+          "description": "the transaction signer's Sui address",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        },
+        {
+          "name": "compiled_modules",
+          "description": "the compiled bytes of a move module, the",
+          "required": true,
+          "schema": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Base64"
+            }
+          }
+        },
+        {
+          "name": "gas",
+          "description": "gas object to be used in this transaction, the gateway will pick one from the signer's possession if not provided",
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        },
+        {
+          "name": "gas_budget",
+          "description": "the gas budget, the transaction will fail if the gas cost exceed the budget",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        }
+      ],
+      "result": {
+        "name": "TransactionBytes",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/TransactionBytes"
+        }
+      }
+    },
+    {
       "name": "sui_publish",
       "tags": [
         {
@@ -2580,6 +2913,131 @@
               "format": "uint64",
               "minimum": 0.0
             }
+          }
+        },
+        {
+          "name": "gas",
+          "description": "gas object to be used in this transaction, the gateway will pick one from the signer's possession if not provided",
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        },
+        {
+          "name": "gas_budget",
+          "description": "the gas budget, the transaction will fail if the gas cost exceed the budget",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        }
+      ],
+      "result": {
+        "name": "TransactionBytes",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/TransactionBytes"
+        }
+      }
+    },
+    {
+      "name": "sui_splitCoin",
+      "tags": [
+        {
+          "name": "Transaction Builder API"
+        }
+      ],
+      "description": "Create an unsigned transaction to split a coin object into multiple coins.",
+      "params": [
+        {
+          "name": "signer",
+          "description": "the transaction signer's Sui address",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        },
+        {
+          "name": "coin_object_id",
+          "description": "the coin object to be spilt",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        },
+        {
+          "name": "split_amounts",
+          "description": "the amounts to split out from the coin",
+          "required": true,
+          "schema": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0.0
+            }
+          }
+        },
+        {
+          "name": "gas",
+          "description": "gas object to be used in this transaction, the gateway will pick one from the signer's possession if not provided",
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        },
+        {
+          "name": "gas_budget",
+          "description": "the gas budget, the transaction will fail if the gas cost exceed the budget",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        }
+      ],
+      "result": {
+        "name": "TransactionBytes",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/TransactionBytes"
+        }
+      }
+    },
+    {
+      "name": "sui_splitCoinEqual",
+      "tags": [
+        {
+          "name": "Transaction Builder API"
+        }
+      ],
+      "description": "Create an unsigned transaction to split a coin object into multiple equal-size coins.",
+      "params": [
+        {
+          "name": "signer",
+          "description": "the transaction signer's Sui address",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        },
+        {
+          "name": "coin_object_id",
+          "description": "the coin object to be spilt",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        },
+        {
+          "name": "split_count",
+          "description": "the number of coins to split into",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
           }
         },
         {
@@ -2775,6 +3233,126 @@
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/SuiAddress"
+          }
+        }
+      ],
+      "result": {
+        "name": "TransactionBytes",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/TransactionBytes"
+        }
+      }
+    },
+    {
+      "name": "sui_transferObject",
+      "tags": [
+        {
+          "name": "Transaction Builder API"
+        }
+      ],
+      "description": "Create an unsigned transaction to transfer an object from one address to another. The object's type must allow public transfers",
+      "params": [
+        {
+          "name": "signer",
+          "description": "the transaction signer's Sui address",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        },
+        {
+          "name": "object_id",
+          "description": "the ID of the object to be transferred",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        },
+        {
+          "name": "gas",
+          "description": "gas object to be used in this transaction, the gateway will pick one from the signer's possession if not provided",
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        },
+        {
+          "name": "gas_budget",
+          "description": "the gas budget, the transaction will fail if the gas cost exceed the budget",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        },
+        {
+          "name": "recipient",
+          "description": "the recipient's Sui address",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        }
+      ],
+      "result": {
+        "name": "TransactionBytes",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/TransactionBytes"
+        }
+      }
+    },
+    {
+      "name": "sui_transferSui",
+      "tags": [
+        {
+          "name": "Transaction Builder API"
+        }
+      ],
+      "description": "Create an unsigned transaction to send SUI coin object to a Sui address. The SUI object is also used as the gas object.",
+      "params": [
+        {
+          "name": "signer",
+          "description": "the transaction signer's Sui address",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        },
+        {
+          "name": "sui_object_id",
+          "description": "the Sui coin object to be used in this transaction",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        },
+        {
+          "name": "gas_budget",
+          "description": "the gas budget, the transaction will fail if the gas cost exceed the budget",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        },
+        {
+          "name": "recipient",
+          "description": "the recipient's Sui address",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        },
+        {
+          "name": "amount",
+          "description": "the amount to be split out and transferred",
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
           }
         }
       ],

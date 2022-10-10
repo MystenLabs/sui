@@ -13,6 +13,7 @@ use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::Write;
 use sui_json_rpc::api::EventReadApiOpenRpc;
+use sui_json_rpc::transaction_builder_api::FullNodeTransactionBuilderApi;
 use sui_json_rpc::transaction_execution_api::FullNodeTransactionExecutionApi;
 use sui_sdk::crypto::AccountKeystore;
 use sui_types::messages::ExecuteTransactionRequestType;
@@ -82,6 +83,7 @@ async fn main() {
     open_rpc.add_module(EventReadApiOpenRpc::module_doc());
     open_rpc.add_module(GatewayWalletSyncApiImpl::rpc_doc_module());
     open_rpc.add_module(FullNodeTransactionExecutionApi::rpc_doc_module());
+    open_rpc.add_module(FullNodeTransactionBuilderApi::rpc_doc_module());
 
     open_rpc.add_examples(RpcExampleProvider::new().examples());
 
