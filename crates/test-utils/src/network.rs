@@ -229,11 +229,6 @@ impl TestClusterBuilder {
             None
         };
 
-        if self.use_embedded_gateway {
-            let config = PersistedConfig::read(&working_dir.join(SUI_GATEWAY_CONFIG))?;
-            wallet_conf.client_type = ClientType::Embedded(config);
-        }
-
         let accounts = wallet_conf.keystore.addresses();
 
         wallet_conf
