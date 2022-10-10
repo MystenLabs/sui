@@ -19,11 +19,11 @@ import type {
 
 const COIN_TYPE = '0x2::coin::Coin';
 const COIN_TYPE_ARG_REGEX = /^0x2::coin::Coin<(.+)>$/;
-export const DEFAULT_GAS_BUDGET_FOR_SPLIT = 1000;
-export const DEFAULT_GAS_BUDGET_FOR_MERGE = 500;
+export const DEFAULT_GAS_BUDGET_FOR_SPLIT = 10000;
+export const DEFAULT_GAS_BUDGET_FOR_MERGE = 10000;
 export const DEFAULT_GAS_BUDGET_FOR_TRANSFER = 100;
 export const DEFAULT_GAS_BUDGET_FOR_TRANSFER_SUI = 100;
-export const DEFAULT_GAS_BUDGET_FOR_STAKE = 1000;
+export const DEFAULT_GAS_BUDGET_FOR_STAKE = 10000;
 export const GAS_TYPE_ARG = '0x2::sui::SUI';
 export const GAS_SYMBOL = 'SUI';
 export const DEFAULT_NFT_TRANSFER_GAS_FEE = 450;
