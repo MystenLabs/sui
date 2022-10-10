@@ -14,7 +14,7 @@ proc-macro = true
 syn = { version = "1.0", features = ["full", "extra-traits"] }
 quote = "1.0"
 proc-macro2 = "1.0"
-itertools = "0.10.4"
+itertools = "0.10.5"
 derive-syn-parse = "0.1.5"
 workspace-hack.workspace = true
 unescape = "0.1.0"

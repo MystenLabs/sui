@@ -26,7 +26,7 @@ tracing = "0.1.36"
 prometheus = "0.13.2"
 backoff = { version = "0.4.0", features = ["tokio"] }
 storage = { path = "../storage", package = "narwhal-storage" }
-itertools = "0.10.4"
+itertools = "0.10.5"
 
 types = { path = "../types", package = "narwhal-types" }
 mysten-network.workspace = true
