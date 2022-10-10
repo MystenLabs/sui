@@ -37,17 +37,12 @@ module sui::bcs {
 
         // Read first 4 LE bytes (u32)
         while (i < 4) {
-            let byte = (v::remove(bcs, 0) as u64);
-            l_value = l_value + (byte << ((8 * (i)) as u8));
-            i = i + 1;
-        };
+            let l_byte = (v::remove(bcs, 0) as u64);
+            let r_byte = (v::remove(bcs, 3 - i) as u64);
 
-        let i = 0;
+            l_value = l_value + (l_byte << ((8 * (i)) as u8));
+            r_value = r_value + (r_byte << ((8 * (i)) as u8));
 
-        // Read second 4 bytes of the U64, also u32 LE
-        while (i < 4) {
-            let byte = (v::remove(bcs, 0) as u64);
-            r_value = r_value + (byte << ((8 * (i)) as u8));
             i = i + 1;
         };
 
@@ -80,6 +75,9 @@ module sui::bcs {
         v::reverse(bcs);
         total
     }
+
+    #[test_only]
+    struct Info has drop { a: bool, b: u8, c: u64, d: u128, k: vector<bool> }
 
     #[test]
     fun test_bcs() {
@@ -125,6 +123,26 @@ module sui::bcs {
             let value = vector[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];
             let bytes = bcs::to_bytes(&value);
             assert!(v::length(&value) == peel_vec_length(&mut bytes), 0);
+        };
+
+        { // full deserialization test (ordering)
+            let info = Info { a: true, b: 100, c: 9999, d: 112333, k: vector[true, false, true, false] };
+            let bytes = &mut bcs::to_bytes(&info);
+
+            assert!(info.a == peel_bool(bytes), 0);
+            assert!(info.b == peel_u8(bytes), 0);
+            assert!(info.c == peel_u64(bytes), 0);
+            assert!(info.d == peel_u128(bytes), 0);
+
+            let len = peel_vec_length(bytes);
+
+            assert!(v::length(&info.k) == len, 0);
+
+            let i = 0;
+            while (i < v::length(&info.k)) {
+                assert!(*v::borrow(&info.k, i) == peel_bool(bytes), 0);
+                i = i + 1;
+            };
         };
     }
 }
