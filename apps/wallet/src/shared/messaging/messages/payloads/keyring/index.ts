@@ -22,6 +22,10 @@ type MethodToPayloads = {
         args: never;
         return: Partial<{ isLocked: boolean; isInitialized: boolean }>;
     };
+    lock: {
+        args: never;
+        return: never;
+    };
 };
 
 export interface KeyringPayload<Method extends keyof MethodToPayloads>

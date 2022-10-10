@@ -161,6 +161,9 @@ class Keyring {
                         id
                     )
                 );
+            } else if (isKeyringPayload<'lock'>(payload, 'lock')) {
+                this.lock();
+                uiConnection.send(createMessage({ type: 'done' }, id));
             }
         } catch (e) {
             uiConnection.send(
