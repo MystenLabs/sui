@@ -547,58 +547,47 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
         let message = request.into_body();
 
         match message {
-            PrimaryMessage::CertificatesRequest(_, _) => self
+            PrimaryMessage::CertificatesRequest(_, _)
+            | PrimaryMessage::CertificatesBatchRequest { .. }
+            | PrimaryMessage::PayloadAvailabilityRequest { .. } => self
                 .tx_helper_requests
-                .send(message)
-                .await
-                .map_err(|_| DagError::ShuttingDown),
+                .try_send(message)
+                .map_err(DagError::from),
+
             PrimaryMessage::CertificatesRangeResponse {
                 certificate_ids,
                 from,
             } => self
                 .tx_availability_responses
-                .send(AvailabilityResponse::CertificateDigest(
+                .try_send(AvailabilityResponse::CertificateDigest(
                     CertificateDigestsResponse {
                         certificate_ids,
                         from,
                     },
                 ))
-                .await
-                .map_err(|_| DagError::ShuttingDown),
-            PrimaryMessage::CertificatesBatchRequest { .. } => self
-                .tx_helper_requests
-                .send(message)
-                .await
-                .map_err(|_| DagError::ShuttingDown),
+                .map_err(DagError::from),
             PrimaryMessage::CertificatesBatchResponse { certificates, from } => self
                 .tx_availability_responses
-                .send(AvailabilityResponse::Certificate(CertificatesResponse {
+                .try_send(AvailabilityResponse::Certificate(CertificatesResponse {
                     certificates,
                     from,
                 }))
-                .await
-                .map_err(|_| DagError::ShuttingDown),
-            PrimaryMessage::PayloadAvailabilityRequest { .. } => self
-                .tx_helper_requests
-                .send(message)
-                .await
-                .map_err(|_| DagError::ShuttingDown),
+                .map_err(DagError::from),
             PrimaryMessage::PayloadAvailabilityResponse {
                 payload_availability,
                 from,
             } => self
                 .tx_availability_responses
-                .send(AvailabilityResponse::Payload(PayloadAvailabilityResponse {
+                .try_send(AvailabilityResponse::Payload(PayloadAvailabilityResponse {
                     block_ids: payload_availability.to_vec(),
-                    from: from.clone(),
+                    from,
                 }))
-                .await
-                .map_err(|_| DagError::ShuttingDown),
+                .map_err(DagError::from),
+
             _ => self
                 .tx_primary_messages
-                .send(message)
-                .await
-                .map_err(|_| DagError::ShuttingDown),
+                .try_send(message)
+                .map_err(DagError::from),
         }
         .map(|_| anemo::Response::new(()))
         .map_err(|e| anemo::rpc::Status::internal(e.to_string()))

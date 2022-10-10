@@ -160,7 +160,7 @@ impl PrimaryToWorker for PrimaryReceiverHandler {
                 )));
             }
         };
-        let request = anemo::Request::new(WorkerBatchRequest {
+        let batch_request = anemo::Request::new(WorkerBatchRequest {
             digests: missing.iter().cloned().collect(),
         })
         .with_timeout(self.request_batches_timeout);
@@ -179,7 +179,7 @@ impl PrimaryToWorker for PrimaryReceiverHandler {
         let peer_id = anemo::PeerId(worker_name.0.to_bytes());
         if let Some(peer) = network.peer(peer_id) {
             match WorkerToWorkerClient::new(peer)
-                .request_batches(request)
+                .request_batches(batch_request)
                 .await
             // TODO: duplicated code in the same file.
             {
