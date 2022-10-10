@@ -7,8 +7,10 @@ import { useNavigate } from 'react-router-dom';
 import useAppSelector from './useAppSelector';
 
 export default function useInitializedGuard(initializedRequired: boolean) {
-    const loading = useAppSelector((state) => state.account.loading);
-    const isInitialized = useAppSelector((state) => !!state.account.mnemonic);
+    const isInitialized = useAppSelector(
+        ({ account }) => account.isInitialized
+    );
+    const loading = isInitialized === null;
     const navigate = useNavigate();
     const guardAct = useMemo(
         () => !loading && initializedRequired !== isInitialized,
