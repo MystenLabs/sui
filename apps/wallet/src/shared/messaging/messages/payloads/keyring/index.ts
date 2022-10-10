@@ -18,6 +18,10 @@ type MethodToPayloads = {
         args: { password: string };
         return: never;
     };
+    walletStatusUpdate: {
+        args: never;
+        return: Partial<{ isLocked: boolean; isInitialized: boolean }>;
+    };
 };
 
 export interface KeyringPayload<Method extends keyof MethodToPayloads>

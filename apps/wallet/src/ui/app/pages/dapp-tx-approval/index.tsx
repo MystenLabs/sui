@@ -7,12 +7,7 @@ import { useParams } from 'react-router-dom';
 
 import Loading from '_components/loading';
 import UserApproveContainer from '_components/user-approve-container';
-import {
-    useAppDispatch,
-    useAppSelector,
-    useInitializedGuard,
-    useMiddleEllipsis,
-} from '_hooks';
+import { useAppDispatch, useAppSelector, useMiddleEllipsis } from '_hooks';
 import {
     loadTransactionResponseMetadata,
     respondToTransactionRequest,
@@ -80,7 +75,6 @@ function PassedObject({ id, module }: { id: string; module: string }) {
 
 export function DappTxApprovalPage() {
     const { txID } = useParams();
-    const guardLoading = useInitializedGuard(true);
     const txRequestsLoading = useAppSelector(
         ({ transactionRequests }) => !transactionRequests.initialized
     );
@@ -90,7 +84,7 @@ export function DappTxApprovalPage() {
         [txID]
     );
     const txRequest = useAppSelector(txRequestSelector);
-    const loading = guardLoading || txRequestsLoading;
+    const loading = txRequestsLoading;
     const dispatch = useAppDispatch();
     const handleOnSubmit = useCallback(
         async (approved: boolean) => {
