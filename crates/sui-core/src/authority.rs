@@ -1710,12 +1710,10 @@ impl AuthorityState {
             self.get_indexes()?
                 .get_transaction_seq(&cursor)?
                 .ok_or_else(|| anyhow!("Transaction [{cursor:?}] not found."))?
+        } else if reverse {
+            TxSequenceNumber::MAX
         } else {
-            if reverse {
-                TxSequenceNumber::MAX
-            } else {
-                TxSequenceNumber::MIN
-            }
+            TxSequenceNumber::MIN
         };
 
         Ok(match query {
