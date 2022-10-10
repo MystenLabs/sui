@@ -92,4 +92,16 @@ pub enum DagError {
 
     #[error("System shutting down")]
     ShuttingDown,
+
+    #[error("Channel Full")]
+    ChannelFull,
+}
+
+impl<T> From<tokio::sync::mpsc::error::TrySendError<T>> for DagError {
+    fn from(err: tokio::sync::mpsc::error::TrySendError<T>) -> Self {
+        match err {
+            tokio::sync::mpsc::error::TrySendError::Full(_) => DagError::ChannelFull,
+            tokio::sync::mpsc::error::TrySendError::Closed(_) => DagError::ShuttingDown,
+        }
+    }
 }
