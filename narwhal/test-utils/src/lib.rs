@@ -25,13 +25,13 @@ use store::{reopen, rocks, rocks::DBMap, Store};
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tracing::info;
 use types::{
-    Batch, BatchDigest, Certificate, CertificateDigest, ConsensusStore, Header, HeaderBuilder,
-    PrimaryMessage, PrimaryToPrimary, PrimaryToPrimaryServer, PrimaryToWorker,
-    PrimaryToWorkerServer, RequestBatchRequest, RequestBatchResponse, Round, SequenceNumber,
-    Transaction, Vote, WorkerBatchRequest, WorkerBatchResponse, WorkerDeleteBatchesMessage,
-    WorkerInfoResponse, WorkerMessage, WorkerPrimaryMessage, WorkerReconfigureMessage,
-    WorkerSynchronizeMessage, WorkerToPrimary, WorkerToPrimaryServer, WorkerToWorker,
-    WorkerToWorkerServer,
+    Batch, BatchDigest, Certificate, CertificateDigest, ConsensusStore, FetchCertificatesRequest,
+    FetchCertificatesResponse, Header, HeaderBuilder, PrimaryMessage, PrimaryToPrimary,
+    PrimaryToPrimaryServer, PrimaryToWorker, PrimaryToWorkerServer, RequestBatchRequest,
+    RequestBatchResponse, Round, SequenceNumber, Transaction, Vote, WorkerBatchRequest,
+    WorkerBatchResponse, WorkerDeleteBatchesMessage, WorkerInfoResponse, WorkerMessage,
+    WorkerPrimaryMessage, WorkerReconfigureMessage, WorkerSynchronizeMessage, WorkerToPrimary,
+    WorkerToPrimaryServer, WorkerToWorker, WorkerToWorkerServer,
 };
 
 pub mod cluster;
@@ -40,6 +40,7 @@ pub const VOTES_CF: &str = "votes";
 pub const HEADERS_CF: &str = "headers";
 pub const CERTIFICATES_CF: &str = "certificates";
 pub const CERTIFICATE_ID_BY_ROUND_CF: &str = "certificate_id_by_round";
+pub const CERTIFICATE_ID_BY_ORIGIN_CF: &str = "certificate_id_by_origin";
 pub const PAYLOAD_CF: &str = "payload";
 
 pub fn temp_dir() -> std::path::PathBuf {
@@ -195,6 +196,13 @@ impl PrimaryToPrimary for PrimaryToPrimaryMockServer {
         self.sender.send(message).await.unwrap();
 
         Ok(anemo::Response::new(()))
+    }
+
+    async fn fetch_certificates(
+        &self,
+        _request: anemo::Request<FetchCertificatesRequest>,
+    ) -> Result<anemo::Response<FetchCertificatesResponse>, anemo::rpc::Status> {
+        unimplemented!()
     }
 }
 

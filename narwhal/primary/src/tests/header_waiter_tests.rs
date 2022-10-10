@@ -48,8 +48,6 @@ async fn successfully_synchronize_batches() {
         payload_store.clone(),
         rx_consensus_round_updates,
         gc_depth,
-        /* sync_retry_delay */ Duration::from_secs(5),
-        /* sync_retry_nodes */ 3,
         rx_reconfigure,
         rx_synchronizer,
         tx_core,

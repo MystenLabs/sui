@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::traits::PrimaryToWorkerRpc;
+use crate::traits::{PrimaryToPrimaryRpc, PrimaryToWorkerRpc};
 use crate::{
     traits::{Lucky, ReliableNetwork, UnreliableNetwork},
     BoundedExecutor, CancelOnDropHandler, RetryConfig, MAX_TASK_CONCURRENCY,
@@ -16,10 +16,11 @@ use std::collections::HashMap;
 use std::time::Duration;
 use tokio::{runtime::Handle, task::JoinHandle};
 use types::{
-    Batch, BatchDigest, PrimaryMessage, PrimaryToPrimaryClient, PrimaryToWorkerClient,
-    RequestBatchRequest, WorkerBatchRequest, WorkerBatchResponse, WorkerDeleteBatchesMessage,
-    WorkerMessage, WorkerPrimaryMessage, WorkerReconfigureMessage, WorkerSynchronizeMessage,
-    WorkerToPrimaryClient, WorkerToWorkerClient,
+    Batch, BatchDigest, FetchCertificatesRequest, FetchCertificatesResponse, PrimaryMessage,
+    PrimaryToPrimaryClient, PrimaryToWorkerClient, RequestBatchRequest, WorkerBatchRequest,
+    WorkerBatchResponse, WorkerDeleteBatchesMessage, WorkerMessage, WorkerPrimaryMessage,
+    WorkerReconfigureMessage, WorkerSynchronizeMessage, WorkerToPrimaryClient,
+    WorkerToWorkerClient,
 };
 
 fn default_executor() -> BoundedExecutor {
@@ -196,6 +197,26 @@ impl ReliableNetwork<PrimaryMessage> for P2pNetwork {
         };
 
         self.send(peer, f).await
+    }
+}
+
+#[async_trait]
+impl PrimaryToPrimaryRpc for P2pNetwork {
+    async fn fetch_certificates(
+        &self,
+        peer: &NetworkPublicKey,
+        request: FetchCertificatesRequest,
+    ) -> Result<FetchCertificatesResponse> {
+        let peer_id = PeerId(peer.0.to_bytes());
+        let peer = self
+            .network
+            .peer(peer_id)
+            .ok_or_else(|| format_err!("Network has no connection with peer {peer_id}"))?;
+        let response = PrimaryToPrimaryClient::new(peer)
+            .fetch_certificates(request)
+            .await
+            .map_err(|e| format_err!("Network error {:?}", e))?;
+        Ok(response.into_body())
     }
 }
 

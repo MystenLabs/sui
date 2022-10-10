@@ -3,9 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
     block_synchronizer::{
-        handler::BlockSynchronizerHandler,
-        responses::{AvailabilityResponse, CertificateDigestsResponse},
-        BlockSynchronizer,
+        handler::BlockSynchronizerHandler, responses::AvailabilityResponse, BlockSynchronizer,
     },
     block_waiter::BlockWaiter,
     certificate_waiter::CertificateWaiter,
@@ -35,7 +33,12 @@ use multiaddr::Protocol;
 use network::metrics::MetricsMakeCallbackHandler;
 use network::P2pNetwork;
 use prometheus::Registry;
-use std::{collections::BTreeMap, net::Ipv4Addr, sync::Arc};
+use std::{
+    cmp::Reverse,
+    collections::{BTreeMap, BinaryHeap},
+    net::Ipv4Addr,
+    sync::Arc,
+};
 use storage::{CertificateStore, ProposerStore};
 use store::Store;
 use tokio::sync::oneshot;
@@ -46,9 +49,10 @@ pub use types::PrimaryMessage;
 use types::{
     error::DagError,
     metered_channel::{channel_with_total, Receiver, Sender},
-    BatchDigest, Certificate, Header, HeaderDigest, PrimaryToPrimary, PrimaryToPrimaryServer,
-    ReconfigureNotification, RoundVoteDigestPair, WorkerInfoResponse, WorkerPrimaryMessage,
-    WorkerToPrimary, WorkerToPrimaryServer,
+    BatchDigest, Certificate, ConsensusStore, FetchCertificatesRequest, FetchCertificatesResponse,
+    Header, HeaderDigest, PrimaryToPrimary, PrimaryToPrimaryServer, ReconfigureNotification,
+    RoundVoteDigestPair, WorkerInfoResponse, WorkerPrimaryMessage, WorkerToPrimary,
+    WorkerToPrimaryServer,
 };
 
 #[cfg(any(test))]
@@ -86,6 +90,7 @@ impl Primary {
         proposer_store: ProposerStore,
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
         vote_digest_store: Store<PublicKey, RoundVoteDigestPair>,
+        consensus_store: Arc<ConsensusStore>,
         tx_consensus: Sender<Certificate>,
         rx_consensus: Receiver<Certificate>,
         dag: Option<Arc<Dag>>,
@@ -133,10 +138,10 @@ impl Primary {
             &primary_channel_metrics.tx_sync_headers,
             &primary_channel_metrics.tx_sync_headers_total,
         );
-        let (tx_sync_certificates, rx_sync_certificates) = channel_with_total(
+        let (tx_certificate_waiter, rx_certificate_waiter) = channel_with_total(
             CHANNEL_CAPACITY,
-            &primary_channel_metrics.tx_sync_certificates,
-            &primary_channel_metrics.tx_sync_certificates_total,
+            &primary_channel_metrics.tx_certificate_waiter,
+            &primary_channel_metrics.tx_certificate_waiter_total,
         );
         let (tx_headers_loopback, rx_headers_loopback) = channel_with_total(
             CHANNEL_CAPACITY,
@@ -144,7 +149,7 @@ impl Primary {
             &primary_channel_metrics.tx_headers_loopback_total,
         );
         let (tx_certificates_loopback, rx_certificates_loopback) = channel_with_total(
-            CHANNEL_CAPACITY,
+            1, // Only one inflight item is possible.
             &primary_channel_metrics.tx_certificates_loopback,
             &primary_channel_metrics.tx_certificates_loopback_total,
         );
@@ -209,6 +214,7 @@ impl Primary {
             tx_primary_messages: tx_primary_messages.clone(),
             tx_helper_requests,
             tx_availability_responses,
+            certificate_store: certificate_store.clone(),
         });
         let worker_service = WorkerToPrimaryServer::new(WorkerReceiverHandler {
             tx_our_digests,
@@ -308,7 +314,7 @@ impl Primary {
             certificate_store.clone(),
             payload_store.clone(),
             /* tx_header_waiter */ tx_sync_headers,
-            /* tx_certificate_waiter */ tx_sync_certificates,
+            tx_certificate_waiter,
             dag.clone(),
         );
 
@@ -335,12 +341,12 @@ impl Primary {
             vote_digest_store,
             synchronizer,
             signature_service.clone(),
-            tx_consensus_round_updates.subscribe(),
+            rx_consensus_round_updates.clone(),
             parameters.gc_depth,
             tx_reconfigure.subscribe(),
             /* rx_primaries */ rx_primary_messages,
             /* rx_header_waiter */ rx_headers_loopback,
-            /* rx_certificate_waiter */ rx_certificates_loopback,
+            rx_certificates_loopback,
             /* rx_proposer */ rx_headers,
             tx_consensus,
             /* tx_proposer */ tx_parents,
@@ -363,7 +369,7 @@ impl Primary {
                 .handler_certificate_deliver_timeout,
         ));
 
-        // Indicator variable for the gRPC server
+        // Indicator variable for components to operate in internal vs external consensus modes.
         let internal_consensus = dag.is_none();
 
         // Responsible for finding missing blocks (certificates) and fetching
@@ -392,10 +398,8 @@ impl Primary {
             worker_cache.clone(),
             certificate_store.clone(),
             payload_store.clone(),
-            tx_consensus_round_updates.subscribe(),
+            rx_consensus_round_updates.clone(),
             parameters.gc_depth,
-            parameters.sync_retry_delay,
-            parameters.sync_retry_nodes,
             tx_reconfigure.subscribe(),
             /* rx_synchronizer */ rx_sync_headers,
             /* tx_core */ tx_headers_loopback,
@@ -406,13 +410,20 @@ impl Primary {
         // The `CertificateWaiter` waits to receive all the ancestors of a certificate before looping it back to the
         // `Core` for further processing.
         let certificate_waiter_handle = CertificateWaiter::spawn(
+            name.clone(),
             (**committee.load()).clone(),
+            P2pNetwork::new(network.clone()),
             certificate_store.clone(),
+            if internal_consensus {
+                Some(consensus_store)
+            } else {
+                None
+            },
             rx_consensus_round_updates,
             parameters.gc_depth,
             tx_reconfigure.subscribe(),
-            /* rx_synchronizer */ rx_sync_certificates,
-            /* tx_core */ tx_certificates_loopback,
+            rx_certificate_waiter,
+            tx_certificates_loopback,
             node_metrics.clone(),
         );
 
@@ -535,6 +546,7 @@ struct PrimaryReceiverHandler {
     tx_primary_messages: Sender<PrimaryMessage>,
     tx_helper_requests: Sender<PrimaryMessage>,
     tx_availability_responses: Sender<AvailabilityResponse>,
+    certificate_store: CertificateStore,
 }
 
 #[async_trait]
@@ -553,18 +565,6 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
                 .try_send(message)
                 .map_err(DagError::from),
 
-            PrimaryMessage::CertificatesRangeResponse {
-                certificate_ids,
-                from,
-            } => self
-                .tx_availability_responses
-                .try_send(AvailabilityResponse::CertificateDigest(
-                    CertificateDigestsResponse {
-                        certificate_ids,
-                        from,
-                    },
-                ))
-                .map_err(DagError::from),
             PrimaryMessage::CertificatesBatchResponse { certificates, from } => self
                 .tx_availability_responses
                 .try_send(AvailabilityResponse::Certificate(CertificatesResponse {
@@ -590,6 +590,68 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
         }
         .map(|_| anemo::Response::new(()))
         .map_err(|e| anemo::rpc::Status::internal(e.to_string()))
+    }
+
+    async fn fetch_certificates(
+        &self,
+        request: anemo::Request<FetchCertificatesRequest>,
+    ) -> Result<anemo::Response<FetchCertificatesResponse>, anemo::rpc::Status> {
+        let request = request.into_body();
+        let mut response = FetchCertificatesResponse {
+            certificates: Vec::new(),
+        };
+        if request.exclusive_lower_bounds.is_empty() || request.max_items == 0 {
+            return Ok(anemo::Response::new(response));
+        }
+
+        // Use a min-queue for (round, authority) to keep track of the next certificate to fetch.
+        // If the requestor is providing its current round on all authorities, it should be able to
+        // process certificates returned in this order without any missing parents.
+        //
+        // Compared to fetching certificates iteratatively round by round, using a heap is simpler,
+        // and avoids the pathological case of iterating through many missing rounds of a downed authority.
+        let mut fetch_queue = BinaryHeap::new();
+
+        // Initialize the min-heap for each authority the next higher round from the requested
+        // lower bound.
+        for (authority, round) in request.exclusive_lower_bounds.into_iter() {
+            let next_round = self
+                .certificate_store
+                .next_round_number(&authority, round)
+                .map_err(|e| anemo::rpc::Status::from_error(Box::new(e)))?;
+            if let Some(r) = next_round {
+                fetch_queue.push(Reverse((r, authority)));
+            }
+        }
+
+        // Iteratively pop one of the (Round, Authority) pairs with the smallest round,
+        // and push to min-heap the next higher round of the same authority.
+        // The process ends when there are no more pairs in the min-heap.
+        while let Some(Reverse((round, authority))) = fetch_queue.pop() {
+            match self
+                .certificate_store
+                .read_by_index(authority.clone(), round)
+                .map_err(|e| anemo::rpc::Status::from_error(Box::new(e)))?
+            {
+                Some(cert) => {
+                    response.certificates.push(cert);
+                    let next_round = self
+                        .certificate_store
+                        .next_round_number(&authority, round)
+                        .map_err(|e| anemo::rpc::Status::from_error(Box::new(e)))?;
+                    if let Some(r) = next_round {
+                        fetch_queue.push(Reverse((r, authority)));
+                    }
+                }
+                None => continue,
+            };
+            if response.certificates.len() == request.max_items {
+                break;
+            }
+            assert!(response.certificates.len() < request.max_items);
+        }
+
+        Ok(anemo::Response::new(response))
     }
 }
 
