@@ -1,15 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import Browser from 'webextension-polyfill';
 
 import Item from './item';
 import { API_ENV_TO_INFO } from '_app/ApiProvider';
+import Button from '_app/shared/button';
+import { lockWallet } from '_app/wallet/actions';
+import { WALLET_ENCRYPTION_ENABLED } from '_app/wallet/constants';
 import ExternalLink from '_components/external-link';
-import { SuiIcons } from '_components/icon';
+import Icon, { SuiIcons } from '_components/icon';
 import { useNextMenuUrl } from '_components/menu/hooks';
-import { useAppSelector, useMiddleEllipsis } from '_hooks';
+import { useAppDispatch, useAppSelector, useMiddleEllipsis } from '_hooks';
 import { ToS_LINK } from '_src/shared/constants';
 
 import st from './MenuList.module.scss';
@@ -22,6 +25,8 @@ function MenuList() {
     const apiEnv = useAppSelector((state) => state.app.apiEnv);
     const networkName = API_ENV_TO_INFO[apiEnv].name;
     const version = Browser.runtime.getManifest().version;
+    const dispatch = useAppDispatch();
+    const navigate = useNavigate();
 
     return (
         <div className={st.container}>
@@ -56,6 +61,24 @@ function MenuList() {
                     subtitle={'v' + version}
                 />
             </div>
+            {WALLET_ENCRYPTION_ENABLED ? (
+                <div className={st.container}>
+                    <div className={st.item}>
+                        <Button
+                            mode="secondary"
+                            size="large"
+                            className={st.btn}
+                            onClick={async () => {
+                                await dispatch(lockWallet()).unwrap();
+                                navigate('/locked', { replace: true });
+                            }}
+                        >
+                            <Icon icon={SuiIcons.Lock} />
+                            Lock Wallet
+                        </Button>
+                    </div>
+                </div>
+            ) : null}
         </div>
     );
 }
