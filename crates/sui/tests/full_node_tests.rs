@@ -1018,7 +1018,7 @@ async fn get_obj_read_from_node(
     }
 }
 
-#[sim_test]
+#[tokio::test]
 async fn test_get_objects_read() -> Result<(), anyhow::Error> {
     telemetry_subscribers::init_for_testing();
     let mut test_cluster = init_cluster_builder_env_aware().build().await?;
