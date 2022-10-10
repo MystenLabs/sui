@@ -71,7 +71,6 @@ export const logout = createAsyncThunk(
 );
 
 type AccountState = {
-    loading: boolean;
     mnemonic: string | null;
     creating: boolean;
     address: SuiAddress | null;
@@ -80,7 +79,6 @@ type AccountState = {
 };
 
 const initialState: AccountState = {
-    loading: true,
     mnemonic: null,
     creating: false,
     address: null,
@@ -114,7 +112,6 @@ const accountSlice = createSlice({
     extraReducers: (builder) =>
         builder
             .addCase(loadAccountFromStorage.fulfilled, (state, action) => {
-                state.loading = false;
                 state.mnemonic = action.payload;
             })
             .addCase(createMnemonic.pending, (state) => {
