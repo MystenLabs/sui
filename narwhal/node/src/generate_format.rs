@@ -14,7 +14,7 @@ use std::{fs::File, io::Write};
 use structopt::{clap::arg_enum, StructOpt};
 use types::{
     Batch, BatchDigest, Certificate, CertificateDigest, Header, HeaderDigest,
-    ReconfigureNotification, WorkerPrimaryError, WorkerPrimaryMessage, WorkerSynchronizeMessage,
+    ReconfigureNotification, WorkerPrimaryMessage, WorkerSynchronizeMessage,
 };
 
 fn get_registry() -> Result<Registry> {
@@ -111,7 +111,6 @@ fn get_registry() -> Result<Registry> {
     );
     tracer.trace_value(&mut samples, &worker_index)?;
 
-    let request_batch = PrimaryWorkerMessage::RequestBatch(BatchDigest([0u8; 32]));
     let sync = WorkerSynchronizeMessage {
         digests: vec![BatchDigest([0u8; 32])],
         target: pk,
@@ -121,7 +120,6 @@ fn get_registry() -> Result<Registry> {
     let update_committee =
         PrimaryWorkerMessage::Reconfigure(ReconfigureNotification::NewEpoch(committee));
     let shutdown = PrimaryWorkerMessage::Reconfigure(ReconfigureNotification::Shutdown);
-    tracer.trace_value(&mut samples, &request_batch)?;
     tracer.trace_value(&mut samples, &sync)?;
     tracer.trace_value(&mut samples, &epoch_change)?;
     tracer.trace_value(&mut samples, &update_committee)?;
@@ -135,7 +133,6 @@ fn get_registry() -> Result<Registry> {
 
     // The final entry points that we must document
     tracer.trace_type::<WorkerPrimaryMessage>(&samples)?;
-    tracer.trace_type::<WorkerPrimaryError>(&samples)?;
     tracer.registry()
 }
 

@@ -7,7 +7,7 @@ use crate::{
         responses::{AvailabilityResponse, CertificateDigestsResponse},
         BlockSynchronizer,
     },
-    block_waiter::{BatchMessageError, BatchResult, BlockWaiter},
+    block_waiter::BlockWaiter,
     certificate_waiter::CertificateWaiter,
     core::Core,
     grpc_server::ConsensusAPIGrpc,
@@ -18,7 +18,7 @@ use crate::{
     proposer::Proposer,
     state_handler::StateHandler,
     synchronizer::Synchronizer,
-    BlockCommand, BlockRemover, CertificatesResponse, PayloadAvailabilityResponse,
+    BlockRemover, CertificatesResponse, PayloadAvailabilityResponse,
 };
 
 use anemo::{types::PeerInfo, PeerId};
@@ -45,9 +45,9 @@ use tracing::info;
 use types::{
     error::DagError,
     metered_channel::{channel_with_total, Receiver, Sender},
-    BatchDigest, BatchMessage, Certificate, Header, HeaderDigest, PrimaryToPrimary,
-    PrimaryToPrimaryServer, ReconfigureNotification, RoundVoteDigestPair, WorkerInfoResponse,
-    WorkerPrimaryError, WorkerPrimaryMessage, WorkerToPrimary, WorkerToPrimaryServer,
+    BatchDigest, Certificate, Header, HeaderDigest, PrimaryToPrimary, PrimaryToPrimaryServer,
+    ReconfigureNotification, RoundVoteDigestPair, WorkerInfoResponse, WorkerPrimaryMessage,
+    WorkerToPrimary, WorkerToPrimaryServer,
 };
 pub use types::{PrimaryMessage, PrimaryWorkerMessage};
 
@@ -88,8 +88,6 @@ impl Primary {
         vote_digest_store: Store<PublicKey, RoundVoteDigestPair>,
         tx_consensus: Sender<Certificate>,
         rx_consensus: Receiver<Certificate>,
-        tx_get_block_commands: Sender<BlockCommand>,
-        rx_get_block_commands: Receiver<BlockCommand>,
         dag: Option<Arc<Dag>>,
         network_model: NetworkModel,
         tx_reconfigure: watch::Sender<ReconfigureNotification>,
@@ -160,11 +158,6 @@ impl Primary {
             &primary_channel_metrics.tx_helper_requests,
             &primary_channel_metrics.tx_helper_requests_total,
         );
-        let (tx_batches, rx_batches) = channel_with_total(
-            CHANNEL_CAPACITY,
-            &primary_channel_metrics.tx_batches,
-            &primary_channel_metrics.tx_batches_total,
-        );
         let (tx_block_synchronizer_commands, rx_block_synchronizer_commands) = channel_with_total(
             CHANNEL_CAPACITY,
             &primary_channel_metrics.tx_block_synchronizer_commands,
@@ -194,12 +187,6 @@ impl Primary {
         primary_channel_metrics
             .replace_registered_new_certificates_metric(registry, Box::new(new_certificates_gauge));
 
-        let tx_get_block_commands_gauge = tx_get_block_commands.gauge().clone();
-        primary_channel_metrics.replace_registered_get_block_commands_metric(
-            registry,
-            Box::new(tx_get_block_commands_gauge),
-        );
-
         let (tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
 
         let our_workers = worker_cache
@@ -226,7 +213,6 @@ impl Primary {
         let worker_service = WorkerToPrimaryServer::new(WorkerReceiverHandler {
             tx_our_digests,
             tx_others_digests,
-            tx_batches,
             tx_state_handler,
             our_workers,
             metrics: node_metrics.clone(),
@@ -378,20 +364,6 @@ impl Primary {
                 .handler_certificate_deliver_timeout,
         ));
 
-        // Retrieves a block's data by contacting the worker nodes that contain the
-        // underlying batches and their transactions.
-        let block_waiter_primary_network = P2pNetwork::new(network.clone());
-        let block_waiter_handle = BlockWaiter::spawn(
-            name.clone(),
-            (**committee.load()).clone(),
-            worker_cache.clone(),
-            tx_reconfigure.subscribe(),
-            rx_get_block_commands,
-            rx_batches,
-            block_synchronizer_handler.clone(),
-            block_waiter_primary_network,
-        );
-
         // Indicator variable for the gRPC server
         let internal_consensus = dag.is_none();
 
@@ -488,6 +460,16 @@ impl Primary {
         );
 
         let consensus_api_handle = if !internal_consensus {
+            // Retrieves a block's data by contacting the worker nodes that contain the
+            // underlying batches and their transactions.
+            let block_waiter_primary_network = P2pNetwork::new(network.clone());
+            let block_waiter = BlockWaiter::new(
+                name.clone(),
+                worker_cache.clone(),
+                block_waiter_primary_network,
+                block_synchronizer_handler.clone(),
+            );
+
             // Orchestrates the removal of blocks across the primary and worker nodes.
             let block_remover_primary_network = P2pNetwork::new(network);
             let block_remover = BlockRemover::new(
@@ -505,7 +487,7 @@ impl Primary {
             Some(ConsensusAPIGrpc::spawn(
                 name.clone(),
                 parameters.consensus_api_grpc.socket_addr,
-                tx_get_block_commands,
+                block_waiter,
                 block_remover,
                 parameters.consensus_api_grpc.get_collections_timeout,
                 parameters.consensus_api_grpc.remove_collections_timeout,
@@ -532,7 +514,6 @@ impl Primary {
             core_handle,
             payload_receiver_handle,
             block_synchronizer_handle,
-            block_waiter_handle,
             header_waiter_handle,
             certificate_waiter_handle,
             proposer_handle,
@@ -629,7 +610,6 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
 struct WorkerReceiverHandler {
     tx_our_digests: Sender<(BatchDigest, WorkerId)>,
     tx_others_digests: Sender<(BatchDigest, WorkerId)>,
-    tx_batches: Sender<BatchResult>,
     tx_state_handler: Sender<ReconfigureNotification>,
     our_workers: BTreeMap<WorkerId, WorkerInfo>,
     metrics: Arc<PrimaryMetrics>,
@@ -664,21 +644,6 @@ impl WorkerToPrimary for WorkerReceiverHandler {
                     .await
                     .map_err(|_| DagError::ShuttingDown)
             }
-            WorkerPrimaryMessage::RequestedBatch(digest, transactions) => self
-                .tx_batches
-                .send(Ok(BatchMessage {
-                    id: digest,
-                    transactions,
-                }))
-                .await
-                .map_err(|_| DagError::ShuttingDown),
-            WorkerPrimaryMessage::Error(error) => match error.clone() {
-                WorkerPrimaryError::RequestedBatchNotFound(digest) => self
-                    .tx_batches
-                    .send(Err(BatchMessageError { id: digest }))
-                    .await
-                    .map_err(|_| DagError::ShuttingDown),
-            },
             WorkerPrimaryMessage::Reconfigure(notification) => self
                 .tx_state_handler
                 .send(notification)

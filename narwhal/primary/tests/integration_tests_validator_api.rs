@@ -100,7 +100,6 @@ async fn test_get_collections() {
         test_utils::test_new_certificates_channel!(CHANNEL_CAPACITY);
     let (tx_feedback, rx_feedback) =
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
-    let (tx_get_block_commands, rx_get_block_commands) = test_utils::test_get_block_commands!(1);
     let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
     let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
@@ -120,8 +119,6 @@ async fn test_get_collections() {
         /* tx_consensus */ tx_new_certificates,
         /* rx_consensus */ rx_feedback,
         /* dag */
-        tx_get_block_commands,
-        rx_get_block_commands,
         Some(Arc::new(
             Dag::new(&committee, rx_new_certificates, consensus_metrics).1,
         )),
@@ -295,7 +292,6 @@ async fn test_remove_collections() {
 
     let (tx_feedback, rx_feedback) =
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
-    let (tx_get_block_commands, rx_get_block_commands) = test_utils::test_get_block_commands!(1);
     let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
     let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
 
@@ -313,8 +309,6 @@ async fn test_remove_collections() {
         store.vote_digest_store.clone(),
         /* tx_consensus */ tx_new_certificates,
         /* rx_consensus */ rx_feedback,
-        tx_get_block_commands,
-        rx_get_block_commands,
         /* dag */ Some(dag.clone()),
         NetworkModel::Asynchronous,
         tx_reconfigure,
@@ -511,9 +505,6 @@ async fn test_read_causal_signed_certificates() {
     let keypair_1 = authority_1.keypair().copy();
     let name_1 = keypair_1.public().clone();
 
-    let (tx_get_block_commands_1, rx_get_block_commands_1) =
-        test_utils::test_get_block_commands!(1);
-
     // Spawn Primary 1 that we will be interacting with.
     Primary::spawn(
         name_1.clone(),
@@ -529,8 +520,6 @@ async fn test_read_causal_signed_certificates() {
         primary_store_1.vote_digest_store.clone(),
         /* tx_consensus */ tx_new_certificates,
         /* rx_consensus */ rx_feedback,
-        tx_get_block_commands_1,
-        rx_get_block_commands_1,
         /* dag */ Some(dag.clone()),
         NetworkModel::Asynchronous,
         tx_reconfigure,
@@ -543,8 +532,6 @@ async fn test_read_causal_signed_certificates() {
         test_utils::test_new_certificates_channel!(CHANNEL_CAPACITY);
     let (tx_feedback_2, rx_feedback_2) =
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
-    let (tx_get_block_commands_2, rx_get_block_commands_2) =
-        test_utils::test_get_block_commands!(1);
 
     let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
     let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
@@ -572,8 +559,6 @@ async fn test_read_causal_signed_certificates() {
         primary_store_2.vote_digest_store,
         /* tx_consensus */ tx_new_certificates_2,
         /* rx_consensus */ rx_feedback_2,
-        tx_get_block_commands_2,
-        rx_get_block_commands_2,
         /* external_consensus */
         Some(Arc::new(
             Dag::new(&committee, rx_new_certificates_2, consensus_metrics_2).1,
@@ -666,8 +651,6 @@ async fn test_read_causal_unsigned_certificates() {
     // Make the Dag
     let (tx_new_certificates, rx_new_certificates) =
         test_utils::test_new_certificates_channel!(CHANNEL_CAPACITY);
-    let (tx_get_block_commands_1, rx_get_block_commands_1) =
-        test_utils::test_get_block_commands!(1);
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
     let dag = Arc::new(Dag::new(&committee, rx_new_certificates, consensus_metrics).1);
 
@@ -746,8 +729,6 @@ async fn test_read_causal_unsigned_certificates() {
         primary_store_1.vote_digest_store.clone(),
         /* tx_consensus */ tx_new_certificates,
         /* rx_consensus */ rx_feedback,
-        tx_get_block_commands_1,
-        rx_get_block_commands_1,
         /* dag */ Some(dag.clone()),
         NetworkModel::Asynchronous,
         tx_reconfigure,
@@ -760,8 +741,6 @@ async fn test_read_causal_unsigned_certificates() {
         test_utils::test_new_certificates_channel!(CHANNEL_CAPACITY);
     let (tx_feedback_2, rx_feedback_2) =
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
-    let (tx_get_block_commands_2, rx_get_block_commands_2) =
-        test_utils::test_get_block_commands!(1);
 
     let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
     let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
@@ -782,8 +761,6 @@ async fn test_read_causal_unsigned_certificates() {
         primary_store_2.vote_digest_store,
         /* tx_consensus */ tx_new_certificates_2,
         /* rx_consensus */ rx_feedback_2,
-        tx_get_block_commands_2,
-        rx_get_block_commands_2,
         /* external_consensus */
         Some(Arc::new(
             Dag::new(&committee, rx_new_certificates_2, consensus_metrics_2).1,
@@ -927,8 +904,6 @@ async fn test_get_collections_with_missing_certificates() {
         test_utils::test_new_certificates_channel!(CHANNEL_CAPACITY);
     let (tx_feedback_1, rx_feedback_1) =
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
-    let (tx_get_block_commands_1, rx_get_block_commands_1) =
-        test_utils::test_get_block_commands!(1);
     let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
     let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
@@ -948,8 +923,6 @@ async fn test_get_collections_with_missing_certificates() {
         /* tx_consensus */ tx_new_certificates_1,
         /* rx_consensus */ rx_feedback_1,
         /* external_consensus */
-        tx_get_block_commands_1,
-        rx_get_block_commands_1,
         Some(Arc::new(
             Dag::new(&committee, rx_new_certificates_1, consensus_metrics).1,
         )),
@@ -979,8 +952,6 @@ async fn test_get_collections_with_missing_certificates() {
     let (tx_new_certificates_2, _) = test_utils::test_new_certificates_channel!(CHANNEL_CAPACITY);
     let (tx_feedback_2, rx_feedback_2) =
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
-    let (tx_get_block_commands_2, rx_get_block_commands_2) =
-        test_utils::test_get_block_commands!(1);
 
     let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
     let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
@@ -999,8 +970,6 @@ async fn test_get_collections_with_missing_certificates() {
         store_primary_2.vote_digest_store,
         /* tx_consensus */ tx_new_certificates_2,
         /* rx_consensus */ rx_feedback_2,
-        tx_get_block_commands_2,
-        rx_get_block_commands_2,
         /* external_consensus */
         None,
         NetworkModel::Asynchronous,

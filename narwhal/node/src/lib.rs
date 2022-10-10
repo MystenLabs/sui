@@ -182,14 +182,6 @@ impl Node {
         let (tx_consensus, rx_consensus) =
             metered_channel::channel(Self::CHANNEL_CAPACITY, &committed_certificates_counter);
 
-        let tx_get_block_commands_counter = IntGauge::new(
-            PrimaryChannelMetrics::NAME_GET_BLOCK_COMMANDS,
-            PrimaryChannelMetrics::DESC_GET_BLOCK_COMMANDS,
-        )
-        .unwrap();
-        let (tx_get_block_commands, rx_get_block_commands) =
-            metered_channel::channel(Self::CHANNEL_CAPACITY, &tx_get_block_commands_counter);
-
         // Compute the public key of this authority.
         let name = keypair.public().clone();
         let mut handles = Vec::new();
@@ -252,8 +244,6 @@ impl Node {
             store.vote_digest_store.clone(),
             tx_new_certificates,
             /* rx_consensus */ rx_consensus,
-            tx_get_block_commands,
-            rx_get_block_commands,
             /* dag */ dag,
             network_model,
             tx_reconfigure,

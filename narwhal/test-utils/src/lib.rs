@@ -104,20 +104,6 @@ macro_rules! test_new_certificates_channel {
     };
 }
 
-#[macro_export]
-macro_rules! test_get_block_commands {
-    ($e:expr) => {
-        types::metered_channel::channel(
-            $e,
-            &prometheus::IntGauge::new(
-                primary::PrimaryChannelMetrics::NAME_GET_BLOCK_COMMANDS,
-                primary::PrimaryChannelMetrics::DESC_GET_BLOCK_COMMANDS,
-            )
-            .unwrap(),
-        );
-    };
-}
-
 ////////////////////////////////////////////////////////////////
 /// Keys, Committee
 ////////////////////////////////////////////////////////////////
