@@ -9,7 +9,3 @@
 .stats {
     @apply ml-auto w-full text-right flex gap-2 justify-end items-center;
 }
-
-.placeholder {
-    @apply w-[120px] h-[12px];
-}

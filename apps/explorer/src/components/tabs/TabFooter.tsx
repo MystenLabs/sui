@@ -5,7 +5,8 @@ import { useState, useCallback } from 'react';
 import { numberSuffix } from '../../utils/numberUtil';
 
 import styles from './TabFooter.module.css';
-import placeholdertheme from './placeholder.module.css';
+
+import { PlaceholderBox } from '~/ui/PlaceholderTable';
 
 const NUMBER_OF_TX_PER_PAGE_OPTIONS = [20, 40, 60];
 // Update this footer now accept React.ReactElement as a child
@@ -45,9 +46,7 @@ function TabFooter({
             {(stats || paging) && (
                 <div className={styles.stats}>
                     {stats && stats.loadState === 'pending' && (
-                        <div
-                            className={`${placeholdertheme.placeholder} ${styles.placeholder}`}
-                        />
+                        <PlaceholderBox width="120px" height="12px" />
                     )}
                     {stats && stats.loadState === 'loaded' && (
                         <>

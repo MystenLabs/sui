@@ -45,7 +45,3 @@
 .tipdivider {
     @apply my-1 h-px bg-sui-grey-90;
 }
-
-.placeholder {
-    @apply w-[59px] h-[32px];
-}

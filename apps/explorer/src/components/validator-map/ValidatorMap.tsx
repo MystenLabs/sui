@@ -10,9 +10,9 @@ import { WorldMap } from './WorldMap';
 import { type NodeLocation } from './types';
 
 import styles from './ValidatorMap.module.css';
-import placeholdertheme from './placeholder.module.css';
 
 import { DateFilter, useDateFilterState } from '~/ui/DateFilter';
+import { PlaceholderBox } from '~/ui/PlaceholderTable';
 
 const HOST = 'https://imgmod.sui.io';
 
@@ -114,12 +114,6 @@ export default function ValidatorMap() {
         [showTooltip, countryNodes, hideTooltip]
     );
 
-    const Placeholder = () => (
-        <div
-            className={`${placeholdertheme.placeholder} ${styles.placeholder}`}
-        />
-    );
-
     return (
         <div data-testid="fullnode-map" className={styles.card}>
             <div className={styles.container}>
@@ -132,7 +126,7 @@ export default function ValidatorMap() {
                             ) : totalCount ? (
                                 numberFormatter.format(totalCount)
                             ) : (
-                                <Placeholder />
+                                <PlaceholderBox width="59px" height="32px" />
                             )}
                         </div>
                     </div>
@@ -144,7 +138,7 @@ export default function ValidatorMap() {
                             ) : countryCount ? (
                                 numberFormatter.format(countryCount)
                             ) : (
-                                <Placeholder />
+                                <PlaceholderBox width="59px" height="32px" />
                             )}
                         </div>
                     </div>
