@@ -49,7 +49,7 @@ jobs:
     strategy:
       fail-fast: false
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v3.1.0
       - uses: actions-rs/toolchain@v1
 
       - name: cargo build (release)

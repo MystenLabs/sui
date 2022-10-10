@@ -13,7 +13,7 @@ jobs:
     outputs:
       isDoc: ${{ steps.diff.outputs.isDoc }}
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v3.1.0
     - name: Detect Changes
       uses: './.github/actions/diffs'
       id: diff
@@ -24,7 +24,7 @@ jobs:
     if: needs.diff.outputs.isDoc == 'true'
     runs-on: [ubuntu-latest]
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v3.1.0
     - name: Spell Check Docs
       uses: crate-ci/typos@master
       with:

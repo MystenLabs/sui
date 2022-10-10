@@ -6,7 +6,7 @@ jobs:
     outputs:
       isTypescriptSDK: ${{ contains(fromJson(steps.pnpm.outputs.packages), '@mysten/sui.js') || steps.diff.outputs.isRust }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v3.1.0
       - name: Detect Changes (pnpm)
         uses: "./.github/actions/pnpm-diffs"
         id: pnpm
@@ -21,7 +21,7 @@ jobs:
     runs-on: [ubuntu-latest]
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v3.1.0
       - uses: pnpm/action-setup@v2.2.2
         with:
           version: 7
@@ -42,7 +42,7 @@ jobs:
     if: needs.diff.outputs.isTypescriptSDK == 'true'
     runs-on: [ubuntu-ghcloud]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v3.1.0
       - uses: actions-rs/toolchain@v1
       - uses: pnpm/action-setup@v2.2.2
         with:
