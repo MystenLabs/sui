@@ -20,6 +20,7 @@ import Transactions from '_src/background/Transactions';
 
 import type { Message } from '_messages';
 import type { PortChannelName } from '_messaging/PortChannelName';
+import type { KeyringPayload } from '_payloads/keyring';
 import type { Permission, PermissionRequests } from '_payloads/permissions';
 import type { UpdateActiveOrigin } from '_payloads/tabs/updateActiveOrigin';
 import type { TransactionRequest } from '_payloads/transactions';
@@ -49,6 +50,16 @@ export class UiConnection extends Connection {
                     })
                 );
             });
+    }
+
+    public sendLockedStatusUpdate(isLocked: boolean) {
+        this.send(
+            createMessage<KeyringPayload<'walletStatusUpdate'>>({
+                type: 'keyring',
+                method: 'walletStatusUpdate',
+                return: { isLocked },
+            })
+        );
     }
 
     protected async handleMessage(msg: Message) {

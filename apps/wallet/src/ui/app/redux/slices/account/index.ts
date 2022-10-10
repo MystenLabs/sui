@@ -8,7 +8,6 @@ import {
 } from '@reduxjs/toolkit';
 import Browser from 'webextension-polyfill';
 
-import { isErrorPayload } from '_payloads';
 import { isKeyringPayload } from '_payloads/keyring';
 import { suiObjectsAdapterSelectors } from '_redux/slices/sui-objects';
 import { Coin } from '_redux/slices/sui-objects/Coin';
@@ -40,9 +39,6 @@ export const createMnemonic = createAsyncThunk<
             password,
             importedMnemonic
         );
-        if (isErrorPayload(payload)) {
-            throw new Error(payload.message);
-        }
         if (!isKeyringPayload<'createMnemonic'>(payload, 'createMnemonic')) {
             throw new Error('Unknown payload');
         }
@@ -79,6 +75,8 @@ type AccountState = {
     mnemonic: string | null;
     creating: boolean;
     address: SuiAddress | null;
+    isLocked: boolean | null;
+    isInitialized: boolean | null;
 };
 
 const initialState: AccountState = {
@@ -86,6 +84,8 @@ const initialState: AccountState = {
     mnemonic: null,
     creating: false,
     address: null,
+    isLocked: null,
+    isInitialized: null,
 };
 
 const accountSlice = createSlice({
@@ -94,6 +94,21 @@ const accountSlice = createSlice({
     reducers: {
         setAddress: (state, action: PayloadAction<string | null>) => {
             state.address = action.payload;
+        },
+        setKeyringStatus: (
+            state,
+            {
+                payload,
+            }: PayloadAction<
+                Partial<{ isLocked: boolean; isInitialized: boolean }>
+            >
+        ) => {
+            if (typeof payload.isLocked !== 'undefined') {
+                state.isLocked = payload.isLocked;
+            }
+            if (typeof payload.isInitialized !== 'undefined') {
+                state.isInitialized = payload.isInitialized;
+            }
         },
     },
     extraReducers: (builder) =>
@@ -108,6 +123,7 @@ const accountSlice = createSlice({
             .addCase(createMnemonic.fulfilled, (state, action) => {
                 state.creating = false;
                 state.mnemonic = action.payload;
+                state.isInitialized = true;
             })
             .addCase(createMnemonic.rejected, (state) => {
                 state.creating = false;
@@ -115,7 +131,7 @@ const accountSlice = createSlice({
             }),
 });
 
-export const { setAddress } = accountSlice.actions;
+export const { setAddress, setKeyringStatus } = accountSlice.actions;
 
 const reducer: Reducer<typeof initialState> = accountSlice.reducer;
 export default reducer;
