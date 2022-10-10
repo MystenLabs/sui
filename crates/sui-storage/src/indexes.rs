@@ -155,21 +155,28 @@ impl IndexStore {
         limit: Option<usize>,
         reverse: bool,
     ) -> SuiResult<Vec<TransactionDigest>> {
-        let iter = index.iter().skip_prior_to(&(object_id.clone(), cursor))?;
-
         Ok(if reverse {
-            let iter = iter.reverse().take_while(|((id, _), _)| *id == object_id);
+            let iter = index
+                .iter()
+                .skip_prior_to(&(object_id.clone(), cursor))?
+                .reverse()
+                .take_while(|((id, _), _)| *id == object_id)
+                .map(|(_, digest)| digest);
             if let Some(limit) = limit {
-                iter.take(limit).map(|(_, digest)| digest).collect()
+                iter.take(limit).collect()
             } else {
-                iter.map(|(_, digest)| digest).collect()
+                iter.collect()
             }
         } else {
-            let iter = iter.take_while(|((id, _), _)| *id == object_id);
+            let iter = index
+                .iter()
+                .skip_to(&(object_id.clone(), cursor))?
+                .take_while(|((id, _), _)| *id == object_id)
+                .map(|(_, digest)| digest);
             if let Some(limit) = limit {
-                iter.take(limit).map(|(_, digest)| digest).collect()
+                iter.take(limit).collect()
             } else {
-                iter.map(|(_, digest)| digest).collect()
+                iter.collect()
             }
         })
     }
@@ -225,34 +232,41 @@ impl IndexStore {
         limit: Option<usize>,
         reverse: bool,
     ) -> SuiResult<Vec<TransactionDigest>> {
-        let iter = self.transactions_by_move_function.iter().skip_prior_to(&(
+        let key = (
             package,
             module.clone().unwrap_or_default(),
             function.clone().unwrap_or_default(),
             cursor,
-        ))?;
-
+        );
+        let iter = self.transactions_by_move_function.iter();
         Ok(if reverse {
-            let iter = iter.reverse().take_while(|((id, m, f, _), _)| {
-                *id == package
-                    && module.as_ref().map(|x| x == m).unwrap_or(true)
-                    && function.as_ref().map(|x| x == f).unwrap_or(true)
-            });
+            let iter = iter
+                .skip_prior_to(&key)?
+                .reverse()
+                .take_while(|((id, m, f, _), _)| {
+                    *id == package
+                        && module.as_ref().map(|x| x == m).unwrap_or(true)
+                        && function.as_ref().map(|x| x == f).unwrap_or(true)
+                })
+                .map(|(_, digest)| digest);
             if let Some(limit) = limit {
-                iter.take(limit).map(|(_, digest)| digest).collect()
+                iter.take(limit).collect()
             } else {
-                iter.map(|(_, digest)| digest).collect()
+                iter.collect()
             }
         } else {
-            let iter = iter.take_while(|((id, m, f, _), _)| {
-                *id == package
-                    && module.as_ref().map(|x| x == m).unwrap_or(true)
-                    && function.as_ref().map(|x| x == f).unwrap_or(true)
-            });
+            let iter = iter
+                .skip_to(&key)?
+                .take_while(|((id, m, f, _), _)| {
+                    *id == package
+                        && module.as_ref().map(|x| x == m).unwrap_or(true)
+                        && function.as_ref().map(|x| x == f).unwrap_or(true)
+                })
+                .map(|(_, digest)| digest);
             if let Some(limit) = limit {
-                iter.take(limit).map(|(_, digest)| digest).collect()
+                iter.take(limit).collect()
             } else {
-                iter.map(|(_, digest)| digest).collect()
+                iter.collect()
             }
         })
     }

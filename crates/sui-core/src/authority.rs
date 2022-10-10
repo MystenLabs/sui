@@ -1739,29 +1739,23 @@ impl AuthorityState {
                 .get_indexes()?
                 .get_transactions_to_addr(address, cursor, limit, reverse)?,
             TransactionQuery::All => {
-                let iter = self
-                    .database
-                    .tables
-                    .executed_sequence
-                    .iter()
-                    .skip_prior_to(&cursor)?;
-
+                let iter = self.database.tables.executed_sequence.iter();
                 if reverse {
-                    let iter = iter.reverse();
+                    let iter = iter
+                        .skip_prior_to(&cursor)?
+                        .reverse()
+                        .map(|(_, digest)| digest.transaction);
                     if let Some(limit) = limit {
-                        iter.take(limit)
-                            .map(|(_, digest)| digest.transaction)
-                            .collect()
+                        iter.take(limit).collect()
                     } else {
-                        iter.map(|(_, digest)| digest.transaction).collect()
+                        iter.collect()
                     }
                 } else {
+                    let iter = iter.skip_to(&cursor)?.map(|(_, digest)| digest.transaction);
                     if let Some(limit) = limit {
-                        iter.take(limit)
-                            .map(|(_, digest)| digest.transaction)
-                            .collect()
+                        iter.take(limit).collect()
                     } else {
-                        iter.map(|(_, digest)| digest.transaction).collect()
+                        iter.collect()
                     }
                 }
             }

@@ -26,11 +26,11 @@ use sui_node::SuiNode;
 use sui_sdk::crypto::AccountKeystore;
 use sui_types::base_types::{ObjectRef, SequenceNumber};
 use sui_types::event::TransferType;
-use sui_types::filter::TransactionQuery;
 use sui_types::messages::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
 };
 use sui_types::object::{Object, ObjectRead, Owner, PastObjectRead};
+use sui_types::query::TransactionQuery;
 use sui_types::sui_framework_address_concat_string;
 use sui_types::{
     base_types::{ObjectID, SuiAddress, TransactionDigest},
@@ -132,6 +132,7 @@ async fn test_full_node_move_function_index() -> Result<(), anyhow::Error> {
         },
         None,
         None,
+        false,
     )?;
 
     assert_eq!(txes.len(), 1);
@@ -145,6 +146,7 @@ async fn test_full_node_move_function_index() -> Result<(), anyhow::Error> {
         },
         None,
         None,
+        false,
     )?;
 
     // 2 transactions in the package i.e create and increment counter
@@ -160,6 +162,7 @@ async fn test_full_node_move_function_index() -> Result<(), anyhow::Error> {
         },
         None,
         None,
+        false,
     )?;
 
     // 2 transactions in the package i.e publish and increment
@@ -184,6 +187,7 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
         TransactionQuery::InputObject(transferred_object),
         None,
         None,
+        false,
     )?;
 
     assert_eq!(txes.len(), 1);
@@ -193,34 +197,38 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
         TransactionQuery::MutatedObject(transferred_object),
         None,
         None,
+        false,
     )?;
     assert_eq!(txes.len(), 1);
     assert_eq!(txes[0], digest);
 
-    let txes = node
-        .state()
-        .get_transactions(TransactionQuery::FromAddress(sender), None, None)?;
+    let txes =
+        node.state()
+            .get_transactions(TransactionQuery::FromAddress(sender), None, None, false)?;
     assert_eq!(txes.len(), 1);
     assert_eq!(txes[0], digest);
 
-    let txes = node
-        .state()
-        .get_transactions(TransactionQuery::ToAddress(receiver), None, None)?;
+    let txes =
+        node.state()
+            .get_transactions(TransactionQuery::ToAddress(receiver), None, None, false)?;
     assert_eq!(txes.len(), 1);
     assert_eq!(txes[0], digest);
 
     // Note that this is also considered a tx to the sender, because it mutated
     // one or more of the sender's objects.
-    let txes = node
-        .state()
-        .get_transactions(TransactionQuery::ToAddress(sender), None, None)?;
+    let txes =
+        node.state()
+            .get_transactions(TransactionQuery::ToAddress(sender), None, None, false)?;
     assert_eq!(txes.len(), 1);
     assert_eq!(txes[0], digest);
 
     // No transactions have originated from the receiver
-    let txes =
-        node.state()
-            .get_transactions(TransactionQuery::FromAddress(receiver), None, None)?;
+    let txes = node.state().get_transactions(
+        TransactionQuery::FromAddress(receiver),
+        None,
+        None,
+        false,
+    )?;
     assert_eq!(txes.len(), 0);
 
     // timestamp is recorded
@@ -597,6 +605,7 @@ async fn test_full_node_event_read_api_ok() -> Result<(), anyhow::Error> {
         TransactionQuery::InputObject(transferred_object),
         None,
         None,
+        false,
     )?;
 
     assert_eq!(txes.len(), 1);

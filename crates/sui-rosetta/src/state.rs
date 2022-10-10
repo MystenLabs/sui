@@ -18,9 +18,9 @@ use sui_core::quorum_driver::QuorumDriver;
 use sui_types::base_types::{
     SequenceNumber, SuiAddress, TransactionDigest, TRANSACTION_DIGEST_LENGTH,
 };
-use sui_types::filter::TransactionQuery;
 use sui_types::gas_coin::GasCoin;
 use sui_types::object::PastObjectRead;
+use sui_types::query::TransactionQuery;
 
 use crate::operations::Operation;
 use crate::types::{
@@ -201,11 +201,11 @@ impl PseudoBlockProvider {
         }
         if current_block.index < total_tx {
             let tx_digests = if current_block.index == 0 {
-                state.get_transactions(TransactionQuery::All, None, None)?
+                state.get_transactions(TransactionQuery::All, None, None, false)?
             } else {
                 let cursor = TransactionDigest::new(current_block.hash.0);
                 let mut tx_digests =
-                    state.get_transactions(TransactionQuery::All, Some(cursor), None)?;
+                    state.get_transactions(TransactionQuery::All, Some(cursor), None, false)?;
                 if tx_digests.remove(0) != cursor {
                     return Err(Error::new_with_msg(
                         ErrorType::InternalError,
