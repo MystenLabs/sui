@@ -55,5 +55,9 @@ export default function PlaceholderTable({
         })),
     };
 
-    return <TableCard tabledata={loadingTable} />;
+    return (
+        <div className={placeholdertheme.container}>
+            <TableCard tabledata={loadingTable} />
+        </div>
+    );
 }

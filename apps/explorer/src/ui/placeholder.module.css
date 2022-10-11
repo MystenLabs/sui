@@ -10,3 +10,7 @@
     );
     background-size: 1000px 100%;
 }
+
+.container tbody td {
+    @apply py-[8px];
+}
