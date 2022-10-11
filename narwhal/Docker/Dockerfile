@@ -7,7 +7,7 @@ ARG BUILD_MODE="release"
 # Stage 0
 #################################################################
 FROM rust:1.62-slim-bullseye as chef
-WORKDIR "$WORKDIR/narwhal"
+WORKDIR "$WORKDIR/sui"
 ARG BUILD_MODE
 
 # Install basic dependencies
@@ -42,8 +42,8 @@ ARG BUILD_MODE
 #   3. Update the lockfile in order to reflect the changes to the
 #      root Cargo.toml file.
 COPY Cargo.toml Cargo.lock ./
-COPY workspace-hack workspace-hack
-RUN sed -i 's/^members = .*/members = ["workspace-hack"]/g' Cargo.toml \
+COPY crates/workspace-hack crates/workspace-hack
+RUN sed -i '/crates\/workspace-hack/b; /crates/d; /narwhal/d' Cargo.toml \
     && cargo metadata -q >/dev/null
 
 #################################################################
@@ -58,10 +58,10 @@ FROM chef AS builder
 ARG BUILD_MODE
 ARG FEATURES="celo,benchmark"
 
-COPY --from=planner /narwhal/Cargo.toml Cargo.toml
-COPY --from=planner /narwhal/Cargo.lock Cargo.lock
-COPY --from=planner /narwhal/workspace-hack workspace-hack
-RUN cargo build --${BUILD_MODE} --all-features
+COPY --from=planner /sui/Cargo.toml Cargo.toml
+COPY --from=planner /sui/Cargo.lock Cargo.lock
+COPY --from=planner /sui/crates/workspace-hack crates/workspace-hack
+RUN cargo build --${BUILD_MODE}
 
 #################################################################
 # Stage 2.5 : Building
@@ -75,7 +75,7 @@ RUN cargo build --${BUILD_MODE} --all-features
 COPY . .
 
 # Build the binary named "node"
-RUN cargo build --${BUILD_MODE} --features ${FEATURES} --bin node --bin benchmark_client
+RUN cargo build --${BUILD_MODE} --features ${FEATURES} --bin narwhal-node --bin narwhal-benchmark-client
 
 
 #################################################################
@@ -86,17 +86,17 @@ RUN cargo build --${BUILD_MODE} --features ${FEATURES} --bin node --bin benchmar
 FROM debian:bullseye-slim
 ARG BUILD_MODE
 
-WORKDIR "$WORKDIR/narwhal"
+WORKDIR "$WORKDIR/sui"
 
 # Copy the Narwhal node binary to bin folder
-COPY --from=builder narwhal/target/${BUILD_MODE}/node bin/
+COPY --from=builder sui/target/${BUILD_MODE}/narwhal-node bin/
 
 # This is used for testing a cluster by generating load.
 # We use this in our k8s cluster deployed alongside the workers and validators.
-COPY --from=builder narwhal/target/${BUILD_MODE}/benchmark_client bin/
+COPY --from=builder sui/target/${BUILD_MODE}/narwhal-benchmark-client bin/
 
 # Copy the entry point file
-COPY Docker/entry.sh ./
+COPY narwhal/Docker/entry.sh ./
 
 # Now add the entry point
 CMD ./entry.sh
