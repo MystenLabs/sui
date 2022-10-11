@@ -1063,8 +1063,8 @@ impl AuthorityState {
                     }
                 }
                 Err(RecvError::Closed) => {
-                    // This shall not happen.
-                    error!("run_tx_post_processing_process receiver channel closed. This shall not happen.");
+                    // This shall not happen because the sender of batch notifier should not be closed.
+                    error!("run_tx_post_processing_process receiver channel closed. If this happens there is a bug");
                     break;
                 }
                 // Today if post processing is too slow we will skip indexing some txes.

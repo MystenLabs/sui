@@ -21,7 +21,7 @@ use sqlx::{
 };
 use sui_types::error::SuiError;
 use sui_types::event::{Event, TransferTypeVariants};
-use tracing::{debug, info, log, warn};
+use tracing::{debug, info, instrument, log, warn};
 
 /// Sqlite-based Event Store
 ///
@@ -355,6 +355,7 @@ const QUERY_BY_OBJECT_ID: &str = "SELECT * FROM events WHERE timestamp >= ? AND 
 
 #[async_trait]
 impl EventStore for SqlEventStore {
+    #[instrument(level = "debug", skip_all, err)]
     async fn add_events(&self, events: &[EventEnvelope]) -> Result<u64, SuiError> {
         // TODO: submit writes in one transaction/batch so it won't just fail in the middle
         let mut cur_seq = self.seq_num.load(Ordering::Acquire);
@@ -412,6 +413,7 @@ impl EventStore for SqlEventStore {
         Ok(rows_affected)
     }
 
+    #[instrument(level = "debug", skip_all, err)]
     async fn events_by_transaction(
         &self,
         digest: TransactionDigest,
@@ -429,6 +431,7 @@ impl EventStore for SqlEventStore {
         Ok(rows)
     }
 
+    #[instrument(level = "debug", skip_all, err)]
     async fn events_by_type(
         &self,
         start_time: u64,
@@ -450,6 +453,7 @@ impl EventStore for SqlEventStore {
         Ok(rows)
     }
 
+    #[instrument(level = "debug", skip_all, err)]
     async fn event_iterator(
         &self,
         start_time: u64,
@@ -468,6 +472,7 @@ impl EventStore for SqlEventStore {
         Ok(rows)
     }
 
+    #[instrument(level = "debug", skip_all, err)]
     async fn events_by_module_id(
         &self,
         start_time: u64,
@@ -490,6 +495,7 @@ impl EventStore for SqlEventStore {
         Ok(rows)
     }
 
+    #[instrument(level = "debug", skip_all, err)]
     async fn events_by_move_event_struct_name(
         &self,
         start_time: u64,
@@ -512,6 +518,7 @@ impl EventStore for SqlEventStore {
         Ok(rows)
     }
 
+    #[instrument(level = "debug", skip_all, err)]
     async fn events_by_sender(
         &self,
         start_time: u64,
@@ -534,6 +541,7 @@ impl EventStore for SqlEventStore {
         Ok(rows)
     }
 
+    #[instrument(level = "debug", skip_all, err)]
     async fn events_by_recipient(
         &self,
         start_time: u64,
@@ -559,6 +567,7 @@ impl EventStore for SqlEventStore {
         Ok(rows)
     }
 
+    #[instrument(level = "debug", skip_all, err)]
     async fn events_by_object(
         &self,
         start_time: u64,
