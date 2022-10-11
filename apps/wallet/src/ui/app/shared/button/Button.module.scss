@@ -1,4 +1,5 @@
 @use '_values/colors';
+@use '_utils';
 
 .container {
     display: flex;
@@ -22,13 +23,20 @@
 
     &.neutral {
         background: colors.$gray-45;
-        color: colors.$gray-85;
+        color: colors.$gray-90;
     }
 
     &.outline {
         background: none;
         color: colors.$cta-blue;
         border: 1px solid colors.$sui-steel-blue;
+        border-radius: 12px;
+    }
+
+    &.secondary {
+        background: none;
+        color: colors.$sui-blue-steel-dark;
+        border: 1px solid colors.$gray-55;
         border-radius: 12px;
     }
 
@@ -46,6 +54,13 @@
         }
     }
 
+    &.mini {
+        padding: 4px 8px;
+        border-radius: 20px;
+
+        @include utils.typography('Primary/CAPTIONSMALL-SB');
+    }
+
     &.small {
         font-weight: 500;
         font-size: 13px;
@@ -54,9 +69,10 @@
     }
 
     &.large {
-        font-weight: 600;
-        font-size: 14px;
         padding: 12px 20px;
-        border-radius: 10px;
+        border-radius: 12px;
+        gap: 8px;
+
+        @include utils.typography('Primary/Body-SB');
     }
 }

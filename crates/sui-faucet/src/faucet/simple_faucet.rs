@@ -567,7 +567,7 @@ mod tests {
             amounts: Some(vec![tiny_value + TRANSFER_SUI_GAS]),
             gas_budget: 50000,
             gas: None,
-            count: 0,
+            count: None,
         }
         .execute(&mut context)
         .await

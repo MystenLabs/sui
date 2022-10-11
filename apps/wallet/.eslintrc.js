@@ -12,7 +12,6 @@ module.exports = {
         'prettier',
     ],
     rules: {
-        'react/jsx-no-bind': ['error'],
         'import/order': [
             'warn',
             {

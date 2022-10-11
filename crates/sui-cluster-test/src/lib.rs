@@ -7,10 +7,14 @@ use cluster::{Cluster, ClusterFactory};
 use config::ClusterTestOpt;
 use futures::{stream::FuturesUnordered, StreamExt};
 use helper::ObjectChecker;
+use jsonrpsee::types::ParamsSer;
+use jsonrpsee::{core::client::ClientT, http_client::HttpClientBuilder};
 use std::sync::Arc;
 use sui::client_commands::WalletContext;
 use sui_faucet::CoinInfo;
-use sui_json_rpc_types::{SuiCertifiedTransaction, SuiTransactionEffects};
+use sui_json_rpc_types::{
+    SuiCertifiedTransaction, SuiExecutionStatus, SuiTransactionEffects, TransactionBytes,
+};
 use sui_types::base_types::TransactionDigest;
 use sui_types::messages::ExecuteTransactionRequestType;
 use sui_types::object::Owner;
@@ -24,6 +28,7 @@ use sui_types::{
 };
 use test_case::{
     call_contract_test::CallContractTest, coin_merge_split_test::CoinMergeSplitTest,
+    fullnode_build_publish_transaction_test::FullNodeBuildPublishTransactionTest,
     fullnode_execute_transaction_test::FullNodeExecuteTransactionTest,
     native_transfer_test::NativeTransferTest, shared_object_test::SharedCounterTest,
 };
@@ -85,6 +90,10 @@ impl TestContext {
         self.client.get_fullnode_client()
     }
 
+    fn get_fullnode_rpc_url(&self) -> &str {
+        self.cluster.fullnode_url()
+    }
+
     fn get_wallet(&self) -> &WalletContext {
         self.client.get_wallet()
     }
@@ -103,6 +112,18 @@ impl TestContext {
         make_transactions_with_wallet_context(self.get_wallet_mut(), max_txn_num).await
     }
 
+    pub async fn build_transaction_remotely(
+        &self,
+        method: &str,
+        params: Option<ParamsSer<'_>>,
+    ) -> anyhow::Result<TransactionData> {
+        let fn_rpc_url = self.get_fullnode_rpc_url();
+        // TODO cache this?
+        let rpc_client = HttpClientBuilder::default().build(fn_rpc_url)?;
+
+        TransactionBytes::to_data(rpc_client.request(method, params).await?)
+    }
+
     async fn sign_and_execute(
         &self,
         txn_data: TransactionData,
@@ -118,7 +139,9 @@ impl TestContext {
             )
             .await
             .unwrap_or_else(|e| panic!("Failed to execute transaction for {}. {}", desc, e));
-        (resp.tx_cert.unwrap(), resp.effects.unwrap())
+        let (tx_cert, effects) = (resp.tx_cert.unwrap(), resp.effects.unwrap());
+        assert!(matches!(effects.status, SuiExecutionStatus::Success));
+        (tx_cert, effects)
     }
 
     pub async fn setup(options: ClusterTestOpt) -> Result<Self, anyhow::Error> {
@@ -255,6 +278,7 @@ impl ClusterTest {
             TestCase::new(CallContractTest {}),
             TestCase::new(SharedCounterTest {}),
             TestCase::new(FullNodeExecuteTransactionTest {}),
+            TestCase::new(FullNodeBuildPublishTransactionTest {}),
         ];
 
         // TODO: improve the runner parallelism for efficiency

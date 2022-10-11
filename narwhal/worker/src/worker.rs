@@ -255,13 +255,10 @@ impl Worker {
             endpoint_metrics,
             network.clone(),
         );
-        let worker_flow_handles = worker.handle_workers_messages(
-            &tx_reconfigure,
-            tx_primary.clone(),
-            rx_worker_processor,
-        );
+        let worker_flow_handles =
+            worker.handle_workers_messages(&tx_reconfigure, tx_primary, rx_worker_processor);
         let primary_flow_handles =
-            worker.handle_primary_messages(rx_synchronizer, tx_reconfigure, tx_primary, network);
+            worker.handle_primary_messages(rx_synchronizer, tx_reconfigure, network);
 
         // NOTE: This log entry is used to compute performance.
         info!(
@@ -287,7 +284,6 @@ impl Worker {
         &self,
         rx_synchronizer: Receiver<PrimaryWorkerMessage>,
         tx_reconfigure: watch::Sender<ReconfigureNotification>,
-        tx_primary: Sender<WorkerPrimaryMessage>,
         network: anemo::Network,
     ) -> Vec<JoinHandle<()>> {
         // The `Synchronizer` is responsible to keep the worker in sync with the others. It handles the commands
@@ -295,10 +291,8 @@ impl Worker {
         let handle = Synchronizer::spawn(
             self.committee.clone(),
             self.worker_cache.clone(),
-            self.store.clone(),
             /* rx_message */ rx_synchronizer,
             tx_reconfigure,
-            tx_primary,
             P2pNetwork::new(network),
         );
 

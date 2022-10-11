@@ -30,6 +30,7 @@ members = [
     "crates/sui-telemetry",
     "crates/sui-test-validator",
     "crates/sui-tool",
+    "crates/sui-transaction-builder",
     "crates/sui-transactional-test-runner",
     "crates/sui-types",
     "crates/sui-verifier",

@@ -5,6 +5,7 @@
     flex-flow: row nowrap;
     align-items: center;
     max-width: 100%;
+    flex: 1;
 }
 
 .copy-icon {
@@ -23,9 +24,17 @@
         opacity: 0.5;
     }
 
+    &.plain {
+        font-weight: 100;
+    }
+
     &.copied {
         transform: scale(150%, 150%);
         color: colors.$sui-blue;
         opacity: 1;
+
+        &.plain {
+            color: inherit;
+        }
     }
 }

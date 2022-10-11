@@ -351,15 +351,18 @@ impl UnreliableNetwork<WorkerBatchRequest> for P2pNetwork {
 impl PrimaryToWorkerRpc for P2pNetwork {
     async fn request_batch(
         &self,
-        peer: &NetworkPublicKey,
+        peer: NetworkPublicKey,
         batch: BatchDigest,
     ) -> Result<Option<Batch>> {
+        const BATCH_REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
+
         let peer_id = PeerId(peer.0.to_bytes());
         let peer = self
             .network
             .peer(peer_id)
             .ok_or_else(|| format_err!("Network has no connection with peer {peer_id}"))?;
-        let request = RequestBatchRequest { batch };
+        let request =
+            anemo::Request::new(RequestBatchRequest { batch }).with_timeout(BATCH_REQUEST_TIMEOUT);
         let response = PrimaryToWorkerClient::new(peer)
             .request_batch(request)
             .await

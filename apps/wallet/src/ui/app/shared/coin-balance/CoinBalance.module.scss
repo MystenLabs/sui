@@ -8,7 +8,7 @@
     overflow: hidden;
     align-items: baseline;
 
-    @include utils.typography('star/text-lg');
+    @include utils.typography('stats/text-lg');
 
     &.neutral {
         color: inherit;

@@ -232,7 +232,7 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
     async fn try_fetch_locally(&self, digest: BatchDigest, worker_id: WorkerId) -> Option<Batch> {
         let _timer = self.metrics.subscriber_local_fetch_latency.start_timer();
         let worker = self.network.my_worker(&worker_id);
-        let payload = self.network.request_batch(digest, &worker).await;
+        let payload = self.network.request_batch(digest, worker).await;
         match payload {
             Ok(Some(batch)) => {
                 debug!("Payload {} found locally", digest);
@@ -266,7 +266,8 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
             let request_batch_guard =
                 PendingGuard::make_inc(&self.metrics.pending_remote_request_batch);
             let payload =
-                tokio::time::timeout_at(deadline, self.safe_request_batch(digest, &worker)).await;
+                tokio::time::timeout_at(deadline, self.safe_request_batch(digest, worker.clone()))
+                    .await;
             drop(request_batch_guard);
             match payload {
                 Ok(Ok(Some(payload))) => return payload,
@@ -290,9 +291,9 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
     async fn safe_request_batch(
         &self,
         digest: BatchDigest,
-        worker: &NetworkPublicKey,
+        worker: NetworkPublicKey,
     ) -> anyhow::Result<Option<Batch>> {
-        let payload = self.network.request_batch(digest, worker).await?;
+        let payload = self.network.request_batch(digest, worker.clone()).await?;
         if let Some(payload) = payload {
             let payload_digest = payload.digest();
             if payload_digest != digest {
@@ -336,7 +337,7 @@ pub trait SubscriberNetwork: Send + Sync {
     async fn request_batch(
         &self,
         digest: BatchDigest,
-        worker: &NetworkPublicKey,
+        worker: NetworkPublicKey,
     ) -> anyhow::Result<Option<Batch>>;
 }
 
@@ -384,7 +385,7 @@ impl SubscriberNetwork for SubscriberNetworkImpl {
     async fn request_batch(
         &self,
         digest: BatchDigest,
-        worker: &NetworkPublicKey,
+        worker: NetworkPublicKey,
     ) -> anyhow::Result<Option<Batch>> {
         self.network.request_batch(worker, digest).await
     }
@@ -460,9 +461,9 @@ mod tests {
         async fn request_batch(
             &self,
             digest: BatchDigest,
-            worker: &NetworkPublicKey,
+            worker: NetworkPublicKey,
         ) -> anyhow::Result<Option<Batch>> {
-            Ok(self.data.get(&digest).unwrap().get(worker).cloned())
+            Ok(self.data.get(&digest).unwrap().get(&worker).cloned())
         }
     }
 
