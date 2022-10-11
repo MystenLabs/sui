@@ -7,7 +7,6 @@ import { useNavigate } from 'react-router-dom';
 import StepOne from './steps/StepOne';
 import StepTwo from './steps/StepTwo';
 import CardLayout from '_app/shared/card-layout';
-import { WALLET_ENCRYPTION_ENABLED } from '_app/wallet/constants';
 import { useAppDispatch } from '_hooks';
 import { createMnemonic, logout } from '_redux/slices/account';
 import { MAIN_UI_URL } from '_src/shared/utils';
@@ -18,11 +17,7 @@ const initialValues = {
     confirmPassword: '',
 };
 
-const allSteps = [StepOne];
-
-if (WALLET_ENCRYPTION_ENABLED) {
-    allSteps.push(StepTwo);
-}
+const allSteps = [StepOne, StepTwo];
 
 export type ImportValuesType = typeof initialValues;
 export type ImportPageProps = {

@@ -4,7 +4,6 @@
 import { useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
-import { WALLET_ENCRYPTION_ENABLED } from './constants';
 import { useAppSelector } from '_hooks';
 
 export function useLockedGuard(requiredLockedStatus: boolean) {
@@ -18,10 +17,7 @@ export function useLockedGuard(requiredLockedStatus: boolean) {
     );
     const loading = isInitialized === null || isLocked === null;
     const guardAct =
-        WALLET_ENCRYPTION_ENABLED &&
-        !loading &&
-        isInitialized &&
-        requiredLockedStatus !== isLocked;
+        !loading && isInitialized && requiredLockedStatus !== isLocked;
     useEffect(() => {
         if (guardAct) {
             navigate(
