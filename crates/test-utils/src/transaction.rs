@@ -329,7 +329,7 @@ pub async fn split_coin_with_wallet_context(context: &mut WalletContext, coin_id
     SuiClientCommands::SplitCoin {
         coin_id,
         amounts: None,
-        count: 2,
+        count: Some(2),
         gas: None,
         gas_budget: MAX_GAS,
     }
