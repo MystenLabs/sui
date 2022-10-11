@@ -14,16 +14,9 @@ import { Coin } from '_redux/slices/sui-objects/Coin';
 
 import type { SuiAddress, SuiMoveObject } from '@mysten/sui.js';
 import type { PayloadAction, Reducer } from '@reduxjs/toolkit';
+import type { KeyringPayload } from '_payloads/keyring';
 import type { RootState } from '_redux/RootReducer';
 import type { AppThunkConfig } from '_store/thunk-extras';
-
-export const loadAccountFromStorage = createAsyncThunk(
-    'account/loadAccount',
-    async (): Promise<string | null> => {
-        const { mnemonic } = await Browser.storage.local.get('mnemonic');
-        return mnemonic || null;
-    }
-);
 
 export const createMnemonic = createAsyncThunk<
     string,
@@ -45,10 +38,7 @@ export const createMnemonic = createAsyncThunk<
         if (!payload.return?.mnemonic) {
             throw new Error('Empty mnemonic in payload');
         }
-        const mnemonic = payload.return.mnemonic;
-        // TODO: store it unencrypted until everything switches to using the encrypted one (#encrypt-wallet)
-        await Browser.storage.local.set({ mnemonic });
-        return mnemonic;
+        return payload.return.mnemonic;
     }
 );
 
@@ -70,7 +60,6 @@ export const logout = createAsyncThunk(
 );
 
 type AccountState = {
-    mnemonic: string | null;
     creating: boolean;
     address: SuiAddress | null;
     isLocked: boolean | null;
@@ -78,7 +67,6 @@ type AccountState = {
 };
 
 const initialState: AccountState = {
-    mnemonic: null,
     creating: false,
     address: null,
     isLocked: null,
@@ -96,34 +84,27 @@ const accountSlice = createSlice({
             state,
             {
                 payload,
-            }: PayloadAction<
-                Partial<{ isLocked: boolean; isInitialized: boolean }>
-            >
+            }: PayloadAction<KeyringPayload<'walletStatusUpdate'>['return']>
         ) => {
-            if (typeof payload.isLocked !== 'undefined') {
+            if (typeof payload?.isLocked !== 'undefined') {
                 state.isLocked = payload.isLocked;
             }
-            if (typeof payload.isInitialized !== 'undefined') {
+            if (typeof payload?.isInitialized !== 'undefined') {
                 state.isInitialized = payload.isInitialized;
             }
         },
     },
     extraReducers: (builder) =>
         builder
-            .addCase(loadAccountFromStorage.fulfilled, (state, action) => {
-                state.mnemonic = action.payload;
-            })
             .addCase(createMnemonic.pending, (state) => {
                 state.creating = true;
             })
             .addCase(createMnemonic.fulfilled, (state, action) => {
                 state.creating = false;
-                state.mnemonic = action.payload;
                 state.isInitialized = true;
             })
             .addCase(createMnemonic.rejected, (state) => {
                 state.creating = false;
-                state.mnemonic = null;
             }),
 });
 

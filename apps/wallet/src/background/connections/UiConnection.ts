@@ -52,19 +52,22 @@ export class UiConnection extends Connection {
             });
     }
 
-    public sendLockedStatusUpdate(isLocked: boolean) {
+    public async sendLockedStatusUpdate(isLocked: boolean) {
         this.send(
             createMessage<KeyringPayload<'walletStatusUpdate'>>({
                 type: 'keyring',
                 method: 'walletStatusUpdate',
-                return: { isLocked },
+                return: {
+                    isLocked,
+                    mnemonic: Keyring.mnemonic() || undefined,
+                    isInitialized: await Keyring.isWalletInitialized(),
+                },
             })
         );
     }
 
     protected async handleMessage(msg: Message) {
         const { payload, id } = msg;
-
         try {
             if (isGetPermissionRequests(payload)) {
                 this.sendPermissions(
