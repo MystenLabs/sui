@@ -57,6 +57,9 @@ export class StandardWalletAdapter implements WalletAdapter {
   async disconnect() {
     this.connected = false;
     this.connecting = false;
+    if (this.#wallet.features["standard:disconnect"]) {
+      await this.#wallet.features["standard:disconnect"].disconnect();
+    }
   }
 
   async signAndExecuteTransaction(transaction: SignableTransaction) {

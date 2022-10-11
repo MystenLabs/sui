@@ -3,11 +3,10 @@
 
 import { WalletAdapterProvider } from "@mysten/wallet-adapter-base";
 import {
-  Wallets,
   isStandardWalletAdapterCompatibleWallet,
   StandardWalletAdapterWallet,
 } from "@mysten/wallet-standard";
-import { initialize } from "@wallet-standard/app";
+import { initialize, InitializedWallets } from "@wallet-standard/app";
 import { StandardWalletAdapter } from "./StandardWalletAdapter";
 import mitt, { Emitter } from "mitt";
 
@@ -16,7 +15,7 @@ type Events = {
 };
 
 export class WalletStandardAdapterProvider implements WalletAdapterProvider {
-  #wallets: Wallets;
+  #wallets: InitializedWallets;
   #adapters: Map<StandardWalletAdapterWallet, StandardWalletAdapter>;
   #events: Emitter<Events>;
 

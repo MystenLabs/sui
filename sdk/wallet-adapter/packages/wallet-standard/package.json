@@ -26,9 +26,9 @@
   },
   "dependencies": {
     "@mysten/sui.js": "workspace:*",
-    "@wallet-standard/features": "0.1.0-alpha.1",
-    "@wallet-standard/standard": "0.1.0-alpha.3",
-    "@wallet-standard/util": "0.1.0-alpha.3"
+    "@wallet-standard/features": "0.1.0-alpha.4",
+    "@wallet-standard/standard": "0.1.0-alpha.5",
+    "@wallet-standard/util": "0.1.0-alpha.6"
   },
   "devDependencies": {
     "tsup": "^6.2.2",
