@@ -9,7 +9,8 @@ import StepTwo from './steps/StepTwo';
 import CardLayout from '_app/shared/card-layout';
 import { WALLET_ENCRYPTION_ENABLED } from '_app/wallet/constants';
 import { useAppDispatch } from '_hooks';
-import { createMnemonic } from '_redux/slices/account';
+import { createMnemonic, logout } from '_redux/slices/account';
+import { MAIN_UI_URL } from '_src/shared/utils';
 
 const initialValues = {
     mnemonic: '',
@@ -24,8 +25,10 @@ if (WALLET_ENCRYPTION_ENABLED) {
 }
 
 export type ImportValuesType = typeof initialValues;
-
-const ImportPage = () => {
+export type ImportPageProps = {
+    mode?: 'import' | 'forgot';
+};
+const ImportPage = ({ mode = 'import' }: ImportPageProps) => {
     const [data, setData] = useState<ImportValuesType>(initialValues);
     const [step, setStep] = useState(0);
     const dispatch = useAppDispatch();
@@ -33,22 +36,47 @@ const ImportPage = () => {
     const onHandleSubmit = useCallback(
         async ({ mnemonic, password }: ImportValuesType) => {
             try {
+                if (mode === 'forgot') {
+                    // clear everything in storage
+                    await dispatch(logout());
+                }
                 await dispatch(
                     createMnemonic({ importedMnemonic: mnemonic, password })
                 ).unwrap();
-                navigate('../backup-imported');
+                if (mode === 'import') {
+                    navigate('../backup-imported');
+                } else {
+                    // refresh the page to re-initialize the store
+                    window.location.href = MAIN_UI_URL;
+                }
             } catch (e) {
                 // Do nothing
             }
         },
-        [dispatch, navigate]
+        [dispatch, navigate, mode]
     );
     const totalSteps = allSteps.length;
     const StepForm = step < totalSteps ? allSteps[step] : null;
     return (
         <CardLayout
-            title="Import an Existing Wallet"
-            headerCaption="Wallet Setup"
+            title={
+                mode === 'import'
+                    ? 'Import an Existing Wallet'
+                    : 'Reset Password for This Wallet'
+            }
+            headerCaption={mode === 'import' ? 'Wallet Setup' : undefined}
+            mode={mode === 'import' ? 'box' : 'plain'}
+            goBackOnClick={
+                mode === 'forgot'
+                    ? () => {
+                          if (step > 0) {
+                              setStep((step) => step - 1);
+                          } else {
+                              navigate(-1);
+                          }
+                      }
+                    : undefined
+            }
         >
             {StepForm ? (
                 <StepForm
@@ -64,6 +92,7 @@ const ImportPage = () => {
                         setStep(nextStep);
                     }}
                     data={data}
+                    mode={mode}
                 />
             ) : null}
         </CardLayout>
