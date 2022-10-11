@@ -5,7 +5,7 @@ use crate::legacy_length_cost;
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::{
     language_storage::TypeTag,
-    value::{MoveStructLayout, MoveTypeLayout},
+    value::{MoveFieldLayout, MoveStructLayout, MoveTypeLayout},
 };
 use move_vm_runtime::native_functions::NativeContext;
 use move_vm_types::{
@@ -35,27 +35,21 @@ pub fn is_one_time_witness(
     };
 
     let has_one_bool_field = match struct_layout {
-        MoveStructLayout::Runtime(vec) => {
-            if !vec.len() == 1 {
-                false
-            } else {
-                matches!(vec[0], MoveTypeLayout::Bool)
-            }
-        }
-        MoveStructLayout::WithFields(vec) => {
-            if !vec.len() == 1 {
-                false
-            } else {
-                matches!(vec[0].layout, MoveTypeLayout::Bool)
-            }
-        }
-        MoveStructLayout::WithTypes { type_: _, fields } => {
-            if !fields.len() == 1 {
-                false
-            } else {
-                matches!(fields[0].layout, MoveTypeLayout::Bool)
-            }
-        }
+        MoveStructLayout::Runtime(vec) => matches!(vec.as_slice(), [MoveTypeLayout::Bool]),
+        MoveStructLayout::WithFields(vec) => matches!(
+            vec.as_slice(),
+            [MoveFieldLayout {
+                name: _,
+                layout: MoveTypeLayout::Bool
+            }]
+        ),
+        MoveStructLayout::WithTypes { type_: _, fields } => matches!(
+            fields.as_slice(),
+            [MoveFieldLayout {
+                name: _,
+                layout: MoveTypeLayout::Bool
+            }]
+        ),
     };
 
     // If a struct type has the same name as the module that defines it but capitalized, and it has

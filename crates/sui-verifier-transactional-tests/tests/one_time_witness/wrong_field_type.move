@@ -12,4 +12,9 @@ module test::m {
 
     fun init(_ctx: &mut sui::tx_context::TxContext) {
     }
+
+    fun foo() {
+        M { value: 7 };
+        M { value: 42 };
+    }
 }
