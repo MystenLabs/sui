@@ -35,6 +35,7 @@ class YourWallet implements Wallet {
 Features are standard methods consumers can use to interact with a wallet. To be listed in the Sui wallet adapter, you must implement the following features in your wallet:
 
 - `standard:connect` - Used to initiate a connection to the wallet.
+- `standard:events` - Used to listen for changes that happen within the wallet, such as accounts being added or removed.
 - `sui:signAndExecuteTransaction` - Used to prompt the user to sign a transaction, then submit it for execution to the blockchain.
 
 You can implement these features in your wallet class under the `features` property:
@@ -42,16 +43,24 @@ You can implement these features in your wallet class under the `features` prope
 ```typescript
 import {
   ConnectFeature,
+  ConnectMethod,
+  EventsFeature,
+  EventsOnMethod,
   SuiSignAndExecuteTransactionFeature,
+  SuiSignAndExecuteTransactionMethod
 } from "@mysten/wallet-standard";
 
 class YourWallet implements Wallet {
-  get features(): ConnectFeature & SuiSignAndExecuteTransactionFeature {
+  get features(): ConnectFeature & EventsFeature & SuiSignAndExecuteTransactionFeature {
     return {
       "standard:connect": {
         version: "1.0.0",
         connect: this.#connect,
       },
+      "standard:events": {
+        version: "1.0.0",
+        on: this.#on,
+      }
       "sui:signAndExecuteTransaction": {
         version: "1.0.0",
         signAndExecuteTransaction: this.#signAndExecuteTransaction,
@@ -59,13 +68,17 @@ class YourWallet implements Wallet {
     };
   },
 
-	#connect() {
-		// Your wallet's connect implementation
-	}
+  #on: EventsOnMethod = () => {
+    // Your wallet's events on implementation.
+  };
 
-	#signAndExecuteTransaction() {
+	#connect: ConnectMethod = () => {
+		// Your wallet's connect implementation
+	};
+
+	#signAndExecuteTransaction: SuiSignAndExecuteTransactionMethod = () => {
 		// Your wallet's signAndExecuteTransaction implementation
-	}
+	};
 }
 ```
 
