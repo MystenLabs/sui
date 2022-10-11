@@ -137,8 +137,8 @@ impl<Network: SubscriberNetwork> Subscriber<Network> {
                 },
 
                 // Receive here consensus messages for which we have downloaded all transactions data.
-                message = waiting.next(), if !waiting.is_empty() => {
-                    if let Err(e) = self.tx_notifier.send(message.expect("We don't poll empty queue")).await {
+                Some(message) = waiting.next() => {
+                    if let Err(e) = self.tx_notifier.send(message).await {
                         error!("tx_notifier closed: {}", e);
                         return Ok(());
                     }
