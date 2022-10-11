@@ -27,7 +27,6 @@ use sui_json::SuiJsonValue;
 use sui_json_rpc::api::EventStreamingApiOpenRpc;
 use sui_json_rpc::api::RpcReadApiClient;
 use sui_json_rpc::bcs_api::BcsApiImpl;
-use sui_json_rpc::gateway_api::{GatewayWalletSyncApiImpl, TransactionBuilderImpl};
 use sui_json_rpc::read_api::{FullNodeApi, ReadApi};
 use sui_json_rpc::sui_rpc_doc;
 use sui_json_rpc::SuiRpcModule;
@@ -75,13 +74,11 @@ async fn main() {
     let options = Options::parse();
 
     let mut open_rpc = sui_rpc_doc();
-    open_rpc.add_module(TransactionBuilderImpl::rpc_doc_module());
     open_rpc.add_module(ReadApi::rpc_doc_module());
     open_rpc.add_module(FullNodeApi::rpc_doc_module());
     open_rpc.add_module(BcsApiImpl::rpc_doc_module());
     open_rpc.add_module(EventStreamingApiOpenRpc::module_doc());
     open_rpc.add_module(EventReadApiOpenRpc::module_doc());
-    open_rpc.add_module(GatewayWalletSyncApiImpl::rpc_doc_module());
     open_rpc.add_module(FullNodeTransactionExecutionApi::rpc_doc_module());
     open_rpc.add_module(FullNodeTransactionBuilderApi::rpc_doc_module());
 

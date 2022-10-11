@@ -15,7 +15,6 @@ use sui_faucet::CoinInfo;
 use sui_json_rpc_types::{
     SuiCertifiedTransaction, SuiExecutionStatus, SuiTransactionEffects, TransactionBytes,
 };
-use sui_transaction_builder::TransactionBuilder;
 use sui_types::base_types::TransactionDigest;
 use sui_types::messages::ExecuteTransactionRequestType;
 use sui_types::object::Owner;
@@ -93,11 +92,6 @@ impl TestContext {
 
     fn get_fullnode_rpc_url(&self) -> &str {
         self.cluster.fullnode_url()
-    }
-
-    #[allow(dead_code)]
-    fn get_embedded_transaction_builder(&self) -> &TransactionBuilder {
-        self.get_fullnode_client().transaction_builder()
     }
 
     fn get_wallet(&self) -> &WalletContext {
