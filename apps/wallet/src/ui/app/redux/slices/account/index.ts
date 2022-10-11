@@ -66,7 +66,6 @@ export const logout = createAsyncThunk(
     'account/logout',
     async (): Promise<void> => {
         await Browser.storage.local.clear();
-        window.location.reload();
     }
 );
 

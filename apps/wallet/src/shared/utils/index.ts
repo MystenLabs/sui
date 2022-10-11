@@ -7,9 +7,10 @@ import Browser from 'webextension-polyfill';
 
 import { trackPageview } from '../plausible';
 
+export const MAIN_UI_URL = Browser.runtime.getURL('ui.html');
+
 export function openInNewTab() {
-    const url = Browser.runtime.getURL('ui.html');
-    return Browser.tabs.create({ url });
+    return Browser.tabs.create({ url: MAIN_UI_URL });
 }
 
 export function usePageView() {

@@ -23,6 +23,7 @@ function Account() {
         setLogoutInProgress(true);
         try {
             await dispatch(logout());
+            window.location.reload();
         } finally {
             setLogoutInProgress(false);
         }
