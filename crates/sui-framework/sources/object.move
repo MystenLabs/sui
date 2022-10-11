@@ -41,7 +41,8 @@ module sui::object {
 
     // === address ===
 
-    /// Convert raw bytes into an address
+    /// Convert raw bytes into an address, aborts if supplied too many
+    /// or too few bytes.
     public native fun address_from_bytes(bytes: vector<u8>): address;
 
     // === id ===
