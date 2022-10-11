@@ -1,7 +1,8 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module sui::wallet {
+/// This module provides handy functionality for wallets and `sui::Coin` management.
+module sui::pay {
     use sui::tx_context::{Self, TxContext};
     use sui::coin::{Self, Coin};
     use sui::transfer;
@@ -24,7 +25,9 @@ module sui::wallet {
 
     /// Split coin `self` into multiple coins, each with balance specified
     /// in `split_amounts`. Remaining balance is left in `self`.
-    public entry fun split_vec<T>(self: &mut Coin<T>, split_amounts: vector<u64>, ctx: &mut TxContext) {
+    public entry fun split_vec<T>(
+        self: &mut Coin<T>, split_amounts: vector<u64>, ctx: &mut TxContext
+    ) {
         let i = 0;
         let len = vector::length(&split_amounts);
         while (i < len) {
@@ -36,7 +39,7 @@ module sui::wallet {
     /// Split coin `self` into `n` coins with equal balances. If the balance is
     /// not evenly divisible by `n`, the remainder is left in `self`. Return
     /// newly created coins.
-    public fun split_n_to_vec<T>(self: &mut Coin<T>, n: u64, ctx: &mut TxContext): vector<Coin<T>> {
+    public fun divide_into_n<T>(self: &mut Coin<T>, n: u64, ctx: &mut TxContext): vector<Coin<T>> {
         assert!(n > 0, EInvalidArg);
         assert!(n <= coin::value(self), ENotEnough);
         let vec = vector::empty<Coin<T>>();
@@ -49,10 +52,10 @@ module sui::wallet {
         vec
     }
 
-    /// Split coin `self` into `n` coins with equal balances. If the balance is
+    /// Divide coin `self` into `n` coins with equal balances. If the balance is
     /// not evenly divisible by `n`, the remainder is left in `self`.
-    public entry fun split_n<T>(self: &mut Coin<T>, n: u64, ctx: &mut TxContext) {
-        let vec: vector<Coin<T>> = split_n_to_vec(self, n, ctx);
+    public entry fun divide_and_keep<T>(self: &mut Coin<T>, n: u64, ctx: &mut TxContext) {
+        let vec: vector<Coin<T>> = divide_into_n(self, n, ctx);
         let i = 0;
         let len = vector::length(&vec);
         while (i < len) {
