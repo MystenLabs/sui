@@ -92,9 +92,9 @@ export const TopValidatorsCardAPI = (): JSX.Element => {
                                     ]}
                                     colWidths={[
                                         '25px',
-                                        '70px',
-                                        '260px',
-                                        '260px',
+                                        '135px',
+                                        '220px',
+                                        '220px',
                                     ]}
                                 />
                             </div>
