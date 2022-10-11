@@ -87,6 +87,7 @@ const INDEXED_COLUMNS: &[&str] = &[
     "sender",
     "recipient",
     "object_id",
+    "move_event_name",
 ];
 
 impl SqlEventStore {
