@@ -13,7 +13,7 @@ use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
     account_address::AccountAddress,
     identifier::Identifier,
-    language_storage::{StructTag, TypeTag},
+    language_storage::StructTag,
     value::{MoveStruct, MoveValue},
     vm_status::StatusCode,
 };
@@ -454,9 +454,6 @@ fn most_recent_at_ty_opt(
     let s = inv.get(&ty)?;
     let most_recent_id = s.keys().filter(|id| !taken.contains_key(id)).last()?;
     Some(pack_id(*most_recent_id))
-}
-fn is_expected_ty(specified_ty: &TypeTag, expected_ty: &StructTag) -> bool {
-    matches!(specified_ty, TypeTag::Struct(s) if s == expected_ty)
 }
 
 fn get_specified_ty(mut ty_args: Vec<Type>) -> Type {

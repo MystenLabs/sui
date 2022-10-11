@@ -76,7 +76,7 @@ B2:
 	6: Branch(14)
 B3:
 	7: LdConst[1](Vector(U8): [20, 58, 152, 93, 167, 79, 226, 37, 178, 4, 92, 23, 45, 107, 211, 144, 189, 133, 95, 8, 110])
-	8: Call[19](calibrate_address_from_bytes(vector<u8>))
+	8: Call[13](calibrate_address_from_bytes(vector<u8>))
 	9: MoveLoc[1](trials: u64)
 	10: LdU64(1)
 	11: Sub
@@ -100,7 +100,7 @@ B2:
 	6: Branch(14)
 B3:
 	7: LdConst[1](Vector(U8): [20, 58, 152, 93, 167, 79, 226, 37, 178, 4, 92, 23, 45, 107, 211, 144, 189, 133, 95, 8, 110])
-	8: Call[20](calibrate_address_from_bytes_nop(vector<u8>))
+	8: Call[14](calibrate_address_from_bytes_nop(vector<u8>))
 	9: MoveLoc[1](trials: u64)
 	10: LdU64(1)
 	11: Sub
@@ -110,100 +110,102 @@ B4:
 	14: Ret
 }
 entry public test_calibrate_id_borrow_uid() {
-L0:	%#1: Scenario
-L1:	id: UID
-L2:	obj: ObjectWithID
-L3:	scenario: &mut Scenario
+L0:	id: UID
+L1:	obj: ObjectWithID
+L2:	scenario: &mut Scenario
+L3:	scenario_val: Scenario
 L4:	sender: address
 L5:	trials: u64
 B0:
 	0: LdConst[0](U64: [1, 0, 0, 0, 0, 0, 0, 0])
 	1: StLoc[5](trials: u64)
 	2: LdConst[2](Address: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
-	3: StLoc[4](sender: address)
-	4: ImmBorrowLoc[4](sender: address)
-	5: Call[21](begin(&address): Scenario)
-	6: StLoc[0](%#1: Scenario)
-	7: MutBorrowLoc[0](%#1: Scenario)
-	8: StLoc[3](scenario: &mut Scenario)
+	3: Call[15](begin(address): Scenario)
+	4: StLoc[3](scenario_val: Scenario)
+	5: MutBorrowLoc[3](scenario_val: Scenario)
+	6: StLoc[2](scenario: &mut Scenario)
 B1:
-	9: CopyLoc[5](trials: u64)
-	10: LdU64(0)
-	11: Gt
-	12: BrTrue(14)
+	7: CopyLoc[5](trials: u64)
+	8: LdU64(0)
+	9: Gt
+	10: BrTrue(12)
 B2:
-	13: Branch(31)
+	11: Branch(29)
 B3:
-	14: CopyLoc[3](scenario: &mut Scenario)
-	15: Call[22](ctx(&mut Scenario): &mut TxContext)
-	16: Call[23](new(&mut TxContext): UID)
-	17: Pack[1](ObjectWithID)
-	18: StLoc[2](obj: ObjectWithID)
-	19: ImmBorrowLoc[2](obj: ObjectWithID)
-	20: Call[2](calibrate_borrow_uid<ObjectWithID>(&ObjectWithID))
-	21: MoveLoc[2](obj: ObjectWithID)
+	12: CopyLoc[2](scenario: &mut Scenario)
+	13: Call[16](ctx(&mut Scenario): &mut TxContext)
+	14: Call[17](new(&mut TxContext): UID)
+	15: Pack[1](ObjectWithID)
+	16: StLoc[1](obj: ObjectWithID)
+	17: ImmBorrowLoc[1](obj: ObjectWithID)
+	18: Call[2](calibrate_borrow_uid<ObjectWithID>(&ObjectWithID))
+	19: MoveLoc[1](obj: ObjectWithID)
+	20: Unpack[1](ObjectWithID)
+	21: StLoc[0](id: UID)
+	22: MoveLoc[0](id: UID)
+	23: Call[19](delete(UID))
+	24: MoveLoc[5](trials: u64)
+	25: LdU64(1)
+	26: Sub
+	27: StLoc[5](trials: u64)
+	28: Branch(7)
+B4:
+	29: MoveLoc[2](scenario: &mut Scenario)
+	30: Pop
+	31: MoveLoc[3](scenario_val: Scenario)
+	32: Call[20](end(Scenario): TransactionEffects)
+	33: Pop
+	34: Ret
+}
+entry public test_calibrate_id_borrow_uid__baseline() {
+L0:	id: UID
+L1:	obj: ObjectWithID
+L2:	scenario: &mut Scenario
+L3:	scenario_val: Scenario
+L4:	sender: address
+L5:	trials: u64
+B0:
+	0: LdConst[0](U64: [1, 0, 0, 0, 0, 0, 0, 0])
+	1: StLoc[5](trials: u64)
+	2: LdConst[2](Address: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+	3: Call[15](begin(address): Scenario)
+	4: StLoc[3](scenario_val: Scenario)
+	5: MutBorrowLoc[3](scenario_val: Scenario)
+	6: StLoc[2](scenario: &mut Scenario)
+B1:
+	7: CopyLoc[5](trials: u64)
+	8: LdU64(0)
+	9: Gt
+	10: BrTrue(12)
+B2:
+	11: Branch(31)
+B3:
+	12: CopyLoc[2](scenario: &mut Scenario)
+	13: Call[16](ctx(&mut Scenario): &mut TxContext)
+	14: Call[17](new(&mut TxContext): UID)
+	15: Pack[1](ObjectWithID)
+	16: StLoc[1](obj: ObjectWithID)
+	17: ImmBorrowLoc[1](obj: ObjectWithID)
+	18: Call[2](calibrate_borrow_uid<ObjectWithID>(&ObjectWithID))
+	19: ImmBorrowLoc[1](obj: ObjectWithID)
+	20: Pop
+	21: MoveLoc[1](obj: ObjectWithID)
 	22: Unpack[1](ObjectWithID)
-	23: StLoc[1](id: UID)
-	24: MoveLoc[1](id: UID)
-	25: Call[25](delete(UID))
+	23: StLoc[0](id: UID)
+	24: MoveLoc[0](id: UID)
+	25: Call[19](delete(UID))
 	26: MoveLoc[5](trials: u64)
 	27: LdU64(1)
 	28: Sub
 	29: StLoc[5](trials: u64)
-	30: Branch(9)
+	30: Branch(7)
 B4:
-	31: MoveLoc[3](scenario: &mut Scenario)
+	31: MoveLoc[2](scenario: &mut Scenario)
 	32: Pop
-	33: Ret
-}
-entry public test_calibrate_id_borrow_uid__baseline() {
-L0:	%#1: Scenario
-L1:	id: UID
-L2:	obj: ObjectWithID
-L3:	scenario: &mut Scenario
-L4:	sender: address
-L5:	trials: u64
-B0:
-	0: LdConst[0](U64: [1, 0, 0, 0, 0, 0, 0, 0])
-	1: StLoc[5](trials: u64)
-	2: LdConst[2](Address: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
-	3: StLoc[4](sender: address)
-	4: ImmBorrowLoc[4](sender: address)
-	5: Call[21](begin(&address): Scenario)
-	6: StLoc[0](%#1: Scenario)
-	7: MutBorrowLoc[0](%#1: Scenario)
-	8: StLoc[3](scenario: &mut Scenario)
-B1:
-	9: CopyLoc[5](trials: u64)
-	10: LdU64(0)
-	11: Gt
-	12: BrTrue(14)
-B2:
-	13: Branch(33)
-B3:
-	14: CopyLoc[3](scenario: &mut Scenario)
-	15: Call[22](ctx(&mut Scenario): &mut TxContext)
-	16: Call[23](new(&mut TxContext): UID)
-	17: Pack[1](ObjectWithID)
-	18: StLoc[2](obj: ObjectWithID)
-	19: ImmBorrowLoc[2](obj: ObjectWithID)
-	20: Call[2](calibrate_borrow_uid<ObjectWithID>(&ObjectWithID))
-	21: ImmBorrowLoc[2](obj: ObjectWithID)
-	22: Pop
-	23: MoveLoc[2](obj: ObjectWithID)
-	24: Unpack[1](ObjectWithID)
-	25: StLoc[1](id: UID)
-	26: MoveLoc[1](id: UID)
-	27: Call[25](delete(UID))
-	28: MoveLoc[5](trials: u64)
-	29: LdU64(1)
-	30: Sub
-	31: StLoc[5](trials: u64)
-	32: Branch(9)
-B4:
-	33: MoveLoc[3](scenario: &mut Scenario)
-	34: Pop
-	35: Ret
+	33: MoveLoc[3](scenario_val: Scenario)
+	34: Call[20](end(Scenario): TransactionEffects)
+	35: Pop
+	36: Ret
 }
 entry public test_calibrate_pop() {
 L0:	_k: bool
@@ -250,164 +252,6 @@ B3:
 B4:
 	12: Ret
 }
-entry public test_calibrate_transfer_freeze_object() {
-L0:	obj1: ObjectSimple
-L1:	trials: u64
-B0:
-	0: LdConst[0](U64: [1, 0, 0, 0, 0, 0, 0, 0])
-	1: StLoc[1](trials: u64)
-B1:
-	2: CopyLoc[1](trials: u64)
-	3: LdU64(0)
-	4: Gt
-	5: BrTrue(7)
-B2:
-	6: Branch(15)
-B3:
-	7: LdFalse
-	8: Pack[0](ObjectSimple)
-	9: Call[3](calibrate_freeze_object<ObjectSimple>(ObjectSimple))
-	10: MoveLoc[1](trials: u64)
-	11: LdU64(1)
-	12: Sub
-	13: StLoc[1](trials: u64)
-	14: Branch(2)
-B4:
-	15: Ret
-}
-entry public test_calibrate_transfer_freeze_object__baseline() {
-L0:	obj1: ObjectSimple
-L1:	trials: u64
-B0:
-	0: LdConst[0](U64: [1, 0, 0, 0, 0, 0, 0, 0])
-	1: StLoc[1](trials: u64)
-B1:
-	2: CopyLoc[1](trials: u64)
-	3: LdU64(0)
-	4: Gt
-	5: BrTrue(7)
-B2:
-	6: Branch(15)
-B3:
-	7: LdFalse
-	8: Pack[0](ObjectSimple)
-	9: Call[4](calibrate_freeze_object_nop<ObjectSimple>(ObjectSimple))
-	10: MoveLoc[1](trials: u64)
-	11: LdU64(1)
-	12: Sub
-	13: StLoc[1](trials: u64)
-	14: Branch(2)
-B4:
-	15: Ret
-}
-entry public test_calibrate_transfer_share_object() {
-L0:	obj1: ObjectSimple
-L1:	trials: u64
-B0:
-	0: LdConst[0](U64: [1, 0, 0, 0, 0, 0, 0, 0])
-	1: StLoc[1](trials: u64)
-B1:
-	2: CopyLoc[1](trials: u64)
-	3: LdU64(0)
-	4: Gt
-	5: BrTrue(7)
-B2:
-	6: Branch(15)
-B3:
-	7: LdFalse
-	8: Pack[0](ObjectSimple)
-	9: Call[5](calibrate_share_object<ObjectSimple>(ObjectSimple))
-	10: MoveLoc[1](trials: u64)
-	11: LdU64(1)
-	12: Sub
-	13: StLoc[1](trials: u64)
-	14: Branch(2)
-B4:
-	15: Ret
-}
-entry public test_calibrate_transfer_share_object__baseline() {
-L0:	obj1: ObjectSimple
-L1:	trials: u64
-B0:
-	0: LdConst[0](U64: [1, 0, 0, 0, 0, 0, 0, 0])
-	1: StLoc[1](trials: u64)
-B1:
-	2: CopyLoc[1](trials: u64)
-	3: LdU64(0)
-	4: Gt
-	5: BrTrue(7)
-B2:
-	6: Branch(15)
-B3:
-	7: LdFalse
-	8: Pack[0](ObjectSimple)
-	9: Call[6](calibrate_share_object_nop<ObjectSimple>(ObjectSimple))
-	10: MoveLoc[1](trials: u64)
-	11: LdU64(1)
-	12: Sub
-	13: StLoc[1](trials: u64)
-	14: Branch(2)
-B4:
-	15: Ret
-}
-entry public test_calibrate_transfer_transfer_internal() {
-L0:	addr: address
-L1:	obj1: ObjectSimple
-L2:	to_object: bool
-L3:	trials: u64
-B0:
-	0: LdConst[0](U64: [1, 0, 0, 0, 0, 0, 0, 0])
-	1: StLoc[3](trials: u64)
-B1:
-	2: CopyLoc[3](trials: u64)
-	3: LdU64(0)
-	4: Gt
-	5: BrTrue(7)
-B2:
-	6: Branch(17)
-B3:
-	7: LdFalse
-	8: Pack[0](ObjectSimple)
-	9: LdConst[2](Address: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
-	10: LdFalse
-	11: Call[7](calibrate_transfer_internal<ObjectSimple>(ObjectSimple, address, bool))
-	12: MoveLoc[3](trials: u64)
-	13: LdU64(1)
-	14: Sub
-	15: StLoc[3](trials: u64)
-	16: Branch(2)
-B4:
-	17: Ret
-}
-entry public test_calibrate_transfer_transfer_internal__baseline() {
-L0:	addr: address
-L1:	obj1: ObjectSimple
-L2:	to_object: bool
-L3:	trials: u64
-B0:
-	0: LdConst[0](U64: [1, 0, 0, 0, 0, 0, 0, 0])
-	1: StLoc[3](trials: u64)
-B1:
-	2: CopyLoc[3](trials: u64)
-	3: LdU64(0)
-	4: Gt
-	5: BrTrue(7)
-B2:
-	6: Branch(17)
-B3:
-	7: LdFalse
-	8: Pack[0](ObjectSimple)
-	9: LdConst[2](Address: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
-	10: LdFalse
-	11: Call[8](calibrate_transfer_internal_nop<ObjectSimple>(ObjectSimple, address, bool))
-	12: MoveLoc[3](trials: u64)
-	13: LdU64(1)
-	14: Sub
-	15: StLoc[3](trials: u64)
-	16: Branch(2)
-B4:
-	17: Ret
-}
 entry public test_calibrate_tx_context_derive_id() {
 L0:	created_num: u64
 L1:	trials: u64
@@ -425,7 +269,7 @@ B2:
 B3:
 	7: LdConst[3](Vector(U8): [32, 58, 152, 93, 167, 79, 226, 37, 178, 4, 92, 23, 45, 107, 211, 144, 189, 133, 95, 8, 110, 62, 157, 82, 91, 70, 191, 226, 69, 17, 67, 21, 50])
 	8: LdU64(0)
-	9: Call[32](calibrate_derive_id(vector<u8>, u64))
+	9: Call[21](calibrate_derive_id(vector<u8>, u64))
 	10: MoveLoc[1](trials: u64)
 	11: LdU64(1)
 	12: Sub
@@ -451,7 +295,7 @@ B2:
 B3:
 	7: LdConst[3](Vector(U8): [32, 58, 152, 93, 167, 79, 226, 37, 178, 4, 92, 23, 45, 107, 211, 144, 189, 133, 95, 8, 110, 62, 157, 82, 91, 70, 191, 226, 69, 17, 67, 21, 50])
 	8: LdU64(0)
-	9: Call[33](calibrate_derive_id_nop(vector<u8>, u64))
+	9: Call[22](calibrate_derive_id_nop(vector<u8>, u64))
 	10: MoveLoc[1](trials: u64)
 	11: LdU64(1)
 	12: Sub
@@ -463,7 +307,7 @@ B4:
 unit_test_poison() {
 B0:
 	0: LdU64(0)
-	1: Call[34](create_signers_for_testing(u64): vector<signer>)
+	1: Call[23](create_signers_for_testing(u64): vector<signer>)
 	2: Pop
 	3: Ret
 }
