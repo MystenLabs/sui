@@ -33,12 +33,19 @@
 }
 
 .origin {
-    margin-top: 10px;
+    margin-bottom: 10px;
     font-size: 14px;
     line-height: 13px;
     font-weight: 500;
     text-decoration: none;
     color: colors.$sui-dark-blue;
+
+    &.warning {
+        color: colors.$issue-dark;
+        &:visited {
+            color: colors.$issue-dark;
+        }
+    }
 
     &:visited {
         color: colors.$sui-dark-blue;
@@ -62,6 +69,10 @@
     display: flex;
     align-items: center;
     gap: 10px;
+
+    &.flip-actions {
+        flex-direction: row-reverse;
+    }
 }
 
 .button {
