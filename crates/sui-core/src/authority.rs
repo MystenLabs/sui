@@ -69,8 +69,8 @@ use tap::TapFallible;
 use thiserror::Error;
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::mpsc::Sender;
+use tracing::Instrument;
 use tracing::{debug, error, instrument, warn};
-use tracing::{trace, Instrument};
 use typed_store::Map;
 
 #[cfg(test)]
@@ -2054,7 +2054,12 @@ impl AuthorityState {
                     .await
                     .map_err(NarwhalHandlerError::NodeError)?
                 {
-                    trace!("Already processed {:?}", certificate.digest());
+                    debug!(
+                        ?consensus_index,
+                        ?tracking_id,
+                        tx_digest = ?certificate.digest(),
+                        "handle_consensus_transaction UserTransaction [skip]",
+                    );
                     self.metrics.skipped_consensus_txns.inc();
                     return Ok(());
                 }

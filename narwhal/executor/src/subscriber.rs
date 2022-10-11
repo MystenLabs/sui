@@ -188,6 +188,7 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
                 batch_index: batch_index as u64,
             };
             workers.shuffle(&mut ThreadRng::default());
+            debug!("Scheduling fetching batch {}", digest);
             ret.push(
                 self.fetch_payload(*digest, *worker_id, workers)
                     .map(move |batch| (batch_index, batch)),
