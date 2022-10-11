@@ -9,6 +9,7 @@ Sui object identifiers
 -  [Struct `ID`](#0x2_object_ID)
 -  [Struct `UID`](#0x2_object_UID)
 -  [Constants](#@Constants_0)
+-  [Function `address_from_bytes`](#0x2_object_address_from_bytes)
 -  [Function `id_to_bytes`](#0x2_object_id_to_bytes)
 -  [Function `id_to_address`](#0x2_object_id_to_address)
 -  [Function `sui_system_state`](#0x2_object_sui_system_state)
@@ -24,7 +25,6 @@ Sui object identifiers
 -  [Function `id_address`](#0x2_object_id_address)
 -  [Function `borrow_uid`](#0x2_object_borrow_uid)
 -  [Function `delete_impl`](#0x2_object_delete_impl)
--  [Function `bytes_to_address`](#0x2_object_bytes_to_address)
 
 
 <pre><code><b>use</b> <a href="">0x1::bcs</a>;
@@ -104,6 +104,16 @@ This is a privileged type that can only be derived from a <code>TxContext</code>
 ## Constants
 
 
+<a name="0x2_object_EAddressParseError"></a>
+
+Error from <code>address_from_bytes</code> when it is supplied too many or too few bytes.
+
+
+<pre><code><b>const</b> <a href="object.md#0x2_object_EAddressParseError">EAddressParseError</a>: u64 = 0;
+</code></pre>
+
+
+
 <a name="0x2_object_SUI_SYSTEM_STATE_OBJECT_ID"></a>
 
 The hardcoded ID for the singleton Sui System State Object.
@@ -113,6 +123,30 @@ The hardcoded ID for the singleton Sui System State Object.
 </code></pre>
 
 
+
+<a name="0x2_object_address_from_bytes"></a>
+
+## Function `address_from_bytes`
+
+Convert raw bytes into an address, aborts if supplied too many
+or too few bytes.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="object.md#0x2_object_address_from_bytes">address_from_bytes</a>(bytes: <a href="">vector</a>&lt;u8&gt;): <b>address</b>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="object.md#0x2_object_address_from_bytes">address_from_bytes</a>(bytes: <a href="">vector</a>&lt;u8&gt;): <b>address</b>;
+</code></pre>
+
+
+
+</details>
 
 <a name="0x2_object_id_to_bytes"></a>
 
@@ -488,29 +522,6 @@ restrictable in the object's module.
 
 
 <pre><code><b>native</b> <b>fun</b> <a href="object.md#0x2_object_delete_impl">delete_impl</a>&lt;<a href="object.md#0x2_object_UID">UID</a>&gt;(id: <a href="object.md#0x2_object_UID">UID</a>);
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_object_bytes_to_address"></a>
-
-## Function `bytes_to_address`
-
-Convert raw bytes into an address
-
-
-<pre><code><b>fun</b> <a href="object.md#0x2_object_bytes_to_address">bytes_to_address</a>(bytes: <a href="">vector</a>&lt;u8&gt;): <b>address</b>
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>native</b> <b>fun</b> <a href="object.md#0x2_object_bytes_to_address">bytes_to_address</a>(bytes: <a href="">vector</a>&lt;u8&gt;): <b>address</b>;
 </code></pre>
 
 
