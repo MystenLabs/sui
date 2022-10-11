@@ -533,6 +533,12 @@ pub struct Committee {
     pub epoch: Epoch,
 }
 
+impl From<Committee> for SharedCommittee {
+    fn from(committee: Committee) -> Self {
+        Arc::new(ArcSwap::from_pointee(committee))
+    }
+}
+
 impl std::fmt::Display for Committee {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(

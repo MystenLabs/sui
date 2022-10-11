@@ -3,21 +3,26 @@
 // SPDX-License-Identifier: Apache-2.0
 use anyhow::Result;
 use async_trait::async_trait;
-use config::{SharedWorkerCache, WorkerId};
+use config::{SharedCommittee, SharedWorkerCache, WorkerCache, WorkerId, WorkerIndex};
 use crypto::PublicKey;
 use fastcrypto::Hash;
 use futures::{stream::FuturesUnordered, StreamExt};
 
 use rand::seq::SliceRandom;
-use std::{collections::HashSet, time::Duration};
+use std::{
+    collections::{BTreeMap, HashSet},
+    sync::Arc,
+    time::Duration,
+};
 use store::Store;
-use tap::TapFallible;
-use tracing::{debug, error, info, trace};
+use tap::{TapFallible, TapOptional};
+use tokio::sync::watch;
+use tracing::{debug, error, info, trace, warn};
 use types::{
     error::DagError, metered_channel::Sender, Batch, BatchDigest, PrimaryToWorker,
-    PrimaryWorkerMessage, RequestBatchRequest, RequestBatchResponse, WorkerBatchRequest,
+    ReconfigureNotification, RequestBatchRequest, RequestBatchResponse, WorkerBatchRequest,
     WorkerBatchResponse, WorkerDeleteBatchesMessage, WorkerMessage, WorkerPrimaryMessage,
-    WorkerSynchronizeMessage, WorkerToWorker, WorkerToWorkerClient,
+    WorkerReconfigureMessage, WorkerSynchronizeMessage, WorkerToWorker, WorkerToWorkerClient,
 };
 
 #[cfg(test)]
@@ -68,12 +73,13 @@ impl WorkerToWorker for WorkerReceiverHandler {
 }
 
 /// Defines how the network receiver handles incoming primary messages.
-#[derive(Clone)]
 pub struct PrimaryReceiverHandler {
     // The public key of this authority.
     pub name: PublicKey,
     // The id of this worker.
     pub id: WorkerId,
+    // The committee information.
+    pub committee: SharedCommittee,
     // The worker information cache.
     pub worker_cache: SharedWorkerCache,
     pub store: Store<BatchDigest, Batch>,
@@ -81,7 +87,8 @@ pub struct PrimaryReceiverHandler {
     pub request_batches_timeout: Duration,
     // Number of random nodes to query when retrying batch requests.
     pub request_batches_retry_nodes: usize,
-    pub tx_synchronizer: Sender<PrimaryWorkerMessage>,
+    /// Send reconfiguration update to other tasks.
+    pub tx_reconfigure: watch::Sender<ReconfigureNotification>,
     // Output channel to send messages to primary.
     pub tx_primary: Sender<WorkerPrimaryMessage>,
     // Output channel to process received batches.
@@ -90,16 +97,61 @@ pub struct PrimaryReceiverHandler {
 
 #[async_trait]
 impl PrimaryToWorker for PrimaryReceiverHandler {
-    async fn send_message(
+    async fn reconfigure(
         &self,
-        request: anemo::Request<PrimaryWorkerMessage>,
+        request: anemo::Request<WorkerReconfigureMessage>,
     ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
-        let message = request.into_body();
+        let message = request.into_body().message;
+        match &message {
+            ReconfigureNotification::NewEpoch(new_committee) => {
+                self.committee.swap(Arc::new(new_committee.clone()));
 
-        self.tx_synchronizer
+                // TODO: duplicated code in this file.
+                // Update the worker cache.
+                self.worker_cache.swap(Arc::new(WorkerCache {
+                            epoch: new_committee.epoch,
+                            workers: new_committee.keys().iter().map(|key|
+                                (
+                                    (*key).clone(),
+                                    self.worker_cache
+                                        .load()
+                                        .workers
+                                        .get(key)
+                                        .tap_none(||
+                                            warn!("Worker cache does not have a key for the new committee member"))
+                                        .unwrap_or(&WorkerIndex(BTreeMap::new()))
+                                        .clone()
+                                )).collect(),
+                        }));
+            }
+            ReconfigureNotification::UpdateCommittee(new_committee) => {
+                self.committee.swap(Arc::new(new_committee.clone()));
+
+                // Update the worker cache.
+                self.worker_cache.swap(Arc::new(WorkerCache {
+                            epoch: new_committee.epoch,
+                            workers: new_committee.keys().iter().map(|key|
+                                (
+                                    (*key).clone(),
+                                    self.worker_cache
+                                        .load()
+                                        .workers
+                                        .get(key)
+                                        .tap_none(||
+                                            warn!("Worker cache does not have a key for the new committee member"))
+                                        .unwrap_or(&WorkerIndex(BTreeMap::new()))
+                                        .clone()
+                                )).collect(),
+                        }));
+
+                tracing::debug!("Committee updated to {}", self.committee);
+            }
+            ReconfigureNotification::Shutdown => {} // no-op
+        };
+
+        // Notify all other tasks.
+        self.tx_reconfigure
             .send(message)
-            .await
-            .map_err(|_| DagError::ShuttingDown)
             .map_err(|e| anemo::rpc::Status::internal(e.to_string()))?;
 
         Ok(anemo::Response::new(()))

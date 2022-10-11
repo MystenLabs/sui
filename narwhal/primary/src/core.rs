@@ -637,10 +637,6 @@ impl Core {
 
     /// Update the committee and cleanup internal state.
     async fn change_epoch(&mut self, committee: Committee) {
-        // Cleanup the network.
-        self.network
-            .cleanup(self.committee.network_diff(&committee));
-
         // Cleanup internal state.
         let keys = self.vote_digest_store.iter(None).await.into_keys();
         if let Err(e) = self.vote_digest_store.remove_all(keys).await {
@@ -708,9 +704,6 @@ impl Core {
                             self.change_epoch(new_committee).await;
                         },
                         ReconfigureNotification::UpdateCommittee(new_committee) => {
-                            // Cleanup the network.
-                            self.network.cleanup(self.committee.network_diff(&new_committee));
-
                             // Update the committee.
                             self.committee = new_committee;
                         },

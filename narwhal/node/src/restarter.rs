@@ -11,7 +11,7 @@ use network::{P2pNetwork, ReliableNetwork};
 use prometheus::Registry;
 use std::{path::PathBuf, sync::Arc};
 use tokio::sync::mpsc::Receiver;
-use types::{PrimaryWorkerMessage, ReconfigureNotification, WorkerPrimaryMessage};
+use types::{ReconfigureNotification, WorkerPrimaryMessage, WorkerReconfigureMessage};
 
 // Module to start a node (primary, workers and default consensus), keep it running, and restarting it
 /// every time the committee changes.
@@ -127,7 +127,9 @@ impl NodeRestarter {
             let primary_cancel_handle =
                 primary_network.send(network_key.to_owned(), &message).await;
 
-            let message = PrimaryWorkerMessage::Reconfigure(ReconfigureNotification::Shutdown);
+            let message = WorkerReconfigureMessage {
+                message: ReconfigureNotification::Shutdown,
+            };
             let mut worker_names = Vec::new();
             for worker in worker_cache
                 .load()

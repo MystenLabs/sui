@@ -4,9 +4,8 @@ use mysten_network::metrics::MetricsCallbackProvider;
 use network::metrics::{NetworkConnectionMetrics, NetworkMetrics};
 use prometheus::{
     default_registry, register_histogram_vec_with_registry, register_int_counter_vec_with_registry,
-    register_int_counter_with_registry, register_int_gauge_vec_with_registry,
-    register_int_gauge_with_registry, HistogramVec, IntCounter, IntCounterVec, IntGauge,
-    IntGaugeVec, Registry,
+    register_int_counter_with_registry, register_int_gauge_with_registry, HistogramVec, IntCounter,
+    IntCounterVec, IntGauge, Registry,
 };
 use std::time::Duration;
 use tonic::Code;
@@ -51,8 +50,6 @@ pub fn initialise_metrics(metrics_registry: &Registry) -> Metrics {
 
 #[derive(Clone)]
 pub struct WorkerMetrics {
-    /// Number of elements pending elements in the worker synchronizer
-    pub pending_elements_worker_synchronizer: IntGaugeVec,
     /// Number of created batches from the batch_maker
     pub created_batch_size: HistogramVec,
 }
@@ -60,13 +57,6 @@ pub struct WorkerMetrics {
 impl WorkerMetrics {
     pub fn new(registry: &Registry) -> Self {
         Self {
-            pending_elements_worker_synchronizer: register_int_gauge_vec_with_registry!(
-                "pending_elements_worker_synchronizer",
-                "Number of pending elements in worker block synchronizer",
-                &["epoch"],
-                registry
-            )
-            .unwrap(),
             created_batch_size: register_histogram_vec_with_registry!(
                 "created_batch_size",
                 "Size in bytes of the created batches",
@@ -88,8 +78,6 @@ impl Default for WorkerMetrics {
 pub struct WorkerChannelMetrics {
     /// occupancy of the channel from various handlers to the `worker::PrimaryConnector`
     pub tx_primary: IntGauge,
-    /// occupancy of the channel from the `handlers::PrimaryReceiverHandler` to the `worker::Synchronizer`
-    pub tx_synchronizer: IntGauge,
     /// occupancy of the channel from the `handlers::PrimaryReceiverHandler` to the `handlers::ChildRpcSender`
     pub tx_request_batches_rpc: IntGauge,
     /// occupancy of the channel from the `worker::TxReceiverhandler` to the `worker::BatchMaker`
@@ -106,8 +94,6 @@ pub struct WorkerChannelMetrics {
     // Record the total events received to infer progress rates
     /// total received from the channel from various handlers to the `worker::PrimaryConnector`
     pub tx_primary_total: IntCounter,
-    /// total received from the channel from the `handlers::PrimaryReceiverHandler` to the `worker::Synchronizer`
-    pub tx_synchronizer_total: IntCounter,
     /// total received from the channel from the `handlers::PrimaryReceiverHandler` to the `handlers::ChildRpcSender`
     pub tx_request_batches_rpc_total: IntCounter,
     /// total received from the channel from the `worker::TxReceiverhandler` to the `worker::BatchMaker`
@@ -128,11 +114,6 @@ impl WorkerChannelMetrics {
             tx_primary: register_int_gauge_with_registry!(
                 "tx_primary",
                 "occupancy of the channel from various handlers to the `worker::PrimaryConnector`",
-                registry
-            ).unwrap(),
-            tx_synchronizer: register_int_gauge_with_registry!(
-                "tx_synchronizer",
-                "occupancy of the channel from the `worker::PrimaryReceiverHandler` to the `worker::Synchronizer`",
                 registry
             ).unwrap(),
             tx_request_batches_rpc: register_int_gauge_with_registry!(
@@ -171,11 +152,6 @@ impl WorkerChannelMetrics {
             tx_primary_total: register_int_counter_with_registry!(
                 "tx_primary_total",
                 "total received from the channel from various handlers to the `worker::PrimaryConnector`",
-                registry
-            ).unwrap(),
-            tx_synchronizer_total: register_int_counter_with_registry!(
-                "tx_synchronizer_total",
-                "total received from the channel from the `worker::PrimaryReceiverHandler` to the `worker::Synchronizer`",
                 registry
             ).unwrap(),
             tx_request_batches_rpc_total: register_int_counter_with_registry!(

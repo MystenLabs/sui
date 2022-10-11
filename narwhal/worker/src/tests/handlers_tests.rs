@@ -10,14 +10,16 @@ use types::WorkerToWorkerServer;
 async fn synchronize() {
     telemetry_subscribers::init_for_testing();
 
-    let (tx_synchronizer, _rx_synchronizer) = test_utils::test_channel!(1);
     let (tx_primary, _rx_primary) = test_utils::test_channel!(1);
     let (tx_batch_processor, mut rx_batch_processor) = test_utils::test_channel!(1);
 
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let committee = fixture.committee();
     let worker_cache = fixture.shared_worker_cache();
     let name = fixture.authorities().next().unwrap().public_key();
     let id = 0;
+    let (tx_reconfigure, _rx_reconfigure) =
+        watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
 
     // Create a new test store.
     let store = test_utils::open_batch_store();
@@ -25,11 +27,12 @@ async fn synchronize() {
     let handler = PrimaryReceiverHandler {
         name,
         id,
+        committee: committee.into(),
         worker_cache,
         store,
         request_batches_timeout: Duration::from_secs(999),
         request_batches_retry_nodes: 3, // Not used in this test.
-        tx_synchronizer,
+        tx_reconfigure,
         tx_primary,
         tx_batch_processor,
     };
@@ -98,14 +101,16 @@ async fn synchronize() {
 async fn synchronize_when_batch_exists() {
     telemetry_subscribers::init_for_testing();
 
-    let (tx_synchronizer, _rx_synchronizer) = test_utils::test_channel!(1);
     let (tx_primary, mut rx_primary) = test_utils::test_channel!(1);
     let (tx_batch_processor, _rx_batch_processor) = test_utils::test_channel!(1);
 
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let committee = fixture.committee();
     let worker_cache = fixture.shared_worker_cache();
     let name = fixture.authorities().next().unwrap().public_key();
     let id = 0;
+    let (tx_reconfigure, _rx_reconfigure) =
+        watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
 
     // Create a new test store.
     let store = test_utils::open_batch_store();
@@ -113,11 +118,12 @@ async fn synchronize_when_batch_exists() {
     let handler = PrimaryReceiverHandler {
         name,
         id,
+        committee: committee.into(),
         worker_cache,
         store: store.clone(),
         request_batches_timeout: Duration::from_secs(999),
         request_batches_retry_nodes: 3, // Not used in this test.
-        tx_synchronizer,
+        tx_reconfigure,
         tx_primary,
         tx_batch_processor,
     };
@@ -159,14 +165,16 @@ async fn synchronize_when_batch_exists() {
 async fn delete_batches() {
     telemetry_subscribers::init_for_testing();
 
-    let (tx_synchronizer, _rx_synchronizer) = test_utils::test_channel!(1);
     let (tx_primary, _rx_primary) = test_utils::test_channel!(1);
     let (tx_batch_processor, _rx_batch_processor) = test_utils::test_channel!(1);
 
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let committee = fixture.committee();
     let worker_cache = fixture.shared_worker_cache();
     let name = fixture.authorities().next().unwrap().public_key();
     let id = 0;
+    let (tx_reconfigure, _rx_reconfigure) =
+        watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
 
     // Create a new test store.
     let store = test_utils::open_batch_store();
@@ -178,11 +186,12 @@ async fn delete_batches() {
     let handler = PrimaryReceiverHandler {
         name,
         id,
+        committee: committee.into(),
         worker_cache,
         store: store.clone(),
         request_batches_timeout: Duration::from_secs(999),
         request_batches_retry_nodes: 3, // Not used in this test.
-        tx_synchronizer,
+        tx_reconfigure,
         tx_primary,
         tx_batch_processor,
     };
