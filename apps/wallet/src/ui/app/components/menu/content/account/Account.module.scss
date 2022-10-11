@@ -1,8 +1,41 @@
 @use '_values/colors';
+@use '_utils';
 
 .content {
+    display: flex;
+    flex-flow: column nowrap;
     flex-grow: 1;
     max-width: 100%;
+    padding: 0 20px;
+}
+
+.item-group {
+    display: flex;
+    flex-flow: column nowrap;
+    padding: 20px 0;
+    gap: 15px;
+
+    & + & {
+        border-top: 1px solid colors.$gray-45;
+    }
+}
+
+.item-title {
+    color: colors.$gray-75;
+    text-transform: uppercase;
+
+    @include utils.typography('Primary/CAPTION-SB');
+
+    text-align: unset;
+}
+
+.item-desc {
+    color: colors.$gray-90;
+    margin-top: -10px;
+
+    @include utils.typography('ParagraphPrimary/P1-M');
+
+    text-align: unset;
 }
 
 .logout {
