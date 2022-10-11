@@ -7849,6 +7849,8 @@ dependencies = [
  "bcs",
  "clap 3.2.17",
  "futures",
+ "jsonrpsee",
+ "move-core-types",
  "prometheus",
  "reqwest",
  "serde 1.0.144",
@@ -7861,6 +7863,7 @@ dependencies = [
  "sui-json-rpc-types",
  "sui-sdk",
  "sui-swarm",
+ "sui-transaction-builder",
  "sui-types",
  "telemetry-subscribers 0.2.0",
  "tempfile",
@@ -8157,6 +8160,7 @@ dependencies = [
  "sui-json-rpc-types",
  "sui-open-rpc",
  "sui-open-rpc-macros",
+ "sui-transaction-builder",
  "sui-types",
  "tokio",
  "tracing",
@@ -8342,6 +8346,7 @@ dependencies = [
  "sui-json",
  "sui-json-rpc",
  "sui-json-rpc-types",
+ "sui-transaction-builder",
  "sui-types",
  "tempfile",
  "tiny-bip39",
@@ -8476,6 +8481,22 @@ dependencies = [
  "tracing",
  "typed-store",
  "typed-store-derive",
+ "workspace-hack",
+]
+
+[[package]]
+name = "sui-transaction-builder"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bcs",
+ "futures",
+ "move-core-types",
+ "sui-adapter",
+ "sui-json",
+ "sui-json-rpc-types",
+ "sui-types",
  "workspace-hack",
 ]
 
