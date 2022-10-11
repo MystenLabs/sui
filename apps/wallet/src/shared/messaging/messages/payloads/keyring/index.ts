@@ -20,7 +20,11 @@ type MethodToPayloads = {
     };
     walletStatusUpdate: {
         args: never;
-        return: Partial<{ isLocked: boolean; isInitialized: boolean }>;
+        return: Partial<{
+            isLocked: boolean;
+            isInitialized: boolean;
+            mnemonic: string;
+        }>;
     };
     lock: {
         args: never;
