@@ -34,8 +34,8 @@ use sui_types::query::{Ordering, TransactionQuery};
 
 use tracing::debug;
 
-use crate::api::RpcReadApiServer;
-use crate::api::{RpcFullNodeReadApiServer, MAX_RESULT_SIZE};
+use crate::api::RpcFullNodeReadApiServer;
+use crate::api::{cap_page_limit, RpcReadApiServer};
 use crate::SuiRpcModule;
 
 // An implementation of the read portion of the Gateway JSON-RPC interface intended for use in
@@ -288,11 +288,7 @@ impl RpcFullNodeReadApiServer for FullNodeApi {
         limit: Option<usize>,
         order: Ordering,
     ) -> RpcResult<TransactionsPage> {
-        let limit = limit.unwrap_or(MAX_RESULT_SIZE);
-
-        if limit == 0 {
-            Err(anyhow!("Page result limit must be larger then 0."))?;
-        }
+        let limit = cap_page_limit(limit)?;
         let reverse = order == Ordering::Descending;
 
         // Retrieve 1 extra item for next cursor

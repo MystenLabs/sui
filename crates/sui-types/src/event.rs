@@ -23,7 +23,6 @@ use crate::error::SuiError;
 use crate::object::MoveObject;
 use crate::object::ObjectFormatOptions;
 use crate::object::Owner;
-use crate::storage::SingleTxContext;
 use crate::{
     base_types::{ObjectID, SequenceNumber, SuiAddress, TransactionDigest},
     committee::EpochId,
@@ -37,8 +36,8 @@ pub struct EventEnvelope {
     pub timestamp: u64,
     /// Transaction digest of associated transaction, if any
     pub tx_digest: Option<TransactionDigest>,
-    /// Sequence number, must be nondecreasing for event ingestion idempotency
-    pub seq_num: u64,
+    /// Transaction sequence number, must be nondecreasing for event ingestion idempotency
+    pub tx_seq_num: u64,
     /// Consecutive per-tx counter assigned to this event.
     pub event_num: u64,
     /// Specific event type
@@ -46,6 +45,9 @@ pub struct EventEnvelope {
     /// json value for MoveStruct (for MoveEvent only)
     pub move_struct_json_value: Option<Value>,
 }
+/// Unique ID of a Sui Event, the ID is generated during transaction post processing,
+/// the ID is local to this particular fullnode and will be different from other fullnode.
+pub type EventID = u64;
 
 impl EventEnvelope {
     pub fn new(

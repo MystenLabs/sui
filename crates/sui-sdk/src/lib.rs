@@ -13,15 +13,18 @@ use futures_core::Stream;
 use jsonrpsee::core::client::{ClientT, Subscription};
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use jsonrpsee::ws_client::{WsClient, WsClientBuilder};
-use serde_json::Value;
 
 use rpc_types::{
     GetPastObjectDataResponse, SuiCertifiedTransaction, SuiExecuteTransactionResponse,
     SuiParsedTransactionResponse, SuiTransactionEffects,
 };
+use serde::Deserialize;
+use serde::Serialize;
+use serde_json::Value;
 pub use sui_config::gateway;
 use sui_core::gateway_state::TxSeqNumber;
 pub use sui_json as json;
+use sui_json_rpc::api::EventReadApiClient;
 use sui_json_rpc::api::EventStreamingApiClient;
 use sui_json_rpc::api::RpcBcsApiClient;
 use sui_json_rpc::api::RpcFullNodeReadApiClient;
@@ -29,14 +32,15 @@ use sui_json_rpc::api::RpcReadApiClient;
 use sui_json_rpc::api::TransactionExecutionApiClient;
 pub use sui_json_rpc_types as rpc_types;
 use sui_json_rpc_types::{
-    GetObjectDataResponse, GetRawObjectDataResponse, SuiEventEnvelope, SuiEventFilter,
+    EventPage, GetObjectDataResponse, GetRawObjectDataResponse, SuiEventEnvelope, SuiEventFilter,
     SuiObjectInfo, SuiTransactionResponse, TransactionsPage,
 };
 use sui_transaction_builder::{DataReader, TransactionBuilder};
 pub use sui_types as types;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
+use sui_types::event::EventID;
 use sui_types::messages::VerifiedTransaction;
-use sui_types::query::{Ordering, TransactionQuery};
+use sui_types::query::{EventQuery, Ordering, TransactionQuery};
 use types::base_types::SequenceNumber;
 use types::committee::EpochId;
 use types::error::TRANSACTION_NOT_FOUND_MSG_PREFIX;
@@ -289,6 +293,23 @@ impl EventApi {
             }
             _ => Err(anyhow!("Subscription only supported by WebSocket client.")),
         }
+    }
+
+    pub async fn get_events(
+        &self,
+        query: EventQuery,
+        cursor: Option<EventID>,
+        limit: Option<usize>,
+        order: Ordering,
+    ) -> anyhow::Result<EventPage> {
+        Ok(match &*self.0 {
+            SuiClientApi::Rpc(RpcClient { http, .. }) => {
+                http.get_events(query, cursor, limit, order).await?
+            }
+            SuiClientApi::Embedded(_) => {
+                return Err(anyhow!("Method not supported by embedded gateway client."))
+            }
+        })
     }
 }
 

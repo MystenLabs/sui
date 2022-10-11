@@ -31,6 +31,7 @@ sui-metrics = { path = "../sui-metrics" }
 typed-store.workspace = true
 typed-store-derive.workspace = true
 move-core-types.workspace = true
+move-bytecode-utils.workspace = true
 sui-json-rpc-types = { path = "../sui-json-rpc-types" }
 workspace-hack.workspace = true
 eyre = "0.6.8"

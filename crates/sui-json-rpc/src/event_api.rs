@@ -1,27 +1,26 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::api::EventReadApiServer;
-use crate::api::EventStreamingApiServer;
-use crate::streaming_api::spawn_subscription;
-use crate::SuiRpcModule;
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use futures::StreamExt;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::types::SubscriptionResult;
 use jsonrpsee_core::server::rpc_module::RpcModule;
 use jsonrpsee_core::server::rpc_module::SubscriptionSink;
-use move_core_types::account_address::AccountAddress;
-use move_core_types::identifier::Identifier;
-use move_core_types::language_storage::ModuleId;
-use std::str::FromStr;
-use std::sync::Arc;
+use tracing::warn;
+
 use sui_core::authority::AuthorityState;
 use sui_core::event_handler::EventHandler;
-use sui_json_rpc_types::{SuiEvent, SuiEventEnvelope, SuiEventFilter};
+use sui_json_rpc_types::{EventPage, SuiEvent, SuiEventEnvelope, SuiEventFilter};
 use sui_open_rpc::Module;
-use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
-use sui_types::object::Owner;
-use tracing::warn;
+use sui_types::event::{EventEnvelope, EventID};
+use sui_types::query::{EventQuery, Ordering};
+
+use crate::api::EventReadApiServer;
+use crate::api::{cap_page_limit, EventStreamingApiServer};
+use crate::streaming_api::spawn_subscription;
+use crate::SuiRpcModule;
 
 pub struct EventStreamingApiImpl {
     state: Arc<AuthorityState>,
@@ -55,16 +54,17 @@ impl EventStreamingApiServer for EventStreamingApiImpl {
 
         let state = self.state.clone();
         let stream = self.event_handler.subscribe(filter);
-        let stream = stream.map(move |e| {
+        let stream = stream.map(move |e: EventEnvelope| {
             let event = SuiEvent::try_from(e.event, state.module_cache.as_ref());
             event.map(|event| SuiEventEnvelope {
+                // The id will not be serialised
+                id: 0,
                 timestamp: e.timestamp,
                 tx_digest: e.tx_digest,
                 event,
             })
         });
         spawn_subscription(sink, stream);
-
         Ok(())
     }
 }
@@ -97,107 +97,23 @@ impl EventReadApiImpl {
 #[allow(unused)]
 #[async_trait]
 impl EventReadApiServer for EventReadApiImpl {
-    async fn get_events_by_transaction(
+    async fn get_events(
         &self,
-        digest: TransactionDigest,
-        count: usize,
-    ) -> RpcResult<Vec<SuiEventEnvelope>> {
-        let events = self.state.get_events_by_transaction(digest, count).await?;
-        Ok(events)
-    }
-
-    async fn get_events_by_transaction_module(
-        &self,
-        package: ObjectID,
-        module: String,
-        count: usize,
-        start_time: u64,
-        end_time: u64,
-    ) -> RpcResult<Vec<SuiEventEnvelope>> {
-        let module_id = ModuleId::new(
-            AccountAddress::from(package),
-            Identifier::from_str(&module)?,
-        );
-
-        let events = self
+        query: EventQuery,
+        cursor: Option<EventID>,
+        limit: Option<usize>,
+        order: Ordering,
+    ) -> RpcResult<EventPage> {
+        let reverse = order == Ordering::Descending;
+        let limit = cap_page_limit(limit)?;
+        // Retrieve 1 extra item for next cursor
+        let mut data = self
             .state
-            .get_events_by_transaction_module(&module_id, start_time, end_time, count)
+            .get_events(query, cursor, limit + 1, reverse)
             .await?;
-        Ok(events)
-    }
-
-    async fn get_events_by_move_event_struct_name(
-        &self,
-        move_event_struct_name: String,
-        count: usize,
-        start_time: u64,
-        end_time: u64,
-    ) -> RpcResult<Vec<SuiEventEnvelope>> {
-        let events = self
-            .state
-            .get_events_by_move_event_struct_name(
-                &move_event_struct_name,
-                start_time,
-                end_time,
-                count,
-            )
-            .await?;
-        Ok(events)
-    }
-
-    async fn get_events_by_sender(
-        &self,
-        sender: SuiAddress,
-        count: usize,
-        start_time: u64,
-        end_time: u64,
-    ) -> RpcResult<Vec<SuiEventEnvelope>> {
-        let events = self
-            .state
-            .get_events_by_sender(&sender, start_time, end_time, count)
-            .await?;
-        Ok(events)
-    }
-
-    async fn get_events_by_recipient(
-        &self,
-        recipient: Owner,
-        count: usize,
-        start_time: u64,
-        end_time: u64,
-    ) -> RpcResult<Vec<SuiEventEnvelope>> {
-        let events = self
-            .state
-            .get_events_by_recipient(&recipient, start_time, end_time, count)
-            .await?;
-        Ok(events)
-    }
-
-    async fn get_events_by_object(
-        &self,
-        object: ObjectID,
-        count: usize,
-        start_time: u64,
-        end_time: u64,
-    ) -> RpcResult<Vec<SuiEventEnvelope>> {
-        let events = self
-            .state
-            .get_events_by_object(&object, start_time, end_time, count)
-            .await?;
-        Ok(events)
-    }
-
-    async fn get_events_by_timerange(
-        &self,
-        count: usize,
-        start_time: u64,
-        end_time: u64,
-    ) -> RpcResult<Vec<SuiEventEnvelope>> {
-        let events = self
-            .state
-            .get_events_by_timerange(start_time, end_time, count)
-            .await?;
-        Ok(events)
+        let next_cursor = data.get(limit).map(|event| event.id);
+        data.truncate(limit);
+        Ok(EventPage { data, next_cursor })
     }
 }
 

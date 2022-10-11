@@ -4,12 +4,13 @@
 use std::sync::Arc;
 
 use move_bytecode_utils::module_cache::SyncModuleCache;
-use sui_json_rpc_types::SuiMoveStruct;
 use tokio_stream::Stream;
 use tracing::{debug, error, instrument, trace};
 
+use sui_json_rpc_types::SuiMoveStruct;
 use sui_storage::event_store::{EventStore, EventStoreType};
 use sui_types::base_types::TransactionDigest;
+use sui_types::filter::EventFilter;
 use sui_types::{
     error::{SuiError, SuiResult},
     event::{Event, EventEnvelope},
@@ -18,7 +19,6 @@ use sui_types::{
 
 use crate::authority::{AuthorityStore, ResolverWrapper};
 use crate::streamer::Streamer;
-use sui_types::filter::EventFilter;
 
 #[cfg(test)]
 #[path = "unit_tests/event_handler_tests.rs"]
@@ -33,10 +33,13 @@ pub struct EventHandler {
 }
 
 impl EventHandler {
-    pub fn new(validator_store: Arc<AuthorityStore>, event_store: Arc<EventStoreType>) -> Self {
+    pub fn new(
+        event_store: Arc<EventStoreType>,
+        module_cache: Arc<SyncModuleCache<ResolverWrapper<AuthorityStore>>>,
+    ) -> Self {
         let streamer = Streamer::spawn(EVENT_DISPATCH_BUFFER_SIZE);
         Self {
-            module_cache: Arc::new(SyncModuleCache::new(ResolverWrapper(validator_store))),
+            module_cache,
             event_streamer: streamer,
             event_store,
         }

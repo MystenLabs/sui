@@ -68,9 +68,7 @@ async fn test_stored_event_to_sui_event() -> Result<(), anyhow::Error> {
         None,
     );
     assert_eq!(db.add_events(&vec![publish.clone()]).await?, 1);
-    let mut queried_events = db
-        .events_by_type(1_001_000, 1_002_000, EventType::Publish, 1)
-        .await?;
+    let mut queried_events = db.events_by_type(5, EventType::Publish, 1, false).await?;
     assert_eq!(queried_events.len(), 1);
     let sui_event: SuiEventEnvelope = queried_events.swap_remove(0).try_into()?;
     assert!(
@@ -87,7 +85,7 @@ async fn insert_and_fetch_by_tx_digest_then_compare(
     let tx_digest = event_envelope.tx_digest.unwrap();
     assert_eq!(db.add_events(&vec![event_envelope.clone()]).await?, 1);
 
-    let mut events = db.events_by_transaction(tx_digest, 10).await?;
+    let mut events = db.events_by_transaction(0, tx_digest, 10, false).await?;
     assert_eq!(events.len(), 1);
     let stored_event = events.pop().unwrap();
     let sui_event: SuiEventEnvelope = stored_event.try_into()?;
