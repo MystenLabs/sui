@@ -65,7 +65,9 @@ export class SuiWallet implements Wallet {
         return SUI_CHAINS;
     }
 
-    get features(): ConnectFeature & EventsFeature & SuiSignAndExecuteTransactionFeature {
+    get features(): ConnectFeature &
+        EventsFeature &
+        SuiSignAndExecuteTransactionFeature {
         return {
             'standard:connect': {
                 version: '1.0.0',
@@ -100,7 +102,7 @@ export class SuiWallet implements Wallet {
     #on: EventsOnMethod = (event, listener) => {
         this.#events.on(event, listener);
         return () => this.#events.off(event, listener);
-    }
+    };
 
     #connected = async () => {
         const accounts = await mapToPromise(
