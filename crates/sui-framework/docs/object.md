@@ -104,6 +104,16 @@ This is a privileged type that can only be derived from a <code>TxContext</code>
 ## Constants
 
 
+<a name="0x2_object_EAddressParseError"></a>
+
+Error from <code>address_from_bytes</code> when it is supplied too many or too few bytes.
+
+
+<pre><code><b>const</b> <a href="object.md#0x2_object_EAddressParseError">EAddressParseError</a>: u64 = 0;
+</code></pre>
+
+
+
 <a name="0x2_object_SUI_SYSTEM_STATE_OBJECT_ID"></a>
 
 The hardcoded ID for the singleton Sui System State Object.

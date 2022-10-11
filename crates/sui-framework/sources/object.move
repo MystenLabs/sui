@@ -15,6 +15,9 @@ module sui::object {
     /// The hardcoded ID for the singleton Sui System State Object.
     const SUI_SYSTEM_STATE_OBJECT_ID: address = @0x5;
 
+    /// Error from `address_from_bytes` when it is supplied too many or too few bytes.
+    const EAddressParseError: u64 = 0;
+
     /// An object ID. This is used to reference Sui Objects.
     /// This is *not* guaranteed to be globally unique--anyone can create an `ID` from a `UID` or
     /// from an object, and ID's can be freely copied and dropped.
