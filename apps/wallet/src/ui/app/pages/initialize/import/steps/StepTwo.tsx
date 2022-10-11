@@ -16,7 +16,7 @@ import st from './StepTwo.module.scss';
 
 const validationSchema = object(passwordFieldsValidation);
 
-export default function StepTwo({ next, data }: StepProps) {
+export default function StepTwo({ next, data, mode }: StepProps) {
     return (
         <Formik
             initialValues={data}
@@ -54,7 +54,7 @@ export default function StepTwo({ next, data }: StepProps) {
                             size="large"
                         >
                             <Loading loading={isSubmitting}>
-                                Import
+                                {mode === 'import' ? 'Import' : 'Reset'}
                                 <Icon
                                     icon={SuiIcons.ArrowRight}
                                     className={st.next}
