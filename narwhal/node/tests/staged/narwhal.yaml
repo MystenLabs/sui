@@ -65,12 +65,6 @@ HeaderDigest:
     TUPLEARRAY:
       CONTENT: U8
       SIZE: 32
-PrimaryWorkerMessage:
-  ENUM:
-    0:
-      Reconfigure:
-        NEWTYPE:
-          TYPENAME: ReconfigureNotification
 ReconfigureNotification:
   ENUM:
     0:
@@ -111,6 +105,10 @@ WorkerPrimaryMessage:
       Reconfigure:
         NEWTYPE:
           TYPENAME: ReconfigureNotification
+WorkerReconfigureMessage:
+  STRUCT:
+    - message:
+        TYPENAME: ReconfigureNotification
 WorkerSynchronizeMessage:
   STRUCT:
     - digests:

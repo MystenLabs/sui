@@ -42,6 +42,7 @@ use tokio::sync::oneshot;
 use tokio::{sync::watch, task::JoinHandle};
 use tower::ServiceBuilder;
 use tracing::info;
+pub use types::PrimaryMessage;
 use types::{
     error::DagError,
     metered_channel::{channel_with_total, Receiver, Sender},
@@ -49,7 +50,6 @@ use types::{
     ReconfigureNotification, RoundVoteDigestPair, WorkerInfoResponse, WorkerPrimaryMessage,
     WorkerToPrimary, WorkerToPrimaryServer,
 };
-pub use types::{PrimaryMessage, PrimaryWorkerMessage};
 
 #[cfg(any(test))]
 #[path = "tests/primary_tests.rs"]
@@ -456,7 +456,6 @@ impl Primary {
             tx_consensus_round_updates,
             rx_state_handler,
             tx_reconfigure,
-            P2pNetwork::new(network.clone()),
         );
 
         let consensus_api_handle = if !internal_consensus {

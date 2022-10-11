@@ -330,9 +330,6 @@ impl HeaderWaiter {
                     let message = self.rx_reconfigure.borrow().clone();
                     match message {
                         ReconfigureNotification::NewEpoch(new_committee) => {
-                            // Update the committee and cleanup internal state.
-                            self.network.cleanup(self.committee.network_diff(&new_committee));
-
                             self.committee = new_committee;
 
                             self.pending.clear();
@@ -340,7 +337,6 @@ impl HeaderWaiter {
                             self.parent_requests.clear();
                         },
                         ReconfigureNotification::UpdateCommittee(new_committee) => {
-                            self.network.cleanup(self.committee.network_diff(&new_committee));
                             self.committee = new_committee;
                         },
                         ReconfigureNotification::Shutdown => return
