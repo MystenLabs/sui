@@ -176,6 +176,11 @@ $main-extra-space: sizing.$main-bottom-space;
         font-weight: 600;
         letter-spacing: 0.05em;
         text-align: center;
+    } @else if $type == 'Primary/CAPTIONSMALL-SB' {
+        font-size: 11px;
+        font-weight: 600;
+        line-height: 11px;
+        letter-spacing: 0.05em;
     } @else if $type == 'Primary/CAPTION-B' {
         font-size: 12px;
         font-weight: 700;
