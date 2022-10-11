@@ -40,6 +40,7 @@
 
 .warning-title {
     @include utils.typography('Primary/Body-SB');
+
     display: inline-block;
     margin-bottom: -1px;
     padding-bottom: 8px;
@@ -48,5 +49,6 @@
 
 .warning-message {
     @include utils.typography('Primary/BodySmall-M');
+
     color: colors.$gray-80;
 }
