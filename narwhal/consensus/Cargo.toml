@@ -21,7 +21,7 @@ tokio = { version = "1.20.1", features = ["sync"] }
 tracing = "0.1.36"
 
 config = { path = "../config", package = "narwhal-config" }
-fastcrypto = "0.1.2"
+fastcrypto.workspace = true
 crypto = { path = "../crypto", package = "narwhal-crypto" }
 storage = { path = "../storage", package = "narwhal-storage" }
 dag = { path = "../dag", package = "narwhal-dag" }

@@ -55,7 +55,7 @@ move-vm-types.workspace = true
 
 narwhal-executor = { path = "../../narwhal/executor" }
 
-fastcrypto = { version = "0.1.2", features = ["copy_key"] }
+fastcrypto = { workspace = true, features = ["copy_key"] }
 
 sui-cost-tables = { path = "../sui-cost-tables"}
 workspace-hack.workspace = true

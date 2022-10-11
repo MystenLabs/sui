@@ -34,7 +34,7 @@ tonic = { version = "0.8.2", features = ["tls"] }
 tracing = "0.1.36"
 
 config = { path = "../config", package = "narwhal-config" }
-fastcrypto = "0.1.2"
+fastcrypto.workspace = true
 crypto = { path = "../crypto", package = "narwhal-crypto" }
 dag = { path = "../dag", package = "narwhal-dag" }
 anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "57c4af7d6cdbf47633e6715bcd67d98f300e2fd8" }
