@@ -31,6 +31,7 @@ use sui_json_rpc::bcs_api::BcsApiImpl;
 use sui_json_rpc::streaming_api::TransactionStreamingApiImpl;
 use sui_json_rpc::transaction_builder_api::FullNodeTransactionBuilderApi;
 use sui_network::api::ValidatorServer;
+use sui_network::default_mysten_network_config;
 use sui_storage::{
     event_store::{EventStoreType, SqlEventStore},
     node_sync_store::NodeSyncStore,
@@ -147,11 +148,7 @@ impl SuiNode {
             )
             .await,
         );
-
-        let mut net_config = mysten_network::config::Config::new();
-        net_config.connect_timeout = Some(Duration::from_secs(5));
-        net_config.request_timeout = Some(Duration::from_secs(5));
-        net_config.http2_keepalive_interval = Some(Duration::from_secs(5));
+        let net_config = default_mysten_network_config();
 
         let sui_system_state = state.get_sui_system_state_object().await?;
 
@@ -175,7 +172,8 @@ impl SuiNode {
             committee_store,
             authority_clients,
             AuthAggMetrics::new(&prometheus_registry),
-            SafeClientMetrics::new(&prometheus_registry),
+            Arc::new(SafeClientMetrics::new(&prometheus_registry)),
+            network_metrics.clone(),
         );
 
         let node_sync_store = Arc::new(NodeSyncStore::open_tables_read_write(

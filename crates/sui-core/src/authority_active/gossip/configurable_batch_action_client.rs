@@ -213,7 +213,7 @@ pub async fn init_configurable_authorities(
     use fastcrypto::traits::KeyPair;
     use sui_types::crypto::AccountKeyPair;
 
-    use crate::safe_client::SafeClientMetrics;
+    use crate::{authority_client::NetworkAuthorityClientMetrics, safe_client::SafeClientMetrics};
 
     let authority_count = 4;
     let (addr1, key1): (_, AccountKeyPair) = get_key_pair();
@@ -255,7 +255,7 @@ pub async fn init_configurable_authorities(
             client,
             committee_store,
             authority_name,
-            SafeClientMetrics::new_for_tests(),
+            Arc::new(SafeClientMetrics::new_for_tests()),
         ));
     }
 
@@ -338,7 +338,8 @@ pub async fn init_configurable_authorities(
         committee_store,
         authority_clients,
         AuthAggMetrics::new_for_tests(),
-        SafeClientMetrics::new_for_tests(),
+        Arc::new(SafeClientMetrics::new_for_tests()),
+        Arc::new(NetworkAuthorityClientMetrics::new_for_tests()),
     );
     (net, states, executed_digests)
 }

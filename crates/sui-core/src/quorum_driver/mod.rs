@@ -65,6 +65,10 @@ impl<A> QuorumDriver<A> {
             metrics,
         }
     }
+
+    pub fn authority_aggregator(&self) -> &ArcSwap<AuthorityAggregator<A>> {
+        &self.validators
+    }
 }
 
 impl<A> QuorumDriver<A>
@@ -193,6 +197,18 @@ where
             debug!("No subscriber found for effects: {}", err);
         }
         Ok(response)
+    }
+
+    pub async fn update_validators(
+        &self,
+        new_validators: Arc<AuthorityAggregator<A>>,
+    ) -> SuiResult {
+        self.task_sender
+            .send(QuorumTask::UpdateCommittee(new_validators))
+            .await
+            .map_err(|err| SuiError::QuorumDriverCommunicationError {
+                error: err.to_string(),
+            })
     }
 }
 

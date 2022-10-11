@@ -25,12 +25,13 @@ use sui_config::gateway::GatewayConfig;
 use sui_config::Config;
 use sui_config::PersistedConfig;
 use sui_core::authority_aggregator::AuthAggMetrics;
-use sui_core::authority_aggregator::AuthorityAggregator;
+use sui_core::authority_aggregator::{reconfig_from_genesis, AuthorityAggregator};
+use sui_core::authority_client::make_authority_clients;
 use sui_core::authority_client::AuthorityAPI;
 use sui_core::authority_client::NetworkAuthorityClient;
 use sui_core::epoch::committee_store::CommitteeStore;
-use sui_core::gateway_state::GatewayState;
 use sui_core::safe_client::SafeClientMetrics;
+use sui_core::validator_info::make_committee;
 use sui_node::metrics;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress;
@@ -252,10 +253,15 @@ async fn main() -> Result<()> {
         config.log_file = Some(opts.log_path);
     }
     let _guard = config.with_env().init();
-
+    let registry: Registry = metrics::start_prometheus_server(
+        format!("{}:{}", opts.client_metric_host, opts.client_metric_port)
+            .parse()
+            .unwrap(),
+    );
+    let network_authority_client_metrics = Arc::new(NetworkAuthorityClientMetrics::new(&registry));
     let barrier = Arc::new(Barrier::new(2));
     let cloned_barrier = barrier.clone();
-    let (primary_gas_id, owner, keypair, gateway_config) = if opts.local {
+    let (primary_gas_id, owner, keypair, aggregator) = if opts.local {
         eprintln!("Configuring local benchmark..");
         let configs = {
             let mut configs = test_and_configure_authority_configs(opts.committee_size as usize);
@@ -284,10 +290,24 @@ async fn main() -> Result<()> {
         // Make the client runtime wait until we are done creating genesis objects
         let cloned_config = configs;
         let cloned_gas = primary_gas;
-        let auth_clients = GatewayState::make_authority_clients(
-            &gateway_config,
-            NetworkAuthorityClientMetrics::new_for_tests(),
+        let auth_clients = make_authority_clients(
+            &gateway_config.validator_set,
+            gateway_config.send_timeout,
+            gateway_config.recv_timeout,
+            network_authority_client_metrics.clone(),
         );
+
+        let committee = make_committee(gateway_config.epoch, &gateway_config.validator_set)?;
+        let committee_store = Arc::new(CommitteeStore::new_for_testing(&committee));
+        let aggregator = Arc::new(AuthorityAggregator::new(
+            committee,
+            committee_store,
+            auth_clients.clone(),
+            AuthAggMetrics::new(&registry),
+            Arc::new(SafeClientMetrics::new(&registry)),
+            Arc::new(NetworkAuthorityClientMetrics::new(&registry)),
+        ));
+
         // spawn a thread to spin up sui nodes on the multi-threaded server runtime
         let _ = std::thread::spawn(move || {
             // create server runtime
@@ -321,7 +341,7 @@ async fn main() -> Result<()> {
                 join_all(follower_handles).await;
             });
         });
-        (primary_gas_id, owner, Arc::new(keypair), gateway_config)
+        (primary_gas_id, owner, Arc::new(keypair), aggregator)
     } else {
         eprintln!("Configuring remote benchmark..");
         std::thread::spawn(move || {
@@ -342,11 +362,13 @@ async fn main() -> Result<()> {
                 ))
             })?;
         let config: GatewayConfig = PersistedConfig::read(&config_path)?;
-        let committee = GatewayState::make_committee(&config)?;
-        let registry = Registry::new();
-        let authority_clients = GatewayState::make_authority_clients(
-            &config,
-            NetworkAuthorityClientMetrics::new(&registry),
+        let committee = make_committee(config.epoch, &config.validator_set)?;
+
+        let authority_clients = make_authority_clients(
+            &config.validator_set,
+            config.send_timeout,
+            config.recv_timeout,
+            network_authority_client_metrics.clone(),
         );
         let committee_store = Arc::new(CommitteeStore::new_for_testing(&committee));
         let aggregator = AuthorityAggregator::new(
@@ -354,12 +376,19 @@ async fn main() -> Result<()> {
             committee_store,
             authority_clients,
             AuthAggMetrics::new(&registry),
-            SafeClientMetrics::new(&registry),
+            Arc::new(SafeClientMetrics::new(&registry)),
+            network_authority_client_metrics.clone(),
         );
+        let aggregator = Arc::new(reconfig_from_genesis(aggregator).await?);
+        eprintln!(
+            "Reconfiguration - Reconfiguration to epoch {} is done",
+            aggregator.committee.epoch
+        );
+
         let offset = ObjectID::from_hex_literal(&opts.primary_gas_id)?;
         let ids = ObjectID::in_range(offset, opts.primary_gas_objects)?;
         let primary_gas_id = ids.choose(&mut rand::thread_rng()).unwrap();
-        let primary_gas = get_latest(*primary_gas_id, Arc::new(aggregator))
+        let primary_gas = get_latest(*primary_gas_id, &aggregator)
             .await
             .ok_or_else(|| {
                 anyhow!(format!(
@@ -383,7 +412,7 @@ async fn main() -> Result<()> {
             *primary_gas_id,
             primary_gas_account,
             Arc::new(ed25519_keypair),
-            config,
+            aggregator,
         )
     };
     barrier.wait().await;
@@ -396,28 +425,9 @@ async fn main() -> Result<()> {
         .unwrap();
     let prev_benchmark_stats_path = opts.compare_with.clone();
     let curr_benchmark_stats_path = opts.benchmark_stats_path.clone();
+    let arc_agg = aggregator.clone();
     let handle = std::thread::spawn(move || {
         client_runtime.block_on(async move {
-            let committee = GatewayState::make_committee(&gateway_config).unwrap();
-            let registry: Registry = metrics::start_prometheus_server(
-                format!("{}:{}", opts.client_metric_host, opts.client_metric_port)
-                    .parse()
-                    .unwrap(),
-            );
-            let authority_clients = GatewayState::make_authority_clients(
-                &gateway_config,
-                NetworkAuthorityClientMetrics::new(&registry),
-            );
-
-            let committee_store = Arc::new(CommitteeStore::new_for_testing(&committee));
-            let aggregator = AuthorityAggregator::new(
-                committee,
-                committee_store,
-                authority_clients,
-                AuthAggMetrics::new(&registry),
-                SafeClientMetrics::new(&registry),
-            );
-            let arc_agg = Arc::new(aggregator);
             match opts.run_spec {
                 RunSpec::Bench {
                     target_qps,

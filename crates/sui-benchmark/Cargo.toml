@@ -37,6 +37,7 @@ bcs = "0.1.3"
 tokio-util = "0.7.4"
 sui-core = { path = "../sui-core" }
 sui-config = { path = "../sui-config" }
+sui-network = { path = "../sui-network" }
 sui-types = { path = "../sui-types" }
 sui-sdk = { path = "../sui-sdk" }
 sui-node = { path = "../sui-node" }

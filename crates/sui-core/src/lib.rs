@@ -20,6 +20,7 @@ pub mod streamer;
 pub mod transaction_input_checker;
 pub mod transaction_orchestrator;
 pub mod transaction_streamer;
+pub mod validator_info;
 
 pub mod test_utils;
 

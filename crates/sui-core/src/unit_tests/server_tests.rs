@@ -325,7 +325,7 @@ async fn test_subscription_safe_client() {
         },
         state.committee_store().clone(),
         state.name,
-        SafeClientMetrics::new_for_tests(),
+        Arc::new(SafeClientMetrics::new_for_tests()),
     );
 
     let _join = server

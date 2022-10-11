@@ -326,6 +326,21 @@ pub fn make_publish_basics_transaction(gas_object: ObjectRef) -> Transaction {
     to_sender_signed_transaction(data, &keypair)
 }
 
+pub fn random_object_digest() -> ObjectRef {
+    (
+        ObjectID::random(),
+        SequenceNumber::from_u64(1),
+        ObjectDigest::random(),
+    )
+}
+
+pub fn make_random_certified_transaction() -> CertifiedTransaction {
+    let gas_ref = random_object_digest();
+    let txn = make_publish_basics_transaction(gas_ref);
+    let (mut certs, _) = make_tx_certs_and_signed_effects(vec![txn]);
+    certs.swap_remove(0)
+}
+
 pub fn make_counter_create_transaction(
     gas_object: ObjectRef,
     package_ref: ObjectRef,

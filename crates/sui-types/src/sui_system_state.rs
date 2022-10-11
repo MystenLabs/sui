@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
+
 use fastcrypto::traits::ToFromBytes;
 use move_core_types::{
     account_address::AccountAddress, ident_str, identifier::IdentStr, language_storage::StructTag,
@@ -8,7 +10,7 @@ use move_core_types::{
 use serde::{Deserialize, Serialize};
 
 use crate::base_types::AuthorityName;
-use crate::committee::{Committee, StakeUnit};
+use crate::committee::{Committee, CommitteeWithNetAddresses, StakeUnit};
 use crate::crypto::AuthorityPublicKeyBytes;
 use crate::{
     balance::{Balance, Supply},
@@ -49,7 +51,7 @@ pub struct ValidatorMetadata {
 }
 
 impl ValidatorMetadata {
-    pub fn to_validator_and_stake_pair(&self) -> (AuthorityName, StakeUnit) {
+    pub fn to_next_epoch_validator_and_stake_pair(&self) -> (AuthorityName, StakeUnit) {
         (
             // TODO: Make sure we are actually verifying this on-chain.
             AuthorityPublicKeyBytes::from_bytes(self.pubkey_bytes.as_ref())
@@ -68,6 +70,20 @@ pub struct Validator {
     pub pending_withdraw: u64,
     pub gas_price: u64,
     pub delegation_staking_pool: StakingPool,
+}
+
+impl Validator {
+    pub fn to_current_epoch_committee_with_net_addresses(
+        &self,
+    ) -> (AuthorityName, StakeUnit, Vec<u8>) {
+        (
+            // TODO: Make sure we are actually verifying this on-chain.
+            AuthorityPublicKeyBytes::from_bytes(self.metadata.pubkey_bytes.as_ref())
+                .expect("Validity of public key bytes should be verified on-chain"),
+            self.stake_amount + self.delegation_staking_pool.epoch_starting_sui_balance,
+            self.metadata.net_address.clone(),
+        )
+    }
 }
 
 /// Rust version of the Move sui::staking_pool::PendingDelegationEntry type.
@@ -130,11 +146,29 @@ impl SuiSystemState {
             self.validators
                 .next_epoch_validators
                 .iter()
-                .map(ValidatorMetadata::to_validator_and_stake_pair)
+                .map(ValidatorMetadata::to_next_epoch_validator_and_stake_pair)
                 .collect(),
         )
         // unwrap is safe because we should have verified the committee on-chain.
         // TODO: Make sure we actually verify it.
         .unwrap()
+    }
+
+    pub fn get_current_epoch_committee(&self) -> CommitteeWithNetAddresses {
+        let mut voting_rights = BTreeMap::new();
+        let mut net_addresses = BTreeMap::new();
+        for validator in &self.validators.active_validators {
+            let (name, voting_stake, net_address) =
+                validator.to_current_epoch_committee_with_net_addresses();
+            voting_rights.insert(name, voting_stake);
+            net_addresses.insert(name, net_address);
+        }
+        CommitteeWithNetAddresses {
+            committee: Committee::new(self.epoch, voting_rights)
+                // unwrap is safe because we should have verified the committee on-chain.
+                // TODO: Make sure we actually verify it.
+                .unwrap(),
+            net_addresses,
+        }
     }
 }

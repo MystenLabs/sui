@@ -3,8 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::base_types::*;
-use crate::crypto::AuthorityPublicKey;
+use crate::crypto::{sha3_hash, AuthorityPublicKey};
 use crate::error::{SuiError, SuiResult};
+use crate::messages::CommitteeInfo;
 use itertools::Itertools;
 use rand::rngs::OsRng;
 use rand::seq::SliceRandom;
@@ -16,6 +17,8 @@ use std::fmt::{Display, Formatter};
 pub type EpochId = u64;
 
 pub type StakeUnit = u64;
+
+pub type CommitteeDigest = [u8; 32];
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Committee {
@@ -261,6 +264,19 @@ impl Committee {
     }
 }
 
+impl TryFrom<CommitteeInfo> for Committee {
+    type Error = SuiError;
+    fn try_from(committee_info: CommitteeInfo) -> Result<Self, Self::Error> {
+        Self::new(
+            committee_info.epoch,
+            committee_info
+                .committee_info
+                .into_iter()
+                .collect::<BTreeMap<_, _>>(),
+        )
+    }
+}
+
 impl PartialEq for Committee {
     fn eq(&self, other: &Self) -> bool {
         self.epoch == other.epoch
@@ -276,6 +292,18 @@ impl Display for Committee {
             "Committee (epoch={:?}): {:?}",
             self.epoch, self.voting_rights
         )
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CommitteeWithNetAddresses {
+    pub committee: Committee,
+    pub net_addresses: BTreeMap<AuthorityName, Vec<u8>>,
+}
+
+impl CommitteeWithNetAddresses {
+    pub fn digest(&self) -> CommitteeDigest {
+        sha3_hash(self)
     }
 }
 
