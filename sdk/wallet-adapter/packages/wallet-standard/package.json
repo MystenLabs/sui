@@ -1,7 +1,7 @@
 {
-  "name": "@mysten/wallet-adapter-react-ui",
-  "version": "0.1.0",
-  "description": "UI for the Sui Wallet Adapter",
+  "name": "@mysten/wallet-standard",
+  "version": "0.0.0",
+  "description": "A suite of standard utilities for implementing wallets based on the Wallet Standard.",
   "license": "Apache-2.0",
   "author": "Mysten Labs <build@mystenlabs.com>",
   "main": "./dist/index.js",
@@ -25,20 +25,14 @@
     "build:types": "tsc --build",
     "prepublishOnly": "pnpm build"
   },
-  "peerDependencies": {
-    "react": "*",
-    "react-dom": "*"
+  "dependencies": {
+    "@mysten/sui.js": "workspace:*",
+    "@wallet-standard/features": "0.1.0-alpha.4",
+    "@wallet-standard/standard": "0.1.0-alpha.5",
+    "@wallet-standard/util": "0.1.0-alpha.6"
   },
   "devDependencies": {
-    "@mysten/sui.js": "workspace:*",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
     "tsup": "^6.2.2",
     "typescript": "^4.8.3"
-  },
-  "dependencies": {
-    "@mui/icons-material": "^5.8.4",
-    "@mui/material": "^5.8.4",
-    "@mysten/wallet-adapter-react": "workspace:*"
   }
 }
