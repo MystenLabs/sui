@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use arc_swap::ArcSwap;
@@ -80,7 +80,6 @@ async fn test_rounds_errors() {
         test_utils::test_new_certificates_channel!(CHANNEL_CAPACITY);
     let (tx_feedback, rx_feedback) =
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
-    let (tx_get_block_commands, rx_get_block_commands) = test_utils::test_get_block_commands!(1);
     let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
     let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
 
@@ -106,13 +105,12 @@ async fn test_rounds_errors() {
         parameters.clone(),
         store_primary.header_store,
         store_primary.certificate_store,
+        store_primary.proposer_store,
         store_primary.payload_store,
         store_primary.vote_digest_store,
         /* tx_consensus */ tx_new_certificates,
         /* rx_consensus */ rx_feedback,
         /* external_consensus */
-        tx_get_block_commands,
-        rx_get_block_commands,
         Some(Arc::new(
             Dag::new(&no_name_committee, rx_new_certificates, consensus_metrics).1,
         )),
@@ -176,7 +174,6 @@ async fn test_rounds_return_successful_response() {
         test_utils::test_new_certificates_channel!(CHANNEL_CAPACITY);
     let (tx_feedback, rx_feedback) =
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
-    let (tx_get_block_commands, rx_get_block_commands) = test_utils::test_get_block_commands!(1);
     let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
     let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
 
@@ -193,12 +190,11 @@ async fn test_rounds_return_successful_response() {
         parameters.clone(),
         store_primary.header_store,
         store_primary.certificate_store,
+        store_primary.proposer_store,
         store_primary.payload_store,
         store_primary.vote_digest_store,
         /* tx_consensus */ tx_new_certificates,
         /* rx_consensus */ rx_feedback,
-        tx_get_block_commands,
-        rx_get_block_commands,
         /* external_consensus */ Some(dag.clone()),
         NetworkModel::Asynchronous,
         tx_reconfigure,
@@ -335,9 +331,6 @@ async fn test_node_read_causal_signed_certificates() {
     let keypair_1 = authority_1.keypair().copy();
     let name_1 = keypair_1.public().clone();
 
-    let (tx_get_block_commands_1, rx_get_block_commands_1) =
-        test_utils::test_get_block_commands!(1);
-
     // Spawn Primary 1 that we will be interacting with.
     Primary::spawn(
         name_1.clone(),
@@ -348,12 +341,11 @@ async fn test_node_read_causal_signed_certificates() {
         primary_1_parameters.clone(),
         primary_store_1.header_store.clone(),
         primary_store_1.certificate_store.clone(),
+        primary_store_1.proposer_store.clone(),
         primary_store_1.payload_store.clone(),
         primary_store_1.vote_digest_store.clone(),
         /* tx_consensus */ tx_new_certificates,
         /* rx_consensus */ rx_feedback,
-        tx_get_block_commands_1,
-        rx_get_block_commands_1,
         /* dag */ Some(dag.clone()),
         NetworkModel::Asynchronous,
         tx_reconfigure,
@@ -377,9 +369,6 @@ async fn test_node_read_causal_signed_certificates() {
     let name_2 = keypair_2.public().clone();
     let consensus_metrics_2 = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
-    let (tx_get_block_commands_2, rx_get_block_commands_2) =
-        test_utils::test_get_block_commands!(1);
-
     // Spawn Primary 2
     Primary::spawn(
         name_2.clone(),
@@ -390,13 +379,12 @@ async fn test_node_read_causal_signed_certificates() {
         primary_2_parameters.clone(),
         primary_store_2.header_store,
         primary_store_2.certificate_store,
+        primary_store_2.proposer_store,
         primary_store_2.payload_store,
         primary_store_2.vote_digest_store,
         /* tx_consensus */ tx_new_certificates_2,
         /* rx_consensus */ rx_feedback_2,
         /* external_consensus */
-        tx_get_block_commands_2,
-        rx_get_block_commands_2,
         Some(Arc::new(
             Dag::new(&committee, rx_new_certificates_2, consensus_metrics_2).1,
         )),

@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{utils, DEFAULT_GAS_PRICE, DEFAULT_STAKE};
@@ -31,7 +31,7 @@ pub struct GenesisConfig {
 impl Config for GenesisConfig {}
 
 impl GenesisConfig {
-    pub fn generate_accounts<R: ::rand::RngCore + ::rand::CryptoRng>(
+    pub fn generate_accounts<R: rand::RngCore + rand::CryptoRng>(
         &self,
         mut rng: R,
     ) -> Result<(Vec<AccountKeyPair>, Vec<Object>)> {

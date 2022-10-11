@@ -7,3 +7,10 @@
         background-color: colors.$gray-40;
     }
 }
+
+.center-loading {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+}

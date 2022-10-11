@@ -16,3 +16,10 @@
         overflow-y: auto;
     }
 }
+
+.center-loading {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+}

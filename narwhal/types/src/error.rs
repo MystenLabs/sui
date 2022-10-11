@@ -1,5 +1,5 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{HeaderDigest, Round};
 use config::Epoch;
@@ -92,4 +92,16 @@ pub enum DagError {
 
     #[error("System shutting down")]
     ShuttingDown,
+
+    #[error("Channel Full")]
+    ChannelFull,
+}
+
+impl<T> From<tokio::sync::mpsc::error::TrySendError<T>> for DagError {
+    fn from(err: tokio::sync::mpsc::error::TrySendError<T>) -> Self {
+        match err {
+            tokio::sync::mpsc::error::TrySendError::Full(_) => DagError::ChannelFull,
+            tokio::sync::mpsc::error::TrySendError::Closed(_) => DagError::ShuttingDown,
+        }
+    }
 }

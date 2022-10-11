@@ -1,5 +1,5 @@
 # Copyright(C) Facebook, Inc. and its affiliates.
-# Copyright (c) 2022, Mysten Labs, Inc.
+# Copyright (c) Mysten Labs, Inc.
 # SPDX-License-Identifier: Apache-2.0
 import subprocess
 from math import ceil

@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, it, expect, beforeAll } from 'vitest';
@@ -25,6 +25,7 @@ describe('RPC Transaction Builder', () => {
   });
 
   it('Split coin', async () => {
+    await signer.syncAccountState();
     const coins = await toolbox.provider.getCoinBalancesOwnedByAddress(
       toolbox.address()
     );
@@ -37,6 +38,7 @@ describe('RPC Transaction Builder', () => {
   });
 
   it('Merge coin', async () => {
+    await signer.syncAccountState();
     const coins = await toolbox.provider.getCoinBalancesOwnedByAddress(
       toolbox.address()
     );
@@ -49,6 +51,7 @@ describe('RPC Transaction Builder', () => {
   });
 
   it('Move Call', async () => {
+    await signer.syncAccountState();
     const txn = await signer.executeMoveCall({
       packageObjectId: '0x2',
       module: 'devnet_nft',
@@ -65,6 +68,7 @@ describe('RPC Transaction Builder', () => {
   });
 
   it('Transfer Object', async () => {
+    await signer.syncAccountState();
     const coins = await toolbox.provider.getCoinBalancesOwnedByAddress(
       toolbox.address()
     );
@@ -77,6 +81,7 @@ describe('RPC Transaction Builder', () => {
   });
 
   it('Transfer Sui', async () => {
+    await signer.syncAccountState();
     const coins = (
       await toolbox.provider.getCoinBalancesOwnedByAddress(toolbox.address())
     ).filter((c) => Coin.getBalance(c)!.gtn(DEFAULT_GAS_BUDGET));

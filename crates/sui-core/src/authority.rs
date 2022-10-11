@@ -1,5 +1,5 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::checkpoints::ConsensusSender;
@@ -36,7 +36,7 @@ use std::{
     collections::{HashMap, VecDeque},
     pin::Pin,
     sync::{
-        atomic::{AtomicBool, AtomicUsize, Ordering},
+        atomic::{AtomicUsize, Ordering},
         Arc,
     },
 };
@@ -92,6 +92,7 @@ pub use sui_adapter::temporary_store::TemporaryStore;
 pub mod authority_store_tables;
 
 mod authority_store;
+use crate::consensus_adapter::ConsensusListenerMessage;
 use crate::epoch::committee_store::CommitteeStore;
 use crate::metrics::TaskUtilizationExt;
 pub use authority_store::{
@@ -381,8 +382,6 @@ pub struct AuthorityState {
     // Epoch related information.
     /// Committee of this Sui instance.
     pub committee: ArcSwap<Committee>,
-    /// A global lock to halt all transaction/cert processing.
-    halted: AtomicBool,
 
     /// Move native functions that are available to invoke
     pub(crate) _native_functions: NativeFunctionTable,
@@ -451,7 +450,11 @@ impl AuthorityState {
     ) -> Result<TransactionInfoResponse, SuiError> {
         let transaction_digest = *transaction.digest();
         // Ensure an idempotent answer.
-        if self.database.transaction_exists(&transaction_digest)? {
+        // If a transaction was signed in a previous epoch, we should no longer reuse it.
+        if self
+            .database
+            .transaction_exists(self.epoch(), &transaction_digest)?
+        {
             self.metrics.tx_already_processed.inc();
             let transaction_info = self.make_transaction_info(&transaction_digest).await?;
             return Ok(transaction_info);
@@ -700,7 +703,7 @@ impl AuthorityState {
         &self,
         tx_guard: CertTxGuard<'_>,
         certificate: &CertifiedTransaction,
-        bypass_validator_halt: bool,
+        mut bypass_validator_halt: bool,
     ) -> SuiResult<TransactionInfoResponse> {
         let digest = *certificate.digest();
         // The cert could have been processed by a concurrent attempt of the same cert, so check if
@@ -710,12 +713,12 @@ impl AuthorityState {
             return Ok(info);
         }
 
-        if self.is_halted()
-            && !bypass_validator_halt
-            && !certificate.signed_data.data.kind.is_system_tx()
-        {
+        // We also bypass validator halt if this is the system transaction.
+        // TODO: Shared object transactions should also bypass validator halt.
+        bypass_validator_halt |= certificate.signed_data.data.kind.is_system_tx();
+
+        if self.is_halted() && !bypass_validator_halt {
             tx_guard.release();
-            // TODO: Do we want to include the new validator set?
             return Err(SuiError::ValidatorHaltedAtEpochEnd);
         }
 
@@ -747,9 +750,14 @@ impl AuthorityState {
 
         // If commit_certificate returns an error, tx_guard will be dropped and the certificate
         // will be persisted in the log for later recovery.
-        self.commit_certificate(inner_temporary_store, certificate, &signed_effects)
-            .await
-            .tap_err(|e| error!(?digest, "commit_certificate failed: {}", e))?;
+        self.commit_certificate(
+            inner_temporary_store,
+            certificate,
+            &signed_effects,
+            bypass_validator_halt,
+        )
+        .await
+        .tap_err(|e| error!(?digest, "commit_certificate failed: {}", e))?;
 
         // commit_certificate finished, the tx is fully committed to the store.
         tx_guard.commit_tx();
@@ -1266,7 +1274,6 @@ impl AuthorityState {
             name,
             secret,
             committee: ArcSwap::from(Arc::new(committee)),
-            halted: AtomicBool::new(false),
             _native_functions: native_functions,
             move_vm,
             database: store.clone(),
@@ -1401,7 +1408,7 @@ impl AuthorityState {
 
     // Continually pop in-progress txes from the WAL and try to drive them to completion.
     pub async fn process_tx_recovery_log(&self, limit: Option<usize>) -> SuiResult {
-        let mut limit = limit.unwrap_or(usize::max_value());
+        let mut limit = limit.unwrap_or(usize::MAX);
         while limit > 0 {
             limit -= 1;
             if let Some((cert, tx_guard)) = self.database.wal.read_one_recoverable_tx().await? {
@@ -1454,15 +1461,15 @@ impl AuthorityState {
     }
 
     pub(crate) fn is_halted(&self) -> bool {
-        self.halted.load(Ordering::Relaxed)
+        self.batch_notifier.is_paused()
     }
 
     pub(crate) fn halt_validator(&self) {
-        self.halted.store(true, Ordering::Relaxed);
+        self.batch_notifier.pause();
     }
 
     pub(crate) fn unhalt_validator(&self) {
-        self.halted.store(false, Ordering::Relaxed);
+        self.batch_notifier.unpause();
     }
 
     pub fn db(&self) -> Arc<AuthorityStore> {
@@ -1839,16 +1846,11 @@ impl AuthorityState {
         inner_temporary_store: InnerTemporaryStore,
         certificate: &CertifiedTransaction,
         signed_effects: &SignedTransactionEffects,
+        bypass_validator_halt: bool,
     ) -> SuiResult {
         let _metrics_guard = start_timer(self.metrics.commit_certificate_latency.clone());
 
-        if self.is_halted() && !certificate.signed_data.data.kind.is_system_tx() {
-            // TODO: Here we should allow consensus transaction to continue.
-            // TODO: Do we want to include the new validator set?
-            return Err(SuiError::ValidatorHaltedAtEpochEnd);
-        }
-
-        let notifier_ticket = self.batch_notifier.ticket()?;
+        let notifier_ticket = self.batch_notifier.ticket(bypass_validator_halt)?;
         let seq = notifier_ticket.seq();
 
         let digest = certificate.digest();
@@ -1968,6 +1970,13 @@ impl AuthorityState {
         match transaction.kind {
             ConsensusTransactionKind::UserTransaction(certificate) => {
                 if self
+                    .checkpoints
+                    .lock()
+                    .should_reject_consensus_transaction()
+                {
+                    return Err(NarwhalHandlerError::ValidatorHalted);
+                }
+                if self
                     .database
                     .consensus_message_processed(certificate.digest())
                     .await
@@ -2044,12 +2053,11 @@ impl AuthorityState {
 
 pub struct ConsensusHandler {
     state: Arc<AuthorityState>,
-    // todo - change Vec<u8> to Box<CertifiedTransaction> and use tx id as consensus adapter hash
-    sender: Sender<Vec<u8>>,
+    sender: Sender<ConsensusListenerMessage>,
 }
 
 impl ConsensusHandler {
-    pub fn new(state: Arc<AuthorityState>, sender: Sender<Vec<u8>>) -> Self {
+    pub fn new(state: Arc<AuthorityState>, sender: Sender<ConsensusListenerMessage>) -> Self {
         Self { state, sender }
     }
 }
@@ -2082,7 +2090,12 @@ impl ExecutionState for ConsensusHandler {
             .await
         {
             Ok(()) => {
-                if self.sender.send(serialized_transaction).await.is_err() {
+                if self
+                    .sender
+                    .send(ConsensusListenerMessage::Processed(serialized_transaction))
+                    .await
+                    .is_err()
+                {
                     warn!("Consensus handler outbound channel closed");
                 }
             }
@@ -2091,6 +2104,9 @@ impl ExecutionState for ConsensusHandler {
                     "Ignoring malformed transaction (failed to verify) from {}: {:?}",
                     consensus_output.certificate.header.author, err
                 );
+            }
+            Err(NarwhalHandlerError::ValidatorHalted) => {
+                debug!("Validator has stopped accepting consensus transactions, skipping");
             }
             Err(NarwhalHandlerError::NodeError(err)) => {
                 Err(err).expect("Unrecoverable error in consensus handler")
@@ -2116,4 +2132,6 @@ pub enum NarwhalHandlerError {
     /// narwhal can continue streaming next transactions to SUI
     #[error("Invalid transaction {}", 0)]
     SkipNarwhalTransaction(SuiError),
+    #[error("Validator halted and no longer accepts sequenced transactions")]
+    ValidatorHalted,
 }

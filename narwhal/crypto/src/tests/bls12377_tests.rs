@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::bls12377::{
     BLS12377AggregateSignature, BLS12377KeyPair, BLS12377PrivateKey, BLS12377PublicKey,
@@ -392,7 +392,7 @@ fn test_sk_zeroization_on_drop() {
             }
         }
         let sk_memory: &[u8] =
-            unsafe { ::std::slice::from_raw_parts(bytes_ptr, CELO_BLS_PRIVATE_KEY_LENGTH) };
+            unsafe { std::slice::from_raw_parts(bytes_ptr, CELO_BLS_PRIVATE_KEY_LENGTH) };
         // Assert that this is equal to sk_bytes before deletion.
         assert_eq!(sk_memory, &sk_bytes[..]);
     }
@@ -410,6 +410,6 @@ fn test_sk_zeroization_on_drop() {
 
     // Check that self.bytes is reset to OnceCell default.
     let sk_memory: &[u8] =
-        unsafe { ::std::slice::from_raw_parts(bytes_ptr, CELO_BLS_PRIVATE_KEY_LENGTH) };
+        unsafe { std::slice::from_raw_parts(bytes_ptr, CELO_BLS_PRIVATE_KEY_LENGTH) };
     assert_ne!(sk_memory, &sk_bytes[..]);
 }

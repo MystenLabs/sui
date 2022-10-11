@@ -1,5 +1,5 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
     metrics::PrimaryMetrics,
@@ -246,6 +246,8 @@ impl HeaderWaiter {
                             if self.pending.contains_key(&header_id) {
                                 continue;
                             }
+                            self.metrics.last_parent_missing_round
+                            .with_label_values(&[&self.committee.epoch.to_string()]).set(round as i64);
 
                             // Add the header to the waiter pool. The waiter will return it to us
                             // when all its parents are in the store.

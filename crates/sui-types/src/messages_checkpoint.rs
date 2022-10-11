@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::{BTreeMap, BTreeSet, HashSet};
@@ -709,6 +709,7 @@ mod tests {
             [ExecutionDigests::random()].into_iter(),
         );
 
+        // TODO: duplicated in a test below.
         let signed_checkpoints: Vec<_> = keys
             .iter()
             .map(|k| {

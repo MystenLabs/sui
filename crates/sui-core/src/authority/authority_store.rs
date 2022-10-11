@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{authority_store_tables::AuthorityStoreTables, *};
@@ -150,14 +150,6 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             .map_err(|e| e.into())
     }
 
-    /// Returns true if we have a transaction structure for this transaction digest
-    pub fn transaction_exists(&self, transaction_digest: &TransactionDigest) -> SuiResult<bool> {
-        self.tables
-            .transactions
-            .contains_key(transaction_digest)
-            .map_err(|e| e.into())
-    }
-
     /// Returns true if there are no objects in the database
     pub fn database_is_empty(&self) -> SuiResult<bool> {
         Ok(self
@@ -260,7 +252,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     }
 
     /// A function that acquires all locks associated with the objects (in order to avoid deadlocks).
-    async fn acquire_locks<'a, 'b>(&'a self, input_objects: &'b [ObjectRef]) -> Vec<LockGuard> {
+    async fn acquire_locks(&self, input_objects: &[ObjectRef]) -> Vec<LockGuard> {
         self.mutex_table
             .acquire_locks(input_objects.iter().map(|(_, _, digest)| *digest))
             .await
@@ -652,7 +644,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         let transaction_digest: &TransactionDigest = certificate.digest();
         write_batch = write_batch.insert_batch(
             &self.tables.certificates,
-            std::iter::once((transaction_digest, certificate)),
+            iter::once((transaction_digest, certificate)),
         )?;
 
         self.sequence_tx(
@@ -719,7 +711,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         // Store the certificate indexed by transaction digest
         write_batch = write_batch.insert_batch(
             &self.tables.certificates,
-            std::iter::once((transaction_digest, &certificate)),
+            iter::once((transaction_digest, &certificate)),
         )?;
         self.sequence_tx(
             write_batch,
@@ -870,10 +862,8 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         // Once a transaction is done processing and effects committed, we no longer
         // need it in the transactions table. This also allows us to track pending
         // transactions.
-        write_batch = write_batch.delete_batch(
-            &self.tables.transactions,
-            std::iter::once(transaction_digest),
-        )?;
+        write_batch =
+            write_batch.delete_batch(&self.tables.transactions, iter::once(transaction_digest))?;
 
         // Update the indexes of the objects written
         write_batch = write_batch.insert_batch(
@@ -1165,7 +1155,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
                "locking shared objects");
 
         // Make an iterator to update the last consensus index.
-        let index_to_write = std::iter::once((LAST_CONSENSUS_INDEX_ADDR, consensus_index));
+        let index_to_write = iter::once((LAST_CONSENSUS_INDEX_ADDR, consensus_index));
 
         // Holding _tx_lock avoids the following race:
         // - we check effects_exist, returns false
@@ -1212,7 +1202,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             write_batch.insert_batch(&self.tables.last_consensus_index, index_to_write)?;
         write_batch = write_batch.insert_batch(
             &self.tables.consensus_message_processed,
-            std::iter::once((transaction_digest, true)),
+            iter::once((transaction_digest, true)),
         )?;
         write_batch.write().map_err(SuiError::from)
     }
@@ -1385,6 +1375,20 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
 }
 
 impl SuiDataStore<AuthoritySignInfo> {
+    /// Returns true if we have a transaction structure for this transaction digest
+    pub fn transaction_exists(
+        &self,
+        cur_epoch: EpochId,
+        transaction_digest: &TransactionDigest,
+    ) -> SuiResult<bool> {
+        let tx = self.tables.transactions.get(transaction_digest)?;
+        Ok(if let Some(signed_tx) = tx {
+            signed_tx.auth_sign_info.epoch == cur_epoch
+        } else {
+            false
+        })
+    }
+
     pub fn get_signed_transaction_info(
         &self,
         transaction_digest: &TransactionDigest,
@@ -1431,6 +1435,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> ParentSync for SuiDa
 impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> ModuleResolver for SuiDataStore<S> {
     type Error = SuiError;
 
+    // TODO: duplicated code with ModuleResolver for InMemoryStorage in memory_storage.rs.
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
         // TODO: We should cache the deserialized modules to avoid
         // fetching from the store / re-deserializing them everytime.

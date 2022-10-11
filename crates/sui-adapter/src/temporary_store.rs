@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use move_core_types::account_address::AccountAddress;
@@ -455,8 +455,11 @@ impl<S> ResourceResolver for TemporaryStore<S> {
 
         match &object.data {
             Data::Move(m) => {
-                assert!(struct_tag == &m.type_, "Invariant violation: ill-typed object in storage or bad object request from caller\
-");
+                assert_eq!(
+                    struct_tag, &m.type_,
+                    "Invariant violation: ill-typed object in storage \
+                or bad object request from caller"
+                );
                 Ok(Some(m.contents().to_vec()))
             }
             other => unimplemented!(

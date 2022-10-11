@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::helper::ObjectChecker;
@@ -111,7 +111,7 @@ impl TestCaseImpl for CallContractTest {
 
         let object = ObjectChecker::new(nft_id)
             .owner(Owner::AddressOwner(signer))
-            .check_into_object(ctx.get_fullnode())
+            .check_into_object(ctx.get_fullnode_client())
             .await;
 
         assert_eq!(
