@@ -12,5 +12,5 @@
 }
 
 .container tbody td {
-    @apply py-[8px] px-2.5;
+    @apply py-[8px];
 }

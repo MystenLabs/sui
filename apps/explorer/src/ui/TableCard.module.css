@@ -8,8 +8,13 @@
     border-bottom: 1px solid #f0f1f2;
 }
 
+.table th,
+.table td {
+    @apply px-2.5 py-[8px];
+}
+
 .table th {
-    @apply text-left font-semibold uppercase text-[#767A81] text-xs px-2.5;
+    @apply text-left font-semibold uppercase text-[#767A81] text-xs;
 }
 
 .table td {
@@ -22,10 +27,6 @@
 
 .table tr:hover abbr {
     @apply text-sui-grey-90;
-}
-
-.table td section {
-    @apply py-2 px-2.5;
 }
 
 .table tbody tr {
