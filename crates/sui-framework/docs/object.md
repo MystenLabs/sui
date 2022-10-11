@@ -118,7 +118,8 @@ The hardcoded ID for the singleton Sui System State Object.
 
 ## Function `address_from_bytes`
 
-Convert raw bytes into an address
+Convert raw bytes into an address, aborts if supplied too many
+or too few bytes.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="object.md#0x2_object_address_from_bytes">address_from_bytes</a>(bytes: <a href="">vector</a>&lt;u8&gt;): <b>address</b>
