@@ -1,18 +1,9 @@
 name: Detect Changes in Pnpm Workspace
 description: Defines variables indicating the parts of the pnpm workspace have changed
 outputs:
-  isExplorerClient:
-    description: True when there are changes to files related to explorer client
-    value: "${{ steps.changes.outputs.explorer }}"
-  isTypeScriptSDK:
-    description: True when there are changes to files related to TypeScript SDK
-    value: "${{ steps.changes.outputs.sdk }}"
-  isWalletExt:
-    description: True when there are changes to files related to Wallet Extension
-    value: "${{ steps.changes.outputs.wallet }}"
-  isWalletAdapter:
-    description: True when there are changes to files related to wallet adapter
-    value: "${{ steps.changes.outputs.walletAdapter }}"
+  packages:
+    description: A list of packages that have changed.
+    value: ${{ steps.changes.outputs.packages }}
 runs:
   using: composite
   steps:
@@ -22,16 +13,10 @@ runs:
     - uses: pnpm/action-setup@v2.2.2
       with:
         version: 7
-    - name: Pnpm list
+    - id: changes
+      name: Detect changes
       shell: bash
-      run: pnpm list --filter "...[origin/main]" --depth -1 --json > changes.json
+      run: echo "::set-output name=packages::$(pnpm list --filter "...[origin/main]" --depth -1 --json | jq -c "[.[] | .name]")"
     - name: Print changes for easy debugging
       shell: bash
-      run: cat ./changes.json
-    - id: changes
-      shell: bash
-      run: |
-        echo "::set-output name=explorer::$(jq 'any(.[]; .name == "sui-explorer")' changes.json)"
-        echo "::set-output name=sdk::$(jq 'any(.[]; .name == "@mysten/sui.js")' changes.json)"
-        echo "::set-output name=wallet::$(jq 'any(.[]; .name == "sui-wallet")' changes.json)"
-        echo "::set-output name=walletAdapter::$(jq 'any(.[]; .name | startswith("@mysten/wallet-adapter"))' changes.json)"
+      run: echo ${{ steps.changes.outputs.packages }}

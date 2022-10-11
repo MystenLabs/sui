@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 /// Example coin with a trusted manager responsible for minting/burning (e.g., a stablecoin)
@@ -18,13 +18,15 @@ module fungible_tokens::managed {
     /// registered once.
     fun init(witness: MANAGED, ctx: &mut TxContext) {
         // Get a treasury cap for the coin and give it to the transaction sender
-        let treasury_cap = coin::create_currency<MANAGED>(witness, ctx);
+        let treasury_cap = coin::create_currency<MANAGED>(witness, 2, ctx);
         transfer::transfer(treasury_cap, tx_context::sender(ctx))
     }
 
     /// Manager can mint new coins
-    public fun mint(treasury_cap: &mut TreasuryCap<MANAGED>, amount: u64, ctx: &mut TxContext): Coin<MANAGED> {
-        coin::mint<MANAGED>(treasury_cap, amount, ctx)
+    public entry fun mint(
+        treasury_cap: &mut TreasuryCap<MANAGED>, amount: u64, recipient: address, ctx: &mut TxContext
+    ) {
+        coin::mint_and_transfer(treasury_cap, amount, recipient, ctx)
     }
 
     /// Manager can burn coins

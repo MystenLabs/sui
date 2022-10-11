@@ -7,7 +7,10 @@ publish = false
 edition = "2021"
 
 [dependencies]
-workspace-hack = { path = "../workspace-hack"}
+workspace-hack.workspace = true
+sui-framework = { path = "../sui-framework" }
+telemetry-subscribers.workspace = true
+tracing = "0.1"
 
 [target.'cfg(msim)'.dependencies]
-msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "e0355e2836fd3a6df7952b6aaca2c178d6055197", package = "msim" }
+msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "305f0ca15fe77df5b92b7f4bb57b5472e568edc3", package = "msim" }

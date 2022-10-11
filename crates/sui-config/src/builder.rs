@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
@@ -93,7 +93,7 @@ impl<R> ConfigBuilder<R> {
         self
     }
 
-    pub fn rng<N: ::rand::RngCore + ::rand::CryptoRng>(self, rng: N) -> ConfigBuilder<N> {
+    pub fn rng<N: rand::RngCore + rand::CryptoRng>(self, rng: N) -> ConfigBuilder<N> {
         ConfigBuilder {
             rng: Some(rng),
             config_directory: self.config_directory,
@@ -106,7 +106,7 @@ impl<R> ConfigBuilder<R> {
     }
 }
 
-impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
+impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
     //TODO right now we always randomize ports, we may want to have a default port configuration
     pub fn build(mut self) -> NetworkConfig {
         let committee = self.committee.take().unwrap();
@@ -248,17 +248,17 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
                 let db_path = self
                     .config_directory
                     .join(AUTHORITIES_DB_NAME)
-                    .join(encode_bytes_hex(&public_key));
+                    .join(encode_bytes_hex(public_key));
                 let network_address = validator.network_address;
                 let consensus_address = validator.narwhal_consensus_address;
                 let consensus_db_path = self
                     .config_directory
                     .join(CONSENSUS_DB_NAME)
-                    .join(encode_bytes_hex(&public_key));
+                    .join(encode_bytes_hex(public_key));
                 let consensus_config = ConsensusConfig {
                     consensus_address,
                     consensus_db_path,
-                    delay_step: Some(15_000),
+                    timeout_secs: Some(60),
                     narwhal_config: Default::default(),
                 };
 

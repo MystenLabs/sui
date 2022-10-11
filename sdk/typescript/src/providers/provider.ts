@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 import { SignatureScheme } from '../cryptography/publickey';
@@ -43,6 +43,15 @@ export abstract class Provider {
   abstract getGasObjectsOwnedByAddress(
     _address: string
   ): Promise<SuiObjectInfo[]>;
+
+  /**
+   * Convenience method for getting all coins objects owned by an address
+   * @param typeArg optional argument for filter by coin type
+   */
+  abstract getCoinBalancesOwnedByAddress(
+    address: string,
+    typeArg?: string
+  ): Promise<GetObjectDataResponse[]>;
 
   /**
    * Get details about an object
@@ -150,7 +159,10 @@ export abstract class Provider {
    * @param digest transaction digest to search by
    * @param count max result count
    */
-  abstract getEventsByTransaction(digest: TransactionDigest, count: number): Promise<SuiEvents>;
+  abstract getEventsByTransaction(
+    digest: TransactionDigest,
+    count: number
+  ): Promise<SuiEvents>;
 
   /**
    * Get events emitted from within the specified Move module
@@ -161,7 +173,7 @@ export abstract class Provider {
    * @param endTime end of time range, exclusive
    */
   abstract getEventsByModule(
-    packageId: ObjectId, 
+    packageId: ObjectId,
     module: string,
     count: number,
     startTime: number,

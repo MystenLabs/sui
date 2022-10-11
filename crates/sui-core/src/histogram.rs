@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use futures::FutureExt;
@@ -175,7 +175,7 @@ impl Histogram {
         match self.channel.try_send((self.labels.clone(), v)) {
             Ok(()) => {}
             Err(TrySendError::Closed(_)) => {
-                unreachable!("Histogram reporting task do not stop when Histogram instance exists")
+                // can happen during runtime shutdown
             }
             Err(TrySendError::Full(_)) => error!("Histogram channel is full, dropping data"),
         }

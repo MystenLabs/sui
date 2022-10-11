@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2022, Mysten Labs, Inc.
+# Copyright (c) Mysten Labs, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
 if [ "$1" != "simtest" ]; then
@@ -43,6 +43,8 @@ else
   echo "Using MSIM_TEST_SEED=$MSIM_TEST_SEED from the environment"
 fi
 
+RUST_FLAGS=('"--cfg"' '"msim"')
+
 cargo_patch_args=(
   --config 'patch.crates-io.hyper.git = "https://github.com/mystenmark/hyper-madsim-fork.git"'
   --config 'patch.crates-io.hyper.rev = "2b2eca1e983376294c84c93385ebe848ccf9a99f"'
@@ -56,8 +58,35 @@ if [ -n "$LOCAL_MSIM_PATH" ]; then
 else
   cargo_patch_args+=(
     --config 'patch.crates-io.tokio.git = "https://github.com/MystenLabs/mysten-sim.git"'
-    --config 'patch.crates-io.tokio.rev = "e0355e2836fd3a6df7952b6aaca2c178d6055197"'
+    --config 'patch.crates-io.tokio.rev = "305f0ca15fe77df5b92b7f4bb57b5472e568edc3"'
   )
+fi
+
+# Mock out the blst crate to massively speed up the simulation.
+# You should not assume that test runs will be repeatable with and without blst mocking,
+# as blst samples from the PRNG when not mocked.
+if [ -n "$USE_MOCK_CRYPTO" ]; then
+  echo "Using mocked crypto crates - no cryptographic verification will occur"
+  RUST_FLAGS+=(
+    '"--cfg"'
+    '"use_mock_crypto"'
+  )
+  cargo_patch_args+=(
+    --config 'patch.crates-io.blst.git = "https://github.com/MystenLabs/mock-blst.git"'
+    --config 'patch.crates-io.blst.rev = "630ca4d55de8e199e62c5b6a695c702d95fe6498"'
+  )
+fi
+
+RUST_FLAGS=$(IFS=, ; echo "${RUST_FLAGS[*]}")
+
+if ! cargo nextest --help > /dev/null 2>&1; then
+  echo "nextest (https://nexte.st) does not appear to be installed. Please install before proceeding."
+  echo "You can install it by running:"
+  echo ""
+  echo "   \$ cargo install cargo-nextest --locked"
+  echo ""
+  echo "or see https://nexte.st for other installation options"
+  exit 1
 fi
 
 CARGO_COMMAND=(nextest run --cargo-profile simulator)
@@ -66,8 +95,11 @@ if [ "$1" = "build" ]; then
   CARGO_COMMAND=(build --profile simulator)
 fi
 
+# Must supply a new temp dir - the test is deterministic and can't choose one randomly itself.
+export TMPDIR=$(mktemp -d)
+
 cargo ${CARGO_COMMAND[@]} \
-  --config 'build.rustflags = ["--cfg", "msim"]' \
+  --config "build.rustflags = [$RUST_FLAGS]" \
   "${cargo_patch_args[@]}" \
   --config 'patch.crates-io.hyper.git = "https://github.com/mystenmark/hyper-madsim-fork.git"' \
   --config 'patch.crates-io.hyper.rev = "2b2eca1e983376294c84c93385ebe848ccf9a99f"' \

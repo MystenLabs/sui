@@ -1,17 +1,17 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
-use std::collections::{BTreeMap, HashSet};
-use std::sync::Arc;
-use std::time::Duration;
 
 use crate::{
     authority::AuthorityState,
     authority_aggregator::{AuthAggMetrics, AuthorityAggregator},
     authority_client::{NetworkAuthorityClient, NetworkAuthorityClientMetrics},
-    epoch::epoch_store::EpochStore,
+    epoch::committee_store::CommitteeStore,
     safe_client::SafeClientMetrics,
 };
+use signature::Signer;
+use std::collections::{BTreeMap, HashSet};
+use std::sync::Arc;
+use std::time::Duration;
 
 use sui_config::{NetworkConfig, ValidatorInfo};
 use sui_types::{
@@ -36,7 +36,8 @@ pub fn test_authority_aggregator(
 ) -> AuthorityAggregator<NetworkAuthorityClient> {
     let validators_info = config.validator_set();
     let committee = Committee::new(0, ValidatorInfo::voting_rights(validators_info)).unwrap();
-    let epoch_store = Arc::new(EpochStore::new_for_testing(&committee));
+    let committee_store = Arc::new(CommitteeStore::new_for_testing(&committee));
+    // TODO: duplicated code in authority.rs
     let clients: BTreeMap<_, _> = validators_info
         .iter()
         .map(|config| {
@@ -53,7 +54,7 @@ pub fn test_authority_aggregator(
     let registry = prometheus::Registry::new();
     AuthorityAggregator::new(
         committee,
-        epoch_store,
+        committee_store,
         clients,
         AuthAggMetrics::new(&registry),
         SafeClientMetrics::new(&registry),
@@ -81,6 +82,7 @@ pub async fn wait_for_all_txes(wait_digests: Vec<TransactionDigest>, state: Arc<
             .unwrap(),
     );
 
+    // TODO: duplicated code with transaction.rs
     loop {
         tokio::select! {
             _ = &mut timeout => panic!("wait_for_tx timed out"),
@@ -138,6 +140,15 @@ pub fn create_fake_transaction() -> Transaction {
         object.compute_object_reference(),
         10000,
     );
-    let signature = Signature::new(&data, &sender_key);
+    to_sender_signed_transaction(data, &sender_key)
+}
+
+// This is used to sign transaction with signer using default Intent.
+pub fn to_sender_signed_transaction(
+    data: TransactionData,
+    signer: &dyn Signer<Signature>,
+) -> Transaction {
+    let signature = Signature::new_temp(&data.to_bytes(), signer);
+    // let signature = Signature::new_secure(&data, Intent::default(), signer).unwrap();
     Transaction::new(data, signature)
 }

@@ -51,7 +51,6 @@ jobs:
         with:
           crate: cargo-hakari
           locked: true
-      - run: scripts/license_check.sh
       - run: cargo xlint
       - run: |
           cargo hakari generate --diff  # workspace-hack Cargo.toml is up-to-date
@@ -66,7 +65,6 @@ jobs:
       matrix:
         os:
           - [ubuntu-ghcloud]
-          - [windows-ghcloud]
       fail-fast: false
     steps:
       - uses: actions/checkout@v3
@@ -74,13 +72,39 @@ jobs:
       - uses: taiki-e/install-action@nextest
       - name: cargo test
         run: |
-          cargo nextest run --all-features --profile ci
+          cargo nextest run --profile ci
+      - name: narwhal celo crypto tests
+        run: |
+          cargo nextest run --features celo --profile ci -p narwhal-crypto
+          cargo test --doc --features celo -p narwhal-crypto
       - name: Doctests
         run: |
-          cargo test --doc --all-features
+          cargo test --doc
       # Ensure there are no uncommitted changes in the repo after running tests
       - run: scripts/changed-files.sh
         shell: bash
+
+  windows-build:
+    needs: diff
+    if: needs.diff.outputs.isRust == 'true'
+    timeout-minutes: 45
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os:
+          - [windows-ghcloud]
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+      - uses: taiki-e/install-action@nextest
+      - name: cargo build
+        run: |
+          cargo build --all-features
+      # Ensure there are no uncommitted changes in the repo after running tests
+      - run: scripts/changed-files.sh
+        shell: bash
+
 
   simtest:
     needs: diff

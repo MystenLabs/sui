@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{env, path::PathBuf};
@@ -85,10 +85,10 @@ fn main() -> Result<()> {
         )
         .method(
             Method::builder()
-                .name("epoch_info")
-                .route_name("Epoch")
-                .input_type("sui_types::messages::EpochRequest")
-                .output_type("sui_types::messages::EpochResponse")
+                .name("committee_info")
+                .route_name("CommitteeInfo")
+                .input_type("sui_types::messages::CommitteeInfoRequest")
+                .output_type("sui_types::messages::CommitteeInfoResponse")
                 .codec_path(codec_path)
                 .build(),
         )

@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 
@@ -19,6 +19,10 @@ pub struct TransactionNotifier {
     notify: Notify,
     has_stream: AtomicBool,
     is_closed: AtomicBool,
+    /// Indicate that we would temporarily stop giving out new tickets, due to epoch change.
+    /// In special cases (i.e. executing known-to-be-finalized transactions) we will bypass
+    /// this.
+    is_paused: AtomicBool,
     inner: Mutex<LockedNotifier>,
 }
 
@@ -37,6 +41,7 @@ impl TransactionNotifier {
             notify: Notify::new(),
             has_stream: AtomicBool::new(false),
             is_closed: AtomicBool::new(false),
+            is_paused: AtomicBool::new(false),
 
             // Keep a set of the tickets that are still being processed
             // This is the size of the number of concurrent processes.
@@ -49,6 +54,18 @@ impl TransactionNotifier {
 
     pub fn low_watermark(&self) -> TxSequenceNumber {
         self.low_watermark.load(Ordering::SeqCst)
+    }
+
+    pub fn pause(&self) {
+        self.is_paused.store(true, Ordering::SeqCst);
+    }
+
+    pub fn unpause(&self) {
+        self.is_paused.store(false, Ordering::SeqCst);
+    }
+
+    pub fn is_paused(&self) -> bool {
+        self.is_paused.load(Ordering::SeqCst)
     }
 
     /// Check that we have drained all tickets (i.e. low watermark reached high watermark).
@@ -69,9 +86,12 @@ impl TransactionNotifier {
     }
 
     /// Get a ticket with a sequence number
-    pub fn ticket(self: &Arc<Self>) -> SuiResult<TransactionNotifierTicket> {
+    pub fn ticket(self: &Arc<Self>, bypass_pause: bool) -> SuiResult<TransactionNotifierTicket> {
         if self.is_closed.load(Ordering::SeqCst) {
             return Err(SuiError::ClosedNotifierError);
+        }
+        if !bypass_pause && self.is_paused() {
+            return Err(SuiError::ValidatorHaltedAtEpochEnd);
         }
 
         let mut inner = self.inner.lock();
@@ -165,10 +185,7 @@ impl TransactionNotifier {
                             ));
                         } else {
                             // If the notifier is closed, then exit
-                            if transaction_notifier
-                                .is_closed
-                                .load(std::sync::atomic::Ordering::SeqCst)
-                            {
+                            if transaction_notifier.is_closed.load(Ordering::SeqCst) {
                                 return None;
                             }
                         }
@@ -185,8 +202,7 @@ impl TransactionNotifier {
 
     /// Signal we want to close this channel.
     pub fn close(&self) {
-        self.is_closed
-            .store(true, std::sync::atomic::Ordering::SeqCst);
+        self.is_closed.store(true, Ordering::SeqCst);
         self.notify.notify_one();
     }
 }
@@ -195,9 +211,7 @@ struct IterUniquenessGuard(Arc<TransactionNotifier>);
 
 impl Drop for IterUniquenessGuard {
     fn drop(&mut self) {
-        self.0
-            .has_stream
-            .store(false, std::sync::atomic::Ordering::SeqCst);
+        self.0.has_stream.store(false, Ordering::SeqCst);
     }
 }
 
@@ -211,12 +225,7 @@ impl TransactionNotifierTicket {
     pub fn seq(&self) -> u64 {
         self.seq
     }
-}
-
-/// A custom drop to notify authority state's transaction_notifier
-/// that a new certified transaction's has just been executed and committed.
-impl Drop for TransactionNotifierTicket {
-    fn drop(&mut self) {
+    pub fn notify(self) {
         let mut inner = self.transaction_notifier.inner.lock();
         inner.live_tickets.remove(&self.seq);
 
@@ -230,7 +239,7 @@ impl Drop for TransactionNotifierTicket {
 
         self.transaction_notifier
             .low_watermark
-            .store(new_low_watermark, std::sync::atomic::Ordering::SeqCst);
+            .store(new_low_watermark, Ordering::SeqCst);
         self.transaction_notifier.notify.notify_one();
     }
 }
@@ -259,18 +268,21 @@ mod tests {
         // TEST 1: Happy sequence
 
         {
-            let t0 = &notifier.ticket().expect("ok");
+            let t0 = notifier.ticket(false).expect("ok");
             store.side_sequence(t0.seq(), &ExecutionDigests::random());
+            t0.notify();
         }
 
         {
-            let t0 = &notifier.ticket().expect("ok");
+            let t0 = notifier.ticket(false).expect("ok");
             store.side_sequence(t0.seq(), &ExecutionDigests::random());
+            t0.notify();
         }
 
         {
-            let t0 = &notifier.ticket().expect("ok");
+            let t0 = notifier.ticket(false).expect("ok");
             store.side_sequence(t0.seq(), &ExecutionDigests::random());
+            t0.notify();
         }
 
         let mut iter = notifier.iter_from(0).unwrap();
@@ -292,13 +304,15 @@ mod tests {
         // TEST 2: Drop a ticket
 
         {
-            let t0 = &notifier.ticket().expect("ok");
-            assert!(t0.seq() == 3);
+            let t0 = notifier.ticket(false).expect("ok");
+            assert_eq!(t0.seq(), 3);
+            t0.notify();
         }
 
         {
-            let t0 = &notifier.ticket().expect("ok");
+            let t0 = notifier.ticket(false).expect("ok");
             store.side_sequence(t0.seq(), &ExecutionDigests::random());
+            t0.notify();
         }
 
         let x = iter.next().await;
@@ -310,21 +324,21 @@ mod tests {
 
         // TEST 3: Drop & out of order
 
-        let t5 = notifier.ticket().expect("ok");
-        let t6 = notifier.ticket().expect("ok");
-        let t7 = notifier.ticket().expect("ok");
-        let t8 = notifier.ticket().expect("ok");
+        let t5 = notifier.ticket(false).expect("ok");
+        let t6 = notifier.ticket(false).expect("ok");
+        let t7 = notifier.ticket(false).expect("ok");
+        let t8 = notifier.ticket(false).expect("ok");
 
         store.side_sequence(t6.seq(), &ExecutionDigests::random());
-        drop(t6);
+        t6.notify();
 
         store.side_sequence(t5.seq(), &ExecutionDigests::random());
-        drop(t5);
+        t5.notify();
 
-        drop(t7);
+        t7.notify();
 
         store.side_sequence(t8.seq(), &ExecutionDigests::random());
-        drop(t8);
+        t8.notify();
 
         assert!(matches!(iter.next().await, Some((5, _))));
         assert!(matches!(iter.next().await, Some((6, _))));

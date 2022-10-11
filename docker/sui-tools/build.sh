@@ -1,5 +1,5 @@
 #!/bin/sh
-# Copyright (c) 2022, Mysten Labs, Inc.
+# Copyright (c) Mysten Labs, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
 # fast fail.
@@ -8,7 +8,7 @@ set -e
 DIR="$( cd "$( dirname "$0" )" && pwd )"
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 DOCKERFILE="$DIR/Dockerfile"
-GIT_REVISION="$(git describe --always --dirty)"
+GIT_REVISION="$(git describe --always --dirty --exclude '*')"
 BUILD_DATE="$(date -u +'%Y-%m-%d')"
 
 echo

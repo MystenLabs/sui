@@ -1,5 +1,5 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{base_types::*, committee::EpochId, messages::ExecutionFailureStatus};
@@ -10,6 +10,8 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use thiserror::Error;
 use typed_store::rocks::TypedStoreError;
+
+pub const TRANSACTION_NOT_FOUND_MSG_PREFIX: &str = "Could not find the referenced transaction";
 
 #[macro_export]
 macro_rules! fp_bail {
@@ -67,7 +69,7 @@ pub enum SuiError {
     #[error("An object that's owned by another object cannot be deleted or wrapped. It must be transferred to an account address first before deletion")]
     DeleteObjectOwnedObject,
     #[error("The shared locks for this transaction have not yet been set.")]
-    SharedObjectLockNotSetObject,
+    SharedObjectLockNotSetError,
     #[error("Invalid Batch Transaction: {}", error)]
     InvalidBatchTransaction { error: String },
     #[error("Object {child_id:?} is owned by object {parent_id:?}, which is not in the input")]
@@ -102,10 +104,6 @@ pub enum SuiError {
     },
     #[error("Invalid Authority Bitmap: {}", error)]
     InvalidAuthorityBitmap { error: String },
-    #[error("Conflicting transaction already received: {pending_transaction:?}")]
-    ConflictingTransaction {
-        pending_transaction: TransactionDigest,
-    },
     #[error("Transaction processing failed: {err}")]
     ErrorWhileProcessingTransactionTransaction { err: String },
     #[error("Confirmation transaction processing failed: {err}")]
@@ -200,10 +198,10 @@ pub enum SuiError {
     #[error("Checkpointing error: {}", error)]
     CheckpointingError { error: String },
     #[error(
-        "ExecutionDriver error for {:?}: {} - Caused by : {:#?}",
+        "ExecutionDriver error for {:?}: {} - Caused by : {}",
         digest,
         msg,
-        errors.iter().map(|e| ToString::to_string(&e)).collect::<Vec<String>>()
+        format!("[ {} ]", errors.iter().map(|e| ToString::to_string(&e)).collect::<Vec<String>>().join("; ")),
     )]
     ExecutionDriverError {
         digest: TransactionDigest,
@@ -267,12 +265,23 @@ pub enum SuiError {
     #[error("Attempt to update state of TxContext from a different instance than original.")]
     InvalidTxUpdate,
     #[error("Attempt to re-initialize a transaction lock for objects {:?}.", refs)]
-    TransactionLockExists { refs: Vec<ObjectRef> },
-    #[error("Attempt to set an non-existing transaction lock.")]
-    TransactionLockDoesNotExist,
-    #[error("Attempt to reset a set transaction lock to a different value.")]
-    TransactionLockReset,
-    #[error("Could not find the referenced transaction [{:?}].", digest)]
+    ObjectLockAlreadyInitialized { refs: Vec<ObjectRef> },
+    #[error("Object {obj_ref:?} lock has not been initialized.")]
+    ObjectLockUninitialized { obj_ref: ObjectRef },
+    #[error(
+        "Object {obj_ref:?} already locked by a different transaction: {pending_transaction:?}"
+    )]
+    ObjectLockConflict {
+        obj_ref: ObjectRef,
+        pending_transaction: TransactionDigest,
+    },
+    #[error("Objects {obj_refs:?} are already locked by a transaction from a future epoch {locked_epoch:?}), attempt to override with a transaction from epoch {new_epoch:?}")]
+    ObjectLockedAtFutureEpoch {
+        obj_refs: Vec<ObjectRef>,
+        locked_epoch: EpochId,
+        new_epoch: EpochId,
+    },
+    #[error("{TRANSACTION_NOT_FOUND_MSG_PREFIX} [{:?}].", digest)]
     TransactionNotFound { digest: TransactionDigest },
     #[error("Could not find the referenced object {:?}.", object_id)]
     ObjectNotFound { object_id: ObjectID },
@@ -343,6 +352,9 @@ pub enum SuiError {
     #[error("Failed to deserialize fields into JSON: {error:?}")]
     ExtraFieldFailedToDeserialize { error: String },
 
+    #[error("Failed to execute transaction locally by Orchestrator: {error:?}")]
+    TransactionOrchestratorLocalExecutionError { error: String },
+
     #[error(
     "Failed to achieve quorum between authorities, cause by : {:#?}",
     errors.iter().map(| e | ToString::to_string(&e)).collect::<Vec<String>>()
@@ -381,8 +393,8 @@ pub enum SuiError {
     FailedToHearBackFromConsensus(String),
     #[error("Failed to execute handle_consensus_transaction on Sui: {0}")]
     HandleConsensusTransactionFailure(String),
-    #[error("Consensus listener is out of capacity")]
-    ListenerCapacityExceeded,
+    #[error("Consensus listener has too many pending transactions and is out of capacity: {0}")]
+    ListenerCapacityExceeded(usize),
     #[error("Failed to serialize/deserialize Narwhal message: {0}")]
     ConsensusSuiSerializationError(String),
     #[error("Only shared object transactions need to be sequenced")]
@@ -426,17 +438,14 @@ pub enum SuiError {
     #[error("Invalid committee composition")]
     InvalidCommittee(String),
 
-    #[error("Invalid authenticated epoch: {0}")]
-    InvalidAuthenticatedEpoch(String),
-
-    #[error("Invalid epoch request response: {0}")]
-    InvalidEpochResponse(String),
+    #[error("Missing committee information for epoch {0}")]
+    MissingCommitteeAtEpoch(EpochId),
 }
 
 pub type SuiResult<T = ()> = Result<T, SuiError>;
 
 // TODO these are both horribly wrong, categorization needs to be considered
-impl std::convert::From<PartialVMError> for SuiError {
+impl From<PartialVMError> for SuiError {
     fn from(error: PartialVMError) -> Self {
         SuiError::ModuleVerificationFailure {
             error: error.to_string(),
@@ -444,13 +453,13 @@ impl std::convert::From<PartialVMError> for SuiError {
     }
 }
 
-impl std::convert::From<ExecutionError> for SuiError {
+impl From<ExecutionError> for SuiError {
     fn from(error: ExecutionError) -> Self {
         SuiError::ExecutionError(error.to_string())
     }
 }
 
-impl std::convert::From<VMError> for SuiError {
+impl From<VMError> for SuiError {
     fn from(error: VMError) -> Self {
         SuiError::ModuleVerificationFailure {
             error: error.to_string(),
@@ -458,7 +467,7 @@ impl std::convert::From<VMError> for SuiError {
     }
 }
 
-impl std::convert::From<SubscriberError> for SuiError {
+impl From<SubscriberError> for SuiError {
     fn from(error: SubscriberError) -> Self {
         SuiError::HandleConsensusTransactionFailure(error.to_string())
     }
@@ -476,7 +485,7 @@ impl From<ExecutionErrorKind> for SuiError {
     }
 }
 
-impl std::convert::From<&str> for SuiError {
+impl From<&str> for SuiError {
     fn from(error: &str) -> Self {
         SuiError::GenericAuthorityError {
             error: error.to_string(),

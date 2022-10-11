@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use clap::Parser;
@@ -10,7 +10,7 @@ use nexlint_lints::{
     project::{BannedDeps, BannedDepsConfig, DirectDuplicateGitDependencies},
 };
 
-static LICENSE_HEADER: &str = "Copyright (c) 2022, Mysten Labs, Inc.\n\
+static LICENSE_HEADER: &str = "Copyright (c) Mysten Labs, Inc.\n\
                                SPDX-License-Identifier: Apache-2.0\n\
                                ";
 #[derive(Debug, Parser)]
@@ -26,10 +26,11 @@ pub fn run(args: Args) -> crate::Result<()> {
                 "lazy_static".to_owned(),
                 "use once_cell::sync::Lazy instead".to_owned(),
             ),
-            (
-                "tracing-test".to_owned(),
-                "you should not be testing against log lines".to_owned(),
-            ),
+            // TODO: re-enable after dropping the dependency from Narwhal.
+            // (
+            //     "tracing-test".to_owned(),
+            //     "you should not be testing against log lines".to_owned(),
+            // ),
         ]
         .into_iter()
         .collect(),
@@ -43,11 +44,12 @@ pub fn run(args: Args) -> crate::Result<()> {
         &CrateNamesPaths,
         &IrrelevantBuildDeps,
         // This one seems to be broken
-        //&UnpublishedPackagesOnlyUsePathDependencies::new(),
+        // &UnpublishedPackagesOnlyUsePathDependencies::new(),
         &PublishedPackagesDontDependOnUnpublishedPackages,
         &OnlyPublishToCratesIo,
         &CratesInCratesDirectory,
-        &CratesOnlyInCratesDirectory,
+        // TODO: re-enable after moving Narwhal crates to crates/, or back to Narwhal repo.
+        // &CratesOnlyInCratesDirectory,
     ];
 
     let file_path_linters: &[&dyn FilePathLinter] = &[

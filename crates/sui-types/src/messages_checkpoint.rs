@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::{BTreeMap, BTreeSet, HashSet};
@@ -6,7 +6,7 @@ use std::fmt::{Debug, Display, Formatter};
 use std::slice::Iter;
 
 use crate::base_types::ExecutionDigests;
-use crate::committee::EpochId;
+use crate::committee::{EpochId, StakeUnit};
 use crate::crypto::{AuthoritySignInfo, AuthoritySignInfoTrait, AuthorityWeakQuorumSignInfo};
 use crate::error::SuiResult;
 use crate::messages::CertifiedTransaction;
@@ -166,6 +166,14 @@ pub struct CheckpointSummary {
     pub sequence_number: CheckpointSequenceNumber,
     pub content_digest: CheckpointContentsDigest,
     pub previous_digest: Option<CheckpointDigest>,
+    /// If this checkpoint is the last checkpoint of the epoch, we also include the committee
+    /// of the next epoch. This allows anyone receiving this checkpoint know that the epoch
+    /// will change after this checkpoint, as well as what the new committee is.
+    /// The committee is stored as a vector of validator pub key and stake pairs. The vector
+    /// should be sorted based on the Committee data structure.
+    /// TODO: If desired, we could also commit to the previous last checkpoint cert so that
+    /// they form a hash chain.
+    pub next_epoch_committee: Option<Vec<(AuthorityName, StakeUnit)>>,
 }
 
 impl CheckpointSummary {
@@ -174,6 +182,7 @@ impl CheckpointSummary {
         sequence_number: CheckpointSequenceNumber,
         transactions: &CheckpointContents,
         previous_digest: Option<CheckpointDigest>,
+        next_epoch_committee: Option<Committee>,
     ) -> CheckpointSummary {
         let mut waypoint = Box::new(Waypoint::default());
         transactions.iter().for_each(|tx| {
@@ -187,6 +196,7 @@ impl CheckpointSummary {
             sequence_number,
             content_digest,
             previous_digest,
+            next_epoch_committee: next_epoch_committee.map(|c| c.voting_rights),
         }
     }
 
@@ -206,7 +216,7 @@ impl Display for CheckpointSummary {
             "CheckpointSummary {{ epoch: {:?}, seq: {:?}, content_digest: {} }}",
             self.epoch,
             self.sequence_number,
-            hex::encode(&self.content_digest),
+            hex::encode(self.content_digest),
         )
     }
 }
@@ -236,9 +246,15 @@ impl SignedCheckpointSummary {
         signer: &dyn signature::Signer<AuthoritySignature>,
         transactions: &CheckpointContents,
         previous_digest: Option<CheckpointDigest>,
+        next_epoch_committee: Option<Committee>,
     ) -> SignedCheckpointSummary {
-        let checkpoint =
-            CheckpointSummary::new(epoch, sequence_number, transactions, previous_digest);
+        let checkpoint = CheckpointSummary::new(
+            epoch,
+            sequence_number,
+            transactions,
+            previous_digest,
+            next_epoch_committee,
+        );
         SignedCheckpointSummary::new_from_summary(checkpoint, authority, signer)
     }
 
@@ -693,12 +709,13 @@ mod tests {
             [ExecutionDigests::random()].into_iter(),
         );
 
+        // TODO: duplicated in a test below.
         let signed_checkpoints: Vec<_> = keys
             .iter()
             .map(|k| {
                 let name = k.public().into();
 
-                SignedCheckpointSummary::new(committee.epoch, 1, name, k, &set, None)
+                SignedCheckpointSummary::new(committee.epoch, 1, name, k, &set, None, None)
             })
             .collect();
 
@@ -726,7 +743,7 @@ mod tests {
             .map(|k| {
                 let name = k.public().into();
 
-                SignedCheckpointSummary::new(committee.epoch, 1, name, k, &set, None)
+                SignedCheckpointSummary::new(committee.epoch, 1, name, k, &set, None, None)
             })
             .collect();
 
@@ -745,7 +762,7 @@ mod tests {
                     [ExecutionDigests::random()].into_iter(),
                 );
 
-                SignedCheckpointSummary::new(committee.epoch, 1, name, k, &set, None)
+                SignedCheckpointSummary::new(committee.epoch, 1, name, k, &set, None, None)
             })
             .collect();
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::keytool::read_authority_keypair_from_file;
@@ -8,7 +8,10 @@ use super::write_keypair_to_file;
 use super::KeyToolCommand;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
-use sui_sdk::crypto::KeystoreType;
+use sui_sdk::crypto::AccountKeystore;
+use sui_sdk::crypto::FileBasedKeystore;
+use sui_sdk::crypto::InMemKeystore;
+use sui_sdk::crypto::Keystore;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::get_key_pair;
 use sui_types::crypto::get_key_pair_from_rng;
@@ -22,10 +25,12 @@ use sui_types::crypto::SuiKeyPair;
 use sui_types::crypto::SuiSignatureInner;
 use tempfile::TempDir;
 
+const TEST_MNEMONIC: &str = "result crisp session latin must fruit genuine question prevent start coconut brave speak student dismiss";
+
 #[test]
 fn test_addresses_command() -> Result<(), anyhow::Error> {
     // Add 3 Ed25519 KeyPairs as default
-    let mut keystore = KeystoreType::InMem(3).init().unwrap();
+    let mut keystore = Keystore::from(InMemKeystore::new(3));
 
     // Add another 3 Secp256k1 KeyPairs
     for _ in 0..3 {
@@ -39,7 +44,7 @@ fn test_addresses_command() -> Result<(), anyhow::Error> {
 
 #[test]
 fn test_flag_in_signature_and_keypair() -> Result<(), anyhow::Error> {
-    let mut keystore = KeystoreType::InMem(0).init().unwrap();
+    let mut keystore = Keystore::from(InMemKeystore::new(0));
 
     keystore.add_key(SuiKeyPair::Secp256k1SuiKeyPair(get_key_pair().1))?;
     keystore.add_key(SuiKeyPair::Ed25519SuiKeyPair(get_key_pair().1))?;
@@ -135,16 +140,15 @@ fn test_load_keystore_err() {
     assert!(res.is_ok());
 
     // cannot load keypair due to missing flag
-    assert!(KeystoreType::File(path2).init().is_err());
+    assert!(FileBasedKeystore::new(&path2).is_err());
 }
 
 #[test]
 fn test_mnemonics_ed25519() -> Result<(), anyhow::Error> {
-    // Test case matches with /sui/wallet/src/shared/cryptography/mnemonics.test.ts
-    let mut keystore = KeystoreType::InMem(0).init().unwrap();
-    let phrase = "result crisp session latin must fruit genuine question prevent start coconut brave speak student dismiss";
+    // Test case matches with /mysten/sui/sdk/typescript/test/unit/cryptography/ed25519-keypair.test.ts
+    let mut keystore = Keystore::from(InMemKeystore::new(0));
     KeyToolCommand::Import {
-        mnemonic_phrase: phrase.to_string(),
+        mnemonic_phrase: TEST_MNEMONIC.to_string(),
         key_scheme: SignatureScheme::ED25519,
         derivation_path: None,
     }
@@ -167,10 +171,9 @@ fn test_mnemonics_ed25519() -> Result<(), anyhow::Error> {
 #[test]
 fn test_mnemonics_secp256k1() -> Result<(), anyhow::Error> {
     // Test case generated from https://microbitcoinorg.github.io/mnemonic/ with path m/54'/784'/0'/0/0
-    let mut keystore = KeystoreType::InMem(0).init().unwrap();
-    let phrase = "result crisp session latin must fruit genuine question prevent start coconut brave speak student dismiss";
+    let mut keystore = Keystore::from(InMemKeystore::new(0));
     KeyToolCommand::Import {
-        mnemonic_phrase: phrase.to_string(),
+        mnemonic_phrase: TEST_MNEMONIC.to_string(),
         key_scheme: SignatureScheme::Secp256k1,
         derivation_path: None,
     }
@@ -192,11 +195,9 @@ fn test_mnemonics_secp256k1() -> Result<(), anyhow::Error> {
 
 #[test]
 fn test_invalid_derivation_path() -> Result<(), anyhow::Error> {
-    let mut keystore = KeystoreType::InMem(0).init().unwrap();
-    let phrase = "result crisp session latin must fruit genuine question prevent start coconut brave speak student dismiss";
-
+    let mut keystore = Keystore::from(InMemKeystore::new(0));
     assert!(KeyToolCommand::Import {
-        mnemonic_phrase: phrase.to_string(),
+        mnemonic_phrase: TEST_MNEMONIC.to_string(),
         key_scheme: SignatureScheme::ED25519,
         derivation_path: Some("m/44'/1'/0'/0/0".parse().unwrap()),
     }
@@ -204,7 +205,7 @@ fn test_invalid_derivation_path() -> Result<(), anyhow::Error> {
     .is_err());
 
     assert!(KeyToolCommand::Import {
-        mnemonic_phrase: phrase.to_string(),
+        mnemonic_phrase: TEST_MNEMONIC.to_string(),
         key_scheme: SignatureScheme::ED25519,
         derivation_path: Some("m/0'/784'/0'/0/0".parse().unwrap()),
     }
@@ -212,7 +213,7 @@ fn test_invalid_derivation_path() -> Result<(), anyhow::Error> {
     .is_err());
 
     assert!(KeyToolCommand::Import {
-        mnemonic_phrase: phrase.to_string(),
+        mnemonic_phrase: TEST_MNEMONIC.to_string(),
         key_scheme: SignatureScheme::ED25519,
         derivation_path: Some("m/54'/784'/0'/0/0".parse().unwrap()),
     }
@@ -220,7 +221,7 @@ fn test_invalid_derivation_path() -> Result<(), anyhow::Error> {
     .is_err());
 
     assert!(KeyToolCommand::Import {
-        mnemonic_phrase: phrase.to_string(),
+        mnemonic_phrase: TEST_MNEMONIC.to_string(),
         key_scheme: SignatureScheme::Secp256k1,
         derivation_path: Some("m/54'/784'/0'/0'/0'".parse().unwrap()),
     }
@@ -228,7 +229,7 @@ fn test_invalid_derivation_path() -> Result<(), anyhow::Error> {
     .is_err());
 
     assert!(KeyToolCommand::Import {
-        mnemonic_phrase: phrase.to_string(),
+        mnemonic_phrase: TEST_MNEMONIC.to_string(),
         key_scheme: SignatureScheme::Secp256k1,
         derivation_path: Some("m/44'/784'/0'/0/0".parse().unwrap()),
     }
@@ -240,11 +241,9 @@ fn test_invalid_derivation_path() -> Result<(), anyhow::Error> {
 
 #[test]
 fn test_valid_derivation_path() -> Result<(), anyhow::Error> {
-    let mut keystore = KeystoreType::InMem(0).init().unwrap();
-    let phrase = "result crisp session latin must fruit genuine question prevent start coconut brave speak student dismiss";
-
+    let mut keystore = Keystore::from(InMemKeystore::new(0));
     assert!(KeyToolCommand::Import {
-        mnemonic_phrase: phrase.to_string(),
+        mnemonic_phrase: TEST_MNEMONIC.to_string(),
         key_scheme: SignatureScheme::ED25519,
         derivation_path: Some("m/44'/784'/0'/0'/0'".parse().unwrap()),
     }
@@ -252,7 +251,7 @@ fn test_valid_derivation_path() -> Result<(), anyhow::Error> {
     .is_ok());
 
     assert!(KeyToolCommand::Import {
-        mnemonic_phrase: phrase.to_string(),
+        mnemonic_phrase: TEST_MNEMONIC.to_string(),
         key_scheme: SignatureScheme::ED25519,
         derivation_path: Some("m/44'/784'/0'/0'/1'".parse().unwrap()),
     }
@@ -260,7 +259,7 @@ fn test_valid_derivation_path() -> Result<(), anyhow::Error> {
     .is_ok());
 
     assert!(KeyToolCommand::Import {
-        mnemonic_phrase: phrase.to_string(),
+        mnemonic_phrase: TEST_MNEMONIC.to_string(),
         key_scheme: SignatureScheme::ED25519,
         derivation_path: Some("m/44'/784'/1'/0'/1'".parse().unwrap()),
     }
@@ -268,7 +267,7 @@ fn test_valid_derivation_path() -> Result<(), anyhow::Error> {
     .is_ok());
 
     assert!(KeyToolCommand::Import {
-        mnemonic_phrase: phrase.to_string(),
+        mnemonic_phrase: TEST_MNEMONIC.to_string(),
         key_scheme: SignatureScheme::Secp256k1,
         derivation_path: Some("m/54'/784'/0'/0/1".parse().unwrap()),
     }
@@ -276,7 +275,7 @@ fn test_valid_derivation_path() -> Result<(), anyhow::Error> {
     .is_ok());
 
     assert!(KeyToolCommand::Import {
-        mnemonic_phrase: phrase.to_string(),
+        mnemonic_phrase: TEST_MNEMONIC.to_string(),
         key_scheme: SignatureScheme::Secp256k1,
         derivation_path: Some("m/54'/784'/1'/0/1".parse().unwrap()),
     }

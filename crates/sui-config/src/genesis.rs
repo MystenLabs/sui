@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::ValidatorInfo;
@@ -393,25 +393,25 @@ impl Builder {
         let path = path.as_ref();
         trace!("Writing Genesis Builder to {}", path.display());
 
-        std::fs::create_dir_all(path)?;
+        fs::create_dir_all(path)?;
 
         // Write Objects
         let object_dir = path.join(GENESIS_BUILDER_OBJECT_DIR);
-        std::fs::create_dir_all(&object_dir)?;
+        fs::create_dir_all(&object_dir)?;
 
         for (_id, object) in self.objects {
             let object_bytes = serde_yaml::to_vec(&object)?;
-            let hex_digest = encode_bytes_hex(&object.digest());
+            let hex_digest = encode_bytes_hex(object.digest());
             fs::write(object_dir.join(hex_digest), object_bytes)?;
         }
 
         // Write validator infos
         let committee_dir = path.join(GENESIS_BUILDER_COMMITTEE_DIR);
-        std::fs::create_dir_all(&committee_dir)?;
+        fs::create_dir_all(&committee_dir)?;
 
         for (_pubkey, validator) in self.validators {
             let validator_info_bytes = serde_yaml::to_vec(&validator)?;
-            let hex_name = encode_bytes_hex(&validator.info.protocol_key());
+            let hex_name = encode_bytes_hex(validator.info.protocol_key());
             fs::write(committee_dir.join(hex_name), validator_info_bytes)?;
         }
 
@@ -617,9 +617,7 @@ mod test {
         let dir = tempfile::TempDir::new().unwrap();
 
         let genesis_config = GenesisConfig::for_local_testing();
-        let (_account_keys, objects) = genesis_config
-            .generate_accounts(&mut rand::rngs::OsRng)
-            .unwrap();
+        let (_account_keys, objects) = genesis_config.generate_accounts(rand::rngs::OsRng).unwrap();
 
         let key: AuthorityKeyPair = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
         let worker_key: NetworkKeyPair = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;

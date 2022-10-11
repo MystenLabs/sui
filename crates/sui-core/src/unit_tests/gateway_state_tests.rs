@@ -1,5 +1,5 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use move_package::BuildConfig;
@@ -249,7 +249,7 @@ async fn test_coin_split_insufficient_gas() {
     assert_eq!(
         gateway
             .store()
-            .get_transaction_envelope(&gas_object.compute_object_reference())
+            .get_object_locking_transaction(&gas_object.compute_object_reference())
             .await
             .unwrap(),
         None
@@ -438,7 +438,7 @@ async fn test_public_transfer_object_with_retry() {
     assert_eq!(
         gateway
             .store()
-            .get_transaction_envelope(&coin_object.compute_object_reference())
+            .get_object_locking_transaction(&coin_object.compute_object_reference())
             .await
             .unwrap(),
         None,
@@ -459,12 +459,16 @@ async fn test_public_transfer_object_with_retry() {
     assert_eq!(gateway.store().pending_transactions().iter().count(), 0);
     assert!(gateway
         .store()
-        .get_transaction_envelope(&coin_object.compute_object_reference())
+        .get_object_locking_transaction(&coin_object.compute_object_reference())
         .await
         .is_err());
     assert!(gateway.store().effects_exists(&tx_digest).unwrap());
     // The transaction is deleted after this is done.
-    assert!(!gateway.store().transaction_exists(&tx_digest).unwrap());
+    assert!(gateway
+        .store()
+        .get_transaction(&tx_digest)
+        .unwrap()
+        .is_none());
     assert_eq!(gateway.store().next_sequence_number().unwrap(), 1);
     assert_eq!(
         gateway

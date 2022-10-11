@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::TEST_COMMITTEE_SIZE;
 use prometheus::Registry;
@@ -7,8 +7,8 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_config::{NetworkConfig, NodeConfig, ValidatorInfo};
-use sui_core::authority_client::NetworkAuthorityClientMetrics;
-use sui_core::epoch::epoch_store::EpochStore;
+use sui_core::authority_client::{AuthorityAPI, NetworkAuthorityClientMetrics};
+use sui_core::epoch::committee_store::CommitteeStore;
 use sui_core::{
     authority_active::{
         checkpoint_driver::{CheckpointMetrics, CheckpointProcessControl},
@@ -20,7 +20,9 @@ use sui_core::{
 };
 use sui_types::{committee::Committee, object::Object};
 
-pub use sui_node::SuiNode;
+pub use sui_node::{SuiNode, SuiNodeHandle};
+use sui_types::base_types::ObjectID;
+use sui_types::messages::{ObjectInfoRequest, ObjectInfoRequestKind};
 
 /// The default network buffer size of a test authority.
 pub const NETWORK_BUFFER_SIZE: usize = 65_000;
@@ -52,12 +54,48 @@ pub fn test_and_configure_authority_configs(committee_size: usize) -> NetworkCon
     configs
 }
 
-pub async fn start_node(config: &NodeConfig, prom_registry: Registry) -> SuiNode {
-    SuiNode::start(config, prom_registry).await.unwrap()
+#[cfg(not(msim))]
+pub async fn start_node(config: &NodeConfig, prom_registry: Registry) -> SuiNodeHandle {
+    SuiNode::start(config, prom_registry).await.unwrap().into()
+}
+
+/// In the simulator, we call SuiNode::start from inside a newly spawned simulator node.
+/// However, we then immediately return the SuiNode handle back to the caller. The caller now has
+/// a direct handle to an object that is "running" on a different "machine". By itself, this
+/// doesn't break anything in the simulator, it just allows test code to magically mutate state
+/// that is owned by some other machine.
+///
+/// Most of the time, tests do this just in order to verify some internal state, so this is fine
+/// most of the time.
+#[cfg(msim)]
+pub async fn start_node(config: &NodeConfig, prom_registry: Registry) -> SuiNodeHandle {
+    use std::net::{IpAddr, SocketAddr};
+
+    let config = config.clone();
+    let socket_addr = mysten_network::multiaddr::to_socket_addr(&config.network_address).unwrap();
+    let ip = match socket_addr {
+        SocketAddr::V4(v4) => IpAddr::V4(*v4.ip()),
+        _ => panic!("unsupported protocol"),
+    };
+
+    let handle = sui_simulator::runtime::Handle::current();
+    let builder = handle.create_node();
+    let node = builder
+        .ip(ip)
+        .name(format!("{}", config.protocol_public_key()))
+        .init(|| async {
+            tracing::info!("node restarted");
+        })
+        .build();
+
+    node.spawn(async move { SuiNode::start(&config, prom_registry).await.unwrap() })
+        .await
+        .unwrap()
+        .into()
 }
 
 /// Spawn all authorities in the test committee into a separate tokio task.
-pub async fn spawn_test_authorities<I>(objects: I, config: &NetworkConfig) -> Vec<SuiNode>
+pub async fn spawn_test_authorities<I>(objects: I, config: &NetworkConfig) -> Vec<SuiNodeHandle>
 where
     I: IntoIterator<Item = Object> + Clone,
 {
@@ -65,11 +103,15 @@ where
     for validator in config.validator_configs() {
         let prom_registry = Registry::new();
         let node = start_node(validator, prom_registry).await;
-        let state = node.state();
+        let objects = objects.clone();
 
-        for o in objects.clone() {
-            state.insert_genesis_object(o).await
-        }
+        node.with_async(|node| async move {
+            let state = node.state();
+            for o in objects {
+                state.insert_genesis_object(o).await
+            }
+        })
+        .await;
 
         handles.push(node);
     }
@@ -77,27 +119,32 @@ where
 }
 
 /// Spawn checkpoint processes with very short checkpointing intervals.
-pub async fn spawn_checkpoint_processes(
-    aggregator: &AuthorityAggregator<NetworkAuthorityClient>,
-    handles: &[SuiNode],
-) {
+pub async fn spawn_checkpoint_processes(configs: &NetworkConfig, handles: &[SuiNodeHandle]) {
     // Start active part of each authority.
-    for authority in handles {
-        let state = authority.state().clone();
-        let inner_agg = aggregator.clone();
-        let active_state = Arc::new(
-            ActiveAuthority::new_with_ephemeral_storage_for_test(state, inner_agg).unwrap(),
-        );
-        let checkpoint_process_control = CheckpointProcessControl {
-            long_pause_between_checkpoints: Duration::from_millis(10),
-            ..CheckpointProcessControl::default()
-        };
-        let _active_authority_handle = active_state
-            .spawn_checkpoint_process_with_config(
-                checkpoint_process_control,
-                CheckpointMetrics::new_for_tests(),
-                false,
-            )
+    for handle in handles {
+        handle
+            .with_async(|authority| async move {
+                let state = authority.state();
+
+                let aggregator =
+                    test_authority_aggregator(configs, authority.state().committee_store().clone());
+
+                let inner_agg = aggregator.clone();
+                let active_state = Arc::new(
+                    ActiveAuthority::new_with_ephemeral_storage_for_test(state, inner_agg).unwrap(),
+                );
+                let checkpoint_process_control = CheckpointProcessControl {
+                    long_pause_between_checkpoints: Duration::from_millis(10),
+                    ..CheckpointProcessControl::default()
+                };
+                let _active_authority_handle = active_state
+                    .spawn_checkpoint_process_with_config(
+                        checkpoint_process_control,
+                        CheckpointMetrics::new_for_tests(),
+                        false,
+                    )
+                    .await;
+            })
             .await;
     }
 }
@@ -105,10 +152,11 @@ pub async fn spawn_checkpoint_processes(
 /// Create a test authority aggregator.
 pub fn test_authority_aggregator(
     config: &NetworkConfig,
-    epoch_store: Arc<EpochStore>,
+    committee_store: Arc<CommitteeStore>,
 ) -> AuthorityAggregator<NetworkAuthorityClient> {
     let validators_info = config.validator_set();
     let committee = Committee::new(0, ValidatorInfo::voting_rights(validators_info)).unwrap();
+    // TODO: duplicated at test_utils.rs
     let clients: BTreeMap<_, _> = validators_info
         .iter()
         .map(|config| {
@@ -122,10 +170,10 @@ pub fn test_authority_aggregator(
             )
         })
         .collect();
-    let registry = prometheus::Registry::new();
+    let registry = Registry::new();
     AuthorityAggregator::new(
         committee,
-        epoch_store,
+        committee_store,
         clients,
         AuthAggMetrics::new(&registry),
         SafeClientMetrics::new(&registry),
@@ -139,4 +187,17 @@ pub fn get_client(config: &ValidatorInfo) -> NetworkAuthorityClient {
         Arc::new(NetworkAuthorityClientMetrics::new_for_tests()),
     )
     .unwrap()
+}
+
+pub async fn get_object(config: &ValidatorInfo, object_id: ObjectID) -> Object {
+    get_client(config)
+        .handle_object_info_request(ObjectInfoRequest {
+            object_id,
+            request_kind: ObjectInfoRequestKind::LatestObjectInfo(None),
+        })
+        .await
+        .unwrap()
+        .object()
+        .unwrap()
+        .clone()
 }

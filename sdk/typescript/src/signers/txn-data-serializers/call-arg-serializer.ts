@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 import { Provider } from '../../providers/provider';
@@ -159,8 +159,9 @@ export class CallArgSerializer {
   }
 
   private isTxContext(param: SuiMoveNormalizedType): boolean {
-    const struct = extractMutableReference(param)?.Struct;
+    const struct = extractStructTag(param)?.Struct;
     return (
+      extractMutableReference(param) != null &&
       struct?.address === '0x2' &&
       struct?.module === 'tx_context' &&
       struct?.name === 'TxContext'

@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use std::env;
@@ -27,9 +27,9 @@ pub mod bcs_api;
 pub mod estimator_api;
 pub mod event_api;
 pub mod gateway_api;
-pub mod quorum_driver_api;
 pub mod read_api;
 pub mod streaming_api;
+pub mod transaction_execution_api;
 
 pub enum ServerBuilder<M = ()> {
     HttpBuilder(HttpServerBuilder<M>),

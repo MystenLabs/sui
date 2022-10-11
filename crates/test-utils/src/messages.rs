@@ -1,6 +1,5 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
 use crate::objects::{test_gas_objects, test_gas_objects_with_owners, test_shared_object};
 use crate::{test_account_keys, test_committee, test_validator_keys};
 use move_core_types::account_address::AccountAddress;
@@ -11,9 +10,12 @@ use std::path::PathBuf;
 use sui::client_commands::WalletContext;
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
 use sui_adapter::genesis;
+use sui_core::test_utils::to_sender_signed_transaction;
 use sui_json_rpc_types::SuiObjectInfo;
-use sui_sdk::crypto::SuiKeystore;
+use sui_sdk::crypto::AccountKeystore;
+use sui_sdk::crypto::Keystore;
 use sui_types::base_types::ObjectRef;
+use sui_types::base_types::SuiAddress;
 use sui_types::base_types::{ObjectDigest, ObjectID, SequenceNumber};
 use sui_types::crypto::{
     get_key_pair, AccountKeyPair, AuthorityKeyPair, AuthorityPublicKeyBytes, KeypairTraits,
@@ -28,7 +30,7 @@ use sui_types::messages::{
 };
 use sui_types::object::Object;
 use sui_types::object::Owner;
-use sui_types::{base_types::SuiAddress, crypto::Signature};
+
 /// The maximum gas per transaction.
 pub const MAX_GAS: u64 = 10_000;
 
@@ -45,8 +47,8 @@ pub fn random_object_ref() -> ObjectRef {
 pub async fn get_account_and_gas_coins(
     context: &mut WalletContext,
 ) -> Result<Vec<(SuiAddress, Vec<GasCoin>)>, anyhow::Error> {
-    let mut res = Vec::with_capacity(context.keystore.addresses().len());
-    let accounts = context.keystore.addresses();
+    let mut res = Vec::with_capacity(context.config.keystore.addresses().len());
+    let accounts = context.config.keystore.addresses();
     for address in accounts {
         let result = SuiClientCommands::Gas {
             address: Some(address),
@@ -98,6 +100,7 @@ pub async fn get_account_and_gas_objects(
 ) -> Vec<(SuiAddress, Vec<SuiObjectInfo>)> {
     let owned_gas_objects = futures::future::join_all(
         context
+            .config
             .keystore
             .addresses()
             .iter()
@@ -105,6 +108,7 @@ pub async fn get_account_and_gas_objects(
     )
     .await;
     context
+        .config
         .keystore
         .addresses()
         .iter()
@@ -141,17 +145,45 @@ pub async fn make_transactions_with_wallet_context(
                 obj.to_object_ref(),
                 MAX_GAS,
             );
-            let sig = context.keystore.sign(address, &data.to_bytes()).unwrap();
-
-            res.push(Transaction::new(data, sig));
+            let tx = to_sender_signed_transaction(
+                data,
+                context.config.keystore.get_key(address).unwrap(),
+            );
+            res.push(tx);
         }
     }
     res
 }
 
+pub async fn make_counter_increment_transaction_with_wallet_context(
+    context: &WalletContext,
+    sender: SuiAddress,
+    counter_id: ObjectID,
+    gas_object_ref: Option<ObjectRef>,
+) -> Transaction {
+    let package_object_ref = genesis::get_framework_object_ref();
+    let gas_objeect_ref = match gas_object_ref {
+        Some(obj_ref) => obj_ref,
+        None => get_gas_object_with_wallet_context(context, &sender)
+            .await
+            .unwrap(),
+    };
+    let data = TransactionData::new_move_call(
+        sender,
+        package_object_ref,
+        "counter".parse().unwrap(),
+        "increment".parse().unwrap(),
+        Vec::new(),
+        gas_objeect_ref,
+        vec![CallArg::Object(ObjectArg::SharedObject(counter_id))],
+        MAX_GAS,
+    );
+    to_sender_signed_transaction(data, context.config.keystore.get_key(&sender).unwrap())
+}
+
 /// Make a few different single-writer test transactions owned by specific addresses.
 pub fn make_transactions_with_pre_genesis_objects(
-    keys: SuiKeystore,
+    keys: Keystore,
 ) -> (Vec<Transaction>, Vec<Object>) {
     // The key pair of the recipient of the transaction.
     let recipient = get_key_pair::<AuthorityKeyPair>().0;
@@ -159,32 +191,31 @@ pub fn make_transactions_with_pre_genesis_objects(
     // The gas objects and the objects used in the transfer transactions. Evert two
     // consecutive objects must have the same owner for the transaction to be valid.
     let mut addresses_two_by_two = Vec::new();
-    let mut signers = Vec::new(); // Keys are not copiable, move them here.
-    for keypair in keys.keys() {
-        let address = (&keypair).into();
+    for address in keys.addresses() {
         addresses_two_by_two.push(address);
         addresses_two_by_two.push(address);
-        signers.push(keys.signer(address));
     }
     let gas_objects = test_gas_objects_with_owners(addresses_two_by_two);
 
     // Make one transaction for every two gas objects.
     let mut transactions = Vec::new();
-    for (objects, signer) in gas_objects.chunks(2).zip(signers) {
+    for objects in gas_objects.chunks(2) {
         let [o1, o2]: &[Object; 2] = match objects.try_into() {
             Ok(x) => x,
             Err(_) => break,
         };
 
+        // Here we assume the object is owned not shared, so it is safe to unwrap.
+        let sender = o1.owner.get_owner_address().unwrap();
         let data = TransactionData::new_transfer(
             recipient,
             o1.compute_object_reference(),
-            /* sender */ o1.owner.get_owner_address().unwrap(),
+            /* sender */ sender,
             /* gas_object_ref */ o2.compute_object_reference(),
             MAX_GAS,
         );
-        let signature = Signature::new(&data, &signer);
-        transactions.push(Transaction::new(data, signature));
+        let tx = to_sender_signed_transaction(data, keys.get_key(&sender).unwrap());
+        transactions.push(tx);
     }
     (transactions, gas_objects)
 }
@@ -197,11 +228,11 @@ pub fn test_shared_object_transactions() -> Vec<Transaction> {
     // Make one transaction per gas object (all containing the same shared object).
     let mut transactions = Vec::new();
     let shared_object_id = test_shared_object().id();
-    for gas_object in test_gas_objects() {
-        let module = "object_basics";
-        let function = "create";
-        let package_object_ref = genesis::get_framework_object_ref();
+    let module = "object_basics";
+    let function = "create";
+    let package_object_ref = genesis::get_framework_object_ref();
 
+    for gas_object in test_gas_objects() {
         let data = TransactionData::new_move_call(
             sender,
             package_object_ref,
@@ -217,8 +248,7 @@ pub fn test_shared_object_transactions() -> Vec<Transaction> {
             ],
             MAX_GAS,
         );
-        let signature = Signature::new(&data, &keypair);
-        transactions.push(Transaction::new(data, signature));
+        transactions.push(to_sender_signed_transaction(data, &keypair));
     }
     transactions
 }
@@ -242,8 +272,7 @@ pub fn create_publish_move_package_transaction(
         })
         .collect();
     let data = TransactionData::new_module(sender, gas_object_ref, all_module_bytes, MAX_GAS);
-    let signature = Signature::new(&data, keypair);
-    Transaction::new(data, signature)
+    to_sender_signed_transaction(data, keypair)
 }
 
 pub fn make_transfer_sui_transaction(
@@ -254,8 +283,7 @@ pub fn make_transfer_sui_transaction(
     keypair: &AccountKeyPair,
 ) -> Transaction {
     let data = TransactionData::new_transfer_sui(recipient, sender, amount, gas_object, MAX_GAS);
-    let signature = Signature::new(&data, keypair);
-    Transaction::new(data, signature)
+    to_sender_signed_transaction(data, keypair)
 }
 
 pub fn make_transfer_object_transaction(
@@ -266,8 +294,7 @@ pub fn make_transfer_object_transaction(
     recipient: SuiAddress,
 ) -> Transaction {
     let data = TransactionData::new_transfer(recipient, object_ref, sender, gas_object, MAX_GAS);
-    let signature = Signature::new(&data, keypair);
-    Transaction::new(data, signature)
+    to_sender_signed_transaction(data, keypair)
 }
 
 pub fn make_transfer_object_transaction_with_wallet_context(
@@ -278,8 +305,7 @@ pub fn make_transfer_object_transaction_with_wallet_context(
     recipient: SuiAddress,
 ) -> Transaction {
     let data = TransactionData::new_transfer(recipient, object_ref, sender, gas_object, MAX_GAS);
-    let sig = context.keystore.sign(&sender, &data.to_bytes()).unwrap();
-    Transaction::new(data, sig)
+    to_sender_signed_transaction(data, context.config.keystore.get_key(&sender).unwrap())
 }
 
 pub fn make_publish_basics_transaction(gas_object: ObjectRef) -> Transaction {
@@ -297,8 +323,7 @@ pub fn make_publish_basics_transaction(gas_object: ObjectRef) -> Transaction {
         })
         .collect();
     let data = TransactionData::new_module(sender, gas_object, all_module_bytes, MAX_GAS);
-    let signature = Signature::new(&data, &keypair);
-    Transaction::new(data, signature)
+    to_sender_signed_transaction(data, &keypair)
 }
 
 pub fn make_counter_create_transaction(
@@ -317,8 +342,7 @@ pub fn make_counter_create_transaction(
         vec![],
         MAX_GAS,
     );
-    let signature = Signature::new(&data, keypair);
-    Transaction::new(data, signature)
+    to_sender_signed_transaction(data, keypair)
 }
 
 pub fn make_counter_increment_transaction(
@@ -338,8 +362,7 @@ pub fn make_counter_increment_transaction(
         vec![CallArg::Object(ObjectArg::SharedObject(counter_id))],
         MAX_GAS,
     );
-    let signature = Signature::new(&data, keypair);
-    Transaction::new(data, signature)
+    to_sender_signed_transaction(data, keypair)
 }
 
 /// Make a transaction calling a specific move module & function.
@@ -350,8 +373,6 @@ pub fn move_transaction(
     package_ref: ObjectRef,
     arguments: Vec<CallArg>,
 ) -> Transaction {
-    // The key pair of the sender of the transaction.
-
     move_transaction_with_type_tags(gas_object, module, function, package_ref, &[], arguments)
 }
 
@@ -377,8 +398,7 @@ pub fn move_transaction_with_type_tags(
         arguments,
         MAX_GAS,
     );
-    let signature = Signature::new(&data, &keypair);
-    Transaction::new(data, signature)
+    to_sender_signed_transaction(data, &keypair)
 }
 
 /// Make a test certificates for each input transaction.

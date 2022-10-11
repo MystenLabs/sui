@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use futures::FutureExt;
@@ -58,7 +58,7 @@ impl Container {
 
         let node = builder
             .ip(ip)
-            .name(format!("{}", config.protocol_public_key()))
+            .name(&format!("{}", config.protocol_public_key()).as_str()[0..8])
             .init(|| async {
                 tracing::info!("node restarted");
             })

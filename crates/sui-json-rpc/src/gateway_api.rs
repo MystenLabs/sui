@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::api::{
@@ -205,6 +205,22 @@ impl RpcTransactionBuilderServer for TransactionBuilderImpl {
         let data = self
             .client
             .transfer_sui(signer, sui_object_id, gas_budget, recipient, amount)
+            .await?;
+        Ok(TransactionBytes::from_data(data)?)
+    }
+
+    async fn pay(
+        &self,
+        signer: SuiAddress,
+        input_coins: Vec<ObjectID>,
+        recipients: Vec<SuiAddress>,
+        amounts: Vec<u64>,
+        gas: Option<ObjectID>,
+        gas_budget: u64,
+    ) -> RpcResult<TransactionBytes> {
+        let data = self
+            .client
+            .pay(signer, input_coins, recipients, amounts, gas, gas_budget)
             .await?;
         Ok(TransactionBytes::from_data(data)?)
     }

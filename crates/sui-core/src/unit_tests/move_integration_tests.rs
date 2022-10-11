@@ -1,17 +1,23 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
-use crate::authority::authority_tests::{
-    call_move, call_move_with_shared, init_state_with_ids, send_and_confirm_transaction,
-    TestCallArg,
+use crate::{
+    authority::authority_tests::{
+        call_move, call_move_with_shared, init_state_with_ids, send_and_confirm_transaction,
+        TestCallArg,
+    },
+    test_utils::to_sender_signed_transaction,
 };
 
-use move_core_types::language_storage::TypeTag;
+use move_core_types::{
+    language_storage::TypeTag,
+    value::{MoveStruct, MoveValue},
+};
 use move_package::BuildConfig;
 use sui_types::{
-    crypto::{get_key_pair, AccountKeyPair, Signature},
+    crypto::{get_key_pair, AccountKeyPair},
     event::{Event, EventType, TransferType},
     messages::ExecutionStatus,
     object::OBJECT_START_VERSION,
@@ -530,7 +536,9 @@ async fn test_entry_point_vector_primitive() {
         "entry_point_vector",
         "prim_vec_len",
         vec![],
-        vec![TestCallArg::PrimVec(vec![7, 42])],
+        vec![TestCallArg::Pure(
+            bcs::to_bytes(&vec![7_u64, 42_u64]).unwrap(),
+        )],
     )
     .await
     .unwrap();
@@ -566,7 +574,7 @@ async fn test_entry_point_vector() {
         "entry_point_vector",
         "mint",
         vec![],
-        vec![TestCallArg::U64(42)],
+        vec![TestCallArg::Pure(bcs::to_bytes(&(42_u64)).unwrap())],
     )
     .await
     .unwrap();
@@ -606,7 +614,7 @@ async fn test_entry_point_vector() {
         "entry_point_vector",
         "mint",
         vec![],
-        vec![TestCallArg::U64(42)],
+        vec![TestCallArg::Pure(bcs::to_bytes(&(42_u64)).unwrap())],
     )
     .await
     .unwrap();
@@ -653,7 +661,7 @@ async fn test_entry_point_vector() {
         "entry_point_vector",
         "mint",
         vec![],
-        vec![TestCallArg::U64(42)],
+        vec![TestCallArg::Pure(bcs::to_bytes(&(42_u64)).unwrap())],
     )
     .await
     .unwrap();
@@ -700,7 +708,7 @@ async fn test_entry_point_vector() {
         "entry_point_vector",
         "mint",
         vec![],
-        vec![TestCallArg::U64(42)],
+        vec![TestCallArg::Pure(bcs::to_bytes(&(42_u64)).unwrap())],
     )
     .await
     .unwrap();
@@ -719,7 +727,10 @@ async fn test_entry_point_vector() {
         "entry_point_vector",
         "mint_child",
         vec![],
-        vec![TestCallArg::U64(42), TestCallArg::Object(parent_id)],
+        vec![
+            TestCallArg::Pure(bcs::to_bytes(&(42_u64)).unwrap()),
+            TestCallArg::Object(parent_id),
+        ],
     )
     .await
     .unwrap();
@@ -779,7 +790,7 @@ async fn test_entry_point_vector_error() {
         "entry_point_vector",
         "mint_another",
         vec![],
-        vec![TestCallArg::U64(42)],
+        vec![TestCallArg::Pure(bcs::to_bytes(&(42_u64)).unwrap())],
     )
     .await
     .unwrap();
@@ -820,7 +831,7 @@ async fn test_entry_point_vector_error() {
         "entry_point_vector",
         "mint_another",
         vec![],
-        vec![TestCallArg::U64(42)],
+        vec![TestCallArg::Pure(bcs::to_bytes(&(42_u64)).unwrap())],
     )
     .await
     .unwrap();
@@ -839,7 +850,7 @@ async fn test_entry_point_vector_error() {
         "entry_point_vector",
         "mint",
         vec![],
-        vec![TestCallArg::U64(42)],
+        vec![TestCallArg::Pure(bcs::to_bytes(&(42_u64)).unwrap())],
     )
     .await
     .unwrap();
@@ -880,7 +891,7 @@ async fn test_entry_point_vector_error() {
         "entry_point_vector",
         "mint_shared",
         vec![],
-        vec![TestCallArg::U64(42)],
+        vec![TestCallArg::Pure(bcs::to_bytes(&(42_u64)).unwrap())],
     )
     .await
     .unwrap();
@@ -906,6 +917,663 @@ async fn test_entry_point_vector_error() {
     .await
     .unwrap();
     // should fail as we do not support shared objects in vectors
+    assert!(
+        matches!(effects.status, ExecutionStatus::Failure { .. }),
+        "{:?}",
+        effects.status
+    );
+}
+
+#[tokio::test]
+async fn test_entry_point_vector_any() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas = ObjectID::random();
+    let authority = init_state_with_ids(vec![(sender, gas)]).await;
+
+    let package = build_and_publish_test_package(
+        &authority,
+        &sender,
+        &sender_key,
+        &gas,
+        "entry_point_vector",
+    )
+    .await;
+
+    let any_type_tag =
+        TypeTag::from_str(format!("{}::entry_point_vector::Any", package.0).as_str()).unwrap();
+
+    // mint an owned object
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package,
+        "entry_point_vector",
+        "mint_any",
+        vec![any_type_tag.clone()],
+        vec![TestCallArg::Pure(bcs::to_bytes(&(42_u64)).unwrap())],
+    )
+    .await
+    .unwrap();
+    assert!(
+        matches!(effects.status, ExecutionStatus::Success { .. }),
+        "{:?}",
+        effects.status
+    );
+    let (obj_id, _, _) = effects.created[0].0;
+    // call a function with a vector containing one owned object
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package,
+        "entry_point_vector",
+        "obj_vec_destroy_any",
+        vec![any_type_tag.clone()],
+        vec![TestCallArg::ObjVec(vec![obj_id])],
+    )
+    .await
+    .unwrap();
+    assert!(
+        matches!(effects.status, ExecutionStatus::Success { .. }),
+        "{:?}",
+        effects.status
+    );
+
+    // mint an owned object
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package,
+        "entry_point_vector",
+        "mint_any",
+        vec![any_type_tag.clone()],
+        vec![TestCallArg::Pure(bcs::to_bytes(&(42_u64)).unwrap())],
+    )
+    .await
+    .unwrap();
+    assert!(
+        matches!(effects.status, ExecutionStatus::Success { .. }),
+        "{:?}",
+        effects.status
+    );
+    let (obj_id, _, _) = effects.created[0].0;
+    // call a function with a vector containing the same owned object as another one passed as
+    // argument
+    let result = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package,
+        "entry_point_vector",
+        "same_objects_any",
+        vec![any_type_tag.clone()],
+        vec![
+            TestCallArg::Object(obj_id),
+            TestCallArg::ObjVec(vec![obj_id]),
+        ],
+    )
+    .await;
+    // should fail as we have the same object passed in vector and as a separate by-value argument
+    assert!(
+        matches!(
+            result.clone().err().unwrap(),
+            SuiError::DuplicateObjectRefInput { .. }
+        ),
+        "{:?}",
+        result
+    );
+
+    // mint an owned object
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package,
+        "entry_point_vector",
+        "mint_any",
+        vec![any_type_tag.clone()],
+        vec![TestCallArg::Pure(bcs::to_bytes(&(42_u64)).unwrap())],
+    )
+    .await
+    .unwrap();
+    assert!(
+        matches!(effects.status, ExecutionStatus::Success { .. }),
+        "{:?}",
+        effects.status
+    );
+    let (obj_id, _, _) = effects.created[0].0;
+    // call a function with a vector containing the same owned object as another one passed as
+    // a reference argument
+    let result = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package,
+        "entry_point_vector",
+        "same_objects_ref_any",
+        vec![any_type_tag.clone()],
+        vec![
+            TestCallArg::Object(obj_id),
+            TestCallArg::ObjVec(vec![obj_id]),
+        ],
+    )
+    .await;
+    assert!(
+        matches!(
+            result.clone().err().unwrap(),
+            SuiError::DuplicateObjectRefInput { .. }
+        ),
+        "{:?}",
+        result
+    );
+
+    // mint a parent object and a child object and make sure that parent stored in the vector
+    // authenticates the child passed by-value
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package,
+        "entry_point_vector",
+        "mint_any",
+        vec![any_type_tag.clone()],
+        vec![TestCallArg::Pure(bcs::to_bytes(&(42_u64)).unwrap())],
+    )
+    .await
+    .unwrap();
+    assert!(
+        matches!(effects.status, ExecutionStatus::Success { .. }),
+        "{:?}",
+        effects.status
+    );
+    let (parent_id, _, _) = effects.created[0].0;
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package,
+        "entry_point_vector",
+        "mint_child_any",
+        vec![any_type_tag.clone()],
+        vec![
+            TestCallArg::Pure(bcs::to_bytes(&(42_u64)).unwrap()),
+            TestCallArg::Object(parent_id),
+        ],
+    )
+    .await
+    .unwrap();
+    assert!(
+        matches!(effects.status, ExecutionStatus::Success { .. }),
+        "{:?}",
+        effects.status
+    );
+    let (child_id, _, _) = effects.created[0].0;
+    // call a function with a vector containing the same owned object as another one passed as
+    // a reference argument
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package,
+        "entry_point_vector",
+        "child_access_any",
+        vec![any_type_tag],
+        vec![
+            TestCallArg::Object(child_id),
+            TestCallArg::ObjVec(vec![parent_id]),
+        ],
+    )
+    .await
+    .unwrap();
+    assert!(
+        matches!(effects.status, ExecutionStatus::Success { .. }),
+        "{:?}",
+        effects.status
+    );
+}
+
+#[tokio::test]
+async fn test_entry_point_vector_any_error() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas = ObjectID::random();
+    let authority = init_state_with_ids(vec![(sender, gas)]).await;
+
+    let package = build_and_publish_test_package(
+        &authority,
+        &sender,
+        &sender_key,
+        &gas,
+        "entry_point_vector",
+    )
+    .await;
+
+    let any_type_tag =
+        TypeTag::from_str(format!("{}::entry_point_vector::Any", package.0).as_str()).unwrap();
+
+    // mint an owned object of a wrong type
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package,
+        "entry_point_vector",
+        "mint_another_any",
+        vec![any_type_tag.clone()],
+        vec![TestCallArg::Pure(bcs::to_bytes(&(42_u64)).unwrap())],
+    )
+    .await
+    .unwrap();
+    assert!(
+        matches!(effects.status, ExecutionStatus::Success { .. }),
+        "{:?}",
+        effects.status
+    );
+    let (obj_id, _, _) = effects.created[0].0;
+    // call a function with a vector containing one owned object
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package,
+        "entry_point_vector",
+        "obj_vec_destroy_any",
+        vec![any_type_tag.clone()],
+        vec![TestCallArg::ObjVec(vec![obj_id])],
+    )
+    .await
+    .unwrap();
+    // should fail as we passed object of the wrong type
+    assert!(
+        matches!(effects.status, ExecutionStatus::Failure { .. }),
+        "{:?}",
+        effects.status
+    );
+
+    // mint two objects - one of a wrong type and one of the correct type
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package,
+        "entry_point_vector",
+        "mint_another_any",
+        vec![any_type_tag.clone()],
+        vec![TestCallArg::Pure(bcs::to_bytes(&(42_u64)).unwrap())],
+    )
+    .await
+    .unwrap();
+    assert!(
+        matches!(effects.status, ExecutionStatus::Success { .. }),
+        "{:?}",
+        effects.status
+    );
+    let (wrong_obj_id, _, _) = effects.created[0].0;
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package,
+        "entry_point_vector",
+        "mint_any",
+        vec![any_type_tag.clone()],
+        vec![TestCallArg::Pure(bcs::to_bytes(&(42_u64)).unwrap())],
+    )
+    .await
+    .unwrap();
+    assert!(
+        matches!(effects.status, ExecutionStatus::Success { .. }),
+        "{:?}",
+        effects.status
+    );
+    let (correct_obj_id, _, _) = effects.created[0].0;
+    // call a function with a vector containing one owned object
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package,
+        "entry_point_vector",
+        "two_obj_vec_destroy_any",
+        vec![any_type_tag.clone()],
+        vec![TestCallArg::ObjVec(vec![wrong_obj_id, correct_obj_id])],
+    )
+    .await
+    .unwrap();
+    // should fail as we passed object of the wrong type as the first element of the vector
+    assert!(
+        matches!(effects.status, ExecutionStatus::Failure { .. }),
+        "{:?}",
+        effects.status
+    );
+
+    // mint a shared object
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package,
+        "entry_point_vector",
+        "mint_shared_any",
+        vec![any_type_tag.clone()],
+        vec![TestCallArg::Pure(bcs::to_bytes(&(42_u64)).unwrap())],
+    )
+    .await
+    .unwrap();
+    assert!(
+        matches!(effects.status, ExecutionStatus::Success { .. }),
+        "{:?}",
+        effects.status
+    );
+    let (shared_obj_id, _, _) = effects.created[0].0;
+    // call a function with a vector containing one shared object
+    let effects = call_move_with_shared(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package,
+        "entry_point_vector",
+        "obj_vec_destroy_any",
+        vec![any_type_tag.clone()],
+        vec![TestCallArg::ObjVec(vec![shared_obj_id])],
+        true, // shared object in arguments
+    )
+    .await
+    .unwrap();
+    // should fail as we do not support shared objects in vectors
+    assert!(
+        matches!(effects.status, ExecutionStatus::Failure { .. }),
+        "{:?}",
+        effects.status
+    );
+}
+
+#[tokio::test]
+async fn test_entry_point_string() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas = ObjectID::random();
+    let authority = init_state_with_ids(vec![(sender, gas)]).await;
+
+    let package = build_and_publish_test_package(
+        &authority,
+        &sender,
+        &sender_key,
+        &gas,
+        "entry_point_string",
+    )
+    .await;
+
+    // pass a valid ascii string
+    let ascii_str = "SomeString";
+    let ascii_str_bcs = MoveValue::Struct(MoveStruct::Runtime(vec![MoveValue::Vector(
+        ascii_str
+            .as_bytes()
+            .iter()
+            .map(|c| MoveValue::U8(*c))
+            .collect(),
+    )]))
+    .simple_serialize()
+    .unwrap();
+
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package,
+        "entry_point_string",
+        "ascii_arg",
+        vec![],
+        vec![TestCallArg::Pure(ascii_str_bcs)],
+    )
+    .await
+    .unwrap();
+    assert!(
+        matches!(effects.status, ExecutionStatus::Success { .. }),
+        "{:?}",
+        effects.status
+    );
+
+    // pass a valid utf8 string
+    let utf8_str = "çå∞≠¢õß∂ƒ∫";
+    let utf_str_bcs = MoveValue::Struct(MoveStruct::Runtime(vec![MoveValue::Vector(
+        utf8_str
+            .as_bytes()
+            .iter()
+            .map(|c| MoveValue::U8(*c))
+            .collect(),
+    )]))
+    .simple_serialize()
+    .unwrap();
+
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package,
+        "entry_point_string",
+        "utf8_arg",
+        vec![],
+        vec![TestCallArg::Pure(utf_str_bcs)],
+    )
+    .await
+    .unwrap();
+    assert!(
+        matches!(effects.status, ExecutionStatus::Success { .. }),
+        "{:?}",
+        effects.status
+    );
+}
+
+#[tokio::test]
+async fn test_entry_point_string_vec() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas = ObjectID::random();
+    let authority = init_state_with_ids(vec![(sender, gas)]).await;
+
+    let package = build_and_publish_test_package(
+        &authority,
+        &sender,
+        &sender_key,
+        &gas,
+        "entry_point_string",
+    )
+    .await;
+
+    // pass a valid utf8 string vector
+    let utf8_str_1 = "çå∞≠¢";
+    let utf8_str_2 = "õß∂ƒ∫";
+    let utf_str_vec_bcs = MoveValue::Vector(vec![
+        MoveValue::Struct(MoveStruct::Runtime(vec![MoveValue::Vector(
+            utf8_str_1
+                .as_bytes()
+                .iter()
+                .map(|c| MoveValue::U8(*c))
+                .collect(),
+        )])),
+        MoveValue::Struct(MoveStruct::Runtime(vec![MoveValue::Vector(
+            utf8_str_2
+                .as_bytes()
+                .iter()
+                .map(|c| MoveValue::U8(*c))
+                .collect(),
+        )])),
+    ])
+    .simple_serialize()
+    .unwrap();
+
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package,
+        "entry_point_string",
+        "utf8_vec_arg",
+        vec![],
+        vec![TestCallArg::Pure(utf_str_vec_bcs)],
+    )
+    .await
+    .unwrap();
+    assert!(
+        matches!(effects.status, ExecutionStatus::Success { .. }),
+        "{:?}",
+        effects.status
+    );
+}
+
+#[tokio::test]
+async fn test_entry_point_string_error() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas = ObjectID::random();
+    let authority = init_state_with_ids(vec![(sender, gas)]).await;
+
+    let package = build_and_publish_test_package(
+        &authority,
+        &sender,
+        &sender_key,
+        &gas,
+        "entry_point_string",
+    )
+    .await;
+
+    // pass a invalid ascii string
+    let ascii_str = "SomeString";
+    let mut ascii_u8_vec: Vec<MoveValue> = ascii_str
+        .as_bytes()
+        .iter()
+        .map(|c| MoveValue::U8(*c))
+        .collect();
+    // mess up one element
+    ascii_u8_vec[7] = MoveValue::U8(255);
+
+    let ascii_str_bcs =
+        MoveValue::Struct(MoveStruct::Runtime(vec![MoveValue::Vector(ascii_u8_vec)]))
+            .simple_serialize()
+            .unwrap();
+
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package,
+        "entry_point_string",
+        "ascii_arg",
+        vec![],
+        vec![TestCallArg::Pure(ascii_str_bcs)],
+    )
+    .await
+    .unwrap();
+    assert!(
+        matches!(effects.status, ExecutionStatus::Failure { .. }),
+        "{:?}",
+        effects.status
+    );
+
+    // pass a invalid utf8 string
+    let utf8_str = "çå∞≠¢õß∂ƒ∫";
+    let mut utf8_u8_vec: Vec<MoveValue> = utf8_str
+        .as_bytes()
+        .iter()
+        .map(|c| MoveValue::U8(*c))
+        .collect();
+    // mess up one element
+    utf8_u8_vec[7] = MoveValue::U8(255);
+
+    let utf8_str_bcs = MoveValue::Struct(MoveStruct::Runtime(vec![MoveValue::Vector(utf8_u8_vec)]))
+        .simple_serialize()
+        .unwrap();
+
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package,
+        "entry_point_string",
+        "utf8_arg",
+        vec![],
+        vec![TestCallArg::Pure(utf8_str_bcs)],
+    )
+    .await
+    .unwrap();
+    assert!(
+        matches!(effects.status, ExecutionStatus::Failure { .. }),
+        "{:?}",
+        effects.status
+    );
+}
+
+#[tokio::test]
+async fn test_entry_point_string_vec_error() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas = ObjectID::random();
+    let authority = init_state_with_ids(vec![(sender, gas)]).await;
+
+    let package = build_and_publish_test_package(
+        &authority,
+        &sender,
+        &sender_key,
+        &gas,
+        "entry_point_string",
+    )
+    .await;
+
+    // pass an utf8 string vector with one invalid string
+    let utf8_str_1 = "çå∞≠¢";
+    let utf8_str_2 = "õß∂ƒ∫";
+    let mut utf8_u8_vec_1: Vec<MoveValue> = utf8_str_1
+        .as_bytes()
+        .iter()
+        .map(|c| MoveValue::U8(*c))
+        .collect();
+    // mess up one element
+    utf8_u8_vec_1[7] = MoveValue::U8(255);
+    let utf_str_vec_bcs = MoveValue::Vector(vec![
+        MoveValue::Struct(MoveStruct::Runtime(vec![MoveValue::Vector(utf8_u8_vec_1)])),
+        MoveValue::Struct(MoveStruct::Runtime(vec![MoveValue::Vector(
+            utf8_str_2
+                .as_bytes()
+                .iter()
+                .map(|c| MoveValue::U8(*c))
+                .collect(),
+        )])),
+    ])
+    .simple_serialize()
+    .unwrap();
+
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package,
+        "entry_point_string",
+        "utf8_vec_arg",
+        vec![],
+        vec![TestCallArg::Pure(utf_str_vec_bcs)],
+    )
+    .await
+    .unwrap();
     assert!(
         matches!(effects.status, ExecutionStatus::Failure { .. }),
         "{:?}",
@@ -940,8 +1608,8 @@ pub async fn build_and_try_publish_test_package(
     let gas_object_ref = gas_object.unwrap().compute_object_reference();
 
     let data = TransactionData::new_module(*sender, gas_object_ref, all_module_bytes, gas_budget);
-    let signature = Signature::new(&data, sender_key);
-    let transaction = Transaction::new(data, signature);
+    let transaction = to_sender_signed_transaction(data, sender_key);
+
     send_and_confirm_transaction(authority, transaction)
         .await
         .unwrap()

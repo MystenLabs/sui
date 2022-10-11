@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Result;
@@ -15,7 +15,6 @@ use sui_cluster_test::{
     cluster::{Cluster, LocalNewCluster},
     config::{ClusterTestOpt, Env},
     faucet::{FaucetClient, FaucetClientFactory},
-    wallet_client::WalletClient,
 };
 use sui_types::base_types::SuiAddress;
 use tower::ServiceBuilder;
@@ -29,11 +28,11 @@ struct Args {
     // /// Config directory that will be used to store network configuration
     // #[clap(short, long, parse(from_os_str), value_hint = ValueHint::DirPath)]
     // config: Option<std::path::PathBuf>,
+    /// Port to start the Fullnode RPC server on
     /// Port to start the Gateway RPC server on
     #[clap(long, default_value = "5001")]
     gateway_rpc_port: u16,
 
-    /// Port to start the Fullnode RPC server on
     #[clap(long, default_value = "9000")]
     fullnode_rpc_port: u16,
 
@@ -48,6 +47,11 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    let (_guard, _filter_handle) =
+        telemetry_subscribers::TelemetryConfig::new(env!("CARGO_BIN_NAME"))
+            .with_env()
+            .init();
+
     let args = Args::parse();
 
     let cluster = LocalNewCluster::start(&ClusterTestOpt {
@@ -64,7 +68,6 @@ async fn main() -> Result<()> {
         "Fullnode Websocket URL: {}",
         cluster.websocket_url().unwrap()
     );
-    println!("Gateway RPC URL: {}", cluster.rpc_url());
 
     start_faucet(&cluster, args.faucet_port).await?;
 
@@ -73,17 +76,12 @@ async fn main() -> Result<()> {
 
 struct AppState {
     faucet: Arc<dyn FaucetClient + Sync + Send>,
-    wallet_client: WalletClient,
 }
 
 async fn start_faucet(cluster: &LocalNewCluster, port: u16) -> Result<()> {
-    let wallet_client = WalletClient::new_from_cluster(cluster).await;
     let faucet = FaucetClientFactory::new_from_cluster(cluster).await;
 
-    let app_state = Arc::new(AppState {
-        faucet,
-        wallet_client,
-    });
+    let app_state = Arc::new(AppState { faucet });
 
     let cors = CorsLayer::new()
         .allow_methods(vec![Method::GET, Method::POST])
@@ -130,16 +128,13 @@ async fn faucet_request(
     Json(payload): Json<FaucetRequest>,
     Extension(state): Extension<Arc<AppState>>,
 ) -> impl IntoResponse {
-    let result = state
-        .faucet
-        .request_sui_coins(&state.wallet_client, Some(1), Some(payload.recipient))
-        .await;
-
-    match result {
-        Ok(_) => (StatusCode::OK, Json(FaucetResponse { ok: true })),
-        Err(_) => (
+    let result = state.faucet.request_sui_coins(payload.recipient).await;
+    if !result.transferred_gas_objects.is_empty() {
+        (StatusCode::OK, Json(FaucetResponse { ok: true }))
+    } else {
+        (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(FaucetResponse { ok: false }),
-        ),
+        )
     }
 }

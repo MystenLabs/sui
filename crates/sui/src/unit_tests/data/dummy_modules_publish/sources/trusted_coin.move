@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 /// Example coin with a trusted owner responsible for minting/burning (e.g., a stablecoin)
@@ -16,7 +16,7 @@ module examples::trusted_coin {
     fun init(witness: TRUSTED_COIN, ctx: &mut TxContext) {
         // Get a treasury cap for the coin and give it to the transaction
         // sender
-        let treasury_cap = coin::create_currency<TRUSTED_COIN>(witness, ctx);
+        let treasury_cap = coin::create_currency<TRUSTED_COIN>(witness, 2, ctx);
         transfer::transfer(treasury_cap, tx_context::sender(ctx))
     }
 

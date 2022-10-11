@@ -1,12 +1,15 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
 use std::collections::HashSet;
+use sui_config::NetworkConfig;
 use sui_core::{
     authority::AuthorityState, authority_aggregator::AuthorityAggregator,
     authority_client::NetworkAuthorityClient,
 };
-use sui_node::SuiNode;
-use sui_sdk::crypto::KeystoreType;
+use sui_macros::sim_test;
+use sui_node::SuiNodeHandle;
+use sui_sdk::crypto::{InMemKeystore, Keystore};
 use sui_types::{
     base_types::{ExecutionDigests, TransactionDigest},
     messages::{CallArg, ExecutionStatus, ObjectArg, Transaction},
@@ -26,7 +29,7 @@ use typed_store::traits::Map;
 /// Helper function determining whether the checkpoint store of an authority contains the input
 /// transactions' digests.
 fn transactions_in_checkpoint(authority: &AuthorityState) -> HashSet<TransactionDigest> {
-    let checkpoints_store = authority.checkpoints().unwrap();
+    let checkpoints_store = authority.checkpoints();
 
     // Get all transactions in the first 10 checkpoints.
     (0..10)
@@ -65,7 +68,7 @@ async fn execute_transactions(
 }
 
 async fn wait_for_advance_to_next_checkpoint(
-    handles: &[SuiNode],
+    handles: &[SuiNodeHandle],
     transaction_digests: &HashSet<TransactionDigest>,
 ) {
     // Wait for the transactions to be executed and end up in a checkpoint.
@@ -74,7 +77,7 @@ async fn wait_for_advance_to_next_checkpoint(
         // Ensure all submitted transactions are in the checkpoint.
         let ok = handles
             .iter()
-            .map(|authority| transactions_in_checkpoint(&authority.state()))
+            .map(|handle| handle.with(|authority| transactions_in_checkpoint(&authority.state())))
             .all(|digests| digests.is_superset(transaction_digests));
 
         match ok {
@@ -88,25 +91,34 @@ async fn wait_for_advance_to_next_checkpoint(
     // Ensure all authorities moved to the next checkpoint sequence number.
     let ok = handles
         .iter()
-        .map(|authority| {
-            authority
-                .state()
-                .checkpoints()
-                .unwrap()
-                .lock()
-                .get_locals()
-                .next_checkpoint
+        .map(|handle| {
+            handle.with(|authority| {
+                authority
+                    .state()
+                    .checkpoints()
+                    .lock()
+                    .get_locals()
+                    .next_checkpoint
+            })
         })
         .all(|sequence| sequence >= 1);
     assert!(ok);
 }
 
-#[tokio::test]
+fn make_aggregator(
+    configs: &NetworkConfig,
+    handles: &[SuiNodeHandle],
+) -> AuthorityAggregator<NetworkAuthorityClient> {
+    let committee_store = handles[0].with(|h| h.state().committee_store().clone());
+    test_authority_aggregator(configs, committee_store)
+}
+
+#[sim_test]
 async fn sequence_fragments() {
     // Spawn a quorum of authorities.
     let configs = test_authority_configs();
     let mut handles = spawn_test_authorities(vec![], &configs).await;
-    let committee = &handles[0].state().clone_committee();
+    let committee = handles[0].with(|h| h.state().clone_committee());
 
     // Get checkpoint proposals.
     let t1 = ExecutionDigests::random();
@@ -118,31 +130,33 @@ async fn sequence_fragments() {
     let mut proposals: Vec<_> = handles
         .iter_mut()
         .map(|handle| {
-            let checkpoints_store = handle.state().checkpoints().unwrap();
-            checkpoints_store
-                .lock()
-                .handle_internal_batch(next_sequence_number, &transactions)
-                .unwrap();
-            let proposal = checkpoints_store
-                .lock()
-                .set_proposal(committee.epoch)
-                .unwrap();
-            proposal
+            handle.with(|node| {
+                let checkpoints_store = node.state().checkpoints();
+                checkpoints_store
+                    .lock()
+                    .handle_internal_batch(next_sequence_number, &transactions)
+                    .unwrap();
+                let proposal = checkpoints_store
+                    .lock()
+                    .set_proposal(committee.epoch)
+                    .unwrap();
+                proposal
+            })
         })
         .collect();
 
     // Ensure the are no fragments in the checkpoint store at this time.
     for handle in &handles {
-        let status = handle
-            .state()
-            .checkpoints()
-            .unwrap()
-            .lock()
-            .tables
-            .fragments
-            .iter()
-            .skip_to_last()
-            .next();
+        let status = handle.with(|node| {
+            node.state()
+                .checkpoints()
+                .lock()
+                .tables
+                .fragments
+                .iter()
+                .skip_to_last()
+                .next()
+        });
         assert!(status.is_none());
     }
 
@@ -152,27 +166,27 @@ async fn sequence_fragments() {
     let fragment = p1.fragment_with(&p2);
 
     for handle in handles.iter_mut() {
-        let _response = handle
-            .state()
-            .checkpoints()
-            .unwrap()
-            .lock()
-            .submit_local_fragment_to_consensus(&fragment, committee);
+        let _response = handle.with(|node| {
+            node.state()
+                .checkpoints()
+                .lock()
+                .submit_local_fragment_to_consensus(&fragment, &committee)
+        });
     }
 
     // Wait until all validators sequence and process the fragment.
     loop {
         let ok = handles.iter().all(|handle| {
-            handle
-                .state()
-                .checkpoints()
-                .unwrap()
-                .lock()
-                .tables
-                .fragments
-                .iter()
-                .next()
-                .is_some()
+            handle.with(|node| {
+                node.state()
+                    .checkpoints()
+                    .lock()
+                    .tables
+                    .fragments
+                    .iter()
+                    .next()
+                    .is_some()
+            })
         });
         if ok {
             break;
@@ -181,12 +195,13 @@ async fn sequence_fragments() {
     }
 }
 
-#[tokio::test]
+#[sim_test]
 async fn end_to_end() {
     telemetry_subscribers::init_for_testing();
     // Make a few test transactions.
     let total_transactions = 3;
-    let keys = KeystoreType::InMem(total_transactions).init().unwrap();
+    let keys = Keystore::from(InMemKeystore::new(total_transactions));
+
     let (transactions, input_objects) = make_transactions_with_pre_genesis_objects(keys);
     let transaction_digests: HashSet<_> = transactions.iter().map(|x| *x.digest()).collect();
 
@@ -195,21 +210,21 @@ async fn end_to_end() {
     let handles = spawn_test_authorities(input_objects, &configs).await;
 
     // Make an authority's aggregator.
-    let aggregator = test_authority_aggregator(&configs, handles[0].state().epoch_store().clone());
+    let aggregator = make_aggregator(&configs, &handles);
 
-    spawn_checkpoint_processes(&aggregator, &handles).await;
+    spawn_checkpoint_processes(&configs, &handles).await;
 
     execute_transactions(&aggregator, &transactions).await;
 
     wait_for_advance_to_next_checkpoint(&handles, &transaction_digests).await;
 }
 
-#[tokio::test]
+#[sim_test]
 async fn end_to_end_with_one_byzantine() {
     telemetry_subscribers::init_for_testing();
     // Make a few test transactions.
     let total_transactions = 3;
-    let keystore = KeystoreType::InMem(total_transactions).init().unwrap();
+    let keystore = Keystore::from(InMemKeystore::new(total_transactions));
     let (transactions, input_objects) = make_transactions_with_pre_genesis_objects(keystore);
     let transaction_digests: HashSet<_> = transactions.iter().map(|x| *x.digest()).collect();
 
@@ -219,10 +234,10 @@ async fn end_to_end_with_one_byzantine() {
     let (_first, rest) = handles[..].split_at(1);
 
     // Make an authority's aggregator.
-    let aggregator = test_authority_aggregator(&configs, handles[0].state().epoch_store().clone());
+    let aggregator = make_aggregator(&configs, &handles);
 
     // one authority does not participate in checkpointing
-    spawn_checkpoint_processes(&aggregator, rest).await;
+    spawn_checkpoint_processes(&configs, rest).await;
 
     execute_transactions(&aggregator, &transactions).await;
 
@@ -230,7 +245,7 @@ async fn end_to_end_with_one_byzantine() {
     wait_for_advance_to_next_checkpoint(rest, &transaction_digests).await;
 }
 
-#[tokio::test]
+#[sim_test]
 async fn checkpoint_with_shared_objects() {
     telemetry_subscribers::init_for_testing();
 
@@ -239,7 +254,7 @@ async fn checkpoint_with_shared_objects() {
 
     // Make a few test transactions.
     let total_transactions = 3;
-    let keystore = KeystoreType::InMem(total_transactions).init().unwrap();
+    let keystore = Keystore::from(InMemKeystore::new(total_transactions));
     let (transactions, input_objects) = make_transactions_with_pre_genesis_objects(keystore);
 
     // Spawn a quorum of authorities.
@@ -248,17 +263,15 @@ async fn checkpoint_with_shared_objects() {
     let handles = spawn_test_authorities(initialization_objects, &configs).await;
 
     // Make an authority's aggregator.
-    let aggregator = test_authority_aggregator(&configs, handles[0].state().epoch_store().clone());
+    let aggregator = make_aggregator(&configs, &handles);
 
-    spawn_checkpoint_processes(&aggregator, &handles).await;
+    spawn_checkpoint_processes(&configs, &handles).await;
 
     // Publish the move package to all authorities and get the new package ref.
-    tokio::task::yield_now().await;
     let gas = gas_objects.pop().unwrap();
     let package_ref = publish_counter_package(gas, configs.validator_set()).await;
 
     // Make a transaction to create a counter.
-    tokio::task::yield_now().await;
     let create_counter_transaction = move_transaction(
         gas_objects.pop().unwrap(),
         "counter",
@@ -278,7 +291,6 @@ async fn checkpoint_with_shared_objects() {
     let ((counter_id, _, _), _) = effects.effects.created[0];
 
     // We can finally make a valid shared-object transaction (incrementing the counter).
-    tokio::task::yield_now().await;
     let increment_counter_transaction = move_transaction(
         gas_objects.pop().unwrap(),
         "counter",

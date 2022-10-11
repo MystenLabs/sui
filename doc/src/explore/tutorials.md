@@ -26,7 +26,7 @@ network charges for gas using its native currency SUI. This transaction fee
 equals the computational effort of executing operations on the Sui network (i.e.
 gas units) times the price of gas in the SUI currency (i.e. the gas price).
 
-When you complete the setup steps, you can use the either use following script to publish and run the sample code, or perform each step manually. Using the script is optional. To manually run each step, follow the steps starting in the [Gather addresses and gas objects](#gather-addresses-and-gas-objects) section.
+When you complete the setup steps, you can either use the following script to publish and run the sample code, or perform each step manually. Using the script is optional. To manually run each step, follow the steps starting in the [Gather addresses and gas objects](#gather-addresses-and-gas-objects) section.
 
 ## Quick script
 If you prefer not to enter command step by step, or need to go though it multiple
@@ -165,12 +165,12 @@ export PACKAGE=A613A7FF8CB03E0DFC0D157E232BBA50C5F19D17
 
 ## Playing TicTacToe
 As we mentioned earlier, we need 3 parties to participate in this game: Admin, PlayerX and PlayerO.
-As a high level, the game works as following:
+At a high level, the game works as following:
 1. The admin creates a game, which also specifies the addresses of the two players. This will also create two capability objects and send to each of the addresses to give them permission to participate in the same game. This ensures that an arbitrary person cannot attempt to join this game.
 2. Each player takes turns to send a *Mark* object to the admin indicating where they want to place their mark.
 3. The admin, upon receiving marks (in practice, this is done through monitoring events), places the mark to the gameboard.
 4. (2) and (3) repeats until game ends.
-Because the admin owns the gameboard, each individual player cannot place a mark directly on the gameboard (they don't own the object, and hence cannot mutate it, see [Object Model](../build/objects.md)), each mark placement is split to 2 steps, that each player first sends a mark, and then the admin places the mark. A sample gameplay can also be found in the [tic_tac_toe_tests](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/games/tests/tic_tac_toe_tests.move) file.
+Because the admin owns the gameboard, each individual player cannot place a mark directly on the gameboard (they don't own the object, and hence cannot mutate it, see [Object Model](../learn/objects.md)), each mark placement is split to 2 steps, that each player first sends a mark, and then the admin places the mark. A sample gameplay can also be found in the [tic_tac_toe_tests](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/games/tests/tic_tac_toe_tests.move) file.
 
 Now let's begin the game!
 First of all, let's create a game with the command:

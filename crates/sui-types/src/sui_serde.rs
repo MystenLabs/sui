@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fmt::Debug;
@@ -25,7 +25,7 @@ where
     E: Debug,
     D: Deserializer<'de>,
 {
-    D::Error::custom(format!("byte deserialization failed, cause by: {:?}", e))
+    Error::custom(format!("byte deserialization failed, cause by: {:?}", e))
 }
 
 #[inline]
@@ -85,7 +85,7 @@ where
         if deserializer.is_human_readable() {
             let value = E::deserialize_as(deserializer)?;
             if value.len() != N {
-                return Err(D::Error::custom(anyhow!(
+                return Err(Error::custom(anyhow!(
                     "invalid array length {}, expecting {}",
                     value.len(),
                     N
@@ -146,8 +146,18 @@ pub trait Encoding {
     fn encode<T: AsRef<[u8]>>(data: T) -> String;
 }
 
-#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+#[derive(Serialize, Deserialize, Debug, JsonSchema, Clone)]
 pub struct Hex(String);
+
+impl Hex {
+    pub fn to_vec(&self) -> Result<Vec<u8>, anyhow::Error> {
+        Self::decode(&self.0)
+    }
+    pub fn from_bytes(bytes: &[u8]) -> Self {
+        Self(Self::encode(bytes))
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, JsonSchema)]
 #[serde(try_from = "String")]
 pub struct Base64(String);

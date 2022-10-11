@@ -13,17 +13,19 @@ tracing = "0.1.36"
 tokio = { version = "1.20.1", features = ["full"] }
 futures = "0.3.23"
 tempfile = "3.3.0"
-tonic-health = "0.6.0"
+tonic-health = "0.7.0"
 tap = "1.0.1"
 prometheus = "0.13.2"
 
 sui-config = { path = "../sui-config" }
 sui-node = { path = "../sui-node" }
-sui-simulator = { path = "../sui-simulator" }
 sui-types = { path = "../sui-types" }
 
-mysten-network = "0.1.0"
-workspace-hack = { path = "../workspace-hack"}
+mysten-network.workspace = true
+workspace-hack.workspace = true
+
+[target.'cfg(msim)'.dependencies]
+sui-simulator = { path = "../sui-simulator" }
 
 [dev-dependencies]
-telemetry-subscribers = "0.1.0"
+telemetry-subscribers.workspace = true

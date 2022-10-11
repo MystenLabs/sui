@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use duration_str::parse;
@@ -104,7 +104,7 @@ impl BenchmarkStats {
         row.add_cell(Cell::new(self.duration.as_secs()));
         row.add_cell(Cell::new(self.num_success / self.duration.as_secs()));
         row.add_cell(Cell::new(
-            self.num_error / (self.num_error + self.num_success),
+            (100 * self.num_error) as f32 / (self.num_error + self.num_success) as f32,
         ));
         row.add_cell(Cell::new(self.latency_ms.histogram.min()));
         row.add_cell(Cell::new(self.latency_ms.histogram.value_at_quantile(0.25)));

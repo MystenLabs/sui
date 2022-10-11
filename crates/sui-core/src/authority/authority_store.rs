@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{authority_store_tables::AuthorityStoreTables, *};
@@ -150,14 +150,6 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             .map_err(|e| e.into())
     }
 
-    /// Returns true if we have a transaction structure for this transaction digest
-    pub fn transaction_exists(&self, transaction_digest: &TransactionDigest) -> SuiResult<bool> {
-        self.tables
-            .transactions
-            .contains_key(transaction_digest)
-            .map_err(|e| e.into())
-    }
-
     /// Returns true if there are no objects in the database
     pub fn database_is_empty(&self) -> SuiResult<bool> {
         Ok(self
@@ -260,7 +252,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     }
 
     /// A function that acquires all locks associated with the objects (in order to avoid deadlocks).
-    async fn acquire_locks<'a, 'b>(&'a self, input_objects: &'b [ObjectRef]) -> Vec<LockGuard> {
+    async fn acquire_locks(&self, input_objects: &[ObjectRef]) -> Vec<LockGuard> {
         self.mutex_table
             .acquire_locks(input_objects.iter().map(|(_, _, digest)| *digest))
             .await
@@ -337,11 +329,9 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     }
 
     /// Get many objects by their (id, version number) key.
-    pub fn get_input_objects(
-        &self,
-        objects: &[InputObjectKind],
-    ) -> Result<Vec<Option<Object>>, SuiError> {
+    pub fn get_input_objects(&self, objects: &[InputObjectKind]) -> Result<Vec<Object>, SuiError> {
         let mut result = Vec::new();
+        let mut errors = Vec::new();
         for kind in objects {
             let obj = match kind {
                 InputObjectKind::MovePackage(id) | InputObjectKind::SharedMoveObject(id) => {
@@ -351,9 +341,16 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
                     self.get_object_by_key(&objref.0, objref.1)?
                 }
             };
-            result.push(obj);
+            match obj {
+                Some(obj) => result.push(obj),
+                None => errors.push(kind.object_not_found_error()),
+            }
         }
-        Ok(result)
+        if !errors.is_empty() {
+            Err(SuiError::ObjectErrors { errors })
+        } else {
+            Ok(result)
+        }
     }
 
     /// Get many objects by their (id, version number) key.
@@ -361,47 +358,60 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         &self,
         digest: &TransactionDigest,
         objects: &[InputObjectKind],
-    ) -> Result<Vec<Option<Object>>, SuiError> {
+    ) -> Result<Vec<Object>, SuiError> {
         let shared_locks: HashMap<_, _> = self.all_shared_locks(digest)?.into_iter().collect();
 
         let mut result = Vec::new();
+        let mut errors = Vec::new();
         for kind in objects {
             let obj = match kind {
                 InputObjectKind::MovePackage(id) => self.get_object(id)?,
                 InputObjectKind::SharedMoveObject(id) => match shared_locks.get(id) {
                     Some(version) => self.get_object_by_key(id, *version)?,
-                    None => None,
+                    None => {
+                        errors.push(SuiError::SharedObjectLockNotSetError);
+                        continue;
+                    }
                 },
                 InputObjectKind::ImmOrOwnedMoveObject(objref) => {
                     self.get_object_by_key(&objref.0, objref.1)?
                 }
             };
-            result.push(obj);
+            match obj {
+                Some(obj) => result.push(obj),
+                None => errors.push(kind.object_not_found_error()),
+            }
         }
-        Ok(result)
+        if !errors.is_empty() {
+            Err(SuiError::ObjectErrors { errors })
+        } else {
+            Ok(result)
+        }
     }
 
-    /// Read a transaction envelope via lock or returns Err(TransactionLockDoesNotExist) if the lock does not exist.
-    pub async fn get_transaction_envelope(
+    /// Get the transaction envelope that currently locks the given object,
+    /// or returns Err(TransactionLockDoesNotExist) if the lock does not exist.
+    pub async fn get_object_locking_transaction(
         &self,
         object_ref: &ObjectRef,
     ) -> SuiResult<Option<TransactionEnvelope<S>>> {
-        let transaction_option = self
-            .lock_service
-            .get_lock(*object_ref)
-            .await?
-            .ok_or(SuiError::TransactionLockDoesNotExist)?;
+        let tx_lock = self.lock_service.get_lock(*object_ref).await?.ok_or(
+            SuiError::ObjectLockUninitialized {
+                obj_ref: *object_ref,
+            },
+        )?;
 
         // Returns None if either no TX with the lock, or TX present but no entry in transactions table.
         // However we retry a couple times because the TX is written after the lock is acquired, so it might
         // just be a race.
-        match transaction_option {
-            Some(tx_digest) => {
+        match tx_lock {
+            Some(lock_info) => {
+                let tx_digest = &lock_info.tx_digest;
                 let mut retry_strategy = ExponentialBackoff::from_millis(2)
                     .factor(10)
                     .map(jitter)
                     .take(3);
-                let mut tx_option = self.tables.transactions.get(&tx_digest)?;
+                let mut tx_option = self.tables.transactions.get(tx_digest)?;
                 while tx_option.is_none() {
                     if let Some(duration) = retry_strategy.next() {
                         // Wait to retry
@@ -411,7 +421,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
                         // No more retries, just quit
                         break;
                     }
-                    tx_option = self.tables.transactions.get(&tx_digest)?;
+                    tx_option = self.tables.transactions.get(tx_digest)?;
                 }
                 Ok(tx_option)
             }
@@ -584,6 +594,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     /// The lock service is used to atomically acquire locks.
     pub async fn lock_and_write_transaction(
         &self,
+        epoch: EpochId,
         owned_input_objects: &[ObjectRef],
         transaction: TransactionEnvelope<S>,
     ) -> Result<(), SuiError> {
@@ -591,7 +602,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
 
         // Acquire the lock on input objects
         self.lock_service
-            .acquire_locks(owned_input_objects.to_owned(), tx_digest)
+            .acquire_locks(epoch, owned_input_objects.to_owned(), tx_digest)
             .await?;
 
         // TODO: we should have transaction insertion be atomic with lock acquisition, or retry.
@@ -633,7 +644,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         let transaction_digest: &TransactionDigest = certificate.digest();
         write_batch = write_batch.insert_batch(
             &self.tables.certificates,
-            std::iter::once((transaction_digest, certificate)),
+            iter::once((transaction_digest, certificate)),
         )?;
 
         self.sequence_tx(
@@ -700,7 +711,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         // Store the certificate indexed by transaction digest
         write_batch = write_batch.insert_batch(
             &self.tables.certificates,
-            std::iter::once((transaction_digest, &certificate)),
+            iter::once((transaction_digest, &certificate)),
         )?;
         self.sequence_tx(
             write_batch,
@@ -851,10 +862,8 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         // Once a transaction is done processing and effects committed, we no longer
         // need it in the transactions table. This also allows us to track pending
         // transactions.
-        write_batch = write_batch.delete_batch(
-            &self.tables.transactions,
-            std::iter::once(transaction_digest),
-        )?;
+        write_batch =
+            write_batch.delete_batch(&self.tables.transactions, iter::once(transaction_digest))?;
 
         // Update the indexes of the objects written
         write_batch = write_batch.insert_batch(
@@ -1097,9 +1106,21 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         Ok(())
     }
 
+    pub async fn consensus_message_processed(
+        &self,
+        digest: &TransactionDigest,
+    ) -> Result<bool, SuiError> {
+        Ok(self
+            .tables
+            .consensus_message_processed
+            .contains_key(digest)?)
+    }
+
     /// Lock a sequence number for the shared objects of the input transaction. Also update the
     /// last consensus index.
     /// This function must only be called from the consensus task (i.e. from handle_consensus_transaction).
+    ///
+    /// Caller is responsible to call consensus_message_processed before this method
     pub async fn persist_certificate_and_lock_shared_objects(
         &self,
         certificate: CertifiedTransaction,
@@ -1107,16 +1128,6 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     ) -> Result<(), SuiError> {
         // Make an iterator to save the certificate.
         let transaction_digest = *certificate.digest();
-
-        // Ensure that we only advance next_object_versions exactly once for every cert received from
-        // consensus.
-        if self
-            .tables
-            .consensus_message_processed
-            .contains_key(&transaction_digest)?
-        {
-            return Ok(());
-        }
 
         // Make an iterator to update the locks of the transaction's shared objects.
         let ids = certificate.shared_input_objects();
@@ -1144,7 +1155,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
                "locking shared objects");
 
         // Make an iterator to update the last consensus index.
-        let index_to_write = std::iter::once((LAST_CONSENSUS_INDEX_ADDR, consensus_index));
+        let index_to_write = iter::once((LAST_CONSENSUS_INDEX_ADDR, consensus_index));
 
         // Holding _tx_lock avoids the following race:
         // - we check effects_exist, returns false
@@ -1191,7 +1202,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             write_batch.insert_batch(&self.tables.last_consensus_index, index_to_write)?;
         write_batch = write_batch.insert_batch(
             &self.tables.consensus_message_processed,
-            std::iter::once((transaction_digest, true)),
+            iter::once((transaction_digest, true)),
         )?;
         write_batch.write().map_err(SuiError::from)
     }
@@ -1364,6 +1375,20 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
 }
 
 impl SuiDataStore<AuthoritySignInfo> {
+    /// Returns true if we have a transaction structure for this transaction digest
+    pub fn transaction_exists(
+        &self,
+        cur_epoch: EpochId,
+        transaction_digest: &TransactionDigest,
+    ) -> SuiResult<bool> {
+        let tx = self.tables.transactions.get(transaction_digest)?;
+        Ok(if let Some(signed_tx) = tx {
+            signed_tx.auth_sign_info.epoch == cur_epoch
+        } else {
+            false
+        })
+    }
+
     pub fn get_signed_transaction_info(
         &self,
         transaction_digest: &TransactionDigest,
@@ -1410,6 +1435,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> ParentSync for SuiDa
 impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> ModuleResolver for SuiDataStore<S> {
     type Error = SuiError;
 
+    // TODO: duplicated code with ModuleResolver for InMemoryStorage in memory_storage.rs.
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
         // TODO: We should cache the deserialized modules to avoid
         // fetching from the store / re-deserializing them everytime.

@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs;
@@ -13,7 +13,7 @@ use signature::rand_core::OsRng;
 use tracing::info;
 
 use fastcrypto::ed25519::{Ed25519KeyPair, Ed25519PrivateKey, Ed25519PublicKey};
-use sui_sdk::crypto::SuiKeystore;
+use sui_sdk::crypto::{AccountKeystore, Keystore};
 use sui_types::base_types::SuiAddress;
 use sui_types::base_types::{decode_bytes_hex, encode_bytes_hex};
 use sui_types::crypto::{
@@ -60,15 +60,15 @@ pub enum KeyToolCommand {
         key_scheme: SignatureScheme,
         derivation_path: Option<DerivationPath>,
     },
-    /// This is a temporary helper function to ensure that testnet genesis does not break while
-    /// we transition towards BLS signatures.
+    /// Read keypair from path and show its base64 encoded value with flag. This is useful
+    /// to generate protocol, account, worker, network keys in NodeConfig with its expected encoding.
     LoadKeypair {
         file: PathBuf,
     },
 }
 
 impl KeyToolCommand {
-    pub fn execute(self, keystore: &mut SuiKeystore) -> Result<(), anyhow::Error> {
+    pub fn execute(self, keystore: &mut Keystore) -> Result<(), anyhow::Error> {
         match self {
             KeyToolCommand::Generate {
                 key_scheme,
@@ -80,7 +80,7 @@ impl KeyToolCommand {
                     let file_name = format!("bls-{address}.key");
                     write_authority_keypair_to_file(&keypair, &file_name)?;
                 } else {
-                    let mnemonic = Mnemonic::random(&mut OsRng, Default::default());
+                    let mnemonic = Mnemonic::random(OsRng, Default::default());
                     let seed = mnemonic.to_seed("");
                     match derive_key_pair_from_path(seed.as_bytes(), derivation_path, &key_scheme) {
                         Ok((address, kp)) => {
@@ -155,18 +155,24 @@ impl KeyToolCommand {
             }
 
             KeyToolCommand::LoadKeypair { file } => {
-                let res: Result<SuiKeyPair, anyhow::Error> = read_keypair_from_file(&file);
-
-                match res {
+                match read_keypair_from_file(&file) {
                     Ok(keypair) => {
+                        // Account keypair is encoded with the key scheme flag {},
+                        // and network and worker keypair are not.
                         println!("Account Keypair: {}", keypair.encode_base64());
-                        println!("Network Keypair: {}", keypair.encode_base64());
                         if let SuiKeyPair::Ed25519SuiKeyPair(kp) = keypair {
-                            println!("Protocol Keypair: {}", kp.encode_base64());
+                            println!("Network Keypair: {}", kp.encode_base64());
+                            println!("Worker Keypair: {}", kp.encode_base64());
                         };
                     }
-                    Err(e) => {
-                        println!("Failed to read keypair at path {:?} err: {:?}", file, e)
+                    Err(_) => {
+                        // Authority keypair file is not stored with the flag, it will try read as BLS keypair..
+                        match read_authority_keypair_from_file(&file) {
+                            Ok(kp) => println!("Protocol Keypair: {}", kp.encode_base64()),
+                            Err(e) => {
+                                println!("Failed to read keypair at path {:?} err: {:?}", file, e)
+                            }
+                        }
                     }
                 }
             }

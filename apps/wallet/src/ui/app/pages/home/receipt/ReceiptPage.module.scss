@@ -1,0 +1,16 @@
+@use '_utils';
+@use '_values/colors';
+
+.receipt-overlay {
+    > div {
+        color: colors.$gray-90;
+        background-color: colors.$gray-40;
+    }
+}
+
+.center-loading {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+}

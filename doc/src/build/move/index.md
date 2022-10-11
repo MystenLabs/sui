@@ -69,7 +69,7 @@ more module files are located:
 my_move_package
 ├── Move.toml
 ├── sources
-    ├── m1.move
+    ├── my_module.move
 ```
 
 See

@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{env, process::Command};
@@ -7,7 +7,7 @@ use std::{env, process::Command};
 fn main() {
     if env::var("GIT_REVISION").is_err() {
         let output = Command::new("git")
-            .args(&["describe", "--always", "--dirty"])
+            .args(["describe", "--always", "--dirty", "--exclude", "*"])
             .output()
             .unwrap();
         if !output.status.success() {

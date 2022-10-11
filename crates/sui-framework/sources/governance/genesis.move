@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 module sui::genesis {
@@ -38,7 +38,7 @@ module sui::genesis {
         validator_gas_prices: vector<u64>,
         ctx: &mut TxContext,
     ) {
-        let sui_supply = sui::new();
+        let sui_supply = sui::new(ctx);
         let storage_fund = balance::increase_supply(&mut sui_supply, INIT_STORAGE_FUND);
         let validators = vector::empty();
         let count = vector::length(&validator_pubkeys);
@@ -63,7 +63,7 @@ module sui::genesis {
             vector::push_back(&mut validators, validator::new(
                 sui_address,
                 pubkey,
-                network_pubkey, 
+                network_pubkey,
                 proof_of_possession,
                 name,
                 net_address,

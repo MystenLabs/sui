@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::test_account_keys;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
@@ -67,6 +67,7 @@ where
         .collect()
 }
 
+// TODO: duplicated in consensus_tests
 /// make a test shared object.
 pub fn test_shared_object() -> Object {
     let seed = "0x6666666666666660";

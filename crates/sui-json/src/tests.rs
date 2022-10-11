@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use std::path::Path;
@@ -195,7 +195,7 @@ fn test_basic_args_linter_pure_args() {
             Value::from(good_hex_val),
             MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8)),
             Some(
-                bcs::to_bytes(&hex::decode(&good_hex_val.trim_start_matches(HEX_PREFIX)).unwrap())
+                bcs::to_bytes(&hex::decode(good_hex_val.trim_start_matches(HEX_PREFIX)).unwrap())
                     .unwrap(),
             ),
         ),
@@ -355,7 +355,7 @@ fn test_basic_args_linter_top_level() {
     .collect();
 
     let json_args =
-        resolve_move_function_args(example_package, module.clone(), function.clone(), args)
+        resolve_move_function_args(example_package, module.clone(), function.clone(), &[], args)
             .unwrap();
 
     assert!(!json_args.is_empty());
@@ -393,7 +393,7 @@ fn test_basic_args_linter_top_level() {
     .iter()
     .map(|q| SuiJsonValue::new(q.clone()).unwrap())
     .collect();
-    assert!(resolve_move_function_args(example_package, module, function, args).is_err());
+    assert!(resolve_move_function_args(example_package, module, function, &[], args).is_err());
 
     // Test with vecu8 as address
     let path =
@@ -424,7 +424,7 @@ fn test_basic_args_linter_top_level() {
         .map(|q| SuiJsonValue::new(q.clone()).unwrap())
         .collect();
 
-    let args = resolve_move_function_args(framework_pkg, module, function, args).unwrap();
+    let args = resolve_move_function_args(framework_pkg, module, function, &[], args).unwrap();
 
     assert_eq!(
         args[0],
@@ -460,7 +460,7 @@ fn test_basic_args_linter_top_level() {
         .map(|q| SuiJsonValue::new(q.clone()).unwrap())
         .collect();
 
-    let args = resolve_move_function_args(framework_pkg, module, function, args).unwrap();
+    let args = resolve_move_function_args(framework_pkg, module, function, &[], args).unwrap();
 
     assert_eq!(
         args[0],
@@ -499,12 +499,12 @@ fn test_basic_args_linter_top_level() {
 
     let args = vec![SuiJsonValue::new(Value::Array(vec![object_id1, object_id2])).unwrap()];
 
-    let args = resolve_move_function_args(example_package, module, function, args).unwrap();
+    let args = resolve_move_function_args(example_package, module, function, &[], args).unwrap();
 
     assert!(matches!(args[0], SuiJsonCallArg::ObjVec { .. }));
 
     if let SuiJsonCallArg::ObjVec(vec) = &args[0] {
-        assert!(vec.len() == 2);
+        assert_eq!(vec.len(), 2);
         assert_eq!(
             vec[0],
             ObjectID::from_hex_literal(&format!("0x{:02x}", object_id_raw1)).unwrap()

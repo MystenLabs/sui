@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 import { isTransactionBytes } from '../../types/index.guard';
@@ -11,6 +11,7 @@ import {
   SplitCoinTransaction,
   TransferObjectTransaction,
   TransferSuiTransaction,
+  PayTransaction,
   PublishTransaction,
   TxnDataSerializer,
 } from './txn-data-serializer';
@@ -54,7 +55,9 @@ export class RpcTxnDataSerializer implements TxnDataSerializer {
       );
       return new Base64DataBuffer(resp.txBytes);
     } catch (err) {
-      throw new Error(`Error transferring object: ${err} with args ${t}`);
+      throw new Error(
+        `Error transferring object: ${err} with args ${JSON.stringify(t)}`
+      );
     }
   }
 
@@ -71,7 +74,35 @@ export class RpcTxnDataSerializer implements TxnDataSerializer {
       );
       return new Base64DataBuffer(resp.txBytes);
     } catch (err) {
-      throw new Error(`Error transferring Sui coin: ${err} with args ${t}`);
+      throw new Error(
+        `Error transferring Sui coin: ${err} with args ${JSON.stringify(t)}`
+      );
+    }
+  }
+
+  async newPay(
+    signerAddress: SuiAddress,
+    t: PayTransaction
+  ): Promise<Base64DataBuffer> {
+    try {
+      const resp = await this.client.requestWithType(
+        'sui_pay',
+        [
+          signerAddress,
+          t.inputCoins,
+          t.recipients,
+          t.amounts,
+          t.gasPayment,
+          t.gasBudget,
+        ],
+        isTransactionBytes,
+        this.skipDataValidation
+      );
+      return new Base64DataBuffer(resp.txBytes);
+    } catch (err) {
+      throw new Error(
+        `Error executing Pay transaction: ${err} with args ${JSON.stringify(t)}`
+      );
     }
   }
 
@@ -97,7 +128,9 @@ export class RpcTxnDataSerializer implements TxnDataSerializer {
       );
       return new Base64DataBuffer(resp.txBytes);
     } catch (err) {
-      throw new Error(`Error executing a move call: ${err} with args ${t}`);
+      throw new Error(
+        `Error executing a move call: ${err} with args ${JSON.stringify(t)}`
+      );
     }
   }
 

@@ -74,7 +74,7 @@ Further, mutable objects are divided into these categories:
 
 Immutable objects do not need this distinction because they have no owner.
 
-For more information, see [Sui Objects](../build/objects.md).
+For more information, see [Sui Objects](../learn/objects.md).
 
 ### Proof-of-stake
 

@@ -1,5 +1,5 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 #![allow(clippy::blacklisted_name)]
@@ -54,7 +54,7 @@ fn test_signatures_serde() {
 #[test]
 fn test_max_sequence_number() {
     let max = SequenceNumber::MAX;
-    assert_eq!(max.0 * 2 + 1, std::u64::MAX);
+    assert_eq!(max.0 * 2 + 1, u64::MAX);
 }
 
 #[test]
@@ -91,7 +91,7 @@ fn test_increment_version() {
         coin_obj.type_specific_contents(),
         old_type_specific_contents
     );
-    assert!(GasCoin::try_from(&coin_obj).unwrap().value() == coin.value());
+    assert_eq!(GasCoin::try_from(&coin_obj).unwrap().value(), coin.value());
 }
 
 #[test]

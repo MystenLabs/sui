@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use fastcrypto::secp256k1::Secp256k1KeyPair;
@@ -131,7 +131,7 @@ fn seed_zeroize_on_drop() {
         secret_ptr = seed.0.as_ptr();
     }
 
-    let memory: &[u8] = unsafe { ::std::slice::from_raw_parts(secret_ptr, 32) };
+    let memory: &[u8] = unsafe { std::slice::from_raw_parts(secret_ptr, 32) };
     assert!(!memory.contains(&0x15));
 }
 

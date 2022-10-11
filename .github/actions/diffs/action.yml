@@ -5,7 +5,7 @@ outputs:
     description: True when changes happened to some documentation
     value: "${{ steps.diff.outputs.isDoc }}"
   isRust:
-    description: True when changes happened to the rust code
+    description: True when changes happened to the Rust code
     value: "${{ steps.diff.outputs.isRust }}"
 runs:
   using: composite
@@ -17,7 +17,8 @@ runs:
     with:
       filters: |
         isRust:
-          - '!(explorer|doc|.github|sdk|wallet)/**'
+          - 'crates/**'
+          - 'narwhal/**'
           - '.github/workflows/bench.yml'
           - '.github/workflows/codecov.yml'
           - '.github/workflows/rust.yml'

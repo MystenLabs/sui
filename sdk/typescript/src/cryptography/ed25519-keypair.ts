@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 import nacl from 'tweetnacl';
@@ -6,6 +6,10 @@ import { Base64DataBuffer } from '../serialization/base64';
 import { Keypair } from './keypair';
 import { Ed25519PublicKey } from './ed25519-publickey';
 import { SignatureScheme } from './publickey';
+import { isValidHardenedPath, mnemonicToSeedHex } from './mnemonics';
+import { derivePath, getPublicKey } from '../utils/ed25519-hd-key';
+
+export const DEFAULT_ED25519_DERIVATION_PATH = "m/44'/784'/0'/0'/0'";
 
 /**
  * Ed25519 Keypair data
@@ -34,7 +38,7 @@ export class Ed25519Keypair implements Keypair {
       this.keypair = nacl.sign.keyPair();
     }
   }
-  
+
   /**
    * Get the key scheme of the keypair ED25519
    */
@@ -99,5 +103,30 @@ export class Ed25519Keypair implements Keypair {
     return new Base64DataBuffer(
       nacl.sign.detached(data.getData(), this.keypair.secretKey)
     );
+  }
+
+  /**
+   * Derive Ed25519 keypair from mnemonics and path. The mnemonics must be normalized
+   * and validated against the english wordlist.
+   *
+   * If path is none, it will default to m/44'/784'/0'/0'/0', otherwise the path must
+   * be compliant to SLIP-0010 in form m/44'/784'/{account_index}'/{change_index}'/{address_index}'.
+   */
+  static deriveKeypair(mnemonics: string, path?: string): Ed25519Keypair {
+    if (path == null) {
+      path = DEFAULT_ED25519_DERIVATION_PATH;
+    }
+    if (!isValidHardenedPath(path)) {
+      throw new Error('Invalid derivation path');
+    }
+    const { key } = derivePath(path, mnemonicToSeedHex(mnemonics));    
+    const pubkey = getPublicKey(key, false);
+    
+    // Ed25519 private key returned here has 32 bytes. NaCl expects 64 bytes where the last 32 bytes are the public key. 
+    let fullPrivateKey = new Uint8Array(64);
+    fullPrivateKey.set(key);
+    fullPrivateKey.set(pubkey, 32);
+
+    return new Ed25519Keypair({ publicKey: pubkey, secretKey: fullPrivateKey });
   }
 }

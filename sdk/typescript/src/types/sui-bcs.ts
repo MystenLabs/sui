@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 import { bcs, decodeStr, encodeStr } from '@mysten/bcs';
@@ -68,6 +68,26 @@ export type TransferSuiTx = {
     amount: { Some: number } | { None: null };
   };
 };
+
+/**
+ * Transaction type used for Pay transaction.
+ */
+export type PayTx = {
+  Pay: {
+    coins: SuiObjectRef[];
+    recipients: string[];
+    amounts: number[];
+  };
+};
+
+bcs
+  .registerVectorType('vector<SuiAddress>', 'SuiAddress')
+  .registerVectorType('vector<SuiObjectRef>', 'SuiObjectRef')
+  .registerStructType('PayTx', {
+    coins: 'vector<SuiObjectRef>',
+    recipients: 'vector<SuiAddress>',
+    amounts: 'vector<u64>',
+  });
 
 bcs.registerEnumType('Option<u64>', {
   None: null,
@@ -216,6 +236,7 @@ bcs
 
 export type Transaction =
   | MoveCallTx
+  | PayTx
   | PublishTx
   | TransferObjectTx
   | TransferSuiTx;
@@ -225,6 +246,7 @@ bcs.registerEnumType('Transaction', {
   Publish: 'PublishTx',
   Call: 'MoveCallTx',
   TransferSui: 'TransferSuiTx',
+  Pay: 'PayTx',
 });
 /**
  * Transaction kind - either Batch or Single.

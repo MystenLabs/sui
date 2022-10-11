@@ -1,9 +1,10 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{helper::ObjectChecker, TestCaseImpl, TestContext};
 use anyhow::bail;
 use async_trait::async_trait;
+use sui_json_rpc_types::{SuiCertifiedTransaction, SuiTransactionEffects};
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::object::Owner;
 use tracing::{debug, info};
@@ -34,7 +35,7 @@ impl TestCaseImpl for CoinMergeSplitTest {
         let amounts = vec![1, (original_value - 2) / 2];
 
         let data = ctx
-            .get_gateway()
+            .get_fullnode_client()
             .transaction_builder()
             .split_coin(
                 signer,
@@ -46,25 +47,20 @@ impl TestCaseImpl for CoinMergeSplitTest {
             .await
             .or_else(|e| bail!("Failed to get transaction data for coin split: {}", e))?;
 
-        let split_response = ctx
-            .sign_and_execute(data, "coin split")
-            .await
-            .parsed_data
-            .unwrap()
-            .to_split_coin_response()
-            .or_else(|e| bail!("Failed to execute SplitCoin: {e}"))?;
+        let (tx_cert, effects) = ctx.sign_and_execute(data, "coin split").await;
+        let tx_digest = tx_cert.transaction_digest;
+        let new_coins = effects.created;
 
         // Verify fullnode observes the txn
-        ctx.let_fullnode_sync().await;
+        ctx.let_fullnode_sync(vec![tx_digest], 5).await;
 
         let _ = futures::future::join_all(
-            split_response
-                .new_coins
+            new_coins
                 .iter()
-                .map(|coin_info| {
-                    ObjectChecker::new(coin_info.reference.object_id)
+                .map(|coin_ref| {
+                    ObjectChecker::new(coin_ref.reference.object_id)
                         .owner(Owner::AddressOwner(signer))
-                        .check_into_gas_coin(ctx.get_fullnode())
+                        .check_into_gas_coin(ctx.get_fullnode_client())
                 })
                 .collect::<Vec<_>>(),
         )
@@ -73,20 +69,23 @@ impl TestCaseImpl for CoinMergeSplitTest {
         // Merge
         info!("Testing coin merge.");
         let mut coins_merged = Vec::new();
+        let mut txes = Vec::new();
         // We on purpose linearize the merge operations, otherwise the primary coin may be locked
-        for new_coin in &split_response.new_coins {
+        for new_coin in new_coins {
             let coin_to_merge = new_coin.reference.object_id;
             debug!(
                 "Merging coin {} back to {}.",
                 coin_to_merge, primary_coin_id
             );
-            Self::merge_coin(ctx, signer, primary_coin_id, coin_to_merge, *gas_obj.id()).await;
+            let (tx_cert, _effects) =
+                Self::merge_coin(ctx, signer, primary_coin_id, coin_to_merge, *gas_obj.id()).await;
             debug!("Verifying the merged coin {} is deleted.", coin_to_merge);
             coins_merged.push(coin_to_merge);
+            txes.push(tx_cert.transaction_digest);
         }
 
         // Verify fullnode observes the txn
-        ctx.let_fullnode_sync().await;
+        ctx.let_fullnode_sync(txes, 5).await;
 
         let _ = futures::future::join_all(
             coins_merged
@@ -95,7 +94,7 @@ impl TestCaseImpl for CoinMergeSplitTest {
                     ObjectChecker::new(*obj_id)
                         .owner(Owner::AddressOwner(signer))
                         .deleted()
-                        .check(ctx.get_fullnode())
+                        .check(ctx.get_fullnode_client())
                 })
                 .collect::<Vec<_>>(),
         )
@@ -110,7 +109,7 @@ impl TestCaseImpl for CoinMergeSplitTest {
         );
         let primary_after_merge = ObjectChecker::new(primary_coin_id)
             .owner(Owner::AddressOwner(ctx.get_wallet_address()))
-            .check_into_gas_coin(ctx.get_fullnode())
+            .check_into_gas_coin(ctx.get_fullnode_client())
             .await;
         assert_eq!(
             primary_after_merge.value(),
@@ -130,13 +129,13 @@ impl CoinMergeSplitTest {
         primary_coin: ObjectID,
         coin_to_merge: ObjectID,
         gas_obj_id: ObjectID,
-    ) {
+    ) -> (SuiCertifiedTransaction, SuiTransactionEffects) {
         let data = ctx
-            .get_gateway()
+            .get_fullnode_client()
             .transaction_builder()
             .merge_coins(signer, primary_coin, coin_to_merge, Some(gas_obj_id), 5000)
             .await
             .expect("Failed to get transaction data for coin merge");
-        ctx.sign_and_execute(data, "coin merge").await;
+        ctx.sign_and_execute(data, "coin merge").await
     }
 }

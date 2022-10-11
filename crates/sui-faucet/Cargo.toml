@@ -1,6 +1,6 @@
 [package]
 name = "sui-faucet"
-version = "0.9.0"
+version = "0.10.0"
 edition = "2021"
 authors = ["Mysten Labs <build@mystenlabs.com>"]
 license = "Apache-2.0"
@@ -28,8 +28,9 @@ sui-node = { path = "../sui-node" }
 sui-json-rpc-types= { path = "../sui-json-rpc-types" }
 sui-types = { path = "../sui-types" }
 sui-config = { path = "../sui-config" }
-telemetry-subscribers = "0.1.0"
-workspace-hack = { path = "../workspace-hack"}
+sui-sdk = { path = "../sui-sdk" }
+telemetry-subscribers.workspace = true
+workspace-hack.workspace = true
 
 [dev-dependencies]
 test-utils = { path = "../test-utils" }
