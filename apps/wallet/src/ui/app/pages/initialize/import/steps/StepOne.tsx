@@ -6,7 +6,6 @@ import * as Yup from 'yup';
 
 import Button from '_app/shared/button';
 import FieldLabel from '_app/shared/field-label';
-import { WALLET_ENCRYPTION_ENABLED } from '_app/wallet/constants';
 import Alert from '_components/alert';
 import Icon, { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
@@ -21,7 +20,6 @@ const validationSchema = Yup.object({
 });
 
 export default function StepOne({ next, data }: StepProps) {
-    const btnTxt = WALLET_ENCRYPTION_ENABLED ? 'Continue' : 'Import wallet Now';
     return (
         <Formik
             initialValues={data}
@@ -78,7 +76,7 @@ export default function StepOne({ next, data }: StepProps) {
                         size="large"
                     >
                         <Loading loading={isSubmitting}>
-                            {btnTxt}
+                            Continue
                             <Icon
                                 icon={SuiIcons.ArrowRight}
                                 className={st.next}
