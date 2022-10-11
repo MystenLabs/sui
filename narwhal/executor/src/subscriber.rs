@@ -7,7 +7,6 @@ use config::{Committee, SharedWorkerCache, WorkerId};
 use consensus::ConsensusOutput;
 use crypto::{NetworkPublicKey, PublicKey};
 
-use futures::future::join;
 use futures::stream::FuturesOrdered;
 use futures::FutureExt;
 use futures::StreamExt;
@@ -138,11 +137,9 @@ impl<Network: SubscriberNetwork> Subscriber<Network> {
                 },
 
                 // Receive here consensus messages for which we have downloaded all transactions data.
-                (message, permit) = join(waiting.next(), self.tx_notifier.reserve()), if !waiting.is_empty() => {
-                    if let Ok(permit) = permit {
-                        permit.send(message.expect("We don't poll empty queue"));
-                    } else {
-                        error!("tx_notifier closed");
+                message = waiting.next(), if !waiting.is_empty() => {
+                    if let Err(e) = self.tx_notifier.send(message.expect("We don't poll empty queue")).await {
+                        error!("tx_notifier closed: {}", e);
                         return Ok(());
                     }
                 },
