@@ -6,15 +6,22 @@
 
 
 -  [Constants](#@Constants_0)
+-  [Function `to_bytes`](#0x2_bcs_to_bytes)
 -  [Function `peel_address`](#0x2_bcs_peel_address)
 -  [Function `peel_bool`](#0x2_bcs_peel_bool)
 -  [Function `peel_u8`](#0x2_bcs_peel_u8)
 -  [Function `peel_u64`](#0x2_bcs_peel_u64)
 -  [Function `peel_u128`](#0x2_bcs_peel_u128)
 -  [Function `peel_vec_length`](#0x2_bcs_peel_vec_length)
+-  [Function `peel_vec_address`](#0x2_bcs_peel_vec_address)
+-  [Function `peel_vec_bool`](#0x2_bcs_peel_vec_bool)
+-  [Function `peel_vec_u8`](#0x2_bcs_peel_vec_u8)
+-  [Function `peel_vec_u64`](#0x2_bcs_peel_vec_u64)
+-  [Function `peel_vec_u128`](#0x2_bcs_peel_vec_u128)
 
 
-<pre><code><b>use</b> <a href="">0x1::vector</a>;
+<pre><code><b>use</b> <a href="">0x1::bcs</a>;
+<b>use</b> <a href="">0x1::vector</a>;
 </code></pre>
 
 
@@ -22,6 +29,26 @@
 <a name="@Constants_0"></a>
 
 ## Constants
+
+
+<a name="0x2_bcs_ELenOutOfRange"></a>
+
+For when ULEB byte is out of range (or not found).
+
+
+<pre><code><b>const</b> <a href="bcs.md#0x2_bcs_ELenOutOfRange">ELenOutOfRange</a>: u64 = 2;
+</code></pre>
+
+
+
+<a name="0x2_bcs_ENotBool"></a>
+
+For when the boolean value different than <code>0</code> or <code>1</code>.
+
+
+<pre><code><b>const</b> <a href="bcs.md#0x2_bcs_ENotBool">ENotBool</a>: u64 = 1;
+</code></pre>
+
 
 
 <a name="0x2_bcs_EOutOfRange"></a>
@@ -34,14 +61,25 @@ For when bytes length is less than required for deserialization.
 
 
 
-<a name="0x2_bcs_peel_address"></a>
+<a name="0x2_bcs_SUI_ADDRESS_LENGTH"></a>
 
-## Function `peel_address`
-
-Read address from the bcs-serialized bytes.
+Address length in Sui is 20 bytes.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_address">peel_address</a>(<a href="bcs.md#0x2_bcs">bcs</a>: &<b>mut</b> <a href="">vector</a>&lt;u8&gt;): <b>address</b>
+<pre><code><b>const</b> <a href="bcs.md#0x2_bcs_SUI_ADDRESS_LENGTH">SUI_ADDRESS_LENGTH</a>: u64 = 20;
+</code></pre>
+
+
+
+<a name="0x2_bcs_to_bytes"></a>
+
+## Function `to_bytes`
+
+Get BCS serialized bytes for any value.
+Re-exports stdlib <code><a href="_to_bytes">bcs::to_bytes</a></code>.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_to_bytes">to_bytes</a>&lt;T&gt;(value: &T): <a href="">vector</a>&lt;u8&gt;
 </code></pre>
 
 
@@ -50,11 +88,36 @@ Read address from the bcs-serialized bytes.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_address">peel_address</a>(<a href="bcs.md#0x2_bcs">bcs</a>: &<b>mut</b> <a href="">vector</a>&lt;u8&gt;): <b>address</b> {
-    <b>assert</b>!(v::length(<a href="bcs.md#0x2_bcs">bcs</a>) &gt;= 20, <a href="bcs.md#0x2_bcs_EOutOfRange">EOutOfRange</a>);
+<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_to_bytes">to_bytes</a>&lt;T&gt;(value: &T): <a href="">vector</a>&lt;u8&gt; {
+    <a href="_to_bytes">bcs::to_bytes</a>(value)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_bcs_peel_address"></a>
+
+## Function `peel_address`
+
+Read address from the bcs-serialized bytes.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_address">peel_address</a>(<a href="">bcs</a>: &<b>mut</b> <a href="">vector</a>&lt;u8&gt;): <b>address</b>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_address">peel_address</a>(<a href="">bcs</a>: &<b>mut</b> <a href="">vector</a>&lt;u8&gt;): <b>address</b> {
+    <b>assert</b>!(v::length(<a href="">bcs</a>) &gt;= <a href="bcs.md#0x2_bcs_SUI_ADDRESS_LENGTH">SUI_ADDRESS_LENGTH</a>, <a href="bcs.md#0x2_bcs_EOutOfRange">EOutOfRange</a>);
     <b>let</b> (_value, i) = (0, 0);
     <b>while</b> (i &lt; 20) {
-        <b>let</b> _ = v::remove(<a href="bcs.md#0x2_bcs">bcs</a>, 0);
+        <b>let</b> _ = v::remove(<a href="">bcs</a>, 0);
         i = i + 1;
     };
     @0x0
@@ -72,7 +135,7 @@ Read address from the bcs-serialized bytes.
 Read a <code>bool</code> value from bcs-serialized bytes.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_bool">peel_bool</a>(<a href="bcs.md#0x2_bcs">bcs</a>: &<b>mut</b> <a href="">vector</a>&lt;u8&gt;): bool
+<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_bool">peel_bool</a>(<a href="">bcs</a>: &<b>mut</b> <a href="">vector</a>&lt;u8&gt;): bool
 </code></pre>
 
 
@@ -81,9 +144,15 @@ Read a <code>bool</code> value from bcs-serialized bytes.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_bool">peel_bool</a>(<a href="bcs.md#0x2_bcs">bcs</a>: &<b>mut</b> <a href="">vector</a>&lt;u8&gt;): bool {
-    <b>let</b> value = <a href="bcs.md#0x2_bcs_peel_u8">peel_u8</a>(<a href="bcs.md#0x2_bcs">bcs</a>);
-    (value != 0)
+<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_bool">peel_bool</a>(<a href="">bcs</a>: &<b>mut</b> <a href="">vector</a>&lt;u8&gt;): bool {
+    <b>let</b> value = <a href="bcs.md#0x2_bcs_peel_u8">peel_u8</a>(<a href="">bcs</a>);
+    <b>if</b> (value == 0) {
+        <b>false</b>
+    } <b>else</b> <b>if</b> (value == 1) {
+        <b>true</b>
+    } <b>else</b> {
+        <b>abort</b> <a href="bcs.md#0x2_bcs_ENotBool">ENotBool</a>
+    }
 }
 </code></pre>
 
@@ -98,7 +167,7 @@ Read a <code>bool</code> value from bcs-serialized bytes.
 Read <code>u8</code> value from bcs-serialized bytes.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_u8">peel_u8</a>(<a href="bcs.md#0x2_bcs">bcs</a>: &<b>mut</b> <a href="">vector</a>&lt;u8&gt;): u8
+<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_u8">peel_u8</a>(<a href="">bcs</a>: &<b>mut</b> <a href="">vector</a>&lt;u8&gt;): u8
 </code></pre>
 
 
@@ -107,9 +176,9 @@ Read <code>u8</code> value from bcs-serialized bytes.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_u8">peel_u8</a>(<a href="bcs.md#0x2_bcs">bcs</a>: &<b>mut</b> <a href="">vector</a>&lt;u8&gt;): u8 {
-    <b>assert</b>!(v::length(<a href="bcs.md#0x2_bcs">bcs</a>) &gt;= 1, <a href="bcs.md#0x2_bcs_EOutOfRange">EOutOfRange</a>);
-    v::remove(<a href="bcs.md#0x2_bcs">bcs</a>, 0)
+<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_u8">peel_u8</a>(<a href="">bcs</a>: &<b>mut</b> <a href="">vector</a>&lt;u8&gt;): u8 {
+    <b>assert</b>!(v::length(<a href="">bcs</a>) &gt;= 1, <a href="bcs.md#0x2_bcs_EOutOfRange">EOutOfRange</a>);
+    v::remove(<a href="">bcs</a>, 0)
 }
 </code></pre>
 
@@ -124,7 +193,7 @@ Read <code>u8</code> value from bcs-serialized bytes.
 Read <code>u64</code> value from bcs-serialized bytes.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_u64">peel_u64</a>(<a href="bcs.md#0x2_bcs">bcs</a>: &<b>mut</b> <a href="">vector</a>&lt;u8&gt;): u64
+<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_u64">peel_u64</a>(<a href="">bcs</a>: &<b>mut</b> <a href="">vector</a>&lt;u8&gt;): u64
 </code></pre>
 
 
@@ -133,23 +202,18 @@ Read <code>u64</code> value from bcs-serialized bytes.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_u64">peel_u64</a>(<a href="bcs.md#0x2_bcs">bcs</a>: &<b>mut</b> <a href="">vector</a>&lt;u8&gt;): u64 {
-    <b>assert</b>!(v::length(<a href="bcs.md#0x2_bcs">bcs</a>) &gt;= 8, <a href="bcs.md#0x2_bcs_EOutOfRange">EOutOfRange</a>);
+<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_u64">peel_u64</a>(<a href="">bcs</a>: &<b>mut</b> <a href="">vector</a>&lt;u8&gt;): u64 {
+    <b>assert</b>!(v::length(<a href="">bcs</a>) &gt;= 8, <a href="bcs.md#0x2_bcs_EOutOfRange">EOutOfRange</a>);
     <b>let</b> (l_value, r_value, i) = (0u64, 0u64, 0);
 
     // Read first 4 LE bytes (u32)
     <b>while</b> (i &lt; 4) {
-        <b>let</b> byte = (v::remove(<a href="bcs.md#0x2_bcs">bcs</a>, 0) <b>as</b> u64);
-        l_value = l_value + (byte &lt;&lt; ((8 * (i)) <b>as</b> u8));
-        i = i + 1;
-    };
+        <b>let</b> l_byte = (v::remove(<a href="">bcs</a>, 0) <b>as</b> u64);
+        <b>let</b> r_byte = (v::remove(<a href="">bcs</a>, 3 - i) <b>as</b> u64);
 
-    <b>let</b> i = 0;
+        l_value = l_value + (l_byte &lt;&lt; ((8 * (i)) <b>as</b> u8));
+        r_value = r_value + (r_byte &lt;&lt; ((8 * (i)) <b>as</b> u8));
 
-    // Read second 4 bytes of the U64, also u32 LE
-    <b>while</b> (i &lt; 4) {
-        <b>let</b> byte = (v::remove(<a href="bcs.md#0x2_bcs">bcs</a>, 0) <b>as</b> u64);
-        r_value = r_value + (byte &lt;&lt; ((8 * (i)) <b>as</b> u8));
         i = i + 1;
     };
 
@@ -169,7 +233,7 @@ Read <code>u64</code> value from bcs-serialized bytes.
 Read <code>u128</code> value from bcs-serialized bytes.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_u128">peel_u128</a>(<a href="bcs.md#0x2_bcs">bcs</a>: &<b>mut</b> <a href="">vector</a>&lt;u8&gt;): u128
+<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_u128">peel_u128</a>(<a href="">bcs</a>: &<b>mut</b> <a href="">vector</a>&lt;u8&gt;): u128
 </code></pre>
 
 
@@ -178,9 +242,11 @@ Read <code>u128</code> value from bcs-serialized bytes.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_u128">peel_u128</a>(<a href="bcs.md#0x2_bcs">bcs</a>: &<b>mut</b> <a href="">vector</a>&lt;u8&gt;): u128 {
-    <b>assert</b>!(v::length(<a href="bcs.md#0x2_bcs">bcs</a>) &gt;= 16, <a href="bcs.md#0x2_bcs_EOutOfRange">EOutOfRange</a>);
-    <b>let</b> (l_value, r_value) = (<a href="bcs.md#0x2_bcs_peel_u64">peel_u64</a>(<a href="bcs.md#0x2_bcs">bcs</a>), <a href="bcs.md#0x2_bcs_peel_u64">peel_u64</a>(<a href="bcs.md#0x2_bcs">bcs</a>));
+<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_u128">peel_u128</a>(<a href="">bcs</a>: &<b>mut</b> <a href="">vector</a>&lt;u8&gt;): u128 {
+    <b>assert</b>!(v::length(<a href="">bcs</a>) &gt;= 16, <a href="bcs.md#0x2_bcs_EOutOfRange">EOutOfRange</a>);
+
+    <b>let</b> (l_value, r_value) = (<a href="bcs.md#0x2_bcs_peel_u64">peel_u64</a>(<a href="">bcs</a>), <a href="bcs.md#0x2_bcs_peel_u64">peel_u64</a>(<a href="">bcs</a>));
+
     ((r_value <b>as</b> u128) &lt;&lt; 64) | (l_value <b>as</b> u128)
 }
 </code></pre>
@@ -196,8 +262,11 @@ Read <code>u128</code> value from bcs-serialized bytes.
 Read ULEB bytes expecting a vector length. Result should
 then be used to perform <code>peel_*</code> operation LEN times.
 
+In BCS <code><a href="">vector</a></code> length is implemented with ULEB128;
+See more here: https://en.wikipedia.org/wiki/LEB128
 
-<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_vec_length">peel_vec_length</a>(<a href="bcs.md#0x2_bcs">bcs</a>: &<b>mut</b> <a href="">vector</a>&lt;u8&gt;): u64
+
+<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_vec_length">peel_vec_length</a>(<a href="">bcs</a>: &<b>mut</b> <a href="">vector</a>&lt;u8&gt;): u64
 </code></pre>
 
 
@@ -206,19 +275,171 @@ then be used to perform <code>peel_*</code> operation LEN times.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_vec_length">peel_vec_length</a>(<a href="bcs.md#0x2_bcs">bcs</a>: &<b>mut</b> <a href="">vector</a>&lt;u8&gt;): u64 {
-    v::reverse(<a href="bcs.md#0x2_bcs">bcs</a>);
-    <b>let</b> (total, shift) = (0u64, 0);
+<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_vec_length">peel_vec_length</a>(<a href="">bcs</a>: &<b>mut</b> <a href="">vector</a>&lt;u8&gt;): u64 {
+    v::reverse(<a href="">bcs</a>);
+    <b>let</b> (total, shift, len) = (0u64, 0, 0);
     <b>while</b> (<b>true</b>) {
-        <b>let</b> byte = (v::pop_back(<a href="bcs.md#0x2_bcs">bcs</a>) <b>as</b> u64);
+        <b>assert</b>!(len &lt;= 4, <a href="bcs.md#0x2_bcs_ELenOutOfRange">ELenOutOfRange</a>);
+        <b>let</b> byte = (v::pop_back(<a href="">bcs</a>) <b>as</b> u64);
+        len = len + 1;
         total = total | ((byte & 0x7f) &lt;&lt; shift);
         <b>if</b> ((byte & 0x80) == 0) {
             <b>break</b>
         };
         shift = shift + 7;
     };
-    v::reverse(<a href="bcs.md#0x2_bcs">bcs</a>);
+    v::reverse(<a href="">bcs</a>);
     total
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_bcs_peel_vec_address"></a>
+
+## Function `peel_vec_address`
+
+Peel a vector of <code><b>address</b></code> from serialized bytes.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_vec_address">peel_vec_address</a>(<a href="">bcs</a>: &<b>mut</b> <a href="">vector</a>&lt;u8&gt;): <a href="">vector</a>&lt;<b>address</b>&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_vec_address">peel_vec_address</a>(<a href="">bcs</a>: &<b>mut</b> <a href="">vector</a>&lt;u8&gt;): <a href="">vector</a>&lt;<b>address</b>&gt; {
+    <b>let</b> (len, i, res) = (<a href="bcs.md#0x2_bcs_peel_vec_length">peel_vec_length</a>(<a href="">bcs</a>), 0, <a href="">vector</a>[]);
+    <b>while</b> (i &lt; len) {
+        v::push_back(&<b>mut</b> res, <a href="bcs.md#0x2_bcs_peel_address">peel_address</a>(<a href="">bcs</a>));
+        i = i + 1;
+    };
+    res
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_bcs_peel_vec_bool"></a>
+
+## Function `peel_vec_bool`
+
+Peel a vector of <code><b>address</b></code> from serialized bytes.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_vec_bool">peel_vec_bool</a>(<a href="">bcs</a>: &<b>mut</b> <a href="">vector</a>&lt;u8&gt;): <a href="">vector</a>&lt;bool&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_vec_bool">peel_vec_bool</a>(<a href="">bcs</a>: &<b>mut</b> <a href="">vector</a>&lt;u8&gt;): <a href="">vector</a>&lt;bool&gt; {
+    <b>let</b> (len, i, res) = (<a href="bcs.md#0x2_bcs_peel_vec_length">peel_vec_length</a>(<a href="">bcs</a>), 0, <a href="">vector</a>[]);
+    <b>while</b> (i &lt; len) {
+        v::push_back(&<b>mut</b> res, <a href="bcs.md#0x2_bcs_peel_bool">peel_bool</a>(<a href="">bcs</a>));
+        i = i + 1;
+    };
+    res
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_bcs_peel_vec_u8"></a>
+
+## Function `peel_vec_u8`
+
+Peel a vector of <code>u8</code> (eg string) from serialized bytes.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_vec_u8">peel_vec_u8</a>(<a href="">bcs</a>: &<b>mut</b> <a href="">vector</a>&lt;u8&gt;): <a href="">vector</a>&lt;u8&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_vec_u8">peel_vec_u8</a>(<a href="">bcs</a>: &<b>mut</b> <a href="">vector</a>&lt;u8&gt;): <a href="">vector</a>&lt;u8&gt; {
+    <b>let</b> (len, i, res) = (<a href="bcs.md#0x2_bcs_peel_vec_length">peel_vec_length</a>(<a href="">bcs</a>), 0, <a href="">vector</a>[]);
+    <b>while</b> (i &lt; len) {
+        v::push_back(&<b>mut</b> res, <a href="bcs.md#0x2_bcs_peel_u8">peel_u8</a>(<a href="">bcs</a>));
+        i = i + 1;
+    };
+    res
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_bcs_peel_vec_u64"></a>
+
+## Function `peel_vec_u64`
+
+Peel a vector of <code>u64</code> from serialized bytes.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_vec_u64">peel_vec_u64</a>(<a href="">bcs</a>: &<b>mut</b> <a href="">vector</a>&lt;u8&gt;): <a href="">vector</a>&lt;u64&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_vec_u64">peel_vec_u64</a>(<a href="">bcs</a>: &<b>mut</b> <a href="">vector</a>&lt;u8&gt;): <a href="">vector</a>&lt;u64&gt; {
+    <b>let</b> (len, i, res) = (<a href="bcs.md#0x2_bcs_peel_vec_length">peel_vec_length</a>(<a href="">bcs</a>), 0, <a href="">vector</a>[]);
+    <b>while</b> (i &lt; len) {
+        v::push_back(&<b>mut</b> res, <a href="bcs.md#0x2_bcs_peel_u64">peel_u64</a>(<a href="">bcs</a>));
+        i = i + 1;
+    };
+    res
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_bcs_peel_vec_u128"></a>
+
+## Function `peel_vec_u128`
+
+Peel a vector of <code>u128</code> from serialized bytes.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_vec_u128">peel_vec_u128</a>(<a href="">bcs</a>: &<b>mut</b> <a href="">vector</a>&lt;u8&gt;): <a href="">vector</a>&lt;u128&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_vec_u128">peel_vec_u128</a>(<a href="">bcs</a>: &<b>mut</b> <a href="">vector</a>&lt;u8&gt;): <a href="">vector</a>&lt;u128&gt; {
+    <b>let</b> (len, i, res) = (<a href="bcs.md#0x2_bcs_peel_vec_length">peel_vec_length</a>(<a href="">bcs</a>), 0, <a href="">vector</a>[]);
+    <b>while</b> (i &lt; len) {
+        v::push_back(&<b>mut</b> res, <a href="bcs.md#0x2_bcs_peel_u128">peel_u128</a>(<a href="">bcs</a>));
+        i = i + 1;
+    };
+    res
 }
 </code></pre>
 

@@ -131,7 +131,7 @@ Get the raw bytes of a <code><a href="object.md#0x2_object_ID">ID</a></code>
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="object.md#0x2_object_id_to_bytes">id_to_bytes</a>(id: &<a href="object.md#0x2_object_ID">ID</a>): <a href="">vector</a>&lt;u8&gt; {
-    bcs::to_bytes(&id.bytes)
+    <a href="_to_bytes">bcs::to_bytes</a>(&id.bytes)
 }
 </code></pre>
 
@@ -259,7 +259,7 @@ Get the raw bytes of a <code><a href="object.md#0x2_object_UID">UID</a></code>
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="object.md#0x2_object_uid_to_bytes">uid_to_bytes</a>(uid: &<a href="object.md#0x2_object_UID">UID</a>): <a href="">vector</a>&lt;u8&gt; {
-    bcs::to_bytes(&uid.id.bytes)
+    <a href="_to_bytes">bcs::to_bytes</a>(&uid.id.bytes)
 }
 </code></pre>
 
@@ -412,7 +412,7 @@ Get the raw bytes for the underlying <code><a href="object.md#0x2_object_ID">ID<
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="object.md#0x2_object_id_bytes">id_bytes</a>&lt;T: key&gt;(obj: &T): <a href="">vector</a>&lt;u8&gt; {
-    bcs::to_bytes(&<a href="object.md#0x2_object_borrow_uid">borrow_uid</a>(obj).id)
+    <a href="_to_bytes">bcs::to_bytes</a>(&<a href="object.md#0x2_object_borrow_uid">borrow_uid</a>(obj).id)
 }
 </code></pre>
 

@@ -220,7 +220,7 @@
     // This proves that the account <b>address</b> is owned by the holder of ValidatorPK, and <b>ensures</b>
     // that PK <b>exists</b>.
     <b>let</b> signed_bytes = pubkey_bytes;
-    <b>let</b> address_bytes = bcs::to_bytes(&sui_address);
+    <b>let</b> address_bytes = <a href="_to_bytes">bcs::to_bytes</a>(&sui_address);
     <a href="_append">vector::append</a>(&<b>mut</b> signed_bytes, address_bytes);
     <b>assert</b>!(
         bls12381_verify_with_domain(&proof_of_possession, &pubkey_bytes, signed_bytes, <a href="validator.md#0x2_validator_PROOF_OF_POSSESSION_DOMAIN">PROOF_OF_POSSESSION_DOMAIN</a>) == <b>true</b>,
