@@ -26,6 +26,7 @@
   },
   "scripts": {
     "dev": "vite",
+    "clean": "pnpm -r --filter './packages/**' run clean",
     "build": "pnpm -r --filter './packages/**' run build && vite build",
     "test": "echo 'No tests.'"
   },

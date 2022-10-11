@@ -146,7 +146,7 @@ export class SuiWallet implements Wallet {
             );
         }
 
-        this.#connected();
+        await this.#connected();
 
         return { accounts: this.accounts };
     };

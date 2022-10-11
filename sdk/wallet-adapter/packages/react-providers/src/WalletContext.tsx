@@ -34,7 +34,6 @@ export interface WalletContextState {
   // disconnecting: boolean;
 
   select(walletName: string): void;
-  connect(): Promise<void>;
   disconnect(): Promise<void>;
 
   getAccounts: () => Promise<SuiAddress[]>;
@@ -75,50 +74,40 @@ export const WalletProvider: FC<WalletProviderProps> = ({
 
   const disconnect = useCallback(async () => {
     setConnected(false);
-    setWalletAndUpdateStorage(null);
+    setWallet(null);
+    localStorage.removeItem(DEFAULT_STORAGE_KEY);
   }, []);
 
-  const connect = useCallback(async () => {
-    if (wallet == null) {
-      return;
+  // Once we connect, we remember that we've connected before to enable auto-connect:
+  useEffect(() => {
+    if (connected && wallet) {
+      localStorage.setItem(DEFAULT_STORAGE_KEY, wallet.name);
     }
-
-    try {
-      setConnecting(true);
-      await wallet.connect();
-      setConnected(true);
-    } catch (e) {
-      setConnected(false);
-    }
-    setConnecting(false);
-  }, [wallet]);
-
-  // Use this to update wallet so that the chosen wallet persists after reload.
-  const setWalletAndUpdateStorage = useCallback(
-    (selectedWallet: WalletAdapter | null) => {
-      setWallet(selectedWallet);
-      if (selectedWallet) {
-        localStorage.setItem(DEFAULT_STORAGE_KEY, selectedWallet.name);
-      } else {
-        localStorage.removeItem(DEFAULT_STORAGE_KEY);
-      }
-    },
-    []
-  );
+  }, [wallet, connected]);
 
   const select = useCallback(
-    (name: string) => {
-      let newWallet = wallets.find((wallet) => wallet.name === name);
-      if (newWallet) {
-        setWalletAndUpdateStorage(newWallet);
+    async (name: string) => {
+      let selectedWallet =
+        wallets.find((wallet) => wallet.name === name) ?? null;
+
+      setWallet(selectedWallet);
+
+      if (selectedWallet && !selectedWallet.connecting) {
+        try {
+          setConnecting(true);
+          await selectedWallet.connect();
+          setConnected(true);
+        } catch (e) {
+          setConnected(false);
+        } finally {
+          setConnecting(false);
+        }
       }
-      connect();
     },
-    [setWalletAndUpdateStorage, connect]
+    [wallets]
   );
 
-  // If the wallet is null, check if there isn't anything in local storage
-  // Note: Optimize this.
+  // Auto-connect to the preferred wallet if there is one in storage:
   useEffect(() => {
     if (!wallet && !connected && !connecting) {
       let preferredWallet = localStorage.getItem(DEFAULT_STORAGE_KEY);
@@ -126,14 +115,7 @@ export const WalletProvider: FC<WalletProviderProps> = ({
         select(preferredWallet);
       }
     }
-  }, [select, connected, connecting, wallet]);
-
-  // Attempt to connect whenever user selects a new wallet
-  useEffect(() => {
-    if (wallet != null && connecting !== true && connected !== true) {
-      connect();
-    }
-  }, [connect, wallet, connecting, connected]);
+  }, [wallet, connected, connecting, select]);
 
   const walletContext = useMemo<WalletContextState>(
     () => ({
@@ -143,7 +125,6 @@ export const WalletProvider: FC<WalletProviderProps> = ({
       connecting,
       connected,
       select,
-      connect,
       disconnect,
 
       async getAccounts() {
@@ -181,16 +162,7 @@ export const WalletProvider: FC<WalletProviderProps> = ({
         return wallet.signAndExecuteTransaction(transaction);
       },
     }),
-    [
-      wallets,
-      adapters,
-      wallet,
-      select,
-      connect,
-      disconnect,
-      connecting,
-      connected,
-    ]
+    [wallets, adapters, wallet, select, disconnect, connecting, connected]
   );
 
   return (
