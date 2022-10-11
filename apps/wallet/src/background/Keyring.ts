@@ -156,6 +156,7 @@ class Keyring {
                             return: {
                                 isLocked: this.isLocked,
                                 isInitialized: await this.isWalletInitialized(),
+                                mnemonic: this.#mnemonic || undefined,
                             },
                         },
                         id

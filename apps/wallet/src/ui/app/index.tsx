@@ -6,7 +6,6 @@ import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 
 import { AppType } from './redux/slices/app/AppType';
 import { routes as stakeRoutes } from './staking';
-import { WALLET_ENCRYPTION_ENABLED } from './wallet/constants';
 import ForgotPasswordPage from '_app/wallet/forgot-password-page';
 import LockedPage from '_app/wallet/locked-page';
 import { useAppDispatch, useAppSelector } from '_hooks';
@@ -29,7 +28,6 @@ import ImportPage from '_pages/initialize/import';
 import SelectPage from '_pages/initialize/select';
 import SiteConnectPage from '_pages/site-connect';
 import WelcomePage from '_pages/welcome';
-import { loadAccountFromStorage } from '_redux/slices/account';
 import { setNavVisibility } from '_redux/slices/app';
 
 const HIDDEN_MENU_PATHS = [
@@ -43,9 +41,6 @@ const HIDDEN_MENU_PATHS = [
 
 const App = () => {
     const dispatch = useAppDispatch();
-    useEffect(() => {
-        dispatch(loadAccountFromStorage());
-    }, [dispatch]);
     const isPopup = useAppSelector(
         (state) => state.app.appType === AppType.popup
     );
@@ -106,15 +101,8 @@ const App = () => {
                     element={<BackupPage mode="imported" />}
                 />
             </Route>
-            {WALLET_ENCRYPTION_ENABLED ? (
-                <>
-                    <Route path="locked" element={<LockedPage />} />
-                    <Route
-                        path="forgot-password"
-                        element={<ForgotPasswordPage />}
-                    />
-                </>
-            ) : null}
+            <Route path="locked" element={<LockedPage />} />
+            <Route path="forgot-password" element={<ForgotPasswordPage />} />
         </Routes>
     );
 };
