@@ -4,7 +4,6 @@
 import { useCallback, useState } from 'react';
 
 import AutoLockTimerSelector from './auto-lock-timer-selector';
-import { WALLET_ENCRYPTION_ENABLED } from '_app/wallet/constants';
 import AccountAddress from '_components/account-address';
 import Icon, { SuiIcons } from '_components/icon';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
@@ -35,18 +34,16 @@ function Account() {
                     <label className={st.itemTitle}>Address</label>
                     <AccountAddress shorten={true} showLink={false} />
                 </div>
-                {WALLET_ENCRYPTION_ENABLED ? (
-                    <div className={st.itemGroup}>
-                        <label className={st.itemTitle}>
-                            Auto-lock timer (minutes)
-                        </label>
-                        <div className={st.itemDesc}>
-                            Set the idle time in minutes before Sui Wallet locks
-                            itself.
-                        </div>
-                        <AutoLockTimerSelector />
+                <div className={st.itemGroup}>
+                    <label className={st.itemTitle}>
+                        Auto-lock timer (minutes)
+                    </label>
+                    <div className={st.itemDesc}>
+                        Set the idle time in minutes before Sui Wallet locks
+                        itself.
                     </div>
-                ) : null}
+                    <AutoLockTimerSelector />
+                </div>
             </div>
             <button
                 className={st.logout}

@@ -7,7 +7,6 @@ import { useNavigate } from 'react-router-dom';
 import { createMnemonicValidation } from './validation';
 import Button from '_app/shared/button';
 import CardLayout from '_app/shared/card-layout';
-import { WALLET_ENCRYPTION_ENABLED } from '_app/wallet/constants';
 import ExternalLink from '_components/external-link';
 import Icon, { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
@@ -21,12 +20,11 @@ import st from './Create.module.scss';
 const CreatePage = () => {
     const dispatch = useAppDispatch();
     const navigate = useNavigate();
-    const headerObj = {
-        [WALLET_ENCRYPTION_ENABLED ? 'headerCaption' : 'title']:
-            'Create New wallet',
-    };
     return (
-        <CardLayout title="Create Password for This Wallet" {...headerObj}>
+        <CardLayout
+            title="Create Password for This Wallet"
+            headerCaption="Create New wallet"
+        >
             <Formik
                 initialValues={{
                     terms: false,
@@ -53,18 +51,7 @@ const CreatePage = () => {
                                 disabled={isSubmitting}
                                 className={st.fieldset}
                             >
-                                {WALLET_ENCRYPTION_ENABLED ? (
-                                    <PasswordFields />
-                                ) : (
-                                    <>
-                                        <div className={st.space} />
-                                        <div className={st.desc}>
-                                            Creating a wallet generates new
-                                            recovery passphrase. Using it you
-                                            can backup and restore your wallet.
-                                        </div>
-                                    </>
-                                )}
+                                <PasswordFields />
                                 <div className={st.space} />
                                 <label className={st.terms}>
                                     <Field name="terms" type="checkbox" />
