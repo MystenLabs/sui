@@ -371,7 +371,8 @@ Delete the object and it's <code><a href="object.md#0x2_object_UID">UID</a></cod
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="object.md#0x2_object_delete">delete</a>(id: <a href="object.md#0x2_object_UID">UID</a>) {
-    <a href="object.md#0x2_object_delete_impl">delete_impl</a>(id)
+    <b>let</b> <a href="object.md#0x2_object_UID">UID</a> { id: <a href="object.md#0x2_object_ID">ID</a> { bytes } } = id;
+    <a href="object.md#0x2_object_delete_impl">delete_impl</a>(bytes)
 }
 </code></pre>
 
@@ -512,7 +513,7 @@ restrictable in the object's module.
 
 
 
-<pre><code><b>fun</b> <a href="object.md#0x2_object_delete_impl">delete_impl</a>&lt;<a href="object.md#0x2_object_UID">UID</a>&gt;(id: <a href="object.md#0x2_object_UID">UID</a>)
+<pre><code><b>fun</b> <a href="object.md#0x2_object_delete_impl">delete_impl</a>(id: <b>address</b>)
 </code></pre>
 
 
@@ -521,7 +522,7 @@ restrictable in the object's module.
 <summary>Implementation</summary>
 
 
-<pre><code><b>native</b> <b>fun</b> <a href="object.md#0x2_object_delete_impl">delete_impl</a>&lt;<a href="object.md#0x2_object_UID">UID</a>&gt;(id: <a href="object.md#0x2_object_UID">UID</a>);
+<pre><code><b>native</b> <b>fun</b> <a href="object.md#0x2_object_delete_impl">delete_impl</a>(id: <b>address</b>);
 </code></pre>
 
 

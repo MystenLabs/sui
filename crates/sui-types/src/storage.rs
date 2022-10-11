@@ -36,11 +36,15 @@ pub enum ObjectChange {
     Delete(SequenceNumber, DeleteKind),
 }
 
-/// An abstraction of the (possibly distributed) store for objects, and (soon) events and transactions
-pub trait Storage {
-    fn reset(&mut self);
-
+/// An abstraction of the (possibly distributed) store for objects. This
+/// API only allows for the retrieval of objects, not any state changes
+pub trait ObjectResolver {
     fn read_object(&self, id: &ObjectID) -> Option<&Object>;
+}
+
+/// An abstraction of the (possibly distributed) store for objects, and (soon) events and transactions
+pub trait Storage: ObjectResolver {
+    fn reset(&mut self);
 
     /// Record an event that happened during execution
     fn log_event(&mut self, event: Event);
@@ -89,5 +93,11 @@ impl<S: ParentSync> ParentSync for &S {
 impl<S: ParentSync> ParentSync for &mut S {
     fn get_latest_parent_entry_ref(&self, object_id: ObjectID) -> SuiResult<Option<ObjectRef>> {
         ParentSync::get_latest_parent_entry_ref(*self, object_id)
+    }
+}
+
+impl<S: ObjectResolver> ObjectResolver for &S {
+    fn read_object(&self, id: &ObjectID) -> Option<&Object> {
+        ObjectResolver::read_object(*self, id)
     }
 }

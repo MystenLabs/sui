@@ -17,7 +17,7 @@ module sui::natives_calibration_tests {
     use sui::object::{Self, UID};
 
     use sui::test_scenario;
-    use sui::transfer;
+    // use sui::transfer;
     use sui::event;
     use sui::tx_context;
 
@@ -33,7 +33,6 @@ module sui::natives_calibration_tests {
     struct ObjectWithID has key, store{
         id: UID,
     }
-
 
     // =================================================================
     // Natives in the `event` module
@@ -70,95 +69,96 @@ module sui::natives_calibration_tests {
     }
 
 
-    // =================================================================
-    // Natives in the `transfer` module
-    // =================================================================
+    // TODO simple object calibration not supported due to type system violations
+    // // =================================================================
+    // // Natives in the `transfer` module
+    // // =================================================================
 
-    // =================================================================
-    // transfer::freeze_object
-    // =================================================================
-    // This native freezes an object
+    // // =================================================================
+    // // transfer::freeze_object
+    // // =================================================================
+    // // This native freezes an object
 
-    // This test function calls the native in a typical manner
-    #[test]
-    public entry fun test_calibrate_transfer_freeze_object() {
-        let trials: u64 = NUM_TRIALS;
+    // // This test function calls the native in a typical manner
+    // #[test]
+    // public entry fun test_calibrate_transfer_freeze_object() {
+    //     let trials: u64 = NUM_TRIALS;
 
-        while (trials > 0) {
-            let obj1 = ObjectSimple { };
-            transfer::calibrate_freeze_object(obj1);
-            trials = trials - 1;
-        }
-    }
-    // This test function excludes the natives
-    #[test]
-    public entry fun test_calibrate_transfer_freeze_object__baseline() {
-        let trials: u64 = NUM_TRIALS;
+    //     while (trials > 0) {
+    //         let obj1 = ObjectSimple { };
+    //         transfer::calibrate_freeze_object(obj1);
+    //         trials = trials - 1;
+    //     }
+    // }
+    // // This test function excludes the natives
+    // #[test]
+    // public entry fun test_calibrate_transfer_freeze_object__baseline() {
+    //     let trials: u64 = NUM_TRIALS;
 
-        while (trials > 0) {
-            let obj1 = ObjectSimple { };
-            transfer::calibrate_freeze_object_nop(obj1);
-            trials = trials - 1;
-        }
-    }
+    //     while (trials > 0) {
+    //         let obj1 = ObjectSimple { };
+    //         transfer::calibrate_freeze_object_nop(obj1);
+    //         trials = trials - 1;
+    //     }
+    // }
 
-    // =================================================================
-    // transfer::share_object
-    // =================================================================
-    // This native shares an object
+    // // =================================================================
+    // // transfer::share_object
+    // // =================================================================
+    // // This native shares an object
 
-    // This test function calls the native in a typical manner
-    #[test]
-    public entry fun test_calibrate_transfer_share_object() {
-        let trials: u64 = NUM_TRIALS;
+    // // This test function calls the native in a typical manner
+    // #[test]
+    // public entry fun test_calibrate_transfer_share_object() {
+    //     let trials: u64 = NUM_TRIALS;
 
-        while (trials > 0) {
-            let obj1 = ObjectSimple { };
-            transfer::calibrate_share_object(obj1);
-            trials = trials - 1;
-        }
-    }
-    // This test function excludes the natives
-    #[test]
-    public entry fun test_calibrate_transfer_share_object__baseline() {
-        let trials: u64 = NUM_TRIALS;
+    //     while (trials > 0) {
+    //         let obj1 = ObjectSimple { };
+    //         transfer::calibrate_share_object(obj1);
+    //         trials = trials - 1;
+    //     }
+    // }
+    // // This test function excludes the natives
+    // #[test]
+    // public entry fun test_calibrate_transfer_share_object__baseline() {
+    //     let trials: u64 = NUM_TRIALS;
 
-        while (trials > 0) {
-            let obj1 = ObjectSimple { };
-            transfer::calibrate_share_object_nop(obj1);
-            trials = trials - 1;
-        }
-    }
+    //     while (trials > 0) {
+    //         let obj1 = ObjectSimple { };
+    //         transfer::calibrate_share_object_nop(obj1);
+    //         trials = trials - 1;
+    //     }
+    // }
 
-    // =================================================================
-    // transfer::transfer_internal
-    // =================================================================
-    // This native transfers an object to an address
+    // // =================================================================
+    // // transfer::transfer_internal
+    // // =================================================================
+    // // This native transfers an object to an address
 
-    // This test function calls the native in a typical manner
-    #[test]
-    public entry fun test_calibrate_transfer_transfer_internal() {
-        let trials: u64 = NUM_TRIALS;
-        while (trials > 0) {
-            let obj1 = ObjectSimple { };
-            let addr = @0x0;
-            let to_object = false;
-            transfer::calibrate_transfer_internal(obj1, addr, to_object);
-            trials = trials - 1;
-        }
-    }
-    // This test function excludes the natives
-    #[test]
-    public entry fun test_calibrate_transfer_transfer_internal__baseline() {
-        let trials: u64 = NUM_TRIALS;
-        while (trials > 0) {
-            let obj1 = ObjectSimple { };
-            let addr = @0x0;
-            let to_object = false;
-            transfer::calibrate_transfer_internal_nop(obj1, addr, to_object);
-            trials = trials - 1;
-        }
-    }
+    // // This test function calls the native in a typical manner
+    // #[test]
+    // public entry fun test_calibrate_transfer_transfer_internal() {
+    //     let trials: u64 = NUM_TRIALS;
+    //     while (trials > 0) {
+    //         let obj1 = ObjectSimple { };
+    //         let addr = @0x0;
+    //         let to_object = false;
+    //         transfer::calibrate_transfer_internal(obj1, addr, to_object);
+    //         trials = trials - 1;
+    //     }
+    // }
+    // // This test function excludes the natives
+    // #[test]
+    // public entry fun test_calibrate_transfer_transfer_internal__baseline() {
+    //     let trials: u64 = NUM_TRIALS;
+    //     while (trials > 0) {
+    //         let obj1 = ObjectSimple { };
+    //         let addr = @0x0;
+    //         let to_object = false;
+    //         transfer::calibrate_transfer_internal_nop(obj1, addr, to_object);
+    //         trials = trials - 1;
+    //     }
+    // }
 
     // =================================================================
     // transfer::delete_child_object_internal
@@ -206,7 +206,8 @@ module sui::natives_calibration_tests {
     public entry fun test_calibrate_id_borrow_uid() {
         let trials: u64 = NUM_TRIALS;
         let sender = @0x0;
-        let scenario = &mut test_scenario::begin(&sender);
+        let scenario_val = test_scenario::begin(sender);
+        let scenario = &mut scenario_val;
 
         while (trials > 0) {
             let obj = ObjectWithID { id: object::new(test_scenario::ctx(scenario)) };
@@ -216,14 +217,16 @@ module sui::natives_calibration_tests {
 
             trials = trials - 1;
 
-        }
+        };
+        test_scenario::end(scenario_val);
     }
     // This test function excludes the natives
     #[test]
     public entry fun test_calibrate_id_borrow_uid__baseline() {
         let trials: u64 = NUM_TRIALS;
         let sender = @0x0;
-        let scenario = &mut test_scenario::begin(&sender);
+        let scenario_val = test_scenario::begin(sender);
+        let scenario = &mut scenario_val;
 
         while (trials > 0) {
             let obj = ObjectWithID { id: object::new(test_scenario::ctx(scenario)) };
@@ -234,7 +237,8 @@ module sui::natives_calibration_tests {
             object::delete(id);
 
             trials = trials - 1;
-        }
+        };
+        test_scenario::end(scenario_val);
     }
 
 

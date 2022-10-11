@@ -43,7 +43,6 @@ use std::{
     },
 };
 use sui_adapter::adapter;
-use sui_adapter::temporary_store::InnerTemporaryStore;
 use sui_config::genesis::Genesis;
 use sui_json_rpc_types::{SuiEventEnvelope, SuiTransactionEffects};
 use sui_simulator::nondeterministic;
@@ -53,6 +52,7 @@ use sui_storage::{
     IndexStore,
 };
 use sui_types::crypto::{AuthorityKeyPair, NetworkKeyPair};
+use sui_types::temporary_store::InnerTemporaryStore;
 use sui_types::{
     base_types::*,
     batch::{TxSequenceNumber, UpdateItem},
@@ -89,7 +89,7 @@ pub mod move_integration_tests;
 #[path = "unit_tests/gas_tests.rs"]
 mod gas_tests;
 
-pub use sui_adapter::temporary_store::TemporaryStore;
+pub use sui_types::temporary_store::TemporaryStore;
 
 pub mod authority_store_tables;
 

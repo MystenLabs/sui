@@ -29,10 +29,11 @@ module nfts::cross_chain_airdrop_tests {
         let (scenario, oracle_address) = init();
 
         // claim a token
-        claim_token(&mut scenario, &oracle_address, SOURCE_TOKEN_ID);
+        claim_token(&mut scenario, oracle_address, SOURCE_TOKEN_ID);
 
         // verify that the recipient has received the nft
-        assert!(owns_object(&mut scenario, &RECIPIENT_ADDRESS), EOBJECT_NOT_FOUND);
+        assert!(owns_object(RECIPIENT_ADDRESS), EOBJECT_NOT_FOUND);
+        test_scenario::end(scenario);
     }
 
     #[test]
@@ -41,14 +42,15 @@ module nfts::cross_chain_airdrop_tests {
         let (scenario, oracle_address) = init();
 
         // claim a token
-        claim_token(&mut scenario, &oracle_address, SOURCE_TOKEN_ID);
+        claim_token(&mut scenario, oracle_address, SOURCE_TOKEN_ID);
 
         // claim the same token again
-        claim_token(&mut scenario, &oracle_address, SOURCE_TOKEN_ID);
+        claim_token(&mut scenario, oracle_address, SOURCE_TOKEN_ID);
+        test_scenario::end(scenario);
     }
 
     fun init(): (Scenario, address) {
-        let scenario = test_scenario::begin(&ORACLE_ADDRESS);
+        let scenario = test_scenario::begin(ORACLE_ADDRESS);
         {
             let ctx = test_scenario::ctx(&mut scenario);
             cross_chain_airdrop::test_init(ctx);
@@ -56,10 +58,10 @@ module nfts::cross_chain_airdrop_tests {
         (scenario, ORACLE_ADDRESS)
     }
 
-    fun claim_token(scenario: &mut Scenario, oracle_address: &address, token_id: u64) {
+    fun claim_token(scenario: &mut Scenario, oracle_address: address, token_id: u64) {
         test_scenario::next_tx(scenario, oracle_address);
         {
-            let oracle = test_scenario::take_owned<CrossChainAirdropOracle>(scenario);
+            let oracle = test_scenario::take_from_sender<CrossChainAirdropOracle>(scenario);
             let ctx = test_scenario::ctx(scenario);
             cross_chain_airdrop::claim(
                 &mut oracle,
@@ -70,13 +72,13 @@ module nfts::cross_chain_airdrop_tests {
                 TOKEN_URI,
                 ctx,
             );
-            test_scenario::return_owned(scenario, oracle);
+            test_scenario::return_to_sender(scenario, oracle);
         };
+        test_scenario::next_tx(scenario, oracle_address);
     }
 
-    fun owns_object(scenario: &mut Scenario, owner: &address): bool{
+    fun owns_object(owner: address): bool{
         // Verify the token has been transfer to the recipient
-        test_scenario::next_tx(scenario, owner);
-        test_scenario::can_take_owned<ERC721>(scenario)
+        test_scenario::has_most_recent_for_address<ERC721>(owner)
     }
 }
