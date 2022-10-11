@@ -3,8 +3,10 @@
 
 import { Ed25519Keypair } from '@mysten/sui.js';
 
+import type { Keypair } from '@mysten/sui.js';
+
 export default class KeypairVault {
-    private _keypair: Ed25519Keypair | null = null;
+    private _keypair: Keypair | null = null;
 
     public set mnemonic(mnemonic: string) {
         this._keypair = Ed25519Keypair.deriveKeypair(mnemonic);

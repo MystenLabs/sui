@@ -1,14 +1,6 @@
 @use '_values/colors';
 @use '_utils';
 
-.desc {
-    color: colors.$gray-80;
-    font-size: 16px;
-    line-height: 21px;
-    font-weight: 500;
-    text-align: left;
-}
-
 .terms {
     display: flex;
     align-items: center;

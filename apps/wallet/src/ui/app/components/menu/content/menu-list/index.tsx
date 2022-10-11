@@ -8,7 +8,6 @@ import Item from './item';
 import { API_ENV_TO_INFO } from '_app/ApiProvider';
 import Button from '_app/shared/button';
 import { lockWallet } from '_app/wallet/actions';
-import { WALLET_ENCRYPTION_ENABLED } from '_app/wallet/constants';
 import ExternalLink from '_components/external-link';
 import Icon, { SuiIcons } from '_components/icon';
 import { useNextMenuUrl } from '_components/menu/hooks';
@@ -61,24 +60,22 @@ function MenuList() {
                     subtitle={'v' + version}
                 />
             </div>
-            {WALLET_ENCRYPTION_ENABLED ? (
-                <div className={st.container}>
-                    <div className={st.item}>
-                        <Button
-                            mode="secondary"
-                            size="large"
-                            className={st.btn}
-                            onClick={async () => {
-                                await dispatch(lockWallet()).unwrap();
-                                navigate('/locked', { replace: true });
-                            }}
-                        >
-                            <Icon icon={SuiIcons.Lock} />
-                            Lock Wallet
-                        </Button>
-                    </div>
+            <div className={st.container}>
+                <div className={st.item}>
+                    <Button
+                        mode="secondary"
+                        size="large"
+                        className={st.btn}
+                        onClick={async () => {
+                            await dispatch(lockWallet()).unwrap();
+                            navigate('/locked', { replace: true });
+                        }}
+                    >
+                        <Icon icon={SuiIcons.Lock} />
+                        Lock Wallet
+                    </Button>
                 </div>
-            ) : null}
+            </div>
         </div>
     );
 }
