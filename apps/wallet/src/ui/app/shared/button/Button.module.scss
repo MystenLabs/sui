@@ -23,7 +23,7 @@
 
     &.neutral {
         background: colors.$gray-45;
-        color: colors.$gray-75;
+        color: colors.$gray-90;
     }
 
     &.outline {
@@ -52,6 +52,13 @@
                 color: colors.$white;
             }
         }
+    }
+
+    &.mini {
+        padding: 4px 8px;
+        border-radius: 20px;
+
+        @include utils.typography('Primary/CAPTIONSMALL-SB');
     }
 
     &.small {
