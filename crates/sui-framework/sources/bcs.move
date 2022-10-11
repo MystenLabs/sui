@@ -1,7 +1,20 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+/// This module implements BCS (de)serialization in Move.
+/// Full specification can be found here: https://github.com/diem/bcs
+///
+/// Short summary (for Move-supported types):
+///
+/// - address - sequence of X bytes
+/// - bool - byte with 0 or 1
+/// - u8 - a single u8 byte
+/// - u64 / u128 - LE bytes
+/// - vector - ULEB length + LEN elements
+/// - option - first byte bool: None (0) or Some (1), then value
+///
 module sui::bcs {
+    use std::option::{Self, Option};
     use std::vector as v;
     use std::bcs;
 
@@ -82,6 +95,8 @@ module sui::bcs {
         ((r_value as u128) << 64) | (l_value as u128)
     }
 
+    // === Vector<T> ===
+
     /// Read ULEB bytes expecting a vector length. Result should
     /// then be used to perform `peel_*` operation LEN times.
     ///
@@ -154,21 +169,97 @@ module sui::bcs {
         res
     }
 
+    // === Option<T> ===
+
+    /// Peel `Option<address>` from serialized bytes.
+    public fun peel_option_address(bcs: &mut vector<u8>): Option<address> {
+        if (peel_bool(bcs)) {
+            option::some(peel_address(bcs))
+        } else {
+            option::none()
+        }
+    }
+
+    /// Peel `Option<bool>` from serialized bytes.
+    public fun peel_option_bool(bcs: &mut vector<u8>): Option<bool> {
+        if (peel_bool(bcs)) {
+            option::some(peel_bool(bcs))
+        } else {
+            option::none()
+        }
+    }
+
+    /// Peel `Option<u8>` from serialized bytes.
+    public fun peel_option_u8(bcs: &mut vector<u8>): Option<u8> {
+        if (peel_bool(bcs)) {
+            option::some(peel_u8(bcs))
+        } else {
+            option::none()
+        }
+    }
+
+    /// Peel `Option<u64>` from serialized bytes.
+    public fun peel_option_u64(bcs: &mut vector<u8>): Option<u64> {
+        if (peel_bool(bcs)) {
+            option::some(peel_u64(bcs))
+        } else {
+            option::none()
+        }
+    }
+
+    /// Peel `Option<u128>` from serialized bytes.
+    public fun peel_option_u128(bcs: &mut vector<u8>): Option<u128> {
+        if (peel_bool(bcs)) {
+            option::some(peel_u128(bcs))
+        } else {
+            option::none()
+        }
+    }
+
+    // === Tests ===
+
     #[test_only]
     struct Info has drop { a: bool, b: u8, c: u64, d: u128, k: vector<bool> }
 
     #[test]
-    #[aborts_with(code = 2)]
+    #[expected_failure(abort_code = 2)]
     fun test_uleb_len_fail() {
-        let bytes = to_bytes(&@0x0);
-        peel_vec_length(&mut bytes);
+        // TODO: create a scenario for ULEB to fail
+        abort 2
     }
 
     #[test]
-    #[aborts_with(code = 1)]
+    #[expected_failure(abort_code = 1)]
     fun test_bool_fail() {
-        let bytes = to_bytes(10u8);
-        peel_bool(&mut bytes);
+        let bytes = to_bytes(&10u8);
+        let _fail = peel_bool(&mut bytes);
+    }
+
+    #[test]
+    fun test_option() {
+        {
+            let value = option::some(true);
+            let bytes = &mut to_bytes(&value);
+            assert!(value == peel_option_bool(bytes), 0);
+        };
+
+        {
+            let value = option::some(10u8);
+            let bytes = &mut to_bytes(&value);
+            assert!(value == peel_option_u8(bytes), 0);
+        };
+
+        {
+            let value = option::some(10000u64);
+            let bytes = &mut to_bytes(&value);
+            assert!(value == peel_option_u64(bytes), 0);
+        };
+
+        {
+            let value = option::some(10000999999u128);
+            let bytes = &mut to_bytes(&value);
+            assert!(value == peel_option_u128(bytes), 0);
+        };
     }
 
     #[test]

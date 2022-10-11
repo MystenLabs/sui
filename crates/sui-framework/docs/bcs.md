@@ -3,6 +3,17 @@
 
 # Module `0x2::bcs`
 
+This module implements BCS (de)serialization in Move.
+Full specification can be found here: https://github.com/diem/bcs
+
+Short summary (for Move-supported types):
+
+- address - sequence of X bytes
+- bool - byte with 0 or 1
+- u8 - a single u8 byte
+- u64 / u128 - LE bytes
+- vector - ULEB length + LEN elements
+- option - first byte bool: None (0) or Some (1), then value
 
 
 -  [Constants](#@Constants_0)
@@ -18,9 +29,15 @@
 -  [Function `peel_vec_u8`](#0x2_bcs_peel_vec_u8)
 -  [Function `peel_vec_u64`](#0x2_bcs_peel_vec_u64)
 -  [Function `peel_vec_u128`](#0x2_bcs_peel_vec_u128)
+-  [Function `peel_option_address`](#0x2_bcs_peel_option_address)
+-  [Function `peel_option_bool`](#0x2_bcs_peel_option_bool)
+-  [Function `peel_option_u8`](#0x2_bcs_peel_option_u8)
+-  [Function `peel_option_u64`](#0x2_bcs_peel_option_u64)
+-  [Function `peel_option_u128`](#0x2_bcs_peel_option_u128)
 
 
 <pre><code><b>use</b> <a href="">0x1::bcs</a>;
+<b>use</b> <a href="">0x1::option</a>;
 <b>use</b> <a href="">0x1::vector</a>;
 </code></pre>
 
@@ -440,6 +457,151 @@ Peel a vector of <code>u128</code> from serialized bytes.
         i = i + 1;
     };
     res
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_bcs_peel_option_address"></a>
+
+## Function `peel_option_address`
+
+Peel <code>Option&lt;<b>address</b>&gt;</code> from serialized bytes.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_option_address">peel_option_address</a>(<a href="">bcs</a>: &<b>mut</b> <a href="">vector</a>&lt;u8&gt;): <a href="_Option">option::Option</a>&lt;<b>address</b>&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_option_address">peel_option_address</a>(<a href="">bcs</a>: &<b>mut</b> <a href="">vector</a>&lt;u8&gt;): Option&lt;<b>address</b>&gt; {
+    <b>if</b> (<a href="bcs.md#0x2_bcs_peel_bool">peel_bool</a>(<a href="">bcs</a>)) {
+        <a href="_some">option::some</a>(<a href="bcs.md#0x2_bcs_peel_address">peel_address</a>(<a href="">bcs</a>))
+    } <b>else</b> {
+        <a href="_none">option::none</a>()
+    }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_bcs_peel_option_bool"></a>
+
+## Function `peel_option_bool`
+
+Peel <code>Option&lt;bool&gt;</code> from serialized bytes.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_option_bool">peel_option_bool</a>(<a href="">bcs</a>: &<b>mut</b> <a href="">vector</a>&lt;u8&gt;): <a href="_Option">option::Option</a>&lt;bool&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_option_bool">peel_option_bool</a>(<a href="">bcs</a>: &<b>mut</b> <a href="">vector</a>&lt;u8&gt;): Option&lt;bool&gt; {
+    <b>if</b> (<a href="bcs.md#0x2_bcs_peel_bool">peel_bool</a>(<a href="">bcs</a>)) {
+        <a href="_some">option::some</a>(<a href="bcs.md#0x2_bcs_peel_bool">peel_bool</a>(<a href="">bcs</a>))
+    } <b>else</b> {
+        <a href="_none">option::none</a>()
+    }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_bcs_peel_option_u8"></a>
+
+## Function `peel_option_u8`
+
+Peel <code>Option&lt;u8&gt;</code> from serialized bytes.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_option_u8">peel_option_u8</a>(<a href="">bcs</a>: &<b>mut</b> <a href="">vector</a>&lt;u8&gt;): <a href="_Option">option::Option</a>&lt;u8&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_option_u8">peel_option_u8</a>(<a href="">bcs</a>: &<b>mut</b> <a href="">vector</a>&lt;u8&gt;): Option&lt;u8&gt; {
+    <b>if</b> (<a href="bcs.md#0x2_bcs_peel_bool">peel_bool</a>(<a href="">bcs</a>)) {
+        <a href="_some">option::some</a>(<a href="bcs.md#0x2_bcs_peel_u8">peel_u8</a>(<a href="">bcs</a>))
+    } <b>else</b> {
+        <a href="_none">option::none</a>()
+    }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_bcs_peel_option_u64"></a>
+
+## Function `peel_option_u64`
+
+Peel <code>Option&lt;u64&gt;</code> from serialized bytes.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_option_u64">peel_option_u64</a>(<a href="">bcs</a>: &<b>mut</b> <a href="">vector</a>&lt;u8&gt;): <a href="_Option">option::Option</a>&lt;u64&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_option_u64">peel_option_u64</a>(<a href="">bcs</a>: &<b>mut</b> <a href="">vector</a>&lt;u8&gt;): Option&lt;u64&gt; {
+    <b>if</b> (<a href="bcs.md#0x2_bcs_peel_bool">peel_bool</a>(<a href="">bcs</a>)) {
+        <a href="_some">option::some</a>(<a href="bcs.md#0x2_bcs_peel_u64">peel_u64</a>(<a href="">bcs</a>))
+    } <b>else</b> {
+        <a href="_none">option::none</a>()
+    }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_bcs_peel_option_u128"></a>
+
+## Function `peel_option_u128`
+
+Peel <code>Option&lt;u128&gt;</code> from serialized bytes.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_option_u128">peel_option_u128</a>(<a href="">bcs</a>: &<b>mut</b> <a href="">vector</a>&lt;u8&gt;): <a href="_Option">option::Option</a>&lt;u128&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_option_u128">peel_option_u128</a>(<a href="">bcs</a>: &<b>mut</b> <a href="">vector</a>&lt;u8&gt;): Option&lt;u128&gt; {
+    <b>if</b> (<a href="bcs.md#0x2_bcs_peel_bool">peel_bool</a>(<a href="">bcs</a>)) {
+        <a href="_some">option::some</a>(<a href="bcs.md#0x2_bcs_peel_u128">peel_u128</a>(<a href="">bcs</a>))
+    } <b>else</b> {
+        <a href="_none">option::none</a>()
+    }
 }
 </code></pre>
 

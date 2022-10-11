@@ -4,7 +4,6 @@
 /// Library for Elliptic Curve operations on chain. We specifically support the Ristretto-255 sub-group.
 module sui::elliptic_curve {
     use std::vector;
-    use std::debug;
 
     ///////////////////////////////////
     /// Elliptic Curve structs
@@ -23,20 +22,20 @@ module sui::elliptic_curve {
     }
 
     ///////////////////////////////////
-    /// Private 
+    /// Private
     ///////////////////////////////////
 
     /// @param value: The value to commit to
     /// @param blinding_factor: A random number used to ensure that the commitment is hiding.
     native fun native_create_pedersen_commitment(value: vector<u8>, blinding_factor: vector<u8>): vector<u8>;
 
-    /// @param self: bytes representation of an EC point on the Ristretto-255 subgroup 
-    /// @param other: bytes representation of an EC point on the Ristretto-255 subgroup 
+    /// @param self: bytes representation of an EC point on the Ristretto-255 subgroup
+    /// @param other: bytes representation of an EC point on the Ristretto-255 subgroup
     /// A native move wrapper around the addition of Ristretto points. Returns self + other.
     native fun native_add_ristretto_point(point1: vector<u8>, point2: vector<u8>): vector<u8>;
 
     /// @param self: bytes representation of an EC point on the Ristretto-255 subgroup
-    /// @param other: bytes representation of an EC point on the Ristretto-255 subgroup 
+    /// @param other: bytes representation of an EC point on the Ristretto-255 subgroup
     /// A native move wrapper around the subtraction of Ristretto points. Returns self - other.
     native fun native_subtract_ristretto_point(point1: vector<u8>, point2: vector<u8>): vector<u8>;
 
@@ -54,13 +53,12 @@ module sui::elliptic_curve {
     ///////////////////////////////////
     /// Public
     ///////////////////////////////////
-    
+
     // Scalar
     ///////////////////////
 
     /// Create a field element from u64
     public fun new_scalar_from_u64(value: u64): Scalar {
-        debug::print(&value);
         Scalar {
             value: native_scalar_from_u64(value)
         }
@@ -85,7 +83,7 @@ module sui::elliptic_curve {
     public fun scalar_bytes(self: &Scalar): vector<u8> {
         self.value
     }
-    
+
     // EC Point
     ///////////////////////
 

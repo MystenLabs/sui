@@ -10,8 +10,8 @@ module sui::bls12381 {
     ///
     /// If the signature is a valid BLS12381 signature of the message and public key, return true.
     /// Otherwise, return false.
-    public native fun bls12381_verify_g1_sig(signature: &vector<u8>, public_key: &vector<u8>, msg: &vector<u8>): bool; 
-   
+    public native fun bls12381_verify_g1_sig(signature: &vector<u8>, public_key: &vector<u8>, msg: &vector<u8>): bool;
+
     /// @param signature: 32-byte signature that is a point on the Ed25519 elliptic curve.
     /// @param public_key: 32-byte signature that is a point on the Ed25519 elliptic curve.
     /// @param msg: The message that we test the signature against.

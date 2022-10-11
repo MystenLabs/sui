@@ -23,8 +23,7 @@ Library for Elliptic Curve operations on chain. We specifically support the Rist
 -  [Function `new_from_bytes`](#0x2_elliptic_curve_new_from_bytes)
 
 
-<pre><code><b>use</b> <a href="">0x1::debug</a>;
-</code></pre>
+<pre><code></code></pre>
 
 
 
@@ -228,7 +227,6 @@ Create a field element from u64
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="elliptic_curve.md#0x2_elliptic_curve_new_scalar_from_u64">new_scalar_from_u64</a>(value: u64): <a href="elliptic_curve.md#0x2_elliptic_curve_Scalar">Scalar</a> {
-    <a href="_print">debug::print</a>(&value);
     <a href="elliptic_curve.md#0x2_elliptic_curve_Scalar">Scalar</a> {
         value: <a href="elliptic_curve.md#0x2_elliptic_curve_native_scalar_from_u64">native_scalar_from_u64</a>(value)
     }
