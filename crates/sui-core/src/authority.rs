@@ -30,6 +30,8 @@ use prometheus::{
     exponential_buckets, register_histogram_with_registry, register_int_counter_with_registry,
     register_int_gauge_with_registry, Histogram, IntCounter, IntGauge,
 };
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 use std::ops::Deref;
 use std::path::PathBuf;
 use std::{
@@ -92,6 +94,7 @@ pub use sui_adapter::temporary_store::TemporaryStore;
 pub mod authority_store_tables;
 
 mod authority_store;
+use crate::authority::authority_store_tables::ExecutionIndicesWithHash;
 use crate::consensus_adapter::ConsensusListenerMessage;
 use crate::epoch::committee_store::CommitteeStore;
 use crate::metrics::TaskUtilizationExt;
@@ -2027,7 +2030,7 @@ impl AuthorityState {
         &self,
         // TODO [2533]: use this once integrating Narwhal reconfiguration
         _consensus_output: &narwhal_consensus::ConsensusOutput,
-        consensus_index: ExecutionIndices,
+        consensus_index: ExecutionIndicesWithHash,
         transaction: ConsensusTransaction,
     ) -> Result<(), NarwhalHandlerError> {
         self.metrics.total_consensus_txns.inc();
@@ -2091,7 +2094,7 @@ impl AuthorityState {
                 let mut checkpoint = self.checkpoints.lock();
                 checkpoint
                     .handle_internal_fragment(
-                        consensus_index,
+                        consensus_index.index,
                         *fragment,
                         self.database.clone(),
                         &self.committee.load(),
@@ -2123,11 +2126,37 @@ impl AuthorityState {
 pub struct ConsensusHandler {
     state: Arc<AuthorityState>,
     sender: Sender<ConsensusListenerMessage>,
+    hash: Mutex<u64>,
 }
 
 impl ConsensusHandler {
     pub fn new(state: Arc<AuthorityState>, sender: Sender<ConsensusListenerMessage>) -> Self {
-        Self { state, sender }
+        let hash = Mutex::new(0);
+        Self {
+            state,
+            sender,
+            hash,
+        }
+    }
+
+    fn update_hash(&self, index: ExecutionIndices, v: &[u8]) -> ExecutionIndicesWithHash {
+        let mut hash_guard = self
+            .hash
+            .try_lock()
+            .expect("Should not have contention on ExecutionState::update_hash");
+        let mut hasher = DefaultHasher::new();
+        (*hash_guard).hash(&mut hasher);
+        v.hash(&mut hasher);
+        let hash = hasher.finish();
+        *hash_guard = hash;
+        // Log hash for every certificate
+        if index.next_transaction_index == 1 && index.next_batch_index == 1 {
+            debug!(
+                "Integrity hash for consensus output at certificate {} is {:016x}",
+                index.next_certificate_index, hash
+            );
+        }
+        ExecutionIndicesWithHash { index, hash }
     }
 }
 
@@ -2142,6 +2171,7 @@ impl ExecutionState for ConsensusHandler {
         consensus_index: ExecutionIndices,
         serialized_transaction: Vec<u8>,
     ) {
+        let consensus_index = self.update_hash(consensus_index, &serialized_transaction);
         let transaction =
             match bincode::deserialize::<ConsensusTransaction>(&serialized_transaction) {
                 Ok(transaction) => transaction,
@@ -2184,10 +2214,17 @@ impl ExecutionState for ConsensusHandler {
     }
 
     async fn load_execution_indices(&self) -> ExecutionIndices {
-        self.state
+        let index_with_hash = self
+            .state
             .database
             .last_consensus_index()
-            .expect("Failed to load consensus indices")
+            .expect("Failed to load consensus indices");
+        *self
+            .hash
+            .try_lock()
+            .expect("Should not have contention on ExecutionState::load_execution_indices") =
+            index_with_hash.hash;
+        index_with_hash.index
     }
 }
 
