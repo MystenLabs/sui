@@ -68,3 +68,6 @@ func main() {
 
 You can verify the result with the [Sui Explorer](https://explorer.devnet.sui.io/) if you are using the Sui Devnet Gateway.
 
+### Example 2 - Subscribe to JSON-RPC Real-Time Events
+
+Subscribe to a real-time event stream generated from Move or from the Sui network. More information [here](https://docs.sui.io/devnet/build/pubsub)
