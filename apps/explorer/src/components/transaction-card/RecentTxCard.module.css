@@ -105,7 +105,7 @@ div.txadd {
 }
 
 .addresses {
-    @apply flex flex-wrap items-center p-0 gap-[4px];
+    @apply flex flex-wrap items-center p-0 gap-[4px] h-full;
 }
 
 tbody tr td:hover .addresses {

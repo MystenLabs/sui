@@ -5,11 +5,10 @@ import {
     getCoreRowModel,
     useReactTable,
 } from '@tanstack/react-table';
+import { cva } from 'class-variance-authority';
 import { useMemo } from 'react';
 
 import type { ExecutionStatusType, TransactionKindName } from '@mysten/sui.js';
-
-import styles from './TableCard.module.css';
 
 export type LinkObj = {
     url: string;
@@ -59,6 +58,18 @@ export type TableType = {
     columns: TableColumn[];
 };
 
+const cellStyle = cva(['text-sui-grey-75 px-[8px] h-[30px]'], {
+    variants: {
+        variant: {
+            th: 'text-left font-semibold uppercase text-xs',
+            td: 'group-hover:text-sui-grey-90 group-hover:bg-sui-grey-40 text-sm group-hover:first:rounded-l-[4px] group-hover:last:rounded-r-[4px]',
+        },
+    },
+    defaultVariants: {
+        variant: 'td',
+    },
+});
+
 function TableCard({ tabledata }: { tabledata: TableType }) {
     const data = useMemo(() => tabledata.data, [tabledata.data]);
     // Use Columns to create a table
@@ -73,8 +84,12 @@ function TableCard({ tabledata }: { tabledata: TableType }) {
     });
 
     return (
-        <div className={styles.container}>
-            <table className={styles.table}>
+        <div className={'w-full overflow-x-auto'}>
+            <table
+                className={
+                    'text-sm text-left min-w-max border-collapse w-full  border-solid border-[#f0f1f2] border-b-[1px] border-0'
+                }
+            >
                 <thead>
                     {table.getHeaderGroups().map((headerGroup: any) => (
                         <tr key={headerGroup.id}>
@@ -83,6 +98,7 @@ function TableCard({ tabledata }: { tabledata: TableType }) {
                                     key={header.id}
                                     colSpan={header.colSpan}
                                     scope="col"
+                                    className={cellStyle({ variant: 'th' })}
                                 >
                                     {header.isPlaceholder
                                         ? null
@@ -97,9 +113,12 @@ function TableCard({ tabledata }: { tabledata: TableType }) {
                 </thead>
                 <tbody>
                     {table.getRowModel().rows.map((row: any) => (
-                        <tr key={row.id}>
+                        <tr key={row.id} className={'group'}>
                             {row.getVisibleCells().map((cell: any) => (
-                                <td key={cell.id}>
+                                <td
+                                    key={cell.id}
+                                    className={cellStyle({ variant: 'td' })}
+                                >
                                     {flexRender(
                                         cell.column.columnDef.cell,
                                         cell.getContext()
