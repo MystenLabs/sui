@@ -48,8 +48,9 @@ def local(ctx, debug=True):
             "socket_addr": "/ip4/127.0.0.1/tcp/0/http"
         },
         "network_admin_server": {
-            "primary_network_admin_server_port": 6564,
-            "worker_network_admin_server_base_port": 6565
+            # Use a random available local port.
+            "primary_network_admin_server_port": 0,
+            "worker_network_admin_server_base_port": 0
         },
     }
     try:
@@ -216,8 +217,9 @@ def remote(ctx, debug=False):
             "socket_addr": "/ip4/0.0.0.0/tcp/0/http"
         },
         "network_admin_server": {
-            "primary_network_admin_server_port": 6564,
-            "worker_network_admin_server_base_port": 6565
+            # Use a random available local port.
+            "primary_network_admin_server_port": 0,
+            "worker_network_admin_server_base_port": 0
         },
     }
     try:
