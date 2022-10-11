@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Field, Form, Formik } from 'formik';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import * as Yup from 'yup';
 
 import Alert from '_app/components/alert';
@@ -89,6 +89,12 @@ export default function LockedPage() {
                                         />
                                         Unlock
                                     </Button>
+                                    <Link
+                                        to="/forgot-password"
+                                        className={st.forgotLink}
+                                    >
+                                        Forgot password?
+                                    </Link>
                                 </Form>
                             )}
                         </Formik>
