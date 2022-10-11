@@ -23,5 +23,7 @@ export * from './signers/signer';
 export * from './signers/raw-signer';
 export * from './signers/signer-with-provider';
 
+console.log('test');
+
 export * from './types';
 export * from './types/index.guard';
