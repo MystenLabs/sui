@@ -7,6 +7,7 @@ import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { AppType } from './redux/slices/app/AppType';
 import { routes as stakeRoutes } from './staking';
 import { WALLET_ENCRYPTION_ENABLED } from './wallet/constants';
+import ForgotPasswordPage from '_app/wallet/forgot-password-page';
 import LockedPage from '_app/wallet/locked-page';
 import { useAppDispatch, useAppSelector } from '_hooks';
 import { DappTxApprovalPage } from '_pages/dapp-tx-approval';
@@ -106,7 +107,13 @@ const App = () => {
                 />
             </Route>
             {WALLET_ENCRYPTION_ENABLED ? (
-                <Route path="locked" element={<LockedPage />} />
+                <>
+                    <Route path="locked" element={<LockedPage />} />
+                    <Route
+                        path="forgot-password"
+                        element={<ForgotPasswordPage />}
+                    />
+                </>
             ) : null}
         </Routes>
     );

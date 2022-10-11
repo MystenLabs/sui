@@ -93,3 +93,9 @@
 
     @include utils.typography('Primary/CAPTION-B');
 }
+
+.back {
+    position: absolute;
+    left: 22px;
+    top: 19px;
+}
