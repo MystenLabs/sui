@@ -3,6 +3,7 @@
 
 import cn from 'classnames';
 
+import PageTitle from '_app/shared/page-title';
 import Icon, { SuiIcons } from '_components/icon';
 
 import type { ReactNode } from 'react';
@@ -17,6 +18,7 @@ export type CardLayoutProps = {
     children: ReactNode | ReactNode[];
     className?: string;
     mode?: 'box' | 'plain';
+    goBackOnClick?: () => void;
 };
 
 export default function CardLayout({
@@ -27,9 +29,17 @@ export default function CardLayout({
     headerCaption,
     icon,
     mode = 'box',
+    goBackOnClick,
 }: CardLayoutProps) {
     return (
         <div className={cn(className, st.container, st[mode])}>
+            {goBackOnClick ? (
+                <PageTitle
+                    onClick={goBackOnClick}
+                    hideBackLabel={true}
+                    className={st.back}
+                />
+            ) : null}
             {icon === 'success' ? (
                 <div className={st.successIcon}>
                     <div className={st.successBg}>
