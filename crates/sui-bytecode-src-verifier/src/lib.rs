@@ -28,8 +28,6 @@ pub struct DependencyVerificationResult {
 
 #[derive(Debug)]
 pub enum DependencyVerificationError {
-    /// Could not resolve Sui addresses for package dependencies
-    ResolutionGraphNotResolved(anyhow::Error),
     /// Could not convert a dependencies' resolved Sui address to a Sui object ID
     ObjectIdFromAddressFailure(ObjectIDParseError),
     /// Could not read a dependencies' on-chain object
