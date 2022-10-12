@@ -50,6 +50,7 @@ const onWindowFocusChanged = fromEventPattern<number>(
 type TabInfo = {
     id: number;
     url: string | null;
+    nextUrl?: string;
     closed?: boolean;
 };
 
@@ -89,6 +90,7 @@ class Tabs {
                         this._onRemoved.next({
                             id,
                             url: currentTab.url,
+                            nextUrl: url,
                             closed: false,
                         });
                     }
