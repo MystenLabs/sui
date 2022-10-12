@@ -1,15 +1,17 @@
-use std::sync::Arc;
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{ExecutionIndices, ExecutionState, ExecutorMetrics};
 use consensus::ConsensusOutput;
+use fastcrypto::Hash;
+use std::sync::Arc;
 use tokio::task::JoinHandle;
+use tracing::debug;
 
 use types::{metered_channel, Batch};
 
 #[derive(Clone, Debug)]
 pub struct BatchIndex {
-    pub consensus_output: ConsensusOutput,
+    pub consensus_output: Arc<ConsensusOutput>,
     pub next_certificate_index: u64,
     pub batch_index: u64,
 }
@@ -36,6 +38,7 @@ impl<State: ExecutionState + Send + Sync + 'static> Notifier<State> {
 
     async fn run(mut self) {
         while let Some((index, batch)) = self.rx_notifier.recv().await {
+            debug!("Notifier processes batch {}", batch.digest());
             self.metrics.notifier_processed_batches.inc();
             let mut bytes = 0usize;
             for (transaction_index, transaction) in batch.0.into_iter().enumerate() {

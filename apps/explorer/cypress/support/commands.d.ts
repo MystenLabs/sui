@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 /* eslint-disable @typescript-eslint/consistent-type-imports */
@@ -11,6 +11,6 @@ declare namespace Cypress {
         task(
             name: 'mint',
             address?: string
-        ): Chainable<import('@mysten/sui.js').SuiTransactionResponse>;
+        ): Chainable<import('@mysten/sui.js').SuiExecuteTransactionResponse>;
     }
 }

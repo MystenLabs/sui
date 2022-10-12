@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use super::Node;
@@ -45,7 +45,7 @@ impl SwarmBuilder {
 }
 
 impl<R> SwarmBuilder<R> {
-    pub fn rng<N: ::rand::RngCore + ::rand::CryptoRng>(self, rng: N) -> SwarmBuilder<N> {
+    pub fn rng<N: rand::RngCore + rand::CryptoRng>(self, rng: N) -> SwarmBuilder<N> {
         SwarmBuilder {
             rng,
             dir: self.dir,
@@ -101,7 +101,7 @@ impl<R> SwarmBuilder<R> {
     }
 }
 
-impl<R: ::rand::RngCore + ::rand::CryptoRng> SwarmBuilder<R> {
+impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
     /// Create the configured Swarm.
     pub fn build(self) -> Swarm {
         let dir = if let Some(dir) = self.dir {
@@ -132,7 +132,8 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> SwarmBuilder<R> {
 
         if self.fullnode_count > 0 {
             (0..self.fullnode_count).for_each(|_| {
-                let mut config = network_config.generate_fullnode_config();
+                let mut config =
+                    network_config.generate_fullnode_config_with_random_dir_name(true, true);
                 if let Some(fullnode_rpc_addr) = self.fullnode_rpc_addr {
                     config.json_rpc_address = fullnode_rpc_addr;
                 }

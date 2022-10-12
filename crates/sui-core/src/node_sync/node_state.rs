@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
@@ -63,8 +63,11 @@ macro_rules! check_epoch {
 
         if expected_epoch != observed_epoch {
             // Most likely indicates a reconfiguration bug.
-            error!(?expected_epoch, ?observed_epoch, "Epoch mis-match");
-            return Err(SuiError::WrongEpoch { expected_epoch });
+            error!(?expected_epoch, ?observed_epoch, "Epoch mismatch");
+            return Err(SuiError::WrongEpoch {
+                expected_epoch,
+                actual_epoch: observed_epoch,
+            });
         }
     };
 }
@@ -546,7 +549,7 @@ where
         let effects = self.get_true_effects(epoch_id, &cert).await?;
 
         // Must release permit before enqueuing new work to prevent deadlock.
-        std::mem::drop(permit);
+        drop(permit);
 
         let missing_parents = self.get_missing_parents(&effects.effects)?;
         self.enqueue_parent_execution_requests(epoch_id, digest, &missing_parents, false)
@@ -589,7 +592,7 @@ where
                 let effects = self.get_true_effects(epoch_id, &cert).await?;
 
                 // Must release permit before enqueuing new work to prevent deadlock.
-                std::mem::drop(permit);
+                drop(permit);
 
                 let missing_parents = self.get_missing_parents(&effects.effects)?;
                 self.enqueue_parent_execution_requests(epoch_id, digest, &missing_parents, true)
@@ -819,7 +822,7 @@ where
         effects: &SignedTransactionEffects,
     ) -> SuiResult {
         // Must drop the permit before waiting to avoid deadlock.
-        std::mem::drop(permit);
+        drop(permit);
 
         for parent in effects.effects.dependencies.iter() {
             let (_, mut rx) = self.pending_parents.wait(parent);
@@ -833,10 +836,9 @@ where
             // able to start.
             rx.recv()
                 .await
-                .map(|_| ())
                 .map_err(|e| SuiError::GenericAuthorityError {
                     error: format!("{:?}", e),
-                })?
+                })??;
         }
 
         if cfg!(debug_assertions) {

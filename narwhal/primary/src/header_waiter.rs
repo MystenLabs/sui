@@ -1,5 +1,5 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
     metrics::PrimaryMetrics,
@@ -246,6 +246,8 @@ impl HeaderWaiter {
                             if self.pending.contains_key(&header_id) {
                                 continue;
                             }
+                            self.metrics.last_parent_missing_round
+                            .with_label_values(&[&self.committee.epoch.to_string()]).set(round as i64);
 
                             // Add the header to the waiter pool. The waiter will return it to us
                             // when all its parents are in the store.
@@ -328,9 +330,6 @@ impl HeaderWaiter {
                     let message = self.rx_reconfigure.borrow().clone();
                     match message {
                         ReconfigureNotification::NewEpoch(new_committee) => {
-                            // Update the committee and cleanup internal state.
-                            self.network.cleanup(self.committee.network_diff(&new_committee));
-
                             self.committee = new_committee;
 
                             self.pending.clear();
@@ -338,7 +337,6 @@ impl HeaderWaiter {
                             self.parent_requests.clear();
                         },
                         ReconfigureNotification::UpdateCommittee(new_committee) => {
-                            self.network.cleanup(self.committee.network_diff(&new_committee));
                             self.committee = new_committee;
                         },
                         ReconfigureNotification::Shutdown => return

@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use super::{NetworkModel, Primary, CHANNEL_CAPACITY};
 use crate::metrics::PrimaryChannelMetrics;
@@ -50,14 +50,6 @@ async fn get_network_peers_from_admin_server() {
         )
         .unwrap(),
     );
-    let (tx_get_block_commands, rx_get_block_commands) = types::metered_channel::channel(
-        1,
-        &prometheus::IntGauge::new(
-            PrimaryChannelMetrics::NAME_GET_BLOCK_COMMANDS,
-            PrimaryChannelMetrics::DESC_GET_BLOCK_COMMANDS,
-        )
-        .unwrap(),
-    );
     let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
     let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
@@ -72,13 +64,12 @@ async fn get_network_peers_from_admin_server() {
         primary_1_parameters.clone(),
         store.header_store.clone(),
         store.certificate_store.clone(),
+        store.proposer_store.clone(),
         store.payload_store.clone(),
         store.vote_digest_store.clone(),
         /* tx_consensus */ tx_new_certificates,
         /* rx_consensus */ rx_feedback,
         /* dag */
-        tx_get_block_commands,
-        rx_get_block_commands,
         Some(Arc::new(
             Dag::new(&committee, rx_new_certificates, consensus_metrics).1,
         )),
@@ -170,14 +161,6 @@ async fn get_network_peers_from_admin_server() {
         )
         .unwrap(),
     );
-    let (tx_get_block_commands_2, rx_get_block_commands_2) = types::metered_channel::channel(
-        1,
-        &prometheus::IntGauge::new(
-            PrimaryChannelMetrics::NAME_GET_BLOCK_COMMANDS,
-            PrimaryChannelMetrics::DESC_GET_BLOCK_COMMANDS,
-        )
-        .unwrap(),
-    );
     let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
     let (tx_reconfigure_2, _rx_reconfigure_2) = watch::channel(initial_committee);
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
@@ -192,13 +175,12 @@ async fn get_network_peers_from_admin_server() {
         primary_2_parameters.clone(),
         store.header_store.clone(),
         store.certificate_store.clone(),
+        store.proposer_store.clone(),
         store.payload_store.clone(),
         store.vote_digest_store.clone(),
         /* tx_consensus */ tx_new_certificates_2,
         /* rx_consensus */ rx_feedback_2,
         /* dag */
-        tx_get_block_commands_2,
-        rx_get_block_commands_2,
         Some(Arc::new(
             Dag::new(&committee, rx_new_certificates_2, consensus_metrics).1,
         )),

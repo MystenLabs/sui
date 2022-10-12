@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 import cl from 'classnames';
@@ -16,12 +16,14 @@ export type PageLayoutProps = {
     limitToPopUpSize?: boolean;
     forceFullscreen?: boolean;
     children: ReactNode | ReactNode[];
+    className?: string;
 };
 
 function PageLayout({
     limitToPopUpSize = false,
     forceFullscreen = false,
     children,
+    className,
 }: PageLayoutProps) {
     const guardLoading = useFullscreenGuard(forceFullscreen);
     const isNavVisible = useAppSelector(getNavIsVisible);
@@ -30,6 +32,7 @@ function PageLayout({
             <div
                 className={cl(
                     st.container,
+                    className,
                     limitToPopUpSize ? st.forcedPopupSize : st.dynamicSize,
                     {
                         [st.navHidden]: !isNavVisible,

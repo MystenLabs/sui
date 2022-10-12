@@ -1,9 +1,9 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use std::borrow::Borrow;
-use std::collections::{BTreeSet, HashMap};
+use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
 use std::fmt;
 use std::str::FromStr;
@@ -59,7 +59,7 @@ mod base_types_tests;
 pub struct SequenceNumber(u64);
 
 impl fmt::Display for SequenceNumber {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:#x}", self.0)
     }
 }
@@ -413,13 +413,6 @@ impl TxContext {
     // for testing
     pub fn with_sender_for_testing_only(sender: &SuiAddress) -> Self {
         Self::new(sender, &TransactionDigest::random(), 0)
-    }
-
-    /// A function that lists all IDs created by this TXContext
-    pub fn recreate_all_ids(&self) -> BTreeSet<ObjectID> {
-        (0..self.ids_created)
-            .map(|seq| self.digest().derive_id(seq))
-            .collect()
     }
 }
 

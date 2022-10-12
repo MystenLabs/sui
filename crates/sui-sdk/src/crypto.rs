@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::anyhow;
@@ -33,7 +33,6 @@ pub trait AccountKeystore: Send + Sync {
     fn add_key(&mut self, keypair: SuiKeyPair) -> Result<(), anyhow::Error>;
     fn keys(&self) -> Vec<PublicKey>;
     fn get_key(&self, address: &SuiAddress) -> Result<&SuiKeyPair, anyhow::Error>;
-
     fn addresses(&self) -> Vec<SuiAddress> {
         self.keys().iter().map(|k| k.into()).collect()
     }
@@ -80,9 +79,9 @@ impl Display for Keystore {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut writer = String::new();
         match self {
-            Keystore::File(path) => {
+            Keystore::File(file) => {
                 writeln!(writer, "Keystore Type : File")?;
-                write!(writer, "Keystore Path : {:?}", path)?;
+                write!(writer, "Keystore Path : {:?}", file.path)?;
                 write!(f, "{}", writer)
             }
             Keystore::InMem(_) => {
@@ -93,7 +92,7 @@ impl Display for Keystore {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Default)]
 pub struct FileBasedKeystore {
     keys: BTreeMap<SuiAddress, SuiKeyPair>,
     path: Option<PathBuf>,

@@ -10,7 +10,7 @@ publish = false
 async-trait = "0.1.57"
 backoff = { version = "0.4.0", features = ["tokio"] }
 bytes = "1.2.1"
-fastcrypto = "0.1.2"
+fastcrypto.workspace = true
 futures = "0.3.24"
 multiaddr = "0.14.0"
 prometheus = "0.13.2"
@@ -18,7 +18,7 @@ rand = { version = "0.8.5", features = ["small_rng"] }
 thiserror = "1.0.35"
 tokio = { version = "1.20.1", features = ["rt", "net", "sync", "macros", "time"] }
 tokio-util = { version = "0.7.4", features = ["codec"] }
-tonic = { version = "0.7.2", features = ["tls"] }
+tonic = { version = "0.8.2", features = ["tls"] }
 tracing = "0.1.36"
 types = { path = "../types", package = "narwhal-types" }
 crypto = { path = "../crypto", package = "narwhal-crypto" }
@@ -27,8 +27,8 @@ serde = "1.0.144"
 workspace-hack.workspace = true
 eyre = "0.6.8"
 
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "302ff6f98fffa30a3a18e919766cd63f5b4c5aa8" }
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "302ff6f98fffa30a3a18e919766cd63f5b4c5aa8" }
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "57c4af7d6cdbf47633e6715bcd67d98f300e2fd8" }
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "57c4af7d6cdbf47633e6715bcd67d98f300e2fd8" }
 anyhow = "1.0.65"
 axum = "0.5.16"
 axum-server = "0.4.2"

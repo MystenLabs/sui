@@ -1,5 +1,5 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
     aggregators::{CertificatesAggregator, VotesAggregator},
@@ -69,6 +69,10 @@ pub struct Core {
 
     /// The last garbage collected round.
     gc_round: Round,
+    /// The highest certificates round received by this node.
+    highest_received_round: Round,
+    /// The highest certificates round processed by this node.
+    highest_processed_round: Round,
     /// The set of headers we are currently processing.
     processing: HashMap<Round, HashSet<HeaderDigest>>,
     /// The last header we proposed (for which we are waiting votes).
@@ -130,6 +134,8 @@ impl Core {
                 tx_consensus,
                 tx_proposer,
                 gc_round: 0,
+                highest_received_round: 0,
+                highest_processed_round: 0,
                 processing: HashMap::with_capacity(2 * gc_depth as usize),
                 current_header: Header::default(),
                 vote_digest_store,
@@ -139,9 +145,28 @@ impl Core {
                 cancel_handlers: HashMap::with_capacity(2 * gc_depth as usize),
                 metrics,
             }
+            .recover()
+            .await
             .run()
             .await;
         })
+    }
+
+    #[instrument(level = "info", skip_all)]
+    pub async fn recover(mut self) -> Self {
+        info!("Starting certificate recovery. Message processing will begin after completion.");
+
+        let last_round_certificates = self
+            .certificate_store
+            .last_round()
+            .expect("Failed recovering certificates in primary core");
+
+        for certificate in last_round_certificates {
+            self.append_certificate_in_aggregator(certificate)
+                .await
+                .expect("Failed appending recovered certificates to aggregator in primary core");
+        }
+        self
     }
 
     #[instrument(level = "debug", skip_all, fields(header_digest = ?header.digest()))]
@@ -403,6 +428,17 @@ impl Core {
             certificate.round()
         );
 
+        let certificate_source = if self.name.eq(&certificate.header.author) {
+            "own"
+        } else {
+            "other"
+        };
+        self.highest_received_round = self.highest_received_round.max(certificate.round());
+        self.metrics
+            .highest_received_round
+            .with_label_values(&[&certificate.epoch().to_string(), certificate_source])
+            .set(self.highest_received_round as i64);
+
         // Let the proposer draw early conclusions from a certificate at this round and epoch, without its
         // parents or payload (which we may not have yet).
         //
@@ -448,16 +484,36 @@ impl Core {
         // Store the certificate.
         self.certificate_store.write(certificate.clone())?;
 
-        let certificate_source = if self.name.eq(&certificate.header.author) {
-            "own"
-        } else {
-            "other"
-        };
+        // Update metrics for processed certificates.
+        self.highest_processed_round = self.highest_processed_round.max(certificate.round());
+        self.metrics
+            .highest_processed_round
+            .with_label_values(&[&certificate.epoch().to_string(), certificate_source])
+            .set(self.highest_processed_round as i64);
         self.metrics
             .certificates_processed
             .with_label_values(&[&certificate.epoch().to_string(), certificate_source])
             .inc();
+        // Append the certificate to the aggregator of the
+        // corresponding round.
+        self.append_certificate_in_aggregator(certificate.clone())
+            .await?;
 
+        // Send it to the consensus layer.
+        let id = certificate.header.id;
+        if let Err(e) = self.tx_consensus.send(certificate).await {
+            warn!(
+                "Failed to deliver certificate {} to the consensus: {}",
+                id, e
+            );
+        }
+        Ok(())
+    }
+
+    async fn append_certificate_in_aggregator(
+        &mut self,
+        certificate: Certificate,
+    ) -> DagResult<()> {
         // Check if we have enough certificates to enter a new dag round and propose a header.
         if let Some(parents) = self
             .certificates_aggregators
@@ -482,14 +538,6 @@ impl Core {
             );
         }
 
-        // Send it to the consensus layer.
-        let id = certificate.header.id;
-        if let Err(e) = self.tx_consensus.send(certificate).await {
-            warn!(
-                "Failed to deliver certificate {} to the consensus: {}",
-                id, e
-            );
-        }
         Ok(())
     }
 
@@ -589,10 +637,6 @@ impl Core {
 
     /// Update the committee and cleanup internal state.
     async fn change_epoch(&mut self, committee: Committee) {
-        // Cleanup the network.
-        self.network
-            .cleanup(self.committee.network_diff(&committee));
-
         // Cleanup internal state.
         let keys = self.vote_digest_store.iter(None).await.into_keys();
         if let Err(e) = self.vote_digest_store.remove_all(keys).await {
@@ -660,9 +704,6 @@ impl Core {
                             self.change_epoch(new_committee).await;
                         },
                         ReconfigureNotification::UpdateCommittee(new_committee) => {
-                            // Cleanup the network.
-                            self.network.cleanup(self.committee.network_diff(&new_committee));
-
                             // Update the committee.
                             self.committee = new_committee;
                         },

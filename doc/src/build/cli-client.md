@@ -19,8 +19,8 @@ Follow the instructions to [install Sui binaries](install.md#binaries).
 ## Genesis
 
 The `genesis` command creates four validators and five user accounts
-each with five gas objects. These are Sui [objects](objects.md) used
-to pay for Sui [transactions](transactions.md#transaction-metadata),
+each with five gas objects. These are Sui [objects](../learn/objects.md) used
+to pay for Sui [transactions](../learn/transactions.md#transaction-metadata),
 such other object transfers or smart contract (Move) calls. These
 numbers represent a sample configuration and have been chosen somewhat
 arbitrarily; the process of generating the genesis state can be
@@ -563,7 +563,7 @@ sui-client-transfer
 Transfer object
 
 USAGE:
-    sui client transfer [OPTIONS] --to <TO> --coin-object-id <COIN_OBJECT_ID> --gas-budget <GAS_BUDGET>
+    sui client transfer [OPTIONS] --to <TO> --object-id <COIN_OBJECT_ID> --gas-budget <GAS_BUDGET>
 
 OPTIONS:
         --coin-object-id <COIN_OBJECT_ID>
@@ -596,7 +596,7 @@ mechanisms. For now, just set something large enough.
 Here is an example transfer of an object to account `0xf456ebef195e4a231488df56b762ac90695be2dd`:
 
 ```shell
-$ sui client transfer --to 0xf456ebef195e4a231488df56b762ac90695be2dd --coin-object-id 0x66eaa38c8ea99673a92a076a00101ab9b3a06b55 --gas-budget 100
+$ sui client transfer --to 0xf456ebef195e4a231488df56b762ac90695be2dd --object-id 0x66eaa38c8ea99673a92a076a00101ab9b3a06b55 --gas-budget 100
 ```
 
 With output like:

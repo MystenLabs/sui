@@ -1,5 +1,5 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 #![warn(
     future_incompatible,
@@ -156,7 +156,7 @@ async fn main() -> Result<(), eyre::Report> {
 fn setup_telemetry(
     tracing_level: &str,
     network_tracing_level: &str,
-    prom_registry: Option<&prometheus::Registry>,
+    prom_registry: Option<&Registry>,
 ) -> TelemetryGuards {
     let log_filter = format!("{tracing_level},h2={network_tracing_level},tower={network_tracing_level},hyper={network_tracing_level},tonic::transport={network_tracing_level},quinn={network_tracing_level}");
 
@@ -181,7 +181,7 @@ fn setup_benchmark_telemetry(
     tracing_level: &str,
     network_tracing_level: &str,
 ) -> Result<(), eyre::Report> {
-    let custom_directive = "executor::core=info";
+    let custom_directive = "narwhal_executor=info";
     let filter = EnvFilter::builder()
         .with_default_directive(LevelFilter::INFO.into())
         .parse(format!(

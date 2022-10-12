@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 //! IndexStore supports creation of various ancillary indexes of state in SuiDataStore.
@@ -140,9 +140,7 @@ impl IndexStore {
         Ok(ts)
     }
 
-    fn get_transactions_by_object<
-        KeyT: Clone + Serialize + DeserializeOwned + std::cmp::PartialEq,
-    >(
+    fn get_transactions_by_object<KeyT: Clone + Serialize + DeserializeOwned + PartialEq>(
         index: &DBMap<(KeyT, TxSequenceNumber), TransactionDigest>,
         object_id: KeyT,
     ) -> SuiResult<Vec<(TxSequenceNumber, TransactionDigest)>> {

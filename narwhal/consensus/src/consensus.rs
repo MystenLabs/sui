@@ -1,5 +1,5 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 #![allow(clippy::mutable_key_type)]
@@ -60,13 +60,18 @@ impl ConsensusState {
     }
 
     #[instrument(level = "info", skip_all)]
-    pub async fn new_from_store(
+    pub fn new_from_store(
         genesis: Vec<Certificate>,
         metrics: Arc<ConsensusMetrics>,
         recover_last_committed: HashMap<PublicKey, Round>,
         cert_store: CertificateStore,
         gc_depth: Round,
     ) -> Self {
+        // We return a bool here which is always true to use as a "recovery token". This
+        // allows us to ensure that the primary is spawned only after the
+        // consensus is guaranteed to be in a state where it can process messages it
+        // receives from the primary when the primary starts up. We do this by passing the
+        // recovery token generated here and checking it before the primary spawn method.
         let last_committed_round = *recover_last_committed
             .iter()
             .max_by(|a, b| a.1.cmp(b.1))
@@ -78,8 +83,7 @@ impl ConsensusState {
         }
         metrics.recovered_consensus_state.inc();
 
-        let dag =
-            Self::construct_dag_from_cert_store(cert_store, last_committed_round, gc_depth).await;
+        let dag = Self::construct_dag_from_cert_store(cert_store, last_committed_round, gc_depth);
 
         Self {
             last_committed_round,
@@ -90,7 +94,7 @@ impl ConsensusState {
     }
 
     #[instrument(level = "info", skip_all)]
-    pub async fn construct_dag_from_cert_store(
+    pub fn construct_dag_from_cert_store(
         cert_store: CertificateStore,
         last_committed_round: Round,
         gc_depth: Round,
@@ -135,7 +139,7 @@ impl ConsensusState {
             .and_modify(|r| *r = max(*r, certificate.round()))
             .or_insert_with(|| certificate.round());
 
-        let last_committed_round = *std::iter::Iterator::max(self.last_committed.values()).unwrap();
+        let last_committed_round = *Iterator::max(self.last_committed.values()).unwrap();
         self.last_committed_round = last_committed_round;
 
         self.metrics
@@ -214,12 +218,23 @@ where
         metrics: Arc<ConsensusMetrics>,
         gc_depth: Round,
     ) -> JoinHandle<()> {
+        // The consensus state (everything else is immutable).
+        let genesis = Certificate::genesis(&committee);
+        let recovered_last_committed = store.read_last_committed();
+        let state = ConsensusState::new_from_store(
+            genesis,
+            metrics.clone(),
+            recovered_last_committed,
+            cert_store,
+            gc_depth,
+        );
+
         tokio::spawn(async move {
             let consensus_index = store
                 .read_last_consensus_index()
                 .expect("Failed to load consensus index from store");
-            let recovered_last_committed = store.read_last_committed();
-            Self {
+
+            let mut s = Self {
                 committee,
                 rx_reconfigure,
                 rx_primary,
@@ -228,10 +243,9 @@ where
                 consensus_index,
                 protocol,
                 metrics,
-            }
-            .run(recovered_last_committed, cert_store, gc_depth)
-            .await
-            .expect("Failed to run consensus")
+            };
+
+            s.run(state).await.expect("Failed to run consensus")
         })
     }
 
@@ -246,23 +260,7 @@ where
     }
 
     #[allow(clippy::mutable_key_type)]
-    async fn run(
-        &mut self,
-        recover_last_committed: HashMap<PublicKey, Round>,
-        cert_store: CertificateStore,
-        gc_depth: Round,
-    ) -> StoreResult<()> {
-        // The consensus state (everything else is immutable).
-        let genesis = Certificate::genesis(&self.committee);
-        let mut state = ConsensusState::new_from_store(
-            genesis,
-            self.metrics.clone(),
-            recover_last_committed,
-            cert_store,
-            gc_depth,
-        )
-        .await;
-
+    async fn run(&mut self, mut state: ConsensusState) -> StoreResult<()> {
         // Listen to incoming certificates.
         loop {
             tokio::select! {

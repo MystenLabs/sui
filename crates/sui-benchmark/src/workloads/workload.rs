@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
@@ -83,7 +83,7 @@ pub async fn transfer_sui_for_testing(
 
 pub async fn get_latest(
     object_id: ObjectID,
-    aggregator: Arc<AuthorityAggregator<NetworkAuthorityClient>>,
+    aggregator: &Arc<AuthorityAggregator<NetworkAuthorityClient>>,
 ) -> Option<Object> {
     // Return the latest object version
     match aggregator.get_object_info_execute(object_id).await.unwrap() {

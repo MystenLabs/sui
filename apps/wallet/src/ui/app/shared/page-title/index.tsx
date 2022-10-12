@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 import cl from 'classnames';
@@ -13,7 +13,7 @@ import type { ButtonHTMLAttributes } from 'react';
 import st from './PageTitle.module.scss';
 
 export type PageTitleProps = {
-    title: string;
+    title?: string;
     stats?: string;
     backLink?: string;
     className?: string;
@@ -53,9 +53,15 @@ function PageTitle({
                 </Link>
             )}
             {BackButton}
-            <h1 className={cl(st.title, { [st.withBackLink]: withBackLink })}>
-                {title} {stats && <span className={st.stats}>{stats}</span>}
-            </h1>
+            {title ? (
+                <h1
+                    className={cl(st.title, {
+                        [st.withBackLink]: withBackLink,
+                    })}
+                >
+                    {title} {stats && <span className={st.stats}>{stats}</span>}
+                </h1>
+            ) : null}
         </div>
     );
 }

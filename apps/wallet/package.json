@@ -1,7 +1,7 @@
 {
     "name": "sui-wallet",
     "private": true,
-    "version": "0.1.1",
+    "version": "0.2.0",
     "description": "A wallet for Sui",
     "main": "./dist/ui.js",
     "scripts": {
@@ -80,11 +80,14 @@
     },
     "dependencies": {
         "@floating-ui/react-dom-interactions": "^0.10.1",
+        "@growthbook/growthbook": "^0.18.1",
         "@metamask/browser-passworder": "^3.0.0",
         "@mysten/sui.js": "workspace:*",
+        "@mysten/wallet-standard": "workspace:*",
         "@reduxjs/toolkit": "^1.8.3",
         "@scure/bip32": "^1.1.0",
         "@scure/bip39": "^1.1.0",
+        "@types/semver": "^7.3.12",
         "bootstrap-icons": "^1.9.1",
         "buffer": "^6.0.3",
         "classnames": "^2.3.1",
@@ -100,6 +103,7 @@
         "react-router-dom": "^6.3.0",
         "react-textarea-autosize": "^8.3.4",
         "rxjs": "^7.5.6",
+        "semver": "^7.3.8",
         "stream-browserify": "^3.0.0",
         "tweetnacl": "^1.0.3",
         "uuid": "^8.3.2",

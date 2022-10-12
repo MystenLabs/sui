@@ -1,5 +1,5 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 pub mod authority;
 pub mod authority_active;
@@ -20,6 +20,7 @@ pub mod streamer;
 pub mod transaction_input_checker;
 pub mod transaction_orchestrator;
 pub mod transaction_streamer;
+pub mod validator_info;
 
 pub mod test_utils;
 

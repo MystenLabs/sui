@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 import type { Payload } from './Payload';
@@ -20,7 +20,8 @@ export type PayloadType =
     | 'transaction-request-response'
     | 'update-active-origin'
     | 'disconnect-app'
-    | 'done';
+    | 'done'
+    | 'keyring';
 
 export interface BasePayload {
     type: PayloadType;

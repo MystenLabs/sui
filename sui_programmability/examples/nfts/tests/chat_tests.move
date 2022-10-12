@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
@@ -13,7 +13,8 @@ module nfts::chat_tests {
 
     #[test]
     fun test_chat() {
-        let scenario = &mut test_scenario::begin(&USER1_ADDRESS);
+        let scenario_val = test_scenario::begin(USER1_ADDRESS);
+        let scenario = &mut scenario_val;
         {
             chat::post(
                 @0xC001, // This should be an application object ID.
@@ -23,12 +24,13 @@ module nfts::chat_tests {
             );
         };
 
-        test_scenario::next_tx(scenario, &USER1_ADDRESS);
+        test_scenario::next_tx(scenario, USER1_ADDRESS);
         {
-            assert!(test_scenario::can_take_owned<Chat>(scenario), 0);
-            let chat = test_scenario::take_owned<Chat>(scenario); // if can remove, object exists
+            assert!(test_scenario::has_most_recent_for_sender<Chat>(scenario), 0);
+            let chat = test_scenario::take_from_sender<Chat>(scenario); // if can remove, object exists
             assert!(chat::text(&chat) == ascii::string(HELLO), 0);
-            test_scenario::return_owned(scenario, chat);
-        }
+            test_scenario::return_to_sender(scenario, chat);
+        };
+        test_scenario::end(scenario_val);
     }
 }

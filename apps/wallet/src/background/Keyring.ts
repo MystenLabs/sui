@@ -1,14 +1,20 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 import { Ed25519Keypair } from '@mysten/sui.js';
 import mitt from 'mitt';
 import Browser from 'webextension-polyfill';
 
+import { createMessage } from '_messages';
+import { isKeyringPayload } from '_payloads/keyring';
 import { encrypt, decrypt } from '_shared/cryptography/keystore';
 import { generateMnemonic } from '_shared/utils/bip39';
 
 import type { Keypair } from '@mysten/sui.js';
+import type { Message } from '_messages';
+import type { ErrorPayload } from '_payloads';
+import type { KeyringPayload } from '_payloads/keyring';
+import type { Connection } from '_src/background/connections/Connection';
 
 type KeyringEvents = {
     lockedStatusUpdate: boolean;
@@ -23,7 +29,8 @@ class Keyring {
     #mnemonic: string | null = null;
 
     // Creates a new mnemonic and saves it to storage encrypted
-    public async createMnemonic(password: string) {
+    // if importedMnemonic is provided it uses that one instead
+    public async createMnemonic(password: string, importedMnemonic?: string) {
         if (await this.isWalletInitialized()) {
             throw new Error(
                 'Mnemonic already exists, creating a new one will override it. Clear the existing one first.'
@@ -31,7 +38,7 @@ class Keyring {
         }
         const encryptedMnemonic = await encrypt(
             password,
-            Buffer.from(generateMnemonic(), 'utf8')
+            Buffer.from(importedMnemonic || generateMnemonic(), 'utf8')
         );
         await this.storeEncryptedMnemonic(encryptedMnemonic);
     }
@@ -86,6 +93,88 @@ class Keyring {
     public on = this.#events.on;
 
     public off = this.#events.off;
+
+    public async handleUiMessage(msg: Message, uiConnection: Connection) {
+        const { id, payload } = msg;
+        try {
+            if (
+                isKeyringPayload<'createMnemonic'>(payload, 'createMnemonic') &&
+                payload.args !== undefined
+            ) {
+                const { password, importedMnemonic } = payload.args;
+                await this.createMnemonic(password, importedMnemonic);
+                await this.unlock(password);
+                if (!this.#mnemonic) {
+                    throw new Error('Error created mnemonic is empty');
+                }
+                uiConnection.send(
+                    createMessage<KeyringPayload<'createMnemonic'>>(
+                        {
+                            type: 'keyring',
+                            method: 'createMnemonic',
+                            return: { mnemonic: this.#mnemonic },
+                        },
+                        id
+                    )
+                );
+            } else if (
+                isKeyringPayload<'getMnemonic'>(payload, 'getMnemonic')
+            ) {
+                if (this.#locked) {
+                    throw new Error('Keyring is locked. Unlock it first.');
+                }
+                if (!this.#mnemonic) {
+                    throw new Error('Error mnemonic is empty');
+                }
+                uiConnection.send(
+                    createMessage<KeyringPayload<'getMnemonic'>>(
+                        {
+                            type: 'keyring',
+                            method: 'getMnemonic',
+                            return: this.#mnemonic,
+                        },
+                        id
+                    )
+                );
+            } else if (
+                isKeyringPayload<'unlock'>(payload, 'unlock') &&
+                payload.args
+            ) {
+                await this.unlock(payload.args.password);
+                uiConnection.send(createMessage({ type: 'done' }, id));
+            } else if (
+                isKeyringPayload<'walletStatusUpdate'>(
+                    payload,
+                    'walletStatusUpdate'
+                )
+            ) {
+                uiConnection.send(
+                    createMessage<KeyringPayload<'walletStatusUpdate'>>(
+                        {
+                            type: 'keyring',
+                            method: 'walletStatusUpdate',
+                            return: {
+                                isLocked: this.isLocked,
+                                isInitialized: await this.isWalletInitialized(),
+                                mnemonic: this.#mnemonic || undefined,
+                            },
+                        },
+                        id
+                    )
+                );
+            } else if (isKeyringPayload<'lock'>(payload, 'lock')) {
+                this.lock();
+                uiConnection.send(createMessage({ type: 'done' }, id));
+            }
+        } catch (e) {
+            uiConnection.send(
+                createMessage<ErrorPayload>(
+                    { code: -1, error: true, message: (e as Error).message },
+                    id
+                )
+            );
+        }
+    }
 
     // pass null to delete it
     private async storeEncryptedMnemonic(encryptedMnemonic: string | null) {

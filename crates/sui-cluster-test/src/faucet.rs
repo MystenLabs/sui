@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use super::cluster::{new_wallet_context_from_cluster, Cluster};
 use async_trait::async_trait;
@@ -101,7 +101,7 @@ impl FaucetClient for LocalFaucetClient {
     async fn request_sui_coins(&self, request_address: SuiAddress) -> FaucetResponse {
         let receipt = self
             .simple_faucet
-            .send(Uuid::new_v4(), request_address, &[50000; 5])
+            .send(Uuid::new_v4(), request_address, &[100000; 5])
             .await
             .unwrap_or_else(|err| panic!("Failed to get gas tokens with error: {}", err));
 

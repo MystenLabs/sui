@@ -13,4 +13,4 @@ written: object(106)
 
 task 3 'run'. lines 43-43:
 written: object(108)
-deleted: object(107)
+deleted: object(_), object(107)

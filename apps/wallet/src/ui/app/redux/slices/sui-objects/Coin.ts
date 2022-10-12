@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 import {
@@ -6,8 +6,6 @@ import {
     getMoveObject,
     isSuiMoveObject,
 } from '@mysten/sui.js';
-
-import { SuiIcons } from '_font-icons/output/sui-icons';
 
 import type {
     ObjectId,
@@ -21,28 +19,16 @@ import type {
 
 const COIN_TYPE = '0x2::coin::Coin';
 const COIN_TYPE_ARG_REGEX = /^0x2::coin::Coin<(.+)>$/;
-export const DEFAULT_GAS_BUDGET_FOR_SPLIT = 1000;
-export const DEFAULT_GAS_BUDGET_FOR_MERGE = 500;
+export const DEFAULT_GAS_BUDGET_FOR_SPLIT = 10000;
+export const DEFAULT_GAS_BUDGET_FOR_MERGE = 10000;
 export const DEFAULT_GAS_BUDGET_FOR_TRANSFER = 100;
 export const DEFAULT_GAS_BUDGET_FOR_TRANSFER_SUI = 100;
-export const DEFAULT_GAS_BUDGET_FOR_STAKE = 1000;
+export const DEFAULT_GAS_BUDGET_FOR_STAKE = 10000;
 export const GAS_TYPE_ARG = '0x2::sui::SUI';
 export const GAS_SYMBOL = 'SUI';
 export const DEFAULT_NFT_TRANSFER_GAS_FEE = 450;
 export const SUI_SYSTEM_STATE_OBJECT_ID =
     '0x0000000000000000000000000000000000000005';
-
-// List of all supported coins
-// TODO: Extend this list as needed
-// Supported coins icons should be included
-export const SUPPORTED_COINS_LIST = [
-    {
-        coinName: 'SUI Coin',
-        coinSymbol: GAS_SYMBOL,
-        coinType: GAS_TYPE_ARG,
-        coinIconName: SuiIcons.SuiLogoIcon,
-    },
-];
 
 // TODO use sdk
 export class Coin {

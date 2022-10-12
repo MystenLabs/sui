@@ -59,7 +59,7 @@ div.mobilecross {
 
 div.filetype,
 div.caption {
-    @apply relative text-offwhite z-50 text-center sm:text-left text-2xl font-semibold mt-5;
+    @apply break-words max-w-[90vw] relative text-offwhite z-50 text-center sm:text-left text-2xl font-semibold mt-5;
 }
 
 div.filetype {

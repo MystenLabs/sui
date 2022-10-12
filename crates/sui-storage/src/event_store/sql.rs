@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 //! SQL and SQLite-based Event Store
@@ -21,7 +21,7 @@ use sqlx::{
 };
 use sui_types::error::SuiError;
 use sui_types::event::{Event, TransferTypeVariants};
-use tracing::{debug, info, log, warn};
+use tracing::{debug, info, instrument, log, warn};
 
 /// Sqlite-based Event Store
 ///
@@ -87,6 +87,7 @@ const INDEXED_COLUMNS: &[&str] = &[
     "sender",
     "recipient",
     "object_id",
+    "move_event_name",
 ];
 
 impl SqlEventStore {
@@ -354,6 +355,7 @@ const QUERY_BY_OBJECT_ID: &str = "SELECT * FROM events WHERE timestamp >= ? AND 
 
 #[async_trait]
 impl EventStore for SqlEventStore {
+    #[instrument(level = "debug", skip_all, err)]
     async fn add_events(&self, events: &[EventEnvelope]) -> Result<u64, SuiError> {
         // TODO: submit writes in one transaction/batch so it won't just fail in the middle
         let mut cur_seq = self.seq_num.load(Ordering::Acquire);
@@ -411,6 +413,7 @@ impl EventStore for SqlEventStore {
         Ok(rows_affected)
     }
 
+    #[instrument(level = "debug", skip_all, err)]
     async fn events_by_transaction(
         &self,
         digest: TransactionDigest,
@@ -428,6 +431,7 @@ impl EventStore for SqlEventStore {
         Ok(rows)
     }
 
+    #[instrument(level = "debug", skip_all, err)]
     async fn events_by_type(
         &self,
         start_time: u64,
@@ -449,6 +453,7 @@ impl EventStore for SqlEventStore {
         Ok(rows)
     }
 
+    #[instrument(level = "debug", skip_all, err)]
     async fn event_iterator(
         &self,
         start_time: u64,
@@ -467,6 +472,7 @@ impl EventStore for SqlEventStore {
         Ok(rows)
     }
 
+    #[instrument(level = "debug", skip_all, err)]
     async fn events_by_module_id(
         &self,
         start_time: u64,
@@ -489,6 +495,7 @@ impl EventStore for SqlEventStore {
         Ok(rows)
     }
 
+    #[instrument(level = "debug", skip_all, err)]
     async fn events_by_move_event_struct_name(
         &self,
         start_time: u64,
@@ -497,6 +504,7 @@ impl EventStore for SqlEventStore {
         limit: usize,
     ) -> Result<Vec<StoredEvent>, SuiError> {
         let limit = Self::cap_limit(limit);
+        // TODO: duplication: these 10 lines are repetitive (4 times) in this file.
         let rows = sqlx::query(QUERY_BY_MOVE_EVENT_STRUCT_NAME)
             .persistent(true)
             .bind(start_time as i64)
@@ -510,6 +518,7 @@ impl EventStore for SqlEventStore {
         Ok(rows)
     }
 
+    #[instrument(level = "debug", skip_all, err)]
     async fn events_by_sender(
         &self,
         start_time: u64,
@@ -532,6 +541,7 @@ impl EventStore for SqlEventStore {
         Ok(rows)
     }
 
+    #[instrument(level = "debug", skip_all, err)]
     async fn events_by_recipient(
         &self,
         start_time: u64,
@@ -557,6 +567,7 @@ impl EventStore for SqlEventStore {
         Ok(rows)
     }
 
+    #[instrument(level = "debug", skip_all, err)]
     async fn events_by_object(
         &self,
         start_time: u64,
@@ -1132,6 +1143,7 @@ mod tests {
         let db = SqlEventStore::new_from_file(&db_file).await?;
         db.initialize().await?;
 
+        // TODO: these 30 lines are quite duplicated in this file (4 times).
         // Write in some events, all should succeed
         let to_insert = vec![
             test_utils::new_test_newobj_event(1_000_000, 1, None, None, None),

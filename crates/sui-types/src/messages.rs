@@ -1,5 +1,5 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use super::{base_types::*, batch::*, committee::Committee, error::*, event::Event};
 use crate::committee::{EpochId, StakeUnit};
@@ -1209,7 +1209,7 @@ impl ExecutionFailureStatus {
     }
 }
 
-impl std::fmt::Display for ExecutionFailureStatus {
+impl Display for ExecutionFailureStatus {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             ExecutionFailureStatus::EmptyInputCoins => {
@@ -2091,6 +2091,22 @@ pub struct CommitteeInfoRequest {
 pub struct CommitteeInfoResponse {
     pub epoch: EpochId,
     pub committee_info: Option<Vec<(AuthorityName, StakeUnit)>>,
+    // TODO: We could also return the certified checkpoint that contains this committee.
+    // This would allows a client to verify the authenticity of the committee.
+}
+
+pub type CommitteeInfoResponseDigest = [u8; 32];
+
+impl CommitteeInfoResponse {
+    pub fn digest(&self) -> CommitteeInfoResponseDigest {
+        sha3_hash(self)
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct CommitteeInfo {
+    pub epoch: EpochId,
+    pub committee_info: Vec<(AuthorityName, StakeUnit)>,
     // TODO: We could also return the certified checkpoint that contains this committee.
     // This would allows a client to verify the authenticity of the committee.
 }

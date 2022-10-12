@@ -1,5 +1,5 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use config::{Committee, SharedWorkerCache, Stake, WorkerId};
 use crypto::PublicKey;
@@ -124,7 +124,6 @@ impl QuorumWaiter {
                                 match message {
                                     ReconfigureNotification::NewEpoch(new_committee)
                                         | ReconfigureNotification::UpdateCommittee(new_committee) => {
-                                            self.network.cleanup(self.committee.network_diff(&new_committee));
                                             self.committee = new_committee;
                                             tracing::debug!("Dropping batch: committee updated to {}", self.committee);
                                             break; // Don't wait for acknowledgements.

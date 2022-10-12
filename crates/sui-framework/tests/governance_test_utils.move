@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
@@ -42,7 +42,8 @@ module sui::governance_test_utils {
     }
 
     public fun advance_epoch(state: &mut SuiSystemState, scenario: &mut Scenario) {
-        test_scenario::next_epoch(scenario);
+        let sender = test_scenario::sender(scenario);
+        test_scenario::next_epoch(scenario, sender);
         let new_epoch = tx_context::epoch(test_scenario::ctx(scenario));
         sui_system::advance_epoch(state, new_epoch, 0, 0, &mut tx_context::dummy());
     }

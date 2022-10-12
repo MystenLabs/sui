@@ -22,14 +22,14 @@ This transaction type is a *smart contract call* that invokes a function in a pu
 In addition to the common metadata above, a call transaction includes the following fields:
 * Package: An object reference pointing to a previously published Move package object.
 * Module: A UTF-8 string specifying the name of a Move module in the package.
-* Function: A UTF-8 string specifying the name of a function inside the module. The function must be a valid entrypoint.
+* Function: A UTF-8 string specifying the name of a function inside the module. The function must be a valid entry point.
 * Type Inputs: A list of Move types that will be bound to the type parameters of the function.
 * Object Inputs: A list of unique object references pointing to objects that will be passed to this function. Each object must either be owned by the sender or immutable. *The gas input object from above cannot also appear as an object input.*
 * Pure Inputs: A list of BCS-encoded values that will be bound to the parameters of the function. Pure inputs must be primitive types (i.e. addresses, object IDs, strings, bytes, integers, or booleans)--they cannot be objects.
 
 ## Move publish transaction
 
-This transaction type publishes a new Move package as an immutable object. Once the package has been published, its public functions and types can be used by future packages, and its entrypoint functions can be called by future transactions.
+This transaction type publishes a new Move package as an immutable object. Once the package has been published, its public functions and types can be used by future packages, and its entry point functions can be called by future transactions.
 
 In addition to the common metadata above, a publish transaction includes Package Bytes: A list of Move bytecode modules topologically sorted by their dependency relationship (i.e., leaves in the dependency graph must appear earlier in the list). These modules will be deserialized, verified, and linked against their dependencies. In addition, each module's initializer function will be invoked in the order specified by the list.
 

@@ -1,5 +1,8 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 export const ToS_LINK = 'https://sui.io/terms';
 export const PRIVACY_POLICY_LINK = 'https://sui.io/policy/';
+
+export const AUTO_LOCK_TIMER_STORAGE_KEY = 'auto-lock-timer-interval';
+export const AUTO_LOCK_TIMER_DEFAULT_INTERVAL_MINUTES = 5;

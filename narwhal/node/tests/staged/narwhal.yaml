@@ -65,21 +65,6 @@ HeaderDigest:
     TUPLEARRAY:
       CONTENT: U8
       SIZE: 32
-PrimaryWorkerMessage:
-  ENUM:
-    0:
-      Reconfigure:
-        NEWTYPE:
-          TYPENAME: ReconfigureNotification
-    1:
-      RequestBatch:
-        NEWTYPE:
-          TYPENAME: BatchDigest
-    2:
-      DeleteBatches:
-        NEWTYPE:
-          SEQ:
-            TYPENAME: BatchDigest
 ReconfigureNotification:
   ENUM:
     0:
@@ -104,17 +89,6 @@ WorkerInfo:
         TYPENAME: Ed25519PublicKey
     - transactions: BYTES
     - worker_address: BYTES
-WorkerPrimaryError:
-  ENUM:
-    0:
-      RequestedBatchNotFound:
-        NEWTYPE:
-          TYPENAME: BatchDigest
-    1:
-      ErrorWhileDeletingBatches:
-        NEWTYPE:
-          SEQ:
-            TYPENAME: BatchDigest
 WorkerPrimaryMessage:
   ENUM:
     0:
@@ -128,27 +102,16 @@ WorkerPrimaryMessage:
           - TYPENAME: BatchDigest
           - U32
     2:
-      RequestedBatch:
-        TUPLE:
-          - TYPENAME: BatchDigest
-          - TYPENAME: Batch
-    3:
-      DeletedBatches:
-        NEWTYPE:
-          SEQ:
-            TYPENAME: BatchDigest
-    4:
-      Error:
-        NEWTYPE:
-          TYPENAME: WorkerPrimaryError
-    5:
       Reconfigure:
         NEWTYPE:
           TYPENAME: ReconfigureNotification
+WorkerReconfigureMessage:
+  STRUCT:
+    - message:
+        TYPENAME: ReconfigureNotification
 WorkerSynchronizeMessage:
   STRUCT:
     - digests:
         SEQ:
           TYPENAME: BatchDigest
     - target: STR
-

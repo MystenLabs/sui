@@ -1,5 +1,5 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
@@ -25,6 +25,7 @@ use sui_network::{
 };
 
 use sui_types::{error::*, messages::*};
+use tap::TapFallible;
 use tokio::{
     sync::mpsc::{channel, Receiver, Sender},
     task::JoinHandle,
@@ -34,7 +35,7 @@ use sui_types::messages_checkpoint::CheckpointRequest;
 use sui_types::messages_checkpoint::CheckpointResponse;
 
 use crate::authority::ConsensusHandler;
-use tracing::{info, Instrument};
+use tracing::{error, info, Instrument};
 
 #[cfg(test)]
 #[path = "unit_tests/server_tests.rs"]
@@ -50,25 +51,25 @@ const MAX_PENDING_CONSENSUS_TRANSACTIONS: u64 = 2000;
 pub struct AuthorityServerHandle {
     tx_cancellation: tokio::sync::oneshot::Sender<()>,
     local_addr: Multiaddr,
-    handle: tokio::task::JoinHandle<Result<(), tonic::transport::Error>>,
+    handle: JoinHandle<Result<(), tonic::transport::Error>>,
 }
 
 impl AuthorityServerHandle {
-    pub async fn join(self) -> Result<(), std::io::Error> {
+    pub async fn join(self) -> Result<(), io::Error> {
         // Note that dropping `self.complete` would terminate the server.
         self.handle
             .await?
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
         Ok(())
     }
 
-    pub async fn kill(self) -> Result<(), std::io::Error> {
+    pub async fn kill(self) -> Result<(), io::Error> {
         self.tx_cancellation.send(()).map_err(|_e| {
-            std::io::Error::new(io::ErrorKind::Other, "could not send cancellation signal!")
+            io::Error::new(io::ErrorKind::Other, "could not send cancellation signal!")
         })?;
         self.handle
             .await?
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
         Ok(())
     }
 
@@ -116,7 +117,7 @@ impl AuthorityServer {
         &self,
         min_batch_size: u64,
         max_delay: Duration,
-    ) -> SuiResult<tokio::task::JoinHandle<SuiResult<()>>> {
+    ) -> SuiResult<JoinHandle<SuiResult<()>>> {
         // Start the batching subsystem, and register the handles with the authority.
         let state = self.state.clone();
         let _batch_join_handle =
@@ -233,7 +234,7 @@ impl ValidatorServiceMetrics {
     }
 
     pub fn new_for_tests() -> Self {
-        let registry = prometheus::Registry::new();
+        let registry = Registry::new();
         Self::new(&registry)
     }
 }
@@ -254,8 +255,7 @@ impl ValidatorService {
         prometheus_registry: Registry,
         rx_reconfigure_consensus: Receiver<ReconfigConsensusMessage>,
     ) -> Result<Self> {
-        let (tx_consensus_to_sui, rx_consensus_to_sui) = channel(1_000);
-        let (tx_sui_to_consensus, rx_sui_to_consensus) = channel(1_000);
+        let (tx_consensus_listener, rx_consensus_listener) = channel(1_000);
 
         // Spawn the consensus node of this authority.
         let consensus_config = config
@@ -266,7 +266,8 @@ impl ValidatorService {
         let consensus_committee = config.genesis()?.narwhal_committee().load();
         let consensus_worker_cache = config.genesis()?.narwhal_worker_cache();
         let consensus_storage_base_path = consensus_config.db_path().to_path_buf();
-        let consensus_execution_state = ConsensusHandler::new(state.clone(), tx_consensus_to_sui);
+        let consensus_execution_state =
+            ConsensusHandler::new(state.clone(), tx_consensus_listener.clone());
         let consensus_execution_state = Arc::new(consensus_execution_state);
         let consensus_parameters = consensus_config.narwhal_config().to_owned();
         let network_keypair = config.network_key_pair.copy();
@@ -290,7 +291,7 @@ impl ValidatorService {
 
         // Spawn a consensus listener. It listen for consensus outputs and notifies the
         // authority server when a sequenced transaction is ready for execution.
-        ConsensusListener::spawn(rx_sui_to_consensus, rx_consensus_to_sui);
+        ConsensusListener::spawn(rx_consensus_listener);
 
         let timeout = Duration::from_secs(consensus_config.timeout_secs.unwrap_or(60));
         let ca_metrics = ConsensusAdapterMetrics::new(&prometheus_registry);
@@ -299,7 +300,7 @@ impl ValidatorService {
         let consensus_adapter = ConsensusAdapter::new(
             consensus_config.address().to_owned(),
             state.clone_committee(),
-            tx_sui_to_consensus.clone(),
+            tx_consensus_listener.clone(),
             timeout,
             ca_metrics.clone(),
         );
@@ -315,7 +316,7 @@ impl ValidatorService {
         let checkpoint_consensus_handle = Some(
             CheckpointConsensusAdapter::new(
                 /* consensus_address */ consensus_config.address().to_owned(),
-                /* tx_consensus_listener */ tx_sui_to_consensus,
+                /* tx_consensus_listener */ tx_consensus_listener,
                 rx_checkpoint_consensus_adapter,
                 /* checkpoint_locals */ state.checkpoints(),
                 /* retry_delay */ timeout,
@@ -408,7 +409,15 @@ impl ValidatorService {
             return Ok(tonic::Response::new(response));
         }
 
-        // 3) If it's a shared object transaction and requires consensus, we need to do so.
+        // 3) If the validator is already halted, we stop here, to avoid
+        // sending the transaction to consensus.
+        if state.is_halted() && !certificate.signed_data.data.kind.is_system_tx() {
+            return Err(tonic::Status::internal(
+                SuiError::ValidatorHaltedAtEpochEnd.to_string(),
+            ));
+        }
+
+        // 4) If it's a shared object transaction and requires consensus, we need to do so.
         // This will wait until either timeout or we have heard back from consensus.
         if is_consensus_tx
             && !state
@@ -429,20 +438,30 @@ impl ValidatorService {
                 .map_err(|e| tonic::Status::internal(e.to_string()))?;
         }
 
-        // 4) Execute the certificate.
+        // 5) Execute the certificate.
         let span = tracing::debug_span!(
             "validator_state_process_cert",
             ?tx_digest,
             tx_kind = certificate.signed_data.data.kind_as_str()
         );
 
-        let response = state
-            .handle_certificate(certificate)
+        match state
+            .handle_certificate(certificate.clone())
             .instrument(span)
             .await
-            .map_err(|e| tonic::Status::internal(e.to_string()))?;
-
-        Ok(tonic::Response::new(response))
+            .map_err(|e| tonic::Status::internal(e.to_string()))
+        {
+            Err(e) => {
+                // Record the cert for later execution, including causal completion if necessary.
+                let tx_digest = *tx_digest;
+                let _ = state
+                    .database
+                    .add_pending_certificates(vec![(tx_digest, Some(certificate))])
+                    .tap_err(|e| error!(?tx_digest, "add_pending_certificates failed: {}", e));
+                Err(e)
+            }
+            Ok(response) => Ok(tonic::Response::new(response)),
+        }
     }
 }
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::EndpointMetrics;
 use mysten_network::metrics::MetricsCallbackProvider;
@@ -73,12 +73,6 @@ pub struct PrimaryChannelMetrics {
     pub tx_primary_messages: IntGauge,
     /// occupancy of the channel from the `primary::PrimaryReceiverHandler` to the `primary::Helper`
     pub tx_helper_requests: IntGauge,
-    /// occupancy of the channel from the `primary::ConsensusAPIGrpc` (when external consensus is being
-    /// used) & `executor::Subscriber` (when internal consensus, ex Bullshark, is being used)  to
-    /// the `primary::BlockWaiter`.
-    pub tx_get_block_commands: IntGauge,
-    /// occupancy of the channel from the `primary::WorkerReceiverHandler` to the `primary::BlockWaiter`
-    pub tx_batches: IntGauge,
     /// occupancy of the channel from the `primary::ConsensusAPIGrpc` to the `primary::BlockRemover`
     pub tx_block_removal_commands: IntGauge,
     /// occupancy of the channel from the `primary::WorkerReceiverHandler` to the `primary::BlockRemover`
@@ -117,12 +111,6 @@ pub struct PrimaryChannelMetrics {
     pub tx_primary_messages_total: IntCounter,
     /// total received on channel from the `primary::PrimaryReceiverHandler` to the `primary::Helper`
     pub tx_helper_requests_total: IntCounter,
-    /// total received on channel from the `primary::ConsensusAPIGrpc` (when external consensus is being
-    /// used) & `executor::Subscriber` (when internal consensus, ex Bullshark, is being used)  to
-    /// the `primary::BlockWaiter`.
-    pub tx_get_block_commands_total: IntCounter,
-    /// total received on channel from the `primary::WorkerReceiverHandler` to the `primary::BlockWaiter`
-    pub tx_batches_total: IntCounter,
     /// total received on channel from the `primary::ConsensusAPIGrpc` to the `primary::BlockRemover`
     pub tx_block_removal_commands_total: IntCounter,
     /// total received on channel from the `primary::WorkerReceiverHandler` to the `primary::BlockRemover`
@@ -152,11 +140,6 @@ impl PrimaryChannelMetrics {
     pub const NAME_NEW_CERTS: &'static str = "tx_new_certificates";
     pub const DESC_NEW_CERTS: &'static str =
         "occupancy of the channel from the `primary::Core` to the `Consensus`";
-    // The consistent use of this constant in the below, as well as in `node::spawn_primary` is
-    // load-bearing, see `replace_registered_tx_get_block_commands_metric`.
-    pub const NAME_GET_BLOCK_COMMANDS: &'static str = "tx_get_block_commands";
-    pub const DESC_GET_BLOCK_COMMANDS: &'static str =
-        "occupancy of the channel from the `primary::ConsensusAPIGrpc` & `executor::Subscriber` to the `primary::BlockWaiter`";
 
     // The consistent use of this constant in the below, as well as in `node::spawn_primary` is
     // load-bearing, see `replace_registered_committed_certificates_metric`.
@@ -168,11 +151,6 @@ impl PrimaryChannelMetrics {
     pub const NAME_NEW_CERTS_TOTAL: &'static str = "tx_new_certificates_total";
     pub const DESC_NEW_CERTS_TOTAL: &'static str =
         "total received on channel from the `primary::Core` to the `Consensus`";
-    // The consistent use of this constant in the below, as well as in `node::spawn_primary` is
-    // load-bearing, see `replace_registered_tx_get_block_commands_metric`.
-    pub const NAME_GET_BLOCK_COMMANDS_TOTAL: &'static str = "tx_get_block_commands_total";
-    pub const DESC_GET_BLOCK_COMMANDS_TOTAL: &'static str =
-        "total received on channel from the `primary::ConsensusAPIGrpc` & `executor::Subscriber` to the `primary::BlockWaiter`";
 
     pub fn new(registry: &Registry) -> Self {
         Self {
@@ -226,16 +204,6 @@ impl PrimaryChannelMetrics {
                 "occupancy of the channel from the `primary::PrimaryReceiverHandler` to the `primary::Helper`",
                 registry
             ).unwrap(),
-            tx_get_block_commands: register_int_gauge_with_registry!(
-                "tx_get_block_commands",
-                "occupancy of the channel from the `primary::ConsensusAPIGrpc` & `executor::Subscriber` to the `primary::BlockWaiter`",
-                registry
-            ).unwrap(),
-            tx_batches: register_int_gauge_with_registry!(
-                "tx_batches",
-                "occupancy of the channel from the `primary::WorkerReceiverHandler` to the `primary::BlockWaiter`",
-                registry
-            ).unwrap(),
             tx_block_removal_commands: register_int_gauge_with_registry!(
                 "tx_block_removal_commands",
                 "occupancy of the channel from the `primary::ConsensusAPIGrpc` to the `primary::BlockRemover`",
@@ -277,8 +245,7 @@ impl PrimaryChannelMetrics {
                 registry
             ).unwrap(),
 
-            // totals 
-
+            // totals
             tx_others_digests_total: register_int_counter_with_registry!(
                 "tx_others_digests_total",
                 "total received on channel from the `primary::WorkerReceiverHandler` to the `primary::PayloadReceiver`",
@@ -327,16 +294,6 @@ impl PrimaryChannelMetrics {
             tx_helper_requests_total: register_int_counter_with_registry!(
                 "tx_helper_requests_total",
                 "total received on channel from the `primary::PrimaryReceiverHandler` to the `primary::Helper`",
-                registry
-            ).unwrap(),
-            tx_get_block_commands_total: register_int_counter_with_registry!(
-                "tx_get_block_commands_total",
-                "total received on channel from the `primary::ConsensusAPIGrpc` & `executor::Subscriber` to the `primary::BlockWaiter`",
-                registry
-            ).unwrap(),
-            tx_batches_total: register_int_counter_with_registry!(
-                "tx_batches_total",
-                "total received on channel from the `primary::WorkerReceiverHandler` to the `primary::BlockWaiter`",
                 registry
             ).unwrap(),
             tx_block_removal_commands_total: register_int_counter_with_registry!(
@@ -414,21 +371,6 @@ impl PrimaryChannelMetrics {
         registry.register(collector).unwrap();
         self.tx_committed_certificates = committed_certificates_counter;
     }
-
-    pub fn replace_registered_get_block_commands_metric(
-        &mut self,
-        registry: &Registry,
-        collector: Box<GenericGauge<AtomicI64>>,
-    ) {
-        let tx_get_block_commands_counter =
-            IntGauge::new(Self::NAME_GET_BLOCK_COMMANDS, Self::DESC_GET_BLOCK_COMMANDS).unwrap();
-        // TODO: Sanity-check by hashing the descs against one another
-        registry
-            .unregister(Box::new(tx_get_block_commands_counter.clone()))
-            .unwrap();
-        registry.register(collector).unwrap();
-        self.tx_get_block_commands = tx_get_block_commands_counter;
-    }
 }
 
 #[derive(Clone)]
@@ -451,8 +393,14 @@ pub struct PrimaryMetrics {
     pub gc_core_latency: HistogramVec,
     /// Number of cancel handlers for core module
     pub core_cancel_handlers_total: IntGaugeVec,
-    /// The current Narwhal round
+    /// The current Narwhal round in proposer
     pub current_round: IntGaugeVec,
+    /// The last received Narwhal round.
+    pub last_parent_missing_round: IntGaugeVec,
+    /// The highest Narwhal round that has been received.
+    pub highest_received_round: IntGaugeVec,
+    /// The highest Narwhal round that has been processed.
+    pub highest_processed_round: IntGaugeVec,
     /// Latency to perform a garbage collection in header_waiter
     pub gc_header_waiter_latency: HistogramVec,
     /// Number of elements in pending list of header_waiter
@@ -467,6 +415,8 @@ pub struct PrimaryMetrics {
     pub waiting_elements_certificate_waiter: IntGaugeVec,
     /// Number of votes that were requested but not sent due to previously having voted differently
     pub votes_dropped_equivocation_protection: IntCounterVec,
+    /// Number of pending batches in proposer
+    pub num_of_pending_batches_in_proposer: IntGaugeVec,
 }
 
 impl PrimaryMetrics {
@@ -537,8 +487,29 @@ impl PrimaryMetrics {
             .unwrap(),
             current_round: register_int_gauge_vec_with_registry!(
                 "current_round",
-                "Current round the node is in",
+                "Current round the node will propose",
                 &["epoch"],
+                registry
+            )
+            .unwrap(),
+            last_parent_missing_round: register_int_gauge_vec_with_registry!(
+                "last_parent_missing_round",
+                "The round of the last certificate which misses parent",
+                &["epoch"],
+                registry
+            )
+            .unwrap(),
+            highest_received_round: register_int_gauge_vec_with_registry!(
+                "highest_received_round",
+                "Highest round received by the primary",
+                &["epoch", "source"],
+                registry
+            )
+            .unwrap(),
+            highest_processed_round: register_int_gauge_vec_with_registry!(
+                "highest_processed_round",
+                "Highest round processed (stored) by the primary",
+                &["epoch", "source"],
                 registry
             )
             .unwrap(),
@@ -591,6 +562,12 @@ impl PrimaryMetrics {
                 registry
             )
             .unwrap(),
+            num_of_pending_batches_in_proposer: register_int_gauge_vec_with_registry!(
+                "num_of_pending_batches_in_proposer",
+                "Number of batch digests pending in proposer for next header proposal",
+                &["epoch"],
+                registry
+            ).unwrap()
         }
     }
 }

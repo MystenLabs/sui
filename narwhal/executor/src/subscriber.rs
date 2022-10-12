@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::notifier::BatchIndex;
 use crate::{errors::SubscriberResult, metrics::ExecutorMetrics};
@@ -7,7 +7,6 @@ use config::{Committee, SharedWorkerCache, WorkerId};
 use consensus::ConsensusOutput;
 use crypto::{NetworkPublicKey, PublicKey};
 
-use futures::future::join;
 use futures::stream::FuturesOrdered;
 use futures::FutureExt;
 use futures::StreamExt;
@@ -120,8 +119,8 @@ impl<Network: SubscriberNetwork> Subscriber<Network> {
             for future in futures {
                 // todo - limit number pending futures on startup
                 waiting.push_back(future);
-                self.metrics.subscriber_recovered_certificates_count.inc();
             }
+            self.metrics.subscriber_recovered_certificates_count.inc();
         }
 
         // Listen to sequenced consensus message and process them.
@@ -138,11 +137,9 @@ impl<Network: SubscriberNetwork> Subscriber<Network> {
                 },
 
                 // Receive here consensus messages for which we have downloaded all transactions data.
-                (message, permit) = join(waiting.next(), self.tx_notifier.reserve()), if !waiting.is_empty() => {
-                    if let Ok(permit) = permit {
-                        permit.send(message.expect("We don't poll empty queue"));
-                    } else {
-                        error!("tx_notifier closed");
+                Some(message) = waiting.next() => {
+                    if let Err(e) = self.tx_notifier.send(message).await {
+                        error!("tx_notifier closed: {}", e);
                         return Ok(());
                     }
                 },
@@ -177,7 +174,8 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
             .set(deliver.certificate.round() as i64);
         self.metrics.subscriber_processed_certificates.inc();
         debug!("Fetching payload for {:?}", deliver);
-        let mut ret = vec![];
+        let mut ret = Vec::with_capacity(deliver.certificate.header.payload.len());
+        let deliver = Arc::new(deliver);
         for (batch_index, (digest, worker_id)) in
             deliver.certificate.header.payload.iter().enumerate()
         {
@@ -190,6 +188,7 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
                 batch_index: batch_index as u64,
             };
             workers.shuffle(&mut ThreadRng::default());
+            debug!("Scheduling fetching batch {}", digest);
             ret.push(
                 self.fetch_payload(*digest, *worker_id, workers)
                     .map(move |batch| (batch_index, batch)),
@@ -219,6 +218,8 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
         for worker in workers {
             let future = self.fetch_from_worker(stagger, worker, digest);
             futures.push(future.boxed());
+            // TODO: Make this a parameter, and also record workers / authorities that are down
+            //       to request from them batches later.
             stagger += Duration::from_millis(200);
         }
         let (batch, _, _) = futures::future::select_all(futures).await;
@@ -229,7 +230,7 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
     async fn try_fetch_locally(&self, digest: BatchDigest, worker_id: WorkerId) -> Option<Batch> {
         let _timer = self.metrics.subscriber_local_fetch_latency.start_timer();
         let worker = self.network.my_worker(&worker_id);
-        let payload = self.network.request_batch(digest, &worker).await;
+        let payload = self.network.request_batch(digest, worker).await;
         match payload {
             Ok(Some(batch)) => {
                 debug!("Payload {} found locally", digest);
@@ -253,6 +254,7 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
         digest: BatchDigest,
     ) -> Batch {
         tokio::time::sleep(stagger_delay).await;
+        // TODO: Make these config parameters
         let max_timeout = Duration::from_secs(60);
         let mut timeout = Duration::from_secs(10);
         let mut attempt = 0usize;
@@ -262,7 +264,8 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
             let request_batch_guard =
                 PendingGuard::make_inc(&self.metrics.pending_remote_request_batch);
             let payload =
-                tokio::time::timeout_at(deadline, self.safe_request_batch(digest, &worker)).await;
+                tokio::time::timeout_at(deadline, self.safe_request_batch(digest, worker.clone()))
+                    .await;
             drop(request_batch_guard);
             match payload {
                 Ok(Ok(Some(payload))) => return payload,
@@ -286,9 +289,9 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
     async fn safe_request_batch(
         &self,
         digest: BatchDigest,
-        worker: &NetworkPublicKey,
+        worker: NetworkPublicKey,
     ) -> anyhow::Result<Option<Batch>> {
-        let payload = self.network.request_batch(digest, worker).await?;
+        let payload = self.network.request_batch(digest, worker.clone()).await?;
         if let Some(payload) = payload {
             let payload_digest = payload.digest();
             if payload_digest != digest {
@@ -332,7 +335,7 @@ pub trait SubscriberNetwork: Send + Sync {
     async fn request_batch(
         &self,
         digest: BatchDigest,
-        worker: &NetworkPublicKey,
+        worker: NetworkPublicKey,
     ) -> anyhow::Result<Option<Batch>>;
 }
 
@@ -380,7 +383,7 @@ impl SubscriberNetwork for SubscriberNetworkImpl {
     async fn request_batch(
         &self,
         digest: BatchDigest,
-        worker: &NetworkPublicKey,
+        worker: NetworkPublicKey,
     ) -> anyhow::Result<Option<Batch>> {
         self.network.request_batch(worker, digest).await
     }
@@ -456,9 +459,9 @@ mod tests {
         async fn request_batch(
             &self,
             digest: BatchDigest,
-            worker: &NetworkPublicKey,
+            worker: NetworkPublicKey,
         ) -> anyhow::Result<Option<Batch>> {
-            Ok(self.data.get(&digest).unwrap().get(worker).cloned())
+            Ok(self.data.get(&digest).unwrap().get(&worker).cloned())
         }
     }
 
