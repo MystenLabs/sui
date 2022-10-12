@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Coin, getObjectFields, getObjectId } from '@mysten/sui.js';
-import BN from 'bn.js';
 import React, {
     useCallback,
     useEffect,
@@ -67,13 +66,14 @@ function OwnedObjectStatic({ id }: { id: string }) {
     if (objects) {
         const results = objects.map(({ objectId }) => {
             const entry = findDataFromID(objectId, undefined);
-            const convertToBN = (balance: string): BN => new BN.BN(balance, 10);
             return {
                 id: entry?.id,
                 Type: entry?.objType,
                 Version: entry?.version,
                 display: entry?.data?.contents?.display,
-                balance: convertToBN(entry?.data?.contents?.balance),
+                balance: entry?.data?.contents?.balance
+                    ? BigInt(entry?.data?.contents?.balance)
+                    : undefined,
                 _isCoin: entry?.data?.contents?.balance !== undefined,
                 name: extractName(entry?.data?.contents),
             };
