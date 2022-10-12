@@ -71,7 +71,7 @@ impl Hash for Batch {
     }
 }
 
-#[derive(Builder, Clone, Default, Deserialize, MallocSizeOf, Serialize)]
+#[derive(Builder, Clone, Default, Deserialize, Serialize)]
 #[builder(pattern = "owned", build_fn(skip))]
 pub struct Header {
     pub author: PublicKey,
@@ -211,7 +211,7 @@ impl Hash for Header {
     type TypedDigest = HeaderDigest;
 
     fn digest(&self) -> HeaderDigest {
-        let hasher = fastcrypto::hash::Blake2b256::default();
+        let mut hasher = fastcrypto::hash::Blake2b256::default();
         hasher.update(&self.author);
         hasher.update(&self.round.to_le_bytes());
         hasher.update(self.epoch.to_le_bytes());
@@ -352,7 +352,7 @@ impl Hash for Vote {
     type TypedDigest = VoteDigest;
 
     fn digest(&self) -> VoteDigest {
-        let hasher = fastcrypto::hash::Blake2b256::default();
+        let mut hasher = fastcrypto::hash::Blake2b256::default();
         hasher.update(Digest::from(self.id));
         hasher.update(&self.round.to_le_bytes());
         hasher.update(&self.epoch.to_le_bytes());
@@ -382,7 +382,7 @@ impl PartialEq for Vote {
 }
 
 #[serde_as]
-#[derive(Clone, MallocSizeOf, Serialize, Deserialize, Default)]
+#[derive(Clone, Serialize, Deserialize, Default)]
 pub struct Certificate {
     pub header: Header,
     aggregated_signature: AggregateSignature,
@@ -471,10 +471,11 @@ impl Certificate {
         let aggregated_signature = if sigs.is_empty() {
             AggregateSignature::default()
         } else {
-            let s: Vec<&BLS12381Signature> = sigs.into_iter().map(|(_, sig)| &sig).collect();
-            AggregateSignature::aggregate(s)
-                .map_err(|_| signature::Error::new())
-                .map_err(DagError::InvalidSignature)?
+            AggregateSignature::aggregate::<BLS12381Signature, Vec<&BLS12381Signature>>(
+                sigs.iter().map(|(_, sig)| sig).collect(),
+            )
+            .map_err(|_| signature::Error::new())
+            .map_err(DagError::InvalidSignature)?
         };
 
         Ok(Certificate {
@@ -607,7 +608,7 @@ impl Hash for Certificate {
     type TypedDigest = CertificateDigest;
 
     fn digest(&self) -> CertificateDigest {
-        let hasher = fastcrypto::hash::Blake2b256::new();
+        let mut hasher = fastcrypto::hash::Blake2b256::new();
         hasher.update(Digest::from(self.header.id));
         hasher.update(self.round().to_le_bytes());
         hasher.update(self.epoch().to_le_bytes());
