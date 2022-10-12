@@ -497,6 +497,7 @@ module sui::test_scenarioTests {
             let obj1 = ts::take_shared<Object>(&mut scenario);
             transfer::freeze_object(obj1);
         };
+        ts::next_tx(&mut scenario, sender);
         abort 42
     }
 
@@ -515,6 +516,7 @@ module sui::test_scenarioTests {
             let obj1 = ts::take_immutable<Object>(&mut scenario);
             transfer::share_object(obj1);
         };
+        ts::next_tx(&mut scenario, sender);
         abort 42
     }
 
@@ -549,8 +551,8 @@ module sui::test_scenarioTests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 4 /* EObjectNotFound */)]
-    fun test_object_not_found() {
+    #[expected_failure(abort_code = 3 /* EEmptyInventory */)]
+    fun test_empty_inventory() {
         let sender = @0x0;
         let scenario = ts::begin(sender);
         ts::return_to_sender(&scenario, ts::take_from_sender<Object>(&scenario));
@@ -558,8 +560,8 @@ module sui::test_scenarioTests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 4 /* EObjectNotFound */)]
-    fun test_object_not_found_shared() {
+    #[expected_failure(abort_code = 3 /* EEmptyInventory */)]
+    fun test_empty_inventory_shared() {
         let sender = @0x0;
         let scenario = ts::begin(sender);
         ts::return_to_sender(&scenario, ts::take_shared<Object>(&scenario));
@@ -567,8 +569,8 @@ module sui::test_scenarioTests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 4 /* EObjectNotFound */)]
-    fun test_object_not_found_immutable() {
+    #[expected_failure(abort_code = 3 /* EEmptyInventory */)]
+    fun test_empty_inventory_immutable() {
         let sender = @0x0;
         let scenario = ts::begin(sender);
         ts::return_to_sender(&scenario, ts::take_immutable<Object>(&scenario));
@@ -577,12 +579,46 @@ module sui::test_scenarioTests {
 
     #[test]
     #[expected_failure(abort_code = 4 /* EObjectNotFound */)]
+    fun test_object_not_found() {
+        let sender = @0x0;
+        let scenario = ts::begin(sender);
+        let uid = ts::new_object(&mut scenario);
+        let id = object::uid_to_inner(&uid);
+        ts::return_to_sender(&scenario, ts::take_from_sender_by_id<Object>(&scenario, id));
+        abort 42
+    }
+
+    #[test]
+    #[expected_failure(abort_code = 4 /* EObjectNotFound */)]
+    fun test_object_not_found_shared() {
+        let sender = @0x0;
+        let scenario = ts::begin(sender);
+        let uid = ts::new_object(&mut scenario);
+        let id = object::uid_to_inner(&uid);
+        ts::return_to_sender(&scenario, ts::take_shared_by_id<Object>(&scenario, id));
+        abort 42
+    }
+
+    #[test]
+    #[expected_failure(abort_code = 4 /* EObjectNotFound */)]
+    fun test_object_not_found_immutable() {
+        let sender = @0x0;
+        let scenario = ts::begin(sender);
+        let uid = ts::new_object(&mut scenario);
+        let id = object::uid_to_inner(&uid);
+        ts::return_to_sender(&scenario, ts::take_immutable_by_id<Object>(&scenario, id));
+        abort 42
+    }
+
+    #[test]
+    #[expected_failure(abort_code = 4 /* EObjectNotFound */)]
     fun test_wrong_object_type() {
         let sender = @0x0;
         let scenario = ts::begin(sender);
-        let id = ts::new_object(&mut scenario);
-        transfer::transfer(Object { id, value: 10 }, sender);
-        ts::return_to_sender(&scenario, ts::take_from_sender<Wrapper>(&scenario));
+        let uid = ts::new_object(&mut scenario);
+        let id = object::uid_to_inner(&uid);
+        transfer::transfer(Object { id: uid, value: 10 }, sender);
+        ts::return_to_sender(&scenario, ts::take_from_sender_by_id<Wrapper>(&scenario, id));
         abort 42
     }
 
@@ -591,9 +627,10 @@ module sui::test_scenarioTests {
     fun test_wrong_object_type_shared() {
         let sender = @0x0;
         let scenario = ts::begin(sender);
-        let id = ts::new_object(&mut scenario);
-        transfer::share_object(Object { id, value: 10 });
-        ts::return_shared(ts::take_shared<Wrapper>(&scenario));
+        let uid = ts::new_object(&mut scenario);
+        let id = object::uid_to_inner(&uid);
+        transfer::share_object(Object { id: uid, value: 10 });
+        ts::return_shared(ts::take_shared_by_id<Wrapper>(&scenario, id));
         abort 42
     }
 
@@ -602,9 +639,10 @@ module sui::test_scenarioTests {
     fun test_wrong_object_type_immutable() {
         let sender = @0x0;
         let scenario = ts::begin(sender);
-        let id = ts::new_object(&mut scenario);
-        transfer::freeze_object(Object { id, value: 10 });
-        ts::return_immutable(ts::take_immutable<Wrapper>(&scenario));
+        let uid = ts::new_object(&mut scenario);
+        let id = object::uid_to_inner(&uid);
+        transfer::freeze_object(Object { id: uid, value: 10 });
+        ts::return_immutable(ts::take_immutable_by_id<Wrapper>(&scenario, id));
         abort 42
     }
 
