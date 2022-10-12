@@ -771,7 +771,7 @@ mod tests {
 
         // THEN
         assert!(logs_contain("Header number of batches threshold set to 32"));
-        assert!(logs_contain("Header max number of batches set to 100"));
+        assert!(logs_contain("Header max number of batches set to 1000"));
         assert!(logs_contain("Max header delay set to 100 ms"));
         assert!(logs_contain("Garbage collection depth set to 50 rounds"));
         assert!(logs_contain("Sync retry delay set to 5000 ms"));

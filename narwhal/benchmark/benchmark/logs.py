@@ -114,10 +114,10 @@ class LogParser:
 
         configs = {
             'header_num_of_batches_threshold': int(
-                search(r'Header number of batches threshold set to .* (\d+)', log).group(1)
+                search(r'Header number of batches threshold .* (\d+)', log).group(1)
             ),
             'max_header_num_of_batches': int(
-                search(r'Header max number of batches set to .* (\d+)', log).group(1)
+                search(r'Header max number of batches .* (\d+)', log).group(1)
             ),
             'max_header_delay': int(
                 search(r'Max header delay .* (\d+)', log).group(1)
@@ -229,8 +229,8 @@ class LogParser:
             f' Transaction size: {self.size[0]:,} B\n'
             f' Execution time: {round(duration):,} s\n'
             '\n'
-            f' Header number of batches threshold: {header_num_of_batches_threshold:,} B\n'
-            f' Header maximum number of batches: {max_header_num_of_batches:,} B\n'
+            f' Header number of batches threshold: {header_num_of_batches_threshold:,} digests\n'
+            f' Header maximum number of batches: {max_header_num_of_batches:,} digests\n'
             f' Max header delay: {max_header_delay:,} ms\n'
             f' GC depth: {gc_depth:,} round(s)\n'
             f' Sync retry delay: {sync_retry_delay:,} ms\n'
