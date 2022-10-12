@@ -19,8 +19,7 @@ module sui::safe {
     const TRANSFER_CAPABILITY_REVOKED: u64 = 2;
     const OVERDRAWN: u64 = 3;
 
-
-    ///
+    //
     /// Allows any holder of a capability to transfer a fixed amount of assets from the safe.
     /// Useful in situations like an NFT marketplace where you wish to buy the NFTs at a specific price.
     /// 
@@ -108,7 +107,7 @@ module sui::safe {
         let cap = create_<T>(balance, ctx);
         transfer::transfer(cap, sender(ctx));
     }
-    
+
     public entry fun create_empty<T>(ctx: &mut TxContext) {
         let empty_balance = balance::zero<T>();
         let cap = create_(empty_balance, ctx);
