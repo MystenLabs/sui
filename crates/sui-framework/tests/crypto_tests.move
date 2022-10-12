@@ -8,6 +8,7 @@ module sui::crypto_tests {
     use sui::bulletproofs;
     use sui::elliptic_curve as ec;
     use std::vector;
+    use sui::hash;
 
     #[test]
     fun test_ecrecover_pubkey() {
@@ -69,7 +70,7 @@ module sui::crypto_tests {
         let hashed_msg_bytes = vector[87, 202, 161, 118, 175, 26, 192, 67, 60, 93, 243, 14, 141, 171, 205, 46, 193, 175,
         30, 146, 162, 110, 206, 213, 247, 25, 184, 132, 88, 119, 124, 214];
 
-        let hashed_msg = ecdsa::keccak256(&msg);
+        let hashed_msg = hash::keccak256(&msg);
         assert!(hashed_msg == hashed_msg_bytes, 0);
     }
 
@@ -468,7 +469,7 @@ module sui::crypto_tests {
         };
 
         // Take the last 20 bytes of the hash of the 64-bytes uncompressed pubkey.
-        let hashed = ecdsa::keccak256(&uncompressed_64);
+        let hashed = hash::keccak256(&uncompressed_64);
         let addr = vector::empty<u8>();
         let i = 12;
         while (i < 32) {

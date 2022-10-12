@@ -32,7 +32,7 @@ pub fn all_natives(
             "decompress_pubkey",
             make_native!(crypto::decompress_pubkey),
         ),
-        ("ecdsa", "keccak256", make_native!(crypto::keccak256)),
+        ("hash", "keccak256", make_native!(crypto::keccak256)),
         (
             "ecdsa",
             "secp256k1_verify",
