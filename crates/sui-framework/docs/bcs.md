@@ -12,7 +12,7 @@ Short summary (for Move-supported types):
 - bool - byte with 0 or 1
 - u8 - a single u8 byte
 - u64 / u128 - LE bytes
-- vector - ULEB length + LEN elements
+- vector - ULEB128 length + LEN elements
 - option - first byte bool: None (0) or Some (1), then value
 
 
