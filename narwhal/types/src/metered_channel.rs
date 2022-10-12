@@ -1,6 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-#![allow(dead_code)] // TODO: complete tests - This kinda sorta facades the whole tokio::mpsc::{Sender, Receiver}: without tests, this will be fragile to maintain.
+#![allow(dead_code)]
+
+use async_trait::async_trait;
+use std::future::Future;
+// TODO: complete tests - This kinda sorta facades the whole tokio::mpsc::{Sender, Receiver}: without tests, this will be fragile to maintain.
 use futures::{FutureExt, Stream, TryFutureExt};
 use prometheus::{IntCounter, IntGauge};
 use std::task::{Context, Poll};
@@ -305,4 +309,17 @@ pub fn channel_with_total<T>(
             total: Some(total_gauge.clone()),
         },
     )
+}
+
+#[async_trait]
+pub trait WithPermit<T> {
+    async fn with_permit<F: Future + Send>(&self, f: F) -> Option<(Permit<T>, F::Output)>;
+}
+
+#[async_trait]
+impl<T: Send> WithPermit<T> for Sender<T> {
+    async fn with_permit<F: Future + Send>(&self, f: F) -> Option<(Permit<T>, F::Output)> {
+        let permit = self.reserve().await.ok()?;
+        Some((permit, f.await))
+    }
 }

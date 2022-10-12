@@ -5069,6 +5069,7 @@ version = "0.1.0"
 dependencies = [
  "anemo",
  "anemo-build",
+ "async-trait",
  "base64",
  "bincode",
  "blake2",
