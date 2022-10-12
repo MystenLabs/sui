@@ -120,7 +120,7 @@ impl Workload<dyn Payload> for TransferObjectWorkload {
         aggregator: Arc<AuthorityAggregator<NetworkAuthorityClient>>,
     ) -> Vec<Box<dyn Payload>> {
         // Read latest test gas object
-        let primary_gas = get_latest(self.test_gas, aggregator.clone()).await.unwrap();
+        let primary_gas = get_latest(self.test_gas, &aggregator).await.unwrap();
         let mut primary_gas_ref = primary_gas.compute_object_reference();
         let owner = *self
             .transfer_keypairs

@@ -83,7 +83,7 @@ pub async fn transfer_sui_for_testing(
 
 pub async fn get_latest(
     object_id: ObjectID,
-    aggregator: Arc<AuthorityAggregator<NetworkAuthorityClient>>,
+    aggregator: &Arc<AuthorityAggregator<NetworkAuthorityClient>>,
 ) -> Option<Object> {
     // Return the latest object version
     match aggregator.get_object_info_execute(object_id).await.unwrap() {

@@ -9,7 +9,7 @@ use crate::{
         authority_aggregator_tests::transfer_coin_transaction, AuthorityAggregator,
     },
     authority_batch::batch_tests::init_state_parameters_from_rng,
-    authority_client::LocalAuthorityClient,
+    authority_client::{LocalAuthorityClient, NetworkAuthorityClientMetrics},
     checkpoints::causal_order_effects::TestCausalOrderNoop,
     safe_client::SafeClientMetrics,
 };
@@ -1622,7 +1622,8 @@ pub async fn checkpoint_tests_setup(
             })
             .collect(),
         AuthAggMetrics::new_for_tests(),
-        SafeClientMetrics::new_for_tests(),
+        Arc::new(SafeClientMetrics::new_for_tests()),
+        Arc::new(NetworkAuthorityClientMetrics::new_for_tests()),
     );
 
     TestSetup {

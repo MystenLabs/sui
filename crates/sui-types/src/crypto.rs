@@ -1235,7 +1235,8 @@ impl<const STRONG_THRESHOLD: bool> AuthoritySignInfoTrait
         fp_ensure!(
             self.epoch == committee.epoch(),
             SuiError::WrongEpoch {
-                expected_epoch: committee.epoch()
+                expected_epoch: committee.epoch(),
+                actual_epoch: self.epoch,
             }
         );
 
@@ -1387,10 +1388,13 @@ mod bcs_signable {
     pub trait BcsSignable: serde::Serialize + serde::de::DeserializeOwned {}
     impl BcsSignable for crate::batch::TransactionBatch {}
     impl BcsSignable for crate::batch::AuthorityBatch {}
+    impl BcsSignable for crate::committee::Committee {}
+    impl BcsSignable for crate::committee::CommitteeWithNetAddresses {}
     impl BcsSignable for crate::messages_checkpoint::CheckpointSummary {}
     impl BcsSignable for crate::messages_checkpoint::CheckpointContents {}
     impl BcsSignable for crate::messages_checkpoint::CheckpointProposalContents {}
     impl BcsSignable for crate::messages_checkpoint::CheckpointProposalSummary {}
+    impl BcsSignable for crate::messages::CommitteeInfoResponse {}
     impl BcsSignable for crate::messages::TransactionEffects {}
     impl BcsSignable for crate::messages::TransactionData {}
     impl BcsSignable for crate::messages::SenderSignedData {}

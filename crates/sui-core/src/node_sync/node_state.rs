@@ -64,7 +64,10 @@ macro_rules! check_epoch {
         if expected_epoch != observed_epoch {
             // Most likely indicates a reconfiguration bug.
             error!(?expected_epoch, ?observed_epoch, "Epoch mismatch");
-            return Err(SuiError::WrongEpoch { expected_epoch });
+            return Err(SuiError::WrongEpoch {
+                expected_epoch,
+                actual_epoch: observed_epoch,
+            });
         }
     };
 }

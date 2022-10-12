@@ -800,7 +800,7 @@ async fn test_safe_batch_stream() {
         auth_client,
         committee_store,
         public_key_bytes,
-        SafeClientMetrics::new_for_tests(),
+        Arc::new(SafeClientMetrics::new_for_tests()),
     );
 
     let request = BatchInfoRequest {
@@ -849,7 +849,7 @@ async fn test_safe_batch_stream() {
         auth_client_from_byzantine,
         committee_store,
         public_key_bytes_b,
-        SafeClientMetrics::new_for_tests(),
+        Arc::new(SafeClientMetrics::new_for_tests()),
     );
 
     let mut batch_stream = safe_client_from_byzantine

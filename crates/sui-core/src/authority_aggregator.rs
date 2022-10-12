@@ -2,14 +2,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority_client::AuthorityAPI;
+use crate::authority_client::{
+    make_network_authority_client_sets_from_committee, AuthorityAPI, NetworkAuthorityClient,
+    NetworkAuthorityClientMetrics,
+};
 use crate::safe_client::{SafeClient, SafeClientMetrics};
 use async_trait::async_trait;
 
 use futures::{future, future::BoxFuture, stream::FuturesUnordered, StreamExt};
+use itertools::Itertools;
 use move_core_types::value::MoveStructLayout;
+use mysten_network::config::Config;
+use sui_network::default_mysten_network_config;
 use sui_types::crypto::AuthoritySignature;
 use sui_types::object::{Object, ObjectFormatOptions, ObjectRead};
+use sui_types::sui_system_state::SuiSystemState;
 use sui_types::{
     base_types::*,
     committee::Committee,
@@ -20,6 +27,7 @@ use sui_types::{
         CheckpointResponse,
     },
 };
+use sui_types::{fp_ensure, SUI_SYSTEM_STATE_OBJECT_ID};
 use tracing::{debug, error, info, instrument, trace, Instrument};
 
 use prometheus::{
@@ -29,7 +37,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::string::ToString;
 use std::sync::Arc;
 use std::time::Duration;
-use sui_types::committee::StakeUnit;
+use sui_types::committee::{CommitteeWithNetAddresses, StakeUnit};
 use tokio::sync::mpsc::Receiver;
 use tokio::time::{sleep, timeout};
 
@@ -149,11 +157,16 @@ pub struct AuthorityAggregator<A> {
     pub committee: Committee,
     /// How to talk to this committee.
     pub authority_clients: BTreeMap<AuthorityName, SafeClient<A>>,
-    // Metrics
+    /// Metrics
     pub metrics: AuthAggMetrics,
     pub timeouts: TimeoutConfig,
-    // Store here for clone during re-config
-    pub safe_client_metrics: SafeClientMetrics,
+    /// Store here for clone during re-config
+    pub safe_client_metrics: Arc<SafeClientMetrics>,
+    /// Store here for clone during re-config.
+    /// Only relevant for NetworkAuthorityClient.
+    pub network_client_metrics: Arc<NetworkAuthorityClientMetrics>,
+    /// Store here for clone during re-config.
+    pub committee_store: Arc<CommitteeStore>,
 }
 
 impl<A> AuthorityAggregator<A> {
@@ -162,7 +175,8 @@ impl<A> AuthorityAggregator<A> {
         committee_store: Arc<CommitteeStore>,
         authority_clients: BTreeMap<AuthorityName, A>,
         metrics: AuthAggMetrics,
-        safe_client_metrics: SafeClientMetrics,
+        safe_client_metrics: Arc<SafeClientMetrics>,
+        network_client_metrics: Arc<NetworkAuthorityClientMetrics>,
     ) -> Self {
         Self::new_with_timeouts(
             committee,
@@ -170,6 +184,7 @@ impl<A> AuthorityAggregator<A> {
             authority_clients,
             metrics,
             safe_client_metrics,
+            network_client_metrics,
             Default::default(),
         )
     }
@@ -179,7 +194,8 @@ impl<A> AuthorityAggregator<A> {
         committee_store: Arc<CommitteeStore>,
         authority_clients: BTreeMap<AuthorityName, A>,
         metrics: AuthAggMetrics,
-        safe_client_metrics: SafeClientMetrics,
+        safe_client_metrics: Arc<SafeClientMetrics>,
+        network_client_metrics: Arc<NetworkAuthorityClientMetrics>,
         timeouts: TimeoutConfig,
     ) -> Self {
         Self {
@@ -201,7 +217,73 @@ impl<A> AuthorityAggregator<A> {
             metrics,
             timeouts,
             safe_client_metrics,
+            network_client_metrics,
+            committee_store,
         }
+    }
+
+    /// This function recreates AuthorityAggregator with the given committee.
+    /// It also updates committee store which impacts other of its references.
+    /// If it is called on a Validator/Fullnode, it **may** interleave with the the authority active's
+    /// reconfiguration process, and leave the commmittee store in an inconsistent state.
+    /// When catching up to the latest epoch, it should call `reconfig_from_genesis` first to fill in
+    /// all previous epoch's committee info.
+    pub fn recreate_with_net_addresses(
+        &self,
+        committee: CommitteeWithNetAddresses,
+        network_config: &Config,
+    ) -> SuiResult<AuthorityAggregator<NetworkAuthorityClient>> {
+        let network_clients = make_network_authority_client_sets_from_committee(
+            &committee,
+            network_config,
+            self.network_client_metrics.clone(),
+        )
+        .map_err(|err| SuiError::GenericAuthorityError {
+            error: format!("Failed to make authority clients from committee: {:?}", err),
+        })?;
+
+        let safe_clients = network_clients
+            .into_iter()
+            .map(|(name, api)| {
+                (
+                    name,
+                    SafeClient::new(
+                        api,
+                        self.committee_store.clone(),
+                        name,
+                        self.safe_client_metrics.clone(),
+                    ),
+                )
+            })
+            .collect::<BTreeMap<_, _>>();
+
+        // TODO: It's likely safer to do the following operations atomically, in case this function
+        // gets called from different threads. It cannot happen today, but worth the caution.
+        let new_committee = committee.committee;
+        fp_ensure!(
+            self.committee.epoch + 1 == new_committee.epoch,
+            SuiError::AdvanceEpochError {
+                error: format!(
+                    "Trying to advance from epoch {} to epoch {}",
+                    self.committee.epoch, new_committee.epoch
+                )
+            }
+        );
+        // This call may return error if this committee is already inserted,
+        // which is fine. We should continue to construct the new aggregator.
+        // This is because there may be multiple AuthorityAggregators
+        // or its containers (e.g. Quorum Drivers)  share the same committee
+        // store and all of them need to reconfigure.
+        let _ = self.committee_store.insert_new_committee(&new_committee);
+        Ok(AuthorityAggregator {
+            committee: new_committee,
+            authority_clients: safe_clients,
+            metrics: self.metrics.clone(),
+            timeouts: self.timeouts.clone(),
+            safe_client_metrics: self.safe_client_metrics.clone(),
+            network_client_metrics: self.network_client_metrics.clone(),
+            committee_store: self.committee_store.clone(),
+        })
     }
 
     pub fn clone_client(&self, name: &AuthorityName) -> SafeClient<A>
@@ -542,8 +624,16 @@ where
                         let source_client = &authority_clients[&source_authority];
                         let destination_client = &authority_clients[&destination_authority];
 
-                        source_client.report_client_error(&inner_err);
-                        destination_client.report_client_error(&inner_err);
+                        error!(
+                            ?inner_err,
+                            source =? source_client.address(),
+                            "sync_certificate_to_authority_with_timeout_inner"
+                        );
+                        error!(
+                            ?inner_err,
+                            destination =? destination_client.address(),
+                            "sync_certificate_to_authority_with_timeout_inner"
+                        );
 
                         debug!(
                             ?source_authority,
@@ -858,6 +948,167 @@ where
         }
     }
 
+    /// Query validators for committee information for `epoch` (None indicates
+    /// latest epoch) and try to form a CommitteeInfo if we can get a quorum.
+    pub async fn get_committee_info(&self, epoch: Option<EpochId>) -> SuiResult<CommitteeInfo> {
+        #[derive(Default)]
+        struct GetCommitteeRequestState {
+            bad_weight: StakeUnit,
+            responses: BTreeMap<CommitteeInfoResponseDigest, StakeUnit>,
+            errors: Vec<(AuthorityName, SuiError)>,
+            committee_info: Option<CommitteeInfo>,
+        }
+        let initial_state = GetCommitteeRequestState::default();
+        let threshold = self.committee.quorum_threshold();
+        let validity = self.committee.validity_threshold();
+        let final_state = self
+            .quorum_map_then_reduce_with_timeout(
+                initial_state,
+                |_name, client| {
+                    Box::pin(async move {
+                        client
+                            .handle_committee_info_request(CommitteeInfoRequest { epoch })
+                            .await
+                    })
+                },
+                |mut state, name, weight, result| {
+                    Box::pin(async move {
+                        match result {
+                            Ok(resp) => {
+                                let resp_digest = resp.digest();
+                                if let Some(info) = resp.committee_info {
+                                    let total_stake =
+                                        state.responses.entry(resp_digest).or_default();
+                                    *total_stake += weight;
+                                    if *total_stake >= threshold {
+                                        state.committee_info = Some(CommitteeInfo {
+                                            epoch: resp.epoch,
+                                            committee_info: info,
+                                        });
+                                        return Ok(ReduceOutput::End(state));
+                                    }
+                                } else {
+                                    // This is technically unreachable because SafeClient
+                                    // does the sanity check in `verify_committee_info_response`
+                                    state.bad_weight += weight;
+                                    state.errors.push((
+                                        name,
+                                        SuiError::from("Validator returns empty committee info."),
+                                    ));
+                                }
+                            }
+                            Err(err) => {
+                                state.bad_weight += weight;
+                                state.errors.push((name, err));
+                            }
+                        };
+
+                        // Return all errors if a quorum is not possible.
+                        if state.bad_weight > validity {
+                            return Err(SuiError::TooManyIncorrectAuthorities {
+                                errors: state.errors,
+                                action: "get_committee_info",
+                            });
+                        }
+                        Ok(ReduceOutput::Continue(state))
+                    })
+                },
+                // A long timeout before we hear back from a quorum
+                self.timeouts.pre_quorum_timeout,
+            )
+            .await?;
+
+        if let Some(committee_info) = final_state.committee_info {
+            Ok(committee_info)
+        } else {
+            Err(SuiError::TooManyIncorrectAuthorities {
+                errors: final_state.errors,
+                action: "get_committee_info",
+            })
+        }
+    }
+
+    /// Query validators for latest SuiSystemState and try to form
+    /// CommitteeWithNetworkAddress. Only return Some(CommitteeWithNetAddresses)
+    /// when there is quorum. This function tolerates uninteresting
+    /// differences in SuiSystemState as long as they all link to the same
+    /// CommitteeWithNetAddresses.
+    /// This function ignores SuiSystemState that has older epoch than
+    /// `minimal_epoch`.
+    /// Usually, the caller should pass in the local incumbent epoch id
+    /// as `minimal_epoch`, to avoid getting confused by byzantine
+    /// validators.
+    pub async fn get_committee_with_net_addresses(
+        &self,
+        minimal_epoch: EpochId,
+    ) -> SuiResult<CommitteeWithNetAddresses> {
+        let (aggregate_object_info, _certificates) =
+            // Skip committee check because this call usually happens when there's a potential new epoch
+            self.get_object_by_id(SUI_SYSTEM_STATE_OBJECT_ID, true).await?;
+
+        let mut committee_and_sigs = aggregate_object_info
+            .into_iter()
+            .filter_map(
+                |(
+                    (_object_ref, _transaction_digest),
+                    (object_option, _layout_option, object_authorities),
+                )| {
+                    if let Some(object) = object_option {
+                        let system_state = object.data.try_as_move().and_then(|move_object| {
+                            bcs::from_bytes::<SuiSystemState>(move_object.contents()).ok()
+                        })?;
+                        if system_state.epoch < minimal_epoch {
+                            None
+                        } else {
+                            let committee = system_state.get_current_epoch_committee();
+                            Some((committee, object_authorities))
+                        }
+                    } else {
+                        None
+                    }
+                },
+            )
+            .collect::<Vec<_>>();
+        // Need to be sorted before applying `group_by`
+        committee_and_sigs
+            .sort_by(|lhs, rhs| Ord::cmp(&lhs.0.committee.epoch, &rhs.0.committee.epoch));
+        let mut committee_and_votes = committee_and_sigs
+            .iter()
+            .group_by(|(committee, _votes)| committee.digest())
+            .into_iter()
+            .map(|(_committee_digest, groups)| {
+                let groups = groups.collect::<Vec<_>>();
+                let votes: StakeUnit = groups
+                    .iter()
+                    .map(|(_committee, object_authorities)| {
+                        object_authorities
+                            .iter()
+                            .map(|(name, _)| self.committee.weight(name))
+                            .sum::<StakeUnit>()
+                    })
+                    .sum();
+                // Due to the nature of `group_by`, `groups` has at least one item
+                let committee = groups[0].0.clone();
+                (committee, votes)
+            })
+            .collect::<Vec<_>>();
+        // Sort by votes. The last item is the one with the most votes, we will examine it.
+        // We don't order by epoch to prevent it from being stuck when some byzantine validators
+        // give wrong results. At the end of day, we need quorum to make acertain.
+        committee_and_votes.sort_by(|lhs, rhs| Ord::cmp(&lhs.1, &rhs.1));
+        let (committee, votes) = committee_and_votes
+            .pop()
+            .ok_or(SuiError::FailedToGetAgreedCommitteeFromMajority { minimal_epoch })?;
+        // TODO: we could try to detect byzantine behavior here, e.g. for the same epoch
+        // there are conflicting committee information.
+        // If supermajority agrees on the committee state, we are good.
+        if votes >= self.committee.quorum_threshold() {
+            Ok(committee)
+        } else {
+            Err(SuiError::FailedToGetAgreedCommitteeFromMajority { minimal_epoch })
+        }
+    }
+
     /// Return all the information in the network regarding the latest state of a specific object.
     /// For each authority queried, we obtain the latest object state along with the certificate that
     /// lead up to that state. The results from each authority are aggreated for the return.
@@ -868,6 +1119,7 @@ where
     async fn get_object_by_id(
         &self,
         object_id: ObjectID,
+        skip_committee_check_during_reconfig: bool,
     ) -> Result<
         (
             BTreeMap<
@@ -902,7 +1154,12 @@ where
                             object_id,
                             Some(ObjectFormatOptions::default()),
                         );
-                        client.handle_object_info_request(request).await
+                        client
+                            .handle_object_info_request(
+                                request,
+                                skip_committee_check_during_reconfig,
+                            )
+                            .await
                     })
                 },
                 |mut state, name, weight, result| {
@@ -950,6 +1207,8 @@ where
                 self.timeouts.pre_quorum_timeout,
             )
             .await?;
+
+        info!("have final state");
 
         let mut error_list = Vec::new();
         let mut object_map = BTreeMap::<
@@ -1000,6 +1259,8 @@ where
                     };
 
                 // Update the map with the information from this authority
+                // TODO: if `(object_ref, transaction_digest)` is alreay seen, need to verify
+                // the existing value matches the old value.
                 let entry = object_map
                     .entry((object_ref, transaction_digest))
                     .or_insert((object_option, layout_option, Vec::new()));
@@ -1135,7 +1396,8 @@ where
             // Authorities to update.
             let mut authorities: HashSet<AuthorityName> = self.committee.names().cloned().collect();
 
-            let (aggregate_object_info, certificates) = self.get_object_by_id(*object_id).await?;
+            let (aggregate_object_info, certificates) =
+                self.get_object_by_id(*object_id, false).await?;
 
             let mut aggregate_object_info: Vec<_> = aggregate_object_info.into_iter().collect();
 
@@ -1593,7 +1855,7 @@ where
     }
 
     pub async fn get_object_info_execute(&self, object_id: ObjectID) -> SuiResult<ObjectRead> {
-        let (object_map, cert_map) = self.get_object_by_id(object_id).await?;
+        let (object_map, cert_map) = self.get_object_by_id(object_id, false).await?;
         let mut object_ref_stack: Vec<_> = object_map.into_iter().collect();
 
         while let Some(((obj_ref, tx_digest), (obj_option, layout_option, authorities))) =
@@ -1682,7 +1944,10 @@ where
         // This assumption is woeful, and should be fixed
         // TODO: https://github.com/MystenLabs/sui/issues/320
         let results = future::join_all(authority_clients.iter().map(|(_, ac)| {
-            tokio::time::timeout(timeout, ac.handle_object_info_request(request.clone()))
+            tokio::time::timeout(
+                timeout,
+                ac.handle_object_info_request(request.clone(), false),
+            )
         }))
         .await;
 
@@ -1956,4 +2221,38 @@ where
             })
             .tap_err(|e| info!(?digest, "execute_cert_to_true_effects failed: {}", e))
     }
+}
+
+/// Given an AuthorityAggregator on genesis (epoch 0), catch up to the latest epoch and fill in
+/// all past epoches' committee information.
+pub async fn reconfig_from_genesis(
+    mut aggregator: AuthorityAggregator<NetworkAuthorityClient>,
+) -> SuiResult<AuthorityAggregator<NetworkAuthorityClient>> {
+    fp_ensure!(
+        aggregator.committee.epoch == 0,
+        SuiError::from("reconfig_from_genesis entails an authority aggregator with epoch 0")
+    );
+    let latest_committee = aggregator.get_committee_with_net_addresses(0).await?;
+    let latest_epoch = latest_committee.committee.epoch;
+    if latest_epoch == 0 {
+        // If still at epoch 0, no need to reconfig
+        return Ok(aggregator);
+    }
+    // First we fill in the committee store from 1 to latest_epoch - 1
+    let mut cur_epoch = 1;
+    let network_config = default_mysten_network_config();
+    loop {
+        if cur_epoch >= latest_epoch {
+            break;
+        }
+        let committee = Committee::try_from(aggregator.get_committee_info(Some(cur_epoch)).await?)?;
+        aggregator
+            .committee_store
+            .insert_new_committee(&committee)?;
+        aggregator.committee = committee;
+        cur_epoch += 1;
+        info!(epoch = cur_epoch, "Inserted committee");
+    }
+    // Now transit from latest_epoch - 1 to latest_epoch
+    aggregator.recreate_with_net_addresses(latest_committee, &network_config)
 }

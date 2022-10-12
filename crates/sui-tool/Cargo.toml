@@ -31,6 +31,7 @@ eyre = "0.6.8"
 sui-core = { path = "../sui-core" }
 sui-config = { path = "../sui-config" }
 sui-types = { path = "../sui-types" }
+sui-network = { path = "../sui-network" }
 
 colored = "2.0.0"
 workspace-hack.workspace = true
