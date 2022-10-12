@@ -48,7 +48,7 @@ async fn pending_exec_storage_notify() {
             .unwrap(),
         );
         let _active_handle = active_state
-            .spawn_checkpoint_process(CheckpointMetrics::new_for_tests(), false)
+            .spawn_checkpoint_process(CheckpointMetrics::new_for_tests())
             .await;
     }
 
@@ -134,7 +134,7 @@ async fn pending_exec_full() {
 
             active_state.clone().spawn_execute_process().await;
             active_state
-                .spawn_checkpoint_process(CheckpointMetrics::new_for_tests(), false)
+                .spawn_checkpoint_process(CheckpointMetrics::new_for_tests())
                 .await;
         });
     }

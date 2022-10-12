@@ -1448,6 +1448,7 @@ impl AuthorityState {
             &genesis_committee,
             secret.public().into(),
             secret.clone(),
+            false,
         )
         .expect("Should not fail to open local checkpoint DB");
         if let Some(consensus_sender) = consensus_sender {

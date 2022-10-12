@@ -68,6 +68,7 @@ fn random_ckpoint_store_num(
                 &committee,
                 k.public().into(),
                 Arc::pin(k.copy()),
+                false,
             )
             .unwrap();
             (path, cps)
@@ -97,6 +98,7 @@ fn crash_recovery() {
         &committee,
         k.public().into(),
         Arc::pin(k.copy()),
+        false,
     )
     .unwrap();
 
@@ -141,6 +143,7 @@ fn crash_recovery() {
         &committee,
         k.public().into(),
         Arc::pin(k.copy()),
+        false,
     )
     .unwrap();
 
@@ -751,6 +754,7 @@ fn checkpoint_integration() {
         &committee,
         k.public().into(),
         Arc::pin(k.copy()),
+        false,
     )
     .unwrap();
 

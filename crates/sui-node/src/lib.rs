@@ -105,6 +105,7 @@ impl SuiNode {
             &committee,
             config.protocol_public_key(),
             secret.clone(),
+            config.enable_reconfig,
         )?));
 
         let index_store = if is_validator {
@@ -254,10 +255,7 @@ impl SuiNode {
             Some(
                 active_authority
                     .clone()
-                    .spawn_checkpoint_process(
-                        CheckpointMetrics::new(&prometheus_registry),
-                        config.enable_reconfig,
-                    )
+                    .spawn_checkpoint_process(CheckpointMetrics::new(&prometheus_registry))
                     .await,
             )
         } else {
