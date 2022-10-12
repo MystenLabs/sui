@@ -84,14 +84,13 @@
 
             font-weight: 600;
             color: colors.$sui-dark-blue;
-            margin-bottom: 5px;
             word-break: break-all;
             text-transform: capitalize;
         }
 
         .info {
             display: flex;
-            gap: 4px;
+            gap: 7px;
             flex-direction: column;
         }
 
@@ -144,6 +143,11 @@
         .icon {
             display: flex;
             justify-content: space-between;
+
+            img {
+                height: 40px;
+                width: 40px;
+            }
         }
 
         .link {
@@ -157,6 +161,7 @@
 
         .title {
             margin-bottom: 0;
+            color: colors.$gray-90;
         }
 
         .info {

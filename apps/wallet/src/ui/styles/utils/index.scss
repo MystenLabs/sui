@@ -63,14 +63,16 @@ $main-extra-space: sizing.$main-bottom-space;
 
     &::after {
         content: '';
-        background-image: url('_assets/images/nft-detail-bg.png');
+        mask: url('_assets/images/receipt_bottom.svg');
+        background-color: colors.$gray-40;
         background-repeat: no-repeat;
         background-position: center bottom;
         background-size: 100%;
-        width: 100%;
-        height: 15px;
+        width: 320px;
+        height: 20px;
         display: flex;
-        top: 12px;
+        left: -20px;
+        top: 25px;
         position: relative;
     }
 }
@@ -154,6 +156,10 @@ $main-extra-space: sizing.$main-bottom-space;
         font-size: 13px;
         font-weight: 500;
         letter-spacing: 0;
+    } @else if $type == 'Primary/Body-M' {
+        font-size: 14px;
+        font-weight: 500;
+        letter-spacing: 0;
     } @else if $type == 'Primary/SubtitleSmall-M' {
         font-size: 11px;
         font-weight: 500;
@@ -165,6 +171,26 @@ $main-extra-space: sizing.$main-bottom-space;
         font-size: 11px;
         font-weight: 500;
         letter-spacing: 0.05em;
+    } @else if $type == 'Primary/CAPTION-SB' {
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-align: center;
+    } @else if $type == 'Primary/CAPTIONSMALL-SB' {
+        font-size: 11px;
+        font-weight: 600;
+        line-height: 11px;
+        letter-spacing: 0.05em;
+    } @else if $type == 'Primary/CAPTION-B' {
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-align: center;
+    } @else if $type == 'Primary/CAPTION-M' {
+        font-size: 12px;
+        font-weight: 500;
+        letter-spacing: 0.05em;
+        text-align: center;
     } @else if $type == 'ParagraphPrimary/P2-R' {
         font-size: 13px;
         font-weight: 400;
@@ -189,9 +215,28 @@ $main-extra-space: sizing.$main-bottom-space;
         line-height: 130%;
         letter-spacing: 0;
         text-align: center;
+    } @else if $type == 'ParagraphPrimary/P1-SB' {
+        font-size: 14px;
+        font-weight: 600;
+        line-height: 18px;
+        letter-spacing: 0;
+    } @else if $type == 'ParagraphPrimary/P2-M' {
+        font-size: 13px;
+        font-weight: 500;
+        line-height: 17px;
+        letter-spacing: 0;
     } @else if $type == 'Primary/Body-SB' {
         font-size: 14px;
         font-weight: 600;
         letter-spacing: 0;
+    } @else if $type == 'mono-type' {
+        // TODO chanage to mono font
+        font-style: normal;
+        font-weight: 500;
+        font-size: 14px;
+        text-decoration: none;
+        line-height: 90%;
+    } @else {
+        @error 'Typography #{$type} has not found';
     }
 }

@@ -15,7 +15,7 @@ serde_json = "1.0.83"
 serde_with = { version = "1.14.0", features = ["hex"] }
 colored = "2.0.0"
 either = "1.7.0"
-itertools = "0.10.4"
+itertools = "0.10.5"
 tracing = "0.1.36"
 bcs = "0.1.3"
 

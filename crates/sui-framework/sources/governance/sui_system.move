@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 module sui::sui_system {
@@ -313,6 +313,12 @@ module sui::sui_system {
     /// Aborts if `validator_addr` is not an active validator.
     public fun validator_delegate_amount(self: &SuiSystemState, validator_addr: address): u64 {
         validator_set::validator_delegate_amount(&self.validators, validator_addr)
+    }
+
+    /// Returns the amount of stake `validator_addr` has.
+    /// Aborts if `validator_addr` is not an active validator.
+    public fun validator_stake_amount(self: &SuiSystemState, validator_addr: address): u64 {
+        validator_set::validator_stake_amount(&self.validators, validator_addr)
     }
 
     #[test_only]

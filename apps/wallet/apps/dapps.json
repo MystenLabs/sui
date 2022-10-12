@@ -7,6 +7,13 @@
         "tags": ["NFT"]
     },
     {
+        "name": "Got Beef?",
+        "description": "Got Beef? is a dApp to create on-chain bets on the Sui Network",
+        "link": "https://gotbeef.app/",
+        "icon": "https://storage.googleapis.com/sui-cms-content/gotbeef_499e1b26f2/gotbeef_499e1b26f2.png",
+        "tags": ["Game"]
+    },
+    {
         "name": "Ethos 2048: An NFT Game",
         "description": "Ethos 2048: An NFT Game",
         "link": "https://ethoswallet.github.io/2048-demo/",
@@ -39,7 +46,7 @@
         "name": "Bluemove",
         "description": "NFT Marketplace on blockchain Sui",
         "link": "https://sui.bluemove.net/",
-        "icon": "https://sui.bluemove.net/BlueMove_main_logo_RGB-Blue_250.png",
+        "icon": "https://storage.googleapis.com/sui-cms-content/thumbnail_bluemove_c7a0a3e528/thumbnail_bluemove_c7a0a3e528.png",
         "tags": ["Marketplace"]
     }
 ]

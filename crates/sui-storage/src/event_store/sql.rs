@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 //! SQL and SQLite-based Event Store
@@ -21,7 +21,7 @@ use sqlx::{
 };
 use sui_types::error::SuiError;
 use sui_types::event::{Event, TransferTypeVariants};
-use tracing::{debug, info, log, warn};
+use tracing::{debug, info, instrument, log, warn};
 
 /// Sqlite-based Event Store
 ///
@@ -87,6 +87,7 @@ const INDEXED_COLUMNS: &[&str] = &[
     "sender",
     "recipient",
     "object_id",
+    "move_event_name",
 ];
 
 impl SqlEventStore {
@@ -329,31 +330,32 @@ impl From<SqliteRow> for StoredEvent {
 }
 
 const TS_QUERY: &str =
-    "SELECT * FROM events WHERE timestamp >= ? AND timestamp < ? ORDER BY timestamp DESC LIMIT ?";
+    "SELECT * FROM events WHERE timestamp >= ? AND timestamp < ? ORDER BY timestamp ASC LIMIT ?";
 
 const TX_QUERY: &str = "SELECT * FROM events WHERE tx_digest = ? LIMIT ?";
 
-// TODO: do we really need `DESC`?
+// ASC is used so there's a way to fetch from last one to NOW
 const QUERY_BY_TYPE: &str = "SELECT * FROM events WHERE timestamp >= ? AND \
-    timestamp < ? AND event_type = ? ORDER BY timestamp DESC LIMIT ?";
+    timestamp < ? AND event_type = ? ORDER BY timestamp ASC LIMIT ?";
 
 const QUERY_BY_MODULE: &str = "SELECT * FROM events WHERE timestamp >= ? AND \
-    timestamp < ? AND package_id = ? AND module_name = ? ORDER BY timestamp DESC LIMIT ?";
+    timestamp < ? AND package_id = ? AND module_name = ? ORDER BY timestamp ASC LIMIT ?";
 
 const QUERY_BY_MOVE_EVENT_STRUCT_NAME: &str = "SELECT * FROM events WHERE timestamp >= ? AND \
-    timestamp < ? AND move_event_name = ? ORDER BY timestamp DESC LIMIT ?";
+    timestamp < ? AND move_event_name = ? ORDER BY timestamp ASC LIMIT ?";
 
 const QUERY_BY_SENDER: &str = "SELECT * FROM events WHERE timestamp >= ? AND \
-    timestamp < ? AND sender = ? ORDER BY timestamp DESC LIMIT ?";
+    timestamp < ? AND sender = ? ORDER BY timestamp ASC LIMIT ?";
 
 const QUERY_BY_RECIPIENT: &str = "SELECT * FROM events WHERE timestamp >= ? AND \
-    timestamp < ? AND recipient = ? ORDER BY timestamp DESC LIMIT ?";
+    timestamp < ? AND recipient = ? ORDER BY timestamp ASC LIMIT ?";
 
 const QUERY_BY_OBJECT_ID: &str = "SELECT * FROM events WHERE timestamp >= ? AND \
-    timestamp < ? AND object_id = ? ORDER BY timestamp DESC LIMIT ?";
+    timestamp < ? AND object_id = ? ORDER BY timestamp ASC LIMIT ?";
 
 #[async_trait]
 impl EventStore for SqlEventStore {
+    #[instrument(level = "debug", skip_all, err)]
     async fn add_events(&self, events: &[EventEnvelope]) -> Result<u64, SuiError> {
         // TODO: submit writes in one transaction/batch so it won't just fail in the middle
         let mut cur_seq = self.seq_num.load(Ordering::Acquire);
@@ -411,6 +413,7 @@ impl EventStore for SqlEventStore {
         Ok(rows_affected)
     }
 
+    #[instrument(level = "debug", skip_all, err)]
     async fn events_by_transaction(
         &self,
         digest: TransactionDigest,
@@ -428,6 +431,7 @@ impl EventStore for SqlEventStore {
         Ok(rows)
     }
 
+    #[instrument(level = "debug", skip_all, err)]
     async fn events_by_type(
         &self,
         start_time: u64,
@@ -449,6 +453,7 @@ impl EventStore for SqlEventStore {
         Ok(rows)
     }
 
+    #[instrument(level = "debug", skip_all, err)]
     async fn event_iterator(
         &self,
         start_time: u64,
@@ -467,6 +472,7 @@ impl EventStore for SqlEventStore {
         Ok(rows)
     }
 
+    #[instrument(level = "debug", skip_all, err)]
     async fn events_by_module_id(
         &self,
         start_time: u64,
@@ -489,6 +495,7 @@ impl EventStore for SqlEventStore {
         Ok(rows)
     }
 
+    #[instrument(level = "debug", skip_all, err)]
     async fn events_by_move_event_struct_name(
         &self,
         start_time: u64,
@@ -497,6 +504,7 @@ impl EventStore for SqlEventStore {
         limit: usize,
     ) -> Result<Vec<StoredEvent>, SuiError> {
         let limit = Self::cap_limit(limit);
+        // TODO: duplication: these 10 lines are repetitive (4 times) in this file.
         let rows = sqlx::query(QUERY_BY_MOVE_EVENT_STRUCT_NAME)
             .persistent(true)
             .bind(start_time as i64)
@@ -510,6 +518,7 @@ impl EventStore for SqlEventStore {
         Ok(rows)
     }
 
+    #[instrument(level = "debug", skip_all, err)]
     async fn events_by_sender(
         &self,
         start_time: u64,
@@ -532,6 +541,7 @@ impl EventStore for SqlEventStore {
         Ok(rows)
     }
 
+    #[instrument(level = "debug", skip_all, err)]
     async fn events_by_recipient(
         &self,
         start_time: u64,
@@ -557,6 +567,7 @@ impl EventStore for SqlEventStore {
         Ok(rows)
     }
 
+    #[instrument(level = "debug", skip_all, err)]
     async fn events_by_object(
         &self,
         start_time: u64,
@@ -672,8 +683,8 @@ mod tests {
         let queried_events = db.event_iterator(1_000_000, 1_002_000, 20).await?;
         assert_eq!(queried_events.len(), 2);
         for i in 0..2 {
-            // DESCENDING order
-            test_queried_event_vs_test_envelope(&queried_events[1 - i], &to_insert[i]);
+            // ASCENDING order
+            test_queried_event_vs_test_envelope(&queried_events[i], &to_insert[i]);
         }
 
         Ok(())
@@ -787,15 +798,15 @@ mod tests {
         assert_eq!(queried_events.len(), 2);
 
         // Desc timestamp order, so the last transfer event should be first
-        test_queried_event_vs_test_envelope(&queried_events[0], &to_insert[4]);
-        test_queried_event_vs_test_envelope(&queried_events[1], &to_insert[2]);
+        test_queried_event_vs_test_envelope(&queried_events[0], &to_insert[2]);
+        test_queried_event_vs_test_envelope(&queried_events[1], &to_insert[4]);
 
         // Query again with limit of 1, it should return only the last transfer event
         let queried_events = db
             .events_by_type(1_000_000, 1_005_000, EventType::TransferObject, 1)
             .await?;
         assert_eq!(queried_events.len(), 1);
-        test_queried_event_vs_test_envelope(&queried_events[0], &to_insert[4]);
+        test_queried_event_vs_test_envelope(&queried_events[0], &to_insert[2]);
         assert_eq!(queried_events[0].fields.len(), 3);
 
         // Query with wrong time range, return 0 events
@@ -911,8 +922,8 @@ mod tests {
         assert_eq!(queried_events.len(), 2);
 
         // results are sorted in DESC order
-        test_queried_event_vs_test_envelope(&queried_events[0], &to_insert[6]);
-        test_queried_event_vs_test_envelope(&queried_events[1], &to_insert[5]);
+        test_queried_event_vs_test_envelope(&queried_events[0], &to_insert[5]);
+        test_queried_event_vs_test_envelope(&queried_events[1], &to_insert[6]);
         assert_eq!(queried_events[0].fields.len(), 2);
         assert_eq!(queried_events[1].fields.len(), 2);
 
@@ -966,8 +977,8 @@ mod tests {
             .await?;
         assert_eq!(events.len(), 2);
 
-        test_queried_event_vs_test_envelope(&events[0], &to_insert[1]);
-        test_queried_event_vs_test_envelope(&events[1], &to_insert[0]);
+        test_queried_event_vs_test_envelope(&events[0], &to_insert[0]);
+        test_queried_event_vs_test_envelope(&events[1], &to_insert[1]);
         assert_eq!(events[0].fields.len(), 2);
         assert_eq!(events[1].fields.len(), 2);
 
@@ -1059,11 +1070,11 @@ mod tests {
             .await?;
         assert_eq!(events.len(), 5);
 
-        test_queried_event_vs_test_envelope(&events[0], &to_insert[7]);
-        test_queried_event_vs_test_envelope(&events[1], &to_insert[5]);
+        test_queried_event_vs_test_envelope(&events[0], &to_insert[0]);
+        test_queried_event_vs_test_envelope(&events[1], &to_insert[1]);
         test_queried_event_vs_test_envelope(&events[2], &to_insert[4]);
-        test_queried_event_vs_test_envelope(&events[3], &to_insert[1]);
-        test_queried_event_vs_test_envelope(&events[4], &to_insert[0]);
+        test_queried_event_vs_test_envelope(&events[3], &to_insert[5]);
+        test_queried_event_vs_test_envelope(&events[4], &to_insert[7]);
 
         // Query by recipient
         let events = db
@@ -1071,9 +1082,9 @@ mod tests {
             .await?;
         assert_eq!(events.len(), 3);
 
-        test_queried_event_vs_test_envelope(&events[0], &to_insert[3]);
+        test_queried_event_vs_test_envelope(&events[0], &to_insert[0]);
         test_queried_event_vs_test_envelope(&events[1], &to_insert[2]);
-        test_queried_event_vs_test_envelope(&events[2], &to_insert[0]);
+        test_queried_event_vs_test_envelope(&events[2], &to_insert[3]);
 
         // Query by object
         let events = db
@@ -1081,10 +1092,10 @@ mod tests {
             .await?;
         assert_eq!(events.len(), 4);
 
-        test_queried_event_vs_test_envelope(&events[0], &to_insert[4]);
-        test_queried_event_vs_test_envelope(&events[1], &to_insert[3]);
-        test_queried_event_vs_test_envelope(&events[2], &to_insert[1]);
-        test_queried_event_vs_test_envelope(&events[3], &to_insert[0]);
+        test_queried_event_vs_test_envelope(&events[0], &to_insert[0]);
+        test_queried_event_vs_test_envelope(&events[1], &to_insert[1]);
+        test_queried_event_vs_test_envelope(&events[2], &to_insert[3]);
+        test_queried_event_vs_test_envelope(&events[3], &to_insert[4]);
 
         Ok(())
     }
@@ -1132,6 +1143,7 @@ mod tests {
         let db = SqlEventStore::new_from_file(&db_file).await?;
         db.initialize().await?;
 
+        // TODO: these 30 lines are quite duplicated in this file (4 times).
         // Write in some events, all should succeed
         let to_insert = vec![
             test_utils::new_test_newobj_event(1_000_000, 1, None, None, None),

@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use clap::Parser;
@@ -10,7 +10,7 @@ use nexlint_lints::{
     project::{BannedDeps, BannedDepsConfig, DirectDuplicateGitDependencies},
 };
 
-static LICENSE_HEADER: &str = "Copyright (c) 2022, Mysten Labs, Inc.\n\
+static LICENSE_HEADER: &str = "Copyright (c) Mysten Labs, Inc.\n\
                                SPDX-License-Identifier: Apache-2.0\n\
                                ";
 #[derive(Debug, Parser)]

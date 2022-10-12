@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 /*
@@ -110,7 +110,7 @@ impl AuthorityHealth {
     }
 }
 
-struct NodeSyncProcessHandle(tokio::task::JoinHandle<()>, oneshot::Sender<()>);
+struct NodeSyncProcessHandle(JoinHandle<()>, oneshot::Sender<()>);
 
 pub struct ActiveAuthority<A> {
     // The local authority state
@@ -202,13 +202,7 @@ impl<A> ActiveAuthority<A> {
 
         let health_overview: Vec<_> = lock
             .iter()
-            .map(|(name, h)| {
-                (
-                    *name,
-                    h.retries,
-                    h.no_contact_before - tokio::time::Instant::now(),
-                )
-            })
+            .map(|(name, h)| (*name, h.retries, h.no_contact_before - Instant::now()))
             .collect();
         debug!(health_overview = ?health_overview, "Current validator health metrics");
 
@@ -412,25 +406,19 @@ where
     pub async fn spawn_checkpoint_process(
         self: Arc<Self>,
         metrics: CheckpointMetrics,
-        enable_reconfig: bool,
     ) -> JoinHandle<()> {
-        self.spawn_checkpoint_process_with_config(
-            CheckpointProcessControl::default(),
-            metrics,
-            enable_reconfig,
-        )
-        .await
+        self.spawn_checkpoint_process_with_config(CheckpointProcessControl::default(), metrics)
+            .await
     }
 
     pub async fn spawn_checkpoint_process_with_config(
         self: Arc<Self>,
         checkpoint_process_control: CheckpointProcessControl,
         metrics: CheckpointMetrics,
-        enable_reconfig: bool,
     ) -> JoinHandle<()> {
         // Spawn task to take care of checkpointing
         tokio::task::spawn(async move {
-            checkpoint_process(self, &checkpoint_process_control, metrics, enable_reconfig).await;
+            checkpoint_process(self, &checkpoint_process_control, metrics).await;
         })
     }
 }

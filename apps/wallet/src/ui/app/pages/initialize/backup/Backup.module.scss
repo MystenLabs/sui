@@ -1,77 +1,61 @@
 @use '_values/colors';
 @use '_utils';
 
-.wallet-created {
-    .mnemonic {
-        padding: 14px;
-        border-radius: 15px;
-        margin: auto;
-        margin-bottom: 16px;
-        background: colors.$white;
-        border: 1px solid #e9eaeb;
-        font-family: Inter, sans-serif;
-        width: 320px;
-        height: 90px;
+.mnemonic {
+    display: flex;
+    flex-flow: column nowrap;
+    gap: 8px;
+    align-self: stretch;
+    font-weight: 600;
+    font-size: 17px;
+    line-height: 140%;
+    padding: 14px;
+    border-radius: 15px;
+    background: colors.$white;
+    border: 1px solid #e9eaeb;
+    box-shadow: 0 1px 2px rgba(16 24 40 / 5%);
+    color: colors.$gray-85;
+}
 
-        @include utils.typography('header/search-text');
+.copy {
+    margin-top: 10px;
+    color: colors.$sui-dark-blue;
+    align-self: flex-end;
+    cursor: pointer;
 
-        line-height: 130%;
-        color: colors.$gray-85;
-    }
+    @include utils.typography('Primary/CAPTION-SB');
+}
 
-    .header-title {
-        text-align: left;
-        margin-bottom: 20px;
-        color: colors.$gray-100;
-        font-size: 30px;
-        font-weight: 700;
-        line-height: 36px;
-    }
+.info {
+    text-align: center;
+    color: colors.$gray-75;
+    margin-top: 15px;
 
-    .sub-title {
-        text-align: center;
-        color: colors.$gray-90;
-        font-weight: 600;
-        font-size: 18px;
-        line-height: 100%;
-    }
+    @include utils.typography('ParagraphPrimary/P2-R');
+}
 
-    .success-icon {
-        border-radius: 50%;
-        width: 46px;
-        height: 46px;
-        margin: auto;
-        border: 3px dotted colors.$success;
-        display: flex;
-        align-items: center;
-        justify-content: center;
+.info-caption {
+    text-align: center;
+    color: colors.$gray-75;
+    margin-bottom: 5px;
 
-        .success-bg {
-            background-color: colors.$success;
-            border-radius: 50%;
-            width: 32px;
-            height: 32px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
+    @include utils.typography('Primary/CAPTION-M');
+}
 
-        i {
-            color: colors.$white;
-            font-size: 25px;
-        }
-    }
+.fill {
+    flex: 1;
+}
 
-    .btn {
-        width: 100%;
-        margin: auto;
-        max-width: 320px;
-        margin-top: 20px;
+.btn {
+    display: flex;
+    flex-flow: row nowrap;
+    margin-top: 45px;
+    align-self: stretch;
+    padding: 14px 20px;
+}
 
-        i {
-            margin-right: 10px;
-            font-weight: 500;
-            font-size: 12px;
-        }
-    }
+.arrow-up {
+    font-size: 12px;
+    font-weight: 300;
+    transform: rotate(135deg);
 }

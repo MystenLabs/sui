@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fmt::Debug;
@@ -25,7 +25,7 @@ where
     E: Debug,
     D: Deserializer<'de>,
 {
-    D::Error::custom(format!("byte deserialization failed, cause by: {:?}", e))
+    Error::custom(format!("byte deserialization failed, cause by: {:?}", e))
 }
 
 #[inline]
@@ -85,7 +85,7 @@ where
         if deserializer.is_human_readable() {
             let value = E::deserialize_as(deserializer)?;
             if value.len() != N {
-                return Err(D::Error::custom(anyhow!(
+                return Err(Error::custom(anyhow!(
                     "invalid array length {}, expecting {}",
                     value.len(),
                     N

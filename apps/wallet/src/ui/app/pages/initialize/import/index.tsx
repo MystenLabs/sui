@@ -1,104 +1,96 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useFormik } from 'formik';
-import { useCallback } from 'react';
-import * as Yup from 'yup';
+import { useCallback, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
-import Button from '_app/shared/button';
-import Icon, { SuiIcons } from '_components/icon';
-import { useAppDispatch, useAppSelector } from '_hooks';
-import { createMnemonic, setMnemonic } from '_redux/slices/account';
-import { normalizeMnemonics, validateMnemonics } from '_src/shared/utils/bip39';
-
-import type { FocusEventHandler } from 'react';
-
-import st from './Import.module.scss';
-
-const validationSchema = Yup.object({
-    mnemonic: Yup.string()
-        .ensure()
-        .required()
-        .trim()
-        .transform((mnemonic) => normalizeMnemonics(mnemonic))
-        .test('mnemonic-valid', 'Recovery Passphrase is invalid', (mnemonic) =>
-            validateMnemonics(mnemonic)
-        )
-        .label('Recovery Passphrase'),
-});
+import StepOne from './steps/StepOne';
+import StepTwo from './steps/StepTwo';
+import CardLayout from '_app/shared/card-layout';
+import { useAppDispatch } from '_hooks';
+import { createMnemonic, logout } from '_redux/slices/account';
+import { MAIN_UI_URL } from '_src/shared/utils';
 
 const initialValues = {
     mnemonic: '',
+    password: '',
+    confirmPassword: '',
 };
-type ValuesType = typeof initialValues;
 
-const ImportPage = () => {
-    const createInProgress = useAppSelector(({ account }) => account.creating);
+const allSteps = [StepOne, StepTwo];
+
+export type ImportValuesType = typeof initialValues;
+export type ImportPageProps = {
+    mode?: 'import' | 'forgot';
+};
+const ImportPage = ({ mode = 'import' }: ImportPageProps) => {
+    const [data, setData] = useState<ImportValuesType>(initialValues);
+    const [step, setStep] = useState(0);
     const dispatch = useAppDispatch();
+    const navigate = useNavigate();
     const onHandleSubmit = useCallback(
-        async ({ mnemonic }: ValuesType) => {
-            await dispatch(createMnemonic(mnemonic));
-            await dispatch(setMnemonic(mnemonic));
+        async ({ mnemonic, password }: ImportValuesType) => {
+            try {
+                if (mode === 'forgot') {
+                    // clear everything in storage
+                    await dispatch(logout());
+                }
+                await dispatch(
+                    createMnemonic({ importedMnemonic: mnemonic, password })
+                ).unwrap();
+                if (mode === 'import') {
+                    navigate('../backup-imported');
+                } else {
+                    // refresh the page to re-initialize the store
+                    window.location.href = MAIN_UI_URL;
+                }
+            } catch (e) {
+                // Do nothing
+            }
         },
-        [dispatch]
+        [dispatch, navigate, mode]
     );
-    const {
-        handleBlur,
-        handleChange,
-        values: { mnemonic },
-        isSubmitting,
-        isValid,
-        errors,
-        touched,
-        handleSubmit,
-        setFieldValue,
-    } = useFormik({
-        initialValues,
-        onSubmit: onHandleSubmit,
-        validationSchema,
-        validateOnMount: true,
-    });
-    const onHandleMnemonicBlur = useCallback<
-        FocusEventHandler<HTMLTextAreaElement>
-    >(
-        async (e) => {
-            const adjMnemonic = await validationSchema.fields.mnemonic.cast(
-                mnemonic
-            );
-            await setFieldValue('mnemonic', adjMnemonic, false);
-            handleBlur(e);
-        },
-        [setFieldValue, mnemonic, handleBlur]
-    );
+    const totalSteps = allSteps.length;
+    const StepForm = step < totalSteps ? allSteps[step] : null;
     return (
-        <>
-            <h1 className={st.headerTitle}>Import wallet</h1>
-            <form onSubmit={handleSubmit} noValidate autoComplete="off">
-                <textarea
-                    onChange={handleChange}
-                    value={mnemonic}
-                    onBlur={onHandleMnemonicBlur}
-                    className={st.mnemonic}
-                    placeholder="Paste your 12-word passphrase"
-                    name="mnemonic"
-                    disabled={createInProgress || isSubmitting}
+        <CardLayout
+            title={
+                mode === 'import'
+                    ? 'Import an Existing Wallet'
+                    : 'Reset Password for This Wallet'
+            }
+            headerCaption={mode === 'import' ? 'Wallet Setup' : undefined}
+            mode={mode === 'import' ? 'box' : 'plain'}
+            goBackOnClick={
+                mode === 'forgot'
+                    ? () => {
+                          if (step > 0) {
+                              setStep((step) => step - 1);
+                          } else {
+                              navigate(-1);
+                          }
+                      }
+                    : undefined
+            }
+        >
+            {StepForm ? (
+                <StepForm
+                    next={async (data, stepIncrement) => {
+                        const nextStep = step + stepIncrement;
+                        if (nextStep >= totalSteps) {
+                            await onHandleSubmit(data);
+                        }
+                        setData(data);
+                        if (nextStep < 0) {
+                            return;
+                        }
+                        setStep(nextStep);
+                    }}
+                    data={data}
+                    mode={mode}
                 />
-                {touched.mnemonic && errors?.mnemonic && (
-                    <div className={st.error}>{errors?.mnemonic}</div>
-                )}
-
-                <Button
-                    type="submit"
-                    disabled={isSubmitting || createInProgress || !isValid}
-                    mode="primary"
-                    className={st.btn}
-                    size="large"
-                >
-                    Import wallet Now
-                    <Icon icon={SuiIcons.ArrowRight} className={st.next} />
-                </Button>
-            </form>
-        </>
+            ) : null}
+        </CardLayout>
     );
 };
 

@@ -2,8 +2,7 @@
 title: Sui Prototypes
 ---
 
-Here are two short gaming pre-alpha prototypes that demonstrate the speed, scalability, and rich interactions made possible with mutable, expressive NFTs. The first prototype [Sui Monstars](https://sui.io/monstar), is playable now.
-
+Here are two short gaming pre-alpha prototypes that demonstrate the speed, scalability, and rich interactions made possible with mutable, expressive NFTs.
 
 ## Sui and gaming
 
@@ -20,12 +19,11 @@ With Sui, we believe game developers should not be limited by the platform perfo
 
 [Move](https://github.com/MystenLabs/awesome-move/blob/main/README.md) is simply awesome: it’s safe, expressive and immune from reentrancy; but Move expertise is not required to build meaningful experiences on Sui. To make it easy for developers and creators to start using Sui for gaming, we will be releasing gaming SDKs that address common use cases and game asset-related features.
 
-
 ## How we did it
 
 Created by game development studio GenITeam, these prototypes use both the Unity SDK and Sui [APIs](https://docs.sui.io/sui-jsonrpc).
 
-GenITeam’s developers who worked on this collaboration are neither smart contract nor Move developers. Based on their input, we created a data model and shared simple APIs. With these APIs, geniteam was able to mint fully on-chain NFTs that are mutable, own other on-chain assets, and freely transfer to other applications.
+GenITeam’s developers who worked on this collaboration are neither smart contract nor Move developers. Based on their input, we created a data model and shared simple APIs. With these APIs, GenITeam was able to mint fully on-chain NFTs that are mutable, own other on-chain assets, and freely transfer to other applications.
 
 This proof of concept build is meant to demonstrate the capabilities for game developers unlocked through Sui. We look forward to seeing what the creative minds in the gaming community come up with as we unveil additional capabilities in the upcoming months. With each bug fixed we learned insights on what game developers look for in a SDK. Sui is committed to building SDKs that are accessible for all levels of developers with varying degrees of smart contracts expertise.
 
@@ -188,9 +186,9 @@ GET /object_info?objectId={{monster_id}}
     }
 ```
 
-## Protype 1 Sui Monstar
+## Sui Monstar prototype
 
-The first prototype is [Sui Monstar](https://sui.io/monstar), a pet simulation game.
+Sui Monstar is an example of a pet simulation game.
 
 Gameplay:
 
@@ -208,11 +206,11 @@ In Sui Monstars, capture cute monstars and watch them get closer to you as you f
 ![Update NFT properties](../../static/nft-properties.png "Equip elemental runes to your Monstar")
 *Equip elemental runes to your Monstar and watch your NFT evolve with updated properties*
 
-That’s not all! As your Monstars become stronger, you can use them to help you battle…in the next prototype>>>
+That’s not all! As your Monstars become stronger, you can use them to help you battle in Sui Battler.
 
-## Prototype 2 Sui Battler
+## Sui Battler prototype
 
-Welcome to Sui Battler, where your cute monstars transform into warriors!
+Sui Battler is an example game where your cute monstars transform into warriors!
 
 Gameplay:
 
@@ -235,4 +233,4 @@ Gameplay:
 ## Further reading
 
 * Check out Sui [APIs](https://docs.sui.io/sui-jsonrpc).
-* Learn about Sui [objects](../build/objects.md).
+* Learn about Sui [objects](../learn/objects.md).

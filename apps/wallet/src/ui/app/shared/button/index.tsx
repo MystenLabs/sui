@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 import cl from 'classnames';
@@ -15,8 +15,8 @@ import st from './Button.module.scss';
 
 export type ButtonProps = {
     className?: string;
-    mode?: 'neutral' | 'primary' | 'outline';
-    size?: 'small' | 'large';
+    mode?: 'neutral' | 'primary' | 'outline' | 'secondary';
+    size?: 'mini' | 'small' | 'large';
     children: ReactNode | ReactNode[];
     disabled?: boolean;
     title?: string;

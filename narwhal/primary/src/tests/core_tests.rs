@@ -1,5 +1,5 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 use crate::common::{create_db_stores, create_test_vote_store};
@@ -7,6 +7,7 @@ use anemo::{types::PeerInfo, PeerId};
 use fastcrypto::traits::KeyPair;
 use prometheus::Registry;
 use test_utils::{fixture_batch_with_transactions, CommitteeFixture, PrimaryToPrimaryMockServer};
+use tokio::time::Duration;
 use types::{CertificateDigest, Header, Vote};
 
 #[tokio::test]
@@ -364,6 +365,7 @@ async fn process_votes() {
         .start(anemo::Router::new())
         .unwrap();
 
+    // TODO: duplicated code (3 times in our repo).
     for (_pubkey, addresses, network_pubkey) in committee.others_primaries(&name) {
         let peer_id = PeerId(network_pubkey.0.to_bytes());
         let address = network::multiaddr_to_address(&addresses).unwrap();
@@ -556,6 +558,317 @@ async fn process_certificates() {
             .get(),
         3
     );
+}
+#[tokio::test(flavor = "current_thread", start_paused = true)]
+async fn recover_core() {
+    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let committee = fixture.committee();
+    let worker_cache = fixture.shared_worker_cache();
+    let primary = fixture.authorities().last().unwrap();
+    let network_key = primary.network_keypair().copy().private().0.to_bytes();
+    let name = primary.public_key();
+    let signature_service = SignatureService::new(primary.keypair().copy());
+
+    let (tx_reconfigure, rx_reconfigure) =
+        watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
+    let (tx_sync_headers, _rx_sync_headers) = test_utils::test_channel!(1);
+    let (tx_sync_certificates, _rx_sync_certificates) = test_utils::test_channel!(1);
+    let (tx_primary_messages, rx_primary_messages) = test_utils::test_channel!(3);
+    let (_tx_headers_loopback, rx_headers_loopback) = test_utils::test_channel!(1);
+    let (_tx_certificates_loopback, rx_certificates_loopback) = test_utils::test_channel!(1);
+    let (_tx_headers, rx_headers) = test_utils::test_channel!(1);
+    let (tx_consensus, _rx_consensus) = test_utils::test_channel!(3);
+    let (tx_parents, _rx_parents) = test_utils::test_channel!(3);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
+
+    // Create test stores.
+    let (header_store, certificates_store, payload_store) = create_db_stores();
+
+    // Make a synchronizer for the core.
+    let synchronizer = Synchronizer::new(
+        name.clone(),
+        &committee,
+        certificates_store.clone(),
+        payload_store.clone(),
+        /* tx_header_waiter */ tx_sync_headers.clone(),
+        /* tx_certificate_waiter */ tx_sync_certificates.clone(),
+        None,
+    );
+
+    let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
+
+    let own_address = network::multiaddr_to_address(&committee.primary(&name).unwrap()).unwrap();
+    let network = anemo::Network::bind(own_address)
+        .server_name("narwhal")
+        .private_key(network_key)
+        .start(anemo::Router::new())
+        .unwrap();
+    // Spawn the core.
+    let _core_handle = Core::spawn(
+        name.clone(),
+        committee.clone(),
+        worker_cache.clone(),
+        header_store.clone(),
+        certificates_store.clone(),
+        create_test_vote_store(),
+        synchronizer,
+        signature_service.clone(),
+        rx_consensus_round_updates.clone(),
+        /* gc_depth */ 50,
+        rx_reconfigure.clone(),
+        /* rx_primaries */ rx_primary_messages,
+        /* rx_header_waiter */ rx_headers_loopback,
+        /* rx_certificate_waiter */ rx_certificates_loopback,
+        /* rx_proposer */ rx_headers,
+        tx_consensus,
+        /* tx_proposer */ tx_parents,
+        metrics.clone(),
+        P2pNetwork::new(network.clone()),
+    );
+
+    // Send 2f+1 certificates to the core.
+    let certificates: Vec<_> = fixture
+        .headers()
+        .iter()
+        .take(3)
+        .map(|h| fixture.certificate(h))
+        .collect();
+
+    for x in certificates.clone() {
+        tx_primary_messages
+            .send(PrimaryMessage::Certificate(x))
+            .await
+            .unwrap();
+    }
+    tokio::time::sleep(Duration::from_secs(5)).await;
+
+    // Shutdown the core.
+    let shutdown = ReconfigureNotification::Shutdown;
+    tx_reconfigure.send(shutdown).unwrap();
+
+    // Restart the core.
+    // Make a synchronizer for the core.
+    let new_synchronizer = Synchronizer::new(
+        name.clone(),
+        &committee,
+        certificates_store.clone(),
+        payload_store.clone(),
+        /* tx_header_waiter */ tx_sync_headers.clone(),
+        /* tx_certificate_waiter */ tx_sync_certificates.clone(),
+        None,
+    );
+    let (_tx_primary_messages, rx_primary_messages) = test_utils::test_channel!(3);
+    let (_tx_headers_loopback, rx_headers_loopback) = test_utils::test_channel!(1);
+    let (_tx_certificates_loopback, rx_certificates_loopback) = test_utils::test_channel!(1);
+    let (_tx_headers, rx_headers) = test_utils::test_channel!(1);
+    let (tx_consensus, _rx_consensus) = test_utils::test_channel!(3);
+    let (tx_parents, mut rx_parents) = test_utils::test_channel!(3);
+
+    let _core_handle = Core::spawn(
+        name.clone(),
+        committee.clone(),
+        worker_cache.clone(),
+        header_store.clone(),
+        certificates_store.clone(),
+        create_test_vote_store(),
+        new_synchronizer,
+        signature_service.clone(),
+        rx_consensus_round_updates.clone(),
+        /* gc_depth */ 50,
+        rx_reconfigure.clone(),
+        /* rx_primaries */ rx_primary_messages,
+        /* rx_header_waiter */ rx_headers_loopback,
+        /* rx_certificate_waiter */ rx_certificates_loopback,
+        /* rx_proposer */ rx_headers,
+        tx_consensus,
+        /* tx_proposer */ tx_parents,
+        metrics.clone(),
+        P2pNetwork::new(network.clone()),
+    );
+
+    // Ensure the core sends the parents of the certificates to the proposer.
+
+    // the recovery flow sends message that contains the parents
+    let received = rx_parents.recv().await.unwrap();
+    assert_eq!(received.1, 1);
+    assert_eq!(received.2, 0);
+    assert_eq!(received.0.len(), certificates.len());
+    for c in &certificates {
+        assert!(received.0.contains(c));
+    }
+
+    // Ensure the certificates are stored.
+    for x in &certificates {
+        let stored = certificates_store.read(x.digest()).unwrap();
+        assert_eq!(stored, Some(x.clone()));
+    }
+
+    let mut m = HashMap::new();
+    m.insert("epoch", "0");
+    m.insert("source", "other");
+    assert_eq!(
+        metrics
+            .certificates_processed
+            .get_metric_with(&m)
+            .unwrap()
+            .get(),
+        3
+    );
+}
+
+#[tokio::test(flavor = "current_thread", start_paused = true)]
+async fn recover_core_partial_certs() {
+    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let committee = fixture.committee();
+    let worker_cache = fixture.shared_worker_cache();
+    let primary = fixture.authorities().last().unwrap();
+    let network_key = primary.network_keypair().copy().private().0.to_bytes();
+    let name = primary.public_key();
+    let signature_service = SignatureService::new(primary.keypair().copy());
+
+    let (tx_reconfigure, rx_reconfigure) =
+        watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
+    let (tx_sync_headers, _rx_sync_headers) = test_utils::test_channel!(1);
+    let (tx_sync_certificates, _rx_sync_certificates) = test_utils::test_channel!(1);
+    let (tx_primary_messages, rx_primary_messages) = test_utils::test_channel!(3);
+    let (_tx_headers_loopback, rx_headers_loopback) = test_utils::test_channel!(1);
+    let (_tx_certificates_loopback, rx_certificates_loopback) = test_utils::test_channel!(1);
+    let (_tx_headers, rx_headers) = test_utils::test_channel!(1);
+    let (tx_consensus, _rx_consensus) = test_utils::test_channel!(3);
+    let (tx_parents, _rx_parents) = test_utils::test_channel!(3);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
+
+    // Create test stores.
+    let (header_store, certificates_store, payload_store) = create_db_stores();
+
+    // Make a synchronizer for the core.
+    let synchronizer = Synchronizer::new(
+        name.clone(),
+        &committee,
+        certificates_store.clone(),
+        payload_store.clone(),
+        /* tx_header_waiter */ tx_sync_headers.clone(),
+        /* tx_certificate_waiter */ tx_sync_certificates.clone(),
+        None,
+    );
+
+    let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
+
+    let own_address = network::multiaddr_to_address(&committee.primary(&name).unwrap()).unwrap();
+    let network = anemo::Network::bind(own_address)
+        .server_name("narwhal")
+        .private_key(network_key)
+        .start(anemo::Router::new())
+        .unwrap();
+    // Spawn the core.
+    let _core_handle = Core::spawn(
+        name.clone(),
+        committee.clone(),
+        worker_cache.clone(),
+        header_store.clone(),
+        certificates_store.clone(),
+        create_test_vote_store(),
+        synchronizer,
+        signature_service.clone(),
+        rx_consensus_round_updates.clone(),
+        /* gc_depth */ 50,
+        rx_reconfigure.clone(),
+        /* rx_primaries */ rx_primary_messages,
+        /* rx_header_waiter */ rx_headers_loopback,
+        /* rx_certificate_waiter */ rx_certificates_loopback,
+        /* rx_proposer */ rx_headers,
+        tx_consensus,
+        /* tx_proposer */ tx_parents,
+        metrics.clone(),
+        P2pNetwork::new(network.clone()),
+    );
+
+    // Send one certificate to the core.
+    let certificates: Vec<Certificate> = fixture
+        .headers()
+        .iter()
+        .take(3)
+        .map(|h| fixture.certificate(h))
+        .collect();
+
+    let last_cert = certificates.clone().into_iter().last().unwrap();
+
+    tx_primary_messages
+        .send(PrimaryMessage::Certificate(last_cert))
+        .await
+        .unwrap();
+
+    tokio::time::sleep(Duration::from_secs(2)).await;
+
+    // Shutdown the core.
+    let shutdown = ReconfigureNotification::Shutdown;
+    tx_reconfigure.send(shutdown).unwrap();
+
+    // Restart the core.
+    // Make a synchronizer for the core.
+    let new_synchronizer = Synchronizer::new(
+        name.clone(),
+        &committee,
+        certificates_store.clone(),
+        payload_store.clone(),
+        /* tx_header_waiter */ tx_sync_headers,
+        /* tx_certificate_waiter */ tx_sync_certificates,
+        None,
+    );
+    let (tx_primary_messages_restored, rx_primary_messages_restored) = test_utils::test_channel!(2);
+    let (_tx_headers_loopback, rx_headers_loopback) = test_utils::test_channel!(1);
+    let (_tx_certificates_loopback, rx_certificates_loopback) = test_utils::test_channel!(1);
+    let (_tx_headers, rx_headers) = test_utils::test_channel!(1);
+    let (tx_consensus, _rx_consensus) = test_utils::test_channel!(3);
+    let (tx_parents, mut rx_parents) = test_utils::test_channel!(3);
+    let (_tx_reconfigure, rx_reconfigure) =
+        watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
+
+    let _core_handle = Core::spawn(
+        name.clone(),
+        committee.clone(),
+        worker_cache.clone(),
+        header_store.clone(),
+        certificates_store.clone(),
+        create_test_vote_store(),
+        new_synchronizer,
+        signature_service.clone(),
+        rx_consensus_round_updates.clone(),
+        /* gc_depth */ 50,
+        rx_reconfigure.clone(),
+        /* rx_primaries */ rx_primary_messages_restored,
+        /* rx_header_waiter */ rx_headers_loopback,
+        /* rx_certificate_waiter */ rx_certificates_loopback,
+        /* rx_proposer */ rx_headers,
+        tx_consensus,
+        /* tx_proposer */ tx_parents,
+        metrics.clone(),
+        P2pNetwork::new(network.clone()),
+    );
+
+    // Send remaining 2f certs to the core.
+    for x in certificates.clone().into_iter().take(2) {
+        tx_primary_messages_restored
+            .send(PrimaryMessage::Certificate(x))
+            .await
+            .unwrap();
+    }
+    tokio::time::sleep(Duration::from_secs(5)).await;
+
+    for _i in 0..2 {
+        let received = rx_parents.recv().await.unwrap();
+        assert_eq!(received, (vec![], 0, 0));
+    }
+
+    // the recovery flow sends message that contains the parents
+    let received = rx_parents.recv().await.unwrap();
+    println!("{:?}", received);
+    assert_eq!(received.1, 1);
+    assert_eq!(received.2, 0);
+    assert_eq!(received.0.len(), certificates.len());
+    for c in &certificates {
+        assert!(received.0.contains(c));
+    }
 }
 
 #[tokio::test]

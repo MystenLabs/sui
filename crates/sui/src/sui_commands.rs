@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::client_commands::{SuiClientCommands, WalletContext};
@@ -7,6 +7,7 @@ use crate::console::start_console;
 use crate::genesis_ceremony::{run, Ceremony};
 use crate::keytool::KeyToolCommand;
 use crate::sui_move::{self, execute_move_command};
+use fastcrypto::traits::KeyPair;
 use move_package::BuildConfig;
 use std::io::{stderr, stdout, Write};
 use std::num::NonZeroUsize;
@@ -24,10 +25,10 @@ use sui_config::{
     sui_config_dir, Config, PersistedConfig, SUI_CLIENT_CONFIG, SUI_FULLNODE_CONFIG,
     SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG,
 };
-use sui_sdk::crypto::KeystoreType;
+use sui_sdk::crypto::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_sdk::ClientType;
 use sui_swarm::memory::Swarm;
-use sui_types::crypto::{KeypairTraits, SignatureScheme, SuiKeyPair};
+use sui_types::crypto::{SignatureScheme, SuiKeyPair};
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Parser)]
@@ -247,11 +248,11 @@ impl SuiCommand {
                         .build()
                 };
 
-                let mut keystore = KeystoreType::File(keystore_path.clone()).init().unwrap();
-
+                let mut keystore = FileBasedKeystore::new(&keystore_path)?;
                 for key in &network_config.account_keys {
                     keystore.add_key(SuiKeyPair::Ed25519SuiKeyPair(key.copy()))?;
                 }
+                let active_address = keystore.addresses().pop();
 
                 network_config.genesis.save(&genesis_path)?;
                 for validator in &mut network_config.validator_configs {
@@ -263,9 +264,6 @@ impl SuiCommand {
                 info!("Network config file is stored in {:?}.", network_path);
 
                 info!("Client keystore is stored in {:?}.", keystore_path);
-
-                // Use the first address if any
-                let active_address = keystore.keys().get(0).map(|k| k.into());
 
                 let validator_set = network_config.validator_set();
 
@@ -284,7 +282,7 @@ impl SuiCommand {
                 };
 
                 let wallet_config = SuiClientConfig {
-                    keystore: KeystoreType::File(keystore_path),
+                    keystore: Keystore::from(keystore),
                     client_type: ClientType::Embedded(wallet_gateway_config),
                     active_address,
                 };
@@ -312,7 +310,7 @@ impl SuiCommand {
             SuiCommand::KeyTool { keystore_path, cmd } => {
                 let keystore_path =
                     keystore_path.unwrap_or(sui_config_dir()?.join(SUI_KEYSTORE_FILENAME));
-                let mut keystore = KeystoreType::File(keystore_path).init()?;
+                let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
                 cmd.execute(&mut keystore)
             }
             SuiCommand::Console { config } => {
@@ -363,28 +361,30 @@ impl SuiCommand {
 
 // Sync all accounts on start up.
 async fn sync_accounts(context: &mut WalletContext) -> Result<(), anyhow::Error> {
-    for address in context.keystore.addresses().clone() {
-        SuiClientCommands::SyncClientState {
-            address: Some(address),
+    if context.client.is_gateway() {
+        for address in context.config.keystore.addresses().clone() {
+            SuiClientCommands::SyncClientState {
+                address: Some(address),
+            }
+            .execute(context)
+            .await?;
         }
-        .execute(context)
-        .await?;
     }
     Ok(())
 }
 
 async fn prompt_if_no_config(wallet_conf_path: &Path) -> Result<(), anyhow::Error> {
-    // Prompt user for connect to gateway if config not exists.
+    // Prompt user for connect to devnet fullnode if config does not exist.
     if !wallet_conf_path.exists() {
         let url = match std::env::var_os("SUI_CONFIG_WITH_RPC_URL") {
             Some(v) => Some(v.into_string().unwrap()),
             None => {
                 print!(
-                    "Config file [{:?}] doesn't exist, do you want to connect to a Sui RPC server [yN]?",
+                    "Config file [{:?}] doesn't exist, do you want to connect to a Sui full node server [yN]?",
                     wallet_conf_path
                 );
                 if matches!(read_line(), Ok(line) if line.trim().to_lowercase() == "y") {
-                    print!("Sui RPC server Url (Default to Sui DevNet if not specified) : ");
+                    print!("Sui full node server url (Default to Sui DevNet if not specified) : ");
                     let url = read_line()?;
                     let url = if url.trim().is_empty() {
                         SUI_DEV_NET_URL
@@ -406,14 +406,13 @@ async fn prompt_if_no_config(wallet_conf_path: &Path) -> Result<(), anyhow::Erro
                 .parent()
                 .unwrap_or(&sui_config_dir()?)
                 .join(SUI_KEYSTORE_FILENAME);
-            let keystore = KeystoreType::File(keystore_path);
+            let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
             println!("Select key scheme to generate keypair (0 for ed25519, 1 for secp256k1):");
             let key_scheme = match SignatureScheme::from_flag(read_line()?.trim()) {
                 Ok(s) => s,
                 Err(e) => return Err(anyhow!("{e}")),
             };
-            let (new_address, phrase, scheme) =
-                keystore.init()?.generate_new_key(key_scheme, None)?;
+            let (new_address, phrase, scheme) = keystore.generate_new_key(key_scheme, None)?;
             println!(
                 "Generated new keypair for address with scheme {:?} [{new_address}]",
                 scheme.to_string()

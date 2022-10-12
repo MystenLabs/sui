@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 import { SignatureScheme } from '../cryptography/publickey';
@@ -45,6 +45,24 @@ export class VoidProvider extends Provider {
     _typeArg?: string
   ): Promise<GetObjectDataResponse[]> {
     throw this.newError('getCoinBalancesOwnedByAddress');
+  }
+
+  async selectCoinsWithBalanceGreaterThanOrEqual(
+    _address: string,
+    _amount: bigint,
+    _typeArg: string,
+    _exclude: ObjectId[] = []
+  ): Promise<GetObjectDataResponse[]> {
+    throw this.newError('selectCoinsWithBalanceGreaterThanOrEqual');
+  }
+
+  async selectCoinSetWithCombinedBalanceGreaterThanOrEqual(
+    _address: string,
+    _amount: bigint,
+    _typeArg: string,
+    _exclude: ObjectId[]
+  ): Promise<GetObjectDataResponse[]> {
+    throw this.newError('selectCoinSetWithCombinedBalanceGreaterThanOrEqual');
   }
 
   async getObject(_objectId: string): Promise<GetObjectDataResponse> {

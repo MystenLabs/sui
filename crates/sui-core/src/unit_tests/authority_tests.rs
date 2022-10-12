@@ -1,6 +1,8 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
+use crate::test_utils::to_sender_signed_transaction;
 
 use super::*;
 use bcs;
@@ -11,7 +13,6 @@ use move_binary_format::{
 use move_core_types::{
     account_address::AccountAddress, ident_str, identifier::Identifier, language_storage::TypeTag,
 };
-use narwhal_executor::ExecutionIndices;
 use rand::{
     distributions::{Distribution, Uniform},
     prelude::StdRng,
@@ -144,10 +145,9 @@ async fn construct_shared_object_transaction_with_sequence_number(
         ],
         MAX_GAS,
     );
-    let signature = Signature::new(&data, &keypair);
     (
         authority,
-        Transaction::new(data, signature),
+        to_sender_signed_transaction(data, &keypair),
         gas_object_id,
         shared_object_id,
     )
@@ -213,8 +213,17 @@ async fn test_handle_transfer_transaction_bad_signature() {
 
     let (_unknown_address, unknown_key): (_, AccountKeyPair) = get_key_pair();
     let mut bad_signature_transfer_transaction = transfer_transaction.clone();
-    bad_signature_transfer_transaction.signed_data.tx_signature =
-        Signature::new(&transfer_transaction.signed_data.data, &unknown_key);
+    bad_signature_transfer_transaction.signed_data.tx_signature = Signature::new_temp(
+        &transfer_transaction.signed_data.data.to_bytes(),
+        &unknown_key,
+    );
+
+    // bad_signature_transfer_transaction.signed_data.tx_signature = Signature::new_secure(
+    //     &transfer_transaction.signed_data.data,
+    //     Intent::default(),
+    //     &unknown_key,
+    // )
+    // .unwrap();
     assert!(authority_state
         .handle_transaction(bad_signature_transfer_transaction)
         .await
@@ -543,11 +552,9 @@ async fn test_objected_owned_gas() {
         child_object.compute_object_reference(),
         10000,
     );
-    let signature = Signature::new(&data, &sender_key);
-    let transfer_transaction = Transaction::new(data, signature);
-    let result = authority_state
-        .handle_transaction(transfer_transaction.clone())
-        .await;
+
+    let transaction = to_sender_signed_transaction(data, &sender_key);
+    let result = authority_state.handle_transaction(transaction).await;
     assert!(matches!(
         result.unwrap_err(),
         SuiError::InsufficientGas { .. }
@@ -638,8 +645,7 @@ async fn test_publish_dependent_module_ok() {
         vec![dependent_module_bytes],
         MAX_GAS,
     );
-    let signature = Signature::new(&data, &sender_key);
-    let transaction = Transaction::new(data, signature);
+    let transaction = to_sender_signed_transaction(data, &sender_key);
 
     let dependent_module_id = TxContext::new(&sender, transaction.digest(), 0).fresh_id();
 
@@ -674,8 +680,7 @@ async fn test_publish_module_no_dependencies_ok() {
     module.serialize(&mut module_bytes).unwrap();
     let module_bytes = vec![module_bytes];
     let data = TransactionData::new_module(sender, gas_payment_object_ref, module_bytes, MAX_GAS);
-    let signature = Signature::new(&data, &sender_key);
-    let transaction = Transaction::new(data, signature);
+    let transaction = to_sender_signed_transaction(data, &sender_key);
     let _module_object_id = TxContext::new(&sender, transaction.digest(), 0).fresh_id();
     let response = send_and_confirm_transaction(&authority, transaction)
         .await
@@ -723,9 +728,7 @@ async fn test_publish_non_existing_dependent_module() {
         vec![dependent_module_bytes],
         MAX_GAS,
     );
-    let signature = Signature::new(&data, &sender_key);
-    let transaction = Transaction::new(data, signature);
-
+    let transaction = to_sender_signed_transaction(data, &sender_key);
     let response = authority.handle_transaction(transaction).await;
     assert!(std::string::ToString::to_string(&response.unwrap_err())
         .contains("DependentPackageNotFound"));
@@ -831,9 +834,7 @@ async fn test_handle_transfer_sui_with_amount_insufficient_gas() {
         object.compute_object_reference(),
         200,
     );
-    let signature = Signature::new(&data, &sender_key);
-    let transaction = Transaction::new(data, signature);
-
+    let transaction = to_sender_signed_transaction(data, &sender_key);
     let result = authority_state.handle_transaction(transaction).await;
     assert!(matches!(
         result.unwrap_err(),
@@ -1404,9 +1405,7 @@ async fn test_move_call_insufficient_gas() {
         gas_used - 5,
     );
 
-    let signature = Signature::new(&data, &recipient_key);
-    let transaction = Transaction::new(data, signature);
-
+    let transaction = to_sender_signed_transaction(data, &recipient_key);
     let tx_digest = *transaction.digest();
     let response = send_and_confirm_transaction(&authority_state, transaction)
         .await
@@ -1787,10 +1786,9 @@ async fn test_transfer_sui_no_amount() {
         gas_object.compute_object_reference(),
         MAX_GAS,
     );
-    let signature = Signature::new(&tx_data, &sender_key);
-    let transaction = Transaction::new(tx_data, signature);
 
     // Make sure transaction handling works as usual.
+    let transaction = to_sender_signed_transaction(tx_data, &sender_key);
     authority_state
         .handle_transaction(transaction.clone())
         .await
@@ -1838,9 +1836,7 @@ async fn test_transfer_sui_with_amount() {
         gas_object.compute_object_reference(),
         MAX_GAS,
     );
-    let signature = Signature::new(&tx_data, &sender_key);
-    let transaction = Transaction::new(tx_data, signature);
-
+    let transaction = to_sender_signed_transaction(tx_data, &sender_key);
     let certificate = init_certified_transaction(transaction, &authority_state);
     let response = authority_state
         .handle_certificate(certificate)
@@ -1892,9 +1888,8 @@ async fn test_store_revert_state_update() {
         gas_object.compute_object_reference(),
         MAX_GAS,
     );
-    let signature = Signature::new(&tx_data, &sender_key);
-    let transaction = Transaction::new(tx_data, signature);
 
+    let transaction = to_sender_signed_transaction(tx_data, &sender_key);
     let certificate = init_certified_transaction(transaction, &authority_state);
     let tx_digest = *certificate.digest();
     authority_state
@@ -2072,8 +2067,7 @@ pub fn init_transfer_transaction(
     gas_object_ref: ObjectRef,
 ) -> Transaction {
     let data = TransactionData::new_transfer(recipient, object_ref, sender, gas_object_ref, 10000);
-    let signature = Signature::new(&data, secret);
-    Transaction::new(data, signature)
+    to_sender_signed_transaction(data, secret)
 }
 
 #[cfg(test)]
@@ -2118,7 +2112,7 @@ async fn send_consensus(authority: &AuthorityState, cert: &CertifiedTransaction)
                 certificate: narwhal_types::Certificate::default(),
                 consensus_index: narwhal_types::SequenceNumber::default(),
             },
-            /* last_consensus_index */ ExecutionIndices::default(),
+            /* last_consensus_index */ Default::default(),
             ConsensusTransaction::new_certificate_message(&authority.name, cert.clone()),
         )
         .await
@@ -2180,9 +2174,7 @@ pub async fn call_move_with_shared(
         MAX_GAS,
     );
 
-    let signature = Signature::new(&data, sender_key);
-    let transaction = Transaction::new(data, signature);
-
+    let transaction = to_sender_signed_transaction(data, sender_key);
     let response =
         send_and_confirm_transaction_with_shared(authority, transaction, with_shared).await?;
     Ok(response.signed_effects.unwrap().effects)
@@ -2240,8 +2232,8 @@ async fn make_test_transaction(
         ],
         MAX_GAS,
     );
-    let signature = Signature::new(&data, sender_key);
-    let transaction = Transaction::new(data, signature);
+
+    let transaction = to_sender_signed_transaction(data, sender_key);
 
     let committee = authorities[0].committee.load();
     let mut sig = SignatureAggregator::try_new(transaction.clone(), &committee).unwrap();

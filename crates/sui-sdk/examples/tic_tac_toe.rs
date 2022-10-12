@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use std::io::{stdin, stdout, Write};
@@ -13,8 +13,9 @@ use clap::Parser;
 use clap::Subcommand;
 use serde::Deserialize;
 
+use sui_sdk::crypto::{AccountKeystore, FileBasedKeystore};
 use sui_sdk::{
-    crypto::{KeystoreType, SuiKeystore},
+    crypto::Keystore,
     json::SuiJsonValue,
     rpc_types::SuiData,
     types::{
@@ -24,12 +25,13 @@ use sui_sdk::{
     },
     SuiClient,
 };
+use sui_types::messages::ExecuteTransactionRequestType;
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
     let opts: TicTacToeOpts = TicTacToeOpts::parse();
     let keystore_path = opts.keystore_path.unwrap_or_else(default_keystore_path);
-    let keystore = KeystoreType::File(keystore_path).init()?;
+    let keystore = Keystore::File(FileBasedKeystore::new(&keystore_path)?);
 
     let game = TicTacToe {
         game_package_id: opts.game_package_id,
@@ -55,7 +57,7 @@ async fn main() -> Result<(), anyhow::Error> {
 struct TicTacToe {
     game_package_id: ObjectID,
     client: SuiClient,
-    keystore: SuiKeystore,
+    keystore: Keystore,
 }
 
 impl TicTacToe {
@@ -67,14 +69,6 @@ impl TicTacToe {
         // Default player identity to first and second keys in the keystore if not provided.
         let player_x = player_x.unwrap_or_else(|| self.keystore.addresses()[0]);
         let player_o = player_o.unwrap_or_else(|| self.keystore.addresses()[1]);
-
-        // Force a sync of signer's state in gateway.
-        if self.client.is_gateway() {
-            self.client
-                .wallet_sync_api()
-                .sync_account_state(player_x)
-                .await?;
-        }
 
         // Create a move call transaction using the TransactionBuilder API.
         let create_game_call = self
@@ -101,15 +95,22 @@ impl TicTacToe {
             .sign(&player_x, &create_game_call.to_bytes())?;
 
         // Execute the transaction.
+
         let response = self
             .client
             .quorum_driver()
-            .execute_transaction(Transaction::new(create_game_call, signature))
+            .execute_transaction(
+                Transaction::new(create_game_call, signature),
+                Some(ExecuteTransactionRequestType::WaitForLocalExecution),
+            )
             .await?;
+
+        assert!(response.confirmed_local_execution);
 
         // We know `create_game` move function will create 1 object.
         let game_id = response
             .effects
+            .unwrap()
             .created
             .first()
             .unwrap()
@@ -194,11 +195,16 @@ impl TicTacToe {
             let response = self
                 .client
                 .quorum_driver()
-                .execute_transaction(Transaction::new(place_mark_call, signature))
+                .execute_transaction(
+                    Transaction::new(place_mark_call, signature),
+                    Some(ExecuteTransactionRequestType::WaitForLocalExecution),
+                )
                 .await?;
 
+            assert!(response.confirmed_local_execution);
+
             // Print any execution error.
-            let status = response.effects.status;
+            let status = response.effects.unwrap().status;
             if status.is_err() {
                 eprintln!("{:?}", status);
             }
@@ -270,7 +276,7 @@ struct TicTacToeOpts {
     game_package_id: ObjectID,
     #[clap(long)]
     keystore_path: Option<PathBuf>,
-    #[clap(long, default_value = "https://gateway.devnet.sui.io:443")]
+    #[clap(long, default_value = "https://fullnode.devnet.sui.io:443")]
     rpc_server_url: String,
     #[clap(subcommand)]
     subcommand: TicTacToeCommand,

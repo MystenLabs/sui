@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 import {
@@ -15,7 +15,6 @@ import {
     type ExecutionStatusType,
     type TransactionKindName,
 } from '@mysten/sui.js';
-import BN from 'bn.js';
 
 import { DefaultRpcClient } from '../../utils/api/DefaultRpcClient';
 import { type Network } from '../../utils/api/rpcSetting';
@@ -32,17 +31,17 @@ export type TxnData = {
     txId: string;
     status: ExecutionStatusType;
     txGas: number;
-    suiAmount: BN;
+    suiAmount: bigint;
     kind: TransactionKindName | undefined;
     From: string;
     timestamp_ms?: number;
 };
 
-export function SuiAmount({ amount }: { amount: BN | string | undefined }) {
+export function SuiAmount({ amount }: { amount: bigint | string | undefined }) {
     if (amount) {
         const SuiSuffix = <abbr className={styles.suisuffix}>SUI</abbr>;
 
-        if (BN.isBN(amount)) {
+        if (typeof amount === 'bigint') {
             return (
                 <span>
                     {presentBN(amount)}
@@ -70,7 +69,7 @@ export const genTableDataFromTxData = (
 ) => {
     return {
         data: results.map((txn) => ({
-            date: `${timeAgo(txn.timestamp_ms, undefined, true)} ago`,
+            date: `${timeAgo(txn.timestamp_ms, undefined, true)}`,
             transactionId: [
                 {
                     url: txn.txId,

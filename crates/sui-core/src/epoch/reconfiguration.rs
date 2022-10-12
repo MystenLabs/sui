@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority_active::ActiveAuthority;
@@ -10,7 +10,7 @@ use multiaddr::Multiaddr;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 use std::time::Duration;
-use sui_network::tonic;
+use sui_network::{default_mysten_network_config, tonic};
 use sui_types::base_types::AuthorityName;
 use sui_types::crypto::AuthorityPublicKeyBytes;
 use sui_types::error::SuiResult;
@@ -67,7 +67,15 @@ where
                 "finish_epoch_change called at the wrong checkpoint",
             );
 
-            for (tx_digest, _) in checkpoints.tables.extra_transactions.iter() {
+            let pending_tx: BTreeSet<_> = checkpoints
+                .tables
+                .extra_transactions
+                .iter()
+                .map(|(digest, _)| digest)
+                .collect();
+            let extra_tx =
+                checkpoints.filter_already_checkpointed_transactions(pending_tx.iter())?;
+            for tx_digest in extra_tx {
                 warn!(?epoch, tx_digest=?tx_digest.transaction, "Reverting local transaction effects");
                 self.state
                     .database
@@ -102,6 +110,7 @@ where
             new_clients,
             self.net.load().metrics.clone(),
             self.net.load().safe_client_metrics.clone(),
+            self.net.load().network_client_metrics.clone(),
         ));
         self.net.store(new_net);
 
@@ -169,12 +178,7 @@ where
     ) -> SuiResult<BTreeMap<AuthorityName, A>> {
         let mut new_clients = BTreeMap::new();
         let next_epoch_validators = sui_system_state.validators.next_epoch_validators;
-
-        let mut net_config = mysten_network::config::Config::new();
-        net_config.connect_timeout = Some(Duration::from_secs(5));
-        net_config.request_timeout = Some(Duration::from_secs(5));
-        net_config.http2_keepalive_interval = Some(Duration::from_secs(5));
-
+        let net_config = default_mysten_network_config();
         let cur_clients = self.net.load().authority_clients.clone();
 
         for validator in next_epoch_validators {

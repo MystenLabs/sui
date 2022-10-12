@@ -10,9 +10,8 @@
 }
 
 .balance-container {
-    margin-top: 16px;
+    margin-top: 8px;
     margin-bottom: 20px;
-    min-height: 59px;
     font-size: 28px;
 }
 
@@ -71,4 +70,36 @@
     }
 
     margin-bottom: 25px;
+}
+
+.empty-wallet {
+    min-height: 40px;
+    display: flex;
+    flex-flow: column nowrap;
+    justify-content: center;
+    align-content: center;
+    gap: 8px;
+    max-width: 280px;
+    text-align: center;
+
+    .empty-wallet-icon {
+        background: url('_assets/images/No-Coins.svg') no-repeat center;
+        height: 50px;
+        display: flex;
+        justify-content: center;
+    }
+
+    .empty-wallet-title {
+        font-weight: 500;
+        font-size: 14px;
+        line-height: 100%;
+        color: colors.$gray-85;
+    }
+
+    .empty-wallet-description {
+        font-weight: 400;
+        font-size: 13px;
+        line-height: 130%;
+        color: colors.$gray-80;
+    }
 }

@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{authority_active::ActiveAuthority, checkpoints::checkpoint_tests::TestSetup};
@@ -36,6 +36,7 @@ async fn pending_exec_storage_notify() {
 
     let authority_state = authorities[0].authority.clone();
 
+    // TODO: duplicated with checkpoint_driver/tests.rs
     // Start active part of authority.
     for inner_state in authorities.clone() {
         let inner_agg = aggregator.clone();
@@ -47,7 +48,7 @@ async fn pending_exec_storage_notify() {
             .unwrap(),
         );
         let _active_handle = active_state
-            .spawn_checkpoint_process(CheckpointMetrics::new_for_tests(), false)
+            .spawn_checkpoint_process(CheckpointMetrics::new_for_tests())
             .await;
     }
 
@@ -133,7 +134,7 @@ async fn pending_exec_full() {
 
             active_state.clone().spawn_execute_process().await;
             active_state
-                .spawn_checkpoint_process(CheckpointMetrics::new_for_tests(), false)
+                .spawn_checkpoint_process(CheckpointMetrics::new_for_tests())
                 .await;
         });
     }

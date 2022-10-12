@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 /// Sui object identifiers
@@ -14,6 +14,9 @@ module sui::object {
 
     /// The hardcoded ID for the singleton Sui System State Object.
     const SUI_SYSTEM_STATE_OBJECT_ID: address = @0x5;
+
+    /// Error from `address_from_bytes` when it is supplied too many or too few bytes.
+    const EAddressParseError: u64 = 0;
 
     /// An object ID. This is used to reference Sui Objects.
     /// This is *not* guaranteed to be globally unique--anyone can create an `ID` from a `UID` or
@@ -38,6 +41,12 @@ module sui::object {
     struct UID has store {
         id: ID,
     }
+
+    // === address ===
+
+    /// Convert raw bytes into an address, aborts if supplied too many
+    /// or too few bytes.
+    public native fun address_from_bytes(bytes: vector<u8>): address;
 
     // === id ===
 
@@ -97,7 +106,8 @@ module sui::object {
     // `UID`. The implementation of this function emits a deleted
     // system event so Sui knows to process the object deletion
     public fun delete(id: UID) {
-        delete_impl(id)
+        let UID { id: ID { bytes } } = id;
+        delete_impl(bytes)
     }
 
     /// Get the underlying `ID` of `obj`
@@ -139,19 +149,15 @@ module sui::object {
     // === internal functions ===
 
     // helper for delete
-    // generic is used to pass type information to the runtime
-    native fun delete_impl<UID>(id: UID);
-
-    /// Convert raw bytes into an address
-    native fun bytes_to_address(bytes: vector<u8>): address;
+    native fun delete_impl(id: address);
 
     // Cost calibration functions
     #[test_only]
-    public fun calibrate_bytes_to_address(bytes: vector<u8>) {
-        bytes_to_address(bytes);
+    public fun calibrate_address_from_bytes(bytes: vector<u8>) {
+        address_from_bytes(bytes);
     }
     #[test_only]
-    public fun calibrate_bytes_to_address_nop(bytes: vector<u8>) {
+    public fun calibrate_address_from_bytes_nop(bytes: vector<u8>) {
         let _ = bytes;
     }
 

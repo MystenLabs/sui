@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::genesis;
@@ -171,7 +171,9 @@ impl NodeConfig {
 pub struct ConsensusConfig {
     pub consensus_address: Multiaddr,
     pub consensus_db_path: PathBuf,
-    pub delay_step: Option<u64>,
+    // Timeout to retry sending transaction to consensus internally.
+    // Default to 60s.
+    pub timeout_secs: Option<u64>,
 
     pub narwhal_config: ConsensusParameters,
 }

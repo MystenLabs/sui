@@ -1,5 +1,5 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{base_types::*, committee::EpochId, messages::ExecutionFailureStatus};
@@ -10,6 +10,8 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use thiserror::Error;
 use typed_store::rocks::TypedStoreError;
+
+pub const TRANSACTION_NOT_FOUND_MSG_PREFIX: &str = "Could not find the referenced transaction";
 
 #[macro_export]
 macro_rules! fp_bail {
@@ -40,6 +42,10 @@ macro_rules! exit_main {
         }
     };
 }
+
+const VALIDATOR_HALTED_ERROR_MSG: &str =
+    "Validator temporarily stopped processing transactions due to epoch change";
+const MISSING_COMMITTEE_ERROR_MSG: &str = "Missing committee information for epoch";
 
 /// Custom error type for Sui.
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error, Hash)]
@@ -86,8 +92,13 @@ pub enum SuiError {
     #[error("Value was not signed by a known authority")]
     UnknownSigner,
     // Certificate verification
-    #[error("Signature or certificate from wrong epoch, expected {expected_epoch}")]
-    WrongEpoch { expected_epoch: EpochId },
+    #[error(
+        "Signature or certificate from wrong epoch, expected {expected_epoch}, got {actual_epoch}"
+    )]
+    WrongEpoch {
+        expected_epoch: EpochId,
+        actual_epoch: EpochId,
+    },
     #[error("Signatures in a certificate must form a quorum")]
     CertificateRequiresQuorum,
     #[error("Authority {authority_name:?} could not sync certificate: {err:?}")]
@@ -196,10 +207,10 @@ pub enum SuiError {
     #[error("Checkpointing error: {}", error)]
     CheckpointingError { error: String },
     #[error(
-        "ExecutionDriver error for {:?}: {} - Caused by : {:#?}",
+        "ExecutionDriver error for {:?}: {} - Caused by : {}",
         digest,
         msg,
-        errors.iter().map(|e| ToString::to_string(&e)).collect::<Vec<String>>()
+        format!("[ {} ]", errors.iter().map(|e| ToString::to_string(&e)).collect::<Vec<String>>().join("; ")),
     )]
     ExecutionDriverError {
         digest: TransactionDigest,
@@ -279,7 +290,7 @@ pub enum SuiError {
         locked_epoch: EpochId,
         new_epoch: EpochId,
     },
-    #[error("Could not find the referenced transaction [{:?}].", digest)]
+    #[error("{TRANSACTION_NOT_FOUND_MSG_PREFIX} [{:?}].", digest)]
     TransactionNotFound { digest: TransactionDigest },
     #[error("Could not find the referenced object {:?}.", object_id)]
     ObjectNotFound { object_id: ObjectID },
@@ -391,8 +402,8 @@ pub enum SuiError {
     FailedToHearBackFromConsensus(String),
     #[error("Failed to execute handle_consensus_transaction on Sui: {0}")]
     HandleConsensusTransactionFailure(String),
-    #[error("Consensus listener is out of capacity")]
-    ListenerCapacityExceeded,
+    #[error("Consensus listener has too many pending transactions and is out of capacity: {0}")]
+    ListenerCapacityExceeded(usize),
     #[error("Failed to serialize/deserialize Narwhal message: {0}")]
     ConsensusSuiSerializationError(String),
     #[error("Only shared object transactions need to be sequenced")]
@@ -411,10 +422,12 @@ pub enum SuiError {
     InvalidPrivateKey,
 
     // Epoch related errors.
-    #[error("Validator temporarily stopped processing transactions due to epoch change")]
+    #[error("{VALIDATOR_HALTED_ERROR_MSG}")]
     ValidatorHaltedAtEpochEnd,
     #[error("Inconsistent state detected during epoch change: {:?}", error)]
     InconsistentEpochState { error: String },
+    #[error("Error when advancing epoch: {:?}", error)]
+    AdvanceEpochError { error: String },
 
     // These are errors that occur when an RPC fails and is simply the utf8 message sent in a
     // Tonic::Status
@@ -436,14 +449,17 @@ pub enum SuiError {
     #[error("Invalid committee composition")]
     InvalidCommittee(String),
 
-    #[error("Missing committee information for epoch {0}")]
+    #[error("{MISSING_COMMITTEE_ERROR_MSG} {0}")]
     MissingCommitteeAtEpoch(EpochId),
+
+    #[error("Failed to get supermajority's consensus on committee information for minimal epoch: {minimal_epoch}")]
+    FailedToGetAgreedCommitteeFromMajority { minimal_epoch: EpochId },
 }
 
 pub type SuiResult<T = ()> = Result<T, SuiError>;
 
 // TODO these are both horribly wrong, categorization needs to be considered
-impl std::convert::From<PartialVMError> for SuiError {
+impl From<PartialVMError> for SuiError {
     fn from(error: PartialVMError) -> Self {
         SuiError::ModuleVerificationFailure {
             error: error.to_string(),
@@ -451,13 +467,13 @@ impl std::convert::From<PartialVMError> for SuiError {
     }
 }
 
-impl std::convert::From<ExecutionError> for SuiError {
+impl From<ExecutionError> for SuiError {
     fn from(error: ExecutionError) -> Self {
         SuiError::ExecutionError(error.to_string())
     }
 }
 
-impl std::convert::From<VMError> for SuiError {
+impl From<VMError> for SuiError {
     fn from(error: VMError) -> Self {
         SuiError::ModuleVerificationFailure {
             error: error.to_string(),
@@ -465,7 +481,7 @@ impl std::convert::From<VMError> for SuiError {
     }
 }
 
-impl std::convert::From<SubscriberError> for SuiError {
+impl From<SubscriberError> for SuiError {
     fn from(error: SubscriberError) -> Self {
         SuiError::HandleConsensusTransactionFailure(error.to_string())
     }
@@ -483,11 +499,19 @@ impl From<ExecutionErrorKind> for SuiError {
     }
 }
 
-impl std::convert::From<&str> for SuiError {
+impl From<&str> for SuiError {
     fn from(error: &str) -> Self {
         SuiError::GenericAuthorityError {
             error: error.to_string(),
         }
+    }
+}
+
+impl SuiError {
+    pub fn indicates_epoch_change(&self) -> bool {
+        let err_str = self.to_string();
+        err_str.contains(VALIDATOR_HALTED_ERROR_MSG)
+            || err_str.contains(MISSING_COMMITTEE_ERROR_MSG)
     }
 }
 

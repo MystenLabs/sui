@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use fastcrypto::traits::KeyPair;
@@ -65,7 +65,15 @@ pub(crate) async fn init_state(
     let (tx_reconfigure_consensus, _rx_reconfigure_consensus) = tokio::sync::mpsc::channel(10);
     let committee_store = Arc::new(CommitteeStore::new(epoch_path, &committee, None));
     let checkpoint_store = Arc::new(parking_lot::Mutex::new(
-        CheckpointStore::open(&checkpoint_path, None, 0, name, secrete.clone()).unwrap(),
+        CheckpointStore::open(
+            &checkpoint_path,
+            None,
+            &committee,
+            name,
+            secrete.clone(),
+            false,
+        )
+        .unwrap(),
     ));
     AuthorityState::new(
         name,
@@ -187,8 +195,9 @@ async fn test_batch_manager_happy_path() {
 
     // Send a transaction.
     {
-        let t0 = &authority_state.batch_notifier.ticket().expect("ok");
+        let t0 = authority_state.batch_notifier.ticket(false).expect("ok");
         store.side_sequence(t0.seq(), &ExecutionDigests::random());
+        t0.notify();
     }
 
     // First we get a transaction update
@@ -202,8 +211,9 @@ async fn test_batch_manager_happy_path() {
     assert!(matches!(rx.recv().await.unwrap(), UpdateItem::Batch(_)));
 
     {
-        let t0 = &authority_state.batch_notifier.ticket().expect("ok");
+        let t0 = authority_state.batch_notifier.ticket(false).expect("ok");
         store.side_sequence(t0.seq(), &ExecutionDigests::random());
+        t0.notify();
     }
 
     // When we close the sending channel we also also end the service task
@@ -245,15 +255,20 @@ async fn test_batch_manager_out_of_order() {
     let mut rx = authority_state.subscribe_batch();
 
     {
-        let t0 = &authority_state.batch_notifier.ticket().expect("ok");
-        let t1 = &authority_state.batch_notifier.ticket().expect("ok");
-        let t2 = &authority_state.batch_notifier.ticket().expect("ok");
-        let t3 = &authority_state.batch_notifier.ticket().expect("ok");
+        let t0 = authority_state.batch_notifier.ticket(false).expect("ok");
+        let t1 = authority_state.batch_notifier.ticket(false).expect("ok");
+        let t2 = authority_state.batch_notifier.ticket(false).expect("ok");
+        let t3 = authority_state.batch_notifier.ticket(false).expect("ok");
 
         store.side_sequence(t1.seq(), &ExecutionDigests::random());
         store.side_sequence(t3.seq(), &ExecutionDigests::random());
         store.side_sequence(t2.seq(), &ExecutionDigests::random());
         store.side_sequence(t0.seq(), &ExecutionDigests::random());
+
+        t0.notify();
+        t1.notify();
+        t2.notify();
+        t3.notify();
     }
 
     // Get transactions in order then batch.
@@ -311,17 +326,17 @@ async fn test_batch_manager_drop_out_of_order() {
     // Send transactions out of order
     let mut rx = authority_state.subscribe_batch();
 
-    let t0 = authority_state.batch_notifier.ticket().expect("ok");
-    let t1 = authority_state.batch_notifier.ticket().expect("ok");
-    let t2 = authority_state.batch_notifier.ticket().expect("ok");
-    let t3 = authority_state.batch_notifier.ticket().expect("ok");
+    let t0 = authority_state.batch_notifier.ticket(false).expect("ok");
+    let t1 = authority_state.batch_notifier.ticket(false).expect("ok");
+    let t2 = authority_state.batch_notifier.ticket(false).expect("ok");
+    let t3 = authority_state.batch_notifier.ticket(false).expect("ok");
 
     store.side_sequence(t1.seq(), &ExecutionDigests::random());
-    drop(t1);
+    t1.notify();
     store.side_sequence(t3.seq(), &ExecutionDigests::random());
-    drop(t3);
+    t3.notify();
     store.side_sequence(t2.seq(), &ExecutionDigests::random());
-    drop(t2);
+    t2.notify();
 
     // Give a chance to send signals
     tokio::task::yield_now().await;
@@ -329,7 +344,7 @@ async fn test_batch_manager_drop_out_of_order() {
     assert_eq!(rx.len(), 0);
 
     store.side_sequence(t0.seq(), &ExecutionDigests::random());
-    drop(t0);
+    t0.notify();
 
     // Get transactions in order then batch.
     assert!(matches!(
@@ -428,27 +443,30 @@ async fn test_batch_store_retrieval() {
 
     let inner_store = store.clone();
     for _i in 0u64..105 {
-        let t0 = &authority_state.batch_notifier.ticket().expect("ok");
+        let t0 = authority_state.batch_notifier.ticket(false).expect("ok");
         inner_store
             .tables
             .executed_sequence
             .insert(&t0.seq(), &tx_zero)
             .expect("Failed to write.");
+        t0.notify();
     }
 
     // Add a few out of order transactions that should be ignored
     // NOTE: gap between 105 and 110
     (105u64..110).into_iter().for_each(|_| {
-        let _ = &authority_state.batch_notifier.ticket().expect("ok");
+        let t = authority_state.batch_notifier.ticket(false).expect("ok");
+        t.notify();
     });
 
     for _i in 110u64..120 {
-        let t0 = &authority_state.batch_notifier.ticket().expect("ok");
+        let t0 = authority_state.batch_notifier.ticket(false).expect("ok");
         inner_store
             .tables
             .executed_sequence
             .insert(&t0.seq(), &tx_zero)
             .expect("Failed to write.");
+        t0.notify();
     }
 
     // Give a change to the channels to send.
@@ -790,7 +808,7 @@ async fn test_safe_batch_stream() {
         auth_client,
         committee_store,
         public_key_bytes,
-        SafeClientMetrics::new_for_tests(),
+        Arc::new(SafeClientMetrics::new_for_tests()),
     );
 
     let request = BatchInfoRequest {
@@ -839,7 +857,7 @@ async fn test_safe_batch_stream() {
         auth_client_from_byzantine,
         committee_store,
         public_key_bytes_b,
-        SafeClientMetrics::new_for_tests(),
+        Arc::new(SafeClientMetrics::new_for_tests()),
     );
 
     let mut batch_stream = safe_client_from_byzantine

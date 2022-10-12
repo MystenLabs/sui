@@ -1,14 +1,13 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
-    block_remover::DeleteBatchResult,
     block_synchronizer::{
         handler::BlockSynchronizerHandler,
         responses::{AvailabilityResponse, CertificateDigestsResponse},
         BlockSynchronizer,
     },
-    block_waiter::{BatchMessageError, BatchResult, BlockWaiter},
+    block_waiter::BlockWaiter,
     certificate_waiter::CertificateWaiter,
     core::Core,
     grpc_server::ConsensusAPIGrpc,
@@ -19,8 +18,7 @@ use crate::{
     proposer::Proposer,
     state_handler::StateHandler,
     synchronizer::Synchronizer,
-    BlockCommand, BlockRemover, CertificatesResponse, DeleteBatchMessage,
-    PayloadAvailabilityResponse,
+    BlockRemover, CertificatesResponse, PayloadAvailabilityResponse,
 };
 
 use anemo::{types::PeerInfo, PeerId};
@@ -38,20 +36,24 @@ use network::metrics::MetricsMakeCallbackHandler;
 use network::P2pNetwork;
 use prometheus::Registry;
 use std::{collections::BTreeMap, net::Ipv4Addr, sync::Arc};
-use storage::CertificateStore;
+use storage::{CertificateStore, ProposerStore};
 use store::Store;
 use tokio::sync::oneshot;
 use tokio::{sync::watch, task::JoinHandle};
 use tower::ServiceBuilder;
 use tracing::info;
+pub use types::PrimaryMessage;
 use types::{
     error::DagError,
-    metered_channel::{channel, Receiver, Sender},
-    BatchDigest, BatchMessage, Certificate, Header, HeaderDigest, PrimaryToPrimary,
-    PrimaryToPrimaryServer, ReconfigureNotification, RoundVoteDigestPair, WorkerInfoResponse,
-    WorkerPrimaryError, WorkerPrimaryMessage, WorkerToPrimary, WorkerToPrimaryServer,
+    metered_channel::{channel_with_total, Receiver, Sender},
+    BatchDigest, Certificate, Header, HeaderDigest, PrimaryToPrimary, PrimaryToPrimaryServer,
+    ReconfigureNotification, RoundVoteDigestPair, WorkerInfoResponse, WorkerPrimaryMessage,
+    WorkerToPrimary, WorkerToPrimaryServer,
 };
-pub use types::{PrimaryMessage, PrimaryWorkerMessage};
+
+#[cfg(any(test))]
+#[path = "tests/primary_tests.rs"]
+pub mod primary_tests;
 
 /// The default channel capacity for each channel of the primary.
 pub const CHANNEL_CAPACITY: usize = 1_000;
@@ -81,12 +83,11 @@ impl Primary {
         parameters: Parameters,
         header_store: Store<HeaderDigest, Header>,
         certificate_store: CertificateStore,
+        proposer_store: ProposerStore,
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
         vote_digest_store: Store<PublicKey, RoundVoteDigestPair>,
         tx_consensus: Sender<Certificate>,
         rx_consensus: Receiver<Certificate>,
-        tx_get_block_commands: Sender<BlockCommand>,
-        rx_get_block_commands: Receiver<BlockCommand>,
         dag: Option<Arc<Dag>>,
         network_model: NetworkModel,
         tx_reconfigure: watch::Sender<ReconfigureNotification>,
@@ -105,55 +106,73 @@ impl Primary {
         let inbound_network_metrics = Arc::new(metrics.inbound_network_metrics.unwrap());
         let outbound_network_metrics = Arc::new(metrics.outbound_network_metrics.unwrap());
         let node_metrics = Arc::new(metrics.node_metrics.unwrap());
+        let network_connection_metrics = metrics.network_connection_metrics.unwrap();
 
-        let (tx_others_digests, rx_others_digests) =
-            channel(CHANNEL_CAPACITY, &primary_channel_metrics.tx_others_digests);
-        let (tx_our_digests, rx_our_digests) =
-            channel(CHANNEL_CAPACITY, &primary_channel_metrics.tx_our_digests);
-        let (tx_parents, rx_parents) =
-            channel(CHANNEL_CAPACITY, &primary_channel_metrics.tx_parents);
-        let (tx_headers, rx_headers) =
-            channel(CHANNEL_CAPACITY, &primary_channel_metrics.tx_headers);
-        let (tx_sync_headers, rx_sync_headers) =
-            channel(CHANNEL_CAPACITY, &primary_channel_metrics.tx_sync_headers);
-        let (tx_sync_certificates, rx_sync_certificates) = channel(
+        let (tx_others_digests, rx_others_digests) = channel_with_total(
+            CHANNEL_CAPACITY,
+            &primary_channel_metrics.tx_others_digests,
+            &primary_channel_metrics.tx_others_digests_total,
+        );
+        let (tx_our_digests, rx_our_digests) = channel_with_total(
+            CHANNEL_CAPACITY,
+            &primary_channel_metrics.tx_our_digests,
+            &primary_channel_metrics.tx_our_digests_total,
+        );
+        let (tx_parents, rx_parents) = channel_with_total(
+            CHANNEL_CAPACITY,
+            &primary_channel_metrics.tx_parents,
+            &primary_channel_metrics.tx_parents_total,
+        );
+        let (tx_headers, rx_headers) = channel_with_total(
+            CHANNEL_CAPACITY,
+            &primary_channel_metrics.tx_headers,
+            &primary_channel_metrics.tx_headers_total,
+        );
+        let (tx_sync_headers, rx_sync_headers) = channel_with_total(
+            CHANNEL_CAPACITY,
+            &primary_channel_metrics.tx_sync_headers,
+            &primary_channel_metrics.tx_sync_headers_total,
+        );
+        let (tx_sync_certificates, rx_sync_certificates) = channel_with_total(
             CHANNEL_CAPACITY,
             &primary_channel_metrics.tx_sync_certificates,
+            &primary_channel_metrics.tx_sync_certificates_total,
         );
-        let (tx_headers_loopback, rx_headers_loopback) = channel(
+        let (tx_headers_loopback, rx_headers_loopback) = channel_with_total(
             CHANNEL_CAPACITY,
             &primary_channel_metrics.tx_headers_loopback,
+            &primary_channel_metrics.tx_headers_loopback_total,
         );
-        let (tx_certificates_loopback, rx_certificates_loopback) = channel(
+        let (tx_certificates_loopback, rx_certificates_loopback) = channel_with_total(
             CHANNEL_CAPACITY,
             &primary_channel_metrics.tx_certificates_loopback,
+            &primary_channel_metrics.tx_certificates_loopback_total,
         );
-        let (tx_primary_messages, rx_primary_messages) = channel(
+        let (tx_primary_messages, rx_primary_messages) = channel_with_total(
             CHANNEL_CAPACITY,
             &primary_channel_metrics.tx_primary_messages,
+            &primary_channel_metrics.tx_primary_messages_total,
         );
-        let (tx_helper_requests, rx_helper_requests) = channel(
+        let (tx_helper_requests, rx_helper_requests) = channel_with_total(
             CHANNEL_CAPACITY,
             &primary_channel_metrics.tx_helper_requests,
+            &primary_channel_metrics.tx_helper_requests_total,
         );
-        let (tx_batches, rx_batches) =
-            channel(CHANNEL_CAPACITY, &primary_channel_metrics.tx_batches);
-        let (tx_block_removal_commands, rx_block_removal_commands) = channel(
-            CHANNEL_CAPACITY,
-            &primary_channel_metrics.tx_block_removal_commands,
-        );
-        let (tx_batch_removal, rx_batch_removal) =
-            channel(CHANNEL_CAPACITY, &primary_channel_metrics.tx_batch_removal);
-        let (tx_block_synchronizer_commands, rx_block_synchronizer_commands) = channel(
+        let (tx_block_synchronizer_commands, rx_block_synchronizer_commands) = channel_with_total(
             CHANNEL_CAPACITY,
             &primary_channel_metrics.tx_block_synchronizer_commands,
+            &primary_channel_metrics.tx_block_synchronizer_commands_total,
         );
-        let (tx_availability_responses, rx_availability_responses) = channel(
+        let (tx_availability_responses, rx_availability_responses) = channel_with_total(
             CHANNEL_CAPACITY,
             &primary_channel_metrics.tx_availability_responses,
+            &primary_channel_metrics.tx_availability_responses_total,
         );
-        let (tx_state_handler, rx_state_handler) =
-            channel(CHANNEL_CAPACITY, &primary_channel_metrics.tx_state_handler);
+        let (tx_state_handler, rx_state_handler) = channel_with_total(
+            CHANNEL_CAPACITY,
+            &primary_channel_metrics.tx_state_handler,
+            &primary_channel_metrics.tx_state_handler_total,
+        );
 
         // we need to hack the gauge from this consensus channel into the primary registry
         // This avoids a cyclic dependency in the initialization of consensus and primary
@@ -167,12 +186,6 @@ impl Primary {
         let new_certificates_gauge = tx_consensus.gauge().clone();
         primary_channel_metrics
             .replace_registered_new_certificates_metric(registry, Box::new(new_certificates_gauge));
-
-        let tx_get_block_commands_gauge = tx_get_block_commands.gauge().clone();
-        primary_channel_metrics.replace_registered_get_block_commands_metric(
-            registry,
-            Box::new(tx_get_block_commands_gauge),
-        );
 
         let (tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
 
@@ -200,8 +213,6 @@ impl Primary {
         let worker_service = WorkerToPrimaryServer::new(WorkerReceiverHandler {
             tx_our_digests,
             tx_others_digests,
-            tx_batches,
-            tx_batch_removal,
             tx_state_handler,
             our_workers,
             metrics: node_metrics.clone(),
@@ -227,9 +238,21 @@ impl Primary {
             )))
             .into_inner();
 
+        let anemo_config = {
+            let mut quic_config = anemo::QuicConfig::default();
+            // Enable keep alives every 5s
+            quic_config.keep_alive_interval_ms = Some(5_000);
+            let mut config = anemo::Config::default();
+            config.quic = Some(quic_config);
+            // Set a default timeout of 30s for all outbound RPC requests
+            config.outbound_request_timeout_ms = Some(30_000);
+            config
+        };
+
         let network = anemo::Network::bind(addr.clone())
             .server_name("narwhal")
             .private_key(network_signer.copy().private().0.to_bytes())
+            .config(anemo_config)
             .outbound_request_layer(outbound_layer)
             .start(service)
             .unwrap_or_else(|_| {
@@ -239,6 +262,12 @@ impl Primary {
                 )
             });
         info!("Primary {} listening on {}", name.encode_base64(), address);
+
+        let connection_monitor_handle = network::connectivity::ConnectionMonitor::spawn(
+            network.clone(),
+            network_connection_metrics,
+            tx_reconfigure.subscribe(),
+        );
 
         let primaries = committee
             .load()
@@ -256,6 +285,22 @@ impl Primary {
             };
             network.known_peers().insert(peer_info);
         }
+
+        info!(
+            "Primary {} listening to network admin messages on 127.0.0.1:{}",
+            name.encode_base64(),
+            parameters
+                .network_admin_server
+                .primary_network_admin_server_port
+        );
+
+        network::admin::start_admin_server(
+            parameters
+                .network_admin_server
+                .primary_network_admin_server_port,
+            network.clone(),
+            tx_reconfigure.subscribe(),
+        );
 
         // The `Synchronizer` provides auxiliary methods helping the `Core` to sync.
         let synchronizer = Synchronizer::new(
@@ -319,39 +364,8 @@ impl Primary {
                 .handler_certificate_deliver_timeout,
         ));
 
-        // Retrieves a block's data by contacting the worker nodes that contain the
-        // underlying batches and their transactions.
-        let block_waiter_primary_network = P2pNetwork::new(network.clone());
-        let block_waiter_handle = BlockWaiter::spawn(
-            name.clone(),
-            (**committee.load()).clone(),
-            worker_cache.clone(),
-            tx_reconfigure.subscribe(),
-            rx_get_block_commands,
-            rx_batches,
-            block_synchronizer_handler.clone(),
-            block_waiter_primary_network,
-        );
-
         // Indicator variable for the gRPC server
         let internal_consensus = dag.is_none();
-
-        // Orchestrates the removal of blocks across the primary and worker nodes.
-        let block_remover_primary_network = P2pNetwork::new(network.clone());
-        let block_remover_handle = BlockRemover::spawn(
-            name.clone(),
-            (**committee.load()).clone(),
-            worker_cache.clone(),
-            certificate_store.clone(),
-            header_store,
-            payload_store.clone(),
-            dag.clone(),
-            block_remover_primary_network,
-            tx_reconfigure.subscribe(),
-            rx_block_removal_commands,
-            rx_batch_removal,
-            tx_committed_certificates,
-        );
 
         // Responsible for finding missing blocks (certificates) and fetching
         // them from the primary peers by synchronizing also their batches.
@@ -409,7 +423,9 @@ impl Primary {
             name.clone(),
             (**committee.load()).clone(),
             signature_service,
-            parameters.header_size,
+            proposer_store,
+            parameters.header_num_of_batches_threshold,
+            parameters.max_header_num_of_batches,
             parameters.max_header_delay,
             network_model,
             tx_reconfigure.subscribe(),
@@ -425,8 +441,8 @@ impl Primary {
         let helper_handle = Helper::spawn(
             name.clone(),
             (**committee.load()).clone(),
-            certificate_store,
-            payload_store,
+            certificate_store.clone(),
+            payload_store.clone(),
             tx_reconfigure.subscribe(),
             rx_helper_requests,
             helper_primary_network,
@@ -436,21 +452,43 @@ impl Primary {
         let state_handler_handle = StateHandler::spawn(
             name.clone(),
             committee.clone(),
-            worker_cache,
+            worker_cache.clone(),
             rx_consensus,
             tx_consensus_round_updates,
             rx_state_handler,
             tx_reconfigure,
-            P2pNetwork::new(network),
         );
 
         let consensus_api_handle = if !internal_consensus {
+            // Retrieves a block's data by contacting the worker nodes that contain the
+            // underlying batches and their transactions.
+            let block_waiter_primary_network = P2pNetwork::new(network.clone());
+            let block_waiter = BlockWaiter::new(
+                name.clone(),
+                worker_cache.clone(),
+                block_waiter_primary_network,
+                block_synchronizer_handler.clone(),
+            );
+
+            // Orchestrates the removal of blocks across the primary and worker nodes.
+            let block_remover_primary_network = P2pNetwork::new(network);
+            let block_remover = BlockRemover::new(
+                name.clone(),
+                worker_cache,
+                certificate_store,
+                header_store,
+                payload_store,
+                dag.clone(),
+                block_remover_primary_network,
+                tx_committed_certificates,
+            );
+
             // Spawn a grpc server to accept requests from external consensus layer.
             Some(ConsensusAPIGrpc::spawn(
                 name.clone(),
                 parameters.consensus_api_grpc.socket_addr,
-                tx_get_block_commands,
-                tx_block_removal_commands,
+                block_waiter,
+                block_remover,
                 parameters.consensus_api_grpc.get_collections_timeout,
                 parameters.consensus_api_grpc.remove_collections_timeout,
                 block_synchronizer_handler,
@@ -476,13 +514,12 @@ impl Primary {
             core_handle,
             payload_receiver_handle,
             block_synchronizer_handle,
-            block_waiter_handle,
-            block_remover_handle,
             header_waiter_handle,
             certificate_waiter_handle,
             proposer_handle,
             helper_handle,
             state_handler_handle,
+            connection_monitor_handle,
         ];
 
         if let Some(h) = consensus_api_handle {
@@ -510,58 +547,47 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
         let message = request.into_body();
 
         match message {
-            PrimaryMessage::CertificatesRequest(_, _) => self
+            PrimaryMessage::CertificatesRequest(_, _)
+            | PrimaryMessage::CertificatesBatchRequest { .. }
+            | PrimaryMessage::PayloadAvailabilityRequest { .. } => self
                 .tx_helper_requests
-                .send(message)
-                .await
-                .map_err(|_| DagError::ShuttingDown),
+                .try_send(message)
+                .map_err(DagError::from),
+
             PrimaryMessage::CertificatesRangeResponse {
                 certificate_ids,
                 from,
             } => self
                 .tx_availability_responses
-                .send(AvailabilityResponse::CertificateDigest(
+                .try_send(AvailabilityResponse::CertificateDigest(
                     CertificateDigestsResponse {
                         certificate_ids,
                         from,
                     },
                 ))
-                .await
-                .map_err(|_| DagError::ShuttingDown),
-            PrimaryMessage::CertificatesBatchRequest { .. } => self
-                .tx_helper_requests
-                .send(message)
-                .await
-                .map_err(|_| DagError::ShuttingDown),
+                .map_err(DagError::from),
             PrimaryMessage::CertificatesBatchResponse { certificates, from } => self
                 .tx_availability_responses
-                .send(AvailabilityResponse::Certificate(CertificatesResponse {
+                .try_send(AvailabilityResponse::Certificate(CertificatesResponse {
                     certificates,
                     from,
                 }))
-                .await
-                .map_err(|_| DagError::ShuttingDown),
-            PrimaryMessage::PayloadAvailabilityRequest { .. } => self
-                .tx_helper_requests
-                .send(message)
-                .await
-                .map_err(|_| DagError::ShuttingDown),
+                .map_err(DagError::from),
             PrimaryMessage::PayloadAvailabilityResponse {
                 payload_availability,
                 from,
             } => self
                 .tx_availability_responses
-                .send(AvailabilityResponse::Payload(PayloadAvailabilityResponse {
+                .try_send(AvailabilityResponse::Payload(PayloadAvailabilityResponse {
                     block_ids: payload_availability.to_vec(),
-                    from: from.clone(),
+                    from,
                 }))
-                .await
-                .map_err(|_| DagError::ShuttingDown),
+                .map_err(DagError::from),
+
             _ => self
                 .tx_primary_messages
-                .send(message)
-                .await
-                .map_err(|_| DagError::ShuttingDown),
+                .try_send(message)
+                .map_err(DagError::from),
         }
         .map(|_| anemo::Response::new(()))
         .map_err(|e| anemo::rpc::Status::internal(e.to_string()))
@@ -573,8 +599,6 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
 struct WorkerReceiverHandler {
     tx_our_digests: Sender<(BatchDigest, WorkerId)>,
     tx_others_digests: Sender<(BatchDigest, WorkerId)>,
-    tx_batches: Sender<BatchResult>,
-    tx_batch_removal: Sender<DeleteBatchResult>,
     tx_state_handler: Sender<ReconfigureNotification>,
     our_workers: BTreeMap<WorkerId, WorkerInfo>,
     metrics: Arc<PrimaryMetrics>,
@@ -584,7 +608,7 @@ struct WorkerReceiverHandler {
 impl WorkerToPrimary for WorkerReceiverHandler {
     async fn send_message(
         &self,
-        request: anemo::Request<types::WorkerPrimaryMessage>,
+        request: anemo::Request<WorkerPrimaryMessage>,
     ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
         let message = request.into_body();
 
@@ -609,31 +633,6 @@ impl WorkerToPrimary for WorkerReceiverHandler {
                     .await
                     .map_err(|_| DagError::ShuttingDown)
             }
-            WorkerPrimaryMessage::RequestedBatch(digest, transactions) => self
-                .tx_batches
-                .send(Ok(BatchMessage {
-                    id: digest,
-                    transactions,
-                }))
-                .await
-                .map_err(|_| DagError::ShuttingDown),
-            WorkerPrimaryMessage::DeletedBatches(batch_ids) => self
-                .tx_batch_removal
-                .send(Ok(DeleteBatchMessage { ids: batch_ids }))
-                .await
-                .map_err(|_| DagError::ShuttingDown),
-            WorkerPrimaryMessage::Error(error) => match error.clone() {
-                WorkerPrimaryError::RequestedBatchNotFound(digest) => self
-                    .tx_batches
-                    .send(Err(BatchMessageError { id: digest }))
-                    .await
-                    .map_err(|_| DagError::ShuttingDown),
-                WorkerPrimaryError::ErrorWhileDeletingBatches(batch_ids) => self
-                    .tx_batch_removal
-                    .send(Err(DeleteBatchMessage { ids: batch_ids }))
-                    .await
-                    .map_err(|_| DagError::ShuttingDown),
-            },
             WorkerPrimaryMessage::Reconfigure(notification) => self
                 .tx_state_handler
                 .send(notification)

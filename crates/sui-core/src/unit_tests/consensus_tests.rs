@@ -1,20 +1,19 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 use crate::authority::{authority_tests::init_state_with_objects, AuthorityState};
+use crate::test_utils::to_sender_signed_transaction;
 use move_core_types::{account_address::AccountAddress, ident_str};
-use narwhal_executor::ExecutionIndices;
 use narwhal_types::Transactions;
 use narwhal_types::TransactionsServer;
 use narwhal_types::{Empty, TransactionProto};
 use sui_network::tonic;
 use sui_types::{
     base_types::{ObjectID, TransactionDigest},
-    crypto::Signature,
     gas_coin::GasCoin,
     messages::{
         CallArg, CertifiedTransaction, ConsensusTransactionKind, ObjectArg, SignatureAggregator,
-        Transaction, TransactionData,
+        TransactionData,
     },
     object::{MoveObject, Object, Owner, OBJECT_START_VERSION},
 };
@@ -69,8 +68,8 @@ pub async fn test_certificates(authority: &AuthorityState) -> Vec<CertifiedTrans
             ],
             /* max_gas */ 10_000,
         );
-        let signature = Signature::new(&data, &keypair);
-        let transaction = Transaction::new(data, signature);
+
+        let transaction = to_sender_signed_transaction(data, &keypair);
 
         // Submit the transaction and assemble a certificate.
         let response = authority
@@ -91,7 +90,6 @@ pub async fn test_certificates(authority: &AuthorityState) -> Vec<CertifiedTrans
 #[tokio::test]
 async fn listen_to_sequenced_transaction() {
     let (tx_sui_to_consensus, rx_sui_to_consensus) = channel(1);
-    let (tx_consensus_to_sui, rx_consensus_to_sui) = channel(1);
 
     // Make an authority state.
     let mut objects = test_gas_objects();
@@ -111,18 +109,14 @@ async fn listen_to_sequenced_transaction() {
                 certificate: narwhal_types::Certificate::default(),
                 consensus_index: narwhal_types::SequenceNumber::default(),
             },
-            ExecutionIndices::default(),
+            Default::default(),
             ConsensusTransaction::new_certificate_message(&state.name, certificate),
         )
         .await
         .unwrap();
 
     // Spawn a consensus listener.
-    ConsensusListener::spawn(
-        /* rx_consensus_input */ rx_sui_to_consensus,
-        /* rx_consensus_output */ rx_consensus_to_sui,
-        /* max_pending_transactions */ 100,
-    );
+    ConsensusListener::spawn(/* rx_consensus_input */ rx_sui_to_consensus);
 
     // Submit a sample consensus transaction.
     let (waiter, signals) = ConsensusWaiter::new();
@@ -132,7 +126,10 @@ async fn listen_to_sequenced_transaction() {
 
     // Notify the consensus listener that the transaction has been sequenced.
     tokio::task::yield_now().await;
-    tx_consensus_to_sui.send(serialized.clone()).await.unwrap();
+    tx_sui_to_consensus
+        .send(ConsensusListenerMessage::Processed(serialized.clone()))
+        .await
+        .unwrap();
 
     // Ensure the caller get notified from the consensus listener.
     assert!(waiter.wait_for_result().await.is_ok());
@@ -162,7 +159,7 @@ async fn submit_transaction_to_consensus() {
         consensus_address.clone(),
         committee,
         tx_consensus_listener,
-        /* max_delay */ Duration::from_millis(1_000),
+        /* timeout */ Duration::from_secs(5),
         metrics,
     );
 
@@ -174,6 +171,7 @@ async fn submit_transaction_to_consensus() {
         while let Some(message) = rx_consensus_listener.recv().await {
             let (serialized, replier) = match message {
                 ConsensusListenerMessage::New(serialized, replier) => (serialized, replier),
+                _ => panic!("Unexpected message {message:?}"),
             };
 
             let message: ConsensusTransaction =
@@ -191,7 +189,7 @@ async fn submit_transaction_to_consensus() {
                         certificate: narwhal_types::Certificate::default(),
                         consensus_index: narwhal_types::SequenceNumber::default(),
                     },
-                    ExecutionIndices::default(),
+                    Default::default(),
                     ConsensusTransaction::new_certificate_message(&name, *certificate),
                 )
                 .await

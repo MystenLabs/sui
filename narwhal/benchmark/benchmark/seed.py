@@ -1,4 +1,4 @@
-# Copyright (c) 2022, Mysten Labs, Inc.
+# Copyright (c) Mysten Labs, Inc.
 import subprocess
 from math import ceil
 from os.path import basename, splitext

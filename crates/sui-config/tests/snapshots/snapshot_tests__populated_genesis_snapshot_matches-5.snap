@@ -217,6 +217,7 @@ validators:
         validator_address: 375741c9373ae27bde5e6b5f5cc79f074cd84587
         starting_epoch: 1
         epoch_starting_sui_balance: 0
+        epoch_starting_delegation_token_supply: 0
         sui_balance: 0
         rewards_pool:
           value: 0

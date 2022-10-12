@@ -2,15 +2,15 @@
 title: Sui Wallet
 ---
 
-This topic describes how to install and use the [Sui Wallet Browser Extension](https://chrome.google.com/webstore/detail/sui-wallet/opcgpfmipidbgpenhmajoajpbobppdil). You can use the Sui Wallet to create an address and complete transactions, mint NFTs, view and manage assets on the Sui network, and connect with blockchain dApps on Web3.
+This topic describes how to install and use the [Sui Wallet Browser Extension](https://chrome.google.com/webstore/detail/sui-wallet/opcgpfmipidbgpenhmajoajpbobppdil). You can use Sui Wallet to create an address and complete transactions, mint NFTs, view and manage assets on the Sui network, and connect with blockchain dApps on Web3.
 
-The early versions of the Sui Wallet let you experiment with the Sui network for testing. The Sui network is still in development, and the tokens have no real value. Accounts reset with each deployment of a new version of the network. View the [devnet-updates](https://discord.com/channels/916379725201563759/1004638487078772736) channel in Discord for updates about the network.
+The early versions of Sui Wallet let you experiment with the Sui network for testing. The Sui network is still in development, and the tokens have no real value. Accounts reset with each deployment of a new version of the network. View the [devnet-updates](https://discord.com/channels/916379725201563759/1004638487078772736) channel in Discord for updates about the network.
 
 To test more advanced features not available in Sui Wallet, see [Sui CLI client](../build/cli-client.md).
 
 ## Sui Wallet features
 
-You can use the Sui Wallet to:
+You can use Sui Wallet to:
 
 * Mint NFTs
 * Transfer coins and NFTs to another address
@@ -19,13 +19,13 @@ You can use the Sui Wallet to:
 * Auto split/merge coins to the exact transfer amount
 * Easily access transaction history in the [Sui Explorer](https://explorer.devnet.sui.io/)
 
-Note that in the current release, the wallet includes buttons to **Buy**, **Swap**, and **Stake & Earn SUI**. These are placeholders for functionality included in future versions of the Sui Wallet. 
+Note that in the current release, Sui Wallet includes buttons to **Buy**, **Swap**, and **Stake & Earn SUI**. These are placeholders for functionality included in future versions of Sui Wallet. 
 
-## Install the Sui Wallet Chrome Browser Extension
+## Install the Sui Wallet browser extension
 
-To use the Sui Wallet you must install a Chrome browser extension. You can use the extension with any browser that supports Chrome extensions from the Google Chrome Store. 
+To use Sui Wallet you must install a Chrome browser extension. You can use the extension with any browser that supports Chrome extensions from the Chrome Web Store. 
 
-1. Open the [Sui Wallet](https://chrome.google.com/webstore/detail/sui-wallet/opcgpfmipidbgpenhmajoajpbobppdil) page on the Google Chrome Store.
+1. Open the [Sui Wallet](https://chrome.google.com/webstore/detail/sui-wallet/opcgpfmipidbgpenhmajoajpbobppdil) page on the Chrome Web Store.
 1. Click **Add to Chrome**.
 1. Acknowledge the message about permissions for the extension, and then click **Add Extension**.
 
@@ -50,9 +50,9 @@ You can use your Sui Wallet on multiple devices and browsers. After you create a
 1. Click **Import a wallet**.
 1. Enter your 12-word recovery passphrase, and then click **Import Wallet Now**.
 
-## Add Sui tokens to your Sui Wallet
+## Add SUI tokens to your Sui Wallet
 
-When you first open the wallet you have no coins in it. You can add tokens to your wallet through Discord. You need an active Discord account to access the Sui channels.
+When you first open the wallet you have no coins in it. You can add SUI tokens to your wallet through Discord. You need an active Discord account to access the Sui channels.
 
 1. Click **Coins**.
 1. Click the small clipboard icon next to your address to copy it. 
@@ -62,7 +62,7 @@ It's near the top of the wallet and starts with 0x.
    `!faucet 0x6c04ed5110554acf59ff1b535129548dd9a0c741`
    Replace the address in the command with your wallet address.
 
-The channel bot displays a message that "5 test SUI objects are heading to your wallet". You can then see 250,000 SUI tokens in your wallet, nice!
+The channel bot displays a message that starts with "5 test SUI objects are heading to your wallet..."
 
 ## View your account balance
 
@@ -95,13 +95,13 @@ Sui Explorer opens with the details for your wallet address displayed.
 
 ## Mint an example NFT
 
-You can mint an example Sui NFT directly from the Sui Wallet.
+You can mint an example Sui NFT directly from Sui Wallet.
 
 Click **Apps**, then click **Mint NFT**. In the current version you can mint only example NFTs.
 
 ## Create a new NFT
 
-The [Sui Wallet demo](https://sui-wallet-demo.sui.io/) site lets you create a new NFT on the Sui network using your own image file. To access the site directly from the Sui Wallet, click the **Apps** tab, and then click **Sui NFT Mint**. You must have an active wallet to mint NFTs.
+The [Sui Wallet demo](https://sui-wallet-demo.sui.io/) site lets you create a new NFT on the Sui network using your own image file. To access the site directly from Sui Wallet, click the **Apps** tab, and then click **Sui NFT Mint**. You must have an active wallet to mint NFTs.
 
 To mint a new NFT using the demo site
 1. Open the [Sui Wallet demo](https://sui-wallet-demo.sui.io/) site.
@@ -115,12 +115,9 @@ After you successfully create a new NFT, you can transfer it to another wallet a
 
 You can view details for the transactions to create the NFT and then transfer it in [Sui Explorer](https://explorer.devnet.sui.io/).
 
-
-
 ## View your NFTs
 
 Click the **NFTs** tab to view all of the NFTS that you mint, purchase, or receive in your wallet. This includes any NFTs that you obtain from connected apps.  Click on an NFT to view additional details about it, view a larger NFT image, or send the NFT to another address.
-
 
 ## Send an NFT
 
@@ -134,16 +131,16 @@ You can use Sui Wallet to send an NFT to another address.
 
 ## Wallet Playground
 
-You can view and try out some apps that already support the Sui Wallet from the Playground on the Apps tab. The apps displayed let you connect your Sui Wallet and use SUI tokens to interact with them, perform transactions, and obtain NFTs that go directly to your connected wallet.
+You can view and try out some apps that already support Sui Wallet from the Playground on the Apps tab. The apps displayed let you connect your Sui Wallet and use SUI tokens to interact with them, perform transactions, and obtain NFTs that go directly to your connected wallet.
 
 Click on an app to open the site for the app. Follow the guidance on the site to connect your wallet. After you connect your wallet to an app you can view the app on the **Active Connections** view.
 
 
 ## View connected apps
 
-To view the apps with active connections to your wallet, click Apps. By default, the Playground view displays. Click Active Connections to view the connected apps.
+To view the apps with active connections to your wallet, click **Apps**. By default, the **Playground** view displays. Click **Active Connections** to view the connected apps.
 
-To open the site associated with the app, click on the app and then click View.
+To open the site associated with the app, click on the app and then click **View**.
 
 
 ## Disconnect from an app

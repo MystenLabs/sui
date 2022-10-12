@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
@@ -41,7 +41,7 @@ async fn checkpoint_active_flow_happy_path() {
             .unwrap(),
         );
         let _active_handle = active_state
-            .spawn_checkpoint_process(CheckpointMetrics::new_for_tests(), false)
+            .spawn_checkpoint_process(CheckpointMetrics::new_for_tests())
             .await;
     }
 
@@ -121,13 +121,13 @@ async fn checkpoint_active_flow_crash_client_with_gossip() {
                 .spawn_checkpoint_process_with_config(
                     Default::default(),
                     CheckpointMetrics::new_for_tests(),
-                    false,
                 )
                 .await;
         });
     }
 
     let sender_aggregator = aggregator.clone();
+    // TODO: duplicated code in the same file `_end_of_sending_join`
     let _end_of_sending_join = tokio::task::spawn(async move {
         while let Some(t) = transactions.pop() {
             // Get a cert
@@ -212,7 +212,6 @@ async fn checkpoint_active_flow_crash_client_no_gossip() {
                 .spawn_checkpoint_process_with_config(
                     CheckpointProcessControl::default(),
                     CheckpointMetrics::new_for_tests(),
-                    false,
                 )
                 .await;
         });
@@ -302,7 +301,6 @@ async fn test_empty_checkpoint() {
                 .spawn_checkpoint_process_with_config(
                     CheckpointProcessControl::default(),
                     CheckpointMetrics::new_for_tests(),
-                    false,
                 )
                 .await;
         });

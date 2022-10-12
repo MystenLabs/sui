@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::ValidatorInfo;
@@ -16,18 +16,18 @@ use std::convert::TryInto;
 use std::{fs, path::Path};
 use sui_adapter::adapter;
 use sui_adapter::adapter::MoveVM;
-use sui_adapter::in_memory_storage::InMemoryStorage;
-use sui_adapter::temporary_store::{InnerTemporaryStore, TemporaryStore};
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::TransactionDigest;
 use sui_types::crypto::{AuthorityPublicKey, ToFromBytes};
 use sui_types::crypto::{AuthorityPublicKeyBytes, AuthoritySignature};
 use sui_types::gas::SuiGasStatus;
+use sui_types::in_memory_storage::InMemoryStorage;
 use sui_types::messages::CallArg;
 use sui_types::messages::InputObjects;
 use sui_types::messages::Transaction;
 use sui_types::sui_serde::{Base64, Encoding};
 use sui_types::sui_system_state::SuiSystemState;
+use sui_types::temporary_store::{InnerTemporaryStore, TemporaryStore};
 use sui_types::MOVE_STDLIB_ADDRESS;
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 use sui_types::{
@@ -393,11 +393,11 @@ impl Builder {
         let path = path.as_ref();
         trace!("Writing Genesis Builder to {}", path.display());
 
-        std::fs::create_dir_all(path)?;
+        fs::create_dir_all(path)?;
 
         // Write Objects
         let object_dir = path.join(GENESIS_BUILDER_OBJECT_DIR);
-        std::fs::create_dir_all(&object_dir)?;
+        fs::create_dir_all(&object_dir)?;
 
         for (_id, object) in self.objects {
             let object_bytes = serde_yaml::to_vec(&object)?;
@@ -407,7 +407,7 @@ impl Builder {
 
         // Write validator infos
         let committee_dir = path.join(GENESIS_BUILDER_COMMITTEE_DIR);
-        std::fs::create_dir_all(&committee_dir)?;
+        fs::create_dir_all(&committee_dir)?;
 
         for (_pubkey, validator) in self.validators {
             let validator_info_bytes = serde_yaml::to_vec(&validator)?;
@@ -502,14 +502,14 @@ fn process_package(
         &modules,
         package_id,
         natives,
-        &mut gas_status,
+        &mut gas_status.create_move_gas_status(),
     )?;
     adapter::store_package_and_init_modules(
         &mut temporary_store,
         &vm,
         modules,
         ctx,
-        &mut gas_status,
+        &mut gas_status.create_move_gas_status(),
     )?;
 
     let (
@@ -574,7 +574,7 @@ pub fn generate_genesis_system_object(
             CallArg::Pure(bcs::to_bytes(&stakes).unwrap()),
             CallArg::Pure(bcs::to_bytes(&gas_prices).unwrap()),
         ],
-        &mut SuiGasStatus::new_unmetered(),
+        &mut SuiGasStatus::new_unmetered().create_move_gas_status(),
         genesis_ctx,
     )?;
 

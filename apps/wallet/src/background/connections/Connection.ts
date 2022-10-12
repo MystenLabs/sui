@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 import { map, take } from 'rxjs';
@@ -23,11 +23,11 @@ export abstract class Connection {
         );
     }
 
-    protected abstract handleMessage(msg: Message): void;
-
-    protected send(msg: Message) {
+    public send(msg: Message) {
         if (this._portStream.connected) {
             return this._portStream.sendMessage(msg);
         }
     }
+
+    protected abstract handleMessage(msg: Message): void;
 }

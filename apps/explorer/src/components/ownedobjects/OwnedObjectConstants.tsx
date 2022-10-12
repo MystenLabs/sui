@@ -1,7 +1,5 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
-import type BN from 'bn.js';
 
 export type DataType = {
     id: string;
@@ -9,7 +7,7 @@ export type DataType = {
     _isCoin: boolean;
     Version?: string;
     display?: string;
-    balance?: BN;
+    balance?: bigint;
     name?: string;
 }[];
 

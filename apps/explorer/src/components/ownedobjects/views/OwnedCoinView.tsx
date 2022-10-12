@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 import { Coin } from '@mysten/sui.js';
@@ -61,7 +61,7 @@ function SingleCoinView({
                     {subObjList[0]._isCoin &&
                     subObjList.every((el) => el.balance !== undefined)
                         ? `${subObjList.reduce(
-                              (prev, current) => prev.add(current.balance!),
+                              (prev, current) => prev + current.balance!,
                               Coin.getZero()
                           )}`
                         : ''}

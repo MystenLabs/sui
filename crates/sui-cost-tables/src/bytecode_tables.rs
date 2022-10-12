@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use std::ops::Mul;
@@ -25,7 +25,7 @@ use move_binary_format::{
 };
 
 /// VM flat fee
-pub const VM_FLAT_FEE: Gas = Gas::new(1_000);
+pub const VM_FLAT_FEE: Gas = Gas::new(2_000);
 
 /// The size in bytes for a non-string or address constant on the stack
 pub const CONST_SIZE: AbstractMemorySize = AbstractMemorySize::new(16);
@@ -199,10 +199,6 @@ impl<'b> GasMeter for GasStatus<'b> {
         self.charge_instr(get_simple_instruction_opcode(instr))
     }
 
-    fn charge_native_function(&mut self, amount: InternalGas) -> PartialVMResult<()> {
-        self.deduct_gas(amount)
-    }
-
     fn charge_call(
         &mut self,
         _module_id: &ModuleId,
@@ -297,10 +293,6 @@ impl<'b> GasMeter for GasStatus<'b> {
             Opcodes::NEQ,
             lhs.legacy_abstract_memory_size() + rhs.legacy_abstract_memory_size(),
         )
-    }
-
-    fn charge_load_resource(&mut self, _loaded: Option<NumBytes>) -> PartialVMResult<()> {
-        Ok(())
     }
 
     fn charge_borrow_global(
@@ -411,6 +403,14 @@ impl<'b> GasMeter for GasStatus<'b> {
 
     fn charge_vec_swap(&mut self, _ty: impl TypeView) -> PartialVMResult<()> {
         self.charge_instr(Opcodes::VEC_SWAP)
+    }
+
+    fn charge_load_resource(&mut self, _loaded: Option<NumBytes>) -> PartialVMResult<()> {
+        Ok(())
+    }
+
+    fn charge_native_function(&mut self, amount: InternalGas) -> PartialVMResult<()> {
+        self.deduct_gas(amount)
     }
 }
 

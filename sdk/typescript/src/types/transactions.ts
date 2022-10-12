@@ -1,10 +1,8 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 import { ObjectOwner, SuiAddress, TransactionDigest } from './common';
 import { SuiMovePackage, SuiObject, SuiObjectRef } from './objects';
-
-import BN from 'bn.js';
 
 export type TransferObject = {
   recipient: SuiAddress;
@@ -31,7 +29,8 @@ export type Pay = {
 export type ExecuteTransactionRequestType =
   | 'ImmediateReturn'
   | 'WaitForTxCert'
-  | 'WaitForEffectsCert';
+  | 'WaitForEffectsCert'
+  | 'WaitForLocalExecution';
 
 export type TransactionKindName =
   | 'TransferObject'
@@ -292,9 +291,9 @@ export function getTransactions(
   return data.data.transactions;
 }
 
-export function getTransferSuiAmount(data: SuiTransactionKind): BN | null {
+export function getTransferSuiAmount(data: SuiTransactionKind): bigint | null {
   return 'TransferSui' in data && data.TransferSui.amount
-    ? new BN.BN(data.TransferSui.amount, 10)
+    ? BigInt(data.TransferSui.amount)
     : null;
 }
 

@@ -7,9 +7,6 @@ outputs:
   isRust:
     description: True when changes happened to the Rust code
     value: "${{ steps.diff.outputs.isRust }}"
-  isNarwhal:
-    description: True when changes happened to the Narwhal code
-    value: "${{ steps.diff.outputs.isNarwhal }}"
 runs:
   using: composite
   steps:
@@ -29,5 +26,3 @@ runs:
           - 'doc/**'
           - '*.md'
           - '.github/workflows/docs.yml'
-        isNarwhal:
-          - 'narwhal/**'
