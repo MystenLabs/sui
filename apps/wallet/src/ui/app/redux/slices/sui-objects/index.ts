@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
+    getExecutionStatusType,
     getObjectExistsResponse,
+    getTimestampFromTransactionResponse,
     getTotalGasUsed,
     getTransactionDigest,
 } from '@mysten/sui.js';
@@ -14,8 +16,15 @@ import {
 
 import { SUI_SYSTEM_STATE_OBJECT_ID } from './Coin';
 import { ExampleNFT } from './NFT';
+import { FEATURES } from '_src/ui/app/experimentation/features';
 
-import type { SuiObject, SuiAddress, ObjectId } from '@mysten/sui.js';
+import type {
+    SuiObject,
+    SuiAddress,
+    ObjectId,
+    SuiExecuteTransactionResponse,
+    SuiTransactionResponse,
+} from '@mysten/sui.js';
 import type { RootState } from '_redux/RootReducer';
 import type { AppThunkConfig } from '_store/thunk-extras';
 
@@ -66,10 +75,14 @@ export const batchFetchObject = createAsyncThunk<
 
 export const mintDemoNFT = createAsyncThunk<void, void, AppThunkConfig>(
     'mintDemoNFT',
-    async (_, { extra: { api, keypairVault }, dispatch }) => {
-        await ExampleNFT.mintExampleNFT(
-            api.getSignerInstance(keypairVault.getKeyPair())
-        );
+    async (_, { extra: { api, keypairVault, featureGating }, dispatch }) => {
+        const signer = api.getSignerInstance(keypairVault.getKeyPair());
+        if (featureGating.isOn(FEATURES.DEPRECATE_GATEWAY)) {
+            await ExampleNFT.mintExampleNFTWithFullnode(signer);
+        } else {
+            await ExampleNFT.mintExampleNFT(signer);
+        }
+
         await dispatch(fetchAllOwnedAndRequiredObjects());
     }
 );
@@ -87,21 +100,31 @@ export const transferSuiNFT = createAsyncThunk<
     AppThunkConfig
 >(
     'transferSuiNFT',
-    async (data, { extra: { api, keypairVault }, dispatch }) => {
-        const txn = await ExampleNFT.TransferNFT(
-            api.getSignerInstance(keypairVault.getKeyPair()),
-            data.nftId,
-            data.recipientAddress,
-            data.transferCost
-        );
+    async (data, { extra: { api, keypairVault, featureGating }, dispatch }) => {
+        let txn: SuiTransactionResponse | SuiExecuteTransactionResponse;
+        const signer = api.getSignerInstance(keypairVault.getKeyPair());
+        if (featureGating.isOn(FEATURES.DEPRECATE_GATEWAY)) {
+            txn = await ExampleNFT.TransferNFTWithFullnode(
+                signer,
+                data.nftId,
+                data.recipientAddress,
+                data.transferCost
+            );
+        } else {
+            txn = await ExampleNFT.TransferNFT(
+                signer,
+                data.nftId,
+                data.recipientAddress,
+                data.transferCost
+            );
+        }
 
         await dispatch(fetchAllOwnedAndRequiredObjects());
-        const txnDigest = getTransactionDigest(txn.certificate);
         const txnResp = {
-            timestamp_ms: txn?.timestamp_ms,
-            status: txn?.effects?.status?.status,
+            timestamp_ms: getTimestampFromTransactionResponse(txn),
+            status: getExecutionStatusType(txn),
             gasFee: txn ? getTotalGasUsed(txn) : 0,
-            txId: txnDigest,
+            txId: getTransactionDigest(txn),
         };
 
         return txnResp as NFTTxResponse;

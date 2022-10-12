@@ -104,71 +104,65 @@ export const getTransactionsByAddress = createAsyncThunk<
         const resp = await api.instance.fullNode
             .getTransactionWithEffectsBatch(deduplicate(transactions))
             .then(async (txEffs) => {
-                return (
-                    txEffs
-                        .map((txEff) => {
-                            const [seq, digest] = transactions.filter(
-                                (transactionId) =>
-                                    transactionId[1] ===
-                                    getTransactionDigest(txEff.certificate)
-                            )[0];
-                            const res: CertifiedTransaction = txEff.certificate;
+                return txEffs
+                    .map((txEff) => {
+                        const digest = transactions.filter(
+                            (transactionId) =>
+                                transactionId ===
+                                getTransactionDigest(txEff.certificate)
+                        )[0];
+                        const res: CertifiedTransaction = txEff.certificate;
 
-                            const txns = getTransactions(res);
-                            if (txns.length > 1) {
-                                return null;
-                            }
-                            // TODO handle batch transactions
-                            const txn = txns[0];
-                            const txKind = getTransactionKindName(txn);
+                        const txns = getTransactions(res);
+                        if (txns.length > 1) {
+                            return null;
+                        }
+                        // TODO handle batch transactions
+                        const txn = txns[0];
+                        const txKind = getTransactionKindName(txn);
 
-                            const transferSui = getTransferSuiTransaction(txn);
-                            const txTransferObject =
-                                getTransferObjectTransaction(txn);
+                        const transferSui = getTransferSuiTransaction(txn);
+                        const txTransferObject =
+                            getTransferObjectTransaction(txn);
 
-                            const recipient =
-                                transferSui?.recipient ??
-                                txTransferObject?.recipient;
+                        const recipient =
+                            transferSui?.recipient ??
+                            txTransferObject?.recipient;
 
-                            const moveCallTxn = getMoveCallTransaction(txn);
+                        const moveCallTxn = getMoveCallTransaction(txn);
 
-                            const callObjectId = getCreatedObjectID(
-                                txEff.effects
-                            );
+                        const callObjectId = getCreatedObjectID(txEff.effects);
 
-                            return {
-                                seq,
-                                txId: digest,
-                                status: getExecutionStatusType(txEff),
-                                txGas: getTotalGasUsed(txEff),
-                                kind: txKind,
-                                callFunctionName: moveCallTxnName(
-                                    moveCallTxn?.function
-                                ),
-                                from: res.data.sender,
-                                ...(txTransferObject || callObjectId
-                                    ? {
-                                          objectId:
-                                              txTransferObject?.objectRef
-                                                  .objectId ?? callObjectId,
-                                      }
-                                    : {}),
-                                error: getExecutionStatusError(txEff),
-                                timestampMs: txEff.timestamp_ms,
-                                isSender: res.data.sender === address,
-                                ...(transferSui?.amount
-                                    ? { amount: transferSui.amount }
-                                    : {}),
-                                ...(recipient
-                                    ? {
-                                          to: recipient,
-                                      }
-                                    : {}),
-                            };
-                        })
-                        // Remove failed transactions and sort by sequence number
-                        .filter(notEmpty)
-                );
+                        return {
+                            txId: digest,
+                            status: getExecutionStatusType(txEff),
+                            txGas: getTotalGasUsed(txEff),
+                            kind: txKind,
+                            callFunctionName: moveCallTxnName(
+                                moveCallTxn?.function
+                            ),
+                            from: res.data.sender,
+                            ...(txTransferObject || callObjectId
+                                ? {
+                                      objectId:
+                                          txTransferObject?.objectRef
+                                              .objectId ?? callObjectId,
+                                  }
+                                : {}),
+                            error: getExecutionStatusError(txEff),
+                            timestampMs: txEff.timestamp_ms,
+                            isSender: res.data.sender === address,
+                            ...(transferSui?.amount
+                                ? { amount: transferSui.amount }
+                                : {}),
+                            ...(recipient
+                                ? {
+                                      to: recipient,
+                                  }
+                                : {}),
+                        };
+                    })
+                    .filter(notEmpty);
             });
 
         // Get all objectId and batch fetch objects for transactions with objectIds

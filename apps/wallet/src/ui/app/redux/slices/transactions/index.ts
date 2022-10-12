@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { isSuiMoveObject } from '@mysten/sui.js';
+import { getTransactionDigest, isSuiMoveObject } from '@mysten/sui.js';
 import {
     createAsyncThunk,
     createEntityAdapter,
@@ -13,10 +13,12 @@ import {
     suiObjectsAdapterSelectors,
 } from '_redux/slices/sui-objects';
 import { Coin } from '_redux/slices/sui-objects/Coin';
+import { FEATURES } from '_src/ui/app/experimentation/features';
 
 import type {
     SuiAddress,
     SuiMoveObject,
+    SuiExecuteTransactionResponse,
     SuiTransactionResponse,
 } from '@mysten/sui.js';
 import type { RootState } from '_redux/RootReducer';
@@ -27,7 +29,7 @@ type SendTokensTXArgs = {
     amount: bigint;
     recipientAddress: SuiAddress;
 };
-type TransactionResult = SuiTransactionResponse;
+type TransactionResult = SuiTransactionResponse | SuiExecuteTransactionResponse;
 
 export const sendTokens = createAsyncThunk<
     TransactionResult,
@@ -37,7 +39,7 @@ export const sendTokens = createAsyncThunk<
     'sui-objects/send-tokens',
     async (
         { tokenTypeArg, amount, recipientAddress },
-        { getState, extra: { api, keypairVault }, dispatch }
+        { getState, extra: { api, keypairVault, featureGating }, dispatch }
     ) => {
         const state = getState();
         const coinType = Coin.getCoinTypeFromArg(tokenTypeArg);
@@ -48,25 +50,30 @@ export const sendTokens = createAsyncThunk<
                     isSuiMoveObject(anObj.data) && anObj.data.type === coinType
             )
             .map(({ data }) => data as SuiMoveObject);
+
+        const signer = api.getSignerInstance(keypairVault.getKeyPair());
+
         const response =
             Coin.getCoinSymbol(tokenTypeArg) === 'SUI'
                 ? await Coin.transferSui(
-                      api.getSignerInstance(keypairVault.getKeyPair()),
+                      signer,
                       coins,
                       amount,
-                      recipientAddress
+                      recipientAddress,
+                      featureGating.isOn(FEATURES.DEPRECATE_GATEWAY)
                   )
                 : await Coin.transferCoin(
-                      api.getSignerInstance(keypairVault.getKeyPair()),
+                      signer,
                       coins,
                       amount,
-                      recipientAddress
+                      recipientAddress,
+                      featureGating.isOn(FEATURES.DEPRECATE_GATEWAY)
                   );
 
         // TODO: better way to sync latest objects
         dispatch(fetchAllOwnedAndRequiredObjects());
         // TODO: is this correct? Find a better way to do it
-        return response as TransactionResult;
+        return response;
     }
 );
 
@@ -83,7 +90,7 @@ export const StakeTokens = createAsyncThunk<
     'sui-objects/stake',
     async (
         { tokenTypeArg, amount },
-        { getState, extra: { api, keypairVault }, dispatch }
+        { getState, extra: { api, keypairVault, featureGating }, dispatch }
     ) => {
         const state = getState();
         const coinType = Coin.getCoinTypeFromArg(tokenTypeArg);
@@ -108,15 +115,16 @@ export const StakeTokens = createAsyncThunk<
             api.getSignerInstance(keypairVault.getKeyPair()),
             coins,
             amount,
-            validatorAddress
+            validatorAddress,
+            featureGating.isOn(FEATURES.DEPRECATE_GATEWAY)
         );
         dispatch(fetchAllOwnedAndRequiredObjects());
-        return response as TransactionResult;
+        return response;
     }
 );
 
 const txAdapter = createEntityAdapter<TransactionResult>({
-    selectId: (tx) => tx.certificate.transactionDigest,
+    selectId: (tx) => getTransactionDigest(tx),
 });
 
 export const txSelectors = txAdapter.getSelectors(
