@@ -32,8 +32,8 @@ use tap::TapFallible;
 use thiserror::Error;
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::mpsc::Sender;
+use tracing::Instrument;
 use tracing::{debug, error, instrument, warn};
-use tracing::{trace, Instrument};
 use typed_store::Map;
 
 pub use authority_store::{
@@ -45,8 +45,6 @@ use narwhal_config::{
 };
 use narwhal_executor::{ExecutionIndices, ExecutionState};
 use sui_adapter::adapter;
-use sui_adapter::temporary_store::InnerTemporaryStore;
-pub use sui_adapter::temporary_store::TemporaryStore;
 use sui_config::genesis::Genesis;
 use sui_json_rpc_types::{SuiEventEnvelope, SuiTransactionEffects};
 use sui_simulator::nondeterministic;
