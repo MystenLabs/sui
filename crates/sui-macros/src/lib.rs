@@ -38,16 +38,24 @@ pub fn init_static_initializers(_args: TokenStream, item: TokenStream) -> TokenS
                 // initialize all that static state before the first test.
                 let rt = ::sui_simulator::runtime::Runtime::new();
                 rt.block_on(async move {
-                    let _network = ::sui_simulator::anemo::Network::bind("127.0.0.1:0")
-                        .server_name("static-init-network")
-                        .private_key(
-                            ::sui_simulator::fastcrypto::ed25519::Ed25519KeyPair::generate(&mut rand::rngs::OsRng)
-                                .private()
-                                .0
-                                .to_bytes(),
-                        )
-                        .start(::sui_simulator::anemo::Router::new())
-                        .unwrap();
+                    use ::sui_simulator::anemo::{Network, Request};
+
+                    let make_network = |port: u16| {
+                        Network::bind(format!("127.0.0.1:{}", port))
+                            .server_name("static-init-network")
+                            .private_key(
+                                ::sui_simulator::fastcrypto::ed25519::Ed25519KeyPair::generate(&mut rand::rngs::OsRng)
+                                    .private()
+                                    .0
+                                    .to_bytes(),
+                            )
+                            .start(::sui_simulator::anemo::Router::new())
+                            .unwrap()
+                    };
+                    let n1 = make_network(80);
+                    let n2 = make_network(81);
+
+                    let _peer = n1.connect(n2.local_addr()).await.unwrap();
                 });
             }).join().unwrap();
 
