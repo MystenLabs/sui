@@ -13,7 +13,7 @@ use syn::{
 };
 
 // This is used as default when none is specified
-const DEFAULT_DB_OPTIONS_CUSTOM_FN: &str = "typed_store::rocks::default_rocksdb_options";
+const DEFAULT_DB_OPTIONS_CUSTOM_FN: &str = "typed_store::rocks::default_db_options";
 // Custom function which returns the option and overrides the defaults for this table
 const DB_OPTIONS_CUSTOM_FUNCTION: &str = "default_options_override_fn";
 
@@ -165,19 +165,19 @@ fn extract_generics_names(generics: &Generics) -> Vec<Ident> {
 /// The definer of the struct can specify the default options for each table using annotations
 /// We can also supply column family options on the default ones
 /// A user defined function of signature () -> Options can be provided for each table
-/// If a an override function is not specified, the default in `typed_store::rocks::default_rocksdb_options` is used
+/// If a an override function is not specified, the default in `typed_store::rocks::default_db_options` is used
 /// ```
-/// use rocksdb::Options;
+/// use typed_store::rocks::DBOptions;
 /// use typed_store::rocks::DBMap;
 /// use typed_store::Store;
 /// use typed_store_derive::DBMapUtils;
 /// use typed_store::traits::TypedStoreDebug;
 /// /// Define a struct with all members having type DBMap<K, V>
 ///
-/// fn custom_fn_name1() -> Options {Options::default()}
-/// fn custom_fn_name2() -> Options {
+/// fn custom_fn_name1() -> DBOptions {DBOptions::default()}
+/// fn custom_fn_name2() -> DBOptions {
 ///     let mut op = custom_fn_name1();
-///     op.set_write_buffer_size(123456);
+///     op.options.set_write_buffer_size(123456);
 ///     op
 /// }
 /// #[derive(DBMapUtils)]
@@ -187,7 +187,7 @@ fn extract_generics_names(generics: &Generics) -> Vec<Ident> {
 ///     table1: DBMap<String, String>,
 ///     #[default_options_override_fn = "custom_fn_name2"]
 ///     table2: DBMap<i32, String>,
-///     // Nothing specifed so `typed_store::rocks::default_rocksdb_options` is used
+///     // Nothing specifed so `typed_store::rocks::default_db_options` is used
 ///     table3: DBMap<i32, String>,
 ///     #[default_options_override_fn = "custom_fn_name1"]
 ///     table4: DBMap<i32, String>,
@@ -200,9 +200,9 @@ fn extract_generics_names(generics: &Generics) -> Vec<Ident> {
 /// // Get a configurator for this table
 /// let mut config = Tables::configurator();
 /// // Config table 1
-/// config.table1 = Options::default();
-/// config.table1.create_if_missing(true);
-/// config.table1.set_write_buffer_size(123456);
+/// config.table1 = DBOptions::default();
+/// config.table1.options.create_if_missing(true);
+/// config.table1.options.set_write_buffer_size(123456);
 ///
 /// let primary_path = tempfile::tempdir().expect("Failed to open temporary directory").into_path();
 ///
@@ -219,17 +219,17 @@ fn extract_generics_names(generics: &Generics) -> Vec<Ident> {
 ///
 /// Use the function `Tables::get_read_only_handle` which returns a handle that only allows read only features
 /// ```
-/// use rocksdb::Options;
+/// use typed_store::rocks::DBOptions;
 /// use typed_store::rocks::DBMap;
 /// use typed_store::Store;
 /// use typed_store_derive::DBMapUtils;
 /// use typed_store::traits::TypedStoreDebug;
 /// /// Define a struct with all members having type DBMap<K, V>
 ///
-/// fn custom_fn_name1() -> Options {Options::default()}
-/// fn custom_fn_name2() -> Options {
+/// fn custom_fn_name1() -> DBOptions {DBOptions::default()}
+/// fn custom_fn_name2() -> DBOptions {
 ///     let mut op = custom_fn_name1();
-///     op.set_write_buffer_size(123456);
+///     op.options.set_write_buffer_size(123456);
 ///     op
 /// }
 /// #[derive(DBMapUtils)]
@@ -239,7 +239,7 @@ fn extract_generics_names(generics: &Generics) -> Vec<Ident> {
 ///     table1: DBMap<String, String>,
 ///     #[default_options_override_fn = "custom_fn_name2"]
 ///     table2: DBMap<i32, String>,
-///     // Nothing specifed so `typed_store::rocks::default_rocksdb_options` is used
+///     // Nothing specifed so `typed_store::rocks::default_db_options` is used
 ///     table3: DBMap<i32, String>,
 ///     #[default_options_override_fn = "custom_fn_name1"]
 ///     table4: DBMap<i32, String>,
@@ -337,7 +337,7 @@ pub fn derive_dbmap_utils_general(input: TokenStream) -> TokenStream {
         /// Create config structs for configuring DBMap tables
         pub struct #config_struct_name {
             #(
-                pub #field_names : rocksdb::Options,
+                pub #field_names : typed_store::rocks::DBOptions,
             )*
         }
 
@@ -346,7 +346,7 @@ pub fn derive_dbmap_utils_general(input: TokenStream) -> TokenStream {
             pub fn init() -> Self {
                 Self {
                     #(
-                        #field_names : typed_store::rocks::default_rocksdb_options(),
+                        #field_names : typed_store::rocks::default_db_options(),
                     )*
                 }
             }
@@ -397,7 +397,7 @@ pub fn derive_dbmap_utils_general(input: TokenStream) -> TokenStream {
                 tables_db_options_override: Option<typed_store::rocks::DBMapTableConfigMap>
             ) -> Self {
                 let path = &path;
-                let db = {
+                let (db, db_metrics) = {
                     let opt_cfs = match tables_db_options_override {
                         None => [
                             #(
@@ -410,22 +410,22 @@ pub fn derive_dbmap_utils_general(input: TokenStream) -> TokenStream {
                             )*
                         ]
                     };
-
-                    let opt_cfs: Vec<_> = opt_cfs.iter().map(|q| (q.0.as_str(), &q.1)).collect();
-
-                    let res = match as_secondary_with_path {
+                    // Safe to call unwrap because we will have atleast one field_name entry in the struct
+                    let registry = opt_cfs.iter().map(|q| &q.1.registry).next().unwrap();
+                    let opt_cfs: Vec<_> = opt_cfs.iter().map(|q| (q.0.as_str(), &q.1.options)).collect();
+                    let db = match as_secondary_with_path {
                         Some(p) => typed_store::rocks::open_cf_opts_secondary(path, Some(&p), global_db_options_override, &opt_cfs),
                         None    => typed_store::rocks::open_cf_opts(path, global_db_options_override, &opt_cfs)
                     };
-                    res
+                    let db_metrics = typed_store::metrics::DBMetrics::make_db_metrics(registry);
+                    db.map(|db| (db, db_metrics))
                 }.expect("Cannot open DB.");
-
                 let (
                         #(
                             #field_names
                         ),*
                 ) = (#(
-                        DBMap::#inner_types::reopen(&db, Some(stringify!(#field_names))).expect(&format!("Cannot open {} CF.", stringify!(#field_names))[..])
+                        DBMap::#inner_types::reopen(&db, Some(stringify!(#field_names)), db_metrics).expect(&format!("Cannot open {} CF.", stringify!(#field_names))[..])
                     ),*);
 
                 Self {

@@ -3,7 +3,6 @@
 #![allow(dead_code)]
 
 use once_cell::sync::Lazy;
-use rocksdb::Options;
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::HashSet;
@@ -138,16 +137,16 @@ struct TablesCustomOptions {
 static TABLE1_OPTIONS_SET_FLAG: Lazy<Mutex<Vec<bool>>> = Lazy::new(|| Mutex::new(vec![]));
 static TABLE2_OPTIONS_SET_FLAG: Lazy<Mutex<Vec<bool>>> = Lazy::new(|| Mutex::new(vec![]));
 
-fn custom_fn_name() -> Options {
+fn custom_fn_name() -> typed_store::rocks::DBOptions {
     TABLE1_OPTIONS_SET_FLAG.lock().unwrap().push(false);
-    Options::default()
+    typed_store::rocks::DBOptions::default()
 }
 
-fn another_custom_fn_name() -> Options {
+fn another_custom_fn_name() -> typed_store::rocks::DBOptions {
     TABLE2_OPTIONS_SET_FLAG.lock().unwrap().push(false);
     TABLE2_OPTIONS_SET_FLAG.lock().unwrap().push(false);
     TABLE2_OPTIONS_SET_FLAG.lock().unwrap().push(false);
-    Options::default()
+    typed_store::rocks::DBOptions::default()
 }
 
 #[tokio::test]
@@ -157,14 +156,14 @@ async fn macro_test_configure() {
     // Get a configurator for this table
     let mut config = Tables::configurator();
     // Config table 1
-    config.table1 = Options::default();
-    config.table1.create_if_missing(true);
-    config.table1.set_write_buffer_size(123456);
+    config.table1 = typed_store::rocks::DBOptions::default();
+    config.table1.options.create_if_missing(true);
+    config.table1.options.set_write_buffer_size(123456);
 
     // Config table 2
     config.table2 = config.table1.clone();
 
-    config.table2.create_if_missing(false);
+    config.table2.options.create_if_missing(false);
 
     // Build and open with new config
     let _ = Tables::open_tables_read_write(primary_path, None, Some(config.build()));
@@ -217,14 +216,14 @@ async fn store_iter_and_filter_successfully() {
     // Use constom configurator
     let mut config = StoreTables::configurator();
     // Config table 1
-    config.table1 = Options::default();
-    config.table1.create_if_missing(true);
-    config.table1.set_write_buffer_size(123456);
+    config.table1 = typed_store::rocks::DBOptions::default();
+    config.table1.options.create_if_missing(true);
+    config.table1.options.set_write_buffer_size(123456);
 
     // Config table 2
     config.table2 = config.table1.clone();
 
-    config.table2.create_if_missing(false);
+    config.table2.options.create_if_missing(false);
     let path = temp_dir();
     let str = StoreTables::open_tables_read_write(path.clone(), None, Some(config.build()));
 
