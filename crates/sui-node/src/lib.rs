@@ -193,19 +193,6 @@ impl SuiNode {
             network_metrics.clone(),
         )?);
 
-        let arc_net = active_authority.agg_aggregator();
-
-        let transaction_orchestrator = if is_full_node {
-            Some(Arc::new(TransactiondOrchestrator::new(
-                arc_net,
-                state.clone(),
-                active_authority.clone().node_sync_handle(),
-                &prometheus_registry,
-            )))
-        } else {
-            None
-        };
-
         let batch_subsystem_handle = {
             // Start batch system so that this node can be followed
             let batch_state = state.clone();
