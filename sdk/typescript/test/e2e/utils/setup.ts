@@ -13,7 +13,7 @@ const DEFAULT_FULLNODE_URL = 'http://127.0.0.1:9000';
 const DEFAULT_GATEWAY_URL = 'http://127.0.0.1:5001';
 
 export const DEFAULT_RECIPIENT = '0x36096be6a0314052931babed39f53c0666a6b0df';
-export const DEFAULT_GAS_BUDGET = 1000;
+export const DEFAULT_GAS_BUDGET = 10000;
 
 export class TestToolbox {
   constructor(

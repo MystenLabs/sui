@@ -158,6 +158,12 @@ fn execute_transaction<S: BackingPackageStore + ParentSync>(
                     type_arguments,
                     arguments,
                 }) => {
+                    // Charge gas for this VM execution
+                    if let Err(e) = gas_status.charge_vm_gas() {
+                        result = Err(e);
+                        break;
+                    }
+
                     let module_id = ModuleId::new(package.0.into(), module);
                     adapter::execute(
                         move_vm,
@@ -166,8 +172,29 @@ fn execute_transaction<S: BackingPackageStore + ParentSync>(
                         &function,
                         type_arguments,
                         arguments,
-                        &mut gas_status,
+                        &mut gas_status.create_move_gas_status(),
                         tx_ctx,
+                    )
+                }
+                SingleTransactionKind::Publish(MoveModulePublish { modules }) => {
+                    // Charge gas for this VM execution
+                    if let Err(e) = gas_status.charge_vm_gas() {
+                        result = Err(e);
+                        break;
+                    }
+                    // Charge gas for this publish
+                    if let Err(e) =
+                        gas_status.charge_publish_package(modules.iter().map(|v| v.len()).sum())
+                    {
+                        result = Err(e);
+                        break;
+                    }
+                    adapter::publish(
+                        temporary_store,
+                        native_functions.clone(),
+                        modules,
+                        tx_ctx,
+                        &mut gas_status.create_move_gas_status(),
                     )
                 }
                 SingleTransactionKind::Pay(Pay {
@@ -185,13 +212,6 @@ fn execute_transaction<S: BackingPackageStore + ParentSync>(
                     ).collect();
                     pay(temporary_store, coin_objects, recipients, amounts, tx_ctx)
                 }
-                SingleTransactionKind::Publish(MoveModulePublish { modules }) => adapter::publish(
-                    temporary_store,
-                    native_functions.clone(),
-                    modules,
-                    tx_ctx,
-                    &mut gas_status,
-                ),
                 SingleTransactionKind::ChangeEpoch(ChangeEpoch {
                     epoch,
                     storage_charge,
@@ -212,7 +232,7 @@ fn execute_transaction<S: BackingPackageStore + ParentSync>(
                             CallArg::Pure(bcs::to_bytes(&storage_charge).unwrap()),
                             CallArg::Pure(bcs::to_bytes(&computation_charge).unwrap()),
                         ],
-                        &mut gas_status,
+                        &mut gas_status.create_move_gas_status(),
                         tx_ctx,
                     )
                 }

@@ -601,7 +601,7 @@ impl SuiClientCommands {
                     "mint",
                     vec![],
                     gas,
-                    gas_budget.unwrap_or(3000),
+                    gas_budget.unwrap_or(100_000),
                     args,
                     context,
                 )

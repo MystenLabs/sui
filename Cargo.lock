@@ -7779,6 +7779,7 @@ dependencies = [
  "move-package",
  "move-vm-runtime",
  "once_cell",
+ "sui-cost-tables",
  "sui-framework",
  "sui-json",
  "sui-types",
