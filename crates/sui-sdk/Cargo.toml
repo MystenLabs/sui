@@ -22,6 +22,7 @@ tiny-bip39 = "1.0.0"
 bip32 = "0.4.0"
 
 sui-json-rpc = { path = "../sui-json-rpc" }
+sui-transaction-builder = { path = "../sui-transaction-builder" }
 sui-json-rpc-types= { path = "../sui-json-rpc-types" }
 sui-types = { path = "../sui-types" }
 sui-json = { path = "../sui-json" }

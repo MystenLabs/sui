@@ -14,7 +14,7 @@ fi
 
 
 # Environment variables to use on the script
-NODE_BIN="./bin/node"
+NODE_BIN="./bin/narwhal-node"
 PRIMARY_KEYS_PATH=${KEYS_PATH:="/validators/validator-$VALIDATOR_ID/primary-key.json"}
 PRIMARY_NETWORK_KEYS_PATH=${KEYS_PATH:="/validators/validator-$VALIDATOR_ID/network-key.json"}
 WORKER_KEYS_PATH=${KEYS_PATH:="/validators/validator-$VALIDATOR_ID/worker-key.json"}

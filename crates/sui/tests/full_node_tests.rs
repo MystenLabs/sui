@@ -359,7 +359,7 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
                     let context = &mut context.lock().await;
                     SuiClientCommands::SplitCoin {
                         amounts: Some(vec![1]),
-                        count: 0,
+                        count: None,
                         coin_id: object_to_split.0,
                         gas: Some(gas_object_id),
                         gas_budget: 50000,

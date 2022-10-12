@@ -94,7 +94,7 @@ class CommandMaker:
         assert isinstance(nodes, list)
         assert all(isinstance(x, str) for x in nodes)
         nodes = f'--nodes {" ".join(nodes)}' if nodes else ''
-        return f'./benchmark_client {address} --size {size} --rate {rate} {nodes}'
+        return f'./narwhal-benchmark-client {address} --size {size} --rate {rate} {nodes}'
 
     @staticmethod
     def alias_demo_binaries(origin):
@@ -117,5 +117,5 @@ class CommandMaker:
     @staticmethod
     def alias_binaries(origin):
         assert isinstance(origin, str)
-        node, client = join(origin, 'node'), join(origin, 'benchmark_client')
-        return f'rm node ; rm benchmark_client ; ln -s {node} . ; ln -s {client} .'
+        node, client = join(origin, 'narwhal-node'), join(origin, 'narwhal-benchmark-client')
+        return f'rm narwhal-node ; rm narwhal-benchmark-client ; ln -s {node} . ; ln -s {client} .'

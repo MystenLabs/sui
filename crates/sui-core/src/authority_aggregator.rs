@@ -1485,36 +1485,12 @@ where
                                 name = ?name.concise(),
                                 "Validator handled certificate successfully",
                             );
-                            // We got an ok answer, so returning the result of processing
-                            // the transaction.
-                            return res;
                         }
 
-                        // LockErrors indicate the authority may be out-of-date.
-                        // We only attempt to update authority and retry if we are seeing LockErrors.
-                        // For any other error, we stop here and return.
-                        if !matches!(res, Err(SuiError::ObjectErrors { .. })) {
-                            debug!(
-                                tx_digest = ?tx_digest,
-                                name = ?name.concise(),
-                                "Error from validator handle_confirmation_transaction: {:?}",
-                                res
-                            );
-                            return res;
-                        }
-
-                        debug!(authority =? name, error =? res, ?timeout_after_quorum, "Validator out of date - syncing certificates");
-                        // If we got LockErrors, we try to update the authority asynchronously
-                        self.sync_certificate_to_authority(
-                                cert_ref.clone(),
-                                name,
-                                DEFAULT_RETRIES,
-                                self.timeouts.authority_request_timeout,
-                                self.timeouts.pre_quorum_timeout,
-                            )
-                            .instrument(tracing::trace_span!("sync_cert", authority =? name.concise()))
-                            .await
-                            .map_err(|e| { info!(err =? e, "Error from sync_certificate"); e})
+                        // The authority may have failed to process the certificate if there were
+                        // missing parents. In that case, the authority will attempt to perform causal
+                        // completion and execute the cert later.
+                        res
                     })
                 },
                 |mut state, name, weight, result| {
@@ -1597,15 +1573,6 @@ where
         Err(SuiError::QuorumFailedToExecuteCertificate {
             errors: state.errors,
         })
-    }
-
-    /// Find the higgest sequence number that is known to a quorum of authorities.
-    /// NOTE: This is only reliable in the synchronous model, with a sufficient timeout value.
-    #[cfg(test)]
-    async fn get_latest_sequence_number(&self, object_id: ObjectID) -> SequenceNumber {
-        let (object_infos, _certificates) = self.get_object_by_id(object_id).await.unwrap(); // Not safe, but want to blow up if testing.
-        let top_ref = object_infos.keys().last().unwrap().0;
-        top_ref.1
     }
 
     pub async fn execute_transaction(

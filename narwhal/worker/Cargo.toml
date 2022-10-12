@@ -25,7 +25,7 @@ tower = "0.4.13"
 tracing = "0.1.36"
 
 config = { path = "../config", package = "narwhal-config" }
-fastcrypto = "0.1.2"
+fastcrypto.workspace = true
 crypto = { path = "../crypto", package = "narwhal-crypto" }
 network = { path = "../network", package = "narwhal-network" }
 primary = { path = "../primary", package = "narwhal-primary" }

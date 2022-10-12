@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{helper::ObjectChecker, TestCaseImpl, TestContext};
-use anyhow::bail;
 use async_trait::async_trait;
+use jsonrpsee::rpc_params;
 use sui_json_rpc_types::{SuiCertifiedTransaction, SuiTransactionEffects};
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::object::Owner;
@@ -34,20 +34,8 @@ impl TestCaseImpl for CoinMergeSplitTest {
         info!("Testing coin split.");
         let amounts = vec![1, (original_value - 2) / 2];
 
-        let data = ctx
-            .get_fullnode_client()
-            .transaction_builder()
-            .split_coin(
-                signer,
-                *primary_coin.id(),
-                amounts,
-                Some(*gas_obj.id()),
-                5000,
-            )
-            .await
-            .or_else(|e| bail!("Failed to get transaction data for coin split: {}", e))?;
-
-        let (tx_cert, effects) = ctx.sign_and_execute(data, "coin split").await;
+        let (tx_cert, effects) =
+            Self::split_coin(ctx, signer, *primary_coin.id(), amounts, *gas_obj.id()).await;
         let tx_digest = tx_cert.transaction_digest;
         let new_coins = effects.created;
 
@@ -130,12 +118,30 @@ impl CoinMergeSplitTest {
         coin_to_merge: ObjectID,
         gas_obj_id: ObjectID,
     ) -> (SuiCertifiedTransaction, SuiTransactionEffects) {
+        let params = rpc_params![signer, primary_coin, coin_to_merge, Some(gas_obj_id), 5000];
+
         let data = ctx
-            .get_fullnode_client()
-            .transaction_builder()
-            .merge_coins(signer, primary_coin, coin_to_merge, Some(gas_obj_id), 5000)
+            .build_transaction_remotely("sui_mergeCoins", params)
             .await
-            .expect("Failed to get transaction data for coin merge");
+            .unwrap();
+
+        ctx.sign_and_execute(data, "coin merge").await
+    }
+
+    async fn split_coin(
+        ctx: &TestContext,
+        signer: SuiAddress,
+        primary_coin: ObjectID,
+        amounts: Vec<u64>,
+        gas_obj_id: ObjectID,
+    ) -> (SuiCertifiedTransaction, SuiTransactionEffects) {
+        let params = rpc_params![signer, primary_coin, amounts, Some(gas_obj_id), 5000];
+
+        let data = ctx
+            .build_transaction_remotely("sui_splitCoin", params)
+            .await
+            .unwrap();
+
         ctx.sign_and_execute(data, "coin merge").await
     }
 }

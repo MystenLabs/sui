@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 use config::{SharedCommittee, SharedWorkerCache, WorkerCache, WorkerIndex};
 use crypto::PublicKey;
-use network::P2pNetwork;
 use std::{collections::BTreeMap, sync::Arc};
 use tap::TapOptional;
 use tokio::{sync::watch, task::JoinHandle};
@@ -28,8 +27,6 @@ pub struct StateHandler {
     tx_reconfigure: watch::Sender<ReconfigureNotification>,
     /// The latest round committed by consensus.
     last_committed_round: Round,
-    /// A network sender to notify our workers of cleanup events.
-    network: P2pNetwork,
 }
 
 impl StateHandler {
@@ -42,7 +39,6 @@ impl StateHandler {
         tx_consensus_round_updates: watch::Sender<u64>,
         rx_reconfigure: Receiver<ReconfigureNotification>,
         tx_reconfigure: watch::Sender<ReconfigureNotification>,
-        network: P2pNetwork,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
             Self {
@@ -54,7 +50,6 @@ impl StateHandler {
                 rx_reconfigure,
                 tx_reconfigure,
                 last_committed_round: 0,
-                network,
             }
             .run()
             .await;
@@ -87,9 +82,6 @@ impl StateHandler {
                 Some(message) = self.rx_reconfigure.recv() => {
                     let shutdown = match &message {
                         ReconfigureNotification::NewEpoch(committee) => {
-                            // Cleanup the network.
-                            self.network.cleanup(self.worker_cache.load().network_diff(committee.keys()));
-
                             // TODO: Duplicated code in the same file.
                             // Update the worker cache.
                             self.worker_cache.swap(Arc::new(WorkerCache {
@@ -118,9 +110,6 @@ impl StateHandler {
                             false
                         },
                         ReconfigureNotification::UpdateCommittee(committee) => {
-                            // Cleanup the network.
-                            self.network.cleanup(self.worker_cache.load().network_diff(committee.keys()));
-
                             // Update the worker cache.
                             self.worker_cache.swap(Arc::new(WorkerCache {
                                 epoch: committee.epoch,

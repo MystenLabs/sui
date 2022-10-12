@@ -361,41 +361,43 @@ module games::hero {
         let admin = @0xAD014;
         let player = @0x0;
 
-        let scenario = &mut test_scenario::begin(&admin);
+        let scenario_val = test_scenario::begin(admin);
+        let scenario = &mut scenario_val;
         // Run the module initializers
-        test_scenario::next_tx(scenario, &admin);
+        test_scenario::next_tx(scenario, admin);
         {
             init(test_scenario::ctx(scenario));
         };
         // Player purchases a hero with the coins
-        test_scenario::next_tx(scenario, &player);
+        test_scenario::next_tx(scenario, player);
         {
             let game = test_scenario::take_immutable<GameInfo>(scenario);
-            let game_ref = test_scenario::borrow(&game);
+            let game_ref = &game;
             let coin = coin::mint_for_testing(500, test_scenario::ctx(scenario));
             acquire_hero(game_ref, coin, test_scenario::ctx(scenario));
-            test_scenario::return_immutable(scenario, game);
+            test_scenario::return_immutable(game);
         };
         // Admin sends a boar to the Player
-        test_scenario::next_tx(scenario, &admin);
+        test_scenario::next_tx(scenario, admin);
         {
             let game = test_scenario::take_immutable<GameInfo>(scenario);
-            let game_ref = test_scenario::borrow(&game);
-            let admin_cap = test_scenario::take_owned<GameAdmin>(scenario);
+            let game_ref = &game;
+            let admin_cap = test_scenario::take_from_sender<GameAdmin>(scenario);
             send_boar(game_ref, &mut admin_cap, 10, 10, player, test_scenario::ctx(scenario));
-            test_scenario::return_owned(scenario, admin_cap);
-            test_scenario::return_immutable(scenario, game);
+            test_scenario::return_to_sender(scenario, admin_cap);
+            test_scenario::return_immutable(game);
         };
         // Player slays the boar!
-        test_scenario::next_tx(scenario, &player);
+        test_scenario::next_tx(scenario, player);
         {
             let game = test_scenario::take_immutable<GameInfo>(scenario);
-            let game_ref = test_scenario::borrow(&game);
-            let hero = test_scenario::take_owned<Hero>(scenario);
-            let boar = test_scenario::take_owned<Boar>(scenario);
+            let game_ref = &game;
+            let hero = test_scenario::take_from_sender<Hero>(scenario);
+            let boar = test_scenario::take_from_sender<Boar>(scenario);
             slay(game_ref, &mut hero, boar, test_scenario::ctx(scenario));
-            test_scenario::return_owned(scenario, hero);
-            test_scenario::return_immutable(scenario, game);
+            test_scenario::return_to_sender(scenario, hero);
+            test_scenario::return_immutable(game);
         };
+        test_scenario::end(scenario_val);
     }
 }

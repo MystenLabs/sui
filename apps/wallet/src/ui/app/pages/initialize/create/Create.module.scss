@@ -1,25 +1,16 @@
 @use '_values/colors';
 @use '_utils';
 
-.desc {
-    color: colors.$gray-80;
-    font-size: 16px;
-    line-height: 21px;
-    font-weight: 500;
-    margin-bottom: 16px;
-    text-align: left;
-}
-
 .terms {
     display: flex;
     align-items: center;
-    margin-bottom: 8px;
+    margin: 20px 0;
     color: colors.$gray-75;
-    font-size: 13px;
     gap: 5px;
     position: relative;
-    line-height: 150%;
     cursor: pointer;
+
+    @include utils.typography('Primary/BodySmall-M');
 
     > input {
         margin: 0 8px 0 0;
@@ -70,33 +61,25 @@
 
     a {
         text-decoration: none;
-        color: #1f6493;
+        color: colors.$sui-dark-blue;
     }
 }
 
-.header-title {
-    text-align: left;
-    margin-bottom: 20px;
-    color: colors.$gray-100;
-    font-size: 30px;
-    font-weight: 700;
-    line-height: 36px;
+.next {
+    font-weight: 500;
+    font-size: 12px;
 }
 
-.content {
+.match-parent {
     display: flex;
-    gap: 20px;
-    width: 420px;
+    flex-flow: column nowrap;
+    flex: 1;
 }
 
-.btn {
-    width: 100%;
-    max-width: 300px;
-    margin-top: 20px;
+.fieldset {
+    display: contents;
+}
 
-    i {
-        margin-left: 10px;
-        font-weight: 500;
-        font-size: 12px;
-    }
+.space {
+    flex: 1;
 }

@@ -19,7 +19,7 @@ class BenchError(Exception):
 class PathMaker:
     @staticmethod
     def binary_path():
-        return join('..', 'target', 'release')
+        return join('..', '..', 'target', 'release')
 
     @staticmethod
     def node_crate_path():

@@ -3,11 +3,12 @@
 
 use crate::helper::ObjectChecker;
 use crate::{TestCaseImpl, TestContext};
-use anyhow::bail;
 use async_trait::async_trait;
+use jsonrpsee::rpc_params;
+use move_core_types::language_storage::TypeTag;
 use serde::Deserialize;
 use serde_json::json;
-use sui::client_commands::{call_move, EXAMPLE_NFT_DESCRIPTION, EXAMPLE_NFT_NAME, EXAMPLE_NFT_URL};
+use sui::client_commands::{EXAMPLE_NFT_DESCRIPTION, EXAMPLE_NFT_NAME, EXAMPLE_NFT_URL};
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::SuiEvent;
 use sui_types::base_types::SequenceNumber;
@@ -37,24 +38,27 @@ impl TestCaseImpl for CallContractTest {
         let mut sui_objs = ctx.get_sui_from_faucet(Some(1)).await;
         let gas_obj = sui_objs.swap_remove(0);
 
-        let wallet_context = ctx.get_wallet_mut();
         let args_json = json!([EXAMPLE_NFT_NAME, EXAMPLE_NFT_DESCRIPTION, EXAMPLE_NFT_URL,]);
         let mut args = vec![];
         for a in args_json.as_array().unwrap() {
             args.push(SuiJsonValue::new(a.clone()).unwrap());
         }
-        let (_, effects) = call_move(
+        let type_args: Vec<TypeTag> = vec![];
+        let params = rpc_params![
+            signer,
             ObjectID::from(SUI_FRAMEWORK_ADDRESS),
             "devnet_nft",
             "mint",
-            vec![],
-            Some(*gas_obj.id()),
-            5000,
+            type_args,
             args,
-            wallet_context,
-        )
-        .await
-        .or_else(|e| bail!("Failed to call move contract: {e}"))?;
+            Some(*gas_obj.id()),
+            5000
+        ];
+
+        let data = ctx
+            .build_transaction_remotely("sui_moveCall", params)
+            .await?;
+        let (_, effects) = ctx.sign_and_execute(data, "call contract").await;
 
         // Retrieve created nft
         let nft_id = effects

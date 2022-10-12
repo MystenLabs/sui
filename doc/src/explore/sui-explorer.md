@@ -9,6 +9,8 @@ title: Sui Explorer
  * Get go-to-definition support for all smart contracts, referred to as packages in Sui.
  * View validators and geographic locations of currently active full nodes.
 
+ See the [Sui Explorer README](https://github.com/MystenLabs/sui/tree/main/apps/explorer#readme) for instructions on how to run the Explorer locally.
+
 ## Choose a network
 
 When you start Sui Explorer, it displays the transactions for the Devnet network by default. You can also use the Explorer to view data for a local network running in your environment or a custom RPC endpoint URL. Use the drop-down menu at the top-right of the page to choose a different network.

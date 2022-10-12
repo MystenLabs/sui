@@ -2702,32 +2702,6 @@
       }
     },
     {
-      "name": "sui_syncAccountState",
-      "tags": [
-        {
-          "name": "Wallet Sync API"
-        }
-      ],
-      "description": "Synchronize client state with validators.",
-      "params": [
-        {
-          "name": "address",
-          "description": "the Sui address to be synchronized",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/SuiAddress"
-          }
-        }
-      ],
-      "result": {
-        "name": "()",
-        "required": true,
-        "schema": {
-          "type": "null"
-        }
-      }
-    },
-    {
       "name": "sui_transferObject",
       "tags": [
         {

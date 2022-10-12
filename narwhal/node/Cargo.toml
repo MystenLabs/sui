@@ -33,7 +33,7 @@ itertools = "0.10.5"
 
 config = { path = "../config", package = "narwhal-config" }
 consensus = { path = "../consensus", package = "narwhal-consensus" }
-fastcrypto = "0.1.2"
+fastcrypto.workspace = true
 crypto = { path = "../crypto", package = "narwhal-crypto" }
 executor = { path = "../executor", package = "narwhal-executor" }
 network = { path = "../network", package = "narwhal-network" }
@@ -61,11 +61,11 @@ dhat-heap = ["dhat"]    # if you are doing heap profiling
 trace_transaction = ["worker/trace_transaction"]
 
 [[bin]]
-name = "node"
+name = "narwhal-node"
 path = "src/main.rs"
 
 [[bin]]
-name = "benchmark_client"
+name = "narwhal-benchmark-client"
 path = "src/benchmark_client.rs"
 required-features = ["benchmark"]
 

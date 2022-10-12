@@ -250,7 +250,7 @@ pub enum SuiClientCommands {
         amounts: Option<Vec<u64>>,
         /// Count of equal-size coins to split into
         #[clap(long)]
-        count: u64,
+        count: Option<u64>,
         /// ID of the gas object for gas payment, in 20 bytes Hex string
         /// If not provided, a gas object with at least gas_budget value will be selected
         #[clap(long)]
@@ -511,21 +511,27 @@ impl SuiClientCommands {
                 gas_budget,
             } => {
                 let signer = context.get_object_owner(&coin_id).await?;
-                let data = if let Some(amounts) = amounts {
-                    context
-                        .client
-                        .transaction_builder()
-                        .split_coin(signer, coin_id, amounts, gas, gas_budget)
-                        .await?
-                } else {
-                    if count == 0 {
-                        return Err(anyhow!("Coin split count must be greater than 0"));
+                let data = match (amounts, count) {
+                    (Some(amounts), None) => {
+                        context
+                            .client
+                            .transaction_builder()
+                            .split_coin(signer, coin_id, amounts, gas, gas_budget)
+                            .await?
                     }
-                    context
-                        .client
-                        .transaction_builder()
-                        .split_coin_equal(signer, coin_id, count, gas, gas_budget)
-                        .await?
+                    (None, Some(count)) => {
+                        if count == 0 {
+                            return Err(anyhow!("Coin split count must be greater than 0"));
+                        }
+                        context
+                            .client
+                            .transaction_builder()
+                            .split_coin_equal(signer, coin_id, count, gas, gas_budget)
+                            .await?
+                    }
+                    _ => {
+                        return Err(anyhow!("Exactly one of `count` and `amounts` must be present for split-coin command."));
+                    }
                 };
                 let signature = context.config.keystore.sign(&signer, &data.to_bytes())?;
                 let response = context

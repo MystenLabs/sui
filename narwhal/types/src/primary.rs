@@ -710,12 +710,10 @@ pub enum ReconfigureNotification {
     Shutdown,
 }
 
-/// The messages sent by the primary to its workers.
-#[allow(clippy::large_enum_variant)]
+/// Used by the primary to reconfigure the worker.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum PrimaryWorkerMessage {
-    /// Reconfigure the worker.
-    Reconfigure(ReconfigureNotification),
+pub struct WorkerReconfigureMessage {
+    pub message: ReconfigureNotification,
 }
 
 /// Used by the primary to request that the worker sync the target missing batches.
@@ -736,22 +734,6 @@ pub struct BatchMessage {
     // TODO: revisit including the id here [see #188]
     pub digest: BatchDigest,
     pub batch: Batch,
-}
-
-pub type BlockRemoverResult<T> = Result<T, BlockRemoverError>;
-
-#[derive(Clone, Debug)]
-pub struct BlockRemoverError {
-    pub ids: Vec<CertificateDigest>,
-    pub error: BlockRemoverErrorKind,
-}
-
-// TODO: refactor BlockError & BlockRemoverError to be one type shared by get/remove collections.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum BlockRemoverErrorKind {
-    Timeout,
-    Failed,
-    StorageFailure,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]

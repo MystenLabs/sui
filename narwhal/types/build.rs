@@ -66,9 +66,9 @@ fn build_anemo_services(out_dir: &Path) {
         .attributes(automock_attribute.clone())
         .method(
             anemo_build::manual::Method::builder()
-                .name("send_message")
-                .route_name("SendMessage")
-                .request_type("crate::PrimaryWorkerMessage")
+                .name("reconfigure")
+                .route_name("Reconfigure")
+                .request_type("crate::WorkerReconfigureMessage")
                 .response_type("()")
                 .codec_path("anemo::rpc::codec::BincodeCodec")
                 .build(),
