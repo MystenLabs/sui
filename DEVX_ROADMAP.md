@@ -40,5 +40,5 @@ To keep Sui builders up to date with the latest happenings, we are maintaining t
 * Source verification for dependent packages enforced at publish time.
 
 ## Faucet
-* As a precursor to integrating Faucet into Sui CLI/SDKs/Wallet, rate-limiting will be enforced on the faucet server to 5 requests per minute and no more than 20 requests in 24 hours, originating from the same ip address.
+* As a precursor to integrating Faucet into Sui CLI/SDKs/Wallet, rate-limiting will be enforced on the faucet server to no more than 20 requests in 24 hours, originating from the same ip address.
 * Adding support for requesting Gas coins from the faucet.
