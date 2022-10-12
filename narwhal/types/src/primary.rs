@@ -12,8 +12,10 @@ use crypto::{AggregateSignature, PublicKey, Signature};
 use dag::node_dag::Affiliated;
 use derive_builder::Builder;
 use fastcrypto::{
+    bls12381::BLS12381Signature,
+    hash::{Digest, Hash, HashFunction, DIGEST_LEN},
     traits::{AggregateAuthenticator, EncodeDecodeBase64, Signer, VerifyingKey},
-    hash::{Digest, DIGEST_LEN, Hash, HashFunction}, SignatureService, Verifier, bls12381::BLS12381Signature,
+    SignatureService, Verifier,
 };
 use indexmap::IndexMap;
 use mysten_util_mem::MallocSizeOf;
@@ -99,7 +101,9 @@ impl HeaderBuilder {
 
         Ok(Header {
             id: h.digest(),
-            signature: signer.try_sign(Digest::from(h.digest()).as_ref()).map_err(|_| fastcrypto::error::FastCryptoError::GeneralError)?,
+            signature: signer
+                .try_sign(Digest::from(h.digest()).as_ref())
+                .map_err(|_| fastcrypto::error::FastCryptoError::GeneralError)?,
             ..h
         })
     }
@@ -208,16 +212,16 @@ impl Hash for Header {
 
     fn digest(&self) -> HeaderDigest {
         let hasher = fastcrypto::hash::Blake2b256::default();
-            hasher.update(&self.author);
-            hasher.update(&self.round.to_le_bytes());
-            hasher.update(self.epoch.to_le_bytes());
-            for (x, y) in self.payload.iter() {
-                hasher.update(Digest::from(*x));
-                hasher.update(y.to_le_bytes());
-            }
-            for x in self.parents.iter() {
-                hasher.update(Digest::from(*x))
-            }
+        hasher.update(&self.author);
+        hasher.update(&self.round.to_le_bytes());
+        hasher.update(self.epoch.to_le_bytes());
+        for (x, y) in self.payload.iter() {
+            hasher.update(Digest::from(*x));
+            hasher.update(y.to_le_bytes());
+        }
+        for x in self.parents.iter() {
+            hasher.update(Digest::from(*x))
+        }
         HeaderDigest(hasher.finalize().into())
     }
 }
@@ -349,10 +353,10 @@ impl Hash for Vote {
 
     fn digest(&self) -> VoteDigest {
         let hasher = fastcrypto::hash::Blake2b256::default();
-            hasher.update(Digest::from(self.id));
-            hasher.update(&self.round.to_le_bytes());
-            hasher.update(&self.epoch.to_le_bytes());
-            hasher.update(&self.origin);
+        hasher.update(Digest::from(self.id));
+        hasher.update(&self.round.to_le_bytes());
+        hasher.update(&self.epoch.to_le_bytes());
+        hasher.update(&self.origin);
         VoteDigest(hasher.finalize().into())
     }
 }
@@ -469,7 +473,8 @@ impl Certificate {
         } else {
             let s: Vec<&BLS12381Signature> = sigs.into_iter().map(|(_, sig)| &sig).collect();
             AggregateSignature::aggregate(s)
-                .map_err(|_| signature::Error::new()).map_err(DagError::InvalidSignature)?
+                .map_err(|_| signature::Error::new())
+                .map_err(DagError::InvalidSignature)?
         };
 
         Ok(Certificate {
@@ -603,10 +608,10 @@ impl Hash for Certificate {
 
     fn digest(&self) -> CertificateDigest {
         let hasher = fastcrypto::hash::Blake2b256::new();
-            hasher.update(Digest::from(self.header.id));
-            hasher.update(self.round().to_le_bytes());
-            hasher.update(self.epoch().to_le_bytes());
-            hasher.update(&self.origin());
+        hasher.update(Digest::from(self.header.id));
+        hasher.update(self.round().to_le_bytes());
+        hasher.update(self.epoch().to_le_bytes());
+        hasher.update(&self.origin());
         CertificateDigest(hasher.finalize().into())
     }
 }
