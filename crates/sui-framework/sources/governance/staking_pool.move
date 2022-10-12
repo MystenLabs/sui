@@ -32,6 +32,8 @@ module sui::staking_pool {
         starting_epoch: u64,
         /// The total number of SUI tokens in this pool at the beginning of the current epoch.
         epoch_starting_sui_balance: u64,
+        /// The total number of delegation tokens issued by this pool at the beginning of the current epoch.
+        epoch_starting_delegation_token_supply: u64,
         /// The total number of SUI tokens in this pool, including the SUI in the rewards_pool, as well as in all the principal
         /// in the `Delegation` object.
         sui_balance: u64,
@@ -93,6 +95,7 @@ module sui::staking_pool {
             validator_address,
             starting_epoch,
             epoch_starting_sui_balance: 0,
+            epoch_starting_delegation_token_supply: 0,
             sui_balance: 0,
             rewards_pool: balance::zero(),
             delegation_token_supply: balance::create_supply(DelegationToken {}),
@@ -112,8 +115,9 @@ module sui::staking_pool {
             pool.sui_balance = pool.sui_balance + sui_amount
         };
 
-        // Record the epoch starting balance.
+        // Record the epoch starting balances.
         pool.epoch_starting_sui_balance = pool.sui_balance;
+        pool.epoch_starting_delegation_token_supply = balance::supply_value(&pool.delegation_token_supply);
     }
 
     // TODO: implement rate limiting new delegations per epoch.
@@ -180,11 +184,11 @@ module sui::staking_pool {
         let delegator = tx_context::sender(ctx);
 
         // TODO: implement withdraw bonding period here.
-        transfer::transfer(coin::from_balance(reward_withdraw, ctx), delegator);
-
         if (option::is_some(&time_lock)) {
             locked_coin::new_from_balance(principal_withdraw, option::destroy_some(time_lock), delegator, ctx);
+            transfer::transfer(coin::from_balance(reward_withdraw, ctx), delegator);
         } else {
+            balance::join(&mut principal_withdraw, reward_withdraw);
             transfer::transfer(coin::from_balance(principal_withdraw, ctx), delegator);
             option::destroy_none(time_lock);
         };
@@ -325,20 +329,22 @@ module sui::staking_pool {
     }
 
     fun get_sui_amount(pool: &StakingPool, token_amount: u64): u64 {
-        let token_supply_amount = balance::supply_value(&pool.delegation_token_supply);
-        if (token_supply_amount == 0) { 
+        if (pool.epoch_starting_delegation_token_supply == 0) { 
             return token_amount 
         };
-        let res = (pool.sui_balance as u128) * (token_amount as u128) / (token_supply_amount as u128);
+        let res = (pool.epoch_starting_sui_balance as u128) 
+                * (token_amount as u128) 
+                / (pool.epoch_starting_delegation_token_supply as u128);
         (res as u64)
     }
 
     fun get_token_amount(pool: &StakingPool, sui_amount: u64): u64 {
-        let token_supply_amount = balance::supply_value(&pool.delegation_token_supply);
-        if (pool.sui_balance == 0) { 
+        if (pool.epoch_starting_sui_balance == 0) { 
             return sui_amount
         };
-        let res = (token_supply_amount as u128) * (sui_amount as u128) / (pool.sui_balance as u128);
+        let res = (pool.epoch_starting_delegation_token_supply as u128) 
+                * (sui_amount as u128)
+                / (pool.epoch_starting_sui_balance as u128);
         (res as u64)
     }    
 }

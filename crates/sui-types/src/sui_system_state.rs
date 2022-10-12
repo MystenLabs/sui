@@ -99,6 +99,7 @@ pub struct StakingPool {
     pub validator_address: AccountAddress,
     pub starting_epoch: u64,
     pub epoch_starting_sui_balance: u64,
+    pub epoch_starting_delegation_token_supply: u64,
     pub sui_balance: u64,
     pub rewards_pool: Balance,
     pub delegation_token_supply: Supply,

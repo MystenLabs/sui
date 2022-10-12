@@ -82,6 +82,12 @@ A staking pool embedded in each validator struct in the system state object.
  The total number of SUI tokens in this pool at the beginning of the current epoch.
 </dd>
 <dt>
+<code>epoch_starting_delegation_token_supply: u64</code>
+</dt>
+<dd>
+ The total number of delegation tokens issued by this pool at the beginning of the current epoch.
+</dd>
+<dt>
 <code>sui_balance: u64</code>
 </dt>
 <dd>
@@ -395,6 +401,7 @@ Create a new, empty staking pool.
         validator_address,
         starting_epoch,
         epoch_starting_sui_balance: 0,
+        epoch_starting_delegation_token_supply: 0,
         sui_balance: 0,
         rewards_pool: <a href="balance.md#0x2_balance_zero">balance::zero</a>(),
         delegation_token_supply: <a href="balance.md#0x2_balance_create_supply">balance::create_supply</a>(<a href="staking_pool.md#0x2_staking_pool_DelegationToken">DelegationToken</a> {}),
@@ -434,8 +441,9 @@ Called at epoch advancement times to add rewards (in SUI) to the staking pool, a
         pool.sui_balance = pool.sui_balance + sui_amount
     };
 
-    // Record the epoch starting <a href="balance.md#0x2_balance">balance</a>.
+    // Record the epoch starting balances.
     pool.epoch_starting_sui_balance = pool.sui_balance;
+    pool.epoch_starting_delegation_token_supply = <a href="balance.md#0x2_balance_supply_value">balance::supply_value</a>(&pool.delegation_token_supply);
 }
 </code></pre>
 
@@ -561,11 +569,11 @@ Returns the amount of SUI withdrawn.
     <b>let</b> delegator = <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx);
 
     // TODO: implement withdraw bonding period here.
-    <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(<a href="coin.md#0x2_coin_from_balance">coin::from_balance</a>(reward_withdraw, ctx), delegator);
-
     <b>if</b> (<a href="_is_some">option::is_some</a>(&time_lock)) {
         <a href="locked_coin.md#0x2_locked_coin_new_from_balance">locked_coin::new_from_balance</a>(principal_withdraw, <a href="_destroy_some">option::destroy_some</a>(time_lock), delegator, ctx);
+        <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(<a href="coin.md#0x2_coin_from_balance">coin::from_balance</a>(reward_withdraw, ctx), delegator);
     } <b>else</b> {
+        <a href="balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> principal_withdraw, reward_withdraw);
         <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(<a href="coin.md#0x2_coin_from_balance">coin::from_balance</a>(principal_withdraw, ctx), delegator);
         <a href="_destroy_none">option::destroy_none</a>(time_lock);
     };
@@ -946,11 +954,12 @@ in the original state of the tokens.
 
 
 <pre><code><b>fun</b> <a href="staking_pool.md#0x2_staking_pool_get_sui_amount">get_sui_amount</a>(pool: &<a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a>, token_amount: u64): u64 {
-    <b>let</b> token_supply_amount = <a href="balance.md#0x2_balance_supply_value">balance::supply_value</a>(&pool.delegation_token_supply);
-    <b>if</b> (token_supply_amount == 0) {
+    <b>if</b> (pool.epoch_starting_delegation_token_supply == 0) {
         <b>return</b> token_amount
     };
-    <b>let</b> res = (pool.sui_balance <b>as</b> u128) * (token_amount <b>as</b> u128) / (token_supply_amount <b>as</b> u128);
+    <b>let</b> res = (pool.epoch_starting_sui_balance <b>as</b> u128)
+            * (token_amount <b>as</b> u128)
+            / (pool.epoch_starting_delegation_token_supply <b>as</b> u128);
     (res <b>as</b> u64)
 }
 </code></pre>
@@ -975,11 +984,12 @@ in the original state of the tokens.
 
 
 <pre><code><b>fun</b> <a href="staking_pool.md#0x2_staking_pool_get_token_amount">get_token_amount</a>(pool: &<a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a>, sui_amount: u64): u64 {
-    <b>let</b> token_supply_amount = <a href="balance.md#0x2_balance_supply_value">balance::supply_value</a>(&pool.delegation_token_supply);
-    <b>if</b> (pool.sui_balance == 0) {
+    <b>if</b> (pool.epoch_starting_sui_balance == 0) {
         <b>return</b> sui_amount
     };
-    <b>let</b> res = (token_supply_amount <b>as</b> u128) * (sui_amount <b>as</b> u128) / (pool.sui_balance <b>as</b> u128);
+    <b>let</b> res = (pool.epoch_starting_delegation_token_supply <b>as</b> u128)
+            * (sui_amount <b>as</b> u128)
+            / (pool.epoch_starting_sui_balance <b>as</b> u128);
     (res <b>as</b> u64)
 }
 </code></pre>

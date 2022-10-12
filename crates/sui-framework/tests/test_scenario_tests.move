@@ -224,6 +224,30 @@ module sui::test_scenarioTests {
     }
 
     #[test]
+    fun test_get_owned_obj_ids() {
+        let sender = @0x0;
+        let scenario = ts::begin(sender);
+        let uid1 = ts::new_object(&mut scenario);
+        let uid2 = ts::new_object(&mut scenario);
+        let uid3 = ts::new_object(&mut scenario);
+        let id1 = object::uid_to_inner(&uid1);
+        let id2 = object::uid_to_inner(&uid2);
+        let id3 = object::uid_to_inner(&uid3);
+        {
+            let obj1 = Object { id: uid1, value: 10 };
+            let obj2 = Object { id: uid2, value: 20 };
+            let obj3 = Object { id: uid3, value: 30 };
+            transfer::transfer(obj1, copy sender);
+            transfer::transfer(obj2, copy sender);
+            transfer::transfer(obj3, copy sender);
+        };
+        ts::next_tx(&mut scenario, sender);
+        let ids = ts::ids_for_sender<Object>(&scenario);
+        assert!(ids == vector[id1, id2, id3], VALUE_MISMATCH);
+        ts::end(scenario);
+    }
+
+    #[test]
     fun test_take_owned_by_id() {
         let sender = @0x0;
         let scenario = ts::begin(sender);
