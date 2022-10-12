@@ -20,7 +20,7 @@ jobs:
         run: pnpm install --frozen-lockfile
       - id: diff
         name: Determine changed public packages from previous commit
-        run: echo "::set-output name=hasChanges::$(pnpm list --filter "...[$(git rev-parse HEAD^1)]" --depth -1 --json | jq "any(.[] | select(.private != true) ; length > 0)")"
+        run: echo "hasChanges=$(pnpm list --filter "...[$(git rev-parse HEAD^1)]" --depth -1 --json | jq "any(.[] | select(.private != true) ; length > 0)")" >> $GITHUB_OUTPUT
       - name: Get changed files in the changesets folder
         id: has-changesets
         uses: tj-actions/changed-files@v34

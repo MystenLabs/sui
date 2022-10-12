@@ -74,8 +74,8 @@ jobs:
       run: |
         owned="Owned $(cat artifacts/owned.txt | grep -e '|' -e '-' -e 'Bench' -e '+')"
         shared="Shared $(cat artifacts/shared.txt | grep -e '|' -e '-' -e 'Bench' -e '+')"
-        echo ::set-output name=owned::$owned
-        echo ::set-output name=shared::$shared
+        echo "owned=$owned" >> $GITHUB_OUTPUT
+        echo "shared=$shared" >> $GITHUB_OUTPUT
     - name: Create commit comment
       uses: peter-evans/commit-comment@v2
       with:
