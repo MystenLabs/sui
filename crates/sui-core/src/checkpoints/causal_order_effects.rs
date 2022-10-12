@@ -301,6 +301,7 @@ mod tests {
             &committee,
             k.public().into(),
             Arc::pin(k.copy()),
+            false,
         )
         .unwrap();
 

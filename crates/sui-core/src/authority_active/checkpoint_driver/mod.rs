@@ -156,7 +156,6 @@ pub async fn checkpoint_process<A>(
     active_authority: Arc<ActiveAuthority<A>>,
     timing: &CheckpointProcessControl,
     metrics: CheckpointMetrics,
-    enable_reconfig: bool,
 ) where
     A: AuthorityAPI + Send + Sync + 'static + Clone + Reconfigurable,
 {
@@ -167,8 +166,7 @@ pub async fn checkpoint_process<A>(
     let mut last_cert_time = Instant::now();
 
     loop {
-        let result =
-            checkpoint_process_step(active_authority.clone(), timing, enable_reconfig).await;
+        let result = checkpoint_process_step(active_authority.clone(), timing).await;
         let state_checkpoints = &active_authority.state.checkpoints;
         let next_cp_seq = state_checkpoints.lock().next_checkpoint();
         match result {
@@ -189,22 +187,17 @@ pub async fn checkpoint_process<A>(
                             .checkpoint_sequence_number
                             .set((next_cp_seq - 1) as i64);
                         last_cert_time = Instant::now();
-                        if enable_reconfig {
-                            if state_checkpoints.lock().is_ready_to_start_epoch_change() {
-                                while let Err(err) = active_authority.start_epoch_change().await {
-                                    error!(?next_cp_seq, "Failed to start epoch change: {:?}", err);
-                                    tokio::time::sleep(timing.epoch_change_retry_delay).await;
-                                }
-                                // No delay to minimize the reconfiguration latency.
-                                continue;
-                            } else if state_checkpoints.lock().is_ready_to_finish_epoch_change() {
-                                while let Err(err) = active_authority.finish_epoch_change().await {
-                                    error!(
-                                        ?next_cp_seq,
-                                        "Failed to finish epoch change: {:?}", err
-                                    );
-                                    tokio::time::sleep(timing.epoch_change_retry_delay).await;
-                                }
+                        if state_checkpoints.lock().is_ready_to_start_epoch_change() {
+                            while let Err(err) = active_authority.start_epoch_change().await {
+                                error!(?next_cp_seq, "Failed to start epoch change: {:?}", err);
+                                tokio::time::sleep(timing.epoch_change_retry_delay).await;
+                            }
+                            // No delay to minimize the reconfiguration latency.
+                            continue;
+                        } else if state_checkpoints.lock().is_ready_to_finish_epoch_change() {
+                            while let Err(err) = active_authority.finish_epoch_change().await {
+                                error!(?next_cp_seq, "Failed to finish epoch change: {:?}", err);
+                                tokio::time::sleep(timing.epoch_change_retry_delay).await;
                             }
                         }
                         tokio::time::sleep(timing.long_pause_between_checkpoints).await;
@@ -271,7 +264,6 @@ pub async fn checkpoint_process<A>(
 pub async fn checkpoint_process_step<A>(
     active_authority: Arc<ActiveAuthority<A>>,
     timing: &CheckpointProcessControl,
-    enable_reconfig: bool,
 ) -> Result<CheckpointStepResult, CheckpointStepError>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone + Reconfigurable,
@@ -370,7 +362,6 @@ where
         my_proposal.signed_summary.auth_signature.epoch,
         *my_proposal.sequence_number(),
         transactions,
-        enable_reconfig,
     )
     .await
     .map_err(|err| CheckpointStepError::CheckpointSignBlocked(Box::new(err)))?;
@@ -383,7 +374,6 @@ pub async fn sync_and_sign_new_checkpoint<A>(
     epoch: EpochId,
     seq: CheckpointSequenceNumber,
     transactions: BTreeSet<ExecutionDigests>,
-    enable_reconfig: bool,
 ) -> SuiResult
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone + Reconfigurable,
@@ -409,6 +399,7 @@ where
         return Err(SuiError::CheckpointingError { error });
     }
 
+    let enable_reconfig = active_authority.state.checkpoints.lock().enable_reconfig;
     let next_epoch_committee = if enable_reconfig {
         // Ready to start epoch change means that we have finalized the last second checkpoint,
         // and now we are about to finalize the last checkpoint of the epoch.
