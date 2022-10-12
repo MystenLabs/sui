@@ -6,7 +6,6 @@ use crate::{
     serde::NarwhalBitmap,
     CertificateDigestProto,
 };
-use blake2::{digest::Update, VarBlake2b};
 use bytes::Bytes;
 use config::{Committee, Epoch, SharedWorkerCache, Stake, WorkerId, WorkerInfo};
 use crypto::{AggregateSignature, PublicKey, Signature};
@@ -14,7 +13,7 @@ use dag::node_dag::Affiliated;
 use derive_builder::Builder;
 use fastcrypto::{
     traits::{AggregateAuthenticator, EncodeDecodeBase64, Signer, VerifyingKey},
-    Digest, Hash, SignatureService, Verifier, DIGEST_LEN,
+    hash::{Digest, DIGEST_LEN, Hash, HashFunction}, SignatureService, Verifier, bls12381::BLS12381Signature,
 };
 use indexmap::IndexMap;
 use mysten_util_mem::MallocSizeOf;
@@ -66,9 +65,7 @@ impl Hash for Batch {
     type TypedDigest = BatchDigest;
 
     fn digest(&self) -> Self::TypedDigest {
-        BatchDigest::new(fastcrypto::blake2b_256(|hasher| {
-            self.0.iter().for_each(|tx| hasher.update(tx))
-        }))
+        BatchDigest::new(fastcrypto::hash::Blake2b256::digest_iterator(self.0.iter()).into())
     }
 }
 
@@ -86,7 +83,7 @@ pub struct Header {
 }
 
 impl HeaderBuilder {
-    pub fn build<F>(self, signer: &F) -> Result<Header, fastcrypto::traits::Error>
+    pub fn build<F>(self, signer: &F) -> Result<Header, fastcrypto::error::FastCryptoError>
     where
         F: Signer<Signature>,
     {
@@ -102,7 +99,7 @@ impl HeaderBuilder {
 
         Ok(Header {
             id: h.digest(),
-            signature: signer.try_sign(Digest::from(h.digest()).as_ref())?,
+            signature: signer.try_sign(Digest::from(h.digest()).as_ref()).map_err(|_| fastcrypto::error::FastCryptoError::GeneralError)?,
             ..h
         })
     }
@@ -210,9 +207,9 @@ impl Hash for Header {
     type TypedDigest = HeaderDigest;
 
     fn digest(&self) -> HeaderDigest {
-        let hasher_update = |hasher: &mut VarBlake2b| {
+        let hasher = fastcrypto::hash::Blake2b256::default();
             hasher.update(&self.author);
-            hasher.update(self.round.to_le_bytes());
+            hasher.update(&self.round.to_le_bytes());
             hasher.update(self.epoch.to_le_bytes());
             for (x, y) in self.payload.iter() {
                 hasher.update(Digest::from(*x));
@@ -221,8 +218,7 @@ impl Hash for Header {
             for x in self.parents.iter() {
                 hasher.update(Digest::from(*x))
             }
-        };
-        HeaderDigest(fastcrypto::blake2b_256(hasher_update))
+        HeaderDigest(hasher.finalize().into())
     }
 }
 
@@ -352,14 +348,12 @@ impl Hash for Vote {
     type TypedDigest = VoteDigest;
 
     fn digest(&self) -> VoteDigest {
-        let hasher_update = |hasher: &mut VarBlake2b| {
+        let hasher = fastcrypto::hash::Blake2b256::default();
             hasher.update(Digest::from(self.id));
-            hasher.update(self.round.to_le_bytes());
-            hasher.update(self.epoch.to_le_bytes());
+            hasher.update(&self.round.to_le_bytes());
+            hasher.update(&self.epoch.to_le_bytes());
             hasher.update(&self.origin);
-        };
-
-        VoteDigest(fastcrypto::blake2b_256(hasher_update))
+        VoteDigest(hasher.finalize().into())
     }
 }
 
@@ -473,8 +467,9 @@ impl Certificate {
         let aggregated_signature = if sigs.is_empty() {
             AggregateSignature::default()
         } else {
-            AggregateSignature::aggregate(sigs.into_iter().map(|(_, sig)| sig).collect())
-                .map_err(DagError::InvalidSignature)?
+            let s: Vec<&BLS12381Signature> = sigs.into_iter().map(|(_, sig)| &sig).collect();
+            AggregateSignature::aggregate(s)
+                .map_err(|_| signature::Error::new()).map_err(DagError::InvalidSignature)?
         };
 
         Ok(Certificate {
@@ -607,14 +602,12 @@ impl Hash for Certificate {
     type TypedDigest = CertificateDigest;
 
     fn digest(&self) -> CertificateDigest {
-        let hasher_update = |hasher: &mut VarBlake2b| {
+        let hasher = fastcrypto::hash::Blake2b256::new();
             hasher.update(Digest::from(self.header.id));
             hasher.update(self.round().to_le_bytes());
             hasher.update(self.epoch().to_le_bytes());
             hasher.update(&self.origin());
-        };
-
-        CertificateDigest(fastcrypto::blake2b_256(hasher_update))
+        CertificateDigest(hasher.finalize().into())
     }
 }
 

@@ -4,7 +4,7 @@
 use arc_swap::ArcSwap;
 use dashmap::DashMap;
 use either::Either;
-use fastcrypto::Digest;
+use fastcrypto::hash::Digest;
 use once_cell::sync::OnceCell;
 use std::sync::Arc;
 use thiserror::Error;
@@ -16,9 +16,9 @@ use super::{Node, NodeRef, WeakNodeRef};
 /// - `compressible`: a value-derived boolean indicating if that value is, initially, compressible
 ///
 /// The `crypto:Hash` trait bound offers the digest-ibility.
-pub trait Affiliated: fastcrypto::Hash {
+pub trait Affiliated: fastcrypto::hash::Hash {
     /// Hash pointers to the parents of the current value
-    fn parents(&self) -> Vec<<Self as fastcrypto::Hash>::TypedDigest>;
+    fn parents(&self) -> Vec<<Self as fastcrypto::hash::Hash>::TypedDigest>;
 
     /// Whether the current value should be marked as compressible when first inserted in a Node.
     /// Defaults to a blanket false for all values.
@@ -253,13 +253,13 @@ impl<T: Affiliated> Default for NodeDag<T> {
 mod tests {
     use std::{collections::HashSet, fmt};
 
-    use fastcrypto::{Digest, Hash};
+    use fastcrypto::hash::{Digest, Hash};
     use proptest::prelude::*;
 
     use super::*;
 
     #[derive(Clone, Default, PartialEq, Eq, Hash, PartialOrd, Ord, Copy)]
-    pub struct TestDigest([u8; fastcrypto::DIGEST_LEN]);
+    pub struct TestDigest([u8; fastcrypto::hash::DIGEST_LEN]);
 
     impl From<TestDigest> for Digest {
         fn from(hd: TestDigest) -> Self {
@@ -306,7 +306,7 @@ mod tests {
 
     prop_compose! {
         pub fn arb_test_digest()(
-            hash in prop::collection::vec(any::<u8>(), fastcrypto::DIGEST_LEN..=fastcrypto::DIGEST_LEN),
+            hash in prop::collection::vec(any::<u8>(), fastcrypto::hash::DIGEST_LEN..=fastcrypto::hash::DIGEST_LEN),
         ) -> TestDigest {
             TestDigest(hash.try_into().unwrap())
         }

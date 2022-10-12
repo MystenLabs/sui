@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{HeaderDigest, Round};
 use config::Epoch;
-use fastcrypto::Digest;
+use fastcrypto::hash::Digest;
 use store::StoreError;
 use thiserror::Error;
 
