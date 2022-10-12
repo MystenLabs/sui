@@ -56,10 +56,10 @@ async fn with_permit_unhappy_case() {
 
     // we now try to receive all the things we can from the outbound channel
     let mut recvd = vec![];
-    (0..100).for_each(|_| {
-        if let Ok(val) = rx_outbound.try_recv() {
-            recvd.push(val);
-        }
-    });
+    while let Ok(Some(val)) = tokio::time::timeout(Duration::from_secs(1), rx_outbound.recv()).await
+    {
+        recvd.push(val);
+    }
+
     assert_eq!(recvd, (0..100).collect::<Vec<usize>>());
 }
