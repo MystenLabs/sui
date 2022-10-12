@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use dashmap::DashMap;
-use fastcrypto::Hash;
+use fastcrypto::hash::Hash;
 use std::{collections::VecDeque, iter, sync::Arc};
 use store::{
     rocks::{DBMap, TypedStoreError::RocksDBError},

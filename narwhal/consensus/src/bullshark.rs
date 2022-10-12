@@ -6,7 +6,7 @@ use crate::{
     utils, ConsensusOutput,
 };
 use config::{Committee, Stake};
-use fastcrypto::{traits::EncodeDecodeBase64, Hash};
+use fastcrypto::{traits::EncodeDecodeBase64, hash::Hash};
 use std::{collections::HashMap, sync::Arc};
 use tracing::debug;
 use types::{Certificate, CertificateDigest, ConsensusStore, Round, SequenceNumber, StoreResult};
