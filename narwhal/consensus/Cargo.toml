@@ -12,7 +12,7 @@ bincode = "1.3.3"
 blake2 = "0.9"
 bytes = "1.2.1"
 match_opt = "0.1.2"
-mysten-util-mem = { git = "https://github.com/MystenLabs/mysten-infra", rev = "ffb76dd4fa04463a03e68f66fb10df7cad618ed5" }
+mysten-util-mem = { git = "https://github.com/MystenLabs/mysten-infra", rev = "cd46f279aac3a0b58f9be20f87fb08cbd8d7eea7" }
 rand = { version = "0.8.5", optional = true }
 serde = { version = "1.0.144", features = ["derive"] }
 store.workspace = true
