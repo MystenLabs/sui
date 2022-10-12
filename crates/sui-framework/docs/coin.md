@@ -23,9 +23,9 @@ tokens and coins. <code><a href="coin.md#0x2_coin_Coin">Coin</a></code> can be d
 -  [Function `into_balance`](#0x2_coin_into_balance)
 -  [Function `take`](#0x2_coin_take)
 -  [Function `put`](#0x2_coin_put)
--  [Function `keep`](#0x2_coin_keep)
 -  [Function `join`](#0x2_coin_join)
 -  [Function `split`](#0x2_coin_split)
+-  [Function `divide_into_n`](#0x2_coin_divide_into_n)
 -  [Function `zero`](#0x2_coin_zero)
 -  [Function `destroy_zero`](#0x2_coin_destroy_zero)
 -  [Function `create_currency`](#0x2_coin_create_currency)
@@ -154,12 +154,32 @@ matches the one in <code><a href="coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;</code
 ## Constants
 
 
+<a name="0x2_coin_ENotEnough"></a>
+
+For when trying to split a coin more times than its balance allows.
+
+
+<pre><code><b>const</b> <a href="coin.md#0x2_coin_ENotEnough">ENotEnough</a>: u64 = 2;
+</code></pre>
+
+
+
 <a name="0x2_coin_EBadWitness"></a>
 
 For when a type passed to create_supply is not a one-time witness.
 
 
 <pre><code><b>const</b> <a href="coin.md#0x2_coin_EBadWitness">EBadWitness</a>: u64 = 0;
+</code></pre>
+
+
+
+<a name="0x2_coin_EInvalidArg"></a>
+
+For when invalid arguments are passed to a function.
+
+
+<pre><code><b>const</b> <a href="coin.md#0x2_coin_EInvalidArg">EInvalidArg</a>: u64 = 1;
 </code></pre>
 
 
@@ -452,31 +472,6 @@ Put a <code><a href="coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;</code> to the <cod
 
 </details>
 
-<a name="0x2_coin_keep"></a>
-
-## Function `keep`
-
-Transfer <code>c</code> to the sender of the current transaction
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_keep">keep</a>&lt;T&gt;(c: <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;, ctx: &<a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_keep">keep</a>&lt;T&gt;(c: <a href="coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;, ctx: &TxContext) {
-    <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(c, <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx))
-}
-</code></pre>
-
-
-
-</details>
-
 <a name="0x2_coin_join"></a>
 
 ## Function `join`
@@ -522,8 +517,48 @@ and the remaining balance is left is <code>self</code>.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_split">split</a>&lt;T&gt;(self: &<b>mut</b> <a href="coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;, split_amount: u64, ctx: &<b>mut</b> TxContext): <a href="coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt; {
+<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_split">split</a>&lt;T&gt;(
+    self: &<b>mut</b> <a href="coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;, split_amount: u64, ctx: &<b>mut</b> TxContext
+): <a href="coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt; {
     <a href="coin.md#0x2_coin_take">take</a>(&<b>mut</b> self.<a href="balance.md#0x2_balance">balance</a>, split_amount, ctx)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_coin_divide_into_n"></a>
+
+## Function `divide_into_n`
+
+Split coin <code>self</code> into <code>n - 1</code> coins with equal balances. The remainder is left in
+<code>self</code>. Return newly created coins.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_divide_into_n">divide_into_n</a>&lt;T&gt;(self: &<b>mut</b> <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;, n: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="">vector</a>&lt;<a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_divide_into_n">divide_into_n</a>&lt;T&gt;(
+    self: &<b>mut</b> <a href="coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;, n: u64, ctx: &<b>mut</b> TxContext
+): <a href="">vector</a>&lt;<a href="coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;&gt; {
+    <b>assert</b>!(n &gt; 0, <a href="coin.md#0x2_coin_EInvalidArg">EInvalidArg</a>);
+    <b>assert</b>!(n &lt;= <a href="coin.md#0x2_coin_value">value</a>(self), <a href="coin.md#0x2_coin_ENotEnough">ENotEnough</a>);
+
+    <b>let</b> vec = <a href="_empty">vector::empty</a>&lt;<a href="coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;&gt;();
+    <b>let</b> i = 0;
+    <b>let</b> split_amount = <a href="coin.md#0x2_coin_value">value</a>(self) / n;
+    <b>while</b> (i &lt; n - 1) {
+        <a href="_push_back">vector::push_back</a>(&<b>mut</b> vec, <a href="coin.md#0x2_coin_split">split</a>(self, split_amount, ctx));
+        i = i + 1;
+    };
+    vec
 }
 </code></pre>
 

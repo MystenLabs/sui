@@ -6,13 +6,20 @@
 /// `Balance` type.
 module sui::coin {
     use sui::balance::{Self, Balance, Supply};
-    use sui::tx_context::{Self, TxContext};
+    use sui::tx_context::TxContext;
     use sui::object::{Self, UID};
     use sui::transfer;
+    use std::vector;
     use sui::event;
 
     /// For when a type passed to create_supply is not a one-time witness.
     const EBadWitness: u64 = 0;
+
+    /// For when invalid arguments are passed to a function.
+    const EInvalidArg: u64 = 1;
+
+    /// For when trying to split a coin more times than its balance allows.
+    const ENotEnough: u64 = 2;
 
     /// A coin of type `T` worth `value`. Transferable and storable
     struct Coin<phantom T> has key, store {
@@ -114,11 +121,6 @@ module sui::coin {
 
     // === Base Coin functionality ===
 
-    /// Transfer `c` to the sender of the current transaction
-    public fun keep<T>(c: Coin<T>, ctx: &TxContext) {
-        transfer::transfer(c, tx_context::sender(ctx))
-    }
-
     /// Consume the coin `c` and add its value to `self`.
     /// Aborts if `c.value + self.value > U64_MAX`
     public entry fun join<T>(self: &mut Coin<T>, c: Coin<T>) {
@@ -129,8 +131,28 @@ module sui::coin {
 
     /// Split coin `self` to two coins, one with balance `split_amount`,
     /// and the remaining balance is left is `self`.
-    public fun split<T>(self: &mut Coin<T>, split_amount: u64, ctx: &mut TxContext): Coin<T> {
+    public fun split<T>(
+        self: &mut Coin<T>, split_amount: u64, ctx: &mut TxContext
+    ): Coin<T> {
         take(&mut self.balance, split_amount, ctx)
+    }
+
+    /// Split coin `self` into `n - 1` coins with equal balances. The remainder is left in
+    /// `self`. Return newly created coins.
+    public fun divide_into_n<T>(
+        self: &mut Coin<T>, n: u64, ctx: &mut TxContext
+    ): vector<Coin<T>> {
+        assert!(n > 0, EInvalidArg);
+        assert!(n <= value(self), ENotEnough);
+
+        let vec = vector::empty<Coin<T>>();
+        let i = 0;
+        let split_amount = value(self) / n;
+        while (i < n - 1) {
+            vector::push_back(&mut vec, split(self, split_amount, ctx));
+            i = i + 1;
+        };
+        vec
     }
 
     /// Make any Coin with a zero value. Useful for placeholding

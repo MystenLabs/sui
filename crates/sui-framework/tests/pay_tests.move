@@ -2,13 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
-module sui::wallet_tests {
+module sui::pay_tests {
     use std::vector;
     use sui::test_scenario::{Self};
-    use sui::coin;
-    use sui::wallet;
+    use sui::coin::{Self, Coin};
+    use sui::pay;
     use sui::sui::SUI;
-    use sui::coin::Coin;
 
     const TEST_SENDER_ADDR: address = @0xA11CE;
 
@@ -20,7 +19,7 @@ module sui::wallet_tests {
         let coin = coin::mint_for_testing<SUI>(10, ctx);
 
         test_scenario::next_tx(scenario, TEST_SENDER_ADDR);
-        coin::split_n(&mut coin, 3, test_scenario::ctx(scenario));
+        pay::divide_and_keep(&mut coin, 3, test_scenario::ctx(scenario));
 
         test_scenario::next_tx(scenario, TEST_SENDER_ADDR);
         let coin1 = test_scenario::take_from_sender<Coin<SUI>>(scenario);
@@ -51,7 +50,7 @@ module sui::wallet_tests {
         let coin = coin::mint_for_testing<SUI>(10, ctx);
 
         test_scenario::next_tx(scenario, TEST_SENDER_ADDR);
-        let split_coins = coin::split_n_to_vec(&mut coin, 3, test_scenario::ctx(scenario));
+        let split_coins = coin::divide_into_n(&mut coin, 3, test_scenario::ctx(scenario));
 
         assert!(vector::length(&split_coins) == 2, 0);
         let coin1 = vector::pop_back(&mut split_coins);
