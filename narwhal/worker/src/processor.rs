@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use config::WorkerId;
-use fastcrypto::Hash;
+use fastcrypto::hash::Hash;
 use store::Store;
 use tokio::{sync::watch, task::JoinHandle};
 use types::{

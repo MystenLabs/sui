@@ -5,7 +5,7 @@ use anyhow::Result;
 use config::{SharedWorkerCache, WorkerId};
 use consensus::dag::{Dag, ValidatorDagError};
 use crypto::PublicKey;
-use fastcrypto::Hash;
+use fastcrypto::hash::Hash;
 use futures::future::try_join_all;
 use itertools::Either;
 use network::{P2pNetwork, PrimaryToWorkerRpc};

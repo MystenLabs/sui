@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::block_synchronizer::{BlockHeader, BlockSynchronizeResult, Command};
-use fastcrypto::Hash;
+use fastcrypto::hash::Hash;
 use prometheus::IntGauge;
 use std::collections::HashMap;
 use tokio::sync::oneshot;

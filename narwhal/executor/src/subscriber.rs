@@ -20,7 +20,7 @@ use std::future::Future;
 use std::{sync::Arc, time::Duration};
 
 use async_trait::async_trait;
-use fastcrypto::Hash;
+use fastcrypto::hash::Hash;
 use rand::prelude::SliceRandom;
 use rand::rngs::ThreadRng;
 use tokio::time::Instant;

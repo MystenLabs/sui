@@ -11,7 +11,7 @@ use crate::{
 };
 use config::{Committee, Parameters, SharedWorkerCache, Stake, WorkerId};
 use crypto::PublicKey;
-use fastcrypto::Hash;
+use fastcrypto::hash::Hash;
 use futures::{
     future::{join_all, BoxFuture},
     stream::FuturesUnordered,

@@ -5,7 +5,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use config::{Committee, SharedCommittee, SharedWorkerCache, WorkerCache, WorkerId, WorkerIndex};
 use crypto::PublicKey;
-use fastcrypto::Hash;
+use fastcrypto::hash::Hash;
 use futures::{stream::FuturesUnordered, StreamExt};
 
 use rand::seq::SliceRandom;

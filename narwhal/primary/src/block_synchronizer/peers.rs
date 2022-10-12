@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crypto::PublicKey;
-use fastcrypto::Hash;
+use fastcrypto::hash::Hash;
 use rand::{prelude::SliceRandom as _, rngs::SmallRng};
 use std::collections::HashMap;
 
