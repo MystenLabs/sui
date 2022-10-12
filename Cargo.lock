@@ -2312,6 +2312,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto"
 version = "2.0.0"
+source = "git+https://github.com/MystenLabs/fastcrypto?branch=update_hash#c849374b1f82e93e5bd696c1c473cbbf228b189c"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -2350,6 +2351,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-derive"
 version = "0.1.2"
+source = "git+https://github.com/MystenLabs/fastcrypto?branch=update_hash#c849374b1f82e93e5bd696c1c473cbbf228b189c"
 dependencies = [
  "proc-macro2 1.0.46",
  "quote 1.0.21",

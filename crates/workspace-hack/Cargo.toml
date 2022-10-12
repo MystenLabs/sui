@@ -178,7 +178,7 @@ event-listener = { version = "2", default-features = false }
 eyre = { version = "0.6", features = ["auto-install", "track-caller"] }
 fail = { version = "0.4", default-features = false }
 fastcrypto-c65f7effa3be6d31 = { package = "fastcrypto", version = "0.1" }
-fastcrypto-61204a4313bd441e = { package = "fastcrypto", path = "../../../fastcrypto/fastcrypto", features = ["copy_key", "secure"] }
+fastcrypto-e00be9d0c34d7d82 = { package = "fastcrypto", git = "https://github.com/MystenLabs/fastcrypto", branch = "update_hash", features = ["copy_key", "secure"] }
 fastrand = { version = "1", default-features = false }
 fd-lock = { version = "3", default-features = false }
 fdlimit = { version = "0.2", default-features = false }
@@ -816,8 +816,8 @@ event-listener = { version = "2", default-features = false }
 eyre = { version = "0.6", features = ["auto-install", "track-caller"] }
 fail = { version = "0.4", default-features = false }
 fastcrypto-c65f7effa3be6d31 = { package = "fastcrypto", version = "0.1" }
-fastcrypto-61204a4313bd441e = { package = "fastcrypto", path = "../../../fastcrypto/fastcrypto", features = ["copy_key", "secure"] }
-fastcrypto-derive = { path = "../../../fastcrypto/fastcrypto-derive", default-features = false }
+fastcrypto-e00be9d0c34d7d82 = { package = "fastcrypto", git = "https://github.com/MystenLabs/fastcrypto", branch = "update_hash", features = ["copy_key", "secure"] }
+fastcrypto-derive = { git = "https://github.com/MystenLabs/fastcrypto", branch = "update_hash", default-features = false }
 fastrand = { version = "1", default-features = false }
 fd-lock = { version = "3", default-features = false }
 fdlimit = { version = "0.2", default-features = false }
