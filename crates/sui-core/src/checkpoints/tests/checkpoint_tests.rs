@@ -184,16 +184,6 @@ fn make_checkpoint_db() {
 
     assert_eq!(cps.next_checkpoint(), 0);
 
-    // You cannot make a checkpoint without processing all transactions
-    assert!(cps
-        .update_new_checkpoint(
-            0,
-            &CheckpointContents::new_with_causally_ordered_transactions(
-                [t1, t2, t4, t5].into_iter()
-            ),
-        )
-        .is_err());
-
     // Now process the extra transactions in the checkpoint
     cps.update_processed_transactions(&[(4, t4), (5, t5)])
         .unwrap();
@@ -256,14 +246,6 @@ fn make_proposals() {
         .chain(p3.transactions())
         .cloned()
         .collect();
-
-    // if not all transactions are processed we fail
-    assert!(cps1
-        .update_new_checkpoint(
-            0,
-            &CheckpointContents::new_with_causally_ordered_transactions(ckp_items.iter().cloned()),
-        )
-        .is_err());
 
     cps1.update_processed_transactions(&[(3, t1), (4, t4)])
         .unwrap();
@@ -467,11 +449,6 @@ fn latest_proposal() {
         .cloned()
         .collect();
 
-    // Fail to set if transactions not processed.
-    assert!(cps1
-        .sign_new_checkpoint(epoch, 0, ckp_items.iter(), TestCausalOrderNoop, None)
-        .is_err());
-
     // Set the transactions as executed.
     let batch: Vec<_> = ckp_items
         .iter()
@@ -630,10 +607,6 @@ fn set_get_checkpoint() {
         .cloned()
         .collect();
 
-    // Need to load the transactions as processed, before getting a checkpoint.
-    assert!(cps1
-        .sign_new_checkpoint(epoch, 0, ckp_items.iter(), TestCausalOrderNoop, None)
-        .is_err());
     let batch: Vec<_> = ckp_items
         .iter()
         .enumerate()
@@ -709,13 +682,10 @@ fn set_get_checkpoint() {
     // Setting with contents succeeds BUT has not processed transactions
     let contents =
         CheckpointContents::new_with_causally_ordered_transactions(ckp_items.into_iter());
-    let response_ckp =
-        cps4.process_new_checkpoint_certificate(&checkpoint_cert, &contents, &committee);
-    assert!(response_ckp.is_err());
 
     // Process transactions and then ask for checkpoint.
     cps4.handle_internal_batch(0, &batch).unwrap();
-    cps4.process_new_checkpoint_certificate(&checkpoint_cert, &contents, &committee)
+    cps4.process_synced_checkpoint_certificate(&checkpoint_cert, &contents, &committee)
         .unwrap();
 
     // Now we have a certified checkpoint
@@ -831,17 +801,6 @@ fn checkpoint_integration() {
             .chain(unprocessed.clone().into_iter())
             .collect();
         let next_checkpoint = cps.get_locals().next_checkpoint;
-
-        // Cannot register the checkpoint while there are unprocessed transactions.
-        assert!(cps
-            .sign_new_checkpoint(
-                committee.epoch,
-                next_checkpoint,
-                transactions.iter(),
-                TestCausalOrderNoop,
-                None
-            )
-            .is_err());
 
         checkpoint_contents_opt = Some(transactions);
 
@@ -1791,7 +1750,11 @@ async fn checkpoint_messaging_flow() {
         if failed_authorities.contains(&auth.authority.name) {
             auth.checkpoint
                 .lock()
-                .process_new_checkpoint_certificate(&checkpoint_cert, &contents, &setup.committee)
+                .process_synced_checkpoint_certificate(
+                    &checkpoint_cert,
+                    &contents,
+                    &setup.committee,
+                )
                 .unwrap();
         } else {
             auth.checkpoint
