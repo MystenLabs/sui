@@ -58,7 +58,7 @@ export type TableType = {
     columns: TableColumn[];
 };
 
-const cellStyle = cva(['text-sui-grey-75 px-[8px] h-[30px]'], {
+const cellStyle = cva(['text-sui-grey-75 h-[30px] px-[4px]'], {
     variants: {
         variant: {
             th: 'text-left font-semibold uppercase text-xs',
