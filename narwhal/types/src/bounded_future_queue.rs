@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use futures::{
     stream::{FuturesOrdered, FuturesUnordered},
-    Future, TryFutureExt, TryStreamExt,
+    Future, StreamExt, TryFutureExt, TryStreamExt,
 };
 use tokio::sync::{AcquireError, Semaphore, SemaphorePermit};
 
@@ -96,6 +96,14 @@ impl<U, V, T: Future<Output = Result<U, V>>> BoundedFuturesUnordered<T> {
                 self.push_semaphore.add_permits(1)
             }
         })
+    }
+}
+
+impl<T: Future> BoundedFuturesUnordered<T> {
+    pub async fn next(&mut self) -> Option<T::Output> {
+        let result = self.queue.next().await;
+        self.push_semaphore.add_permits(1);
+        result
     }
 }
 

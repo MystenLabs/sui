@@ -22,13 +22,14 @@ use tokio::{
     task::JoinHandle,
     time::{sleep, Duration, Instant},
 };
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
+use types::metered_channel::WithPermit;
 use types::{
     bounded_future_queue::BoundedFuturesUnordered,
     error::{DagError, DagResult},
     metered_channel::{Receiver, Sender},
-    try_fut_and_permit, BatchDigest, CertificateDigest, Header, HeaderDigest,
-    ReconfigureNotification, Round, WorkerSynchronizeMessage,
+    BatchDigest, CertificateDigest, Header, HeaderDigest, ReconfigureNotification, Round,
+    WorkerSynchronizeMessage,
 };
 
 #[cfg(test)]
@@ -281,15 +282,24 @@ impl HeaderWaiter {
                 },
 
                 // we poll the availability of a slot to send the result to the core simultaneously
-                (Some(result), permit) = try_fut_and_permit!(waiting.try_next(), self.tx_core) => if let Some(header) = result {
-                    let _ = self.pending.remove(&header.id);
-                    for x in header.payload.keys() {
-                        let _ = self.batch_requests.remove(x);
+                Some((permit, Some(header))) = self.tx_core.with_permit(waiting.next()) => {
+                    let header = match header{
+                        Err(err) => {
+                            warn!("Error fetching header {}", err);
+                            continue;
+                        },
+                        Ok(header) => header,
+                    };
+                    if let Some(header) = header {
+                        let _ = self.pending.remove(&header.id);
+                        for x in header.payload.keys() {
+                            let _ = self.batch_requests.remove(x);
+                        }
+                        for x in &header.parents {
+                            let _ = self.parent_requests.remove(x);
+                        }
+                        permit.send(header);
                     }
-                    for x in &header.parents {
-                        let _ = self.parent_requests.remove(x);
-                    }
-                    permit.send(header);
                 },  // This request has been canceled when result is None.
 
                 () = &mut timer => {
