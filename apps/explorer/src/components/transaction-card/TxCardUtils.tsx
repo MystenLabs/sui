@@ -69,7 +69,7 @@ export const genTableDataFromTxData = (
 ) => {
     return {
         data: results.map((txn) => ({
-            date: `${timeAgo(txn.timestamp_ms, undefined, true)} ago`,
+            date: `${timeAgo(txn.timestamp_ms, undefined, true)}`,
             transactionId: [
                 {
                     url: txn.txId,
