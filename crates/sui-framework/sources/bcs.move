@@ -12,7 +12,6 @@
 /// - u64 / u128 - LE bytes
 /// - vector - ULEB128 length + LEN elements
 /// - option - first byte bool: None (0) or Some (1), then value
-///
 module sui::bcs {
     use std::option::{Self, Option};
     use std::vector as v;
