@@ -162,6 +162,9 @@ pub struct CheckpointStore {
 
     memory_locals: Arc<CheckpointLocals>,
 
+    /// Whether reconfiguration is enabled.
+    pub enable_reconfig: bool,
+
     /// Consensus sender
     sender: Option<Box<dyn ConsensusSender>>,
 
@@ -274,6 +277,7 @@ impl CheckpointStore {
         current_committee: &Committee,
         name: AuthorityName,
         secret: StableSyncAuthoritySigner,
+        enable_reconfig: bool,
     ) -> Result<CheckpointStore, SuiError> {
         let tables =
             CheckpointStoreTables::open_tables_read_write(path.to_path_buf(), db_options, None);
@@ -287,6 +291,7 @@ impl CheckpointStore {
             name,
             secret,
             memory_locals,
+            enable_reconfig,
             sender: None,
             tables,
         })
@@ -835,12 +840,12 @@ impl CheckpointStore {
 
     pub fn is_ready_to_start_epoch_change(&mut self) -> bool {
         let next_seq = self.next_checkpoint();
-        next_seq % CHECKPOINT_COUNT_PER_EPOCH == 0 && next_seq != 0
+        self.enable_reconfig && next_seq % CHECKPOINT_COUNT_PER_EPOCH == 0 && next_seq != 0
     }
 
     pub fn is_ready_to_finish_epoch_change(&mut self) -> bool {
         let next_seq = self.next_checkpoint();
-        next_seq % CHECKPOINT_COUNT_PER_EPOCH == 1 && next_seq != 1
+        self.enable_reconfig && next_seq % CHECKPOINT_COUNT_PER_EPOCH == 1 && next_seq != 1
     }
 
     /// Checks whether we should reject consensus transaction.
@@ -848,14 +853,25 @@ impl CheckpointStore {
     /// create the second last checkpoint of the epoch. We continue to reject consensus transactions
     /// until we finish the last checkpoint.
     pub fn should_reject_consensus_transaction(&mut self) -> bool {
+        // Never reject consensus message if reconfiguration is not enabled.
+        if !self.enable_reconfig {
+            return false;
+        }
         let next_seq = self.next_checkpoint();
-        // Either we just finished constructing the second last checkpoint,
-        // or just finished constructing the last checkpoint.
-        ((next_seq + 1) % CHECKPOINT_COUNT_PER_EPOCH == 0 || self.is_ready_to_start_epoch_change())
+        // Either we just finished constructing the second last checkpoint
+        if (next_seq + 1) % CHECKPOINT_COUNT_PER_EPOCH == 0
             && self
                 .memory_locals
                 .checkpoint_to_be_constructed
                 .is_completed()
+        {
+            return true;
+        }
+        // Or we are already in the process of constructing the last checkpoint.
+        if next_seq % CHECKPOINT_COUNT_PER_EPOCH == 0 && next_seq != 0 {
+            return true;
+        }
+        false
     }
 
     pub fn validators_already_fragmented_with(

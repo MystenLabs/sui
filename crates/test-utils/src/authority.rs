@@ -141,7 +141,6 @@ pub async fn spawn_checkpoint_processes(configs: &NetworkConfig, handles: &[SuiN
                     .spawn_checkpoint_process_with_config(
                         checkpoint_process_control,
                         CheckpointMetrics::new_for_tests(),
-                        false,
                     )
                     .await;
             })
