@@ -30,6 +30,10 @@ type MethodToPayloads = {
         args: never;
         return: never;
     };
+    clear: {
+        args: never;
+        return: never;
+    };
 };
 
 export interface KeyringPayload<Method extends keyof MethodToPayloads>

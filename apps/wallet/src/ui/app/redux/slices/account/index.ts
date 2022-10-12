@@ -22,7 +22,7 @@ export const createMnemonic = createAsyncThunk<
     string,
     {
         importedMnemonic?: string;
-        password?: string;
+        password: string;
     },
     AppThunkConfig
 >(
@@ -32,6 +32,7 @@ export const createMnemonic = createAsyncThunk<
             password,
             importedMnemonic
         );
+        await background.unlockWallet(password);
         if (!isKeyringPayload<'createMnemonic'>(payload, 'createMnemonic')) {
             throw new Error('Unknown payload');
         }
@@ -52,10 +53,11 @@ export const loadMnemonicFromKeyring = createAsyncThunk<
         await background.getMnemonic(password)
 );
 
-export const logout = createAsyncThunk(
+export const logout = createAsyncThunk<void, void, AppThunkConfig>(
     'account/logout',
-    async (): Promise<void> => {
+    async (_, { extra: { background } }): Promise<void> => {
         await Browser.storage.local.clear();
+        await background.clearWallet();
     }
 );
 
