@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use anyhow::Result;
 use async_trait::async_trait;
-use config::{SharedCommittee, SharedWorkerCache, WorkerCache, WorkerId, WorkerIndex};
+use config::{Committee, SharedCommittee, SharedWorkerCache, WorkerCache, WorkerId, WorkerIndex};
 use crypto::PublicKey;
 use fastcrypto::Hash;
 use futures::{stream::FuturesUnordered, StreamExt};
@@ -105,48 +105,15 @@ impl PrimaryToWorker for PrimaryReceiverHandler {
         match &message {
             ReconfigureNotification::NewEpoch(new_committee) => {
                 self.committee.swap(Arc::new(new_committee.clone()));
-
-                // TODO: duplicated code in this file.
-                // Update the worker cache.
-                self.worker_cache.swap(Arc::new(WorkerCache {
-                            epoch: new_committee.epoch,
-                            workers: new_committee.keys().iter().map(|key|
-                                (
-                                    (*key).clone(),
-                                    self.worker_cache
-                                        .load()
-                                        .workers
-                                        .get(key)
-                                        .tap_none(||
-                                            warn!("Worker cache does not have a key for the new committee member"))
-                                        .unwrap_or(&WorkerIndex(BTreeMap::new()))
-                                        .clone()
-                                )).collect(),
-                        }));
+                self.update_worker_cache(new_committee);
+                tracing::debug!("Committee updated to {}", self.committee);
             }
             ReconfigureNotification::UpdateCommittee(new_committee) => {
                 self.committee.swap(Arc::new(new_committee.clone()));
-
-                // Update the worker cache.
-                self.worker_cache.swap(Arc::new(WorkerCache {
-                            epoch: new_committee.epoch,
-                            workers: new_committee.keys().iter().map(|key|
-                                (
-                                    (*key).clone(),
-                                    self.worker_cache
-                                        .load()
-                                        .workers
-                                        .get(key)
-                                        .tap_none(||
-                                            warn!("Worker cache does not have a key for the new committee member"))
-                                        .unwrap_or(&WorkerIndex(BTreeMap::new()))
-                                        .clone()
-                                )).collect(),
-                        }));
-
+                self.update_worker_cache(new_committee);
                 tracing::debug!("Committee updated to {}", self.committee);
             }
-            ReconfigureNotification::Shutdown => {} // no-op
+            ReconfigureNotification::Shutdown => (), // no-op
         };
 
         // Notify all other tasks.
@@ -345,5 +312,33 @@ impl PrimaryToWorker for PrimaryReceiverHandler {
             .map_err(|e| anemo::rpc::Status::from_error(Box::new(e)))?;
 
         Ok(anemo::Response::new(()))
+    }
+}
+
+impl PrimaryReceiverHandler {
+    fn update_worker_cache(&self, new_committee: &Committee) {
+        self.worker_cache.swap(Arc::new(WorkerCache {
+            epoch: new_committee.epoch,
+            workers: new_committee
+                .keys()
+                .iter()
+                .map(|key| {
+                    (
+                        (*key).clone(),
+                        self.worker_cache
+                            .load()
+                            .workers
+                            .get(key)
+                            .tap_none(|| {
+                                warn!(
+                                    "Worker cache does not have a key for the new committee member"
+                                )
+                            })
+                            .unwrap_or(&WorkerIndex(BTreeMap::new()))
+                            .clone(),
+                    )
+                })
+                .collect(),
+        }));
     }
 }
