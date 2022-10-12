@@ -148,9 +148,9 @@ impl IndexStore {
         Ok(ts)
     }
 
-    fn get_transactions_by_object<KeyT: Clone + Serialize + DeserializeOwned + PartialEq>(
+    fn get_transactions_from_index<KeyT: Clone + Serialize + DeserializeOwned + PartialEq>(
         index: &DBMap<(KeyT, TxSequenceNumber), TransactionDigest>,
-        object_id: KeyT,
+        key: KeyT,
         cursor: TxSequenceNumber,
         limit: Option<usize>,
         reverse: bool,
@@ -158,9 +158,9 @@ impl IndexStore {
         Ok(if reverse {
             let iter = index
                 .iter()
-                .skip_prior_to(&(object_id.clone(), cursor))?
+                .skip_prior_to(&(key.clone(), cursor))?
                 .reverse()
-                .take_while(|((id, _), _)| *id == object_id)
+                .take_while(|((id, _), _)| *id == key)
                 .map(|(_, digest)| digest);
             if let Some(limit) = limit {
                 iter.take(limit).collect()
@@ -170,8 +170,8 @@ impl IndexStore {
         } else {
             let iter = index
                 .iter()
-                .skip_to(&(object_id.clone(), cursor))?
-                .take_while(|((id, _), _)| *id == object_id)
+                .skip_to(&(key.clone(), cursor))?
+                .take_while(|((id, _), _)| *id == key)
                 .map(|(_, digest)| digest);
             if let Some(limit) = limit {
                 iter.take(limit).collect()
@@ -188,7 +188,7 @@ impl IndexStore {
         limit: Option<usize>,
         reverse: bool,
     ) -> SuiResult<Vec<TransactionDigest>> {
-        Self::get_transactions_by_object(
+        Self::get_transactions_from_index(
             &self.transactions_by_input_object_id,
             input_object,
             cursor,
@@ -204,7 +204,7 @@ impl IndexStore {
         limit: Option<usize>,
         reverse: bool,
     ) -> SuiResult<Vec<TransactionDigest>> {
-        Self::get_transactions_by_object(
+        Self::get_transactions_from_index(
             &self.transactions_by_mutated_object_id,
             mutated_object,
             cursor,
@@ -220,7 +220,13 @@ impl IndexStore {
         limit: Option<usize>,
         reverse: bool,
     ) -> SuiResult<Vec<TransactionDigest>> {
-        Self::get_transactions_by_object(&self.transactions_from_addr, addr, cursor, limit, reverse)
+        Self::get_transactions_from_index(
+            &self.transactions_from_addr,
+            addr,
+            cursor,
+            limit,
+            reverse,
+        )
     }
 
     pub fn get_transactions_by_move_function(
@@ -278,7 +284,7 @@ impl IndexStore {
         limit: Option<usize>,
         reverse: bool,
     ) -> SuiResult<Vec<TransactionDigest>> {
-        Self::get_transactions_by_object(&self.transactions_to_addr, addr, cursor, limit, reverse)
+        Self::get_transactions_from_index(&self.transactions_to_addr, addr, cursor, limit, reverse)
     }
 
     pub fn get_transaction_seq(
