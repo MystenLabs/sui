@@ -7,6 +7,13 @@
         "tags": ["NFT"]
     },
     {
+        "name": "Got Beef?",
+        "description": "Got Beef? is a dApp to create on-chain bets on the Sui Network",
+        "link": "https://gotbeef.app/",
+        "icon": "https://storage.googleapis.com/sui-cms-content/gotbeef_499e1b26f2/gotbeef_499e1b26f2.png",
+        "tags": ["Game"]
+    },
+    {
         "name": "Ethos 2048: An NFT Game",
         "description": "Ethos 2048: An NFT Game",
         "link": "https://ethoswallet.github.io/2048-demo/",
