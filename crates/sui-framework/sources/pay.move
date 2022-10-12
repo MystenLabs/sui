@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 /// This module provides handy functionality for wallets and `sui::Coin` management.
@@ -35,6 +35,15 @@ module sui::pay {
             i = i + 1;
         };
     }
+
+    /// Send `amount` units of `c` to `recipient`
+    /// Aborts with `EVALUE` if `amount` is greater than or equal to `amount`
+    public entry fun split_and_transfer<T>(
+        c: &mut Coin<T>, amount: u64, recipient: address, ctx: &mut TxContext
+    ) {
+        transfer::transfer(coin::split(c, amount, ctx), recipient)
+    }
+
 
     /// Divide coin `self` into `n - 1` coins with equal balances. If the balance is
     /// not evenly divisible by `n`, the remainder is left in `self`.

@@ -234,14 +234,6 @@ module sui::coin {
         burn(c, coin);
     }
 
-    /// Send `amount` units of `c` to `recipient`
-    /// Aborts with `EVALUE` if `amount` is greater than or equal to `amount`
-    public entry fun split_and_transfer<T>(
-        c: &mut Coin<T>, amount: u64, recipient: address, ctx: &mut TxContext
-    ) {
-        transfer::transfer(take(&mut c.balance, amount, ctx), recipient)
-    }
-
     // === Test-only code ===
 
     #[test_only]

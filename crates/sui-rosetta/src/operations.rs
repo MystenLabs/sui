@@ -9,7 +9,7 @@ use serde::Serialize;
 use serde_json::{json, Value};
 
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
-use sui_types::coin::{COIN_JOIN_FUNC_NAME, COIN_MODULE_NAME, COIN_SPLIT_VEC_FUNC_NAME};
+use sui_types::coin::{PAY_JOIN_FUNC_NAME, PAY_MODULE_NAME, PAY_SPLIT_VEC_FUNC_NAME};
 use sui_types::event::Event;
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::{
@@ -557,8 +557,8 @@ impl SuiAction {
                 TransactionData::new_move_call(
                     sender,
                     metadata.try_get_info(&SUI_FRAMEWORK_OBJECT_ID)?.into(),
-                    COIN_MODULE_NAME.to_owned(),
-                    COIN_JOIN_FUNC_NAME.to_owned(),
+                    PAY_MODULE_NAME.to_owned(),
+                    PAY_JOIN_FUNC_NAME.to_owned(),
                     type_args,
                     gas.into(),
                     vec![
@@ -581,8 +581,8 @@ impl SuiAction {
                 TransactionData::new_move_call(
                     sender,
                     metadata.try_get_info(&SUI_FRAMEWORK_OBJECT_ID)?.into(),
-                    COIN_MODULE_NAME.to_owned(),
-                    COIN_SPLIT_VEC_FUNC_NAME.to_owned(),
+                    PAY_MODULE_NAME.to_owned(),
+                    PAY_SPLIT_VEC_FUNC_NAME.to_owned(),
                     type_args,
                     gas.into(),
                     vec![
