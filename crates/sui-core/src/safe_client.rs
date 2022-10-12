@@ -23,7 +23,20 @@ use sui_types::{
     error::{SuiError, SuiResult},
     messages::*,
 };
-use tracing::error;
+use tap::TapFallible;
+use tracing::{debug, error};
+
+macro_rules! check_error {
+    ($address:expr, $cond:expr, $msg:expr) => {
+        $cond.tap_err(|err| {
+            if matches!(err, SuiError::ValidatorHaltedAtEpochEnd) {
+                debug!(?err, authority=?$address, "Not a real client error");
+            } else {
+                error!(?err, authority=?$address, $msg);
+            }
+        })
+    }
+}
 
 /// Prometheus metrics which can be displayed in Grafana, queried and alerted on
 #[derive(Clone)]
@@ -456,10 +469,11 @@ where
             .authority_client
             .handle_transaction(transaction)
             .await?;
-        if let Err(err) = self.check_transaction_response(&digest, None, &transaction_info) {
-            error!(?err, authority=?self.address, "Client error in handle_transaction");
-            return Err(err);
-        }
+        check_error!(
+            self.address,
+            self.check_transaction_response(&digest, None, &transaction_info),
+            "Client error in handle_transaction"
+        )?;
         Ok(transaction_info)
     }
 
@@ -491,10 +505,11 @@ where
             .handle_certificate(certificate)
             .await?;
 
-        if let Err(err) = self.verify_certificate_response(&digest, &transaction_info) {
-            error!(?err, authority=?self.address, "Client error in handle_certificate");
-            return Err(err);
-        }
+        check_error!(
+            self.address,
+            self.verify_certificate_response(&digest, &transaction_info),
+            "Client error in handle_certificate"
+        )?;
         Ok(transaction_info)
     }
 
@@ -734,9 +749,8 @@ where
             .handle_checkpoint(request.clone())
             .await?;
         self.verify_checkpoint_response(&request, &resp)
-            .map_err(|err| {
+            .tap_err(|err| {
                 error!(?err, authority=?self.address, "Client error in handle_checkpoint");
-                err
             })?;
         Ok(resp)
     }
