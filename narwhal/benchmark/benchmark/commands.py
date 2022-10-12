@@ -28,12 +28,12 @@ class CommandMaker:
     @staticmethod
     def generate_key(filename):
         assert isinstance(filename, str)
-        return f'./node generate_keys --filename {filename}'
+        return f'./narwhal-node generate_keys --filename {filename}'
 
     @staticmethod
     def generate_network_key(filename):
         assert isinstance(filename, str)
-        return f'./node generate_network_keys --filename {filename}'
+        return f'./narwhal-node generate_network_keys --filename {filename}'
 
     @staticmethod
     def run_primary(primary_keys, primary_network_keys, worker_keys, committee, workers, store, parameters, debug=False):
@@ -45,7 +45,7 @@ class CommandMaker:
         assert isinstance(parameters, str)
         assert isinstance(debug, bool)
         v = '-vvv' if debug else '-vv'
-        return (f'./node {v} run --primary-keys {primary_keys} --primary-network-keys {primary_network_keys} '
+        return (f'./narwhal-node {v} run --primary-keys {primary_keys} --primary-network-keys {primary_network_keys} '
                 f'--worker-keys {worker_keys} --committee {committee} --workers {workers} --store {store} '
                 f'--parameters {parameters} primary')
 
@@ -68,7 +68,7 @@ class CommandMaker:
         assert isinstance(parameters, str)
         assert isinstance(debug, bool)
         v = '-vvv' if debug else '-vv'
-        return (f'./node {v} run --primary-keys {primary_keys} --primary-network-keys {primary_network_keys} '
+        return (f'./narwhal-node {v} run --primary-keys {primary_keys} --primary-network-keys {primary_network_keys} '
                 f'--worker-keys {worker_keys} --committee {committee} --workers {workers} --store {store} '
                 f'--parameters {parameters} primary --consensus-disabled')
 
@@ -82,7 +82,7 @@ class CommandMaker:
         assert isinstance(parameters, str)
         assert isinstance(debug, bool)
         v = '-vvv' if debug else '-vv'
-        return (f'./node {v} run --primary-keys {primary_keys} --primary-network-keys {primary_network_keys} '
+        return (f'./narwhal-node {v} run --primary-keys {primary_keys} --primary-network-keys {primary_network_keys} '
                 f'--worker-keys {worker_keys} --committee {committee} --workers {workers} --store {store} '
                 f'--parameters {parameters} worker --id {id}')
 
