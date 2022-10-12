@@ -71,7 +71,6 @@ function SuiApp({
         pageLink,
     };
 
-
     const originLabel = useMiddleEllipsis(
         new URL(link).hostname,
         TRUNCATE_MAX_LENGTH,
