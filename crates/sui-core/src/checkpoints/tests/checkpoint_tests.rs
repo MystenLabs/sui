@@ -1184,8 +1184,7 @@ fn set_fragment_reconstruct() {
 
     let fragment41 = p4.fragment_with(&p1);
     let span = SpanGraph::mew(&committee, 0, &[fragment12, fragment34, fragment41]);
-    assert!(span.is_completed());
-    let reconstruction = span.construct_checkpoint();
+    let reconstruction = span.construct_checkpoint().unwrap();
     assert_eq!(reconstruction.global.authority_waypoints.len(), 4);
 }
 
@@ -1235,9 +1234,8 @@ fn set_fragment_reconstruct_two_components() {
     }
 
     let span = SpanGraph::mew(&committee, 0, &fragments);
-    assert!(span.is_completed());
 
-    let reconstruction = span.construct_checkpoint();
+    let reconstruction = span.construct_checkpoint().unwrap();
     assert_eq!(reconstruction.global.authority_waypoints.len(), 5);
 }
 
@@ -1442,6 +1440,182 @@ fn test_fragment_full_flow() {
     // Cannot advance to next checkpoint
     assert_eq!(cps6.next_checkpoint(), 0);
     // But recording of fragments is closed
+}
+
+#[test]
+fn test_slow_fragment() {
+    let (committee, _keys, mut cp_stores) = random_ckpoint_store();
+    let proposals: Vec<_> = cp_stores
+        .iter_mut()
+        .map(|(_, cp)| cp.set_proposal(0).unwrap())
+        .collect();
+    let fragment12 = proposals[1].fragment_with(&proposals[2]);
+    let fragment23 = proposals[2].fragment_with(&proposals[3]);
+    let mut index = ExecutionIndices::default();
+    cp_stores.iter_mut().for_each(|(_, cp)| {
+        cp.handle_internal_fragment(
+            index.clone(),
+            fragment12.clone(),
+            PendCertificateForExecutionNoop,
+            &committee,
+        )
+        .unwrap();
+        index.next_transaction_index += 1;
+        cp.handle_internal_fragment(
+            index.clone(),
+            fragment23.clone(),
+            PendCertificateForExecutionNoop,
+            &committee,
+        )
+        .unwrap();
+        index.next_transaction_index += 1;
+        assert!(cp.memory_locals.in_construction_checkpoint.is_completed());
+    });
+    // Missing link on validator 0, even though the span graph is complete.
+    assert!(cp_stores[0].1.attempt_to_construct_checkpoint().is_err());
+    assert!(cp_stores[0]
+        .1
+        .memory_locals
+        .in_construction_checkpoint
+        .is_completed());
+
+    // All other validators can make the checkpoint.
+    // Collect signed checkpoints, create cert and update validator 1-3.
+    let signed: Vec<_> = cp_stores
+        .iter_mut()
+        .skip(1)
+        .map(|(_, cp)| {
+            assert!(cp.attempt_to_construct_checkpoint().is_ok());
+            cp.sign_new_checkpoint(0, 0, [].into_iter(), TestCausalOrderNoop, None)
+                .unwrap();
+            // This hasn't changed yet.
+            assert_eq!(cp.memory_locals.next_checkpoint, 0);
+            assert_eq!(cp.memory_locals.in_construction_checkpoint_seq, 0);
+            if let AuthenticatedCheckpoint::Signed(s) = cp.latest_stored_checkpoint().unwrap() {
+                s
+            } else {
+                unreachable!()
+            }
+        })
+        .collect();
+    let cert0 = CertifiedCheckpointSummary::aggregate(signed, &committee).unwrap();
+    cp_stores.iter_mut().skip(1).for_each(|(_, cp)| {
+        cp.promote_signed_checkpoint_to_cert(&cert0, &committee)
+            .unwrap();
+        assert_eq!(cp.memory_locals.next_checkpoint, 1);
+        assert_eq!(cp.memory_locals.in_construction_checkpoint_seq, 1);
+    });
+    // At this point, validator 0 still has a complete span graph with missing link, and doesn't
+    // yet know there is a checkpoint cert.
+
+    let proposals: Vec<_> = cp_stores
+        .iter_mut()
+        .map(|(_, cp)| cp.set_proposal(0).unwrap())
+        .collect();
+    let fragment12 = proposals[1].fragment_with(&proposals[2]);
+    let fragment23 = proposals[2].fragment_with(&proposals[3]);
+    cp_stores.iter_mut().skip(1).for_each(|(_, cp)| {
+        cp.handle_internal_fragment(
+            index.clone(),
+            fragment12.clone(),
+            PendCertificateForExecutionNoop,
+            &committee,
+        )
+        .unwrap();
+        index.next_transaction_index += 1;
+        cp.handle_internal_fragment(
+            index.clone(),
+            fragment23.clone(),
+            PendCertificateForExecutionNoop,
+            &committee,
+        )
+        .unwrap();
+        index.next_transaction_index += 1;
+        assert!(cp.memory_locals.in_construction_checkpoint.is_completed());
+    });
+    // Validator 0 is still at checkpoint 0, and haven't received any fragments for checkpoint 1.
+    assert_eq!(
+        cp_stores[0].1.memory_locals.in_construction_checkpoint_seq,
+        0
+    );
+    let signed: Vec<_> = cp_stores
+        .iter_mut()
+        .skip(1)
+        .map(|(_, cp)| {
+            assert!(cp.attempt_to_construct_checkpoint().is_ok());
+            cp.sign_new_checkpoint(0, 1, [].into_iter(), TestCausalOrderNoop, None)
+                .unwrap();
+            if let AuthenticatedCheckpoint::Signed(s) = cp.latest_stored_checkpoint().unwrap() {
+                s
+            } else {
+                unreachable!()
+            }
+        })
+        .collect();
+    let cert1 = CertifiedCheckpointSummary::aggregate(signed, &committee).unwrap();
+    cp_stores.iter_mut().skip(1).for_each(|(_, cp)| {
+        cp.promote_signed_checkpoint_to_cert(&cert1, &committee)
+            .unwrap();
+    });
+    // Now update both certs on validator 0.
+    cp_stores[0]
+        .1
+        .process_synced_checkpoint_certificate(
+            &cert0,
+            &CheckpointContents::new_with_causally_ordered_transactions([].into_iter()),
+            &committee,
+        )
+        .unwrap();
+    assert_eq!(cp_stores[0].1.memory_locals.next_checkpoint, 1);
+    assert_eq!(
+        cp_stores[0].1.memory_locals.in_construction_checkpoint_seq,
+        1
+    );
+    cp_stores[0]
+        .1
+        .process_synced_checkpoint_certificate(
+            &cert1,
+            &CheckpointContents::new_with_causally_ordered_transactions([].into_iter()),
+            &committee,
+        )
+        .unwrap();
+    // Although it has seen checkpoint cert 1, it hasn't seen enough fragments for checkpoint 1 yet.
+    // Hence it is still in the state of constructing checkpoint 1.
+    assert_eq!(cp_stores[0].1.memory_locals.next_checkpoint, 2);
+    assert_eq!(
+        cp_stores[0].1.memory_locals.in_construction_checkpoint_seq,
+        1
+    );
+    cp_stores[0]
+        .1
+        .handle_internal_fragment(
+            index.clone(),
+            fragment12,
+            PendCertificateForExecutionNoop,
+            &committee,
+        )
+        .unwrap();
+    index.next_transaction_index += 1;
+    cp_stores[0]
+        .1
+        .handle_internal_fragment(
+            index.clone(),
+            fragment23,
+            PendCertificateForExecutionNoop,
+            &committee,
+        )
+        .unwrap();
+    index.next_transaction_index += 1;
+    // Validator 0 should have automatically advanced to be constructing checkpoint 2.
+    assert_eq!(
+        cp_stores[0].1.memory_locals.in_construction_checkpoint_seq,
+        2
+    );
+    assert!(!cp_stores[0]
+        .1
+        .memory_locals
+        .in_construction_checkpoint
+        .is_completed());
 }
 
 #[derive(Clone)]
@@ -1858,14 +2032,13 @@ async fn test_no_more_fragments() {
     // Give time to the receiving task to process (so that consensus can sequence fragments).
     tokio::time::sleep(Duration::from_secs(1)).await;
 
-    // Expecting more fragments
-    assert!(
-        !setup.authorities[0]
-            .checkpoint
-            .lock()
-            .get_locals()
-            .no_more_fragments
-    );
+    // Expecting checkpoint construction still in progress.
+    assert!(!setup.authorities[0]
+        .checkpoint
+        .lock()
+        .get_locals()
+        .in_construction_checkpoint
+        .is_completed());
 
     // put in fragment 0-2, now node 0 can form a checkpoint but not node 3
 
@@ -1878,36 +2051,34 @@ async fn test_no_more_fragments() {
     // Give time to the receiving task to process (so that consensus can sequence fragments).
     tokio::time::sleep(Duration::from_secs(1)).await;
 
+    // Expecting checkpoint construction complete.
+    assert!(setup.authorities[0]
+        .checkpoint
+        .lock()
+        .get_locals()
+        .in_construction_checkpoint
+        .is_completed());
+
     assert!(setup.authorities[0]
         .checkpoint
         .lock()
         .attempt_to_construct_checkpoint()
         .is_ok());
 
-    // Expecting more fragments
-    assert!(
-        !setup.authorities[0]
-            .checkpoint
-            .lock()
-            .get_locals()
-            .no_more_fragments
-    );
-
-    // node 3 cannot make one
+    // node 3 cannot make one due to missing link.
     assert!(setup.authorities[3]
         .checkpoint
         .lock()
         .attempt_to_construct_checkpoint()
         .is_err());
 
-    // Expecting more fragments
-    assert!(
-        setup.authorities[3]
-            .checkpoint
-            .lock()
-            .get_locals()
-            .no_more_fragments
-    );
+    // But span graph has enough fragments, and hence is complete.
+    assert!(setup.authorities[3]
+        .checkpoint
+        .lock()
+        .get_locals()
+        .in_construction_checkpoint
+        .is_completed());
 
     // Now fie node 3 a link and it can make the checkpoint
     setup.authorities[3]

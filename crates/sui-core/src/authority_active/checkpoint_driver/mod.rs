@@ -810,23 +810,7 @@ pub async fn create_fragments<A>(
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
-    let next_cp_seq = checkpoint_db.lock().next_checkpoint();
-
-    let mut available_authorities = committee.shuffle_by_stake(None, None);
-    // Remove ourselves and all validators that we have already diffed with.
-    let already_fragmented = checkpoint_db
-        .lock()
-        .validators_already_fragmented_with(next_cp_seq);
-    // TODO: We can also use AuthorityHealth to pick healthy authorities first.
-    available_authorities
-        .retain(|name| name != &active_authority.state.name && !already_fragmented.contains(name));
-    debug!(
-        ?next_cp_seq,
-        fragmented_count=?already_fragmented.len(),
-        to_be_fragmented_count=?available_authorities.len(),
-        "Going through remaining validators to generate fragments",
-    );
-
+    let next_cp_seq = *my_proposal.sequence_number();
     let result = checkpoint_db.lock().attempt_to_construct_checkpoint();
 
     match result {
@@ -840,12 +824,27 @@ where
         }
     }
 
-    // If we failed to create a checkpoint, try to make more fragments.
-
-    if checkpoint_db.lock().get_locals().no_more_fragments {
+    // If we failed to create a checkpoint, try to make more fragments if it's still useful.
+    if !checkpoint_db.lock().should_sequence_more_fragments() {
         // Sending more fragments won't help anymore.
         return None;
     }
+
+    let mut available_authorities = committee.shuffle_by_stake(None, None);
+    // Remove ourselves and all validators that we have already diffed with.
+    let already_fragmented = checkpoint_db
+        .lock()
+        .validators_already_fragmented_with(next_cp_seq);
+
+    // TODO: We can also use AuthorityHealth to pick healthy authorities first.
+    available_authorities
+        .retain(|name| name != &active_authority.state.name && !already_fragmented.contains(name));
+    debug!(
+        ?next_cp_seq,
+        fragmented_count=?already_fragmented.len(),
+        to_be_fragmented_count=?available_authorities.len(),
+        "Going through remaining validators to generate fragments",
+    );
 
     // We have ran out of authorities?
     if available_authorities.is_empty() {

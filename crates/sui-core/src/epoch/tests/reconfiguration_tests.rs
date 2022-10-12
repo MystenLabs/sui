@@ -52,9 +52,9 @@ async fn test_start_epoch_change() {
             next_checkpoint: CHECKPOINT_COUNT_PER_EPOCH,
             proposal_next_transaction: None,
             next_transaction_sequence: 0,
-            no_more_fragments: true,
             current_proposal: None,
-            checkpoint_to_be_constructed: SpanGraph::mew(
+            in_construction_checkpoint_seq: CHECKPOINT_COUNT_PER_EPOCH,
+            in_construction_checkpoint: SpanGraph::mew(
                 &genesis_committee,
                 CHECKPOINT_COUNT_PER_EPOCH,
                 &[],
@@ -158,9 +158,9 @@ async fn test_finish_epoch_change() {
                     next_checkpoint: CHECKPOINT_COUNT_PER_EPOCH,
                     proposal_next_transaction: None,
                     next_transaction_sequence: 0,
-                    no_more_fragments: true,
                     current_proposal: None,
-                    checkpoint_to_be_constructed: SpanGraph::mew(
+                    in_construction_checkpoint_seq: CHECKPOINT_COUNT_PER_EPOCH,
+                    in_construction_checkpoint: SpanGraph::mew(
                         &genesis_committee,
                         CHECKPOINT_COUNT_PER_EPOCH,
                         &[],
