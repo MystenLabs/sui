@@ -31,7 +31,8 @@ export type Pay = {
 export type ExecuteTransactionRequestType =
   | 'ImmediateReturn'
   | 'WaitForTxCert'
-  | 'WaitForEffectsCert';
+  | 'WaitForEffectsCert'
+  | 'WaitForLocalExecution';
 
 export type TransactionKindName =
   | 'TransferObject'

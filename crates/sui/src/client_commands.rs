@@ -22,12 +22,12 @@ use tracing::info;
 use sui_framework::build_move_package_to_bytes;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    GetObjectDataResponse, SuiExecuteTransactionResponse, SuiObjectInfo, SuiParsedObject,
-    SuiTransactionResponse,
+    GetObjectDataResponse, SuiObjectInfo, SuiParsedObject, SuiTransactionResponse,
 };
 use sui_json_rpc_types::{GetRawObjectDataResponse, SuiData};
 use sui_json_rpc_types::{SuiCertifiedTransaction, SuiExecutionStatus, SuiTransactionEffects};
 use sui_sdk::crypto::AccountKeystore;
+use sui_sdk::TransactionExecutionResult;
 use sui_sdk::{ClientType, SuiClient};
 use sui_types::crypto::SignatureScheme;
 use sui_types::sui_serde::{Base64, Encoding};
@@ -250,7 +250,7 @@ pub enum SuiClientCommands {
         amounts: Option<Vec<u64>>,
         /// Count of equal-size coins to split into
         #[clap(long)]
-        count: u64,
+        count: Option<u64>,
         /// ID of the gas object for gas payment, in 20 bytes Hex string
         /// If not provided, a gas object with at least gas_budget value will be selected
         #[clap(long)]
@@ -511,21 +511,27 @@ impl SuiClientCommands {
                 gas_budget,
             } => {
                 let signer = context.get_object_owner(&coin_id).await?;
-                let data = if let Some(amounts) = amounts {
-                    context
-                        .client
-                        .transaction_builder()
-                        .split_coin(signer, coin_id, amounts, gas, gas_budget)
-                        .await?
-                } else {
-                    if count == 0 {
-                        return Err(anyhow!("Coin split count must be greater than 0"));
+                let data = match (amounts, count) {
+                    (Some(amounts), None) => {
+                        context
+                            .client
+                            .transaction_builder()
+                            .split_coin(signer, coin_id, amounts, gas, gas_budget)
+                            .await?
                     }
-                    context
-                        .client
-                        .transaction_builder()
-                        .split_coin_equal(signer, coin_id, count, gas, gas_budget)
-                        .await?
+                    (None, Some(count)) => {
+                        if count == 0 {
+                            return Err(anyhow!("Coin split count must be greater than 0"));
+                        }
+                        context
+                            .client
+                            .transaction_builder()
+                            .split_coin_equal(signer, coin_id, count, gas, gas_budget)
+                            .await?
+                    }
+                    _ => {
+                        return Err(anyhow!("Exactly one of `count` and `amounts` must be present for split-coin command."));
+                    }
                 };
                 let signature = context.config.keystore.sign(&signer, &data.to_bytes())?;
                 let response = context
@@ -755,43 +761,43 @@ impl WalletContext {
         ))
     }
 
-    /// A backward-compatible migration of transaction execution from gateway to fullnode
+    /// This function is compatible with both fullnode and an embedded gateway
     pub async fn execute_transaction(
         &self,
         tx: Transaction,
     ) -> anyhow::Result<SuiTransactionResponse> {
         let tx_digest = *tx.digest();
-        if self.client.is_gateway() {
-            self.client.quorum_driver().execute_transaction(tx).await
-        } else {
-            let result = self
-                .client
-                .quorum_driver()
-                .execute_transaction_by_fullnode(
-                    tx,
-                    sui_types::messages::ExecuteTransactionRequestType::WaitForLocalExecution,
-                )
-                .await;
-            match result {
-                // TODO: if confirmed_local_execution is false, poll fullnode until it's confirmed
-                Ok(SuiExecuteTransactionResponse::EffectsCert {
-                    certificate,
-                    effects,
-                    confirmed_local_execution: _,
-                }) => Ok(SuiTransactionResponse {
-                    certificate,
-                    effects: effects.effects,
-                    timestamp_ms: None,
-                    parsed_data: None,
-                }),
-                Err(err) => Err(anyhow!(
-                    "Failed to execute transaction {tx_digest:?} with error {err:?}"
-                )),
-                other => Err(anyhow!(
-                    "Expect SuiExecuteTransactionResponse::EffectsCert but got {other:?}"
-                )),
-            }
+
+        let result = self
+            .client
+            .quorum_driver()
+            .execute_transaction(
+                tx,
+                Some(sui_types::messages::ExecuteTransactionRequestType::WaitForLocalExecution),
+            )
+            .await;
+        match result {
+            Ok(TransactionExecutionResult {
+                tx_digest: _,
+                tx_cert,
+                effects,
+                confirmed_local_execution: _,
+                timestamp_ms,
+                parsed_data,
+            }) => Ok(SuiTransactionResponse {
+                certificate: tx_cert.unwrap(), // check is done in execute_transaction, safe to unwrap
+                effects: effects.unwrap(), // check is done in execute_transaction, safe to unwrap
+                timestamp_ms,
+                parsed_data,
+            }),
+            Err(err) => Err(anyhow!(
+                "Failed to execute transaction {tx_digest:?} with error {err:?}"
+            )),
         }
+    }
+
+    pub fn switch_client(&mut self, new_client: SuiClient) {
+        self.client = new_client;
     }
 }
 

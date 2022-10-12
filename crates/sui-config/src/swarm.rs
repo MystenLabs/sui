@@ -3,6 +3,7 @@
 
 use crate::{builder, genesis, utils, Config, NodeConfig, ValidatorInfo, FULL_NODE_DB_PATH};
 use rand::rngs::OsRng;
+use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use std::num::NonZeroUsize;
@@ -60,14 +61,14 @@ impl NetworkConfig {
     }
 
     pub fn generate_fullnode_config(&self) -> NodeConfig {
-        self.generate_fullnode_config_with_custom_db_path(None, true)
+        self.generate_fullnode_config_with_random_dir_name(false, true)
     }
 
     /// Generate a fullnode config based on this `NetworkConfig`. This is useful if you want to run
     /// a fullnode and have it connect to a network defined by this `NetworkConfig`.
-    pub fn generate_fullnode_config_with_custom_db_path(
+    pub fn generate_fullnode_config_with_random_dir_name(
         &self,
-        fullnode_db_dir: Option<&str>,
+        use_random_dir_name: bool,
         enable_websocket: bool,
     ) -> NodeConfig {
         let protocol_key_pair: Arc<AuthorityKeyPair> =
@@ -89,13 +90,17 @@ impl NetworkConfig {
         // TODO: In the simulator, we can run event store in a separate thread and make
         // blocking calls to it to fix this.
         let enable_event_processing = !cfg!(msim);
-
+        let dir_name = if use_random_dir_name {
+            OsRng.next_u32().to_string()
+        } else {
+            FULL_NODE_DB_PATH.to_string()
+        };
         NodeConfig {
             protocol_key_pair,
             worker_key_pair,
             account_key_pair,
             network_key_pair,
-            db_path: db_path.join(fullnode_db_dir.unwrap_or(FULL_NODE_DB_PATH)),
+            db_path: db_path.join(dir_name),
             network_address: utils::new_network_address(),
             metrics_address: utils::available_local_socket_address(),
             admin_interface_port: utils::get_available_port(),

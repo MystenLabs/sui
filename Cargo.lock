@@ -3158,9 +3158,9 @@ checksum = "879d54834c8c76457ef4293a689b2a8c59b076067ad77b15efafbb05f92a592b"
 
 [[package]]
 name = "itertools"
-version = "0.10.4"
+version = "0.10.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d8bf247779e67a9082a4790b45e71ac7cfd1321331a5c856a74a9faebdab78d0"
+checksum = "b0fd2260e829bddf4cb6ea802289de2f86d6a7a690192fbe91b3f46e0f2c8473"
 dependencies = [
  "either",
 ]
@@ -4529,7 +4529,7 @@ dependencies = [
 [[package]]
 name = "mysten-util-mem"
 version = "0.11.0"
-source = "git+https://github.com/MystenLabs/mysten-infra#56e4d7b80bb33c555930b10915e20ba1ef4b1bad"
+source = "git+https://github.com/MystenLabs/mysten-infra?rev=ffb76dd4fa04463a03e68f66fb10df7cad618ed5#ffb76dd4fa04463a03e68f66fb10df7cad618ed5"
 dependencies = [
  "cfg-if 1.0.0",
  "ed25519-consensus",
@@ -4546,7 +4546,7 @@ dependencies = [
 [[package]]
 name = "mysten-util-mem-derive"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysten-infra#56e4d7b80bb33c555930b10915e20ba1ef4b1bad"
+source = "git+https://github.com/MystenLabs/mysten-infra?rev=ffb76dd4fa04463a03e68f66fb10df7cad618ed5#ffb76dd4fa04463a03e68f66fb10df7cad618ed5"
 dependencies = [
  "proc-macro2 1.0.43",
  "syn 1.0.99",
@@ -4968,6 +4968,7 @@ dependencies = [
  "futures",
  "hex",
  "indexmap",
+ "mockall",
  "mysten-util-mem",
  "narwhal-config",
  "narwhal-crypto",
@@ -5690,9 +5691,9 @@ checksum = "478c572c3d73181ff3c2539045f6eb99e5491218eae919370993b890cdbdd98e"
 
 [[package]]
 name = "pest"
-version = "2.3.0"
+version = "2.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4b0560d531d1febc25a3c9398a62a71256c0178f2e3443baedd9ad4bb8c9deb4"
+checksum = "dbc7bc69c062e492337d74d59b120c274fd3d261b6bf6d3207d499b4b379c41a"
 dependencies = [
  "thiserror",
  "ucd-trie",
@@ -5700,9 +5701,9 @@ dependencies = [
 
 [[package]]
 name = "pest_derive"
-version = "2.2.1"
+version = "2.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b13570633aff33c6d22ce47dd566b10a3b9122c2fe9d8e7501895905be532b91"
+checksum = "60b75706b9642ebcb34dab3bc7750f811609a0eb1dd8b88c2d15bf628c1c65b2"
 dependencies = [
  "pest",
  "pest_generator",
@@ -5710,9 +5711,9 @@ dependencies = [
 
 [[package]]
 name = "pest_generator"
-version = "2.3.0"
+version = "2.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5803d8284a629cc999094ecd630f55e91b561a1d1ba75e233b00ae13b91a69ad"
+checksum = "f4f9272122f5979a6511a749af9db9bfc810393f63119970d7085fed1c4ea0db"
 dependencies = [
  "pest",
  "pest_meta",
@@ -5723,13 +5724,13 @@ dependencies = [
 
 [[package]]
 name = "pest_meta"
-version = "2.3.0"
+version = "2.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1538eb784f07615c6d9a8ab061089c6c54a344c5b4301db51990ca1c241e8c04"
+checksum = "4c8717927f9b79515e565a64fe46c38b8cd0427e64c40680b14a7365ab09ac8d"
 dependencies = [
  "once_cell",
  "pest",
- "sha-1 0.10.0",
+ "sha1",
 ]
 
 [[package]]
@@ -7247,6 +7248,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "sha1"
+version = "0.10.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f04293dc80c3993519f2d7f6f511707ee7094fe0c6d3406feb330cdb3540eba3"
+dependencies = [
+ "cfg-if 1.0.0",
+ "cpufeatures",
+ "digest 0.10.5",
+]
+
+[[package]]
 name = "sha2"
 version = "0.9.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7761,6 +7773,7 @@ dependencies = [
  "anyhow",
  "bcs",
  "leb128",
+ "linked-hash-map",
  "move-binary-format",
  "move-core-types",
  "move-package",
@@ -7837,6 +7850,8 @@ dependencies = [
  "bcs",
  "clap 3.2.17",
  "futures",
+ "jsonrpsee",
+ "move-core-types",
  "prometheus",
  "reqwest",
  "serde 1.0.144",
@@ -7849,6 +7864,7 @@ dependencies = [
  "sui-json-rpc-types",
  "sui-sdk",
  "sui-swarm",
+ "sui-transaction-builder",
  "sui-types",
  "telemetry-subscribers 0.2.0",
  "tempfile",
@@ -8145,6 +8161,7 @@ dependencies = [
  "sui-json-rpc-types",
  "sui-open-rpc",
  "sui-open-rpc-macros",
+ "sui-transaction-builder",
  "sui-types",
  "tokio",
  "tracing",
@@ -8330,6 +8347,7 @@ dependencies = [
  "sui-json",
  "sui-json-rpc",
  "sui-json-rpc-types",
+ "sui-transaction-builder",
  "sui-types",
  "tempfile",
  "tiny-bip39",
@@ -8430,6 +8448,7 @@ dependencies = [
  "sui-cluster-test",
  "sui-faucet",
  "sui-types",
+ "telemetry-subscribers 0.2.0",
  "tokio",
  "tower",
  "tower-http",
@@ -8463,6 +8482,22 @@ dependencies = [
  "tracing",
  "typed-store",
  "typed-store-derive",
+ "workspace-hack",
+]
+
+[[package]]
+name = "sui-transaction-builder"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bcs",
+ "futures",
+ "move-core-types",
+ "sui-adapter",
+ "sui-json",
+ "sui-json-rpc-types",
+ "sui-types",
  "workspace-hack",
 ]
 
@@ -8828,6 +8863,7 @@ dependencies = [
  "anyhow",
  "bcs",
  "futures",
+ "jsonrpsee",
  "jsonrpsee-http-client",
  "move-core-types",
  "move-package",

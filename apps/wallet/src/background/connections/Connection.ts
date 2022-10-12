@@ -23,11 +23,11 @@ export abstract class Connection {
         );
     }
 
-    protected abstract handleMessage(msg: Message): void;
-
-    protected send(msg: Message) {
+    public send(msg: Message) {
         if (this._portStream.connected) {
             return this._portStream.sendMessage(msg);
         }
     }
+
+    protected abstract handleMessage(msg: Message): void;
 }

@@ -13,7 +13,6 @@ use move_binary_format::{
 use move_core_types::{
     account_address::AccountAddress, ident_str, identifier::Identifier, language_storage::TypeTag,
 };
-use narwhal_executor::ExecutionIndices;
 use rand::{
     distributions::{Distribution, Uniform},
     prelude::StdRng,
@@ -2113,7 +2112,7 @@ async fn send_consensus(authority: &AuthorityState, cert: &CertifiedTransaction)
                 certificate: narwhal_types::Certificate::default(),
                 consensus_index: narwhal_types::SequenceNumber::default(),
             },
-            /* last_consensus_index */ ExecutionIndices::default(),
+            /* last_consensus_index */ Default::default(),
             ConsensusTransaction::new_certificate_message(&authority.name, cert.clone()),
         )
         .await

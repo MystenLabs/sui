@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{authority_store_tables::AuthorityStoreTables, *};
-use narwhal_executor::ExecutionIndices;
+use crate::authority::authority_store_tables::ExecutionIndicesWithHash;
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -146,14 +146,6 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     pub fn effects_exists(&self, transaction_digest: &TransactionDigest) -> SuiResult<bool> {
         self.tables
             .effects
-            .contains_key(transaction_digest)
-            .map_err(|e| e.into())
-    }
-
-    /// Returns true if we have a transaction structure for this transaction digest
-    pub fn transaction_exists(&self, transaction_digest: &TransactionDigest) -> SuiResult<bool> {
-        self.tables
-            .transactions
             .contains_key(transaction_digest)
             .map_err(|e| e.into())
     }
@@ -1132,7 +1124,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     pub async fn persist_certificate_and_lock_shared_objects(
         &self,
         certificate: CertifiedTransaction,
-        consensus_index: ExecutionIndices,
+        consensus_index: ExecutionIndicesWithHash,
     ) -> Result<(), SuiError> {
         // Make an iterator to save the certificate.
         let transaction_digest = *certificate.digest();
@@ -1334,7 +1326,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     }
 
     /// Return the latest consensus index. It is used to bootstrap the consensus client.
-    pub fn last_consensus_index(&self) -> SuiResult<ExecutionIndices> {
+    pub fn last_consensus_index(&self) -> SuiResult<ExecutionIndicesWithHash> {
         self.tables
             .last_consensus_index
             .get(&LAST_CONSENSUS_INDEX_ADDR)
@@ -1383,6 +1375,20 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
 }
 
 impl SuiDataStore<AuthoritySignInfo> {
+    /// Returns true if we have a transaction structure for this transaction digest
+    pub fn transaction_exists(
+        &self,
+        cur_epoch: EpochId,
+        transaction_digest: &TransactionDigest,
+    ) -> SuiResult<bool> {
+        let tx = self.tables.transactions.get(transaction_digest)?;
+        Ok(if let Some(signed_tx) = tx {
+            signed_tx.auth_sign_info.epoch == cur_epoch
+        } else {
+            false
+        })
+    }
+
     pub fn get_signed_transaction_info(
         &self,
         transaction_digest: &TransactionDigest,

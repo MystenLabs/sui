@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 use std::str::FromStr;
 use std::sync::Arc;
 
+use async_trait::async_trait;
 use futures::future::join_all;
 
 use anyhow::anyhow;
@@ -13,6 +14,8 @@ use move_core_types::language_storage::TypeTag;
 
 use sui_adapter::adapter::resolve_and_type_check;
 use sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue};
+use sui_json_rpc_types::GetRawObjectDataResponse;
+use sui_json_rpc_types::SuiObjectInfo;
 use sui_json_rpc_types::{RPCTransactionRequestParams, SuiData, SuiTypeTag};
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::error::SuiError;
@@ -25,9 +28,20 @@ use sui_types::move_package::MovePackage;
 use sui_types::object::Object;
 use sui_types::{coin, fp_ensure, SUI_FRAMEWORK_OBJECT_ID};
 
-use crate::ReadApi;
+#[async_trait]
+pub trait DataReader {
+    async fn get_objects_owned_by_address(
+        &self,
+        address: SuiAddress,
+    ) -> Result<Vec<SuiObjectInfo>, anyhow::Error>;
 
-pub struct TransactionBuilder(pub(crate) Arc<ReadApi>);
+    async fn get_object(
+        &self,
+        object_id: ObjectID,
+    ) -> Result<GetRawObjectDataResponse, anyhow::Error>;
+}
+
+pub struct TransactionBuilder(pub Arc<dyn DataReader + Sync + Send>);
 
 impl TransactionBuilder {
     async fn select_gas(

@@ -11,6 +11,8 @@ use std::fmt::Debug;
 use thiserror::Error;
 use typed_store::rocks::TypedStoreError;
 
+pub const TRANSACTION_NOT_FOUND_MSG_PREFIX: &str = "Could not find the referenced transaction";
+
 #[macro_export]
 macro_rules! fp_bail {
     ($e:expr) => {
@@ -279,7 +281,7 @@ pub enum SuiError {
         locked_epoch: EpochId,
         new_epoch: EpochId,
     },
-    #[error("Could not find the referenced transaction [{:?}].", digest)]
+    #[error("{TRANSACTION_NOT_FOUND_MSG_PREFIX} [{:?}].", digest)]
     TransactionNotFound { digest: TransactionDigest },
     #[error("Could not find the referenced object {:?}.", object_id)]
     ObjectNotFound { object_id: ObjectID },

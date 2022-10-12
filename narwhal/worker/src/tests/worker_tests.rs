@@ -114,7 +114,6 @@ async fn get_network_peers_from_admin_server() {
     let (tx_new_certificates, rx_new_certificates) =
         test_utils::test_new_certificates_channel!(CHANNEL_CAPACITY);
     let (tx_feedback, rx_feedback) = test_utils::test_channel!(CHANNEL_CAPACITY);
-    let (tx_get_block_commands, rx_get_block_commands) = test_utils::test_get_block_commands!(1);
     let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
     let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
@@ -135,8 +134,6 @@ async fn get_network_peers_from_admin_server() {
         /* tx_consensus */ tx_new_certificates,
         /* rx_consensus */ rx_feedback,
         /* dag */
-        tx_get_block_commands,
-        rx_get_block_commands,
         Some(Arc::new(
             Dag::new(&committee, rx_new_certificates, consensus_metrics).1,
         )),
@@ -228,8 +225,6 @@ async fn get_network_peers_from_admin_server() {
     let (tx_new_certificates_2, rx_new_certificates_2) =
         test_utils::test_new_certificates_channel!(CHANNEL_CAPACITY);
     let (tx_feedback_2, rx_feedback_2) = test_utils::test_channel!(CHANNEL_CAPACITY);
-    let (tx_get_block_commands_2, rx_get_block_commands_2) =
-        test_utils::test_get_block_commands!(1);
     let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
     let (tx_reconfigure_2, _rx_reconfigure_2) = watch::channel(initial_committee);
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
@@ -250,8 +245,6 @@ async fn get_network_peers_from_admin_server() {
         /* tx_consensus */ tx_new_certificates_2,
         /* rx_consensus */ rx_feedback_2,
         /* dag */
-        tx_get_block_commands_2,
-        rx_get_block_commands_2,
         Some(Arc::new(
             Dag::new(&committee, rx_new_certificates_2, consensus_metrics).1,
         )),

@@ -3,15 +3,7 @@
     flex-flow: column nowrap;
     align-items: center;
     margin: 0 auto;
-    padding: 8px;
+    padding: 16px;
     justify-content: center;
-}
-
-.header {
-    align-self: stretch;
-    margin-bottom: 16px;
-}
-
-.content {
-    padding: 8px;
+    flex: 1;
 }

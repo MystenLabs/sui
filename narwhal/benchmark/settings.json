@@ -5,8 +5,8 @@
     },
     "port": 5000,
     "repo": {
-        "name": "narwhal",
-        "url": "https://github.com/mystenlabs/narwhal",
+        "name": "sui",
+        "url": "https://github.com/mystenlabs/sui",
         "branch": "main"
     },
     "instances": {

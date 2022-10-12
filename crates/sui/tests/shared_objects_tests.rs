@@ -341,6 +341,7 @@ async fn replay_shared_object_transaction() {
     }
 }
 
+// TODO [gateway-deprecation] remove test case
 #[sim_test]
 async fn shared_object_on_gateway() {
     let mut gas_objects = test_gas_objects();

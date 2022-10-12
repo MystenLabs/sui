@@ -4,7 +4,7 @@
 use crate::{helper::ObjectChecker, TestCaseImpl, TestContext};
 use async_trait::async_trait;
 use sui::client_commands::WalletContext;
-use sui_json_rpc_types::{SuiExecutionStatus, SuiTransactionResponse};
+use sui_json_rpc_types::SuiExecutionStatus;
 use sui_types::base_types::SequenceNumber;
 use sui_types::object::Owner;
 use test_utils::transaction::{increment_counter, publish_basics_package_and_make_counter};
@@ -32,10 +32,8 @@ impl TestCaseImpl for SharedCounterTest {
         let address = ctx.get_wallet_address();
         let (package_ref, counter_id) =
             publish_basics_package_and_make_counter(wallet_context, address).await;
-
-        let response: SuiTransactionResponse =
+        let (tx_cert, effects) =
             increment_counter(wallet_context, address, None, package_ref, counter_id).await;
-        let effects = response.effects;
         assert_eq!(
             effects.status,
             SuiExecutionStatus::Success,
@@ -49,12 +47,12 @@ impl TestCaseImpl for SharedCounterTest {
             .expect("Expect obj {counter_id} in shared_objects");
 
         // Verify fullnode observes the txn
-        ctx.let_fullnode_sync(vec![response.certificate.transaction_digest], 5)
+        ctx.let_fullnode_sync(vec![tx_cert.transaction_digest], 5)
             .await;
 
         let counter_object = ObjectChecker::new(counter_id)
             .owner(Owner::Shared)
-            .check_into_object(ctx.get_fullnode())
+            .check_into_object(ctx.get_fullnode_client())
             .await;
 
         assert_eq!(

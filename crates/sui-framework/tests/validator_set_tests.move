@@ -15,7 +15,7 @@ module sui::validator_set_tests {
 
     #[test]
     fun test_validator_set_flow() {
-        let scenario = test_scenario::begin(&@0x1);
+        let scenario = test_scenario::begin(@0x1);
         let ctx1 = test_scenario::ctx(&mut scenario);
 
         // Create 4 validators, with stake 100, 200, 300, 400.
@@ -43,7 +43,7 @@ module sui::validator_set_tests {
             validator3,
         );
 
-        test_scenario::next_tx(&mut scenario, &@0x1);
+        test_scenario::next_tx(&mut scenario, @0x1);
         {
             let ctx1 = test_scenario::ctx(&mut scenario);
             validator_set::request_add_stake(
@@ -57,9 +57,9 @@ module sui::validator_set_tests {
             assert!(validator_set::total_validator_stake(&validator_set) == 100, 0);
         };
 
-        test_scenario::next_tx(&mut scenario, &@0x1);
+        test_scenario::next_tx(&mut scenario, @0x1);
         {
-            let stake1 = test_scenario::take_last_created_owned<Stake>(&mut scenario);
+            let stake1 = test_scenario::take_from_sender<Stake>(&mut scenario);
             let ctx1 = test_scenario::ctx(&mut scenario);
             validator_set::request_withdraw_stake(
                 &mut validator_set,
@@ -68,7 +68,7 @@ module sui::validator_set_tests {
                 100 /* min_validator_stake */,
                 ctx1,
             );
-            test_scenario::return_owned(&mut scenario, stake1);
+            test_scenario::return_to_sender(&mut scenario, stake1);
             assert!(validator_set::total_validator_stake(&validator_set) == 100, 0);
 
             validator_set::request_add_validator(
@@ -77,7 +77,7 @@ module sui::validator_set_tests {
             );
         };
 
-        test_scenario::next_tx(&mut scenario, &@0x1);
+        test_scenario::next_tx(&mut scenario, @0x1);
         {
             let reward = balance::zero<SUI>();
             let delegation_reward = balance::zero<SUI>();
@@ -102,11 +102,12 @@ module sui::validator_set_tests {
         };
 
         validator_set::destroy_for_testing(validator_set);
+        test_scenario::end(scenario);
     }
 
     #[test]
     fun test_reference_gas_price_derivation() {
-        let scenario = test_scenario::begin(&@0x1);
+        let scenario = test_scenario::begin(@0x1);
         let ctx1 = test_scenario::ctx(&mut scenario);
         let dummy_balance = balance::zero();
         let dummy_delegator_reward = balance::zero();
@@ -157,6 +158,7 @@ module sui::validator_set_tests {
         validator_set::destroy_for_testing(validator_set);
         balance::destroy_zero(dummy_balance);
         balance::destroy_zero(dummy_delegator_reward);
+        test_scenario::end(scenario);
     }
 
     fun create_validator(addr: address, hint: u8, ctx: &mut TxContext): Validator {

@@ -29,7 +29,7 @@ pub const SUI_CLIENT_CONFIG: &str = "client.yaml";
 pub const SUI_KEYSTORE_FILENAME: &str = "sui.keystore";
 pub const SUI_GATEWAY_CONFIG: &str = "gateway.yaml";
 pub const SUI_GENESIS_FILENAME: &str = "genesis.blob";
-pub const SUI_DEV_NET_URL: &str = "https://gateway.devnet.sui.io:443";
+pub const SUI_DEV_NET_URL: &str = "https://fullnode.devnet.sui.io:443";
 
 pub const AUTHORITIES_DB_NAME: &str = "authorities_db";
 pub const CONSENSUS_DB_NAME: &str = "consensus_db";

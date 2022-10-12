@@ -79,9 +79,9 @@ impl Display for Keystore {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut writer = String::new();
         match self {
-            Keystore::File(path) => {
+            Keystore::File(file) => {
                 writeln!(writer, "Keystore Type : File")?;
-                write!(writer, "Keystore Path : {:?}", path)?;
+                write!(writer, "Keystore Path : {:?}", file.path)?;
                 write!(f, "{}", writer)
             }
             Keystore::InMem(_) => {
@@ -92,7 +92,7 @@ impl Display for Keystore {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Default)]
 pub struct FileBasedKeystore {
     keys: BTreeMap<SuiAddress, SuiKeyPair>,
     path: Option<PathBuf>,

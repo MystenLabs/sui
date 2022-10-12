@@ -3,6 +3,7 @@
 
 import { useCallback, useState } from 'react';
 
+import AutoLockTimerSelector from './auto-lock-timer-selector';
 import AccountAddress from '_components/account-address';
 import Icon, { SuiIcons } from '_components/icon';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
@@ -21,6 +22,7 @@ function Account() {
         setLogoutInProgress(true);
         try {
             await dispatch(logout());
+            window.location.reload();
         } finally {
             setLogoutInProgress(false);
         }
@@ -28,7 +30,20 @@ function Account() {
     return (
         <Layout title="Account" backUrl={backUrl}>
             <div className={st.content}>
-                <AccountAddress shorten={false} showLink={false} />
+                <div className={st.itemGroup}>
+                    <label className={st.itemTitle}>Address</label>
+                    <AccountAddress shorten={true} showLink={false} />
+                </div>
+                <div className={st.itemGroup}>
+                    <label className={st.itemTitle}>
+                        Auto-lock timer (minutes)
+                    </label>
+                    <div className={st.itemDesc}>
+                        Set the idle time in minutes before Sui Wallet locks
+                        itself.
+                    </div>
+                    <AutoLockTimerSelector />
+                </div>
             </div>
             <button
                 className={st.logout}

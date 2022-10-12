@@ -25,6 +25,7 @@ use sui_network::{
 };
 
 use sui_types::{error::*, messages::*};
+use tap::TapFallible;
 use tokio::{
     sync::mpsc::{channel, Receiver, Sender},
     task::JoinHandle,
@@ -34,7 +35,7 @@ use sui_types::messages_checkpoint::CheckpointRequest;
 use sui_types::messages_checkpoint::CheckpointResponse;
 
 use crate::authority::ConsensusHandler;
-use tracing::{info, Instrument};
+use tracing::{error, info, Instrument};
 
 #[cfg(test)]
 #[path = "unit_tests/server_tests.rs"]
@@ -444,13 +445,23 @@ impl ValidatorService {
             tx_kind = certificate.signed_data.data.kind_as_str()
         );
 
-        let response = state
-            .handle_certificate(certificate)
+        match state
+            .handle_certificate(certificate.clone())
             .instrument(span)
             .await
-            .map_err(|e| tonic::Status::internal(e.to_string()))?;
-
-        Ok(tonic::Response::new(response))
+            .map_err(|e| tonic::Status::internal(e.to_string()))
+        {
+            Err(e) => {
+                // Record the cert for later execution, including causal completion if necessary.
+                let tx_digest = *tx_digest;
+                let _ = state
+                    .database
+                    .add_pending_certificates(vec![(tx_digest, Some(certificate))])
+                    .tap_err(|e| error!(?tx_digest, "add_pending_certificates failed: {}", e));
+                Err(e)
+            }
+            Ok(response) => Ok(tonic::Response::new(response)),
+        }
     }
 }
 

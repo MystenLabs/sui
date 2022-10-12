@@ -1,5 +1,5 @@
-node
-benchmark_client
+narwhal-node
+narwhal-benchmark-client
 results
 plots
 demo_client

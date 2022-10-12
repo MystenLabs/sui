@@ -3,6 +3,7 @@
 
 use move_package::BuildConfig;
 use std::{path::Path, str::FromStr};
+use sui_config::utils::get_available_port;
 use sui_config::SUI_KEYSTORE_FILENAME;
 use sui_core::gateway_state::GatewayTxSeqNumber;
 use sui_core::test_utils::to_sender_signed_transaction;
@@ -21,13 +22,18 @@ use sui_types::gas_coin::GAS;
 use sui_types::sui_serde::Base64;
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 
-use test_utils::network::start_rpc_test_network;
+use test_utils::network::TestClusterBuilder;
 
 #[tokio::test]
 async fn test_get_objects() -> Result<(), anyhow::Error> {
-    let test_network = start_rpc_test_network(None).await?;
-    let http_client = test_network.http_client;
-    let address = test_network.accounts.first().unwrap();
+    let port = get_available_port();
+    let cluster = TestClusterBuilder::new()
+        .set_gateway_rpc_port(port)
+        .build()
+        .await?;
+
+    let http_client = cluster.rpc_client().unwrap();
+    let address = cluster.accounts.first().unwrap();
 
     http_client.sync_account_state(*address).await?;
     let objects = http_client.get_objects_owned_by_address(*address).await?;
@@ -37,9 +43,13 @@ async fn test_get_objects() -> Result<(), anyhow::Error> {
 
 #[tokio::test]
 async fn test_public_transfer_object() -> Result<(), anyhow::Error> {
-    let test_network = start_rpc_test_network(None).await?;
-    let http_client = test_network.http_client;
-    let address = test_network.accounts.first().unwrap();
+    let port = get_available_port();
+    let cluster = TestClusterBuilder::new()
+        .set_gateway_rpc_port(port)
+        .build()
+        .await?;
+    let http_client = cluster.rpc_client().unwrap();
+    let address = cluster.accounts.first().unwrap();
     http_client.sync_account_state(*address).await?;
     let objects = http_client.get_objects_owned_by_address(*address).await?;
 
@@ -53,7 +63,7 @@ async fn test_public_transfer_object() -> Result<(), anyhow::Error> {
         )
         .await?;
 
-    let keystore_path = test_network.network.dir().join(SUI_KEYSTORE_FILENAME);
+    let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
     let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
     let tx = to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
     let (tx_bytes, sig_scheme, signature_bytes, pub_key) = tx.to_network_data_for_execution();
@@ -70,9 +80,13 @@ async fn test_public_transfer_object() -> Result<(), anyhow::Error> {
 
 #[tokio::test]
 async fn test_publish() -> Result<(), anyhow::Error> {
-    let test_network = start_rpc_test_network(None).await?;
-    let http_client = test_network.http_client;
-    let address = test_network.accounts.first().unwrap();
+    let port = get_available_port();
+    let cluster = TestClusterBuilder::new()
+        .set_gateway_rpc_port(port)
+        .build()
+        .await?;
+    let http_client = cluster.rpc_client().unwrap();
+    let address = cluster.accounts.first().unwrap();
     http_client.sync_account_state(*address).await?;
     let objects = http_client.get_objects_owned_by_address(*address).await?;
     let gas = objects.first().unwrap();
@@ -89,7 +103,7 @@ async fn test_publish() -> Result<(), anyhow::Error> {
         .publish(*address, compiled_modules, Some(gas.object_id), 10000)
         .await?;
 
-    let keystore_path = test_network.network.dir().join(SUI_KEYSTORE_FILENAME);
+    let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
     let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
     let tx = to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
     let (tx_bytes, sig_scheme, signature_bytes, pub_key) = tx.to_network_data_for_execution();
@@ -103,9 +117,13 @@ async fn test_publish() -> Result<(), anyhow::Error> {
 
 #[tokio::test]
 async fn test_move_call() -> Result<(), anyhow::Error> {
-    let test_network = start_rpc_test_network(None).await?;
-    let http_client = test_network.http_client;
-    let address = test_network.accounts.first().unwrap();
+    let port = get_available_port();
+    let cluster = TestClusterBuilder::new()
+        .set_gateway_rpc_port(port)
+        .build()
+        .await?;
+    let http_client = cluster.rpc_client().unwrap();
+    let address = cluster.accounts.first().unwrap();
     http_client.sync_account_state(*address).await?;
     let objects = http_client.get_objects_owned_by_address(*address).await?;
     let gas = objects.first().unwrap();
@@ -134,7 +152,7 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
         )
         .await?;
 
-    let keystore_path = test_network.network.dir().join(SUI_KEYSTORE_FILENAME);
+    let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
     let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
     let tx = to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
 
@@ -143,7 +161,6 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
     let tx_response = http_client
         .execute_transaction(tx_bytes, sig_scheme, signature_bytes, pub_key)
         .await?;
-
     let effect = tx_response.effects;
     assert_eq!(1, effect.created.len());
     Ok(())
@@ -151,9 +168,13 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
 
 #[tokio::test]
 async fn test_get_object_info() -> Result<(), anyhow::Error> {
-    let test_network = start_rpc_test_network(None).await?;
-    let http_client = test_network.http_client;
-    let address = test_network.accounts.first().unwrap();
+    let port = get_available_port();
+    let cluster = TestClusterBuilder::new()
+        .set_gateway_rpc_port(port)
+        .build()
+        .await?;
+    let http_client = cluster.rpc_client().unwrap();
+    let address = cluster.accounts.first().unwrap();
     http_client.sync_account_state(*address).await?;
     let objects = http_client.get_objects_owned_by_address(*address).await?;
 
@@ -168,9 +189,13 @@ async fn test_get_object_info() -> Result<(), anyhow::Error> {
 
 #[tokio::test]
 async fn test_get_transaction() -> Result<(), anyhow::Error> {
-    let test_network = start_rpc_test_network(None).await?;
-    let http_client = test_network.http_client;
-    let address = test_network.accounts.first().unwrap();
+    let port = get_available_port();
+    let cluster = TestClusterBuilder::new()
+        .set_gateway_rpc_port(port)
+        .build()
+        .await?;
+    let http_client = cluster.rpc_client().unwrap();
+    let address = cluster.accounts.first().unwrap();
 
     http_client.sync_account_state(*address).await?;
 
@@ -183,8 +208,7 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
         let transaction_bytes: TransactionBytes = http_client
             .transfer_object(*address, oref.object_id, Some(gas_id), 1000, *address)
             .await?;
-
-        let keystore_path = test_network.network.dir().join(SUI_KEYSTORE_FILENAME);
+        let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
         let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
         let tx =
             to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
