@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Field, Form, Formik } from 'formik';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import * as Yup from 'yup';
 
 import Alert from '_app/components/alert';
@@ -28,10 +28,7 @@ export default function LockedPage() {
     const initGuardLoading = useInitializedGuard(true);
     const lockedGuardLoading = useLockedGuard(true);
     const guardsLoading = initGuardLoading || lockedGuardLoading;
-    const [searchParams] = useSearchParams();
-    const navigate = useNavigate();
     const dispatch = useAppDispatch();
-    const nextUrl = searchParams.get('url') || '/';
     return (
         <Loading loading={guardsLoading}>
             <PageLayout limitToPopUpSize={true}>
@@ -54,7 +51,6 @@ export default function LockedPage() {
                                     await dispatch(
                                         unlockWallet({ password })
                                     ).unwrap();
-                                    navigate(nextUrl);
                                 } catch (e) {
                                     setFieldError(
                                         'password',
