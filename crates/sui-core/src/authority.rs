@@ -814,14 +814,26 @@ impl AuthorityState {
 
         // If commit_certificate returns an error, tx_guard will be dropped and the certificate
         // will be persisted in the log for later recovery.
-        self.commit_certificate(
-            inner_temporary_store,
-            certificate,
-            &signed_effects,
-            bypass_validator_halt,
-        )
-        .await
-        .tap_err(|e| error!(?digest, "commit_certificate failed: {e}"))?;
+        if let Err(err) = self
+            .commit_certificate(
+                inner_temporary_store,
+                certificate,
+                &signed_effects,
+                bypass_validator_halt,
+            )
+            .await
+        {
+            if matches!(err, SuiError::ValidatorHaltedAtEpochEnd) {
+                debug!(
+                    ?digest,
+                    "validator halted and this cert will never be committed"
+                );
+                tx_guard.release();
+            } else {
+                error!(?digest, "commit_certificate failed: {}", err);
+            }
+            return Err(err);
+        }
 
         // commit_certificate finished, the tx is fully committed to the store.
         tx_guard.commit_tx();
