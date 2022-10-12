@@ -151,7 +151,7 @@ impl Parameters {
     }
 
     fn default_max_header_num_of_batches() -> usize {
-        1000
+        1_000
     }
 }
 
