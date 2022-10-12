@@ -28,7 +28,7 @@ merlin = "3.0.0"
 # TODO: switch to https://github.com/celo-org/celo-bls-snark-rs
 # when https://github.com/celo-org/celo-bls-snark-rs/issues/228 is solved
 celo-bls = { git = "https://github.com/huitseeker/celo-bls-snark-rs", branch = "updates-2", package = "bls-crypto", optional = true }
-fastcrypto = { version = "0.1.2", features = ["copy_key"] }
+fastcrypto = { workspace = true, features = ["copy_key"] }
 
 ark-ec = { version = "0.3.0", features = ["std"], optional = true }
 ark-ff = { version = "0.3.0", features = ["std"], optional = true }

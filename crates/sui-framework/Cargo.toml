@@ -17,7 +17,7 @@ num_enum = "0.5.7"
 once_cell = "1.14.0"
 sha3 = "0.10.4"
 curve25519-dalek-ng = "4.1.1"
-fastcrypto = "0.1.2"
+fastcrypto.workspace = true
 
 sui-types = { path = "../sui-types" }
 sui-framework-build = { path = "../sui-framework-build" }

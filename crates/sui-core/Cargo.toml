@@ -56,7 +56,7 @@ narwhal-executor = { path = "../../narwhal/executor" }
 narwhal-node = { path = "../../narwhal/node" }
 narwhal-types = { path = "../../narwhal/types" }
 
-fastcrypto = "0.1.2"
+fastcrypto.workspace = true
 workspace-hack.workspace = true
 thiserror = "1.0.34"
 eyre = "0.6.8"
