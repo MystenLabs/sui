@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 /// WARNING: Like all files in the examples section, this code is unaudited
@@ -310,7 +310,7 @@ module fungible_tokens::treasury_lock_tests {
                 coin::from_balance(balance, test_scenario::ctx(scenario)),
                 USER
             );
-        } 
+        }
     }
 
     #[test]
