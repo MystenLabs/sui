@@ -1,9 +1,11 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use std::marker::PhantomData;
+use std::{marker::PhantomData, sync::Arc};
 
 use bincode::Options;
 use rocksdb::Direction;
+
+use crate::metrics::DBMetrics;
 
 use super::{be_fix_int_ser, errors::TypedStoreError};
 use serde::{de::DeserializeOwned, Serialize};
@@ -15,14 +17,22 @@ pub struct Iter<'a, K, V> {
     db_iter: DBRawIteratorMultiThreaded<'a>,
     _phantom: PhantomData<(K, V)>,
     direction: Direction,
+    cf: String,
+    db_metrics: Arc<DBMetrics>,
 }
 
 impl<'a, K: DeserializeOwned, V: DeserializeOwned> Iter<'a, K, V> {
-    pub(super) fn new(db_iter: DBRawIteratorMultiThreaded<'a>) -> Self {
+    pub(super) fn new(
+        db_iter: DBRawIteratorMultiThreaded<'a>,
+        cf: String,
+        db_metrics: &Arc<DBMetrics>,
+    ) -> Self {
         Self {
             db_iter,
             _phantom: PhantomData,
             direction: Direction::Forward,
+            cf,
+            db_metrics: db_metrics.clone(),
         }
     }
 }
@@ -32,15 +42,28 @@ impl<'a, K: DeserializeOwned, V: DeserializeOwned> Iterator for Iter<'a, K, V> {
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.db_iter.valid() {
+            let _timer = self
+                .db_metrics
+                .rocksdb_iter_latency_seconds
+                .with_label_values(&[&self.cf])
+                .start_timer();
             let config = bincode::DefaultOptions::new()
                 .with_big_endian()
                 .with_fixint_encoding();
-            let key = self.db_iter.key().and_then(|k| config.deserialize(k).ok());
-            let value = self
+            let raw_key = self
+                .db_iter
+                .key()
+                .expect("Valid iterator failed to get key");
+            let raw_value = self
                 .db_iter
                 .value()
-                .and_then(|v| bincode::deserialize(v).ok());
-
+                .expect("Valid iterator failed to get value");
+            self.db_metrics
+                .rocksdb_iter_bytes
+                .with_label_values(&[&self.cf])
+                .observe((raw_key.len() + raw_value.len()) as f64);
+            let key = config.deserialize(raw_key).ok();
+            let value = bincode::deserialize(raw_value).ok();
             match self.direction {
                 Direction::Forward => self.db_iter.next(),
                 Direction::Reverse => self.db_iter.prev(),

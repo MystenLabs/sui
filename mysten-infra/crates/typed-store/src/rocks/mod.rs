@@ -5,9 +5,10 @@ mod iter;
 mod keys;
 mod values;
 
-use crate::traits::Map;
+use crate::{metrics::DBMetrics, traits::Map};
 use bincode::Options;
 use collectable::TryExtend;
+use prometheus::Registry;
 use rocksdb::{ColumnFamilyDescriptor, DBWithThreadMode, MultiThreaded, WriteBatch};
 use serde::{de::DeserializeOwned, Serialize};
 use std::{borrow::Borrow, collections::BTreeMap, env, marker::PhantomData, path::Path, sync::Arc};
@@ -51,6 +52,9 @@ type DBRawIteratorMultiThreaded<'a> =
 /// # use typed_store::reopen;
 /// # use typed_store::rocks::*;
 /// # use tempfile::tempdir;
+/// # use prometheus::Registry;
+/// # use std::sync::Arc;
+/// # use typed_store::metrics::DBMetrics;
 ///
 /// # fn main() {
 /// const FIRST_CF: &str = "First_CF";
@@ -59,16 +63,19 @@ type DBRawIteratorMultiThreaded<'a> =
 /// /// Create the rocks database reference for the desired column families
 /// let rocks = open_cf(tempdir().unwrap(), None, &[FIRST_CF, SECOND_CF]).unwrap();
 ///
+/// /// Create db_metrics to log stats into prometheus
+/// let db_metrics = Arc::new(DBMetrics::make_db_metrics(&Registry::default()));
+///
 /// /// Now simply open all the column families for their expected Key-Value types
-/// let (db_map_1, db_map_2) = reopen!(&rocks, FIRST_CF;<i32, String>, SECOND_CF;<i32, String>);
+/// let (db_map_1, db_map_2) = reopen!(&rocks, &db_metrics, FIRST_CF;<i32, String>, SECOND_CF;<i32, String>);
 /// # }
 /// ```
 #[macro_export]
 macro_rules! reopen {
-    ( $db:expr, $($cf:expr;<$K:ty, $V:ty>),* ) => {
+    ( $db:expr, $db_metrics:expr, $($cf:expr;<$K:ty, $V:ty>),*) => {
         (
             $(
-                DBMap::<$K, $V>::reopen($db, Some($cf)).expect(&format!("Cannot open {} CF.", $cf)[..])
+                DBMap::<$K, $V>::reopen($db, Some($cf), $db_metrics).expect(&format!("Cannot open {} CF.", $cf)[..])
             ),*
         )
     };
@@ -81,6 +88,7 @@ pub struct DBMap<K, V> {
     _phantom: PhantomData<fn(K) -> V>,
     // the rocksDB ColumnFamily under which the map is stored
     cf: String,
+    db_metrics: Arc<DBMetrics>,
 }
 
 unsafe impl<K: Send, V: Send> Send for DBMap<K, V> {}
@@ -95,6 +103,7 @@ impl<K, V> DBMap<K, V> {
         path: P,
         db_options: Option<rocksdb::Options>,
         opt_cf: Option<&str>,
+        registry: &Registry,
     ) -> Result<Self, TypedStoreError> {
         let cf_key = opt_cf.unwrap_or(rocksdb::DEFAULT_COLUMN_FAMILY_NAME);
         let cfs = vec![cf_key];
@@ -104,6 +113,7 @@ impl<K, V> DBMap<K, V> {
             rocksdb,
             _phantom: PhantomData,
             cf: cf_key.to_string(),
+            db_metrics: Arc::new(DBMetrics::new(registry)),
         })
     }
 
@@ -112,17 +122,22 @@ impl<K, V> DBMap<K, V> {
     ///
     /// ```
     ///    use typed_store::rocks::*;
+    ///    use typed_store::metrics::DBMetrics;
     ///    use tempfile::tempdir;
+    ///    use prometheus::Registry;
+    ///    use std::sync::Arc;
     ///    /// Open the DB with all needed column families first.
     ///    let rocks = open_cf(tempdir().unwrap(), None, &["First_CF", "Second_CF"]).unwrap();
+    ///    let db_metrics = Arc::new(DBMetrics::make_db_metrics(&Registry::default()));
     ///    /// Attach the column families to specific maps.
-    ///    let db_cf_1 = DBMap::<u32,u32>::reopen(&rocks, Some("First_CF")).expect("Failed to open storage");
-    ///    let db_cf_2 = DBMap::<u32,u32>::reopen(&rocks, Some("Second_CF")).expect("Failed to open storage");
+    ///    let db_cf_1 = DBMap::<u32,u32>::reopen(&rocks, Some("First_CF"), &db_metrics).expect("Failed to open storage");
+    ///    let db_cf_2 = DBMap::<u32,u32>::reopen(&rocks, Some("Second_CF"), &db_metrics).expect("Failed to open storage");
     /// ```
     #[instrument(level = "debug", skip(db), err)]
     pub fn reopen(
         db: &Arc<rocksdb::DBWithThreadMode<MultiThreaded>>,
         opt_cf: Option<&str>,
+        db_metrics: &Arc<DBMetrics>,
     ) -> Result<Self, TypedStoreError> {
         let cf_key = opt_cf
             .unwrap_or(rocksdb::DEFAULT_COLUMN_FAMILY_NAME)
@@ -135,11 +150,12 @@ impl<K, V> DBMap<K, V> {
             rocksdb: db.clone(),
             _phantom: PhantomData,
             cf: cf_key,
+            db_metrics: db_metrics.clone(),
         })
     }
 
     pub fn batch(&self) -> DBBatch {
-        DBBatch::new(&self.rocksdb)
+        DBBatch::new(&self.rocksdb, &self.db_metrics)
     }
 
     fn cf(&self) -> Arc<rocksdb::BoundColumnFamily<'_>> {
@@ -162,13 +178,17 @@ impl<K, V> DBMap<K, V> {
 /// use typed_store::rocks::*;
 /// use tempfile::tempdir;
 /// use typed_store::Map;
+/// use typed_store::metrics::DBMetrics;
+/// use prometheus::Registry;
+/// use std::sync::Arc;
 /// let rocks = open_cf(tempfile::tempdir().unwrap(), None, &["First_CF", "Second_CF"]).unwrap();
 ///
-/// let db_cf_1 = DBMap::reopen(&rocks, Some("First_CF"))
+/// let db_metrics = Arc::new(DBMetrics::make_db_metrics(&Registry::default()));
+/// let db_cf_1 = DBMap::reopen(&rocks, Some("First_CF"), &db_metrics)
 ///     .expect("Failed to open storage");
 /// let keys_vals_1 = (1..100).map(|i| (i, i.to_string()));
 ///
-/// let db_cf_2 = DBMap::reopen(&rocks, Some("Second_CF"))
+/// let db_cf_2 = DBMap::reopen(&rocks, Some("Second_CF"), &db_metrics)
 ///     .expect("Failed to open storage");
 /// let keys_vals_2 = (1000..1100).map(|i| (i, i.to_string()));
 ///
@@ -194,23 +214,44 @@ impl<K, V> DBMap<K, V> {
 pub struct DBBatch {
     rocksdb: Arc<rocksdb::DBWithThreadMode<MultiThreaded>>,
     batch: WriteBatch,
+    db_metrics: Arc<DBMetrics>,
 }
 
 impl DBBatch {
     /// Create a new batch associated with a DB reference.
     ///
     /// Use `open_cf` to get the DB reference or an existing open database.
-    pub fn new(dbref: &Arc<rocksdb::DBWithThreadMode<MultiThreaded>>) -> Self {
+    pub fn new(
+        dbref: &Arc<rocksdb::DBWithThreadMode<MultiThreaded>>,
+        db_metrics: &Arc<DBMetrics>,
+    ) -> Self {
         DBBatch {
             rocksdb: dbref.clone(),
             batch: WriteBatch::default(),
+            db_metrics: db_metrics.clone(),
         }
     }
 
     /// Consume the batch and write its operations to the database
     #[instrument(level = "trace", skip_all, err)]
     pub fn write(self) -> Result<(), TypedStoreError> {
+        let db_name = self
+            .rocksdb
+            .path()
+            .file_name()
+            .and_then(|f| f.to_str())
+            .unwrap_or("unknown");
+        let _timer = self
+            .db_metrics
+            .rocksdb_batch_commit_latency_seconds
+            .with_label_values(&[db_name])
+            .start_timer();
+        let size = self.batch.size_in_bytes();
         self.rocksdb.write(self.batch)?;
+        self.db_metrics
+            .rocksdb_batch_commit_bytes
+            .with_label_values(&[db_name])
+            .observe(size as f64);
         Ok(())
     }
 }
@@ -298,8 +339,17 @@ where
 
     #[instrument(level = "trace", skip_all, err)]
     fn get(&self, key: &K) -> Result<Option<V>, TypedStoreError> {
+        let _timer = self
+            .db_metrics
+            .rocksdb_get_latency_seconds
+            .with_label_values(&[&self.cf])
+            .start_timer();
         let key_buf = be_fix_int_ser(key)?;
         let res = self.rocksdb.get_pinned_cf(&self.cf(), &key_buf)?;
+        self.db_metrics
+            .rocksdb_get_bytes
+            .with_label_values(&[&self.cf])
+            .observe(res.as_ref().map_or(0.0, |v| v.len() as f64));
         match res {
             Some(data) => Ok(Some(bincode::deserialize(&data)?)),
             None => Ok(None),
@@ -308,8 +358,17 @@ where
 
     #[instrument(level = "trace", skip_all, err)]
     fn get_raw_bytes(&self, key: &K) -> Result<Option<Vec<u8>>, TypedStoreError> {
+        let _timer = self
+            .db_metrics
+            .rocksdb_get_latency_seconds
+            .with_label_values(&[&self.cf])
+            .start_timer();
         let key_buf = be_fix_int_ser(key)?;
         let res = self.rocksdb.get_pinned_cf(&self.cf(), &key_buf)?;
+        self.db_metrics
+            .rocksdb_get_bytes
+            .with_label_values(&[&self.cf])
+            .observe(res.as_ref().map_or(0.0, |v| v.len() as f64));
         match res {
             Some(data) => Ok(Some(data.to_vec())),
             None => Ok(None),
@@ -318,17 +377,33 @@ where
 
     #[instrument(level = "trace", skip_all, err)]
     fn insert(&self, key: &K, value: &V) -> Result<(), TypedStoreError> {
+        let _timer = self
+            .db_metrics
+            .rocksdb_put_latency_seconds
+            .with_label_values(&[&self.cf])
+            .start_timer();
         let key_buf = be_fix_int_ser(key)?;
         let value_buf = bincode::serialize(value)?;
-
+        self.db_metrics
+            .rocksdb_put_bytes
+            .with_label_values(&[&self.cf])
+            .observe((key_buf.len() + value_buf.len()) as f64);
         self.rocksdb.put_cf(&self.cf(), &key_buf, &value_buf)?;
         Ok(())
     }
 
     #[instrument(level = "trace", skip_all, err)]
     fn remove(&self, key: &K) -> Result<(), TypedStoreError> {
+        let _timer = self
+            .db_metrics
+            .rocksdb_delete_latency_seconds
+            .with_label_values(&[&self.cf])
+            .start_timer();
         let key_buf = be_fix_int_ser(key)?;
-
+        self.db_metrics
+            .rocksdb_deletes
+            .with_label_values(&[&self.cf])
+            .inc();
         self.rocksdb.delete_cf(&self.cf(), &key_buf)?;
         Ok(())
     }
@@ -337,7 +412,7 @@ where
     fn clear(&self) -> Result<(), TypedStoreError> {
         let _ = self.rocksdb.drop_cf(&self.cf);
         self.rocksdb
-            .create_cf(self.cf.clone(), &default_rocksdb_options())?;
+            .create_cf(self.cf.clone(), &default_db_options().options)?;
         Ok(())
     }
 
@@ -349,7 +424,7 @@ where
         let mut db_iter = self.rocksdb.raw_iterator_cf(&self.cf());
         db_iter.seek_to_first();
 
-        Iter::new(db_iter)
+        Iter::new(db_iter, self.cf.clone(), &self.db_metrics)
     }
 
     fn keys(&'a self) -> Self::Keys {
@@ -375,6 +450,11 @@ where
     where
         J: Borrow<K>,
     {
+        let _timer = self
+            .db_metrics
+            .rocksdb_multiget_latency_seconds
+            .with_label_values(&[&self.cf])
+            .start_timer();
         let cf = self.cf();
 
         let keys_bytes: Result<Vec<_>, TypedStoreError> = keys
@@ -383,7 +463,15 @@ where
             .collect();
 
         let results = self.rocksdb.multi_get_cf(keys_bytes?);
-
+        let entry_size = |entry: &Result<Option<Vec<u8>>, rocksdb::Error>| -> f64 {
+            entry
+                .as_ref()
+                .map_or(0.0, |e| e.as_ref().map_or(0.0, |v| v.len() as f64))
+        };
+        self.db_metrics
+            .rocksdb_multiget_bytes
+            .with_label_values(&[&self.cf])
+            .observe(results.iter().map(entry_size).sum());
         let values_parsed: Result<Vec<_>, TypedStoreError> = results
             .into_iter()
             .map(|value_byte| match value_byte? {
@@ -462,8 +550,14 @@ fn read_size_from_env(var_name: &str) -> Option<usize> {
         .ok()
 }
 
+#[derive(Default, Clone)]
+pub struct DBOptions {
+    pub options: rocksdb::Options,
+    pub registry: prometheus::Registry,
+}
+
 /// Creates a default RocksDB option, to be used when RocksDB option is not specified..
-pub fn default_rocksdb_options() -> rocksdb::Options {
+pub fn default_db_options() -> DBOptions {
     let mut opt = rocksdb::Options::default();
     // Sui uses multiple RocksDB in a node, so total sizes of write buffers and WAL can be higher
     // than the limits below.
@@ -483,7 +577,11 @@ pub fn default_rocksdb_options() -> rocksdb::Options {
     opt.set_max_total_wal_size(
         read_size_from_env(ENV_VAR_DB_WAL_SIZE).unwrap_or(DEFAULT_DB_WAL_SIZE) as u64 * 1024 * 1024,
     );
-    opt
+    let registry = Registry::default();
+    DBOptions {
+        options: opt,
+        registry,
+    }
 }
 
 /// Opens a database with options, and a number of column families that are created if they do not exist.
@@ -493,7 +591,7 @@ pub fn open_cf<P: AsRef<Path>>(
     db_options: Option<rocksdb::Options>,
     opt_cfs: &[&str],
 ) -> Result<Arc<rocksdb::DBWithThreadMode<MultiThreaded>>, TypedStoreError> {
-    let options = db_options.unwrap_or_else(default_rocksdb_options);
+    let options = db_options.unwrap_or_else(|| default_db_options().options);
     let column_descriptors: Vec<_> = opt_cfs.iter().map(|name| (*name, &options)).collect();
     open_cf_opts(path, Some(options.clone()), &column_descriptors[..])
 }
@@ -506,18 +604,17 @@ pub fn open_cf_opts<P: AsRef<Path>>(
     opt_cfs: &[(&str, &rocksdb::Options)],
 ) -> Result<Arc<rocksdb::DBWithThreadMode<MultiThreaded>>, TypedStoreError> {
     // Customize database options
-    let mut options = db_options.unwrap_or_else(default_rocksdb_options);
-
+    let mut options = db_options.unwrap_or_else(|| default_db_options().options);
     let mut opt_cfs: std::collections::HashMap<_, _> = opt_cfs.iter().cloned().collect();
     let cfs = rocksdb::DBWithThreadMode::<MultiThreaded>::list_cf(&options, &path)
         .ok()
         .unwrap_or_default();
 
-    let default_rocksdb_options = default_rocksdb_options();
+    let default_db_options = default_db_options();
     // Add CFs not explicitly listed
     for cf_key in cfs.iter() {
         if !opt_cfs.contains_key(&cf_key[..]) {
-            opt_cfs.insert(cf_key, &default_rocksdb_options);
+            opt_cfs.insert(cf_key, &default_db_options.options);
         }
     }
 
@@ -547,7 +644,7 @@ pub fn open_cf_opts_secondary<P: AsRef<Path>>(
     opt_cfs: &[(&str, &rocksdb::Options)],
 ) -> Result<Arc<rocksdb::DBWithThreadMode<MultiThreaded>>, TypedStoreError> {
     // Customize database options
-    let mut options = db_options.unwrap_or_else(default_rocksdb_options);
+    let mut options = db_options.unwrap_or_else(|| default_db_options().options);
 
     fdlimit::raise_fd_limit();
     // This is a requirement by RocksDB when opening as secondary
@@ -558,11 +655,11 @@ pub fn open_cf_opts_secondary<P: AsRef<Path>>(
         .ok()
         .unwrap_or_default();
 
-    let default_rocksdb_options = default_rocksdb_options();
+    let default_db_options = default_db_options();
     // Add CFs not explicitly listed
     for cf_key in cfs.iter() {
         if !opt_cfs.contains_key(&cf_key[..]) {
-            opt_cfs.insert(cf_key, &default_rocksdb_options);
+            opt_cfs.insert(cf_key, &default_db_options.options);
         }
     }
 
@@ -627,13 +724,13 @@ where
 }
 
 #[derive(Clone)]
-pub struct DBMapTableConfigMap(BTreeMap<String, rocksdb::Options>);
+pub struct DBMapTableConfigMap(BTreeMap<String, DBOptions>);
 impl DBMapTableConfigMap {
-    pub fn new(map: BTreeMap<String, rocksdb::Options>) -> Self {
+    pub fn new(map: BTreeMap<String, DBOptions>) -> Self {
         Self(map)
     }
 
-    pub fn to_map(&self) -> BTreeMap<String, rocksdb::Options> {
+    pub fn to_map(&self) -> BTreeMap<String, DBOptions> {
         self.0.clone()
     }
 }
