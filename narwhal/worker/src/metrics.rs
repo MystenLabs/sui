@@ -61,6 +61,20 @@ impl WorkerMetrics {
                 "created_batch_size",
                 "Size in bytes of the created batches",
                 &["epoch", "reason"],
+                // buckets with size in bytes
+                vec![
+                    100.0,
+                    500.0,
+                    1_000.0,
+                    5_000.0,
+                    10_000.0,
+                    20_000.0,
+                    50_000.0,
+                    100_000.0,
+                    250_000.0,
+                    500_000.0,
+                    1_000_000.0
+                ],
                 registry
             )
             .unwrap(),

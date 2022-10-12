@@ -24,7 +24,8 @@ def local(ctx, debug=True):
         'mem_profiling': False
     }
     node_params = {
-        'header_size': 1_000,  # bytes
+        'header_num_of_batches_threshold': 32,
+        'max_header_num_of_batches': 1000,
         'max_header_delay': '200ms',  # ms
         'gc_depth': 50,  # rounds
         'sync_retry_delay': '10_000ms',  # ms
@@ -88,7 +89,8 @@ def demo(ctx, debug=True):
             "socket_addr": "/ip4/0.0.0.0/tcp/0/http"
         },
         "gc_depth": 50,  # rounds
-        "header_size": 1000,  # bytes
+        'header_num_of_batches_threshold': 32,
+        "max_header_num_of_batches": 1000,
         "max_batch_delay": "200ms",  # ms
         "max_concurrent_requests": 500_000,
         "max_header_delay": "2000ms",  # ms
@@ -193,7 +195,8 @@ def remote(ctx, debug=False):
         'mem_profiling': False
     }
     node_params = {
-        'header_size': 1_000,  # bytes
+        'header_num_of_batches_threshold': 32,
+        'max_header_num_of_batches': 1000,
         'max_header_delay': '200ms',  # ms
         'gc_depth': 50,  # rounds
         'sync_retry_delay': '10_000ms',  # ms
