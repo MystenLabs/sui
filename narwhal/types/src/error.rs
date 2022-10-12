@@ -7,6 +7,10 @@ use fastcrypto::Digest;
 use store::StoreError;
 use thiserror::Error;
 
+#[cfg(test)]
+#[path = "./tests/error_test.rs"]
+mod error_test;
+
 #[macro_export]
 macro_rules! bail {
     ($e:expr) => {
