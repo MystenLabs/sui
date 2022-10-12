@@ -39,6 +39,7 @@ Short summary (for Move-supported types):
 <pre><code><b>use</b> <a href="">0x1::bcs</a>;
 <b>use</b> <a href="">0x1::option</a>;
 <b>use</b> <a href="">0x1::vector</a>;
+<b>use</b> <a href="object.md#0x2_object">0x2::object</a>;
 </code></pre>
 
 
@@ -132,12 +133,14 @@ Read address from the bcs-serialized bytes.
 
 <pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_address">peel_address</a>(<a href="">bcs</a>: &<b>mut</b> <a href="">vector</a>&lt;u8&gt;): <b>address</b> {
     <b>assert</b>!(v::length(<a href="">bcs</a>) &gt;= <a href="bcs.md#0x2_bcs_SUI_ADDRESS_LENGTH">SUI_ADDRESS_LENGTH</a>, <a href="bcs.md#0x2_bcs_EOutOfRange">EOutOfRange</a>);
-    <b>let</b> (_value, i) = (0, 0);
+    v::reverse(<a href="">bcs</a>);
+    <b>let</b> (addr_bytes, i) = (v::empty(), 0);
     <b>while</b> (i &lt; 20) {
-        <b>let</b> _ = v::remove(<a href="">bcs</a>, 0);
+        v::push_back(&<b>mut</b> addr_bytes, v::pop_back(<a href="">bcs</a>));
         i = i + 1;
     };
-    @0x0
+    v::reverse(<a href="">bcs</a>);
+    <a href="object.md#0x2_object_address_from_bytes">object::address_from_bytes</a>(addr_bytes)
 }
 </code></pre>
 

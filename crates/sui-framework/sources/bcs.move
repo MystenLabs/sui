@@ -16,6 +16,7 @@
 module sui::bcs {
     use std::option::{Self, Option};
     use std::vector as v;
+    use sui::object;
     use std::bcs;
 
     /// For when bytes length is less than required for deserialization.
@@ -40,12 +41,14 @@ module sui::bcs {
     /// Read address from the bcs-serialized bytes.
     public fun peel_address(bcs: &mut vector<u8>): address {
         assert!(v::length(bcs) >= SUI_ADDRESS_LENGTH, EOutOfRange);
-        let (_value, i) = (0, 0);
+        v::reverse(bcs);
+        let (addr_bytes, i) = (v::empty(), 0);
         while (i < 20) {
-            let _ = v::remove(bcs, 0);
+            v::push_back(&mut addr_bytes, v::pop_back(bcs));
             i = i + 1;
         };
-        @0x0
+        v::reverse(bcs);
+        object::address_from_bytes(addr_bytes)
     }
 
     /// Read a `bool` value from bcs-serialized bytes.
@@ -219,7 +222,7 @@ module sui::bcs {
     // === Tests ===
 
     #[test_only]
-    struct Info has drop { a: bool, b: u8, c: u64, d: u128, k: vector<bool> }
+    struct Info has drop { a: bool, b: u8, c: u64, d: u128, k: vector<bool>, s: address }
 
     #[test]
     #[expected_failure(abort_code = 2)]
@@ -227,6 +230,7 @@ module sui::bcs {
         let value = vector[0xff, 0xff, 0xff, 0xff, 0xff];
         let bytes = &mut to_bytes(&value);
         let _fail = peel_vec_length(bytes);
+        abort 2 // TODO: make this test fail
     }
 
     #[test]
@@ -261,10 +265,28 @@ module sui::bcs {
             let bytes = &mut to_bytes(&value);
             assert!(value == peel_option_u128(bytes), 0);
         };
+
+        {
+            let value = option::some(@0xC0FFEE);
+            let bytes = &mut to_bytes(&value);
+            assert!(value == peel_option_address(bytes), 0);
+        };
+
+        {
+            let value: Option<bool> = option::none();
+            let bytes = &mut to_bytes(&value);
+            assert!(value == peel_option_bool(bytes), 0);
+        };
     }
 
     #[test]
     fun test_bcs() {
+        {
+            let value = @0xC0FFEE;
+            let bytes = to_bytes(&value);
+            assert!(value == peel_address(&mut bytes), 0);
+        };
+
         { // boolean: true
             let value = true;
             let bytes = to_bytes(&value);
@@ -322,7 +344,7 @@ module sui::bcs {
         };
 
         { // full deserialization test (ordering)
-            let info = Info { a: true, b: 100, c: 9999, d: 112333, k: vector[true, false, true, false] };
+            let info = Info { a: true, b: 100, c: 9999, d: 112333, k: vector[true, false, true, false], s: @0xAAAAAAAAAAA };
             let bytes = &mut to_bytes(&info);
 
             assert!(info.a == peel_bool(bytes), 0);
@@ -339,6 +361,8 @@ module sui::bcs {
                 assert!(*v::borrow(&info.k, i) == peel_bool(bytes), 0);
                 i = i + 1;
             };
+
+            assert!(info.s == peel_address(bytes), 0);
         };
 
         { // read vector of bytes directly
@@ -363,6 +387,12 @@ module sui::bcs {
             let value = vector[true, false, true, false];
             let bytes = &mut to_bytes(&value);
             assert!(value == peel_vec_bool(bytes), 0);
+        };
+
+        { // read vector of address directly
+            let value = vector[@0x0, @0x1, @0x2, @0x3];
+            let bytes = &mut to_bytes(&value);
+            assert!(value == peel_vec_address(bytes), 0);
         };
     }
 }

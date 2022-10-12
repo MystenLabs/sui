@@ -13,15 +13,16 @@ module fungible_tokens::basket_tests {
     public fun test_mint_burn() {
         let user = @0xA;
 
-        let scenario = &mut test_scenario::begin(&user);
+        let scenario_val = test_scenario::begin(user);
+        let scenario = &mut scenario_val;
         {
             let ctx = test_scenario::ctx(scenario);
             basket::init_for_testing(ctx);
         };
-        test_scenario::next_tx(scenario, &user);
+        test_scenario::next_tx(scenario, user);
         {
-            let reserve_wrapper = test_scenario::take_shared<Reserve>(scenario);
-            let reserve = test_scenario::borrow_mut(&mut reserve_wrapper);
+            let reserve_val = test_scenario::take_shared<Reserve>(scenario);
+            let reserve = &mut reserve_val;
             let ctx = test_scenario::ctx(scenario);
             assert!(basket::total_supply(reserve) == 0, 0);
 
@@ -38,8 +39,9 @@ module fungible_tokens::basket_tests {
 
             coin::keep(sui, ctx);
             coin::keep(managed, ctx);
-            test_scenario::return_shared(scenario, reserve_wrapper);
-        }
+            test_scenario::return_shared(reserve_val);
+        };
+        test_scenario::end(scenario_val);
     }
 
 }

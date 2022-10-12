@@ -21,14 +21,11 @@ use prometheus::{
     register_histogram_with_registry, register_int_counter_with_registry, Histogram, IntCounter,
     Registry,
 };
-use sui_types::SUI_SYSTEM_STATE_OBJECT_ID;
-use tracing::{debug, error, trace, Instrument};
-
 use sui_adapter::adapter::resolve_and_type_check;
 use sui_config::gateway::GatewayConfig;
-use sui_config::ValidatorInfo;
 use sui_types::gas_coin::GasCoin;
 use sui_types::object::{Data, ObjectFormatOptions, Owner};
+use sui_types::SUI_SYSTEM_STATE_OBJECT_ID;
 use sui_types::{
     base_types::*,
     coin,
@@ -39,12 +36,16 @@ use sui_types::{
     object::{Object, ObjectRead},
     SUI_FRAMEWORK_ADDRESS,
 };
+use tracing::{debug, error, trace, Instrument};
 
 use crate::authority::ResolverWrapper;
 use crate::authority_aggregator::AuthAggMetrics;
-use crate::authority_client::{NetworkAuthorityClient, NetworkAuthorityClientMetrics};
+use crate::authority_client::{
+    make_authority_clients, NetworkAuthorityClient, NetworkAuthorityClientMetrics,
+};
 use crate::safe_client::SafeClientMetrics;
 use crate::transaction_input_checker;
+use crate::validator_info::make_committee;
 use crate::{
     authority::GatewayStore, authority_aggregator::AuthorityAggregator,
     authority_client::AuthorityAPI, query_helpers::QueryHelpers,
@@ -189,10 +190,11 @@ impl<A> GatewayState<A> {
         committee: Committee,
         authority_clients: BTreeMap<AuthorityName, A>,
         prometheus_registry: &Registry,
+        network_metrics: Arc<NetworkAuthorityClientMetrics>,
     ) -> SuiResult<Self> {
         let gateway_metrics = GatewayMetrics::new(prometheus_registry);
         let auth_agg_metrics = AuthAggMetrics::new(prometheus_registry);
-        let safe_client_metrics = SafeClientMetrics::new(&Registry::new());
+        let safe_client_metrics = Arc::new(SafeClientMetrics::new(prometheus_registry));
         let gateway_store = Arc::new(GatewayStore::open(&base_path.join("store"), None));
         let committee_store = Arc::new(CommitteeStore::new(
             base_path.join("epochs"),
@@ -207,6 +209,7 @@ impl<A> GatewayState<A> {
                 authority_clients,
                 auth_agg_metrics,
                 safe_client_metrics,
+                network_metrics,
             ),
             gateway_metrics,
         )
@@ -254,44 +257,24 @@ impl GatewayState<NetworkAuthorityClient> {
         config: &GatewayConfig,
         prometheus_registry: Option<&Registry>,
     ) -> Result<GatewayClient, anyhow::Error> {
-        let committee = Self::make_committee(config)?;
+        let committee = make_committee(config.epoch, &config.validator_set)?;
         let default_registry = Registry::new();
         let prometheus_registry = prometheus_registry.unwrap_or(&default_registry);
-        let network_metrics = NetworkAuthorityClientMetrics::new(prometheus_registry);
-        let authority_clients = Self::make_authority_clients(config, network_metrics);
+        let network_metrics = Arc::new(NetworkAuthorityClientMetrics::new(prometheus_registry));
+        let authority_clients = make_authority_clients(
+            &config.validator_set,
+            config.send_timeout,
+            config.recv_timeout,
+            network_metrics.clone(),
+        );
 
         Ok(Arc::new(GatewayState::new(
             &config.db_folder_path,
             committee,
             authority_clients,
             prometheus_registry,
+            network_metrics,
         )?))
-    }
-
-    pub fn make_committee(config: &GatewayConfig) -> SuiResult<Committee> {
-        Committee::new(
-            config.epoch,
-            ValidatorInfo::voting_rights(&config.validator_set),
-        )
-    }
-
-    pub fn make_authority_clients(
-        config: &GatewayConfig,
-        network_metrics: NetworkAuthorityClientMetrics,
-    ) -> BTreeMap<AuthorityName, NetworkAuthorityClient> {
-        let mut authority_clients = BTreeMap::new();
-        let mut network_config = mysten_network::config::Config::new();
-        network_config.connect_timeout = Some(config.send_timeout);
-        network_config.request_timeout = Some(config.recv_timeout);
-        let net_metrics = Arc::new(network_metrics);
-        for authority in &config.validator_set {
-            let channel = network_config
-                .connect_lazy(authority.network_address())
-                .unwrap();
-            let client = NetworkAuthorityClient::new(channel, net_metrics.clone());
-            authority_clients.insert(authority.protocol_key(), client);
-        }
-        authority_clients
     }
 }
 

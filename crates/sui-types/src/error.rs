@@ -43,6 +43,10 @@ macro_rules! exit_main {
     };
 }
 
+const VALIDATOR_HALTED_ERROR_MSG: &str =
+    "Validator temporarily stopped processing transactions due to epoch change";
+const MISSING_COMMITTEE_ERROR_MSG: &str = "Missing committee information for epoch";
+
 /// Custom error type for Sui.
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error, Hash)]
 #[allow(clippy::large_enum_variant)]
@@ -88,8 +92,13 @@ pub enum SuiError {
     #[error("Value was not signed by a known authority")]
     UnknownSigner,
     // Certificate verification
-    #[error("Signature or certificate from wrong epoch, expected {expected_epoch}")]
-    WrongEpoch { expected_epoch: EpochId },
+    #[error(
+        "Signature or certificate from wrong epoch, expected {expected_epoch}, got {actual_epoch}"
+    )]
+    WrongEpoch {
+        expected_epoch: EpochId,
+        actual_epoch: EpochId,
+    },
     #[error("Signatures in a certificate must form a quorum")]
     CertificateRequiresQuorum,
     #[error("Authority {authority_name:?} could not sync certificate: {err:?}")]
@@ -413,10 +422,12 @@ pub enum SuiError {
     InvalidPrivateKey,
 
     // Epoch related errors.
-    #[error("Validator temporarily stopped processing transactions due to epoch change")]
+    #[error("{VALIDATOR_HALTED_ERROR_MSG}")]
     ValidatorHaltedAtEpochEnd,
     #[error("Inconsistent state detected during epoch change: {:?}", error)]
     InconsistentEpochState { error: String },
+    #[error("Error when advancing epoch: {:?}", error)]
+    AdvanceEpochError { error: String },
 
     // These are errors that occur when an RPC fails and is simply the utf8 message sent in a
     // Tonic::Status
@@ -438,8 +449,11 @@ pub enum SuiError {
     #[error("Invalid committee composition")]
     InvalidCommittee(String),
 
-    #[error("Missing committee information for epoch {0}")]
+    #[error("{MISSING_COMMITTEE_ERROR_MSG} {0}")]
     MissingCommitteeAtEpoch(EpochId),
+
+    #[error("Failed to get supermajority's consensus on committee information for minimal epoch: {minimal_epoch}")]
+    FailedToGetAgreedCommitteeFromMajority { minimal_epoch: EpochId },
 }
 
 pub type SuiResult<T = ()> = Result<T, SuiError>;
@@ -490,6 +504,14 @@ impl From<&str> for SuiError {
         SuiError::GenericAuthorityError {
             error: error.to_string(),
         }
+    }
+}
+
+impl SuiError {
+    pub fn indicates_epoch_change(&self) -> bool {
+        let err_str = self.to_string();
+        err_str.contains(VALIDATOR_HALTED_ERROR_MSG)
+            || err_str.contains(MISSING_COMMITTEE_ERROR_MSG)
     }
 }
 

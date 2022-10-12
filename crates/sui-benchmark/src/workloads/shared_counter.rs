@@ -98,7 +98,7 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
             return;
         }
         // publish basics package
-        let primary_gas = get_latest(self.test_gas, aggregator.clone()).await.unwrap();
+        let primary_gas = get_latest(self.test_gas, &aggregator).await.unwrap();
         let primary_gas_ref = primary_gas.compute_object_reference();
         let mut publish_module_gas_ref = None;
         let (address, keypair) = get_key_pair();
@@ -132,7 +132,7 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
         aggregator: Arc<AuthorityAggregator<NetworkAuthorityClient>>,
     ) -> Vec<Box<dyn Payload>> {
         // Read latest test gas object
-        let primary_gas = get_latest(self.test_gas, aggregator.clone()).await.unwrap();
+        let primary_gas = get_latest(self.test_gas, &aggregator).await.unwrap();
         let mut primary_gas_ref = primary_gas.compute_object_reference();
         // Make as many gas objects as the number of counters
         let mut counters_gas = vec![];

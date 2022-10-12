@@ -32,7 +32,7 @@ use sui_types::object::Object;
 use sui_types::object::Owner;
 
 /// The maximum gas per transaction.
-pub const MAX_GAS: u64 = 10_000;
+pub const MAX_GAS: u64 = 50_000;
 
 pub fn random_object_ref() -> ObjectRef {
     (
@@ -324,6 +324,21 @@ pub fn make_publish_basics_transaction(gas_object: ObjectRef) -> Transaction {
         .collect();
     let data = TransactionData::new_module(sender, gas_object, all_module_bytes, MAX_GAS);
     to_sender_signed_transaction(data, &keypair)
+}
+
+pub fn random_object_digest() -> ObjectRef {
+    (
+        ObjectID::random(),
+        SequenceNumber::from_u64(1),
+        ObjectDigest::random(),
+    )
+}
+
+pub fn make_random_certified_transaction() -> CertifiedTransaction {
+    let gas_ref = random_object_digest();
+    let txn = make_publish_basics_transaction(gas_ref);
+    let (mut certs, _) = make_tx_certs_and_signed_effects(vec![txn]);
+    certs.swap_remove(0)
 }
 
 pub fn make_counter_create_transaction(

@@ -1,19 +1,22 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { lastValueFrom, take } from 'rxjs';
+import { lastValueFrom, map, take } from 'rxjs';
 
 import { createMessage } from '_messages';
 import { PortStream } from '_messaging/PortStream';
+import { isKeyringPayload } from '_payloads/keyring';
 import { isPermissionRequests } from '_payloads/permissions';
 import { isUpdateActiveOrigin } from '_payloads/tabs/updateActiveOrigin';
 import { isGetTransactionRequestsResponse } from '_payloads/transactions/ui/GetTransactionRequestsResponse';
+import { setKeyringStatus } from '_redux/slices/account';
 import { setActiveOrigin } from '_redux/slices/app';
 import { setPermissions } from '_redux/slices/permissions';
 import { setTransactionRequests } from '_redux/slices/transaction-requests';
 
 import type { SuiAddress, SuiTransactionResponse } from '@mysten/sui.js';
 import type { Message } from '_messages';
+import type { KeyringPayload } from '_payloads/keyring';
 import type {
     GetPermissionRequests,
     PermissionResponse,
@@ -38,6 +41,7 @@ export class BackgroundClient {
         return Promise.all([
             this.sendGetPermissionRequests(),
             this.sendGetTransactionRequests(),
+            this.getWalletStatus(),
         ]).then(() => undefined);
     }
 
@@ -103,6 +107,81 @@ export class BackgroundClient {
         );
     }
 
+    // TODO: password should be required (#encrypt-wallet)
+    public async createMnemonic(password?: string, importedMnemonic?: string) {
+        return await lastValueFrom(
+            this.sendMessage(
+                createMessage<KeyringPayload<'createMnemonic'>>({
+                    type: 'keyring',
+                    method: 'createMnemonic',
+                    args: { password: password || '', importedMnemonic },
+                    return: undefined,
+                })
+            ).pipe(take(1))
+        );
+    }
+
+    public async unlockWallet(password: string) {
+        return await lastValueFrom(
+            this.sendMessage(
+                createMessage<KeyringPayload<'unlock'>>({
+                    type: 'keyring',
+                    method: 'unlock',
+                    args: { password: password },
+                    return: undefined,
+                })
+            ).pipe(take(1))
+        );
+    }
+    public async lockWallet() {
+        return await lastValueFrom(
+            this.sendMessage(
+                createMessage<KeyringPayload<'lock'>>({
+                    type: 'keyring',
+                    method: 'lock',
+                })
+            ).pipe(take(1))
+        );
+    }
+
+    public async getMnemonic(password?: string) {
+        return await lastValueFrom(
+            this.sendMessage(
+                createMessage<KeyringPayload<'getMnemonic'>>({
+                    type: 'keyring',
+                    method: 'getMnemonic',
+                    args: password,
+                    return: undefined,
+                })
+            ).pipe(
+                take(1),
+                map(({ payload }) => {
+                    if (
+                        isKeyringPayload<'getMnemonic'>(
+                            payload,
+                            'getMnemonic'
+                        ) &&
+                        payload.return
+                    ) {
+                        return payload.return;
+                    }
+                    throw new Error('Mnemonic not found');
+                })
+            )
+        );
+    }
+
+    private async getWalletStatus() {
+        return await lastValueFrom(
+            this.sendMessage(
+                createMessage<KeyringPayload<'walletStatusUpdate'>>({
+                    type: 'keyring',
+                    method: 'walletStatusUpdate',
+                })
+            ).pipe(take(1))
+        );
+    }
+
     private handleIncomingMessage(msg: Message) {
         if (!this._initialized || !this._dispatch) {
             throw new Error(
@@ -117,6 +196,14 @@ export class BackgroundClient {
             action = setTransactionRequests(payload.txRequests);
         } else if (isUpdateActiveOrigin(payload)) {
             action = setActiveOrigin(payload);
+        } else if (
+            isKeyringPayload<'walletStatusUpdate'>(
+                payload,
+                'walletStatusUpdate'
+            ) &&
+            payload.return
+        ) {
+            action = setKeyringStatus(payload.return);
         }
         if (action) {
             this._dispatch(action);

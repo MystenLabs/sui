@@ -27,9 +27,9 @@ use tracing::info;
 use types::{
     Batch, BatchDigest, Certificate, CertificateDigest, ConsensusStore, Header, HeaderBuilder,
     PrimaryMessage, PrimaryToPrimary, PrimaryToPrimaryServer, PrimaryToWorker,
-    PrimaryToWorkerServer, PrimaryWorkerMessage, RequestBatchRequest, RequestBatchResponse, Round,
-    SequenceNumber, Transaction, Vote, WorkerBatchRequest, WorkerBatchResponse,
-    WorkerDeleteBatchesMessage, WorkerInfoResponse, WorkerMessage, WorkerPrimaryMessage,
+    PrimaryToWorkerServer, RequestBatchRequest, RequestBatchResponse, Round, SequenceNumber,
+    Transaction, Vote, WorkerBatchRequest, WorkerBatchResponse, WorkerDeleteBatchesMessage,
+    WorkerInfoResponse, WorkerMessage, WorkerPrimaryMessage, WorkerReconfigureMessage,
     WorkerSynchronizeMessage, WorkerToPrimary, WorkerToPrimaryServer, WorkerToWorker,
     WorkerToWorkerServer,
 };
@@ -244,7 +244,8 @@ impl WorkerToPrimary for WorkerToPrimaryMockServer {
 }
 
 pub struct PrimaryToWorkerMockServer {
-    msg_sender: Sender<PrimaryWorkerMessage>,
+    // TODO: refactor tests to use mockall for this.
+    msg_sender: Sender<WorkerReconfigureMessage>,
     synchronize_sender: Sender<WorkerSynchronizeMessage>,
 }
 
@@ -253,7 +254,7 @@ impl PrimaryToWorkerMockServer {
         keypair: NetworkKeyPair,
         address: Multiaddr,
     ) -> (
-        Receiver<PrimaryWorkerMessage>,
+        Receiver<WorkerReconfigureMessage>,
         Receiver<WorkerSynchronizeMessage>,
         anemo::Network,
     ) {
@@ -278,9 +279,9 @@ impl PrimaryToWorkerMockServer {
 
 #[async_trait]
 impl PrimaryToWorker for PrimaryToWorkerMockServer {
-    async fn send_message(
+    async fn reconfigure(
         &self,
-        request: anemo::Request<PrimaryWorkerMessage>,
+        request: anemo::Request<WorkerReconfigureMessage>,
     ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
         let message = request.into_body();
         self.msg_sender.send(message).await.unwrap();

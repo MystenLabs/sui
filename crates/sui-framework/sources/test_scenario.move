@@ -3,18 +3,23 @@
 
 #[test_only]
 module sui::test_scenario {
+    use std::option::{Self, Option};
     use sui::object::{Self, ID, UID};
     use sui::tx_context::{Self, TxContext};
-    use std::option::{Self, Option};
-    use std::vector;
+    use sui::vec_map::VecMap;
 
-    /// Requested a transfer or user-defined event on an invalid transaction index
-    const EInvalidTxIndex: u64 = 1;
+    /// the transaction failed when generating these effects. For example, a circular ownership
+    /// of objects was created
+    const ECouldNotGenerateEffects: u64 = 0;
+
+    /// Transaction ended without all shared and immutable objects being returned or with those
+    /// objects being transferred or wrapped
+    const EInvalidSharedOrImmutableUsage: u64 = 1;
 
     /// Attempted to return an object to the inventory that was not previously removed from the
     /// inventory during the current transaction. Can happen if the user attempts to call
-    /// `return_owned` on a locally constructed object rather than one returned from a `test_scenario`
-    /// function such as `take_owned`.
+    /// `return_to_address` on a locally constructed object rather than one returned from a
+    /// `test_scenario` function such as `take_from_address`.
     const ECantReturnObject: u64 = 2;
 
     /// Attempted to retrieve an object of a particular type from the inventory, but it is empty.
@@ -22,371 +27,106 @@ module sui::test_scenario {
     /// transfer the object to the user.
     const EEmptyInventory: u64 = 3;
 
-    /// Expected 1 object of this type in the tx sender's inventory, but found >1.
-    /// Consider using test_scenario::take_owned_by_id to select a specific object
-    const EInventoryAmbiguity: u64 = 4;
-
-    /// The inventory previously contained an object of this type, but it was removed during the current
-    /// transaction.
-    const EAlreadyRemovedObject: u64 = 5;
-
-    /// Object of given ID cannot be found in the inventory.
-    const EObjectIDNotFound: u64 = 6;
+    /// Object of that ID was not found in that inventory. It was possibly already taken
+    const EObjectNotFound: u64 = 4;
 
     /// Utility for mocking a multi-transaction Sui execution in a single Move procedure.
     /// A `Scenario` maintains a view of the global object pool built up by the execution.
-    /// These objects can be accessed via functions like `take_owned`, which gives the
-    /// transaction sender access to (only) objects in their inventory.
+    /// These objects can be accessed via functions like `take_from_sender`, which gives the
+    /// transaction sender access to objects in (only) their inventory.
     /// Example usage:
     /// ```
     /// let addr1: address = 0;
     /// let addr2: address = 1;
     /// // begin a test scenario in a context where addr1 is the sender
-    /// let scenario = &mut test_scenario::begin(&addr1);
+    /// let scenario = &mut test_scenario::begin(addr1);
     /// // addr1 sends an object to addr2
     /// {
     ///     let some_object: SomeObject = ... // construct an object
     ///     transfer::transfer(some_object, copy addr2)
     /// };
     /// // end the first transaction and begin a new one where addr2 is the sender
-    /// test_scenario::next_tx(scenario, &addr2)
+    /// // Starting a new transaction moves any objects transferred into their respective
+    /// // inventiories. In other words, if you call `take_from_sender` before `next_tx`, `addr2`
+    /// // will not yet have `some_object`
+    /// test_scenario::next_tx(scenario, addr2);
     /// {
     ///     // remove the SomeObject value from addr2's inventory
-    ///     let obj = test_scenario::take_owned<SomeObject>(scenario);
+    ///     let obj = test_scenario::take_from_sender<SomeObject>(scenario);
     ///     // use it to test some function that needs this value
     ///     SomeObject::some_function(obj)
-    /// }
+    /// };
     /// ... // more txes
+    /// test_scenario::end(scenario);
     /// ```
-    struct Scenario has drop {
+    struct Scenario {
+        txn_number: u64,
         ctx: TxContext,
-        /// Object ID's that have been removed during the current transaction. Needed to prevent
-        /// double removals
-        removed: vector<ID>,
-        /// The `i`th entry in this vector is the start index for events emitted by the `i`th transaction.
-        /// This information allows us to partition events emitted by distinct transactions
-        event_start_indexes: vector<u64>,
     }
 
-    /// A wrapper for test_scenario to return an immutable object from the inventory
-    struct ImmutableWrapper<T: key> {
-        object: T,
-    }
-
-    /// A wrapper for test_scenario to return a shared object from the inventory
-    struct SharedWrapper<T: key> {
-        object: T,
+    /// The effects of a transaction
+    struct TransactionEffects has drop {
+        /// The objects created this transaction
+        created: vector<ID>,
+        /// The objects written/modified this transaction
+        written: vector<ID>,
+        /// The objects deleted this transaction
+        deleted: vector<ID>,
+        /// The objects transferred to an account this transaction
+        transferred_to_account: VecMap<ID, /* owner */ address>,
+        /// The objects transferred to an object this transaction
+        transferred_to_object: VecMap<ID, /* owner */ ID>,
+        /// The objects shared this transaction
+        shared: vector<ID>,
+        /// The objects frozen this transaction
+        frozen: vector<ID>,
+        /// The number of user events emmitted this transaction
+        num_user_events: u64,
     }
 
     /// Begin a new multi-transaction test scenario in a context where `sender` is the tx sender
-    public fun begin(sender: &address): Scenario {
+    public fun begin(sender: address): Scenario {
         Scenario {
-            ctx: tx_context::new_from_hint(*sender, 0, 0, 0),
-            removed: vector::empty(),
-            event_start_indexes: vector[0],
+            txn_number: 0,
+            ctx: tx_context::new_from_hint(sender, 0, 0, 0),
         }
     }
 
     /// Advance the scenario to a new transaction where `sender` is the transaction sender
-    public fun next_tx(scenario: &mut Scenario, sender: &address) {
-        let last_tx_start_index = last_tx_start_index(scenario);
-        let old_total_events = last_tx_start_index;
-
-        // Objects that were wrapped during the transaction need to be explicitly handled
-        // since there is no dedicated event for object wrapping.
-        // We know an object was wrapped if:
-        // - it was removed and not returned
-        // - it does not appear in an event during the current transaction.
-        emit_wrapped_object_events(last_tx_start_index, &scenario.removed);
-        // reset `removed` for the next tx
-        scenario.removed = vector::empty();
-
-        // start index for the next tx is the end index for the current one
-        let new_total_events = num_events();
-        let tx_event_count = new_total_events - old_total_events;
-        let event_end_index = last_tx_start_index + tx_event_count;
-        vector::push_back(&mut scenario.event_start_indexes, event_end_index);
-
+    /// All objects transferred will be moved into the inventories of the account or the global
+    /// inventory. In other words, in order to access an object with one of the various "take"
+    /// functions below, e.g. `take_from_address_by_id`, the transaction must first be ended via
+    /// `next_tx`.
+    /// Returns the results from the previous transaction
+    /// Will abort if shared or immutable objects were deleted, transferred, or wrapped.
+    /// Will abort if TransactionEffects cannot be generated
+    public fun next_tx(scenario: &mut Scenario, sender: address): TransactionEffects {
         // create a seed for new transaction digest to ensure that this tx has a different
         // digest (and consequently, different object ID's) than the previous tx
-        let new_tx_digest_seed = vector::length(&scenario.event_start_indexes);
+        scenario.txn_number = scenario.txn_number + 1;
         let epoch = tx_context::epoch(&scenario.ctx);
-        scenario.ctx = tx_context::new_from_hint(*sender, new_tx_digest_seed, epoch, 0);
+        scenario.ctx = tx_context::new_from_hint(sender,  scenario.txn_number, epoch, 0);
+        // end the transaction
+        end_transaction()
     }
 
-    /// Advance the scenario to a new epoch.
-    public fun next_epoch(scenario: &mut Scenario) {
+    /// Advance the scenario to a new epoch and end the transaction
+    /// See `next_transaction` for further details
+    public fun next_epoch(scenario: &mut Scenario, sender: address): TransactionEffects {
         tx_context::increment_epoch_number(&mut scenario.ctx);
+        next_tx(scenario, sender)
     }
 
-    /// Remove the object of type `T` from the inventory of the current tx sender in `scenario`.
-    /// An object is in the sender's inventory if:
-    /// - The object is in the global event log
-    /// - The sender owns the object
-    /// - If the object was previously removed, it was subsequently replaced via a call to `return_owned`.
-    /// Aborts if there is no object of type `T` in the inventory of the tx sender
-    /// Aborts if there is >1 object of type `T` in the inventory of the tx sender--this function
-    /// only succeeds when the object to choose is unambiguous. In cases where there are multiple `T`'s,
-    /// the caller should resolve the ambiguity by using `take_owned_by_id`.
-    public fun take_owned<T: key>(scenario: &mut Scenario): T {
-        let signer_address = sender(scenario);
-        let objects: vector<T> = get_account_owned_inventory<T>(
-            signer_address,
-            last_tx_start_index(scenario)
-        );
-        remove_unique_object_from_inventory(scenario, objects)
+    /// Ends the test scenario
+    /// Returns the results from the final transaction
+    /// Will abort if shared or immutable objects were deleted, transferred, or wrapped.
+    /// Will abort if TransactionEffects cannot be generated
+    public fun end(scenario: Scenario): TransactionEffects {
+        let Scenario { txn_number: _, ctx: _ } = scenario;
+        end_transaction()
     }
 
-    /// Remove the object of type `T` from the inventory of the current tx sender in `scenario`
-    /// that wast most recently created.
-    /// Aborts if there is no object of type `T` in the inventory of the tx sender.
-    public fun take_last_created_owned<T: key>(scenario: &mut Scenario): T {
-        let signer_address = sender(scenario);
-        let objects: vector<T> = get_account_owned_inventory<T>(
-            signer_address,
-            last_tx_start_index(scenario)
-        );
-        let num_objects = vector::length(&objects);
-        assert!(num_objects > 0, EEmptyInventory);
-        let res = vector::pop_back(&mut objects);
-        let removed_id = object::id(&res);
-        assert!(!vector::contains(&scenario.removed, &removed_id), EAlreadyRemovedObject);
-        vector::push_back(&mut scenario.removed, removed_id);
-        let i = 0;
-        // Put the rest of the objects back into the storage.
-        while (i < num_objects - 1) {
-            update_object(vector::remove(&mut objects, 0));
-            i = i + 1
-        };
-        vector::destroy_empty(objects);
-        res
-    }
-
-    /// Similar to take_owned, but only return objects that are immutable with type `T`.
-    /// In this case, the sender is irrelevant.
-    /// Returns a wrapper that only supports a `borrow` API to get the read-only reference.
-    public fun take_immutable<T: key>(scenario: &mut Scenario): ImmutableWrapper<T> {
-        let objects: vector<T> = get_unowned_inventory<T>(
-            true /* immutable */,
-            last_tx_start_index(scenario),
-        );
-        let object = remove_unique_object_from_inventory(scenario, objects);
-        ImmutableWrapper {
-            object,
-        }
-    }
-
-    /// Returns the underlying reference of an immutable object wrapper returned above.
-    public fun borrow<T: key>(wrapper: &ImmutableWrapper<T>): &T {
-        &wrapper.object
-    }
-
-    /// Similar to take_owned, but only return objects that are shared with type `T`.
-    /// In this case, the sender is irrelevant.
-    /// Returns a wrapper that only supports a `borrow_mut` API to get the mutable reference.
-    public fun take_shared<T: key>(scenario: &mut Scenario): SharedWrapper<T> {
-        let objects: vector<T> = get_unowned_inventory<T>(
-            false /* immutable */,
-            last_tx_start_index(scenario),
-        );
-        let object = remove_unique_object_from_inventory(scenario, objects);
-        SharedWrapper {
-            object,
-        }
-    }
-
-    /// Same as `take_shared`, but returns the object of type `T` with object ID `id`.
-    /// Should only be used in cases where current tx sender has more than one shared object of
-    /// type `T` in their inventory.
-    /// Returns a wrapper that only supports a `borrow_mut` API to get the mutable reference.
-    public fun take_shared_by_id<T: key>(scenario: &mut Scenario, id: ID): SharedWrapper<T> {
-        let objects: vector<T> = get_unowned_inventory<T>(
-            false, /* immutable */
-            last_tx_start_index(scenario)
-        );
-        let object_opt = find_object_by_id_in_inventory(objects, &id);
-        let object = remove_unique_object_from_inventory(scenario, option::to_vec(object_opt));
-        SharedWrapper {
-            object,
-        }
-    }
-
-     /// Return `true` if a call to `take_shared<T>(scenario)` will succeed
-    public fun can_take_shared<T: key>(scenario: &Scenario): bool {
-        let objects: vector<T> = get_unowned_inventory<T>(
-            false, /* immutable */
-            last_tx_start_index(scenario)
-        );
-        // Check that there is one unique such object, and it has not
-        // yet been removed from the inventory.
-        let res = vector::length(&objects) == 1;
-        if (res) {
-            let id = object::borrow_id(vector::borrow(&objects, 0));
-            res = !vector::contains(&scenario.removed, id);
-        };
-        drop_object_for_testing(objects);
-        res
-    }
-
-    /// This function tells you whether calling `take_shared_by_id` would succeed.
-    /// It provides a way to check without triggering assertions.
-    public fun can_take_shared_by_id<T: key>(scenario: &Scenario, id: ID): bool {
-        // Check that the object has not been removed from the inventory.
-        if (vector::contains(&scenario.removed, &id)) {
-            return false
-        };
-        let objects: vector<T> = get_unowned_inventory<T>(
-            false, /* immutable */
-            last_tx_start_index(scenario)
-        );
-        let object_opt: Option<T> = find_object_by_id_in_inventory(objects, &id);
-        let res =  option::is_some(&object_opt);
-        drop_object_for_testing(object_opt);
-        res
-    }
-
-    /// Remove the object of type `T` from the shared inventory that wast most recently created.
-    /// Aborts if there is no object of type `T` in the inventory.
-    public fun take_last_created_shared<T: key>(scenario: &mut Scenario): SharedWrapper<T> {
-        let objects: vector<T> = get_unowned_inventory<T>(
-            false,
-            last_tx_start_index(scenario)
-        );
-        let num_objects = vector::length(&objects);
-        assert!(num_objects > 0, EEmptyInventory);
-        let object = vector::pop_back(&mut objects);
-        let removed_id = object::id(&object);
-        assert!(!vector::contains(&scenario.removed, &removed_id), EAlreadyRemovedObject);
-        vector::push_back(&mut scenario.removed, removed_id);
-        let i = 0;
-        // Put the rest of the objects back into the storage.
-        while (i < num_objects - 1) {
-            update_object(vector::remove(&mut objects, 0));
-            i = i + 1
-        };
-        vector::destroy_empty(objects);
-        SharedWrapper {
-            object,
-        }
-    }
-
-    /// Returns the underlying mutable reference of a shared object.
-    public fun borrow_mut<T: key>(wrapper: &mut SharedWrapper<T>): &mut T {
-        &mut wrapper.object
-    }
-
-    /// Remove and return the child object of type `T2` owned by `parent_obj`.
-    /// Aborts if there is no object of type `T2` owned by `parent_obj`
-    /// Aborts if there is >1 object of type `T2` owned by `parent_obj`--this function
-    /// only succeeds when the object to choose is unambiguous. In cases where there are are multiple `T`'s
-    /// owned by `parent_obj`, the caller should resolve the ambiguity using `take_child_object_by_id`.
-    public fun take_child_object<T1: key, T2: key>(
-        scenario: &mut Scenario, parent_obj: &T1
-    ): T2 {
-        let signer_address = sender(scenario);
-        let objects = get_object_owned_inventory<T2>(
-            signer_address,
-            object::id_address(parent_obj),
-            last_tx_start_index(scenario),
-        );
-        remove_unique_object_from_inventory(scenario, objects)
-    }
-
-    /// Same as `take_owned`, but returns the object of type `T` with object ID `id`.
-    /// Should only be used in cases where current tx sender has more than one object of
-    /// type `T` in their inventory.
-    public fun take_owned_by_id<T: key>(scenario: &mut Scenario, id: ID): T {
-        let sender = sender(scenario);
-        let inventory: vector<T> = get_account_owned_inventory<T>(
-            sender,
-            last_tx_start_index(scenario)
-        );
-        let object_opt = find_object_by_id_in_inventory(inventory, &id);
-        remove_unique_object_from_inventory(scenario, option::to_vec(object_opt))
-    }
-
-    /// This function tells you whether calling `take_owned_by_id` would succeed.
-    /// It provides a way to check without triggering assertions.
-    public fun can_take_owned_by_id<T: key>(scenario: &Scenario, id: ID): bool {
-        // Check that the object has not been removed from the inventory.
-        if (vector::contains(&scenario.removed, &id)) {
-            return false
-        };
-        let sender = sender(scenario);
-        let objects: vector<T> = get_account_owned_inventory<T>(
-            sender,
-            last_tx_start_index(scenario)
-        );
-        // And the object with the specified ID is indeed one of the owned.
-        let object_opt: Option<T> = find_object_by_id_in_inventory(objects, &id);
-        let res =  option::is_some(&object_opt);
-        drop_object_for_testing(object_opt);
-        res
-    }
-
-    /// Same as `take_child_object`, but returns the child object of type `T` with object ID `id`.
-    /// Should only be used in cases where the parent object has more than one child of type `T`.
-    public fun take_child_object_by_id<T1: key, T2: key>(
-        scenario: &mut Scenario, parent_obj: &T1, child_id: ID
-    ): T2 {
-        let signer_address = sender(scenario);
-        let objects = get_object_owned_inventory<T2>(
-            signer_address,
-            object::id_address(parent_obj),
-            last_tx_start_index(scenario),
-        );
-        let child_object_opt = find_object_by_id_in_inventory(objects, &child_id);
-        remove_unique_object_from_inventory(scenario, option::to_vec(child_object_opt))
-    }
-
-    /// Return `t` to the global object pool maintained by `scenario`.
-    /// Subsequent calls to `take_owned<T>` will succeed if the object is in the inventory of the current
-    /// transaction sender.
-    /// Aborts if `t` was not previously taken from the inventory via a call to `take_owned` or similar.
-    public fun return_owned<T: key>(scenario: &mut Scenario, t: T) {
-        let id = object::borrow_id(&t);
-        let removed = &mut scenario.removed;
-        // TODO: add Vector::remove_element to Std that does this 3-liner
-        let (is_mem, idx) = vector::index_of(removed, id);
-        // can't return an object we haven't removed
-        assert!(is_mem, ECantReturnObject);
-        vector::remove(removed, idx);
-
-        // Update the object content in the inventory.
-        // Because the events are the source of truth for all object values in the inventory,
-        // we must put any state change future txes want to see in an event. It would not be safe
-        // to do (e.g.) `delete_object_for_testing(t)` instead.
-        update_object(t)
-    }
-
-    /// Similar to return_owned, return a shared object to the inventory.
-    public fun return_shared<T: key>(scenario: &mut Scenario, object_wrapper: SharedWrapper<T>) {
-        let SharedWrapper { object } = object_wrapper;
-        return_owned(scenario, object)
-    }
-
-    /// Return an immutable object to the inventory.
-    public fun return_immutable<T: key>(scenario: &mut Scenario, object_wrapper: ImmutableWrapper<T>) {
-        let ImmutableWrapper { object } = object_wrapper;
-        return_owned(scenario, object)
-    }
-
-    /// Return `true` if a call to `take_owned<T>(scenario)` will succeed
-    public fun can_take_owned<T: key>(scenario: &Scenario): bool {
-        let objects: vector<T> = get_account_owned_inventory<T>(
-            sender(scenario),
-            last_tx_start_index(scenario)
-        );
-        // Check that there is one unique such object, and it has not
-        // yet been removed from the inventory.
-        let res = vector::length(&objects) == 1;
-        if (res) {
-            let id = object::borrow_id(vector::borrow(&objects, 0));
-            res = !vector::contains(&scenario.removed, id);
-        };
-        drop_object_for_testing(objects);
-        res
-    }
+    // == accessors and helpers ==
 
     /// Return the `TxContext` associated with this `scenario`
     public fun ctx(scenario: &mut Scenario): &mut TxContext {
@@ -404,98 +144,218 @@ module sui::test_scenario {
     }
 
     /// Return the number of concluded transactions in this scenario.
-    /// This does not include the current transaction--e.g., this will return 0 if `next_tx` has never been called
+    /// This does not include the current transaction, e.g. this will return 0 if `next_tx` has
+    /// not yet been called
     public fun num_concluded_txes(scenario: &Scenario): u64 {
-        vector::length(&scenario.event_start_indexes) - 1
+        scenario.txn_number
     }
 
-    /// Return the index in the global transaction log where the events emitted by the `tx_idx`th transaction begin
-    fun tx_start_index(scenario: &Scenario, tx_idx: u64): u64 {
-        let idxs = &scenario.event_start_indexes;
-        let len = vector::length(idxs);
-        assert!(tx_idx < len, EInvalidTxIndex);
-        *vector::borrow(idxs, tx_idx)
+    /// Accessor for `created` field of `TransactionEffects`
+    public fun created(effects: &TransactionEffects): vector<ID> {
+        effects.created
     }
 
-    /// Return the tx start index of the current transaction. This is an index into the global event log
-    /// such that all events emitted by the current transaction occur at or after this index
-    fun last_tx_start_index(scenario: &Scenario): u64 {
-        let idxs = &scenario.event_start_indexes;
-        // Safe because because `event_start_indexes` is always non-empty
-        *vector::borrow(idxs, vector::length(idxs) - 1)
+    /// Accessor for `written` field of `TransactionEffects`
+    public fun written(effects: &TransactionEffects): vector<ID> {
+        effects.written
     }
 
-    fun remove_unique_object_from_inventory<T: key>(scenario: &mut Scenario, inventory: vector<T>): T {
-        let objects_len = vector::length(&inventory);
-        if (objects_len == 1) {
-            // found a unique object. ensure that it hasn't already been removed, then return it
-            let t = vector::pop_back(&mut inventory);
-            let id = object::id(&t);
-            vector::destroy_empty(inventory);
-
-            assert!(!vector::contains(&scenario.removed, &id), EAlreadyRemovedObject);
-            vector::push_back(&mut scenario.removed, id);
-            t
-        } else if (objects_len == 0) {
-            abort(EEmptyInventory)
-        } else { // objects_len > 1
-            abort(EInventoryAmbiguity)
-        }
+    /// Accessor for `deleted` field of `TransactionEffects`
+    public fun deleted(effects: &TransactionEffects): vector<ID> {
+        effects.deleted
     }
 
-    fun find_object_by_id_in_inventory<T: key>(inventory: vector<T>, id: &ID): Option<T> {
-        let object_opt = option::none();
-        while (!vector::is_empty(&inventory)) {
-            let element = vector::pop_back(&mut inventory);
-            if (object::borrow_id(&element) == id) {
-                // Within the same test scenario, there is no way to
-                // create two objects with the same ID. So this should
-                // be unique.
-                option::fill(&mut object_opt, element);
-            } else {
-                drop_object_for_testing(element);
-            }
-        };
-        vector::destroy_empty(inventory);
-
-        object_opt
+    /// Accessor for `transferred_to_account` field of `TransactionEffects`
+    public fun transferred_to_account(effects: &TransactionEffects): VecMap<ID, address> {
+        effects.transferred_to_account
     }
+
+    /// Accessor for `transferred_to_object` field of `TransactionEffects`
+    public fun transferred_to_object(effects: &TransactionEffects): VecMap<ID, ID> {
+        effects.transferred_to_object
+    }
+
+    /// Accessor for `shared` field of `TransactionEffects`
+    public fun shared(effects: &TransactionEffects): vector<ID> {
+        effects.shared
+    }
+
+    /// Accessor for `frozen` field of `TransactionEffects`
+    public fun frozen(effects: &TransactionEffects): vector<ID> {
+        effects.frozen
+    }
+
+    /// Accessor for `num_user_events` field of `TransactionEffects`
+    public fun num_user_events(effects: &TransactionEffects): u64 {
+        effects.num_user_events
+    }
+
+    // == from address ==
+
+    /// Remove the object of type `T` with ID `id` from the inventory of the `account`
+    /// An object is in the address's inventory if the object was transferred to the `account`
+    /// in a previous transaction. Using `return_to_address` is similar to `transfer` and you
+    /// must wait until the next transaction to re-take the object.
+    /// Aborts if there is no object of type `T` in the inventory with ID `id`
+    public native fun take_from_address_by_id<T: key>(
+        scenario: &Scenario,
+        account: address,
+        id: ID,
+    ): T;
+
+    /// Returns the most recent object of type `T` transferred to address `account` that has not
+    /// been taken
+    public native fun most_recent_id_for_address<T: key>(account: address): Option<ID>;
+
+    /// helper that returns true iff `most_recent_id_for_address` returns some
+    public fun has_most_recent_for_address<T: key>(account: address): bool {
+        option::is_some(&most_recent_id_for_address<T>(account))
+    }
+
+    /// Helper combining `take_from_address_by_id` and `most_recent_id_for_address`
+    /// Aborts if there is no object of type `T` in the inventory of `account`
+    public fun take_from_address<T: key>(scenario: &Scenario, account: address): T {
+        let id_opt = most_recent_id_for_address<T>(account);
+        assert!(option::is_some(&id_opt), EEmptyInventory);
+        take_from_address_by_id(scenario, account, option::destroy_some(id_opt))
+    }
+
+    /// Return `t` to the inventory of the `account`. `transfer` can be used directly instead,
+    /// but this function is helpful for test cleanliness as it will abort if the object was not
+    /// originally taken from this account
+    public fun return_to_address<T: key>(account: address, t: T) {
+        let id = object::id(&t);
+        assert!(was_taken_from_address(account, id), ECantReturnObject);
+        sui::transfer::transfer(t, account)
+    }
+
+    /// Returns true if the object with `ID` id was in the inventory for `account`
+    public native fun was_taken_from_address(account: address, id: ID): bool;
+
+    // == from sender ==
+
+    /// helper for `take_from_address_by_id` that operates over the transaction sender
+    public fun take_from_sender_by_id<T: key>(scenario: &Scenario, id: ID): T {
+        take_from_address_by_id(scenario, sender(scenario), id)
+    }
+
+    /// helper for `most_recent_id_for_address` that operates over the transaction sender
+    public fun most_recent_id_for_sender<T: key>(scenario: &Scenario): Option<ID> {
+        most_recent_id_for_address<T>(sender(scenario))
+    }
+
+    /// helper that returns true iff `most_recent_id_for_sender` returns some
+    public fun has_most_recent_for_sender<T: key>(scenario: &Scenario): bool {
+        option::is_some(&most_recent_id_for_address<T>(sender(scenario)))
+    }
+
+    /// helper for `take_from_address` that operates over the transaction sender
+    public fun take_from_sender<T: key>(scenario: &Scenario): T {
+        take_from_address(scenario, sender(scenario))
+    }
+
+    /// helper for `return_to_address` that operates over the transaction sender
+    public fun return_to_sender<T: key>(scenario: &Scenario, t: T) {
+        return_to_address(sender(scenario), t)
+    }
+
+    /// Returns true if the object with `ID` id was in the inventory for the sender
+    public fun was_taken_from_sender(scenario: &Scenario, id: ID): bool {
+        was_taken_from_address(sender(scenario), id)
+    }
+
+    // == immutable ==
+
+    /// Remove the immutable object of type `T` with ID `id` from the global inventory
+    /// Aborts if there is no object of type `T` in the inventory with ID `id`
+    public native fun take_immutable_by_id<T: key>(scenario: &Scenario, id: ID): T;
+
+    /// Returns the most recent immutable object of type `T` that has not been taken
+    public native fun most_recent_immutable_id<T: key>(): Option<ID>;
+
+    /// helper that returns true iff `most_recent_immutable_id` returns some
+    public fun has_most_recent_immutable<T: key>(): bool {
+        option::is_some(&most_recent_immutable_id<T>())
+    }
+
+    /// Helper combining `take_immutable_by_id` and `most_recent_immutable_id`
+    /// Aborts if there is no immutable object of type `T` in the global inventory
+    public fun take_immutable<T: key>(scenario: &Scenario): T {
+        let id_opt = most_recent_immutable_id<T>();
+        assert!(option::is_some(&id_opt), EEmptyInventory);
+        take_immutable_by_id(scenario, option::destroy_some(id_opt))
+    }
+
+    /// Return `t` to the global inventory
+    public fun return_immutable<T: key>(t: T) {
+        let id = object::id(&t);
+        assert!(was_taken_immutable(id), ECantReturnObject);
+        sui::transfer::freeze_object(t)
+    }
+
+    /// Returns true if the object with `ID` id was an immutable object in the global inventory
+    public native fun was_taken_immutable(id: ID): bool;
+
+    // == shared ==
+
+    /// Remove the shared object of type `T` with ID `id` from the global inventory
+    /// Aborts if there is no object of type `T` in the inventory with ID `id`
+    public native fun take_shared_by_id<T: key>(scenario: &Scenario, id: ID): T;
+
+    /// Returns the most recent shared object of type `T` that has not been taken
+    public native fun most_recent_id_shared<T: key>(): Option<ID>;
+
+    /// helper that returns true iff `most_recent_id_shared` returns some
+    public fun has_most_recent_shared<T: key>(): bool {
+        option::is_some(&most_recent_id_shared<T>())
+    }
+
+    /// Helper combining `take_shared_by_id` and `most_recent_id_shared`
+    /// Aborts if there is no shared object of type `T` in the global inventory
+    public fun take_shared<T: key>(scenario: &Scenario): T {
+        let id_opt = most_recent_id_shared<T>();
+        assert!(option::is_some(&id_opt), EEmptyInventory);
+        take_shared_by_id(scenario, option::destroy_some(id_opt))
+    }
+
+    /// Return `t` to the global inventory
+    public fun return_shared<T: key>(t: T) {
+        let id = object::id(&t);
+        assert!(was_taken_shared(id), ECantReturnObject);
+        sui::transfer::share_object(t)
+    }
+
+    /// Returns true if the object with `ID` id was an shared object in the global inventory
+    native fun was_taken_shared(id: ID): bool;
+
+    // // == child objects ==
+
+    // /// Remove the shared object of type `T` with ID `id` from the global inventory
+    // /// Aborts if there is no object of type `T` in the inventory with ID `id`
+    // public native fun take_child_object<T: key>(id: ID): T;
+
+    // /// Returns the most recent shared object of type `T`
+    // public native fun most_recent_id_shared<T: key>(): Option<ID>;
+
+    // /// Helper combining `take_shared_by_id` and `most_recent_id_shared`
+    // /// Aborts if there is no shared object of type `T` in the global inventory
+    // public fun take_shared<T: key>(): T {
+    //     let id = option::destroy_some(most_recent_id_shared<T>());
+    //     take_shared_by_id(id)
+    // }
+
+    // /// Return `t` to the global inventory
+    // /// Note that this is object will now be returned from `most_recent_id_shared`
+    // public fun return_shared<T: key>(t: T) {
+    //     sui::transfer::share_object(t)
+    // }
+
+    // == internal ==
+
+    // internal function that ends the transaction, realizing changes
+    native fun end_transaction(): TransactionEffects;
+
 
     // TODO: Add API's for inspecting user events, printing the user's inventory, ...
 
-    // ---Natives---
-
-    /// Return all live objects of type `T` that can be accessed by `signer_address` in the current transaction
-    /// Events at or beyond `tx_end_index` in the log should not be processed to build this inventory
-    native fun get_account_owned_inventory<T: key>(signer_address: address, tx_end_index: u64): vector<T>;
-
-    /// Return all live objects of type `T` that's owned by another object `parent_object_id`, with
-    /// signer account `signer_address`.
-    /// Events at or beyond `tx_end_index` in the log should not be processed to build this inventory
-    native fun get_object_owned_inventory<T: key>(
-        signer_address: address,
-        parent_object_id: address,
-        tx_end_index: u64,
-    ): vector<T>;
-
-    /// Return all live objects of type `T` that's not owned, i.e. either immutable or shared.
-    /// `immutable` indicates whether we want to return immutable object or shared.
-    /// Events at or beyond `tx_end_index` in the log should not be processed to build this inventory
-    native fun get_unowned_inventory<T: key>(immutable: bool, tx_end_index: u64): vector<T>;
-
-    /// Test-only function for dropping an arbitrary object.
-    /// Useful for eliminating objects without the `drop` ability.
-    /// Note that this doesn't delete the object from anywhere.
-    /// Usually it existed in the first place through a native copy
-    /// that could not be done in normal code path.
-    native fun drop_object_for_testing<T>(t: T);
-
-    /// Return the total number of events emitted by all txes in the current VM execution, including both user-defined events and system events
-    native fun num_events(): u64;
-
-    /// Find out all objects that were wrapped during the transaction, and emit an event for each of them.
-    native fun emit_wrapped_object_events<ID>(tx_begin_idx: u64, removed: &vector<ID>);
-
-    /// Update the content of an object in the inventory.
-    native fun update_object<T: key>(obj: T);
 }

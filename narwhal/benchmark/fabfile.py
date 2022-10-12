@@ -46,7 +46,12 @@ def local(ctx, debug=True):
         'max_concurrent_requests': 500_000,
         'prometheus_metrics': {
             "socket_addr": "/ip4/127.0.0.1/tcp/0/http"
-        }
+        },
+        "network_admin_server": {
+            # Use a random available local port.
+            "primary_network_admin_server_port": 0,
+            "worker_network_admin_server_base_port": 0
+        },
     }
     try:
         ret = LocalBench(bench_params, node_params).run(debug)
@@ -209,8 +214,13 @@ def remote(ctx, debug=False):
         },
         'max_concurrent_requests': 500_000,
         'prometheus_metrics': {
-            "socket_addr": "/ip4/127.0.0.1/tcp/0/http"
-        }
+            "socket_addr": "/ip4/0.0.0.0/tcp/0/http"
+        },
+        "network_admin_server": {
+            # Use a random available local port.
+            "primary_network_admin_server_port": 0,
+            "worker_network_admin_server_base_port": 0
+        },
     }
     try:
         Bench(ctx).run(bench_params, node_params, debug)

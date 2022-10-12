@@ -710,12 +710,10 @@ pub enum ReconfigureNotification {
     Shutdown,
 }
 
-/// The messages sent by the primary to its workers.
-#[allow(clippy::large_enum_variant)]
+/// Used by the primary to reconfigure the worker.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum PrimaryWorkerMessage {
-    /// Reconfigure the worker.
-    Reconfigure(ReconfigureNotification),
+pub struct WorkerReconfigureMessage {
+    pub message: ReconfigureNotification,
 }
 
 /// Used by the primary to request that the worker sync the target missing batches.

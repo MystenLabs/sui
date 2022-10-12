@@ -10,7 +10,7 @@ publish = false
 [dependencies]
 tempfile = "3.3.0"
 dashmap = "5.4.0"
-fastcrypto = "0.1.2"
+fastcrypto.workspace = true
 futures = "0.3.24"
 store.workspace = true
 thiserror = "1.0.35"

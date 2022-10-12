@@ -28,7 +28,7 @@ use crate::{
     gas_coin::GasCoin,
 };
 
-pub const GAS_VALUE_FOR_TESTING: u64 = 100000_u64;
+pub const GAS_VALUE_FOR_TESTING: u64 = 1_000_000_u64;
 pub const OBJECT_START_VERSION: SequenceNumber = SequenceNumber::from_u64(1);
 
 #[serde_as]

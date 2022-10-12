@@ -5,7 +5,7 @@
 /// and should NOT be running in production. Using the code unaudited could potentially
 /// result in lost of funds from hacks, and leakage of transaction amounts.
 
-/// Module representing an example implementation for private coins. 
+/// Module representing an example implementation for private coins.
 ///
 /// To implement any of the methods, module defining the type for the currency
 /// is expected to implement the main set of methods such as `borrow()`,
@@ -230,32 +230,37 @@ module fungible_tokens::private_coin_tests {
     struct MIZU has drop {}
 
     // Tests section
-    #[test] fun test_init_pool() { test_transfer_private_coin(&mut scenario()) }
+    #[test] fun test_init_pool() {
+        let scenario = scenario();
+        test_transfer_private_coin(&mut scenario);
+        test::end(scenario);
+    }
 
     fun test_transfer_private_coin(scenario: &mut Scenario) {
         let (owner, recipient) = people();
 
         // Create currency
-        next_tx(scenario, &owner); {
+        next_tx(scenario, owner);
+        {
             let cap = pc::create_currency(MIZU {}, ctx(scenario));
             transfer::transfer(cap, owner);
         };
 
         // Mint private coin
-        next_tx(scenario, &owner); {
-            let cap = test::take_owned<pc::TreasuryCap<MIZU>>(scenario);
+        next_tx(scenario, owner); {
+            let cap = test::take_from_sender<pc::TreasuryCap<MIZU>>(scenario);
             pc::mint_and_transfer(
                 &mut cap,
                 1000,
                 recipient,
                 ctx(scenario)
             );
-            test::return_owned(scenario, cap);
+            test::return_to_sender(scenario, cap);
         };
 
         // Split and transfer private coin
-        next_tx(scenario, &recipient); {
-            let coin = test::take_owned<pc::PrivateCoin<MIZU>>(scenario);
+        next_tx(scenario, recipient); {
+            let coin = test::take_from_sender<pc::PrivateCoin<MIZU>>(scenario);
             // This should be created off-chain in the actual implementation
             let commit = ec::create_pedersen_commitment(
                 ec::new_scalar_from_u64(990u64),
@@ -304,12 +309,12 @@ module fungible_tokens::private_coin_tests {
                 ctx(scenario)
             );
 
-            test::return_owned(scenario, coin);
+            test::return_to_sender(scenario, coin);
         };
 
         // Check that balances are correct when opened
-        next_tx(scenario, &recipient); {
-            let coin = test::take_owned<pc::PrivateCoin<MIZU>>(scenario);
+        next_tx(scenario, recipient); {
+            let coin = test::take_from_sender<pc::PrivateCoin<MIZU>>(scenario);
             let value = 10u64;
             // (0 - 10) mod P
             let blinding = vector[227, 211, 245, 92, 26, 99, 18, 88, 214, 156, 247, 162, 222, 249, 222, 20, 0, 0, 0, 0,
@@ -318,12 +323,12 @@ module fungible_tokens::private_coin_tests {
             pc::open_coin(&mut coin, value, blinding);
             // Get the opened public balance and check that this is accurate
             assert!(*option::borrow(&pb::value(pc::balance(&coin))) == value, 0);
-            test::return_owned(scenario, coin);
+            test::return_to_sender(scenario, coin);
         };
 
         // Transfer a public coin out. Ensure that this still remains public
-        next_tx(scenario, &recipient); {
-            let coin = test::take_owned<pc::PrivateCoin<MIZU>>(scenario);
+        next_tx(scenario, recipient); {
+            let coin = test::take_from_sender<pc::PrivateCoin<MIZU>>(scenario);
             let value = 1u64;
             // Open the coin
             pc::split_public_and_transfer<MIZU>(
@@ -335,10 +340,10 @@ module fungible_tokens::private_coin_tests {
             );
             // Check that the coin is still public and equals to 9
             assert!(*option::borrow(&pb::value(pc::balance(&coin))) == 9, 0);
-            test::return_owned(scenario, coin);
+            test::return_to_sender(scenario, coin);
         };
     }
     // utilities
-    fun scenario(): Scenario { test::begin(&@0x1) }
+    fun scenario(): Scenario { test::begin(@0x1) }
     fun people(): (address, address) { (@0xB0BA, @0x7EA) }
 }

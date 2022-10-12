@@ -161,7 +161,11 @@ impl crate::authority::AuthorityState {
         // transactions we may have received out of order.
         let mut current_batch: Vec<(TxSequenceNumber, ExecutionDigests)> = Vec::new();
 
-        while !exit {
+        loop {
+            if exit {
+                error!("batch service exited!");
+                break;
+            }
             // Reset the flags.
             make_batch = false;
 
@@ -169,7 +173,7 @@ impl crate::authority::AuthorityState {
             tokio::select! {
                 _ = interval.tick() => {
                     // Every so often we check if we should make a batch
-                    // but it should never be empty. But never empty.
+                    // but it should never be empty.
                     make_batch = true;
                 },
                 item_option = transaction_stream.next() => {
@@ -182,6 +186,9 @@ impl crate::authority::AuthorityState {
                             // Add to batch and broadcast
                             current_batch.push((seq, tx_digest));
                             let _ = self.batch_channels.send(UpdateItem::Transaction((seq, tx_digest)));
+
+                            self.metrics.batch_service_total_tx_broadcasted.inc();
+                            self.metrics.batch_service_latest_seq_broadcasted.set(seq as i64);
 
                             if current_batch.len() as TxSequenceNumber >= min_batch_size {
                                 make_batch = true;

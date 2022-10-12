@@ -17,7 +17,7 @@ export type CopyToClipboardProps = {
     children: ReactNode;
     copyOnlyOnIconClick?: boolean;
     className?: string;
-    mode?: 'normal' | 'highlighted';
+    mode?: 'normal' | 'highlighted' | 'plain';
 };
 
 function CopyToClipboard({
@@ -62,7 +62,7 @@ function CopyToClipboard({
             {children}
             <Icon
                 className={cl(st.copyIcon, st[mode], { [st.copied]: copied })}
-                icon={SuiIcons.Clipboard}
+                icon={SuiIcons.Copy}
                 onClick={copyToClipboard}
                 title="Copy to clipboard"
             />

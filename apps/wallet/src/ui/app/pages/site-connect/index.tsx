@@ -7,7 +7,7 @@ import { useParams } from 'react-router-dom';
 import Icon, { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
 import UserApproveContainer from '_components/user-approve-container';
-import { useAppDispatch, useAppSelector, useInitializedGuard } from '_hooks';
+import { useAppDispatch, useAppSelector } from '_hooks';
 import {
     permissionsSelectors,
     respondToPermissionRequest,
@@ -25,11 +25,10 @@ const permissionTypeToTxt: Record<PermissionType, string> = {
 
 function SiteConnectPage() {
     const { requestID } = useParams();
-    const guardLoading = useInitializedGuard(true);
     const permissionsInitialized = useAppSelector(
         ({ permissions }) => permissions.initialized
     );
-    const loading = guardLoading || !permissionsInitialized;
+    const loading = !permissionsInitialized;
     const permissionSelector = useMemo(
         () => (state: RootState) =>
             requestID

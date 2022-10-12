@@ -7,8 +7,8 @@ use std::cmp::min;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Duration;
 use sui_config::genesis::Genesis;
+use sui_network::default_mysten_network_config;
 use sui_tool::db_tool::{execute_db_tool_command, print_db_all_tables, DbToolCommand};
 
 use sui_core::authority_client::{
@@ -140,10 +140,7 @@ pub enum ToolCommand {
 }
 
 fn make_clients(genesis: &Genesis) -> Result<BTreeMap<AuthorityName, NetworkAuthorityClient>> {
-    let mut net_config = mysten_network::config::Config::new();
-    net_config.connect_timeout = Some(Duration::from_secs(5));
-    net_config.request_timeout = Some(Duration::from_secs(5));
-    net_config.http2_keepalive_interval = Some(Duration::from_secs(5));
+    let net_config = default_mysten_network_config();
 
     let mut authority_clients = BTreeMap::new();
 

@@ -4529,7 +4529,7 @@ dependencies = [
 [[package]]
 name = "mysten-util-mem"
 version = "0.11.0"
-source = "git+https://github.com/MystenLabs/mysten-infra#56e4d7b80bb33c555930b10915e20ba1ef4b1bad"
+source = "git+https://github.com/MystenLabs/mysten-infra?rev=ffb76dd4fa04463a03e68f66fb10df7cad618ed5#ffb76dd4fa04463a03e68f66fb10df7cad618ed5"
 dependencies = [
  "cfg-if 1.0.0",
  "ed25519-consensus",
@@ -4546,7 +4546,7 @@ dependencies = [
 [[package]]
 name = "mysten-util-mem-derive"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysten-infra#56e4d7b80bb33c555930b10915e20ba1ef4b1bad"
+source = "git+https://github.com/MystenLabs/mysten-infra?rev=ffb76dd4fa04463a03e68f66fb10df7cad618ed5#ffb76dd4fa04463a03e68f66fb10df7cad618ed5"
 dependencies = [
  "proc-macro2 1.0.43",
  "syn 1.0.99",
@@ -7773,11 +7773,13 @@ dependencies = [
  "anyhow",
  "bcs",
  "leb128",
+ "linked-hash-map",
  "move-binary-format",
  "move-core-types",
  "move-package",
  "move-vm-runtime",
  "once_cell",
+ "sui-cost-tables",
  "sui-framework",
  "sui-json",
  "sui-types",
@@ -7826,6 +7828,7 @@ dependencies = [
  "sui-core",
  "sui-json-rpc-types",
  "sui-macros",
+ "sui-network",
  "sui-node",
  "sui-sdk",
  "sui-simulator",
@@ -7849,6 +7852,8 @@ dependencies = [
  "bcs",
  "clap 3.2.17",
  "futures",
+ "jsonrpsee",
+ "move-core-types",
  "prometheus",
  "reqwest",
  "serde 1.0.144",
@@ -7861,6 +7866,7 @@ dependencies = [
  "sui-json-rpc-types",
  "sui-sdk",
  "sui-swarm",
+ "sui-transaction-builder",
  "sui-types",
  "telemetry-subscribers 0.2.0",
  "tempfile",
@@ -7920,6 +7926,7 @@ dependencies = [
  "eyre",
  "fastcrypto",
  "futures",
+ "itertools",
  "move-binary-format",
  "move-bytecode-utils",
  "move-core-types",
@@ -8157,6 +8164,7 @@ dependencies = [
  "sui-json-rpc-types",
  "sui-open-rpc",
  "sui-open-rpc-macros",
+ "sui-transaction-builder",
  "sui-types",
  "tokio",
  "tracing",
@@ -8342,6 +8350,7 @@ dependencies = [
  "sui-json",
  "sui-json-rpc",
  "sui-json-rpc-types",
+ "sui-transaction-builder",
  "sui-types",
  "tempfile",
  "tiny-bip39",
@@ -8467,6 +8476,7 @@ dependencies = [
  "strum_macros",
  "sui-config",
  "sui-core",
+ "sui-network",
  "sui-storage",
  "sui-types",
  "telemetry-subscribers 0.2.0",
@@ -8476,6 +8486,22 @@ dependencies = [
  "tracing",
  "typed-store",
  "typed-store-derive",
+ "workspace-hack",
+]
+
+[[package]]
+name = "sui-transaction-builder"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bcs",
+ "futures",
+ "move-core-types",
+ "sui-adapter",
+ "sui-json",
+ "sui-json-rpc-types",
+ "sui-types",
  "workspace-hack",
 ]
 
@@ -8845,6 +8871,7 @@ dependencies = [
  "jsonrpsee-http-client",
  "move-core-types",
  "move-package",
+ "multiaddr",
  "mysten-network",
  "once_cell",
  "prometheus",

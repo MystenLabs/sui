@@ -36,7 +36,7 @@ tracing = "0.1.36"
 tap = "1.0.1"
 
 consensus = { path = "../consensus", package = "narwhal-consensus" }
-fastcrypto = "0.1.2"
+fastcrypto.workspace = true
 crypto = { path = "../crypto", package = "narwhal-crypto" }
 network = { path = "../network", package = "narwhal-network" }
 types = { path = "../types", package = "narwhal-types" }
