@@ -1,6 +1,7 @@
 @use '_values/colors';
 
 .container {
+    flex: 1;
     display: flex;
     flex-flow: column nowrap;
     height: 100%;
