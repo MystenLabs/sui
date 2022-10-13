@@ -41,27 +41,31 @@ impl ConsensusProtocol for Bullshark {
         // We must have stored already the parents of this certiciate!
         if round > 0 {
             let parents = certificate.header.parents.clone();
-            let store_parents: BTreeSet<&CertificateDigest> = state
-                .dag
-                .get(&(round - 1))
-                .expect("We should have the previous round!")
-                .iter()
-                .map(|(_, (digest, _))| digest)
-                .collect();
-            for parent_digest in parents {
-                if !store_parents.contains(&parent_digest) {
-                    if round - 1 + self.gc_depth > state.last_committed_round {
-                        error!(
-                        "The store does not contain the parent of {:?}: Missing item digest={:?}",
-                        certificate, parent_digest
-                    );
-                    } else {
-                        debug!(
-                        "The store does not contain the parent of {:?}: Missing item digest={:?} (but below GC round)",
-                        certificate, parent_digest
-                    );
+            if let Some(round_table) = state.dag.get(&(round - 1)) {
+                let store_parents: BTreeSet<&CertificateDigest> =
+                    round_table.iter().map(|(_, (digest, _))| digest).collect();
+
+                for parent_digest in parents {
+                    if !store_parents.contains(&parent_digest) {
+                        if round - 1 + self.gc_depth > state.last_committed_round {
+                            error!(
+                                "The store does not contain the parent of {:?}: Missing item digest={:?}",
+                                certificate, parent_digest
+                            );
+                        } else {
+                            debug!(
+                                "The store does not contain the parent of {:?}: Missing item digest={:?} (but below GC round)",
+                                certificate, parent_digest
+                            );
+                        }
                     }
                 }
+            } else {
+                error!(
+                    "Round not present in Dag store: {:?} when looking for parents of {:?}",
+                    round - 1,
+                    certificate
+                );
             }
         }
 
