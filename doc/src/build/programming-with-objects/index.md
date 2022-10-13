@@ -13,7 +13,7 @@ Note, you can find Sui Move programming examples at: https://examples.sui.io/
 Understand:
 - [Learn about Sui](../../learn/about-sui.md)
 - [Smart Contracts with Move](../../build/move/index.md)
-- [Sui Objects](../../build/objects.md)
+- [Sui Objects](../../learn/objects.md)
 
 Install:
 - [Sui binaries](../install.md#binaries)
