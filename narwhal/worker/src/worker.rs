@@ -117,7 +117,6 @@ impl Worker {
             request_batches_timeout: worker.parameters.sync_retry_delay,
             request_batches_retry_nodes: worker.parameters.sync_retry_nodes,
             tx_reconfigure,
-            tx_primary: tx_primary.clone(),
             tx_batch_processor: tx_worker_processor,
         });
 
