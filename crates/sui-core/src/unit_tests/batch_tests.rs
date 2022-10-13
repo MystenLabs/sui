@@ -120,7 +120,7 @@ async fn test_open_manager() {
         //         when we re-open the database.
 
         store
-            .tables
+            .perpetual_tables
             .executed_sequence
             .insert(&0, &ExecutionDigests::random())
             .expect("no error on write");
@@ -143,7 +143,7 @@ async fn test_open_manager() {
 
         // TEST 3: If the database contains out of order transactions we just make a block with gaps
         store
-            .tables
+            .perpetual_tables
             .executed_sequence
             .insert(&2, &ExecutionDigests::random())
             .expect("no error on write");
@@ -445,7 +445,7 @@ async fn test_batch_store_retrieval() {
     for _i in 0u64..105 {
         let t0 = authority_state.batch_notifier.ticket(false).expect("ok");
         inner_store
-            .tables
+            .perpetual_tables
             .executed_sequence
             .insert(&t0.seq(), &tx_zero)
             .expect("Failed to write.");
@@ -462,7 +462,7 @@ async fn test_batch_store_retrieval() {
     for _i in 110u64..120 {
         let t0 = authority_state.batch_notifier.ticket(false).expect("ok");
         inner_store
-            .tables
+            .perpetual_tables
             .executed_sequence
             .insert(&t0.seq(), &tx_zero)
             .expect("Failed to write.");

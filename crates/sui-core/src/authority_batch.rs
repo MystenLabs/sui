@@ -60,7 +60,7 @@ impl crate::authority::AuthorityState {
     pub fn last_batch(&self) -> Result<Option<SignedBatch>, SuiError> {
         let last_batch = self
             .db()
-            .tables
+            .perpetual_tables
             .batches
             .iter()
             .skip_prior_to(&TxSequenceNumber::MAX)?
@@ -79,7 +79,7 @@ impl crate::authority::AuthorityState {
         // First read the last batch in the db
         let mut last_batch = match self
             .db()
-            .tables
+            .perpetual_tables
             .batches
             .iter()
             .skip_prior_to(&TxSequenceNumber::MAX)?
@@ -94,7 +94,7 @@ impl crate::authority::AuthorityState {
                     &*self.secret,
                     self.name,
                 );
-                self.db().tables.batches.insert(&0, &zero_batch)?;
+                self.db().perpetual_tables.batches.insert(&0, &zero_batch)?;
                 zero_batch.into_data()
             }
         };
@@ -102,7 +102,7 @@ impl crate::authority::AuthorityState {
         // See if there are any transactions in the database not in a batch
         let transactions: Vec<_> = self
             .db()
-            .tables
+            .perpetual_tables
             .executed_sequence
             .iter()
             .skip_to(&last_batch.next_sequence_number)?
@@ -117,7 +117,7 @@ impl crate::authority::AuthorityState {
                 &*self.secret,
                 self.name,
             );
-            self.db().tables.batches.insert(
+            self.db().perpetual_tables.batches.insert(
                 &last_signed_batch.data().next_sequence_number,
                 &last_signed_batch,
             )?;
@@ -136,7 +136,7 @@ impl crate::authority::AuthorityState {
         // This assumes we have initialized the database with a batch.
         let (next_sequence_number, prev_signed_batch) = self
             .db()
-            .tables
+            .perpetual_tables
             .batches
             .iter()
             .skip_prior_to(&TxSequenceNumber::MAX)?
@@ -214,7 +214,7 @@ impl crate::authority::AuthorityState {
                     self.name,
                 );
                 self.db()
-                    .tables
+                    .perpetual_tables
                     .batches
                     .insert(&new_batch.data().next_sequence_number, &new_batch)?;
                 debug!(next_sequence_number=?new_batch.data().next_sequence_number, "New batch created. Transactions: {:?}", current_batch);

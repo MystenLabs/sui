@@ -1388,7 +1388,7 @@ impl AuthorityState {
         // Get all unprocessed checkpoints
         for (_seq, batch) in state
             .database
-            .tables
+            .perpetual_tables
             .batches
             .iter()
             .skip_to(&next_expected_tx)
@@ -1396,7 +1396,7 @@ impl AuthorityState {
         {
             let transactions: Vec<(TxSequenceNumber, ExecutionDigests)> = state
                 .database
-                .tables
+                .perpetual_tables
                 .executed_sequence
                 .iter()
                 .skip_to(&batch.data().initial_sequence_number)
@@ -1735,7 +1735,7 @@ impl AuthorityState {
                 .get_indexes()?
                 .get_transactions_to_addr(address, cursor, limit, reverse)?,
             TransactionQuery::All => {
-                let iter = self.database.tables.executed_sequence.iter();
+                let iter = self.database.perpetual_tables.executed_sequence.iter();
                 if reverse {
                     let iter = iter
                         .skip_prior_to(&cursor)?
