@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { ObjectOwner, SuiAddress, TransactionDigest } from './common';
-import { SuiMovePackage, SuiObject, SuiObjectRef } from './objects';
+import {ObjectId, SuiMovePackage, SuiObject, SuiObjectRef} from './objects';
 
 export type TransferObject = {
   recipient: SuiAddress;
@@ -152,7 +152,24 @@ export type SuiExecuteTransactionResponse =
 
 export type GatewayTxSeqNumber = number;
 
-export type GetTxnDigestsResponse = [GatewayTxSeqNumber, TransactionDigest][];
+export type GetTxnDigestsResponse = TransactionDigest[];
+
+export type PaginatedTransactionDigests = {
+  data: TransactionDigest[];
+  nextCursor: TransactionDigest | null;
+};
+
+export type TransactionQuery =
+    | "All"
+    | { "MoveFunction": { "package": ObjectId, "module": string | null, "function": string | null } }
+    | { "InputObject": ObjectId }
+    | { "MutatedObject": ObjectId }
+    | { "FromAddress": SuiAddress }
+    | { "ToAddress": SuiAddress };
+
+export type Ordering =
+    | "Ascending"
+    | "Descending"
 
 export type MoveCall = {
   package: SuiObjectRef;

@@ -3,11 +3,9 @@
 
 import { IS_STATIC_ENV } from './envUtil';
 
-const deduplicate = (results: [number, string][] | undefined) =>
+const deduplicate = (results: string[] | undefined) =>
     results
-        ? results
-              .map((result) => result[1])
-              .filter((value, index, self) => self.indexOf(value) === index)
+        ? results.filter((value, index, self) => self.indexOf(value) === index)
         : [];
 
 let navigateWithUnknown: Function;

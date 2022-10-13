@@ -1,6 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::str::FromStr;
+use std::{collections::BTreeMap, sync::Arc};
+
 use futures::future;
 use jsonrpsee::core::client::{ClientT, Subscription, SubscriptionClientT};
 use jsonrpsee::rpc_params;
@@ -9,23 +12,6 @@ use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::ModuleId;
 use move_core_types::value::MoveStructLayout;
 use prometheus::Registry;
-use std::str::FromStr;
-use std::{collections::BTreeMap, sync::Arc};
-use sui_types::base_types::{ObjectRef, SequenceNumber};
-use sui_types::event::TransferType;
-use sui_types::object::{Object, ObjectRead, Owner, PastObjectRead};
-use sui_types::sui_framework_address_concat_string;
-use test_utils::authority::test_and_configure_authority_configs;
-use test_utils::messages::{
-    get_gas_object_with_wallet_context, make_transfer_object_transaction_with_wallet_context,
-};
-use test_utils::network::{
-    init_cluster_builder_env_aware, start_a_fullnode, start_a_fullnode_with_handle,
-};
-use test_utils::transaction::{
-    create_devnet_nft, delete_devnet_nft, increment_counter,
-    publish_basics_package_and_make_counter, transfer_coin,
-};
 use tokio::sync::Mutex;
 use tokio::time::timeout;
 use tokio::time::{sleep, Duration};
@@ -38,14 +24,30 @@ use sui_json_rpc_types::{
 use sui_macros::*;
 use sui_node::SuiNode;
 use sui_sdk::crypto::AccountKeystore;
+use sui_types::base_types::{ObjectRef, SequenceNumber};
+use sui_types::event::TransferType;
 use sui_types::messages::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
 };
+use sui_types::object::{Object, ObjectRead, Owner, PastObjectRead};
+use sui_types::query::TransactionQuery;
+use sui_types::sui_framework_address_concat_string;
 use sui_types::{
     base_types::{ObjectID, SuiAddress, TransactionDigest},
     messages::TransactionInfoRequest,
 };
+use test_utils::authority::test_and_configure_authority_configs;
 use test_utils::messages::make_transactions_with_wallet_context;
+use test_utils::messages::{
+    get_gas_object_with_wallet_context, make_transfer_object_transaction_with_wallet_context,
+};
+use test_utils::network::{
+    init_cluster_builder_env_aware, start_a_fullnode, start_a_fullnode_with_handle,
+};
+use test_utils::transaction::{
+    create_devnet_nft, delete_devnet_nft, increment_counter,
+    publish_basics_package_and_make_counter, transfer_coin,
+};
 use test_utils::transaction::{wait_for_all_txes, wait_for_tx};
 
 #[sim_test]
@@ -122,36 +124,50 @@ async fn test_full_node_move_function_index() -> Result<(), anyhow::Error> {
     let digest = tx_cert.transaction_digest;
 
     wait_for_tx(digest, node.state().clone()).await;
-    let txes = node
-        .state()
-        .get_transactions_by_move_function(
-            package_ref.0,
-            Some("counter".to_string()),
-            Some("increment".to_string()),
-        )
-        .await?;
+    let txes = node.state().get_transactions(
+        TransactionQuery::MoveFunction {
+            package: package_ref.0,
+            module: Some("counter".to_string()),
+            function: Some("increment".to_string()),
+        },
+        None,
+        None,
+        false,
+    )?;
 
     assert_eq!(txes.len(), 1);
-    assert_eq!(txes[0].1, digest);
+    assert_eq!(txes[0], digest);
 
-    let txes = node
-        .state()
-        .get_transactions_by_move_function(package_ref.0, None, None)
-        .await?;
+    let txes = node.state().get_transactions(
+        TransactionQuery::MoveFunction {
+            package: package_ref.0,
+            module: None,
+            function: None,
+        },
+        None,
+        None,
+        false,
+    )?;
 
     // 2 transactions in the package i.e create and increment counter
     assert_eq!(txes.len(), 2);
-    assert_eq!(txes[1].1, digest);
+    assert_eq!(txes[1], digest);
 
     eprint!("start...");
-    let txes = node
-        .state()
-        .get_transactions_by_move_function(package_ref.0, Some("counter".to_string()), None)
-        .await?;
+    let txes = node.state().get_transactions(
+        TransactionQuery::MoveFunction {
+            package: package_ref.0,
+            module: Some("counter".to_string()),
+            function: None,
+        },
+        None,
+        None,
+        false,
+    )?;
 
     // 2 transactions in the package i.e publish and increment
     assert_eq!(txes.len(), 2);
-    assert_eq!(txes[1].1, digest);
+    assert_eq!(txes[1], digest);
 
     Ok(())
 }
@@ -167,37 +183,52 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
 
     wait_for_tx(digest, node.state().clone()).await;
 
-    let txes = node
-        .state()
-        .get_transactions_by_input_object(transferred_object)
-        .await?;
+    let txes = node.state().get_transactions(
+        TransactionQuery::InputObject(transferred_object),
+        None,
+        None,
+        false,
+    )?;
 
     assert_eq!(txes.len(), 1);
-    assert_eq!(txes[0].1, digest);
+    assert_eq!(txes[0], digest);
 
-    let txes = node
-        .state()
-        .get_transactions_by_mutated_object(transferred_object)
-        .await?;
+    let txes = node.state().get_transactions(
+        TransactionQuery::MutatedObject(transferred_object),
+        None,
+        None,
+        false,
+    )?;
     assert_eq!(txes.len(), 1);
-    assert_eq!(txes[0].1, digest);
+    assert_eq!(txes[0], digest);
 
-    let txes = node.state().get_transactions_from_addr(sender).await?;
+    let txes =
+        node.state()
+            .get_transactions(TransactionQuery::FromAddress(sender), None, None, false)?;
     assert_eq!(txes.len(), 1);
-    assert_eq!(txes[0].1, digest);
+    assert_eq!(txes[0], digest);
 
-    let txes = node.state().get_transactions_to_addr(receiver).await?;
+    let txes =
+        node.state()
+            .get_transactions(TransactionQuery::ToAddress(receiver), None, None, false)?;
     assert_eq!(txes.len(), 1);
-    assert_eq!(txes[0].1, digest);
+    assert_eq!(txes[0], digest);
 
     // Note that this is also considered a tx to the sender, because it mutated
     // one or more of the sender's objects.
-    let txes = node.state().get_transactions_to_addr(sender).await?;
+    let txes =
+        node.state()
+            .get_transactions(TransactionQuery::ToAddress(sender), None, None, false)?;
     assert_eq!(txes.len(), 1);
-    assert_eq!(txes[0].1, digest);
+    assert_eq!(txes[0], digest);
 
     // No transactions have originated from the receiver
-    let txes = node.state().get_transactions_from_addr(receiver).await?;
+    let txes = node.state().get_transactions(
+        TransactionQuery::FromAddress(receiver),
+        None,
+        None,
+        false,
+    )?;
     assert_eq!(txes.len(), 0);
 
     // timestamp is recorded
@@ -570,13 +601,15 @@ async fn test_full_node_event_read_api_ok() -> Result<(), anyhow::Error> {
 
     wait_for_tx(digest, node.state().clone()).await;
 
-    let txes = node
-        .state()
-        .get_transactions_by_input_object(transferred_object)
-        .await?;
+    let txes = node.state().get_transactions(
+        TransactionQuery::InputObject(transferred_object),
+        None,
+        None,
+        false,
+    )?;
 
     assert_eq!(txes.len(), 1);
-    assert_eq!(txes[0].1, digest);
+    assert_eq!(txes[0], digest);
 
     // timestamp is recorded
     let ts = node.state().get_timestamp_ms(&digest).await?;

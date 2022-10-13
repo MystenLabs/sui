@@ -1,56 +1,56 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Provider } from './provider';
-import { JsonRpcClient } from '../rpc/client';
+import {Provider} from './provider';
+import {JsonRpcClient} from '../rpc/client';
 import {
   isGetObjectDataResponse,
   isGetOwnedObjectsResponse,
   isGetTxnDigestsResponse,
-  isSuiTransactionResponse,
-  isSuiMoveFunctionArgTypes,
-  isSuiMoveNormalizedModules,
-  isSuiMoveNormalizedModule,
-  isSuiMoveNormalizedFunction,
-  isSuiMoveNormalizedStruct,
-  isSuiExecuteTransactionResponse,
+  isPaginatedTransactionDigests,
   isSuiEvents,
+  isSuiExecuteTransactionResponse,
+  isSuiMoveFunctionArgTypes,
+  isSuiMoveNormalizedFunction,
+  isSuiMoveNormalizedModule,
+  isSuiMoveNormalizedModules,
+  isSuiMoveNormalizedStruct,
+  isSuiTransactionResponse,
 } from '../types/index.guard';
 import {
-  GatewayTxSeqNumber,
-  GetTxnDigestsResponse,
-  GetObjectDataResponse,
-  SuiObjectInfo,
-  SuiMoveFunctionArgTypes,
-  SuiMoveNormalizedModules,
-  SuiMoveNormalizedModule,
-  SuiMoveNormalizedFunction,
-  SuiMoveNormalizedStruct,
-  TransactionDigest,
-  SuiTransactionResponse,
-  SuiObjectRef,
-  getObjectReference,
   Coin,
-  SuiEventFilter,
-  SuiEventEnvelope,
-  SubscriptionId,
-  ExecuteTransactionRequestType,
-  SuiExecuteTransactionResponse,
-  SuiAddress,
-  ObjectOwner,
-  ObjectId,
-  SuiEvents,
-  EVENT_QUERY_MAX_LIMIT,
-  DEFAULT_START_TIME,
   DEFAULT_END_TIME,
+  DEFAULT_START_TIME,
+  EVENT_QUERY_MAX_LIMIT,
+  ExecuteTransactionRequestType,
+  GatewayTxSeqNumber,
+  GetObjectDataResponse,
+  getObjectReference,
+  GetTxnDigestsResponse,
+  ObjectId,
+  ObjectOwner,
+  Ordering,
+  PaginatedTransactionDigests,
+  SubscriptionId,
+  SuiAddress,
+  SuiEventEnvelope,
+  SuiEventFilter,
+  SuiEvents,
+  SuiExecuteTransactionResponse,
+  SuiMoveFunctionArgTypes,
+  SuiMoveNormalizedFunction,
+  SuiMoveNormalizedModule,
+  SuiMoveNormalizedModules,
+  SuiMoveNormalizedStruct,
+  SuiObjectInfo,
+  SuiObjectRef,
+  SuiTransactionResponse,
+  TransactionDigest,
+  TransactionQuery,
   SUI_TYPE_ARG,
 } from '../types';
-import { SignatureScheme } from '../cryptography/publickey';
-import {
-  DEFAULT_CLIENT_OPTIONS,
-  WebsocketClient,
-  WebsocketClientOptions,
-} from '../rpc/websocket-client';
+import {SignatureScheme} from '../cryptography/publickey';
+import {DEFAULT_CLIENT_OPTIONS, WebsocketClient, WebsocketClientOptions,} from '../rpc/websocket-client';
 
 const isNumber = (val: any): val is number => typeof val === 'number';
 const isAny = (_val: any): _val is any => true;
@@ -298,28 +298,47 @@ export class JsonRpcProvider extends Provider {
   }
 
   // Transactions
+  async getTransactions(
+      query: TransactionQuery,
+      cursor: TransactionDigest| null,
+      limit: number|null,
+      order: Ordering
+  ): Promise<PaginatedTransactionDigests> {
+    try {
+      return await this.client.requestWithType(
+          'sui_getTransactions',
+          [query, cursor, limit, order],
+          isPaginatedTransactionDigests,
+          this.skipDataValidation
+      );
+    } catch (err) {
+      throw new Error(
+          `Error getting transactions for query: ${err} for query ${query}`
+      );
+    }
+  }
 
   async getTransactionsForObject(
     objectID: string
   ): Promise<GetTxnDigestsResponse> {
     const requests = [
       {
-        method: 'sui_getTransactionsByInputObject',
-        args: [objectID],
+        method: 'sui_getTransactions',
+        args: [{ InputObject: objectID }, null, null, "Ascending"],
       },
       {
-        method: 'sui_getTransactionsByMutatedObject',
-        args: [objectID],
+        method: 'sui_getTransactions',
+        args: [{ MutatedObject: objectID }, null, null, "Ascending"],
       },
     ];
 
     try {
       const results = await this.client.batchRequestWithType(
         requests,
-        isGetTxnDigestsResponse,
+          isPaginatedTransactionDigests,
         this.skipDataValidation
       );
-      return [...results[0], ...results[1]];
+      return [...results[0].data, ...results[1].data];
     } catch (err) {
       throw new Error(
         `Error getting transactions for object: ${err} for id ${objectID}`
@@ -332,22 +351,22 @@ export class JsonRpcProvider extends Provider {
   ): Promise<GetTxnDigestsResponse> {
     const requests = [
       {
-        method: 'sui_getTransactionsToAddress',
-        args: [addressID],
+        method: 'sui_getTransactions',
+        args: [{ ToAddress: addressID }, null, null, "Ascending"],
       },
       {
-        method: 'sui_getTransactionsFromAddress',
-        args: [addressID],
+        method: 'sui_getTransactions',
+        args: [{ FromAddress: addressID }, null, null, "Ascending"],
       },
     ];
 
     try {
       const results = await this.client.batchRequestWithType(
         requests,
-        isGetTxnDigestsResponse,
+          isPaginatedTransactionDigests,
         this.skipDataValidation
       );
-      return [...results[0], ...results[1]];
+      return [...results[0].data, ...results[1].data];
     } catch (err) {
       throw new Error(
         `Error getting transactions for address: ${err} for id ${addressID}`
