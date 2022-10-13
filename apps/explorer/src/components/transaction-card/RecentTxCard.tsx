@@ -283,8 +283,8 @@ function LatestTxCard({ ...data }: RecentTx) {
                                 ]}
                                 colWidths={[
                                     '85px',
-                                    '95px',
-                                    '90px',
+                                    '100px',
+                                    '120px',
                                     '204px',
                                     '90px',
                                     '38px',
