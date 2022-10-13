@@ -36,6 +36,18 @@ export type SuiMoveObject = {
   has_public_transfer?: boolean;
 };
 
+export const MIST_PER_SUI: BigInt = BigInt(1000000000);
+
+export type CoinDenominationInfoResponse = {
+  /** Coin type like "0x2::sui::SUI" */
+  coinType: string;
+  /** min unit, like MIST */
+  basicUnit?: string;
+  /** number of zeros in the denomination,
+   * e.g., 9 here for SUI. */
+  decimalNumber: number;
+}
+
 export type SuiMovePackage = {
   /** A mapping from module name to disassembled Move bytecode */
   disassembled: MovePackageContent;
