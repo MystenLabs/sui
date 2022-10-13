@@ -6,7 +6,8 @@ use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 use sui_config::NetworkConfig;
 use sui_core::{
-    authority::AuthorityState, authority_aggregator::AuthorityAggregator,
+    authority::AuthorityState,
+    authority_aggregator::{AuthorityAggregator, AuthorityAggregatorBuilder},
     authority_client::NetworkAuthorityClient,
 };
 use sui_macros::sim_test;
@@ -23,7 +24,8 @@ use sui_types::{
 use test_utils::transaction::{publish_counter_package, submit_shared_object_transaction};
 use test_utils::{
     authority::{
-        spawn_checkpoint_processes, spawn_test_authorities, test_authority_aggregator,
+        spawn_checkpoint_processes,
+        spawn_test_authorities,
         test_authority_configs,
     },
     messages::{make_transactions_with_pre_genesis_objects, move_transaction},
@@ -116,7 +118,11 @@ fn make_aggregator(
     handles: &[SuiNodeHandle],
 ) -> AuthorityAggregator<NetworkAuthorityClient> {
     let committee_store = handles[0].with(|h| h.state().committee_store().clone());
-    test_authority_aggregator(configs, committee_store)
+    let (aggregator, _) = AuthorityAggregatorBuilder::from_network_config(configs)
+        .with_committee_store(committee_store)
+        .build()
+        .unwrap();
+    aggregator
 }
 
 #[sim_test]

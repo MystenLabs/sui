@@ -7,7 +7,6 @@ use futures::future::try_join_all;
 use futures::StreamExt;
 use prometheus::Registry;
 use rand::seq::SliceRandom;
-use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use strum_macros::EnumString;
@@ -21,29 +20,19 @@ use sui_benchmark::workloads::workload::get_latest;
 use sui_benchmark::workloads::{
     make_combination_workload, make_shared_counter_workload, make_transfer_object_workload,
 };
-use sui_core::authority_aggregator::AuthAggMetrics;
-use sui_core::authority_aggregator::{reconfig_from_genesis, AuthorityAggregator};
-use sui_core::authority_client::make_authority_clients;
+use sui_core::authority_aggregator::{reconfig_from_genesis, AuthorityAggregatorBuilder};
 use sui_core::authority_client::AuthorityAPI;
 use sui_core::authority_client::NetworkAuthorityClient;
-use sui_core::epoch::committee_store::CommitteeStore;
-use sui_core::safe_client::SafeClientMetrics;
-use sui_core::validator_info::make_committee;
-use sui_network::DEFAULT_CONNECT_TIMEOUT_SEC;
-use sui_network::DEFAULT_REQUEST_TIMEOUT_SEC;
 use sui_node::metrics;
-use sui_types::base_types::AuthorityName;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress;
 use sui_types::batch::UpdateItem;
-use sui_types::committee::Committee;
 use sui_types::crypto::AccountKeyPair;
 use sui_types::messages::BatchInfoRequest;
 use sui_types::messages::BatchInfoResponseItem;
 use sui_types::messages::TransactionInfoRequest;
 use tracing::log::info;
 
-use sui_core::authority_client::NetworkAuthorityClientMetrics;
 use test_utils::authority::spawn_test_authorities;
 use test_utils::authority::test_and_configure_authority_configs;
 use test_utils::objects::generate_gas_objects_with_owner;
@@ -255,12 +244,11 @@ async fn main() -> Result<()> {
         config.log_file = Some(opts.log_path);
     }
     let _guard = config.with_env().init();
-    let registry: Registry = metrics::start_prometheus_server(
+    let registry: Arc<Registry> = Arc::new(metrics::start_prometheus_server(
         format!("{}:{}", opts.client_metric_host, opts.client_metric_port)
             .parse()
             .unwrap(),
-    );
-    let network_authority_client_metrics = Arc::new(NetworkAuthorityClientMetrics::new(&registry));
+    ));
     let barrier = Arc::new(Barrier::new(2));
     let cloned_barrier = barrier.clone();
     let (primary_gas_id, owner, keypair, aggregator) = if opts.local {
@@ -285,24 +273,10 @@ async fn main() -> Result<()> {
         let cloned_config = configs.clone();
         let cloned_gas = primary_gas;
 
-        let auth_clients = make_authority_clients(
-            configs.validator_set(),
-            DEFAULT_CONNECT_TIMEOUT_SEC,
-            DEFAULT_REQUEST_TIMEOUT_SEC,
-            network_authority_client_metrics.clone(),
-        );
-
-        let committee = configs.committee();
-
-        let committee_store = Arc::new(CommitteeStore::new_for_testing(&committee));
-        let aggregator = Arc::new(AuthorityAggregator::new(
-            committee,
-            committee_store,
-            auth_clients.clone(),
-            AuthAggMetrics::new(&registry),
-            Arc::new(SafeClientMetrics::new(&registry)),
-            network_authority_client_metrics.clone(),
-        ));
+        let (aggregator, auth_clients) = AuthorityAggregatorBuilder::from_network_config(&configs)
+            .with_registry(registry.clone())
+            .build()
+            .unwrap();
 
         // spawn a thread to spin up sui nodes on the multi-threaded server runtime
         let _ = std::thread::spawn(move || {
@@ -337,7 +311,12 @@ async fn main() -> Result<()> {
                 join_all(follower_handles).await;
             });
         });
-        (primary_gas_id, owner, Arc::new(keypair), aggregator)
+        (
+            primary_gas_id,
+            owner,
+            Arc::new(keypair),
+            Arc::new(aggregator),
+        )
     } else {
         eprintln!("Configuring remote benchmark..");
         std::thread::spawn(move || {
@@ -348,21 +327,13 @@ async fn main() -> Result<()> {
                     cloned_barrier.wait().await;
                 });
         });
-        let (committee, authority_clients) = get_genesis_committee_and_clients(
-            &opts.genesis_blob_path,
-            network_authority_client_metrics.clone(),
-        )
-        .await
-        .unwrap();
-        let committee_store = Arc::new(CommitteeStore::new_for_testing(&committee));
-        let aggregator = AuthorityAggregator::new(
-            committee,
-            committee_store,
-            authority_clients,
-            AuthAggMetrics::new(&registry),
-            Arc::new(SafeClientMetrics::new(&registry)),
-            network_authority_client_metrics.clone(),
-        );
+        let genesis = sui_config::node::Genesis::new_from_file(&opts.genesis_blob_path);
+        let genesis = genesis.genesis()?;
+        let (aggregator, _) = AuthorityAggregatorBuilder::from_genesis(genesis)
+            .with_registry(registry.clone())
+            .build()
+            .unwrap();
+
         let aggregator = Arc::new(reconfig_from_genesis(aggregator).await?);
         eprintln!(
             "Reconfiguration - Reconfiguration to epoch {} is done",
@@ -410,6 +381,7 @@ async fn main() -> Result<()> {
     let prev_benchmark_stats_path = opts.compare_with.clone();
     let curr_benchmark_stats_path = opts.benchmark_stats_path.clone();
     let arc_agg = aggregator.clone();
+    let registry_clone = registry.clone();
     let handle = std::thread::spawn(move || {
         client_runtime.block_on(async move {
             match opts.run_spec {
@@ -486,7 +458,7 @@ async fn main() -> Result<()> {
                     let show_progress = interval.is_unbounded();
                     let driver = BenchDriver::new(stat_collection_interval);
                     driver
-                        .run(workloads, arc_agg, &registry, show_progress, interval)
+                        .run(workloads, arc_agg, &registry_clone, show_progress, interval)
                         .await
                 }
             }
@@ -520,22 +492,4 @@ async fn main() -> Result<()> {
         }
         Ok(())
     }
-}
-
-async fn get_genesis_committee_and_clients(
-    genesis_blob_path: &str,
-    network_authority_client_metrics: Arc<NetworkAuthorityClientMetrics>,
-) -> Result<(Committee, BTreeMap<AuthorityName, NetworkAuthorityClient>)> {
-    let genesis = sui_config::node::Genesis::new_from_file(&genesis_blob_path);
-
-    let validator_set = genesis.genesis()?.validator_set();
-    let auth_clients = make_authority_clients(
-        validator_set,
-        DEFAULT_CONNECT_TIMEOUT_SEC,
-        DEFAULT_REQUEST_TIMEOUT_SEC,
-        network_authority_client_metrics,
-    );
-
-    let committee = make_committee(0, validator_set)?;
-    Ok((committee, auth_clients))
 }

@@ -5,12 +5,12 @@ use bcs::to_bytes;
 use move_core_types::{account_address::AccountAddress, ident_str};
 use move_package::BuildConfig;
 use multiaddr::Multiaddr;
-use sui_network::{DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_REQUEST_TIMEOUT_SEC};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use sui_config::genesis::Genesis;
 use sui_config::ValidatorInfo;
+use sui_network::{DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_REQUEST_TIMEOUT_SEC};
 use sui_types::crypto::{
     generate_proof_of_possession, get_authority_key_pair, get_key_pair, AccountKeyPair,
     AuthorityKeyPair, AuthorityPublicKeyBytes, NetworkKeyPair, SuiKeyPair,
