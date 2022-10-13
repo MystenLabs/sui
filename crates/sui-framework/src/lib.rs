@@ -133,6 +133,8 @@ pub fn build_and_verify_package(
     Ok(modules)
 }
 
+/// This function returns a result of UnitTestResult. The outer result indicates whether it
+/// successfully started running the test, and the inner result indicatests whether all tests pass.
 pub fn run_move_unit_tests(
     path: &Path,
     build_config: BuildConfig,
@@ -237,18 +239,9 @@ mod tests {
     fn run_framework_move_unit_tests() {
         get_sui_framework();
         get_move_stdlib();
-        build_and_verify_package(
-            &PathBuf::from(DEFAULT_FRAMEWORK_PATH),
-            BuildConfig::default(),
-        )
-        .unwrap();
-        run_move_unit_tests(
-            Path::new(env!("CARGO_MANIFEST_DIR")),
-            BuildConfig::default(),
-            None,
-            false,
-        )
-        .unwrap();
+        let path = PathBuf::from(DEFAULT_FRAMEWORK_PATH);
+        build_and_verify_package(&path, BuildConfig::default()).unwrap();
+        check_move_unit_tests(&path);
     }
 
     #[test]
@@ -268,7 +261,7 @@ mod tests {
                 .join("../../sui_programmability/examples")
                 .join(example);
             build_and_verify_package(&path, BuildConfig::default()).unwrap();
-            run_move_unit_tests(&path, BuildConfig::default(), None, false).unwrap();
+            check_move_unit_tests(&path);
         }
     }
 
@@ -278,6 +271,13 @@ mod tests {
         let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../doc/book/examples");
 
         build_and_verify_package(&path, BuildConfig::default()).unwrap();
-        run_move_unit_tests(&path, BuildConfig::default(), None, false).unwrap();
+        check_move_unit_tests(&path);
+    }
+
+    fn check_move_unit_tests(path: &Path) {
+        assert_eq!(
+            run_move_unit_tests(path, BuildConfig::default(), None, false).unwrap(),
+            UnitTestResult::Success
+        );
     }
 }
