@@ -35,6 +35,7 @@ async fn reconfig_end_to_end_tests() {
     for c in configs.validator_configs.iter_mut() {
         // Turn off checkpoint process so that we can have fine control over it in the test.
         c.enable_checkpoint = false;
+        c.enable_reconfig = true;
     }
 
     let configs = Arc::new(configs);
@@ -150,6 +151,7 @@ async fn reconfig_last_checkpoint_sync_missing_tx() {
     for c in configs.validator_configs.iter_mut() {
         // Turn off checkpoint process so that we can have fine control over it in the test.
         c.enable_checkpoint = false;
+        c.enable_reconfig = true;
     }
     let validator_info = configs.validator_set();
     let mut gas_objects = test_gas_objects();
@@ -200,12 +202,9 @@ async fn reconfig_last_checkpoint_sync_missing_tx() {
                 .lock()
                 .is_ready_to_finish_epoch_change()
             {
-                let _ = checkpoint_process_step(
-                    active.clone(),
-                    &CheckpointProcessControl::default(),
-                    true,
-                )
-                .await;
+                let _ =
+                    checkpoint_process_step(active.clone(), &CheckpointProcessControl::default())
+                        .await;
             }
         })
     });
@@ -227,7 +226,6 @@ async fn reconfig_last_checkpoint_sync_missing_tx() {
                 let _ = checkpoint_process_step(
                     node.active().clone(),
                     &CheckpointProcessControl::default(),
-                    true,
                 )
                 .await;
             }
@@ -335,12 +333,9 @@ async fn fast_forward_to_ready_for_reconfig_start(handles: &[SuiNodeHandle]) {
                 .lock()
                 .is_ready_to_start_epoch_change()
             {
-                let _ = checkpoint_process_step(
-                    active.clone(),
-                    &CheckpointProcessControl::default(),
-                    true,
-                )
-                .await;
+                let _ =
+                    checkpoint_process_step(active.clone(), &CheckpointProcessControl::default())
+                        .await;
             }
         })
     });
@@ -358,12 +353,9 @@ async fn fast_forward_to_ready_for_reconfig_finish(handles: &[SuiNodeHandle]) {
                 .lock()
                 .is_ready_to_finish_epoch_change()
             {
-                let _ = checkpoint_process_step(
-                    active.clone(),
-                    &CheckpointProcessControl::default(),
-                    true,
-                )
-                .await;
+                let _ =
+                    checkpoint_process_step(active.clone(), &CheckpointProcessControl::default())
+                        .await;
             }
         })
     });

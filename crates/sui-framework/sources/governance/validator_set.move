@@ -203,7 +203,14 @@ module sui::validator_set {
 
         // and deposit into the new validator's pool
         request_add_delegation(self, new_validator_address, principal_stake, time_lock, ctx);
-        request_add_delegation(self, new_validator_address, rewards_stake, option::none(), ctx);
+
+        // If staking rewards was earned with the previous validator, we add that to delegate with the new validator too.
+        if (balance::value(&rewards_stake) > 0) {
+            request_add_delegation(self, new_validator_address, rewards_stake, option::none(), ctx)
+        } else {
+            balance::destroy_zero(rewards_stake)
+        };
+        
 
         self.next_epoch_validators = derive_next_epoch_validators(self);
     }

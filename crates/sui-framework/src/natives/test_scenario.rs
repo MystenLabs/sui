@@ -230,6 +230,32 @@ pub fn take_from_address_by_id(
     ))
 }
 
+// native fun ids_for_address<T: key>(account: address): vector<ID>;
+pub fn ids_for_address(
+    context: &mut NativeContext,
+    ty_args: Vec<Type>,
+    mut args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    let specified_ty = get_specified_ty(ty_args);
+    let account: SuiAddress = pop_arg!(args, AccountAddress).into();
+    assert!(args.is_empty());
+    let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
+    let inventories = &mut object_runtime.test_inventories;
+    let ids = inventories
+        .address_inventories
+        .get(&account)
+        .and_then(|inv| inv.get(&specified_ty))
+        .map(|s| {
+            s.keys()
+                .map(|id| pack_id(*id))
+                .into_iter()
+                .collect::<Vec<Value>>()
+        })
+        .unwrap_or_default();
+    let ids_vector = Value::vector_for_testing_only(ids);
+    Ok(NativeResult::ok(legacy_test_cost(), smallvec![ids_vector]))
+}
+
 // native fun most_recent_id_for_address<T: key>(account: address): Option<ID>;
 pub fn most_recent_id_for_address(
     context: &mut NativeContext,

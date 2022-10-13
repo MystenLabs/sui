@@ -20,6 +20,7 @@ use sui_types::{
     SUI_SYSTEM_STATE_OBJECT_ID,
 };
 
+use crate::authority::AuthorityState;
 use crate::checkpoints::reconstruction::SpanGraph;
 use crate::{
     authority::TemporaryStore,
@@ -39,6 +40,7 @@ async fn test_start_epoch_change() {
     let genesis_objects = vec![object.clone(), gas_object.clone()];
     // Create authority_aggregator and authority states.
     let (net, states, _) = init_local_authorities(4, genesis_objects.clone()).await;
+    enable_reconfig(&states);
     let state = states[0].clone();
 
     // Check that we initialized the genesis epoch.
@@ -173,6 +175,7 @@ async fn test_finish_epoch_change() {
     // Create authority_aggregator and authority states.
     let genesis_objects = vec![];
     let (net, states, _) = init_local_authorities(4, genesis_objects.clone()).await;
+    enable_reconfig(&states);
     let actives: Vec<_> = states
         .iter()
         .map(|state| {
@@ -245,5 +248,11 @@ async fn test_finish_epoch_change() {
         assert!(response.signed_effects.is_some());
         assert!(response.certified_transaction.is_some());
         assert!(response.signed_effects.is_some());
+    }
+}
+
+fn enable_reconfig(states: &[Arc<AuthorityState>]) {
+    for state in states {
+        state.checkpoints.lock().enable_reconfig = true;
     }
 }

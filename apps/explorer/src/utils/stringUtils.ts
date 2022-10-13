@@ -97,7 +97,7 @@ export async function genFileTypeMsg(
 export const alttextgen = (value: number | string | boolean | BN): string =>
     truncate(String(value), 19);
 
-export const presentBN = (amount: BN) =>
+export const presentBN = (amount: bigint) =>
     amount.toString().replace(/(\d)(?=(\d{3})+$)/g, '$1,');
 
 // TODO: Use version of this function from the SDK when it is exposed.

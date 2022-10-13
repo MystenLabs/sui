@@ -39,6 +39,7 @@ pub fn test_staking_pool(sui_address: SuiAddress, epoch_starting_sui_balance: u6
         validator_address: sui_address.into(),
         starting_epoch: 0,
         epoch_starting_sui_balance,
+        epoch_starting_delegation_token_supply: 0,
         sui_balance: 999,
         rewards_pool: Balance::new(0),
         delegation_token_supply: Supply { value: 0 },

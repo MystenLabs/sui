@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 
 import Icon, { SuiIcons } from '_components/icon';
@@ -62,31 +62,85 @@ function SiteConnectPage() {
         }
     }, [loading, permissionRequest]);
 
+    const parsedOrigin = useMemo(
+        () => (permissionRequest ? new URL(permissionRequest.origin) : null),
+        [permissionRequest]
+    );
+
+    const isSecure = parsedOrigin?.protocol === 'https:';
+    const [displayWarning, setDisplayWarning] = useState(!isSecure);
+
+    const handleHideWarning = useCallback(
+        (allowed: boolean) => {
+            if (allowed) {
+                setDisplayWarning(false);
+            } else {
+                handleOnSubmit(false);
+            }
+        },
+        [handleOnSubmit]
+    );
+
+    useEffect(() => {
+        setDisplayWarning(!isSecure);
+    }, [isSecure]);
+
     return (
         <Loading loading={loading}>
-            {permissionRequest ? (
-                <UserApproveContainer
-                    origin={permissionRequest.origin}
-                    originFavIcon={permissionRequest.favIcon}
-                    approveTitle="Connect"
-                    rejectTitle="Cancel"
-                    onSubmit={handleOnSubmit}
-                    isConnect
-                >
-                    <div className={st.label}>App Permissions</div>
-                    <ul className={st.permissions}>
-                        {permissionRequest.permissions.map((aPermission) => (
-                            <li key={aPermission} className={st.permission}>
-                                <Icon
-                                    icon={SuiIcons.Checkmark}
-                                    className={st.checkmark}
-                                />
-                                {permissionTypeToTxt[aPermission]}
-                            </li>
-                        ))}
-                    </ul>
-                </UserApproveContainer>
-            ) : null}
+            {permissionRequest &&
+                (displayWarning ? (
+                    <UserApproveContainer
+                        origin={permissionRequest.origin}
+                        originFavIcon={permissionRequest.favIcon}
+                        approveTitle="Continue"
+                        rejectTitle="Reject"
+                        onSubmit={handleHideWarning}
+                        isWarning
+                        isConnect
+                    >
+                        <div className={st.warningWrapper}>
+                            <h1 className={st.warningTitle}>
+                                Your Connection is Not Secure
+                            </h1>
+                        </div>
+
+                        <div className={st.warningMessage}>
+                            This site requesting this wallet connection is not
+                            secure, and attackers might be trying to steal your
+                            information.
+                            <br />
+                            <br />
+                            Continue at your own risk.
+                        </div>
+                    </UserApproveContainer>
+                ) : (
+                    <UserApproveContainer
+                        origin={permissionRequest.origin}
+                        originFavIcon={permissionRequest.favIcon}
+                        approveTitle="Connect"
+                        rejectTitle="Cancel"
+                        onSubmit={handleOnSubmit}
+                        isConnect
+                    >
+                        <div className={st.label}>App Permissions</div>
+                        <ul className={st.permissions}>
+                            {permissionRequest.permissions.map(
+                                (aPermission) => (
+                                    <li
+                                        key={aPermission}
+                                        className={st.permission}
+                                    >
+                                        <Icon
+                                            icon={SuiIcons.Checkmark}
+                                            className={st.checkmark}
+                                        />
+                                        {permissionTypeToTxt[aPermission]}
+                                    </li>
+                                )
+                            )}
+                        </ul>
+                    </UserApproveContainer>
+                ))}
         </Loading>
     );
 }

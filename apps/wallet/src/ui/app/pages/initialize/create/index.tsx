@@ -36,7 +36,7 @@ const CreatePage = () => {
                 onSubmit={async (values) => {
                     try {
                         await dispatch(
-                            createMnemonic({ password: values['password'] })
+                            createMnemonic({ password: values.password })
                         ).unwrap();
                         navigate('../backup');
                     } catch (e) {

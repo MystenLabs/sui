@@ -25,6 +25,7 @@ jobs:
       - name: "Download artifact"
         uses: actions/github-script@v6
         id: get-artifact
+        if: steps.source-run-info.outputs.pullRequestNumber
         with:
           result-encoding: string
           script: |
@@ -46,7 +47,7 @@ jobs:
 
       - name: Comment PR
         uses: thollander/actions-comment-pull-request@v1
-        if: steps.get-artifact.outputs.result == 'true'
+        if: steps.get-artifact.outputs.result == 'true' && steps.source-run-info.outputs.pullRequestNumber
         with:
           pr_number: ${{ steps.source-run-info.outputs.pullRequestNumber }}
           comment_includes: "⚠️ 🦋 **Changesets Warning:**"
@@ -58,7 +59,7 @@ jobs:
 
       - name: Remove outdated comments
         uses: actions/github-script@v6
-        if: steps.get-artifact.outputs.result == 'false'
+        if: steps.get-artifact.outputs.result == 'false' && steps.source-run-info.outputs.pullRequestNumber
         env:
           ISSUE_NUMBER: ${{ steps.source-run-info.outputs.pullRequestNumber }}
         with:

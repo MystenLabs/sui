@@ -43,6 +43,7 @@ import {
   EVENT_QUERY_MAX_LIMIT,
   DEFAULT_START_TIME,
   DEFAULT_END_TIME,
+  SUI_TYPE_ARG,
 } from '../types';
 import { SignatureScheme } from '../cryptography/publickey';
 import {
@@ -217,6 +218,34 @@ export class JsonRpcProvider extends Provider {
       .map((c) => c.objectId);
 
     return await this.getObjectBatch(coinIds);
+  }
+
+  async selectCoinsWithBalanceGreaterThanOrEqual(
+    address: string,
+    amount: bigint,
+    typeArg: string = SUI_TYPE_ARG,
+    exclude: ObjectId[] = []
+  ): Promise<GetObjectDataResponse[]> {
+    const coins = await this.getCoinBalancesOwnedByAddress(address, typeArg);
+    return (await Coin.selectCoinsWithBalanceGreaterThanOrEqual(
+      coins,
+      amount,
+      exclude
+    )) as GetObjectDataResponse[];
+  }
+
+  async selectCoinSetWithCombinedBalanceGreaterThanOrEqual(
+    address: string,
+    amount: bigint,
+    typeArg: string = SUI_TYPE_ARG,
+    exclude: ObjectId[] = []
+  ): Promise<GetObjectDataResponse[]> {
+    const coins = await this.getCoinBalancesOwnedByAddress(address, typeArg);
+    return (await Coin.selectCoinSetWithCombinedBalanceGreaterThanOrEqual(
+      coins,
+      amount,
+      exclude
+    )) as GetObjectDataResponse[];
   }
 
   async getObjectsOwnedByObject(objectId: string): Promise<SuiObjectInfo[]> {

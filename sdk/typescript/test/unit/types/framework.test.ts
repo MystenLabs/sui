@@ -5,12 +5,10 @@ import { describe, it, expect } from 'vitest';
 import mockObjectData from '@mysten/sui-open-rpc/samples/objects.json';
 import { Coin, GetObjectDataResponse } from '../../../src';
 
-import BN from 'bn.js';
-
 describe('Test framework classes', () => {
   it('Test coin utils', () => {
     const data = mockObjectData['coin'] as GetObjectDataResponse;
     expect(Coin.isCoin(data)).toBeTruthy();
-    expect(Coin.getBalance(data)).toEqual(new BN.BN('100000000000000'));
+    expect(Coin.getBalance(data)).toEqual(BigInt('100000000000000'));
   });
 });

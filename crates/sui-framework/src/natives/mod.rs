@@ -137,6 +137,11 @@ pub fn all_natives(
             make_native!(test_scenario::end_transaction),
         ),
         (
+            "test_scenario",
+            "ids_for_address",
+            make_native!(test_scenario::ids_for_address),
+        ),
+        (
             "transfer",
             "transfer_internal",
             make_native!(transfer::transfer_internal),

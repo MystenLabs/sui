@@ -21,6 +21,7 @@ type UserApproveContainerProps = {
     approveTitle: string;
     onSubmit: (approved: boolean) => void;
     isConnect?: boolean;
+    isWarning?: boolean;
 };
 
 function UserApproveContainer({
@@ -31,6 +32,7 @@ function UserApproveContainer({
     approveTitle,
     onSubmit,
     isConnect,
+    isWarning,
 }: UserApproveContainerProps) {
     const [submitting, setSubmitting] = useState(false);
     const handleOnResponse = useCallback<MouseEventHandler<HTMLButtonElement>>(
@@ -45,6 +47,8 @@ function UserApproveContainer({
 
     const parsedOrigin = useMemo(() => new URL(origin), [origin]);
 
+    const isSecure = parsedOrigin.protocol === 'https:';
+
     return (
         <div className={st.container}>
             <div className={st.scrollBody}>
@@ -57,22 +61,30 @@ function UserApproveContainer({
                         />
                     ) : null}
                     <div className={st.host}>{parsedOrigin.host}</div>
-                    <AccountAddress showLink={false} />
-                    <ExternalLink href={origin} className={st.origin}>
+                    <ExternalLink
+                        href={origin}
+                        className={cl(st.origin, !isSecure && st.warning)}
+                        showIcon={isSecure}
+                    >
                         {origin}
                     </ExternalLink>
+                    <AccountAddress showLink={false} />
                 </div>
                 <div className={st.children}>{children}</div>
             </div>
             <div className={st.actionsContainer}>
-                <div className={st.actions}>
+                <div className={cl(st.actions, isWarning && st.flipActions)}>
                     <button
                         type="button"
                         data-allow="false"
                         onClick={handleOnResponse}
                         className={cl(
                             st.button,
-                            isConnect ? st.cancel : st.reject
+                            isWarning
+                                ? st.reject
+                                : isConnect
+                                ? st.cancel
+                                : st.reject
                         )}
                         disabled={submitting}
                     >
@@ -81,19 +93,24 @@ function UserApproveContainer({
                     </button>
                     <button
                         type="button"
-                        className={cl(st.button, st.approve)}
+                        className={cl(
+                            st.button,
+                            isWarning ? st.cancel : st.approve
+                        )}
                         data-allow="true"
                         onClick={handleOnResponse}
                         disabled={submitting}
                     >
-                        {isConnect ? (
-                            <Icon icon="plus" />
-                        ) : (
-                            <Icon icon="check" />
-                        )}
+                        {!isWarning &&
+                            (isConnect ? (
+                                <Icon icon="plus" />
+                            ) : (
+                                <Icon icon="check" />
+                            ))}
                         <span>
                             {submitting ? <LoadingIndicator /> : approveTitle}
                         </span>
+                        {isWarning && <Icon icon="arrow-right" />}
                     </button>
                 </div>
             </div>

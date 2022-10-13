@@ -873,7 +873,7 @@ where
                 SingleTransactionKind::Call(move_call) => {
                     self.metrics.num_tx_movecall.inc();
                     if move_call.package == self.get_framework_object_ref().await?
-                        && move_call.module.as_ref() == coin::COIN_MODULE_NAME
+                        && move_call.module.as_ref() == coin::PAY_MODULE_NAME
                     {
                         if move_call.function.as_ref() == coin::PAY_SPLIT_VEC_FUNC_NAME {
                             self.metrics.num_tx_splitcoin.inc();

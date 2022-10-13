@@ -305,7 +305,7 @@ async fn main() -> Result<()> {
             auth_clients.clone(),
             AuthAggMetrics::new(&registry),
             Arc::new(SafeClientMetrics::new(&registry)),
-            Arc::new(NetworkAuthorityClientMetrics::new(&registry)),
+            network_authority_client_metrics.clone(),
         ));
 
         // spawn a thread to spin up sui nodes on the multi-threaded server runtime
