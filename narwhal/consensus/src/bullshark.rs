@@ -50,10 +50,17 @@ impl ConsensusProtocol for Bullshark {
                 .collect();
             for parent_digest in parents {
                 if !store_parents.contains(&parent_digest) {
-                    panic!(
+                    if round - 1 + self.gc_depth > state.last_committed_round {
+                        panic!(
                         "The store does not contain the parent of {:?}: Missing item digest={:?}",
                         certificate, parent_digest
                     );
+                    } else {
+                        debug!(
+                        "The store does not contain the parent of {:?}: Missing item digest={:?} (but below GC round)",
+                        certificate, parent_digest
+                    );
+                    }
                 }
             }
         }
