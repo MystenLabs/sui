@@ -22,7 +22,7 @@ pub const COIN_STRUCT_NAME: &IdentStr = ident_str!("Coin");
 
 pub const PAY_MODULE_NAME: &IdentStr = ident_str!("pay");
 pub const PAY_JOIN_FUNC_NAME: &IdentStr = ident_str!("join");
-pub const PAY_SPLIT_N_FUNC_NAME: &IdentStr = ident_str!("divide_into_n");
+pub const PAY_SPLIT_N_FUNC_NAME: &IdentStr = ident_str!("divide_and_keep");
 pub const PAY_SPLIT_VEC_FUNC_NAME: &IdentStr = ident_str!("split_vec");
 
 // Rust version of the Move sui::coin::Coin type
