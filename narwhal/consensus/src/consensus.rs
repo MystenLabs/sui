@@ -199,6 +199,9 @@ pub struct Consensus<ConsensusProtocol> {
 
     /// Metrics handler
     metrics: Arc<ConsensusMetrics>,
+
+    /// Inner state
+    state: ConsensusState,
 }
 
 impl<Protocol> Consensus<Protocol>
@@ -228,25 +231,23 @@ where
             cert_store,
             gc_depth,
         );
+        let consensus_index = store
+            .read_last_consensus_index()
+            .expect("Failed to load consensus index from store");
 
-        tokio::spawn(async move {
-            let consensus_index = store
-                .read_last_consensus_index()
-                .expect("Failed to load consensus index from store");
+        let s = Self {
+            committee,
+            rx_reconfigure,
+            rx_primary,
+            tx_primary,
+            tx_output,
+            consensus_index,
+            protocol,
+            metrics,
+            state,
+        };
 
-            let mut s = Self {
-                committee,
-                rx_reconfigure,
-                rx_primary,
-                tx_primary,
-                tx_output,
-                consensus_index,
-                protocol,
-                metrics,
-            };
-
-            s.run(state).await.expect("Failed to run consensus")
-        })
+        tokio::spawn(s.run())
     }
 
     fn change_epoch(&mut self, new_committee: Committee) -> StoreResult<ConsensusState> {
@@ -259,8 +260,11 @@ where
         Ok(ConsensusState::new(genesis, self.metrics.clone()))
     }
 
-    #[allow(clippy::mutable_key_type)]
-    async fn run(&mut self, mut state: ConsensusState) -> StoreResult<()> {
+    async fn run(self) {
+        self.run_inner().await.expect("Failed to run consensus")
+    }
+
+    async fn run_inner(mut self) -> StoreResult<()> {
         // Listen to incoming certificates.
         loop {
             tokio::select! {
@@ -272,7 +276,7 @@ where
                             let message = self.rx_reconfigure.borrow_and_update().clone();
                             match message  {
                                 ReconfigureNotification::NewEpoch(new_committee) => {
-                                    state = self.change_epoch(new_committee)?;
+                                    self.state = self.change_epoch(new_committee)?;
                                 },
                                 ReconfigureNotification::UpdateCommittee(new_committee) => {
                                     self.committee = new_committee;
@@ -294,7 +298,7 @@ where
                     // Process the certificate using the selected consensus protocol.
                     let sequence =
                         self.protocol
-                            .process_certificate(&mut state, self.consensus_index, certificate)?;
+                            .process_certificate(&mut self.state, self.consensus_index, certificate)?;
 
                     // Update the consensus index.
                     self.consensus_index += sequence.len() as u64;
@@ -321,7 +325,7 @@ where
                         if output.consensus_index % 1_000 == 0 {
                             self.metrics
                                 .dag_size_bytes
-                                .set((mysten_util_mem::malloc_size(&state.dag) + std::mem::size_of::<Dag>()) as i64);
+                                .set((mysten_util_mem::malloc_size(&self.state.dag) + std::mem::size_of::<Dag>()) as i64);
                         }
 
                         self.tx_primary
@@ -337,7 +341,7 @@ where
                     self.metrics
                         .consensus_dag_rounds
                         .with_label_values(&[])
-                        .set(state.dag.len() as i64);
+                        .set(self.state.dag.len() as i64);
                 },
 
                 // Check whether the committee changed.
@@ -346,7 +350,7 @@ where
                     let message = self.rx_reconfigure.borrow().clone();
                     match message {
                         ReconfigureNotification::NewEpoch(new_committee) => {
-                            state = self.change_epoch(new_committee)?;
+                            self.state = self.change_epoch(new_committee)?;
                         },
                         ReconfigureNotification::UpdateCommittee(new_committee) => {
                             self.committee = new_committee;
