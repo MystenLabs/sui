@@ -7,9 +7,9 @@ use futures::future::try_join_all;
 use futures::StreamExt;
 use prometheus::Registry;
 use rand::seq::SliceRandom;
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Duration;
 use strum_macros::EnumString;
 use sui_benchmark::drivers::bench_driver::BenchDriver;
 use sui_benchmark::drivers::driver::Driver;
@@ -21,9 +21,6 @@ use sui_benchmark::workloads::workload::get_latest;
 use sui_benchmark::workloads::{
     make_combination_workload, make_shared_counter_workload, make_transfer_object_workload,
 };
-use sui_config::gateway::GatewayConfig;
-use sui_config::Config;
-use sui_config::PersistedConfig;
 use sui_core::authority_aggregator::AuthAggMetrics;
 use sui_core::authority_aggregator::{reconfig_from_genesis, AuthorityAggregator};
 use sui_core::authority_client::make_authority_clients;
@@ -32,10 +29,14 @@ use sui_core::authority_client::NetworkAuthorityClient;
 use sui_core::epoch::committee_store::CommitteeStore;
 use sui_core::safe_client::SafeClientMetrics;
 use sui_core::validator_info::make_committee;
+use sui_network::DEFAULT_CONNECT_TIMEOUT_SEC;
+use sui_network::DEFAULT_REQUEST_TIMEOUT_SEC;
 use sui_node::metrics;
+use sui_types::base_types::AuthorityName;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress;
 use sui_types::batch::UpdateItem;
+use sui_types::committee::Committee;
 use sui_types::crypto::AccountKeyPair;
 use sui_types::messages::BatchInfoRequest;
 use sui_types::messages::BatchInfoResponseItem;
@@ -69,15 +70,16 @@ struct Opts {
     pub num_client_threads: u64,
     #[clap(long, default_value = "", global = true)]
     pub log_path: String,
-    /// Path where gateway config is stored when running remote benchmark
-    /// This is also the path where gateway config is stored during local
-    /// benchmark
-    #[clap(long, default_value = "/tmp/gateway.yaml", global = true)]
-    pub gateway_config_path: String,
+    /// [Required for remote benchmark]
+    /// Path where genesis.blob is stored when running remote benchmark
+    #[clap(long, default_value = "/tmp/genesis.blob", global = true)]
+    pub genesis_blob_path: String,
+    /// [Required for remote benchmark]
     /// Path where keypair for primary gas account is stored. The format of
     /// this file is same as what `sui keytool generate` outputs
     #[clap(long, default_value = "", global = true)]
     pub keystore_path: String,
+    /// [Required for remote benchmark]
     /// Object id of the primary gas coin used for benchmark
     /// NOTE: THe remote network should have this coin in its genesis config
     /// with large enough gas i.e. u64::MAX
@@ -87,7 +89,7 @@ struct Opts {
     pub primary_gas_objects: u64,
     /// Whether to run local or remote benchmark
     /// NOTE: For running remote benchmark we must have the following
-    /// gateway_config_path, keypair_path and primary_gas_id
+    /// genesis_blob_path, keypair_path and primary_gas_id
     #[clap(long, parse(try_from_str), default_value = "true", global = true)]
     pub local: bool,
     /// Default workload is 100% transfer object
@@ -274,30 +276,24 @@ async fn main() -> Result<()> {
             });
             Arc::new(configs)
         };
-        let gateway_config = GatewayConfig {
-            epoch: 0,
-            validator_set: configs.validator_set().to_vec(),
-            send_timeout: Duration::from_secs(4),
-            recv_timeout: Duration::from_secs(4),
-            buffer_size: 650000,
-            db_folder_path: PathBuf::from("/tmp/client_db"),
-        };
-        gateway_config.save(&opts.gateway_config_path)?;
+
         // bring up servers ..
         let (owner, keypair): (SuiAddress, AccountKeyPair) = test_account_keys().pop().unwrap();
         let primary_gas = generate_gas_objects_with_owner(1, owner);
         let primary_gas_id = primary_gas.get(0).unwrap().id();
         // Make the client runtime wait until we are done creating genesis objects
-        let cloned_config = configs;
+        let cloned_config = configs.clone();
         let cloned_gas = primary_gas;
+
         let auth_clients = make_authority_clients(
-            &gateway_config.validator_set,
-            gateway_config.send_timeout,
-            gateway_config.recv_timeout,
+            configs.validator_set(),
+            DEFAULT_CONNECT_TIMEOUT_SEC,
+            DEFAULT_REQUEST_TIMEOUT_SEC,
             network_authority_client_metrics.clone(),
         );
 
-        let committee = make_committee(gateway_config.epoch, &gateway_config.validator_set)?;
+        let committee = configs.committee();
+
         let committee_store = Arc::new(CommitteeStore::new_for_testing(&committee));
         let aggregator = Arc::new(AuthorityAggregator::new(
             committee,
@@ -352,24 +348,12 @@ async fn main() -> Result<()> {
                     cloned_barrier.wait().await;
                 });
         });
-        let config_path = Some(&opts.gateway_config_path)
-            .filter(|s| !s.is_empty())
-            .map(PathBuf::from)
-            .ok_or_else(|| {
-                anyhow!(format!(
-                    "Failed to find gateway config at path: {}",
-                    opts.gateway_config_path
-                ))
-            })?;
-        let config: GatewayConfig = PersistedConfig::read(&config_path)?;
-        let committee = make_committee(config.epoch, &config.validator_set)?;
-
-        let authority_clients = make_authority_clients(
-            &config.validator_set,
-            config.send_timeout,
-            config.recv_timeout,
+        let (committee, authority_clients) = get_genesis_committee_and_clients(
+            &opts.genesis_blob_path,
             network_authority_client_metrics.clone(),
-        );
+        )
+        .await
+        .unwrap();
         let committee_store = Arc::new(CommitteeStore::new_for_testing(&committee));
         let aggregator = AuthorityAggregator::new(
             committee,
@@ -536,4 +520,22 @@ async fn main() -> Result<()> {
         }
         Ok(())
     }
+}
+
+async fn get_genesis_committee_and_clients(
+    genesis_blob_path: &str,
+    network_authority_client_metrics: Arc<NetworkAuthorityClientMetrics>,
+) -> Result<(Committee, BTreeMap<AuthorityName, NetworkAuthorityClient>)> {
+    let genesis = sui_config::node::Genesis::new_from_file(&genesis_blob_path);
+
+    let validator_set = genesis.genesis()?.validator_set();
+    let auth_clients = make_authority_clients(
+        validator_set,
+        DEFAULT_CONNECT_TIMEOUT_SEC,
+        DEFAULT_REQUEST_TIMEOUT_SEC,
+        network_authority_client_metrics,
+    );
+
+    let committee = make_committee(0, validator_set)?;
+    Ok((committee, auth_clients))
 }

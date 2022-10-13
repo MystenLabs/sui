@@ -298,7 +298,7 @@ impl Genesis {
         }
     }
 
-    fn genesis(&self) -> Result<&genesis::Genesis> {
+    pub fn genesis(&self) -> Result<&genesis::Genesis> {
         match &self.location {
             GenesisLocation::InPlace { genesis } => Ok(genesis),
             GenesisLocation::File {
