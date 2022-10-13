@@ -6,8 +6,6 @@
 /// The keywords "MUST", "MUST NOT", "SHOULD", "SHOULD NOT" and "MAY" below should be interpreted as described in
 /// RFC 2119.
 ///
-/// TODO(ben): Should we s/resource/object? or will it just confuse people with Sui objects?
-///
 module sui::immutable_external_resource {
     use sui::digest::Sha2256Digest;
     use sui::url::{Url, inner_url};

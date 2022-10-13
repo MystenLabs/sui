@@ -8,8 +8,6 @@ Sui types for specifying off-chain/external resources.
 The keywords "MUST", "MUST NOT", "SHOULD", "SHOULD NOT" and "MAY" below should be interpreted as described in
 RFC 2119.
 
-TODO(ben): Should we s/resource/object? or will it just confuse people with Sui objects?
-
 
 -  [Struct `ImmutableExternalResource`](#0x2_immutable_external_resource_ImmutableExternalResource)
 -  [Function `new`](#0x2_immutable_external_resource_new)
