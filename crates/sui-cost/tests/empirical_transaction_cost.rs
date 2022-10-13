@@ -8,9 +8,9 @@ use sui_config::ValidatorInfo;
 use sui_cost::estimator::estimate_transaction_computation_cost;
 use sui_cost::estimator::CommonTransactionCosts;
 use sui_types::base_types::SuiAddress;
-use sui_types::coin::COIN_JOIN_FUNC_NAME;
-use sui_types::coin::COIN_MODULE_NAME;
-use sui_types::coin::COIN_SPLIT_VEC_FUNC_NAME;
+use sui_types::coin::PAY_JOIN_FUNC_NAME;
+use sui_types::coin::PAY_MODULE_NAME;
+use sui_types::coin::PAY_SPLIT_VEC_FUNC_NAME;
 use sui_types::crypto::AccountKeyPair;
 use sui_types::messages::Transaction;
 use sui_types::object::Object;
@@ -70,8 +70,8 @@ async fn split_n_tx(
 
     move_transaction_with_type_tags(
         gas.clone(),
-        COIN_MODULE_NAME.as_str(),
-        COIN_SPLIT_VEC_FUNC_NAME.as_str(),
+        PAY_MODULE_NAME.as_str(),
+        PAY_SPLIT_VEC_FUNC_NAME.as_str(),
         get_framework_object(validator_info)
             .await
             .compute_object_reference(),
@@ -151,8 +151,8 @@ async fn create_txes(
 
     let merge_tx = move_transaction_with_type_tags(
         gas_objects.pop().unwrap(),
-        COIN_MODULE_NAME.as_str(),
-        COIN_JOIN_FUNC_NAME.as_str(),
+        PAY_MODULE_NAME.as_str(),
+        PAY_JOIN_FUNC_NAME.as_str(),
         get_framework_object(configs.validator_set())
             .await
             .compute_object_reference(),

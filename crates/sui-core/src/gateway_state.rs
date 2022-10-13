@@ -867,21 +867,21 @@ where
                 SingleTransactionKind::Call(move_call) => {
                     self.metrics.num_tx_movecall.inc();
                     if move_call.package == self.get_framework_object_ref().await?
-                        && move_call.module.as_ref() == coin::COIN_MODULE_NAME
+                        && move_call.module.as_ref() == coin::PAY_MODULE_NAME
                     {
-                        if move_call.function.as_ref() == coin::COIN_SPLIT_VEC_FUNC_NAME {
+                        if move_call.function.as_ref() == coin::PAY_SPLIT_VEC_FUNC_NAME {
                             self.metrics.num_tx_splitcoin.inc();
                             return Ok(Some(
                                 self.create_split_coin_response(certificate, effects, false)
                                     .await?,
                             ));
-                        } else if move_call.function.as_ref() == coin::COIN_SPLIT_N_FUNC_NAME {
+                        } else if move_call.function.as_ref() == coin::PAY_SPLIT_N_FUNC_NAME {
                             self.metrics.num_tx_splitcoin_equal.inc();
                             return Ok(Some(
                                 self.create_split_coin_response(certificate, effects, true)
                                     .await?,
                             ));
-                        } else if move_call.function.as_ref() == coin::COIN_JOIN_FUNC_NAME {
+                        } else if move_call.function.as_ref() == coin::PAY_JOIN_FUNC_NAME {
                             self.metrics.num_tx_mergecoin.inc();
                             return Ok(Some(
                                 self.create_merge_coin_response(certificate, effects)
@@ -1554,8 +1554,8 @@ where
         let data = TransactionData::new_move_call(
             signer,
             self.get_framework_object_ref().await?,
-            coin::COIN_MODULE_NAME.to_owned(),
-            coin::COIN_SPLIT_VEC_FUNC_NAME.to_owned(),
+            coin::PAY_MODULE_NAME.to_owned(),
+            coin::PAY_SPLIT_VEC_FUNC_NAME.to_owned(),
             vec![coin_type],
             gas,
             vec![
@@ -1585,8 +1585,8 @@ where
         let data = TransactionData::new_move_call(
             signer,
             self.get_framework_object_ref().await?,
-            coin::COIN_MODULE_NAME.to_owned(),
-            coin::COIN_SPLIT_N_FUNC_NAME.to_owned(),
+            coin::PAY_MODULE_NAME.to_owned(),
+            coin::PAY_SPLIT_N_FUNC_NAME.to_owned(),
             vec![coin_type],
             gas,
             vec![
@@ -1623,8 +1623,8 @@ where
         let data = TransactionData::new_move_call(
             signer,
             self.get_framework_object_ref().await?,
-            coin::COIN_MODULE_NAME.to_owned(),
-            coin::COIN_JOIN_FUNC_NAME.to_owned(),
+            coin::PAY_MODULE_NAME.to_owned(),
+            coin::PAY_JOIN_FUNC_NAME.to_owned(),
             vec![coin_type],
             gas,
             vec![
