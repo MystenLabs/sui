@@ -41,15 +41,6 @@ export interface WalletContextState {
   signAndExecuteTransaction(
     transaction: SignableTransaction
   ): Promise<SuiTransactionResponse>;
-
-  /** @deprecated Prefer `signAndExecuteTransaction` when available. */
-  executeMoveCall: (
-    transaction: MoveCallTransaction
-  ) => Promise<SuiTransactionResponse>;
-  /** @deprecated Prefer `signAndExecuteTransaction` when available. */
-  executeSerializedMoveCall: (
-    transactionBytes: Uint8Array
-  ) => Promise<SuiTransactionResponse>;
 }
 
 export const WalletContext = createContext<WalletContextState | null>(null);
@@ -73,6 +64,7 @@ export const WalletProvider: FC<WalletProviderProps> = ({
   const [connecting, setConnecting] = useState(false);
 
   const disconnect = useCallback(async () => {
+    wallet?.disconnect();
     setConnected(false);
     setWallet(null);
     localStorage.removeItem(DEFAULT_STORAGE_KEY);
@@ -130,24 +122,6 @@ export const WalletProvider: FC<WalletProviderProps> = ({
       async getAccounts() {
         if (wallet == null) throw Error("Wallet Not Connected");
         return wallet.getAccounts();
-      },
-
-      async executeMoveCall(transaction) {
-        if (wallet == null) throw Error("Wallet Not Connected");
-        if (!wallet.executeMoveCall) {
-          throw new Error('Wallet does not support "executeMoveCall" method');
-        }
-        return wallet.executeMoveCall(transaction);
-      },
-
-      async executeSerializedMoveCall(transactionBytes) {
-        if (wallet == null) throw Error("Wallet Not Connected");
-        if (!wallet.executeSerializedMoveCall) {
-          throw new Error(
-            'Wallet does not support "executeSerializedMoveCall" method'
-          );
-        }
-        return wallet.executeSerializedMoveCall(transactionBytes);
       },
 
       async signAndExecuteTransaction(transaction) {
