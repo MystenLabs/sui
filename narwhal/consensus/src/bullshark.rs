@@ -7,7 +7,10 @@ use crate::{
 };
 use config::{Committee, Stake};
 use fastcrypto::{traits::EncodeDecodeBase64, Hash};
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{BTreeSet, HashMap},
+    sync::Arc,
+};
 use tracing::debug;
 use types::{Certificate, CertificateDigest, ConsensusStore, Round, SequenceNumber, StoreResult};
 
@@ -34,6 +37,26 @@ impl ConsensusProtocol for Bullshark {
         debug!("Processing {:?}", certificate);
         let round = certificate.round();
         let mut consensus_index = consensus_index;
+
+        // We must have stored already the parents of this certiciate!
+        if round > 0 {
+            let parents = certificate.header.parents.clone();
+            let store_parents: BTreeSet<&CertificateDigest> = state
+                .dag
+                .get(&(round - 1))
+                .expect("We should have the previous round!")
+                .iter()
+                .map(|(_, (digest, _))| digest)
+                .collect();
+            for parent_digest in parents {
+                if !store_parents.contains(&parent_digest) {
+                    panic!(
+                        "The store does not contain the parent of {:?}: Missing item digest={:?}",
+                        certificate, parent_digest
+                    );
+                }
+            }
+        }
 
         // Add the new certificate to the local storage.
         state
@@ -90,6 +113,8 @@ impl ConsensusProtocol for Bullshark {
             .iter()
             .rev()
         {
+            debug!("Previous Leader {:?} has enough support", leader);
+
             // Starting from the oldest leader, flatten the sub-dag referenced by the leader.
             for x in utils::order_dag(self.gc_depth, leader, state) {
                 let digest = x.digest();
