@@ -330,7 +330,7 @@ impl CertificateStore {
 #[cfg(test)]
 mod test {
     use crate::certificate_store::{CertificateStore, CertificateToken};
-    use fastcrypto::Hash;
+    use fastcrypto::hash::Hash;
     use futures::future::join_all;
     use std::{
         collections::{BTreeSet, HashSet},

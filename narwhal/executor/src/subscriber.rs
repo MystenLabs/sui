@@ -393,8 +393,8 @@ impl SubscriberNetwork for SubscriberNetworkImpl {
 mod tests {
     use super::*;
     use crypto::NetworkKeyPair;
+    use fastcrypto::hash::Hash;
     use fastcrypto::traits::KeyPair;
-    use fastcrypto::Hash;
     use rand::rngs::StdRng;
     use std::collections::HashMap;
 

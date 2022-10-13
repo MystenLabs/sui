@@ -14,12 +14,12 @@ use types::{Certificate, CertificateDigest, Round};
 // RequestID helps us identify an incoming request and
 // all the consequent network requests associated with it.
 #[derive(Clone, Copy, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct RequestID(pub [u8; fastcrypto::hash::DIGEST_LEN]);
+pub struct RequestID(pub [u8; crypto::DIGEST_LENGTH]);
 
 impl RequestID {
     // Create a request key (deterministically) from arbitrary data.
     pub fn new(data: &[u8]) -> Self {
-        RequestID(fastcrypto::hash::Blake2b256::digest(data).into())
+        RequestID(crypto::DefaultHashFunction::digest(data).into())
     }
 }
 

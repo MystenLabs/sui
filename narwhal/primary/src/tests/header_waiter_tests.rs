@@ -6,7 +6,7 @@ use crate::{
     metrics::PrimaryMetrics,
 };
 
-use fastcrypto::{traits::KeyPair, Hash};
+use fastcrypto::{hash::Hash, traits::KeyPair};
 use network::P2pNetwork;
 use prometheus::Registry;
 use std::{sync::Arc, time::Duration};

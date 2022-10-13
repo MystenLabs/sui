@@ -82,10 +82,10 @@ pub enum DagError {
     HeaderRequiresQuorum(HeaderDigest),
 
     #[error("Message {0} (round {1}) too old for GC round {2}")]
-    TooOld(Digest, Round, Round),
+    TooOld(Digest<{ crypto::DIGEST_LENGTH }>, Round, Round),
 
     #[error("Vote {0} (round {1}) too old for round {2}")]
-    VoteTooOld(Digest, Round, Round),
+    VoteTooOld(Digest<{ crypto::DIGEST_LENGTH }>, Round, Round),
 
     #[error("Invalid epoch (expected {expected}, received {received})")]
     InvalidEpoch { expected: Epoch, received: Epoch },

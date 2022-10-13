@@ -3,8 +3,8 @@
 use config::{Authority, Committee, Epoch, WorkerIndex, WorkerInfo};
 use crypto::{KeyPair, NetworkKeyPair};
 use fastcrypto::{
+    hash::{Digest, Hash},
     traits::{KeyPair as _, Signer},
-    Digest, Hash,
 };
 use multiaddr::Multiaddr;
 use rand::{prelude::StdRng, SeedableRng};

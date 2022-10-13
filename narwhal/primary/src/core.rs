@@ -46,7 +46,7 @@ pub struct Core {
     /// Handles synchronization with other nodes and our workers.
     synchronizer: Synchronizer,
     /// Service to sign headers.
-    signature_service: SignatureService<Signature>,
+    signature_service: SignatureService<Signature, { crypto::DIGEST_LENGTH }>,
     /// Get a signal when the round changes
     rx_consensus_round_updates: watch::Receiver<u64>,
     /// The depth of the garbage collector.
@@ -102,7 +102,7 @@ impl Core {
         certificate_store: CertificateStore,
         vote_digest_store: Store<PublicKey, RoundVoteDigestPair>,
         synchronizer: Synchronizer,
-        signature_service: SignatureService<Signature>,
+        signature_service: SignatureService<Signature, { crypto::DIGEST_LENGTH }>,
         rx_consensus_round_updates: watch::Receiver<u64>,
         gc_depth: Round,
         rx_committee: watch::Receiver<ReconfigureNotification>,

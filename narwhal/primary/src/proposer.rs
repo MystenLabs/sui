@@ -33,7 +33,7 @@ pub struct Proposer {
     /// The committee information.
     committee: Committee,
     /// Service to sign headers.
-    signature_service: SignatureService<Signature>,
+    signature_service: SignatureService<Signature, { crypto::DIGEST_LENGTH }>,
     /// The size of the headers' payload.
     header_size: usize,
     /// The maximum delay to wait for batches' digests.
@@ -72,7 +72,7 @@ impl Proposer {
     pub fn spawn(
         name: PublicKey,
         committee: Committee,
-        signature_service: SignatureService<Signature>,
+        signature_service: SignatureService<Signature, { crypto::DIGEST_LENGTH }>,
         proposer_store: ProposerStore,
         header_size: usize,
         max_header_delay: Duration,

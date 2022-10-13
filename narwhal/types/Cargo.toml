@@ -15,7 +15,7 @@ derive_builder = "0.11.2"
 futures = "0.3.24"
 indexmap = { version = "1.9.1", features = ["serde"] }
 mockall = "0.11.2"
-mysten-util-mem = { path = "../../../mysten-infra/crates/mysten-util-mem" }
+mysten-util-mem = { git = "https://github.com/MystenLabs/mysten-infra/", rev = "e06e43f0ed817d75b0e25f77803afeae5f514a40" }
 prometheus = "0.13.2"
 proptest = "1.0.0"
 proptest-derive = "0.3.0"

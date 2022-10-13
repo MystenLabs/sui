@@ -13,7 +13,7 @@ use dag::node_dag::Affiliated;
 use derive_builder::Builder;
 use fastcrypto::{
     bls12381::BLS12381Signature,
-    hash::{Digest, Hash, HashFunction, DIGEST_LEN},
+    hash::{Digest, Hash, HashFunction},
     traits::{AggregateAuthenticator, EncodeDecodeBase64, Signer, VerifyingKey},
     SignatureService, Verifier,
 };
@@ -37,7 +37,7 @@ pub struct Batch(pub Vec<Transaction>);
 #[derive(
     Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq, Hash, PartialOrd, Ord, MallocSizeOf,
 )]
-pub struct BatchDigest(pub [u8; DIGEST_LEN]);
+pub struct BatchDigest(pub [u8; crypto::DIGEST_LENGTH]);
 
 impl fmt::Debug for BatchDigest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
@@ -51,23 +51,23 @@ impl fmt::Display for BatchDigest {
     }
 }
 
-impl From<BatchDigest> for Digest {
+impl From<BatchDigest> for Digest<{ crypto::DIGEST_LENGTH }> {
     fn from(digest: BatchDigest) -> Self {
         Digest::new(digest.0)
     }
 }
 
 impl BatchDigest {
-    pub fn new(val: [u8; DIGEST_LEN]) -> BatchDigest {
+    pub fn new(val: [u8; crypto::DIGEST_LENGTH]) -> BatchDigest {
         BatchDigest(val)
     }
 }
 
-impl Hash for Batch {
+impl Hash<{ crypto::DIGEST_LENGTH }> for Batch {
     type TypedDigest = BatchDigest;
 
     fn digest(&self) -> Self::TypedDigest {
-        BatchDigest::new(fastcrypto::hash::Blake2b256::digest_iterator(self.0.iter()).into())
+        BatchDigest::new(crypto::DefaultHashFunction::digest_iterator(self.0.iter()).into())
     }
 }
 
@@ -128,7 +128,7 @@ impl Header {
         epoch: Epoch,
         payload: IndexMap<BatchDigest, WorkerId>,
         parents: BTreeSet<CertificateDigest>,
-        signature_service: &mut SignatureService<Signature>,
+        signature_service: &mut SignatureService<Signature, { crypto::DIGEST_LENGTH }>,
     ) -> Self {
         let header = Self {
             author,
@@ -177,7 +177,7 @@ impl Header {
         }
 
         // Check the signature.
-        let id_digest: Digest = Digest::from(self.id);
+        let id_digest: Digest<{ crypto::DIGEST_LENGTH }> = Digest::from(self.id);
         self.author
             .verify(id_digest.as_ref(), &self.signature)
             .map_err(DagError::from)
@@ -187,9 +187,9 @@ impl Header {
 #[derive(
     Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq, Hash, PartialOrd, Ord, MallocSizeOf,
 )]
-pub struct HeaderDigest([u8; DIGEST_LEN]);
+pub struct HeaderDigest([u8; crypto::DIGEST_LENGTH]);
 
-impl From<HeaderDigest> for Digest {
+impl From<HeaderDigest> for Digest<{ crypto::DIGEST_LENGTH }> {
     fn from(hd: HeaderDigest) -> Self {
         Digest::new(hd.0)
     }
@@ -207,11 +207,11 @@ impl fmt::Display for HeaderDigest {
     }
 }
 
-impl Hash for Header {
+impl Hash<{ crypto::DIGEST_LENGTH }> for Header {
     type TypedDigest = HeaderDigest;
 
     fn digest(&self) -> HeaderDigest {
-        let mut hasher = fastcrypto::hash::Blake2b256::default();
+        let mut hasher = crypto::DefaultHashFunction::new();
         hasher.update(&self.author);
         hasher.update(&self.round.to_le_bytes());
         hasher.update(self.epoch.to_le_bytes());
@@ -269,7 +269,7 @@ impl Vote {
     pub async fn new(
         header: &Header,
         author: &PublicKey,
-        signature_service: &mut SignatureService<Signature>,
+        signature_service: &mut SignatureService<Signature, { crypto::DIGEST_LENGTH }>,
     ) -> Self {
         let vote = Self {
             id: header.id,
@@ -298,7 +298,7 @@ impl Vote {
             signature: Signature::default(),
         };
 
-        let vote_digest: Digest = vote.digest().into();
+        let vote_digest: Digest<{ crypto::DIGEST_LENGTH }> = vote.digest().into();
         let signature = signer.sign(vote_digest.as_ref());
 
         Self { signature, ..vote }
@@ -321,16 +321,16 @@ impl Vote {
         );
 
         // Check the signature.
-        let vote_digest: Digest = self.digest().into();
+        let vote_digest: Digest<{ crypto::DIGEST_LENGTH }> = self.digest().into();
         self.author
             .verify(vote_digest.as_ref(), &self.signature)
             .map_err(DagError::from)
     }
 }
 #[derive(Clone, Serialize, Deserialize, Default, PartialEq, Eq, Hash, PartialOrd, Ord, Copy)]
-pub struct VoteDigest([u8; DIGEST_LEN]);
+pub struct VoteDigest([u8; crypto::DIGEST_LENGTH]);
 
-impl From<VoteDigest> for Digest {
+impl From<VoteDigest> for Digest<{ crypto::DIGEST_LENGTH }> {
     fn from(hd: VoteDigest) -> Self {
         Digest::new(hd.0)
     }
@@ -348,11 +348,11 @@ impl fmt::Display for VoteDigest {
     }
 }
 
-impl Hash for Vote {
+impl Hash<{ crypto::DIGEST_LENGTH }> for Vote {
     type TypedDigest = VoteDigest;
 
     fn digest(&self) -> VoteDigest {
-        let mut hasher = fastcrypto::hash::Blake2b256::default();
+        let mut hasher = crypto::DefaultHashFunction::default();
         hasher.update(Digest::from(self.id));
         hasher.update(&self.round.to_le_bytes());
         hasher.update(&self.epoch.to_le_bytes());
@@ -540,7 +540,7 @@ impl Certificate {
         );
 
         // Verify the signatures
-        let certificate_digest: Digest = Digest::from(self.digest());
+        let certificate_digest: Digest<{ crypto::DIGEST_LENGTH }> = Digest::from(self.digest());
         self.aggregated_signature
             .verify(&pks[..], certificate_digest.as_ref())
             .map_err(|_| signature::Error::new())
@@ -565,10 +565,10 @@ impl Certificate {
 #[derive(
     Clone, Copy, Serialize, Deserialize, Default, MallocSizeOf, PartialEq, Eq, Hash, PartialOrd, Ord,
 )]
-pub struct CertificateDigest([u8; DIGEST_LEN]);
+pub struct CertificateDigest([u8; crypto::DIGEST_LENGTH]);
 
 impl CertificateDigest {
-    pub fn new(digest: [u8; DIGEST_LEN]) -> CertificateDigest {
+    pub fn new(digest: [u8; crypto::DIGEST_LENGTH]) -> CertificateDigest {
         CertificateDigest(digest)
     }
 }
@@ -579,7 +579,7 @@ impl AsRef<[u8]> for CertificateDigest {
     }
 }
 
-impl From<CertificateDigest> for Digest {
+impl From<CertificateDigest> for Digest<{ crypto::DIGEST_LENGTH }> {
     fn from(hd: CertificateDigest) -> Self {
         Digest::new(hd.0)
     }
@@ -604,11 +604,11 @@ impl fmt::Display for CertificateDigest {
     }
 }
 
-impl Hash for Certificate {
+impl Hash<{ crypto::DIGEST_LENGTH }> for Certificate {
     type TypedDigest = CertificateDigest;
 
     fn digest(&self) -> CertificateDigest {
-        let mut hasher = fastcrypto::hash::Blake2b256::new();
+        let mut hasher = crypto::DefaultHashFunction::new();
         hasher.update(Digest::from(self.header.id));
         hasher.update(self.round().to_le_bytes());
         hasher.update(self.epoch().to_le_bytes());
@@ -642,7 +642,7 @@ impl PartialEq for Certificate {
 }
 
 impl Affiliated for Certificate {
-    fn parents(&self) -> Vec<<Self as Hash>::TypedDigest> {
+    fn parents(&self) -> Vec<<Self as Hash<{ crypto::DIGEST_LENGTH }>>::TypedDigest> {
         self.header.parents.iter().cloned().collect()
     }
 
