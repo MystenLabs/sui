@@ -25,10 +25,10 @@ describe('Transaction Reading API', () => {
 
   it('Get Transactions', async () => {
     const resp = await toolbox.provider.getTransactionsForAddress(toolbox.address());
-    expect(resp.length).toEqual(5);
+    expect(resp.length).to.greaterThan(0);
 
     const allTransactions = await toolbox.provider.getTransactions("All",null,10, "Ascending");
-    expect(allTransactions.data.length).toEqual(10);
+    expect(allTransactions.data.length).to.greaterThan(0);
 
     const resp2 = await toolbox.provider.getTransactions({ToAddress:toolbox.address()},null,null, "Ascending");
     const resp3 = await toolbox.provider.getTransactions({FromAddress:toolbox.address()},null,null, "Ascending");
