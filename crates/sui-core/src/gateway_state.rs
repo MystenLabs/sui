@@ -70,7 +70,7 @@ pub type AsyncResult<'a, T, E> = future::BoxFuture<'a, Result<T, E>>;
 
 pub type GatewayClient = Arc<dyn GatewayAPI + Sync + Send>;
 
-pub type GatewayTxSeqNumber = u64;
+pub type TxSeqNumber = u64;
 
 /// Number of times to retry failed TX
 const MAX_NUM_TX_RETRIES: usize = 5;
@@ -427,15 +427,9 @@ pub trait GatewayAPI {
     /// `start` is included, `end` is excluded.
     fn get_transactions_in_range(
         &self,
-        start: GatewayTxSeqNumber,
-        end: GatewayTxSeqNumber,
-    ) -> Result<Vec<(GatewayTxSeqNumber, TransactionDigest)>, anyhow::Error>;
-
-    /// Return the most recent `count` transactions.
-    fn get_recent_transactions(
-        &self,
-        count: u64,
-    ) -> Result<Vec<(GatewayTxSeqNumber, TransactionDigest)>, anyhow::Error>;
+        start: TxSeqNumber,
+        end: TxSeqNumber,
+    ) -> Result<Vec<TransactionDigest>, anyhow::Error>;
 
     /// return transaction details by digest
     async fn get_transaction(
@@ -1691,17 +1685,15 @@ where
 
     fn get_transactions_in_range(
         &self,
-        start: GatewayTxSeqNumber,
-        end: GatewayTxSeqNumber,
-    ) -> Result<Vec<(GatewayTxSeqNumber, TransactionDigest)>, anyhow::Error> {
-        QueryHelpers::get_transactions_in_range(&self.store, start, end)
-    }
-
-    fn get_recent_transactions(
-        &self,
-        count: u64,
-    ) -> Result<Vec<(GatewayTxSeqNumber, TransactionDigest)>, anyhow::Error> {
-        QueryHelpers::get_recent_transactions(&self.store, count)
+        start: TxSeqNumber,
+        end: TxSeqNumber,
+    ) -> Result<Vec<TransactionDigest>, anyhow::Error> {
+        Ok(
+            QueryHelpers::get_transactions_in_range(&self.store, start, end)?
+                .into_iter()
+                .map(|(_, digest)| digest)
+                .collect(),
+        )
     }
 
     async fn get_transaction(

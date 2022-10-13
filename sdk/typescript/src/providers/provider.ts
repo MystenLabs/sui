@@ -23,7 +23,7 @@ import {
   ObjectId,
   SuiAddress,
   ObjectOwner,
-  SuiEvents,
+  SuiEvents, PaginatedTransactionDigests, TransactionQuery, Ordering,
 } from '../types';
 
 ///////////////////////////////
@@ -108,11 +108,14 @@ export abstract class Provider {
   ): Promise<GetTxnDigestsResponse>;
 
   /**
-   * Get the latest `count` transactions
-   *
-   * NOTE: this method may get deprecated after DevNet
+   * Get transactions for a given query criteria
    */
-  abstract getRecentTransactions(count: number): Promise<GetTxnDigestsResponse>;
+  abstract getTransactions(
+      query: TransactionQuery,
+      cursor: TransactionDigest | null,
+      limit: number | null,
+      order: Ordering
+  ): Promise<PaginatedTransactionDigests>;
 
   /**
    * Get total number of transactions
