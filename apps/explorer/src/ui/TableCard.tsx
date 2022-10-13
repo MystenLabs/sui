@@ -19,7 +19,7 @@ export type LinkObj = {
 };
 
 type TableColumn = {
-    headerLabel: string;
+    headerLabel: string | (() => JSX.Element);
     accessorKey: string;
 };
 // TODO: update Link to use Tuple type
@@ -70,7 +70,7 @@ const cellStyle = cva(['text-sui-grey-75 h-[30px] px-[4px]'], {
     },
 });
 
-function TableCard({ tabledata }: { tabledata: TableType }) {
+export function TableCard({ tabledata }: { tabledata: TableType }) {
     const data = useMemo(() => tabledata.data, [tabledata.data]);
     // Use Columns to create a table
     const columns = useMemo(
@@ -132,5 +132,3 @@ function TableCard({ tabledata }: { tabledata: TableType }) {
         </div>
     );
 }
-
-export default TableCard;

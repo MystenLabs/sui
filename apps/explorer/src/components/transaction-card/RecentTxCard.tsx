@@ -29,8 +29,8 @@ import {
 
 import styles from './RecentTxCard.module.css';
 
-import PlaceholderTable from '~/ui/PlaceholderTable';
-import TableCard, { type TableType } from '~/ui/TableCard';
+import { PlaceholderTable } from '~/ui/PlaceholderTable';
+import { TableCard, type TableType } from '~/ui/TableCard';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 
 const TRUNCATE_LENGTH = 10;

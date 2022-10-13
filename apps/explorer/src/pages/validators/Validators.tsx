@@ -22,7 +22,7 @@ import { truncate } from '../../utils/stringUtils';
 import { mockState } from './mockData';
 
 import { Heading } from '~/ui/Heading';
-import TableCard from '~/ui/TableCard';
+import { TableCard } from '~/ui/TableCard';
 
 const textDecoder = new TextDecoder();
 

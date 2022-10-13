@@ -1,9 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import TableCard from './TableCard';
-
-import placeholdertheme from './placeholder.module.css';
+import { Placeholder } from './Placeholder';
+import { TableCard } from './TableCard';
 
 type DataType = {
     rowCount: number;
@@ -12,25 +11,7 @@ type DataType = {
     colWidths: string[];
 };
 
-export function PlaceholderBox({
-    width,
-    height,
-}: {
-    width: string;
-    height: string;
-}) {
-    return (
-        <div
-            className={placeholdertheme.placeholder}
-            style={{
-                width,
-                height,
-            }}
-        />
-    );
-}
-
-export default function PlaceholderTable({
+export function PlaceholderTable({
     rowCount,
     rowHeight,
     colHeadings,
@@ -39,7 +20,7 @@ export default function PlaceholderTable({
     const rowEntry = Object.fromEntries(
         colHeadings.map((header, index) => [
             `a${index}`,
-            <PlaceholderBox
+            <Placeholder
                 key={index}
                 width={colWidths[index]}
                 height={rowHeight}
@@ -55,9 +36,5 @@ export default function PlaceholderTable({
         })),
     };
 
-    return (
-        <div className={placeholdertheme.container}>
-            <TableCard tabledata={loadingTable} />
-        </div>
-    );
+    return <TableCard tabledata={loadingTable} />;
 }

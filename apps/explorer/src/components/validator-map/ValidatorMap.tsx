@@ -12,7 +12,7 @@ import { type NodeLocation } from './types';
 import styles from './ValidatorMap.module.css';
 
 import { DateFilter, useDateFilterState } from '~/ui/DateFilter';
-import { PlaceholderBox } from '~/ui/PlaceholderTable';
+import { Placeholder } from '~/ui/Placeholder';
 
 const HOST = 'https://imgmod.sui.io';
 
@@ -126,7 +126,7 @@ export default function ValidatorMap() {
                             ) : totalCount ? (
                                 numberFormatter.format(totalCount)
                             ) : (
-                                <PlaceholderBox width="59px" height="32px" />
+                                <Placeholder width="59px" height="32px" />
                             )}
                         </div>
                     </div>
@@ -138,7 +138,7 @@ export default function ValidatorMap() {
                             ) : countryCount ? (
                                 numberFormatter.format(countryCount)
                             ) : (
-                                <PlaceholderBox width="59px" height="32px" />
+                                <Placeholder width="59px" height="32px" />
                             )}
                         </div>
                     </div>

@@ -207,13 +207,15 @@ export const genTableDataFromTxData = (
                 accessorKey: 'txTypes',
             },
             {
-                headerLabel: (
+                headerLabel: () => (
                     <div className={styles.addresses}>Transaction ID</div>
                 ),
                 accessorKey: 'transactionId',
             },
             {
-                headerLabel: <div className={styles.addresses}>Addresses</div>,
+                headerLabel: () => (
+                    <div className={styles.addresses}>Addresses</div>
+                ),
                 accessorKey: 'addresses',
             },
             {

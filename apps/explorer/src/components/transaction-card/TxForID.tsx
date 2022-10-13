@@ -17,7 +17,7 @@ import {
     getDataOnTxDigests,
 } from './TxCardUtils';
 
-import TableCard from '~/ui/TableCard';
+import { TableCard } from '~/ui/TableCard';
 
 const TRUNCATE_LENGTH = 14;
 const ITEMS_PER_PAGE = 20;

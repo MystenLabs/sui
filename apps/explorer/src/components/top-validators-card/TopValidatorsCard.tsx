@@ -14,8 +14,8 @@ import {
 import { mockState } from '../../pages/validators/mockData';
 import { truncate } from '../../utils/stringUtils';
 
-import PlaceholderTable from '~/ui/PlaceholderTable';
-import TableCard from '~/ui/TableCard';
+import { PlaceholderTable } from '~/ui/PlaceholderTable';
+import { TableCard } from '~/ui/TableCard';
 import { TabGroup, TabList, Tab, TabPanels, TabPanel } from '~/ui/Tabs';
 
 export const STATE_DEFAULT: ValidatorState = {
