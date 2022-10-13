@@ -20,6 +20,7 @@ use arc_swap::ArcSwap;
 use async_trait::async_trait;
 use chrono::prelude::*;
 use fastcrypto::traits::KeyPair;
+use futures::stream::{self, Stream};
 use move_bytecode_utils::module_cache::SyncModuleCache;
 use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
@@ -30,8 +31,10 @@ use prometheus::{
 };
 use tap::TapFallible;
 use thiserror::Error;
-use tokio::sync::broadcast::error::RecvError;
-use tokio::sync::mpsc::Sender;
+use tokio::sync::{
+    broadcast::{self, error::RecvError},
+    mpsc,
+};
 use tracing::Instrument;
 use tracing::{debug, error, instrument, warn};
 use typed_store::Map;
@@ -56,7 +59,8 @@ use sui_storage::{
 use sui_types::committee::EpochId;
 use sui_types::crypto::{AuthorityKeyPair, NetworkKeyPair};
 use sui_types::messages_checkpoint::{
-    CheckpointRequest, CheckpointRequestType, CheckpointResponse,
+    AuthenticatedCheckpoint, CertifiedCheckpointSummary, CheckpointRequest, CheckpointRequestType,
+    CheckpointResponse, CheckpointSequenceNumber,
 };
 use sui_types::object::{Owner, PastObjectRead};
 use sui_types::query::TransactionQuery;
@@ -477,7 +481,7 @@ pub struct AuthorityState {
     pub metrics: Arc<AuthorityMetrics>,
 
     /// A channel to tell consensus to reconfigure.
-    tx_reconfigure_consensus: Sender<ReconfigConsensusMessage>,
+    tx_reconfigure_consensus: mpsc::Sender<ReconfigConsensusMessage>,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -1289,6 +1293,74 @@ impl AuthorityState {
         }
     }
 
+    pub async fn handle_checkpoint_streaming(
+        &self,
+        _request: CheckpointStreamRequest,
+    ) -> Result<impl Stream<Item = Result<CheckpointStreamResponseItem, SuiError>>, SuiError> {
+        struct Locals {
+            from_db: Option<AuthenticatedCheckpoint>,
+            latest_sequence_sent: Option<CheckpointSequenceNumber>,
+            subscriber: broadcast::Receiver<CertifiedCheckpointSummary>,
+            exit: bool,
+        }
+
+        let checkpoints = self.checkpoints.lock();
+        let subscriber = checkpoints.subscribe_to_checkpoints();
+        let from_db = checkpoints.latest_certified_checkpoint();
+        std::mem::drop(checkpoints);
+
+        let latest_sequence_sent = from_db.as_ref().map(|c| c.sequence_number());
+        let locals = Locals {
+            from_db,
+            latest_sequence_sent,
+            subscriber,
+            exit: false,
+        };
+
+        Ok(stream::unfold(locals, move |mut locals| async move {
+            if let Some(checkpoint) = locals.from_db.take() {
+                Some((
+                    Ok(CheckpointStreamResponseItem {
+                        first_available_sequence: 0,
+                        checkpoint,
+                    }),
+                    locals,
+                ))
+            } else {
+                match locals.subscriber.recv().await {
+                    Ok(checkpoint) => {
+                        let sequence_number = *checkpoint.summary.sequence_number();
+                        if locals.latest_sequence_sent.is_none()
+                            || sequence_number > locals.latest_sequence_sent.unwrap()
+                        {
+                            locals.latest_sequence_sent = Some(sequence_number);
+                            Some((
+                                Ok(CheckpointStreamResponseItem {
+                                    first_available_sequence: 0,
+                                    checkpoint: AuthenticatedCheckpoint::Certified(checkpoint),
+                                }),
+                                locals,
+                            ))
+                        } else {
+                            None
+                        }
+                    }
+                    Err(RecvError::Closed) => {
+                        locals.exit = true;
+                        Some((Err(SuiError::SubscriptionServiceClosed), locals))
+                    }
+                    Err(RecvError::Lagged(number_skipped)) => {
+                        locals.exit = true;
+                        Some((
+                            Err(SuiError::SubscriptionItemsDroppedError(number_skipped)),
+                            locals,
+                        ))
+                    }
+                }
+            }
+        }))
+    }
+
     pub fn handle_committee_info_request(
         &self,
         request: &CommitteeInfoRequest,
@@ -1319,7 +1391,7 @@ impl AuthorityState {
         checkpoints: Arc<Mutex<CheckpointStore>>,
         genesis: &Genesis,
         prometheus_registry: &prometheus::Registry,
-        tx_reconfigure_consensus: Sender<ReconfigConsensusMessage>,
+        tx_reconfigure_consensus: mpsc::Sender<ReconfigConsensusMessage>,
     ) -> Self {
         let (tx, _rx) = tokio::sync::broadcast::channel(BROADCAST_CAPACITY);
         let native_functions =
@@ -1424,7 +1496,7 @@ impl AuthorityState {
         store_base_path: Option<PathBuf>,
         genesis: Option<&Genesis>,
         consensus_sender: Option<Box<dyn ConsensusSender>>,
-        tx_reconfigure_consensus: Sender<ReconfigConsensusMessage>,
+        tx_reconfigure_consensus: mpsc::Sender<ReconfigConsensusMessage>,
     ) -> Self {
         let secret = Arc::pin(key.copy());
         let path = match store_base_path {
@@ -2152,12 +2224,12 @@ impl AuthorityState {
 
 pub struct ConsensusHandler {
     state: Arc<AuthorityState>,
-    sender: Sender<ConsensusListenerMessage>,
+    sender: mpsc::Sender<ConsensusListenerMessage>,
     hash: Mutex<u64>,
 }
 
 impl ConsensusHandler {
-    pub fn new(state: Arc<AuthorityState>, sender: Sender<ConsensusListenerMessage>) -> Self {
+    pub fn new(state: Arc<AuthorityState>, sender: mpsc::Sender<ConsensusListenerMessage>) -> Self {
         let hash = Mutex::new(0);
         Self {
             state,

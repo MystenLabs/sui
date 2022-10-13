@@ -576,6 +576,24 @@ impl Validator for ValidatorService {
         return Ok(tonic::Response::new(response));
     }
 
+    type FollowCheckpointStreamStream =
+        BoxStream<'static, Result<CheckpointStreamResponseItem, tonic::Status>>;
+    async fn checkpoint_info(
+        &self,
+        request: tonic::Request<CheckpointStreamRequest>,
+    ) -> Result<tonic::Response<Self::FollowCheckpointStreamStream>, tonic::Status> {
+        let request = request.into_inner();
+        let xstream = self
+            .state
+            .handle_checkpoint_streaming(request)
+            .await
+            .map_err(|e| tonic::Status::internal(e.to_string()))?;
+
+        let response = xstream.map_err(|e| tonic::Status::internal(e.to_string()));
+
+        Ok(tonic::Response::new(Box::pin(response)))
+    }
+
     async fn committee_info(
         &self,
         request: tonic::Request<CommitteeInfoRequest>,
