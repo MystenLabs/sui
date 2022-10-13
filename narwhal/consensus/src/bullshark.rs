@@ -12,7 +12,6 @@ use std::{
     sync::Arc,
 };
 use tracing::{debug, error};
->>>>>>> main
 use types::{Certificate, CertificateDigest, ConsensusStore, Round, SequenceNumber, StoreResult};
 
 #[cfg(test)]
