@@ -59,7 +59,7 @@ the result is false, clients SHOULD indicate that to users or ignore the resourc
 
 </dd>
 <dt>
-<code><a href="digest.md#0x2_digest">digest</a>: <a href="digest.md#0x2_digest_Sha256Digest">digest::Sha256Digest</a></code>
+<code><a href="digest.md#0x2_digest">digest</a>: <a href="digest.md#0x2_digest_Sha2256Digest">digest::Sha2256Digest</a></code>
 </dt>
 <dd>
 
@@ -76,7 +76,7 @@ the result is false, clients SHOULD indicate that to users or ignore the resourc
 Create a <code><a href="immutable_external_resource.md#0x2_immutable_external_resource_ImmutableExternalResource">ImmutableExternalResource</a></code>, and set the immutable hash.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="immutable_external_resource.md#0x2_immutable_external_resource_new">new</a>(<a href="url.md#0x2_url">url</a>: <a href="url.md#0x2_url_Url">url::Url</a>, <a href="digest.md#0x2_digest">digest</a>: <a href="digest.md#0x2_digest_Sha256Digest">digest::Sha256Digest</a>): <a href="immutable_external_resource.md#0x2_immutable_external_resource_ImmutableExternalResource">immutable_external_resource::ImmutableExternalResource</a>
+<pre><code><b>public</b> <b>fun</b> <a href="immutable_external_resource.md#0x2_immutable_external_resource_new">new</a>(<a href="url.md#0x2_url">url</a>: <a href="url.md#0x2_url_Url">url::Url</a>, <a href="digest.md#0x2_digest">digest</a>: <a href="digest.md#0x2_digest_Sha2256Digest">digest::Sha2256Digest</a>): <a href="immutable_external_resource.md#0x2_immutable_external_resource_ImmutableExternalResource">immutable_external_resource::ImmutableExternalResource</a>
 </code></pre>
 
 
@@ -85,7 +85,7 @@ Create a <code><a href="immutable_external_resource.md#0x2_immutable_external_re
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="immutable_external_resource.md#0x2_immutable_external_resource_new">new</a>(<a href="url.md#0x2_url">url</a>: Url, <a href="digest.md#0x2_digest">digest</a>: Sha256Digest): <a href="immutable_external_resource.md#0x2_immutable_external_resource_ImmutableExternalResource">ImmutableExternalResource</a> {
+<pre><code><b>public</b> <b>fun</b> <a href="immutable_external_resource.md#0x2_immutable_external_resource_new">new</a>(<a href="url.md#0x2_url">url</a>: Url, <a href="digest.md#0x2_digest">digest</a>: Sha2256Digest): <a href="immutable_external_resource.md#0x2_immutable_external_resource_ImmutableExternalResource">ImmutableExternalResource</a> {
     <a href="immutable_external_resource.md#0x2_immutable_external_resource_ImmutableExternalResource">ImmutableExternalResource</a> { <a href="url.md#0x2_url">url</a>, <a href="digest.md#0x2_digest">digest</a> }
 }
 </code></pre>
@@ -101,7 +101,7 @@ Create a <code><a href="immutable_external_resource.md#0x2_immutable_external_re
 Get the hash of the resource.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="digest.md#0x2_digest">digest</a>(self: &<a href="immutable_external_resource.md#0x2_immutable_external_resource_ImmutableExternalResource">immutable_external_resource::ImmutableExternalResource</a>): <a href="digest.md#0x2_digest_Sha256Digest">digest::Sha256Digest</a>
+<pre><code><b>public</b> <b>fun</b> <a href="digest.md#0x2_digest">digest</a>(self: &<a href="immutable_external_resource.md#0x2_immutable_external_resource_ImmutableExternalResource">immutable_external_resource::ImmutableExternalResource</a>): <a href="digest.md#0x2_digest_Sha2256Digest">digest::Sha2256Digest</a>
 </code></pre>
 
 
@@ -110,7 +110,7 @@ Get the hash of the resource.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="digest.md#0x2_digest">digest</a>(self: &<a href="immutable_external_resource.md#0x2_immutable_external_resource_ImmutableExternalResource">ImmutableExternalResource</a>): Sha256Digest {
+<pre><code><b>public</b> <b>fun</b> <a href="digest.md#0x2_digest">digest</a>(self: &<a href="immutable_external_resource.md#0x2_immutable_external_resource_ImmutableExternalResource">ImmutableExternalResource</a>): Sha2256Digest {
     self.<a href="digest.md#0x2_digest">digest</a>
 }
 </code></pre>
