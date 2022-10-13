@@ -92,14 +92,6 @@ pub trait RpcReadApi {
         end: TxSequenceNumber,
     ) -> RpcResult<Vec<TransactionDigest>>;
 
-    /// Return list of recent transaction digest.
-    #[method(name = "getRecentTransactions")]
-    async fn get_recent_transactions(
-        &self,
-        /// maximum size of the result
-        count: u64,
-    ) -> RpcResult<Vec<TransactionDigest>>;
-
     /// Return the transaction response object.
     #[method(name = "getTransaction")]
     async fn get_transaction(

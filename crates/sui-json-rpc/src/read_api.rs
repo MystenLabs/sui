@@ -109,15 +109,6 @@ impl RpcReadApiServer for ReadApi {
             .collect())
     }
 
-    async fn get_recent_transactions(&self, count: u64) -> RpcResult<Vec<TransactionDigest>> {
-        Ok(self
-            .state
-            .get_recent_transactions(count)?
-            .into_iter()
-            .map(|(_, digest)| digest)
-            .collect())
-    }
-
     async fn get_transaction(
         &self,
         digest: TransactionDigest,

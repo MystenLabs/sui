@@ -1,57 +1,56 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Provider } from './provider';
-import { JsonRpcClient } from '../rpc/client';
+import {Provider} from './provider';
+import {JsonRpcClient} from '../rpc/client';
 import {
   isGetObjectDataResponse,
   isGetOwnedObjectsResponse,
   isGetTxnDigestsResponse,
-  isSuiTransactionResponse,
-  isSuiMoveFunctionArgTypes,
-  isSuiMoveNormalizedModules,
-  isSuiMoveNormalizedModule,
-  isSuiMoveNormalizedFunction,
-  isSuiMoveNormalizedStruct,
-  isSuiExecuteTransactionResponse,
   isSuiEvents,
+  isSuiExecuteTransactionResponse,
+  isSuiMoveFunctionArgTypes,
+  isSuiMoveNormalizedFunction,
+  isSuiMoveNormalizedModule,
+  isSuiMoveNormalizedModules,
+  isSuiMoveNormalizedStruct,
+  isSuiTransactionResponse,
   isTransactionPage,
 } from '../types/index.guard';
 import {
-  GatewayTxSeqNumber,
-  GetTxnDigestsResponse,
-  GetObjectDataResponse,
-  SuiObjectInfo,
-  SuiMoveFunctionArgTypes,
-  SuiMoveNormalizedModules,
-  SuiMoveNormalizedModule,
-  SuiMoveNormalizedFunction,
-  SuiMoveNormalizedStruct,
-  TransactionDigest,
-  SuiTransactionResponse,
-  SuiObjectRef,
-  getObjectReference,
   Coin,
-  SuiEventFilter,
-  SuiEventEnvelope,
-  SubscriptionId,
-  ExecuteTransactionRequestType,
-  SuiExecuteTransactionResponse,
-  SuiAddress,
-  ObjectOwner,
-  ObjectId,
-  SuiEvents,
-  EVENT_QUERY_MAX_LIMIT,
-  DEFAULT_START_TIME,
   DEFAULT_END_TIME,
+  DEFAULT_START_TIME,
+  EVENT_QUERY_MAX_LIMIT,
+  ExecuteTransactionRequestType,
+  GatewayTxSeqNumber,
+  GetObjectDataResponse,
+  getObjectReference,
+  GetTxnDigestsResponse,
+  ObjectId,
+  ObjectOwner,
+  Ordering,
+  PaginatedTransactionDigests,
+  SubscriptionId,
+  SuiAddress,
+  SuiEventEnvelope,
+  SuiEventFilter,
+  SuiEvents,
+  SuiExecuteTransactionResponse,
+  SuiMoveFunctionArgTypes,
+  SuiMoveNormalizedFunction,
+  SuiMoveNormalizedModule,
+  SuiMoveNormalizedModules,
+  SuiMoveNormalizedStruct,
+  SuiObjectInfo,
+  SuiObjectRef,
+  SuiTransactionResponse,
+  TransactionDigest,
+  TransactionQuery,
   SUI_TYPE_ARG,
 } from '../types';
-import { SignatureScheme } from '../cryptography/publickey';
-import {
-  DEFAULT_CLIENT_OPTIONS,
-  WebsocketClient,
-  WebsocketClientOptions,
-} from '../rpc/websocket-client';
+import {SignatureScheme} from '../cryptography/publickey';
+import {DEFAULT_CLIENT_OPTIONS, WebsocketClient, WebsocketClientOptions,} from '../rpc/websocket-client';
 
 const isNumber = (val: any): val is number => typeof val === 'number';
 const isAny = (_val: any): _val is any => true;
@@ -299,6 +298,25 @@ export class JsonRpcProvider extends Provider {
   }
 
   // Transactions
+  async getTransactions(
+      query: TransactionQuery,
+      cursor: TransactionDigest| null,
+      limit: number|null,
+      order: Ordering
+  ): Promise<PaginatedTransactionDigests> {
+    try {
+      return await this.client.requestWithType(
+          'sui_getTransactions',
+          [query, cursor, limit, order],
+          isTransactionPage,
+          this.skipDataValidation
+      );
+    } catch (err) {
+      throw new Error(
+          `Error getting transactions for query: ${err} for query ${query}`
+      );
+    }
+  }
 
   async getTransactionsForObject(
     objectID: string

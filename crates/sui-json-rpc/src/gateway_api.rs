@@ -141,10 +141,6 @@ impl RpcReadApiServer for GatewayReadApiImpl {
         Ok(self.client.get_object(object_id).await?)
     }
 
-    async fn get_recent_transactions(&self, count: u64) -> RpcResult<Vec<TransactionDigest>> {
-        Ok(self.client.get_recent_transactions(count)?)
-    }
-
     async fn get_transaction(
         &self,
         digest: TransactionDigest,

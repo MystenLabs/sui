@@ -431,9 +431,6 @@ pub trait GatewayAPI {
         end: TxSeqNumber,
     ) -> Result<Vec<TransactionDigest>, anyhow::Error>;
 
-    /// Return the most recent `count` transactions.
-    fn get_recent_transactions(&self, count: u64) -> Result<Vec<TransactionDigest>, anyhow::Error>;
-
     /// return transaction details by digest
     async fn get_transaction(
         &self,
@@ -1697,13 +1694,6 @@ where
                 .map(|(_, digest)| digest)
                 .collect(),
         )
-    }
-
-    fn get_recent_transactions(&self, count: u64) -> Result<Vec<TransactionDigest>, anyhow::Error> {
-        Ok(QueryHelpers::get_recent_transactions(&self.store, count)?
-            .into_iter()
-            .map(|(_, digest)| digest)
-            .collect())
     }
 
     async fn get_transaction(

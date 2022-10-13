@@ -295,16 +295,6 @@ impl ReadApi {
         })
     }
 
-    pub async fn get_recent_transactions(
-        &self,
-        count: u64,
-    ) -> anyhow::Result<Vec<TransactionDigest>> {
-        Ok(match &*self.api {
-            SuiClientApi::Rpc(c) => c.http.get_recent_transactions(count).await?,
-            SuiClientApi::Embedded(c) => c.get_recent_transactions(count)?,
-        })
-    }
-
     pub async fn get_transactions_in_range(
         &self,
         start: TxSeqNumber,

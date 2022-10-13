@@ -233,14 +233,6 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
     let tx: Vec<TransactionDigest> = http_client.get_transactions_in_range(1, 3).await?;
     assert_eq!(2, tx.len());
 
-    // test get_recent_transactions with smaller range
-    let tx: Vec<TransactionDigest> = http_client.get_recent_transactions(3).await?;
-    assert_eq!(3, tx.len());
-
-    // test get_recent_transactions
-    let tx: Vec<TransactionDigest> = http_client.get_recent_transactions(10).await?;
-    assert_eq!(4, tx.len());
-
     // test get_transaction
     for tx_digest in tx {
         let response: SuiTransactionResponse = http_client.get_transaction(tx_digest).await?;
@@ -296,25 +288,13 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
         }
     }
 
-    // test get_transactions_in_range
-    let tx: Vec<TransactionDigest> = client
-        .read_api()
-        .get_transactions_in_range(0, 50)
-        .await
-        .unwrap();
-    assert_eq!(20, tx.len());
-
-    // test get_transactions_in_range with smaller range
-    let tx: Vec<TransactionDigest> = client
-        .read_api()
-        .get_transactions_in_range(1, 3)
-        .await
-        .unwrap();
-    assert_eq!(2, tx.len());
-
     // test get_recent_transactions with smaller range
-    let tx = client.read_api().get_recent_transactions(3).await.unwrap();
-    assert_eq!(3, tx.len());
+    let tx = client
+        .full_node_api()
+        .get_transactions(TransactionQuery::All, None, Some(3), Ordering::Descending)
+        .await
+        .unwrap();
+    assert_eq!(3, tx.data.len());
 
     // test get all transactions paged
     let first_page = client
@@ -386,11 +366,15 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
     assert_eq!(data_asc, address_txs_desc.data);
 
     // test get_recent_transactions
-    let tx = client.read_api().get_recent_transactions(20).await.unwrap();
-    assert_eq!(20, tx.len());
+    let tx = client
+        .full_node_api()
+        .get_transactions(TransactionQuery::All, None, Some(20), Ordering::Descending)
+        .await
+        .unwrap();
+    assert_eq!(20, tx.data.len());
 
     // test get_transaction
-    for tx_digest in tx {
+    for tx_digest in tx.data {
         let response: SuiTransactionResponse =
             client.read_api().get_transaction(tx_digest).await.unwrap();
         assert!(tx_responses.iter().any(|effects| effects

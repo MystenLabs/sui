@@ -23,8 +23,15 @@ describe('Transaction Reading API', () => {
     expect(txn.certificate.transactionDigest).toEqual(digest);
   });
 
-  it('Get Transactions for address', async () => {
+  it('Get Transactions', async () => {
     const resp = await toolbox.provider.getTransactionsForAddress(toolbox.address());
     expect(resp.length).toEqual(5);
+
+    const allTransactions = await toolbox.provider.getTransactions("All",null,10, "Ascending");
+    expect(allTransactions.data.length).toEqual(10);
+
+    const resp2 = await toolbox.provider.getTransactions({ToAddress:toolbox.address()},null,null, "Ascending");
+    const resp3 = await toolbox.provider.getTransactions({FromAddress:toolbox.address()},null,null, "Ascending");
+    expect([...resp2.data, ...resp3.data]).toEqual(resp);
   });
 });
