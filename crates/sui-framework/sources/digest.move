@@ -5,25 +5,25 @@
 module sui::digest {
     use std::vector;
 
-    /// Length of the vector<u8> representing a SHA256 digest.
-    const SHA256_DIGEST_VECTOR_LENGTH: u64 = 32;
+    /// Length of the vector<u8> representing a SHA2-256 digest.
+    const SHA2_256_DIGEST_VECTOR_LENGTH: u64 = 32;
 
     /// Error code when the length of the digest vector is invalid.
     const EHashLengthMismatch: u64 = 0;
 
-    /// Sha256Digest: An immutable wrapper of SHA256_DIGEST_VECTOR_LENGTH bytes.
-    struct Sha256Digest has store, copy, drop {
+    /// Sha2256Digest: An immutable wrapper of SHA2256_DIGEST_VECTOR_LENGTH bytes.
+    struct Sha2256Digest has store, copy, drop {
         digest: vector<u8>,
     }
 
-    /// Create a `Sha256Digest` from bytes. Aborts if `bytes` is not of length 32.
-    public fun new_sha256_digest(digest: vector<u8>): Sha256Digest {
-        assert!(vector::length(&digest) == SHA256_DIGEST_VECTOR_LENGTH, EHashLengthMismatch);
-        Sha256Digest { digest }
+    /// Create a `Sha2256Digest` from bytes. Aborts if `bytes` is not of length 32.
+    public fun sha2_256_digest_from_bytes(digest: vector<u8>): Sha2256Digest {
+        assert!(vector::length(&digest) == SHA2_256_DIGEST_VECTOR_LENGTH, EHashLengthMismatch);
+        Sha2256Digest { digest }
     }
 
     /// Get the digest.
-    public fun sha256_digest(self: &Sha256Digest): vector<u8> {
+    public fun sha2_256_digest_to_bytes(self: &Sha2256Digest): vector<u8> {
         self.digest
     }
 }

@@ -19,7 +19,7 @@ module sui::immutable_external_resource_tests {
         let hash = x"1234567890123456789012345678901234567890abcdefabcdefabcdefabcdef";
 
         let url = url::new_unsafe(url_str);
-        let digest = digest::new_sha256_digest(hash);
+        let digest = digest::sha2_256_digest_from_bytes(hash);
         let resource = immutable_external_resource::new(url, digest);
 
         assert!(immutable_external_resource::url(&resource) == url, 0);

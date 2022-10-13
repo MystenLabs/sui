@@ -9,7 +9,7 @@
 /// TODO(ben): Should we s/resource/object? or will it just confuse people with Sui objects?
 ///
 module sui::immutable_external_resource {
-    use sui::digest::Sha256Digest;
+    use sui::digest::Sha2256Digest;
     use sui::url::{Url, inner_url};
 
     /// ImmutableExternalResource: An arbitrary, mutable URL plus an immutable digest of the resource.
@@ -25,16 +25,16 @@ module sui::immutable_external_resource {
     /// the result is false, clients SHOULD indicate that to users or ignore the resource.
     struct ImmutableExternalResource has store, copy, drop {
         url: Url,
-        digest: Sha256Digest,
+        digest: Sha2256Digest,
     }
 
     /// Create a `ImmutableExternalResource`, and set the immutable hash.
-    public fun new(url: Url, digest: Sha256Digest): ImmutableExternalResource {
+    public fun new(url: Url, digest: Sha2256Digest): ImmutableExternalResource {
         ImmutableExternalResource { url, digest }
     }
 
     /// Get the hash of the resource.
-    public fun digest(self: &ImmutableExternalResource): Sha256Digest {
+    public fun digest(self: &ImmutableExternalResource): Sha2256Digest {
         self.digest
     }
 

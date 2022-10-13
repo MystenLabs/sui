@@ -3,7 +3,7 @@
 
 #[test_only]
 module sui::digest_tests {
-    use sui::digest::{new_sha256_digest, sha256_digest};
+    use sui::digest::{sha2_256_digest_from_bytes, sha2_256_digest_to_bytes};
 
     const EHASH_LENGTH_MISMATCH: u64 = 0;
 
@@ -11,20 +11,20 @@ module sui::digest_tests {
     #[expected_failure(abort_code = 0)]
     fun test_too_short_hash() {
         let hash = x"badf012345";
-        let _ = new_sha256_digest(hash);
+        let _ = sha2_256_digest_from_bytes(hash);
     }
 
     #[test]
     #[expected_failure(abort_code = 0)]
     fun test_too_long_hash() {
         let hash = x"1234567890123456789012345678901234567890abcdefabcdefabcdefabcdef123456";
-        let _ = new_sha256_digest(hash);
+        let _ = sha2_256_digest_from_bytes(hash);
     }
 
     #[test]
     fun test_good_hash() {
         let hash = x"1234567890123456789012345678901234567890abcdefabcdefabcdefabcdef";
-        let digest = new_sha256_digest(hash);
-        assert!(sha256_digest(&digest) == hash, EHASH_LENGTH_MISMATCH);
+        let digest = sha2_256_digest_from_bytes(hash);
+        assert!(sha2_256_digest_to_bytes(&digest) == hash, EHASH_LENGTH_MISMATCH);
     }
 }
