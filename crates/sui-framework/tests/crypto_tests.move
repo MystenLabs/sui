@@ -7,7 +7,10 @@ module sui::crypto_tests {
     use sui::bls12381;
     use sui::bulletproofs;
     use sui::elliptic_curve as ec;
+    use sui::hash;
     use std::vector;
+    use std::debug;
+
 
     #[test]
     fun test_ecrecover_pubkey() {
@@ -71,6 +74,17 @@ module sui::crypto_tests {
 
         let hashed_msg = ecdsa::keccak256(&msg);
         assert!(hashed_msg == hashed_msg_bytes, 0);
+    }
+
+    #[test]
+    fun test_hmac_sha2_256() {
+        let key = b"my key!";
+        let msg = b"hello world!";
+        let expected_output_bytes = vector[207, 103, 23, 179, 210, 93, 9, 76, 127, 246, 240, 20, 222, 163, 219, 149, 119, 63, 198, 15, 242, 164, 199, 241, 250, 203, 182, 239, 94, 217, 188, 238];
+
+        let output = hash::hmac_sha2_256(&key, &msg);
+        debug::print(&output);
+        assert!(output == expected_output_bytes, 0);
     }
 
     #[test]
