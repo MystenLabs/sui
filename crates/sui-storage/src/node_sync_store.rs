@@ -68,6 +68,18 @@ impl NodeSyncStore {
             .insert(&(epoch_id, *cert.digest()), cert)?)
     }
 
+    pub fn batch_store_certs(
+        &self,
+        certs: impl Iterator<Item = CertifiedTransaction>,
+    ) -> SuiResult {
+        let batch = self.pending_certs.batch().insert_batch(
+            &self.pending_certs,
+            certs.map(|cert| ((cert.epoch(), *cert.digest()), cert)),
+        )?;
+        batch.write()?;
+        Ok(())
+    }
+
     pub fn store_effects(
         &self,
         epoch_id: EpochId,

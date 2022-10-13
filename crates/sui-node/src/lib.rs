@@ -133,11 +133,18 @@ impl SuiNode {
             .websocket_address
             .map(|_| Arc::new(TransactionStreamer::new()));
 
+        let node_sync_store = Arc::new(NodeSyncStore::open_tables_read_write(
+            config.db_path().join("node_sync_db"),
+            None,
+            None,
+        ));
+
         let state = Arc::new(
             AuthorityState::new(
                 config.protocol_public_key(),
                 secret,
                 store,
+                node_sync_store,
                 committee_store.clone(),
                 index_store.clone(),
                 event_store,
@@ -177,14 +184,8 @@ impl SuiNode {
             network_metrics.clone(),
         );
 
-        let node_sync_store = Arc::new(NodeSyncStore::open_tables_read_write(
-            config.db_path().join("node_sync_db"),
-            None,
-            None,
-        ));
         let active_authority = Arc::new(ActiveAuthority::new(
             state.clone(),
-            node_sync_store,
             net.clone(),
             GossipMetrics::new(&prometheus_registry),
             network_metrics.clone(),

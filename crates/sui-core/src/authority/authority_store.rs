@@ -208,27 +208,18 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     /// index. If two instanced run concurrently, the indexes are guaranteed to not overlap
     /// although some certificates may be included twice in the `pending_execution`, and
     /// the same certificate may be written twice (but that is OK since it is valid.)
-    pub fn add_pending_certificates(
-        &self,
-        certs: Vec<(TransactionDigest, Option<CertifiedTransaction>)>,
-    ) -> SuiResult<()> {
+    pub fn add_pending_digests(&self, digests: Vec<TransactionDigest>) -> SuiResult<()> {
         let first_index = self
             .next_pending_seq
-            .fetch_add(certs.len() as u64, Ordering::Relaxed);
+            .fetch_add(digests.len() as u64, Ordering::Relaxed);
 
-        let batch = self.tables.pending_execution.batch();
+        let batch = self.epoch_tables.pending_execution.batch();
         let batch = batch.insert_batch(
-            &self.tables.pending_execution,
-            certs
+            &self.epoch_tables.pending_execution,
+            digests
                 .iter()
                 .enumerate()
-                .map(|(num, (digest, _))| ((num as u64) + first_index, digest)),
-        )?;
-        let batch = batch.insert_batch(
-            &self.tables.certificates,
-            certs
-                .into_iter()
-                .filter_map(|(digest, cert_opt)| cert_opt.map(|cert| (digest, cert))),
+                .map(|(num, digest)| ((num as u64) + first_index, digest)),
         )?;
         batch.write()?;
 
@@ -246,24 +237,16 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     }
 
     /// Remove entries from pending certificates
-    pub fn remove_pending_certificates(&self, seqs: Vec<InternalSequenceNumber>) -> SuiResult<()> {
+    pub fn remove_pending_digests(&self, seqs: Vec<InternalSequenceNumber>) -> SuiResult<()> {
         let batch = self.epoch_tables.pending_execution.batch();
         let batch = batch.delete_batch(&self.epoch_tables.pending_execution, seqs.iter())?;
         batch.write()?;
         Ok(())
     }
 
-    // Empty the pending_execution table, and remove the certs from the certificates table.
+    // Empty the pending_execution table.
     pub fn remove_all_pending_certificates(&self) -> SuiResult {
-        let all_pending_tx = self.get_pending_digests()?;
-        let mut batch = self.epoch_tables.pending_execution.batch();
-        batch = batch.delete_batch(
-            &self.perpetual_tables.certificates,
-            all_pending_tx.iter().map(|(_, digest)| digest),
-        )?;
-        batch.write()?;
         self.epoch_tables.pending_execution.clear()?;
-
         Ok(())
     }
 
@@ -1154,7 +1137,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     /// This function must only be called from the consensus task (i.e. from handle_consensus_transaction).
     ///
     /// Caller is responsible to call consensus_message_processed before this method
-    pub async fn persist_certificate_and_lock_shared_objects(
+    pub async fn lock_shared_objects(
         &self,
         certificate: CertifiedTransaction,
         consensus_index: ExecutionIndicesWithHash,
@@ -1197,9 +1180,6 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         // - we write to assigned_object versions, re-creating the locks that were just deleted
         // - now it's possible to run a new tx against old versions of the shared objects.
         let _tx_lock = self.acquire_tx_lock(&transaction_digest).await;
-
-        // Schedule the certificate for execution
-        self.add_pending_certificates(vec![(transaction_digest, Some(certificate.clone()))])?;
 
         // Note: if we crash here we are not in an inconsistent state since
         //       it is ok to just update the pending list without updating the sequence.

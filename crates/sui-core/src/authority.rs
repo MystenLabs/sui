@@ -50,6 +50,7 @@ use sui_json_rpc_types::{SuiEventEnvelope, SuiTransactionEffects};
 use sui_simulator::nondeterministic;
 use sui_storage::{
     event_store::{EventStore, EventStoreType, StoredEvent},
+    node_sync_store::NodeSyncStore,
     write_ahead_log::{DBTxGuard, TxGuard, WriteAheadLog},
     IndexStore,
 };
@@ -449,6 +450,8 @@ pub struct AuthorityState {
 
     /// The database
     pub(crate) database: Arc<AuthorityStore>, // TODO: remove pub
+
+    pub node_sync_store: Arc<NodeSyncStore>,
 
     indexes: Option<Arc<IndexStore>>,
 
@@ -1312,6 +1315,7 @@ impl AuthorityState {
         name: AuthorityName,
         secret: StableSyncAuthoritySigner,
         store: Arc<AuthorityStore>,
+        node_sync_store: Arc<NodeSyncStore>,
         committee_store: Arc<CommitteeStore>,
         indexes: Option<Arc<IndexStore>>,
         event_store: Option<Arc<EventStoreType>>,
@@ -1350,6 +1354,7 @@ impl AuthorityState {
             _native_functions: native_functions,
             move_vm,
             database: store.clone(),
+            node_sync_store,
             indexes,
             // `module_cache` uses a separate in-mem cache from `event_handler`
             // this is because they largely deal with different types of MoveStructs
@@ -1463,11 +1468,19 @@ impl AuthorityState {
             &genesis_committee,
             None,
         ));
+
+        let node_sync_store = Arc::new(NodeSyncStore::open_tables_read_write(
+            path.join("node_sync_db"),
+            None,
+            None,
+        ));
+
         // add the object_basics module
         AuthorityState::new(
             secret.public().into(),
             secret.clone(),
             store,
+            node_sync_store,
             epochs,
             None,
             None,
@@ -1478,6 +1491,21 @@ impl AuthorityState {
             tx_reconfigure_consensus,
         )
         .await
+    }
+
+    /// Add a number of certificates to the pending transactions as well as the
+    /// certificates structure if they are not already executed.
+    /// Certificates are optional, and if not provided, they will be eventually
+    /// downloaded in the execution driver.
+    pub fn add_pending_certificates(
+        &self,
+        certs: Vec<(TransactionDigest, Option<CertifiedTransaction>)>,
+    ) -> SuiResult<()> {
+        self.node_sync_store
+            .batch_store_certs(certs.iter().filter_map(|(_, cert_opt)| cert_opt.clone()))?;
+
+        self.database
+            .add_pending_digests(certs.iter().map(|(digest, _)| *digest).collect())
     }
 
     // Continually pop in-progress txes from the WAL and try to drive them to completion.
@@ -2095,8 +2123,15 @@ impl AuthorityState {
                     "handle_consensus_transaction UserTransaction",
                 );
 
+                // Schedule the certificate for execution
+                self.add_pending_certificates(vec![(
+                    *certificate.digest(),
+                    Some(*certificate.clone()),
+                )])
+                .map_err(NarwhalHandlerError::NodeError)?;
+
                 self.database
-                    .persist_certificate_and_lock_shared_objects(*certificate, consensus_index)
+                    .lock_shared_objects(*certificate, consensus_index)
                     // todo - potentially more errors from inside here needs to be mapped differently
                     .await
                     .map_err(NarwhalHandlerError::NodeError)?;
@@ -2123,7 +2158,7 @@ impl AuthorityState {
                     .handle_internal_fragment(
                         consensus_index.index,
                         *fragment,
-                        self.database.clone(),
+                        self,
                         &self.committee.load(),
                     )
                     .map_err(NarwhalHandlerError::NodeError)?;

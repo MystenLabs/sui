@@ -83,7 +83,6 @@ async fn pending_exec_storage_notify() {
     // Insert the certificates
     let num_certs = certs.len();
     authority_state
-        .database
         .add_pending_certificates(
             certs
                 .into_iter()
@@ -170,7 +169,6 @@ async fn pending_exec_full() {
     // Insert the certificates
     let num_certs = certs.len();
     authority_state
-        .database
         .add_pending_certificates(
             certs
                 .into_iter()
@@ -264,7 +262,6 @@ async fn test_parent_cert_exec() {
     active_state.clone().spawn_execute_process().await;
 
     authorities[3]
-        .database
         .add_pending_certificates(vec![(*tx2.digest(), None)])
         .unwrap();
 

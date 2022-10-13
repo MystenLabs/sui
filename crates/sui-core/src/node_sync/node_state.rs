@@ -280,7 +280,7 @@ impl<A> NodeSyncState<A> {
     }
 
     pub fn store(&self) -> Arc<NodeSyncStore> {
-        self.active_authority.node_sync_store.clone()
+        self.state().node_sync_store.clone()
     }
 
     fn state(&self) -> &AuthorityState {
@@ -509,14 +509,9 @@ where
         epoch_id: EpochId,
         digest: &TransactionDigest,
     ) -> SuiResult<CertifiedTransaction> {
-        if let Some(cert) = self.state().database.read_certificate(digest)? {
-            if cert.epoch() == epoch_id {
-                return Ok(cert);
-            }
-            warn!(
-                ?digest, ?epoch_id, cert_epoch = ?cert.epoch(),
-                "Found certificate from prior epoch in authority db"
-            );
+        if let Some(cert) = self.store().get_cert(epoch_id, digest)? {
+            assert_eq!(epoch_id, cert.epoch());
+            return Ok(cert);
         }
 
         let (cert, _) = self
