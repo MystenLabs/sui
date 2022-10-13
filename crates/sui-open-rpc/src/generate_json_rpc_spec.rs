@@ -449,7 +449,7 @@ async fn create_coin_split_response(
         amounts: Some(vec![20, 20, 20, 20, 20]),
         count: None,
         gas: None,
-        gas_budget: 1000,
+        gas_budget: 10000,
     }
     .execute(context)
     .await?;
