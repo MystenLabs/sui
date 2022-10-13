@@ -21,6 +21,7 @@
 -  [Function `advance_epoch`](#0x2_sui_system_advance_epoch)
 -  [Function `epoch`](#0x2_sui_system_epoch)
 -  [Function `validator_delegate_amount`](#0x2_sui_system_validator_delegate_amount)
+-  [Function `validator_stake_amount`](#0x2_sui_system_validator_stake_amount)
 
 
 <pre><code><b>use</b> <a href="">0x1::option</a>;
@@ -673,6 +674,32 @@ Aborts if <code>validator_addr</code> is not an active validator.
 
 <pre><code><b>public</b> <b>fun</b> <a href="sui_system.md#0x2_sui_system_validator_delegate_amount">validator_delegate_amount</a>(self: &<a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>, validator_addr: <b>address</b>): u64 {
     <a href="validator_set.md#0x2_validator_set_validator_delegate_amount">validator_set::validator_delegate_amount</a>(&self.validators, validator_addr)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_sui_system_validator_stake_amount"></a>
+
+## Function `validator_stake_amount`
+
+Returns the amount of stake <code>validator_addr</code> has.
+Aborts if <code>validator_addr</code> is not an active validator.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="sui_system.md#0x2_sui_system_validator_stake_amount">validator_stake_amount</a>(self: &<a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, validator_addr: <b>address</b>): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="sui_system.md#0x2_sui_system_validator_stake_amount">validator_stake_amount</a>(self: &<a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>, validator_addr: <b>address</b>): u64 {
+    <a href="validator_set.md#0x2_validator_set_validator_stake_amount">validator_set::validator_stake_amount</a>(&self.validators, validator_addr)
 }
 </code></pre>
 

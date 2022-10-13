@@ -60,9 +60,12 @@ class Permissions {
         this.permissionReply = this._permissionResponses.pipe(
             mergeWith(
                 Tabs.onRemoved.pipe(
-                    filter((aTab) =>
-                        Permissions.isPermissionUiUrl(aTab.url || '')
-                    )
+                    filter((aTab) => {
+                        return (
+                            Permissions.isPermissionUiUrl(aTab.url || '') &&
+                            !aTab.nextUrl?.includes('/locked')
+                        );
+                    })
                 )
             ),
             concatMap((data) =>

@@ -490,7 +490,14 @@ The remaining stake of the validator cannot be lower than <code>min_validator_st
 
     // and deposit into the new <a href="validator.md#0x2_validator">validator</a>'s pool
     <a href="validator_set.md#0x2_validator_set_request_add_delegation">request_add_delegation</a>(self, new_validator_address, principal_stake, time_lock, ctx);
-    <a href="validator_set.md#0x2_validator_set_request_add_delegation">request_add_delegation</a>(self, new_validator_address, rewards_stake, <a href="_none">option::none</a>(), ctx);
+
+    // If staking rewards was earned <b>with</b> the previous <a href="validator.md#0x2_validator">validator</a>, we add that <b>to</b> delegate <b>with</b> the new <a href="validator.md#0x2_validator">validator</a> too.
+    <b>if</b> (<a href="balance.md#0x2_balance_value">balance::value</a>(&rewards_stake) &gt; 0) {
+        <a href="validator_set.md#0x2_validator_set_request_add_delegation">request_add_delegation</a>(self, new_validator_address, rewards_stake, <a href="_none">option::none</a>(), ctx)
+    } <b>else</b> {
+        <a href="balance.md#0x2_balance_destroy_zero">balance::destroy_zero</a>(rewards_stake)
+    };
+
 
     self.next_epoch_validators = <a href="validator_set.md#0x2_validator_set_derive_next_epoch_validators">derive_next_epoch_validators</a>(self);
 }

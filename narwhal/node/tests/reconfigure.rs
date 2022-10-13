@@ -167,7 +167,7 @@ async fn restart() {
 
     let parameters = Parameters {
         batch_size: 200,
-        header_size: 1,
+        max_header_num_of_batches: 1,
         ..Parameters::default()
     };
 
@@ -257,7 +257,7 @@ async fn epoch_change() {
     let worker_cache = fixture.shared_worker_cache();
     let parameters = Parameters {
         batch_size: 200,
-        header_size: 1,
+        max_header_num_of_batches: 1,
         ..Parameters::default()
     };
 

@@ -4,6 +4,8 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import {
   getExecutionStatusType,
+  getNewlyCreatedCoinRefsAfterSplit,
+  getObjectId,
   LocalTxnDataSerializer,
   RawSigner,
 } from '../../src';
@@ -12,6 +14,7 @@ import {
   DEFAULT_GAS_BUDGET,
   setup,
   TestToolbox,
+  DEFAULT_RECIPIENT_2,
 } from './utils/setup';
 
 describe('Local Transaction Builder', () => {
@@ -95,6 +98,35 @@ describe('Local Transaction Builder', () => {
       gasBudget: DEFAULT_GAS_BUDGET,
       recipient: DEFAULT_RECIPIENT,
       gasPayment: coins[1].objectId,
+    });
+    expect(getExecutionStatusType(txn)).toEqual('success');
+  });
+
+  it('Pay', async () => {
+    const coins =
+      await toolbox.provider.selectCoinsWithBalanceGreaterThanOrEqual(
+        toolbox.address(),
+        BigInt(DEFAULT_GAS_BUDGET)
+      );
+
+    // get some new coins with small amount
+    const splitTxn = await signer.splitCoinWithRequestType({
+      coinObjectId: getObjectId(coins[0]),
+      splitAmounts: [1, 2, 3],
+      gasBudget: DEFAULT_GAS_BUDGET,
+      gasPayment: getObjectId(coins[1]),
+    });
+    const splitCoins = getNewlyCreatedCoinRefsAfterSplit(splitTxn)!.map((c) =>
+      getObjectId(c)
+    );
+
+    // use the newly created coins as the input coins for the pay transaction
+    const txn = await signer.payWithRequestType({
+      inputCoins: splitCoins,
+      gasBudget: DEFAULT_GAS_BUDGET,
+      recipients: [DEFAULT_RECIPIENT, DEFAULT_RECIPIENT_2],
+      amounts: [4, 2],
+      gasPayment: getObjectId(coins[2]),
     });
     expect(getExecutionStatusType(txn)).toEqual('success');
   });

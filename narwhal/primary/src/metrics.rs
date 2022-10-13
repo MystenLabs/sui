@@ -73,10 +73,6 @@ pub struct PrimaryChannelMetrics {
     pub tx_primary_messages: IntGauge,
     /// occupancy of the channel from the `primary::PrimaryReceiverHandler` to the `primary::Helper`
     pub tx_helper_requests: IntGauge,
-    /// occupancy of the channel from the `primary::ConsensusAPIGrpc` to the `primary::BlockRemover`
-    pub tx_block_removal_commands: IntGauge,
-    /// occupancy of the channel from the `primary::WorkerReceiverHandler` to the `primary::BlockRemover`
-    pub tx_batch_removal: IntGauge,
     /// occupancy of the channel from the `primary::BlockSynchronizerHandler` to the `primary::BlockSynchronizer`
     pub tx_block_synchronizer_commands: IntGauge,
     /// occupancy of the channel from the `primary::PrimaryReceiverHandler` to the `primary::BlockSynchronizer`
@@ -111,10 +107,6 @@ pub struct PrimaryChannelMetrics {
     pub tx_primary_messages_total: IntCounter,
     /// total received on channel from the `primary::PrimaryReceiverHandler` to the `primary::Helper`
     pub tx_helper_requests_total: IntCounter,
-    /// total received on channel from the `primary::ConsensusAPIGrpc` to the `primary::BlockRemover`
-    pub tx_block_removal_commands_total: IntCounter,
-    /// total received on channel from the `primary::WorkerReceiverHandler` to the `primary::BlockRemover`
-    pub tx_batch_removal_total: IntCounter,
     /// total received on channel from the `primary::BlockSynchronizerHandler` to the `primary::BlockSynchronizer`
     pub tx_block_synchronizer_commands_total: IntCounter,
     /// total received on channel from the `primary::PrimaryReceiverHandler` to the `primary::BlockSynchronizer`
@@ -204,16 +196,6 @@ impl PrimaryChannelMetrics {
                 "occupancy of the channel from the `primary::PrimaryReceiverHandler` to the `primary::Helper`",
                 registry
             ).unwrap(),
-            tx_block_removal_commands: register_int_gauge_with_registry!(
-                "tx_block_removal_commands",
-                "occupancy of the channel from the `primary::ConsensusAPIGrpc` to the `primary::BlockRemover`",
-                registry
-            ).unwrap(),
-            tx_batch_removal: register_int_gauge_with_registry!(
-                "tx_batch_removal",
-                "occupancy of the channel from the `primary::WorkerReceiverHandler` to the `primary::BlockRemover`",
-                registry
-            ).unwrap(),
             tx_block_synchronizer_commands: register_int_gauge_with_registry!(
                 "tx_block_synchronizer_commands",
                 "occupancy of the channel from the `primary::BlockSynchronizerHandler` to the `primary::BlockSynchronizer`",
@@ -294,16 +276,6 @@ impl PrimaryChannelMetrics {
             tx_helper_requests_total: register_int_counter_with_registry!(
                 "tx_helper_requests_total",
                 "total received on channel from the `primary::PrimaryReceiverHandler` to the `primary::Helper`",
-                registry
-            ).unwrap(),
-            tx_block_removal_commands_total: register_int_counter_with_registry!(
-                "tx_block_removal_commands_total",
-                "total received on channel from the `primary::ConsensusAPIGrpc` to the `primary::BlockRemover`",
-                registry
-            ).unwrap(),
-            tx_batch_removal_total: register_int_counter_with_registry!(
-                "tx_batch_removal_total",
-                "total received on channel from the `primary::WorkerReceiverHandler` to the `primary::BlockRemover`",
                 registry
             ).unwrap(),
             tx_block_synchronizer_commands_total: register_int_counter_with_registry!(
@@ -415,6 +387,8 @@ pub struct PrimaryMetrics {
     pub waiting_elements_certificate_waiter: IntGaugeVec,
     /// Number of votes that were requested but not sent due to previously having voted differently
     pub votes_dropped_equivocation_protection: IntCounterVec,
+    /// Number of pending batches in proposer
+    pub num_of_pending_batches_in_proposer: IntGaugeVec,
 }
 
 impl PrimaryMetrics {
@@ -560,6 +534,12 @@ impl PrimaryMetrics {
                 registry
             )
             .unwrap(),
+            num_of_pending_batches_in_proposer: register_int_gauge_vec_with_registry!(
+                "num_of_pending_batches_in_proposer",
+                "Number of batch digests pending in proposer for next header proposal",
+                &["epoch"],
+                registry
+            ).unwrap()
         }
     }
 }

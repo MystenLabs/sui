@@ -18,7 +18,8 @@ validator_configs:
       consensus-db-path: /tmp/foo/
       timeout-secs: 60
       narwhal-config:
-        header_size: 1000
+        header_num_of_batches_threshold: 32
+        max_header_num_of_batches: 1000
         max_header_delay: 100ms
         gc_depth: 50
         sync_retry_delay: 5000ms
@@ -64,7 +65,8 @@ validator_configs:
       consensus-db-path: /tmp/foo/
       timeout-secs: 60
       narwhal-config:
-        header_size: 1000
+        header_num_of_batches_threshold: 32
+        max_header_num_of_batches: 1000
         max_header_delay: 100ms
         gc_depth: 50
         sync_retry_delay: 5000ms
@@ -110,7 +112,8 @@ validator_configs:
       consensus-db-path: /tmp/foo/
       timeout-secs: 60
       narwhal-config:
-        header_size: 1000
+        header_num_of_batches_threshold: 32
+        max_header_num_of_batches: 1000
         max_header_delay: 100ms
         gc_depth: 50
         sync_retry_delay: 5000ms
@@ -156,7 +159,8 @@ validator_configs:
       consensus-db-path: /tmp/foo/
       timeout-secs: 60
       narwhal-config:
-        header_size: 1000
+        header_num_of_batches_threshold: 32
+        max_header_num_of_batches: 1000
         max_header_delay: 100ms
         gc_depth: 50
         sync_retry_delay: 5000ms
@@ -202,7 +206,8 @@ validator_configs:
       consensus-db-path: /tmp/foo/
       timeout-secs: 60
       narwhal-config:
-        header_size: 1000
+        header_num_of_batches_threshold: 32
+        max_header_num_of_batches: 1000
         max_header_delay: 100ms
         gc_depth: 50
         sync_retry_delay: 5000ms
@@ -248,7 +253,8 @@ validator_configs:
       consensus-db-path: /tmp/foo/
       timeout-secs: 60
       narwhal-config:
-        header_size: 1000
+        header_num_of_batches_threshold: 32
+        max_header_num_of_batches: 1000
         max_header_delay: 100ms
         gc_depth: 50
         sync_retry_delay: 5000ms
@@ -294,7 +300,8 @@ validator_configs:
       consensus-db-path: /tmp/foo/
       timeout-secs: 60
       narwhal-config:
-        header_size: 1000
+        header_num_of_batches_threshold: 32
+        max_header_num_of_batches: 1000
         max_header_delay: 100ms
         gc_depth: 50
         sync_retry_delay: 5000ms
@@ -332,3 +339,4 @@ account_keys:
   - PvPO23Xcf7+pO4XpJeTSk+HnbBvHomH5eiXZrcP6ED+7yoogulSh/bvgp+PbcaUy+Rrg5RRpihG3aL+mKDCK9g==
   - QRJXlCdYPZTIW1/5uk1RzO8KRRO+JLxooHkVCJMxGitwxRrVJ0dTYnP2qxhjeFQCyfEIAMJlI5mGhE8E8wXeUA==
 genesis: "[fake genesis]"
+
