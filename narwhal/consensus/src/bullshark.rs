@@ -11,7 +11,7 @@ use std::{
     collections::{BTreeSet, HashMap},
     sync::Arc,
 };
-use tracing::debug;
+use tracing::{debug, error};
 use types::{Certificate, CertificateDigest, ConsensusStore, Round, SequenceNumber, StoreResult};
 
 #[cfg(test)]
@@ -51,7 +51,7 @@ impl ConsensusProtocol for Bullshark {
             for parent_digest in parents {
                 if !store_parents.contains(&parent_digest) {
                     if round - 1 + self.gc_depth > state.last_committed_round {
-                        panic!(
+                        error!(
                         "The store does not contain the parent of {:?}: Missing item digest={:?}",
                         certificate, parent_digest
                     );
