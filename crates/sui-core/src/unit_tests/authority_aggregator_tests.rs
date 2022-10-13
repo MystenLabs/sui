@@ -5,7 +5,6 @@ use bcs::to_bytes;
 use move_core_types::{account_address::AccountAddress, ident_str};
 use move_package::BuildConfig;
 use multiaddr::Multiaddr;
-use sui_network::{DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_REQUEST_TIMEOUT_SEC};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
