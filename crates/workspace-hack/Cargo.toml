@@ -177,7 +177,8 @@ ethnum = { version = "1", default-features = false }
 event-listener = { version = "2", default-features = false }
 eyre = { version = "0.6", features = ["auto-install", "track-caller"] }
 fail = { version = "0.4", default-features = false }
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "03001408973d050151ca914f8dac041eb13ad79b", features = ["copy_key", "secure"] }
+fastcrypto-1b99b1623305ec81 = { package = "fastcrypto", git = "https://github.com/MystenLabs/fastcrypto", rev = "03001408973d050151ca914f8dac041eb13ad79b", features = ["secure"] }
+fastcrypto-752d1fad207525e = { package = "fastcrypto", git = "https://github.com/MystenLabs/fastcrypto", rev = "a5147af9e044056b9769547d7ba96486255487c3", features = ["copy_key", "secure"] }
 fastrand = { version = "1", default-features = false }
 fd-lock = { version = "3", default-features = false }
 fdlimit = { version = "0.2", default-features = false }
@@ -813,8 +814,10 @@ ethnum = { version = "1", default-features = false }
 event-listener = { version = "2", default-features = false }
 eyre = { version = "0.6", features = ["auto-install", "track-caller"] }
 fail = { version = "0.4", default-features = false }
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "03001408973d050151ca914f8dac041eb13ad79b", features = ["copy_key", "secure"] }
-fastcrypto-derive = { git = "https://github.com/MystenLabs/fastcrypto", rev = "03001408973d050151ca914f8dac041eb13ad79b", default-features = false }
+fastcrypto-1b99b1623305ec81 = { package = "fastcrypto", git = "https://github.com/MystenLabs/fastcrypto", rev = "03001408973d050151ca914f8dac041eb13ad79b", features = ["secure"] }
+fastcrypto-752d1fad207525e = { package = "fastcrypto", git = "https://github.com/MystenLabs/fastcrypto", rev = "a5147af9e044056b9769547d7ba96486255487c3", features = ["copy_key", "secure"] }
+fastcrypto-derive-1b99b1623305ec81 = { package = "fastcrypto-derive", git = "https://github.com/MystenLabs/fastcrypto", rev = "03001408973d050151ca914f8dac041eb13ad79b", default-features = false }
+fastcrypto-derive-752d1fad207525e = { package = "fastcrypto-derive", git = "https://github.com/MystenLabs/fastcrypto", rev = "a5147af9e044056b9769547d7ba96486255487c3", default-features = false }
 fastrand = { version = "1", default-features = false }
 fd-lock = { version = "3", default-features = false }
 fdlimit = { version = "0.2", default-features = false }
