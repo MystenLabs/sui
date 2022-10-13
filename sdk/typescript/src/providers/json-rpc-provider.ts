@@ -7,6 +7,7 @@ import {
   isGetObjectDataResponse,
   isGetOwnedObjectsResponse,
   isGetTxnDigestsResponse,
+  isPaginatedTransactionDigests,
   isSuiEvents,
   isSuiExecuteTransactionResponse,
   isSuiMoveFunctionArgTypes,
@@ -15,7 +16,6 @@ import {
   isSuiMoveNormalizedModules,
   isSuiMoveNormalizedStruct,
   isSuiTransactionResponse,
-  isTransactionPage,
 } from '../types/index.guard';
 import {
   Coin,
@@ -308,7 +308,7 @@ export class JsonRpcProvider extends Provider {
       return await this.client.requestWithType(
           'sui_getTransactions',
           [query, cursor, limit, order],
-          isTransactionPage,
+          isPaginatedTransactionDigests,
           this.skipDataValidation
       );
     } catch (err) {
@@ -335,7 +335,7 @@ export class JsonRpcProvider extends Provider {
     try {
       const results = await this.client.batchRequestWithType(
         requests,
-        isTransactionPage,
+          isPaginatedTransactionDigests,
         this.skipDataValidation
       );
       return [...results[0].data, ...results[1].data];
@@ -363,7 +363,7 @@ export class JsonRpcProvider extends Provider {
     try {
       const results = await this.client.batchRequestWithType(
         requests,
-        isTransactionPage,
+          isPaginatedTransactionDigests,
         this.skipDataValidation
       );
       return [...results[0].data, ...results[1].data];
