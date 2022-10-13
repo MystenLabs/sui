@@ -165,6 +165,9 @@ class Keyring {
             } else if (isKeyringPayload<'lock'>(payload, 'lock')) {
                 this.lock();
                 uiConnection.send(createMessage({ type: 'done' }, id));
+            } else if (isKeyringPayload<'clear'>(payload, 'clear')) {
+                await this.clearMnemonic();
+                uiConnection.send(createMessage({ type: 'done' }, id));
             }
         } catch (e) {
             uiConnection.send(

@@ -34,8 +34,13 @@ pub struct Proposer {
     committee: Committee,
     /// Service to sign headers.
     signature_service: SignatureService<Signature, { crypto::DIGEST_LENGTH }>,
-    /// The size of the headers' payload.
-    header_size: usize,
+    /// The threshold number of batches that can trigger
+    /// a header creation. When there are available at least
+    /// `header_num_of_batches_threshold` batches we are ok
+    /// to try and propose a header
+    header_num_of_batches_threshold: usize,
+    /// The maximum number of batches in header.
+    max_header_num_of_batches: usize,
     /// The maximum delay to wait for batches' digests.
     max_header_delay: Duration,
     /// The network model in which the node operates.
@@ -60,8 +65,6 @@ pub struct Proposer {
     last_leader: Option<Certificate>,
     /// Holds the batches' digests waiting to be included in the next header.
     digests: Vec<(BatchDigest, WorkerId)>,
-    /// Keeps track of the size (in bytes) of batches' digests that we received so far.
-    payload_size: usize,
     /// Metrics handler
     metrics: Arc<PrimaryMetrics>,
 }
@@ -74,7 +77,8 @@ impl Proposer {
         committee: Committee,
         signature_service: SignatureService<Signature, { crypto::DIGEST_LENGTH }>,
         proposer_store: ProposerStore,
-        header_size: usize,
+        header_num_of_batches_threshold: usize,
+        max_header_num_of_batches: usize,
         max_header_delay: Duration,
         network_model: NetworkModel,
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
@@ -89,7 +93,8 @@ impl Proposer {
                 name,
                 committee,
                 signature_service,
-                header_size,
+                header_num_of_batches_threshold,
+                max_header_num_of_batches,
                 max_header_delay,
                 network_model,
                 rx_reconfigure,
@@ -100,8 +105,7 @@ impl Proposer {
                 round: 0,
                 last_parents: genesis,
                 last_leader: None,
-                digests: Vec::with_capacity(2 * header_size),
-                payload_size: 0,
+                digests: Vec::with_capacity(2 * max_header_num_of_batches),
                 metrics,
             }
             .run()
@@ -110,17 +114,13 @@ impl Proposer {
     }
 
     async fn make_header(&mut self) -> DagResult<()> {
-        // Backup digests and payload size, clear payload size
-        let digest_backup = self.digests.clone();
-        let payload_size_backup = self.payload_size;
-        self.payload_size = 0;
-
         // Make a new header.
+        let num_of_digests = self.digests.len().min(self.max_header_num_of_batches);
         let mut header = Header::new(
             self.name.clone(),
             self.round,
             self.committee.epoch(),
-            self.digests.drain(..).collect(),
+            self.digests.drain(..num_of_digests).collect(),
             self.last_parents.drain(..).map(|x| x.digest()).collect(),
             &mut self.signature_service,
         )
@@ -133,8 +133,14 @@ impl Proposer {
                 // We have already produced a header for the current round, idempotent re-send
                 if last_header != header {
                     debug!("Equivocation protection was enacted in the proposer");
-                    self.digests = digest_backup;
-                    self.payload_size = payload_size_backup;
+
+                    // add again the digests for proposal
+                    // keeping their original order
+                    header
+                        .payload
+                        .into_iter()
+                        .for_each(|value| self.digests.insert(0, value));
+
                     header = last_header;
                 }
             }
@@ -257,11 +263,11 @@ impl Proposer {
             // Check if we can propose a new header. We propose a new header when we have a quorum of parents
             // and one of the following conditions is met:
             // (i) the timer expired (we timed out on the leader or gave up gather votes for the leader),
-            // (ii) we have enough digests (minimum header size) and we are on the happy path (we can vote for
+            // (ii) we have enough digests (header_num_of_batches_threshold) and we are on the happy path (we can vote for
             // the leader or the leader has enough votes to enable a commit). The latter condition only matters
-            // in partially synchrony.
+            // in partially synchrony. We guarantee that no more than max_header_num_of_batches are included in
             let enough_parents = !self.last_parents.is_empty();
-            let enough_digests = self.payload_size >= self.header_size;
+            let enough_digests = self.digests.len() >= self.header_num_of_batches_threshold;
             let mut timer_expired = timer.is_elapsed();
 
             if (timer_expired || (enough_digests && advance)) && enough_parents {
@@ -350,7 +356,6 @@ impl Proposer {
 
                 // Receive digests from our workers.
                 Some((digest, worker_id)) = self.rx_workers.recv() => {
-                    self.payload_size += Digest::from(digest).size();
                     self.digests.push((digest, worker_id));
                 }
 
@@ -376,6 +381,12 @@ impl Proposer {
 
                 }
             }
+
+            // update metrics
+            self.metrics
+                .num_of_pending_batches_in_proposer
+                .with_label_values(&[&self.committee.epoch.to_string()])
+                .set(self.digests.len() as i64);
         }
     }
 }

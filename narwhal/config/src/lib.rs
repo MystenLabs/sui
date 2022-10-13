@@ -105,11 +105,17 @@ pub type WorkerId = u32;
 /// milliseconds or seconds (e.x 5s, 10ms , 2000ms).
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Parameters {
-    /// The preferred header size. The primary creates a new header when it has enough parents and
-    /// enough batches' digests to reach `header_size`. Denominated in bytes.
-    pub header_size: usize,
+    /// When the primary has at least `header_num_of_batches_threshold` num of batch digests
+    /// available, then it can propose a new header.
+    #[serde(default = "Parameters::default_header_num_of_batches_threshold")]
+    pub header_num_of_batches_threshold: usize,
+
+    /// The maximum number of batch digests included in a header.
+    #[serde(default = "Parameters::default_max_header_num_of_batches")]
+    pub max_header_num_of_batches: usize,
+
     /// The maximum delay that the primary waits between generating two headers, even if the header
-    /// did not reach `max_header_size`.
+    /// did not reach `max_header_num_of_batches`.
     #[serde(with = "duration_format")]
     pub max_header_delay: Duration,
     /// The depth of the garbage collection (Denominated in number of rounds).
@@ -137,6 +143,16 @@ pub struct Parameters {
     pub prometheus_metrics: PrometheusMetricsParameters,
     /// Network admin server ports for primary & worker.
     pub network_admin_server: NetworkAdminServerParameters,
+}
+
+impl Parameters {
+    fn default_header_num_of_batches_threshold() -> usize {
+        32
+    }
+
+    fn default_max_header_num_of_batches() -> usize {
+        1_000
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -279,7 +295,8 @@ impl Default for BlockSynchronizerParameters {
 impl Default for Parameters {
     fn default() -> Self {
         Self {
-            header_size: 1_000,
+            header_num_of_batches_threshold: 32,
+            max_header_num_of_batches: 1000,
             max_header_delay: Duration::from_millis(100),
             gc_depth: 50,
             sync_retry_delay: Duration::from_millis(5_000),
@@ -297,7 +314,14 @@ impl Default for Parameters {
 
 impl Parameters {
     pub fn tracing(&self) {
-        info!("Header size set to {} B", self.header_size);
+        info!(
+            "Header number of batches threshold set to {}",
+            self.header_num_of_batches_threshold
+        );
+        info!(
+            "Header max number of batches set to {}",
+            self.max_header_num_of_batches
+        );
         info!(
             "Max header delay set to {} ms",
             self.max_header_delay.as_millis()
@@ -746,7 +770,8 @@ mod tests {
         parameters.tracing();
 
         // THEN
-        assert!(logs_contain("Header size set to 1000 B"));
+        assert!(logs_contain("Header number of batches threshold set to 32"));
+        assert!(logs_contain("Header max number of batches set to 1000"));
         assert!(logs_contain("Max header delay set to 100 ms"));
         assert!(logs_contain("Garbage collection depth set to 50 rounds"));
         assert!(logs_contain("Sync retry delay set to 5000 ms"));

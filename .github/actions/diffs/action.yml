@@ -19,6 +19,7 @@ runs:
         isRust:
           - 'crates/**'
           - 'narwhal/**'
+          - 'sui_programmability/**'
           - '.github/workflows/bench.yml'
           - '.github/workflows/codecov.yml'
           - '.github/workflows/rust.yml'

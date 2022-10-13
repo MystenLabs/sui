@@ -432,7 +432,12 @@ where
 
                 let res = match res {
                     Err(error) | Ok(Err(error)) => {
-                        error!(?tx_digest, "process_digest failed: {}", error);
+                        if matches!(error, SuiError::ValidatorHaltedAtEpochEnd) {
+                            // This is not a real error.
+                            debug!(?tx_digest, "process_digest failed: {}", error);
+                        } else {
+                            error!(?tx_digest, "process_digest failed: {}", error);
+                        }
                         Err(error)
                     }
 

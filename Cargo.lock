@@ -1646,6 +1646,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ctr"
+version = "0.9.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0369ee1ad671834580515889b80f2ea915f23b8be8d0daa4bbaf2ac5c7590835"
+dependencies = [
+ "cipher",
+]
+
+[[package]]
 name = "curve25519-dalek"
 version = "3.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2647,6 +2656,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bff49e947297f3312447abdca79f45f4738097cc82b06e72054d2223f601f1b9"
 dependencies = [
  "serde 1.0.145",
+ "serde 1.0.144",
  "typenum",
  "version_check",
 ]
@@ -2681,6 +2691,16 @@ dependencies = [
  "cfg-if 1.0.0",
  "libc",
  "wasi 0.11.0+wasi-snapshot-preview1",
+]
+
+[[package]]
+name = "ghash"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d930750de5717d2dd0b8c0d42c076c0e884c81a73e6cab859bbd2339c71e3e40"
+dependencies = [
+ "opaque-debug",
+ "polyval",
 ]
 
 [[package]]
@@ -4592,7 +4612,7 @@ dependencies = [
 [[package]]
 name = "msim"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=305f0ca15fe77df5b92b7f4bb57b5472e568edc3#305f0ca15fe77df5b92b7f4bb57b5472e568edc3"
+source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=982cf1a544ebd1e2818330f9b1247a4c3dd26c13#982cf1a544ebd1e2818330f9b1247a4c3dd26c13"
 dependencies = [
  "ahash",
  "async-task",
@@ -4620,7 +4640,7 @@ dependencies = [
 [[package]]
 name = "msim-macros"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=305f0ca15fe77df5b92b7f4bb57b5472e568edc3#305f0ca15fe77df5b92b7f4bb57b5472e568edc3"
+source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=982cf1a544ebd1e2818330f9b1247a4c3dd26c13#982cf1a544ebd1e2818330f9b1247a4c3dd26c13"
 dependencies = [
  "darling 0.14.1",
  "proc-macro2 1.0.46",
@@ -5124,6 +5144,7 @@ version = "0.1.0"
 dependencies = [
  "anemo",
  "anemo-build",
+ "async-trait",
  "base64",
  "bincode",
  "bytes",
@@ -7904,7 +7925,7 @@ checksum = "734676eb262c623cec13c3155096e08d1f8f29adce39ba17948b18dad1e54142"
 
 [[package]]
 name = "sui"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -8107,7 +8128,7 @@ dependencies = [
 
 [[package]]
 name = "sui-core"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -8211,7 +8232,7 @@ dependencies = [
 
 [[package]]
 name = "sui-faucet"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -8413,7 +8434,7 @@ dependencies = [
 
 [[package]]
 name = "sui-node"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -8557,8 +8578,11 @@ dependencies = [
 name = "sui-simulator"
 version = "0.7.0"
 dependencies = [
+ "anemo",
+ "fastcrypto",
  "msim",
  "sui-framework",
+ "sui-types",
  "telemetry-subscribers 0.2.0",
  "tracing",
  "workspace-hack",
@@ -8655,7 +8679,7 @@ dependencies = [
 
 [[package]]
 name = "sui-tool"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "clap 3.2.22",
