@@ -15,7 +15,7 @@ use std::{
 };
 use storage::CertificateStore;
 use tokio::{sync::watch, task::JoinHandle};
-use tracing::{info, instrument};
+use tracing::{debug, info, instrument};
 use types::{
     metered_channel, Certificate, CertificateDigest, ConsensusStore, ReconfigureNotification,
     Round, StoreResult,
@@ -130,6 +130,28 @@ impl ConsensusState {
         );
 
         dag
+    }
+
+    #[allow(clippy::result_unit_err)]
+    pub fn try_insert(&mut self, certificate: Certificate) -> Result<(), ()> {
+        let last_committed = self
+            .last_committed
+            .get(&certificate.origin())
+            .cloned()
+            .unwrap_or_default();
+        if certificate.round() < last_committed {
+            debug!(
+                "Ignoring certificate {:?} as it is past last committed round for this origin {}",
+                certificate, last_committed
+            );
+            Err(())
+        } else {
+            self.dag
+                .entry(certificate.round())
+                .or_insert_with(HashMap::new)
+                .insert(certificate.origin(), (certificate.digest(), certificate));
+            Ok(())
+        }
     }
 
     /// Update and clean up internal state base on committed certificates.

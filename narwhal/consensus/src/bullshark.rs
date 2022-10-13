@@ -7,10 +7,7 @@ use crate::{
 };
 use config::{Committee, Stake};
 use fastcrypto::{traits::EncodeDecodeBase64, Hash};
-use std::{
-    collections::{BTreeSet, HashMap},
-    sync::Arc,
-};
+use std::{collections::BTreeSet, sync::Arc};
 use tracing::{debug, error};
 use types::{Certificate, CertificateDigest, ConsensusStore, Round, SequenceNumber, StoreResult};
 
@@ -70,11 +67,9 @@ impl ConsensusProtocol for Bullshark {
         }
 
         // Add the new certificate to the local storage.
-        state
-            .dag
-            .entry(round)
-            .or_insert_with(HashMap::new)
-            .insert(certificate.origin(), (certificate.digest(), certificate));
+        if state.try_insert(certificate).is_err() {
+            return Ok(Vec::new());
+        }
 
         // Try to order the dag to commit. Start from the highest round for which we have at least
         // f+1 certificates. This is because we need them to reveal the common coin.
