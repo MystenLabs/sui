@@ -5,7 +5,7 @@ use crate::{metrics::PrimaryMetrics, NetworkModel};
 use config::{Committee, Epoch, WorkerId};
 use crypto::{PublicKey, Signature};
 use fastcrypto::{
-    hash::{Digest, Hash as _},
+    hash::Hash as _,
     SignatureService,
 };
 use std::{cmp::Ordering, sync::Arc};
