@@ -236,7 +236,6 @@ impl<T: ReadStore> ReadStore for &T {
 }
 
 pub trait WriteStore: ReadStore {
-    // Insert a verified checkpoint
     fn insert_checkpoint(&self, checkpoint: VerifiedCheckpoint);
     fn update_highest_synced_checkpoint(&self, checkpoint: &VerifiedCheckpoint);
     fn insert_checkpoint_contents(&self, contents: CheckpointContents);
@@ -277,7 +276,6 @@ impl<T: WriteStore> WriteStore for &T {
 pub struct InMemoryStore {
     highest_verified_checkpoint: Option<(CheckpointSequenceNumber, CheckpointDigest)>,
     highest_synced_checkpoint: Option<(CheckpointSequenceNumber, CheckpointDigest)>,
-    // highest_executed_checkpoint: Option<(CheckpointSequenceNumber, CheckpointDigest)>,
     checkpoints: HashMap<CheckpointDigest, VerifiedCheckpoint>,
     sequence_number_to_digest: HashMap<CheckpointSequenceNumber, CheckpointDigest>,
     checkpoint_contents: HashMap<CheckpointContentsDigest, CheckpointContents>,
@@ -327,7 +325,6 @@ impl InMemoryStore {
         self.checkpoint_contents.insert(contents.digest(), contents);
     }
 
-    // Insert a verified checkpoint
     pub fn insert_checkpoint(&mut self, checkpoint: VerifiedCheckpoint) {
         let digest = checkpoint.digest();
         let sequence_number = checkpoint.sequence_number();
