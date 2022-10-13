@@ -304,54 +304,6 @@ async fn test_coin_merge() {
 }
 
 #[tokio::test]
-async fn test_recent_transactions() -> Result<(), anyhow::Error> {
-    let (addr1, key1): (_, AccountKeyPair) = get_key_pair();
-    let (addr2, _): (_, AccountKeyPair) = get_key_pair();
-
-    let object1 = Object::with_owner_for_testing(addr1);
-    let object2 = Object::with_owner_for_testing(addr1);
-    let object3 = Object::with_owner_for_testing(addr1);
-    let gas_object = Object::with_owner_for_testing(addr1);
-    let genesis_objects = vec![
-        object1.clone(),
-        object2.clone(),
-        object3.clone(),
-        gas_object.clone(),
-    ];
-    let gateway = create_gateway_state(genesis_objects).await;
-
-    assert_eq!(gateway.get_total_transaction_number()?, 0);
-    let mut cnt = 0;
-    let mut digests = vec![];
-    for obj_id in [object1.id(), object2.id(), object3.id()] {
-        let data = gateway
-            .public_transfer_object(addr1, obj_id, Some(gas_object.id()), 50000, addr2)
-            .await
-            .unwrap();
-        let signature = key1.sign(&data.to_bytes());
-        let response = gateway
-            .execute_transaction(Transaction::new(data, signature))
-            .await?;
-        digests.push((cnt, response.certificate.transaction_digest));
-        cnt += 1;
-        assert_eq!(gateway.get_total_transaction_number()?, cnt);
-    }
-    // start must <= end.
-    assert!(gateway.get_transactions_in_range(2, 1).is_err());
-    assert!(gateway.get_transactions_in_range(1, 1).unwrap().is_empty());
-    // Extends max range allowed.
-    assert!(gateway.get_transactions_in_range(1, 100000).is_err());
-    let txs = gateway.get_recent_transactions(10)?;
-    assert_eq!(txs.len(), 3);
-    assert_eq!(txs, digests);
-    let txs = gateway.get_transactions_in_range(0, 10)?;
-    assert_eq!(txs.len(), 3);
-    assert_eq!(txs, digests);
-
-    Ok(())
-}
-
-#[tokio::test]
 async fn test_equivocation_resilient() {
     telemetry_subscribers::init_for_testing();
     let (addr1, key1): (_, AccountKeyPair) = get_key_pair();

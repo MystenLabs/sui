@@ -23,26 +23,20 @@ tokens and coins. <code><a href="coin.md#0x2_coin_Coin">Coin</a></code> can be d
 -  [Function `into_balance`](#0x2_coin_into_balance)
 -  [Function `take`](#0x2_coin_take)
 -  [Function `put`](#0x2_coin_put)
--  [Function `keep`](#0x2_coin_keep)
 -  [Function `join`](#0x2_coin_join)
--  [Function `join_vec`](#0x2_coin_join_vec)
--  [Function `destroy_zero`](#0x2_coin_destroy_zero)
+-  [Function `split`](#0x2_coin_split)
+-  [Function `divide_into_n`](#0x2_coin_divide_into_n)
 -  [Function `zero`](#0x2_coin_zero)
+-  [Function `destroy_zero`](#0x2_coin_destroy_zero)
 -  [Function `create_currency`](#0x2_coin_create_currency)
 -  [Function `mint`](#0x2_coin_mint)
 -  [Function `mint_balance`](#0x2_coin_mint_balance)
 -  [Function `burn`](#0x2_coin_burn)
 -  [Function `mint_and_transfer`](#0x2_coin_mint_and_transfer)
 -  [Function `burn_`](#0x2_coin_burn_)
--  [Function `split_and_transfer`](#0x2_coin_split_and_transfer)
--  [Function `split`](#0x2_coin_split)
--  [Function `split_n_to_vec`](#0x2_coin_split_n_to_vec)
--  [Function `split_n`](#0x2_coin_split_n)
--  [Function `split_vec`](#0x2_coin_split_vec)
 
 
-<pre><code><b>use</b> <a href="">0x1::vector</a>;
-<b>use</b> <a href="balance.md#0x2_balance">0x2::balance</a>;
+<pre><code><b>use</b> <a href="balance.md#0x2_balance">0x2::balance</a>;
 <b>use</b> <a href="event.md#0x2_event">0x2::event</a>;
 <b>use</b> <a href="object.md#0x2_object">0x2::object</a>;
 <b>use</b> <a href="transfer.md#0x2_transfer">0x2::transfer</a>;
@@ -477,31 +471,6 @@ Put a <code><a href="coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;</code> to the <cod
 
 </details>
 
-<a name="0x2_coin_keep"></a>
-
-## Function `keep`
-
-Transfer <code>c</code> to the sender of the current transaction
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_keep">keep</a>&lt;T&gt;(c: <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;, ctx: &<a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_keep">keep</a>&lt;T&gt;(c: <a href="coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;, ctx: &TxContext) {
-    <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(c, <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx))
-}
-</code></pre>
-
-
-
-</details>
-
 <a name="0x2_coin_join"></a>
 
 ## Function `join`
@@ -530,14 +499,15 @@ Aborts if <code>c.value + self.value &gt; U64_MAX</code>
 
 </details>
 
-<a name="0x2_coin_join_vec"></a>
+<a name="0x2_coin_split"></a>
 
-## Function `join_vec`
+## Function `split`
 
-Join everything in <code>coins</code> with <code>self</code>
+Split coin <code>self</code> to two coins, one with balance <code>split_amount</code>,
+and the remaining balance is left is <code>self</code>.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_join_vec">join_vec</a>&lt;T&gt;(self: &<b>mut</b> <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;, coins: <a href="">vector</a>&lt;<a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;&gt;)
+<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_split">split</a>&lt;T&gt;(self: &<b>mut</b> <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;, split_amount: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;
 </code></pre>
 
 
@@ -546,16 +516,74 @@ Join everything in <code>coins</code> with <code>self</code>
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="coin.md#0x2_coin_join_vec">join_vec</a>&lt;T&gt;(self: &<b>mut</b> <a href="coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;, coins: <a href="">vector</a>&lt;<a href="coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;&gt;) {
+<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_split">split</a>&lt;T&gt;(
+    self: &<b>mut</b> <a href="coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;, split_amount: u64, ctx: &<b>mut</b> TxContext
+): <a href="coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt; {
+    <a href="coin.md#0x2_coin_take">take</a>(&<b>mut</b> self.<a href="balance.md#0x2_balance">balance</a>, split_amount, ctx)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_coin_divide_into_n"></a>
+
+## Function `divide_into_n`
+
+Split coin <code>self</code> into <code>n - 1</code> coins with equal balances. The remainder is left in
+<code>self</code>. Return newly created coins.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_divide_into_n">divide_into_n</a>&lt;T&gt;(self: &<b>mut</b> <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;, n: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="">vector</a>&lt;<a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_divide_into_n">divide_into_n</a>&lt;T&gt;(
+    self: &<b>mut</b> <a href="coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;, n: u64, ctx: &<b>mut</b> TxContext
+): <a href="">vector</a>&lt;<a href="coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;&gt; {
+    <b>assert</b>!(n &gt; 0, <a href="coin.md#0x2_coin_EInvalidArg">EInvalidArg</a>);
+    <b>assert</b>!(n &lt;= <a href="coin.md#0x2_coin_value">value</a>(self), <a href="coin.md#0x2_coin_ENotEnough">ENotEnough</a>);
+
+    <b>let</b> vec = <a href="_empty">vector::empty</a>&lt;<a href="coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;&gt;();
     <b>let</b> i = 0;
-    <b>let</b> len = <a href="_length">vector::length</a>(&coins);
-    <b>while</b> (i &lt; len) {
-        <b>let</b> <a href="coin.md#0x2_coin">coin</a> = <a href="_remove">vector::remove</a>(&<b>mut</b> coins, i);
-        <a href="coin.md#0x2_coin_join">join</a>(self, <a href="coin.md#0x2_coin">coin</a>);
-        i = i + 1
+    <b>let</b> split_amount = <a href="coin.md#0x2_coin_value">value</a>(self) / n;
+    <b>while</b> (i &lt; n - 1) {
+        <a href="_push_back">vector::push_back</a>(&<b>mut</b> vec, <a href="coin.md#0x2_coin_split">split</a>(self, split_amount, ctx));
+        i = i + 1;
     };
-    // safe because we've drained the <a href="">vector</a>
-    <a href="_destroy_empty">vector::destroy_empty</a>(coins)
+    vec
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_coin_zero"></a>
+
+## Function `zero`
+
+Make any Coin with a zero value. Useful for placeholding
+bids/payments or preemptively making empty balances.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_zero">zero</a>&lt;T&gt;(ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_zero">zero</a>&lt;T&gt;(ctx: &<b>mut</b> TxContext): <a href="coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt; {
+    <a href="coin.md#0x2_coin_Coin">Coin</a> { id: <a href="object.md#0x2_object_new">object::new</a>(ctx), <a href="balance.md#0x2_balance">balance</a>: <a href="balance.md#0x2_balance_zero">balance::zero</a>() }
 }
 </code></pre>
 
@@ -583,32 +611,6 @@ Destroy a coin with value zero
     <b>let</b> <a href="coin.md#0x2_coin_Coin">Coin</a> { id, <a href="balance.md#0x2_balance">balance</a> } = c;
     <a href="object.md#0x2_object_delete">object::delete</a>(id);
     <a href="balance.md#0x2_balance_destroy_zero">balance::destroy_zero</a>(<a href="balance.md#0x2_balance">balance</a>)
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_coin_zero"></a>
-
-## Function `zero`
-
-Make any Coin with a zero value. Useful for placeholding
-bids/payments or preemptively making empty balances.
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_zero">zero</a>&lt;T&gt;(ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_zero">zero</a>&lt;T&gt;(ctx: &<b>mut</b> TxContext): <a href="coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt; {
-    <a href="coin.md#0x2_coin_Coin">Coin</a> { id: <a href="object.md#0x2_object_new">object::new</a>(ctx), <a href="balance.md#0x2_balance">balance</a>: <a href="balance.md#0x2_balance_zero">balance::zero</a>() }
 }
 </code></pre>
 
@@ -791,163 +793,6 @@ Burn a Coin and reduce the total_supply. Invokes <code><a href="coin.md#0x2_coin
 
 <pre><code><b>public</b> entry <b>fun</b> <a href="coin.md#0x2_coin_burn_">burn_</a>&lt;T&gt;(c: &<b>mut</b> <a href="coin.md#0x2_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;, <a href="coin.md#0x2_coin">coin</a>: <a href="coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;) {
     <a href="coin.md#0x2_coin_burn">burn</a>(c, <a href="coin.md#0x2_coin">coin</a>);
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_coin_split_and_transfer"></a>
-
-## Function `split_and_transfer`
-
-Send <code>amount</code> units of <code>c</code> to <code>recipient</code>
-Aborts with <code>EVALUE</code> if <code>amount</code> is greater than or equal to <code>amount</code>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_split_and_transfer">split_and_transfer</a>&lt;T&gt;(c: &<b>mut</b> <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;, amount: u64, recipient: <b>address</b>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> entry <b>fun</b> <a href="coin.md#0x2_coin_split_and_transfer">split_and_transfer</a>&lt;T&gt;(
-    c: &<b>mut</b> <a href="coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;, amount: u64, recipient: <b>address</b>, ctx: &<b>mut</b> TxContext
-) {
-    <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(<a href="coin.md#0x2_coin_take">take</a>(&<b>mut</b> c.<a href="balance.md#0x2_balance">balance</a>, amount, ctx), recipient)
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_coin_split"></a>
-
-## Function `split`
-
-Split coin <code>self</code> to two coins, one with balance <code>split_amount</code>,
-and the remaining balance is left is <code>self</code>.
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_split">split</a>&lt;T&gt;(self: &<b>mut</b> <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;, split_amount: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> entry <b>fun</b> <a href="coin.md#0x2_coin_split">split</a>&lt;T&gt;(self: &<b>mut</b> <a href="coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;, split_amount: u64, ctx: &<b>mut</b> TxContext) {
-    <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(
-        <a href="coin.md#0x2_coin_take">take</a>(&<b>mut</b> self.<a href="balance.md#0x2_balance">balance</a>, split_amount, ctx),
-        <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx)
-    )
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_coin_split_n_to_vec"></a>
-
-## Function `split_n_to_vec`
-
-Split coin <code>self</code> into <code>n</code> coins with equal balances. If the balance is
-not evenly divisible by <code>n</code>, the remainder is left in <code>self</code>. Return
-newly created coins.
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_split_n_to_vec">split_n_to_vec</a>&lt;T&gt;(self: &<b>mut</b> <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;, n: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="">vector</a>&lt;<a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;&gt;
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_split_n_to_vec">split_n_to_vec</a>&lt;T&gt;(self: &<b>mut</b> <a href="coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;, n: u64, ctx: &<b>mut</b> TxContext): <a href="">vector</a>&lt;<a href="coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;&gt; {
-    <b>assert</b>!(n &gt; 0, <a href="coin.md#0x2_coin_EInvalidArg">EInvalidArg</a>);
-    <b>assert</b>!(n &lt;= <a href="balance.md#0x2_balance_value">balance::value</a>(&self.<a href="balance.md#0x2_balance">balance</a>), <a href="coin.md#0x2_coin_ENotEnough">ENotEnough</a>);
-    <b>let</b> vec = <a href="_empty">vector::empty</a>&lt;<a href="coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;&gt;();
-    <b>let</b> i = 0;
-    <b>let</b> split_amount = <a href="balance.md#0x2_balance_value">balance::value</a>(&self.<a href="balance.md#0x2_balance">balance</a>) / n;
-    <b>while</b> (i &lt; n - 1) {
-        <a href="_push_back">vector::push_back</a>(&<b>mut</b> vec, <a href="coin.md#0x2_coin_take">take</a>(&<b>mut</b> self.<a href="balance.md#0x2_balance">balance</a>, split_amount, ctx));
-        i = i + 1;
-    };
-    vec
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_coin_split_n"></a>
-
-## Function `split_n`
-
-Split coin <code>self</code> into <code>n</code> coins with equal balances. If the balance is
-not evenly divisible by <code>n</code>, the remainder is left in <code>self</code>.
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_split_n">split_n</a>&lt;T&gt;(self: &<b>mut</b> <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;, n: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> entry <b>fun</b> <a href="coin.md#0x2_coin_split_n">split_n</a>&lt;T&gt;(self: &<b>mut</b> <a href="coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;, n: u64, ctx: &<b>mut</b> TxContext) {
-    <b>let</b> vec: <a href="">vector</a>&lt;<a href="coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;&gt; = <a href="coin.md#0x2_coin_split_n_to_vec">split_n_to_vec</a>(self, n, ctx);
-    <b>let</b> i = 0;
-    <b>let</b> len = <a href="_length">vector::length</a>(&vec);
-    <b>while</b> (i &lt; len) {
-        <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(<a href="_pop_back">vector::pop_back</a>(&<b>mut</b> vec), <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx));
-        i = i + 1;
-    };
-    <a href="_destroy_empty">vector::destroy_empty</a>(vec);
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_coin_split_vec"></a>
-
-## Function `split_vec`
-
-Split coin <code>self</code> into multiple coins, each with balance specified
-in <code>split_amounts</code>. Remaining balance is left in <code>self</code>.
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_split_vec">split_vec</a>&lt;T&gt;(self: &<b>mut</b> <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;, split_amounts: <a href="">vector</a>&lt;u64&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> entry <b>fun</b> <a href="coin.md#0x2_coin_split_vec">split_vec</a>&lt;T&gt;(self: &<b>mut</b> <a href="coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;, split_amounts: <a href="">vector</a>&lt;u64&gt;, ctx: &<b>mut</b> TxContext) {
-    <b>let</b> i = 0;
-    <b>let</b> len = <a href="_length">vector::length</a>(&split_amounts);
-    <b>while</b> (i &lt; len) {
-        <a href="coin.md#0x2_coin_split">split</a>(self, *<a href="_borrow">vector::borrow</a>(&split_amounts, i), ctx);
-        i = i + 1;
-    };
 }
 </code></pre>
 

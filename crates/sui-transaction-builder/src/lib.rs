@@ -325,8 +325,8 @@ impl TransactionBuilder {
         Ok(TransactionData::new_move_call(
             signer,
             self.get_object_ref(SUI_FRAMEWORK_OBJECT_ID).await?,
-            coin::COIN_MODULE_NAME.to_owned(),
-            coin::COIN_SPLIT_VEC_FUNC_NAME.to_owned(),
+            coin::PAY_MODULE_NAME.to_owned(),
+            coin::PAY_SPLIT_VEC_FUNC_NAME.to_owned(),
             type_args,
             gas,
             vec![
@@ -356,8 +356,8 @@ impl TransactionBuilder {
         Ok(TransactionData::new_move_call(
             signer,
             self.get_object_ref(SUI_FRAMEWORK_OBJECT_ID).await?,
-            coin::COIN_MODULE_NAME.to_owned(),
-            coin::COIN_SPLIT_N_FUNC_NAME.to_owned(),
+            coin::PAY_MODULE_NAME.to_owned(),
+            coin::PAY_SPLIT_N_FUNC_NAME.to_owned(),
             type_args,
             gas,
             vec![
@@ -388,8 +388,8 @@ impl TransactionBuilder {
         Ok(TransactionData::new_move_call(
             signer,
             self.get_object_ref(SUI_FRAMEWORK_OBJECT_ID).await?,
-            coin::COIN_MODULE_NAME.to_owned(),
-            coin::COIN_JOIN_FUNC_NAME.to_owned(),
+            coin::PAY_MODULE_NAME.to_owned(),
+            coin::PAY_JOIN_FUNC_NAME.to_owned(),
             type_args,
             gas,
             vec![

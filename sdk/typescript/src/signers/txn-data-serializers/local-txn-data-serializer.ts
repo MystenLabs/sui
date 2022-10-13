@@ -5,10 +5,10 @@ import { Base64DataBuffer } from '../../serialization/base64';
 import {
   bcs,
   Coin,
-  COIN_JOIN_FUNC_NAME,
-  COIN_MODULE_NAME,
-  COIN_PACKAGE_ID,
-  COIN_SPLIT_VEC_FUNC_NAME,
+  PAY_JOIN_COIN_FUNC_NAME,
+  PAY_MODULE_NAME,
+  SUI_PACKAGE_ID,
+  PAY_SPLIT_COIN_VEC_FUNC_NAME,
   SuiAddress,
   Transaction,
   TransactionData,
@@ -158,9 +158,9 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
   ): Promise<Base64DataBuffer> {
     try {
       return await this.newMoveCall(signerAddress, {
-        packageObjectId: COIN_PACKAGE_ID,
-        module: COIN_MODULE_NAME,
-        function: COIN_JOIN_FUNC_NAME,
+        packageObjectId: SUI_PACKAGE_ID,
+        module: PAY_MODULE_NAME,
+        function: PAY_JOIN_COIN_FUNC_NAME,
         typeArguments: [await this.getCoinStructTag(t.coinToMerge)],
         arguments: [t.primaryCoin, t.coinToMerge],
         gasPayment: t.gasPayment,
@@ -181,9 +181,9 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
   ): Promise<Base64DataBuffer> {
     try {
       return await this.newMoveCall(signerAddress, {
-        packageObjectId: COIN_PACKAGE_ID,
-        module: COIN_MODULE_NAME,
-        function: COIN_SPLIT_VEC_FUNC_NAME,
+        packageObjectId: SUI_PACKAGE_ID,
+        module: PAY_MODULE_NAME,
+        function: PAY_SPLIT_COIN_VEC_FUNC_NAME,
         typeArguments: [await this.getCoinStructTag(t.coinObjectId)],
         arguments: [t.coinObjectId, t.splitAmounts],
         gasPayment: t.gasPayment,

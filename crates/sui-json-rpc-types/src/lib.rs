@@ -26,7 +26,6 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
 use serde_with::serde_as;
-use sui_types::{parse_sui_struct_tag, parse_sui_type_tag};
 use tracing::warn;
 
 use sui_json::SuiJsonValue;
@@ -53,13 +52,14 @@ use sui_types::object::{
     Data, MoveObject, Object, ObjectFormatOptions, ObjectRead, Owner, PastObjectRead,
 };
 use sui_types::sui_serde::{Base64, Encoding};
+use sui_types::{parse_sui_struct_tag, parse_sui_type_tag};
 
 #[cfg(test)]
 #[path = "unit_tests/rpc_types_tests.rs"]
 mod rpc_types_tests;
 
-pub type GatewayTxSeqNumber = u64;
 pub type SuiMoveTypeParameterIndex = u16;
+pub type TransactionsPage = Page<TransactionDigest, TransactionDigest>;
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
 pub enum SuiMoveAbility {
@@ -2377,4 +2377,11 @@ impl TransactionBytes {
     pub fn to_data(self) -> Result<TransactionData, anyhow::Error> {
         TransactionData::from_signable_bytes(&self.tx_bytes.to_vec()?)
     }
+}
+
+#[derive(Clone, Debug, JsonSchema, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Page<T, C> {
+    pub data: Vec<T>,
+    pub next_cursor: Option<C>,
 }
