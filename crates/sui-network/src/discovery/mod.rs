@@ -13,8 +13,10 @@ use std::{
 };
 use sui_config::p2p::{P2pConfig, SeedPeer};
 use tap::{Pipe, TapFallible};
-use tokio::sync::oneshot;
-use tokio::task::{AbortHandle, JoinSet};
+use tokio::{
+    sync::oneshot,
+    task::{AbortHandle, JoinSet},
+};
 use tracing::{debug, info, trace};
 
 const TIMEOUT: Duration = Duration::from_secs(1);

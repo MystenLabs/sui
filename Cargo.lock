@@ -8626,6 +8626,7 @@ version = "0.0.0"
 dependencies = [
  "anemo",
  "anemo-build",
+ "anyhow",
  "async-trait",
  "futures",
  "multiaddr",
@@ -8635,8 +8636,8 @@ dependencies = [
  "sui-config",
  "sui-types",
  "tap",
+ "telemetry-subscribers",
  "tokio",
- "tokio-stream",
  "tonic",
  "tonic-build",
  "tracing",
