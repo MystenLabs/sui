@@ -65,7 +65,15 @@ pub(crate) async fn init_state(
     let (tx_reconfigure_consensus, _rx_reconfigure_consensus) = tokio::sync::mpsc::channel(10);
     let committee_store = Arc::new(CommitteeStore::new(epoch_path, &committee, None));
     let checkpoint_store = Arc::new(parking_lot::Mutex::new(
-        CheckpointStore::open(&checkpoint_path, None, &committee, name, secrete.clone()).unwrap(),
+        CheckpointStore::open(
+            &checkpoint_path,
+            None,
+            &committee,
+            name,
+            secrete.clone(),
+            false,
+        )
+        .unwrap(),
     ));
     AuthorityState::new(
         name,
@@ -800,7 +808,7 @@ async fn test_safe_batch_stream() {
         auth_client,
         committee_store,
         public_key_bytes,
-        SafeClientMetrics::new_for_tests(),
+        Arc::new(SafeClientMetrics::new_for_tests()),
     );
 
     let request = BatchInfoRequest {
@@ -849,7 +857,7 @@ async fn test_safe_batch_stream() {
         auth_client_from_byzantine,
         committee_store,
         public_key_bytes_b,
-        SafeClientMetrics::new_for_tests(),
+        Arc::new(SafeClientMetrics::new_for_tests()),
     );
 
     let mut batch_stream = safe_client_from_byzantine

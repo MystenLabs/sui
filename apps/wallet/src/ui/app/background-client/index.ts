@@ -107,14 +107,13 @@ export class BackgroundClient {
         );
     }
 
-    // TODO: password should be required (#encrypt-wallet)
-    public async createMnemonic(password?: string, importedMnemonic?: string) {
+    public async createMnemonic(password: string, importedMnemonic?: string) {
         return await lastValueFrom(
             this.sendMessage(
                 createMessage<KeyringPayload<'createMnemonic'>>({
                     type: 'keyring',
                     method: 'createMnemonic',
-                    args: { password: password || '', importedMnemonic },
+                    args: { password, importedMnemonic },
                     return: undefined,
                 })
             ).pipe(take(1))
@@ -133,12 +132,24 @@ export class BackgroundClient {
             ).pipe(take(1))
         );
     }
+
     public async lockWallet() {
         return await lastValueFrom(
             this.sendMessage(
                 createMessage<KeyringPayload<'lock'>>({
                     type: 'keyring',
                     method: 'lock',
+                })
+            ).pipe(take(1))
+        );
+    }
+
+    public async clearWallet() {
+        return await lastValueFrom(
+            this.sendMessage(
+                createMessage<KeyringPayload<'clear'>>({
+                    type: 'keyring',
+                    method: 'clear',
                 })
             ).pipe(take(1))
         );

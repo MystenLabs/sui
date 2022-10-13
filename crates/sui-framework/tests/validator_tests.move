@@ -16,7 +16,8 @@ module sui::validator_tests {
     fun test_validator_owner_flow() {
         let sender = @0x8feebb589ffa14667ff721b7cfb186cfad6530fc;
 
-        let scenario = &mut test_scenario::begin(&sender);
+        let scenario_val = test_scenario::begin(sender);
+        let scenario = &mut scenario_val;
         {
             let ctx = test_scenario::ctx(scenario);
 
@@ -40,18 +41,20 @@ module sui::validator_tests {
         };
 
         // Check that after destroy, the original stake still exists.
-        test_scenario::next_tx(scenario, &sender);
+        test_scenario::next_tx(scenario, sender);
         {
-            let stake = test_scenario::take_owned<Stake>(scenario);
+            let stake = test_scenario::take_from_sender<Stake>(scenario);
             assert!(stake::value(&stake) == 10, 0);
-            test_scenario::return_owned(scenario, stake);
+            test_scenario::return_to_sender(scenario, stake);
         };
+        test_scenario::end(scenario_val);
     }
 
     #[test]
     fun test_pending_validator_flow() {
         let sender = @0x8feebb589ffa14667ff721b7cfb186cfad6530fc;
-        let scenario = &mut test_scenario::begin(&sender);
+        let scenario_val = test_scenario::begin(sender);
+        let scenario = &mut scenario_val;
         let ctx = test_scenario::ctx(scenario);
         let init_stake = coin::into_balance(coin::mint_for_testing(10, ctx));
 
@@ -68,7 +71,7 @@ module sui::validator_tests {
             ctx
         );
 
-        test_scenario::next_tx(scenario, &sender);
+        test_scenario::next_tx(scenario, sender);
         {
             let ctx = test_scenario::ctx(scenario);
             let new_stake = coin::into_balance(coin::mint_for_testing(30, ctx));
@@ -78,12 +81,12 @@ module sui::validator_tests {
             assert!(validator::pending_stake_amount(&validator) == 30, 0);
         };
 
-        test_scenario::next_tx(scenario, &sender);
+        test_scenario::next_tx(scenario, sender);
         {
-            let stake = test_scenario::take_last_created_owned<Stake>(scenario);
+            let stake = test_scenario::take_from_sender<Stake>(scenario);
             let ctx = test_scenario::ctx(scenario);
             validator::request_withdraw_stake(&mut validator, &mut stake, 5, 35, ctx);
-            test_scenario::return_owned(scenario, stake);
+            test_scenario::return_to_sender(scenario, stake);
             assert!(validator::stake_amount(&validator) == 10, 0);
             assert!(validator::pending_stake_amount(&validator) == 30, 0);
             assert!(validator::pending_withdraw(&validator) == 5, 0);
@@ -96,13 +99,14 @@ module sui::validator_tests {
             assert!(validator::pending_withdraw(&validator) == 0, 0);
         };
 
-        test_scenario::next_tx(scenario, &sender);
+        test_scenario::next_tx(scenario, sender);
         {
-            let withdraw = test_scenario::take_owned<LockedCoin<SUI>>(scenario);
+            let withdraw = test_scenario::take_from_sender<LockedCoin<SUI>>(scenario);
             assert!(locked_coin::value(&withdraw) == 5, 0);
-            test_scenario::return_owned(scenario, withdraw);
+            test_scenario::return_to_sender(scenario, withdraw);
         };
 
         validator::destroy(validator, test_scenario::ctx(scenario));
+        test_scenario::end(scenario_val);
     }
 }

@@ -7,11 +7,12 @@
     rust_2021_compatibility
 )]
 
-use base_types::ObjectID;
 use move_core_types::{
     account_address::AccountAddress,
     language_storage::{StructTag, TypeTag},
 };
+
+use base_types::ObjectID;
 
 #[macro_use]
 pub mod error;
@@ -26,16 +27,19 @@ pub mod event;
 pub mod gas;
 pub mod gas_coin;
 pub mod id;
+pub mod in_memory_storage;
 pub mod intent;
 pub mod message_envelope;
 pub mod messages;
 pub mod messages_checkpoint;
 pub mod move_package;
 pub mod object;
+pub mod query;
 pub mod signature_seed;
 pub mod storage;
 pub mod sui_serde;
 pub mod sui_system_state;
+pub mod temporary_store;
 pub mod waypoint;
 
 pub mod filter;

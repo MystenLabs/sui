@@ -13,13 +13,13 @@ use tokio::{
     task::JoinHandle,
     time::{sleep, Duration, Instant},
 };
-use tracing::info;
+use tracing::{info, warn};
+use types::metered_channel::WithPermit;
 use types::{
     bounded_future_queue::BoundedFuturesUnordered,
     error::{DagError, DagResult},
     metered_channel::{Receiver, Sender},
-    try_fut_and_permit, Certificate, CertificateDigest, HeaderDigest, ReconfigureNotification,
-    Round,
+    Certificate, CertificateDigest, HeaderDigest, ReconfigureNotification, Round,
 };
 
 #[cfg(test)]
@@ -149,7 +149,14 @@ impl CertificateWaiter {
                     waiting.push(fut).await;
                 }
                 // we poll the availability of a slot to send the result to the core simultaneously
-                (Some(certificate), permit) = try_fut_and_permit!(waiting.try_next(), self.tx_core) => {
+                Some((permit, Some(certificate))) = self.tx_core.with_permit(waiting.next()) => {
+                    let certificate = match certificate{
+                        Err(err) => {
+                            warn!("Error fetching certificate {}", err);
+                            continue;
+                        },
+                        Ok(certificate) => certificate,
+                    };
                         // TODO [issue #115]: To ensure crash-recovery of consensus, it is not enough to send every
                         // certificate for which their ancestors are in the storage. After recovery, we may also
                         // need to send a all parents certificates with rounds greater then `last_committed`.

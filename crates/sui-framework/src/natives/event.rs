@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{legacy_emit_cost, EventType};
+use crate::{legacy_emit_cost, natives::object_runtime::ObjectRuntime};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
-use move_core_types::vm_status::StatusCode;
+use move_core_types::{language_storage::TypeTag, vm_status::StatusCode};
 use move_vm_runtime::native_functions::NativeContext;
 use move_vm_types::{
     loaded_data::runtime_types::Type, natives::function::NativeResult, values::Value,
@@ -26,18 +26,17 @@ pub fn emit(
 
     // gas cost is proportional to size of event
     let cost = legacy_emit_cost();
-    match ty {
-        Type::Struct(..) | Type::StructInstantiation(..) => (),
-        ty => {
-            // TODO (https://github.com/MystenLabs/sui/issues/19): ideally enforce this in the ability system
-            return Err(PartialVMError::new(StatusCode::DATA_FORMAT_ERROR)
-                .with_message(format!("Unsupported event type {:?} (struct expected)", ty)));
+    let tag = match context.type_to_type_tag(&ty)? {
+        TypeTag::Struct(s) => s,
+        _ => {
+            return Err(
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                    .with_message("Sui verifier guarantees this is a struct".to_string()),
+            )
         }
-    }
+    };
 
-    if !context.save_event(Vec::new(), EventType::User as u64, ty, event)? {
-        return Ok(NativeResult::err(cost, 0));
-    }
-
+    let obj_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
+    obj_runtime.emit_event(ty, tag, event);
     Ok(NativeResult::ok(cost, smallvec![]))
 }

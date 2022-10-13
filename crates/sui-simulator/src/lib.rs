@@ -5,7 +5,10 @@
 pub use msim::*;
 
 // Re-export things used by sui-macros
+pub use anemo;
+pub use fastcrypto;
 pub use sui_framework;
+pub use sui_types;
 pub use telemetry_subscribers;
 
 /// Evaluates an expression in a new thread which will not be subject to interception of

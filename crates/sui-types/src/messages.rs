@@ -2094,3 +2094,19 @@ pub struct CommitteeInfoResponse {
     // TODO: We could also return the certified checkpoint that contains this committee.
     // This would allows a client to verify the authenticity of the committee.
 }
+
+pub type CommitteeInfoResponseDigest = [u8; 32];
+
+impl CommitteeInfoResponse {
+    pub fn digest(&self) -> CommitteeInfoResponseDigest {
+        sha3_hash(self)
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct CommitteeInfo {
+    pub epoch: EpochId,
+    pub committee_info: Vec<(AuthorityName, StakeUnit)>,
+    // TODO: We could also return the certified checkpoint that contains this committee.
+    // This would allows a client to verify the authenticity of the committee.
+}

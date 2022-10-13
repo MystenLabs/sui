@@ -84,7 +84,7 @@ impl Deref for FixedCost {
 /// to ensure a value of this type is used specifically for computation cost.
 /// Anything that does not change the amount of bytes stored in the authority data store
 /// will charge ComputationCostPerByte.
-struct ComputationCostPerByte(InternalGasPerByte);
+pub struct ComputationCostPerByte(InternalGasPerByte);
 
 impl ComputationCostPerByte {
     pub fn new(x: u64) -> Self {
@@ -104,7 +104,7 @@ impl Deref for ComputationCostPerByte {
 /// to ensure a value of this type is used specifically for storage cost.
 /// Anything that changes the amount of bytes stored in the authority data store
 /// will charge StorageCostPerByte.
-struct StorageCostPerByte(InternalGasPerByte);
+pub struct StorageCostPerByte(InternalGasPerByte);
 
 impl Deref for StorageCostPerByte {
     type Target = InternalGasPerByte;
@@ -121,7 +121,7 @@ impl StorageCostPerByte {
 }
 
 /// A list of constant costs of various operations in Sui.
-struct SuiCostTable {
+pub struct SuiCostTable {
     /// A flat fee charged for every transaction. This is also the mimmum amount of
     /// gas charged for a transaction.
     pub min_transaction_cost: FixedCost,
@@ -148,7 +148,7 @@ struct SuiCostTable {
 }
 
 // TODO: The following numbers are arbitrary at this point.
-static INIT_SUI_COST_TABLE: Lazy<SuiCostTable> = Lazy::new(|| SuiCostTable {
+pub static INIT_SUI_COST_TABLE: Lazy<SuiCostTable> = Lazy::new(|| SuiCostTable {
     min_transaction_cost: FixedCost::new(BASE_TX_COST_FIXED),
     package_publish_per_byte_cost: ComputationCostPerByte::new(PACKAGE_PUBLISH_COST_PER_BYTE),
     object_read_per_byte_cost: ComputationCostPerByte::new(OBJ_ACCESS_COST_READ_PER_BYTE),
@@ -210,8 +210,12 @@ impl<'a> SuiGasStatus<'a> {
         !self.charge
     }
 
-    pub fn get_move_gas_status(&mut self) -> &mut GasStatus<'a> {
-        &mut self.gas_status
+    pub fn create_move_gas_status(&mut self) -> GasStatus<'a> {
+        if self.charge {
+            GasStatus::new(&INITIAL_COST_SCHEDULE, VM_FLAT_FEE)
+        } else {
+            GasStatus::new_unmetered()
+        }
     }
 
     pub fn charge_vm_gas(&mut self) -> Result<(), ExecutionError> {

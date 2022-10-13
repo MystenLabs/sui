@@ -13,7 +13,7 @@ blake2 = "0.9"
 bytes = "1.2.1"
 config = { path = "../config", package = "narwhal-config" }
 consensus = { path = "../consensus", package = "narwhal-consensus" }
-fastcrypto = "0.1.2"
+fastcrypto.workspace = true
 futures = "0.3.24"
 multiaddr = "0.14.0"
 primary = { path = "../primary", package = "narwhal-primary" }

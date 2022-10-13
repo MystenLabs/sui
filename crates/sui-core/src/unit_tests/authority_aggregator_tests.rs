@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
+use bcs::to_bytes;
 use move_core_types::{account_address::AccountAddress, ident_str};
 use move_package::BuildConfig;
+use multiaddr::Multiaddr;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -9,24 +12,27 @@ use sui_config::gateway::GatewayConfig;
 use sui_config::genesis::Genesis;
 use sui_config::ValidatorInfo;
 use sui_types::crypto::{
-    generate_proof_of_possession, get_key_pair, AccountKeyPair, AuthorityKeyPair,
-    AuthorityPublicKeyBytes, NetworkKeyPair, SuiKeyPair,
+    generate_proof_of_possession, get_authority_key_pair, get_key_pair, AccountKeyPair,
+    AuthorityKeyPair, AuthorityPublicKeyBytes, NetworkKeyPair, SuiKeyPair,
 };
 use sui_types::crypto::{KeypairTraits, Signature};
+use test_utils::sui_system_state::{test_sui_system_state, test_validator};
 
 use sui_macros::sim_test;
 use sui_types::messages::*;
-use sui_types::object::{Object, GAS_VALUE_FOR_TESTING};
+use sui_types::object::{MoveObject, Object, Owner, GAS_VALUE_FOR_TESTING};
 use test_utils::authority::{spawn_test_authorities, test_and_configure_authority_configs};
+use test_utils::messages::make_random_certified_transaction;
 
 use super::*;
 use crate::authority::AuthorityState;
+use crate::authority_client::make_authority_clients;
 use crate::authority_client::{
     AuthorityAPI, BatchInfoResponseItemStream, LocalAuthorityClient,
     LocalAuthorityClientFaultConfig, NetworkAuthorityClient, NetworkAuthorityClientMetrics,
 };
-use crate::gateway_state::GatewayState;
 use crate::test_utils::to_sender_signed_transaction;
+use crate::validator_info::make_committee;
 
 use tokio::time::Instant;
 
@@ -47,19 +53,24 @@ pub async fn init_network_authorities(
         buffer_size: 650000,
         db_folder_path: PathBuf::from("/tmp/client_db"),
     };
-    let committee = GatewayState::make_committee(&gateway_config).unwrap();
+    let committee = make_committee(gateway_config.epoch, &gateway_config.validator_set).unwrap();
     let committee_store = Arc::new(CommitteeStore::new_for_testing(&committee));
-    let auth_clients = GatewayState::make_authority_clients(
-        &gateway_config,
-        NetworkAuthorityClientMetrics::new_for_tests(),
+
+    let auth_clients = make_authority_clients(
+        &gateway_config.validator_set,
+        gateway_config.send_timeout,
+        gateway_config.recv_timeout,
+        Arc::new(NetworkAuthorityClientMetrics::new_for_tests()),
     );
+
     let registry = prometheus::Registry::new();
     AuthorityAggregator::new(
         committee,
         committee_store,
         auth_clients,
         AuthAggMetrics::new(&registry),
-        SafeClientMetrics::new(&registry),
+        Arc::new(SafeClientMetrics::new(&registry)),
+        Arc::new(NetworkAuthorityClientMetrics::new(&registry)),
     )
 }
 
@@ -149,7 +160,8 @@ pub async fn init_local_authorities_with_genesis(
             committee_store,
             clients,
             AuthAggMetrics::new_for_tests(),
-            SafeClientMetrics::new_for_tests(),
+            Arc::new(SafeClientMetrics::new_for_tests()),
+            Arc::new(NetworkAuthorityClientMetrics::new_for_tests()),
             timeouts,
         ),
         states,
@@ -380,9 +392,10 @@ where
         requested_object_reference: Some(object_ref),
         ..
     }) = authority
-        .handle_object_info_request(ObjectInfoRequest::latest_object_info_request(
-            object_id, None,
-        ))
+        .handle_object_info_request(
+            ObjectInfoRequest::latest_object_info_request(object_id, None),
+            false,
+        )
         .await
     {
         return object_ref;
@@ -893,127 +906,122 @@ async fn test_process_transaction_fault_fail() {
     .is_err());
 }
 
+#[derive(Clone)]
+struct MockAuthorityApi {
+    delay: Duration,
+    count: Arc<Mutex<u32>>,
+    handle_committee_info_request_result: Option<SuiResult<CommitteeInfoResponse>>,
+    handle_object_info_request_result: Option<SuiResult<ObjectInfoResponse>>,
+}
+
+impl MockAuthorityApi {
+    pub fn new(delay: Duration, count: Arc<Mutex<u32>>) -> Self {
+        MockAuthorityApi {
+            delay,
+            count,
+            handle_committee_info_request_result: None,
+            handle_object_info_request_result: None,
+        }
+    }
+    pub fn set_handle_committee_info_request_result(
+        &mut self,
+        result: SuiResult<CommitteeInfoResponse>,
+    ) {
+        self.handle_committee_info_request_result = Some(result);
+    }
+
+    pub fn set_handle_object_info_request(&mut self, result: SuiResult<ObjectInfoResponse>) {
+        self.handle_object_info_request_result = Some(result);
+    }
+}
+
+#[async_trait]
+impl AuthorityAPI for MockAuthorityApi {
+    /// Initiate a new transaction to a Sui or Primary account.
+    async fn handle_transaction(
+        &self,
+        _transaction: Transaction,
+    ) -> Result<TransactionInfoResponse, SuiError> {
+        unreachable!();
+    }
+
+    /// Execute a certificate.
+    async fn handle_certificate(
+        &self,
+        _certificate: CertifiedTransaction,
+    ) -> Result<TransactionInfoResponse, SuiError> {
+        unreachable!()
+    }
+
+    /// Handle Account information requests for this account.
+    async fn handle_account_info_request(
+        &self,
+        _request: AccountInfoRequest,
+    ) -> Result<AccountInfoResponse, SuiError> {
+        unreachable!();
+    }
+
+    /// Handle Object information requests for this account.
+    async fn handle_object_info_request(
+        &self,
+        _request: ObjectInfoRequest,
+    ) -> Result<ObjectInfoResponse, SuiError> {
+        self.handle_object_info_request_result.clone().unwrap()
+    }
+
+    /// Handle Object information requests for this account.
+    async fn handle_transaction_info_request(
+        &self,
+        _request: TransactionInfoRequest,
+    ) -> Result<TransactionInfoResponse, SuiError> {
+        let count = {
+            let mut count = self.count.lock().unwrap();
+            *count += 1;
+            *count
+        };
+
+        // timeout until the 15th request
+        if count < 15 {
+            tokio::time::sleep(self.delay).await;
+        }
+
+        let res = TransactionInfoResponse {
+            signed_transaction: None,
+            certified_transaction: None,
+            signed_effects: None,
+        };
+        Ok(res)
+    }
+
+    async fn handle_batch_stream(
+        &self,
+        _request: BatchInfoRequest,
+    ) -> Result<BatchInfoResponseItemStream, SuiError> {
+        unreachable!();
+    }
+
+    async fn handle_checkpoint(
+        &self,
+        _request: CheckpointRequest,
+    ) -> Result<CheckpointResponse, SuiError> {
+        unreachable!();
+    }
+
+    async fn handle_committee_info_request(
+        &self,
+        _request: CommitteeInfoRequest,
+    ) -> Result<CommitteeInfoResponse, SuiError> {
+        self.handle_committee_info_request_result.clone().unwrap()
+    }
+}
+
 #[tokio::test(start_paused = true)]
 async fn test_quorum_once_with_timeout() {
     telemetry_subscribers::init_for_testing();
 
-    #[derive(Clone)]
-    struct MockAuthorityApi {
-        delay: Duration,
-        count: Arc<Mutex<u32>>,
-    }
-
-    #[async_trait]
-    impl AuthorityAPI for MockAuthorityApi {
-        /// Initiate a new transaction to a Sui or Primary account.
-        async fn handle_transaction(
-            &self,
-            _transaction: Transaction,
-        ) -> Result<TransactionInfoResponse, SuiError> {
-            unreachable!();
-        }
-
-        /// Execute a certificate.
-        async fn handle_certificate(
-            &self,
-            _certificate: CertifiedTransaction,
-        ) -> Result<TransactionInfoResponse, SuiError> {
-            unreachable!()
-        }
-
-        /// Handle Account information requests for this account.
-        async fn handle_account_info_request(
-            &self,
-            _request: AccountInfoRequest,
-        ) -> Result<AccountInfoResponse, SuiError> {
-            unreachable!();
-        }
-
-        /// Handle Object information requests for this account.
-        async fn handle_object_info_request(
-            &self,
-            _request: ObjectInfoRequest,
-        ) -> Result<ObjectInfoResponse, SuiError> {
-            unreachable!();
-        }
-
-        /// Handle Object information requests for this account.
-        async fn handle_transaction_info_request(
-            &self,
-            _request: TransactionInfoRequest,
-        ) -> Result<TransactionInfoResponse, SuiError> {
-            let count = {
-                let mut count = self.count.lock().unwrap();
-                *count += 1;
-                *count
-            };
-
-            // timeout until the 15th request
-            if count < 15 {
-                tokio::time::sleep(self.delay).await;
-            }
-
-            let res = TransactionInfoResponse {
-                signed_transaction: None,
-                certified_transaction: None,
-                signed_effects: None,
-            };
-            Ok(res)
-        }
-
-        async fn handle_batch_stream(
-            &self,
-            _request: BatchInfoRequest,
-        ) -> Result<BatchInfoResponseItemStream, SuiError> {
-            unreachable!();
-        }
-
-        async fn handle_checkpoint(
-            &self,
-            _request: CheckpointRequest,
-        ) -> Result<CheckpointResponse, SuiError> {
-            unreachable!();
-        }
-
-        async fn handle_committee_info_request(
-            &self,
-            _request: CommitteeInfoRequest,
-        ) -> Result<CommitteeInfoResponse, SuiError> {
-            unimplemented!();
-        }
-    }
-
     let count = Arc::new(Mutex::new(0));
-
-    let new_client = |delay: u64| {
-        let delay = Duration::from_millis(delay);
-        let count = count.clone();
-        MockAuthorityApi { delay, count }
-    };
-
-    let mut authorities = BTreeMap::new();
-    let mut clients = BTreeMap::new();
-    for _ in 0..30 {
-        let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
-        let name: AuthorityName = sec.public().into();
-        authorities.insert(name, 1);
-        clients.insert(name, new_client(1000));
-    }
-
-    let committee = Committee::new(0, authorities).unwrap();
-    let committee_store = Arc::new(CommitteeStore::new_for_testing(&committee));
-
-    let agg = AuthorityAggregator::new_with_timeouts(
-        committee,
-        committee_store,
-        clients,
-        AuthAggMetrics::new_for_tests(),
-        SafeClientMetrics::new_for_tests(),
-        TimeoutConfig {
-            serial_authority_request_interval: Duration::from_millis(50),
-            ..Default::default()
-        },
-    );
+    let (authorities, _authorities_vec, clients) = get_authorities(count.clone(), 30);
+    let agg = get_agg(authorities, clients);
 
     let case = |agg: AuthorityAggregator<MockAuthorityApi>, authority_request_timeout: u64| async move {
         let log = Arc::new(Mutex::new(Vec::new()));
@@ -1058,4 +1066,371 @@ async fn test_quorum_once_with_timeout() {
             .map(|d| Duration::from_millis(*d))
             .collect::<Vec<Duration>>()
     );
+}
+
+#[allow(clippy::type_complexity)]
+fn get_authorities(
+    count: Arc<Mutex<u32>>,
+    committee_size: u64,
+) -> (
+    BTreeMap<AuthorityName, StakeUnit>,
+    Vec<(AuthorityName, StakeUnit)>,
+    BTreeMap<AuthorityName, MockAuthorityApi>,
+) {
+    let new_client = |delay: u64| {
+        let delay = Duration::from_millis(delay);
+        let count = count.clone();
+        MockAuthorityApi::new(delay, count)
+    };
+
+    let mut authorities = BTreeMap::new();
+    let mut authorities_vec = Vec::new();
+    let mut clients = BTreeMap::new();
+    for _ in 0..committee_size {
+        let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
+        let name: AuthorityName = sec.public().into();
+        authorities.insert(name, 1);
+        authorities_vec.push((name, 1));
+        clients.insert(name, new_client(1000));
+    }
+    (authorities, authorities_vec, clients)
+}
+
+fn get_agg(
+    authorities: BTreeMap<AuthorityName, StakeUnit>,
+    clients: BTreeMap<AuthorityName, MockAuthorityApi>,
+) -> AuthorityAggregator<MockAuthorityApi> {
+    let committee = Committee::new(0, authorities).unwrap();
+    let committee_store = Arc::new(CommitteeStore::new_for_testing(&committee));
+
+    AuthorityAggregator::new_with_timeouts(
+        committee,
+        committee_store,
+        clients,
+        AuthAggMetrics::new_for_tests(),
+        Arc::new(SafeClientMetrics::new_for_tests()),
+        Arc::new(NetworkAuthorityClientMetrics::new_for_tests()),
+        TimeoutConfig {
+            serial_authority_request_interval: Duration::from_millis(50),
+            ..Default::default()
+        },
+    )
+}
+
+#[tokio::test]
+async fn test_get_committee_with_net_addresses() {
+    telemetry_subscribers::init_for_testing();
+    let count = Arc::new(Mutex::new(0));
+    let new_client = |delay: u64| {
+        let delay = Duration::from_millis(delay);
+        let count = count.clone();
+        MockAuthorityApi::new(delay, count)
+    };
+
+    let (val0_pk, val0_addr) = get_authority_pub_key_bytes_and_address();
+    let (val1_pk, val1_addr) = get_authority_pub_key_bytes_and_address();
+    let (val2_pk, val2_addr) = get_authority_pub_key_bytes_and_address();
+    let (val3_pk, val3_addr) = get_authority_pub_key_bytes_and_address();
+
+    let mut clients = BTreeMap::from([
+        (val0_pk, new_client(1000)),
+        (val1_pk, new_client(1000)),
+        (val2_pk, new_client(1000)),
+        (val3_pk, new_client(1000)),
+    ]);
+    let authorities = BTreeMap::from([(val0_pk, 1), (val1_pk, 1), (val2_pk, 1), (val3_pk, 1)]);
+
+    let validators = vec![
+        test_validator(val0_pk, Multiaddr::empty().to_vec(), 1, 0),
+        test_validator(val1_pk, Multiaddr::empty().to_vec(), 1, 0),
+        test_validator(val2_pk, Multiaddr::empty().to_vec(), 1, 0),
+        test_validator(val3_pk, Multiaddr::empty().to_vec(), 1, 0),
+    ];
+    let system_state = test_sui_system_state(1, validators);
+    let good_result = make_response_from_sui_system_state(system_state.clone());
+
+    for client in clients.values_mut() {
+        client.set_handle_object_info_request(good_result.clone());
+    }
+    let clients = clients;
+    let agg = get_agg(authorities.clone(), clients.clone());
+    let res = agg.get_committee_with_net_addresses(1).await;
+
+    macro_rules! verify_good_result {
+        ($res: expr, $epoch: expr) => {{
+            let res = $res;
+            match res {
+                Ok(info) => {
+                    assert_eq!(info.committee.epoch, $epoch);
+                    assert_eq!(
+                        info.committee
+                            .voting_rights
+                            .into_iter()
+                            .collect::<BTreeMap<_, _>>(),
+                        BTreeMap::from([(val0_pk, 1), (val1_pk, 1), (val2_pk, 1), (val3_pk, 1),]),
+                    );
+                    assert_eq!(
+                        info.net_addresses,
+                        BTreeMap::from([
+                            (val0_pk, val0_addr.clone()),
+                            (val1_pk, val1_addr.clone()),
+                            (val2_pk, val2_addr.clone()),
+                            (val3_pk, val3_addr.clone()),
+                        ])
+                    );
+                }
+                Err(err) => panic!("expect Ok result but got {err}"),
+            };
+        }};
+    }
+
+    macro_rules! verify_bad_result {
+        ($res: expr, $epoch: expr) => {{
+            let res = $res;
+            match res {
+                Ok(info) => panic!(
+                    "expect SuiError::FailedToGetAgreedCommitteeFromMajority but got {:?}",
+                    info
+                ),
+                Err(SuiError::FailedToGetAgreedCommitteeFromMajority { minimal_epoch }) => {
+                    assert_eq!(minimal_epoch, $epoch);
+                }
+                Err(err) => panic!(
+                    "expect SuiError::FailedToGetAgreedCommitteeFromMajority but got {:?}",
+                    err
+                ),
+            };
+        }};
+    }
+    verify_good_result!(res, 1);
+
+    // 1 out of 4 gives bad result, we are good
+    let mut clone_clients = clients.clone();
+    let bad_result: SuiResult<ObjectInfoResponse> = Err(SuiError::GenericAuthorityError {
+        error: "foo".into(),
+    });
+
+    clone_clients
+        .get_mut(&val0_pk)
+        .unwrap()
+        .set_handle_object_info_request(bad_result.clone());
+
+    let agg = get_agg(authorities.clone(), clone_clients.clone());
+    let res = agg.get_committee_with_net_addresses(1).await;
+
+    verify_good_result!(res, 1);
+
+    // 2 out of 4 give bad result, get error
+    clone_clients
+        .get_mut(&val1_pk)
+        .unwrap()
+        .set_handle_object_info_request(bad_result.clone());
+    let agg = get_agg(authorities.clone(), clone_clients.clone());
+    let res = agg.get_committee_with_net_addresses(1).await;
+    verify_bad_result!(res, 1);
+
+    // val0 and val1 gives a slightly different system state but
+    // CommitteeWithNetAddresses is the same, we are good.
+    let mut system_state_clone = system_state.clone();
+    // In practice we wouldn't expect validator_stake differs in the same epoch.
+    // Here we update it for simplicity.
+    system_state_clone.validators.validator_stake += 1;
+    let different_result = make_response_from_sui_system_state(system_state_clone);
+
+    let mut clone_clients = clients.clone();
+    clone_clients
+        .get_mut(&val0_pk)
+        .unwrap()
+        .set_handle_object_info_request(different_result.clone());
+    clone_clients
+        .get_mut(&val1_pk)
+        .unwrap()
+        .set_handle_object_info_request(different_result.clone());
+
+    let agg = get_agg(authorities.clone(), clone_clients.clone());
+    let res = agg.get_committee_with_net_addresses(1).await;
+    verify_good_result!(res, 1);
+
+    // (val0, val1) disagree with (val2, val3) on network address, get error
+    let validators = vec![
+        test_validator(
+            val0_pk,
+            "/ip4/127.0.0.1".parse::<Multiaddr>().unwrap().to_vec(),
+            1,
+            0,
+        ),
+        test_validator(val1_pk, Multiaddr::empty().to_vec(), 1, 0),
+        test_validator(val2_pk, Multiaddr::empty().to_vec(), 1, 0),
+        test_validator(val3_pk, Multiaddr::empty().to_vec(), 1, 0),
+    ];
+    let system_state_with_different_net_addr = test_sui_system_state(1, validators);
+    let different_result =
+        make_response_from_sui_system_state(system_state_with_different_net_addr);
+
+    clone_clients
+        .get_mut(&val0_pk)
+        .unwrap()
+        .set_handle_object_info_request(different_result.clone());
+    clone_clients
+        .get_mut(&val1_pk)
+        .unwrap()
+        .set_handle_object_info_request(different_result.clone());
+
+    let agg = get_agg(authorities.clone(), clone_clients);
+    let res = agg.get_committee_with_net_addresses(1).await;
+    verify_bad_result!(res, 1);
+
+    // val0, val1 and val2 are still in epoch0
+    let mut system_state_clone = system_state.clone();
+    system_state_clone.epoch = 0;
+    let epoch_0_result = make_response_from_sui_system_state(system_state_clone);
+
+    let mut clone_clients = clients.clone();
+    clone_clients
+        .get_mut(&val0_pk)
+        .unwrap()
+        .set_handle_object_info_request(epoch_0_result.clone());
+    clone_clients
+        .get_mut(&val1_pk)
+        .unwrap()
+        .set_handle_object_info_request(epoch_0_result.clone());
+    clone_clients
+        .get_mut(&val2_pk)
+        .unwrap()
+        .set_handle_object_info_request(epoch_0_result.clone());
+    let agg = get_agg(authorities.clone(), clone_clients);
+    let res = agg.get_committee_with_net_addresses(1).await;
+    // Get error when asking with minimal epoch = 1
+    verify_bad_result!(res, 1);
+    // Get good results when asking with minimal epoch = 0
+    let res = agg.get_committee_with_net_addresses(0).await;
+    verify_good_result!(res, 0);
+}
+
+#[tokio::test]
+async fn test_get_committee_info() {
+    telemetry_subscribers::init_for_testing();
+
+    let count = Arc::new(Mutex::new(0));
+    // 4 out of 4 give good result
+    let (authorities, authorities_vec, mut clients) = get_authorities(count.clone(), 4);
+    let good_result = Ok(CommitteeInfoResponse {
+        epoch: 0,
+        committee_info: Some(authorities_vec.clone()),
+    });
+    for client in clients.values_mut() {
+        client.set_handle_committee_info_request_result(good_result.clone());
+    }
+    let clients = clients;
+    let clone_clients = clients.clone();
+    let agg = get_agg(authorities.clone(), clone_clients);
+    let res = agg.get_committee_info(Some(0)).await;
+    match res {
+        Ok(info) => {
+            assert_eq!(info.epoch, 0);
+            assert_eq!(info.committee_info, authorities_vec);
+        }
+        Err(err) => panic!("expect Ok result but got {err}"),
+    };
+
+    // 1 out 4 gives error
+    let mut clone_clients = clients.clone();
+    let bad_result = Err(SuiError::GenericAuthorityError {
+        error: "foo".into(),
+    });
+
+    clone_clients
+        .values_mut()
+        .next()
+        .unwrap()
+        .set_handle_committee_info_request_result(bad_result.clone());
+    let agg = get_agg(authorities.clone(), clone_clients);
+    let res = agg.get_committee_info(Some(0)).await;
+    match res {
+        Ok(info) => {
+            assert_eq!(info.epoch, 0);
+            assert_eq!(info.committee_info, authorities_vec);
+        }
+        Err(_) => panic!("expect Ok result!"),
+    };
+
+    // 2 out 4 gives error
+    let mut clone_clients = clients.clone();
+    let mut i = 0;
+    for client in clone_clients.values_mut() {
+        client.set_handle_committee_info_request_result(bad_result.clone());
+        i += 1;
+        if i >= 2 {
+            break;
+        }
+    }
+    let agg = get_agg(authorities.clone(), clone_clients);
+    let res = agg.get_committee_info(Some(0)).await;
+    match res {
+        Err(SuiError::TooManyIncorrectAuthorities { .. }) => (),
+        other => panic!(
+            "expect to get SuiError::TooManyIncorrectAuthorities but got {:?}",
+            other
+        ),
+    };
+
+    // 2 out 4 gives empty committee info
+    let mut clone_clients = clients.clone();
+    let empty_result = Ok(CommitteeInfoResponse {
+        epoch: 0,
+        committee_info: None,
+    });
+    let mut i = 0;
+    for client in clone_clients.values_mut() {
+        client.set_handle_committee_info_request_result(empty_result.clone());
+        i += 1;
+        if i >= 2 {
+            break;
+        }
+    }
+    let agg = get_agg(authorities, clone_clients);
+    let res = agg.get_committee_info(Some(0)).await;
+    match res {
+        Err(SuiError::TooManyIncorrectAuthorities { .. }) => (),
+        other => panic!(
+            "expect to get SuiError::TooManyIncorrectAuthorities but got {:?}",
+            other
+        ),
+    };
+}
+
+pub fn make_response_from_sui_system_state(
+    system_state: SuiSystemState,
+) -> SuiResult<ObjectInfoResponse> {
+    let move_content = to_bytes(&system_state).unwrap();
+    let mut tx_cert = make_random_certified_transaction();
+    // A trick to bypass the check in safe client to make the test setup simpler
+    tx_cert.is_verified = true;
+    let move_object = unsafe {
+        MoveObject::new_from_execution(
+            SuiSystemState::type_(),
+            false,
+            SequenceNumber::from_u64(1),
+            move_content,
+        )
+    };
+    let object = Object::new_move(move_object, Owner::Shared, *tx_cert.digest());
+    let obj_digest = object.compute_object_reference();
+    Ok(ObjectInfoResponse {
+        parent_certificate: Some(tx_cert),
+        requested_object_reference: Some(obj_digest),
+        object_and_lock: Some(ObjectResponse {
+            object,
+            lock: None,
+            layout: None,
+        }),
+    })
+}
+
+pub fn get_authority_pub_key_bytes_and_address() -> (AuthorityPublicKeyBytes, Vec<u8>) {
+    let (_val0_addr, val0_kp) = get_authority_key_pair();
+    (
+        AuthorityPublicKeyBytes::from(val0_kp.public()),
+        Multiaddr::empty().to_vec(),
+    )
 }

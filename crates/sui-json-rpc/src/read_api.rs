@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::api::RpcFullNodeReadApiServer;
-use crate::api::RpcReadApiServer;
-use crate::SuiRpcModule;
+use std::collections::BTreeMap;
+use std::sync::Arc;
+
 use anyhow::anyhow;
 use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
@@ -11,23 +11,27 @@ use jsonrpsee_core::server::rpc_module::RpcModule;
 use move_binary_format::normalized::{Module as NormalizedModule, Type};
 use move_core_types::identifier::Identifier;
 use signature::Signature;
-use std::collections::BTreeMap;
-use std::sync::Arc;
+
 use sui_core::authority::AuthorityState;
-use sui_core::gateway_state::GatewayTxSeqNumber;
 use sui_json_rpc_types::{
-    GetObjectDataResponse, GetPastObjectDataResponse, MoveFunctionArgType, ObjectValueKind,
+    GetObjectDataResponse, GetPastObjectDataResponse, MoveFunctionArgType, ObjectValueKind, Page,
     SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiObjectInfo,
-    SuiTransactionEffects, SuiTransactionResponse,
+    SuiTransactionEffects, SuiTransactionResponse, TransactionsPage,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
+use sui_types::batch::TxSequenceNumber;
 use sui_types::crypto::{SignableBytes, SignatureScheme};
 use sui_types::messages::{Transaction, TransactionData};
 use sui_types::move_package::normalize_modules;
 use sui_types::object::{Data, ObjectRead, Owner};
+use sui_types::query::{Ordering, TransactionQuery};
 use sui_types::sui_serde::Base64;
+
+use crate::api::RpcReadApiServer;
+use crate::api::{RpcFullNodeReadApiServer, MAX_RESULT_SIZE};
+use crate::SuiRpcModule;
 
 // An implementation of the read portion of the Gateway JSON-RPC interface intended for use in
 // Fullnodes.
@@ -94,17 +98,15 @@ impl RpcReadApiServer for ReadApi {
 
     async fn get_transactions_in_range(
         &self,
-        start: GatewayTxSeqNumber,
-        end: GatewayTxSeqNumber,
-    ) -> RpcResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>> {
-        Ok(self.state.get_transactions_in_range(start, end)?)
-    }
-
-    async fn get_recent_transactions(
-        &self,
-        count: u64,
-    ) -> RpcResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>> {
-        Ok(self.state.get_recent_transactions(count)?)
+        start: TxSequenceNumber,
+        end: TxSequenceNumber,
+    ) -> RpcResult<Vec<TransactionDigest>> {
+        Ok(self
+            .state
+            .get_transactions_in_range(start, end)?
+            .into_iter()
+            .map(|(_, digest)| digest)
+            .collect())
     }
 
     async fn get_transaction(
@@ -258,47 +260,29 @@ impl RpcFullNodeReadApiServer for FullNodeApi {
         }?)
     }
 
-    async fn get_transactions_by_input_object(
+    async fn get_transactions(
         &self,
-        object: ObjectID,
-    ) -> RpcResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>> {
-        Ok(self.state.get_transactions_by_input_object(object).await?)
-    }
+        query: TransactionQuery,
+        cursor: Option<TransactionDigest>,
+        limit: Option<usize>,
+        order: Ordering,
+    ) -> RpcResult<TransactionsPage> {
+        let limit = limit.unwrap_or(MAX_RESULT_SIZE);
 
-    async fn get_transactions_by_mutated_object(
-        &self,
-        object: ObjectID,
-    ) -> RpcResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>> {
-        Ok(self
+        if limit == 0 {
+            Err(anyhow!("Page result limit must be larger then 0."))?;
+        }
+        let reverse = order == Ordering::Descending;
+
+        // Retrieve 1 extra item for next cursor
+        let mut data = self
             .state
-            .get_transactions_by_mutated_object(object)
-            .await?)
-    }
+            .get_transactions(query, cursor, Some(limit + 1), reverse)?;
 
-    async fn get_transactions_by_move_function(
-        &self,
-        package: ObjectID,
-        module: Option<String>,
-        function: Option<String>,
-    ) -> RpcResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>> {
-        Ok(self
-            .state
-            .get_transactions_by_move_function(package, module, function)
-            .await?)
-    }
-
-    async fn get_transactions_from_addr(
-        &self,
-        addr: SuiAddress,
-    ) -> RpcResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>> {
-        Ok(self.state.get_transactions_from_addr(addr).await?)
-    }
-
-    async fn get_transactions_to_addr(
-        &self,
-        addr: SuiAddress,
-    ) -> RpcResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>> {
-        Ok(self.state.get_transactions_to_addr(addr).await?)
+        // extract next cursor
+        let next_cursor = data.get(limit).cloned();
+        data.truncate(limit);
+        Ok(Page { data, next_cursor })
     }
 
     async fn try_get_past_object(

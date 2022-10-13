@@ -1,14 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
-use std::collections::BTreeMap;
-use sui_types::{
+use crate::{
     base_types::{ObjectID, ObjectRef, SequenceNumber},
     error::{SuiError, SuiResult},
     object::Object,
     storage::{BackingPackageStore, DeleteKind, ParentSync, WriteKind},
 };
+use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
+use std::collections::BTreeMap;
 
 // TODO: We should use AuthorityTemporaryStore instead.
 // Keeping this functionally identical to AuthorityTemporaryStore is a pain.

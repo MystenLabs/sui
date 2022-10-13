@@ -46,7 +46,7 @@ pub fn test_and_configure_authority_configs(committee_size: usize) -> NetworkCon
         let parameters = &mut config.consensus_config.as_mut().unwrap().narwhal_config;
         // NOTE: the following parameters are important to ensure tests run fast. Using the default
         // Narwhal parameters may result in tests taking >60 seconds.
-        parameters.header_size = 1;
+        parameters.header_num_of_batches_threshold = 1;
         parameters.max_header_delay = Duration::from_millis(200);
         parameters.batch_size = 1;
         parameters.max_batch_delay = Duration::from_millis(200);
@@ -141,7 +141,6 @@ pub async fn spawn_checkpoint_processes(configs: &NetworkConfig, handles: &[SuiN
                     .spawn_checkpoint_process_with_config(
                         checkpoint_process_control,
                         CheckpointMetrics::new_for_tests(),
-                        false,
                     )
                     .await;
             })
@@ -157,6 +156,8 @@ pub fn test_authority_aggregator(
     let validators_info = config.validator_set();
     let committee = Committee::new(0, ValidatorInfo::voting_rights(validators_info)).unwrap();
     // TODO: duplicated at test_utils.rs
+    let registry = prometheus::Registry::new();
+    let network_metrics = Arc::new(NetworkAuthorityClientMetrics::new(&registry));
     let clients: BTreeMap<_, _> = validators_info
         .iter()
         .map(|config| {
@@ -164,19 +165,19 @@ pub fn test_authority_aggregator(
                 config.protocol_key(),
                 NetworkAuthorityClient::connect_lazy(
                     config.network_address(),
-                    Arc::new(NetworkAuthorityClientMetrics::new_for_tests()),
+                    network_metrics.clone(),
                 )
                 .unwrap(),
             )
         })
         .collect();
-    let registry = Registry::new();
     AuthorityAggregator::new(
         committee,
         committee_store,
         clients,
         AuthAggMetrics::new(&registry),
-        SafeClientMetrics::new(&registry),
+        Arc::new(SafeClientMetrics::new(&registry)),
+        network_metrics,
     )
 }
 

@@ -4,7 +4,6 @@ use super::*;
 use crate::authority::{authority_tests::init_state_with_objects, AuthorityState};
 use crate::test_utils::to_sender_signed_transaction;
 use move_core_types::{account_address::AccountAddress, ident_str};
-use narwhal_executor::ExecutionIndices;
 use narwhal_types::Transactions;
 use narwhal_types::TransactionsServer;
 use narwhal_types::{Empty, TransactionProto};
@@ -110,7 +109,7 @@ async fn listen_to_sequenced_transaction() {
                 certificate: narwhal_types::Certificate::default(),
                 consensus_index: narwhal_types::SequenceNumber::default(),
             },
-            ExecutionIndices::default(),
+            Default::default(),
             ConsensusTransaction::new_certificate_message(&state.name, certificate),
         )
         .await
@@ -190,7 +189,7 @@ async fn submit_transaction_to_consensus() {
                         certificate: narwhal_types::Certificate::default(),
                         consensus_index: narwhal_types::SequenceNumber::default(),
                     },
-                    ExecutionIndices::default(),
+                    Default::default(),
                     ConsensusTransaction::new_certificate_message(&name, *certificate),
                 )
                 .await

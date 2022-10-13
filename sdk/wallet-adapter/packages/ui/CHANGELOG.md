@@ -1,5 +1,16 @@
 # @mysten/wallet-adapter-react-ui
 
+## 0.2.0
+
+### Minor Changes
+
+- 5ac98bc9a: Introduce new wallet adapter based on the Wallet Standard. This wallet adapter automatically detects wallets that adhere to the standard interface.
+
+### Patch Changes
+
+- Updated dependencies [5ac98bc9a]
+  - @mysten/wallet-adapter-react@3.0.0
+
 ## 0.1.0
 
 ### Minor Changes

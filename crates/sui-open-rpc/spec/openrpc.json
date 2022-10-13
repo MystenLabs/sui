@@ -473,16 +473,16 @@
             "value": [
               {
                 "timestamp": 0,
-                "txDigest": "BWKhOquPtEACDdYixmLKLkY8r27PC+U2QNCUs3DoJN0=",
+                "txDigest": "GoMyiLnqV1c1MhJGwS9EkxttHEOO7T3JRHoA8ljFNyo=",
                 "event": {
                   "transferObject": {
                     "packageId": "0x0000000000000000000000000000000000000002",
                     "transactionModule": "native",
-                    "sender": "0xf9c68d73904967cc3c81c4c4b890a970a8507c78",
+                    "sender": "0xbb4fa19d228beca5e98850f2ce11afc4f84c7657",
                     "recipient": {
-                      "AddressOwner": "0xaba24f862a763851c54908cd2a0ee7d709c11b93"
+                      "AddressOwner": "0x86a866efa6db5c1bd60446af9ce59a85cd194e47"
                     },
-                    "objectId": "0xd4a2083747b76856a5a8e30db5a798a7354340b6",
+                    "objectId": "0x15701e55e66b092d67b54aea5028bed04c46a29b",
                     "version": 2,
                     "type": "ToAddress",
                     "amount": 100
@@ -578,7 +578,7 @@
             "value": [
               {
                 "timestamp": 0,
-                "txDigest": "5gGhza5PgAlZCcBy5zBl7V+89D10AyPs2sD1HQCd8rA=",
+                "txDigest": "Qp8yq31APG+JGGF++uG5kzKW9bGyGdGE1/49WxDMsXY=",
                 "event": {
                   "moveEvent": {
                     "packageId": "0x0000000000000000000000000000000000000002",
@@ -658,7 +658,7 @@
           "params": [
             {
               "name": "object",
-              "value": "0xd817566297f9de95703e326f7b6c5bb06e2f69cc"
+              "value": "0xbdec549c7cdea06bc4a1d339a22521eea933b889"
             },
             {
               "name": "count",
@@ -678,16 +678,16 @@
             "value": [
               {
                 "timestamp": 0,
-                "txDigest": "jWADr6VMgCbS8rxZpDk+bGg/EyrP4yS05pgGNdvirYs=",
+                "txDigest": "Hnzx5pqSWf6SSK4iYkU0ID0UN6/6LVAMVDOv7Tpy9Nc=",
                 "event": {
                   "transferObject": {
                     "packageId": "0x0000000000000000000000000000000000000002",
                     "transactionModule": "native",
-                    "sender": "0xe06b58b3bdbc7809e33e3348fcdaa4f9b165d3bc",
+                    "sender": "0x23806221284475899703e19ebb71f5c98a509494",
                     "recipient": {
-                      "AddressOwner": "0x937919da0294cbba1d4980fbaf0a4dbfbcc39033"
+                      "AddressOwner": "0x26a361970c65a5b12c43805d0d6f5402a7ad0da5"
                     },
-                    "objectId": "0xd817566297f9de95703e326f7b6c5bb06e2f69cc",
+                    "objectId": "0xbdec549c7cdea06bc4a1d339a22521eea933b889",
                     "version": 2,
                     "type": "ToAddress",
                     "amount": 100
@@ -764,7 +764,7 @@
             {
               "name": "recipient",
               "value": {
-                "AddressOwner": "0x870302c062944303fab7b475b723f72ea7072ddb"
+                "AddressOwner": "0x8581e7115f3d762b5057bc2a187b79e31a5ccbc4"
               }
             },
             {
@@ -785,16 +785,16 @@
             "value": [
               {
                 "timestamp": 0,
-                "txDigest": "VU+PBMNuPbwyiI1DAp67Hjm+0wXGxKnc907LIXi90xY=",
+                "txDigest": "wUUUMKe4LH83LUD79mCF/BXIPwVp2iPHKgRBmv+aIs0=",
                 "event": {
                   "transferObject": {
                     "packageId": "0x0000000000000000000000000000000000000002",
                     "transactionModule": "native",
-                    "sender": "0xd7bb69df2588d9da5b16c0e4f7441f776cebc4e8",
+                    "sender": "0x6ad5da5d137026b83f3be64dd6dc76f3cca22375",
                     "recipient": {
-                      "AddressOwner": "0x870302c062944303fab7b475b723f72ea7072ddb"
+                      "AddressOwner": "0x8581e7115f3d762b5057bc2a187b79e31a5ccbc4"
                     },
-                    "objectId": "0x502e90be432231b6dee1af33100f0e6f7e769678",
+                    "objectId": "0x74eecfc5ce1ef691c14c027b6aa764377981bafd",
                     "version": 2,
                     "type": "ToAddress",
                     "amount": 100
@@ -870,7 +870,7 @@
           "params": [
             {
               "name": "sender",
-              "value": "0xf314b325698f174131719f65a3cf72bb34492bcd"
+              "value": "0xbbe4b8234b099cdfb3277c5e4df7b72c366bb7c7"
             },
             {
               "name": "count",
@@ -890,16 +890,16 @@
             "value": [
               {
                 "timestamp": 0,
-                "txDigest": "v5HQwob+eKKNcsvGaM5K2OnUgvf63cu68SKFS/yO3xI=",
+                "txDigest": "ag3RA2mE7vqHXAJ9hiitgpf1DLGgMmNwShD64Ng0IWE=",
                 "event": {
                   "transferObject": {
                     "packageId": "0x0000000000000000000000000000000000000002",
                     "transactionModule": "native",
-                    "sender": "0xf314b325698f174131719f65a3cf72bb34492bcd",
+                    "sender": "0xbbe4b8234b099cdfb3277c5e4df7b72c366bb7c7",
                     "recipient": {
-                      "AddressOwner": "0x9afc2c4425b5db6694f1a597b4e8f709a396f7f6"
+                      "AddressOwner": "0x45e3e1415579352c128b4d1a2f42fdfbc9c5a73a"
                     },
-                    "objectId": "0xb1482bdcd65a673d111e49286c527fab7c2d0961",
+                    "objectId": "0x441193e99ab6cc2a92f7d37948898292d7042041",
                     "version": 2,
                     "type": "ToAddress",
                     "amount": 100
@@ -983,16 +983,16 @@
             "value": [
               {
                 "timestamp": 0,
-                "txDigest": "6xIRNCFVvsrCBHWEYx5sDldrfOTf7lDCYwJHeZcZ3oQ=",
+                "txDigest": "F0wkDp/8VWs3RGkz+ly2X30lhxEwW2Y+JPGhkiKKevI=",
                 "event": {
                   "transferObject": {
                     "packageId": "0x0000000000000000000000000000000000000002",
                     "transactionModule": "native",
-                    "sender": "0x19853e72777287f776c5e0c8533bd7e140942454",
+                    "sender": "0x636a37efd526f38da079eb35644961e93c869b16",
                     "recipient": {
-                      "AddressOwner": "0x0a59e4c9ada705c31cf98a5bee322ea06661084c"
+                      "AddressOwner": "0x53a8771e448930bc95a0369fad43a9870a2e5878"
                     },
-                    "objectId": "0xd6e8769f42ef9314ccc792dd4401a88e69c66b4c",
+                    "objectId": "0x91825debff541cf4e08b5c5f7296ff9840e6f0b1",
                     "version": 2,
                     "type": "ToAddress",
                     "amount": 100
@@ -1048,7 +1048,7 @@
           "params": [
             {
               "name": "digest",
-              "value": "Z/5rJu8FeEnRAjHxgcgs/sWiecbniwdTNG93AmZWRsM="
+              "value": "gA8fELgirLI/JDKVpMfsOtvDRO4FvjFTQhnc2CGIHXw="
             },
             {
               "name": "count",
@@ -1060,16 +1060,16 @@
             "value": [
               {
                 "timestamp": 0,
-                "txDigest": "Z/5rJu8FeEnRAjHxgcgs/sWiecbniwdTNG93AmZWRsM=",
+                "txDigest": "gA8fELgirLI/JDKVpMfsOtvDRO4FvjFTQhnc2CGIHXw=",
                 "event": {
                   "transferObject": {
                     "packageId": "0x0000000000000000000000000000000000000002",
                     "transactionModule": "native",
-                    "sender": "0xf32b507af13d38cf7e2b5040ed557d216eeed116",
+                    "sender": "0xd084dad8fc6cc86a71b0df0c98c5b71c4184d9b2",
                     "recipient": {
-                      "AddressOwner": "0xec4c5c752302b12d01726cfaa9bca5c15f879085"
+                      "AddressOwner": "0xdee7c7ff955697fe2b704c9540a3846e9298b75d"
                     },
-                    "objectId": "0x6802af59971ef9615b01d73d0f756364ad6284aa",
+                    "objectId": "0xb725c1ee3027b783ea689e1a38eb476c6efc44ed",
                     "version": 2,
                     "type": "ToAddress",
                     "amount": 100
@@ -1560,85 +1560,6 @@
       ]
     },
     {
-      "name": "sui_getRecentTransactions",
-      "tags": [
-        {
-          "name": "Read API"
-        }
-      ],
-      "description": "Return list of recent transaction digest.",
-      "params": [
-        {
-          "name": "count",
-          "description": "maximum size of the result",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        }
-      ],
-      "result": {
-        "name": "Vec<(GatewayTxSeqNumber,TransactionDigest)>",
-        "required": true,
-        "schema": {
-          "type": "array",
-          "items": {
-            "type": "array",
-            "items": [
-              {
-                "type": "integer",
-                "format": "uint64",
-                "minimum": 0.0
-              },
-              {
-                "$ref": "#/components/schemas/TransactionDigest"
-              }
-            ],
-            "maxItems": 2,
-            "minItems": 2
-          }
-        }
-      },
-      "examples": [
-        {
-          "name": "Get recent transactions",
-          "params": [
-            {
-              "name": "count",
-              "value": 5
-            }
-          ],
-          "result": {
-            "name": "Result",
-            "value": [
-              [
-                5,
-                "a77K+UV8mvd6kfYxdghTk004NjS898MmVQCaYfHeDq4="
-              ],
-              [
-                6,
-                "QgouSuG7dyqy3V1affqUnA7waQjnpUkA8nm+TGoQHpo="
-              ],
-              [
-                7,
-                "OvXIBwES+Ahkizbvv43uihqC3kbZUE6WoRCKF473b1Y="
-              ],
-              [
-                8,
-                "w5ljOi6zELypEk5fLzjOc56qy7ZgBoiATgeESJ+Q9/g="
-              ],
-              [
-                9,
-                "Zswp37HaY3POlPnZXcpaQPThdpkY7r+fuuAL045Xhy8="
-              ]
-            ]
-          }
-        }
-      ]
-    },
-    {
       "name": "sui_getTotalTransactionNumber",
       "tags": [
         {
@@ -1810,303 +1731,87 @@
       ]
     },
     {
-      "name": "sui_getTransactionsByInputObject",
+      "name": "sui_getTransactions",
       "tags": [
         {
           "name": "Full Node API"
         }
       ],
-      "description": "Return list of transactions for a specified input object.",
+      "description": "Return list of transactions for a specified query criteria.",
       "params": [
         {
-          "name": "object",
-          "description": "the ID of the input object",
+          "name": "query",
+          "description": "the transaction query criteria.",
           "required": true,
           "schema": {
-            "$ref": "#/components/schemas/ObjectID"
+            "$ref": "#/components/schemas/TransactionQuery"
+          }
+        },
+        {
+          "name": "cursor",
+          "description": "Optional paging cursor",
+          "schema": {
+            "$ref": "#/components/schemas/TransactionDigest"
+          }
+        },
+        {
+          "name": "limit",
+          "description": "Maximum item returned per page",
+          "schema": {
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0.0
+          }
+        },
+        {
+          "name": "order",
+          "description": "Transaction query ordering",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/Ordering"
           }
         }
       ],
       "result": {
-        "name": "Vec<(GatewayTxSeqNumber,TransactionDigest)>",
+        "name": "TransactionsPage",
         "required": true,
         "schema": {
-          "type": "array",
-          "items": {
-            "type": "array",
-            "items": [
-              {
-                "type": "integer",
-                "format": "uint64",
-                "minimum": 0.0
-              },
-              {
-                "$ref": "#/components/schemas/TransactionDigest"
-              }
-            ],
-            "maxItems": 2,
-            "minItems": 2
-          }
+          "$ref": "#/components/schemas/Page_for_TransactionDigest_and_TransactionDigest"
         }
       },
       "examples": [
         {
-          "name": "Return the transaction digest for specified input object",
+          "name": "Return the transaction digest for specified query criteria",
           "params": [
             {
-              "name": "object",
-              "value": "0xcccaa97a02cc3a98041670e1609db714e9858c96"
+              "name": "query",
+              "value": {
+                "InputObject": "0xb10c0046e293c08cec0f40783d9ac4bf4abb4d7f"
+              }
+            },
+            {
+              "name": "cursor",
+              "value": 10
+            },
+            {
+              "name": "limit",
+              "value": 100
+            },
+            {
+              "name": "order",
+              "value": "Ascending"
             }
           ],
           "result": {
             "name": "Result",
-            "value": [
-              [
-                5,
-                "e6kd3H5xfPcIyTcGDwQEhzbsM/sXRtmZpeWM1cZ37YA="
-              ],
-              [
-                6,
-                "T4LxyFh7mNZMAL+0bDhDvYv2zPp8ZahhOGmM0f3Kw9w="
-              ],
-              [
-                7,
+            "value": {
+              "data": [
+                "e6kd3H5xfPcIyTcGDwQEhzbsM/sXRtmZpeWM1cZ37YA=",
+                "T4LxyFh7mNZMAL+0bDhDvYv2zPp8ZahhOGmM0f3Kw9w=",
                 "6NjHzoY/MT2j29kqg+8m0Si4j+Zr8m4ODQnNr3J9HYQ="
-              ]
-            ]
-          }
-        }
-      ]
-    },
-    {
-      "name": "sui_getTransactionsByMoveFunction",
-      "tags": [
-        {
-          "name": "Full Node API"
-        }
-      ],
-      "description": "Return list of transactions for a specified move function.",
-      "params": [
-        {
-          "name": "package",
-          "description": "the Move package ID, e.g. `0x2`",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/ObjectID"
-          }
-        },
-        {
-          "name": "module",
-          "description": "the Move module name, e.g. `devnet_nft`",
-          "schema": {
-            "type": "string"
-          }
-        },
-        {
-          "name": "function",
-          "description": "the move function name, e.g. `mint`",
-          "schema": {
-            "type": "string"
-          }
-        }
-      ],
-      "result": {
-        "name": "Vec<(GatewayTxSeqNumber,TransactionDigest)>",
-        "required": true,
-        "schema": {
-          "type": "array",
-          "items": {
-            "type": "array",
-            "items": [
-              {
-                "type": "integer",
-                "format": "uint64",
-                "minimum": 0.0
-              },
-              {
-                "$ref": "#/components/schemas/TransactionDigest"
-              }
-            ],
-            "maxItems": 2,
-            "minItems": 2
-          }
-        }
-      },
-      "examples": [
-        {
-          "name": "Return the transaction digest for specified input object",
-          "params": [
-            {
-              "name": "package",
-              "value": "0x0000000000000000000000000000000000000002"
-            },
-            {
-              "name": "module",
-              "value": "devnet_nft"
-            },
-            {
-              "name": "function",
-              "value": "function"
+              ],
+              "nextCursor": "zMqpegLMOpgEFnDhYJ23FOmFjJbp5GmFXxzzv9+X6GU="
             }
-          ],
-          "result": {
-            "name": "Result",
-            "value": [
-              [
-                6,
-                "6eRphV8c87/fl+hlsQwARuKTwIzsD0B4PZrEv0q7TX8="
-              ],
-              [
-                7,
-                "ggZH/YXRkYPe58f/lVaX/itwTJVAo4Rukpi3Xbclwe4="
-              ],
-              [
-                8,
-                "MCe3g+ponho460dsbvxE7bXNPf4y9L9sPorELu8TheA="
-              ],
-              [
-                9,
-                "FAPkmkspatyyLqJ9PJLkziJWrGRcur3DbPG58uyEgaI="
-              ]
-            ]
-          }
-        }
-      ]
-    },
-    {
-      "name": "sui_getTransactionsByMutatedObject",
-      "tags": [
-        {
-          "name": "Full Node API"
-        }
-      ],
-      "description": "Return list of transactions for a specified mutated object.",
-      "params": [
-        {
-          "name": "object",
-          "description": "the ID of the mutated object",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/ObjectID"
-          }
-        }
-      ],
-      "result": {
-        "name": "Vec<(GatewayTxSeqNumber,TransactionDigest)>",
-        "required": true,
-        "schema": {
-          "type": "array",
-          "items": {
-            "type": "array",
-            "items": [
-              {
-                "type": "integer",
-                "format": "uint64",
-                "minimum": 0.0
-              },
-              {
-                "$ref": "#/components/schemas/TransactionDigest"
-              }
-            ],
-            "maxItems": 2,
-            "minItems": 2
-          }
-        }
-      },
-      "examples": [
-        {
-          "name": "Return the transaction digest for specified mutated object",
-          "params": [
-            {
-              "name": "object",
-              "value": "0xbdec549c7cdea06bc4a1d339a22521eea933b889"
-            }
-          ],
-          "result": {
-            "name": "Result",
-            "value": [
-              [
-                5,
-                "bKfYEWlVl5QCi48C5DAqVZXYiJpnxtMcbJcOVn8D72c="
-              ],
-              [
-                6,
-                "2BGk+ENmW43j8oL6SLPgEDupu+1qBhU7n8SG4QHw6eI="
-              ],
-              [
-                7,
-                "cDrIZm0GrsxN3355JqNhlwxlpbEsQ4BdDW9UAqetDaU="
-              ]
-            ]
-          }
-        }
-      ]
-    },
-    {
-      "name": "sui_getTransactionsFromAddress",
-      "tags": [
-        {
-          "name": "Full Node API"
-        }
-      ],
-      "description": "Return list of transactions for a specified sender's Sui address.",
-      "params": [
-        {
-          "name": "addr",
-          "description": "the sender's Sui address",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/SuiAddress"
-          }
-        }
-      ],
-      "result": {
-        "name": "Vec<(GatewayTxSeqNumber,TransactionDigest)>",
-        "required": true,
-        "schema": {
-          "type": "array",
-          "items": {
-            "type": "array",
-            "items": [
-              {
-                "type": "integer",
-                "format": "uint64",
-                "minimum": 0.0
-              },
-              {
-                "$ref": "#/components/schemas/TransactionDigest"
-              }
-            ],
-            "maxItems": 2,
-            "minItems": 2
-          }
-        }
-      },
-      "examples": [
-        {
-          "name": "Return the transaction digest for specified sender address",
-          "params": [
-            {
-              "name": "addr",
-              "value": "0x5a9b385f479fea7c2ddad0b77b758036a74fdb6f"
-            }
-          ],
-          "result": {
-            "name": "Result",
-            "value": [
-              [
-                5,
-                "nvsgc1pPauyCE27/c+aBnHN3fSsxRAWdEJYzYFOryNA="
-              ],
-              [
-                6,
-                "6ENxIqcnFPvxDrwXAzxbTJGYkm3c1gMNwsHZkAgLQVg="
-              ],
-              [
-                7,
-                "I1jG1BVwgh7S+Ivck07o0WLNcF2h36DN6mjskM8fdWc="
-              ]
-            ]
           }
         }
       ]
@@ -2142,128 +1847,15 @@
         }
       ],
       "result": {
-        "name": "Vec<(GatewayTxSeqNumber,TransactionDigest)>",
+        "name": "Vec<TransactionDigest>",
         "required": true,
         "schema": {
           "type": "array",
           "items": {
-            "type": "array",
-            "items": [
-              {
-                "type": "integer",
-                "format": "uint64",
-                "minimum": 0.0
-              },
-              {
-                "$ref": "#/components/schemas/TransactionDigest"
-              }
-            ],
-            "maxItems": 2,
-            "minItems": 2
+            "$ref": "#/components/schemas/TransactionDigest"
           }
         }
-      },
-      "examples": [
-        {
-          "name": "Return the transaction digest in range",
-          "params": [
-            {
-              "name": "start",
-              "value": 5
-            },
-            {
-              "name": "end",
-              "value": 8
-            }
-          ],
-          "result": {
-            "name": "Result",
-            "value": [
-              [
-                5,
-                "2+pGo+vHd5xF4+FBVXk1LBKLTRovQv37ycWnOkQRk+k="
-              ],
-              [
-                6,
-                "mrbMKpL303lIiYKS1wQgQYuEUC5QZ5Qif4lyN3ZN3o0="
-              ],
-              [
-                7,
-                "eaAashBL90Kid6Kr4DXKQcVWtyKHi5rmtMaTpGQO6GI="
-              ]
-            ]
-          }
-        }
-      ]
-    },
-    {
-      "name": "sui_getTransactionsToAddress",
-      "tags": [
-        {
-          "name": "Full Node API"
-        }
-      ],
-      "description": "Return list of transactions for a specified recipient's Sui address.",
-      "params": [
-        {
-          "name": "addr",
-          "description": "the recipient's Sui address",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/SuiAddress"
-          }
-        }
-      ],
-      "result": {
-        "name": "Vec<(GatewayTxSeqNumber,TransactionDigest)>",
-        "required": true,
-        "schema": {
-          "type": "array",
-          "items": {
-            "type": "array",
-            "items": [
-              {
-                "type": "integer",
-                "format": "uint64",
-                "minimum": 0.0
-              },
-              {
-                "$ref": "#/components/schemas/TransactionDigest"
-              }
-            ],
-            "maxItems": 2,
-            "minItems": 2
-          }
-        }
-      },
-      "examples": [
-        {
-          "name": "Return the transaction digest for specified recipient address",
-          "params": [
-            {
-              "name": "addr",
-              "value": "0x74eecfc5ce1ef691c14c027b6aa764377981bafd"
-            }
-          ],
-          "result": {
-            "name": "Result",
-            "value": [
-              [
-                5,
-                "uWvvhPqY0vzutLlYV2d1Bxb1iEfdnGaiAktUTHYjuRs="
-              ],
-              [
-                6,
-                "DB9yI0+EHo6na+nsC11yh5sJHW1tj4Mu+Ugwy44TOpM="
-              ],
-              [
-                7,
-                "MVLgNNUceI3F69bChYHnEV89ditQV7wqGHt54xpcy8Q="
-              ]
-            ]
-          }
-        }
-      ]
+      }
     },
     {
       "name": "sui_mergeCoins",
@@ -3974,6 +3566,13 @@
           "ByValue"
         ]
       },
+      "Ordering": {
+        "type": "string",
+        "enum": [
+          "Ascending",
+          "Descending"
+        ]
+      },
       "Owner": {
         "oneOf": [
           {
@@ -4010,6 +3609,30 @@
             "additionalProperties": false
           }
         ]
+      },
+      "Page_for_TransactionDigest_and_TransactionDigest": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TransactionDigest"
+            }
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TransactionDigest"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
       },
       "Pay": {
         "type": "object",
@@ -4882,6 +4505,96 @@
             "properties": {
               "ChangeEpoch": {
                 "$ref": "#/components/schemas/SuiChangeEpoch"
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      },
+      "TransactionQuery": {
+        "oneOf": [
+          {
+            "type": "string",
+            "enum": [
+              "All"
+            ]
+          },
+          {
+            "type": "object",
+            "required": [
+              "MoveFunction"
+            ],
+            "properties": {
+              "MoveFunction": {
+                "type": "object",
+                "required": [
+                  "package"
+                ],
+                "properties": {
+                  "function": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "module": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "package": {
+                    "$ref": "#/components/schemas/ObjectID"
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "InputObject"
+            ],
+            "properties": {
+              "InputObject": {
+                "$ref": "#/components/schemas/ObjectID"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "MutatedObject"
+            ],
+            "properties": {
+              "MutatedObject": {
+                "$ref": "#/components/schemas/ObjectID"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "FromAddress"
+            ],
+            "properties": {
+              "FromAddress": {
+                "$ref": "#/components/schemas/SuiAddress"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "ToAddress"
+            ],
+            "properties": {
+              "ToAddress": {
+                "$ref": "#/components/schemas/SuiAddress"
               }
             },
             "additionalProperties": false

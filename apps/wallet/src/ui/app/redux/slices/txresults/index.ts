@@ -29,7 +29,6 @@ import type { AppThunkConfig } from '_store/thunk-extras';
 
 export type TxResultState = {
     to?: string;
-    seq: number;
     txId: string;
     status: ExecutionStatusType;
     txGas: number;
@@ -64,11 +63,9 @@ const initialState: TransactionManualState = {
 type TxResultByAddress = TxResultState[];
 
 // Remove duplicate transactionsId, reduces the number of RPC calls
-const deduplicate = (results: [number, string][] | undefined) =>
+const deduplicate = (results: string[] | undefined) =>
     results
-        ? results
-              .map((result) => result[1])
-              .filter((value, index, self) => self.indexOf(value) === index)
+        ? results.filter((value, index, self) => self.indexOf(value) === index)
         : [];
 
 // TODO: This is a temporary solution to get the NFT data from Call txn
@@ -97,9 +94,8 @@ export const getTransactionsByAddress = createAsyncThunk<
             return [];
         }
         // Get all transactions txId for address
-        const transactions: GetTxnDigestsResponse = (
-            await api.instance.fullNode.getTransactionsForAddress(address)
-        ).filter((tx) => tx);
+        const transactions: GetTxnDigestsResponse =
+            await api.instance.fullNode.getTransactionsForAddress(address);
 
         if (!transactions || !transactions.length) {
             return [];
@@ -172,7 +168,6 @@ export const getTransactionsByAddress = createAsyncThunk<
                         })
                         // Remove failed transactions and sort by sequence number
                         .filter(notEmpty)
-                        .sort((a, b) => b.seq - a.seq)
                 );
             });
 

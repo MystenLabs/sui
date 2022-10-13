@@ -406,25 +406,19 @@ where
     pub async fn spawn_checkpoint_process(
         self: Arc<Self>,
         metrics: CheckpointMetrics,
-        enable_reconfig: bool,
     ) -> JoinHandle<()> {
-        self.spawn_checkpoint_process_with_config(
-            CheckpointProcessControl::default(),
-            metrics,
-            enable_reconfig,
-        )
-        .await
+        self.spawn_checkpoint_process_with_config(CheckpointProcessControl::default(), metrics)
+            .await
     }
 
     pub async fn spawn_checkpoint_process_with_config(
         self: Arc<Self>,
         checkpoint_process_control: CheckpointProcessControl,
         metrics: CheckpointMetrics,
-        enable_reconfig: bool,
     ) -> JoinHandle<()> {
         // Spawn task to take care of checkpointing
         tokio::task::spawn(async move {
-            checkpoint_process(self, &checkpoint_process_control, metrics, enable_reconfig).await;
+            checkpoint_process(self, &checkpoint_process_control, metrics).await;
         })
     }
 }

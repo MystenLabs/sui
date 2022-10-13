@@ -14,7 +14,6 @@ pub mod metrics;
 mod primary_connector;
 mod processor;
 mod quorum_waiter;
-mod synchronizer;
 mod worker;
 
 pub use crate::worker::{Worker, WorkerMessage};

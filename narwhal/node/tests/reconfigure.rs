@@ -11,7 +11,6 @@ use futures::future::join_all;
 use narwhal_node as node;
 use network::{P2pNetwork, ReliableNetwork};
 use node::{restarter::NodeRestarter, Node, NodeStorage};
-use primary::PrimaryWorkerMessage;
 use prometheus::Registry;
 use std::sync::{Arc, Mutex};
 use test_utils::{random_network, CommitteeFixture};
@@ -19,7 +18,10 @@ use tokio::{
     sync::mpsc::{channel, Receiver, Sender},
     time::{interval, sleep, Duration, MissedTickBehavior},
 };
-use types::{ReconfigureNotification, TransactionProto, TransactionsClient, WorkerPrimaryMessage};
+use types::{
+    ReconfigureNotification, TransactionProto, TransactionsClient, WorkerPrimaryMessage,
+    WorkerReconfigureMessage,
+};
 
 /// A simple/dumb execution engine.
 struct SimpleExecutionState {
@@ -165,7 +167,7 @@ async fn restart() {
 
     let parameters = Parameters {
         batch_size: 200,
-        header_size: 1,
+        max_header_num_of_batches: 1,
         ..Parameters::default()
     };
 
@@ -255,7 +257,7 @@ async fn epoch_change() {
     let worker_cache = fixture.shared_worker_cache();
     let parameters = Parameters {
         batch_size: 200,
-        header_size: 1,
+        max_header_num_of_batches: 1,
         ..Parameters::default()
     };
 
@@ -304,9 +306,9 @@ async fn epoch_change() {
                 let primary_cancel_handle =
                     primary_network.send(network_key.to_owned(), &message).await;
 
-                let message = PrimaryWorkerMessage::Reconfigure(ReconfigureNotification::NewEpoch(
-                    committee.clone(),
-                ));
+                let message = WorkerReconfigureMessage {
+                    message: ReconfigureNotification::NewEpoch(committee.clone()),
+                };
                 let mut worker_names = Vec::new();
                 for worker in worker_cache_clone
                     .load()

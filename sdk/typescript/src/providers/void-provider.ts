@@ -24,7 +24,7 @@ import {
   ObjectOwner,
   SuiAddress,
   ObjectId,
-  SuiEvents,
+  SuiEvents, TransactionQuery, Ordering, PaginatedTransactionDigests,
 } from '../types';
 import { Provider } from './provider';
 
@@ -45,6 +45,24 @@ export class VoidProvider extends Provider {
     _typeArg?: string
   ): Promise<GetObjectDataResponse[]> {
     throw this.newError('getCoinBalancesOwnedByAddress');
+  }
+
+  async selectCoinsWithBalanceGreaterThanOrEqual(
+    _address: string,
+    _amount: bigint,
+    _typeArg: string,
+    _exclude: ObjectId[] = []
+  ): Promise<GetObjectDataResponse[]> {
+    throw this.newError('selectCoinsWithBalanceGreaterThanOrEqual');
+  }
+
+  async selectCoinSetWithCombinedBalanceGreaterThanOrEqual(
+    _address: string,
+    _amount: bigint,
+    _typeArg: string,
+    _exclude: ObjectId[]
+  ): Promise<GetObjectDataResponse[]> {
+    throw this.newError('selectCoinSetWithCombinedBalanceGreaterThanOrEqual');
   }
 
   async getObject(_objectId: string): Promise<GetObjectDataResponse> {
@@ -211,5 +229,13 @@ export class VoidProvider extends Provider {
 
   private newError(operation: string): Error {
     return new Error(`Please use a valid provider for ${operation}`);
+  }
+
+  async getTransactions(_query: TransactionQuery,
+                        _cursor: TransactionDigest | null,
+                        _limit: number | null,
+                        _order: Ordering
+  ): Promise<PaginatedTransactionDigests> {
+    throw this.newError('getTransactions');
   }
 }

@@ -64,7 +64,10 @@ macro_rules! check_epoch {
         if expected_epoch != observed_epoch {
             // Most likely indicates a reconfiguration bug.
             error!(?expected_epoch, ?observed_epoch, "Epoch mismatch");
-            return Err(SuiError::WrongEpoch { expected_epoch });
+            return Err(SuiError::WrongEpoch {
+                expected_epoch,
+                actual_epoch: observed_epoch,
+            });
         }
     };
 }
@@ -429,7 +432,12 @@ where
 
                 let res = match res {
                     Err(error) | Ok(Err(error)) => {
-                        error!(?tx_digest, "process_digest failed: {}", error);
+                        if matches!(error, SuiError::ValidatorHaltedAtEpochEnd) {
+                            // This is not a real error.
+                            debug!(?tx_digest, "process_digest failed: {}", error);
+                        } else {
+                            error!(?tx_digest, "process_digest failed: {}", error);
+                        }
                         Err(error)
                     }
 

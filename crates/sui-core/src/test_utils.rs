@@ -38,6 +38,7 @@ pub fn test_authority_aggregator(
     let committee = Committee::new(0, ValidatorInfo::voting_rights(validators_info)).unwrap();
     let committee_store = Arc::new(CommitteeStore::new_for_testing(&committee));
     // TODO: duplicated code in authority.rs
+    let network_metrics = Arc::new(NetworkAuthorityClientMetrics::new_for_tests());
     let clients: BTreeMap<_, _> = validators_info
         .iter()
         .map(|config| {
@@ -45,7 +46,7 @@ pub fn test_authority_aggregator(
                 config.protocol_key(),
                 NetworkAuthorityClient::connect_lazy(
                     config.network_address(),
-                    Arc::new(NetworkAuthorityClientMetrics::new_for_tests()),
+                    network_metrics.clone(),
                 )
                 .unwrap(),
             )
@@ -57,7 +58,8 @@ pub fn test_authority_aggregator(
         committee_store,
         clients,
         AuthAggMetrics::new(&registry),
-        SafeClientMetrics::new(&registry),
+        Arc::new(SafeClientMetrics::new(&registry)),
+        network_metrics,
     )
 }
 

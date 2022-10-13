@@ -140,6 +140,7 @@ importers:
       '@growthbook/growthbook': ^0.18.1
       '@metamask/browser-passworder': ^3.0.0
       '@mysten/sui.js': workspace:*
+      '@mysten/wallet-standard': workspace:*
       '@reduxjs/toolkit': ^1.8.3
       '@scure/bip32': ^1.1.0
       '@scure/bip39': ^1.1.0
@@ -212,6 +213,7 @@ importers:
       '@growthbook/growthbook': 0.18.1
       '@metamask/browser-passworder': 3.0.0
       '@mysten/sui.js': link:../../sdk/typescript
+      '@mysten/wallet-standard': link:../../sdk/wallet-adapter/packages/wallet-standard
       '@reduxjs/toolkit': 1.8.5_kkwg4cbsojnjnupd3btipussee
       '@scure/bip32': 1.1.0
       '@scure/bip39': 1.1.0
@@ -393,6 +395,7 @@ importers:
       '@mysten/wallet-adapter-react': workspace:*
       '@mysten/wallet-adapter-react-ui': workspace:*
       '@mysten/wallet-adapter-sui-wallet': workspace:*
+      '@mysten/wallet-adapter-wallet-standard': workspace:*
       '@testing-library/jest-dom': ^5.16.4
       '@testing-library/react': ^13.3.0
       '@testing-library/user-event': ^13.5.0
@@ -416,6 +419,7 @@ importers:
       '@mysten/wallet-adapter-react': link:packages/react-providers
       '@mysten/wallet-adapter-react-ui': link:packages/ui
       '@mysten/wallet-adapter-sui-wallet': link:packages/adapters/sui-wallet
+      '@mysten/wallet-adapter-wallet-standard': link:packages/adapters/wallet-standard-adapter
       '@testing-library/jest-dom': 5.16.5
       '@testing-library/react': 13.3.0_biqbaboplfbrettd7655fr4n2y
       '@testing-library/user-event': 13.5.0
@@ -434,11 +438,13 @@ importers:
     specifiers:
       '@mysten/wallet-adapter-mock-wallet': workspace:*
       '@mysten/wallet-adapter-sui-wallet': workspace:*
+      '@mysten/wallet-adapter-wallet-standard': workspace:*
       tsup: ^6.2.2
       typescript: ^4.8.3
     dependencies:
       '@mysten/wallet-adapter-mock-wallet': link:../mock-wallet
       '@mysten/wallet-adapter-sui-wallet': link:../sui-wallet
+      '@mysten/wallet-adapter-wallet-standard': link:../wallet-standard-adapter
     devDependencies:
       tsup: 6.2.2_typescript@4.8.3
       typescript: 4.8.3
@@ -476,6 +482,25 @@ importers:
     dependencies:
       '@mysten/sui.js': link:../../../../typescript
       '@mysten/wallet-adapter-base': link:../base-adapter
+    devDependencies:
+      tsup: 6.2.2_typescript@4.8.3
+      typescript: 4.8.3
+
+  sdk/wallet-adapter/packages/adapters/wallet-standard-adapter:
+    specifiers:
+      '@mysten/sui.js': workspace:*
+      '@mysten/wallet-adapter-base': workspace:*
+      '@mysten/wallet-standard': workspace:*
+      '@wallet-standard/app': 0.1.0-alpha.6
+      mitt: ^3.0.0
+      tsup: ^6.2.2
+      typescript: ^4.8.3
+    dependencies:
+      '@mysten/sui.js': link:../../../../typescript
+      '@mysten/wallet-adapter-base': link:../base-adapter
+      '@mysten/wallet-standard': link:../../wallet-standard
+      '@wallet-standard/app': 0.1.0-alpha.6
+      mitt: 3.0.0
     devDependencies:
       tsup: 6.2.2_typescript@4.8.3
       typescript: 4.8.3
@@ -519,6 +544,23 @@ importers:
       '@mysten/sui.js': link:../../../typescript
       react: 18.2.0
       react-dom: 18.2.0_react@18.2.0
+      tsup: 6.2.2_typescript@4.8.3
+      typescript: 4.8.3
+
+  sdk/wallet-adapter/packages/wallet-standard:
+    specifiers:
+      '@mysten/sui.js': workspace:*
+      '@wallet-standard/features': 0.1.0-alpha.4
+      '@wallet-standard/standard': 0.1.0-alpha.5
+      '@wallet-standard/util': 0.1.0-alpha.6
+      tsup: ^6.2.2
+      typescript: ^4.8.3
+    dependencies:
+      '@mysten/sui.js': link:../../../typescript
+      '@wallet-standard/features': 0.1.0-alpha.4
+      '@wallet-standard/standard': 0.1.0-alpha.5
+      '@wallet-standard/util': 0.1.0-alpha.6
+    devDependencies:
       tsup: 6.2.2_typescript@4.8.3
       typescript: 4.8.3
 
@@ -7216,6 +7258,28 @@ packages:
       sirv: 2.0.2
     dev: true
 
+  /@wallet-standard/app/0.1.0-alpha.6:
+    resolution: {integrity: sha512-Z/aTiMpI2qjh/YDS8GtmHrIwpsHhHlzYffkEvuiG3RY7j0ZNsQWOx38hNN/V6lOlKrh7S+azPcFL7ESiilqvcA==}
+    dependencies:
+      '@wallet-standard/standard': 0.1.0-alpha.5
+    dev: false
+
+  /@wallet-standard/features/0.1.0-alpha.4:
+    resolution: {integrity: sha512-HF7i//1oqadV8269Jp8rEFxSf+nCxLZ+CGKT5giuavSb/hdbiPPDbQLMhWfyLRatSnssIZN1LtsyzGe9kDFJrg==}
+    dependencies:
+      '@wallet-standard/standard': 0.1.0-alpha.5
+    dev: false
+
+  /@wallet-standard/standard/0.1.0-alpha.5:
+    resolution: {integrity: sha512-rqs9vD+Hww8kWtF8/8wi+hhLIWN1ank/ZfK7mGALen+9XhxAcgOJwl96l30MCSL2w1AHykOEELOZK6lUbg13gQ==}
+    dev: false
+
+  /@wallet-standard/util/0.1.0-alpha.6:
+    resolution: {integrity: sha512-dyfgryEo5PU3XXZ20Zs9jRtyVuP/7qsKD9yNyPy9XlcZpB6HR3OtdqiXJQsm1KOxz8VsOsfRIdmzri4O/1MR7Q==}
+    dependencies:
+      '@wallet-standard/standard': 0.1.0-alpha.5
+    dev: false
+
   /@webassemblyjs/ast/1.11.1:
     resolution: {integrity: sha512-ukBh14qFLjxTQNTXocdyksN5QdM28S1CxHt2rdskFyL+xFV7VremuBLVbmCePj+URalXBENx/9Lm7lnhihtCSw==}
     dependencies:
@@ -8213,7 +8277,7 @@ packages:
   /axios/0.25.0:
     resolution: {integrity: sha512-cD8FOb0tRH3uuEe6+evtAbgJtfxr7ly3fQjYcMcuPlgkwVS9xboaVIpcDV+cYQe+yGykgwZCs1pzjntcGa6l5g==}
     dependencies:
-      follow-redirects: 1.15.1
+      follow-redirects: 1.15.1_debug@4.3.2
     transitivePeerDependencies:
       - debug
     dev: true
@@ -8221,7 +8285,7 @@ packages:
   /axios/0.27.2:
     resolution: {integrity: sha512-t+yRIyySRTp/wua5xEr+z1q60QmLq8ABsS5O9Me1AsE5dfKqgnCFzwiCZZ/cGNd1lq4/7akDWMxdhVlucjmnOQ==}
     dependencies:
-      follow-redirects: 1.15.1
+      follow-redirects: 1.15.1_debug@4.3.2
       form-data: 4.0.0
     transitivePeerDependencies:
       - debug
@@ -12566,16 +12630,6 @@ packages:
     dependencies:
       inherits: 2.0.4
       readable-stream: 2.3.7
-    dev: true
-
-  /follow-redirects/1.15.1:
-    resolution: {integrity: sha512-yLAMQs+k0b2m7cVxpS1VKJVvoz7SS9Td1zss3XRwXj+ZDH00RJgnuLx7E44wx02kQLrdM3aOOy+FpzS7+8OizA==}
-    engines: {node: '>=4.0'}
-    peerDependencies:
-      debug: '*'
-    peerDependenciesMeta:
-      debug:
-        optional: true
     dev: true
 
   /follow-redirects/1.15.1_debug@4.3.2:
@@ -20160,7 +20214,7 @@ packages:
       schema-utils: 3.1.1
       serialize-javascript: 6.0.0
       terser: 5.14.2
-      webpack: 5.74.0_webpack-cli@4.10.0
+      webpack: 5.74.0
     dev: true
 
   /terser/4.8.1:
@@ -21297,34 +21351,6 @@ packages:
       fsevents: 2.3.2
     dev: true
 
-  /vite/3.0.9_sass@1.54.5:
-    resolution: {integrity: sha512-waYABTM+G6DBTCpYAxvevpG50UOlZuynR0ckTK5PawNVt7ebX6X7wNXHaGIO6wYYFXSM7/WcuFuO2QzhBB6aMw==}
-    engines: {node: ^14.18.0 || >=16.0.0}
-    hasBin: true
-    peerDependencies:
-      less: '*'
-      sass: '*'
-      stylus: '*'
-      terser: ^5.4.0
-    peerDependenciesMeta:
-      less:
-        optional: true
-      sass:
-        optional: true
-      stylus:
-        optional: true
-      terser:
-        optional: true
-    dependencies:
-      esbuild: 0.14.54
-      postcss: 8.4.16
-      resolve: 1.22.1
-      rollup: 2.77.3
-      sass: 1.54.5
-    optionalDependencies:
-      fsevents: 2.3.2
-    dev: true
-
   /vite/3.1.6:
     resolution: {integrity: sha512-qMXIwnehvvcK5XfJiXQUiTxoYAEMKhM+jqCY6ZSTKFBKu1hJnAKEzP3AOcnTerI0cMZYAaJ4wpW1wiXLMDt4mA==}
     engines: {node: ^14.18.0 || >=16.0.0}
@@ -21348,6 +21374,34 @@ packages:
       postcss: 8.4.16
       resolve: 1.22.1
       rollup: 2.78.1
+    optionalDependencies:
+      fsevents: 2.3.2
+    dev: true
+
+  /vite/3.1.6_sass@1.54.5:
+    resolution: {integrity: sha512-qMXIwnehvvcK5XfJiXQUiTxoYAEMKhM+jqCY6ZSTKFBKu1hJnAKEzP3AOcnTerI0cMZYAaJ4wpW1wiXLMDt4mA==}
+    engines: {node: ^14.18.0 || >=16.0.0}
+    hasBin: true
+    peerDependencies:
+      less: '*'
+      sass: '*'
+      stylus: '*'
+      terser: ^5.4.0
+    peerDependenciesMeta:
+      less:
+        optional: true
+      sass:
+        optional: true
+      stylus:
+        optional: true
+      terser:
+        optional: true
+    dependencies:
+      esbuild: 0.15.10
+      postcss: 8.4.16
+      resolve: 1.22.1
+      rollup: 2.78.1
+      sass: 1.54.5
     optionalDependencies:
       fsevents: 2.3.2
     dev: true
@@ -21422,7 +21476,7 @@ packages:
       local-pkg: 0.4.2
       tinypool: 0.2.4
       tinyspy: 1.0.2
-      vite: 3.0.9
+      vite: 3.1.6
     transitivePeerDependencies:
       - less
       - sass
@@ -21461,7 +21515,7 @@ packages:
       local-pkg: 0.4.2
       tinypool: 0.2.4
       tinyspy: 1.0.2
-      vite: 3.0.9_sass@1.54.5
+      vite: 3.1.6_sass@1.54.5
     transitivePeerDependencies:
       - less
       - sass
