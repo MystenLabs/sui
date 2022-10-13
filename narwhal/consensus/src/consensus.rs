@@ -302,6 +302,8 @@ where
                     // Output the sequence in the right order.
                     for output in sequence {
                         let certificate = &output.certificate;
+                        tracing::debug!("Commit in Sequence {:?}", output);
+
                         #[cfg(not(feature = "benchmark"))]
                         if output.consensus_index % 5_000 == 0 {
                             tracing::debug!("Committed {}", certificate.header);
