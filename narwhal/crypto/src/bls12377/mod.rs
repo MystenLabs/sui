@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
+    borrow::Borrow,
     fmt::{self, Display},
     str::FromStr,
 };
@@ -202,9 +203,9 @@ impl Ord for BLS12377PublicKey {
 }
 
 impl ToFromBytes for BLS12377PublicKey {
-    fn from_bytes(bytes: &[u8]) -> Result<Self, signature::Error> {
+    fn from_bytes(bytes: &[u8]) -> Result<Self, fastcrypto::error::FastCryptoError> {
         let g2 = <G2Affine as CanonicalDeserialize>::deserialize(bytes)
-            .map_err(|_| signature::Error::new())?
+            .map_err(|_| fastcrypto::error::FastCryptoError::InvalidInput)?
             .into_projective();
         Ok(BLS12377PublicKey {
             pubkey: g2.into(),
@@ -307,8 +308,9 @@ impl AsRef<[u8]> for BLS12377PrivateKey {
 }
 
 impl ToFromBytes for BLS12377PrivateKey {
-    fn from_bytes(bytes: &[u8]) -> Result<Self, signature::Error> {
-        let fr = <Fr as FromBytes>::read(bytes).map_err(|_| signature::Error::new())?;
+    fn from_bytes(bytes: &[u8]) -> Result<Self, fastcrypto::error::FastCryptoError> {
+        let fr = <Fr as FromBytes>::read(bytes)
+            .map_err(|_| fastcrypto::error::FastCryptoError::InvalidInput)?;
         Ok(BLS12377PrivateKey {
             privkey: fr.into(),
             bytes: OnceCell::new(),
@@ -488,15 +490,20 @@ impl AggregateAuthenticator for BLS12377AggregateSignature {
     type PrivKey = BLS12377PrivateKey;
 
     /// Parse a key from its byte representation
-    fn aggregate(signatures: Vec<Self::Sig>) -> Result<Self, signature::Error> {
-        let sig = celo_bls::Signature::aggregate(signatures.iter().map(|x| &x.sig));
+    fn aggregate<'a, K: Borrow<Self::Sig> + 'a, I: IntoIterator<Item = &'a K>>(
+        signatures: I,
+    ) -> Result<Self, fastcrypto::error::FastCryptoError> {
+        let sig = celo_bls::Signature::aggregate(signatures.into_iter().map(|x| &x.borrow().sig));
         Ok(BLS12377AggregateSignature {
             sig: Some(sig),
             bytes: OnceCell::new(),
         })
     }
 
-    fn add_signature(&mut self, signature: Self::Sig) -> Result<(), signature::Error> {
+    fn add_signature(
+        &mut self,
+        signature: Self::Sig,
+    ) -> Result<(), fastcrypto::error::FastCryptoError> {
         match self.sig {
             Some(ref mut sig) => {
                 let raw_sig = celo_bls::Signature::aggregate([signature.sig, sig.clone()]);
@@ -510,7 +517,7 @@ impl AggregateAuthenticator for BLS12377AggregateSignature {
         }
     }
 
-    fn add_aggregate(&mut self, signature: Self) -> Result<(), signature::Error> {
+    fn add_aggregate(&mut self, signature: Self) -> Result<(), fastcrypto::error::FastCryptoError> {
         match self.sig {
             Some(ref mut sig) => match signature.sig {
                 Some(sig_to_add) => {
@@ -531,27 +538,30 @@ impl AggregateAuthenticator for BLS12377AggregateSignature {
         &self,
         pks: &[<Self::Sig as Authenticator>::PubKey],
         message: &[u8],
-    ) -> Result<(), signature::Error> {
+    ) -> Result<(), fastcrypto::error::FastCryptoError> {
         let mut cache = celo_bls::PublicKeyCache::new();
         let apk = cache.aggregate(pks.iter().map(|pk| pk.pubkey.clone()).collect());
         apk.verify(
             message,
             &[],
-            &self.sig.clone().ok_or_else(signature::Error::new)?,
+            &self
+                .sig
+                .clone()
+                .ok_or(fastcrypto::error::FastCryptoError::GeneralError)?,
             &*try_and_increment::COMPOSITE_HASH_TO_G1,
         )
-        .map_err(|_| signature::Error::new())?;
-
-        Ok(())
+        .map_err(|_| fastcrypto::error::FastCryptoError::GeneralError)
     }
 
     fn batch_verify<'a>(
         signatures: &[&Self],
         pks: Vec<impl Iterator<Item = &'a Self::PubKey>>,
         messages: &[&[u8]],
-    ) -> Result<(), signature::Error> {
+    ) -> Result<(), fastcrypto::error::FastCryptoError> {
         if pks.len() != messages.len() || messages.len() != signatures.len() {
-            return Err(signature::Error::new());
+            return Err(fastcrypto::error::FastCryptoError::InputLengthWrong(
+                signatures.len(),
+            ));
         }
         let mut pk_iter = pks.into_iter();
         for i in 0..signatures.len() {
@@ -567,10 +577,10 @@ impl AggregateAuthenticator for BLS12377AggregateSignature {
             apk.verify(
                 messages[i],
                 &[],
-                &sig.ok_or_else(signature::Error::new)?,
+                &sig.ok_or(fastcrypto::error::FastCryptoError::GeneralError)?,
                 &*try_and_increment::COMPOSITE_HASH_TO_G1,
             )
-            .map_err(|_| signature::Error::new())?;
+            .map_err(|_| fastcrypto::error::FastCryptoError::GeneralError)?;
         }
         Ok(())
     }
