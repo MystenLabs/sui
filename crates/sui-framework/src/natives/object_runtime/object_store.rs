@@ -9,7 +9,7 @@ use move_vm_types::{
     loaded_data::runtime_types::Type,
     values::{GlobalValue, StructRef, Value},
 };
-use std::collections::BTreeMap;
+use std::collections::{btree_map, BTreeMap};
 use sui_types::{
     base_types::ObjectID,
     object::{Data, MoveObject},
@@ -23,9 +23,13 @@ pub(super) struct ChildObject {
     pub(super) value: GlobalValue,
 }
 
-pub(super) struct ObjectStore<'a> {
+struct Inner<'a> {
     resolver: Box<dyn ChildObjectResolver + 'a>,
     cached_objects: BTreeMap<ObjectID, Option<MoveObject>>,
+}
+
+pub(super) struct ObjectStore<'a> {
+    inner: Inner<'a>,
     store: BTreeMap<ObjectID, ChildObject>,
 }
 
@@ -35,21 +39,13 @@ pub(crate) enum ObjectResult<V> {
     Loaded(V),
 }
 
-impl<'a> ObjectStore<'a> {
-    pub(super) fn new(resolver: Box<dyn ChildObjectResolver + 'a>) -> Self {
-        Self {
-            resolver,
-            cached_objects: BTreeMap::new(),
-            store: BTreeMap::new(),
-        }
-    }
-
+impl<'a> Inner<'a> {
     fn get_or_fetch_object_from_store(
         &mut self,
         parent: ObjectID,
         child: ObjectID,
     ) -> PartialVMResult<Option<&MoveObject>> {
-        if !self.cached_objects.contains_key(&child) {
+        if let btree_map::Entry::Vacant(e) = self.cached_objects.entry(child) {
             let child_opt = self
                 .resolver
                 .read_child_object(&parent, &child)
@@ -71,7 +67,7 @@ impl<'a> ObjectStore<'a> {
             } else {
                 None
             };
-            self.cached_objects.insert(child, obj_opt);
+            e.insert(obj_opt);
         }
         Ok(self.cached_objects.get(&child).unwrap().as_ref())
     }
@@ -119,9 +115,21 @@ impl<'a> ObjectStore<'a> {
             };
         Ok(ObjectResult::Loaded((
             child_ty.clone(),
-            child_tag.clone(),
+            child_tag,
             global_value,
         )))
+    }
+}
+
+impl<'a> ObjectStore<'a> {
+    pub(super) fn new(resolver: Box<dyn ChildObjectResolver + 'a>) -> Self {
+        Self {
+            inner: Inner {
+                resolver,
+                cached_objects: BTreeMap::new(),
+            },
+            store: BTreeMap::new(),
+        }
     }
 
     pub(super) fn object_exists(
@@ -133,6 +141,7 @@ impl<'a> ObjectStore<'a> {
             return Ok(true);
         }
         Ok(self
+            .inner
             .get_or_fetch_object_from_store(parent, child)?
             .is_some())
     }
@@ -144,9 +153,10 @@ impl<'a> ObjectStore<'a> {
         child_tag: StructTag,
     ) -> PartialVMResult<bool> {
         if let Some(child_object) = self.store.get(&child) {
-            return Ok(&child_object.tag == &child_tag);
+            return Ok(child_object.tag == child_tag);
         }
         Ok(self
+            .inner
             .get_or_fetch_object_from_store(parent, child)?
             .map(|move_obj| move_obj.type_ == child_tag)
             .unwrap_or(false))
@@ -160,22 +170,23 @@ impl<'a> ObjectStore<'a> {
         child_layout: MoveTypeLayout,
         child_tag: StructTag,
     ) -> PartialVMResult<ObjectResult<&mut ChildObject>> {
-        if !self.store.contains_key(&child) {
-            let (ty, tag, value) =
-                match self.fetch_object_impl(parent, child, child_ty, child_layout, child_tag)? {
-                    ObjectResult::MismatchedType => return Ok(ObjectResult::MismatchedType),
-                    ObjectResult::Loaded(res) => res,
-                };
-            let prev = self.store.insert(
+        if let btree_map::Entry::Vacant(e) = self.store.entry(child) {
+            let (ty, tag, value) = match self.inner.fetch_object_impl(
+                parent,
                 child,
-                ChildObject {
-                    owner: parent,
-                    ty,
-                    tag,
-                    value,
-                },
-            );
-            assert!(prev.is_none())
+                child_ty,
+                child_layout,
+                child_tag,
+            )? {
+                ObjectResult::MismatchedType => return Ok(ObjectResult::MismatchedType),
+                ObjectResult::Loaded(res) => res,
+            };
+            e.insert(ChildObject {
+                owner: parent,
+                ty,
+                tag,
+                value,
+            });
         }
         Ok(ObjectResult::Loaded(self.store.get_mut(&child).unwrap()))
     }

@@ -217,7 +217,7 @@ pub fn end_transaction(
     }
     // remove deleted
     for id in &deleted {
-        object_runtime_ref.test_inventories.objects.remove(&id);
+        object_runtime_ref.test_inventories.objects.remove(id);
     }
     // remove active child objects
     for id in all_active_child_objects {
