@@ -6,6 +6,7 @@ use fastcrypto::{
     bls12381::{BLS12381PublicKey, BLS12381Signature},
     bulletproofs::{BulletproofsRangeProof, PedersenCommitment},
     ed25519::{Ed25519PublicKey, Ed25519Signature},
+    hmac::hmac,
     secp256k1::{Secp256k1PublicKey, Secp256k1Signature},
     traits::ToFromBytes,
     Verifier,
@@ -20,6 +21,7 @@ use move_vm_types::{
 };
 use smallvec::smallvec;
 use std::collections::VecDeque;
+use fastcrypto::hmac::HmacKey;
 use sui_types::error::SuiError;
 
 pub const FAIL_TO_RECOVER_PUBKEY: u64 = 0;
@@ -407,4 +409,26 @@ pub fn ed25519_verify(
         Ok(_) => Ok(NativeResult::ok(cost, smallvec![Value::bool(true)])),
         Err(_) => Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
     }
+}
+
+/// Native implementation of hmac in public Move API, see crypto.move for specifications.
+pub fn hmac_sha2_256(
+    _context: &mut NativeContext,
+    ty_args: Vec<Type>,
+    mut args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    debug_assert!(ty_args.is_empty());
+    debug_assert!(args.len() == 2);
+
+    let key = pop_arg!(args, VectorRef);
+    let message = pop_arg!(args, VectorRef);
+    let hmac_key = HmacKey::from_bytes(&key.as_bytes_ref()).unwrap();
+
+    // TODO: implement native gas cost estimation https://github.com/MystenLabs/sui/issues/3593
+    let cost = legacy_empty_cost();
+
+    Ok(NativeResult::ok(
+        cost,
+        smallvec![Value::vector_u8(hmac(&hmac_key, &message.as_bytes_ref()).to_vec())],
+    ))
 }
