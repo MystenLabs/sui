@@ -1,23 +1,24 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use futures::{stream::FuturesUnordered, StreamExt};
 use prometheus::IntGauge;
 
 use super::DagError;
 use crate::metered_channel::{channel, Receiver, Sender, WithPermit};
-use std::time::Duration;
+use std::{future, time::Duration};
 
 pub struct Processor {
-    input: Receiver<Result<usize, DagError>>,
+    input: Receiver<usize>,
     output: Sender<usize>,
 }
 
 impl Processor {
-    pub fn new(input: Receiver<Result<usize, DagError>>, output: Sender<usize>) -> Self {
+    pub fn new(input: Receiver<usize>, output: Sender<usize>) -> Self {
         Self { input, output }
     }
 
-    pub fn spawn(input: Receiver<Result<usize, DagError>>, output: Sender<usize>) {
+    pub fn spawn(input: Receiver<usize>, output: Sender<usize>) {
         tokio::spawn(async move {
             let mut processor = Processor::new(input, output);
             processor.run().await;
@@ -25,9 +26,19 @@ impl Processor {
     }
 
     pub async fn run(&mut self) {
+        let mut waiting = FuturesUnordered::new();
+
         loop {
             tokio::select! {
-                Some((permit, Some(res_value))) = self.output.with_permit(self.input.recv())  => {
+                Some(input) = self.input.recv() => {
+                    let deliver: future::Ready<Result<usize, DagError>> = future::ready(
+                        Ok(input)
+                    );
+                    waiting.push(deliver)
+                }
+
+
+                Some((permit, Some(res_value))) = self.output.with_permit(waiting.next())  => {
                     permit.send(res_value.unwrap());
                 }
             }
@@ -46,7 +57,7 @@ async fn with_permit_unhappy_case() {
     // we fill the inbound channel with stuff
     (0..100).for_each(|i| {
         tx_inbound
-            .try_send(Ok(i))
+            .try_send(i)
             .expect("failed to send to inbound channel");
     });
 
