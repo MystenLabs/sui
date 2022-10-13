@@ -8,6 +8,7 @@ use super::{
 use narwhal_executor::ExecutionIndices;
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
+use std::path::Path;
 use sui_storage::default_db_options;
 use sui_types::base_types::{ExecutionDigests, SequenceNumber};
 use sui_types::batch::{SignedBatch, TxSequenceNumber};
@@ -54,6 +55,23 @@ pub struct AuthorityEpochTables<S> {
     /// by a single process acting as consensus (light) client. It is used to ensure the authority processes
     /// every message output by consensus (and in the right order).
     pub(crate) last_consensus_index: DBMap<u64, ExecutionIndicesWithHash>,
+}
+
+impl<S> AuthorityEpochTables<S>
+where
+    S: std::fmt::Debug + Serialize + for<'de> Deserialize<'de>,
+{
+    pub fn path(parent_path: &Path) -> PathBuf {
+        parent_path.join("epoch")
+    }
+
+    pub fn open(parent_path: &Path, db_options: Option<Options>) -> Self {
+        Self::open_tables_read_write(Self::path(parent_path), db_options, None)
+    }
+
+    pub fn open_readonly(parent_path: &Path) -> AuthorityEpochTablesReadOnly<S> {
+        Self::get_read_only_handle(Self::path(parent_path), None, None)
+    }
 }
 
 /// AuthorityPerpetualTables contains data that must be preserved from one epoch to the next.
@@ -119,6 +137,23 @@ pub struct AuthorityPerpetualTables<S> {
 
     /// A sequence of batches indexing into the sequence of executed transactions.
     pub batches: DBMap<TxSequenceNumber, SignedBatch>,
+}
+
+impl<S> AuthorityPerpetualTables<S>
+where
+    S: std::fmt::Debug + Serialize + for<'de> Deserialize<'de>,
+{
+    pub fn path(parent_path: &Path) -> PathBuf {
+        parent_path.join("perpetual")
+    }
+
+    pub fn open(parent_path: &Path, db_options: Option<Options>) -> Self {
+        Self::open_tables_read_write(Self::path(parent_path), db_options, None)
+    }
+
+    pub fn open_readonly(parent_path: &Path) -> AuthorityPerpetualTablesReadOnly<S> {
+        Self::get_read_only_handle(Self::path(parent_path), None, None)
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]

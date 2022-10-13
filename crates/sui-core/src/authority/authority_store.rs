@@ -73,16 +73,8 @@ pub struct SuiDataStore<S> {
 impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     /// Open an authority store by directory path
     pub fn open(path: &Path, db_options: Option<Options>) -> Self {
-        let perpetual_tables_path = path.join("perpetual");
-        let epoch_tables_path = path.join("epoch");
-
-        let perpetual_tables = AuthorityPerpetualTables::open_tables_read_write(
-            perpetual_tables_path,
-            db_options.clone(),
-            None,
-        );
-        let epoch_tables =
-            AuthorityEpochTables::open_tables_read_write(epoch_tables_path, db_options, None);
+        let perpetual_tables = AuthorityPerpetualTables::open(path, db_options.clone());
+        let epoch_tables = AuthorityEpochTables::open(path, db_options);
 
         // For now, create one LockService for each SuiDataStore, and we use a specific
         // subdir of the data store directory
