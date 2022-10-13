@@ -1560,58 +1560,6 @@
       ]
     },
     {
-      "name": "sui_getRecentTransactions",
-      "tags": [
-        {
-          "name": "Read API"
-        }
-      ],
-      "description": "Return list of recent transaction digest.",
-      "params": [
-        {
-          "name": "count",
-          "description": "maximum size of the result",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        }
-      ],
-      "result": {
-        "name": "Vec<TransactionDigest>",
-        "required": true,
-        "schema": {
-          "type": "array",
-          "items": {
-            "$ref": "#/components/schemas/TransactionDigest"
-          }
-        }
-      },
-      "examples": [
-        {
-          "name": "Get recent transactions",
-          "params": [
-            {
-              "name": "count",
-              "value": 5
-            }
-          ],
-          "result": {
-            "name": "Result",
-            "value": [
-              "a77K+UV8mvd6kfYxdghTk004NjS898MmVQCaYfHeDq4=",
-              "QgouSuG7dyqy3V1affqUnA7waQjnpUkA8nm+TGoQHpo=",
-              "OvXIBwES+Ahkizbvv43uihqC3kbZUE6WoRCKF473b1Y=",
-              "w5ljOi6zELypEk5fLzjOc56qy7ZgBoiATgeESJ+Q9/g=",
-              "Zswp37HaY3POlPnZXcpaQPThdpkY7r+fuuAL045Xhy8="
-            ]
-          }
-        }
-      ]
-    },
-    {
       "name": "sui_getTotalTransactionNumber",
       "tags": [
         {

@@ -17,8 +17,8 @@ describe('Transaction Reading API', () => {
   });
 
   it('Get Transaction', async () => {
-    const resp = await toolbox.provider.getRecentTransactions(1);
-    const digest = resp[0];
+    const resp = await toolbox.provider.getTransactions("All",null,1, "Descending");
+    const digest = resp.data[0];
     const txn = await toolbox.provider.getTransactionWithEffects(digest);
     expect(txn.certificate.transactionDigest).toEqual(digest);
   });
