@@ -182,11 +182,11 @@ module fungible_tokens::treasury_lock_tests {
     struct TREASURY_LOCK_TESTS has drop {}
 
     fun user_with_mint_cap_scenario(): Scenario {
-        let scenario_ = test_scenario::begin(&ADMIN);
+        let scenario_ = test_scenario::begin(ADMIN);
         let scenario = &mut scenario_;
 
         // create a currency and lock it
-        test_scenario::next_tx(scenario, &ADMIN);
+        test_scenario::next_tx(scenario, ADMIN);
         {
             let treasury = coin::create_currency(TREASURY_LOCK_TESTS {}, 0, test_scenario::ctx(scenario));
             let admin_cap = new_lock(treasury, test_scenario::ctx(scenario));
@@ -197,29 +197,30 @@ module fungible_tokens::treasury_lock_tests {
         };
 
         // create a mint capability and transfer it to user
-        test_scenario::next_tx(scenario, &ADMIN);
+        test_scenario::next_tx(scenario, ADMIN);
         {
-            let admin_cap = test_scenario::take_owned<LockAdminCap<TREASURY_LOCK_TESTS>>(scenario);
+            let admin_cap = test_scenario::take_from_sender<LockAdminCap<TREASURY_LOCK_TESTS>>(scenario);
             create_and_transfer_mint_cap(&admin_cap, 500, USER, test_scenario::ctx(scenario));
-            test_scenario::return_owned(scenario, admin_cap);
+            test_scenario::return_to_sender(scenario, admin_cap);
         };
+        test_scenario::next_tx(scenario, ADMIN);
 
         return scenario_
     }
 
     fun user_mint_balance(scenario: &mut Scenario, amount: u64): Balance<TREASURY_LOCK_TESTS> {
-        let mint_cap = test_scenario::take_owned<MintCap<TREASURY_LOCK_TESTS>>(scenario);
+        let mint_cap = test_scenario::take_from_sender<MintCap<TREASURY_LOCK_TESTS>>(scenario);
         let lock = test_scenario::take_shared<TreasuryLock<TREASURY_LOCK_TESTS>>(scenario);
 
         let balance = mint_balance(
-            test_scenario::borrow_mut(&mut lock),
+            &mut lock,
             &mut mint_cap,
             amount,
             test_scenario::ctx(scenario)
         );
 
-        test_scenario::return_owned(scenario, mint_cap);
-        test_scenario::return_shared(scenario, lock);
+        test_scenario::return_to_sender(scenario, mint_cap);
+        test_scenario::return_shared(lock);
 
         balance
     }
@@ -227,10 +228,11 @@ module fungible_tokens::treasury_lock_tests {
 
     #[test]
     fun test_user_can_mint() {
-        let scenario = &mut user_with_mint_cap_scenario();
+        let scenario_ = user_with_mint_cap_scenario();
+        let scenario = &mut scenario_;
 
         // user uses its capability to mint 300 coins
-        test_scenario::next_tx(scenario, &USER);
+        test_scenario::next_tx(scenario, USER);
         {
             let balance = user_mint_balance(scenario, 300);
             assert!(balance::value<TREASURY_LOCK_TESTS>(&balance) == 300, 0);
@@ -240,16 +242,17 @@ module fungible_tokens::treasury_lock_tests {
                 USER
             );
         };
-
+        test_scenario::end(scenario_);
     }
 
     #[test]
     #[expected_failure(abort_code = 1)]
     fun test_minting_over_limit_fails() {
-        let scenario = &mut user_with_mint_cap_scenario();
+        let scenario_ = user_with_mint_cap_scenario();
+        let scenario = &mut scenario_;
 
         // mint 300 coins
-        test_scenario::next_tx(scenario, &USER);
+        test_scenario::next_tx(scenario, USER);
         {
             let balance = user_mint_balance(scenario, 300);
             assert!(balance::value<TREASURY_LOCK_TESTS>(&balance) == 300, 0);
@@ -261,7 +264,7 @@ module fungible_tokens::treasury_lock_tests {
         };
 
         // mint 200 more
-        test_scenario::next_tx(scenario, &USER);
+        test_scenario::next_tx(scenario, USER);
         {
             let balance = user_mint_balance(scenario, 200);
             assert!(balance::value<TREASURY_LOCK_TESTS>(&balance) == 200, 0);
@@ -273,7 +276,7 @@ module fungible_tokens::treasury_lock_tests {
         };
 
         // attempt to mint amount over the epoch limit - should fail
-        test_scenario::next_tx(scenario, &USER);
+        test_scenario::next_tx(scenario, USER);
         {
             let balance = user_mint_balance(scenario, 1);
 
@@ -282,14 +285,16 @@ module fungible_tokens::treasury_lock_tests {
                 USER
             );
         };
+        test_scenario::end(scenario_);
     }
 
     #[test]
     fun test_minted_amount_resets_at_epoch_change() {
-        let scenario = &mut user_with_mint_cap_scenario();
+        let scenario_ = user_with_mint_cap_scenario();
+        let scenario = &mut scenario_;
 
         // mint 300 coins
-        test_scenario::next_tx(scenario, &USER);
+        test_scenario::next_tx(scenario, USER);
         {
             let balance = user_mint_balance(scenario, 300);
             assert!(balance::value<TREASURY_LOCK_TESTS>(&balance) == 300, 0);
@@ -301,8 +306,7 @@ module fungible_tokens::treasury_lock_tests {
         };
 
         // next epoch and mint 300 again
-        test_scenario::next_epoch(scenario);
-        test_scenario::next_tx(scenario, &USER);
+        test_scenario::next_epoch(scenario, USER);
         {
             let balance = user_mint_balance(scenario, 300);
 
@@ -310,23 +314,25 @@ module fungible_tokens::treasury_lock_tests {
                 coin::from_balance(balance, test_scenario::ctx(scenario)),
                 USER
             );
-        }
+        };
+        test_scenario::end(scenario_);
     }
 
     #[test]
     #[expected_failure(abort_code = 0)]
     fun test_banned_cap_cannot_mint() {
-        let scenario = &mut user_with_mint_cap_scenario();
+        let scenario_ = user_with_mint_cap_scenario();
+        let scenario = &mut scenario_;
 
         // get the mint cap ID for reference
-        test_scenario::next_tx(scenario, &USER);
-        let mint_cap = test_scenario::take_owned<MintCap<TREASURY_LOCK_TESTS>>(scenario);
+        test_scenario::next_tx(scenario, USER);
+        let mint_cap = test_scenario::take_from_sender<MintCap<TREASURY_LOCK_TESTS>>(scenario);
         let mint_cap_id = object::id(&mint_cap);
-        test_scenario::return_owned(scenario, mint_cap);
+        test_scenario::return_to_sender(scenario, mint_cap);
 
 
         // mint 100 coins
-        test_scenario::next_tx(scenario, &USER);
+        test_scenario::next_tx(scenario, USER);
         {
             let balance = user_mint_balance(scenario, 100);
             assert!(balance::value<TREASURY_LOCK_TESTS>(&balance) == 100, 0);
@@ -338,23 +344,23 @@ module fungible_tokens::treasury_lock_tests {
         };
 
         // admin bans mint cap
-        test_scenario::next_tx(scenario, &ADMIN);
+        test_scenario::next_tx(scenario, ADMIN);
         {
-            let admin_cap = test_scenario::take_owned<LockAdminCap<TREASURY_LOCK_TESTS>>(scenario);
+            let admin_cap = test_scenario::take_from_sender<LockAdminCap<TREASURY_LOCK_TESTS>>(scenario);
             let lock = test_scenario::take_shared<TreasuryLock<TREASURY_LOCK_TESTS>>(scenario);
 
             treasury_lock::ban_mint_cap_id(
                 &admin_cap,
-                test_scenario::borrow_mut(&mut lock),
+                &mut lock,
                 mint_cap_id
             );
 
-            test_scenario::return_owned(scenario, admin_cap);
-            test_scenario::return_shared(scenario, lock);
+            test_scenario::return_to_sender(scenario, admin_cap);
+            test_scenario::return_shared(lock);
         };
 
         // user attempts to mint but fails
-        test_scenario::next_tx(scenario, &USER);
+        test_scenario::next_tx(scenario, USER);
         {
             let balance = user_mint_balance(scenario, 100);
 
@@ -363,20 +369,22 @@ module fungible_tokens::treasury_lock_tests {
                 USER
             );
         };
+        test_scenario::end(scenario_);
     }
 
     #[test]
     fun test_user_can_mint_after_unban() {
-        let scenario = &mut user_with_mint_cap_scenario();
+        let scenario_ = user_with_mint_cap_scenario();
+        let scenario = &mut scenario_;
 
         // get the mint cap ID for reference
-        test_scenario::next_tx(scenario, &USER);
-        let mint_cap = test_scenario::take_owned<MintCap<TREASURY_LOCK_TESTS>>(scenario);
+        test_scenario::next_tx(scenario, USER);
+        let mint_cap = test_scenario::take_from_sender<MintCap<TREASURY_LOCK_TESTS>>(scenario);
         let mint_cap_id = object::id(&mint_cap);
-        test_scenario::return_owned(scenario, mint_cap);
+        test_scenario::return_to_sender(scenario, mint_cap);
 
         // mint 100 coins
-        test_scenario::next_tx(scenario, &USER);
+        test_scenario::next_tx(scenario, USER);
         {
             let balance = user_mint_balance(scenario, 100);
             assert!(balance::value<TREASURY_LOCK_TESTS>(&balance) == 100, 0);
@@ -388,39 +396,39 @@ module fungible_tokens::treasury_lock_tests {
         };
 
         // admin bans mint cap
-        test_scenario::next_tx(scenario, &ADMIN);
+        test_scenario::next_tx(scenario, ADMIN);
         {
-            let admin_cap = test_scenario::take_owned<LockAdminCap<TREASURY_LOCK_TESTS>>(scenario);
+            let admin_cap = test_scenario::take_from_sender<LockAdminCap<TREASURY_LOCK_TESTS>>(scenario);
             let lock = test_scenario::take_shared<TreasuryLock<TREASURY_LOCK_TESTS>>(scenario);
 
             treasury_lock::ban_mint_cap_id(
                 &admin_cap,
-                test_scenario::borrow_mut(&mut lock),
+                &mut lock,
                 mint_cap_id
             );
 
-            test_scenario::return_owned(scenario, admin_cap);
-            test_scenario::return_shared(scenario, lock);
+            test_scenario::return_to_sender(scenario, admin_cap);
+            test_scenario::return_shared(lock);
         };
 
         // admin unbans mint cap
-        test_scenario::next_tx(scenario, &ADMIN);
+        test_scenario::next_tx(scenario, ADMIN);
         {
-            let admin_cap = test_scenario::take_owned<LockAdminCap<TREASURY_LOCK_TESTS>>(scenario);
+            let admin_cap = test_scenario::take_from_sender<LockAdminCap<TREASURY_LOCK_TESTS>>(scenario);
             let lock = test_scenario::take_shared<TreasuryLock<TREASURY_LOCK_TESTS>>(scenario);
 
             treasury_lock::unban_mint_cap_id(
                 &admin_cap,
-                test_scenario::borrow_mut(&mut lock),
+                &mut lock,
                 mint_cap_id
             );
 
-            test_scenario::return_owned(scenario, admin_cap);
-            test_scenario::return_shared(scenario, lock);
+            test_scenario::return_to_sender(scenario, admin_cap);
+            test_scenario::return_shared(lock);
         };
 
         // user can mint
-        test_scenario::next_tx(scenario, &USER);
+        test_scenario::next_tx(scenario, USER);
         {
             let balance = user_mint_balance(scenario, 100);
             assert!(balance::value<TREASURY_LOCK_TESTS>(&balance) == 100, 0);
@@ -430,5 +438,6 @@ module fungible_tokens::treasury_lock_tests {
                 USER
             );
         };
+        test_scenario::end(scenario_);
     }
 }
