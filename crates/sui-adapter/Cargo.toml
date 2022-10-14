@@ -9,7 +9,7 @@ edition = "2021"
 
 [dependencies]
 anyhow = { version = "1.0.64", features = ["backtrace"] }
-bcs = "0.1.3"
+bcs = "0.1.4"
 leb128 = "0.2.5"
 once_cell = "1.14.0"
 linked-hash-map = "0.5.6"
