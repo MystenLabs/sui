@@ -6,7 +6,7 @@ We are hosting a public Devnet for the community to experiment with Sui and prov
 
 The Sui Devnet network currently consists of:
 
-* Four validator nodes operated by Mysten Labs. Clients send transactions and read requests via this endpoint: gateway.devnet.sui.io:443 using [JSON-RPC](../build/json-rpc.md)
+* Four validator nodes operated by Mysten Labs. Clients send transactions and read requests via this endpoint: fullnode.devnet.sui.io:443 using [JSON-RPC](../build/json-rpc.md)
 * A public network [Sui Explorer](https://explorer.devnet.sui.io) for browsing transaction history.
 * A [Discord channel](https://discordapp.com/channels/916379725201563759/971488439931392130) for requesting test coins that can be used to pay for gas on the test network. These coins have no financial value and will disappear each time we reset the network.
 
@@ -44,9 +44,9 @@ You should see the path to the command. Otherwise, reinstall.
 
 ## Configure the Sui client
 
-Now set up your Sui CLI client and connect to Devnet. Note you can manually change the Gateway URL if you have already configured a Sui CLI client.
+Now set up your Sui CLI client and connect to Sui Devnet. Note you can manually change the RPC endpoint URL if you previously configured a Sui CLI client.
 
- To connect the Sui client to the Devnet, run the following command:
+ To connect the Sui client to Sui Devnet, run the following command:
 ```shell
 $ sui client
 ```
@@ -62,7 +62,7 @@ The Sui client prompts you for the RPC server URL; press 'Enter' and it defaults
 
 If you previously installed a Sui client with a local network, modify your existing  `client.yaml` to change the RPC endpoint with the following command:
 ```shell
-$ sui client switch --rpc https://gateway.devnet.sui.io:443
+$ sui client switch --rpc https://fullnode.devnet.sui.io:443
 ```
 
 > **Tip:** If you run into issues, reset the Sui configuration by removing its directory, by default located at `~/.sui/sui_config`. Then reinstall [Sui binaries](../build/install.md#binaries).

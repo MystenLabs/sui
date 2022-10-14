@@ -82,7 +82,7 @@ curl --location --request POST $SUI_RPC_HOST \
                         "{{to_address}}"],
               "id":1}' | json_pp
 ```
-A transaction data response will be returned from the gateway server.
+A transaction data response from the gateway server resembles the following.
 ```json
 {
   "id" : 1,
