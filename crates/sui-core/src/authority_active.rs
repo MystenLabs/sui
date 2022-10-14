@@ -51,6 +51,9 @@ use once_cell::sync::OnceCell;
 use tap::TapFallible;
 
 use tokio::time::Instant;
+
+pub mod cancellable_spawner;
+
 pub mod gossip;
 use gossip::{gossip_process, GossipMetrics};
 

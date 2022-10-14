@@ -443,6 +443,9 @@ pub enum SuiError {
     #[error("Operation timed out")]
     TimeoutError,
 
+    #[error("Task could not be spawned")]
+    TaskSpawnError,
+
     #[error("Error executing {0}")]
     ExecutionError(String),
 
