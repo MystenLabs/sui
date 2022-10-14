@@ -1,20 +1,36 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::str::FromStr;
+
 use anyhow::anyhow;
 use move_core_types::ident_str;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::{StructTag, TypeTag};
 use move_core_types::value::{MoveStruct, MoveValue};
-use std::str::FromStr;
 
 use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::gas_coin::GasCoin;
 use sui_types::object::MoveObject;
+use sui_types::sui_serde::Base64;
 use sui_types::{MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS};
 
 use crate::{SuiMoveStruct, SuiMoveValue};
+
+#[test]
+fn test_move_value_to_sui_bytearray() {
+    let move_value = MoveValue::Vector(vec![
+        MoveValue::U8(0),
+        MoveValue::U8(1),
+        MoveValue::U8(2),
+        MoveValue::U8(3),
+        MoveValue::U8(4),
+    ]);
+    let sui_value = SuiMoveValue::from(move_value);
+    let bytes_base64 = Base64::from_bytes(&[0, 1, 2, 3, 4]);
+    assert!(matches!(sui_value, SuiMoveValue::Bytearray(bytes) if bytes == bytes_base64))
+}
 
 #[test]
 fn test_move_value_to_sui_coin() {
@@ -124,11 +140,6 @@ fn test_serde() {
         SuiMoveValue::Address(SuiAddress::random_for_testing_only()),
         SuiMoveValue::Bool(true),
         SuiMoveValue::Option(Box::new(None)),
-        SuiMoveValue::Vector(vec![
-            SuiMoveValue::String("Test".to_string()),
-            SuiMoveValue::String("Test".to_string()),
-            SuiMoveValue::String("Test".to_string()),
-        ]),
         SuiMoveValue::Vector(vec![
             SuiMoveValue::Number(1000000),
             SuiMoveValue::Number(2000000),

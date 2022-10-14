@@ -1099,6 +1099,7 @@ pub enum SuiMoveValue {
     Bool(bool),
     Address(SuiAddress),
     Vector(Vec<SuiMoveValue>),
+    Bytearray(Base64),
     String(String),
     UID { id: ObjectID },
     Struct(SuiMoveStruct),
@@ -1123,6 +1124,13 @@ impl Display for SuiMoveValue {
                     vec.iter().map(|value| format!("{value}")).join(",\n")
                 )?;
             }
+            SuiMoveValue::Bytearray(value) => {
+                write!(
+                    writer,
+                    "{:?}",
+                    value.clone().to_vec().map_err(fmt::Error::custom)?
+                )?;
+            }
         }
         write!(f, "{}", writer.trim_end_matches('\n'))
     }
@@ -1136,7 +1144,11 @@ impl From<MoveValue> for SuiMoveValue {
             MoveValue::U128(value) => SuiMoveValue::String(format!("{value}")),
             MoveValue::Bool(value) => SuiMoveValue::Bool(value),
             MoveValue::Vector(values) => {
-                SuiMoveValue::Vector(values.into_iter().map(|value| value.into()).collect())
+                if let Some(bytes) = to_bytearray(&values) {
+                    SuiMoveValue::Bytearray(Base64::from_bytes(&bytes))
+                } else {
+                    SuiMoveValue::Vector(values.into_iter().map(|value| value.into()).collect())
+                }
             }
             MoveValue::Struct(value) => {
                 // Best effort Sui core type conversion
@@ -1166,7 +1178,7 @@ fn to_bytearray(value: &[MoveValue]) -> Option<Vec<u8>> {
                 }
             })
             .collect::<Vec<_>>();
-        return Some(bytearray);
+        Some(bytearray)
     } else {
         None
     }
@@ -1259,7 +1271,7 @@ fn try_convert_type(type_: &StructTag, fields: &[(Identifier, MoveValue)]) -> Op
         type_.name
     );
     let mut values = fields
-        .into_iter()
+        .iter()
         .map(|(id, value)| (id.to_string(), value))
         .collect::<BTreeMap<_, _>>();
     match struct_name.as_str() {
@@ -1288,9 +1300,11 @@ fn try_convert_type(type_: &StructTag, fields: &[(Identifier, MoveValue)]) -> Op
             return values.remove("value").cloned().map(SuiMoveValue::from);
         }
         "0x1::option::Option" => {
-            let vec = values.remove("vec").cloned().map(SuiMoveValue::from);
-            if let Some(SuiMoveValue::Vector(values)) = vec {
-                return Some(SuiMoveValue::Option(Box::new(values.first().cloned())));
+            if let Some(MoveValue::Vector(values)) = values.remove("vec") {
+                return Some(SuiMoveValue::Option(Box::new(
+                    // in Move option is modeled as vec of 1 element
+                    values.first().cloned().map(SuiMoveValue::from),
+                )));
             }
         }
         _ => return None,
