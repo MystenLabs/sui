@@ -421,7 +421,7 @@ fn expect_ok<T>(res: Result<T, PartialVMError>) -> Result<T, String> {
                 Got error: {partial_vm_error:?}"
             );
             // This is an internal error, but we cannot accept the module as safe
-            Err("".to_string())
+            Err("Unexpected internal verifier error".to_string())
         }
     }
 }
