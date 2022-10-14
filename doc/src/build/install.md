@@ -169,6 +169,10 @@ for your operating system.
 
 Download and install [CMake](https://cmake.org/) from: https://cmake.org/download/
 
+### protoc
+
+Download [protoc](https://github.com/protocolbuffers/protobuf/releases) and add the bin directory to windows PATH.
+
 ### Additional tools for Windows
 
 Sui requires the following additional tools on computer running Windows.
