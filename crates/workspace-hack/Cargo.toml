@@ -660,7 +660,6 @@ atoi = { version = "1", default-features = false }
 atomicwrites = { version = "0.3", default-features = false }
 atty = { version = "0.2", default-features = false }
 autocfg = { version = "1", default-features = false }
-autotools = { version = "0.2", default-features = false }
 axum = { version = "0.5", features = ["form", "http1", "json", "matched-path", "original-uri", "query", "serde_json", "serde_urlencoded", "tower-log"] }
 axum-core = { version = "0.2", default-features = false }
 axum-server = { version = "0.4" }
@@ -1083,7 +1082,6 @@ prost-derive-93f6ce9d446188ac = { package = "prost-derive", version = "0.10", de
 prost-derive-a6292c17cd707f01 = { package = "prost-derive", version = "0.11", default-features = false }
 prost-types = { version = "0.11", features = ["std"] }
 protobuf = { version = "2", default-features = false }
-protobuf-src = { version = "1", default-features = false }
 ptree = { version = "0.4", features = ["ansi", "ansi_term", "atty", "conf", "config", "directories", "petgraph", "serde-value", "tint", "value"] }
 quick-error-dff4ba8e3ae991db = { package = "quick-error", version = "1", default-features = false }
 quick-error-f595c2ba2a3f28df = { package = "quick-error", version = "2", default-features = false }
@@ -1387,6 +1385,7 @@ web-sys = { version = "0.3", default-features = false, features = ["Worker"] }
 
 [target.aarch64-apple-darwin.build-dependencies]
 arrayvec-9fbad63c4bcf4a8f = { package = "arrayvec", version = "0.4", default-features = false }
+autotools = { version = "0.2", default-features = false }
 core-foundation = { version = "0.9", default-features = false }
 core-foundation-sys = { version = "0.8", default-features = false }
 cpp_demangle = { version = "0.3", features = ["std"] }
@@ -1414,6 +1413,7 @@ nodrop = { version = "0.1", default-features = false }
 num-format = { version = "0.4", default-features = false }
 num_threads = { version = "0.1", default-features = false }
 pprof = { version = "0.10", features = ["cpp", "criterion", "flamegraph", "inferno"] }
+protobuf-src = { version = "1", default-features = false }
 quick-xml = { version = "0.23", default-features = false }
 rand_chacha-6f8ce4dd05d13bba = { package = "rand_chacha", version = "0.2", default-features = false, features = ["std"] }
 rgb = { version = "0.8", features = ["as-bytes", "bytemuck"] }
@@ -1478,6 +1478,7 @@ web-sys = { version = "0.3", default-features = false, features = ["Worker"] }
 
 [target.x86_64-unknown-linux-gnu.build-dependencies]
 arrayvec-9fbad63c4bcf4a8f = { package = "arrayvec", version = "0.4", default-features = false }
+autotools = { version = "0.2", default-features = false }
 cpp_demangle = { version = "0.3", features = ["std"] }
 cpufeatures = { version = "0.2", default-features = false }
 debugid = { version = "0.8", default-features = false }
@@ -1509,6 +1510,7 @@ openssl-macros = { version = "0.1", default-features = false }
 openssl-probe = { version = "0.1", default-features = false }
 openssl-sys = { version = "0.9", default-features = false }
 pprof = { version = "0.10", features = ["cpp", "criterion", "flamegraph", "inferno"] }
+protobuf-src = { version = "1", default-features = false }
 quick-xml = { version = "0.23", default-features = false }
 rand_chacha-6f8ce4dd05d13bba = { package = "rand_chacha", version = "0.2", default-features = false, features = ["std"] }
 rgb = { version = "0.8", features = ["as-bytes", "bytemuck"] }
