@@ -55,7 +55,7 @@ You can verify the result with the [Sui Explorer](https://explorer.devnet.sui.io
 
 ### Example 2 - Create and execute transaction
 
-Use this example to conduct a transaction in Sui using the Sui Devnet Gateway:
+Use this example to conduct a transaction in Sui using the Sui Devnet Full node:
 
 ```rust
 use std::str::FromStr;

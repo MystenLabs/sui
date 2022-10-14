@@ -2,20 +2,18 @@
 title: Use Sui CLI to Start and Manage Network
 ---
 
-Welcome to the Sui tutorial on the Sui CLI developed
+Welcome to the Sui tutorial on the Sui CLI, developed
 to facilitate experimentation with Sui features using a
-command line interface. In this document, we describe how to set up
-the Sui client and execute commands through its command line
-interface, *Sui CLI*.
+command line interface. This document describes how to set up
+the Sui client and execute commands through the Sui command line
+interface (CLI).
 
 Note, this is an advanced option and an alternative to simply connecting to our public
-[Devnet](../build/devnet.md). Use Devnet to build upon Sui. Use the Sui CLI here to
-[contribute](../contribute/index.md) to Sui itself.
+[Devnet](../build/devnet.md).
 
 ## Set up
 
 Follow the instructions to [install Sui binaries](install.md#binaries).
-
 
 ## Using the Sui client
 
@@ -49,7 +47,7 @@ The following commands are supported by the Sui client:
 
 > **Note:** The `clear`, `echo`, `env` and `exit` commands exist only in the interactive shell.
 
-Use `sui client -h` to see the most up-to-date list of commands.
+Use `sui client -h` to see a list of supported commands.
 
 Use `help <command>` to see more information on each command.
 
@@ -65,7 +63,7 @@ accepted the default location for configuration:
 $ sui console
 ```
 
-This command will look for the client configuration file
+The console command looks for the client configuration file
 `client.yaml` in the `~/.sui/sui_config` directory. But you can
 override this setting by providing a path to the directory where this
 file is stored:
@@ -76,20 +74,13 @@ $ sui console --config /path/to/client/config/file
 
 The Sui interactive client console supports the following shell functionality:
 
-* *Command history* -
-  The `history` command can be used to print the interactive shell's command history;
-  you can also use Up, Down or Ctrl-P, Ctrl-N to navigate previous or next matches from history.
-  History search is also supported using Ctrl-R.
-* *Tab completion* -
-  Tab completion is supported for all commands using Tab and Ctrl-I keys.
-* *Environment variable substitution* -
-  The Sui console will substitute inputs prefixed with `$` with environment variables,
-  you can use the `env` command to print out the entire list of variables and
-  use `echo` to preview the substitution without invoking any commands.
+  * *Command history* - use the `history` command to print the command history. You can also use Up, Down or Ctrl-P, Ctrl-N to display the previous or next in the history list. Use Ctrl-R to search the command history.
+  * *Tab completion* - supported for all commands using Tab and Ctrl-I keys.
+  * *Environment variable substitution* - the console substitutes input prefixed with `$` with environment variables. Use the `env` command to print out the entire list of variables and use `echo` to preview the substitution without invoking any commands.
 
 ### Command line mode
 
-The client can also be used without the interactive shell, which can be useful if
+You can use the client without the interactive shell. This is useful if
 you want to pipe the output of the client to another application or invoke client
 commands using scripts.
 
@@ -98,68 +89,43 @@ USAGE:
     sui client [SUBCOMMAND]
 ```
 
-For example, we can use the following command to see the list of
-accounts available on the platform:
+For example, the following command returns the list of
+account addresses available on the platform:
 
 ```shell
 $ sui client addresses
 ```
 
-The result of running this command should resemble the following output:
-
-```shell
-Showing 5 results.
-0x66af3898e7558b79e115ab61184a958497d1905a
-0xae6fb6036570fec1df71599740c132cdf5b45b9d
-0x45cda12e3bafe3017b4b3cd62c493e5fbaad7fb0
-0xef999dbdb19ccca504eef5432cec69ea8a1d4a1b
-0x4489ab46a230c1876578441d68f25bf968e6f2b0
-```
-
-But the actual address values will most likely differ
-in your case (as will other values, such as object IDs, in the latter
-parts of this tutorial). Consequently, **do not copy and paste
-the actual command from this tutorial as they are unlikely to work for
-you verbatim**. Each time you create a config for the client, addresses
-and object IDs will be assigned randomly. Consequently, you cannot rely
-on copy-pasting commands that include these values, as they will be different
-between different users/configs.
-
 ### Active address
 
-Since a Sui CLI client manages multiple disjointed addresses, one might need to specify
-which address they want to call a command on.
+You can specify an active address or default address to use to execute commands. 
 
-For convenience, one can choose to set a default, or active address that will be
-used for commands that require an address to operate on. A default address is picked
-at the start, but this can be changed later.
-
-In order to see what the current active address is, use the command `active-address`
+Sui sets a default address to use for commands. It uses the active address for commands that require an address. To view the current active address, use the `active-address` command.
 
 ```shell
 $ sui client active-address
 ```
 
-Which will reveal an address resembling:
+The response to the request resembles the following:
 
 ```shell
 0x562f07cf6369e8d22dbf226a5bfedc6300014837
 ```
 
-Changing the default address is as easy as calling the `switch` command:
+To change the default address, use the `switch` command:
 
 ```shell
 $ sui client switch --address 0x913cf36f370613ed131868ac6f9da2420166062e
 ```
 
-You will see output like:
+The response resembles the following:
 
 ```shell
 Active address switched to 0x913cf36f370613ed131868ac6f9da2420166062e
 ```
 
-One can call, for example, the `objects` command with or without an address specified.
-When not specified, the active address is used.
+You can call the `objects` command with or without specifying an address.
+Sui uses the active address if you do not specify one.
 
 ```shell
 $ sui client objects
@@ -174,20 +140,15 @@ $ sui client objects --address 0x913cf36f370613ed131868ac6f9da2420166062e
  0x66eaa38c8ea99673a92a076a00101ab9b3a06b55 |     0      | j8qLxVk/Bm9iMdhPf9b7HcIMQIAM+qCd8LfPAwKYrFo= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>
 ```
 
-All commands where `address` is omitted will now use the newly specified active address:
+All subsequent commands that omit `address` use the new active address:
 0x913cf36f370613ed131868ac6f9da2420166062e
 
-Note that if one calls a command that uses a gas object not owned by the active address,
-the address owned by the gas object is temporarily used for the transaction.
+If you call a command that uses a gas object that is not owned by the active address,
+Sui temporarily uses the address that owns the gas object for the transaction.
 
 ### Paying For transactions with gas objects
 
-All Sui transactions require a gas object for payment, as well as a budget. However, specifying
-the gas object can be cumbersome; so in the CLI, one is allowed to omit the gas object and leave
-the client to pick an object that meets the specified budget. This gas selection logic is currently
-rudimentary as it does not combine/split gas as needed but currently picks the first object it finds
-that meets the budget. Note that one can always specify their own gas if they want to manage the gas
-themselves.
+All Sui transactions require a gas object for payment, as well as a budget. However, specifying the gas object can be cumbersome; so in the CLI, one is allowed to omit the gas object and leave the client to pick an object that meets the specified budget. This gas selection logic is currently rudimentary as it does not combine/split gas as needed but currently picks the first object it finds that meets the budget. Note that one can always specify their own gas if they want to manage the gas themselves.
 
 :warning: A gas object cannot be part of the transaction while also being used to
 pay for the transaction. For example, one cannot try to transfer gas object X while paying for the
