@@ -29,6 +29,8 @@ use crate::drivers::driver::Driver;
 use crate::drivers::HistogramWrapper;
 use crate::workloads::workload::Payload;
 use crate::workloads::workload::WorkloadInfo;
+use crate::LocalValidatorAggregator;
+use crate::ValidatorProxy;
 use std::collections::{BTreeMap, VecDeque};
 use std::sync::Arc;
 use std::time::Duration;
@@ -272,9 +274,10 @@ impl Driver<BenchmarkStats> for BenchDriver {
             let cloned_barrier = barrier.clone();
             let metrics_cloned = metrics.clone();
             // Make a per worker quorum driver, otherwise they all share the same task.
-            let quorum_driver_handler =
-                QuorumDriverHandler::new(aggregator.clone(), QuorumDriverMetrics::new_for_tests());
-            let qd = quorum_driver_handler.clone_quorum_driver();
+            let agg = Arc::new(LocalValidatorAggregator::from_auth_agg(aggregator.clone()));
+            // let quorum_driver_handler =
+            //     QuorumDriverHandler::new(aggregator.clone(), QuorumDriverMetrics::new_for_tests());
+            // let qd = quorum_driver_handler.clone_quorum_driver();
             let runner = tokio::spawn(async move {
                 cloned_barrier.wait().await;
                 let start_time = print_and_start_benchmark().await;
@@ -332,19 +335,21 @@ impl Driver<BenchmarkStats> for BenchDriver {
                                 num_submitted += 1;
                                 metrics_cloned.num_submitted.with_label_values(&[&b.1.get_workload_type().to_string()]).inc();
                                 let metrics_cloned = metrics_cloned.clone();
-                                let qd_clone = qd.clone();
+                                // let qd_clone = qd.clone();
                                 // TODO: clone committee for each request is not ideal.
-                                let committee_cloned = qd_clone.clone_committee();
+                                let committee_cloned = Arc::new(agg.get_committee().await);
+                                let agg_clone = agg.clone();
+                                // let committee_cloned = Arc::new(qd_clone.clone_committee());
                                 let start = Arc::new(Instant::now());
-                                let res = qd
-                                    .execute_transaction(QuorumDriverRequest {
-                                        transaction: b.0.clone(),
-                                        request_type: QuorumDriverRequestType::WaitForEffectsCert,
-                                    })
+                                let res = agg
+                                    .execute_transaction(b.0.clone())
+                                    // .execute_transaction(QuorumDriverRequest {
+                                    //     transaction: b.0.clone(),
+                                    //     request_type: QuorumDriverRequestType::WaitForEffectsCert,
+                                    // })
                                     .then(|res| async move  {
                                         match res {
-                                            Ok(QuorumDriverResponse::EffectsCert(result)) => {
-                                                let (cert, effects) = *result;
+                                            Ok((cert, effects)) => {
                                                 let new_version = effects.effects.mutated.iter().find(|(object_ref, _)| {
                                                     object_ref.0 == b.1.get_object_id()
                                                 }).map(|x| x.0).unwrap();
@@ -360,14 +365,10 @@ impl Driver<BenchmarkStats> for BenchDriver {
                                                 ),
                                                 ))
                                             }
-                                            Ok(resp) => {
-                                                error!("unexpected_response: {:?}", resp);
-                                                metrics_cloned.num_error.with_label_values(&[&b.1.get_workload_type().to_string(), "unknown_error"]).inc();
-                                                NextOp::Retry(b)
-                                            }
                                             Err(err) => {
                                                 if err.indicates_epoch_change() {
-                                                    reconfig(committee_cloned.epoch(), qd_clone.clone()).await;
+                                                    agg_clone.reconfig().await;
+                                                    // reconfig(committee_cloned.epoch(), qd_clone.clone()).await;
                                                 } else {
                                                     error!("{}", err);
                                                     metrics_cloned.num_error.with_label_values(&[&b.1.get_workload_type().to_string(), &err.to_string()]).inc();
@@ -392,18 +393,16 @@ impl Driver<BenchmarkStats> for BenchDriver {
                                 let tx = payload.make_transaction();
                                 let start = Arc::new(Instant::now());
                                 let metrics_cloned = metrics_cloned.clone();
-                                let qd_clone = qd.clone();
+                                let agg_clone = agg.clone();
+                                // let qd_clone = qd.clone();
                                 // TODO: clone committee for each request is not ideal.
-                                let committee_cloned = qd_clone.clone_committee();
-                                let res = qd
-                                    .execute_transaction(QuorumDriverRequest {
-                                        transaction: tx.clone(),
-                                    request_type: QuorumDriverRequestType::WaitForEffectsCert,
-                                })
+                                // let committee_cloned = Arc::new(qd_clone.clone_committee());
+                                let committee_cloned = Arc::new(agg.get_committee().await);
+                                let res = agg
+                                    .execute_transaction(tx.clone())
                                 .then(|res| async move {
                                     match res {
-                                        Ok(QuorumDriverResponse::EffectsCert(result)) => {
-                                            let (cert, effects) = *result;
+                                        Ok((cert, effects)) => {
                                             let new_version = effects.effects.mutated.iter().find(|(object_ref, _)| {
                                                 object_ref.0 == payload.get_object_id()
                                             }).map(|x| x.0).unwrap();
@@ -418,14 +417,10 @@ impl Driver<BenchmarkStats> for BenchDriver {
                                                 payload.make_new_payload(new_version, effects.effects.gas_object.0),
                                             )))
                                         }
-                                        Ok(resp) => {
-                                            error!("unexpected_response: {:?}", resp);
-                                            metrics_cloned.num_error.with_label_values(&[&payload.get_workload_type().to_string(), "unknown_error"]).inc();
-                                            NextOp::Retry(Box::new((tx, payload)))
-                                        }
                                         Err(err) => {
                                             if err.indicates_epoch_change() {
-                                                reconfig(committee_cloned.epoch(), qd_clone.clone()).await;
+                                                agg_clone.reconfig().await;
+                                                // reconfig(committee_cloned.epoch(), qd_clone.clone()).await;
                                             } else {
                                                 error!("Retry due to error: {}", err);
                                                 metrics_cloned.num_error.with_label_values(&[&payload.get_workload_type().to_string(), &err.to_string()]).inc();

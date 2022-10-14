@@ -70,8 +70,8 @@ impl<A> QuorumDriver<A> {
         &self.validators
     }
 
-    pub fn clone_committee(&self) -> Arc<Committee> {
-        Arc::new(self.validators.load().committee.clone())
+    pub fn clone_committee(&self) -> Committee {
+        self.validators.load().committee.clone()
     }
 
     pub fn current_epoch(&self) -> EpochId {
