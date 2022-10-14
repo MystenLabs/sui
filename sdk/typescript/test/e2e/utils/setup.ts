@@ -6,6 +6,7 @@ import {
   Ed25519Keypair,
   JsonRpcProvider,
   JsonRpcProviderWithCache,
+  LATEST_RPC_API_VERSION,
 } from '../../../src';
 
 const DEFAULT_FAUCET_URL = 'http://127.0.0.1:9123/faucet';
@@ -46,8 +47,8 @@ export function getProvider(
   const url =
     rpcType === 'fullnode' ? DEFAULT_FULLNODE_URL : DEFAULT_GATEWAY_URL;
   return providerType === 'rpc'
-    ? new JsonRpcProvider(url, false)
-    : new JsonRpcProviderWithCache(url, false);
+    ? new JsonRpcProvider(url, false, LATEST_RPC_API_VERSION)
+    : new JsonRpcProviderWithCache(url, false, LATEST_RPC_API_VERSION);
 }
 
 export async function setup(

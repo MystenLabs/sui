@@ -91,6 +91,24 @@ export class Coin {
   }
 
   /**
+   * Convenience method for select an arbitrary coin object that has a balance greater than or
+   * equal to `amount`
+   *
+   * @param amount coin balance
+   * @param exclude object ids of the coins to exclude
+   * @return an arbitray coin with balance greater than or equal to `amount
+   */
+  static selectCoinWithBalanceGreaterThanOrEqual(
+    coins: ObjectDataFull[],
+    amount: bigint,
+    exclude: ObjectId[] = []
+  ): ObjectDataFull | undefined {
+    return coins.find(
+      (c) => !exclude.includes(Coin.getID(c)) && Coin.getBalance(c)! >= amount
+    );
+  }
+
+  /**
    * Convenience method for select a minimal set of coin objects that has a balance greater than
    * or equal to `amount`. The output can be used for `PayTransaction`
    *
