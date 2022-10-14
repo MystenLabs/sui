@@ -10,20 +10,27 @@ use crate::{
     },
     authority_batch::batch_tests::init_state_parameters_from_rng,
     authority_client::{LocalAuthorityClient, NetworkAuthorityClientMetrics},
-    checkpoints::causal_order_effects::TestCausalOrderNoop,
+    checkpoints::causal_order_effects::TestEffectsStore,
     safe_client::SafeClientMetrics,
 };
 use rand::prelude::StdRng;
 use rand::SeedableRng;
-use std::{collections::HashSet, env, fs, path::PathBuf, sync::Arc, time::Duration};
+use std::{
+    collections::{BTreeMap, HashSet},
+    env, fs,
+    path::PathBuf,
+    sync::Arc,
+    time::Duration,
+};
 use sui_types::{
-    base_types::{AuthorityName, ObjectID},
+    base_types::{AuthorityName, ObjectID, TransactionDigest},
     batch::UpdateItem,
     crypto::{
         get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair, AuthoritySignature, KeypairTraits,
         SuiAuthoritySignature,
     },
-    messages::{CertifiedTransaction, ExecutionStatus},
+    gas::GasCostSummary,
+    messages::{CertifiedTransaction, ExecutionStatus, TransactionEffects},
     messages_checkpoint::CheckpointRequest,
     object::Object,
     utils::{make_committee_key, make_committee_key_num},
@@ -362,6 +369,73 @@ fn make_diffs() {
 }
 
 #[test]
+// Check that we are summing up the gas costs of txns in a checkpoint correctly.
+fn test_gas_costs() {
+    let (committee, _keys, mut stores) = random_ckpoint_store();
+    let (_, mut cps) = stores.pop().unwrap();
+    let txn_digest_0 = TransactionDigest::random();
+    let txn_digest_1 = TransactionDigest::random();
+    let txn_digest_2 = TransactionDigest::random();
+    let txn_effects_0 = TransactionEffects {
+        gas_used: GasCostSummary {
+            storage_cost: 42,
+            computation_cost: 500,
+            storage_rebate: 0,
+        },
+        transaction_digest: txn_digest_0,
+        ..Default::default()
+    };
+    let txn_effects_1 = TransactionEffects {
+        gas_used: GasCostSummary {
+            storage_cost: 113,
+            computation_cost: 738,
+            storage_rebate: 0,
+        },
+        transaction_digest: txn_digest_1,
+        ..Default::default()
+    };
+    let txn_effects_2 = TransactionEffects {
+        gas_used: GasCostSummary {
+            storage_cost: 248,
+            computation_cost: 6201,
+            storage_rebate: 0,
+        },
+        transaction_digest: txn_digest_2,
+        ..Default::default()
+    };
+
+    let execution_digests_0 = ExecutionDigests::new(txn_digest_0, txn_effects_0.digest());
+    let execution_digests_1 = ExecutionDigests::new(txn_digest_1, txn_effects_1.digest());
+    let execution_digests_2 = ExecutionDigests::new(txn_digest_2, txn_effects_2.digest());
+
+    let mut effects_map = BTreeMap::new();
+    effects_map.extend([
+        (txn_digest_0, txn_effects_0),
+        (txn_digest_1, txn_effects_1),
+        (txn_digest_2, txn_effects_2),
+    ]);
+    let effects_store = TestEffectsStore(effects_map);
+    cps.sign_new_checkpoint(
+        committee.epoch,
+        0,
+        vec![
+            execution_digests_0,
+            execution_digests_1,
+            execution_digests_2,
+        ]
+        .iter(),
+        effects_store,
+        None,
+    )
+    .unwrap();
+
+    let signed_checkpoint = cps.latest_stored_checkpoint().unwrap();
+
+    assert_eq!(signed_checkpoint.summary().total_storage_charge, 403);
+    assert_eq!(signed_checkpoint.summary().total_computation_charge, 7439);
+}
+
+#[test]
 fn latest_proposal() {
     let (committee, _keys, mut stores) = random_ckpoint_store();
     let (_, mut cps1) = stores.pop().unwrap();
@@ -484,14 +558,38 @@ fn latest_proposal() {
     cps4.handle_internal_batch(0, &batch).unwrap();
 
     // Try to get checkpoint
-    cps1.sign_new_checkpoint(epoch, 0, ckp_items.iter(), TestCausalOrderNoop, None)
-        .unwrap();
-    cps2.sign_new_checkpoint(epoch, 0, ckp_items.iter(), TestCausalOrderNoop, None)
-        .unwrap();
-    cps3.sign_new_checkpoint(epoch, 0, ckp_items.iter(), TestCausalOrderNoop, None)
-        .unwrap();
-    cps4.sign_new_checkpoint(epoch, 0, ckp_items.iter(), TestCausalOrderNoop, None)
-        .unwrap();
+    cps1.sign_new_checkpoint(
+        epoch,
+        0,
+        ckp_items.iter(),
+        TestEffectsStore::default(),
+        None,
+    )
+    .unwrap();
+    cps2.sign_new_checkpoint(
+        epoch,
+        0,
+        ckp_items.iter(),
+        TestEffectsStore::default(),
+        None,
+    )
+    .unwrap();
+    cps3.sign_new_checkpoint(
+        epoch,
+        0,
+        ckp_items.iter(),
+        TestEffectsStore::default(),
+        None,
+    )
+    .unwrap();
+    cps4.sign_new_checkpoint(
+        epoch,
+        0,
+        ckp_items.iter(),
+        TestEffectsStore::default(),
+        None,
+    )
+    .unwrap();
 
     // --- TEST3 ---
 
@@ -643,12 +741,30 @@ fn set_get_checkpoint() {
     cps2.handle_internal_batch(0, &batch).unwrap();
     cps3.handle_internal_batch(0, &batch).unwrap();
 
-    cps1.sign_new_checkpoint(epoch, 0, ckp_items.iter(), TestCausalOrderNoop, None)
-        .unwrap();
-    cps2.sign_new_checkpoint(epoch, 0, ckp_items.iter(), TestCausalOrderNoop, None)
-        .unwrap();
-    cps3.sign_new_checkpoint(epoch, 0, ckp_items.iter(), TestCausalOrderNoop, None)
-        .unwrap();
+    cps1.sign_new_checkpoint(
+        epoch,
+        0,
+        ckp_items.iter(),
+        TestEffectsStore::default(),
+        None,
+    )
+    .unwrap();
+    cps2.sign_new_checkpoint(
+        epoch,
+        0,
+        ckp_items.iter(),
+        TestEffectsStore::default(),
+        None,
+    )
+    .unwrap();
+    cps3.sign_new_checkpoint(
+        epoch,
+        0,
+        ckp_items.iter(),
+        TestEffectsStore::default(),
+        None,
+    )
+    .unwrap();
     // cps4.handle_internal_set_checkpoint(summary, &transactions)
     //     .unwrap();
 
@@ -791,7 +907,7 @@ fn checkpoint_integration() {
                     committee.epoch,
                     old_checkpoint,
                     transactions.iter(),
-                    TestCausalOrderNoop,
+                    TestEffectsStore::default(),
                     None,
                 )
                 .is_ok());
@@ -1385,7 +1501,7 @@ fn test_fragment_full_flow() {
         seq.next_transaction_index += 1;
     }
     let transactions = cps0.attempt_to_construct_checkpoint().unwrap();
-    cps0.sign_new_checkpoint(0, 0, transactions.iter(), TestCausalOrderNoop, None)
+    cps0.sign_new_checkpoint(0, 0, transactions.iter(), TestEffectsStore::default(), None)
         .unwrap();
 
     // Two fragments for 5-6, and then 0-1, 1-2, 2-3, 3-4
@@ -1746,7 +1862,7 @@ async fn checkpoint_messaging_flow() {
             .unwrap();
         auth.checkpoint
             .lock()
-            .sign_new_checkpoint(0, 0, transactions.iter(), TestCausalOrderNoop, None)
+            .sign_new_checkpoint(0, 0, transactions.iter(), TestEffectsStore::default(), None)
             .unwrap();
     }
 

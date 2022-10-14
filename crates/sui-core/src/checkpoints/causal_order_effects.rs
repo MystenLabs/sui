@@ -192,16 +192,28 @@ impl EffectsStore for Arc<AuthorityStore> {
     }
 }
 
-/// An identity causal order that returns just the same order. For testing.
-pub struct TestCausalOrderNoop;
+/// A transaction effects store that returns an identity causal order. For testing.
+#[derive(Default)]
+pub struct TestEffectsStore(pub BTreeMap<TransactionDigest, TransactionEffects>);
 
-impl CausalOrder for TestCausalOrderNoop {
+impl CausalOrder for TestEffectsStore {
     fn get_complete_causal_order<'a>(
         &self,
         transactions: impl Iterator<Item = &'a ExecutionDigests>,
         _ckpt_store: &mut CheckpointStore,
     ) -> SuiResult<Vec<ExecutionDigests>> {
         Ok(transactions.cloned().collect())
+    }
+}
+
+impl EffectsStore for TestEffectsStore {
+    fn get_effects<'a>(
+        &self,
+        transactions: impl Iterator<Item = &'a ExecutionDigests>,
+    ) -> SuiResult<Vec<Option<TransactionEffects>>> {
+        Ok(transactions
+            .map(|item| self.0.get(&item.transaction).cloned())
+            .collect())
     }
 }
 
@@ -216,22 +228,11 @@ impl CausalOrder for Arc<AuthorityStore> {
     }
 }
 
-impl EffectsStore for BTreeMap<TransactionDigest, TransactionEffects> {
-    fn get_effects<'a>(
-        &self,
-        transactions: impl Iterator<Item = &'a ExecutionDigests>,
-    ) -> SuiResult<Vec<Option<TransactionEffects>>> {
-        Ok(transactions
-            .map(|item| self.get(&item.transaction).cloned())
-            .collect())
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::{collections::BTreeMap, env, fs, sync::Arc};
 
-    use crate::checkpoints::causal_order_effects::EffectsStore;
+    use crate::checkpoints::causal_order_effects::{EffectsStore, TestEffectsStore};
     use crate::checkpoints::CheckpointStore;
     use fastcrypto::traits::KeyPair;
     use rand::{prelude::StdRng, SeedableRng};
@@ -319,8 +320,8 @@ mod tests {
         let e2 = effects_from(t2, vec![t1]);
         let e3 = effects_from(t3, vec![t2]);
 
-        let mut effect_map = BTreeMap::new();
-        effect_map.extend([
+        let mut effects_store = TestEffectsStore(BTreeMap::new());
+        effects_store.0.extend([
             (t0, e0),
             (t1, e1.clone()),
             (t2, e2.clone()),
@@ -334,7 +335,7 @@ mod tests {
 
         // TEST 1
         // None are recorded as new transactions in the checkpoint DB so the end sequence is empty
-        let x = effect_map.causal_order_from_effects(input.iter(), &mut cps);
+        let x = effects_store.causal_order_from_effects(input.iter(), &mut cps);
         assert_eq!(x.unwrap().len(), 0);
 
         cps.tables.extra_transactions.insert(&input[0], &0).unwrap();
@@ -343,7 +344,7 @@ mod tests {
 
         // TEST 2
         // The two transactions are recorded as new so they are re-ordered and sequenced
-        let x = effect_map.causal_order_from_effects(input[..2].iter(), &mut cps);
+        let x = effects_store.causal_order_from_effects(input[..2].iter(), &mut cps);
         assert_eq!(x.clone().unwrap().len(), 2);
         // Its in the correct order
         assert_eq!(x.unwrap(), vec![input[1], input[0]]);
@@ -355,7 +356,7 @@ mod tests {
             .map(|item| ExecutionDigests::new(item.transaction_digest, item.digest()))
             .collect();
 
-        let x = effect_map.causal_order_from_effects(input[..2].iter(), &mut cps);
+        let x = effects_store.causal_order_from_effects(input[..2].iter(), &mut cps);
 
         assert_eq!(x.clone().unwrap().len(), 1);
         // Its in the correct order
@@ -371,7 +372,7 @@ mod tests {
         let ex = effects_from(tx, vec![t0, t1]);
         let ey = effects_from(ty, vec![tx, t2]);
 
-        effect_map.extend([(tx, ex.clone()), (ty, ey.clone())]);
+        effects_store.0.extend([(tx, ex.clone()), (ty, ey.clone())]);
 
         let input: Vec<_> = vec![e2.clone(), ex.clone(), ey.clone(), e1.clone()]
             .iter()
@@ -382,7 +383,7 @@ mod tests {
         cps.tables.extra_transactions.insert(&input[2], &4).unwrap();
 
         assert_eq!(input[1..].len(), 3);
-        let x = effect_map.causal_order_from_effects(input[1..].iter(), &mut cps);
+        let x = effects_store.causal_order_from_effects(input[1..].iter(), &mut cps);
 
         println!("result: {:?}", x);
         assert_eq!(x.clone().unwrap().len(), 2);
@@ -391,7 +392,7 @@ mod tests {
 
         // TESt 5 all
 
-        let x = effect_map.causal_order_from_effects(input.iter(), &mut cps);
+        let x = effects_store.causal_order_from_effects(input.iter(), &mut cps);
 
         println!("result: {:?}", x);
         assert_eq!(x.clone().unwrap().len(), 4);

@@ -60,7 +60,7 @@ where
         let epoch = self.state.committee.load().epoch;
         info!(?epoch, "Finishing epoch change");
         let checkpoints = &self.state.checkpoints;
-        {
+        let (storage_charge, computation_charge) = {
             let mut checkpoints = checkpoints.lock();
             assert!(
                 checkpoints.is_ready_to_finish_epoch_change(),
@@ -86,7 +86,22 @@ where
             checkpoints.tables.extra_transactions.clear()?;
 
             self.state.database.remove_all_pending_certificates()?;
-        }
+
+            let (storage_charges, computation_charges): (Vec<u64>, Vec<u64>) = checkpoints
+                .get_checkpoints_of_epoch(epoch)
+                .iter()
+                .map(|cp| {
+                    (
+                        cp.summary().total_computation_charge,
+                        cp.summary().total_storage_charge,
+                    )
+                })
+                .unzip();
+            (
+                storage_charges.iter().sum(),
+                computation_charges.iter().sum(),
+            )
+        };
 
         let sui_system_state = self.state.get_sui_system_state_object().await?;
         let next_epoch = epoch + 1;
@@ -125,8 +140,8 @@ where
 
         let advance_epoch_tx = SignedTransaction::new_change_epoch(
             next_epoch,
-            0, // TODO: fill in storage_charge
-            0, // TODO: fill in computation_charge
+            storage_charge,
+            computation_charge,
             self.state.name,
             &*self.state.secret,
         );

@@ -8,6 +8,7 @@ pub mod reconstruction;
 #[path = "./tests/checkpoint_tests.rs"]
 pub(crate) mod checkpoint_tests;
 
+use itertools::Itertools;
 use narwhal_executor::ExecutionIndices;
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
@@ -38,7 +39,7 @@ use typed_store::{
 };
 use typed_store_derive::DBMapUtils;
 
-use crate::checkpoints::causal_order_effects::CausalOrder;
+use crate::checkpoints::causal_order_effects::{CausalOrder, EffectsStore};
 use crate::checkpoints::reconstruction::SpanGraph;
 use crate::{
     authority::StableSyncAuthoritySigner,
@@ -182,6 +183,15 @@ impl CheckpointStore {
         seq: CheckpointSequenceNumber,
     ) -> Result<Option<AuthenticatedCheckpoint>, SuiError> {
         Ok(self.tables.checkpoints.get(&seq)?)
+    }
+
+    // TODO: there might be more efficient ways to implement this.
+    pub fn get_checkpoints_of_epoch(&self, epoch: EpochId) -> Vec<AuthenticatedCheckpoint> {
+        self.tables
+            .checkpoints
+            .values()
+            .filter(|cp| cp.summary().epoch == epoch)
+            .collect_vec()
     }
 
     fn get_prev_checkpoint_digest(
@@ -378,7 +388,7 @@ impl CheckpointStore {
         epoch: EpochId,
         sequence_number: CheckpointSequenceNumber,
         transactions: impl Iterator<Item = &'a ExecutionDigests> + Clone,
-        effects_store: impl CausalOrder,
+        effects_store: impl CausalOrder + EffectsStore,
         next_epoch_committee: Option<Committee>,
     ) -> SuiResult {
         // Make sure that all transactions in the checkpoint show up in extra_transactions.
@@ -394,15 +404,27 @@ impl CheckpointStore {
         // Create a causal order of all transactions in the checkpoint.
         let ordered_contents = CheckpointContents::new_with_causally_ordered_transactions(
             effects_store
-                .get_complete_causal_order(transactions, self)?
+                .get_complete_causal_order(transactions.clone(), self)?
                 .into_iter(),
         );
+
+        let (storage_charges, computation_charges) = effects_store
+            .get_effects(transactions)?
+            .into_iter()
+            .map(|effect| {
+                effect.map_or((0, 0), |e| {
+                    (e.gas_used.storage_cost, e.gas_used.computation_cost)
+                })
+            })
+            .unzip::<u64, u64, Vec<u64>, Vec<u64>>();
 
         let summary = CheckpointSummary::new(
             epoch,
             sequence_number,
             &ordered_contents,
             previous_digest,
+            storage_charges.iter().sum(),
+            computation_charges.iter().sum(),
             next_epoch_committee,
         );
 

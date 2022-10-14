@@ -1701,6 +1701,36 @@ impl Display for TransactionEffects {
     }
 }
 
+impl Default for TransactionEffects {
+    fn default() -> Self {
+        TransactionEffects {
+            status: ExecutionStatus::Success,
+            gas_used: GasCostSummary {
+                computation_cost: 0,
+                storage_cost: 0,
+                storage_rebate: 0,
+            },
+            shared_objects: Vec::new(),
+            transaction_digest: TransactionDigest::random(),
+            created: Vec::new(),
+            mutated: Vec::new(),
+            unwrapped: Vec::new(),
+            deleted: Vec::new(),
+            wrapped: Vec::new(),
+            gas_object: (
+                (
+                    ObjectID::random(),
+                    SequenceNumber::new(),
+                    ObjectDigest::new([0; 32]),
+                ),
+                Owner::AddressOwner(SuiAddress::default()),
+            ),
+            events: Vec::new(),
+            dependencies: Vec::new(),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TransactionEffectsEnvelope<S> {
     // This is a cache of an otherwise expensive to compute value.
