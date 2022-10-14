@@ -70,7 +70,7 @@ dependencies = [
  "rand 0.8.5",
  "rcgen",
  "rustls",
- "serde 1.0.144",
+ "serde 1.0.145",
  "serde_json",
  "tokio",
  "tokio-stream",
@@ -129,7 +129,7 @@ version = "1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "983cd8b9d4b02a6dc6ffa557262eb5858a27a0038ffffe21a0f133eaa819a164"
 dependencies = [
- "serde 1.0.144",
+ "serde 1.0.145",
 ]
 
 [[package]]
@@ -482,7 +482,7 @@ dependencies = [
  "mime",
  "percent-encoding",
  "pin-project-lite",
- "serde 1.0.144",
+ "serde 1.0.145",
  "serde_json",
  "serde_urlencoded",
  "sync_wrapper",
@@ -573,11 +573,11 @@ checksum = "ea2b2456fd614d856680dcd9fcc660a51a820fa09daef2e49772b56a193c8474"
 
 [[package]]
 name = "bcs"
-version = "0.1.3"
+version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "510fd83e3eaf7263b06182f3550b4c0af2af42cb36ab8024969ff5ea7fcb2833"
+checksum = "8b06b4c1f053002b70e7084ac944c77d58d5d92b2110dbc5e852735e00ad3ccc"
 dependencies = [
- "serde 1.0.144",
+ "serde 1.0.145",
  "thiserror",
 ]
 
@@ -587,7 +587,7 @@ version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3a8241f3ebb85c056b509d4327ad0358fbbba6ffb340bf388f26350aeda225b1"
 dependencies = [
- "serde 1.0.144",
+ "serde 1.0.145",
 ]
 
 [[package]]
@@ -622,7 +622,7 @@ version = "1.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b1f45e9417d87227c7a56d22e471c6206462cba514c7590c09aff4cf6d1ddcad"
 dependencies = [
- "serde 1.0.144",
+ "serde 1.0.145",
 ]
 
 [[package]]
@@ -814,7 +814,7 @@ dependencies = [
  "lazy_static 1.4.0",
  "memchr",
  "regex-automata",
- "serde 1.0.144",
+ "serde 1.0.145",
 ]
 
 [[package]]
@@ -830,7 +830,7 @@ dependencies = [
  "merlin",
  "rand 0.8.5",
  "rand_core 0.6.3",
- "serde 1.0.144",
+ "serde 1.0.145",
  "serde_derive",
  "sha3 0.9.1",
  "subtle-ng",
@@ -846,7 +846,7 @@ checksum = "c1ad822118d20d2c234f427000d5acc36eabe1e29a348c89b63dd60b13f28e5d"
 [[package]]
 name = "bytecode-interpreter-crypto"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=05678c0533b6ffd5fcd91a6109648b6b089f55f3#05678c0533b6ffd5fcd91a6109648b6b089f55f3"
+source = "git+https://github.com/move-language/move?rev=c9b5765f816d773618cc12a70a0095f644bbc68d#c9b5765f816d773618cc12a70a0095f644bbc68d"
 dependencies = [
  "anyhow",
  "curve25519-dalek-fiat",
@@ -873,7 +873,7 @@ version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ec8a7b6a70fde80372154c65702f00a0f56f3e1c36abbc6c440484be248856db"
 dependencies = [
- "serde 1.0.144",
+ "serde 1.0.145",
 ]
 
 [[package]]
@@ -893,7 +893,7 @@ version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "88ad0e1e3e88dd237a156ab9f571021b8a158caa0ae44b1968a241efb5144c1e"
 dependencies = [
- "serde 1.0.144",
+ "serde 1.0.145",
 ]
 
 [[package]]
@@ -902,7 +902,7 @@ version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cbdb825da8a5df079a43676dbe042702f1707b1109f713a01420fbb4cc71fa27"
 dependencies = [
- "serde 1.0.144",
+ "serde 1.0.145",
 ]
 
 [[package]]
@@ -914,7 +914,7 @@ dependencies = [
  "camino",
  "cargo-platform",
  "semver 1.0.9",
- "serde 1.0.144",
+ "serde 1.0.145",
  "serde_json",
 ]
 
@@ -927,7 +927,7 @@ dependencies = [
  "camino",
  "cargo-platform",
  "semver 1.0.9",
- "serde 1.0.144",
+ "serde 1.0.145",
  "serde_json",
 ]
 
@@ -993,7 +993,7 @@ dependencies = [
  "js-sys",
  "num-integer",
  "num-traits 0.2.15",
- "serde 1.0.144",
+ "serde 1.0.145",
  "time 0.1.43",
  "wasm-bindgen",
  "winapi",
@@ -1113,7 +1113,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3362992a0d9f1dd7c3d0e89e0ab2bb540b7a95fea8cd798090e758fda2899b5e"
 dependencies = [
  "codespan-reporting",
- "serde 1.0.144",
+ "serde 1.0.145",
 ]
 
 [[package]]
@@ -1122,7 +1122,7 @@ version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3538270d33cc669650c4b093848450d380def10c331d38c768e34cac80576e6e"
 dependencies = [
- "serde 1.0.144",
+ "serde 1.0.145",
  "termcolor",
  "unicode-width",
 ]
@@ -1186,7 +1186,7 @@ dependencies = [
  "lazy_static 1.4.0",
  "nom 5.1.2",
  "rust-ini",
- "serde 1.0.144",
+ "serde 1.0.145",
  "serde-hjson",
  "serde_json",
  "toml",
@@ -1232,7 +1232,7 @@ dependencies = [
  "hdrhistogram",
  "humantime",
  "prost-types",
- "serde 1.0.144",
+ "serde 1.0.145",
  "serde_json",
  "thread_local",
  "tokio",
@@ -1340,7 +1340,7 @@ dependencies = [
  "plotters",
  "rayon",
  "regex",
- "serde 1.0.144",
+ "serde 1.0.145",
  "serde_cbor",
  "serde_derive",
  "serde_json",
@@ -1535,7 +1535,7 @@ dependencies = [
  "csv-core",
  "itoa 0.4.8",
  "ryu",
- "serde 1.0.144",
+ "serde 1.0.145",
 ]
 
 [[package]]
@@ -1566,7 +1566,7 @@ dependencies = [
  "byteorder",
  "digest 0.9.0",
  "rand_core 0.5.1",
- "serde 1.0.144",
+ "serde 1.0.145",
  "subtle",
  "zeroize",
 ]
@@ -1594,7 +1594,7 @@ dependencies = [
  "byteorder",
  "digest 0.9.0",
  "rand_core 0.6.3",
- "serde 1.0.144",
+ "serde 1.0.145",
  "subtle-ng",
  "zeroize",
 ]
@@ -1804,7 +1804,7 @@ dependencies = [
  "once_cell",
  "petgraph 0.6.2",
  "rayon",
- "serde 1.0.144",
+ "serde 1.0.145",
  "toml",
 ]
 
@@ -1824,7 +1824,7 @@ dependencies = [
  "lazy_static 1.4.0",
  "parking_lot 0.11.2",
  "rustc-hash",
- "serde 1.0.144",
+ "serde 1.0.145",
  "serde_json",
  "thousands",
 ]
@@ -1983,7 +1983,7 @@ dependencies = [
  "chrono",
  "nom 6.1.2",
  "rust_decimal",
- "serde 1.0.144",
+ "serde 1.0.145",
  "time 0.3.14",
 ]
 
@@ -2012,7 +2012,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1e9c280362032ea4203659fc489832d0204ef09f247a0506f170dafcac08c369"
 dependencies = [
  "pkcs8",
- "serde 1.0.144",
+ "serde 1.0.145",
  "signature",
  "zeroize",
 ]
@@ -2026,7 +2026,7 @@ dependencies = [
  "curve25519-dalek-ng",
  "hex",
  "rand_core 0.6.3",
- "serde 1.0.144",
+ "serde 1.0.145",
  "sha2 0.9.9",
  "thiserror",
  "zeroize",
@@ -2041,7 +2041,7 @@ dependencies = [
  "curve25519-dalek-fiat",
  "ed25519",
  "rand 0.8.5",
- "serde 1.0.144",
+ "serde 1.0.145",
  "serde_bytes",
  "sha2 0.9.9",
  "zeroize",
@@ -2204,7 +2204,7 @@ dependencies = [
  "rand 0.8.5",
  "readonly",
  "secp256k1",
- "serde 1.0.144",
+ "serde 1.0.145",
  "serde_bytes",
  "serde_with 2.0.1",
  "signature",
@@ -2578,7 +2578,7 @@ dependencies = [
  "gloo-utils",
  "js-sys",
  "pin-project",
- "serde 1.0.144",
+ "serde 1.0.145",
  "serde_json",
  "thiserror",
  "wasm-bindgen",
@@ -2605,7 +2605,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "40913a05c8297adca04392f707b1e73b12ba7b8eab7244a4961580b1fd34063c"
 dependencies = [
  "js-sys",
- "serde 1.0.144",
+ "serde 1.0.145",
  "serde_json",
  "wasm-bindgen",
  "web-sys",
@@ -2643,7 +2643,7 @@ dependencies = [
  "petgraph 0.6.2",
  "rayon",
  "semver 1.0.9",
- "serde 1.0.144",
+ "serde 1.0.145",
  "serde_json",
  "smallvec",
  "static_assertions",
@@ -2662,7 +2662,7 @@ dependencies = [
  "diffus",
  "guppy-workspace-hack",
  "semver 1.0.9",
- "serde 1.0.144",
+ "serde 1.0.145",
  "toml",
 ]
 
@@ -2711,7 +2711,7 @@ dependencies = [
  "owo-colors",
  "pathdiff",
  "rayon",
- "serde 1.0.144",
+ "serde 1.0.145",
  "tabular",
  "target-spec",
  "toml",
@@ -3067,7 +3067,7 @@ checksum = "10a35a97730320ffe8e2d410b5d3b69279b98d2c14bdb8b70ea89ecf7888d41e"
 dependencies = [
  "autocfg",
  "hashbrown 0.12.3",
- "serde 1.0.144",
+ "serde 1.0.145",
 ]
 
 [[package]]
@@ -3110,7 +3110,7 @@ dependencies = [
  "linked-hash-map",
  "pest",
  "pest_derive",
- "serde 1.0.144",
+ "serde 1.0.145",
  "similar",
  "yaml-rust",
 ]
@@ -3297,7 +3297,7 @@ dependencies = [
  "parking_lot 0.12.1",
  "rand 0.8.5",
  "rustc-hash",
- "serde 1.0.144",
+ "serde 1.0.145",
  "serde_json",
  "soketto",
  "thiserror",
@@ -3320,7 +3320,7 @@ dependencies = [
  "jsonrpsee-core",
  "jsonrpsee-types",
  "rustc-hash",
- "serde 1.0.144",
+ "serde 1.0.145",
  "serde_json",
  "thiserror",
  "tokio",
@@ -3339,7 +3339,7 @@ dependencies = [
  "hyper",
  "jsonrpsee-core",
  "jsonrpsee-types",
- "serde 1.0.144",
+ "serde 1.0.145",
  "serde_json",
  "tokio",
  "tracing",
@@ -3366,7 +3366,7 @@ checksum = "e290bba767401b646812f608c099b922d8142603c9e73a50fb192d3ac86f4a0d"
 dependencies = [
  "anyhow",
  "beef",
- "serde 1.0.144",
+ "serde 1.0.145",
  "serde_json",
  "thiserror",
  "tracing",
@@ -3440,7 +3440,7 @@ version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b310ccceade8121d7d77fee406160e457c2f4e7c7982d589da3499bc7ea4526"
 dependencies = [
- "serde 1.0.144",
+ "serde 1.0.145",
 ]
 
 [[package]]
@@ -3580,7 +3580,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "abb12e687cfb44aa40f41fc3978ef76448f9b6038cad6aef4259d3c095a2382e"
 dependencies = [
  "cfg-if 1.0.0",
- "serde 1.0.144",
+ "serde 1.0.145",
 ]
 
 [[package]]
@@ -3734,7 +3734,7 @@ dependencies = [
 [[package]]
 name = "move-abigen"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=05678c0533b6ffd5fcd91a6109648b6b089f55f3#05678c0533b6ffd5fcd91a6109648b6b089f55f3"
+source = "git+https://github.com/move-language/move?rev=c9b5765f816d773618cc12a70a0095f644bbc68d#c9b5765f816d773618cc12a70a0095f644bbc68d"
 dependencies = [
  "anyhow",
  "bcs",
@@ -3745,31 +3745,31 @@ dependencies = [
  "move-command-line-common",
  "move-core-types",
  "move-model",
- "serde 1.0.144",
+ "serde 1.0.145",
 ]
 
 [[package]]
 name = "move-binary-format"
 version = "0.0.3"
-source = "git+https://github.com/move-language/move?rev=05678c0533b6ffd5fcd91a6109648b6b089f55f3#05678c0533b6ffd5fcd91a6109648b6b089f55f3"
+source = "git+https://github.com/move-language/move?rev=c9b5765f816d773618cc12a70a0095f644bbc68d#c9b5765f816d773618cc12a70a0095f644bbc68d"
 dependencies = [
  "anyhow",
  "move-core-types",
  "once_cell",
  "ref-cast",
- "serde 1.0.144",
+ "serde 1.0.145",
  "variant_count",
 ]
 
 [[package]]
 name = "move-borrow-graph"
 version = "0.0.1"
-source = "git+https://github.com/move-language/move?rev=05678c0533b6ffd5fcd91a6109648b6b089f55f3#05678c0533b6ffd5fcd91a6109648b6b089f55f3"
+source = "git+https://github.com/move-language/move?rev=c9b5765f816d773618cc12a70a0095f644bbc68d#c9b5765f816d773618cc12a70a0095f644bbc68d"
 
 [[package]]
 name = "move-bytecode-source-map"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=05678c0533b6ffd5fcd91a6109648b6b089f55f3#05678c0533b6ffd5fcd91a6109648b6b089f55f3"
+source = "git+https://github.com/move-language/move?rev=c9b5765f816d773618cc12a70a0095f644bbc68d#c9b5765f816d773618cc12a70a0095f644bbc68d"
 dependencies = [
  "anyhow",
  "bcs",
@@ -3778,13 +3778,13 @@ dependencies = [
  "move-core-types",
  "move-ir-types",
  "move-symbol-pool",
- "serde 1.0.144",
+ "serde 1.0.145",
 ]
 
 [[package]]
 name = "move-bytecode-utils"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=05678c0533b6ffd5fcd91a6109648b6b089f55f3#05678c0533b6ffd5fcd91a6109648b6b089f55f3"
+source = "git+https://github.com/move-language/move?rev=c9b5765f816d773618cc12a70a0095f644bbc68d#c9b5765f816d773618cc12a70a0095f644bbc68d"
 dependencies = [
  "anyhow",
  "move-binary-format",
@@ -3796,7 +3796,7 @@ dependencies = [
 [[package]]
 name = "move-bytecode-verifier"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=05678c0533b6ffd5fcd91a6109648b6b089f55f3#05678c0533b6ffd5fcd91a6109648b6b089f55f3"
+source = "git+https://github.com/move-language/move?rev=c9b5765f816d773618cc12a70a0095f644bbc68d#c9b5765f816d773618cc12a70a0095f644bbc68d"
 dependencies = [
  "anyhow",
  "move-binary-format",
@@ -3808,7 +3808,7 @@ dependencies = [
 [[package]]
 name = "move-bytecode-viewer"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=05678c0533b6ffd5fcd91a6109648b6b089f55f3#05678c0533b6ffd5fcd91a6109648b6b089f55f3"
+source = "git+https://github.com/move-language/move?rev=c9b5765f816d773618cc12a70a0095f644bbc68d#c9b5765f816d773618cc12a70a0095f644bbc68d"
 dependencies = [
  "anyhow",
  "clap 3.2.17",
@@ -3825,7 +3825,7 @@ dependencies = [
 [[package]]
 name = "move-cli"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=05678c0533b6ffd5fcd91a6109648b6b089f55f3#05678c0533b6ffd5fcd91a6109648b6b089f55f3"
+source = "git+https://github.com/move-language/move?rev=c9b5765f816d773618cc12a70a0095f644bbc68d#c9b5765f816d773618cc12a70a0095f644bbc68d"
 dependencies = [
  "anyhow",
  "bcs",
@@ -3860,7 +3860,7 @@ dependencies = [
  "read-write-set",
  "read-write-set-dynamic",
  "reqwest",
- "serde 1.0.144",
+ "serde 1.0.145",
  "serde_json",
  "serde_yaml",
  "tempfile",
@@ -3871,7 +3871,7 @@ dependencies = [
 [[package]]
 name = "move-command-line-common"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=05678c0533b6ffd5fcd91a6109648b6b089f55f3#05678c0533b6ffd5fcd91a6109648b6b089f55f3"
+source = "git+https://github.com/move-language/move?rev=c9b5765f816d773618cc12a70a0095f644bbc68d#c9b5765f816d773618cc12a70a0095f644bbc68d"
 dependencies = [
  "anyhow",
  "difference",
@@ -3880,7 +3880,7 @@ dependencies = [
  "move-core-types",
  "num-bigint",
  "once_cell",
- "serde 1.0.144",
+ "serde 1.0.145",
  "sha2 0.9.9",
  "walkdir",
 ]
@@ -3888,7 +3888,7 @@ dependencies = [
 [[package]]
 name = "move-compiler"
 version = "0.0.1"
-source = "git+https://github.com/move-language/move?rev=05678c0533b6ffd5fcd91a6109648b6b089f55f3#05678c0533b6ffd5fcd91a6109648b6b089f55f3"
+source = "git+https://github.com/move-language/move?rev=c9b5765f816d773618cc12a70a0095f644bbc68d#c9b5765f816d773618cc12a70a0095f644bbc68d"
 dependencies = [
  "anyhow",
  "bcs",
@@ -3917,7 +3917,7 @@ dependencies = [
 [[package]]
 name = "move-core-types"
 version = "0.0.4"
-source = "git+https://github.com/move-language/move?rev=05678c0533b6ffd5fcd91a6109648b6b089f55f3#05678c0533b6ffd5fcd91a6109648b6b089f55f3"
+source = "git+https://github.com/move-language/move?rev=c9b5765f816d773618cc12a70a0095f644bbc68d#c9b5765f816d773618cc12a70a0095f644bbc68d"
 dependencies = [
  "anyhow",
  "bcs",
@@ -3925,14 +3925,14 @@ dependencies = [
  "once_cell",
  "rand 0.8.5",
  "ref-cast",
- "serde 1.0.144",
+ "serde 1.0.145",
  "serde_bytes",
 ]
 
 [[package]]
 name = "move-coverage"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=05678c0533b6ffd5fcd91a6109648b6b089f55f3#05678c0533b6ffd5fcd91a6109648b6b089f55f3"
+source = "git+https://github.com/move-language/move?rev=c9b5765f816d773618cc12a70a0095f644bbc68d#c9b5765f816d773618cc12a70a0095f644bbc68d"
 dependencies = [
  "anyhow",
  "bcs",
@@ -3946,13 +3946,13 @@ dependencies = [
  "move-ir-types",
  "once_cell",
  "petgraph 0.5.1",
- "serde 1.0.144",
+ "serde 1.0.145",
 ]
 
 [[package]]
 name = "move-disassembler"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=05678c0533b6ffd5fcd91a6109648b6b089f55f3#05678c0533b6ffd5fcd91a6109648b6b089f55f3"
+source = "git+https://github.com/move-language/move?rev=c9b5765f816d773618cc12a70a0095f644bbc68d#c9b5765f816d773618cc12a70a0095f644bbc68d"
 dependencies = [
  "anyhow",
  "clap 3.2.17",
@@ -3970,7 +3970,7 @@ dependencies = [
 [[package]]
 name = "move-docgen"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=05678c0533b6ffd5fcd91a6109648b6b089f55f3#05678c0533b6ffd5fcd91a6109648b6b089f55f3"
+source = "git+https://github.com/move-language/move?rev=c9b5765f816d773618cc12a70a0095f644bbc68d#c9b5765f816d773618cc12a70a0095f644bbc68d"
 dependencies = [
  "anyhow",
  "codespan",
@@ -3982,13 +3982,13 @@ dependencies = [
  "num",
  "once_cell",
  "regex",
- "serde 1.0.144",
+ "serde 1.0.145",
 ]
 
 [[package]]
 name = "move-errmapgen"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=05678c0533b6ffd5fcd91a6109648b6b089f55f3#05678c0533b6ffd5fcd91a6109648b6b089f55f3"
+source = "git+https://github.com/move-language/move?rev=c9b5765f816d773618cc12a70a0095f644bbc68d#c9b5765f816d773618cc12a70a0095f644bbc68d"
 dependencies = [
  "anyhow",
  "bcs",
@@ -3996,13 +3996,13 @@ dependencies = [
  "move-command-line-common",
  "move-core-types",
  "move-model",
- "serde 1.0.144",
+ "serde 1.0.145",
 ]
 
 [[package]]
 name = "move-ir-compiler"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=05678c0533b6ffd5fcd91a6109648b6b089f55f3#05678c0533b6ffd5fcd91a6109648b6b089f55f3"
+source = "git+https://github.com/move-language/move?rev=c9b5765f816d773618cc12a70a0095f644bbc68d#c9b5765f816d773618cc12a70a0095f644bbc68d"
 dependencies = [
  "anyhow",
  "bcs",
@@ -4021,7 +4021,7 @@ dependencies = [
 [[package]]
 name = "move-ir-to-bytecode"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=05678c0533b6ffd5fcd91a6109648b6b089f55f3#05678c0533b6ffd5fcd91a6109648b6b089f55f3"
+source = "git+https://github.com/move-language/move?rev=c9b5765f816d773618cc12a70a0095f644bbc68d#c9b5765f816d773618cc12a70a0095f644bbc68d"
 dependencies = [
  "anyhow",
  "codespan-reporting",
@@ -4040,7 +4040,7 @@ dependencies = [
 [[package]]
 name = "move-ir-to-bytecode-syntax"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=05678c0533b6ffd5fcd91a6109648b6b089f55f3#05678c0533b6ffd5fcd91a6109648b6b089f55f3"
+source = "git+https://github.com/move-language/move?rev=c9b5765f816d773618cc12a70a0095f644bbc68d#c9b5765f816d773618cc12a70a0095f644bbc68d"
 dependencies = [
  "anyhow",
  "hex",
@@ -4053,7 +4053,7 @@ dependencies = [
 [[package]]
 name = "move-ir-types"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=05678c0533b6ffd5fcd91a6109648b6b089f55f3#05678c0533b6ffd5fcd91a6109648b6b089f55f3"
+source = "git+https://github.com/move-language/move?rev=c9b5765f816d773618cc12a70a0095f644bbc68d#c9b5765f816d773618cc12a70a0095f644bbc68d"
 dependencies = [
  "anyhow",
  "hex",
@@ -4061,13 +4061,13 @@ dependencies = [
  "move-core-types",
  "move-symbol-pool",
  "once_cell",
- "serde 1.0.144",
+ "serde 1.0.145",
 ]
 
 [[package]]
 name = "move-model"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=05678c0533b6ffd5fcd91a6109648b6b089f55f3#05678c0533b6ffd5fcd91a6109648b6b089f55f3"
+source = "git+https://github.com/move-language/move?rev=c9b5765f816d773618cc12a70a0095f644bbc68d#c9b5765f816d773618cc12a70a0095f644bbc68d"
 dependencies = [
  "anyhow",
  "codespan",
@@ -4087,13 +4087,13 @@ dependencies = [
  "num",
  "once_cell",
  "regex",
- "serde 1.0.144",
+ "serde 1.0.145",
 ]
 
 [[package]]
 name = "move-package"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=05678c0533b6ffd5fcd91a6109648b6b089f55f3#05678c0533b6ffd5fcd91a6109648b6b089f55f3"
+source = "git+https://github.com/move-language/move?rev=c9b5765f816d773618cc12a70a0095f644bbc68d#c9b5765f816d773618cc12a70a0095f644bbc68d"
 dependencies = [
  "anyhow",
  "bcs",
@@ -4117,7 +4117,7 @@ dependencies = [
  "ptree",
  "regex",
  "reqwest",
- "serde 1.0.144",
+ "serde 1.0.145",
  "serde_yaml",
  "sha2 0.9.9",
  "tempfile",
@@ -4129,7 +4129,7 @@ dependencies = [
 [[package]]
 name = "move-prover"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=05678c0533b6ffd5fcd91a6109648b6b089f55f3#05678c0533b6ffd5fcd91a6109648b6b089f55f3"
+source = "git+https://github.com/move-language/move?rev=c9b5765f816d773618cc12a70a0095f644bbc68d#c9b5765f816d773618cc12a70a0095f644bbc68d"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4156,7 +4156,7 @@ dependencies = [
  "once_cell",
  "pretty",
  "rand 0.8.5",
- "serde 1.0.144",
+ "serde 1.0.145",
  "serde_json",
  "simplelog",
  "tokio",
@@ -4166,7 +4166,7 @@ dependencies = [
 [[package]]
 name = "move-prover-boogie-backend"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=05678c0533b6ffd5fcd91a6109648b6b089f55f3#05678c0533b6ffd5fcd91a6109648b6b089f55f3"
+source = "git+https://github.com/move-language/move?rev=c9b5765f816d773618cc12a70a0095f644bbc68d#c9b5765f816d773618cc12a70a0095f644bbc68d"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4185,7 +4185,7 @@ dependencies = [
  "pretty",
  "rand 0.8.5",
  "regex",
- "serde 1.0.144",
+ "serde 1.0.145",
  "serde_json",
  "tera",
  "tokio",
@@ -4194,18 +4194,18 @@ dependencies = [
 [[package]]
 name = "move-read-write-set-types"
 version = "0.0.3"
-source = "git+https://github.com/move-language/move?rev=05678c0533b6ffd5fcd91a6109648b6b089f55f3#05678c0533b6ffd5fcd91a6109648b6b089f55f3"
+source = "git+https://github.com/move-language/move?rev=c9b5765f816d773618cc12a70a0095f644bbc68d#c9b5765f816d773618cc12a70a0095f644bbc68d"
 dependencies = [
  "anyhow",
  "move-binary-format",
  "move-core-types",
- "serde 1.0.144",
+ "serde 1.0.145",
 ]
 
 [[package]]
 name = "move-resource-viewer"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=05678c0533b6ffd5fcd91a6109648b6b089f55f3#05678c0533b6ffd5fcd91a6109648b6b089f55f3"
+source = "git+https://github.com/move-language/move?rev=c9b5765f816d773618cc12a70a0095f644bbc68d#c9b5765f816d773618cc12a70a0095f644bbc68d"
 dependencies = [
  "anyhow",
  "bcs",
@@ -4214,13 +4214,13 @@ dependencies = [
  "move-bytecode-utils",
  "move-core-types",
  "once_cell",
- "serde 1.0.144",
+ "serde 1.0.145",
 ]
 
 [[package]]
 name = "move-stackless-bytecode"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=05678c0533b6ffd5fcd91a6109648b6b089f55f3#05678c0533b6ffd5fcd91a6109648b6b089f55f3"
+source = "git+https://github.com/move-language/move?rev=c9b5765f816d773618cc12a70a0095f644bbc68d#c9b5765f816d773618cc12a70a0095f644bbc68d"
 dependencies = [
  "codespan",
  "codespan-reporting",
@@ -4241,13 +4241,13 @@ dependencies = [
  "once_cell",
  "paste",
  "petgraph 0.5.1",
- "serde 1.0.144",
+ "serde 1.0.145",
 ]
 
 [[package]]
 name = "move-stackless-bytecode-interpreter"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=05678c0533b6ffd5fcd91a6109648b6b089f55f3#05678c0533b6ffd5fcd91a6109648b6b089f55f3"
+source = "git+https://github.com/move-language/move?rev=c9b5765f816d773618cc12a70a0095f644bbc68d#c9b5765f816d773618cc12a70a0095f644bbc68d"
 dependencies = [
  "anyhow",
  "bytecode-interpreter-crypto",
@@ -4259,13 +4259,13 @@ dependencies = [
  "move-model",
  "move-stackless-bytecode",
  "num",
- "serde 1.0.144",
+ "serde 1.0.145",
 ]
 
 [[package]]
 name = "move-stdlib"
 version = "0.1.1"
-source = "git+https://github.com/move-language/move?rev=05678c0533b6ffd5fcd91a6109648b6b089f55f3#05678c0533b6ffd5fcd91a6109648b6b089f55f3"
+source = "git+https://github.com/move-language/move?rev=c9b5765f816d773618cc12a70a0095f644bbc68d#c9b5765f816d773618cc12a70a0095f644bbc68d"
 dependencies = [
  "anyhow",
  "log",
@@ -4287,16 +4287,16 @@ dependencies = [
 [[package]]
 name = "move-symbol-pool"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=05678c0533b6ffd5fcd91a6109648b6b089f55f3#05678c0533b6ffd5fcd91a6109648b6b089f55f3"
+source = "git+https://github.com/move-language/move?rev=c9b5765f816d773618cc12a70a0095f644bbc68d#c9b5765f816d773618cc12a70a0095f644bbc68d"
 dependencies = [
  "once_cell",
- "serde 1.0.144",
+ "serde 1.0.145",
 ]
 
 [[package]]
 name = "move-table-extension"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=05678c0533b6ffd5fcd91a6109648b6b089f55f3#05678c0533b6ffd5fcd91a6109648b6b089f55f3"
+source = "git+https://github.com/move-language/move?rev=c9b5765f816d773618cc12a70a0095f644bbc68d#c9b5765f816d773618cc12a70a0095f644bbc68d"
 dependencies = [
  "anyhow",
  "bcs",
@@ -4313,7 +4313,7 @@ dependencies = [
 [[package]]
 name = "move-transactional-test-runner"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=05678c0533b6ffd5fcd91a6109648b6b089f55f3#05678c0533b6ffd5fcd91a6109648b6b089f55f3"
+source = "git+https://github.com/move-language/move?rev=c9b5765f816d773618cc12a70a0095f644bbc68d#c9b5765f816d773618cc12a70a0095f644bbc68d"
 dependencies = [
  "anyhow",
  "clap 3.2.17",
@@ -4344,7 +4344,7 @@ dependencies = [
 [[package]]
 name = "move-unit-test"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=05678c0533b6ffd5fcd91a6109648b6b089f55f3#05678c0533b6ffd5fcd91a6109648b6b089f55f3"
+source = "git+https://github.com/move-language/move?rev=c9b5765f816d773618cc12a70a0095f644bbc68d#c9b5765f816d773618cc12a70a0095f644bbc68d"
 dependencies = [
  "anyhow",
  "better_any",
@@ -4375,7 +4375,7 @@ dependencies = [
 [[package]]
 name = "move-vm-runtime"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=05678c0533b6ffd5fcd91a6109648b6b089f55f3#05678c0533b6ffd5fcd91a6109648b6b089f55f3"
+source = "git+https://github.com/move-language/move?rev=c9b5765f816d773618cc12a70a0095f644bbc68d#c9b5765f816d773618cc12a70a0095f644bbc68d"
 dependencies = [
  "better_any",
  "fail",
@@ -4392,26 +4392,26 @@ dependencies = [
 [[package]]
 name = "move-vm-test-utils"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=05678c0533b6ffd5fcd91a6109648b6b089f55f3#05678c0533b6ffd5fcd91a6109648b6b089f55f3"
+source = "git+https://github.com/move-language/move?rev=c9b5765f816d773618cc12a70a0095f644bbc68d#c9b5765f816d773618cc12a70a0095f644bbc68d"
 dependencies = [
  "anyhow",
  "move-binary-format",
  "move-core-types",
  "move-vm-types",
  "once_cell",
- "serde 1.0.144",
+ "serde 1.0.145",
 ]
 
 [[package]]
 name = "move-vm-types"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=05678c0533b6ffd5fcd91a6109648b6b089f55f3#05678c0533b6ffd5fcd91a6109648b6b089f55f3"
+source = "git+https://github.com/move-language/move?rev=c9b5765f816d773618cc12a70a0095f644bbc68d#c9b5765f816d773618cc12a70a0095f644bbc68d"
 dependencies = [
  "bcs",
  "move-binary-format",
  "move-core-types",
  "once_cell",
- "serde 1.0.144",
+ "serde 1.0.145",
  "smallvec",
 ]
 
@@ -4435,7 +4435,7 @@ dependencies = [
  "pin-project-lite",
  "rand 0.8.5",
  "real_tokio",
- "serde 1.0.144",
+ "serde 1.0.145",
  "socket2",
  "tokio-util 0.7.3",
  "toml",
@@ -4466,7 +4466,7 @@ dependencies = [
  "data-encoding",
  "multihash",
  "percent-encoding",
- "serde 1.0.144",
+ "serde 1.0.145",
  "static_assertions",
  "unsigned-varint",
  "url",
@@ -4515,7 +4515,7 @@ dependencies = [
  "futures",
  "http",
  "multiaddr",
- "serde 1.0.144",
+ "serde 1.0.145",
  "tokio",
  "tokio-stream",
  "tonic",
@@ -4595,7 +4595,7 @@ dependencies = [
  "narwhal-crypto",
  "narwhal-test-utils",
  "rand 0.8.5",
- "serde 1.0.144",
+ "serde 1.0.145",
  "serde_json",
  "serde_with 2.0.1",
  "tempfile",
@@ -4629,7 +4629,7 @@ dependencies = [
  "pprof",
  "prometheus",
  "rand 0.8.5",
- "serde 1.0.144",
+ "serde 1.0.145",
  "thiserror",
  "tokio",
  "tracing",
@@ -4669,7 +4669,7 @@ dependencies = [
  "rand 0.8.5",
  "readonly",
  "secp256k1",
- "serde 1.0.144",
+ "serde 1.0.145",
  "serde-reflection",
  "serde_bytes",
  "serde_json",
@@ -4695,7 +4695,7 @@ dependencies = [
  "proptest",
  "proptest-derive",
  "rayon",
- "serde 1.0.144",
+ "serde 1.0.145",
  "thiserror",
  "workspace-hack",
 ]
@@ -4741,7 +4741,7 @@ dependencies = [
  "narwhal-types",
  "prometheus",
  "rand 0.8.5",
- "serde 1.0.144",
+ "serde 1.0.145",
  "telemetry-subscribers 0.2.0",
  "tempfile",
  "thiserror",
@@ -4775,7 +4775,7 @@ dependencies = [
  "narwhal-types",
  "prometheus",
  "rand 0.8.5",
- "serde 1.0.144",
+ "serde 1.0.145",
  "thiserror",
  "tokio",
  "tokio-util 0.7.4",
@@ -4875,7 +4875,7 @@ dependencies = [
  "rand 0.8.5",
  "reqwest",
  "roaring",
- "serde 1.0.144",
+ "serde 1.0.145",
  "tap",
  "telemetry-subscribers 0.2.0",
  "tempfile",
@@ -4936,7 +4936,7 @@ dependencies = [
  "narwhal-worker",
  "prometheus",
  "rand 0.8.5",
- "serde 1.0.144",
+ "serde 1.0.145",
  "telemetry-subscribers 0.2.0",
  "tempfile",
  "thiserror",
@@ -4980,7 +4980,7 @@ dependencies = [
  "rand 0.8.5",
  "roaring",
  "rustversion",
- "serde 1.0.144",
+ "serde 1.0.145",
  "serde_test",
  "serde_with 2.0.1",
  "signature",
@@ -5023,7 +5023,7 @@ dependencies = [
  "prometheus",
  "rand 0.8.5",
  "reqwest",
- "serde 1.0.144",
+ "serde 1.0.145",
  "tap",
  "telemetry-subscribers 0.2.0",
  "tempfile",
@@ -5073,7 +5073,7 @@ dependencies = [
  "hakari",
  "hex",
  "once_cell",
- "serde 1.0.144",
+ "serde 1.0.145",
 ]
 
 [[package]]
@@ -5088,7 +5088,7 @@ dependencies = [
  "guppy",
  "nexlint",
  "regex",
- "serde 1.0.144",
+ "serde 1.0.145",
  "toml",
 ]
 
@@ -6191,7 +6191,7 @@ dependencies = [
  "config",
  "directories",
  "petgraph 0.6.2",
- "serde 1.0.144",
+ "serde 1.0.145",
  "serde-value",
  "tint",
 ]
@@ -6441,7 +6441,7 @@ dependencies = [
 [[package]]
 name = "read-write-set"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=05678c0533b6ffd5fcd91a6109648b6b089f55f3#05678c0533b6ffd5fcd91a6109648b6b089f55f3"
+source = "git+https://github.com/move-language/move?rev=c9b5765f816d773618cc12a70a0095f644bbc68d#c9b5765f816d773618cc12a70a0095f644bbc68d"
 dependencies = [
  "anyhow",
  "move-binary-format",
@@ -6456,7 +6456,7 @@ dependencies = [
 [[package]]
 name = "read-write-set-dynamic"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=05678c0533b6ffd5fcd91a6109648b6b089f55f3#05678c0533b6ffd5fcd91a6109648b6b089f55f3"
+source = "git+https://github.com/move-language/move?rev=c9b5765f816d773618cc12a70a0095f644bbc68d#c9b5765f816d773618cc12a70a0095f644bbc68d"
 dependencies = [
  "anyhow",
  "move-binary-format",
@@ -6595,7 +6595,7 @@ dependencies = [
  "once_cell",
  "percent-encoding",
  "pin-project-lite",
- "serde 1.0.144",
+ "serde 1.0.145",
  "serde_json",
  "serde_urlencoded",
  "tokio",
@@ -6877,7 +6877,7 @@ dependencies = [
  "dyn-clone",
  "either",
  "schemars_derive",
- "serde 1.0.144",
+ "serde 1.0.145",
  "serde_json",
 ]
 
@@ -6990,7 +6990,7 @@ version = "1.0.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8cb243bdfdb5936c8dc3c45762a19d12ab4550cdc753bc247637d4ec35a040fd"
 dependencies = [
- "serde 1.0.144",
+ "serde 1.0.145",
 ]
 
 [[package]]
@@ -7022,9 +7022,9 @@ checksum = "9dad3f759919b92c3068c696c15c3d17238234498bbdcc80f2c469606f948ac8"
 
 [[package]]
 name = "serde"
-version = "1.0.144"
+version = "1.0.145"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0f747710de3dcd43b88c9168773254e809d8ddbdf9653b84e2554ab219f17860"
+checksum = "728eb6351430bccb993660dfffc5a72f91ccc1295abaa8ce19b27ebe4f75568b"
 dependencies = [
  "serde_derive",
 ]
@@ -7047,7 +7047,7 @@ version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3b5b14ebbcc4e4f2b3642fa99c388649da58d1dc3308c7d109f39f565d1710f0"
 dependencies = [
- "serde 1.0.144",
+ "serde 1.0.145",
  "thiserror",
 ]
 
@@ -7058,7 +7058,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f05a5f801ac62a51a49d378fdb3884480041b99aced450b28990673e8ff99895"
 dependencies = [
  "once_cell",
- "serde 1.0.144",
+ "serde 1.0.145",
  "thiserror",
 ]
 
@@ -7069,7 +7069,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f3a1a3341211875ef120e117ea7fd5228530ae7e7036a779fdc9117be6b3282c"
 dependencies = [
  "ordered-float 2.10.0",
- "serde 1.0.144",
+ "serde 1.0.145",
 ]
 
 [[package]]
@@ -7078,7 +7078,7 @@ version = "0.11.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cfc50e8183eeeb6178dcb167ae34a8051d63535023ae38b5d8d12beae193d37b"
 dependencies = [
- "serde 1.0.144",
+ "serde 1.0.145",
 ]
 
 [[package]]
@@ -7088,14 +7088,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2bef2ebfde456fb76bbcf9f59315333decc4fda0b2b44b420243c11e0f5ec1f5"
 dependencies = [
  "half",
- "serde 1.0.144",
+ "serde 1.0.145",
 ]
 
 [[package]]
 name = "serde_derive"
-version = "1.0.144"
+version = "1.0.145"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "94ed3a816fb1d101812f83e789f888322c34e291f894f19590dc310963e87a00"
+checksum = "81fa1584d3d1bcacd84c277a0dfe21f5b0f6accf4a23d04d4c6d61f1af522b4c"
 dependencies = [
  "proc-macro2 1.0.43",
  "quote 1.0.21",
@@ -7122,7 +7122,7 @@ dependencies = [
  "indexmap",
  "itoa 1.0.2",
  "ryu",
- "serde 1.0.144",
+ "serde 1.0.145",
 ]
 
 [[package]]
@@ -7131,7 +7131,7 @@ version = "1.0.145"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9c17d2112159132660b4c5399e274f676fb75a2f8d70b7468f18f045b71138ed"
 dependencies = [
- "serde 1.0.144",
+ "serde 1.0.145",
 ]
 
 [[package]]
@@ -7143,7 +7143,7 @@ dependencies = [
  "form_urlencoded",
  "itoa 1.0.2",
  "ryu",
- "serde 1.0.144",
+ "serde 1.0.145",
 ]
 
 [[package]]
@@ -7153,7 +7153,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "678b5a069e50bf00ecd22d0cd8ddf7c236f68581b03db652061ed5eb13a312ff"
 dependencies = [
  "hex",
- "serde 1.0.144",
+ "serde 1.0.145",
  "serde_with_macros 1.5.2",
 ]
 
@@ -7167,7 +7167,7 @@ dependencies = [
  "chrono",
  "hex",
  "indexmap",
- "serde 1.0.144",
+ "serde 1.0.145",
  "serde_json",
  "serde_with_macros 2.0.1",
  "time 0.3.14",
@@ -7205,7 +7205,7 @@ checksum = "578a7433b776b56a35785ed5ce9a7e777ac0598aac5a6dd1b4b18a307c7fc71b"
 dependencies = [
  "indexmap",
  "ryu",
- "serde 1.0.144",
+ "serde 1.0.145",
  "yaml-rust",
 ]
 
@@ -7714,7 +7714,7 @@ dependencies = [
  "rocksdb",
  "rustyline",
  "rustyline-derive",
- "serde 1.0.144",
+ "serde 1.0.145",
  "serde_json",
  "serde_with 1.14.0",
  "shell-words",
@@ -7792,7 +7792,7 @@ dependencies = [
  "rand_distr",
  "rayon",
  "rocksdb",
- "serde 1.0.144",
+ "serde 1.0.145",
  "serde_json",
  "serde_with 1.14.0",
  "strum",
@@ -7826,7 +7826,7 @@ dependencies = [
  "futures",
  "prometheus",
  "reqwest",
- "serde 1.0.144",
+ "serde 1.0.145",
  "serde_json",
  "sui",
  "sui-config",
@@ -7867,7 +7867,7 @@ dependencies = [
  "narwhal-crypto",
  "once_cell",
  "rand 0.8.5",
- "serde 1.0.144",
+ "serde 1.0.145",
  "serde_with 1.14.0",
  "serde_yaml",
  "sha3 0.10.5",
@@ -7914,7 +7914,7 @@ dependencies = [
  "rand 0.8.5",
  "rocksdb",
  "scopeguard",
- "serde 1.0.144",
+ "serde 1.0.145",
  "serde-reflection",
  "serde_json",
  "serde_with 1.14.0",
@@ -7955,7 +7955,7 @@ dependencies = [
  "move-cli",
  "move-disassembler",
  "move-package",
- "serde 1.0.144",
+ "serde 1.0.145",
  "serde_json",
  "strum",
  "strum_macros",
@@ -7979,7 +7979,7 @@ dependencies = [
  "move-core-types",
  "move-vm-types",
  "once_cell",
- "serde 1.0.144",
+ "serde 1.0.145",
  "workspace-hack",
 ]
 
@@ -7995,7 +7995,7 @@ dependencies = [
  "http",
  "prometheus",
  "scopeguard",
- "serde 1.0.144",
+ "serde 1.0.145",
  "sui",
  "sui-config",
  "sui-json-rpc-types",
@@ -8072,7 +8072,7 @@ dependencies = [
  "move-package",
  "mysten-network",
  "prometheus",
- "serde 1.0.144",
+ "serde 1.0.145",
  "sui-config",
  "sui-core",
  "sui-framework",
@@ -8100,7 +8100,7 @@ dependencies = [
  "move-core-types",
  "move-package",
  "schemars",
- "serde 1.0.144",
+ "serde 1.0.145",
  "serde_json",
  "sui-adapter",
  "sui-framework",
@@ -8124,7 +8124,7 @@ dependencies = [
  "move-bytecode-utils",
  "move-core-types",
  "prometheus",
- "serde 1.0.144",
+ "serde 1.0.145",
  "signature",
  "sui-core",
  "sui-cost",
@@ -8152,7 +8152,7 @@ dependencies = [
  "move-bytecode-utils",
  "move-core-types",
  "schemars",
- "serde 1.0.144",
+ "serde 1.0.145",
  "serde_json",
  "serde_with 1.14.0",
  "sui-json",
@@ -8226,7 +8226,7 @@ dependencies = [
  "pretty_assertions",
  "rand 0.8.5",
  "schemars",
- "serde 1.0.144",
+ "serde 1.0.145",
  "serde_json",
  "sui",
  "sui-config",
@@ -8266,7 +8266,7 @@ dependencies = [
  "hyper",
  "move-core-types",
  "once_cell",
- "serde 1.0.144",
+ "serde 1.0.145",
  "serde_json",
  "serde_with 1.14.0",
  "signature",
@@ -8306,7 +8306,7 @@ dependencies = [
  "move-bytecode-utils",
  "move-core-types",
  "rand 0.8.5",
- "serde 1.0.144",
+ "serde 1.0.145",
  "serde_json",
  "sha3 0.10.5",
  "signature",
@@ -8350,7 +8350,7 @@ dependencies = [
  "num_cpus",
  "pretty_assertions",
  "rocksdb",
- "serde 1.0.144",
+ "serde 1.0.145",
  "serde_json",
  "sqlx",
  "strum",
@@ -8395,7 +8395,7 @@ name = "sui-telemetry"
 version = "0.1.0"
 dependencies = [
  "reqwest",
- "serde 1.0.144",
+ "serde 1.0.145",
  "tokio",
  "tracing",
  "workspace-hack",
@@ -8410,7 +8410,7 @@ dependencies = [
  "clap 3.2.17",
  "http",
  "move-package",
- "serde 1.0.144",
+ "serde 1.0.145",
  "serde_json",
  "sui",
  "sui-cluster-test",
@@ -8434,7 +8434,7 @@ dependencies = [
  "mysten-network",
  "narwhal-executor",
  "rocksdb",
- "serde 1.0.144",
+ "serde 1.0.145",
  "serde_with 1.14.0",
  "strum",
  "strum_macros",
@@ -8508,7 +8508,7 @@ dependencies = [
  "rand 0.8.5",
  "roaring",
  "schemars",
- "serde 1.0.144",
+ "serde 1.0.145",
  "serde-name",
  "serde_bytes",
  "serde_json",
@@ -8643,7 +8643,7 @@ checksum = "462215968f204588ef2d3499333d07729b692aa01f79f9b0925071127b3b353f"
 dependencies = [
  "cfg-expr",
  "guppy-workspace-hack",
- "serde 1.0.144",
+ "serde 1.0.145",
  "target-lexicon",
 ]
 
@@ -8718,7 +8718,7 @@ dependencies = [
  "pest_derive",
  "rand 0.8.5",
  "regex",
- "serde 1.0.144",
+ "serde 1.0.145",
  "serde_json",
  "slug",
  "unic-segment",
@@ -8755,7 +8755,7 @@ version = "3.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "125df852011c4f8f31df5620f4aea38ecddb5dfb4d9bc569b30485b15ffc3d4e"
 dependencies = [
- "serde 1.0.144",
+ "serde 1.0.145",
  "test-fuzz-internal",
  "test-fuzz-macro",
  "test-fuzz-runtime",
@@ -8770,7 +8770,7 @@ dependencies = [
  "cargo_metadata 0.15.0",
  "proc-macro2 1.0.43",
  "quote 1.0.21",
- "serde 1.0.144",
+ "serde 1.0.145",
  "strum_macros",
 ]
 
@@ -8801,7 +8801,7 @@ dependencies = [
  "bincode",
  "hex",
  "num-traits 0.2.15",
- "serde 1.0.144",
+ "serde 1.0.145",
  "sha-1 0.10.0",
  "test-fuzz-internal",
 ]
@@ -8862,18 +8862,18 @@ dependencies = [
 
 [[package]]
 name = "thiserror"
-version = "1.0.35"
+version = "1.0.37"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c53f98874615aea268107765aa1ed8f6116782501d18e53d08b471733bea6c85"
+checksum = "10deb33631e3c9018b9baf9dcbbc4f737320d2b576bac10f6aefa048fa407e3e"
 dependencies = [
  "thiserror-impl",
 ]
 
 [[package]]
 name = "thiserror-impl"
-version = "1.0.35"
+version = "1.0.37"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f8b463991b4eab2d801e724172285ec4195c650e8ec79b149e6c2a8e6dd3f783"
+checksum = "982d17546b47146b28f7c22e3d08465f6b8903d0ea13c1660d9d84a6e7adcdbb"
 dependencies = [
  "proc-macro2 1.0.43",
  "quote 1.0.21",
@@ -8949,7 +8949,7 @@ dependencies = [
  "itoa 1.0.2",
  "libc",
  "num_threads",
- "serde 1.0.144",
+ "serde 1.0.145",
  "time-macros",
 ]
 
@@ -8993,7 +8993,7 @@ version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "be4d6b5f19ff7664e8c98d03e2139cb510db9b0a60b55f8e8709b689d939b6bc"
 dependencies = [
- "serde 1.0.144",
+ "serde 1.0.145",
  "serde_json",
 ]
 
@@ -9148,7 +9148,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8d82e1a7758622a465f8cee077614c73484dac5b836c02ff6a40d5d1010324d7"
 dependencies = [
  "indexmap",
- "serde 1.0.144",
+ "serde 1.0.145",
 ]
 
 [[package]]
@@ -9172,7 +9172,7 @@ dependencies = [
  "combine",
  "indexmap",
  "itertools",
- "serde 1.0.144",
+ "serde 1.0.145",
 ]
 
 [[package]]
@@ -9345,7 +9345,7 @@ checksum = "a788f2119fde477cd33823330c14004fa8cdac6892fd6f12181bbda9dbf14fc9"
 dependencies = [
  "gethostname",
  "log",
- "serde 1.0.144",
+ "serde 1.0.145",
  "serde_json",
  "time 0.3.14",
  "tracing",
@@ -9523,7 +9523,7 @@ dependencies = [
  "fdlimit",
  "pre",
  "rocksdb",
- "serde 1.0.144",
+ "serde 1.0.145",
  "tap",
  "thiserror",
  "tokio",
@@ -9853,7 +9853,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7c53b543413a17a202f4be280a7e5c62a1c69345f5de525ee64f8cfdbc954994"
 dependencies = [
  "cfg-if 1.0.0",
- "serde 1.0.144",
+ "serde 1.0.145",
  "serde_json",
  "wasm-bindgen-macro",
 ]
@@ -10670,7 +10670,7 @@ dependencies = [
  "semver-parser 0.7.0",
  "send_wrapper",
  "serde 0.8.23",
- "serde 1.0.144",
+ "serde 1.0.145",
  "serde-hjson",
  "serde-name",
  "serde-reflection",
