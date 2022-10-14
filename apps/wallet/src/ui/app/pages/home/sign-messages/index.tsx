@@ -3,10 +3,12 @@
 
 import { useCallback, useEffect, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
+
 import UserApproveContainer from '_components/user-approve-container';
 import Loading from '_src/ui/app/components/loading';
 import { useAppDispatch, useAppSelector, useInitializedGuard } from '_src/ui/app/hooks';
 import { respondToSignatureRequest, sigRequestsSelectors } from '_src/ui/app/redux/slices/signatures';
+
 import type { RootState } from '_redux/RootReducer';
 
 function SigningPage() {

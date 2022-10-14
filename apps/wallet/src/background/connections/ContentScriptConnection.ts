@@ -10,7 +10,12 @@ import {
 } from '_payloads/permissions';
 import { isExecuteTransactionRequest } from '_payloads/transactions';
 import Permissions from '_src/background/Permissions';
+import Signatures from '_src/background/Signatures';
 import Transactions from '_src/background/Transactions';
+import {
+    type ExecuteSignatureResponse,
+    isExecuteSignatureRequest
+} from '_src/shared/messaging/messages/payloads/signatures';
 
 import type { SuiAddress } from '@mysten/sui.js';
 import type { Message } from '_messages';
@@ -88,6 +93,37 @@ export class ContentScriptConnection extends Connection {
                     msg.id
                 );
             }
+        } else if (isExecuteSignatureRequest(payload)) {
+            // const allowed = await Permissions.hasPermissions(this.origin, [
+            //     'viewAccount',
+            //     'suggestSignatures'
+            // ]);
+            // if (allowed) {
+            try {
+                const signature = await Signatures.signMessage(
+                    payload.message,
+                    this
+                );
+                this.send(
+                    createMessage<ExecuteSignatureResponse>(
+                        { type: 'sign-message-response', signature },
+                        msg.id
+                    )
+                );
+            } catch (err) {
+                alert(err);
+                this.sendError(
+                    {
+                        error: true,
+                        code: -1,
+                        message: (err as Error).message
+                    },
+                    msg.id
+                );
+            }
+            // } else {
+            //     this.sendNotAllowedError(msg.id);
+            // }
         } else if (isExecuteTransactionRequest(payload)) {
             const allowed = await Permissions.hasPermissions(this.origin, [
                 'viewAccount',

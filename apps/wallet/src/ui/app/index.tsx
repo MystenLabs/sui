@@ -20,6 +20,7 @@ import HomePage, {
     ReceiptPage,
     CoinsSelectorPage,
     AppsPage,
+    SigningPage
 } from '_pages/home';
 import InitializePage from '_pages/initialize';
 import BackupPage from '_pages/initialize/backup';
@@ -87,6 +88,10 @@ const App = () => {
                 <Route
                     path="tx-approval/:txID"
                     element={<DappTxApprovalPage />}
+                />
+                <Route
+                    path="sign-message/:sigId"
+                    element={<SigningPage />}
                 />
             </Route>
 

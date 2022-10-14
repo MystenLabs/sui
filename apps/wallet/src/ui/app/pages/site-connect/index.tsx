@@ -21,6 +21,7 @@ import st from './SiteConnectPage.module.scss';
 const permissionTypeToTxt: Record<PermissionType, string> = {
     viewAccount: 'Share wallet address',
     suggestTransactions: 'Suggest transactions to approve',
+    suggestSignatures: 'Suggest signatures for messages'
 };
 
 function SiteConnectPage() {
