@@ -12,6 +12,7 @@ import type {
     SuiAddress,
     MoveCallTransaction,
     SignableTransaction,
+    Base64DataBuffer,
 } from '@mysten/sui.js';
 import type { Payload } from '_payloads';
 import type { GetAccount } from '_payloads/account/GetAccount';
@@ -27,6 +28,10 @@ import type {
     ExecuteTransactionRequest,
     ExecuteTransactionResponse,
 } from '_payloads/transactions';
+import type {
+    ExecuteSignatureRequest,
+    ExecuteSignatureResponse
+} from '_src/shared/messaging/messages/payloads/signatures';
 import type { Observable } from 'rxjs';
 
 function mapToPromise<T extends Payload, R>(
@@ -87,6 +92,16 @@ export class DAppInterface {
                 type: 'get-account',
             }),
             (response) => response.accounts
+        );
+    }
+
+    public signMessage(message: Base64DataBuffer) {
+        return mapToPromise(
+            this.send<ExecuteSignatureRequest, ExecuteSignatureResponse>({
+                type: 'sign-message-request',
+                message: message
+            }),
+            response => response.signature
         );
     }
 

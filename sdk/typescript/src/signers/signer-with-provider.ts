@@ -61,6 +61,11 @@ export abstract class SignerWithProvider implements Signer {
       serializer || new RpcTxnDataSerializer(endpoint, skipDataValidation);
   }
 
+  async signMessage(message: Base64DataBuffer): Promise<SignaturePubkeyPair> {
+    const signature = await this.signData(message);
+    return signature;
+  }
+
   /**
    * Sign a transaction and submit to the Gateway for execution
    */

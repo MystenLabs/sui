@@ -7,6 +7,7 @@ import account from './slices/account';
 import app from './slices/app';
 import curatedApps from './slices/dapps';
 import permissions from './slices/permissions';
+import signatureRequests from './slices/signatures';
 import suiObjects from './slices/sui-objects';
 import transactionRequests from './slices/transaction-requests';
 import transactions from './slices/transactions';
@@ -19,6 +20,7 @@ const rootReducer = combineReducers({
     transactions,
     txresults,
     permissions,
+    signatureRequests,
     transactionRequests,
     curatedApps,
 });

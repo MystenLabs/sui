@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
+  Base64DataBuffer,
   MoveCallTransaction,
   SignableTransaction,
+  SignaturePubkeyPair,
   SuiAddress,
   SuiTransactionResponse,
 } from "@mysten/sui.js";
@@ -29,7 +31,7 @@ export interface WalletContextState {
   disconnect(): Promise<void>;
 
   getAccounts: () => Promise<SuiAddress[]>;
-
+  signMessage(message: Base64DataBuffer): Promise<SignaturePubkeyPair>;
   signAndExecuteTransaction(
     transaction: SignableTransaction
   ): Promise<SuiTransactionResponse>;
@@ -67,6 +69,11 @@ const DEFAULT_CONTEXT = {
   getAccounts() {
     return Promise.reject(
       console.error(constructMissingProviderErrorMessage("get", "getAccounts"))
+    );
+  },
+  signMessage(message: Base64DataBuffer) {
+    return Promise.reject(
+      console.error(constructMissingProviderErrorMessage("get", "signMessage"))
     );
   },
   signAndExecuteTransaction(

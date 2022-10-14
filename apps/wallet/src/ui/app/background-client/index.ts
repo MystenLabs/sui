@@ -12,13 +12,17 @@ import { setActiveOrigin } from '_redux/slices/app';
 import { setPermissions } from '_redux/slices/permissions';
 import { setTransactionRequests } from '_redux/slices/transaction-requests';
 
-import type { SuiAddress, SuiTransactionResponse } from '@mysten/sui.js';
+import type { SignaturePubkeyPair, SuiAddress, SuiTransactionResponse } from '@mysten/sui.js';
 import type { Message } from '_messages';
 import type {
     GetPermissionRequests,
     PermissionResponse,
 } from '_payloads/permissions';
 import type { DisconnectApp } from '_payloads/permissions/DisconnectApp';
+import type {
+    GetSignatureRequests,
+    SignatureRequestResponse
+} from "_payloads/signatures";
 import type { GetTransactionRequests } from '_payloads/transactions/ui/GetTransactionRequests';
 import type { TransactionRequestResponse } from '_payloads/transactions/ui/TransactionRequestResponse';
 import type { AppDispatch } from '_store';
@@ -39,6 +43,33 @@ export class BackgroundClient {
             this.sendGetPermissionRequests(),
             this.sendGetTransactionRequests(),
         ]).then(() => undefined);
+    }
+
+    public sendSignatureResponse(
+        sigId: string,
+        signed: boolean,
+        sigResult: SignaturePubkeyPair | undefined,
+        sigResultError: string | undefined
+    ) {
+        this.sendMessage(
+            createMessage<SignatureRequestResponse>({
+                type: 'signature-request-response',
+                signed,
+                sigId,
+                sigResult,
+                sigResultError
+            })
+        );
+    }
+
+    public sendGetSignatureRequests() {
+        return lastValueFrom(
+            this.sendMessage(
+                createMessage<GetSignatureRequests>({
+                    type: 'get-signature-requests'
+                })
+            ).pipe(take(1))
+        );
     }
 
     public sendPermissionResponse(

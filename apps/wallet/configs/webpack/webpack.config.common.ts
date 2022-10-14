@@ -13,7 +13,7 @@ import packageJson from '../../package.json';
 
 import type { Configuration } from 'webpack';
 
-const APP_NAME = 'Sui Wallet';
+const APP_NAME = 'Sui Wallet Modified Version';
 const PROJECT_ROOT = resolve(__dirname, '..', '..');
 const CONFIGS_ROOT = resolve(PROJECT_ROOT, 'configs');
 const SRC_ROOT = resolve(PROJECT_ROOT, 'src');

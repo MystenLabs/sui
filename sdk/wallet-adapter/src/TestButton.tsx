@@ -4,14 +4,17 @@
 import { Button } from "@mui/material";
 import React from "react";
 import { useWallet } from "@mysten/wallet-adapter-react";
+import { Base64DataBuffer } from '@mysten/sui.js';
 
 export function TestButton() {
-  let { connected, getAccounts, signAndExecuteTransaction } = useWallet();
+  let { connected, getAccounts, signMessage, signAndExecuteTransaction } = useWallet();
 
   const handleClick = async () => {
     getAccounts().then((accounts) => {
       console.log("Getting Accounts", accounts);
     });
+
+    await signMessage(new Base64DataBuffer("This is the message for testing!"));
 
     await signAndExecuteTransaction({
       kind: "moveCall",

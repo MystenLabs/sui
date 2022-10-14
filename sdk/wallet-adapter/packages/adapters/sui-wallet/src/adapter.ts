@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
+  Base64DataBuffer,
   MoveCallTransaction,
   SignableTransaction,
+  SignaturePubkeyPair,
   SuiAddress,
   SuiTransactionResponse,
 } from "@mysten/sui.js";
@@ -17,6 +19,7 @@ interface SuiWallet {
   hasPermissions(permissions: readonly PermissionType[]): Promise<boolean>;
   requestPermissions(): Promise<boolean>;
   getAccounts(): Promise<SuiAddress[]>;
+  signMessage(message: Base64DataBuffer): Promise<SignaturePubkeyPair>;
   executeMoveCall: (
     transaction: MoveCallTransaction
   ) => Promise<SuiTransactionResponse>;
@@ -51,6 +54,9 @@ export class SuiWalletAdapter implements WalletCapabilities {
     transactionBytes: Uint8Array
   ): Promise<SuiTransactionResponse> {
     return window.suiWallet.executeSerializedMoveCall(transactionBytes);
+  }
+  signMessage(message: Base64DataBuffer): Promise<SignaturePubkeyPair> {
+    return window.suiWallet.signMessage(message);
   }
   signAndExecuteTransaction(
     transaction: SignableTransaction

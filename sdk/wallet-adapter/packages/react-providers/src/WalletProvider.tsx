@@ -7,6 +7,7 @@ import type {
   MoveCallTransaction,
   SuiTransactionResponse,
   SignableTransaction,
+  Base64DataBuffer,
 } from "@mysten/sui.js";
 import { WalletCapabilities } from "@mysten/wallet-adapter-base";
 import { Wallet, WalletContext } from "./useWallet";
@@ -110,6 +111,14 @@ export const WalletProvider: FC<WalletProviderProps> = ({
     return await wallet.adapter.executeSerializedMoveCall(transactionBytes);
   };
 
+  const signMessage = async (message: Base64DataBuffer) => {
+    if (wallet == null)
+      throw new Error("Wallet Not Connected");
+    if (!wallet.adapter.signMessage)
+      throw new Error('Wallet does not support "signMessage" method');
+    return await wallet.adapter.signMessage(message);
+  };
+
   const signAndExecuteTransaction = async (
     transaction: SignableTransaction
   ): Promise<SuiTransactionResponse> => {
@@ -143,6 +152,7 @@ export const WalletProvider: FC<WalletProviderProps> = ({
         connect,
         disconnect,
         getAccounts,
+        signMessage,
         signAndExecuteTransaction,
         executeMoveCall,
         executeSerializedMoveCall,

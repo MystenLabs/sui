@@ -26,7 +26,7 @@ const txRequestsAdapter = createEntityAdapter<TransactionRequest>({
 });
 
 export const loadTransactionResponseMetadata = createAsyncThunk<
-    { txRequestID: string; metadata: SuiMoveNormalizedFunction },
+    { txRequestID: string; metadata: SuiMoveNormalizedFunction; },
     {
         txRequestID: string;
         objectId: string;
@@ -62,7 +62,7 @@ export const respondToTransactionRequest = createAsyncThunk<
         approved: boolean;
         txResponse: SuiTransactionResponse | null;
     },
-    { txRequestID: string; approved: boolean },
+    { txRequestID: string; approved: boolean; },
     AppThunkConfig
 >(
     'respond-to-transaction-request',
