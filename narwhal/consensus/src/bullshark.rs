@@ -70,11 +70,9 @@ impl ConsensusProtocol for Bullshark {
         }
 
         // Add the new certificate to the local storage.
-        state
-            .dag
-            .entry(round)
-            .or_insert_with(HashMap::new)
-            .insert(certificate.origin(), (certificate.digest(), certificate));
+        if state.try_insert(certificate).is_err() {
+            return Ok(Vec::new());
+        }
 
         // Try to order the dag to commit. Start from the highest round for which we have at least
         // f+1 certificates. This is because we need them to reveal the common coin.

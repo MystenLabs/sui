@@ -8,7 +8,7 @@ edition = "2021"
 
 [dependencies]
 anyhow = { version = "1.0.64", features = ["backtrace"] }
-bcs = "0.1.3"
+bcs = "0.1.4"
 byteorder = "1.4.3"
 itertools = "0.10.5"
 once_cell = "1.14.0"

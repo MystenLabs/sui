@@ -129,7 +129,7 @@ async fn test_subscription() {
     let tx_zero = ExecutionDigests::random();
     for _i in 0u64..105 {
         let ticket = state.batch_notifier.ticket(false).expect("all good");
-        db.tables
+        db.perpetual_tables
             .executed_sequence
             .insert(&ticket.seq(), &tx_zero)
             .expect("Failed to write.");
@@ -184,7 +184,7 @@ async fn test_subscription() {
                 .batch_notifier
                 .ticket(false)
                 .expect("all good");
-            db2.tables
+            db2.perpetual_tables
                 .executed_sequence
                 .insert(&ticket.seq(), &tx_zero)
                 .expect("Failed to write.");
@@ -262,7 +262,7 @@ async fn test_subscription() {
             .batch_notifier
             .ticket(false)
             .expect("all good");
-        db3.tables
+        db3.perpetual_tables
             .executed_sequence
             .insert(&ticket.seq(), &tx_zero)
             .expect("Failed to write.");
@@ -338,7 +338,7 @@ async fn test_subscription_safe_client() {
     let tx_zero = ExecutionDigests::random();
     for _i in 0u64..105 {
         let ticket = server.state.batch_notifier.ticket(false).expect("all good");
-        db.tables
+        db.perpetual_tables
             .executed_sequence
             .insert(&ticket.seq(), &tx_zero)
             .expect("Failed to write.");
@@ -401,7 +401,7 @@ async fn test_subscription_safe_client() {
                 .batch_notifier
                 .ticket(false)
                 .expect("all good");
-            db2.tables
+            db2.perpetual_tables
                 .executed_sequence
                 .insert(&ticket.seq(), &tx_zero)
                 .expect("Failed to write.");
@@ -475,7 +475,7 @@ async fn test_subscription_safe_client() {
             .batch_notifier
             .ticket(false)
             .expect("all good");
-        db3.tables
+        db3.perpetual_tables
             .executed_sequence
             .insert(&ticket.seq(), &tx_zero)
             .expect("Failed to write.");

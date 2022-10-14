@@ -27,6 +27,8 @@ use sui_types::{
         SignedCheckpointSummary,
     },
 };
+use tap::TapFallible;
+use tokio::sync::broadcast;
 use tracing::{debug, error, info};
 use typed_store::traits::TypedStoreDebug;
 
@@ -170,6 +172,8 @@ pub struct CheckpointStore {
 
     /// DBMap tables
     pub tables: CheckpointStoreTables,
+
+    notify_new_checkpoint_tx: broadcast::Sender<CertifiedCheckpointSummary>,
 }
 
 impl CheckpointStore {
@@ -191,6 +195,11 @@ impl CheckpointStore {
         } else {
             None
         })
+    }
+
+    /// Subscribe to new checkpoints.
+    pub fn subscribe_to_checkpoints(&self) -> broadcast::Receiver<CertifiedCheckpointSummary> {
+        self.notify_new_checkpoint_tx.subscribe()
     }
 
     // Manage persistent local variables
@@ -287,6 +296,7 @@ impl CheckpointStore {
             name,
             secret.clone(),
         )?);
+        let (notify_new_checkpoint_tx, _) = broadcast::channel(16);
         Ok(CheckpointStore {
             name,
             secret,
@@ -294,6 +304,7 @@ impl CheckpointStore {
             enable_reconfig,
             sender: None,
             tables,
+            notify_new_checkpoint_tx,
         })
     }
 
@@ -456,6 +467,10 @@ impl CheckpointStore {
 
         // Update the transactions databases.
         self.update_new_checkpoint_inner(checkpoint_sequence_number, contents, batch)?;
+
+        if let AuthenticatedCheckpoint::Certified(summary) = checkpoint {
+            self.notify_new_checkpoint(summary.clone());
+        }
 
         // TODO: Make the following atomic with above db writes.
         let locals = self.get_locals();
@@ -760,6 +775,7 @@ impl CheckpointStore {
         self.tables
             .checkpoints
             .insert(seq, &AuthenticatedCheckpoint::Certified(checkpoint.clone()))?;
+        self.notify_new_checkpoint(checkpoint.clone());
         self.clear_proposal(*seq + 1)?;
         Ok(())
     }
@@ -783,6 +799,16 @@ impl CheckpointStore {
         )?;
         self.clear_proposal(*seq + 1)?;
         Ok(())
+    }
+
+    fn notify_new_checkpoint(&self, ckpt: CertifiedCheckpointSummary) {
+        let sequence = ckpt.summary.sequence_number;
+        let _ = self.notify_new_checkpoint_tx.send(ckpt).tap_err(|_| {
+            debug!(
+                ?sequence,
+                "notify_new_checkpoint failed - no subscribers at this time"
+            )
+        });
     }
 
     fn clear_proposal(
@@ -812,11 +838,23 @@ impl CheckpointStore {
     }
 
     /// Get the latest stored checkpoint if there is one
-    pub fn latest_stored_checkpoint(&mut self) -> Option<AuthenticatedCheckpoint> {
+    pub fn latest_stored_checkpoint(&self) -> Option<AuthenticatedCheckpoint> {
         self.tables
             .checkpoints
             .iter()
             .skip_to_last()
+            .next()
+            .map(|(_, ckp)| ckp)
+    }
+
+    /// Get the latest certified checkpoint
+    pub fn latest_certified_checkpoint(&self) -> Option<AuthenticatedCheckpoint> {
+        self.tables
+            .checkpoints
+            .iter()
+            .skip_to_last()
+            .reverse()
+            .take_while(|(_, ckp)| !matches!(ckp, AuthenticatedCheckpoint::Certified(_)))
             .next()
             .map(|(_, ckp)| ckp)
     }

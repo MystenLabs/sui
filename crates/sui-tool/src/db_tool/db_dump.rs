@@ -8,7 +8,7 @@ use rocksdb::MultiThreaded;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use strum_macros::EnumString;
-use sui_core::authority::authority_store_tables::AuthorityStoreTables;
+use sui_core::authority::authority_store_tables::{AuthorityEpochTables, AuthorityPerpetualTables};
 use sui_core::checkpoints::CheckpointStoreTables;
 use sui_core::epoch::committee_store::CommitteeStore;
 use sui_storage::default_db_options;
@@ -59,13 +59,31 @@ pub fn dump_table(
 ) -> anyhow::Result<BTreeMap<String, String>> {
     match store_name {
         StoreName::Validator => {
-            AuthorityStoreTables::<AuthoritySignInfo>::get_read_only_handle(db_path, None, None)
-                .dump(table_name, page_size, page_number)
+            let epoch_tables = AuthorityEpochTables::<AuthoritySignInfo>::describe_tables();
+            if epoch_tables.contains_key(table_name) {
+                AuthorityEpochTables::<AuthoritySignInfo>::open_readonly(&db_path).dump(
+                    table_name,
+                    page_size,
+                    page_number,
+                )
+            } else {
+                AuthorityPerpetualTables::<AuthoritySignInfo>::open_readonly(&db_path).dump(
+                    table_name,
+                    page_size,
+                    page_number,
+                )
+            }
         }
-        StoreName::Gateway => AuthorityStoreTables::<EmptySignInfo>::get_read_only_handle(
-            db_path, None, None,
-        )
-        .dump(table_name, page_size, page_number),
+        StoreName::Gateway => {
+            AuthorityEpochTables::<EmptySignInfo>::open_readonly(&db_path)
+                .dump(table_name, page_size, page_number)
+                .map_err(|e| anyhow!(e))?;
+            AuthorityPerpetualTables::<EmptySignInfo>::open_readonly(&db_path).dump(
+                table_name,
+                page_size,
+                page_number,
+            )
+        }
         StoreName::Index => IndexStore::get_read_only_handle(db_path, None, None).dump(
             table_name,
             page_size,
@@ -97,21 +115,35 @@ pub fn dump_table(
 
 #[cfg(test)]
 mod test {
-    use sui_core::authority::authority_store_tables::AuthorityStoreTables;
+    use sui_core::authority::authority_store_tables::AuthorityEpochTables;
+    use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
     use sui_types::crypto::AuthoritySignInfo;
 
     use crate::db_tool::db_dump::{dump_table, list_tables, StoreName};
 
-    #[tokio::test]
-    async fn db_dump_population() -> Result<(), anyhow::Error> {
+    #[test]
+    fn db_dump_population() -> Result<(), anyhow::Error> {
         let primary_path = tempfile::tempdir()?.into_path();
 
         // Open the DB for writing
-        let _: AuthorityStoreTables<AuthoritySignInfo> =
-            AuthorityStoreTables::open_tables_read_write(primary_path.clone(), None, None);
+        let _: AuthorityEpochTables<AuthoritySignInfo> =
+            AuthorityEpochTables::open(&primary_path, None);
+        let _: AuthorityPerpetualTables<AuthoritySignInfo> =
+            AuthorityPerpetualTables::open(&primary_path, None);
 
-        // Get all the tables
-        let tables = list_tables(primary_path.clone()).unwrap();
+        // Get all the tables for AuthorityEpochTables
+        let tables = {
+            let mut epoch_tables = list_tables(AuthorityEpochTables::<AuthoritySignInfo>::path(
+                &primary_path,
+            ))
+            .unwrap();
+            let mut perpetual_tables = list_tables(
+                AuthorityPerpetualTables::<AuthoritySignInfo>::path(&primary_path),
+            )
+            .unwrap();
+            epoch_tables.append(&mut perpetual_tables);
+            epoch_tables
+        };
 
         let mut missing_tables = vec![];
         for t in tables {

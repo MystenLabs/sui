@@ -1560,7 +1560,7 @@ pub async fn checkpoint_tests_setup(
                 } else if let Err(err) = cps.lock().handle_internal_fragment(
                     seq.clone(),
                     msg.clone(),
-                    authority.database.clone(),
+                    authority.as_ref(),
                     &c,
                 ) {
                     println!("Error: {:?}", err);

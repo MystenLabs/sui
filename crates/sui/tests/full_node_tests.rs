@@ -67,7 +67,7 @@ async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
     wait_for_tx(digest, node.state().clone()).await;
 
     // verify that the intermediate sync data is cleared.
-    let sync_store = node.active().node_sync_store.clone();
+    let sync_store = node.state().node_sync_store.clone();
     let epoch_id = 0;
     assert!(sync_store.get_cert(epoch_id, &digest).unwrap().is_none());
     assert!(sync_store.get_effects(epoch_id, &digest).unwrap().is_none());

@@ -2,7 +2,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority_client::{AuthorityAPI, BatchInfoResponseItemStream};
+use crate::authority_client::{
+    AuthorityAPI, BatchInfoResponseItemStream, CheckpointStreamResponseItemStream,
+};
 use crate::epoch::committee_store::CommitteeStore;
 use crate::histogram::{Histogram, HistogramVec};
 use futures::StreamExt;
@@ -753,6 +755,29 @@ where
                 error!(?err, authority=?self.address, "Client error in handle_checkpoint");
             })?;
         Ok(resp)
+    }
+
+    pub async fn handle_checkpoint_stream(
+        &self,
+        request: CheckpointStreamRequest,
+    ) -> Result<CheckpointStreamResponseItemStream, SuiError> {
+        let checkpoint_info_items = self
+            .authority_client
+            .handle_checkpoint_stream(request)
+            .await?;
+
+        let client = self.clone();
+
+        let stream = Box::pin(checkpoint_info_items.scan((), move |_, item| {
+            let process_item = |item: SuiResult<CheckpointStreamResponseItem>| -> SuiResult<CheckpointStreamResponseItem> {
+                let item = item?;
+                let CheckpointStreamResponseItem { ref checkpoint, .. } = item;
+                checkpoint.verify(&client.get_committee(&checkpoint.epoch())?, None)?;
+                Ok(item)
+            };
+            futures::future::ready(Some(process_item(item)))
+        }));
+        Ok(Box::pin(stream))
     }
 
     /// Handle Batch information requests for this authority.
