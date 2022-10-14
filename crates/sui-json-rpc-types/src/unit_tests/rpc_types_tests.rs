@@ -3,30 +3,18 @@
 
 use anyhow::anyhow;
 use move_core_types::ident_str;
-use move_core_types::language_storage::StructTag;
+use move_core_types::identifier::Identifier;
+use move_core_types::language_storage::{StructTag, TypeTag};
 use move_core_types::value::{MoveStruct, MoveValue};
+use std::str::FromStr;
 
-use crate::{SuiMoveStruct, SuiMoveValue};
 use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::gas_coin::GasCoin;
 use sui_types::object::MoveObject;
-use sui_types::sui_serde::Base64;
 use sui_types::{MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS};
 
-#[test]
-fn test_move_value_to_sui_bytearray() {
-    let move_value = MoveValue::Vector(vec![
-        MoveValue::U8(0),
-        MoveValue::U8(1),
-        MoveValue::U8(2),
-        MoveValue::U8(3),
-        MoveValue::U8(4),
-    ]);
-    let sui_value = SuiMoveValue::from(move_value);
-    let bytes_base64 = Base64::from_bytes(&[0, 1, 2, 3, 4]);
-    assert!(matches!(sui_value, SuiMoveValue::Bytearray(bytes) if bytes == bytes_base64))
-}
+use crate::{SuiMoveStruct, SuiMoveValue};
 
 #[test]
 fn test_move_value_to_sui_coin() {
@@ -67,6 +55,28 @@ fn test_move_value_to_string() {
     let sui_value = SuiMoveValue::from(move_value);
 
     assert!(matches!(sui_value, SuiMoveValue::String(s) if s == test_string));
+}
+
+#[test]
+fn test_option() {
+    // bugfix for https://github.com/MystenLabs/sui/issues/4995
+    let option = MoveValue::Struct(MoveStruct::WithTypes {
+        type_: StructTag {
+            address: MOVE_STDLIB_ADDRESS,
+            module: Identifier::from_str("option").unwrap(),
+            name: Identifier::from_str("Option").unwrap(),
+            type_params: vec![TypeTag::U8],
+        },
+        fields: vec![(
+            Identifier::from_str("vec").unwrap(),
+            MoveValue::Vector(vec![MoveValue::U8(5)]),
+        )],
+    });
+    let sui_value = SuiMoveValue::from(option);
+    assert!(matches!(
+        sui_value,
+        SuiMoveValue::Option(value) if *value == Some(SuiMoveValue::Number(5))
+    ));
 }
 
 #[test]
@@ -114,7 +124,16 @@ fn test_serde() {
         SuiMoveValue::Address(SuiAddress::random_for_testing_only()),
         SuiMoveValue::Bool(true),
         SuiMoveValue::Option(Box::new(None)),
-        SuiMoveValue::Bytearray(Base64::from_bytes(&[10u8; 20])),
+        SuiMoveValue::Vector(vec![
+            SuiMoveValue::String("Test".to_string()),
+            SuiMoveValue::String("Test".to_string()),
+            SuiMoveValue::String("Test".to_string()),
+        ]),
+        SuiMoveValue::Vector(vec![
+            SuiMoveValue::Number(1000000),
+            SuiMoveValue::Number(2000000),
+            SuiMoveValue::Number(3000000),
+        ]),
     ];
 
     for value in test_values {
