@@ -169,9 +169,13 @@ for your operating system.
 
 Download and install [CMake](https://cmake.org/) from: https://cmake.org/download/
 
+### Protocol Buffers
+
+Download [Protocol Buffers](https://github.com/protocolbuffers/protobuf/releases) (protoc-xx.x-win32.zip or protoc-xx.x-win64.zip) and add the \bin directory to your Windows PATH environment variable.
+
 ### Additional tools for Windows
 
-Sui requires the following additional tools on computer running Windows.
+Sui requires the following additional tools on computers running Windows.
 
  * For Windows on ARM64 only - [Visual Studio 2022 Preview](https://visualstudio.microsoft.com/vs/preview/)
  * [C++ build tools](https://visualstudio.microsoft.com/downloads/)

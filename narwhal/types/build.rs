@@ -9,6 +9,7 @@ use std::{
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
 fn main() -> Result<()> {
+    #[cfg(not(target_env = "msvc"))]
     std::env::set_var("PROTOC", protobuf_src::protoc());
 
     let out_dir = if env::var("DUMP_GENERATED_GRPC").is_ok() {
