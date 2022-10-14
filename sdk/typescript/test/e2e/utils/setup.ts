@@ -11,7 +11,6 @@ import {
 
 const DEFAULT_FAUCET_URL = 'http://127.0.0.1:9123/faucet';
 const DEFAULT_FULLNODE_URL = 'http://127.0.0.1:9000';
-const DEFAULT_GATEWAY_URL = 'http://127.0.0.1:5001';
 
 export const DEFAULT_RECIPIENT = '0x36096be6a0314052931babed39f53c0666a6b0df';
 export const DEFAULT_RECIPIENT_2 = '0x46096be6a0314052931babed39f53c0666a6b0da';
@@ -37,27 +36,22 @@ export async function requestToken(recipient: string): Promise<void> {
   }
 }
 
-type RPCType = 'gateway' | 'fullnode';
 type ProviderType = 'rpc' | 'rpc-with-cache';
 
-export function getProvider(
-  rpcType: RPCType,
-  providerType: ProviderType
-): JsonRpcProvider {
-  const url =
-    rpcType === 'fullnode' ? DEFAULT_FULLNODE_URL : DEFAULT_GATEWAY_URL;
+export function getProvider(providerType: ProviderType): JsonRpcProvider {
   return providerType === 'rpc'
-    ? new JsonRpcProvider(url, false, LATEST_RPC_API_VERSION)
-    : new JsonRpcProviderWithCache(url, false, LATEST_RPC_API_VERSION);
+    ? new JsonRpcProvider(DEFAULT_FULLNODE_URL, false, LATEST_RPC_API_VERSION)
+    : new JsonRpcProviderWithCache(
+        DEFAULT_FULLNODE_URL,
+        false,
+        LATEST_RPC_API_VERSION
+      );
 }
 
-export async function setup(
-  rpcType: RPCType = 'fullnode',
-  providerType: ProviderType = 'rpc'
-) {
+export async function setup(providerType: ProviderType = 'rpc') {
   const keypair = Ed25519Keypair.generate();
   const address = keypair.getPublicKey().toSuiAddress();
   await requestToken(address);
 
-  return new TestToolbox(keypair, getProvider(rpcType, providerType));
+  return new TestToolbox(keypair, getProvider(providerType));
 }
