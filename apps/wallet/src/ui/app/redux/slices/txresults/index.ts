@@ -109,7 +109,7 @@ export const getTransactionsByAddress = createAsyncThunk<
                         .map((txEff) => {
                             const [seq, digest] = transactions.filter(
                                 (transactionId) =>
-                                    transactionId[1] ===
+                                    transactionId ===
                                     getTransactionDigest(txEff.certificate)
                             )[0];
                             const res: CertifiedTransaction = txEff.certificate;
