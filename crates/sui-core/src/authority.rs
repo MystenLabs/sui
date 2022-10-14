@@ -80,6 +80,7 @@ use sui_types::{
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID,
 };
 
+use crate::authority::authority_notifier::TransactionNotifierTicket;
 use crate::authority::authority_store_tables::ExecutionIndicesWithHash;
 use crate::checkpoints::ConsensusSender;
 use crate::consensus_adapter::ConsensusListenerMessage;
@@ -814,12 +815,13 @@ impl AuthorityState {
 
         // If commit_certificate returns an error, tx_guard will be dropped and the certificate
         // will be persisted in the log for later recovery.
+        let notifier_ticket = self.batch_notifier.ticket(bypass_validator_halt)?;
         if let Err(err) = self
             .commit_certificate(
                 inner_temporary_store,
                 certificate,
                 &signed_effects,
-                bypass_validator_halt,
+                notifier_ticket,
             )
             .await
         {
@@ -2024,11 +2026,10 @@ impl AuthorityState {
         inner_temporary_store: InnerTemporaryStore,
         certificate: &CertifiedTransaction,
         signed_effects: &SignedTransactionEffects,
-        bypass_validator_halt: bool,
+        notifier_ticket: TransactionNotifierTicket,
     ) -> SuiResult {
         let _metrics_guard = start_timer(self.metrics.commit_certificate_latency.clone());
 
-        let notifier_ticket = self.batch_notifier.ticket(bypass_validator_halt)?;
         let seq = notifier_ticket.seq();
 
         let digest = certificate.digest();
