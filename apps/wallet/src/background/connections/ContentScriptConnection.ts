@@ -162,7 +162,7 @@ export class ContentScriptConnection extends Connection {
         );
     }
 
-    // optional data to be used by the UI.
+    // optional field for the app link.
     private getAppUrl(port: Runtime.Port) {
         if (port.sender?.url) {
             return new URL(port.sender.url).href;
