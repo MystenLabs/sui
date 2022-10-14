@@ -39,6 +39,7 @@ function ConnectedDapps() {
                         name: name,
                         icon: appData?.favIcon,
                         link: appData.origin,
+                        pagelink: appData.pagelink,
                         linkLabel: appData.origin.replace('https://', ''),
                         description: '',
                         id: appData.id,
