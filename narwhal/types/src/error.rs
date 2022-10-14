@@ -7,6 +7,10 @@ use fastcrypto::Digest;
 use store::StoreError;
 use thiserror::Error;
 
+#[cfg(test)]
+#[path = "./tests/error_test.rs"]
+mod error_test;
+
 #[macro_export]
 macro_rules! bail {
     ($e:expr) => {
@@ -20,24 +24,6 @@ macro_rules! ensure {
         if !($cond) {
             bail!($e);
         }
-    };
-}
-
-#[macro_export]
-macro_rules! try_fut_and_permit {
-    ($fut:expr, $sender:expr) => {
-        futures::future::TryFutureExt::unwrap_or_else(
-            futures::future::try_join(
-                $fut,
-                futures::TryFutureExt::map_err($sender.reserve(), |_e| {
-                    DagError::ClosedChannel(stringify!(sender).to_owned())
-                }),
-            ),
-            |e| {
-                tracing::error!("{e}");
-                panic!("I/O failure, killing the node.");
-            },
-        )
     };
 }
 

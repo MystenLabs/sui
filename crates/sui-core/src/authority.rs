@@ -2,34 +2,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::checkpoints::ConsensusSender;
-use crate::{
-    authority_batch::{BroadcastReceiver, BroadcastSender},
-    checkpoints::CheckpointStore,
-    event_handler::EventHandler,
-    execution_engine,
-    metrics::start_timer,
-    query_helpers::QueryHelpers,
-    transaction_input_checker,
-    transaction_streamer::TransactionStreamer,
-};
-use arc_swap::ArcSwap;
-use async_trait::async_trait;
-use chrono::prelude::*;
-use fastcrypto::traits::KeyPair;
-use move_bytecode_utils::module_cache::SyncModuleCache;
-use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
-use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
-use narwhal_config::{
-    Committee as ConsensusCommittee, WorkerCache as ConsensusWorkerCache,
-    WorkerId as ConsensusWorkerId,
-};
-use narwhal_executor::{ExecutionIndices, ExecutionState};
-use parking_lot::Mutex;
-use prometheus::{
-    exponential_buckets, register_histogram_with_registry, register_int_counter_with_registry,
-    register_int_gauge_with_registry, Histogram, IntCounter, IntGauge,
-};
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 use std::ops::Deref;
 use std::path::PathBuf;
 use std::{
@@ -40,17 +14,60 @@ use std::{
         Arc,
     },
 };
+
+use anyhow::anyhow;
+use arc_swap::ArcSwap;
+use async_trait::async_trait;
+use chrono::prelude::*;
+use fastcrypto::traits::KeyPair;
+use futures::stream::{self, Stream};
+use move_bytecode_utils::module_cache::SyncModuleCache;
+use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
+use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
+use parking_lot::Mutex;
+use prometheus::{
+    exponential_buckets, register_histogram_with_registry, register_int_counter_with_registry,
+    register_int_gauge_with_registry, Histogram, IntCounter, IntGauge,
+};
+use tap::TapFallible;
+use thiserror::Error;
+use tokio::sync::{
+    broadcast::{self, error::RecvError},
+    mpsc,
+};
+use tracing::Instrument;
+use tracing::{debug, error, instrument, warn};
+use typed_store::Map;
+
+pub use authority_store::{
+    AuthorityStore, GatewayStore, ResolverWrapper, SuiDataStore, UpdateType,
+};
+use narwhal_config::{
+    Committee as ConsensusCommittee, WorkerCache as ConsensusWorkerCache,
+    WorkerId as ConsensusWorkerId,
+};
+use narwhal_executor::{ExecutionIndices, ExecutionState};
 use sui_adapter::adapter;
-use sui_adapter::temporary_store::InnerTemporaryStore;
 use sui_config::genesis::Genesis;
 use sui_json_rpc_types::{SuiEventEnvelope, SuiTransactionEffects};
 use sui_simulator::nondeterministic;
 use sui_storage::{
     event_store::{EventStore, EventStoreType, StoredEvent},
+    node_sync_store::NodeSyncStore,
     write_ahead_log::{DBTxGuard, TxGuard, WriteAheadLog},
     IndexStore,
 };
+use sui_types::committee::EpochId;
 use sui_types::crypto::{AuthorityKeyPair, NetworkKeyPair};
+use sui_types::messages_checkpoint::{
+    AuthenticatedCheckpoint, CertifiedCheckpointSummary, CheckpointRequest, CheckpointRequestType,
+    CheckpointResponse, CheckpointSequenceNumber,
+};
+use sui_types::object::{Owner, PastObjectRead};
+use sui_types::query::TransactionQuery;
+use sui_types::sui_system_state::SuiSystemState;
+use sui_types::temporary_store::InnerTemporaryStore;
+pub use sui_types::temporary_store::TemporaryStore;
 use sui_types::{
     base_types::*,
     batch::{TxSequenceNumber, UpdateItem},
@@ -63,13 +80,22 @@ use sui_types::{
     storage::{BackingPackageStore, DeleteKind},
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID,
 };
-use tap::TapFallible;
-use thiserror::Error;
-use tokio::sync::broadcast::error::RecvError;
-use tokio::sync::mpsc::Sender;
-use tracing::{debug, error, instrument, warn};
-use tracing::{trace, Instrument};
-use typed_store::Map;
+
+use crate::authority::authority_store_tables::ExecutionIndicesWithHash;
+use crate::checkpoints::ConsensusSender;
+use crate::consensus_adapter::ConsensusListenerMessage;
+use crate::epoch::committee_store::CommitteeStore;
+use crate::metrics::TaskUtilizationExt;
+use crate::{
+    authority_batch::{BroadcastReceiver, BroadcastSender},
+    checkpoints::CheckpointStore,
+    event_handler::EventHandler,
+    execution_engine,
+    metrics::start_timer,
+    query_helpers::QueryHelpers,
+    transaction_input_checker,
+    transaction_streamer::TransactionStreamer,
+};
 
 #[cfg(test)]
 #[path = "unit_tests/authority_tests.rs"]
@@ -87,25 +113,10 @@ pub mod move_integration_tests;
 #[path = "unit_tests/gas_tests.rs"]
 mod gas_tests;
 
-pub use sui_adapter::temporary_store::TemporaryStore;
-
 pub mod authority_store_tables;
 
-mod authority_store;
-use crate::consensus_adapter::ConsensusListenerMessage;
-use crate::epoch::committee_store::CommitteeStore;
-use crate::metrics::TaskUtilizationExt;
-pub use authority_store::{
-    AuthorityStore, GatewayStore, ResolverWrapper, SuiDataStore, UpdateType,
-};
-use sui_types::committee::EpochId;
-use sui_types::messages_checkpoint::{
-    CheckpointRequest, CheckpointRequestType, CheckpointResponse,
-};
-use sui_types::object::{Owner, PastObjectRead};
-use sui_types::sui_system_state::SuiSystemState;
-
 pub mod authority_notifier;
+mod authority_store;
 
 pub const MAX_ITEMS_LIMIT: u64 = 1_000;
 const BROADCAST_CAPACITY: usize = 10_000;
@@ -127,7 +138,6 @@ pub struct AuthorityMetrics {
     total_certs: IntCounter,
     total_cert_attempts: IntCounter,
     total_effects: IntCounter,
-    total_events: IntCounter,
     signature_errors: IntCounter,
     pub shared_obj_tx: IntCounter,
     tx_already_processed: IntCounter,
@@ -158,6 +168,18 @@ pub struct AuthorityMetrics {
     pub gossip_sync_count: IntCounter,
     pub gossip_task_success_count: IntCounter,
     pub gossip_task_error_count: IntCounter,
+
+    /// Post processing metrics
+    post_processing_total_events_emitted: IntCounter,
+    post_processing_total_tx_indexed: IntCounter,
+    post_processing_total_tx_added_to_streamer: IntCounter,
+    post_processing_total_tx_had_event_processed: IntCounter,
+    post_processing_total_tx_sent_to_post_processing: IntCounter,
+    post_processing_latest_seq_seen: IntGauge,
+
+    /// Batch service metrics
+    pub(crate) batch_service_total_tx_broadcasted: IntCounter,
+    pub(crate) batch_service_latest_seq_broadcasted: IntGauge,
 }
 
 // Override default Prom buckets for positive numbers in 0-50k range
@@ -200,12 +222,7 @@ impl AuthorityMetrics {
                 registry,
             )
             .unwrap(),
-            total_events: register_int_counter_with_registry!(
-                "total_events",
-                "Total number of events produced",
-                registry,
-            )
-            .unwrap(),
+
             signature_errors: register_int_counter_with_registry!(
                 "total_signature_errors",
                 "Number of transaction signature errors",
@@ -359,6 +376,54 @@ impl AuthorityMetrics {
                 registry,
             )
             .unwrap(),
+            post_processing_total_events_emitted: register_int_counter_with_registry!(
+                "post_processing_total_events_emitted",
+                "Total number of events emitted in post processing",
+                registry,
+            )
+            .unwrap(),
+            post_processing_total_tx_indexed: register_int_counter_with_registry!(
+                "post_processing_total_tx_indexed",
+                "Total number of txes indexed in post processing",
+                registry,
+            )
+            .unwrap(),
+            post_processing_total_tx_added_to_streamer: register_int_counter_with_registry!(
+                "post_processing_total_tx_added_to_streamer",
+                "Total number of txes added to tx streamer in post processing",
+                registry,
+            )
+            .unwrap(),
+            post_processing_total_tx_had_event_processed: register_int_counter_with_registry!(
+                "post_processing_total_tx_had_event_processed",
+                "Total number of txes finished event processing in post processing",
+                registry,
+            )
+            .unwrap(),
+            post_processing_total_tx_sent_to_post_processing: register_int_counter_with_registry!(
+                "post_processing_total_tx_sent_to_post_processing",
+                "Total number of txes sent to post processing",
+                registry,
+            )
+            .unwrap(),
+            post_processing_latest_seq_seen: register_int_gauge_with_registry!(
+                "post_processing_latest_seq_seen",
+                "The latest seq number of tx that is seen in post processing",
+                registry,
+            )
+            .unwrap(),
+            batch_service_total_tx_broadcasted: register_int_counter_with_registry!(
+                "batch_service_total_tx_broadcasted",
+                "Total number of txes broadcasted in batch service",
+                registry,
+            )
+            .unwrap(),
+            batch_service_latest_seq_broadcasted: register_int_gauge_with_registry!(
+                "batch_service_latest_seq_broadcasted",
+                "The latest seq number of tx that is broadcasted in batch service",
+                registry,
+            )
+            .unwrap(),
         }
     }
 }
@@ -390,6 +455,8 @@ pub struct AuthorityState {
     /// The database
     pub(crate) database: Arc<AuthorityStore>, // TODO: remove pub
 
+    pub node_sync_store: Arc<NodeSyncStore>,
+
     indexes: Option<Arc<IndexStore>>,
 
     pub module_cache: Arc<SyncModuleCache<ResolverWrapper<AuthorityStore>>>, // TODO: use strategies (e.g. LRU?) to constraint memory usage
@@ -417,7 +484,7 @@ pub struct AuthorityState {
     pub metrics: Arc<AuthorityMetrics>,
 
     /// A channel to tell consensus to reconfigure.
-    tx_reconfigure_consensus: Sender<ReconfigConsensusMessage>,
+    tx_reconfigure_consensus: mpsc::Sender<ReconfigConsensusMessage>,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -566,7 +633,7 @@ impl AuthorityState {
         let resp = self
             .process_certificate(tx_guard, certificate, true)
             .await
-            .tap_err(|e| debug!(?digest, "process_certificate failed: {}", e))?;
+            .tap_err(|e| debug!(?digest, "process_certificate failed: {e}"))?;
 
         let expected_effects_digest = effects.digest();
         let observed_effects_digest = resp.signed_effects.as_ref().map(|e| e.digest());
@@ -638,7 +705,7 @@ impl AuthorityState {
 
         self.process_certificate(tx_guard, &certificate, bypass_validator_halt)
             .await
-            .tap_err(|e| debug!(?tx_digest, "process_certificate failed: {}", e))
+            .tap_err(|e| debug!(?tx_digest, "process_certificate failed: {e}"))
     }
 
     #[instrument(level = "trace", skip_all)]
@@ -738,7 +805,7 @@ impl AuthorityState {
         let (inner_temporary_store, signed_effects) =
             match self.prepare_certificate(certificate, digest).await {
                 Err(e) => {
-                    debug!(name = ?self.name, ?digest, "Error preparing transaction: {}", e);
+                    debug!(name = ?self.name, ?digest, "Error preparing transaction: {e}");
                     tx_guard.release();
                     return Err(e);
                 }
@@ -757,7 +824,7 @@ impl AuthorityState {
             bypass_validator_halt,
         )
         .await
-        .tap_err(|e| error!(?digest, "commit_certificate failed: {}", e))?;
+        .tap_err(|e| error!(?digest, "commit_certificate failed: {e}"))?;
 
         // commit_certificate finished, the tx is fully committed to the store.
         tx_guard.commit_tx();
@@ -891,6 +958,7 @@ impl AuthorityState {
         }
     }
 
+    #[instrument(level = "debug", skip_all, fields(seq = ?seq, tx_digest =? digest), err)]
     fn index_tx(
         &self,
         indexes: &IndexStore,
@@ -922,7 +990,12 @@ impl AuthorityState {
         )
     }
 
-    async fn process_one_tx(&self, seq: TxSequenceNumber, digest: &TransactionDigest) -> SuiResult {
+    #[instrument(level = "debug", skip_all, fields(seq=?seq, tx_digest=?digest), err)]
+    async fn post_process_one_tx(
+        &self,
+        seq: TxSequenceNumber,
+        digest: &TransactionDigest,
+    ) -> SuiResult {
         // Load cert and effects.
         let info = self.make_transaction_info(digest).await?;
         let (cert, effects) = match info {
@@ -942,26 +1015,30 @@ impl AuthorityState {
 
         // Index tx
         if let Some(indexes) = &self.indexes {
-            if let Err(e) =
-                self.index_tx(indexes.as_ref(), seq, digest, &cert, &effects, timestamp_ms)
-            {
-                warn!(?digest, "Couldn't index tx: {}", e);
-            }
+            let _ = self
+                .index_tx(indexes.as_ref(), seq, digest, &cert, &effects, timestamp_ms)
+                .tap_ok(|_| self.metrics.post_processing_total_tx_indexed.inc())
+                .tap_err(|e| warn!(tx_digest=?digest, "Post processing - Couldn't index tx: {e}"));
         }
 
         // Stream transaction
         if let Some(transaction_streamer) = &self.transaction_streamer {
             transaction_streamer.enqueue((cert, effects.clone())).await;
+            self.metrics
+                .post_processing_total_tx_added_to_streamer
+                .inc();
         }
 
         // Emit events
         if let Some(event_handler) = &self.event_handler {
             event_handler
                 .process_events(&effects.effects, timestamp_ms, seq)
-                .await?;
+                .await
+                .tap_ok(|_| self.metrics.post_processing_total_tx_had_event_processed.inc())
+                .tap_err(|e| warn!(tx_digest=?digest, "Post processing - Couldn't process events for tx: {}", e))?;
 
             self.metrics
-                .total_events
+                .post_processing_total_events_emitted
                 .inc_by(effects.effects.events.len() as u64);
         }
 
@@ -984,26 +1061,29 @@ impl AuthorityState {
                         },
                     )) = item
                     {
-                        if let Err(e) = self.process_one_tx(seq, &digest).await {
-                            warn!(?digest, "Couldn't process tx: {}", e);
+                        self.metrics.post_processing_latest_seq_seen.set(seq as i64);
+                        self.metrics
+                            .post_processing_total_tx_sent_to_post_processing
+                            .inc();
+                        if let Err(e) = self.post_process_one_tx(seq, &digest).await {
+                            warn!(?digest, "Couldn't process tx: {e}");
                         }
                     }
                 }
-
-                // For both the error cases, we exit the loop which ends this task.
-                // TODO: Automatically restart the task, which in combination with the todo above,
-                // will process any skipped txes and then begin listening for new ones.
                 Err(RecvError::Closed) => {
-                    // The service closed the channel.
-                    error!("run_tx_post_processing_process receiver channel closed");
+                    // This shall not happen because the sender of batch notifier should not be closed.
+                    error!("run_tx_post_processing_process receiver channel closed. If this happens there is a bug");
                     break;
                 }
+                // Today if post processing is too slow we will skip indexing some txes.
+                // TODO: https://github.com/MystenLabs/sui/issues/5025
+                // Automatically restart the task, which in combination with the todo above,
+                // will process any skipped txes and then begin listening for new ones.
                 Err(RecvError::Lagged(number_skipped)) => {
                     error!(
                         "run_tx_post_processing_process too slow, skipped {} txes",
                         number_skipped
                     );
-                    break;
                 }
             }
         }
@@ -1216,6 +1296,74 @@ impl AuthorityState {
         }
     }
 
+    pub async fn handle_checkpoint_streaming(
+        &self,
+        _request: CheckpointStreamRequest,
+    ) -> Result<impl Stream<Item = Result<CheckpointStreamResponseItem, SuiError>>, SuiError> {
+        struct Locals {
+            from_db: Option<AuthenticatedCheckpoint>,
+            latest_sequence_sent: Option<CheckpointSequenceNumber>,
+            subscriber: broadcast::Receiver<CertifiedCheckpointSummary>,
+            exit: bool,
+        }
+
+        let checkpoints = self.checkpoints.lock();
+        let subscriber = checkpoints.subscribe_to_checkpoints();
+        let from_db = checkpoints.latest_certified_checkpoint();
+        std::mem::drop(checkpoints);
+
+        let latest_sequence_sent = from_db.as_ref().map(|c| c.sequence_number());
+        let locals = Locals {
+            from_db,
+            latest_sequence_sent,
+            subscriber,
+            exit: false,
+        };
+
+        Ok(stream::unfold(locals, move |mut locals| async move {
+            if let Some(checkpoint) = locals.from_db.take() {
+                Some((
+                    Ok(CheckpointStreamResponseItem {
+                        first_available_sequence: 0,
+                        checkpoint,
+                    }),
+                    locals,
+                ))
+            } else {
+                match locals.subscriber.recv().await {
+                    Ok(checkpoint) => {
+                        let sequence_number = *checkpoint.summary.sequence_number();
+                        if locals.latest_sequence_sent.is_none()
+                            || sequence_number > locals.latest_sequence_sent.unwrap()
+                        {
+                            locals.latest_sequence_sent = Some(sequence_number);
+                            Some((
+                                Ok(CheckpointStreamResponseItem {
+                                    first_available_sequence: 0,
+                                    checkpoint: AuthenticatedCheckpoint::Certified(checkpoint),
+                                }),
+                                locals,
+                            ))
+                        } else {
+                            None
+                        }
+                    }
+                    Err(RecvError::Closed) => {
+                        locals.exit = true;
+                        Some((Err(SuiError::SubscriptionServiceClosed), locals))
+                    }
+                    Err(RecvError::Lagged(number_skipped)) => {
+                        locals.exit = true;
+                        Some((
+                            Err(SuiError::SubscriptionItemsDroppedError(number_skipped)),
+                            locals,
+                        ))
+                    }
+                }
+            }
+        }))
+    }
+
     pub fn handle_committee_info_request(
         &self,
         request: &CommitteeInfoRequest,
@@ -1239,6 +1387,7 @@ impl AuthorityState {
         name: AuthorityName,
         secret: StableSyncAuthoritySigner,
         store: Arc<AuthorityStore>,
+        node_sync_store: Arc<NodeSyncStore>,
         committee_store: Arc<CommitteeStore>,
         indexes: Option<Arc<IndexStore>>,
         event_store: Option<Arc<EventStoreType>>,
@@ -1246,7 +1395,7 @@ impl AuthorityState {
         checkpoints: Arc<Mutex<CheckpointStore>>,
         genesis: &Genesis,
         prometheus_registry: &prometheus::Registry,
-        tx_reconfigure_consensus: Sender<ReconfigConsensusMessage>,
+        tx_reconfigure_consensus: mpsc::Sender<ReconfigConsensusMessage>,
     ) -> Self {
         let (tx, _rx) = tokio::sync::broadcast::channel(BROADCAST_CAPACITY);
         let native_functions =
@@ -1277,6 +1426,7 @@ impl AuthorityState {
             _native_functions: native_functions,
             move_vm,
             database: store.clone(),
+            node_sync_store,
             indexes,
             // `module_cache` uses a separate in-mem cache from `event_handler`
             // this is because they largely deal with different types of MoveStructs
@@ -1315,7 +1465,7 @@ impl AuthorityState {
         // Get all unprocessed checkpoints
         for (_seq, batch) in state
             .database
-            .tables
+            .perpetual_tables
             .batches
             .iter()
             .skip_to(&next_expected_tx)
@@ -1323,7 +1473,7 @@ impl AuthorityState {
         {
             let transactions: Vec<(TxSequenceNumber, ExecutionDigests)> = state
                 .database
-                .tables
+                .perpetual_tables
                 .executed_sequence
                 .iter()
                 .skip_to(&batch.data().initial_sequence_number)
@@ -1351,7 +1501,7 @@ impl AuthorityState {
         store_base_path: Option<PathBuf>,
         genesis: Option<&Genesis>,
         consensus_sender: Option<Box<dyn ConsensusSender>>,
-        tx_reconfigure_consensus: Sender<ReconfigConsensusMessage>,
+        tx_reconfigure_consensus: mpsc::Sender<ReconfigConsensusMessage>,
     ) -> Self {
         let secret = Arc::pin(key.copy());
         let path = match store_base_path {
@@ -1376,6 +1526,7 @@ impl AuthorityState {
             &genesis_committee,
             secret.public().into(),
             secret.clone(),
+            false,
         )
         .expect("Should not fail to open local checkpoint DB");
         if let Some(consensus_sender) = consensus_sender {
@@ -1389,11 +1540,19 @@ impl AuthorityState {
             &genesis_committee,
             None,
         ));
+
+        let node_sync_store = Arc::new(NodeSyncStore::open_tables_read_write(
+            path.join("node_sync_db"),
+            None,
+            None,
+        ));
+
         // add the object_basics module
         AuthorityState::new(
             secret.public().into(),
             secret.clone(),
             store,
+            node_sync_store,
             epochs,
             None,
             None,
@@ -1404,6 +1563,21 @@ impl AuthorityState {
             tx_reconfigure_consensus,
         )
         .await
+    }
+
+    /// Add a number of certificates to the pending transactions as well as the
+    /// certificates structure if they are not already executed.
+    /// Certificates are optional, and if not provided, they will be eventually
+    /// downloaded in the execution driver.
+    pub fn add_pending_certificates(
+        &self,
+        certs: Vec<(TransactionDigest, Option<CertifiedTransaction>)>,
+    ) -> SuiResult<()> {
+        self.node_sync_store
+            .batch_store_certs(certs.iter().filter_map(|(_, cert_opt)| cert_opt.clone()))?;
+
+        self.database
+            .add_pending_digests(certs.iter().map(|(digest, _)| *digest).collect())
     }
 
     // Continually pop in-progress txes from the WAL and try to drive them to completion.
@@ -1432,7 +1606,7 @@ impl AuthorityState {
                 }
 
                 if let Err(e) = self.process_certificate(tx_guard, &cert, false).await {
-                    warn!(?digest, "Failed to process in-progress certificate: {}", e);
+                    warn!(?digest, "Failed to process in-progress certificate: {e}");
                 }
             } else {
                 break;
@@ -1621,15 +1795,67 @@ impl AuthorityState {
         }
     }
 
-    pub async fn get_transactions_by_move_function(
+    pub fn get_transactions(
         &self,
-        package: ObjectID,
-        module: Option<String>,
-        function: Option<String>,
-    ) -> Result<Vec<(TxSequenceNumber, TransactionDigest)>, anyhow::Error> {
-        Ok(self
-            .get_indexes()?
-            .get_transactions_by_move_function(package, module, function)?)
+        query: TransactionQuery,
+        cursor: Option<TransactionDigest>,
+        limit: Option<usize>,
+        reverse: bool,
+    ) -> Result<Vec<TransactionDigest>, anyhow::Error> {
+        // Lookup TransactionDigest sequence number,
+        // also default cursor to 0 or the current sequence number depends on ordering.
+        let cursor = if let Some(cursor) = cursor {
+            self.get_indexes()?
+                .get_transaction_seq(&cursor)?
+                .ok_or_else(|| anyhow!("Transaction [{cursor:?}] not found."))?
+        } else if reverse {
+            TxSequenceNumber::MAX
+        } else {
+            TxSequenceNumber::MIN
+        };
+
+        Ok(match query {
+            TransactionQuery::MoveFunction {
+                package,
+                module,
+                function,
+            } => self.get_indexes()?.get_transactions_by_move_function(
+                package, module, function, cursor, limit, reverse,
+            )?,
+            TransactionQuery::InputObject(object_id) => self
+                .get_indexes()?
+                .get_transactions_by_input_object(object_id, cursor, limit, reverse)?,
+            TransactionQuery::MutatedObject(object_id) => self
+                .get_indexes()?
+                .get_transactions_by_mutated_object(object_id, cursor, limit, reverse)?,
+            TransactionQuery::FromAddress(address) => self
+                .get_indexes()?
+                .get_transactions_from_addr(address, cursor, limit, reverse)?,
+            TransactionQuery::ToAddress(address) => self
+                .get_indexes()?
+                .get_transactions_to_addr(address, cursor, limit, reverse)?,
+            TransactionQuery::All => {
+                let iter = self.database.perpetual_tables.executed_sequence.iter();
+                if reverse {
+                    let iter = iter
+                        .skip_prior_to(&cursor)?
+                        .reverse()
+                        .map(|(_, digest)| digest.transaction);
+                    if let Some(limit) = limit {
+                        iter.take(limit).collect()
+                    } else {
+                        iter.collect()
+                    }
+                } else {
+                    let iter = iter.skip_to(&cursor)?.map(|(_, digest)| digest.transaction);
+                    if let Some(limit) = limit {
+                        iter.take(limit).collect()
+                    } else {
+                        iter.collect()
+                    }
+                }
+            }
+        })
     }
 
     pub async fn get_timestamp_ms(
@@ -1637,38 +1863,6 @@ impl AuthorityState {
         digest: &TransactionDigest,
     ) -> Result<Option<u64>, anyhow::Error> {
         Ok(self.get_indexes()?.get_timestamp_ms(digest)?)
-    }
-
-    pub async fn get_transactions_by_input_object(
-        &self,
-        object: ObjectID,
-    ) -> Result<Vec<(TxSequenceNumber, TransactionDigest)>, anyhow::Error> {
-        Ok(self
-            .get_indexes()?
-            .get_transactions_by_input_object(object)?)
-    }
-
-    pub async fn get_transactions_by_mutated_object(
-        &self,
-        object: ObjectID,
-    ) -> Result<Vec<(TxSequenceNumber, TransactionDigest)>, anyhow::Error> {
-        Ok(self
-            .get_indexes()?
-            .get_transactions_by_mutated_object(object)?)
-    }
-
-    pub async fn get_transactions_from_addr(
-        &self,
-        address: SuiAddress,
-    ) -> Result<Vec<(TxSequenceNumber, TransactionDigest)>, anyhow::Error> {
-        Ok(self.get_indexes()?.get_transactions_from_addr(address)?)
-    }
-
-    pub async fn get_transactions_to_addr(
-        &self,
-        address: SuiAddress,
-    ) -> Result<Vec<(TxSequenceNumber, TransactionDigest)>, anyhow::Error> {
-        Ok(self.get_indexes()?.get_transactions_to_addr(address)?)
     }
 
     /// Returns a full handle to the event store, including inserts... so be careful!
@@ -1958,7 +2152,7 @@ impl AuthorityState {
         &self,
         // TODO [2533]: use this once integrating Narwhal reconfiguration
         _consensus_output: &narwhal_consensus::ConsensusOutput,
-        consensus_index: ExecutionIndices,
+        consensus_index: ExecutionIndicesWithHash,
         transaction: ConsensusTransaction,
     ) -> Result<(), NarwhalHandlerError> {
         self.metrics.total_consensus_txns.inc();
@@ -1982,7 +2176,12 @@ impl AuthorityState {
                     .await
                     .map_err(NarwhalHandlerError::NodeError)?
                 {
-                    trace!("Already processed {:?}", certificate.digest());
+                    debug!(
+                        ?consensus_index,
+                        ?tracking_id,
+                        tx_digest = ?certificate.digest(),
+                        "handle_consensus_transaction UserTransaction [skip]",
+                    );
                     self.metrics.skipped_consensus_txns.inc();
                     return Ok(());
                 }
@@ -1996,8 +2195,15 @@ impl AuthorityState {
                     "handle_consensus_transaction UserTransaction",
                 );
 
+                // Schedule the certificate for execution
+                self.add_pending_certificates(vec![(
+                    *certificate.digest(),
+                    Some(*certificate.clone()),
+                )])
+                .map_err(NarwhalHandlerError::NodeError)?;
+
                 self.database
-                    .persist_certificate_and_lock_shared_objects(*certificate, consensus_index)
+                    .lock_shared_objects(*certificate, consensus_index)
                     // todo - potentially more errors from inside here needs to be mapped differently
                     .await
                     .map_err(NarwhalHandlerError::NodeError)?;
@@ -2022,9 +2228,9 @@ impl AuthorityState {
                 let mut checkpoint = self.checkpoints.lock();
                 checkpoint
                     .handle_internal_fragment(
-                        consensus_index,
+                        consensus_index.index,
                         *fragment,
-                        self.database.clone(),
+                        self,
                         &self.committee.load(),
                     )
                     .map_err(NarwhalHandlerError::NodeError)?;
@@ -2053,12 +2259,38 @@ impl AuthorityState {
 
 pub struct ConsensusHandler {
     state: Arc<AuthorityState>,
-    sender: Sender<ConsensusListenerMessage>,
+    sender: mpsc::Sender<ConsensusListenerMessage>,
+    hash: Mutex<u64>,
 }
 
 impl ConsensusHandler {
-    pub fn new(state: Arc<AuthorityState>, sender: Sender<ConsensusListenerMessage>) -> Self {
-        Self { state, sender }
+    pub fn new(state: Arc<AuthorityState>, sender: mpsc::Sender<ConsensusListenerMessage>) -> Self {
+        let hash = Mutex::new(0);
+        Self {
+            state,
+            sender,
+            hash,
+        }
+    }
+
+    fn update_hash(&self, index: ExecutionIndices, v: &[u8]) -> ExecutionIndicesWithHash {
+        let mut hash_guard = self
+            .hash
+            .try_lock()
+            .expect("Should not have contention on ExecutionState::update_hash");
+        let mut hasher = DefaultHasher::new();
+        (*hash_guard).hash(&mut hasher);
+        v.hash(&mut hasher);
+        let hash = hasher.finish();
+        *hash_guard = hash;
+        // Log hash for every certificate
+        if index.next_transaction_index == 1 && index.next_batch_index == 1 {
+            debug!(
+                "Integrity hash for consensus output at certificate {} is {:016x}",
+                index.next_certificate_index, hash
+            );
+        }
+        ExecutionIndicesWithHash { index, hash }
     }
 }
 
@@ -2073,6 +2305,7 @@ impl ExecutionState for ConsensusHandler {
         consensus_index: ExecutionIndices,
         serialized_transaction: Vec<u8>,
     ) {
+        let consensus_index = self.update_hash(consensus_index, &serialized_transaction);
         let transaction =
             match bincode::deserialize::<ConsensusTransaction>(&serialized_transaction) {
                 Ok(transaction) => transaction,
@@ -2115,10 +2348,17 @@ impl ExecutionState for ConsensusHandler {
     }
 
     async fn load_execution_indices(&self) -> ExecutionIndices {
-        self.state
+        let index_with_hash = self
+            .state
             .database
             .last_consensus_index()
-            .expect("Failed to load consensus indices")
+            .expect("Failed to load consensus indices");
+        *self
+            .hash
+            .try_lock()
+            .expect("Should not have contention on ExecutionState::load_execution_indices") =
+            index_with_hash.hash;
+        index_with_hash.index
     }
 }
 

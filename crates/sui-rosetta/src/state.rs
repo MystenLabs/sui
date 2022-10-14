@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::cmp::min;
 use std::collections::BTreeMap;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -21,6 +20,7 @@ use sui_types::base_types::{
 };
 use sui_types::gas_coin::GasCoin;
 use sui_types::object::PastObjectRead;
+use sui_types::query::TransactionQuery;
 
 use crate::operations::Operation;
 use crate::types::{
@@ -29,7 +29,11 @@ use crate::types::{
     TransactionIdentifier,
 };
 use crate::ErrorType::{BlockNotFound, InternalError};
-use crate::{Error, SUI};
+use crate::{Error, ErrorType, SUI};
+
+#[cfg(test)]
+#[path = "unit_tests/balance_changing_tx_tests.rs"]
+mod balance_changing_tx_tests;
 
 pub struct OnlineServerContext {
     pub state: Arc<AuthorityState>,
@@ -200,14 +204,25 @@ impl PseudoBlockProvider {
             return Ok(());
         }
         if current_block.index < total_tx {
-            // Make sure we don't hit the query limit.
-            // TODO: replace this with pagination when it's available.
-            let end = min(4000 + current_block.index, total_tx);
-            let tx_digests = state.get_transactions_in_range(current_block.index, end)?;
+            let tx_digests = if current_block.index == 0 {
+                state.get_transactions(TransactionQuery::All, None, None, false)?
+            } else {
+                let cursor = TransactionDigest::new(current_block.hash.0);
+                let mut tx_digests =
+                    state.get_transactions(TransactionQuery::All, Some(cursor), None, false)?;
+                if tx_digests.remove(0) != cursor {
+                    return Err(Error::new_with_msg(
+                        ErrorType::InternalError,
+                        "Incorrect data returned from state.",
+                    ));
+                }
+                tx_digests
+            };
+
             let mut index = current_block.index;
             let mut parent_block_identifier = current_block;
 
-            for (_, digest) in tx_digests {
+            for digest in tx_digests {
                 index += 1;
                 let block_identifier = BlockIdentifier {
                     index,
@@ -308,7 +323,7 @@ fn extract_balance_changes_from_ops(
     let mut changes: BTreeMap<SuiAddress, SignedValue> = BTreeMap::new();
     for op in ops {
         match op.type_ {
-            OperationType::TransferSUI | OperationType::GasSpent | OperationType::Genesis => {
+            OperationType::SuiBalanceChange | OperationType::GasSpent | OperationType::Genesis => {
                 let addr = op
                     .account
                     .ok_or_else(|| anyhow!("Account address cannot be null for {:?}", op.type_))?

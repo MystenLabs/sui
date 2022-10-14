@@ -40,7 +40,8 @@ The content of our [settings.json](https://github.com/mystenlabs/narwhal/blob/ma
 We set the following `node_params` in our [fabfile](https://github.com/mystenlabs/narwhal/blob/main/benchmark/fabfile.py):
 ```python
 node_params = {
-    'header_size': 1_000,  # bytes
+    'header_num_of_batches_threshold': 1000, # number of batches
+    'max_header_num_of_batches': 32, # number of batches
     'max_header_delay': 200,  # ms
     'gc_depth': 50,  # rounds
     'sync_retry_delay': 10_000,  # ms

@@ -8,7 +8,6 @@ use crate::{
     primary_connector::PrimaryConnector,
     processor::Processor,
     quorum_waiter::QuorumWaiter,
-    synchronizer::Synchronizer,
 };
 use anemo::{types::PeerInfo, PeerId};
 use anemo_tower::{callback::CallbackLayer, trace::TraceLayer};
@@ -19,7 +18,6 @@ use futures::StreamExt;
 use multiaddr::{Multiaddr, Protocol};
 use network::metrics::MetricsMakeCallbackHandler;
 use network::P2pNetwork;
-use primary::PrimaryWorkerMessage;
 use std::{net::Ipv4Addr, sync::Arc};
 use store::Store;
 use tokio::{sync::watch, task::JoinHandle};
@@ -105,11 +103,6 @@ impl Worker {
             &channel_metrics.tx_worker_processor,
             &channel_metrics.tx_worker_processor_total,
         );
-        let (tx_synchronizer, rx_synchronizer) = channel_with_total(
-            CHANNEL_CAPACITY,
-            &channel_metrics.tx_synchronizer,
-            &channel_metrics.tx_synchronizer_total,
-        );
 
         let worker_service = WorkerToWorkerServer::new(WorkerReceiverHandler {
             tx_processor: tx_worker_processor.clone(),
@@ -118,11 +111,12 @@ impl Worker {
         let primary_service = PrimaryToWorkerServer::new(PrimaryReceiverHandler {
             name: worker.primary_name.clone(),
             id: worker.id,
+            committee: worker.committee.clone(),
             worker_cache: worker.worker_cache.clone(),
             store: worker.store.clone(),
             request_batches_timeout: worker.parameters.sync_retry_delay,
             request_batches_retry_nodes: worker.parameters.sync_retry_nodes,
-            tx_synchronizer,
+            tx_reconfigure,
             tx_primary: tx_primary.clone(),
             tx_batch_processor: tx_worker_processor,
         });
@@ -182,7 +176,7 @@ impl Worker {
         let connection_monitor_handle = network::connectivity::ConnectionMonitor::spawn(
             network.clone(),
             network_connection_metrics,
-            tx_reconfigure.subscribe(),
+            rx_reconfigure.clone(),
         );
 
         let other_workers = worker
@@ -221,7 +215,7 @@ impl Worker {
         network::admin::start_admin_server(
             network_admin_server_base_port,
             network.clone(),
-            tx_reconfigure.subscribe(),
+            rx_reconfigure.clone(),
         );
 
         // Connect worker to its corresponding primary.
@@ -243,22 +237,20 @@ impl Worker {
         });
         let primary_connector_handle = PrimaryConnector::spawn(
             primary_network_key,
-            rx_reconfigure,
+            rx_reconfigure.clone(),
             rx_primary,
             P2pNetwork::new(network.clone()),
         );
         let client_flow_handles = worker.handle_clients_transactions(
-            &tx_reconfigure,
+            rx_reconfigure.clone(),
             tx_primary.clone(),
             node_metrics,
             channel_metrics,
             endpoint_metrics,
-            network.clone(),
+            network,
         );
         let worker_flow_handles =
-            worker.handle_workers_messages(&tx_reconfigure, tx_primary, rx_worker_processor);
-        let primary_flow_handles =
-            worker.handle_primary_messages(rx_synchronizer, tx_reconfigure, network);
+            worker.handle_workers_messages(rx_reconfigure, tx_primary, rx_worker_processor);
 
         // NOTE: This log entry is used to compute performance.
         info!(
@@ -273,36 +265,15 @@ impl Worker {
         );
 
         let mut handles = vec![primary_connector_handle, connection_monitor_handle];
-        handles.extend(primary_flow_handles);
         handles.extend(client_flow_handles);
         handles.extend(worker_flow_handles);
         handles
     }
 
-    /// Spawn all tasks responsible to handle messages from our primary.
-    fn handle_primary_messages(
-        &self,
-        rx_synchronizer: Receiver<PrimaryWorkerMessage>,
-        tx_reconfigure: watch::Sender<ReconfigureNotification>,
-        network: anemo::Network,
-    ) -> Vec<JoinHandle<()>> {
-        // The `Synchronizer` is responsible to keep the worker in sync with the others. It handles the commands
-        // it receives from the primary (which are mainly notifications that we are out of sync).
-        let handle = Synchronizer::spawn(
-            self.committee.clone(),
-            self.worker_cache.clone(),
-            /* rx_message */ rx_synchronizer,
-            tx_reconfigure,
-            P2pNetwork::new(network),
-        );
-
-        vec![handle]
-    }
-
     /// Spawn all tasks responsible to handle clients transactions.
     fn handle_clients_transactions(
         &self,
-        tx_reconfigure: &watch::Sender<ReconfigureNotification>,
+        rx_reconfigure: watch::Receiver<ReconfigureNotification>,
         tx_primary: Sender<WorkerPrimaryMessage>,
         node_metrics: Arc<WorkerMetrics>,
         channel_metrics: Arc<WorkerChannelMetrics>,
@@ -337,7 +308,7 @@ impl Worker {
             .unwrap();
         let tx_receiver_handle = TxReceiverHandler { tx_batch_maker }.spawn(
             address.clone(),
-            tx_reconfigure.subscribe(),
+            rx_reconfigure.clone(),
             endpoint_metrics,
         );
 
@@ -348,7 +319,7 @@ impl Worker {
             (*(*(*self.committee).load()).clone()).clone(),
             self.parameters.batch_size,
             self.parameters.max_batch_delay,
-            tx_reconfigure.subscribe(),
+            rx_reconfigure.clone(),
             /* rx_transaction */ rx_batch_maker,
             /* tx_message */ tx_quorum_waiter,
             node_metrics,
@@ -361,7 +332,7 @@ impl Worker {
             self.id,
             (*(*(*self.committee).load()).clone()).clone(),
             self.worker_cache.clone(),
-            tx_reconfigure.subscribe(),
+            rx_reconfigure.clone(),
             /* rx_message */ rx_quorum_waiter,
             /* tx_batch */ tx_client_processor,
             P2pNetwork::new(network),
@@ -372,7 +343,7 @@ impl Worker {
         let processor_handle = Processor::spawn(
             self.id,
             self.store.clone(),
-            tx_reconfigure.subscribe(),
+            rx_reconfigure,
             /* rx_batch */ rx_client_processor,
             /* tx_digest */ tx_primary,
             /* own_batch */ true,
@@ -394,7 +365,7 @@ impl Worker {
     /// Spawn all tasks responsible to handle messages from other workers.
     fn handle_workers_messages(
         &self,
-        tx_reconfigure: &watch::Sender<ReconfigureNotification>,
+        rx_reconfigure: watch::Receiver<ReconfigureNotification>,
         tx_primary: Sender<WorkerPrimaryMessage>,
         rx_worker_processor: Receiver<Batch>,
     ) -> Vec<JoinHandle<()>> {
@@ -403,7 +374,7 @@ impl Worker {
         let processor_handle = Processor::spawn(
             self.id,
             self.store.clone(),
-            tx_reconfigure.subscribe(),
+            rx_reconfigure,
             /* rx_batch */ rx_worker_processor,
             /* tx_digest */ tx_primary,
             /* own_batch */ false,

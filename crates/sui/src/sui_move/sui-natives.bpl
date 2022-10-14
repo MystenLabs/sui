@@ -25,7 +25,7 @@ procedure {:inline 1} $2_transfer_freeze_object{{S}}(obj: {{T}});
 // ==================================================================================
 // Native object
 
-procedure {:inline 1} $2_object_bytes_to_address(bytes: Vec (int)) returns (res: int);
+procedure {:inline 1} $2_object_address_from_bytes(bytes: Vec (int)) returns (res: int);
 
 {%- for instance in object_instances %}
 {%- set S = "'" ~ instance.suffix ~ "'" -%}

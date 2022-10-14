@@ -30,6 +30,7 @@ members = [
     "crates/sui-telemetry",
     "crates/sui-test-validator",
     "crates/sui-tool",
+    "crates/sui-transaction-builder",
     "crates/sui-transactional-test-runner",
     "crates/sui-types",
     "crates/sui-verifier",
@@ -89,6 +90,8 @@ move-transactional-test-runner = { git = "https://github.com/move-language/move"
 move-ir-types = { git = "https://github.com/move-language/move", rev = "7c8552e0001c0c041c929e050c2d2959935485f1" }
 move-prover = { git = "https://github.com/move-language/move", rev = "7c8552e0001c0c041c929e050c2d2959935485f1" }
 move-prover-boogie-backend = { git = "https://github.com/move-language/move", rev = "7c8552e0001c0c041c929e050c2d2959935485f1" }
+
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "4b7a06fe393003013489990dc2f4d3d2ebb32539" }
 
 # Use the same workspace-hack across crates.
 workspace-hack = { path = "crates/workspace-hack" }

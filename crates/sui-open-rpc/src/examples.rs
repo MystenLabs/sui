@@ -16,11 +16,11 @@ use sui::client_commands::EXAMPLE_NFT_URL;
 use sui_core::test_utils::to_sender_signed_transaction;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    GatewayTxSeqNumber, MoveCallParams, OwnedObjectRef, RPCTransactionRequestParams,
-    SuiCertifiedTransaction, SuiData, SuiEvent, SuiEventEnvelope, SuiExecutionStatus,
-    SuiGasCostSummary, SuiObject, SuiObjectRead, SuiObjectRef, SuiParsedData, SuiPastObjectRead,
-    SuiRawData, SuiRawMoveObject, SuiTransactionData, SuiTransactionEffects,
-    SuiTransactionResponse, TransactionBytes, TransferObjectParams,
+    MoveCallParams, OwnedObjectRef, RPCTransactionRequestParams, SuiCertifiedTransaction, SuiData,
+    SuiEvent, SuiEventEnvelope, SuiExecutionStatus, SuiGasCostSummary, SuiObject, SuiObjectRead,
+    SuiObjectRef, SuiParsedData, SuiPastObjectRead, SuiRawData, SuiRawMoveObject,
+    SuiTransactionData, SuiTransactionEffects, SuiTransactionResponse, TransactionBytes,
+    TransactionsPage, TransferObjectParams,
 };
 use sui_open_rpc::ExamplePairing;
 use sui_types::base_types::{
@@ -35,6 +35,8 @@ use sui_types::messages::{
     TransactionData, TransactionKind, TransferObject,
 };
 use sui_types::object::Owner;
+use sui_types::query::Ordering;
+use sui_types::query::TransactionQuery;
 use sui_types::sui_serde::Base64;
 use sui_types::SUI_FRAMEWORK_OBJECT_ID;
 
@@ -75,12 +77,7 @@ impl RpcExampleProvider {
             self.get_recent_transactions(),
             self.get_total_transaction_number(),
             self.get_transaction(),
-            self.get_transactions_by_input_object(),
-            self.get_transactions_by_move_function(),
-            self.get_transactions_by_mutated_object(),
-            self.get_transactions_from_address(),
-            self.get_transactions_in_range(),
-            self.get_transactions_to_address(),
+            self.get_transactions(),
             self.get_events_by_transaction(),
             self.get_events_by_object(),
             self.get_events_by_sender(),
@@ -376,95 +373,33 @@ impl RpcExampleProvider {
         )
     }
 
-    fn get_transactions_by_input_object(&mut self) -> Examples {
-        let result = self.get_transaction_digests(5..8);
-        Examples::new(
-            "sui_getTransactionsByInputObject",
-            vec![ExamplePairing::new(
-                "Return the transaction digest for specified input object",
-                vec![("object", json!(ObjectID::new(self.rng.gen())))],
-                json!(result),
-            )],
-        )
-    }
+    fn get_transactions(&mut self) -> Examples {
+        let mut data = self.get_transaction_digests(5..9);
+        let next_cursor = data.pop();
 
-    fn get_transactions_by_move_function(&mut self) -> Examples {
-        let result = self.get_transaction_digests(6..10);
+        let result = TransactionsPage { data, next_cursor };
         Examples::new(
-            "sui_getTransactionsByMoveFunction",
+            "sui_getTransactions",
             vec![ExamplePairing::new(
-                "Return the transaction digest for specified input object",
+                "Return the transaction digest for specified query criteria",
                 vec![
-                    ("package", json!(SUI_FRAMEWORK_OBJECT_ID)),
-                    ("module", json!("devnet_nft")),
-                    ("function", json!("function")),
+                    (
+                        "query",
+                        json!(TransactionQuery::InputObject(ObjectID::new(self.rng.gen()))),
+                    ),
+                    ("cursor", json!(10)),
+                    ("limit", json!(100)),
+                    ("order", json!(Ordering::Ascending)),
                 ],
                 json!(result),
             )],
         )
     }
 
-    fn get_transactions_by_mutated_object(&mut self) -> Examples {
-        let result = self.get_transaction_digests(5..8);
-        Examples::new(
-            "sui_getTransactionsByMutatedObject",
-            vec![ExamplePairing::new(
-                "Return the transaction digest for specified mutated object",
-                vec![("object", json!(ObjectID::new(self.rng.gen())))],
-                json!(result),
-            )],
-        )
-    }
-
-    fn get_transactions_from_address(&mut self) -> Examples {
-        let result = self.get_transaction_digests(5..8);
-        Examples::new(
-            "sui_getTransactionsFromAddress",
-            vec![ExamplePairing::new(
-                "Return the transaction digest for specified sender address",
-                vec![(
-                    "addr",
-                    json!(SuiAddress::from(ObjectID::new(self.rng.gen()))),
-                )],
-                json!(result),
-            )],
-        )
-    }
-
-    fn get_transactions_in_range(&mut self) -> Examples {
-        let result = self.get_transaction_digests(5..8);
-        Examples::new(
-            "sui_getTransactionsInRange",
-            vec![ExamplePairing::new(
-                "Return the transaction digest in range",
-                vec![("start", json!(5)), ("end", json!(8))],
-                json!(result),
-            )],
-        )
-    }
-
-    fn get_transactions_to_address(&mut self) -> Examples {
-        let result = self.get_transaction_digests(5..8);
-        Examples::new(
-            "sui_getTransactionsToAddress",
-            vec![ExamplePairing::new(
-                "Return the transaction digest for specified recipient address",
-                vec![(
-                    "addr",
-                    json!(SuiAddress::from(ObjectID::new(self.rng.gen()))),
-                )],
-                json!(result),
-            )],
-        )
-    }
-
-    fn get_transaction_digests(
-        &mut self,
-        range: Range<u64>,
-    ) -> Vec<(GatewayTxSeqNumber, TransactionDigest)> {
+    fn get_transaction_digests(&mut self, range: Range<u64>) -> Vec<TransactionDigest> {
         range
             .into_iter()
-            .map(|seq| (seq, TransactionDigest::new(self.rng.gen())))
+            .map(|_| TransactionDigest::new(self.rng.gen()))
             .collect()
     }
 

@@ -243,7 +243,8 @@ class NodeParameters:
     def __init__(self, json):
         inputs = []
         try:
-            inputs += [json['header_size']]
+            inputs += [json['header_num_of_batches_threshold']]
+            inputs += [json['max_header_num_of_batches']]
             inputs += [json['max_header_delay']]
             inputs += [json['gc_depth']]
             inputs += [json['sync_retry_delay']]

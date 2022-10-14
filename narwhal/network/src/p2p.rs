@@ -11,15 +11,14 @@ use anyhow::format_err;
 use anyhow::Result;
 use async_trait::async_trait;
 use crypto::{traits::KeyPair, NetworkPublicKey};
-use multiaddr::Multiaddr;
 use rand::{rngs::SmallRng, SeedableRng as _};
 use std::collections::HashMap;
 use std::time::Duration;
 use tokio::{runtime::Handle, task::JoinHandle};
 use types::{
     Batch, BatchDigest, PrimaryMessage, PrimaryToPrimaryClient, PrimaryToWorkerClient,
-    PrimaryWorkerMessage, RequestBatchRequest, WorkerBatchRequest, WorkerBatchResponse,
-    WorkerDeleteBatchesMessage, WorkerMessage, WorkerPrimaryMessage, WorkerSynchronizeMessage,
+    RequestBatchRequest, WorkerBatchRequest, WorkerBatchResponse, WorkerDeleteBatchesMessage,
+    WorkerMessage, WorkerPrimaryMessage, WorkerReconfigureMessage, WorkerSynchronizeMessage,
     WorkerToPrimaryClient, WorkerToWorkerClient,
 };
 
@@ -50,15 +49,6 @@ impl P2pNetwork {
             rng: SmallRng::from_entropy(),
             executors: HashMap::new(),
         }
-    }
-
-    pub fn cleanup<'a, I>(&mut self, _to_remove: I)
-    where
-        I: IntoIterator<Item = &'a Multiaddr>,
-    {
-        // TODO This function was previously used to remove old clients on epoch changes. This may
-        // not be necessary with the new networking stack so we'll need to revisit if this function
-        // is even needed. For now do nothing.
     }
 
     // Creates a new single-use anemo::Network to connect outbound to a single
@@ -212,32 +202,31 @@ impl ReliableNetwork<PrimaryMessage> for P2pNetwork {
 // Primary-to-Worker
 //
 
-impl UnreliableNetwork<PrimaryWorkerMessage> for P2pNetwork {
+impl UnreliableNetwork<WorkerReconfigureMessage> for P2pNetwork {
     type Response = ();
     fn unreliable_send(
         &mut self,
         peer: NetworkPublicKey,
-        message: &PrimaryWorkerMessage,
+        message: &WorkerReconfigureMessage,
     ) -> Result<JoinHandle<Result<anemo::Response<()>>>> {
         let message = message.to_owned();
         let f =
-            move |peer| async move { PrimaryToWorkerClient::new(peer).send_message(message).await };
+            move |peer| async move { PrimaryToWorkerClient::new(peer).reconfigure(message).await };
         self.unreliable_send(peer, f)
     }
 }
-
 #[async_trait]
-impl ReliableNetwork<PrimaryWorkerMessage> for P2pNetwork {
+impl ReliableNetwork<WorkerReconfigureMessage> for P2pNetwork {
     type Response = ();
     async fn send(
         &mut self,
         peer: NetworkPublicKey,
-        message: &PrimaryWorkerMessage,
+        message: &WorkerReconfigureMessage,
     ) -> CancelOnDropHandler<Result<anemo::Response<()>>> {
         let message = message.to_owned();
         let f = move |peer| {
             let message = message.clone();
-            async move { PrimaryToWorkerClient::new(peer).send_message(message).await }
+            async move { PrimaryToWorkerClient::new(peer).reconfigure(message).await }
         };
 
         self.send(peer, f).await

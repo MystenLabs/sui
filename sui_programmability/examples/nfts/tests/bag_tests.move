@@ -23,18 +23,19 @@ module nfts::bag_tests {
     #[test]
     fun test_bag() {
         let sender = @0x0;
-        let scenario = &mut test_scenario::begin(&sender);
+        let scenario_val = test_scenario::begin(sender);
+        let scenario = &mut scenario_val;
 
         // Create a new Bag and transfer it to the sender.
-        test_scenario::next_tx(scenario, &sender);
+        test_scenario::next_tx(scenario, sender);
         {
             bag::create(test_scenario::ctx(scenario));
         };
 
         // Add two objects of different types into the bag.
-        test_scenario::next_tx(scenario, &sender);
+        test_scenario::next_tx(scenario, sender);
         {
-            let bag = test_scenario::take_owned<Bag>(scenario);
+            let bag = test_scenario::take_from_sender<Bag>(scenario);
             assert!(bag::size(&bag) == 0, EBAG_SIZE_MISMATCH);
 
             let obj1 = Object1 { id: object::new(test_scenario::ctx(scenario)) };
@@ -47,8 +48,9 @@ module nfts::bag_tests {
             assert!(bag::contains(&bag, typed_id::as_id(&item_id1)), EOBJECT_NOT_FOUND);
             assert!(bag::contains(&bag, typed_id::as_id(&item_id2)), EOBJECT_NOT_FOUND);
 
-            test_scenario::return_owned(scenario, bag);
+            test_scenario::return_to_sender(scenario, bag);
         };
+        test_scenario::end(scenario_val);
         // TODO: Test object removal once we can retrieve object owned objects from test_scenario.
     }
 

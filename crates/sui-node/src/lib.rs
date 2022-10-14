@@ -29,7 +29,9 @@ use sui_core::{
 };
 use sui_json_rpc::bcs_api::BcsApiImpl;
 use sui_json_rpc::streaming_api::TransactionStreamingApiImpl;
+use sui_json_rpc::transaction_builder_api::FullNodeTransactionBuilderApi;
 use sui_network::api::ValidatorServer;
+use sui_network::default_mysten_network_config;
 use sui_storage::{
     event_store::{EventStoreType, SqlEventStore},
     node_sync_store::NodeSyncStore,
@@ -103,6 +105,7 @@ impl SuiNode {
             &committee,
             config.protocol_public_key(),
             secret.clone(),
+            config.enable_reconfig,
         )?));
 
         let index_store = if is_validator {
@@ -130,11 +133,18 @@ impl SuiNode {
             .websocket_address
             .map(|_| Arc::new(TransactionStreamer::new()));
 
+        let node_sync_store = Arc::new(NodeSyncStore::open_tables_read_write(
+            config.db_path().join("node_sync_db"),
+            None,
+            None,
+        ));
+
         let state = Arc::new(
             AuthorityState::new(
                 config.protocol_public_key(),
                 secret,
                 store,
+                node_sync_store,
                 committee_store.clone(),
                 index_store.clone(),
                 event_store,
@@ -146,11 +156,7 @@ impl SuiNode {
             )
             .await,
         );
-
-        let mut net_config = mysten_network::config::Config::new();
-        net_config.connect_timeout = Some(Duration::from_secs(5));
-        net_config.request_timeout = Some(Duration::from_secs(5));
-        net_config.http2_keepalive_interval = Some(Duration::from_secs(5));
+        let net_config = default_mysten_network_config();
 
         let sui_system_state = state.get_sui_system_state_object().await?;
 
@@ -174,17 +180,12 @@ impl SuiNode {
             committee_store,
             authority_clients,
             AuthAggMetrics::new(&prometheus_registry),
-            SafeClientMetrics::new(&prometheus_registry),
+            Arc::new(SafeClientMetrics::new(&prometheus_registry)),
+            network_metrics.clone(),
         );
 
-        let node_sync_store = Arc::new(NodeSyncStore::open_tables_read_write(
-            config.db_path().join("node_sync_db"),
-            None,
-            None,
-        ));
         let active_authority = Arc::new(ActiveAuthority::new(
             state.clone(),
-            node_sync_store,
             net.clone(),
             GossipMetrics::new(&prometheus_registry),
             network_metrics.clone(),
@@ -255,10 +256,7 @@ impl SuiNode {
             Some(
                 active_authority
                     .clone()
-                    .spawn_checkpoint_process(
-                        CheckpointMetrics::new(&prometheus_registry),
-                        config.enable_reconfig,
-                    )
+                    .spawn_checkpoint_process(CheckpointMetrics::new(&prometheus_registry))
                     .await,
             )
         } else {
@@ -382,6 +380,7 @@ pub async fn build_http_servers(
     server.register_module(ReadApi::new(state.clone()))?;
     server.register_module(FullNodeApi::new(state.clone()))?;
     server.register_module(BcsApiImpl::new(state.clone()))?;
+    server.register_module(FullNodeTransactionBuilderApi::new(state.clone()))?;
 
     if let Some(transaction_orchestrator) = transaction_orchestrator {
         server.register_module(FullNodeTransactionExecutionApi::new(

@@ -6,7 +6,7 @@
 // 2) Recover a Secp256k1 signature to its public key, output an object with the public key. 
 // 3) Verify a Secp256k1 signature, produce an event for whether it is verified. 
 module math::ecdsa {
-    use sui::crypto;
+    use sui::ecdsa;
     use sui::event;
     use sui::object::{Self, UID};
     use sui::tx_context::TxContext;
@@ -26,7 +26,7 @@ module math::ecdsa {
     public entry fun keccak256(data: vector<u8>, recipient: address, ctx: &mut TxContext) {
         let hashed = Output {
             id: object::new(ctx),
-            value: crypto::keccak256(data),
+            value: ecdsa::keccak256(&data),
         };
         // Transfer an output data object holding the hashed data to the recipient.
         transfer::transfer(hashed, recipient)
@@ -35,7 +35,7 @@ module math::ecdsa {
     public entry fun ecrecover(signature: vector<u8>, hashed_msg: vector<u8>, recipient: address, ctx: &mut TxContext) {
         let pubkey = Output {
             id: object::new(ctx),
-            value: crypto::ecrecover(signature, hashed_msg),
+            value: ecdsa::ecrecover(&signature, &hashed_msg),
         };
         // Transfer an output data object holding the pubkey to the recipient.
         transfer::transfer(pubkey, recipient)
@@ -52,8 +52,8 @@ module math::ecdsa {
             *v = (*v - 1) % 2;
         };
 
-        let pubkey = crypto::ecrecover(signature, hashed_msg);
-        let uncompressed = crypto::decompress_pubkey(pubkey);
+        let pubkey = ecdsa::ecrecover(&signature, &hashed_msg);
+        let uncompressed = ecdsa::decompress_pubkey(&pubkey);
 
         // Take the last 64 bytes of the uncompressed pubkey.
         let uncompressed_64 = vector::empty<u8>();
@@ -65,7 +65,7 @@ module math::ecdsa {
         };
 
         // Take the last 20 bytes of the hash of the 64-bytes uncompressed pubkey.
-        let hashed = crypto::keccak256(uncompressed_64);
+        let hashed = ecdsa::keccak256(&uncompressed_64);
         let addr = vector::empty<u8>();
         let i = 12;
         while (i < 32) {
@@ -84,6 +84,6 @@ module math::ecdsa {
     }
 
     public entry fun secp256k1_verify(signature: vector<u8>, public_key: vector<u8>, hashed_msg: vector<u8>) {
-        event::emit(VerifiedEvent {is_verified: crypto::secp256k1_verify(signature, public_key, hashed_msg)});
+        event::emit(VerifiedEvent {is_verified: ecdsa::secp256k1_verify(&signature, &public_key, &hashed_msg)});
     }
 }

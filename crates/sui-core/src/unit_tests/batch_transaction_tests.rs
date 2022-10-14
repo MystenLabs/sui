@@ -23,7 +23,7 @@ async fn test_batch_transaction_ok() -> anyhow::Result<()> {
     // This batch transaction contains 100 transfers, and 100 Move calls.
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let (recipient, _): (_, AccountKeyPair) = get_key_pair();
-    const N: usize = 100;
+    const N: usize = 10;
     const TOTAL: usize = N + 1;
     let all_ids = (0..TOTAL).map(|_| ObjectID::random()).collect::<Vec<_>>();
     let (authority_state, package) = init_state_with_ids_and_object_basics(
@@ -61,7 +61,7 @@ async fn test_batch_transaction_ok() -> anyhow::Result<()> {
             .await?
             .unwrap()
             .compute_object_reference(),
-        100000,
+        1000000,
     );
 
     let tx = to_sender_signed_transaction(data, &sender_key);

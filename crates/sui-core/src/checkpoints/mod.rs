@@ -27,6 +27,8 @@ use sui_types::{
         SignedCheckpointSummary,
     },
 };
+use tap::TapFallible;
+use tokio::sync::broadcast;
 use tracing::{debug, error, info};
 use typed_store::traits::TypedStoreDebug;
 
@@ -162,11 +164,16 @@ pub struct CheckpointStore {
 
     memory_locals: Arc<CheckpointLocals>,
 
+    /// Whether reconfiguration is enabled.
+    pub enable_reconfig: bool,
+
     /// Consensus sender
     sender: Option<Box<dyn ConsensusSender>>,
 
     /// DBMap tables
     pub tables: CheckpointStoreTables,
+
+    notify_new_checkpoint_tx: broadcast::Sender<CertifiedCheckpointSummary>,
 }
 
 impl CheckpointStore {
@@ -188,6 +195,11 @@ impl CheckpointStore {
         } else {
             None
         })
+    }
+
+    /// Subscribe to new checkpoints.
+    pub fn subscribe_to_checkpoints(&self) -> broadcast::Receiver<CertifiedCheckpointSummary> {
+        self.notify_new_checkpoint_tx.subscribe()
     }
 
     // Manage persistent local variables
@@ -274,6 +286,7 @@ impl CheckpointStore {
         current_committee: &Committee,
         name: AuthorityName,
         secret: StableSyncAuthoritySigner,
+        enable_reconfig: bool,
     ) -> Result<CheckpointStore, SuiError> {
         let tables =
             CheckpointStoreTables::open_tables_read_write(path.to_path_buf(), db_options, None);
@@ -283,12 +296,15 @@ impl CheckpointStore {
             name,
             secret.clone(),
         )?);
+        let (notify_new_checkpoint_tx, _) = broadcast::channel(16);
         Ok(CheckpointStore {
             name,
             secret,
             memory_locals,
+            enable_reconfig,
             sender: None,
             tables,
+            notify_new_checkpoint_tx,
         })
     }
 
@@ -365,9 +381,6 @@ impl CheckpointStore {
         effects_store: impl CausalOrder,
         next_epoch_committee: Option<Committee>,
     ) -> SuiResult {
-        // Make sure that all transactions in the checkpoint have been executed locally.
-        self.check_checkpoint_transactions(transactions.clone())?;
-
         let previous_digest = self.get_prev_checkpoint_digest(sequence_number)?;
 
         // Create a causal order of all transactions in the checkpoint.
@@ -454,6 +467,10 @@ impl CheckpointStore {
 
         // Update the transactions databases.
         self.update_new_checkpoint_inner(checkpoint_sequence_number, contents, batch)?;
+
+        if let AuthenticatedCheckpoint::Certified(summary) = checkpoint {
+            self.notify_new_checkpoint(summary.clone());
+        }
 
         // TODO: Make the following atomic with above db writes.
         let locals = self.get_locals();
@@ -758,22 +775,9 @@ impl CheckpointStore {
         self.tables
             .checkpoints
             .insert(seq, &AuthenticatedCheckpoint::Certified(checkpoint.clone()))?;
+        self.notify_new_checkpoint(checkpoint.clone());
         self.clear_proposal(*seq + 1)?;
         Ok(())
-    }
-
-    /// Processes a checkpoint certificate that this validator just learned about.
-    /// Such certificate may either be created locally based on a quorum of signed checkpoints,
-    /// or downloaded from other validators to sync local checkpoint state.
-    #[cfg(test)]
-    pub fn process_new_checkpoint_certificate(
-        &mut self,
-        checkpoint: &CertifiedCheckpointSummary,
-        contents: &CheckpointContents,
-        committee: &Committee,
-    ) -> SuiResult {
-        self.check_checkpoint_transactions(contents.iter())?;
-        self.process_synced_checkpoint_certificate(checkpoint, contents, committee)
     }
 
     /// Unlike process_new_checkpoint_certificate this does not verify that transactions are executed
@@ -795,6 +799,16 @@ impl CheckpointStore {
         )?;
         self.clear_proposal(*seq + 1)?;
         Ok(())
+    }
+
+    fn notify_new_checkpoint(&self, ckpt: CertifiedCheckpointSummary) {
+        let sequence = ckpt.summary.sequence_number;
+        let _ = self.notify_new_checkpoint_tx.send(ckpt).tap_err(|_| {
+            debug!(
+                ?sequence,
+                "notify_new_checkpoint failed - no subscribers at this time"
+            )
+        });
     }
 
     fn clear_proposal(
@@ -824,7 +838,7 @@ impl CheckpointStore {
     }
 
     /// Get the latest stored checkpoint if there is one
-    pub fn latest_stored_checkpoint(&mut self) -> Option<AuthenticatedCheckpoint> {
+    pub fn latest_stored_checkpoint(&self) -> Option<AuthenticatedCheckpoint> {
         self.tables
             .checkpoints
             .iter()
@@ -833,14 +847,26 @@ impl CheckpointStore {
             .map(|(_, ckp)| ckp)
     }
 
+    /// Get the latest certified checkpoint
+    pub fn latest_certified_checkpoint(&self) -> Option<AuthenticatedCheckpoint> {
+        self.tables
+            .checkpoints
+            .iter()
+            .skip_to_last()
+            .reverse()
+            .take_while(|(_, ckp)| !matches!(ckp, AuthenticatedCheckpoint::Certified(_)))
+            .next()
+            .map(|(_, ckp)| ckp)
+    }
+
     pub fn is_ready_to_start_epoch_change(&mut self) -> bool {
         let next_seq = self.next_checkpoint();
-        next_seq % CHECKPOINT_COUNT_PER_EPOCH == 0 && next_seq != 0
+        self.enable_reconfig && next_seq % CHECKPOINT_COUNT_PER_EPOCH == 0 && next_seq != 0
     }
 
     pub fn is_ready_to_finish_epoch_change(&mut self) -> bool {
         let next_seq = self.next_checkpoint();
-        next_seq % CHECKPOINT_COUNT_PER_EPOCH == 1 && next_seq != 1
+        self.enable_reconfig && next_seq % CHECKPOINT_COUNT_PER_EPOCH == 1 && next_seq != 1
     }
 
     /// Checks whether we should reject consensus transaction.
@@ -848,14 +874,25 @@ impl CheckpointStore {
     /// create the second last checkpoint of the epoch. We continue to reject consensus transactions
     /// until we finish the last checkpoint.
     pub fn should_reject_consensus_transaction(&mut self) -> bool {
+        // Never reject consensus message if reconfiguration is not enabled.
+        if !self.enable_reconfig {
+            return false;
+        }
         let next_seq = self.next_checkpoint();
-        // Either we just finished constructing the second last checkpoint,
-        // or just finished constructing the last checkpoint.
-        ((next_seq + 1) % CHECKPOINT_COUNT_PER_EPOCH == 0 || self.is_ready_to_start_epoch_change())
+        // Either we just finished constructing the second last checkpoint
+        if (next_seq + 1) % CHECKPOINT_COUNT_PER_EPOCH == 0
             && self
                 .memory_locals
                 .checkpoint_to_be_constructed
                 .is_completed()
+        {
+            return true;
+        }
+        // Or we are already in the process of constructing the last checkpoint.
+        if next_seq % CHECKPOINT_COUNT_PER_EPOCH == 0 && next_seq != 0 {
+            return true;
+        }
+        false
     }
 
     pub fn validators_already_fragmented_with(
@@ -918,33 +955,12 @@ impl CheckpointStore {
         Ok(checkpoint_proposal)
     }
 
-    fn check_checkpoint_transactions<'a>(
-        &self,
-        transactions: impl Iterator<Item = &'a ExecutionDigests> + Clone,
-    ) -> SuiResult {
-        fp_ensure!(
-            self.tables
-                .extra_transactions
-                .multi_get(transactions)?
-                .into_iter()
-                .all(|s| s.is_some()),
-            // This should never happen (unless called directly from tests).
-            SuiError::CheckpointingError {
-                error: "Some transactions are not in extra_transactions".to_string()
-            }
-        );
-        Ok(())
-    }
-
     #[cfg(test)]
     pub fn update_new_checkpoint(
         &mut self,
         seq: CheckpointSequenceNumber,
         transactions: &CheckpointContents,
     ) -> Result<(), SuiError> {
-        // Ensure we have processed all transactions contained in this checkpoint.
-        self.check_checkpoint_transactions(transactions.iter())?;
-
         let batch = self.tables.transactions_to_checkpoint.batch();
         self.update_new_checkpoint_inner(seq, transactions, batch)?;
         Ok(())

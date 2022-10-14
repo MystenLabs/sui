@@ -58,3 +58,13 @@ fn sui_wallet_address_mnemonic_test() -> Result<(), anyhow::Error> {
 
     Ok(())
 }
+
+#[test]
+fn keystore_display_test() -> Result<(), anyhow::Error> {
+    let temp_dir = TempDir::new().unwrap();
+    let keystore_path = temp_dir.path().join("sui.keystore");
+    let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
+    assert!(keystore.to_string().contains("sui.keystore"));
+    assert!(!keystore.to_string().contains("keys:"));
+    Ok(())
+}

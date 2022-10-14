@@ -64,7 +64,10 @@ macro_rules! check_epoch {
         if expected_epoch != observed_epoch {
             // Most likely indicates a reconfiguration bug.
             error!(?expected_epoch, ?observed_epoch, "Epoch mismatch");
-            return Err(SuiError::WrongEpoch { expected_epoch });
+            return Err(SuiError::WrongEpoch {
+                expected_epoch,
+                actual_epoch: observed_epoch,
+            });
         }
     };
 }
@@ -277,7 +280,7 @@ impl<A> NodeSyncState<A> {
     }
 
     pub fn store(&self) -> Arc<NodeSyncStore> {
-        self.active_authority.node_sync_store.clone()
+        self.state().node_sync_store.clone()
     }
 
     fn state(&self) -> &AuthorityState {
@@ -429,7 +432,12 @@ where
 
                 let res = match res {
                     Err(error) | Ok(Err(error)) => {
-                        error!(?tx_digest, "process_digest failed: {}", error);
+                        if matches!(error, SuiError::ValidatorHaltedAtEpochEnd) {
+                            // This is not a real error.
+                            debug!(?tx_digest, "process_digest failed: {}", error);
+                        } else {
+                            error!(?tx_digest, "process_digest failed: {}", error);
+                        }
                         Err(error)
                     }
 
@@ -501,14 +509,9 @@ where
         epoch_id: EpochId,
         digest: &TransactionDigest,
     ) -> SuiResult<CertifiedTransaction> {
-        if let Some(cert) = self.state().database.read_certificate(digest)? {
-            if cert.epoch() == epoch_id {
-                return Ok(cert);
-            }
-            warn!(
-                ?digest, ?epoch_id, cert_epoch = ?cert.epoch(),
-                "Found certificate from prior epoch in authority db"
-            );
+        if let Some(cert) = self.store().get_cert(epoch_id, digest)? {
+            assert_eq!(epoch_id, cert.epoch());
+            return Ok(cert);
         }
 
         let (cert, _) = self

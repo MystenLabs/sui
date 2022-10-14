@@ -1,7 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use futures::stream::StreamExt;
 use std::collections::HashSet;
+use std::sync::{Arc, Mutex};
 use sui_config::NetworkConfig;
 use sui_core::{
     authority::AuthorityState, authority_aggregator::AuthorityAggregator,
@@ -12,7 +14,11 @@ use sui_node::SuiNodeHandle;
 use sui_sdk::crypto::{InMemKeystore, Keystore};
 use sui_types::{
     base_types::{ExecutionDigests, TransactionDigest},
-    messages::{CallArg, ExecutionStatus, ObjectArg, Transaction},
+    messages::{
+        CallArg, CheckpointStreamRequest, CheckpointStreamResponseItem, ExecutionStatus, ObjectArg,
+        Transaction,
+    },
+    messages_checkpoint::AuthenticatedCheckpoint,
 };
 use test_utils::transaction::{publish_counter_package, submit_shared_object_transaction};
 use test_utils::{
@@ -212,11 +218,45 @@ async fn end_to_end() {
     // Make an authority's aggregator.
     let aggregator = make_aggregator(&configs, &handles);
 
+    // Follow checkpoint notifications
+    let client = aggregator.clone_client(aggregator.committee.sample());
+    let checkpoint_stream = Arc::new(Mutex::new(Vec::new()));
+    let checkpoint_stream_inner = checkpoint_stream.clone();
+
+    tokio::task::spawn(async move {
+        let mut stream = client
+            .handle_checkpoint_stream(CheckpointStreamRequest::new())
+            .await
+            .unwrap();
+
+        while let Some(next) = stream.next().await {
+            match next.unwrap() {
+                CheckpointStreamResponseItem {
+                    first_available_sequence,
+                    checkpoint: AuthenticatedCheckpoint::Certified(c),
+                } => {
+                    assert_eq!(first_available_sequence, 0);
+                    checkpoint_stream_inner.lock().unwrap().push(c);
+                }
+                _ => {
+                    panic!("only certified checkpoints should be streamed for now")
+                }
+            }
+        }
+    });
+
     spawn_checkpoint_processes(&configs, &handles).await;
 
     execute_transactions(&aggregator, &transactions).await;
 
     wait_for_advance_to_next_checkpoint(&handles, &transaction_digests).await;
+
+    tokio::time::sleep(Duration::from_secs(3)).await;
+
+    let checkpoint_stream = checkpoint_stream.lock().unwrap();
+    assert!(checkpoint_stream.len() >= 2);
+    assert_eq!(checkpoint_stream[0].summary.sequence_number, 0);
+    assert_eq!(checkpoint_stream[1].summary.sequence_number, 1);
 }
 
 #[sim_test]

@@ -16,8 +16,13 @@ use prometheus::GaugeVec;
 use prometheus::HistogramVec;
 use prometheus::IntCounterVec;
 use prometheus::Registry;
+use rand::Rng;
 use sui_core::authority_aggregator::AuthorityAggregator;
+use sui_core::quorum_driver::QuorumDriver;
+use sui_network::default_mysten_network_config;
+use sui_types::committee::EpochId;
 use tokio::sync::OnceCell;
+use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
 
 use crate::drivers::driver::Driver;
@@ -36,7 +41,7 @@ use sui_types::messages::{
 use tokio::sync::Barrier;
 use tokio::time;
 use tokio::time::Instant;
-use tracing::{debug, error};
+use tracing::{debug, error, info};
 
 use super::BenchmarkStats;
 use super::Interval;
@@ -53,6 +58,8 @@ pub struct BenchMetrics {
 const LATENCY_SEC_BUCKETS: &[f64] = &[
     0.01, 0.05, 0.1, 0.25, 0.5, 1., 2.5, 5., 10., 20., 30., 60., 90.,
 ];
+
+const RECONFIG_QUIESCENCE_TIME_SEC: u64 = 10;
 
 impl BenchMetrics {
     fn new(registry: &Registry) -> Self {
@@ -229,7 +236,6 @@ impl Driver<BenchmarkStats> for BenchDriver {
         show_progress: bool,
         run_duration: Interval,
     ) -> Result<BenchmarkStats, anyhow::Error> {
-        let committee = Arc::new(aggregator.committee.clone());
         let mut tasks = Vec::new();
         let (tx, mut rx) = tokio::sync::mpsc::channel(100);
         let mut bench_workers = vec![];
@@ -258,7 +264,6 @@ impl Driver<BenchmarkStats> for BenchDriver {
                 ),
         });
         for (i, worker) in bench_workers.into_iter().enumerate() {
-            let committee = committee.clone();
             let cloned_token = self.token.clone();
             let request_delay_micros = 1_000_000 / worker.target_qps;
             let mut free_pool = worker.payload;
@@ -327,14 +332,16 @@ impl Driver<BenchmarkStats> for BenchDriver {
                                 num_submitted += 1;
                                 metrics_cloned.num_submitted.with_label_values(&[&b.1.get_workload_type().to_string()]).inc();
                                 let metrics_cloned = metrics_cloned.clone();
-                                let committee_cloned = committee.clone();
-                                let start = Instant::now();
+                                let qd_clone = qd.clone();
+                                // TODO: clone committee for each request is not ideal.
+                                let committee_cloned = qd_clone.clone_committee();
+                                let start = Arc::new(Instant::now());
                                 let res = qd
                                     .execute_transaction(QuorumDriverRequest {
                                         transaction: b.0.clone(),
                                         request_type: QuorumDriverRequestType::WaitForEffectsCert,
                                     })
-                                    .map(move |res| {
+                                    .then(|res| async move  {
                                         match res {
                                             Ok(QuorumDriverResponse::EffectsCert(result)) => {
                                                 let (cert, effects) = *result;
@@ -358,9 +365,13 @@ impl Driver<BenchmarkStats> for BenchDriver {
                                                 metrics_cloned.num_error.with_label_values(&[&b.1.get_workload_type().to_string(), "unknown_error"]).inc();
                                                 NextOp::Retry(b)
                                             }
-                                            Err(sui_err) => {
-                                                error!("{}", sui_err);
-                                                metrics_cloned.num_error.with_label_values(&[&b.1.get_workload_type().to_string(), &sui_err.to_string()]).inc();
+                                            Err(err) => {
+                                                if err.indicates_epoch_change() {
+                                                    reconfig(committee_cloned.epoch(), qd_clone.clone()).await;
+                                                } else {
+                                                    error!("{}", err);
+                                                    metrics_cloned.num_error.with_label_values(&[&b.1.get_workload_type().to_string(), &err.to_string()]).inc();
+                                                }
                                                 NextOp::Retry(b)
                                             }
                                         }
@@ -379,15 +390,17 @@ impl Driver<BenchmarkStats> for BenchDriver {
                                 metrics_cloned.num_in_flight.with_label_values(&[&payload.get_workload_type().to_string()]).inc();
                                 metrics_cloned.num_submitted.with_label_values(&[&payload.get_workload_type().to_string()]).inc();
                                 let tx = payload.make_transaction();
-                                let start = Instant::now();
+                                let start = Arc::new(Instant::now());
                                 let metrics_cloned = metrics_cloned.clone();
-                                let committee_cloned = committee.clone();
+                                let qd_clone = qd.clone();
+                                // TODO: clone committee for each request is not ideal.
+                                let committee_cloned = qd_clone.clone_committee();
                                 let res = qd
                                     .execute_transaction(QuorumDriverRequest {
                                         transaction: tx.clone(),
                                     request_type: QuorumDriverRequestType::WaitForEffectsCert,
                                 })
-                                .map(move |res| {
+                                .then(|res| async move {
                                     match res {
                                         Ok(QuorumDriverResponse::EffectsCert(result)) => {
                                             let (cert, effects) = *result;
@@ -410,9 +423,13 @@ impl Driver<BenchmarkStats> for BenchDriver {
                                             metrics_cloned.num_error.with_label_values(&[&payload.get_workload_type().to_string(), "unknown_error"]).inc();
                                             NextOp::Retry(Box::new((tx, payload)))
                                         }
-                                        Err(sui_err) => {
-                                            error!("Retry due to error: {}", sui_err);
-                                            metrics_cloned.num_error.with_label_values(&[&payload.get_workload_type().to_string(), &sui_err.to_string()]).inc();
+                                        Err(err) => {
+                                            if err.indicates_epoch_change() {
+                                                reconfig(committee_cloned.epoch(), qd_clone.clone()).await;
+                                            } else {
+                                                error!("Retry due to error: {}", err);
+                                                metrics_cloned.num_error.with_label_values(&[&payload.get_workload_type().to_string(), &err.to_string()]).inc();
+                                            }
                                             NextOp::Retry(Box::new((tx, payload)))
                                         }
                                     }
@@ -544,4 +561,44 @@ impl Driver<BenchmarkStats> for BenchDriver {
         let benchmark_stat = stat_task.await.unwrap();
         Ok(benchmark_stat)
     }
+}
+
+/// Advance to the latest epoch and update QuorumDriver
+async fn reconfig(cur_epoch: EpochId, qd: Arc<QuorumDriver<NetworkAuthorityClient>>) {
+    let mut rng = rand::rngs::OsRng;
+    let jitter = rng.gen_range(0..RECONFIG_QUIESCENCE_TIME_SEC);
+    sleep(Duration::from_secs(RECONFIG_QUIESCENCE_TIME_SEC + jitter)).await;
+
+    let auth_agg = qd.authority_aggregator().load();
+    match auth_agg.get_committee_with_net_addresses(cur_epoch).await {
+        Err(err) => {
+            error!(
+                "Reconfiguration - Failed to get committee with network address: {}",
+                err
+            )
+        }
+        Ok(committee_info) => {
+            let network_config = default_mysten_network_config();
+            let new_epoch = committee_info.committee.epoch;
+            // Check if we already advanced.
+            let cur_epoch = qd.current_epoch();
+            if new_epoch <= cur_epoch {
+                return;
+            }
+            info!("Reconfiguration - Observed a new epoch {new_epoch}, attempting to reconfig from current epoch: {cur_epoch}");
+            match auth_agg.recreate_with_net_addresses(committee_info, &network_config) {
+                Err(err) => error!(
+                    "Reconfiguration - Error when cloning authority aggregator with committee: {}",
+                    err
+                ),
+                Ok(auth_agg) => {
+                    if let Err(err) = qd.update_validators(Arc::new(auth_agg)).await {
+                        error!("Reconfiguration - Error when updating authority aggregator in quorum driver: {}", err);
+                    } else {
+                        info!("Reconfiguration - Reconfiguration to epoch {new_epoch} is done");
+                    }
+                }
+            }
+        }
+    };
 }

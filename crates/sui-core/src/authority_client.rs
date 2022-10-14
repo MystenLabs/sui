@@ -12,8 +12,12 @@ use mysten_network::config::Config;
 use prometheus::{register_histogram_with_registry, Histogram};
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use std::time::Duration;
 use sui_config::genesis::Genesis;
+use sui_config::ValidatorInfo;
 use sui_network::{api::ValidatorClient, tonic};
+use sui_types::base_types::AuthorityName;
+use sui_types::committee::CommitteeWithNetAddresses;
 use sui_types::crypto::AuthorityPublicKeyBytes;
 use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
 use sui_types::sui_system_state::SuiSystemState;
@@ -67,6 +71,11 @@ pub trait AuthorityAPI {
         request: CheckpointRequest,
     ) -> Result<CheckpointResponse, SuiError>;
 
+    async fn handle_checkpoint_stream(
+        &self,
+        request: CheckpointStreamRequest,
+    ) -> Result<CheckpointStreamResponseItemStream, SuiError>;
+
     async fn handle_committee_info_request(
         &self,
         request: CommitteeInfoRequest,
@@ -74,6 +83,8 @@ pub trait AuthorityAPI {
 }
 
 pub type BatchInfoResponseItemStream = BoxStream<'static, Result<BatchInfoResponseItem, SuiError>>;
+pub type CheckpointStreamResponseItemStream =
+    BoxStream<'static, Result<CheckpointStreamResponseItem, SuiError>>;
 
 #[derive(Clone)]
 pub struct NetworkAuthorityClient {
@@ -238,6 +249,21 @@ impl AuthorityAPI for NetworkAuthorityClient {
             .map_err(Into::into)
     }
 
+    /// Stream checkpoint notifications
+    async fn handle_checkpoint_stream(
+        &self,
+        request: CheckpointStreamRequest,
+    ) -> Result<CheckpointStreamResponseItemStream, SuiError> {
+        let stream = self
+            .client()
+            .checkpoint_info(request)
+            .await
+            .map(tonic::Response::into_inner)?
+            .map_err(Into::into);
+
+        Ok(Box::pin(stream))
+    }
+
     async fn handle_committee_info_request(
         &self,
         request: CommitteeInfoRequest,
@@ -274,6 +300,26 @@ pub fn make_network_authority_client_sets_from_system_state(
     Ok(authority_clients)
 }
 
+pub fn make_network_authority_client_sets_from_committee(
+    committee: &CommitteeWithNetAddresses,
+    network_config: &Config,
+    network_metrics: Arc<NetworkAuthorityClientMetrics>,
+) -> anyhow::Result<BTreeMap<AuthorityPublicKeyBytes, NetworkAuthorityClient>> {
+    let mut authority_clients = BTreeMap::new();
+    for (name, _stakes) in &committee.committee.voting_rights {
+        let address = committee.net_addresses.get(name).ok_or_else(|| {
+            SuiError::from("Missing network address in CommitteeWithNetAddresses")
+        })?;
+        let address = Multiaddr::try_from(address.clone())?;
+        let channel = network_config
+            .connect_lazy(&address)
+            .map_err(|err| anyhow!(err.to_string()))?;
+        let client = NetworkAuthorityClient::new(channel, network_metrics.clone());
+        authority_clients.insert(*name, client);
+    }
+    Ok(authority_clients)
+}
+
 pub fn make_network_authority_client_sets_from_genesis(
     genesis: &Genesis,
     network_config: &Config,
@@ -288,6 +334,26 @@ pub fn make_network_authority_client_sets_from_genesis(
         authority_clients.insert(validator.protocol_key(), client);
     }
     Ok(authority_clients)
+}
+
+pub fn make_authority_clients(
+    validator_set: &[ValidatorInfo],
+    send_timeout: Duration,
+    recv_timeout: Duration,
+    net_metrics: Arc<NetworkAuthorityClientMetrics>,
+) -> BTreeMap<AuthorityName, NetworkAuthorityClient> {
+    let mut authority_clients = BTreeMap::new();
+    let mut network_config = mysten_network::config::Config::new();
+    network_config.connect_timeout = Some(send_timeout);
+    network_config.request_timeout = Some(recv_timeout);
+    for authority in validator_set {
+        let channel = network_config
+            .connect_lazy(authority.network_address())
+            .unwrap();
+        let client = NetworkAuthorityClient::new(channel, net_metrics.clone());
+        authority_clients.insert(authority.protocol_key(), client);
+    }
+    authority_clients
 }
 
 #[derive(Clone, Copy, Default)]
@@ -394,6 +460,14 @@ impl AuthorityAPI for LocalAuthorityClient {
         let state = self.state.clone();
 
         state.handle_checkpoint_request(&request)
+    }
+
+    async fn handle_checkpoint_stream(
+        &self,
+        request: CheckpointStreamRequest,
+    ) -> Result<CheckpointStreamResponseItemStream, SuiError> {
+        let stream = self.state.handle_checkpoint_streaming(request).await?;
+        Ok(Box::pin(stream))
     }
 
     async fn handle_committee_info_request(

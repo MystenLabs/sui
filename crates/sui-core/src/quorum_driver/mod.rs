@@ -6,6 +6,7 @@ pub use metrics::*;
 
 use arc_swap::ArcSwap;
 use std::sync::Arc;
+use sui_types::committee::{Committee, EpochId};
 
 use tokio::sync::mpsc::{self, Receiver, Sender};
 use tokio::task::JoinHandle;
@@ -19,10 +20,9 @@ use sui_types::messages::{
     CertifiedTransaction, CertifiedTransactionEffects, QuorumDriverRequest,
     QuorumDriverRequestType, QuorumDriverResponse, Transaction,
 };
-pub enum QuorumTask<A> {
+pub enum QuorumTask {
     ProcessTransaction(Transaction),
     ProcessCertificate(CertifiedTransaction),
-    UpdateCommittee(Arc<AuthorityAggregator<A>>),
 }
 
 /// A handler to wrap around QuorumDriver. This handler should be owned by the node with exclusive
@@ -42,7 +42,7 @@ pub struct QuorumDriverHandler<A> {
 /// committee, or to subscribe effects generated from the QuorumDriver.
 pub struct QuorumDriver<A> {
     validators: ArcSwap<AuthorityAggregator<A>>,
-    task_sender: Sender<QuorumTask<A>>,
+    task_sender: Sender<QuorumTask>,
     effects_subscribe_sender:
         tokio::sync::broadcast::Sender<(CertifiedTransaction, CertifiedTransactionEffects)>,
     metrics: QuorumDriverMetrics,
@@ -51,7 +51,7 @@ pub struct QuorumDriver<A> {
 impl<A> QuorumDriver<A> {
     pub fn new(
         validators: Arc<AuthorityAggregator<A>>,
-        task_sender: Sender<QuorumTask<A>>,
+        task_sender: Sender<QuorumTask>,
         effects_subscribe_sender: tokio::sync::broadcast::Sender<(
             CertifiedTransaction,
             CertifiedTransactionEffects,
@@ -64,6 +64,18 @@ impl<A> QuorumDriver<A> {
             effects_subscribe_sender,
             metrics,
         }
+    }
+
+    pub fn authority_aggregator(&self) -> &ArcSwap<AuthorityAggregator<A>> {
+        &self.validators
+    }
+
+    pub fn clone_committee(&self) -> Arc<Committee> {
+        Arc::new(self.validators.load().committee.clone())
+    }
+
+    pub fn current_epoch(&self) -> EpochId {
+        self.validators.load().committee.epoch
     }
 }
 
@@ -194,6 +206,14 @@ where
         }
         Ok(response)
     }
+
+    pub async fn update_validators(
+        &self,
+        new_validators: Arc<AuthorityAggregator<A>>,
+    ) -> SuiResult {
+        self.validators.store(new_validators);
+        Ok(())
+    }
 }
 
 impl<A> QuorumDriverHandler<A>
@@ -201,7 +221,7 @@ where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
     pub fn new(validators: Arc<AuthorityAggregator<A>>, metrics: QuorumDriverMetrics) -> Self {
-        let (task_tx, task_rx) = mpsc::channel::<QuorumTask<A>>(5000);
+        let (task_tx, task_rx) = mpsc::channel::<QuorumTask>(5000);
         let (subscriber_tx, subscriber_rx) = tokio::sync::broadcast::channel::<_>(100);
         let quorum_driver = Arc::new(QuorumDriver::new(
             validators,
@@ -232,22 +252,9 @@ where
         self.effects_subscriber.resubscribe()
     }
 
-    pub async fn update_validators(
-        &self,
-        new_validators: Arc<AuthorityAggregator<A>>,
-    ) -> SuiResult {
-        self.quorum_driver
-            .task_sender
-            .send(QuorumTask::UpdateCommittee(new_validators))
-            .await
-            .map_err(|err| SuiError::QuorumDriverCommunicationError {
-                error: err.to_string(),
-            })
-    }
-
     async fn task_queue_processor(
         quorum_driver: Arc<QuorumDriver<A>>,
-        mut task_receiver: Receiver<QuorumTask<A>>,
+        mut task_receiver: Receiver<QuorumTask>,
     ) {
         // TODO https://github.com/MystenLabs/sui/issues/4565
         // spawn a tokio task for each job for higher concurrency
@@ -286,9 +293,6 @@ where
                                 debug!(?tx_digest, "Certificate processing succeeded");
                             }
                         }
-                    }
-                    QuorumTask::UpdateCommittee(new_validators) => {
-                        quorum_driver.validators.store(new_validators);
                     }
                 }
             }

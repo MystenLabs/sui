@@ -3,6 +3,7 @@
 
 use fastcrypto::traits::KeyPair;
 use rand::{prelude::StdRng, SeedableRng};
+use sui_storage::node_sync_store::NodeSyncStore;
 use sui_types::committee::Committee;
 use sui_types::crypto::get_key_pair;
 use sui_types::crypto::get_key_pair_from_rng;
@@ -17,7 +18,9 @@ use crate::authority::authority_tests::*;
 use crate::authority::*;
 use crate::safe_client::SafeClient;
 
-use crate::authority_client::{AuthorityAPI, BatchInfoResponseItemStream};
+use crate::authority_client::{
+    AuthorityAPI, BatchInfoResponseItemStream, CheckpointStreamResponseItemStream,
+};
 use crate::checkpoints::CheckpointStore;
 use crate::epoch::committee_store::CommitteeStore;
 use crate::safe_client::SafeClientMetrics;
@@ -30,8 +33,9 @@ use std::fs;
 use std::sync::Arc;
 use sui_types::messages::{
     AccountInfoRequest, AccountInfoResponse, BatchInfoRequest, BatchInfoResponseItem,
-    CertifiedTransaction, CommitteeInfoRequest, CommitteeInfoResponse, ObjectInfoRequest,
-    ObjectInfoResponse, Transaction, TransactionInfoRequest, TransactionInfoResponse,
+    CertifiedTransaction, CheckpointStreamRequest, CommitteeInfoRequest, CommitteeInfoResponse,
+    ObjectInfoRequest, ObjectInfoResponse, Transaction, TransactionInfoRequest,
+    TransactionInfoResponse,
 };
 
 pub(crate) fn init_state_parameters_from_rng<R>(
@@ -61,16 +65,33 @@ pub(crate) async fn init_state(
     let dir = env::temp_dir();
     let epoch_path = dir.join(format!("DB_{:?}", ObjectID::random()));
     let checkpoint_path = dir.join(format!("DB_{:?}", ObjectID::random()));
+    let node_sync_path = dir.join(format!("DB_{:?}", ObjectID::random()));
     fs::create_dir(&epoch_path).unwrap();
     let (tx_reconfigure_consensus, _rx_reconfigure_consensus) = tokio::sync::mpsc::channel(10);
     let committee_store = Arc::new(CommitteeStore::new(epoch_path, &committee, None));
     let checkpoint_store = Arc::new(parking_lot::Mutex::new(
-        CheckpointStore::open(&checkpoint_path, None, &committee, name, secrete.clone()).unwrap(),
+        CheckpointStore::open(
+            &checkpoint_path,
+            None,
+            &committee,
+            name,
+            secrete.clone(),
+            false,
+        )
+        .unwrap(),
     ));
+
+    let node_sync_store = Arc::new(NodeSyncStore::open_tables_read_write(
+        node_sync_path,
+        None,
+        None,
+    ));
+
     AuthorityState::new(
         name,
         secrete,
         store,
+        node_sync_store,
         committee_store,
         None,
         None,
@@ -112,7 +133,7 @@ async fn test_open_manager() {
         //         when we re-open the database.
 
         store
-            .tables
+            .perpetual_tables
             .executed_sequence
             .insert(&0, &ExecutionDigests::random())
             .expect("no error on write");
@@ -135,7 +156,7 @@ async fn test_open_manager() {
 
         // TEST 3: If the database contains out of order transactions we just make a block with gaps
         store
-            .tables
+            .perpetual_tables
             .executed_sequence
             .insert(&2, &ExecutionDigests::random())
             .expect("no error on write");
@@ -437,7 +458,7 @@ async fn test_batch_store_retrieval() {
     for _i in 0u64..105 {
         let t0 = authority_state.batch_notifier.ticket(false).expect("ok");
         inner_store
-            .tables
+            .perpetual_tables
             .executed_sequence
             .insert(&t0.seq(), &tx_zero)
             .expect("Failed to write.");
@@ -454,7 +475,7 @@ async fn test_batch_store_retrieval() {
     for _i in 110u64..120 {
         let t0 = authority_state.batch_notifier.ticket(false).expect("ok");
         inner_store
-            .tables
+            .perpetual_tables
             .executed_sequence
             .insert(&t0.seq(), &tx_zero)
             .expect("Failed to write.");
@@ -591,6 +612,13 @@ impl AuthorityAPI for TrustworthyAuthorityClient {
         unimplemented!();
     }
 
+    async fn handle_checkpoint_stream(
+        &self,
+        _request: CheckpointStreamRequest,
+    ) -> Result<CheckpointStreamResponseItemStream, SuiError> {
+        unimplemented!();
+    }
+
     /// Handle Batch information requests for this authority.
     async fn handle_batch_stream(
         &self,
@@ -713,6 +741,13 @@ impl AuthorityAPI for ByzantineAuthorityClient {
         unimplemented!()
     }
 
+    async fn handle_checkpoint_stream(
+        &self,
+        _request: CheckpointStreamRequest,
+    ) -> Result<CheckpointStreamResponseItemStream, SuiError> {
+        unimplemented!();
+    }
+
     /// Handle Batch information requests for this authority.
     /// This function comes from a byzantine authority that has incorrect behavior.
     async fn handle_batch_stream(
@@ -800,7 +835,7 @@ async fn test_safe_batch_stream() {
         auth_client,
         committee_store,
         public_key_bytes,
-        SafeClientMetrics::new_for_tests(),
+        Arc::new(SafeClientMetrics::new_for_tests()),
     );
 
     let request = BatchInfoRequest {
@@ -849,7 +884,7 @@ async fn test_safe_batch_stream() {
         auth_client_from_byzantine,
         committee_store,
         public_key_bytes_b,
-        SafeClientMetrics::new_for_tests(),
+        Arc::new(SafeClientMetrics::new_for_tests()),
     );
 
     let mut batch_stream = safe_client_from_byzantine

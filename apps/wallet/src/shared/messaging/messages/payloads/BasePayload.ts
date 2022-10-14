@@ -25,7 +25,8 @@ export type PayloadType =
     | 'transaction-request-response'
     | 'update-active-origin'
     | 'disconnect-app'
-    | 'done';
+    | 'done'
+    | 'keyring';
 
 export interface BasePayload {
     type: PayloadType;

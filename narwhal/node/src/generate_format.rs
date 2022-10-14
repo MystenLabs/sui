@@ -7,14 +7,14 @@ use fastcrypto::{
     Digest, Hash,
 };
 use multiaddr::Multiaddr;
-use primary::PrimaryWorkerMessage;
 use rand::{prelude::StdRng, SeedableRng};
 use serde_reflection::{Registry, Result, Samples, Tracer, TracerConfig};
 use std::{fs::File, io::Write};
 use structopt::{clap::arg_enum, StructOpt};
 use types::{
     Batch, BatchDigest, Certificate, CertificateDigest, Header, HeaderDigest,
-    ReconfigureNotification, WorkerPrimaryMessage, WorkerSynchronizeMessage,
+    ReconfigureNotification, WorkerPrimaryMessage, WorkerReconfigureMessage,
+    WorkerSynchronizeMessage,
 };
 
 fn get_registry() -> Result<Registry> {
@@ -115,11 +115,15 @@ fn get_registry() -> Result<Registry> {
         digests: vec![BatchDigest([0u8; 32])],
         target: pk,
     };
-    let epoch_change =
-        PrimaryWorkerMessage::Reconfigure(ReconfigureNotification::NewEpoch(committee.clone()));
-    let update_committee =
-        PrimaryWorkerMessage::Reconfigure(ReconfigureNotification::NewEpoch(committee));
-    let shutdown = PrimaryWorkerMessage::Reconfigure(ReconfigureNotification::Shutdown);
+    let epoch_change = WorkerReconfigureMessage {
+        message: ReconfigureNotification::NewEpoch(committee.clone()),
+    };
+    let update_committee = WorkerReconfigureMessage {
+        message: ReconfigureNotification::NewEpoch(committee),
+    };
+    let shutdown = WorkerReconfigureMessage {
+        message: ReconfigureNotification::Shutdown,
+    };
     tracer.trace_value(&mut samples, &sync)?;
     tracer.trace_value(&mut samples, &epoch_change)?;
     tracer.trace_value(&mut samples, &update_committee)?;
