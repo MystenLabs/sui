@@ -1649,7 +1649,7 @@ async fn test_authority_persist() {
     fs::create_dir(&path).unwrap();
 
     // Create an authority
-    let store = Arc::new(AuthorityStore::open(&path, None));
+    let store = Arc::new(AuthorityStore::open(&path, None).unwrap());
     let authority =
         crate::authority_batch::batch_tests::init_state(committee, authority_key, store).await;
 
@@ -1670,7 +1670,7 @@ async fn test_authority_persist() {
         crate::authority_batch::batch_tests::init_state_parameters_from_rng(
             &mut StdRng::from_seed(seed),
         );
-    let store = Arc::new(AuthorityStore::open(&path, None));
+    let store = Arc::new(AuthorityStore::open(&path, None).unwrap());
     let authority2 =
         crate::authority_batch::batch_tests::init_state(committee, authority_key, store).await;
     let obj2 = authority2.get_object(&object_id).await.unwrap().unwrap();

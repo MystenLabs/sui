@@ -195,7 +195,7 @@ impl<A> GatewayState<A> {
         let gateway_metrics = GatewayMetrics::new(prometheus_registry);
         let auth_agg_metrics = AuthAggMetrics::new(prometheus_registry);
         let safe_client_metrics = Arc::new(SafeClientMetrics::new(prometheus_registry));
-        let gateway_store = Arc::new(GatewayStore::open(&base_path.join("store"), None));
+        let gateway_store = Arc::new(GatewayStore::open(&base_path.join("store"), None)?);
         let committee_store = Arc::new(CommitteeStore::new(
             base_path.join("epochs"),
             &committee,

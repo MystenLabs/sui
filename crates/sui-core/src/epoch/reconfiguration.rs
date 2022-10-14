@@ -90,6 +90,10 @@ where
 
         let sui_system_state = self.state.get_sui_system_state_object().await?;
         let next_epoch = epoch + 1;
+
+        // Create new AuthorityEpochTables for epoch-specific data.
+        self.state.database.reopen_epoch_db(next_epoch);
+
         let new_committee = sui_system_state.get_next_epoch_committee();
         debug!(
             ?epoch,

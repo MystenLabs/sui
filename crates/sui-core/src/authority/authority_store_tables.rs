@@ -61,16 +61,16 @@ impl<S> AuthorityEpochTables<S>
 where
     S: std::fmt::Debug + Serialize + for<'de> Deserialize<'de>,
 {
-    pub fn path(parent_path: &Path) -> PathBuf {
-        parent_path.join("epoch")
+    pub fn path(epoch: EpochId, parent_path: &Path) -> PathBuf {
+        parent_path.join(format!("epoch_{}", epoch))
     }
 
-    pub fn open(parent_path: &Path, db_options: Option<Options>) -> Self {
-        Self::open_tables_read_write(Self::path(parent_path), db_options, None)
+    pub fn open(epoch: EpochId, parent_path: &Path, db_options: Option<Options>) -> Self {
+        Self::open_tables_read_write(Self::path(epoch, parent_path), db_options, None)
     }
 
-    pub fn open_readonly(parent_path: &Path) -> AuthorityEpochTablesReadOnly<S> {
-        Self::get_read_only_handle(Self::path(parent_path), None, None)
+    pub fn open_readonly(epoch: EpochId, parent_path: &Path) -> AuthorityEpochTablesReadOnly<S> {
+        Self::get_read_only_handle(Self::path(epoch, parent_path), None, None)
     }
 }
 
@@ -153,6 +153,89 @@ where
 
     pub fn open_readonly(parent_path: &Path) -> AuthorityPerpetualTablesReadOnly<S> {
         Self::get_read_only_handle(Self::path(parent_path), None, None)
+    }
+
+    /// Read an object and return it, or Err(ObjectNotFound) if the object was not found.
+    pub fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
+        let obj_entry = self
+            .objects
+            .iter()
+            .skip_prior_to(&ObjectKey::max_for_id(object_id))?
+            .next();
+
+        let obj = match obj_entry {
+            Some((ObjectKey(obj_id, _), obj)) if obj_id == *object_id => obj,
+            _ => return Ok(None),
+        };
+
+        // Note that the two reads in this function are (obviously) not atomic, and the
+        // object may be deleted after we have read it. Hence we check get_latest_parent_entry
+        // last, so that the write to self.parent_sync gets the last word.
+        //
+        // TODO: verify this race is ok.
+        //
+        // I believe it is - Even if the reads were atomic, calls to this function would still
+        // race with object deletions (the object could be deleted between when the function is
+        // called and when the first read takes place, which would be indistinguishable to the
+        // caller with the case in which the object is deleted in between the two reads).
+        let parent_entry = self.get_latest_parent_entry(*object_id)?;
+
+        match parent_entry {
+            None => {
+                error!(
+                    ?object_id,
+                    "Object is missing parent_sync entry, data store is inconsistent"
+                );
+                Ok(None)
+            }
+            Some((obj_ref, _)) if obj_ref.2.is_alive() => Ok(Some(obj)),
+            _ => Ok(None),
+        }
+    }
+
+    pub fn get_latest_parent_entry(
+        &self,
+        object_id: ObjectID,
+    ) -> Result<Option<(ObjectRef, TransactionDigest)>, SuiError> {
+        let mut iterator = self
+            .parent_sync
+            .iter()
+            // Make the max possible entry for this object ID.
+            .skip_prior_to(&(object_id, SequenceNumber::MAX, ObjectDigest::MAX))?;
+
+        Ok(iterator.next().and_then(|(obj_ref, tx_digest)| {
+            if obj_ref.0 == object_id {
+                Some((obj_ref, tx_digest))
+            } else {
+                None
+            }
+        }))
+    }
+
+    pub fn get_sui_system_state_object(&self) -> SuiResult<SuiSystemState> {
+        let sui_system_object = self
+            .get_object(&SUI_SYSTEM_STATE_OBJECT_ID)?
+            .expect("Sui System State object must always exist");
+        let move_object = sui_system_object
+            .data
+            .try_as_move()
+            .expect("Sui System State object must be a Move object");
+        let result = bcs::from_bytes::<SuiSystemState>(move_object.contents())
+            .expect("Sui System State object deserialization cannot fail");
+        Ok(result)
+    }
+
+    pub fn get_epoch(&self) -> SuiResult<EpochId> {
+        Ok(self.get_sui_system_state_object()?.epoch)
+    }
+
+    pub fn database_is_empty(&self) -> SuiResult<bool> {
+        Ok(self
+            .objects
+            .iter()
+            .skip_to(&ObjectKey::ZERO)?
+            .next()
+            .is_none())
     }
 }
 

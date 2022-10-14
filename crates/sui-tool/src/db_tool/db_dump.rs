@@ -13,7 +13,10 @@ use sui_core::checkpoints::CheckpointStoreTables;
 use sui_core::epoch::committee_store::CommitteeStore;
 use sui_storage::default_db_options;
 use sui_storage::{lock_service::LockServiceImpl, node_sync_store::NodeSyncStore, IndexStore};
-use sui_types::crypto::{AuthoritySignInfo, EmptySignInfo};
+use sui_types::{
+    base_types::EpochId,
+    crypto::{AuthoritySignInfo, EmptySignInfo},
+};
 
 #[derive(EnumString, Parser, Debug)]
 pub enum StoreName {
@@ -52,6 +55,7 @@ pub fn list_tables(path: PathBuf) -> anyhow::Result<Vec<String>> {
 // TODO: condense this using macro or trait dyn skills
 pub fn dump_table(
     store_name: StoreName,
+    epoch: Option<EpochId>,
     db_path: PathBuf,
     table_name: &str,
     page_size: u16,
@@ -61,7 +65,8 @@ pub fn dump_table(
         StoreName::Validator => {
             let epoch_tables = AuthorityEpochTables::<AuthoritySignInfo>::describe_tables();
             if epoch_tables.contains_key(table_name) {
-                AuthorityEpochTables::<AuthoritySignInfo>::open_readonly(&db_path).dump(
+                let epoch = epoch.ok_or_else(|| anyhow!("--epoch is required"))?;
+                AuthorityEpochTables::<AuthoritySignInfo>::open_readonly(epoch, &db_path).dump(
                     table_name,
                     page_size,
                     page_number,
@@ -75,14 +80,21 @@ pub fn dump_table(
             }
         }
         StoreName::Gateway => {
-            AuthorityEpochTables::<EmptySignInfo>::open_readonly(&db_path)
-                .dump(table_name, page_size, page_number)
-                .map_err(|e| anyhow!(e))?;
-            AuthorityPerpetualTables::<EmptySignInfo>::open_readonly(&db_path).dump(
-                table_name,
-                page_size,
-                page_number,
-            )
+            let epoch_tables = AuthorityEpochTables::<EmptySignInfo>::describe_tables();
+            if epoch_tables.contains_key(table_name) {
+                let epoch = epoch.ok_or_else(|| anyhow!("--epoch is required"))?;
+                AuthorityEpochTables::<EmptySignInfo>::open_readonly(epoch, &db_path).dump(
+                    table_name,
+                    page_size,
+                    page_number,
+                )
+            } else {
+                AuthorityPerpetualTables::<AuthoritySignInfo>::open_readonly(&db_path).dump(
+                    table_name,
+                    page_size,
+                    page_number,
+                )
+            }
         }
         StoreName::Index => IndexStore::get_read_only_handle(db_path, None, None).dump(
             table_name,
@@ -127,13 +139,14 @@ mod test {
 
         // Open the DB for writing
         let _: AuthorityEpochTables<AuthoritySignInfo> =
-            AuthorityEpochTables::open(&primary_path, None);
+            AuthorityEpochTables::open(0, &primary_path, None);
         let _: AuthorityPerpetualTables<AuthoritySignInfo> =
             AuthorityPerpetualTables::open(&primary_path, None);
 
         // Get all the tables for AuthorityEpochTables
         let tables = {
             let mut epoch_tables = list_tables(AuthorityEpochTables::<AuthoritySignInfo>::path(
+                0,
                 &primary_path,
             ))
             .unwrap();
@@ -148,7 +161,16 @@ mod test {
         let mut missing_tables = vec![];
         for t in tables {
             println!("{}", t);
-            if dump_table(StoreName::Validator, primary_path.clone(), &t, 0, 0).is_err() {
+            if dump_table(
+                StoreName::Validator,
+                Some(0),
+                primary_path.clone(),
+                &t,
+                0,
+                0,
+            )
+            .is_err()
+            {
                 missing_tables.push(t);
             }
         }
