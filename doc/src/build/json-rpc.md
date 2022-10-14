@@ -79,7 +79,6 @@ curl --location --request POST 'https://fullnode.devnet.sui.io:443' \
     {{sig_scheme}},
     {{signature}},
     {{pub_key}},
-    {{request_type}}
   ]
 }'
 ```
@@ -105,7 +104,7 @@ The keytool creates a key and then returns the signature and public key informat
 #### Execute a transaction with a signature and a public key
 
 ```shell
-curl --location --request POST 'https://fullnode.devnet.sui.io:443' \
+curl --location --request POST $SUI_RPC_HOST \
 --header 'Content-Type: application/json' \
 --data-raw '{
   "jsonrpc": "2.0",
@@ -162,19 +161,23 @@ The keytool creates a key and then returns the signature and public key informat
 ```shell
 curl --location --request POST $SUI_RPC_HOST \
 --header 'Content-Type: application/json' \
---data-raw '{ "jsonrpc":"2.0",
-              "method":"sui_executeTransaction",
-              "params":[{
-                  "tx_bytes" : "{{tx_bytes}}",
-                  "signature" : "{{signature}}",
-                  "pub_key" : "{{pub_key}}"}],
-              "id":1}' | json_pp
+--data-raw '{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "sui_executeTransaction",
+  "params": [ 
+    {{tx_bytes}},
+    {{sig_scheme}},
+    {{signature}},
+    {{pub_key}},
+    {{request_type}}
+  ]
+}'
 ```
 
 Arguments are passed in, and type is inferred from the function
 signature.  Gas usage is capped by the `gas_budget`. The `transfer`
-function is described in more detail in
-the [Sui CLI client](cli-client.md#calling-move-code) documentation.
+function is described in more detail in the [Sui CLI client](cli-client.md#calling-move-code) documentation.
 
 The `transfer` function in the `Coin` module serves the same
 purpose as ([`sui_transferObject`](#sui_TransferObject)). It is used for illustration purposes, as a native transfer is more efficient.
@@ -198,7 +201,7 @@ curl --location --request POST $SUI_RPC_HOST \
 This endpoint performs proper verification and linking to make
 sure the package is valid. If some modules have [initializers](move/debug-publish.md#module-initializers), these initializers execute in Move (which means new Move objects can be created in the process of publishing a Move package). Gas budget is required because of the need to execute module initializers.
 
-To publish a Move module, you also need `{{vector_of_compiled_modules}}`. To generate the value of this field, use the `sui move` command. The `sui move` command supports printing the bytecode as base64:
+To publish a Move module, you also need to include `{{vector_of_compiled_modules}}`. To generate the value of this field, use the `sui move` command. The `sui move` command supports printing the bytecode as base64:
 
 ```
 sui move --path <move-module-path> build --dump-bytecode-as-base64
@@ -228,21 +231,18 @@ The keytool creates a key and then returns the signature and public key informat
 ```shell
 curl --location --request POST $SUI_RPC_HOST \
 --header 'Content-Type: application/json' \
---data-raw '{ "jsonrpc":"2.0",
-              "method":"sui_executeTransaction",
-              "params":[{
-                  "tx_bytes" : "{{tx_bytes}}",
-                  "signature" : "{{signature}}",
-                  "pub_key" : "{{pub_key}}"}],
-              "id":1}' | json_pp
+--data-raw '{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "sui_executeTransaction",
+  "params": [ 
+    {{tx_bytes}},
+    {{sig_scheme}},
+    {{signature}},
+    {{pub_key}},
+    {{request_type}}
+  ]
+}'
 ```
 
-Below you can see a truncated sample output of [sui_publish](#sui_publish). One of the results of executing this command is generation of a package object representing the published Move code. An ID of the package object can be used as an argument for subsequent Move calls to functions defined in this package.
-
-```
-{
-    "package": [
-            "0x13e3ec7279060663e1bbc45aaf5859113fc164d2",
-    ...
-}
-```
+The command generates a package object that represents the published Move code. You can use the package ID as an argument for subsequent Move calls to functions defined in this package.
