@@ -1121,21 +1121,32 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         let versions = self.epoch_tables().next_object_versions.multi_get(ids)?;
 
         let ids = certificate.shared_input_objects();
-        let (sequenced_to_write, schedule_to_write): (Vec<_>, Vec<_>) = ids
-            .zip(versions.iter())
-            .map(|(id, v)| {
-                // If it is the first time the shared object has been sequenced, assign it the default
-                // sequence number (`OBJECT_START_VERSION`). Otherwise use the `scheduled` map to
-                // to assign the next sequence number.
-                let version = v.unwrap_or_else(|| OBJECT_START_VERSION);
-                let next_version = version.increment();
+        type LockWrite = (
+            ((TransactionDigest, ObjectID), SequenceNumber),
+            (ObjectID, SequenceNumber),
+        );
+        let mut sequenced_to_write = Vec::new();
+        let mut schedule_to_write = Vec::new();
 
-                let sequenced = ((transaction_digest, *id), version);
-                let scheduled = (id, next_version);
+        for (id, v) in ids.zip(versions.iter()) {
+            // The object may have been sequenced in a previous epoch - if so the start version
+            // is the latest available version of the object. Otherwise, this is the first time
+            // the shared object has been sequenced, so we use OBJECT_START_VERSION.
+            // Otherwise use the `scheduled` map to to assign the next sequence number.
+            let version = match v {
+                Some(v) => *v,
+                None => self
+                    // TODO: if we use an eventually consistent object store in the future,
+                    // we must make this read strongly consistent somehow!
+                    .get_latest_parent_entry(*id)?
+                    .map(|(objref, _)| objref.1)
+                    .unwrap_or(OBJECT_START_VERSION),
+            };
+            let next_version = version.increment();
 
-                (sequenced, scheduled)
-            })
-            .unzip();
+            sequenced_to_write.push(((transaction_digest, *id), version));
+            schedule_to_write.push((*id, next_version));
+        }
 
         trace!(tx_digest = ?transaction_digest,
                ?sequenced_to_write, ?schedule_to_write,

@@ -17,6 +17,7 @@ use sui_sdk::crypto::Keystore;
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SuiAddress;
 use sui_types::base_types::{ObjectDigest, ObjectID, SequenceNumber};
+use sui_types::committee::Committee;
 use sui_types::crypto::{
     get_key_pair, AccountKeyPair, AuthorityKeyPair, AuthorityPublicKeyBytes, KeypairTraits,
 };
@@ -421,14 +422,21 @@ pub fn make_tx_certs_and_signed_effects(
     transactions: Vec<Transaction>,
 ) -> (Vec<CertifiedTransaction>, Vec<SignedTransactionEffects>) {
     let committee = test_committee();
+    make_tx_certs_and_signed_effects_with_committee(transactions, &committee)
+}
+
+/// Make a test certificates for each input transaction.
+pub fn make_tx_certs_and_signed_effects_with_committee(
+    transactions: Vec<Transaction>,
+    committee: &Committee,
+) -> (Vec<CertifiedTransaction>, Vec<SignedTransactionEffects>) {
     let mut tx_certs = Vec::new();
     let mut effect_sigs = Vec::new();
     for tx in transactions {
-        let mut signed_tx_aggregator =
-            SignatureAggregator::try_new(tx.clone(), &committee).unwrap();
+        let mut signed_tx_aggregator = SignatureAggregator::try_new(tx.clone(), committee).unwrap();
         for (key, _, _, _) in test_validator_keys() {
             let vote =
-                SignedTransaction::new(/* epoch */ 0, tx.clone(), key.public().into(), &key);
+                SignedTransaction::new(committee.epoch, tx.clone(), key.public().into(), &key);
 
             if let Some(tx_cert) = signed_tx_aggregator
                 .append(vote.auth_sign_info.authority, vote.auth_sign_info.signature)
