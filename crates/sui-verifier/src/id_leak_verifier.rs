@@ -418,6 +418,7 @@ fn expect_ok<T>(res: Result<T, PartialVMError>) -> PartialVMResult<T> {
     }
 }
 
-fn move_verification_error(msg: impl ToString) -> PartialVMError {
-    PartialVMError::new(StatusCode::UNKNOWN_VERIFICATION_ERROR).with_message(msg.to_string())
+fn move_verification_error(msg: impl std::fmt::Display) -> PartialVMError {
+    PartialVMError::new(StatusCode::UNKNOWN_VERIFICATION_ERROR)
+        .with_message(format!("Sui Move Bytecode Verification Error: {}", msg))
 }
