@@ -15,8 +15,10 @@ import { isGetTransactionRequests } from '_payloads/transactions/ui/GetTransacti
 import { isTransactionRequestResponse } from '_payloads/transactions/ui/TransactionRequestResponse';
 import Keyring from '_src/background/Keyring';
 import Permissions from '_src/background/Permissions';
+import Signatures from '_src/background/Signatures';
 import Tabs from '_src/background/Tabs';
 import Transactions from '_src/background/Transactions';
+import { isSignatureRequestResponse } from '_src/shared/messaging/messages/payloads/signatures';
 
 import type { Message } from '_messages';
 import type { PortChannelName } from '_messaging/PortChannelName';
@@ -80,6 +82,8 @@ export class UiConnection extends Connection {
                 }
             } else if (isPermissionResponse(payload)) {
                 Permissions.handlePermissionResponse(payload);
+            } else if (isSignatureRequestResponse(payload)) {
+                Signatures.handleMessage(payload);
             } else if (isTransactionRequestResponse(payload)) {
                 Transactions.handleMessage(payload);
             } else if (isGetTransactionRequests(payload)) {

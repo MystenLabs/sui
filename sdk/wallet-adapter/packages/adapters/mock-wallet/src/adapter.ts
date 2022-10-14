@@ -10,7 +10,7 @@ import {
 } from "@mysten/sui.js";
 import { WalletAdapter } from "@mysten/wallet-adapter-base";
 
-const ALL_PERMISSION_TYPES = ["viewAccount", "suggestTransactions"];
+const ALL_PERMISSION_TYPES = ["viewAccount", "suggestTransactions", "suggestSignatures"];
 type AllPermissionsType = typeof ALL_PERMISSION_TYPES;
 type PermissionType = AllPermissionsType[number];
 
@@ -40,7 +40,7 @@ export class MockWalletAdapter implements WalletAdapter {
   getAccounts(): Promise<string[]> {
     return window.suiWallet.getAccounts();
   }
-  async signMessage(message: Base64DataBuffer): Promise<SignaturePubkeyPair> {
+  signMessage(message: Base64DataBuffer): Promise<SignaturePubkeyPair> {
     return window.suiWallet.signMessage(message);
   }
   executeMoveCall(
@@ -61,11 +61,9 @@ export class MockWalletAdapter implements WalletAdapter {
     if (window.suiWallet) {
       const wallet = window.suiWallet;
       try {
-        let given = await wallet.requestPermissions();
+        await wallet.requestPermissions();
         const newLocal: readonly PermissionType[] = ["viewAccount"];
-        let perms = await wallet.hasPermissions(newLocal);
-        console.log(perms);
-        console.log(given);
+        await wallet.hasPermissions(newLocal);
         this.connected = true;
       } catch (err) {
         console.error(err);

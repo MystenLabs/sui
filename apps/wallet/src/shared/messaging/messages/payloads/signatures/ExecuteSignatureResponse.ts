@@ -9,7 +9,6 @@ import type { BasePayload, Payload } from '_payloads';
 export interface ExecuteSignatureResponse extends BasePayload {
   type: 'sign-message-response';
   signature: SignaturePubkeyPair;
-  responseDate: string;
 }
 
 export function isExecuteSignatureResponse(

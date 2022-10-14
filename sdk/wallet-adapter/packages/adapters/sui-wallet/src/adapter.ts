@@ -11,7 +11,7 @@ import {
 } from "@mysten/sui.js";
 import { WalletAdapter } from "@mysten/wallet-adapter-base";
 
-const ALL_PERMISSION_TYPES = ["viewAccount", "suggestTransactions"] as const;
+const ALL_PERMISSION_TYPES = ["viewAccount", "suggestTransactions", "suggestSignatures"] as const;
 type AllPermissionsType = typeof ALL_PERMISSION_TYPES;
 type PermissionType = AllPermissionsType[number];
 
@@ -73,11 +73,9 @@ export class SuiWalletAdapter implements WalletAdapter {
     if (window.suiWallet) {
       const wallet = window.suiWallet;
       try {
-        let given = await wallet.requestPermissions();
-        const newLocal: readonly PermissionType[] = ["viewAccount"];
-        let perms = await wallet.hasPermissions(newLocal);
-        console.log(perms);
-        console.log(given);
+        await wallet.requestPermissions();
+        const newLocal: readonly PermissionType[] = ["viewAccount", "suggestTransactions", "suggestSignatures"];
+        await wallet.hasPermissions(newLocal);
         this.connected = true;
       } catch (err) {
         console.error(err);
