@@ -18,10 +18,12 @@ import {
 
 /**
  * This is a temporary implementation of the `TxnDataSerializer` class
- * that uses the Sui Gateway RPC API to serialize a transaction into BCS bytes.
- * This class will be deprecated once we support BCS serialization in TypeScript.
- * It is not safe to use this class in production because one cannot authenticate
- * the encoding.
+ * that uses the Sui Fullnode RPC API to serialize a transaction into BCS bytes. We will
+ * deprecate this implementation once `LocalTxnDataSerializer` stabilizes.
+ *
+ * Prefer to use `LocalTxnDataSerializer` instead for better performance and safety, otherwise
+ * this needs to be used with a trusted fullnode and it is recommended to verify the returned
+ * BCS bytes matches the input.
  */
 export class RpcTxnDataSerializer implements TxnDataSerializer {
   private client: JsonRpcClient;
