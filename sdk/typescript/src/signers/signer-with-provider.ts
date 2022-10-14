@@ -62,8 +62,7 @@ export abstract class SignerWithProvider implements Signer {
   }
 
   async signMessage(message: Base64DataBuffer): Promise<SignaturePubkeyPair> {
-    const signature = await this.signData(message);
-    return signature;
+    return await this.signData(message);
   }
 
   /**

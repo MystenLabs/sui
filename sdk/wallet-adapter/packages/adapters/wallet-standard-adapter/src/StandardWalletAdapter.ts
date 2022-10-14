@@ -62,7 +62,7 @@ export class StandardWalletAdapter implements WalletAdapter {
     }
   }
 
-  async signMessage(message: Base64DataBuffer): Promise<SignaturePubkeyPair> {
+  async signMessage(message: Base64DataBuffer) {
     return this.#wallet.features["standard:signMessage"].signMessage(message);
   }
 

@@ -134,6 +134,11 @@ export const WalletProvider: FC<WalletProviderProps> = ({
       async signMessage(message) {
         if (wallet == null)
           throw Error("Wallet Not Connected");
+        if (!wallet.signMessage) {
+          throw new Error(
+            'Wallet does not support "signMessage" method'
+          );
+        }
         return wallet.signMessage(message);
       },
 
