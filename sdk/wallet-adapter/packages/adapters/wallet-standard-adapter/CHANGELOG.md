@@ -1,5 +1,17 @@
 # @mysten/wallet-adapter-wallet-standard
 
+## 0.2.1
+
+### Patch Changes
+
+- Updated dependencies [1d036d459]
+- Updated dependencies [b11b69262]
+- Updated dependencies [b11b69262]
+- Updated dependencies [b11b69262]
+  - @mysten/sui.js@0.13.0
+  - @mysten/wallet-adapter-base@0.2.1
+  - @mysten/wallet-standard@0.1.1
+
 ## 0.2.0
 
 ### Minor Changes
