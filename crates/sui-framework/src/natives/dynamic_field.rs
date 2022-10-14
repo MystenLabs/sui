@@ -115,7 +115,6 @@ pub fn add_child_object(
     let child = args.pop_back().unwrap();
     let parent = pop_arg!(args, AccountAddress).into();
     assert!(args.is_empty());
-    assert!(args.is_empty());
     // TODO remove this copy_value, which will require VM changes
     let child_id = get_object_id(child.copy_value().unwrap())
         .unwrap()

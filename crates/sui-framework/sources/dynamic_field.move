@@ -3,8 +3,8 @@
 
 /// In addition to the fields declared in its type definition, a Sui object can have dynamic fields
 /// that can be added after the object has been constructed. Unlike ordinary field names
-/// (which are always staticlly declared identifiers) a dynamic field name can be any value with
-/// the `copy`, `drop`, and `store` abilities, an integer, a boolean, a string, etc.
+/// (which are always statically declared identifiers) a dynamic field name can be any value with
+/// the `copy`, `drop`, and `store` abilities, e.g. an integer, a boolean, or a string.
 /// This gives Sui programmers the flexibility to extend objects on-the-fly, and it also serves as a
 /// building block for core collection types
 module sui::dynamic_field {
@@ -123,14 +123,20 @@ public fun exists_with_type<Name: copy + drop + store, Value: store>(
 }
 
 public(friend) native fun hash_type_and_key<K: copy + drop + store>(parent: address, k: K): address;
+
 /// throws `EFieldAlreadyExists` if a child already exists with that ID
 public(friend) native fun add_child_object<Child: key>(parent: address, child: Child);
+
 /// throws `EFieldDoesNotExist` if a child does not exist with that ID
 /// or throws `EFieldTypeMismatch` if the type does not match
 public(friend) native fun borrow_child_object<Child: key>(parent: address, id: address): &mut Child;
+
 /// throws `EFieldDoesNotExist` if a child does not exist with that ID
 /// /// or throws `EFieldTypeMismatch` if the type does not match
 public(friend) native fun remove_child_object<Child: key>(parent: address, id: address): Child;
+
 public(friend) native fun has_child_object(parent: address, id: address): bool;
+
 public(friend) native fun has_child_object_with_ty<Child: key>(parent: address, id: address): bool;
+
 }
