@@ -171,7 +171,7 @@ Download and install [CMake](https://cmake.org/) from: https://cmake.org/downloa
 
 ### Protocol Buffers
 
-Download [Protocol Buffers](https://github.com/protocolbuffers/protobuf/releases) (protobuf) and add the \bin directory to your Windows PATH environment variable.
+Download [Protocol Buffers](https://github.com/protocolbuffers/protobuf/releases) (protoc-xx.x-win32.zip or protoc-xx.x-win64.zip) and add the \bin directory to your Windows PATH environment variable.
 
 ### Additional tools for Windows
 
