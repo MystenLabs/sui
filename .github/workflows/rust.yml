@@ -102,8 +102,6 @@ jobs:
       - name: cargo build
         run: |
           cargo build --all-features
-      # Ensure there are no uncommitted changes in the repo after running tests
-      - run: scripts/changed-files.sh
         shell: bash
 
 
