@@ -28,7 +28,7 @@ use sui_types::{
     },
 };
 use sui_types::{fp_ensure, SUI_SYSTEM_STATE_OBJECT_ID};
-use tracing::{debug, error, info, instrument, trace, Instrument};
+use tracing::{debug, error, info, instrument, trace, warn, Instrument};
 
 use prometheus::{
     register_histogram_with_registry, register_int_counter_with_registry, Histogram, IntCounter,
@@ -1259,7 +1259,7 @@ where
                     };
 
                 // Update the map with the information from this authority
-                // TODO: if `(object_ref, transaction_digest)` is alreay seen, need to verify
+                // TODO: if `(object_ref, transaction_digest)` is already seen, need to verify
                 // the existing value matches the old value.
                 let entry = object_map
                     .entry((object_ref, transaction_digest))
@@ -1565,7 +1565,10 @@ where
                             Ok(TransactionInfoResponse {
                                 certified_transaction: Some(inner_certificate),
                                 ..
-                            }) => {
+                            }) if inner_certificate.epoch() == self.committee.epoch  => {
+                                // A validator could return a certificate from an epoch that's
+                                // different from what the authority aggregator is expecting.
+                                // In that case, we should not accept that certificate.
                                 let tx_digest = inner_certificate.digest();
                                 debug!(tx_digest = ?tx_digest, ?name, weight, "Received prev certificate from validator handle_transaction");
                                 state.certificate = Some(inner_certificate);
@@ -1577,7 +1580,7 @@ where
                             Ok(TransactionInfoResponse {
                                 signed_transaction: Some(inner_signed_transaction),
                                 ..
-                            }) => {
+                            }) if inner_signed_transaction.auth_sign_info.epoch == self.committee.epoch => {
                                 let tx_digest = inner_signed_transaction.digest();
                                 debug!(tx_digest = ?tx_digest, ?name, weight, "Received signed transaction from validator handle_transaction");
                                 state.signatures.push((
@@ -1612,7 +1615,30 @@ where
                                 state.bad_stake += weight; // This is the bad stake counter
                             }
                             // In case we don't get an error but also don't get a valid value
-                            ret => {
+                            Ok(ret) => {
+                                // If we are here and yet there are either certs of signed tx,
+                                // it's because their epoch doesn't match with the committee.
+                                // This should start happen less over time as we are working on
+                                // eliminating this on honest validators.
+                                // Log a warning to keep track.
+                                if let Some(inner_certificate) = &ret.certified_transaction {
+                                    warn!(
+                                        ?tx_digest,
+                                        name=?name.concise(),
+                                        expected_epoch=?self.committee.epoch,
+                                        returned_epoch=?inner_certificate.epoch(),
+                                        "Returned certificate is from wrong epoch"
+                                    );
+                                }
+                                if let Some(inner_signed) = &ret.signed_transaction {
+                                    warn!(
+                                        ?tx_digest,
+                                        name=?name.concise(),
+                                        expected_epoch=?self.committee.epoch,
+                                        returned_epoch=?inner_signed.auth_sign_info.epoch,
+                                        "Returned signed transaction is from wrong epoch"
+                                    );
+                                }
                                 state.errors.push(
                                     SuiError::ErrorWhileProcessingTransactionTransaction {
                                         err: format!("Unexpected: {:?}", ret),
