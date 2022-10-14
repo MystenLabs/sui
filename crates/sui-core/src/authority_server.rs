@@ -455,7 +455,6 @@ impl ValidatorService {
                 // Record the cert for later execution, including causal completion if necessary.
                 let tx_digest = *tx_digest;
                 let _ = state
-                    .database
                     .add_pending_certificates(vec![(tx_digest, Some(certificate))])
                     .tap_err(|e| error!(?tx_digest, "add_pending_certificates failed: {}", e));
                 Err(e)

@@ -156,7 +156,7 @@ impl TransactionNotifier {
                     if let Ok(iter) = transaction_notifier
                         .clone()
                         .state
-                        .tables
+                        .perpetual_tables
                         .executed_sequence
                         .iter()
                         .skip_to(&next_seq)
