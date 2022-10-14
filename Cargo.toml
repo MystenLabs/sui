@@ -91,7 +91,7 @@ move-ir-types = { git = "https://github.com/move-language/move", rev = "7c8552e0
 move-prover = { git = "https://github.com/move-language/move", rev = "7c8552e0001c0c041c929e050c2d2959935485f1" }
 move-prover-boogie-backend = { git = "https://github.com/move-language/move", rev = "7c8552e0001c0c041c929e050c2d2959935485f1" }
 
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "a5147af9e044056b9769547d7ba96486255487c3" }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "2495f7dcc64a80c0d838cbecff889356e8614d6b" }
 
 # Use the same workspace-hack across crates.
 workspace-hack = { path = "crates/workspace-hack" }
