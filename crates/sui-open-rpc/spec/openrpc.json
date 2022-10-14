@@ -3077,15 +3077,56 @@
       },
       "EventType": {
         "description": "Auto-generated discriminant enum variants",
-        "type": "string",
-        "enum": [
-          "MoveEvent",
-          "Publish",
-          "TransferObject",
-          "DeleteObject",
-          "NewObject",
-          "EpochChange",
-          "Checkpoint"
+        "oneOf": [
+          {
+            "description": "Move-specific event",
+            "type": "string",
+            "enum": [
+              "MoveEvent"
+            ]
+          },
+          {
+            "description": "Module published",
+            "type": "string",
+            "enum": [
+              "Publish"
+            ]
+          },
+          {
+            "description": "Transfer objects to new address / wrap in another object / coin",
+            "type": "string",
+            "enum": [
+              "TransferObject"
+            ]
+          },
+          {
+            "description": "Delete object",
+            "type": "string",
+            "enum": [
+              "DeleteObject"
+            ]
+          },
+          {
+            "description": "New object creation",
+            "type": "string",
+            "enum": [
+              "NewObject"
+            ]
+          },
+          {
+            "description": "Epoch change",
+            "type": "string",
+            "enum": [
+              "EpochChange"
+            ]
+          },
+          {
+            "description": "New checkpoint",
+            "type": "string",
+            "enum": [
+              "Checkpoint"
+            ]
+          }
         ]
       },
       "ExecuteTransactionRequestType": {
@@ -3576,13 +3617,6 @@
       "Owner": {
         "oneOf": [
           {
-            "type": "string",
-            "enum": [
-              "Shared",
-              "Immutable"
-            ]
-          },
-          {
             "description": "Object is exclusively owned by a single address, and is mutable.",
             "type": "object",
             "required": [
@@ -3607,6 +3641,20 @@
               }
             },
             "additionalProperties": false
+          },
+          {
+            "description": "Object is shared, can be used by any address, and is mutable.",
+            "type": "string",
+            "enum": [
+              "Shared"
+            ]
+          },
+          {
+            "description": "Object is immutable, and hence ownership doesn't matter.",
+            "type": "string",
+            "enum": [
+              "Immutable"
+            ]
           }
         ]
       },
