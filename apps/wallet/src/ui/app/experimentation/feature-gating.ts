@@ -3,9 +3,13 @@
 
 import { GrowthBook } from '@growthbook/growthbook';
 
-const GROWTHBOOK_API_KEY =
-    process.env.GROWTH_BOOK_API_KEY ?? 'key_dev_dc2872e15e0c5f95';
+import type { JSONValue } from '@growthbook/growthbook';
+import type { WidenPrimitives } from '@growthbook/growthbook/dist/types/growthbook';
 
+const GROWTHBOOK_API_KEY =
+    process.env.NODE_ENV === 'production'
+        ? 'key_prod_ac59fe325855eb5f'
+        : 'key_dev_dc2872e15e0c5f95';
 export default class FeatureGating {
     #growthBook: GrowthBook;
 
@@ -38,5 +42,12 @@ export default class FeatureGating {
 
     public isOn(featureName: string): boolean {
         return this.#growthBook.isOn(featureName);
+    }
+
+    public getFeatureValue<T extends JSONValue>(
+        featureName: string,
+        defaultValue: T
+    ): WidenPrimitives<T> {
+        return this.#growthBook.getFeatureValue(featureName, defaultValue);
     }
 }

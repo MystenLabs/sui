@@ -19,7 +19,7 @@ reqwest = { version = "0.11.11", features = ["blocking", "json"] }
 telemetry-subscribers.workspace = true
 async-trait = "0.1.57"
 anyhow = { version = "1.0.64", features = ["backtrace"] }
-bcs = "0.1.3"
+bcs = "0.1.4"
 uuid = {version = "1.1.2", features = [ "v4", "fast-rng"]}
 prometheus = "0.13.2"
 

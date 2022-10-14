@@ -5,7 +5,7 @@ use std::{collections::HashSet, sync::Arc};
 use sui_types::{base_types::TransactionDigest, error::SuiResult, messages::CertifiedTransaction};
 use tracing::{debug, info};
 
-use crate::authority::AuthorityStore;
+use crate::authority::AuthorityState;
 use crate::authority_client::AuthorityAPI;
 
 use futures::{stream, StreamExt};
@@ -24,12 +24,12 @@ pub trait PendCertificateForExecution {
     ) -> SuiResult<()>;
 }
 
-impl PendCertificateForExecution for Arc<AuthorityStore> {
+impl PendCertificateForExecution for &AuthorityState {
     fn add_pending_certificates(
         &self,
         certs: Vec<(TransactionDigest, Option<CertifiedTransaction>)>,
     ) -> SuiResult<()> {
-        self.as_ref().add_pending_certificates(certs)
+        AuthorityState::add_pending_certificates(self, certs)
     }
 }
 
@@ -116,7 +116,7 @@ where
     active_authority
         .state
         .database
-        .remove_pending_certificates(indexes_to_delete)?;
+        .remove_pending_digests(indexes_to_delete)?;
 
     // Send them for execution
     let epoch = active_authority.state.committee.load().epoch;
@@ -149,7 +149,7 @@ where
     active_authority
         .state
         .database
-        .remove_pending_certificates(executed)?;
+        .remove_pending_digests(executed)?;
 
     Ok(pending_count == executed_count)
 }

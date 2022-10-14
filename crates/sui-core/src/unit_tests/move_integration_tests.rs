@@ -604,99 +604,6 @@ async fn test_entry_point_vector() {
         effects.status
     );
 
-    // mint an owned object
-    let effects = call_move(
-        &authority,
-        &gas,
-        &sender,
-        &sender_key,
-        &package,
-        "entry_point_vector",
-        "mint",
-        vec![],
-        vec![TestCallArg::Pure(bcs::to_bytes(&(42_u64)).unwrap())],
-    )
-    .await
-    .unwrap();
-    assert!(
-        matches!(effects.status, ExecutionStatus::Success { .. }),
-        "{:?}",
-        effects.status
-    );
-    let (obj_id, _, _) = effects.created[0].0;
-    // call a function with a vector containing the same owned object as another one passed as
-    // argument
-    let result = call_move(
-        &authority,
-        &gas,
-        &sender,
-        &sender_key,
-        &package,
-        "entry_point_vector",
-        "same_objects",
-        vec![],
-        vec![
-            TestCallArg::Object(obj_id),
-            TestCallArg::ObjVec(vec![obj_id]),
-        ],
-    )
-    .await;
-    // should fail as we have the same object passed in vector and as a separate by-value argument
-    assert!(
-        matches!(
-            result.clone().err().unwrap(),
-            SuiError::DuplicateObjectRefInput { .. }
-        ),
-        "{:?}",
-        result
-    );
-
-    // mint an owned object
-    let effects = call_move(
-        &authority,
-        &gas,
-        &sender,
-        &sender_key,
-        &package,
-        "entry_point_vector",
-        "mint",
-        vec![],
-        vec![TestCallArg::Pure(bcs::to_bytes(&(42_u64)).unwrap())],
-    )
-    .await
-    .unwrap();
-    assert!(
-        matches!(effects.status, ExecutionStatus::Success { .. }),
-        "{:?}",
-        effects.status
-    );
-    let (obj_id, _, _) = effects.created[0].0;
-    // call a function with a vector containing the same owned object as another one passed as
-    // a reference argument
-    let result = call_move(
-        &authority,
-        &gas,
-        &sender,
-        &sender_key,
-        &package,
-        "entry_point_vector",
-        "same_objects_ref",
-        vec![],
-        vec![
-            TestCallArg::Object(obj_id),
-            TestCallArg::ObjVec(vec![obj_id]),
-        ],
-    )
-    .await;
-    assert!(
-        matches!(
-            result.clone().err().unwrap(),
-            SuiError::DuplicateObjectRefInput { .. }
-        ),
-        "{:?}",
-        result
-    );
-
     // mint a parent object and a child object and make sure that parent stored in the vector
     // authenticates the child passed by-value
     let effects = call_move(
@@ -922,6 +829,100 @@ async fn test_entry_point_vector_error() {
         "{:?}",
         effects.status
     );
+
+    // mint an owned object
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package,
+        "entry_point_vector",
+        "mint",
+        vec![],
+        vec![TestCallArg::Pure(bcs::to_bytes(&(42_u64)).unwrap())],
+    )
+    .await
+    .unwrap();
+    assert!(
+        matches!(effects.status, ExecutionStatus::Success { .. }),
+        "{:?}",
+        effects.status
+    );
+    let (obj_id, _, _) = effects.created[0].0;
+    // call a function with a vector containing the same owned object as another one passed as
+    // argument
+    let result = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package,
+        "entry_point_vector",
+        "same_objects",
+        vec![],
+        vec![
+            TestCallArg::Object(obj_id),
+            TestCallArg::ObjVec(vec![obj_id]),
+        ],
+    )
+    .await;
+    // should fail as we have the same object passed in vector and as a separate by-value argument
+    assert!(
+        matches!(
+            result.clone().err().unwrap(),
+            SuiError::DuplicateObjectRefInput { .. }
+        ),
+        "{:?}",
+        result
+    );
+
+    // mint an owned object
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package,
+        "entry_point_vector",
+        "mint",
+        vec![],
+        vec![TestCallArg::Pure(bcs::to_bytes(&(42_u64)).unwrap())],
+    )
+    .await
+    .unwrap();
+    assert!(
+        matches!(effects.status, ExecutionStatus::Success { .. }),
+        "{:?}",
+        effects.status
+    );
+    let (obj_id, _, _) = effects.created[0].0;
+    // call a function with a vector containing the same owned object as another one passed as
+    // a reference argument
+    let result = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package,
+        "entry_point_vector",
+        "same_objects_ref",
+        vec![],
+        vec![
+            TestCallArg::Object(obj_id),
+            TestCallArg::ObjVec(vec![obj_id]),
+        ],
+    )
+    .await;
+    // should fail as we have the same object passed in vector and as a separate by-reference argument
+    assert!(
+        matches!(
+            result.clone().err().unwrap(),
+            SuiError::DuplicateObjectRefInput { .. }
+        ),
+        "{:?}",
+        result
+    );
 }
 
 #[tokio::test]
@@ -980,99 +981,6 @@ async fn test_entry_point_vector_any() {
         matches!(effects.status, ExecutionStatus::Success { .. }),
         "{:?}",
         effects.status
-    );
-
-    // mint an owned object
-    let effects = call_move(
-        &authority,
-        &gas,
-        &sender,
-        &sender_key,
-        &package,
-        "entry_point_vector",
-        "mint_any",
-        vec![any_type_tag.clone()],
-        vec![TestCallArg::Pure(bcs::to_bytes(&(42_u64)).unwrap())],
-    )
-    .await
-    .unwrap();
-    assert!(
-        matches!(effects.status, ExecutionStatus::Success { .. }),
-        "{:?}",
-        effects.status
-    );
-    let (obj_id, _, _) = effects.created[0].0;
-    // call a function with a vector containing the same owned object as another one passed as
-    // argument
-    let result = call_move(
-        &authority,
-        &gas,
-        &sender,
-        &sender_key,
-        &package,
-        "entry_point_vector",
-        "same_objects_any",
-        vec![any_type_tag.clone()],
-        vec![
-            TestCallArg::Object(obj_id),
-            TestCallArg::ObjVec(vec![obj_id]),
-        ],
-    )
-    .await;
-    // should fail as we have the same object passed in vector and as a separate by-value argument
-    assert!(
-        matches!(
-            result.clone().err().unwrap(),
-            SuiError::DuplicateObjectRefInput { .. }
-        ),
-        "{:?}",
-        result
-    );
-
-    // mint an owned object
-    let effects = call_move(
-        &authority,
-        &gas,
-        &sender,
-        &sender_key,
-        &package,
-        "entry_point_vector",
-        "mint_any",
-        vec![any_type_tag.clone()],
-        vec![TestCallArg::Pure(bcs::to_bytes(&(42_u64)).unwrap())],
-    )
-    .await
-    .unwrap();
-    assert!(
-        matches!(effects.status, ExecutionStatus::Success { .. }),
-        "{:?}",
-        effects.status
-    );
-    let (obj_id, _, _) = effects.created[0].0;
-    // call a function with a vector containing the same owned object as another one passed as
-    // a reference argument
-    let result = call_move(
-        &authority,
-        &gas,
-        &sender,
-        &sender_key,
-        &package,
-        "entry_point_vector",
-        "same_objects_ref_any",
-        vec![any_type_tag.clone()],
-        vec![
-            TestCallArg::Object(obj_id),
-            TestCallArg::ObjVec(vec![obj_id]),
-        ],
-    )
-    .await;
-    assert!(
-        matches!(
-            result.clone().err().unwrap(),
-            SuiError::DuplicateObjectRefInput { .. }
-        ),
-        "{:?}",
-        result
     );
 
     // mint a parent object and a child object and make sure that parent stored in the vector
@@ -1302,6 +1210,99 @@ async fn test_entry_point_vector_any_error() {
         matches!(effects.status, ExecutionStatus::Failure { .. }),
         "{:?}",
         effects.status
+    );
+
+    // mint an owned object
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package,
+        "entry_point_vector",
+        "mint_any",
+        vec![any_type_tag.clone()],
+        vec![TestCallArg::Pure(bcs::to_bytes(&(42_u64)).unwrap())],
+    )
+    .await
+    .unwrap();
+    assert!(
+        matches!(effects.status, ExecutionStatus::Success { .. }),
+        "{:?}",
+        effects.status
+    );
+    let (obj_id, _, _) = effects.created[0].0;
+    // call a function with a vector containing the same owned object as another one passed as
+    // argument
+    let result = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package,
+        "entry_point_vector",
+        "same_objects_any",
+        vec![any_type_tag.clone()],
+        vec![
+            TestCallArg::Object(obj_id),
+            TestCallArg::ObjVec(vec![obj_id]),
+        ],
+    )
+    .await;
+    // should fail as we have the same object passed in vector and as a separate by-value argument
+    assert!(
+        matches!(
+            result.clone().err().unwrap(),
+            SuiError::DuplicateObjectRefInput { .. }
+        ),
+        "{:?}",
+        result
+    );
+
+    // mint an owned object
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package,
+        "entry_point_vector",
+        "mint_any",
+        vec![any_type_tag.clone()],
+        vec![TestCallArg::Pure(bcs::to_bytes(&(42_u64)).unwrap())],
+    )
+    .await
+    .unwrap();
+    assert!(
+        matches!(effects.status, ExecutionStatus::Success { .. }),
+        "{:?}",
+        effects.status
+    );
+    let (obj_id, _, _) = effects.created[0].0;
+    // call a function with a vector containing the same owned object as another one passed as
+    // a reference argument
+    let result = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package,
+        "entry_point_vector",
+        "same_objects_ref_any",
+        vec![any_type_tag.clone()],
+        vec![
+            TestCallArg::Object(obj_id),
+            TestCallArg::ObjVec(vec![obj_id]),
+        ],
+    )
+    .await;
+    assert!(
+        matches!(
+            result.clone().err().unwrap(),
+            SuiError::DuplicateObjectRefInput { .. }
+        ),
+        "{:?}",
+        result
     );
 }
 

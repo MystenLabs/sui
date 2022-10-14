@@ -169,6 +169,7 @@ class Permissions {
             permissionTypes,
             connection.originFavIcon,
             requestMsgID,
+            connection.pagelink,
             existingPermission
         );
         await new Window(Permissions.getUiUrl(pRequest.id)).show();
@@ -242,6 +243,7 @@ class Permissions {
         permissionTypes: readonly PermissionType[],
         favIcon: string | undefined,
         requestMsgID: string,
+        pagelink?: string | undefined,
         existingPermission?: Permission | null
     ): Promise<Permission> {
         let permissionToStore: Permission;
@@ -268,6 +270,7 @@ class Permissions {
                 createdDate: new Date().toISOString(),
                 origin,
                 favIcon,
+                pagelink,
                 permissions: permissionTypes as PermissionType[],
                 responseDate: null,
                 requestMsgID,

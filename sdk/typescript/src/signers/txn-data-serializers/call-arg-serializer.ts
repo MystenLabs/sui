@@ -9,6 +9,7 @@ import {
   isSharedObject,
   isValidSuiAddress,
   normalizeSuiObjectId,
+  ObjectId,
   SuiJsonValue,
   SuiMoveNormalizedType,
 } from '../../types';
@@ -21,6 +22,21 @@ const isTypeFunc = (type: string) => (t: any) => typeof t === type;
 
 export class CallArgSerializer {
   constructor(private provider: Provider) {}
+
+  async extractObjectIds(txn: MoveCallTransaction): Promise<ObjectId[]> {
+    const args = await this.serializeMoveCallArguments(txn);
+    return args
+      .map((arg) => {
+        if ('Object' in arg) {
+          const objectArg = arg.Object;
+          return 'Shared' in objectArg
+            ? objectArg.Shared
+            : objectArg.ImmOrOwned.objectId;
+        }
+        return null;
+      })
+      .filter((a) => a != null) as ObjectId[];
+  }
 
   async serializeMoveCallArguments(
     txn: MoveCallTransaction
@@ -76,7 +92,6 @@ export class CallArgSerializer {
     }
 
     let serType = this.getPureSerializationType(expectedType, argVal);
-
     return {
       Pure: bcs.ser(serType, argVal).toBytes(),
     };

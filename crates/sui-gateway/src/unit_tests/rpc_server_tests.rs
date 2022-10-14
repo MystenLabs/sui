@@ -135,7 +135,7 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
 
     // now do the call
     let package_id = ObjectID::new(SUI_FRAMEWORK_ADDRESS.into_bytes());
-    let module = "coin".to_string();
+    let module = "pay".to_string();
     let function = "split".to_string();
 
     let json_args = vec![

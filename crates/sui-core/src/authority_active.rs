@@ -31,7 +31,6 @@
 
 use arc_swap::ArcSwap;
 use std::{collections::HashMap, ops::Deref, sync::Arc, time::Duration};
-use sui_storage::node_sync_store::NodeSyncStore;
 use sui_types::{base_types::AuthorityName, error::SuiResult};
 use tokio::{
     sync::{oneshot, Mutex, MutexGuard},
@@ -115,7 +114,6 @@ struct NodeSyncProcessHandle(JoinHandle<()>, oneshot::Sender<()>);
 pub struct ActiveAuthority<A> {
     // The local authority state
     pub state: Arc<AuthorityState>,
-    pub node_sync_store: Arc<NodeSyncStore>,
 
     // Handle that holds a channel connected to NodeSyncState, used to send sync requests
     // into NodeSyncState.
@@ -141,7 +139,6 @@ pub struct ActiveAuthority<A> {
 impl<A> ActiveAuthority<A> {
     pub fn new(
         authority: Arc<AuthorityState>,
-        node_sync_store: Arc<NodeSyncStore>,
         net: AuthorityAggregator<A>,
         gossip_metrics: GossipMetrics,
         network_metrics: Arc<NetworkAuthorityClientMetrics>,
@@ -158,7 +155,6 @@ impl<A> ActiveAuthority<A> {
                     .collect(),
             )),
             state: authority,
-            node_sync_store,
             node_sync_handle: OnceCell::new(),
             node_sync_process: Default::default(),
             net: ArcSwap::from(net),
@@ -175,17 +171,8 @@ impl<A> ActiveAuthority<A> {
         authority: Arc<AuthorityState>,
         net: AuthorityAggregator<A>,
     ) -> SuiResult<Self> {
-        let working_dir = tempfile::tempdir().unwrap();
-        let sync_db_path = working_dir.path().join("node_sync_db");
-
-        let node_sync_store = Arc::new(NodeSyncStore::open_tables_read_write(
-            sync_db_path,
-            None,
-            None,
-        ));
         Self::new(
             authority,
-            node_sync_store,
             net,
             GossipMetrics::new_for_tests(),
             Arc::new(NetworkAuthorityClientMetrics::new_for_tests()),
@@ -249,7 +236,6 @@ impl<A> Clone for ActiveAuthority<A> {
     fn clone(&self) -> Self {
         ActiveAuthority {
             state: self.state.clone(),
-            node_sync_store: self.node_sync_store.clone(),
             node_sync_handle: self.node_sync_handle.clone(),
             node_sync_process: self.node_sync_process.clone(),
             net: ArcSwap::from(self.net.load().clone()),
@@ -372,7 +358,7 @@ where
         let aggregator = self.agg_aggregator();
 
         let node_sync_handle = self.clone().node_sync_handle();
-        let node_sync_store = self.node_sync_store.clone();
+        let node_sync_store = self.state.node_sync_store.clone();
 
         info!("spawning node sync task");
         let join_handle = tokio::task::spawn(node_sync_process(

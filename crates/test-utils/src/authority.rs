@@ -82,7 +82,7 @@ pub async fn start_node(config: &NodeConfig, prom_registry: Registry) -> SuiNode
     let builder = handle.create_node();
     let node = builder
         .ip(ip)
-        .name(format!("{}", config.protocol_public_key()))
+        .name(format!("{:?}", config.protocol_public_key().concise()))
         .init(|| async {
             tracing::info!("node restarted");
         })

@@ -7,8 +7,8 @@ use crate::{
 };
 use config::{Committee, Stake};
 use fastcrypto::{traits::EncodeDecodeBase64, Hash};
-use std::{collections::HashMap, sync::Arc};
-use tracing::debug;
+use std::{collections::BTreeSet, sync::Arc};
+use tracing::{debug, error};
 use types::{Certificate, CertificateDigest, ConsensusStore, Round, SequenceNumber, StoreResult};
 
 #[cfg(test)]
@@ -35,12 +35,41 @@ impl ConsensusProtocol for Bullshark {
         let round = certificate.round();
         let mut consensus_index = consensus_index;
 
+        // We must have stored already the parents of this certiciate!
+        if round > 0 {
+            let parents = certificate.header.parents.clone();
+            if let Some(round_table) = state.dag.get(&(round - 1)) {
+                let store_parents: BTreeSet<&CertificateDigest> =
+                    round_table.iter().map(|(_, (digest, _))| digest).collect();
+
+                for parent_digest in parents {
+                    if !store_parents.contains(&parent_digest) {
+                        if round - 1 + self.gc_depth > state.last_committed_round {
+                            error!(
+                                "The store does not contain the parent of {:?}: Missing item digest={:?}",
+                                certificate, parent_digest
+                            );
+                        } else {
+                            debug!(
+                                "The store does not contain the parent of {:?}: Missing item digest={:?} (but below GC round)",
+                                certificate, parent_digest
+                            );
+                        }
+                    }
+                }
+            } else {
+                error!(
+                    "Round not present in Dag store: {:?} when looking for parents of {:?}",
+                    round - 1,
+                    certificate
+                );
+            }
+        }
+
         // Add the new certificate to the local storage.
-        state
-            .dag
-            .entry(round)
-            .or_insert_with(HashMap::new)
-            .insert(certificate.origin(), (certificate.digest(), certificate));
+        if state.try_insert(certificate).is_err() {
+            return Ok(Vec::new());
+        }
 
         // Try to order the dag to commit. Start from the highest round for which we have at least
         // f+1 certificates. This is because we need them to reveal the common coin.
@@ -90,6 +119,8 @@ impl ConsensusProtocol for Bullshark {
             .iter()
             .rev()
         {
+            debug!("Previous Leader {:?} has enough support", leader);
+
             // Starting from the oldest leader, flatten the sub-dag referenced by the leader.
             for x in utils::order_dag(self.gc_depth, leader, state) {
                 let digest = x.digest();

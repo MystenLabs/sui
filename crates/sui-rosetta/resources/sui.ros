@@ -13,7 +13,6 @@ transfer(10){
     print_message({"recipient_amount":{{recipient_amount}}});
 
     // Find recipient and construct operations
-    sender_amount = 0 - {{recipient_amount}};
     recipient = find_balance({
       "not_account_identifier":[{{sender.account_identifier}}],
       "minimum_balance":{
@@ -27,23 +26,11 @@ transfer(10){
         "operation_identifier":{"index":0},
         "type":"TransferSUI",
         "account":{{sender.account_identifier}},
-        "amount":{
-          "value":{{sender_amount}},
-          "currency":{{currency}}
-        },
-        "coin_change":{"coin_action":"coin_spent", "coin_identifier":{{sender.coin}}}
+        "coin_change":{"coin_action":"coin_spent", "coin_identifier":{{sender.coin}}},
+        "metadata":{"recipient":{{recipient.account_identifier.address}}, "amount": {{recipient_amount}}}
       },
       {
         "operation_identifier":{"index":1},
-        "type":"TransferSUI",
-        "account":{{recipient.account_identifier}},
-        "amount":{
-          "value":{{recipient_amount}},
-          "currency":{{currency}}
-        }
-      },
-      {
-        "operation_identifier":{"index":2},
         "type":"GasBudget",
         "account":{{sender.account_identifier}},
         "coin_change":{"coin_action":"coin_spent", "coin_identifier":{{sender.coin}}},

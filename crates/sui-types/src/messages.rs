@@ -10,7 +10,9 @@ use crate::crypto::{
     VerificationObligation,
 };
 use crate::gas::GasCostSummary;
-use crate::messages_checkpoint::CheckpointFragment;
+use crate::messages_checkpoint::{
+    AuthenticatedCheckpoint, CheckpointFragment, CheckpointSequenceNumber,
+};
 use crate::object::{Object, ObjectFormatOptions, Owner, OBJECT_START_VERSION};
 use crate::storage::{DeleteKind, WriteKind};
 use crate::sui_serde::Base64;
@@ -930,6 +932,33 @@ pub struct BatchInfoRequest {
 
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct BatchInfoResponseItem(pub UpdateItem);
+
+/// Subscribe to notifications when new checkpoint certificates are available.
+///
+/// Note that there is no start field necessary, because checkpoint sequence numbers are
+/// contiguous. Therefore the client is always immediately sent the highest available checkpoint
+/// number, from which they can deduce if they are missing any checkpoints.
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+pub struct CheckpointStreamRequest {
+    // No request fields are currently necessary, but tonic errors when the request struct has size
+    // 0.
+    _ignored: u64,
+}
+
+impl CheckpointStreamRequest {
+    pub fn new() -> Self {
+        Default::default()
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CheckpointStreamResponseItem {
+    /// The first available checkpoint sequence on this validator. Currently this is always 0.
+    /// When snapshots are implemented, this may change to become the first checkpoint after the
+    /// most recent snapshot.
+    pub first_available_sequence: CheckpointSequenceNumber,
+    pub checkpoint: AuthenticatedCheckpoint,
+}
 
 impl From<SuiAddress> for AccountInfoRequest {
     fn from(account: SuiAddress) -> Self {

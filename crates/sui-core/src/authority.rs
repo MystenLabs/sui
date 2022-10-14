@@ -20,6 +20,7 @@ use arc_swap::ArcSwap;
 use async_trait::async_trait;
 use chrono::prelude::*;
 use fastcrypto::traits::KeyPair;
+use futures::stream::{self, Stream};
 use move_bytecode_utils::module_cache::SyncModuleCache;
 use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
@@ -30,8 +31,10 @@ use prometheus::{
 };
 use tap::TapFallible;
 use thiserror::Error;
-use tokio::sync::broadcast::error::RecvError;
-use tokio::sync::mpsc::Sender;
+use tokio::sync::{
+    broadcast::{self, error::RecvError},
+    mpsc,
+};
 use tracing::Instrument;
 use tracing::{debug, error, instrument, warn};
 use typed_store::Map;
@@ -50,13 +53,15 @@ use sui_json_rpc_types::{SuiEventEnvelope, SuiTransactionEffects};
 use sui_simulator::nondeterministic;
 use sui_storage::{
     event_store::{EventStore, EventStoreType, StoredEvent},
+    node_sync_store::NodeSyncStore,
     write_ahead_log::{DBTxGuard, TxGuard, WriteAheadLog},
     IndexStore,
 };
 use sui_types::committee::EpochId;
 use sui_types::crypto::{AuthorityKeyPair, NetworkKeyPair};
 use sui_types::messages_checkpoint::{
-    CheckpointRequest, CheckpointRequestType, CheckpointResponse,
+    AuthenticatedCheckpoint, CertifiedCheckpointSummary, CheckpointRequest, CheckpointRequestType,
+    CheckpointResponse, CheckpointSequenceNumber,
 };
 use sui_types::object::{Owner, PastObjectRead};
 use sui_types::query::TransactionQuery;
@@ -76,6 +81,7 @@ use sui_types::{
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID,
 };
 
+use crate::authority::authority_notifier::TransactionNotifierTicket;
 use crate::authority::authority_store_tables::ExecutionIndicesWithHash;
 use crate::checkpoints::ConsensusSender;
 use crate::consensus_adapter::ConsensusListenerMessage;
@@ -450,6 +456,8 @@ pub struct AuthorityState {
     /// The database
     pub(crate) database: Arc<AuthorityStore>, // TODO: remove pub
 
+    pub node_sync_store: Arc<NodeSyncStore>,
+
     indexes: Option<Arc<IndexStore>>,
 
     pub module_cache: Arc<SyncModuleCache<ResolverWrapper<AuthorityStore>>>, // TODO: use strategies (e.g. LRU?) to constraint memory usage
@@ -477,7 +485,7 @@ pub struct AuthorityState {
     pub metrics: Arc<AuthorityMetrics>,
 
     /// A channel to tell consensus to reconfigure.
-    tx_reconfigure_consensus: Sender<ReconfigConsensusMessage>,
+    tx_reconfigure_consensus: mpsc::Sender<ReconfigConsensusMessage>,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -810,14 +818,27 @@ impl AuthorityState {
 
         // If commit_certificate returns an error, tx_guard will be dropped and the certificate
         // will be persisted in the log for later recovery.
-        self.commit_certificate(
-            inner_temporary_store,
-            certificate,
-            &signed_effects,
-            bypass_validator_halt,
-        )
-        .await
-        .tap_err(|e| error!(?digest, "commit_certificate failed: {e}"))?;
+        let notifier_ticket = self.batch_notifier.ticket(bypass_validator_halt)?;
+        if let Err(err) = self
+            .commit_certificate(
+                inner_temporary_store,
+                certificate,
+                &signed_effects,
+                notifier_ticket,
+            )
+            .await
+        {
+            if matches!(err, SuiError::ValidatorHaltedAtEpochEnd) {
+                debug!(
+                    ?digest,
+                    "validator halted and this cert will never be committed"
+                );
+                tx_guard.release();
+            } else {
+                error!(?digest, "commit_certificate failed: {}", err);
+            }
+            return Err(err);
+        }
 
         // commit_certificate finished, the tx is fully committed to the store.
         tx_guard.commit_tx();
@@ -1289,6 +1310,74 @@ impl AuthorityState {
         }
     }
 
+    pub async fn handle_checkpoint_streaming(
+        &self,
+        _request: CheckpointStreamRequest,
+    ) -> Result<impl Stream<Item = Result<CheckpointStreamResponseItem, SuiError>>, SuiError> {
+        struct Locals {
+            from_db: Option<AuthenticatedCheckpoint>,
+            latest_sequence_sent: Option<CheckpointSequenceNumber>,
+            subscriber: broadcast::Receiver<CertifiedCheckpointSummary>,
+            exit: bool,
+        }
+
+        let checkpoints = self.checkpoints.lock();
+        let subscriber = checkpoints.subscribe_to_checkpoints();
+        let from_db = checkpoints.latest_certified_checkpoint();
+        std::mem::drop(checkpoints);
+
+        let latest_sequence_sent = from_db.as_ref().map(|c| c.sequence_number());
+        let locals = Locals {
+            from_db,
+            latest_sequence_sent,
+            subscriber,
+            exit: false,
+        };
+
+        Ok(stream::unfold(locals, move |mut locals| async move {
+            if let Some(checkpoint) = locals.from_db.take() {
+                Some((
+                    Ok(CheckpointStreamResponseItem {
+                        first_available_sequence: 0,
+                        checkpoint,
+                    }),
+                    locals,
+                ))
+            } else {
+                match locals.subscriber.recv().await {
+                    Ok(checkpoint) => {
+                        let sequence_number = *checkpoint.summary.sequence_number();
+                        if locals.latest_sequence_sent.is_none()
+                            || sequence_number > locals.latest_sequence_sent.unwrap()
+                        {
+                            locals.latest_sequence_sent = Some(sequence_number);
+                            Some((
+                                Ok(CheckpointStreamResponseItem {
+                                    first_available_sequence: 0,
+                                    checkpoint: AuthenticatedCheckpoint::Certified(checkpoint),
+                                }),
+                                locals,
+                            ))
+                        } else {
+                            None
+                        }
+                    }
+                    Err(RecvError::Closed) => {
+                        locals.exit = true;
+                        Some((Err(SuiError::SubscriptionServiceClosed), locals))
+                    }
+                    Err(RecvError::Lagged(number_skipped)) => {
+                        locals.exit = true;
+                        Some((
+                            Err(SuiError::SubscriptionItemsDroppedError(number_skipped)),
+                            locals,
+                        ))
+                    }
+                }
+            }
+        }))
+    }
+
     pub fn handle_committee_info_request(
         &self,
         request: &CommitteeInfoRequest,
@@ -1312,6 +1401,7 @@ impl AuthorityState {
         name: AuthorityName,
         secret: StableSyncAuthoritySigner,
         store: Arc<AuthorityStore>,
+        node_sync_store: Arc<NodeSyncStore>,
         committee_store: Arc<CommitteeStore>,
         indexes: Option<Arc<IndexStore>>,
         event_store: Option<Arc<EventStoreType>>,
@@ -1319,7 +1409,7 @@ impl AuthorityState {
         checkpoints: Arc<Mutex<CheckpointStore>>,
         genesis: &Genesis,
         prometheus_registry: &prometheus::Registry,
-        tx_reconfigure_consensus: Sender<ReconfigConsensusMessage>,
+        tx_reconfigure_consensus: mpsc::Sender<ReconfigConsensusMessage>,
     ) -> Self {
         let (tx, _rx) = tokio::sync::broadcast::channel(BROADCAST_CAPACITY);
         let native_functions =
@@ -1350,6 +1440,7 @@ impl AuthorityState {
             _native_functions: native_functions,
             move_vm,
             database: store.clone(),
+            node_sync_store,
             indexes,
             // `module_cache` uses a separate in-mem cache from `event_handler`
             // this is because they largely deal with different types of MoveStructs
@@ -1388,7 +1479,7 @@ impl AuthorityState {
         // Get all unprocessed checkpoints
         for (_seq, batch) in state
             .database
-            .tables
+            .perpetual_tables
             .batches
             .iter()
             .skip_to(&next_expected_tx)
@@ -1396,7 +1487,7 @@ impl AuthorityState {
         {
             let transactions: Vec<(TxSequenceNumber, ExecutionDigests)> = state
                 .database
-                .tables
+                .perpetual_tables
                 .executed_sequence
                 .iter()
                 .skip_to(&batch.data().initial_sequence_number)
@@ -1424,7 +1515,7 @@ impl AuthorityState {
         store_base_path: Option<PathBuf>,
         genesis: Option<&Genesis>,
         consensus_sender: Option<Box<dyn ConsensusSender>>,
-        tx_reconfigure_consensus: Sender<ReconfigConsensusMessage>,
+        tx_reconfigure_consensus: mpsc::Sender<ReconfigConsensusMessage>,
     ) -> Self {
         let secret = Arc::pin(key.copy());
         let path = match store_base_path {
@@ -1463,11 +1554,19 @@ impl AuthorityState {
             &genesis_committee,
             None,
         ));
+
+        let node_sync_store = Arc::new(NodeSyncStore::open_tables_read_write(
+            path.join("node_sync_db"),
+            None,
+            None,
+        ));
+
         // add the object_basics module
         AuthorityState::new(
             secret.public().into(),
             secret.clone(),
             store,
+            node_sync_store,
             epochs,
             None,
             None,
@@ -1478,6 +1577,21 @@ impl AuthorityState {
             tx_reconfigure_consensus,
         )
         .await
+    }
+
+    /// Add a number of certificates to the pending transactions as well as the
+    /// certificates structure if they are not already executed.
+    /// Certificates are optional, and if not provided, they will be eventually
+    /// downloaded in the execution driver.
+    pub fn add_pending_certificates(
+        &self,
+        certs: Vec<(TransactionDigest, Option<CertifiedTransaction>)>,
+    ) -> SuiResult<()> {
+        self.node_sync_store
+            .batch_store_certs(certs.iter().filter_map(|(_, cert_opt)| cert_opt.clone()))?;
+
+        self.database
+            .add_pending_digests(certs.iter().map(|(digest, _)| *digest).collect())
     }
 
     // Continually pop in-progress txes from the WAL and try to drive them to completion.
@@ -1735,7 +1849,7 @@ impl AuthorityState {
                 .get_indexes()?
                 .get_transactions_to_addr(address, cursor, limit, reverse)?,
             TransactionQuery::All => {
-                let iter = self.database.tables.executed_sequence.iter();
+                let iter = self.database.perpetual_tables.executed_sequence.iter();
                 if reverse {
                     let iter = iter
                         .skip_prior_to(&cursor)?
@@ -1940,11 +2054,10 @@ impl AuthorityState {
         inner_temporary_store: InnerTemporaryStore,
         certificate: &CertifiedTransaction,
         signed_effects: &SignedTransactionEffects,
-        bypass_validator_halt: bool,
+        notifier_ticket: TransactionNotifierTicket,
     ) -> SuiResult {
         let _metrics_guard = start_timer(self.metrics.commit_certificate_latency.clone());
 
-        let notifier_ticket = self.batch_notifier.ticket(bypass_validator_halt)?;
         let seq = notifier_ticket.seq();
 
         let digest = certificate.digest();
@@ -2095,8 +2208,15 @@ impl AuthorityState {
                     "handle_consensus_transaction UserTransaction",
                 );
 
+                // Schedule the certificate for execution
+                self.add_pending_certificates(vec![(
+                    *certificate.digest(),
+                    Some(*certificate.clone()),
+                )])
+                .map_err(NarwhalHandlerError::NodeError)?;
+
                 self.database
-                    .persist_certificate_and_lock_shared_objects(*certificate, consensus_index)
+                    .lock_shared_objects(*certificate, consensus_index)
                     // todo - potentially more errors from inside here needs to be mapped differently
                     .await
                     .map_err(NarwhalHandlerError::NodeError)?;
@@ -2123,7 +2243,7 @@ impl AuthorityState {
                     .handle_internal_fragment(
                         consensus_index.index,
                         *fragment,
-                        self.database.clone(),
+                        self,
                         &self.committee.load(),
                     )
                     .map_err(NarwhalHandlerError::NodeError)?;
@@ -2152,12 +2272,12 @@ impl AuthorityState {
 
 pub struct ConsensusHandler {
     state: Arc<AuthorityState>,
-    sender: Sender<ConsensusListenerMessage>,
+    sender: mpsc::Sender<ConsensusListenerMessage>,
     hash: Mutex<u64>,
 }
 
 impl ConsensusHandler {
-    pub fn new(state: Arc<AuthorityState>, sender: Sender<ConsensusListenerMessage>) -> Self {
+    pub fn new(state: Arc<AuthorityState>, sender: mpsc::Sender<ConsensusListenerMessage>) -> Self {
         let hash = Mutex::new(0);
         Self {
             state,

@@ -6,11 +6,11 @@
 /// `Balance` type.
 module sui::coin {
     use sui::balance::{Self, Balance, Supply};
+    use sui::tx_context::TxContext;
     use sui::object::{Self, UID};
     use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
-    use sui::event;
     use std::vector;
+    use sui::event;
 
     /// For when a type passed to create_supply is not a one-time witness.
     const EBadWitness: u64 = 0;
@@ -119,12 +119,7 @@ module sui::coin {
         balance::join(balance, into_balance(coin));
     }
 
-    // === Functionality for Coin<T> holders ===
-
-    /// Transfer `c` to the sender of the current transaction
-    public fun keep<T>(c: Coin<T>, ctx: &TxContext) {
-        transfer::transfer(c, tx_context::sender(ctx))
-    }
+    // === Base Coin functionality ===
 
     /// Consume the coin `c` and add its value to `self`.
     /// Aborts if `c.value + self.value > U64_MAX`
@@ -134,17 +129,36 @@ module sui::coin {
         balance::join(&mut self.balance, balance);
     }
 
-    /// Join everything in `coins` with `self`
-    public entry fun join_vec<T>(self: &mut Coin<T>, coins: vector<Coin<T>>) {
+    /// Split coin `self` to two coins, one with balance `split_amount`,
+    /// and the remaining balance is left is `self`.
+    public fun split<T>(
+        self: &mut Coin<T>, split_amount: u64, ctx: &mut TxContext
+    ): Coin<T> {
+        take(&mut self.balance, split_amount, ctx)
+    }
+
+    /// Split coin `self` into `n - 1` coins with equal balances. The remainder is left in
+    /// `self`. Return newly created coins.
+    public fun divide_into_n<T>(
+        self: &mut Coin<T>, n: u64, ctx: &mut TxContext
+    ): vector<Coin<T>> {
+        assert!(n > 0, EInvalidArg);
+        assert!(n <= value(self), ENotEnough);
+
+        let vec = vector::empty<Coin<T>>();
         let i = 0;
-        let len = vector::length(&coins);
-        while (i < len) {
-            let coin = vector::remove(&mut coins, i);
-            join(self, coin);
-            i = i + 1
+        let split_amount = value(self) / n;
+        while (i < n - 1) {
+            vector::push_back(&mut vec, split(self, split_amount, ctx));
+            i = i + 1;
         };
-        // safe because we've drained the vector
-        vector::destroy_empty(coins)
+        vec
+    }
+
+    /// Make any Coin with a zero value. Useful for placeholding
+    /// bids/payments or preemptively making empty balances.
+    public fun zero<T>(ctx: &mut TxContext): Coin<T> {
+        Coin { id: object::new(ctx), balance: balance::zero() }
     }
 
     /// Destroy a coin with value zero
@@ -155,12 +169,6 @@ module sui::coin {
     }
 
     // === Registering new coin types and managing the coin supply ===
-
-    /// Make any Coin with a zero value. Useful for placeholding
-    /// bids/payments or preemptively making empty balances.
-    public fun zero<T>(ctx: &mut TxContext): Coin<T> {
-        Coin { id: object::new(ctx), balance: balance::zero() }
-    }
 
     /// Create a new currency type `T` as and return the `TreasuryCap` for
     /// `T` to the caller. Can only be called with a `one-time-witness`
@@ -224,63 +232,6 @@ module sui::coin {
     /// Burn a Coin and reduce the total_supply. Invokes `burn()`.
     public entry fun burn_<T>(c: &mut TreasuryCap<T>, coin: Coin<T>) {
         burn(c, coin);
-    }
-
-    /// Send `amount` units of `c` to `recipient`
-    /// Aborts with `EVALUE` if `amount` is greater than or equal to `amount`
-    public entry fun split_and_transfer<T>(
-        c: &mut Coin<T>, amount: u64, recipient: address, ctx: &mut TxContext
-    ) {
-        transfer::transfer(take(&mut c.balance, amount, ctx), recipient)
-    }
-
-    /// Split coin `self` to two coins, one with balance `split_amount`,
-    /// and the remaining balance is left is `self`.
-    public entry fun split<T>(self: &mut Coin<T>, split_amount: u64, ctx: &mut TxContext) {
-        transfer::transfer(
-            take(&mut self.balance, split_amount, ctx),
-            tx_context::sender(ctx)
-        )
-    }
-
-    /// Split coin `self` into `n` coins with equal balances. If the balance is
-    /// not evenly divisible by `n`, the remainder is left in `self`. Return
-    /// newly created coins.
-    public fun split_n_to_vec<T>(self: &mut Coin<T>, n: u64, ctx: &mut TxContext): vector<Coin<T>> {
-        assert!(n > 0, EInvalidArg);
-        assert!(n <= balance::value(&self.balance), ENotEnough);
-        let vec = vector::empty<Coin<T>>();
-        let i = 0;
-        let split_amount = balance::value(&self.balance) / n;
-        while (i < n - 1) {
-            vector::push_back(&mut vec, take(&mut self.balance, split_amount, ctx));
-            i = i + 1;
-        };
-        vec
-    }
-
-    /// Split coin `self` into `n` coins with equal balances. If the balance is
-    /// not evenly divisible by `n`, the remainder is left in `self`.
-    public entry fun split_n<T>(self: &mut Coin<T>, n: u64, ctx: &mut TxContext) {
-        let vec: vector<Coin<T>> = split_n_to_vec(self, n, ctx);
-        let i = 0;
-        let len = vector::length(&vec);
-        while (i < len) {
-            transfer::transfer(vector::pop_back(&mut vec), tx_context::sender(ctx));
-            i = i + 1;
-        };
-        vector::destroy_empty(vec);
-    }
-
-    /// Split coin `self` into multiple coins, each with balance specified
-    /// in `split_amounts`. Remaining balance is left in `self`.
-    public entry fun split_vec<T>(self: &mut Coin<T>, split_amounts: vector<u64>, ctx: &mut TxContext) {
-        let i = 0;
-        let len = vector::length(&split_amounts);
-        while (i < len) {
-            split(self, *vector::borrow(&split_amounts, i), ctx);
-            i = i + 1;
-        };
     }
 
     // === Test-only code ===

@@ -51,7 +51,7 @@ async fn main() -> Result<(), anyhow::Error> {
 }
 ```
 
-You can verify the result with the [Sui Explorer](https://explorer.devnet.sui.io/) if you are using the Sui Devnet Gateway.
+You can verify the result with the [Sui Explorer](https://explorer.devnet.sui.io/) if you are using the Sui Devnet Full node.
 
 ### Example 2 - Create and execute transaction
 
@@ -115,7 +115,7 @@ use sui_sdk::SuiClient;
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    let sui = SuiClient::new_rpc_client("https://gateway.devnet.sui.io:443", Some("ws://127.0.0.1:9001")).await?;
+    let sui = SuiClient::new_rpc_client("https://fullnode.devnet.sui.io:443", Some("ws://127.0.0.1:9001")).await?;
     let mut subscribe_all = sui.event_api().subscribe_event(SuiEventFilter::All(vec![])).await?;
     loop {
         println!("{:?}", subscribe_all.next().await);
