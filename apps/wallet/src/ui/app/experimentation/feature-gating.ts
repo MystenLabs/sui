@@ -4,7 +4,6 @@
 import { GrowthBook } from '@growthbook/growthbook';
 
 import type { JSONValue } from '@growthbook/growthbook';
-import type { WidenPrimitives } from '@growthbook/growthbook/dist/types/growthbook';
 
 const GROWTHBOOK_API_KEY =
     process.env.NODE_ENV === 'production'
@@ -47,7 +46,7 @@ export default class FeatureGating {
     public getFeatureValue<T extends JSONValue>(
         featureName: string,
         defaultValue: T
-    ): WidenPrimitives<T> {
+    ) {
         return this.#growthBook.getFeatureValue(featureName, defaultValue);
     }
 }
