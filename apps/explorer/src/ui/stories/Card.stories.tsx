@@ -1,24 +1,24 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type ComponentStory, type ComponentMeta } from '@storybook/react';
+import { type Meta, type StoryObj } from '@storybook/react';
 
-import { Card } from '../Card';
+import { Card, type CardProps } from '../Card';
 
 export default {
-    title: 'UI/Card',
     component: Card,
-} as ComponentMeta<typeof Card>;
+} as Meta;
 
-const Template: ComponentStory<typeof Card> = (args) => (
-    <Card {...args}>This is card content.</Card>
-);
+export const Default: StoryObj<CardProps> = {
+    render: (props) => <Card {...props}>This is card content.</Card>,
+};
 
-export const Default = Template.bind({});
-Default.args = {};
+export const Small: StoryObj<CardProps> = {
+    ...Default,
+    args: { spacing: 'sm' },
+};
 
-export const Small = Template.bind({});
-Small.args = { spacing: 'sm' };
-
-export const Large = Template.bind({});
-Large.args = { spacing: 'lg' };
+export const Large: StoryObj<CardProps> = {
+    ...Default,
+    args: { spacing: 'lg' },
+};

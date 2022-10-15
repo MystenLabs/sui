@@ -26,6 +26,7 @@ module.exports = {
             },
         ],
         'import/no-duplicates': ['error'],
+        'import/no-anonymous-default-export': 'off',
         '@typescript-eslint/consistent-type-imports': [
             'error',
             {
