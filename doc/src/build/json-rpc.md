@@ -68,7 +68,7 @@ be owned by the address specified for `{{owner_address}}` for the command to suc
 #### Create an unsigned transaction to transfer a Sui coin from one address to another
 
 ```shell
-curl --location --request POST 'https://fullnode.devnet.sui.io:443' \
+curl --location --request POST $SUI_RPC_HOST \
 --header 'Content-Type: application/json' \
 --data-raw '{
   "jsonrpc": "2.0",

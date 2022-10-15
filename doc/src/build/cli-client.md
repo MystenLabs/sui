@@ -1,49 +1,36 @@
 ---
-title: Use Sui CLI to Start and Manage Network
+title: Sui Client CLI
 ---
 
-Welcome to the Sui tutorial on the Sui CLI, developed
-to facilitate experimentation with Sui features using a
-command line interface. This document describes how to set up
-the Sui client and execute commands through the Sui command line
-interface (CLI).
-
-Note, this is an advanced option and an alternative to simply connecting to our public
-[Devnet](../build/devnet.md).
+Learn how to set up, configure, and use the Sui Client Command Line Interface (CLI). You can use the CLI to experiment with Sui features using a command line interface.
 
 ## Set up
 
-Follow the instructions to [install Sui binaries](install.md#binaries).
+The SUI Client CLI installs when you install Sui. See the [Install Sui](install.md) topic for prerequisites and installation instructions.
 
 ## Using the Sui client
 
-Now start a new terminal since you have the Sui network running in the first terminal.
+The Sui Client CLI supports the following commands:
 
-The following commands are supported by the Sui client:
-
-    active-address        Default address used for commands when none specified
-    addresses             Obtain the Addresses managed by the client
-    call                  Call Move function
-    clear                 Clear screen
-    create-example-nft    Create an example NFT
-    echo                  Write arguments to the console output
-    env                   Print environment
-    exit                  Exit the interactive shell
-    gas                   Obtain all gas objects owned by the address
-    help                  Print this message or the help of the given subcommand(s)
-    history               Print history
-    merge-coin            Merge two coin objects into one coin
-    new-address           Generate new address and keypair
-    object                Get obj info
-    objects               Obtain all objects owned by the address
-    publish               Publish Move modules
-    split-coin            Split a coin object into multiple coins
-    switch                Switch active address and network (e.g., Devnet, local RPC server)
-    sync                  Synchronize client state with authorities
-    transfer              Transfer object
-    transfer-sui          Transfer SUI, and pay gas with the same SUI coin object. If amount is
-                              specified, only the amount is transferred; otherwise the entire object
-                              is transferred
+| Command | Description |
+| --- | --- |
+| active-address | Default address used for commands when none specified |
+| addresses | Obtain the Addresses managed by the client |
+| call | Call Move function |
+| create-example-nft | Create an example NFT |
+| gas | Obtain all gas objects owned by the address |
+| help | Print this message or the help of the given subcommand(s) |
+| merge-coin | Merge two coin objects into one coin |
+| new-address | Generate new address and keypair with keypair scheme flag {ed25519 or secp256k1} with optional derivation path, default to m/44'/784'/0'/0'/0' for ed25519 or m/54'/784'/0'/0/0 for secp256k1 |
+| object | Get object info |
+| objects | Obtain all objects owned by the address |
+| pay | Pay SUI to recipients following specified amounts, with input coins. Length of recipients must be the same as that of amounts |
+| publish | Publish Move modules|
+| split-coin | Split a coin object into multiple coins |
+| switch | Switch active address and network(such as devnet, local rpc server) |
+| sync | Synchronize client state with authorities |
+| transfer | Transfer an object |
+| transfer-sui | Transfer SUI, and pay gas with the same SUI coin object. If amount is specified, transfers only the amount. If not specified, transfers the object. |
 
 > **Note:** The `clear`, `echo`, `env` and `exit` commands exist only in the interactive shell.
 
