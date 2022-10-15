@@ -30,7 +30,6 @@ static_assertions = "1.1.0"
 opentelemetry = { version = "0.17.0", features = ["rt-tokio"] }
 base64ct = { version = "1.5.2", features = ["std", "alloc"] }
 zeroize = "1.5.7"
-hkdf = "0.12.3"
 digest = "0.10.3"
 schemars ="0.8.10"
 tonic = "0.8"

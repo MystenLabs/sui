@@ -8,7 +8,10 @@
     rust_2021_compatibility
 )]
 
-use fastcrypto::{bls12381, ed25519};
+use fastcrypto::{
+    bls12381, ed25519,
+    hash::{Blake2b256, HashFunction},
+};
 
 // This re-export allows using the trait-defined APIs
 pub use fastcrypto::traits;
@@ -46,6 +49,10 @@ pub type NetworkPublicKey = ed25519::Ed25519PublicKey;
 pub type NetworkKeyPair = ed25519::Ed25519KeyPair;
 
 ////////////////////////////////////////////////////////////////////////
+
+// Type alias selecting the default hash function for the code base.
+pub type DefaultHashFunction = Blake2b256;
+pub const DIGEST_LENGTH: usize = DefaultHashFunction::OUTPUT_SIZE;
 
 #[cfg(all(test, feature = "celo"))]
 #[path = "tests/bls12377_tests.rs"]

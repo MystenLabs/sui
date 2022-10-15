@@ -12,7 +12,7 @@ use crate::{
 };
 use anemo::{types::PeerInfo, PeerId};
 use config::{BlockSynchronizerParameters, Parameters};
-use fastcrypto::Hash;
+use fastcrypto::hash::Hash;
 use futures::{future::try_join_all, stream::FuturesUnordered};
 use network::P2pNetwork;
 use std::{

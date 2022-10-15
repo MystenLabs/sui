@@ -8,7 +8,7 @@ use crate::{
     metrics::PrimaryMetrics,
     synchronizer::Synchronizer,
 };
-use fastcrypto::{traits::KeyPair, Hash, SignatureService};
+use fastcrypto::{hash::Hash, traits::KeyPair, SignatureService};
 use network::P2pNetwork;
 use prometheus::Registry;
 use std::{collections::BTreeSet, sync::Arc, time::Duration};

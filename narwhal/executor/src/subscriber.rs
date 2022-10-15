@@ -20,7 +20,7 @@ use std::future::Future;
 use std::{sync::Arc, time::Duration};
 
 use async_trait::async_trait;
-use fastcrypto::Hash;
+use fastcrypto::hash::Hash;
 use rand::prelude::SliceRandom;
 use rand::rngs::ThreadRng;
 use tokio::time::Instant;
@@ -393,8 +393,8 @@ impl SubscriberNetwork for SubscriberNetworkImpl {
 mod tests {
     use super::*;
     use crypto::NetworkKeyPair;
+    use fastcrypto::hash::Hash;
     use fastcrypto::traits::KeyPair;
-    use fastcrypto::Hash;
     use rand::rngs::StdRng;
     use std::collections::HashMap;
 
