@@ -2,9 +2,7 @@
 title: Create a local Sui network
 ---
 
-Learn how to create a Sui network in your local environment.
-
-
+Learn how to create a Sui network in your local environment. Use the [Sui Client CLI](cli-client.md) to interact with the local network.
 
 ## Genesis
 
@@ -56,56 +54,14 @@ $ sui genesis --force --working-dir /path/to/sui/config/dir
 
 ## Client configuration
 
-The genesis process creates a configuration file `client.yaml`, and a keystore file `sui.keystore` for the
-Sui client.  The config file contains information of the accounts and
+The genesis process creates a configuration file `client.yaml`, and a keystore file `sui.keystore` for the Sui client.  The config file contains information of the accounts and
 the Sui Network server. The keystore file contains all the public-private key pairs of the created accounts.
+
 Sui client uses the network information in `client.yaml` to communicate
-with the Sui network validators  and create transactions using the key
+with the Sui network validators and create transactions using the key
 pairs residing in the keystore file.
 
-Here is an example of `client.yaml` showing the accounts and key pairs
-in the client configuration (with some values omitted):
-
-```yaml
----
-accounts:
-  - b02b5e57fe3572f94ad5ac2a17392bfb3261f7a0
-  - b4f5ed3cbe78c7969e6ac073f9a0c525fd07f05a
-  - 48ff0a932b12976caec91d521265b009ad5b2225
-  - 08da15bee6a3f5b01edbbd402654a75421d81397
-  - 3cbf06e9997b3864e3baad6bc0f0ef8ec423cd75
-keystore:
-  File: /Users/user/.sui/sui_config/sui.keystore
-gateway:
-  embedded:
-    epoch: 0
-    validator_set:
-      - public-key: Ot3ov659M4tl59E9Tq1rUj5SccoXstXrMhQSJX7pFKQ=
-        stake: 1
-        network-address: /dns/localhost/tcp/57468/http
-      - public-key: UGfB4wzJ2Lntn+WJvv+83RSigpuf7Vv2AmCPQR28TVY=
-        stake: 1
-        network-address: /dns/localhost/tcp/57480/http
-      - public-key: 5bO8DUgmA9i1SiUka5BT6VjIclMNQBRnbVww2IXxFqw=
-        stake: 1
-        network-address: /dns/localhost/tcp/57492/http
-      - public-key: 8uV0ml/DPUXG9UbrnlP6v08XaBum9pcIDelRT04NanU=
-        stake: 1
-        network-address: /dns/localhost/tcp/57504/http
-    send_timeout:
-      secs: 4
-      nanos: 0
-    recv_timeout:
-      secs: 4
-      nanos: 0
-    buffer_size: 650000
-    db_folder_path: /Users/user/.sui/sui_config/client_db
-active_address: "0xb02b5e57fe3572f94ad5ac2a17392bfb3261f7a0"
-```
-
-The `accounts` variable contains the account's address that the client manages. The
-`gateway` variable contains the information of the Sui network that the client will
-be connecting to.
+The `accounts` section contains the account addresses that the client manages.
 
 The `authorities` variable is part of the embedded gateway configuration. It contains
 the Sui network validator's name, host and port information. It is used to establish connections
@@ -116,27 +72,11 @@ parameters, and `db_folder_path` is the path to the account's client state
 database. This database stores all the transaction data, certificates
 and object data belonging to the account.
 
-### Sui Network Gateway
-
-The Sui Network Gateway (or simply, Sui Gateway) is an abstraction layer that acts as the entry
-point to the Sui network. Different gateway implementations can be used by the application layer
-based on their use cases.
-
 #### Embedded gateway
 
 As the name suggests, embedded gateway embeds the gateway logic into the application;
 all data will be stored locally and the application will make direct
 connection to the validators.
-
-#### RPC gateway
-You can also connect the client to the Sui network via an [RPC Gateway](json-rpc.md#start-local-rpc-server);
-To use the RPC gateway, update `client.yaml`'s `gateway` section to:
-```yaml
-...
-gateway:
-  rpc: "http://localhost:5001"
-...
-```
 
 ### Key management
 

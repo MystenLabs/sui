@@ -3,7 +3,7 @@ title: Interact with Sui over Rust SDK
 ---
 
 ## Overview
-The [Sui SDK](https://github.com/MystenLabs/sui/tree/main/crates/sui-sdk) is a collection of Rust language JSON-RPC wrapper and crypto utilities you can use to interact with the [Sui Devnet Gateway](../build/devnet.md) and [Sui Full Node](fullnode.md).
+The [Sui SDK](https://github.com/MystenLabs/sui/tree/main/crates/sui-sdk) is a collection of Rust language JSON-RPC wrapper and crypto utilities you can use to interact with the [Sui Devnet](../build/devnet.md) and [Sui Full node](fullnode.md).
 
 The [`SuiClient`](cli-client.md) can be used to create an HTTP or a WebSocket client (`SuiClient::new_rpc_client`).  
 See our [JSON-RPC](json-rpc.md#sui-json-rpc-methods) doc for the list of available methods.
@@ -122,7 +122,7 @@ async fn main() -> Result<(), anyhow::Error> {
     }
 }
 ```
-> Note: You will need to connect to a fullnode for the Event subscription service, see [Fullnode setup](fullnode.md#fullnode-setup) if you want to run a Sui Fullnode.
+> Note: You will need to connect to a fullnode for the Event subscription service, see [Full node setup](fullnode.md#fullnode-setup) if you want to run a Sui Fullnode.
 
 
 ## Larger examples
