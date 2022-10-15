@@ -79,7 +79,7 @@ pub struct JsonRpcServerBuilder {
 pub fn sui_rpc_doc() -> Project {
     Project::new(
         "Sui JSON-RPC",
-        "Sui JSON-RPC API for interaction with the Sui network gateway.",
+        "Sui JSON-RPC API for interaction with Sui Full node.",
         "Mysten Labs",
         "https://mystenlabs.com",
         "build@mystenlabs.com",

@@ -9,7 +9,9 @@ import {
   PAY_MODULE_NAME,
   SUI_PACKAGE_ID,
   PAY_SPLIT_COIN_VEC_FUNC_NAME,
+  ObjectId,
   SuiAddress,
+  SUI_TYPE_ARG,
   Transaction,
   TransactionData,
   TypeTag,
@@ -23,9 +25,12 @@ import {
   PublishTransaction,
   TxnDataSerializer,
   PayTransaction,
+  SignableTransaction,
+  UnserializedSignableTransaction,
 } from './txn-data-serializer';
 import { Provider } from '../../providers/provider';
 import { CallArgSerializer } from './call-arg-serializer';
+import { TypeTagSerializer } from './type-tag-serializer';
 
 const TYPE_TAG = Array.from('TransactionData::').map((e) => e.charCodeAt(0));
 
@@ -50,9 +55,8 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
       };
       return await this.constructTransactionData(
         tx,
-        // TODO: make `gasPayment` a required field in `TransferObjectTransaction`
-        t.gasPayment!,
-        t.gasBudget,
+        { kind: 'transferObject', data: t },
+        t.gasPayment,
         signerAddress
       );
     } catch (err) {
@@ -77,8 +81,8 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
       };
       return await this.constructTransactionData(
         tx,
+        { kind: 'transferSui', data: t },
         t.suiObjectId,
-        t.gasBudget,
         signerAddress
       );
     } catch (err) {
@@ -109,8 +113,8 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
       };
       return await this.constructTransactionData(
         tx,
-        t.gasPayment!,
-        t.gasBudget,
+        { kind: 'pay', data: t },
+        t.gasPayment,
         signerAddress
       );
     } catch (err) {
@@ -131,7 +135,11 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
           package: pkg!,
           module: t.module,
           function: t.function,
-          typeArguments: t.typeArguments as TypeTag[],
+          typeArguments: t.typeArguments.map((a) =>
+            typeof a === 'string'
+              ? new TypeTagSerializer().parseFromStr(a)
+              : (a as TypeTag)
+          ),
           arguments: await new CallArgSerializer(
             this.provider
           ).serializeMoveCallArguments(t),
@@ -140,9 +148,8 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
 
       return await this.constructTransactionData(
         tx,
-        // TODO: make `gasPayment` a required field in `MoveCallTransaction`
-        t.gasPayment!,
-        t.gasBudget,
+        { kind: 'moveCall', data: t },
+        t.gasPayment,
         signerAddress
       );
     } catch (err) {
@@ -210,9 +217,8 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
       };
       return await this.constructTransactionData(
         tx,
-        // TODO: make `gasPayment` a required field in `PublishTransaction`
-        t.gasPayment!,
-        t.gasBudget,
+        { kind: 'publish', data: t },
+        t.gasPayment,
         signerAddress
       );
     } catch (err) {
@@ -222,6 +228,68 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
         )}`
       );
     }
+  }
+
+  /**
+   * Util function to select a coin for gas payment given an transaction, which will select
+   * an arbitrary gas object owned by the address with balance greater than or equal to
+   * `txn.data.gasBudget` that's not used in `txn` itself and the `exclude` list.
+   *
+   * @param txn the transaction for which the gas object is selected
+   * @param signerAddress signer of the transaction
+   * @param exclude additional object ids of the gas coins to exclude. Object ids that appear
+   * in `txn` will be appended
+   */
+  public async selectGasPaymentForTransaction(
+    txn: SignableTransaction,
+    signerAddress: string,
+    exclude: ObjectId[] = []
+  ): Promise<ObjectId | undefined> {
+    if (txn.kind === 'bytes') {
+      return undefined;
+    }
+
+    const coins = await this.provider.selectCoinsWithBalanceGreaterThanOrEqual(
+      signerAddress,
+      BigInt(txn.data.gasBudget),
+      SUI_TYPE_ARG,
+      exclude.concat(await this.extractObjectIds(txn))
+    );
+
+    return coins.length > 0 ? Coin.getID(coins[0]) : undefined;
+  }
+
+  /**
+   * Returns a list of object ids used in the transaction, including the gas payment object
+   */
+  public async extractObjectIds(txn: SignableTransaction): Promise<ObjectId[]> {
+    const ret = await this.extractInputObjectIds(txn);
+    if ('gasPayment' in txn.data && txn.data['gasPayment']) {
+      ret.push(txn.data['gasPayment']);
+    }
+    return ret;
+  }
+
+  private async extractInputObjectIds(
+    txn: SignableTransaction
+  ): Promise<ObjectId[]> {
+    switch (txn.kind) {
+      case 'moveCall':
+        return await new CallArgSerializer(this.provider).extractObjectIds(
+          txn.data
+        );
+      case 'transferSui':
+        return [txn.data.suiObjectId];
+      case 'transferObject':
+        return [txn.data.objectId];
+      case 'mergeCoin':
+        return [txn.data.primaryCoin, txn.data.coinToMerge];
+      case 'splitCoin':
+        return [txn.data.coinObjectId];
+      case 'pay':
+        return txn.data.inputCoins;
+    }
+    return [];
   }
 
   private async getCoinStructTag(coinId: string): Promise<TypeTag> {
@@ -235,11 +303,21 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
 
   private async constructTransactionData(
     tx: Transaction,
-    gasObjectId: string,
-    gasBudget: number,
+    originalTx: UnserializedSignableTransaction,
+    gasObjectId: ObjectId | undefined,
     signerAddress: SuiAddress
   ): Promise<Base64DataBuffer> {
-    // TODO: mark gasPayment as required in `MoveCallTransaction`
+    if (gasObjectId === undefined) {
+      gasObjectId = await this.selectGasPaymentForTransaction(
+        originalTx,
+        signerAddress
+      );
+      if (gasObjectId === undefined) {
+        throw new Error(
+          `Unable to select a gas object with balance greater than or equal to ${originalTx.data.gasBudget}`
+        );
+      }
+    }
     const gasPayment = await this.provider.getObjectRef(gasObjectId);
     const txData = {
       kind: {
@@ -250,7 +328,7 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
       // Need to keep in sync with
       // https://github.com/MystenLabs/sui/blob/f32877f2e40d35a008710c232e49b57aab886462/crates/sui-types/src/messages.rs#L338
       gasPrice: 1,
-      gasBudget: gasBudget,
+      gasBudget: originalTx.data.gasBudget,
       sender: signerAddress,
     };
 

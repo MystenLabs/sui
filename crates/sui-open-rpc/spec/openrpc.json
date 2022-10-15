@@ -2,7 +2,7 @@
   "openrpc": "1.2.6",
   "info": {
     "title": "Sui JSON-RPC",
-    "description": "Sui JSON-RPC API for interaction with the Sui network gateway.",
+    "description": "Sui JSON-RPC API for interaction with Sui Full node.",
     "contact": {
       "name": "Mysten Labs",
       "url": "https://mystenlabs.com",

@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::BTreeSet,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
@@ -14,8 +13,7 @@ use sui_types::{
     base_types::{ObjectID, SuiAddress},
     crypto::{get_key_pair, AccountKeyPair, AuthoritySignature, SuiAuthoritySignature},
     error::SuiError,
-    gas::SuiGasStatus,
-    messages::{InputObjects, SignatureAggregator, TransactionData},
+    messages::{SignatureAggregator, TransactionData},
     object::Object,
     SUI_SYSTEM_STATE_OBJECT_ID,
 };
@@ -23,11 +21,9 @@ use sui_types::{
 use crate::authority::AuthorityState;
 use crate::checkpoints::reconstruction::SpanGraph;
 use crate::{
-    authority::TemporaryStore,
     authority_active::ActiveAuthority,
     authority_aggregator::authority_aggregator_tests::init_local_authorities,
     checkpoints::{CheckpointLocals, CHECKPOINT_COUNT_PER_EPOCH},
-    execution_engine,
     test_utils::to_sender_signed_transaction,
 };
 
@@ -134,40 +130,7 @@ async fn test_start_epoch_change() {
 
     // Test that for certificates that have finished execution and is about to write effects,
     // they will also fail to get a ticket for the commit.
-    let tx_digest = *transaction.digest();
-    let temporary_store = TemporaryStore::new(
-        state.database.clone(),
-        InputObjects::new(
-            transaction
-                .signed_data
-                .data
-                .input_objects()
-                .unwrap()
-                .into_iter()
-                .zip(genesis_objects)
-                .collect(),
-        ),
-        tx_digest,
-    );
-    let (inner_temporary_store, effects, _) = execution_engine::execute_transaction_to_effects(
-        vec![],
-        temporary_store,
-        transaction.signed_data.data.clone(),
-        tx_digest,
-        BTreeSet::new(),
-        &state.move_vm,
-        &state._native_functions,
-        SuiGasStatus::new_with_budget(1000, 1.into(), 1.into()),
-        state.epoch(),
-    );
-    let signed_effects = effects.to_sign_effects(0, &state.name, &*state.secret);
-    assert_eq!(
-        state
-            .commit_certificate(inner_temporary_store, &certificate, &signed_effects, false)
-            .await
-            .unwrap_err(),
-        SuiError::ValidatorHaltedAtEpochEnd
-    );
+    assert!(state.batch_notifier.ticket(false).is_err());
 }
 
 #[tokio::test]

@@ -62,8 +62,7 @@ export interface MoveCallTransaction {
   gasBudget: number;
 }
 
-/** A type that represents the possible transactions that can be signed: */
-export type SignableTransaction =
+export type UnserializedSignableTransaction =
   | {
       kind: 'moveCall';
       data: MoveCallTransaction;
@@ -88,6 +87,14 @@ export type SignableTransaction =
       kind: 'pay';
       data: PayTransaction;
     }
+  | {
+      kind: 'publish';
+      data: PublishTransaction;
+    };
+
+/** A type that represents the possible transactions that can be signed: */
+export type SignableTransaction =
+  | UnserializedSignableTransaction
   | {
       kind: 'bytes';
       data: Uint8Array;
