@@ -52,10 +52,13 @@
         "vanilla-cookieconsent": "^2.8.0"
     },
     "devDependencies": {
+        "@babel/core": "^7.19.3",
         "@storybook/addon-a11y": "7.0.0-alpha.38",
         "@storybook/addon-essentials": "7.0.0-alpha.38",
+        "@storybook/addons": "7.0.0-alpha.38",
         "@storybook/react": "7.0.0-alpha.38",
         "@storybook/react-vite": "7.0.0-alpha.38",
+        "@storybook/theming": "7.0.0-alpha.38",
         "@testing-library/dom": "^8.17.1",
         "@testing-library/jest-dom": "^5.16.2",
         "@testing-library/react": "^13.3.0",

@@ -1,23 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type ComponentStory, type ComponentMeta } from '@storybook/react';
+import { type Meta, type StoryObj } from '@storybook/react';
 
 import { ListItem, VerticalList } from '../VerticalList';
 
 export default {
-    title: 'UI/VerticalList',
     component: VerticalList,
-} as ComponentMeta<typeof VerticalList>;
+} as Meta;
 
-const Template: ComponentStory<typeof VerticalList> = (args) => (
-    <VerticalList {...args}>
-        <ListItem>One</ListItem>
-        <ListItem active>Two</ListItem>
-        <ListItem>Three</ListItem>
-        <ListItem>Four</ListItem>
-    </VerticalList>
-);
-
-export const Default = Template.bind({});
-Default.args = {};
+export const Default: StoryObj = {
+    render: () => (
+        <VerticalList>
+            <ListItem>One</ListItem>
+            <ListItem active>Two</ListItem>
+            <ListItem>Three</ListItem>
+            <ListItem>Four</ListItem>
+        </VerticalList>
+    ),
+};

@@ -6,8 +6,19 @@ import { MemoryRouter } from 'react-router-dom';
 
 import { Button, type ButtonProps } from '../Button';
 
-function ButtonStory(props: ButtonProps) {
-    return (
+export default {
+    component: Button,
+    decorators: [
+        (Story) => (
+            <MemoryRouter>
+                <Story />
+            </MemoryRouter>
+        ),
+    ],
+} as Meta;
+
+export const Primary: StoryObj<ButtonProps> = {
+    render: (props) => (
         <div className="flex flex-col items-start gap-2">
             <Button to="/relative" {...props}>
                 Router Link
@@ -28,22 +39,7 @@ function ButtonStory(props: ButtonProps) {
                 Large Button
             </Button>
         </div>
-    );
-}
-
-export default {
-    component: Button,
-    decorators: [
-        (Story) => (
-            <MemoryRouter>
-                <Story />
-            </MemoryRouter>
-        ),
-    ],
-} as Meta;
-
-export const Primary: StoryObj<ButtonProps> = {
-    render: () => <ButtonStory />,
+    ),
     args: { variant: 'primary' },
 };
 

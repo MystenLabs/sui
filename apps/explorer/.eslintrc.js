@@ -44,4 +44,13 @@ module.exports = {
             ],
         ],
     },
+    overrides: [
+        {
+            files: ['*.stories.*'],
+            rules: {
+                // Story files have render functions that this rule incorrectly warns on:
+                'react-hooks/rules-of-hooks': 'off',
+            },
+        },
+    ],
 };
