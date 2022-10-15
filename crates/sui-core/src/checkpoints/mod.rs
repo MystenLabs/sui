@@ -775,10 +775,22 @@ impl CheckpointStore {
         committee: &Committee,
     ) -> SuiResult {
         checkpoint.verify(committee, None)?;
-        debug_assert!(matches!(
-            self.latest_stored_checkpoint(),
-            Some(AuthenticatedCheckpoint::Signed(_))
-        ));
+        match self.latest_stored_checkpoint() {
+            Some(AuthenticatedCheckpoint::Signed(s)) => {
+                if s.summary != checkpoint.summary {
+                    error!(
+                        cp_seq=checkpoint.summary.sequence_number,
+                        "Local signed checkpoint is not the same as the checkpoint cert. Most likely local checkpoint has forked. cert: {}, local signed: {}",
+                        checkpoint.summary,
+                        s.summary,
+                    );
+                    panic!();
+                }
+            }
+            _ => {
+                unreachable!("Can never call promote_signed_checkpoint_to_cert when there is no signed checkpoint locally");
+            }
+        }
         let seq = checkpoint.summary.sequence_number();
         self.tables
             .checkpoints
