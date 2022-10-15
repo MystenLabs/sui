@@ -85,7 +85,7 @@ impl Default for CheckpointProcessControl {
         CheckpointProcessControl {
             delay_on_quorum_failure: Duration::from_secs(10),
             delay_on_local_failure: Duration::from_secs(3),
-            long_pause_between_checkpoints: Duration::from_secs(120),
+            long_pause_between_checkpoints: Duration::from_secs(20),
             timeout_until_quorum: Duration::from_secs(60),
             extra_time_after_quorum: Duration::from_millis(200),
             // TODO: Optimize this.

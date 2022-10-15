@@ -4,28 +4,26 @@
 use async_trait::async_trait;
 use std::sync::Arc;
 use std::{collections::HashMap, fmt};
-use sui_core::quorum_driver::{QuorumDriverHandler, QuorumDriverMetrics};
-use sui_core::{
-    authority_aggregator::AuthorityAggregator, authority_client::NetworkAuthorityClient,
-};
+
 use sui_types::{
     base_types::{ObjectID, ObjectRef},
     crypto::EmptySignInfo,
-    messages::{TransactionEffects, TransactionEnvelope},
-    object::{Object, ObjectRead, Owner},
+    messages::TransactionEnvelope,
+    object::Owner,
 };
 
 use futures::FutureExt;
 use sui_types::{
     base_types::SuiAddress,
     crypto::AccountKeyPair,
-    messages::{QuorumDriverRequest, QuorumDriverRequestType, QuorumDriverResponse, Transaction},
 };
 use test_utils::messages::make_transfer_sui_transaction;
 use tracing::error;
 
 use rand::{prelude::*, rngs::OsRng};
 use rand_distr::WeightedAliasIndex;
+
+use crate::ValidatorProxy;
 
 // This is the maximum gas we will transfer from primary coin into any gas coin
 // for running the benchmark
@@ -40,7 +38,7 @@ pub async fn transfer_sui_for_testing(
     keypair: &AccountKeyPair,
     value: u64,
     address: SuiAddress,
-    aggregator: Arc<AuthorityAggregator<NetworkAuthorityClient>>,
+    proxy: Arc<dyn ValidatorProxy + Sync + Send>,
 ) -> Option<UpdatedAndNewlyMinted> {
     let tx = make_transfer_sui_transaction(
         gas.0,
@@ -49,68 +47,27 @@ pub async fn transfer_sui_for_testing(
         gas.1.get_owner_address().unwrap(),
         keypair,
     );
-    let quorum_driver_handler =
-        QuorumDriverHandler::new(aggregator.clone(), QuorumDriverMetrics::new_for_tests());
-    let qd = quorum_driver_handler.clone_quorum_driver();
-    qd.execute_transaction(QuorumDriverRequest {
-        transaction: tx.clone(),
-        request_type: QuorumDriverRequestType::WaitForEffectsCert,
-    })
-    .map(move |res| match res {
-        Ok(QuorumDriverResponse::EffectsCert(result)) => {
-            let (_, effects) = *result;
-            let minted = effects.effects.created.get(0).unwrap().0;
-            let updated = effects
-                .effects
-                .mutated
-                .iter()
-                .find(|(k, _)| k.0 == gas.0 .0)
-                .unwrap()
-                .0;
-            Some((updated, minted))
-        }
-        Ok(resp) => {
-            error!("Unexpected response while transferring sui: {:?}", resp);
-            None
-        }
-        Err(err) => {
-            error!("Error while transferring sui: {:?}", err);
-            None
-        }
-    })
-    .await
-}
-
-pub async fn get_latest(
-    object_id: ObjectID,
-    aggregator: &Arc<AuthorityAggregator<NetworkAuthorityClient>>,
-) -> Option<Object> {
-    // Return the latest object version
-    match aggregator.get_object_info_execute(object_id).await.unwrap() {
-        ObjectRead::Exists(_, object, _) => Some(object),
-        _ => None,
-    }
-}
-
-pub async fn submit_transaction(
-    transaction: Transaction,
-    aggregator: Arc<AuthorityAggregator<NetworkAuthorityClient>>,
-) -> Option<TransactionEffects> {
-    let qd = QuorumDriverHandler::new(aggregator.clone(), QuorumDriverMetrics::new_for_tests());
-    if let QuorumDriverResponse::EffectsCert(result) = qd
-        .clone_quorum_driver()
-        .execute_transaction(QuorumDriverRequest {
-            transaction,
-            request_type: QuorumDriverRequestType::WaitForEffectsCert,
+    proxy
+        .execute_transaction(tx)
+        .map(move |res| match res {
+            Ok((_, effects)) => {
+                // let (_, effects) = *result;
+                let minted = effects.effects.created.get(0).unwrap().0;
+                let updated = effects
+                    .effects
+                    .mutated
+                    .iter()
+                    .find(|(k, _)| k.0 == gas.0 .0)
+                    .unwrap()
+                    .0;
+                Some((updated, minted))
+            }
+            Err(err) => {
+                error!("Error while transferring sui: {:?}", err);
+                None
+            }
         })
         .await
-        .unwrap()
-    {
-        let (_, effects) = *result;
-        Some(effects.effects)
-    } else {
-        None
-    }
 }
 
 pub trait Payload: Send + Sync {
@@ -188,11 +145,11 @@ impl fmt::Display for WorkloadType {
 
 #[async_trait]
 pub trait Workload<T: Payload + ?Sized>: Send + Sync {
-    async fn init(&mut self, aggregator: Arc<AuthorityAggregator<NetworkAuthorityClient>>);
+    async fn init(&mut self, proxy: Arc<dyn ValidatorProxy + Sync + Send>);
     async fn make_test_payloads(
         &self,
         count: u64,
-        client: Arc<AuthorityAggregator<NetworkAuthorityClient>>,
+        proxy: Arc<dyn ValidatorProxy + Sync + Send>,
     ) -> Vec<Box<T>>;
 }
 
@@ -203,20 +160,20 @@ pub struct CombinationWorkload {
 
 #[async_trait]
 impl Workload<dyn Payload> for CombinationWorkload {
-    async fn init(&mut self, aggregator: Arc<AuthorityAggregator<NetworkAuthorityClient>>) {
+    async fn init(&mut self, proxy: Arc<dyn ValidatorProxy + Sync + Send>) {
         for (_, (_, workload)) in self.workloads.iter_mut() {
-            workload.init(aggregator.clone()).await;
+            workload.init(proxy.clone()).await;
         }
     }
     async fn make_test_payloads(
         &self,
         count: u64,
-        aggregator: Arc<AuthorityAggregator<NetworkAuthorityClient>>,
+        proxy: Arc<dyn ValidatorProxy + Sync + Send>,
     ) -> Vec<Box<dyn Payload>> {
         let mut workloads: HashMap<WorkloadType, (u32, Vec<Box<dyn Payload>>)> = HashMap::new();
         for (workload_type, (weight, workload)) in self.workloads.iter() {
             let payloads: Vec<Box<dyn Payload>> =
-                workload.make_test_payloads(count, aggregator.clone()).await;
+                workload.make_test_payloads(count, proxy.clone()).await;
             assert_eq!(payloads.len() as u64, count);
             workloads
                 .entry(*workload_type)

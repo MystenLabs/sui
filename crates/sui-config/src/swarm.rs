@@ -122,7 +122,7 @@ impl NetworkConfig {
             enable_event_processing,
             enable_gossip: true,
             enable_checkpoint: true,
-            enable_reconfig: false,
+            enable_reconfig: true,
             genesis: validator_config.genesis.clone(),
             grpc_load_shed: None,
             grpc_concurrency_limit: None,

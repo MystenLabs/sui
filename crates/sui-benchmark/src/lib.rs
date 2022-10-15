@@ -1,6 +1,5 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
 use std::sync::Arc;
 
 use anyhow::bail;
@@ -40,11 +39,14 @@ pub trait ValidatorProxy {
     async fn reconfig(&self);
 
     async fn get_committee(&self) -> Committee;
+
+    async fn get_current_epoch(&self) -> EpochId;
+
+    fn clone_new(&self) -> Box<dyn ValidatorProxy + Send + Sync>;
 }
 
 pub struct LocalValidatorAggregator {
-    // agg: Arc<AuthorityAggregator<NetworkAuthorityClient>>,
-    _qd_handler: Arc<QuorumDriverHandler<NetworkAuthorityClient>>,
+    _qd_handler: QuorumDriverHandler<NetworkAuthorityClient>,
     qd: Arc<QuorumDriver<NetworkAuthorityClient>>,
 }
 
@@ -53,8 +55,9 @@ impl LocalValidatorAggregator {
         let qd_handler = QuorumDriverHandler::new(agg, QuorumDriverMetrics::new_for_tests());
         let qd = qd_handler.clone_quorum_driver();
         Self {
-            _qd_handler: Arc::new(qd_handler),
+            _qd_handler: qd_handler,
             qd,
+
         }
     }
 }
@@ -85,8 +88,7 @@ impl ValidatorProxy for LocalValidatorAggregator {
                 let (tx_cert, effects_cert) = *result;
                 Ok((tx_cert, effects_cert))
             }
-            other => panic!("This should not happen"),
-            // Err(err) => Err(err),
+            other => panic!("This should not happen, got: {:?}", other),
         }
     }
 
@@ -130,5 +132,18 @@ impl ValidatorProxy for LocalValidatorAggregator {
 
     async fn get_committee(&self) -> Committee {
         self.qd.clone_committee()
+    }
+
+    async fn get_current_epoch(&self) -> EpochId {
+        self.qd.current_epoch()
+    }
+
+    fn clone_new(&self) -> Box<dyn ValidatorProxy + Send + Sync> {
+        let qdh = self._qd_handler.clone_new();
+        let qd = qdh.clone_quorum_driver();
+        Box::new(Self {
+            _qd_handler: qdh,
+            qd,
+        })
     }
 }

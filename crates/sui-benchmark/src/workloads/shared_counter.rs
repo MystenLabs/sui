@@ -1,14 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::workload::{submit_transaction, Gas, Payload, Workload, WorkloadType};
-use crate::workloads::workload::{get_latest, transfer_sui_for_testing, MAX_GAS_FOR_TESTING};
+use super::workload::{Gas, Payload, Workload, WorkloadType};
+use crate::{
+    workloads::workload::{transfer_sui_for_testing, MAX_GAS_FOR_TESTING},
+    ValidatorProxy,
+};
 use async_trait::async_trait;
 use futures::future::join_all;
 use std::{path::PathBuf, sync::Arc};
-use sui_core::{
-    authority_aggregator::AuthorityAggregator, authority_client::NetworkAuthorityClient,
-};
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress},
     crypto::{get_key_pair, AccountKeyPair, EmptySignInfo},
@@ -83,25 +83,26 @@ impl SharedCounterWorkload {
 
 pub async fn publish_basics_package(
     gas: ObjectRef,
-    aggregator: Arc<AuthorityAggregator<NetworkAuthorityClient>>,
+    proxy: Arc<dyn ValidatorProxy + Sync + Send>,
     sender: SuiAddress,
     keypair: &AccountKeyPair,
 ) -> ObjectRef {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("../../sui_programmability/examples/basics");
     let transaction = create_publish_move_package_transaction(gas, path, sender, keypair);
-    let effects = submit_transaction(transaction, aggregator).await.unwrap();
-    parse_package_ref(&effects).unwrap()
+    let (_, effects) = proxy.execute_transaction(transaction).await.unwrap();
+    parse_package_ref(&effects.effects).unwrap()
 }
 
 #[async_trait]
 impl Workload<dyn Payload> for SharedCounterWorkload {
-    async fn init(&mut self, aggregator: Arc<AuthorityAggregator<NetworkAuthorityClient>>) {
+    // async fn init(&mut self, aggregator: Arc<AuthorityAggregator<NetworkAuthorityClient>>) {
+    async fn init(&mut self, proxy: Arc<dyn ValidatorProxy + Sync + Send>) {
         if self.basics_package_ref.is_some() {
             return;
         }
         // publish basics package
-        let primary_gas = get_latest(self.test_gas, &aggregator).await.unwrap();
+        let primary_gas = proxy.get_object(self.test_gas).await.unwrap();
         let primary_gas_ref = primary_gas.compute_object_reference();
         let mut publish_module_gas_ref = None;
         let (address, keypair) = get_key_pair();
@@ -110,7 +111,7 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
             &self.test_gas_keypair,
             MAX_GAS_FOR_TESTING,
             address,
-            aggregator.clone(),
+            proxy.clone(),
         )
         .await
         {
@@ -122,7 +123,7 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
         self.basics_package_ref = Some(
             publish_basics_package(
                 publish_module_gas.2,
-                aggregator,
+                proxy,
                 publish_module_gas.0,
                 &publish_module_gas.1,
             )
@@ -132,10 +133,10 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
     async fn make_test_payloads(
         &self,
         count: u64,
-        aggregator: Arc<AuthorityAggregator<NetworkAuthorityClient>>,
+        proxy: Arc<dyn ValidatorProxy + Sync + Send>,
     ) -> Vec<Box<dyn Payload>> {
         // Read latest test gas object
-        let primary_gas = get_latest(self.test_gas, &aggregator).await.unwrap();
+        let primary_gas = proxy.get_object(self.test_gas).await.unwrap();
         let mut primary_gas_ref = primary_gas.compute_object_reference();
         // Make as many gas objects as the number of counters
         let mut counters_gas = vec![];
@@ -146,7 +147,7 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
                 &self.test_gas_keypair,
                 MAX_GAS_FOR_TESTING,
                 address,
-                aggregator.clone(),
+                proxy.clone(),
             )
             .await
             {
@@ -154,7 +155,7 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
                 counters_gas.push((address, keypair, minted));
             }
         }
-        let agg = &aggregator;
+        let proxy_ref = &proxy;
         // create counters using gas objects we created above
         eprintln!("Creating shared counters, this may take a while..");
         let futures = counters_gas
@@ -166,7 +167,8 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
                     sender,
                     &keypair,
                 );
-                if let Some(effects) = submit_transaction(transaction, agg.clone()).await {
+                if let Ok((_, effects)) = proxy_ref.execute_transaction(transaction).await {
+                    let effects = effects.effects;
                     let counter_ref = effects.created[0].0;
                     Box::new(SharedCounterTestPayload {
                         package_ref: self.basics_package_ref.unwrap(),

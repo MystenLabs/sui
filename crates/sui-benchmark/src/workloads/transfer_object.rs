@@ -5,9 +5,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use async_trait::async_trait;
 use rand::seq::IteratorRandom;
-use sui_core::{
-    authority_aggregator::AuthorityAggregator, authority_client::NetworkAuthorityClient,
-};
+
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress},
     crypto::{get_key_pair, AccountKeyPair, EmptySignInfo},
@@ -17,8 +15,10 @@ use sui_types::{
 
 use test_utils::messages::make_transfer_object_transaction;
 
+use crate::ValidatorProxy;
+
 use super::workload::{
-    get_latest, transfer_sui_for_testing, Gas, Payload, Workload, WorkloadType, MAX_GAS_FOR_TESTING,
+    transfer_sui_for_testing, Gas, Payload, Workload, WorkloadType, MAX_GAS_FOR_TESTING,
 };
 
 pub struct TransferObjectTestPayload {
@@ -111,16 +111,16 @@ impl TransferObjectWorkload {
 
 #[async_trait]
 impl Workload<dyn Payload> for TransferObjectWorkload {
-    async fn init(&mut self, _aggregator: Arc<AuthorityAggregator<NetworkAuthorityClient>>) {
+    async fn init(&mut self, _proxy: Arc<dyn ValidatorProxy + Sync + Send>) {
         return;
     }
     async fn make_test_payloads(
         &self,
         count: u64,
-        aggregator: Arc<AuthorityAggregator<NetworkAuthorityClient>>,
+        proxy: Arc<dyn ValidatorProxy + Sync + Send>,
     ) -> Vec<Box<dyn Payload>> {
         // Read latest test gas object
-        let primary_gas = get_latest(self.test_gas, &aggregator).await.unwrap();
+        let primary_gas = proxy.get_object(self.test_gas).await.unwrap();
         let mut primary_gas_ref = primary_gas.compute_object_reference();
         let owner = *self
             .transfer_keypairs
@@ -138,7 +138,7 @@ impl Workload<dyn Payload> for TransferObjectWorkload {
                     &self.test_gas_keypair,
                     MAX_GAS_FOR_TESTING,
                     *owner,
-                    aggregator.clone(),
+                    proxy.clone(),
                 )
                 .await
                 {
@@ -157,7 +157,7 @@ impl Workload<dyn Payload> for TransferObjectWorkload {
                 &self.test_gas_keypair,
                 1,
                 owner,
-                aggregator.clone(),
+                proxy.clone(),
             )
             .await
             {
