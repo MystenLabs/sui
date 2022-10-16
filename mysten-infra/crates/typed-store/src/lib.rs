@@ -37,7 +37,7 @@ pub type StoreError = rocks::TypedStoreError;
 type StoreResult<T> = Result<T, StoreError>;
 
 pub enum StoreCommand<Key, Value> {
-    Write(Key, Value),
+    Write(Key, Value, Option<oneshot::Sender<StoreResult<()>>>),
     WriteAll(Vec<(Key, Value)>, oneshot::Sender<StoreResult<()>>),
     Delete(Key),
     DeleteAll(Vec<Key>, oneshot::Sender<StoreResult<()>>),
@@ -69,12 +69,17 @@ where
         tokio::spawn(async move {
             while let Some(command) = rx.recv().await {
                 match command {
-                    StoreCommand::Write(key, value) => {
-                        let _ = keyed_db.insert(&key, &value);
-                        if let Some(mut senders) = obligations.remove(&key) {
-                            while let Some(s) = senders.pop_front() {
-                                let _ = s.send(Ok(Some(value.clone())));
+                    StoreCommand::Write(key, value, sender) => {
+                        let response = keyed_db.insert(&key, &value);
+                        if response.is_ok() {
+                            if let Some(mut senders) = obligations.remove(&key) {
+                                while let Some(s) = senders.pop_front() {
+                                    let _ = s.send(Ok(Some(value.clone())));
+                                }
                             }
+                        }
+                        if let Some(replier) = sender {
+                            let _ = replier.send(response);
                         }
                     }
                     StoreCommand::WriteAll(key_values, sender) => {
@@ -162,16 +167,34 @@ where
     Key: Serialize + DeserializeOwned + Send,
     Value: Serialize + DeserializeOwned + Send,
 {
-    pub async fn write(&self, key: Key, value: Value) {
-        if let Err(e) = self.channel.send(StoreCommand::Write(key, value)).await {
+    pub async fn async_write(&self, key: Key, value: Value) {
+        if let Err(e) = self
+            .channel
+            .send(StoreCommand::Write(key, value, None))
+            .await
+        {
             panic!("Failed to send Write command to store: {e}");
         }
+    }
+
+    pub async fn sync_write(&self, key: Key, value: Value) -> StoreResult<()> {
+        let (sender, receiver) = oneshot::channel();
+        if let Err(e) = self
+            .channel
+            .send(StoreCommand::Write(key, value, Some(sender)))
+            .await
+        {
+            panic!("Failed to send Write command to store: {e}");
+        }
+        receiver
+            .await
+            .expect("Failed to receive reply to Write command from store")
     }
 
     /// Atomically writes all the key-value pairs in storage.
     /// If the operation is successful, then the result will be a non
     /// error empty result. Otherwise the error is returned.
-    pub async fn write_all(
+    pub async fn sync_write_all(
         &self,
         key_value_pairs: impl IntoIterator<Item = (Key, Value)>,
     ) -> StoreResult<()> {

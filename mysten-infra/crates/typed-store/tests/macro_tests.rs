@@ -237,7 +237,7 @@ async fn store_iter_and_filter_successfully() {
         (vec![0u8, 6u8], vec![4u8, 1u8]),
     ];
 
-    let result = str.table1.write_all(key_values.clone()).await;
+    let result = str.table1.sync_write_all(key_values.clone()).await;
     assert!(result.is_ok());
 
     // Iter through the keys
