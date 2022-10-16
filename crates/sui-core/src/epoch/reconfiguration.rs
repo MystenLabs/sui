@@ -6,6 +6,7 @@ use crate::authority_aggregator::AuthorityAggregator;
 use crate::authority_client::{AuthorityAPI, NetworkAuthorityClientMetrics};
 use async_trait::async_trait;
 use fastcrypto::traits::ToFromBytes;
+use itertools::MultiUnzip;
 use multiaddr::Multiaddr;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
@@ -60,7 +61,7 @@ where
         let epoch = self.state.committee.load().epoch;
         info!(?epoch, "Finishing epoch change");
         let checkpoints = &self.state.checkpoints;
-        let (storage_charge, computation_charge) = {
+        let (storage_charge, computation_charge, storage_rebate) = {
             let mut checkpoints = checkpoints.lock();
             assert!(
                 checkpoints.is_ready_to_finish_epoch_change(),
@@ -87,19 +88,25 @@ where
 
             self.state.database.remove_all_pending_certificates()?;
 
-            let (storage_charges, computation_charges): (Vec<u64>, Vec<u64>) = checkpoints
+            let (storage_charges, computation_charges, storage_rebates): (
+                Vec<u64>,
+                Vec<u64>,
+                Vec<u64>,
+            ) = checkpoints
                 .get_checkpoints_of_epoch(epoch)
                 .iter()
                 .map(|cp| {
                     (
                         cp.summary().total_computation_charge,
                         cp.summary().total_storage_charge,
+                        cp.summary().total_storage_rebate,
                     )
                 })
-                .unzip();
+                .multiunzip();
             (
                 storage_charges.iter().sum(),
                 computation_charges.iter().sum(),
+                storage_rebates.iter().sum(),
             )
         };
 
@@ -142,6 +149,7 @@ where
             next_epoch,
             storage_charge,
             computation_charge,
+            storage_rebate,
             self.state.name,
             &*self.state.secret,
         );

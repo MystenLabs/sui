@@ -408,15 +408,23 @@ impl CheckpointStore {
                 .into_iter(),
         );
 
-        let (storage_charges, computation_charges) = effects_store
+        let (storage_charges, computation_charges, storage_rebates): (
+            Vec<u64>,
+            Vec<u64>,
+            Vec<u64>,
+        ) = effects_store
             .get_effects(transactions)?
             .into_iter()
             .map(|effect| {
-                effect.map_or((0, 0), |e| {
-                    (e.gas_used.storage_cost, e.gas_used.computation_cost)
+                effect.map_or((0, 0, 0), |e| {
+                    (
+                        e.gas_used.storage_cost,
+                        e.gas_used.computation_cost,
+                        e.gas_used.storage_rebate,
+                    )
                 })
             })
-            .unzip::<u64, u64, Vec<u64>, Vec<u64>>();
+            .multiunzip();
 
         let summary = CheckpointSummary::new(
             epoch,
@@ -425,6 +433,7 @@ impl CheckpointStore {
             previous_digest,
             storage_charges.iter().sum(),
             computation_charges.iter().sum(),
+            storage_rebates.iter().sum(),
             next_epoch_committee,
         );
 

@@ -120,6 +120,8 @@ pub struct ChangeEpoch {
     pub storage_charge: u64,
     /// The total amount of gas charged for computation during the epoch.
     pub computation_charge: u64,
+    /// The total amount of storage rebate refunded during the epoch.
+    pub storage_rebate: u64,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
@@ -347,6 +349,7 @@ impl Display for SingleTransactionKind {
                 writeln!(writer, "New epoch ID: {}", e.epoch)?;
                 writeln!(writer, "Storage gas reward: {}", e.storage_charge)?;
                 writeln!(writer, "Computation gas reward: {}", e.computation_charge)?;
+                writeln!(writer, "Storage rebate: {}", e.storage_rebate)?;
             }
         }
         write!(f, "{}", writer)
@@ -873,6 +876,7 @@ impl SignedTransaction {
         next_epoch: EpochId,
         storage_charge: u64,
         computation_charge: u64,
+        storage_rebate: u64,
         authority: AuthorityName,
         secret: &dyn signature::Signer<AuthoritySignature>,
     ) -> Self {
@@ -880,6 +884,7 @@ impl SignedTransaction {
             epoch: next_epoch,
             storage_charge,
             computation_charge,
+            storage_rebate,
         }));
         // For the ChangeEpoch transaction, we do not care about the sender and the gas.
         let data = TransactionData::new(

@@ -184,6 +184,8 @@ pub struct CheckpointSummary {
     pub total_storage_charge: u64,
     /// The sum of computation charges of all transactions included in the checkpoint.
     pub total_computation_charge: u64,
+    /// The sum of storage rebates of all transactions included in the checkpoint.
+    pub total_storage_rebate: u64,
     /// If this checkpoint is the last checkpoint of the epoch, we also include the committee
     /// of the next epoch. This allows anyone receiving this checkpoint know that the epoch
     /// will change after this checkpoint, as well as what the new committee is.
@@ -202,6 +204,7 @@ impl CheckpointSummary {
         previous_digest: Option<CheckpointDigest>,
         total_storage_charge: u64,
         total_computation_charge: u64,
+        total_storage_rebate: u64,
         next_epoch_committee: Option<Committee>,
     ) -> CheckpointSummary {
         let mut waypoint = Box::new(Waypoint::default());
@@ -218,6 +221,7 @@ impl CheckpointSummary {
             previous_digest,
             total_storage_charge,
             total_computation_charge,
+            total_storage_rebate,
             next_epoch_committee: next_epoch_committee.map(|c| c.voting_rights),
         }
     }
@@ -235,12 +239,14 @@ impl Display for CheckpointSummary {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "CheckpointSummary {{ epoch: {:?}, seq: {:?}, content_digest: {}, total_storage_charge: {}, total_computation_charge: {}}}",
+            "CheckpointSummary {{ epoch: {:?}, seq: {:?}, content_digest: {}, 
+            total_storage_charge: {}, total_computation_charge: {}, total_storage_rebate: {}}}",
             self.epoch,
             self.sequence_number,
             hex::encode(self.content_digest),
             self.total_storage_charge,
             self.total_computation_charge,
+            self.total_storage_rebate,
         )
     }
 }
@@ -272,6 +278,7 @@ impl SignedCheckpointSummary {
         previous_digest: Option<CheckpointDigest>,
         total_storage_charge: u64,
         total_computation_charge: u64,
+        total_storage_rebate: u64,
         next_epoch_committee: Option<Committee>,
     ) -> SignedCheckpointSummary {
         let checkpoint = CheckpointSummary::new(
@@ -281,6 +288,7 @@ impl SignedCheckpointSummary {
             previous_digest,
             total_storage_charge,
             total_computation_charge,
+            total_storage_rebate,
             next_epoch_committee,
         );
         SignedCheckpointSummary::new_from_summary(checkpoint, authority, signer)
@@ -743,7 +751,7 @@ mod tests {
             .map(|k| {
                 let name = k.public().into();
 
-                SignedCheckpointSummary::new(committee.epoch, 1, name, k, &set, None, 0, 0, None)
+                SignedCheckpointSummary::new(committee.epoch, 1, name, k, &set, None, 0, 0, 0, None)
             })
             .collect();
 
@@ -771,7 +779,7 @@ mod tests {
             .map(|k| {
                 let name = k.public().into();
 
-                SignedCheckpointSummary::new(committee.epoch, 1, name, k, &set, None, 0, 0, None)
+                SignedCheckpointSummary::new(committee.epoch, 1, name, k, &set, None, 0, 0, 0, None)
             })
             .collect();
 
@@ -790,7 +798,7 @@ mod tests {
                     [ExecutionDigests::random()].into_iter(),
                 );
 
-                SignedCheckpointSummary::new(committee.epoch, 1, name, k, &set, None, 0, 0, None)
+                SignedCheckpointSummary::new(committee.epoch, 1, name, k, &set, None, 0, 0, 0, None)
             })
             .collect();
 

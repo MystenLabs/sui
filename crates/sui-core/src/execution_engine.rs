@@ -217,6 +217,7 @@ fn execute_transaction<S: BackingPackageStore + ParentSync>(
                     epoch,
                     storage_charge,
                     computation_charge,
+                    storage_rebate,
                 }) => {
                     let module_id =
                         ModuleId::new(SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_MODULE_NAME.to_owned());
@@ -235,6 +236,7 @@ fn execute_transaction<S: BackingPackageStore + ParentSync>(
                             CallArg::Pure(bcs::to_bytes(&epoch).unwrap()),
                             CallArg::Pure(bcs::to_bytes(&storage_charge).unwrap()),
                             CallArg::Pure(bcs::to_bytes(&computation_charge).unwrap()),
+                            CallArg::Pure(bcs::to_bytes(&storage_rebate).unwrap()),
                         ],
                         &mut gas_status.create_move_gas_status(),
                         tx_ctx,
@@ -284,6 +286,8 @@ fn execute_transaction<S: BackingPackageStore + ParentSync>(
         }
         let cost_summary = gas_status.summary(result.is_ok());
         let gas_used = cost_summary.gas_used();
+        // TODO: Only refund to user a percentage of the storage rebate. This percentage should be read
+        // from a system parameter stored on-chain.
         let gas_rebate = cost_summary.storage_rebate;
         // We must re-fetch the gas object from the temporary store, as it may have been reset
         // previously in the case of error.

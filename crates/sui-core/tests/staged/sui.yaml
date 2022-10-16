@@ -63,6 +63,7 @@ ChangeEpoch:
     - epoch: U64
     - storage_charge: U64
     - computation_charge: U64
+    - storage_rebate: U64
 CircularObjectOwnership:
   STRUCT:
     - object:

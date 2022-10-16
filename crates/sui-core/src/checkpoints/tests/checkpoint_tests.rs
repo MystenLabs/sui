@@ -380,7 +380,7 @@ fn test_gas_costs() {
         gas_used: GasCostSummary {
             storage_cost: 42,
             computation_cost: 500,
-            storage_rebate: 0,
+            storage_rebate: 53,
         },
         transaction_digest: txn_digest_0,
         ..Default::default()
@@ -389,7 +389,7 @@ fn test_gas_costs() {
         gas_used: GasCostSummary {
             storage_cost: 113,
             computation_cost: 738,
-            storage_rebate: 0,
+            storage_rebate: 124,
         },
         transaction_digest: txn_digest_1,
         ..Default::default()
@@ -398,7 +398,7 @@ fn test_gas_costs() {
         gas_used: GasCostSummary {
             storage_cost: 248,
             computation_cost: 6201,
-            storage_rebate: 0,
+            storage_rebate: 61,
         },
         transaction_digest: txn_digest_2,
         ..Default::default()
@@ -433,6 +433,7 @@ fn test_gas_costs() {
 
     assert_eq!(signed_checkpoint.summary().total_storage_charge, 403);
     assert_eq!(signed_checkpoint.summary().total_computation_charge, 7439);
+    assert_eq!(signed_checkpoint.summary().total_storage_rebate, 238);
 }
 
 #[test]

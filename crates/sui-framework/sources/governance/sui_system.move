@@ -260,14 +260,17 @@ module sui::sui_system {
     /// This function should be called at the end of an epoch, and advances the system to the next epoch.
     /// It does the following things:
     /// 1. Add storage charge to the storage fund.
-    /// 2. Distribute computation charge to validator stake and delegation stake.
-    /// 3. Create reward information records for each validator in this epoch.
-    /// 4. Update all validators.
+    /// 2. Burn the storage rebates from the storage fund. These are already refunded to transaction sender's
+    ///    gas coins. 
+    /// 3. Distribute computation charge to validator stake and delegation stake.
+    /// 4. Create reward information records for each validator in this epoch.
+    /// 5. Update all validators.
     public entry fun advance_epoch(
         self: &mut SuiSystemState,
         new_epoch: u64,
         storage_charge: u64,
         computation_charge: u64,
+        storage_rebate: u64,
         ctx: &mut TxContext,
     ) {
         // Validator will make a special system call with sender set as 0x0.
@@ -301,6 +304,10 @@ module sui::sui_system {
         // the storage fund.
         balance::join(&mut self.storage_fund, delegator_reward);
         balance::join(&mut self.storage_fund, computation_reward);
+
+        // Burn the storage rebate.
+        assert!(balance::value(&self.storage_fund) >= storage_rebate, 0);
+        balance::decrease_supply(&mut self.sui_supply, balance::split(&mut self.storage_fund, storage_rebate));
     }
 
     /// Return the current epoch number. Useful for applications that need a coarse-grained concept of time,
