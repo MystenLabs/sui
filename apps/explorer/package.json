@@ -24,10 +24,10 @@
         "preview-storybook": "pnpm dlx serve ./storybook-static -l 6007"
     },
     "dependencies": {
+        "@mysten/core": "workspace:*",
         "@growthbook/growthbook": "^0.18.1",
         "@growthbook/growthbook-react": "^0.9.1",
         "@headlessui/react": "^1.7.2",
-        "@headlessui/tailwindcss": "^0.1.1",
         "@mysten/sui.js": "workspace:*",
         "@sentry/react": "^7.6.0",
         "@sentry/tracing": "^7.6.0",
