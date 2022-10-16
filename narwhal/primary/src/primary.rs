@@ -225,14 +225,14 @@ impl Primary {
             .add_rpc_service(worker_service);
 
         let service = ServiceBuilder::new()
-            .layer(TraceLayer::new())
+            .layer(TraceLayer::new_for_server_errors())
             .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
                 inbound_network_metrics,
             )))
             .service(routes);
 
         let outbound_layer = ServiceBuilder::new()
-            .layer(TraceLayer::new())
+            .layer(TraceLayer::new_for_client_and_server_errors())
             .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
                 outbound_network_metrics,
             )))

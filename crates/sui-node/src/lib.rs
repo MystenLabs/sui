@@ -312,14 +312,14 @@ impl SuiNode {
             let routes = anemo::Router::new();
 
             let service = ServiceBuilder::new()
-                .layer(TraceLayer::new())
+                .layer(TraceLayer::new_for_server_errors())
                 .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
                     Arc::new(inbound_network_metrics),
                 )))
                 .service(routes);
 
             let outbound_layer = ServiceBuilder::new()
-                .layer(TraceLayer::new())
+                .layer(TraceLayer::new_for_client_and_server_errors())
                 .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
                     Arc::new(outbound_network_metrics),
                 )))
