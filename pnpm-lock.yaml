@@ -156,6 +156,7 @@ importers:
       '@types/uuid': ^8.3.4
       '@types/webextension-polyfill': ^0.9.0
       '@types/webpack': ^5.28.0
+      '@types/zxcvbn': ^4.4.1
       '@typescript-eslint/eslint-plugin': ^5.38.1
       '@typescript-eslint/parser': ^5.38.1
       bootstrap-icons: ^1.9.1
@@ -212,6 +213,7 @@ importers:
       webpack-cli: ^4.10.0
       webpack-merge: ^5.8.0
       yup: ^0.32.11
+      zxcvbn: ^4.4.2
     dependencies:
       '@floating-ui/react-dom-interactions': 0.10.1_7ey2zzynotv32rpkwno45fsx4e
       '@growthbook/growthbook': 0.18.1
@@ -221,7 +223,6 @@ importers:
       '@reduxjs/toolkit': 1.8.5_kkwg4cbsojnjnupd3btipussee
       '@scure/bip32': 1.1.0
       '@scure/bip39': 1.1.0
-      '@types/semver': 7.3.12
       bootstrap-icons: 1.9.1
       buffer: 6.0.3
       classnames: 2.3.1
@@ -243,14 +244,17 @@ importers:
       uuid: 8.3.2
       webextension-polyfill: 0.9.0
       yup: 0.32.11
+      zxcvbn: 4.4.2
     devDependencies:
       '@types/dotenv-webpack': 7.0.3_webpack-cli@4.10.0
       '@types/node': 18.7.6
       '@types/react': 18.0.20
       '@types/react-dom': 18.0.6
+      '@types/semver': 7.3.12
       '@types/uuid': 8.3.4
       '@types/webextension-polyfill': 0.9.0
       '@types/webpack': 5.28.0_webpack-cli@4.10.0
+      '@types/zxcvbn': 4.4.1
       '@typescript-eslint/eslint-plugin': 5.38.1_6qyfj4btk4aki5s3lhni2ivbpu
       '@typescript-eslint/parser': 5.38.1_itqs5654cmlnjraw6gjzqacppi
       concurrently: 7.3.0
@@ -6750,7 +6754,7 @@ packages:
 
   /@types/semver/7.3.12:
     resolution: {integrity: sha512-WwA1MW0++RfXmCr12xeYOOC5baSC9mSb0ZqCquFzKhcoF4TvHu5MKOuXsncgZcpVFhB1pXd5hZmM0ryAoCp12A==}
-    dev: false
+    dev: true
 
   /@types/sinonjs__fake-timers/8.1.1:
     resolution: {integrity: sha512-0kSuKjAS0TrGLJ0M/+8MaFkGsQhZpB6pxOmvS3K8FYI72K//YmdfoW9X2qPsAKh1mkwxGD5zib9s1FIFed6E8g==}
@@ -6920,6 +6924,10 @@ packages:
     requiresBuild: true
     dependencies:
       '@types/node': 18.7.6
+    dev: true
+
+  /@types/zxcvbn/4.4.1:
+    resolution: {integrity: sha512-3NoqvZC2W5gAC5DZbTpCeJ251vGQmgcWIHQJGq2J240HY6ErQ9aWKkwfoKJlHLx+A83WPNTZ9+3cd2ILxbvr1w==}
     dev: true
 
   /@typescript-eslint/eslint-plugin/5.38.1_6qyfj4btk4aki5s3lhni2ivbpu:
@@ -20228,7 +20236,7 @@ packages:
       schema-utils: 3.1.1
       serialize-javascript: 6.0.0
       terser: 5.14.2
-      webpack: 5.74.0
+      webpack: 5.74.0_webpack-cli@4.10.0
     dev: true
 
   /terser/4.8.1:
@@ -22279,6 +22287,10 @@ packages:
   /zwitch/1.0.5:
     resolution: {integrity: sha512-V50KMwwzqJV0NpZIZFwfOD5/lyny3WlSzRiXgA0G7VUnRlqttta1L6UQIHzd6EuBY/cHGfwTIck7w1yH6Q5zUw==}
     dev: true
+
+  /zxcvbn/4.4.2:
+    resolution: {integrity: sha512-Bq0B+ixT/DMyG8kgX2xWcI5jUvCwqrMxSFam7m0lAf78nf04hv6lNCsyLYdyYTrCVMqNDY/206K7eExYCeSyUQ==}
+    dev: false
 
   file:crates/sui-open-rpc:
     resolution: {directory: crates/sui-open-rpc, type: directory}
