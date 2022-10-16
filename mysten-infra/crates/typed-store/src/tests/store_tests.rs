@@ -18,7 +18,7 @@ async fn create_store() {
 }
 
 #[tokio::test]
-async fn read_write_value() {
+async fn read_async_write_value() {
     // Create new store.
     let db =
         rocks::DBMap::<Vec<u8>, Vec<u8>>::open(temp_dir(), None, None, &Registry::new()).unwrap();
@@ -27,7 +27,27 @@ async fn read_write_value() {
     // Write value to the store.
     let key = vec![0u8, 1u8, 2u8, 3u8];
     let value = vec![4u8, 5u8, 6u8, 7u8];
-    store.write(key.clone(), value.clone()).await;
+    store.async_write(key.clone(), value.clone()).await;
+
+    // Read value.
+    let result = store.read(key).await;
+    assert!(result.is_ok());
+    let read_value = result.unwrap();
+    assert!(read_value.is_some());
+    assert_eq!(read_value.unwrap(), value);
+}
+
+#[tokio::test]
+async fn read_sync_write_value() {
+    // Create new store.
+    let db =
+        rocks::DBMap::<Vec<u8>, Vec<u8>>::open(temp_dir(), None, None, &Registry::new()).unwrap();
+    let store = Store::new(db);
+
+    // Write value to the store.
+    let key = vec![0u8, 1u8, 2u8, 3u8];
+    let value = vec![4u8, 5u8, 6u8, 7u8];
+    store.sync_write(key.clone(), value.clone()).await.unwrap();
 
     // Read value.
     let result = store.read(key).await;
@@ -47,7 +67,7 @@ async fn read_raw_write_value() {
     // Write value to the store.
     let key = vec![0u8, 1u8, 2u8, 3u8];
     let value = "123456".to_string();
-    store.write(key.clone(), value.clone()).await;
+    store.async_write(key.clone(), value.clone()).await;
 
     // Read value.
     let result = store.read_raw_bytes(key).await;
@@ -95,7 +115,7 @@ async fn read_notify() {
     });
 
     // Write the missing value and ensure the handle terminates correctly.
-    store.write(key, value).await;
+    store.async_write(key, value).await;
     assert!(handle.await.is_ok());
 }
 
@@ -115,7 +135,7 @@ async fn remove_all_successfully() {
     let value = vec![4u8, 5u8, 6u8, 7u8];
 
     for key in keys.clone() {
-        store.write(key.clone(), value.clone()).await;
+        store.async_write(key.clone(), value.clone()).await;
     }
 
     // WHEN multi remove values
@@ -147,7 +167,7 @@ async fn write_and_read_all_successfully() {
     ];
 
     // WHEN
-    let result = store.write_all(key_values.clone()).await;
+    let result = store.sync_write_all(key_values.clone()).await;
 
     // THEN
     assert!(result.is_ok());
@@ -179,7 +199,7 @@ async fn iter_successfully() {
         (vec![0u8, 3u8], vec![4u8, 6u8]),
     ];
 
-    let result = store.write_all(key_values.clone()).await;
+    let result = store.sync_write_all(key_values.clone()).await;
     assert!(result.is_ok());
 
     // Iter through the keys
@@ -209,7 +229,7 @@ async fn iter_and_filter_successfully() {
         (vec![0u8, 6u8], vec![4u8, 1u8]),
     ];
 
-    let result = store.write_all(key_values.clone()).await;
+    let result = store.sync_write_all(key_values.clone()).await;
     assert!(result.is_ok());
 
     // Iter through the keys
