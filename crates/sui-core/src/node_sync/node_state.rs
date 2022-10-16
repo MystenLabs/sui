@@ -6,7 +6,8 @@ use crate::{
     authority_active::ActiveAuthority, authority_aggregator::AuthorityAggregator,
     authority_client::AuthorityAPI,
 };
-
+use rand::rngs::ThreadRng;
+use rand::Rng;
 use tokio_stream::{Stream, StreamExt};
 
 use std::collections::{hash_map, BTreeSet, HashMap};
@@ -29,9 +30,12 @@ use futures::{future::BoxFuture, stream::FuturesOrdered, FutureExt};
 
 use tap::TapFallible;
 
-use tokio::sync::{broadcast, mpsc, oneshot, OwnedSemaphorePermit, Semaphore};
 use tokio::task::JoinHandle;
 use tokio::time::{timeout, Duration};
+use tokio::{
+    sync::{broadcast, mpsc, oneshot, OwnedSemaphorePermit, Semaphore},
+    time::sleep,
+};
 
 use tracing::{debug, error, instrument, trace, warn};
 
@@ -261,7 +265,7 @@ pub struct NodeSyncState<A> {
     // Used to suppress duplicate tx processing.
     pending_txes: Waiter<TransactionDigest, SyncResult>,
 
-    // Channels for enqueuing DigestMessage requests.
+    // Channels for enqueuing DigestsMessage requests.
     sender: mpsc::Sender<DigestsMessage>,
     receiver: Arc<tokio::sync::Mutex<mpsc::Receiver<DigestsMessage>>>,
 }
@@ -582,12 +586,17 @@ where
         } else {
             self.state().handle_certificate(cert.clone()).await
         };
+
         match result {
             Ok(_) => Ok(SyncStatus::CertExecuted),
             Err(SuiError::ObjectNotFound { .. })
             | Err(SuiError::ObjectErrors { .. })
             | Err(SuiError::SharedObjectLockNotSetError) => {
                 debug!(?digest, "cert execution failed due to missing parents");
+                // HACK: Sleep for 1~3 secs before trying to handle the error. Hold permit during
+                // the sleep to limit throughput when many transactions result in these errors.
+                let delay_ms = ThreadRng::default().gen_range(1000..3000);
+                sleep(Duration::from_millis(delay_ms)).await;
 
                 let effects = self.get_true_effects(epoch_id, &cert).await?;
 

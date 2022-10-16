@@ -210,7 +210,7 @@ pub struct ConsensusAdapter {
     consensus_client: TransactionsClient<sui_network::tonic::transport::Channel>,
     /// The Sui committee information.
     committee: Committee,
-    /// A channel to notify the consensus listener to take action for a transactions.
+    /// A channel to notify the consensus listener to take action for a transaction.
     tx_consensus_listener: Sender<ConsensusListenerMessage>,
     /// Retries sending a transaction to consensus after this timeout.
     timeout: Duration,
