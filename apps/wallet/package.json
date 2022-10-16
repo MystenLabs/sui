@@ -39,9 +39,11 @@
         "@types/node": "^18.0.6",
         "@types/react": "^18.0.20",
         "@types/react-dom": "^18.0.6",
+        "@types/semver": "^7.3.12",
         "@types/uuid": "^8.3.4",
         "@types/webextension-polyfill": "^0.9.0",
         "@types/webpack": "^5.28.0",
+        "@types/zxcvbn": "^4.4.1",
         "@typescript-eslint/eslint-plugin": "^5.38.1",
         "@typescript-eslint/parser": "^5.38.1",
         "concurrently": "^7.3.0",
@@ -87,7 +89,6 @@
         "@reduxjs/toolkit": "^1.8.3",
         "@scure/bip32": "^1.1.0",
         "@scure/bip39": "^1.1.0",
-        "@types/semver": "^7.3.12",
         "bootstrap-icons": "^1.9.1",
         "buffer": "^6.0.3",
         "classnames": "^2.3.1",
@@ -108,6 +109,7 @@
         "tweetnacl": "^1.0.3",
         "uuid": "^8.3.2",
         "webextension-polyfill": "^0.9.0",
-        "yup": "^0.32.11"
+        "yup": "^0.32.11",
+        "zxcvbn": "^4.4.2"
     }
 }
