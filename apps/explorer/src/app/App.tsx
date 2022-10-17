@@ -54,6 +54,7 @@ function App() {
                         position="bottom-center"
                         gutter={8}
                         toastOptions={{
+                            duration: 4000,
                             success: {
                                 className:
                                     '!bg-success-light !text-success-dark',
