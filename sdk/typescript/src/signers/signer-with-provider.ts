@@ -9,6 +9,7 @@ import {
   ExecuteTransactionRequestType,
   SuiAddress,
   SuiExecuteTransactionResponse,
+  SuiSignatureResponse,
   SuiTransactionResponse,
 } from '../types';
 import { SignaturePubkeyPair, Signer } from './signer';
@@ -61,8 +62,13 @@ export abstract class SignerWithProvider implements Signer {
       serializer || new RpcTxnDataSerializer(endpoint, skipDataValidation);
   }
 
-  async signMessage(message: Base64DataBuffer): Promise<SignaturePubkeyPair> {
-    return await this.signData(message);
+  async signMessage(message: Uint8Array): Promise<SuiSignatureResponse> {
+    let result = await this.signData(new Base64DataBuffer(message));
+    return ({
+      signatureScheme: result.signatureScheme,
+      signature: result.signature.getData(),
+      pubkey: result.pubKey.toBytes()
+    });
   }
 
   /**

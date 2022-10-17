@@ -7,9 +7,11 @@ import Browser from 'webextension-polyfill';
 
 import { Window } from './Window';
 
-import type { Base64DataBuffer } from '@mysten/sui.js';
 import type { ContentScriptConnection } from '_src/background/connections/ContentScriptConnection';
-import type { SignatureRequest, SignatureRequestResponse } from '_src/shared/messaging/messages/payloads/signatures';
+import type {
+  SignatureRequest,
+  SignatureRequestResponse
+} from '_src/shared/messaging/messages/payloads/signatures';
 
 const SIG_STORE_KEY = 'signatures';
 
@@ -24,7 +26,7 @@ class Signatures {
   private _sigResponseMessages = new Subject<SignatureRequestResponse>();
 
   public async signMessage(
-    message: Base64DataBuffer,
+    message: Uint8Array,
     connection: ContentScriptConnection
   ) {
     const sigRequest = this.createSignatureRequest(
@@ -50,7 +52,7 @@ class Signatures {
             const { signed, sigResult, sigResultError } = response;
             if (signed) {
               sigRequest.signed = signed;
-              sigRequest.sigResult = sigResult?.signature.getData();
+              sigRequest.sigResult = sigResult;
               sigRequest.sigResultError = sigResultError;
               await this.storeSignatureRequest(sigRequest);
               if (sigResultError) {
@@ -90,7 +92,7 @@ class Signatures {
   }
 
   private createSignatureRequest(
-    message: Base64DataBuffer,
+    message: Uint8Array,
     origin: string,
     originFavIcon?: string
   ): SignatureRequest {
@@ -100,7 +102,7 @@ class Signatures {
       origin,
       originFavIcon,
       createdDate: new Date().toISOString(),
-      message: message.getData(),
+      message,
     };
   }
 

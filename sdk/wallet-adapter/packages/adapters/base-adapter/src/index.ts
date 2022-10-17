@@ -2,11 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
-  Base64DataBuffer,
   MoveCallTransaction,
   SignableTransaction,
-  SignaturePubkeyPair,
   SuiAddress,
+  SuiSignatureResponse,
   SuiTransactionResponse,
 } from "@mysten/sui.js";
 
@@ -21,7 +20,7 @@ export interface WalletAdapter {
   connect: () => Promise<void>;
   disconnect: () => Promise<void>;
 
-  signMessage(message: Base64DataBuffer): Promise<SignaturePubkeyPair>;
+  signMessage(message: Uint8Array): Promise<SuiSignatureResponse>;
 
   /**
    * Suggest a transaction for the user to sign. Supports all valid transaction types.

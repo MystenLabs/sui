@@ -1,8 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { SignatureScheme } from '../cryptography/publickey';
 import { ObjectOwner, SuiAddress, TransactionDigest } from './common';
-import {ObjectId, SuiMovePackage, SuiObject, SuiObjectRef} from './objects';
+import { ObjectId, SuiMovePackage, SuiObject, SuiObjectRef } from './objects';
 
 export type TransferObject = {
   recipient: SuiAddress;
@@ -41,12 +42,12 @@ export type TransactionKindName =
   | 'Pay';
 
 export type SuiTransactionKind =
-  | { TransferObject: TransferObject }
-  | { Publish: SuiMovePackage }
-  | { Call: MoveCall }
-  | { TransferSui: SuiTransferSui }
-  | { ChangeEpoch: SuiChangeEpoch }
-  | { Pay: Pay };
+  | { TransferObject: TransferObject; }
+  | { Publish: SuiMovePackage; }
+  | { Call: MoveCall; }
+  | { TransferSui: SuiTransferSui; }
+  | { ChangeEpoch: SuiChangeEpoch; }
+  | { Pay: Pay; };
 export type SuiTransactionData = {
   transactions: SuiTransactionKind[];
   sender: SuiAddress;
@@ -124,6 +125,12 @@ export type TransactionEffects = {
   dependencies?: TransactionDigest[];
 };
 
+export type SuiSignatureResponse = {
+  signatureScheme: SignatureScheme,
+  signature: Uint8Array,
+  pubkey: Uint8Array;
+};
+
 export type SuiTransactionResponse = {
   certificate: CertifiedTransaction;
   effects: TransactionEffects;
@@ -138,17 +145,17 @@ export type SuiCertifiedTransactionEffects = {
 
 export type SuiExecuteTransactionResponse =
   | {
-      ImmediateReturn: {
-        tx_digest: string;
-      };
-    }
-  | { TxCert: { certificate: CertifiedTransaction } }
-  | {
-      EffectsCert: {
-        certificate: CertifiedTransaction;
-        effects: SuiCertifiedTransactionEffects;
-      };
+    ImmediateReturn: {
+      tx_digest: string;
     };
+  }
+  | { TxCert: { certificate: CertifiedTransaction; }; }
+  | {
+    EffectsCert: {
+      certificate: CertifiedTransaction;
+      effects: SuiCertifiedTransactionEffects;
+    };
+  };
 
 export type GatewayTxSeqNumber = number;
 
@@ -160,16 +167,16 @@ export type PaginatedTransactionDigests = {
 };
 
 export type TransactionQuery =
-    | "All"
-    | { "MoveFunction": { "package": ObjectId, "module": string | null, "function": string | null } }
-    | { "InputObject": ObjectId }
-    | { "MutatedObject": ObjectId }
-    | { "FromAddress": SuiAddress }
-    | { "ToAddress": SuiAddress };
+  | "All"
+  | { "MoveFunction": { "package": ObjectId, "module": string | null, "function": string | null; }; }
+  | { "InputObject": ObjectId; }
+  | { "MutatedObject": ObjectId; }
+  | { "FromAddress": SuiAddress; }
+  | { "ToAddress": SuiAddress; };
 
 export type Ordering =
-    | "Ascending"
-    | "Descending"
+  | "Ascending"
+  | "Descending";
 
 export type MoveCall = {
   package: SuiObjectRef;
@@ -216,14 +223,14 @@ export type SuiPackage = {
 
 export type SuiParsedTransactionResponse =
   | {
-      SplitCoin: SuiParsedSplitCoinResponse;
-    }
+    SplitCoin: SuiParsedSplitCoinResponse;
+  }
   | {
-      MergeCoin: SuiParsedMergeCoinResponse;
-    }
+    MergeCoin: SuiParsedMergeCoinResponse;
+  }
   | {
-      Publish: SuiParsedPublishResponse;
-    };
+    Publish: SuiParsedPublishResponse;
+  };
 
 /* -------------------------------------------------------------------------- */
 /*                              Helper functions                              */

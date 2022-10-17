@@ -18,7 +18,12 @@ import Permissions from '_src/background/Permissions';
 import Signatures from '_src/background/Signatures';
 import Tabs from '_src/background/Tabs';
 import Transactions from '_src/background/Transactions';
-import { isSignatureRequestResponse } from '_src/shared/messaging/messages/payloads/signatures';
+import {
+    type GetSignatureRequestsResponse,
+    isGetSignatureRequests,
+    isSignatureRequestResponse,
+    type SignatureRequest
+} from '_src/shared/messaging/messages/payloads/signatures';
 
 import type { Message } from '_messages';
 import type { PortChannelName } from '_messaging/PortChannelName';
@@ -86,6 +91,11 @@ export class UiConnection extends Connection {
                 Signatures.handleMessage(payload);
             } else if (isTransactionRequestResponse(payload)) {
                 Transactions.handleMessage(payload);
+            } else if (isGetSignatureRequests(payload)) {
+                this.sendSignatureRequests(
+                    Object.values(await Signatures.getSignatureRequests()),
+                    id
+                );
             } else if (isGetTransactionRequests(payload)) {
                 this.sendTransactionRequests(
                     Object.values(await Transactions.getTransactionRequests()),
@@ -111,6 +121,21 @@ export class UiConnection extends Connection {
                     permissions,
                 },
                 requestID
+            )
+        );
+    }
+
+    private sendSignatureRequests(
+        sigRequests: SignatureRequest[],
+        requestId: string
+    ) {
+        this.send(
+            createMessage<GetSignatureRequestsResponse>(
+                {
+                    type: 'get-signature-requests-response',
+                    sigRequests
+                },
+                requestId
             )
         );
     }

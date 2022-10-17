@@ -1,18 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type {
-  Base64DataBuffer,
-  SignaturePubkeyPair,
-} from "@mysten/sui.js";
+import type { SuiSignatureResponse } from "@mysten/sui.js";
 
 /** The latest API version of the signMessage API. */
 export type SuiSignMessageVersion = "1.0.0";
 
 /**
- * A Wallet Standard feature for signing a transaction, and submitting it to the
- * network. The wallet is expected to submit the transaction to the network via RPC,
- * and return the transaction response.
+ * A Wallet Standard feature for signing a message
  */
 export type SuiSignMessageFeature = {
   /** Namespace for the feature. */
@@ -27,11 +22,11 @@ export type SuiSignMessageMethod = (
   input: SuiSignMessageInput
 ) => Promise<SuiSignMessageOutput>;
 
-/** Input for signing and sending transactions. */
-export interface SuiSignMessageInput extends Base64DataBuffer { }
+/** Input for signing messages. */
+export interface SuiSignMessageInput extends Uint8Array { }
 
-/** Output of signing and sending transactions. */
-export interface SuiSignMessageOutput extends SignaturePubkeyPair { }
+/** Output of signing messages. */
+export interface SuiSignMessageOutput extends SuiSignatureResponse { }
 
-/** Options for signing and sending transactions. */
+/** Options for signing messages. */
 export interface SuiSignMessageOptions { }

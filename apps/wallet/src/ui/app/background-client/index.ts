@@ -7,14 +7,21 @@ import { createMessage } from '_messages';
 import { PortStream } from '_messaging/PortStream';
 import { isKeyringPayload } from '_payloads/keyring';
 import { isPermissionRequests } from '_payloads/permissions';
+import {
+    type GetSignatureRequests,
+    isGetSignatureRequestsResponse,
+    type SignatureRequestResponse
+} from "_payloads/signatures";
 import { isUpdateActiveOrigin } from '_payloads/tabs/updateActiveOrigin';
 import { isGetTransactionRequestsResponse } from '_payloads/transactions/ui/GetTransactionRequestsResponse';
 import { setKeyringStatus } from '_redux/slices/account';
 import { setActiveOrigin } from '_redux/slices/app';
 import { setPermissions } from '_redux/slices/permissions';
+import { setSignatureRequests } from '_redux/slices/signatures';
 import { setTransactionRequests } from '_redux/slices/transaction-requests';
 
-import type { SignaturePubkeyPair, SuiAddress, SuiTransactionResponse } from '@mysten/sui.js';
+import type { SuiAddress, SuiTransactionResponse } from '@mysten/sui.js';
+import type { SuiSignMessageOutput } from '@mysten/wallet-standard';
 import type { Message } from '_messages';
 import type { KeyringPayload } from '_payloads/keyring';
 import type {
@@ -22,10 +29,6 @@ import type {
     PermissionResponse,
 } from '_payloads/permissions';
 import type { DisconnectApp } from '_payloads/permissions/DisconnectApp';
-import type {
-    GetSignatureRequests,
-    SignatureRequestResponse
-} from "_payloads/signatures";
 import type { GetTransactionRequests } from '_payloads/transactions/ui/GetTransactionRequests';
 import type { TransactionRequestResponse } from '_payloads/transactions/ui/TransactionRequestResponse';
 import type { AppDispatch } from '_store';
@@ -44,15 +47,16 @@ export class BackgroundClient {
         this.createPortStream();
         return Promise.all([
             this.sendGetPermissionRequests(),
+            this.sendGetSignatureRequests(),
             this.sendGetTransactionRequests(),
             this.getWalletStatus(),
         ]).then(() => undefined);
     }
 
-    public sendSignatureResponse(
+    public sendSignatureRequestResponse(
         sigId: string,
         signed: boolean,
-        sigResult: SignaturePubkeyPair | undefined,
+        sigResult: SuiSignMessageOutput | undefined,
         sigResultError: string | undefined
     ) {
         this.sendMessage(
@@ -234,6 +238,8 @@ export class BackgroundClient {
         let action;
         if (isPermissionRequests(payload)) {
             action = setPermissions(payload.permissions);
+        } else if (isGetSignatureRequestsResponse(payload)) {
+            action = setSignatureRequests(payload.sigRequests);
         } else if (isGetTransactionRequestsResponse(payload)) {
             action = setTransactionRequests(payload.txRequests);
         } else if (isUpdateActiveOrigin(payload)) {

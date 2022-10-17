@@ -1,16 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { isBasePayload } from '_payloads';
+import {
+    isBasePayload,
+    type BasePayload,
+    type Payload
+} from '_payloads';
 
-import type { SignaturePubkeyPair } from '@mysten/sui.js';
-import type { BasePayload, Payload } from '_payloads';
+import type { SuiSignMessageOutput } from '@mysten/wallet-standard';
 
 export interface SignatureRequestResponse extends BasePayload {
     type: 'signature-request-response';
     sigId: string;
     signed: boolean;
-    sigResult?: SignaturePubkeyPair;
+    sigResult?: SuiSignMessageOutput;
     sigResultError?: string;
 }
 

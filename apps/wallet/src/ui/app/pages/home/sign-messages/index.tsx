@@ -1,19 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 
 import UserApproveContainer from '_components/user-approve-container';
 import Loading from '_src/ui/app/components/loading';
-import { useAppDispatch, useAppSelector, useInitializedGuard } from '_src/ui/app/hooks';
+import { useAppDispatch, useAppSelector } from '_src/ui/app/hooks';
 import { respondToSignatureRequest, sigRequestsSelectors } from '_src/ui/app/redux/slices/signatures';
 
 import type { RootState } from '_redux/RootReducer';
 
+import st from './SigningPage.module.scss';
+
 function SigningPage() {
   const { sigId } = useParams();
-  const guardLoading = useInitializedGuard(true);
+  const [message, setMessage] = useState<string>("<div></div>");
   const sigRequestsLoading = useAppSelector(
     ({ signatureRequests }) => !signatureRequests.initialized
   );
@@ -23,7 +25,6 @@ function SigningPage() {
     [sigId]
   );
   const sigRequest = useAppSelector(sigRequestSelector);
-  const loading = guardLoading || sigRequestsLoading;
   const dispatch = useAppDispatch();
   const handleOnSubmit = useCallback(
     async (signed: boolean) => {
@@ -41,14 +42,23 @@ function SigningPage() {
 
   useEffect(() => {
     if (
-      !loading &&
+      !sigRequestsLoading &&
       (!sigRequest || (sigRequest && sigRequest.signed !== null))
     )
       window.close();
-  }, [loading, sigRequest]);
+  }, [sigRequestsLoading, sigRequest]);
+
+  useEffect(() => {
+    if (sigRequest) {
+      const data = [];
+      for (let i = 0; i < Object.keys(sigRequest.message).length; i++)
+        data.push(sigRequest.message[i]);
+      setMessage(`<div>${(new TextDecoder().decode(Uint8Array.from(data))).replace(/\n/g, "<br/>")}</div>`);
+    }
+  }, [sigRequest]);
 
   return (
-    <Loading loading={loading}>
+    <Loading loading={sigRequestsLoading}>
       {sigRequest &&
         <UserApproveContainer
           origin={sigRequest.origin}
@@ -56,8 +66,10 @@ function SigningPage() {
           approveTitle="Sign"
           rejectTitle="Reject"
           onSubmit={handleOnSubmit}>
-          <div>MESSAGE</div>
-          <div>{sigRequest.message.toString()}</div>
+          <div className={st.warningWrapper}>
+            <h1 className={st.warningTitle}>Message</h1>
+          </div>
+          <div className={st.warningMessage} dangerouslySetInnerHTML={{ __html: message }}></div>
         </UserApproveContainer>
       }
     </Loading>

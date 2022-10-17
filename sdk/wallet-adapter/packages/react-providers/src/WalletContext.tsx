@@ -16,8 +16,7 @@ import type {
   MoveCallTransaction,
   SuiTransactionResponse,
   SignableTransaction,
-  Base64DataBuffer,
-  SignaturePubkeyPair,
+  SuiSignatureResponse,
 } from "@mysten/sui.js";
 import { WalletAdapter, WalletAdapterList } from "@mysten/wallet-adapter-base";
 import { useWalletAdapters } from "./useWalletAdapters";
@@ -40,7 +39,7 @@ export interface WalletContextState {
 
   getAccounts: () => Promise<SuiAddress[]>;
 
-  signMessage(message: Base64DataBuffer): Promise<SignaturePubkeyPair>;
+  signMessage(message: Uint8Array): Promise<SuiSignatureResponse>;
 
   signAndExecuteTransaction(
     transaction: SignableTransaction

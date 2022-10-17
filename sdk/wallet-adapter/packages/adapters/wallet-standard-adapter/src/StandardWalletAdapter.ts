@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Base64DataBuffer, SignableTransaction, SignaturePubkeyPair } from "@mysten/sui.js";
+import { SignableTransaction } from "@mysten/sui.js";
 import { WalletAdapter } from "@mysten/wallet-adapter-base";
 import { StandardWalletAdapterWallet } from "@mysten/wallet-standard";
 
@@ -62,7 +62,7 @@ export class StandardWalletAdapter implements WalletAdapter {
     }
   }
 
-  async signMessage(message: Base64DataBuffer) {
+  async signMessage(message: Uint8Array) {
     return this.#wallet.features["standard:signMessage"].signMessage(message);
   }
 

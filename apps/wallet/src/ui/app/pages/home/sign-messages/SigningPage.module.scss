@@ -1,33 +1,22 @@
-.nft-gallery-container {
-    margin-top: 20px;
-    padding-bottom: 50px;
-    flex-grow: 1;
-    padding-left: 25px;
-    padding-right: 25px;
-    margin-left: -25px;
-    margin-right: -25px;
-    height: 450px;
-    overflow-y: auto;
+@use '_utils';
+@use '_values/colors';
 
-    .nft-gallery {
-        display: grid;
-        grid-template-columns: repeat(1, 1fr) 50%;
-        grid-gap: 30px 10px;
-
-        a {
-            text-decoration: none;
-            text-transform: capitalize;
-        }
-    }
+.warning-wrapper {
+    border-bottom: 1px solid colors.$gray-45;
+    margin-bottom: 8px;
 }
 
-.page-title {
-    justify-content: center;
+.warning-title {
+    @include utils.typography('Primary/Body-SB');
+
+    display: inline-block;
+    margin-bottom: -1px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid colors.$gray-90;
 }
 
-.container {
-    display: flex;
-    flex-flow: column nowrap;
-    overflow-x: visible;
-    height: 100%;
+.warning-message {
+    @include utils.typography('Primary/BodySmall-M');
+
+    color: colors.$gray-80;
 }

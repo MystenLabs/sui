@@ -168,7 +168,11 @@ export class SuiWallet implements Wallet {
                 type: 'sign-message-request',
                 message: input
             }),
-            response => response.signature
+            response => ({
+                signatureScheme: response.signatureScheme,
+                signature: response.signature,
+                pubkey: response.pubkey
+            })
         );
     };
 

@@ -1,14 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { isBasePayload } from '_payloads';
+import {
+    isBasePayload,
+    type BasePayload,
+    type Payload
+} from '_payloads';
 
-import type { BasePayload, Payload } from '_payloads';
-import type { ExecuteSignatureRequest } from "_payloads/signatures";
-
+import type { SignatureRequest } from '../SignatureRequest';
 export interface GetSignatureRequestsResponse extends BasePayload {
     type: 'get-signature-requests-response';
-    sigRequests: ExecuteSignatureRequest[];
+    sigRequests: SignatureRequest[];
 }
 
 export function isGetSignatureRequestsResponse(
