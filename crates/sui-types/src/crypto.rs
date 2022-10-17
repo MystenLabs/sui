@@ -1,9 +1,5 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use std::fmt::{Display, Formatter};
-use std::hash::{Hash, Hasher};
-use std::str::FromStr;
-
 use anyhow::{anyhow, Error};
 use base64ct::Encoding;
 use bip32::{ChildNumber, DerivationPath, XPrv};
@@ -31,6 +27,9 @@ use serde_with::{serde_as, Bytes};
 use sha3::Sha3_256;
 use signature::Signer;
 use slip10_ed25519::derive_ed25519_private_key;
+use std::fmt::{Display, Formatter};
+use std::hash::{Hash, Hasher};
+use std::str::FromStr;
 
 use crate::base_types::{AuthorityName, SuiAddress};
 use crate::committee::{Committee, EpochId};
@@ -320,9 +319,13 @@ impl PublicKey {
 /// Defines the compressed version of the public key that we pass around
 /// in Sui
 #[serde_as]
-#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(
+    Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, schemars::JsonSchema,
+)]
 pub struct AuthorityPublicKeyBytes(
-    #[serde_as(as = "Readable<Base64, Bytes>")] [u8; AuthorityPublicKey::LENGTH],
+    #[schemars(with = "Base64")]
+    #[serde_as(as = "Readable<Base64, Bytes>")]
+    [u8; AuthorityPublicKey::LENGTH],
 );
 
 impl AuthorityPublicKeyBytes {
