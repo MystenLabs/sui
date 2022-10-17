@@ -338,7 +338,7 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
   private serializeTransactionData(
     tx: TransactionData,
     // TODO: derive the buffer size automatically
-    size: number = 2048
+    size: number = 8192
   ): Base64DataBuffer {
     const dataBytes = bcs.ser('TransactionData', tx, size).toBytes();
     const serialized = new Uint8Array(TYPE_TAG.length + dataBytes.length);
