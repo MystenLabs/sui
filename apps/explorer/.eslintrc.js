@@ -26,6 +26,7 @@ module.exports = {
             },
         ],
         'import/no-duplicates': ['error'],
+        'import/no-anonymous-default-export': 'off',
         '@typescript-eslint/consistent-type-imports': [
             'error',
             {
@@ -43,4 +44,13 @@ module.exports = {
             ],
         ],
     },
+    overrides: [
+        {
+            files: ['*.stories.*'],
+            rules: {
+                // Story files have render functions that this rule incorrectly warns on:
+                'react-hooks/rules-of-hooks': 'off',
+            },
+        },
+    ],
 };

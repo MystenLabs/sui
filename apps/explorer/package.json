@@ -19,8 +19,8 @@
         "lint": "pnpm eslint:check && pnpm prettier:check && pnpm stylelint:check",
         "lint:fix": "pnpm eslint:fix && pnpm prettier:fix && pnpm stylelint:fix",
         "preview": "vite preview",
-        "storybook": "start-storybook --port 6007",
-        "build-storybook": "build-storybook",
+        "storybook": "storybook dev -p 6007",
+        "build-storybook": "storybook build",
         "preview-storybook": "pnpm dlx serve ./storybook-static -l 6007"
     },
     "dependencies": {
@@ -52,10 +52,13 @@
         "vanilla-cookieconsent": "^2.8.0"
     },
     "devDependencies": {
-        "@storybook/addon-a11y": "^6.5.10",
-        "@storybook/addon-essentials": "^6.5.10",
-        "@storybook/builder-vite": "^0.2.2",
-        "@storybook/react": "^6.5.10",
+        "@babel/core": "^7.19.3",
+        "@storybook/addon-a11y": "7.0.0-alpha.38",
+        "@storybook/addon-essentials": "7.0.0-alpha.38",
+        "@storybook/addons": "7.0.0-alpha.38",
+        "@storybook/react": "7.0.0-alpha.38",
+        "@storybook/react-vite": "7.0.0-alpha.38",
+        "@storybook/theming": "7.0.0-alpha.38",
         "@testing-library/dom": "^8.17.1",
         "@testing-library/jest-dom": "^5.16.2",
         "@testing-library/react": "^13.3.0",
@@ -78,6 +81,7 @@
         "postcss": "^8.4.6",
         "prettier": "2.5.1",
         "start-server-and-test": "^1.14.0",
+        "storybook": "7.0.0-alpha.38",
         "stylelint": "^14.5.0",
         "stylelint-config-prettier": "^9.0.3",
         "stylelint-config-standard": "^25.0.0",
