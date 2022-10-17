@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
@@ -11,7 +11,7 @@ use move_vm_types::{
 };
 use std::collections::{btree_map, BTreeMap};
 use sui_types::{
-    base_types::ObjectID,
+    base_types::{ObjectID, SequenceNumber},
     object::{Data, MoveObject},
     storage::ChildObjectResolver,
 };
@@ -21,6 +21,15 @@ pub(super) struct ChildObject {
     pub(super) ty: Type,
     pub(super) tag: StructTag,
     pub(super) value: GlobalValue,
+}
+
+pub(crate) struct ChildObjectEffect {
+    pub(super) owner: ObjectID,
+    // none if it was an input object
+    pub(super) loaded_version: Option<SequenceNumber>,
+    pub(super) ty: Type,
+    pub(super) tag: StructTag,
+    pub(super) effect: Op<Value>,
 }
 
 struct Inner<'a> {
@@ -191,10 +200,38 @@ impl<'a> ObjectStore<'a> {
         Ok(ObjectResult::Loaded(self.store.get_mut(&child).unwrap()))
     }
 
-    // retrieve the `Op` effects for the child objects
-    pub(super) fn take_effects(
+    pub(super) fn add_object(
         &mut self,
-    ) -> BTreeMap<ObjectID, (/* Owner */ ObjectID, Type, StructTag, Op<Value>)> {
+        parent: ObjectID,
+        child: ObjectID,
+        child_ty: &Type,
+        child_tag: StructTag,
+        child_value: Value,
+    ) -> PartialVMResult<()> {
+        let mut child_object = ChildObject {
+            owner: parent,
+            ty: child_ty.clone(),
+            tag: child_tag,
+            value: GlobalValue::none(),
+        };
+        child_object.value.move_to(child_value).unwrap();
+        if let Some(prev) = self.store.insert(child, child_object) {
+            if prev.value.exists()? {
+                return Err(
+                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                        .with_message(
+                            "Duplicate addition of a child object. \
+                            The previous value will be lost. Indicates some duplication of objects"
+                                .to_string(),
+                        ),
+                );
+            }
+        }
+        Ok(())
+    }
+
+    // retrieve the `Op` effects for the child objects
+    pub(super) fn take_effects(&mut self) -> BTreeMap<ObjectID, ChildObjectEffect> {
         std::mem::take(&mut self.store)
             .into_iter()
             .filter_map(|(id, child_object)| {
@@ -204,8 +241,20 @@ impl<'a> ObjectStore<'a> {
                     tag,
                     value,
                 } = child_object;
+                let loaded_version = self
+                    .inner
+                    .cached_objects
+                    .get(&id)
+                    .and_then(|obj_opt| Some(obj_opt.as_ref()?.version()));
                 let effect = value.into_effect()?;
-                Some((id, (owner, ty, tag, effect)))
+                let child_effect = ChildObjectEffect {
+                    owner,
+                    loaded_version,
+                    ty,
+                    tag,
+                    effect,
+                };
+                Some((id, child_effect))
             })
             .collect()
     }

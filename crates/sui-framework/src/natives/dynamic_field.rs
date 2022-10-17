@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
@@ -25,7 +25,6 @@ use smallvec::smallvec;
 use std::collections::VecDeque;
 use sui_types::base_types::{ObjectID, SuiAddress};
 
-const E_KEY_ALREADY_EXISTS: u64 = 0;
 const E_KEY_DOES_NOT_EXIST: u64 = 1;
 const E_FIELD_TYPE_MISMATCH: u64 = 2;
 const E_BCS_SERIALIZATION_FAILURE: u64 = 3;
@@ -121,20 +120,19 @@ pub fn add_child_object(
         .value_as::<AccountAddress>()
         .unwrap()
         .into();
-    let global_value_result = get_or_fetch_object!(context, ty_args, parent, child_id);
-    let global_value = match global_value_result {
-        ObjectResult::MismatchedType => {
-            return Ok(NativeResult::err(legacy_emit_cost(), E_KEY_ALREADY_EXISTS))
+    let child_ty = ty_args.pop().unwrap();
+    assert!(ty_args.is_empty());
+    let tag = match context.type_to_type_tag(&child_ty)? {
+        TypeTag::Struct(s) => s,
+        _ => {
+            return Err(
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                    .with_message("Sui verifier guarantees this is a struct".to_string()),
+            )
         }
-        ObjectResult::Loaded(gv) => gv,
     };
-    if global_value.exists()? {
-        return Ok(NativeResult::err(legacy_emit_cost(), E_KEY_ALREADY_EXISTS));
-    }
-    global_value.move_to(child).map_err(|(err, _child)| {
-        assert!(err.major_status() != StatusCode::RESOURCE_ALREADY_EXISTS);
-        err
-    })?;
+    let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
+    object_runtime.add_child_object(parent, child_id, &child_ty, tag, child)?;
     Ok(NativeResult::ok(legacy_emit_cost(), smallvec![]))
 }
 

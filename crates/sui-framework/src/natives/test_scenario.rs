@@ -75,6 +75,7 @@ pub fn end_transaction(
         writes,
         deletions,
         user_events,
+        loaded_child_objects: _,
     } = match results {
         Ok(res) => res,
         Err(_) => {

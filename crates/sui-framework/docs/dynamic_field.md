@@ -5,8 +5,8 @@
 
 In addition to the fields declared in its type definition, a Sui object can have dynamic fields
 that can be added after the object has been constructed. Unlike ordinary field names
-(which are always staticlly declared identifiers) a dynamic field name can be any value with
-the <code><b>copy</b></code>, <code>drop</code>, and <code>store</code> abilities, an integer, a boolean, a string, etc.
+(which are always statically declared identifiers) a dynamic field name can be any value with
+the <code><b>copy</b></code>, <code>drop</code>, and <code>store</code> abilities, e.g. an integer, a boolean, or a string.
 This gives Sui programmers the flexibility to extend objects on-the-fly, and it also serves as a
 building block for core collection types
 
@@ -327,7 +327,6 @@ Returns true if and only if the <code><a href="object.md#0x2_object">object</a><
 
 ## Function `add_child_object`
 
-throws <code><a href="dynamic_field.md#0x2_dynamic_field_EFieldAlreadyExists">EFieldAlreadyExists</a></code> if a child already exists with that ID
 
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="dynamic_field.md#0x2_dynamic_field_add_child_object">add_child_object</a>&lt;Child: key&gt;(parent: <b>address</b>, child: Child)

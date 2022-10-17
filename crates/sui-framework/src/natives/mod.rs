@@ -83,6 +83,11 @@ pub fn all_natives(
         ("object", "delete_impl", make_native!(object::delete_impl)),
         ("object", "borrow_uid", make_native!(object::borrow_uid)),
         (
+            "object",
+            "record_new_uid",
+            make_native!(object::record_new_uid),
+        ),
+        (
             "bulletproofs",
             "native_verify_full_range_proof",
             make_native!(crypto::verify_range_proof),

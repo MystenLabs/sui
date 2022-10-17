@@ -124,7 +124,6 @@ public fun exists_with_type<Name: copy + drop + store, Value: store>(
 
 public(friend) native fun hash_type_and_key<K: copy + drop + store>(parent: address, k: K): address;
 
-/// throws `EFieldAlreadyExists` if a child already exists with that ID
 public(friend) native fun add_child_object<Child: key>(parent: address, child: Child);
 
 /// throws `EFieldDoesNotExist` if a child does not exist with that ID

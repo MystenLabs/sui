@@ -248,6 +248,7 @@ fn execute_internal<
         writes,
         deletions,
         user_events,
+        loaded_child_objects,
     } = object_runtime.finish()?;
     let session = new_session(vm, &*state_view, BTreeMap::new());
     let writes = writes
@@ -274,6 +275,7 @@ fn execute_internal<
         state_view,
         module_id,
         &by_value_object_map,
+        &loaded_child_objects,
         mutable_refs,
         writes,
         deletions,
@@ -494,6 +496,7 @@ fn process_successful_execution<S: Storage + ParentSync>(
     state_view: &mut S,
     module_id: &ModuleId,
     by_value_objects: &BTreeMap<ObjectID, (object::Owner, SequenceNumber)>,
+    loaded_child_objects: &BTreeMap<ObjectID, SequenceNumber>,
     mutable_refs: Vec<(ObjectID, Vec<u8>)>,
     writes: LinkedHashMap<ObjectID, (WriteKind, Owner, StructTag, AbilitySet, Vec<u8>)>,
     deletions: LinkedHashMap<ObjectID, DeleteKind>,
@@ -525,17 +528,19 @@ fn process_successful_execution<S: Storage + ParentSync>(
                 .expect("object contents should start with an id")
         );
         let old_object = by_value_objects.get(&id);
-        let (write_kind, version) = match (write_kind, old_object) {
-            (_, Some((_, version))) => {
+        let loaded_child_version = loaded_child_objects.get(&id);
+        let (write_kind, version) = match (write_kind, old_object, loaded_child_version) {
+            (_, Some((_, version)), _) => {
                 debug_assert!(write_kind == WriteKind::Mutate);
                 (WriteKind::Mutate, *version)
             }
+            (WriteKind::Mutate, _, Some(loaded_version)) => (WriteKind::Mutate, *loaded_version),
             // When an object was wrapped at version `v`, we added a record into `parent_sync`
             // with version `v+1` along with OBJECT_DIGEST_WRAPPED. Now when the object is unwrapped,
             // it will also have version `v+1`, leading to a violation of the invariant that any
             // object_id and version pair must be unique. We use the version from parent_sync and
             // increment it (below), so we will have `(v+1)+1`, thus preserving the uniqueness
-            (WriteKind::Unwrap, None) => match state_view.get_latest_parent_entry_ref(id) {
+            (WriteKind::Unwrap, None, _) => match state_view.get_latest_parent_entry_ref(id) {
                 Ok(Some((_, last_version, _))) => (WriteKind::Unwrap, last_version),
                 // if the object is not in parent sync, it was wrapped before ever being stored into
                 // storage.
@@ -550,7 +555,7 @@ fn process_successful_execution<S: Storage + ParentSync>(
                     ));
                 }
             },
-            (_, None) => {
+            (_, None, _) => {
                 debug_assert!(write_kind == WriteKind::Create);
                 (WriteKind::Create, SequenceNumber::new())
             }
@@ -589,7 +594,12 @@ fn process_successful_execution<S: Storage + ParentSync>(
         //   2. Created in this transaction (in `newly_generated_ids`)
         //   3. Unwrapped in this transaction
         // The following condition checks if this object was unwrapped in this transaction.
-        if let Some((_old_owner, old_obj_ver)) = old_object {
+        let old_obj_ver = match (old_object, loaded_child_version) {
+            (Some((_old_owner, old_obj_ver)), _) => Some(*old_obj_ver),
+            (None, Some(loaded_version)) => Some(*loaded_version),
+            _ => None,
+        };
+        if let Some(old_obj_ver) = old_obj_ver {
             debug_assert!(write_kind == WriteKind::Mutate);
             // Some kind of transfer since there's an old object
             // Add an event for the transfer
@@ -612,7 +622,7 @@ fn process_successful_execution<S: Storage + ParentSync>(
                     sender,
                     recipient,
                     object_id: id,
-                    version: *old_obj_ver,
+                    version: old_obj_ver,
                     type_,
                     amount,
                 })

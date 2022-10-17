@@ -14,7 +14,7 @@ use move_vm_types::{
 };
 use std::collections::{BTreeMap, BTreeSet};
 use sui_types::{
-    base_types::{ObjectID, SuiAddress},
+    base_types::{ObjectID, SequenceNumber, SuiAddress},
     error::{ExecutionError, ExecutionErrorKind},
     object::{MoveObject, Owner},
     storage::{ChildObjectResolver, DeleteKind, WriteKind},
@@ -25,7 +25,7 @@ pub(crate) mod object_store;
 
 use object_store::ObjectStore;
 
-use self::object_store::ObjectResult;
+use self::object_store::{ChildObjectEffect, ObjectResult};
 
 use super::get_object_id;
 
@@ -54,6 +54,8 @@ pub struct RuntimeResults {
     pub writes: LinkedHashMap<ObjectID, (WriteKind, Owner, Type, StructTag, Value)>,
     pub deletions: LinkedHashMap<ObjectID, DeleteKind>,
     pub user_events: Vec<(Type, StructTag, Value)>,
+    // loaded child objects and their versions
+    pub loaded_child_objects: BTreeMap<ObjectID, SequenceNumber>,
 }
 
 #[derive(Default)]
@@ -173,6 +175,18 @@ impl<'a> ObjectRuntime<'a> {
         })
     }
 
+    pub(crate) fn add_child_object(
+        &mut self,
+        parent: ObjectID,
+        child: ObjectID,
+        child_ty: &Type,
+        child_tag: StructTag,
+        child_value: Value,
+    ) -> PartialVMResult<()> {
+        self.object_store
+            .add_object(parent, child, child_ty, child_tag, child_value)
+    }
+
     // returns None if a child object is still borrowed
     pub(crate) fn take_state(&mut self) -> ObjectRuntimeState {
         std::mem::take(&mut self.state)
@@ -199,30 +213,35 @@ impl ObjectRuntimeState {
     /// - Process `deleted_ids` with previously determined information to determine the
     ///   DeleteKind
     /// - Passes through user events
-    pub fn finish(
+    pub(crate) fn finish(
         mut self,
-        child_object_effects: BTreeMap<
-            ObjectID,
-            (/* Owner */ ObjectID, Type, StructTag, Op<Value>),
-        >,
+        child_object_effects: BTreeMap<ObjectID, ChildObjectEffect>,
     ) -> Result<RuntimeResults, ExecutionError> {
-        let mut mutated_children = BTreeSet::new();
         let mut wrapped_children = BTreeSet::new();
-        let mut deleted_children = BTreeSet::new();
-        for (child, (parent, ty, tag, effect)) in child_object_effects {
+        let mut loaded_child_objects = BTreeMap::new();
+        for (child, child_object_effect) in child_object_effects {
+            let ChildObjectEffect {
+                owner: parent,
+                loaded_version,
+                ty,
+                tag,
+                effect,
+            } = child_object_effect;
+            if let Some(v) = loaded_version {
+                loaded_child_objects.insert(child, v);
+            }
             match effect {
-                // was new, so mark it as new and transferred
-                Op::New(v) => {
-                    debug_assert!(!self.transfers.contains_key(&child));
-                    self.new_ids.insert(child, ());
-                    self.transfers
-                        .insert(child, (Owner::ObjectOwner(parent.into()), ty, tag, v));
-                }
                 // was modified, so mark it as mutated and transferred
                 Op::Modify(v) => {
                     debug_assert!(!self.transfers.contains_key(&child));
                     debug_assert!(!self.new_ids.contains_key(&child));
-                    mutated_children.insert(child);
+                    debug_assert!(loaded_version.is_some());
+                    self.transfers
+                        .insert(child, (Owner::ObjectOwner(parent.into()), ty, tag, v));
+                }
+
+                Op::New(v) => {
+                    debug_assert!(!self.transfers.contains_key(&child));
                     self.transfers
                         .insert(child, (Owner::ObjectOwner(parent.into()), ty, tag, v));
                 }
@@ -233,7 +252,6 @@ impl ObjectRuntimeState {
                 // ID was deleted too was deleted so mark as deleted
                 Op::Delete if self.deleted_ids.contains_key(&child) => {
                     debug_assert!(!self.transfers.contains_key(&child));
-                    deleted_children.insert(child);
                 }
                 // was new so the object is transient and does not need to be marked as deleted
                 Op::Delete if self.new_ids.contains_key(&child) => {}
@@ -269,7 +287,7 @@ impl ObjectRuntimeState {
             .into_iter()
             .map(|(id, (owner, type_, tag, value))| {
                 let write_kind =
-                    if mutated_children.contains(&id) || input_objects.contains_key(&id) {
+                    if input_objects.contains_key(&id) || loaded_child_objects.contains_key(&id) {
                         debug_assert!(!new_ids.contains_key(&id));
                         WriteKind::Mutate
                     } else if id == SUI_SYSTEM_STATE_OBJECT_ID || new_ids.contains_key(&id) {
@@ -286,7 +304,7 @@ impl ObjectRuntimeState {
             .map(|(id, ())| {
                 debug_assert!(!new_ids.contains_key(&id));
                 let delete_kind =
-                    if deleted_children.contains(&id) || input_objects.contains_key(&id) {
+                    if input_objects.contains_key(&id) || loaded_child_objects.contains_key(&id) {
                         DeleteKind::Normal
                     } else {
                         DeleteKind::UnwrapThenDelete
@@ -316,6 +334,7 @@ impl ObjectRuntimeState {
             writes,
             deletions,
             user_events,
+            loaded_child_objects,
         })
     }
 }
