@@ -12,6 +12,7 @@
     "@mysten/wallet-adapter-base": "workspace:*",
     "@mysten/wallet-adapter-react": "workspace:*",
     "@mysten/wallet-adapter-react-ui": "workspace:*",
+    "@mysten/wallet-adapter-hyperpay-wallet": "workspace:*",
     "@mysten/wallet-adapter-sui-wallet": "workspace:*",
     "@mysten/wallet-adapter-wallet-standard": "workspace:*",
     "@testing-library/jest-dom": "^5.16.4",
