@@ -16,10 +16,10 @@ futures = "0.3.21"
 http = "0.2.8"
 multiaddr = "0.14.0"
 serde = { version = "1.0.140", features = ["derive"] }
-tokio = { version = "1.20.1", features = ["sync", "rt", "macros"] }
-tokio-stream = { version = "0.1.9", features = ["net"] }
-tonic = { version = "0.8.0", features = ["transport"] }
+tokio = { version = "1.21.2", features = ["sync", "rt", "macros"] }
+tokio-stream = { version = "0.1.11", features = ["net"] }
+tonic = { version = "0.8.2", features = ["transport"] }
 tonic-health = "0.7.0"
 tower = { version = "0.4.13", features = ["full"] }
 tower-http = { version = "0.3.4", features = ["trace", "set-header", "propagate-header"] }
-tracing = "0.1.36"
+tracing = "0.1.37"
