@@ -29,9 +29,8 @@ use types::{
     FetchCertificatesResponse, Header, HeaderBuilder, PrimaryMessage, PrimaryToPrimary,
     PrimaryToPrimaryServer, PrimaryToWorker, PrimaryToWorkerServer, RequestBatchRequest,
     RequestBatchResponse, Round, SequenceNumber, Transaction, Vote, WorkerBatchRequest,
-    WorkerBatchResponse, WorkerDeleteBatchesMessage, WorkerInfoResponse, WorkerMessage,
-    WorkerPrimaryMessage, WorkerReconfigureMessage, WorkerSynchronizeMessage, WorkerToPrimary,
-    WorkerToPrimaryServer, WorkerToWorker, WorkerToWorkerServer,
+    WorkerBatchResponse, WorkerDeleteBatchesMessage, WorkerMessage, WorkerReconfigureMessage,
+    WorkerSynchronizeMessage, WorkerToWorker, WorkerToWorkerServer,
 };
 
 pub mod cluster;
@@ -202,51 +201,6 @@ impl PrimaryToPrimary for PrimaryToPrimaryMockServer {
         &self,
         _request: anemo::Request<FetchCertificatesRequest>,
     ) -> Result<anemo::Response<FetchCertificatesResponse>, anemo::rpc::Status> {
-        unimplemented!()
-    }
-}
-
-pub struct WorkerToPrimaryMockServer {
-    sender: Sender<WorkerPrimaryMessage>,
-}
-
-impl WorkerToPrimaryMockServer {
-    pub fn spawn(
-        keypair: NetworkKeyPair,
-        address: Multiaddr,
-    ) -> (Receiver<WorkerPrimaryMessage>, anemo::Network) {
-        let addr = network::multiaddr_to_address(&address).unwrap();
-        let (sender, receiver) = channel(1);
-        let service = WorkerToPrimaryServer::new(Self { sender });
-
-        let routes = anemo::Router::new().add_rpc_service(service);
-        let network = anemo::Network::bind(addr)
-            .server_name("narwhal")
-            .private_key(keypair.private().0.to_bytes())
-            .start(routes)
-            .unwrap();
-        info!("starting network on: {}", network.local_addr());
-        (receiver, network)
-    }
-}
-
-#[async_trait]
-impl WorkerToPrimary for WorkerToPrimaryMockServer {
-    async fn send_message(
-        &self,
-        request: anemo::Request<types::WorkerPrimaryMessage>,
-    ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
-        let message = request.into_body();
-
-        self.sender.send(message).await.unwrap();
-
-        Ok(anemo::Response::new(()))
-    }
-
-    async fn worker_info(
-        &self,
-        _request: anemo::Request<()>,
-    ) -> Result<anemo::Response<WorkerInfoResponse>, anemo::rpc::Status> {
         unimplemented!()
     }
 }
@@ -833,6 +787,14 @@ impl AuthorityFixture {
 
     pub fn network_keypair(&self) -> NetworkKeyPair {
         self.network_keypair.copy()
+    }
+
+    pub fn new_network(&self, router: anemo::Router) -> anemo::Network {
+        anemo::Network::bind(network::multiaddr_to_address(&self.address).unwrap())
+            .server_name("narwhal")
+            .private_key(self.network_keypair().private().0.to_bytes())
+            .start(router)
+            .unwrap()
     }
 
     pub fn address(&self) -> &Multiaddr {

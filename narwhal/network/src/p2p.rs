@@ -18,9 +18,9 @@ use tokio::{runtime::Handle, task::JoinHandle};
 use types::{
     Batch, BatchDigest, FetchCertificatesRequest, FetchCertificatesResponse, PrimaryMessage,
     PrimaryToPrimaryClient, PrimaryToWorkerClient, RequestBatchRequest, WorkerBatchRequest,
-    WorkerBatchResponse, WorkerDeleteBatchesMessage, WorkerMessage, WorkerPrimaryMessage,
-    WorkerReconfigureMessage, WorkerSynchronizeMessage, WorkerToPrimaryClient,
-    WorkerToWorkerClient,
+    WorkerBatchResponse, WorkerDeleteBatchesMessage, WorkerMessage, WorkerOthersBatchMessage,
+    WorkerOurBatchMessage, WorkerPrimaryMessage, WorkerReconfigureMessage,
+    WorkerSynchronizeMessage, WorkerToPrimaryClient, WorkerToWorkerClient,
 };
 
 fn default_executor() -> BoundedExecutor {
@@ -324,6 +324,50 @@ impl ReliableNetwork<WorkerPrimaryMessage> for P2pNetwork {
         let f = move |peer| {
             let message = message.clone();
             async move { WorkerToPrimaryClient::new(peer).send_message(message).await }
+        };
+
+        self.send(peer, f).await
+    }
+}
+
+#[async_trait]
+impl ReliableNetwork<WorkerOurBatchMessage> for P2pNetwork {
+    type Response = ();
+    async fn send(
+        &mut self,
+        peer: NetworkPublicKey,
+        message: &WorkerOurBatchMessage,
+    ) -> CancelOnDropHandler<Result<anemo::Response<()>>> {
+        let message = message.to_owned();
+        let f = move |peer| {
+            let message = message.clone();
+            async move {
+                WorkerToPrimaryClient::new(peer)
+                    .report_our_batch(message)
+                    .await
+            }
+        };
+
+        self.send(peer, f).await
+    }
+}
+
+#[async_trait]
+impl ReliableNetwork<WorkerOthersBatchMessage> for P2pNetwork {
+    type Response = ();
+    async fn send(
+        &mut self,
+        peer: NetworkPublicKey,
+        message: &WorkerOthersBatchMessage,
+    ) -> CancelOnDropHandler<Result<anemo::Response<()>>> {
+        let message = message.to_owned();
+        let f = move |peer| {
+            let message = message.clone();
+            async move {
+                WorkerToPrimaryClient::new(peer)
+                    .report_others_batch(message)
+                    .await
+            }
         };
 
         self.send(peer, f).await

@@ -778,12 +778,22 @@ impl fmt::Display for BlockErrorKind {
 /// The messages sent by the workers to their primary.
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub enum WorkerPrimaryMessage {
-    /// The worker indicates it sealed a new batch.
-    OurBatch(BatchDigest, WorkerId),
-    /// The worker indicates it received a batch's digest from another authority.
-    OthersBatch(BatchDigest, WorkerId),
     /// Reconfiguration message sent by the executor (usually upon epoch change).
     Reconfigure(ReconfigureNotification),
+}
+
+/// Used by worker to inform primary it sealed a new batch.
+#[derive(Clone, Serialize, Deserialize, Eq, PartialEq, Debug)]
+pub struct WorkerOurBatchMessage {
+    pub digest: BatchDigest,
+    pub worker_id: WorkerId,
+}
+
+/// Used by worker to inform primary it received a batch from another authority.
+#[derive(Clone, Serialize, Deserialize, Eq, PartialEq, Debug)]
+pub struct WorkerOthersBatchMessage {
+    pub digest: BatchDigest,
+    pub worker_id: WorkerId,
 }
 
 #[derive(Clone, Serialize, Deserialize, Eq, PartialEq, Debug)]
