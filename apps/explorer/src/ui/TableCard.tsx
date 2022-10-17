@@ -71,7 +71,7 @@ const cellStyle = cva(['text-sui-grey-75 h-[30px] px-[4px]'], {
 });
 
 export function TableCard({ tabledata }: { tabledata: TableType }) {
-    const data = useMemo(() => tabledata.data, [tabledata.data]);
+    const data = tabledata.data;
     // Use Columns to create a table
     const columns = useMemo(
         () => columnsContent(tabledata.columns),
