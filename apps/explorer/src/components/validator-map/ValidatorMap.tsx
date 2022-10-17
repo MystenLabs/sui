@@ -31,7 +31,7 @@ const DATE_FILTER_TO_WINDOW = {
 export default function ValidatorMap() {
     const [dateFilter, setDateFilter] = useDateFilterState('D');
 
-    const { data, isLoading, isSuccess, isError, error } = useQuery(
+    const { data, isLoading, isSuccess } = useQuery(
         ['validator-map', dateFilter],
         async () => {
             const res = await fetch(
@@ -47,10 +47,6 @@ export default function ValidatorMap() {
             return res.json() as Promise<NodeLocation[]>;
         }
     );
-
-    if (isError) {
-        console.error('Error in Validator Map data retrieval', error);
-    }
 
     const { totalCount, countryCount, countryNodes } = useMemo<{
         totalCount: number | null;
