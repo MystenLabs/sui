@@ -31,6 +31,7 @@ use prometheus::{
     exponential_buckets, register_histogram_with_registry, register_int_counter_with_registry,
     register_int_gauge_with_registry, Histogram, IntCounter, IntGauge,
 };
+use sui_types::intent::ChainId;
 use tap::TapFallible;
 use tokio::sync::{
     broadcast::{self, error::RecvError},
@@ -462,6 +463,10 @@ pub struct AuthorityState {
     // Fixed size, static, identity of the authority
     /// The name of this authority.
     pub name: AuthorityName,
+
+    // The chain id the node is running on.
+    pub chain_id: ChainId,
+
     /// The signature key of the authority.
     pub secret: StableSyncAuthoritySigner,
 
@@ -517,6 +522,10 @@ pub struct AuthorityState {
 impl AuthorityState {
     pub fn is_fullnode(&self) -> bool {
         !self.committee.load().authority_exists(&self.name)
+    }
+
+    pub fn chain_id(&self) -> ChainId {
+        self.chain_id
     }
 
     /// Get a broadcast receiver for updates
@@ -1438,6 +1447,7 @@ impl AuthorityState {
     // Technically genesis already contains committee information. Could consider merging them.
     pub async fn new(
         name: AuthorityName,
+        chain_id: ChainId,
         secret: StableSyncAuthoritySigner,
         store: Arc<AuthorityStore>,
         node_sync_store: Arc<NodeSyncStore>,
@@ -1476,6 +1486,7 @@ impl AuthorityState {
 
         let mut state = AuthorityState {
             name,
+            chain_id,
             secret,
             committee: ArcSwap::from(Arc::new(committee)),
             _native_functions: native_functions,
@@ -1606,6 +1617,7 @@ impl AuthorityState {
         // add the object_basics module
         AuthorityState::new(
             secret.public().into(),
+            ChainId::Testing,
             secret.clone(),
             store,
             node_sync_store,

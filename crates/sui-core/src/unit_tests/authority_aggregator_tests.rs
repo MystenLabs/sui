@@ -16,6 +16,7 @@ use sui_types::crypto::{
     AuthorityKeyPair, AuthorityPublicKeyBytes, NetworkKeyPair, SuiKeyPair,
 };
 use sui_types::crypto::{KeypairTraits, Signature};
+use sui_types::intent::ChainId;
 use test_utils::sui_system_state::{test_sui_system_state, test_validator};
 
 use sui_macros::sim_test;
@@ -112,6 +113,7 @@ pub async fn init_local_authorities(
             narwhal_primary_address: sui_config::utils::new_network_address(),
             narwhal_worker_address: sui_config::utils::new_network_address(),
             narwhal_consensus_address: sui_config::utils::new_network_address(),
+            chain_id: ChainId::Testing,
         };
         let pop = generate_proof_of_possession(&key_pair, (&account_key_pair.public()).into());
         builder = builder.add_validator(validator_info, pop);

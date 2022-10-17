@@ -221,6 +221,7 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                         narwhal_primary_address: validator.narwhal_primary_address.clone(),
                         narwhal_worker_address: validator.narwhal_worker_address.clone(),
                         narwhal_consensus_address: validator.narwhal_consensus_address.clone(),
+                        chain_id: validator.chain_id,
                     },
                     pop,
                 )
@@ -287,6 +288,7 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                     grpc_load_shed: initial_accounts_config.grpc_load_shed,
                     grpc_concurrency_limit: initial_accounts_config.grpc_concurrency_limit,
                     p2p_config,
+                    chain_id: validator.chain_id,
                 }
             })
             .collect();

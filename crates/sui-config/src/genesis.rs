@@ -598,9 +598,12 @@ mod test {
     use super::Builder;
     use crate::{genesis_config::GenesisConfig, utils, ValidatorInfo};
     use fastcrypto::traits::KeyPair;
-    use sui_types::crypto::{
-        generate_proof_of_possession, get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair,
-        NetworkKeyPair,
+    use sui_types::{
+        crypto::{
+            generate_proof_of_possession, get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair,
+            NetworkKeyPair,
+        },
+        intent::ChainId,
     };
 
     #[test]
@@ -636,6 +639,7 @@ mod test {
             narwhal_primary_address: utils::new_network_address(),
             narwhal_worker_address: utils::new_network_address(),
             narwhal_consensus_address: utils::new_network_address(),
+            chain_id: ChainId::Testing,
         };
         let pop = generate_proof_of_possession(&key, account_key.public().into());
         let builder = Builder::new()

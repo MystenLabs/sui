@@ -14,6 +14,7 @@ use sui_types::committee::Committee;
 use sui_types::crypto::{
     get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair, NetworkKeyPair, SuiKeyPair,
 };
+use sui_types::intent::ChainId;
 use sui_types::sui_serde::KeyPairBase64;
 
 /// This is a config that is used for testing or local use as it contains the config and keys for
@@ -126,6 +127,7 @@ impl NetworkConfig {
             grpc_load_shed: None,
             grpc_concurrency_limit: None,
             p2p_config,
+            chain_id: ChainId::Testing,
         }
     }
 }

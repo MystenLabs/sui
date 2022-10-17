@@ -51,6 +51,7 @@ validator_configs:
       listen-address: "0.0.0.0:1"
     genesis:
       genesis: "[fake genesis]"
+    chain-id: 0
   - protocol-key-pair: LqPR5IijTDFVFUq2rCvOsiIO8dIRuXSAldAP+DYC1me2tykqD8b9TR5r1KXG1tk5NzsUp1pV97mzqOf4RZiHOuHRbC/7MTIsXXZZqIJo6WQCoJQf//aqfEwxf5hNpYWpnuGovtGTaPGU7tq29e9O7GmsMIAVjtZZHy3ribwbBb8=
     worker-key-pair: 9Z/d0Lf1LcwMYKRIy/lRFhCwp0Lx5NI4p6RcrgVOwhydR2FqGN8gOTB/BkIiYCWItSpqrqp7b+jGtNnrqKeHsQ==
     account-key-pair: AOo/znbuELOmRfswQFEd+rTJzWBY9BkpAU0WRm9eOywq4BB+FmG6xjjQpGNs/bv21foY4nMY2jMCltCjhxgNbIw=
@@ -99,6 +100,7 @@ validator_configs:
       listen-address: "0.0.0.0:1"
     genesis:
       genesis: "[fake genesis]"
+    chain-id: 0
   - protocol-key-pair: Hiq/0Ct6fmLhv1nBMiPqovOB6sOCfo5729qmN08q5xqmoXf1i/SZl1hJgzwzhR0tHh1rEBWcoC23JZIvZTv5l61M6Do8FX6cWWirPwYkXz0JpmyKSWt+uTVCq3nJc6q7GWTWC0H8eafBj9shurYTrgUf8CSXw6dc8Pwr8R2ywIw=
     worker-key-pair: kYP0d2s+pZoXgeVko+rpZ2k5e4q0NbJd2kGJ4QPQMc9cR/734xE9wBxW701He/5RV6/DOWmgFPi7VTfhjM7GTA==
     account-key-pair: AIM52ZwzO7Oid/63gLjUbKwwzc2QUNviNfuMxnuRwbBqnZTXHAccZRpZcVXhUvvQe7WAB32Ak1vyNmNCX/Kl8ak=
@@ -147,6 +149,7 @@ validator_configs:
       listen-address: "0.0.0.0:1"
     genesis:
       genesis: "[fake genesis]"
+    chain-id: 0
   - protocol-key-pair: GzzrEigjxChf2XnG0nSJuAfP6tSQo4A7/63k4hAOjOeL0OmML+RlsN3ntyxKDupYUwXe5MQI7aMEPczkE5dTxPsB5tOsw770PkhudQjw3uUWGaMSIoWHBQ6UUZvHWOR0/bXY9H9e+drIfENom4yTK3EAIGeyGL1OttmJk/XS2os=
     worker-key-pair: EQwhVD8hX7efjIVAYfuALmRyfmPqQ4ebKA5PameIh5D6gqrtUVPSkBC+OW8S2LZhTDl8dcRhP9uzbU/3BOUAqw==
     account-key-pair: ABbIisgBp4THAoTQX/i9gfBB1+pjLqfKKifGyv/WUZMM+K6cRt6kc+jMcFpq8yJS6MNJtJTF3O/XGG0atPFaJY0=
@@ -195,6 +198,7 @@ validator_configs:
       listen-address: "0.0.0.0:1"
     genesis:
       genesis: "[fake genesis]"
+    chain-id: 0
   - protocol-key-pair: NsLWImHeTmGIB9KvW1EAu3X+tW7Q/KkI5gk3COXONCmm1yzKunhYP2XGQ4HKxwLtN5RUod5uTWXZX7P1wdIn2g5MbKFtB3Rj74n7dbqnia8Oqz14vEoSNUoxrh+6xLgU9IDbBhMKOlyOcHFrDQVkXoV75fge2er7vrS7f8/5wCw=
     worker-key-pair: Neqo634LMrcrpZYZ2dT5jOG8wyg5tK6nYrRGYFGa4WGWuKxioRp0flyAuGxPURbmrq5UrHAJctMlA7eSVqFTLw==
     account-key-pair: AFWsiGMz7Iq6Fa2OHopRFFSgjPy3zXDFjdhCyqBwjRq/a7tE8gojj/hBeXcgQGHOCDL2HfJ2KPJ4Q1ggrXvO/+Y=
@@ -243,6 +247,7 @@ validator_configs:
       listen-address: "0.0.0.0:1"
     genesis:
       genesis: "[fake genesis]"
+    chain-id: 0
   - protocol-key-pair: CsRQrECMM8bjsounq/lp4HpZ78DfTEQ+8JZ8ep9Uwd2oUEn0LWkMFMIY2sZlOweOIHI1PV/hKGf74V8tdqFj1X3vaDCy7xCKXUrHW4MK4I8CQSs29yb3X//ssrVtkq3DHEUgHSiJu9bxRDABWZt1BPRnAJom/Ta3blmSnDSP0rE=
     worker-key-pair: SmwxHcV2gQzxKoBcs5t39VDlpi6qn4CTFlvWdcQ2bo98EQEujhdX27EEV3Z86OoMCQvPAkniwEgO0RrLK3A7sA==
     account-key-pair: AIuFbz7FC0IUpvvkfoabM2nORDi5yW4dNjQDEnD/+Pi9LskdaKDI6rfXAXjiEd/Ot3tQDPgwFi2lyCfU68jIPj8=
@@ -291,6 +296,7 @@ validator_configs:
       listen-address: "0.0.0.0:1"
     genesis:
       genesis: "[fake genesis]"
+    chain-id: 0
   - protocol-key-pair: ATtFYSC+WduPcjkDb5W/0qmeY8rJakh27PTldLq+nuaoaYghGPn/1BWEWXhXazXPUQf8cN4uOBzwlLo6iPuLQNcbp2Pg5RHFiVKZxrNDM6wNbuWCIMktDH6wzEJFDLBAb6alikZSqgMsGoi5ZpmIdqI0p+jHsU8TyXZ5wHORhWA=
     worker-key-pair: zqXFxYQpWyrIZx3ICuKRy6ie+Wm8m95nm9W63uaig36qOKjHsxwR6y1zCu5mSIno9fisAX34MT7/Vna0Cbrs4A==
     account-key-pair: AN0bN3jLSY/+7Ujz2rArJBe/aA5PpUqd4MeiL6JNiqBkTuESCA04r/Za9cqm5666CpZ6hHuIcdT0QtKnD3S1qNE=
@@ -339,6 +345,7 @@ validator_configs:
       listen-address: "0.0.0.0:1"
     genesis:
       genesis: "[fake genesis]"
+    chain-id: 0
 account_keys:
   - yIbne+wwgP4d/FJwW9ew24THp3ndohgNYuCyjolSB7FkenjWSH2tsGuc37yf7VtGcAsiwgbeT4MmrSfWJkv72A==
   - 4SbmUpOLhdu5hStv+P9N7Y0PaQjksjQ4qZ6N65TG3fYH8hVkxLer32Jowa3ene0Lod8xIpaJ/1ai/5vkqnMAYA==

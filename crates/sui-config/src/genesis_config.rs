@@ -7,6 +7,7 @@ use anyhow::Result;
 use multiaddr::Multiaddr;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
+use sui_types::intent::ChainId;
 use tracing::info;
 
 use sui_types::base_types::{ObjectID, SuiAddress};
@@ -105,6 +106,7 @@ pub struct ValidatorGenesisInfo {
     pub narwhal_primary_address: Multiaddr,
     pub narwhal_worker_address: Multiaddr,
     pub narwhal_consensus_address: Multiaddr,
+    pub chain_id: ChainId,
 }
 
 impl ValidatorGenesisInfo {
@@ -125,6 +127,7 @@ impl ValidatorGenesisInfo {
             narwhal_primary_address: utils::new_network_address(),
             narwhal_worker_address: utils::new_network_address(),
             narwhal_consensus_address: utils::new_network_address(),
+            chain_id: ChainId::Testing,
         }
     }
 
@@ -154,6 +157,7 @@ impl ValidatorGenesisInfo {
             narwhal_primary_address: make_addr(2000 + port_offset),
             narwhal_worker_address: make_addr(3000 + port_offset),
             narwhal_consensus_address: make_addr(4000 + port_offset),
+            chain_id: ChainId::Testing,
         }
     }
 }

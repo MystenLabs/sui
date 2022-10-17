@@ -28,6 +28,7 @@ use sui_types::crypto::{
     generate_proof_of_possession, get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair,
     AuthorityPublicKeyBytes, NetworkKeyPair,
 };
+use sui_types::intent::ChainId;
 
 #[test]
 fn genesis_config_snapshot_matches() {
@@ -80,6 +81,7 @@ fn populated_genesis_snapshot_matches() {
         narwhal_primary_address: Multiaddr::empty(),
         narwhal_worker_address: Multiaddr::empty(),
         narwhal_consensus_address: Multiaddr::empty(),
+        chain_id: ChainId::Testing,
     };
     let pop = generate_proof_of_possession(&key, account_key.public().into());
 

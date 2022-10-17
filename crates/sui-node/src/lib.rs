@@ -155,6 +155,7 @@ impl SuiNode {
         let state = Arc::new(
             AuthorityState::new(
                 config.protocol_public_key(),
+                *config.chain_id(),
                 secret,
                 store,
                 node_sync_store,

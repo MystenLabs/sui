@@ -25,6 +25,7 @@ use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::batch::TxSequenceNumber;
 use sui_types::committee::EpochId;
 use sui_types::crypto::{SignableBytes, SignatureScheme};
+use sui_types::intent::ChainId;
 use sui_types::messages::{
     CommitteeInfoRequest, CommitteeInfoResponse, Transaction, TransactionData,
 };
@@ -321,8 +322,10 @@ impl RpcFullNodeReadApiServer for FullNodeApi {
             .handle_committee_info_request(&CommitteeInfoRequest { epoch })
             .map_err(|e| anyhow!("{e}"))?)
     }
+    async fn get_chain_id(&self) -> RpcResult<ChainId> {
+        Ok(self.state.chain_id())
+    }
 }
-
 impl SuiRpcModule for FullNodeApi {
     fn rpc(self) -> RpcModule<Self> {
         self.into_rpc()

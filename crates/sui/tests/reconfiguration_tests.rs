@@ -18,6 +18,7 @@ use sui_types::crypto::{
     KeypairTraits, NetworkKeyPair,
 };
 use sui_types::error::SuiResult;
+use sui_types::intent::ChainId;
 use sui_types::messages::{CallArg, ExecutionStatus, ObjectArg, TransactionEffects};
 use sui_types::messages_checkpoint::AuthenticatedCheckpoint;
 use sui_types::object::Object;
@@ -379,6 +380,7 @@ pub fn get_new_validator() -> (ValidatorInfo, AuthoritySignature) {
             narwhal_primary_address: sui_config::utils::new_network_address(),
             narwhal_worker_address: sui_config::utils::new_network_address(),
             narwhal_consensus_address: sui_config::utils::new_network_address(),
+            chain_id: ChainId::Testing,
         },
         pop,
     )

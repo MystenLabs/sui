@@ -23,6 +23,7 @@ use sui_types::crypto::NetworkKeyPair;
 use sui_types::crypto::NetworkPublicKey;
 use sui_types::crypto::PublicKey as AccountsPublicKey;
 use sui_types::crypto::SuiKeyPair;
+use sui_types::intent::ChainId;
 use sui_types::sui_serde::KeyPairBase64;
 
 // Default max number of concurrent requests served
@@ -81,6 +82,8 @@ pub struct NodeConfig {
     pub p2p_config: P2pConfig,
 
     pub genesis: Genesis,
+
+    pub chain_id: ChainId,
 }
 
 fn default_key_pair() -> Arc<AuthorityKeyPair> {
@@ -158,6 +161,10 @@ impl NodeConfig {
         &self.network_address
     }
 
+    pub fn chain_id(&self) -> &ChainId {
+        &self.chain_id
+    }
+
     pub fn consensus_config(&self) -> Option<&ConsensusConfig> {
         self.consensus_config.as_ref()
     }
@@ -213,6 +220,7 @@ pub struct ValidatorInfo {
     //TODO remove all of these as they shouldn't be needed to be encoded in genesis
     pub narwhal_worker_address: Multiaddr,
     pub narwhal_consensus_address: Multiaddr,
+    pub chain_id: ChainId,
 }
 
 impl ValidatorInfo {
@@ -254,6 +262,10 @@ impl ValidatorInfo {
 
     pub fn network_address(&self) -> &Multiaddr {
         &self.network_address
+    }
+
+    pub fn chain_id(&self) -> &ChainId {
+        &self.chain_id
     }
 
     pub fn voting_rights(validator_set: &[Self]) -> BTreeMap<AuthorityPublicKeyBytes, u64> {

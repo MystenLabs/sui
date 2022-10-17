@@ -1,6 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::str::FromStr;
+
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_repr::Deserialize_repr;
 use serde_repr::Serialize_repr;
@@ -15,12 +18,21 @@ pub enum IntentVersion {
     V0 = 0,
 }
 
-#[derive(Serialize_repr, Deserialize_repr, Copy, Clone, PartialEq, Eq, Debug)]
+#[derive(Serialize_repr, Deserialize_repr, Copy, Clone, PartialEq, Eq, Debug, JsonSchema)]
 #[repr(u8)]
 pub enum ChainId {
     Testing = 0,
 }
 
+impl FromStr for ChainId {
+    type Err = anyhow::Error;
+    fn from_str(s: &str) -> Result<Self, anyhow::Error> {
+        match s {
+            "0" => Ok(ChainId::Testing),
+            _ => unimplemented!(),
+        }
+    }
+}
 pub trait SecureIntent: Serialize + private::SealedIntent {}
 
 #[derive(Serialize_repr, Deserialize_repr, Copy, Clone, PartialEq, Eq, Debug)]

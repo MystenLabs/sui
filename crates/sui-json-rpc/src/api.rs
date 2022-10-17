@@ -22,6 +22,7 @@ use sui_types::batch::TxSequenceNumber;
 use sui_types::committee::EpochId;
 use sui_types::crypto::SignatureScheme;
 use sui_types::event::EventID;
+use sui_types::intent::ChainId;
 use sui_types::messages::CommitteeInfoResponse;
 use sui_types::messages::ExecuteTransactionRequestType;
 use sui_types::query::{EventQuery, TransactionQuery};
@@ -201,6 +202,9 @@ pub trait RpcFullNodeReadApi {
         /// The epoch of interest. If None, default to the latest epoch
         epoch: Option<EpochId>,
     ) -> RpcResult<CommitteeInfoResponse>;
+    /// Return the chain ID that the node is running on.
+    #[method(name = "getChainId")]
+    async fn get_chain_id(&self) -> RpcResult<ChainId>;
 }
 
 #[open_rpc(namespace = "sui", tag = "Transaction Builder API")]

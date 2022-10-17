@@ -11,6 +11,7 @@ use sui_config::{
     genesis::{Builder, Genesis},
     SUI_GENESIS_FILENAME,
 };
+use sui_types::intent::ChainId;
 use sui_types::{
     base_types::{decode_bytes_hex, encode_bytes_hex, ObjectID, SuiAddress},
     crypto::{
@@ -65,6 +66,8 @@ pub enum CeremonyCommand {
         narwhal_worker_address: Multiaddr,
         #[clap(long)]
         narwhal_consensus_address: Multiaddr,
+        #[clap(long)]
+        chain_id: ChainId,
     },
 
     AddGasObject {
@@ -110,6 +113,7 @@ pub fn run(cmd: Ceremony) -> Result<()> {
             narwhal_primary_address,
             narwhal_worker_address,
             narwhal_consensus_address,
+            chain_id,
         } => {
             let mut builder = Builder::load(&dir)?;
             let keypair: AuthorityKeyPair = read_authority_keypair_from_file(validator_key_file)?;
@@ -131,6 +135,7 @@ pub fn run(cmd: Ceremony) -> Result<()> {
                     narwhal_primary_address,
                     narwhal_worker_address,
                     narwhal_consensus_address,
+                    chain_id,
                 },
                 pop,
             );
@@ -297,6 +302,7 @@ mod test {
                     narwhal_primary_address: utils::new_network_address(),
                     narwhal_worker_address: utils::new_network_address(),
                     narwhal_consensus_address: utils::new_network_address(),
+                    chain_id: ChainId::Testing,
                 };
                 let key_file = dir.path().join(format!("{}-0.key", info.name));
                 write_authority_keypair_to_file(&keypair, &key_file).unwrap();
@@ -355,6 +361,7 @@ mod test {
                     narwhal_primary_address: validator.narwhal_primary_address.clone(),
                     narwhal_worker_address: validator.narwhal_worker_address.clone(),
                     narwhal_consensus_address: validator.narwhal_consensus_address.clone(),
+                    chain_id: validator.chain_id,
                 },
             };
             command.run()?;

@@ -10,6 +10,7 @@ use sui_types::crypto::get_key_pair_from_rng;
 use sui_types::crypto::AccountKeyPair;
 use sui_types::crypto::AuthorityKeyPair;
 use sui_types::crypto::AuthorityPublicKeyBytes;
+use sui_types::intent::ChainId;
 use sui_types::messages_checkpoint::CheckpointRequest;
 use sui_types::messages_checkpoint::CheckpointResponse;
 
@@ -89,6 +90,7 @@ pub(crate) async fn init_state(
 
     AuthorityState::new(
         name,
+        ChainId::Testing,
         secrete,
         store,
         node_sync_store,
