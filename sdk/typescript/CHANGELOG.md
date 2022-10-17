@@ -1,5 +1,14 @@
 # @mysten/sui.js
 
+## 0.13.0
+
+### Minor Changes
+
+- 1d036d459: Transactions query pagination and merge all getTransactions\* methods
+- b11b69262: Add gas selection to LocalTxnSerializer
+- b11b69262: Deprecate Gateway related APIs
+- b11b69262: Add rpcAPIVersion to JsonRpcProvider to support multiple RPC API Versions
+
 ## 0.12.0
 
 ### Minor Changes

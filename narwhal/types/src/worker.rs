@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{Batch, BatchDigest};
-use blake2::digest::Update;
 
+use fastcrypto::hash::HashFunction;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -45,7 +45,7 @@ pub struct RequestBatchResponse {
 /// Hashes a serialized batch message without deserializing it into a batch.
 ///
 /// See the test `test_batch_and_serialized`, which guarantees that the output of this
-/// function remains the same as the [`fastcrypto::Hash::digest`] result you would get from [`Batch`].
+/// function remains the same as the [`fastcrypto::hash::Hash::digest`] result you would get from [`Batch`].
 /// See also the micro-benchmark `batch_digest`, which checks the performance of this is
 /// identical to hashing a serialized batch.
 ///
@@ -67,9 +67,9 @@ pub fn serialized_batch_digest<K: AsRef<[u8]>>(sbm: K) -> Result<BatchDigest, Di
         transactions.push(tx_ref);
         offset = new_offset;
     }
-    Ok(BatchDigest::new(fastcrypto::blake2b_256(|hasher| {
-        transactions.iter().for_each(|tx| hasher.update(tx))
-    })))
+    Ok(BatchDigest::new(
+        crypto::DefaultHashFunction::digest_iterator(transactions.iter()).into(),
+    ))
 }
 
 #[derive(Debug, Error)]

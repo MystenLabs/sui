@@ -18,8 +18,10 @@ tokio = { version = "1.20.1", features = ["macros", "rt-multi-thread"] }
 tonic = "0.8.2"
 workspace-hack.workspace = true
 
-[build-dependencies]
+[target.'cfg(not(target_env = "msvc"))'.build-dependencies]
 protobuf-src = "1.1.0"
+
+[build-dependencies]
 tonic-build = "0.8.2"
 
 [features]

@@ -153,3 +153,9 @@ impl From<bcs::Error> for Error {
         Error::new_with_cause(ErrorType::SerializationError, e)
     }
 }
+
+impl From<fastcrypto::error::FastCryptoError> for Error {
+    fn from(e: fastcrypto::error::FastCryptoError) -> Self {
+        Error::new_with_cause(ErrorType::SignatureError, e)
+    }
+}

@@ -2,7 +2,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
-use fastcrypto::Hash;
+use fastcrypto::hash::Hash;
 use test_utils::CommitteeFixture;
 use types::WorkerToWorkerServer;
 

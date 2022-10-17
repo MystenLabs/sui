@@ -3,9 +3,8 @@
 
 //! A secret seed value, useful for deterministic private key and SuiAddress generation.
 
-use fastcrypto::{hmac::hkdf_generate_from_ikm, traits::KeyPair as KeypairTraits};
+use fastcrypto::{hash::Sha3_256, hmac::hkdf_generate_from_ikm, traits::KeyPair as KeypairTraits};
 use rand::{CryptoRng, RngCore};
-use sha3::Sha3_256;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use crate::base_types::SuiAddress;
