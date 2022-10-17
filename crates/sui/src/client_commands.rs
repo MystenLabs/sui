@@ -13,12 +13,14 @@ use anyhow::{anyhow, ensure};
 use bip32::DerivationPath;
 use clap::*;
 use colored::Colorize;
+use fastcrypto::traits::ToFromBytes;
 use move_core_types::language_storage::TypeTag;
 use move_package::BuildConfig;
 use serde::Serialize;
 use serde_json::json;
 use tracing::info;
 
+use crate::config::{Config, PersistedConfig, SuiClientConfig};
 use sui_framework::build_move_package_to_bytes;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
@@ -29,8 +31,6 @@ use sui_json_rpc_types::{SuiCertifiedTransaction, SuiExecutionStatus, SuiTransac
 use sui_sdk::crypto::AccountKeystore;
 use sui_sdk::TransactionExecutionResult;
 use sui_sdk::{ClientType, SuiClient};
-use sui_types::crypto::SignatureScheme;
-use sui_types::sui_serde::{Base64, Encoding};
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     gas_coin::GasCoin,
@@ -38,8 +38,14 @@ use sui_types::{
     object::Owner,
     parse_sui_type_tag, SUI_FRAMEWORK_ADDRESS,
 };
-
-use crate::config::{Config, PersistedConfig, SuiClientConfig};
+use sui_types::{
+    crypto::SignableBytes,
+    sui_serde::{Base64, Encoding},
+};
+use sui_types::{
+    crypto::{Signature, SignatureScheme},
+    messages::TransactionData,
+};
 
 pub const EXAMPLE_NFT_NAME: &str = "Example NFT";
 pub const EXAMPLE_NFT_DESCRIPTION: &str = "An NFT created by the Sui Command Line Tool";
@@ -300,6 +306,45 @@ pub enum SuiClientCommands {
         /// Gas budget for this transfer
         #[clap(long)]
         gas_budget: Option<u64>,
+    },
+
+    /// Serialize a transfer that can be signed. This is useful when user prefers to take the data to sign elsewhere.
+    #[clap(name = "serialize-transfer-sui")]
+    SerializeTransferSui {
+        /// Recipient address
+        #[clap(long)]
+        to: SuiAddress,
+
+        /// Sui coin object to transfer, ID in 20 bytes Hex string. This is also the gas object.
+        #[clap(long)]
+        sui_coin_object_id: ObjectID,
+
+        /// Gas budget for this transfer
+        #[clap(long)]
+        gas_budget: u64,
+
+        /// The amount to transfer, if not specified, the entire coin object will be transferred.
+        #[clap(long)]
+        amount: Option<u64>,
+    },
+
+    /// Execute a Signed Transaction. This is useful when the user prefers to sign elsewhere and use this command to execute.
+    ExecuteSignedTx {
+        /// Base64 encoded of the transaction data.
+        #[clap(long)]
+        tx_data: String,
+
+        /// Signature scheme used to sign the transaction.
+        #[clap(long)]
+        scheme: SignatureScheme,
+
+        /// Public key that the signature can be verified with.
+        #[clap(long)]
+        pubkey: String,
+
+        /// Base64 encoded signature committed to the transaction data.
+        #[clap(long)]
+        signature: String,
     },
 }
 
@@ -615,6 +660,47 @@ impl SuiClientCommands {
                 let object_read = context.client.read_api().get_parsed_object(nft_id).await?;
                 SuiClientCommandResult::CreateExampleNFT(object_read)
             }
+
+            SuiClientCommands::SerializeTransferSui {
+                to,
+                sui_coin_object_id: object_id,
+                gas_budget,
+                amount,
+            } => {
+                let from = context.get_object_owner(&object_id).await?;
+
+                let data = context
+                    .client
+                    .transaction_builder()
+                    .transfer_sui(from, object_id, gas_budget, to, amount)
+                    .await?;
+                SuiClientCommandResult::SerializeTransferSui(data.to_base64())
+            }
+
+            SuiClientCommands::ExecuteSignedTx {
+                tx_data,
+                scheme,
+                pubkey,
+                signature,
+            } => {
+                let data =
+                    TransactionData::from_signable_bytes(&Base64::try_from(tx_data)?.to_vec()?)?;
+                let signed_tx = Transaction::new(
+                    data,
+                    Signature::from_bytes(
+                        &[
+                            vec![scheme.flag()],
+                            Base64::try_from(signature)?.to_vec()?,
+                            Base64::try_from(pubkey)?.to_vec()?,
+                        ]
+                        .concat(),
+                    )?,
+                );
+                signed_tx.verify_sender_signature()?;
+
+                let response = context.execute_transaction(signed_tx).await?;
+                SuiClientCommandResult::ExecuteSignedTx(response)
+            }
         });
         ret
     }
@@ -921,6 +1007,19 @@ impl Display for SuiClientCommandResult {
                 writeln!(writer, "{}\n", "Successfully created an ExampleNFT:".bold())?;
                 writeln!(writer, "{}", object)?;
             }
+            SuiClientCommandResult::ExecuteSignedTx(response) => {
+                write!(
+                    writer,
+                    "{}",
+                    write_cert_and_effects(&response.certificate, &response.effects)?
+                )?;
+                if let Some(parsed_resp) = &response.parsed_data {
+                    writeln!(writer, "{}", parsed_resp)?;
+                }
+            }
+            SuiClientCommandResult::SerializeTransferSui(res) => {
+                write!(writer, "{}", res)?;
+            }
         }
         write!(f, "{}", writer.trim_end_matches('\n'))
     }
@@ -1048,6 +1147,8 @@ pub enum SuiClientCommandResult {
     Switch(SwitchResponse),
     ActiveAddress(Option<SuiAddress>),
     CreateExampleNFT(GetObjectDataResponse),
+    SerializeTransferSui(String),
+    ExecuteSignedTx(SuiTransactionResponse),
 }
 
 #[derive(Serialize, Clone, Debug)]
