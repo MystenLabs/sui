@@ -12,9 +12,9 @@ publish = ["crates-io"]
 proc-macro = true
 
 [dependencies]
-proc-macro2 = "1.0.24"
+proc-macro2 = "1.0.47"
 quote = "1.0.9"
-syn = { version = "1.0.64", features = ["derive"] }
+syn = { version = "1.0.102", features = ["derive"] }
 
 [dev-dependencies]
 eyre = "0.6.8"
