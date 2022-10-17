@@ -9,9 +9,70 @@ export default {
     component: PageHeader,
 } as Meta;
 
-export const Default: StoryObj<PageHeaderProps> = {
+const title = '0x76763c665d5de1f59471e87af92767f3df376580';
+
+export const Address: StoryObj<PageHeaderProps> = {
     args: {
-        title: '0x76763c665d5de1f59471e87af92767f3df376580',
+        title,
+        type: 'Address',
+    },
+};
+
+export const CallTransaction: StoryObj<PageHeaderProps> = {
+    args: {
+        title,
+        type: 'Call',
+        status: 'success',
+    },
+};
+
+export const CallTransactionFailure: StoryObj<PageHeaderProps> = {
+    args: {
+        ...CallTransaction.args,
+        status: 'failure',
+    },
+};
+
+export const ChangeEpoch: StoryObj<PageHeaderProps> = {
+    args: {
+        title,
+        type: 'ChangeEpoch',
+    },
+};
+
+export const Object: StoryObj<PageHeaderProps> = {
+    args: {
+        title,
+        type: 'Object',
+    },
+};
+
+export const Package: StoryObj<PageHeaderProps> = {
+    args: {
+        title,
+        type: 'Package',
+    },
+};
+
+export const Pay: StoryObj<PageHeaderProps> = {
+    args: {
+        title,
+        type: 'Pay',
+    },
+};
+
+export const TransferObject: StoryObj<PageHeaderProps> = {
+    args: {
+        title,
+        type: 'TransferObject',
+        status: 'success',
+    },
+};
+
+export const TransferSui: StoryObj<PageHeaderProps> = {
+    args: {
+        title,
+        type: 'TransferSui',
         status: 'success',
     },
 };

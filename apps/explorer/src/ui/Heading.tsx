@@ -37,6 +37,7 @@ const headingStyles = cva(
             fixed: { true: '', false: '' },
         },
         defaultVariants: {
+            variant: 'heading1',
             weight: 'semibold',
         },
         // Use the empty `fixed` variant to force text size to a set value:

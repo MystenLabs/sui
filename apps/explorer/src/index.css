@@ -29,6 +29,7 @@
     --warning-dark: theme('colors.warning.dark');
     --issue-light: theme('colors.issue.light');
     --issue-dark: theme('colors.issue.dark');
+    --sui-steel: theme('colors.sui.steel.DEFAULT');
 }
 
 body {
