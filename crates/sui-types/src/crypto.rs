@@ -384,9 +384,10 @@ impl Display for AuthorityPublicKeyBytes {
 }
 
 impl ToFromBytes for AuthorityPublicKeyBytes {
-    fn from_bytes(bytes: &[u8]) -> Result<Self, signature::Error> {
-        let bytes: [u8; AuthorityPublicKey::LENGTH] =
-            bytes.try_into().map_err(signature::Error::from_source)?;
+    fn from_bytes(bytes: &[u8]) -> Result<Self, fastcrypto::error::FastCryptoError> {
+        let bytes: [u8; AuthorityPublicKey::LENGTH] = bytes
+            .try_into()
+            .map_err(|_| fastcrypto::error::FastCryptoError::InvalidInput)?;
         Ok(AuthorityPublicKeyBytes(bytes))
     }
 }
@@ -1308,7 +1309,7 @@ impl<const STRONG_THRESHOLD: bool> AuthorityQuorumSignInfo<STRONG_THRESHOLD> {
 
         Ok(AuthorityQuorumSignInfo {
             epoch: committee.epoch,
-            signature: AggregateAuthoritySignature::aggregate(sigs).map_err(|e| {
+            signature: AggregateAuthoritySignature::aggregate(&sigs).map_err(|e| {
                 SuiError::InvalidSignature {
                     error: e.to_string(),
                 }

@@ -5,8 +5,9 @@ use crate::bls12377::{
     BLS12377PublicKeyBytes, BLS12377Signature,
 };
 use fastcrypto::{
+    hash::{Blake2b256, HashFunction},
     traits::{AggregateAuthenticator, EncodeDecodeBase64, KeyPair, ToFromBytes, VerifyingKey},
-    Hash, SignatureService,
+    SignatureService,
 };
 
 use crate::bls12377::CELO_BLS_PRIVATE_KEY_LENGTH;
@@ -36,7 +37,7 @@ fn sign_with_keypairs(
 fn signature_test_inputs() -> (Vec<u8>, Vec<BLS12377PublicKey>, Vec<BLS12377Signature>) {
     // Make signatures.
     let message: &[u8] = b"Hello, world!";
-    let digest = message.digest();
+    let digest = Blake2b256::digest(message);
     let (pubkeys, signatures) = sign_with_keypairs(keys(), digest.as_ref());
 
     (digest.to_vec(), pubkeys, signatures)
@@ -52,17 +53,17 @@ fn verify_batch_aggregate_signature_inputs() -> (
 ) {
     // Make signatures.
     let message1: &[u8] = b"Hello, world!";
-    let digest1 = message1.digest();
+    let digest1 = Blake2b256::digest(message1);
     let (pubkeys1, signatures1) = sign_with_keypairs(keys(), digest1.as_ref());
 
-    let aggregated_signature1 = BLS12377AggregateSignature::aggregate(signatures1).unwrap();
+    let aggregated_signature1 = BLS12377AggregateSignature::aggregate(&signatures1).unwrap();
 
     // Make signatures.
     let message2: &[u8] = b"Hello, worl!";
-    let digest2 = message2.digest();
+    let digest2 = Blake2b256::digest(message2);
     let (pubkeys2, signatures2) = sign_with_keypairs(keys(), digest2.as_ref());
 
-    let aggregated_signature2 = BLS12377AggregateSignature::aggregate(signatures2).unwrap();
+    let aggregated_signature2 = BLS12377AggregateSignature::aggregate(&signatures2).unwrap();
     (
         digest1.to_vec(),
         digest2.to_vec(),
@@ -109,7 +110,7 @@ fn verify_valid_signature() {
 
     // Make signature.
     let message: &[u8] = b"Hello, world!";
-    let digest = message.digest();
+    let digest = Blake2b256::digest(message);
 
     let signature = kp.sign(digest.as_ref());
 
@@ -124,13 +125,13 @@ fn verify_invalid_signature() {
 
     // Make signature.
     let message: &[u8] = b"Hello, world!";
-    let digest = message.digest();
+    let digest = Blake2b256::digest(message);
 
     let signature = kp.sign(digest.as_ref());
 
     // Verify the signature.
     let bad_message: &[u8] = b"Bad message!";
-    let digest = bad_message.digest();
+    let digest = Blake2b256::digest(bad_message);
 
     assert!(kp.public().verify(digest.as_ref(), &signature).is_err());
 }
@@ -181,7 +182,7 @@ fn verify_batch_missing_public_keys() {
 #[test]
 fn verify_valid_aggregate_signaature() {
     let (digest, pubkeys, signatures) = signature_test_inputs();
-    let aggregated_signature = BLS12377AggregateSignature::aggregate(signatures).unwrap();
+    let aggregated_signature = BLS12377AggregateSignature::aggregate(&signatures).unwrap();
 
     let res = aggregated_signature.verify(&pubkeys[..], &digest);
     assert!(res.is_ok(), "{:?}", res);
@@ -190,7 +191,7 @@ fn verify_valid_aggregate_signaature() {
 #[test]
 fn verify_invalid_aggregate_signature_length_mismatch() {
     let (digest, pubkeys, signatures) = signature_test_inputs();
-    let aggregated_signature = BLS12377AggregateSignature::aggregate(signatures).unwrap();
+    let aggregated_signature = BLS12377AggregateSignature::aggregate(&signatures).unwrap();
 
     let res = aggregated_signature.verify(&pubkeys[..2], &digest);
     assert!(res.is_err(), "{:?}", res);
@@ -199,7 +200,7 @@ fn verify_invalid_aggregate_signature_length_mismatch() {
 #[test]
 fn verify_invalid_aggregate_signature_public_key_switch() {
     let (digest, mut pubkeys, signatures) = signature_test_inputs();
-    let aggregated_signature = BLS12377AggregateSignature::aggregate(signatures).unwrap();
+    let aggregated_signature = BLS12377AggregateSignature::aggregate(&signatures).unwrap();
 
     pubkeys[0] = keys()[3].public().clone();
 
@@ -319,18 +320,18 @@ fn test_add_signatures_to_aggregate() {
     let mut sig2 = BLS12377AggregateSignature::default();
 
     let kp = &keys()[0];
-    let sig = BLS12377AggregateSignature::aggregate(vec![kp.sign(message)]).unwrap();
+    let sig = BLS12377AggregateSignature::aggregate(&vec![kp.sign(message)]).unwrap();
     sig2.add_aggregate(sig).unwrap();
 
     assert!(sig2.verify(&pks[0..1], message).is_ok());
 
     let aggregated_signature = BLS12377AggregateSignature::aggregate(
-        keys()
+        &keys()
             .into_iter()
             .take(3)
             .skip(1)
             .map(|kp| kp.sign(message))
-            .collect(),
+            .collect::<Vec<BLS12377Signature>>(),
     )
     .unwrap();
 
@@ -358,7 +359,7 @@ async fn signature_service() {
 
     // Request signature from the service.
     let message: &[u8] = b"Hello, world!";
-    let digest = message.digest();
+    let digest = Blake2b256::digest(message);
     let signature = service.request_signature(digest).await;
 
     // Verify the signature we received.

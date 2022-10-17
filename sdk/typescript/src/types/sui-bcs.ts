@@ -266,7 +266,7 @@ bcs
   });
 
 /**
- * The TransactionData to be signed and sent to the Gateway service.
+ * The TransactionData to be signed and sent to the RPC service.
  *
  * Field `sender` is made optional as it can be added during the signing
  * process and there's no need to define it sooner.

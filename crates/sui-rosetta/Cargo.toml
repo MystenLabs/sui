@@ -26,6 +26,8 @@ strum_macros = "0.24.3"
 async-trait = "0.1.57"
 clap = { version = "3.2.17", features = ["derive"] }
 
+fastcrypto.workspace = true
+
 sui-types = { path = "../sui-types" }
 sui-core = { path = "../sui-core" }
 sui-node = { path = "../sui-node" }

@@ -9,8 +9,8 @@ use config::{
 };
 use crypto::{KeyPair, NetworkKeyPair, NetworkPublicKey, PublicKey};
 use fastcrypto::{
+    hash::{Digest, Hash as _},
     traits::{KeyPair as _, Signer as _},
-    Digest, Hash as _,
 };
 use indexmap::IndexMap;
 use multiaddr::Multiaddr;

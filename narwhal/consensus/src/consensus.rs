@@ -7,7 +7,7 @@
 use crate::{metrics::ConsensusMetrics, ConsensusOutput, SequenceNumber};
 use config::Committee;
 use crypto::PublicKey;
-use fastcrypto::Hash;
+use fastcrypto::hash::Hash;
 use std::{
     cmp::{max, Ordering},
     collections::HashMap,

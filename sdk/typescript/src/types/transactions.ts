@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { ObjectOwner, SuiAddress, TransactionDigest } from './common';
-import {ObjectId, SuiMovePackage, SuiObject, SuiObjectRef} from './objects';
+import { ObjectId, SuiMovePackage, SuiObject, SuiObjectRef } from './objects';
 
 export type TransferObject = {
   recipient: SuiAddress;
@@ -153,6 +153,11 @@ export type SuiExecuteTransactionResponse =
 export type GatewayTxSeqNumber = number;
 
 export type GetTxnDigestsResponse = TransactionDigest[];
+// TODO: remove after we deploy 0.12.0 DevNet
+export type GetTxnDigestsResponse__DEPRECATED = [
+  GatewayTxSeqNumber,
+  TransactionDigest
+][];
 
 export type PaginatedTransactionDigests = {
   data: TransactionDigest[];
@@ -160,16 +165,20 @@ export type PaginatedTransactionDigests = {
 };
 
 export type TransactionQuery =
-    | "All"
-    | { "MoveFunction": { "package": ObjectId, "module": string | null, "function": string | null } }
-    | { "InputObject": ObjectId }
-    | { "MutatedObject": ObjectId }
-    | { "FromAddress": SuiAddress }
-    | { "ToAddress": SuiAddress };
+  | 'All'
+  | {
+      MoveFunction: {
+        package: ObjectId;
+        module: string | null;
+        function: string | null;
+      };
+    }
+  | { InputObject: ObjectId }
+  | { MutatedObject: ObjectId }
+  | { FromAddress: SuiAddress }
+  | { ToAddress: SuiAddress };
 
-export type Ordering =
-    | "Ascending"
-    | "Descending"
+export type Ordering = 'Ascending' | 'Descending';
 
 export type MoveCall = {
   package: SuiObjectRef;
@@ -230,10 +239,34 @@ export type SuiParsedTransactionResponse =
 /* -------------------------------------------------------------------------- */
 
 /* ---------------------------------- CertifiedTransaction --------------------------------- */
+
+export function getCertifiedTransaction(
+  tx: SuiTransactionResponse | SuiExecuteTransactionResponse
+): CertifiedTransaction | undefined {
+  if ('certificate' in tx) {
+    return tx.certificate;
+  } else if ('TxCert' in tx) {
+    return tx.TxCert.certificate;
+  } else if ('EffectsCert' in tx) {
+    return tx.EffectsCert.certificate;
+  }
+  return undefined;
+}
+
 export function getTransactionDigest(
-  tx: CertifiedTransaction
+  tx:
+    | CertifiedTransaction
+    | SuiTransactionResponse
+    | SuiExecuteTransactionResponse
 ): TransactionDigest {
-  return tx.transactionDigest;
+  if ('ImmediateReturn' in tx) {
+    return tx.ImmediateReturn.tx_digest;
+  }
+  if ('transactionDigest' in tx) {
+    return tx.transactionDigest;
+  }
+  const ctxn = getCertifiedTransaction(tx)!;
+  return ctxn.transactionDigest;
 }
 
 export function getTransactionSignature(tx: CertifiedTransaction): string {
@@ -331,42 +364,48 @@ export function getExecutionStatusType(
 export function getExecutionStatus(
   data: SuiTransactionResponse | SuiExecuteTransactionResponse
 ): ExecutionStatus | undefined {
-  if ('effects' in data) {
-    return data.effects.status;
-  } else if ('EffectsCert' in data) {
-    return data.EffectsCert.effects.effects.status;
-  }
-  return undefined;
+  return getTransactionEffects(data)?.status;
 }
 
 export function getExecutionStatusError(
-  data: SuiTransactionResponse
+  data: SuiTransactionResponse | SuiExecuteTransactionResponse
 ): string | undefined {
   return getExecutionStatus(data)?.error;
 }
 
 export function getExecutionStatusGasSummary(
-  data: SuiTransactionResponse
-): GasCostSummary {
-  return data.effects.gasUsed;
+  data: SuiTransactionResponse | SuiExecuteTransactionResponse
+): GasCostSummary | undefined {
+  return getTransactionEffects(data)?.gasUsed;
 }
 
-export function getTotalGasUsed(data: SuiTransactionResponse): number {
+export function getTotalGasUsed(
+  data: SuiTransactionResponse | SuiExecuteTransactionResponse
+): number | undefined {
   const gasSummary = getExecutionStatusGasSummary(data);
-  return (
-    gasSummary.computationCost +
-    gasSummary.storageCost -
-    gasSummary.storageRebate
-  );
+  return gasSummary
+    ? gasSummary.computationCost +
+        gasSummary.storageCost -
+        gasSummary.storageRebate
+    : undefined;
 }
 
 export function getTransactionEffects(
-  data: SuiExecuteTransactionResponse
+  data: SuiExecuteTransactionResponse | SuiTransactionResponse
 ): TransactionEffects | undefined {
+  if ('effects' in data) {
+    return data.effects;
+  }
   return 'EffectsCert' in data ? data.EffectsCert.effects.effects : undefined;
 }
 
 /* --------------------------- TransactionResponse -------------------------- */
+
+export function getTimestampFromTransactionResponse(
+  data: SuiExecuteTransactionResponse | SuiTransactionResponse
+): number | undefined {
+  return 'timestamp_ms' in data ? data.timestamp_ms ?? undefined : undefined;
+}
 
 export function getParsedSplitCoinResponse(
   data: SuiTransactionResponse

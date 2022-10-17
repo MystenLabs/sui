@@ -1110,33 +1110,19 @@ impl Display for SuiMoveValue {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let mut writer = String::new();
         match self {
-            SuiMoveValue::Number(value) => {
-                write!(writer, "{}", value)?;
-            }
-            SuiMoveValue::Bool(value) => {
-                write!(writer, "{}", value)?;
-            }
-            SuiMoveValue::Address(value) => {
-                write!(writer, "{}", value)?;
-            }
+            SuiMoveValue::Number(value) => write!(writer, "{}", value)?,
+            SuiMoveValue::Bool(value) => write!(writer, "{}", value)?,
+            SuiMoveValue::Address(value) => write!(writer, "{}", value)?,
+            SuiMoveValue::String(value) => write!(writer, "{}", value)?,
+            SuiMoveValue::UID { id } => write!(writer, "{id}")?,
+            SuiMoveValue::Struct(value) => write!(writer, "{}", value)?,
+            SuiMoveValue::Option(value) => write!(writer, "{:?}", value)?,
             SuiMoveValue::Vector(vec) => {
                 write!(
                     writer,
                     "{}",
                     vec.iter().map(|value| format!("{value}")).join(",\n")
                 )?;
-            }
-            SuiMoveValue::String(value) => {
-                write!(writer, "{}", value)?;
-            }
-            SuiMoveValue::UID { id } => {
-                write!(writer, "{id}")?;
-            }
-            SuiMoveValue::Struct(value) => {
-                write!(writer, "{}", value)?;
-            }
-            SuiMoveValue::Option(value) => {
-                write!(writer, "{:?}", value)?;
             }
             SuiMoveValue::Bytearray(value) => {
                 write!(
@@ -1146,7 +1132,6 @@ impl Display for SuiMoveValue {
                 )?;
             }
         }
-
         write!(f, "{}", writer.trim_end_matches('\n'))
     }
 }
@@ -1158,22 +1143,12 @@ impl From<MoveValue> for SuiMoveValue {
             MoveValue::U64(value) => SuiMoveValue::Number(value),
             MoveValue::U128(value) => SuiMoveValue::String(format!("{value}")),
             MoveValue::Bool(value) => SuiMoveValue::Bool(value),
-            MoveValue::Vector(value) => {
-                // Try convert bytearray
-                if value.iter().all(|value| matches!(value, MoveValue::U8(_))) {
-                    let bytearray = value
-                        .iter()
-                        .flat_map(|value| {
-                            if let MoveValue::U8(u8) = value {
-                                Some(*u8)
-                            } else {
-                                None
-                            }
-                        })
-                        .collect::<Vec<_>>();
-                    return SuiMoveValue::Bytearray(Base64::from_bytes(&bytearray));
+            MoveValue::Vector(values) => {
+                if let Some(bytes) = to_bytearray(&values) {
+                    SuiMoveValue::Bytearray(Base64::from_bytes(&bytes))
+                } else {
+                    SuiMoveValue::Vector(values.into_iter().map(|value| value.into()).collect())
                 }
-                SuiMoveValue::Vector(value.into_iter().map(|value| value.into()).collect())
             }
             MoveValue::Struct(value) => {
                 // Best effort Sui core type conversion
@@ -1188,6 +1163,24 @@ impl From<MoveValue> for SuiMoveValue {
                 SuiMoveValue::Address(SuiAddress::from(ObjectID::from(value)))
             }
         }
+    }
+}
+
+fn to_bytearray(value: &[MoveValue]) -> Option<Vec<u8>> {
+    if value.iter().all(|value| matches!(value, MoveValue::U8(_))) {
+        let bytearray = value
+            .iter()
+            .flat_map(|value| {
+                if let MoveValue::U8(u8) = value {
+                    Some(*u8)
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        Some(bytearray)
+    } else {
+        None
     }
 }
 
@@ -1277,45 +1270,41 @@ fn try_convert_type(type_: &StructTag, fields: &[(Identifier, MoveValue)]) -> Op
         type_.module,
         type_.name
     );
-    let fields = fields
+    let mut values = fields
         .iter()
-        .map(|(id, value)| (id.to_string(), value.clone().into()))
-        .collect::<BTreeMap<_, SuiMoveValue>>();
+        .map(|(id, value)| (id.to_string(), value))
+        .collect::<BTreeMap<_, _>>();
     match struct_name.as_str() {
         "0x1::string::String" | "0x1::ascii::String" => {
-            if let Some(SuiMoveValue::Bytearray(bytes)) = fields.get("bytes") {
-                if let Ok(bytes) = bytes.to_vec() {
-                    if let Ok(s) = String::from_utf8(bytes) {
-                        return Some(SuiMoveValue::String(s));
-                    }
-                }
+            if let Some(MoveValue::Vector(bytes)) = values.remove("bytes") {
+                return to_bytearray(bytes)
+                    .and_then(|bytes| String::from_utf8(bytes).ok())
+                    .map(SuiMoveValue::String);
             }
         }
         "0x2::url::Url" => {
-            if let Some(url) = fields.get("url") {
-                return Some(url.clone());
-            }
+            return values.remove("url").cloned().map(SuiMoveValue::from);
         }
         "0x2::object::ID" => {
-            if let Some(SuiMoveValue::Address(id)) = fields.get("bytes") {
-                return Some(SuiMoveValue::Address(*id));
-            }
+            return values.remove("bytes").cloned().map(SuiMoveValue::from);
         }
         "0x2::object::UID" => {
-            if let Some(SuiMoveValue::Address(address)) = fields.get("id") {
+            let id = values.remove("id").cloned().map(SuiMoveValue::from);
+            if let Some(SuiMoveValue::Address(address)) = id {
                 return Some(SuiMoveValue::UID {
-                    id: ObjectID::from(*address),
+                    id: ObjectID::from(address),
                 });
             }
         }
         "0x2::balance::Balance" => {
-            if let Some(SuiMoveValue::Number(value)) = fields.get("value") {
-                return Some(SuiMoveValue::Number(*value));
-            }
+            return values.remove("value").cloned().map(SuiMoveValue::from);
         }
         "0x1::option::Option" => {
-            if let Some(SuiMoveValue::Vector(values)) = fields.get("vec") {
-                return Some(SuiMoveValue::Option(Box::new(values.first().cloned())));
+            if let Some(MoveValue::Vector(values)) = values.remove("vec") {
+                return Some(SuiMoveValue::Option(Box::new(
+                    // in Move option is modeled as vec of 1 element
+                    values.first().cloned().map(SuiMoveValue::from),
+                )));
             }
         }
         _ => return None,

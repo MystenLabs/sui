@@ -71,7 +71,7 @@ pub struct RemoteRunningCluster {
 impl Cluster for RemoteRunningCluster {
     async fn start(options: &ClusterTestOpt) -> Result<Self, anyhow::Error> {
         let (fullnode_url, faucet_url) = match options.env {
-            Env::DevNet => (
+            Env::Devnet => (
                 String::from(DEVNET_FULLNODE_ADDR),
                 String::from(DEVNET_FAUCET_ADDR),
             ),
@@ -79,7 +79,7 @@ impl Cluster for RemoteRunningCluster {
                 String::from(STAGING_FULLNODE_ADDR),
                 String::from(STAGING_FAUCET_ADDR),
             ),
-            Env::Continuous => (
+            Env::Ci => (
                 String::from(CONTINUOUS_FULLNODE_ADDR),
                 String::from(CONTINUOUS_FAUCET_ADDR),
             ),

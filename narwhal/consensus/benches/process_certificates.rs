@@ -9,7 +9,7 @@ use consensus::{
 use criterion::{
     criterion_group, criterion_main, BenchmarkId, Criterion, SamplingMode, Throughput,
 };
-use fastcrypto::Hash;
+use fastcrypto::hash::Hash;
 use narwhal_consensus as consensus;
 use pprof::criterion::{Output, PProfProfiler};
 use prometheus::Registry;

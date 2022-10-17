@@ -1,12 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {Provider} from './provider';
-import {JsonRpcClient} from '../rpc/client';
+import { Provider } from './provider';
+import { JsonRpcClient } from '../rpc/client';
 import {
   isGetObjectDataResponse,
   isGetOwnedObjectsResponse,
   isGetTxnDigestsResponse,
+  isGetTxnDigestsResponse__DEPRECATED,
   isPaginatedTransactionDigests,
   isSuiEvents,
   isSuiExecuteTransactionResponse,
@@ -49,11 +50,18 @@ import {
   TransactionQuery,
   SUI_TYPE_ARG,
 } from '../types';
-import {SignatureScheme} from '../cryptography/publickey';
-import {DEFAULT_CLIENT_OPTIONS, WebsocketClient, WebsocketClientOptions,} from '../rpc/websocket-client';
+import { SignatureScheme } from '../cryptography/publickey';
+import {
+  DEFAULT_CLIENT_OPTIONS,
+  WebsocketClient,
+  WebsocketClientOptions,
+} from '../rpc/websocket-client';
 
 const isNumber = (val: any): val is number => typeof val === 'number';
 const isAny = (_val: any): _val is any => true;
+
+const PRE_PAGINATION_API_VERSION = '0.11.0';
+export const LATEST_RPC_API_VERSION = 'latest';
 
 export class JsonRpcProvider extends Provider {
   protected client: JsonRpcClient;
@@ -71,10 +79,13 @@ export class JsonRpcProvider extends Provider {
    * the version compatibility of the SDK, as not all the schema
    * changes in the RPC response will affect the caller, but the caller needs to
    * understand that the data may not match the TypeSrcript definitions.
+   * @param rpcAPIVersion controls which type of RPC API version to use.
    */
   constructor(
     public endpoint: string,
     public skipDataValidation: boolean = true,
+    // TODO: Update the default value after we deploy 0.12.0
+    private rpcAPIVersion: string = PRE_PAGINATION_API_VERSION,
     public socketOptions: WebsocketClientOptions = DEFAULT_CLIENT_OPTIONS
   ) {
     super();
@@ -299,21 +310,21 @@ export class JsonRpcProvider extends Provider {
 
   // Transactions
   async getTransactions(
-      query: TransactionQuery,
-      cursor: TransactionDigest| null,
-      limit: number|null,
-      order: Ordering
+    query: TransactionQuery,
+    cursor: TransactionDigest | null,
+    limit: number | null,
+    order: Ordering
   ): Promise<PaginatedTransactionDigests> {
     try {
       return await this.client.requestWithType(
-          'sui_getTransactions',
-          [query, cursor, limit, order],
-          isPaginatedTransactionDigests,
-          this.skipDataValidation
+        'sui_getTransactions',
+        [query, cursor, limit, order],
+        isPaginatedTransactionDigests,
+        this.skipDataValidation
       );
     } catch (err) {
       throw new Error(
-          `Error getting transactions for query: ${err} for query ${query}`
+        `Error getting transactions for query: ${err} for query ${query}`
       );
     }
   }
@@ -321,21 +332,47 @@ export class JsonRpcProvider extends Provider {
   async getTransactionsForObject(
     objectID: string
   ): Promise<GetTxnDigestsResponse> {
+    // TODO: remove after we deploy 0.12.0 DevNet
+    if (this.rpcAPIVersion === PRE_PAGINATION_API_VERSION) {
+      const requests = [
+        {
+          method: 'sui_getTransactionsByInputObject',
+          args: [objectID],
+        },
+        {
+          method: 'sui_getTransactionsByMutatedObject',
+          args: [objectID],
+        },
+      ];
+
+      try {
+        const results = await this.client.batchRequestWithType(
+          requests,
+          isGetTxnDigestsResponse__DEPRECATED,
+          this.skipDataValidation
+        );
+        return [...results[0], ...results[1]].map((tx) => tx[1]);
+      } catch (err) {
+        throw new Error(
+          `Error getting transactions for object: ${err} for id ${objectID}`
+        );
+      }
+    }
     const requests = [
       {
         method: 'sui_getTransactions',
-        args: [{ InputObject: objectID }, null, null, "Ascending"],
+        args: [{ InputObject: objectID }, null, null, 'Ascending'],
       },
       {
         method: 'sui_getTransactions',
-        args: [{ MutatedObject: objectID }, null, null, "Ascending"],
+        args: [{ MutatedObject: objectID }, null, null, 'Ascending'],
       },
     ];
 
     try {
       const results = await this.client.batchRequestWithType(
         requests,
-          isPaginatedTransactionDigests,
+        isPaginatedTransactionDigests,
         this.skipDataValidation
       );
       return [...results[0].data, ...results[1].data];
@@ -349,21 +386,45 @@ export class JsonRpcProvider extends Provider {
   async getTransactionsForAddress(
     addressID: string
   ): Promise<GetTxnDigestsResponse> {
+    // TODO: remove after we deploy 0.12.0 DevNet
+    if (this.rpcAPIVersion === PRE_PAGINATION_API_VERSION) {
+      const requests = [
+        {
+          method: 'sui_getTransactionsToAddress',
+          args: [addressID],
+        },
+        {
+          method: 'sui_getTransactionsFromAddress',
+          args: [addressID],
+        },
+      ];
+      try {
+        const results = await this.client.batchRequestWithType(
+          requests,
+          isGetTxnDigestsResponse__DEPRECATED,
+          this.skipDataValidation
+        );
+        return [...results[0], ...results[1]].map((r) => r[1]);
+      } catch (err) {
+        throw new Error(
+          `Error getting transactions for address: ${err} for id ${addressID}`
+        );
+      }
+    }
     const requests = [
       {
         method: 'sui_getTransactions',
-        args: [{ ToAddress: addressID }, null, null, "Ascending"],
+        args: [{ ToAddress: addressID }, null, null, 'Ascending'],
       },
       {
         method: 'sui_getTransactions',
-        args: [{ FromAddress: addressID }, null, null, "Ascending"],
+        args: [{ FromAddress: addressID }, null, null, 'Ascending'],
       },
     ];
-
     try {
       const results = await this.client.batchRequestWithType(
         requests,
-          isPaginatedTransactionDigests,
+        isPaginatedTransactionDigests,
         this.skipDataValidation
       );
       return [...results[0].data, ...results[1].data];
