@@ -4,7 +4,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { ParentSizeModern } from '@visx/responsive';
 import { TooltipWithBounds, useTooltip } from '@visx/tooltip';
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo } from 'react';
 
 import { WorldMap } from './WorldMap';
 import { type NodeLocation } from './types';
@@ -30,10 +30,10 @@ const DATE_FILTER_TO_WINDOW = {
 
 export default function ValidatorMap() {
     const [dateFilter, setDateFilter] = useDateFilterState('D');
-    const [isFail, setIsFail] = useState(false);
 
-    const { data } = useQuery(['validator-map', dateFilter], async () => {
-        try {
+    const { data, isLoading, isSuccess, isError, error } = useQuery(
+        ['validator-map', dateFilter],
+        async () => {
             const res = await fetch(
                 `${HOST}/location?${new URLSearchParams({
                     version: 'v2',
@@ -44,18 +44,13 @@ export default function ValidatorMap() {
                 }
             );
 
-            if (!res.ok) {
-                setIsFail(true);
-                return [];
-            }
-
             return res.json() as Promise<NodeLocation[]>;
-        } catch (error) {
-            console.error('Error in Validator Map data retrieval', error);
-            setIsFail(true);
-            return [];
         }
-    });
+    );
+
+    if (isError) {
+        console.error('Error in Validator Map data retrieval', error);
+    }
 
     const { totalCount, countryCount, countryNodes } = useMemo<{
         totalCount: number | null;
@@ -121,25 +116,26 @@ export default function ValidatorMap() {
                     <div>
                         <div className={styles.title}>Nodes</div>
                         <div className={styles.stat}>
-                            {isFail ? (
-                                <></>
-                            ) : totalCount ? (
-                                numberFormatter.format(totalCount)
-                            ) : (
+                            {isLoading && (
                                 <Placeholder width="59px" height="32px" />
                             )}
+                            {
+                                // Fetch received response with no errors and the value was not null
+                                isSuccess &&
+                                    totalCount &&
+                                    numberFormatter.format(totalCount)
+                            }
                         </div>
                     </div>
                     <div>
                         <div className={styles.title}>Countries</div>
                         <div className={styles.stat}>
-                            {isFail ? (
-                                <></>
-                            ) : countryCount ? (
-                                numberFormatter.format(countryCount)
-                            ) : (
+                            {isLoading && (
                                 <Placeholder width="59px" height="32px" />
                             )}
+                            {isSuccess &&
+                                countryCount &&
+                                numberFormatter.format(countryCount)}
                         </div>
                     </div>
                 </div>
