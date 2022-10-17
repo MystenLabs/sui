@@ -381,7 +381,12 @@ impl CheckpointStore {
         effects_store: impl CausalOrder,
         next_epoch_committee: Option<Committee>,
     ) -> SuiResult {
-        // Make sure that all transactions in the checkpoint have been executed locally.
+        // Make sure that all transactions in the checkpoint show up in extra_transactions.
+        // Although this is not needed when storing a new checkpoint certificate, it is required
+        // when signing a new checkpoint locally. This is because in order to sign a new checkpoint
+        // we need to causally order the transactions in it. The causal ordering process requires
+        // knowing whether all dependencies are either already checkpointed or included in the new
+        // checkpoint.
         self.check_checkpoint_transactions(transactions.clone())?;
 
         let previous_digest = self.get_prev_checkpoint_digest(sequence_number)?;
