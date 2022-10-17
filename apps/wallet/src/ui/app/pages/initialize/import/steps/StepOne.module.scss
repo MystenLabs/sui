@@ -31,16 +31,19 @@
     flex: 1;
 }
 
-.btn {
-    width: 100%;
-    font-style: normal;
-    font-weight: 400;
-    font-size: 14px;
-    line-height: 12px;
+.actions-container {
+    display: flex;
+    flex-flow: row nowrap;
+    align-items: center;
     margin-top: 20px;
+    gap: 10px;
 }
 
-.next {
-    font-size: 12px;
-    font-weight: 500;
+.btn {
+    flex: 1;
+}
+
+.btn-icon {
+    font-size: 10px;
+    font-weight: 300;
 }
