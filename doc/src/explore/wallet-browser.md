@@ -34,21 +34,73 @@ To use Sui Wallet you must install a Chrome browser extension. You can use the e
 If you don't yet have a Sui Wallet, create a new one. To import an existing wallet, see [Import an existing Sui Wallet](#import-an-existing-sui-wallet).
 
 1. Open the Sui Wallet extension in your browser and then click **Get Started**.
-1. Click **Create new wallet**.
+1. Click **Create a New Wallet**.
+1. Enter a password for your wallet.
+   This is not a global password for Sui Wallet. It applies only to this installation.
+1. Enter the password again to confirm it.
 1. Click the checkbox to accept the Terms of Service.
-1. Click **Create Wallet Now**.
-1. Copy the Recovery passphrase and store it in a safe location.
-1. Click **Done**.
+1. Click **Create Wallet**.
+1. Copy the Recovery Phrase and store it in a safe location.
+1. Click **Open Sui Wallet**.
 
-If you lose access to your wallet, you can recover it only with the recovery passphrase. If you lose the passphrase, you lose access to your wallet and any coins or NFTs stored in it.
+Sui Wallet prompts you to enter your password when you open it.
+
+If you lose access to your wallet, you can recover it only with the recovery phrase. If you lose the recovery phrase, you lose access to your wallet and any coins or NFTs stored in it.
 
 ## Import an existing Sui Wallet
 
-You can use your Sui Wallet on multiple devices and browsers. After you create a Sui Wallet, use the 12-word recovery passphrase to import your wallet to a new browser or device. 
+You can use your Sui Wallet on multiple devices and browsers. After you create a Sui Wallet, use the 12-word recovery phrase to import your wallet to a new browser or device. 
 
 1. Open the Sui Wallet extension in your browser and then click **Get Started**.
-1. Click **Import a wallet**.
-1. Enter your 12-word recovery passphrase, and then click **Import Wallet Now**.
+1. Click **Import an Existing Wallet**.
+1. Enter your 12-word recovery phrase, and then click **Continue**.
+1. Enter a password for your wallet.
+   This is not a global password for Sui Wallet. It applies only to this installation.
+1. Enter the password again to confirm it.
+1. Click **Import**.
+1. Click **Open Sui Wallet**.
+
+Sui Wallet prompts you to enter your password when you open it.
+
+
+## View Sui Wallet details
+
+To view details about your Sui Wallet, including the Account ID, current network, and installed version, click the menu (the three bars) at the top-right corner of the Sui Wallet interface.
+
+
+## Reset your Sui Wallet password
+
+If you forget the password for your Sui Wallet you can reset it using your 12-word recovery phrase. 
+
+1. Click **Forgot password?** on the **Welcome Back** page.
+1. Enter your 12-word recovery phrase, and then click **Continue**.
+1. Enter a password, then confirm the password.
+1. Click **Reset**.
+
+
+## Lock your Sui Wallet
+
+You can lock your wallet to prevent unauthorized access. You must enter your password to unlock it.
+
+1. Click the menu (the three bars) at the top-right corner of the Sui Wallet interface.
+1. Click **Lock Wallet**.
+
+You can also set a timer to automatically lock your wallet after a period of idle time. 
+
+1. Click the menu (the three bars) at the top-right corner of the Sui Wallet interface.
+1. Click **Account**.
+1. In the field under **AUTO-LOCK TIMER**, enter a number for the number of minutes of idle time before the wallet locks, and then click **Save**.
+
+
+## Change the active network
+
+You can change the active network for Sui Wallet. Currently, Sui Wallet supports only Devnet and Local. Use Devnet unless you have a local network for testing. To learn how to create a local network, see [Sui Client CLI](../build/cli-client.md).
+
+1. Click the menu (the three bars) at the top-right corner of the Sui Wallet interface.
+1. Click **Network**.
+1. Click the network to use. 
+   A checkmark displays next to the active network.
+
 
 ## Add SUI tokens to your Sui Wallet
 
@@ -64,9 +116,10 @@ It's near the top of the wallet and starts with 0x.
 
 The channel bot displays a message that starts with "5 test SUI objects are heading to your wallet..."
 
-## View your account balance
 
-To view your account balance, click **Coins**. The wallet shows your SUI balance and lists the other coins in your wallet, if any.
+## View your wallet balance
+
+To view your wallet balance, click **Coins**. The wallet shows your SUI balance and lists the other coins in your wallet, if any.
 
 
 ## Send coins
@@ -97,7 +150,8 @@ Sui Explorer opens with the details for your wallet address displayed.
 
 You can mint an example Sui NFT directly from Sui Wallet.
 
-Click **Apps**, then click **Mint NFT**. In the current version you can mint only example NFTs.
+Click **Apps**, then click **Mint an NFT**. In the current version you can mint only example NFTs.
+
 
 ## Create a new NFT
 
@@ -107,6 +161,7 @@ To mint a new NFT using the demo site
 1. Open the [Sui Wallet demo](https://sui-wallet-demo.sui.io/) site.
 1. Click **Connect**.
 1. In your Sui Wallet, click **Connect** to connect your wallet with the demo site.
+   You may need to enter your wallet password.
 1. Enter a **Name** and **Description** for your NFT, and then enter Image URL to the image to use.
 1. Click **Create**.
 1. Click **Approve** in your wallet to allow the site to add the NFT to your wallet.
@@ -115,9 +170,11 @@ After you successfully create a new NFT, you can transfer it to another wallet a
 
 You can view details for the transactions to create the NFT and then transfer it in [Sui Explorer](https://explorer.devnet.sui.io/).
 
+
 ## View your NFTs
 
 Click the **NFTs** tab to view all of the NFTS that you mint, purchase, or receive in your wallet. This includes any NFTs that you obtain from connected apps.  Click on an NFT to view additional details about it, view a larger NFT image, or send the NFT to another address.
+
 
 ## Send an NFT
 
