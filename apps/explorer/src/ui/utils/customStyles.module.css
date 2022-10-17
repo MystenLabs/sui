@@ -1,6 +1,4 @@
 .placeholder {
-    @apply rounded-[3px] animate-shimmer;
-
     background: linear-gradient(
         90deg,
         #ecf1f4 -24.18%,
