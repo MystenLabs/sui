@@ -704,6 +704,11 @@ impl AuthorityState {
             .instrument(span)
             .await?;
 
+        if self.is_cert_awaiting_sequencing(digest)? {
+            debug!("shared object cert has not been sequenced by narwhal");
+            return Err(SuiError::SharedObjectLockNotSetError);
+        }
+
         self.process_certificate(tx_guard, certificate, bypass_validator_halt)
             .await
             .tap_err(|e| debug!(?tx_digest, "process_certificate failed: {e}"))
@@ -2077,6 +2082,23 @@ impl AuthorityState {
         // We only notify i.e. update low watermark once database changes are committed
         notifier_ticket.notify();
         Ok(())
+    }
+
+    /// Returns true if certificate is a shared-object cert but has not been sequenced.
+    async fn is_cert_awaiting_sequencing(
+        &self,
+        certificate: &CertifiedTransaction,
+    ) -> SuiResult<bool> {
+        // always an error to call this on fullnode.
+        assert!(!self.is_fullnode());
+
+        if !certicate.contains_shared_object() {
+            Ok(false)
+        } else {
+            !self
+                .database
+                .consensus_message_processed(certificate.digest())
+        }
     }
 
     /// Check whether a shared-object certificate has already been given shared-locks.
