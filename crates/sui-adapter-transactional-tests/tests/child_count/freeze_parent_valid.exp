@@ -1,31 +1,28 @@
-processed 8 tasks
+processed 7 tasks
 
 init:
 A: object(100), B: object(101)
 
-task 1 'publish'. lines 9-40:
+task 1 'publish'. lines 9-62:
 created: object(105)
 written: object(104)
 
-task 2 'run'. lines 42-42:
+task 2 'run'. lines 64-64:
 created: object(107)
 written: object(106)
 
-task 3 'run'. lines 44-44:
-created: object(109)
-written: object(108)
+task 3 'run'. lines 66-66:
+created: object(109), object(110)
+written: object(107), object(108)
 
-task 4 'run'. lines 46-46:
-written: object(107), object(109), object(110)
-
-task 5 'view-object'. lines 48-48:
+task 4 'view-object'. lines 68-68:
 Owner: Account Address ( A )
 Version: 2
 Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(107)}}}
 
-task 6 'run'. lines 50-50:
-written: object(107), object(111)
-deleted: object(109)
+task 5 'run'. lines 70-70:
+written: object(107), object(109), object(111)
+deleted: object(110)
 
-task 7 'run'. lines 52-52:
+task 6 'run'. lines 72-72:
 written: object(107), object(112)
