@@ -23,11 +23,7 @@ use sui_types::{
 };
 use test_utils::transaction::{publish_counter_package, submit_shared_object_transaction};
 use test_utils::{
-    authority::{
-        spawn_checkpoint_processes,
-        spawn_test_authorities,
-        test_authority_configs,
-    },
+    authority::{spawn_checkpoint_processes, spawn_test_authorities, test_authority_configs},
     messages::{make_transactions_with_pre_genesis_objects, move_transaction},
     objects::test_gas_objects,
 };
