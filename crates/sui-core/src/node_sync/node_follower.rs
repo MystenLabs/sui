@@ -324,8 +324,8 @@ where
 mod test {
     use super::*;
     use crate::{
-        authority_active::gossip::GossipMetrics, authority_client::NetworkAuthorityClient,
-        node_sync::SyncStatus, test_utils::test_authority_aggregator,
+        authority_active::gossip::GossipMetrics, authority_aggregator::AuthorityAggregatorBuilder,
+        authority_client::NetworkAuthorityClient, node_sync::SyncStatus,
     };
     use std::sync::{Arc, Mutex};
     use sui_macros::sim_test;
@@ -454,7 +454,10 @@ mod test {
         // Set up an authority
         let config = test_and_configure_authority_configs(1);
         let authorities = spawn_test_authorities(objects, &config).await;
-        let net = Arc::new(test_authority_aggregator(&config));
+        let (agg, _) = AuthorityAggregatorBuilder::from_network_config(&config)
+            .build()
+            .unwrap();
+        let net = Arc::new(agg);
 
         execute_transactions(&net, &transactions).await;
 
