@@ -14,21 +14,16 @@ use sui_types::error::{SuiError, SuiResult};
 /// CancellableSpawner allows spawned tasks to be cancelled easily without keeping track of every
 /// JoinHandle that gets created.
 pub struct CancellableSpawner {
-    cancel_tx: broadcast::Sender<()>,
-    spawn_lock: Arc<RwLock<()>>,
-    task_lock: Arc<RwLock<()>>,
+    task_spawner: Arc<RwLock<TaskSpawner>>,
 }
 
 /// While a CancelGuard is held, no new tasks can be spawned on the CancellableSpawner.
-pub struct CancelGuard(OwnedRwLockWriteGuard<()>);
+pub struct CancelGuard(OwnedRwLockWriteGuard<TaskSpawner>);
 
 impl CancellableSpawner {
     pub fn new() -> Self {
-        let (cancel_tx, _) = broadcast::channel(1);
         Self {
-            cancel_tx,
-            spawn_lock: Default::default(),
-            task_lock: Default::default(),
+            task_spawner: Arc::new(RwLock::new(TaskSpawner::new())),
         }
     }
 
@@ -39,19 +34,52 @@ impl CancellableSpawner {
     {
         // if spawn_lock is held for write, the spawner is in the process of cancelling, so new
         // spawn attempts must fail.
-        let _spawn_guard = self
-            .spawn_lock
+        let spawner = self
+            .task_spawner
             .try_read()
             .tap_err(|_| {
                 debug!("task could not be spawned, CancellableSpawner::cancel() is in progress")
             })
             .map_err(|_| SuiError::TaskSpawnError)?;
 
+        Ok(spawner.spawn(fut))
+    }
+
+    /// Cancel all tasks that were spawned via this instance.
+    /// Returns a guard which, while held, prevents new tasks from spawning.
+    pub async fn cancel_all_tasks(&self) -> CancelGuard {
+        debug!("cancelling all tasks");
+        // no new readers of task_lock can lock while spawn_lock is held for write, because
+        // task_lock.read() is only called while spawn_lock is held.
+        let spawn_guard = self.task_spawner.clone().write_owned().await;
+        spawn_guard.cancel().await;
+        CancelGuard(spawn_guard)
+    }
+}
+
+struct TaskSpawner {
+    cancel_tx: broadcast::Sender<()>,
+    any_task_alive_lock: Arc<RwLock<()>>,
+}
+
+impl TaskSpawner {
+    fn new() -> Self {
+        let (cancel_tx, _) = broadcast::channel(1);
+        Self {
+            cancel_tx,
+            any_task_alive_lock: Default::default(),
+        }
+    }
+
+    fn spawn<F>(&self, fut: F) -> JoinHandle<()>
+    where
+        F: Future<Output = ()> + Send + 'static,
+    {
         // While spawn_lock is held, task_lock.write() cannot be called, so try_read must succeed.
-        let task_guard = self.task_lock.clone().try_read_owned().unwrap();
+        let task_guard = self.any_task_alive_lock.clone().try_read_owned().unwrap();
         let mut cancel_rx = self.cancel_tx.subscribe();
 
-        Ok(tokio::spawn(async move {
+        tokio::spawn(async move {
             let _task_guard = task_guard;
             let recv = cancel_rx.recv();
             tokio::select! {
@@ -62,25 +90,15 @@ impl CancellableSpawner {
                     trace!("task finished normally");
                 }
             }
-        }))
+        })
     }
 
-    /// Cancel all tasks that were spawned via this instance.
-    /// Returns a guard which, while held, prevents new tasks from spawning.
-    pub async fn cancel_all_tasks(&self) -> CancelGuard {
-        debug!("cancelling all tasks");
-        // no new readers of task_lock can lock while spawn_lock is held for write, because
-        // task_lock.read() is only called while spawn_lock is held.
-        let spawn_guard = self.spawn_lock.clone().write_owned().await;
-
-        debug!("sending cancel broadcast");
+    async fn cancel(&self) {
         let _ = self.cancel_tx.send(());
 
         // await all tasks exiting.
-        let _ = self.task_lock.write().await;
+        let _ = self.any_task_alive_lock.write().await;
         debug!("all tasks exited");
-
-        CancelGuard(spawn_guard)
     }
 }
 
