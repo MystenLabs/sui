@@ -214,6 +214,10 @@ export function getObjectVersion(
 
 /* -------------------------------- SuiObject ------------------------------- */
 
+export function shouldUseOldSharedObjectAPI(version: string): boolean {
+  return version === '0.11.0' || version === '0.12.0';
+}
+
 export function getObjectType(
   resp: GetObjectDataResponse
 ): ObjectType | undefined {
@@ -232,9 +236,20 @@ export function getObjectOwner(
   return getObjectExistsResponse(resp)?.owner;
 }
 
+export function getSharedObjectInitialVersion(
+  resp: GetObjectDataResponse
+): number | undefined {
+  const owner = getObjectOwner(resp);
+  if (typeof owner === 'object' && 'Shared' in owner) {
+    return owner.Shared.initial_shared_version;
+  } else {
+    return undefined;
+  }
+}
+
 export function isSharedObject(resp: GetObjectDataResponse): boolean {
   const owner = getObjectOwner(resp);
-  return owner === 'Shared';
+  return owner === 'Shared' || (typeof owner === 'object' && 'Shared' in owner);
 }
 
 export function isImmutableObject(resp: GetObjectDataResponse): boolean {

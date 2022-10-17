@@ -10,6 +10,7 @@ import {
   SUI_PACKAGE_ID,
   PAY_SPLIT_COIN_VEC_FUNC_NAME,
   ObjectId,
+  shouldUseOldSharedObjectAPI,
   SuiAddress,
   SUI_TYPE_ARG,
   Transaction,
@@ -332,15 +333,20 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
       sender: signerAddress,
     };
 
-    return this.serializeTransactionData(txData);
+    return await this.serializeTransactionData(txData);
   }
 
-  private serializeTransactionData(
+  private async serializeTransactionData(
     tx: TransactionData,
     // TODO: derive the buffer size automatically
     size: number = 8192
-  ): Base64DataBuffer {
-    const dataBytes = bcs.ser('TransactionData', tx, size).toBytes();
+  ): Promise<Base64DataBuffer> {
+    const version = await this.provider.getRpcApiVersion();
+    const format = shouldUseOldSharedObjectAPI(version)
+      ? 'TransactionData_Deprecated'
+      : 'TransactionData';
+
+    const dataBytes = bcs.ser(format, tx, size).toBytes();
     const serialized = new Uint8Array(TYPE_TAG.length + dataBytes.length);
     serialized.set(TYPE_TAG);
     serialized.set(dataBytes, TYPE_TAG.length);
