@@ -1366,7 +1366,7 @@ nix-adf3d7031871b0af = { package = "nix", version = "0.24", default-features = f
 num-format = { version = "0.4", default-features = false }
 num_threads = { version = "0.1", default-features = false }
 pprof = { version = "0.10", features = ["cpp", "criterion", "flamegraph", "inferno"] }
-quick-xml = { version = "0.25", default-features = false }
+quick-xml = { version = "0.23", default-features = false }
 rand_chacha-6f8ce4dd05d13bba = { package = "rand_chacha", version = "0.2", default-features = false, features = ["std"] }
 rgb = { version = "0.8", features = ["as-bytes", "bytemuck"] }
 rustix = { version = "0.35", features = ["fs", "io-lifetimes", "libc", "std", "use-libc-auxv"] }
@@ -1410,7 +1410,7 @@ num-format = { version = "0.4", default-features = false }
 num_threads = { version = "0.1", default-features = false }
 pprof = { version = "0.10", features = ["cpp", "criterion", "flamegraph", "inferno"] }
 protobuf-src = { version = "1", default-features = false }
-quick-xml = { version = "0.25", default-features = false }
+quick-xml = { version = "0.23", default-features = false }
 rand_chacha-6f8ce4dd05d13bba = { package = "rand_chacha", version = "0.2", default-features = false, features = ["std"] }
 rgb = { version = "0.8", features = ["as-bytes", "bytemuck"] }
 rustix = { version = "0.35", features = ["fs", "io-lifetimes", "libc", "std", "use-libc-auxv"] }
@@ -1454,7 +1454,7 @@ openssl = { version = "0.10" }
 openssl-probe = { version = "0.1", default-features = false }
 openssl-sys = { version = "0.9", default-features = false }
 pprof = { version = "0.10", features = ["cpp", "criterion", "flamegraph", "inferno"] }
-quick-xml = { version = "0.25", default-features = false }
+quick-xml = { version = "0.23", default-features = false }
 rand_chacha-6f8ce4dd05d13bba = { package = "rand_chacha", version = "0.2", default-features = false, features = ["std"] }
 rgb = { version = "0.8", features = ["as-bytes", "bytemuck"] }
 rustix = { version = "0.35", features = ["fs", "io-lifetimes", "libc", "std", "use-libc-auxv"] }
@@ -1501,7 +1501,7 @@ openssl-probe = { version = "0.1", default-features = false }
 openssl-sys = { version = "0.9", default-features = false }
 pprof = { version = "0.10", features = ["cpp", "criterion", "flamegraph", "inferno"] }
 protobuf-src = { version = "1", default-features = false }
-quick-xml = { version = "0.25", default-features = false }
+quick-xml = { version = "0.23", default-features = false }
 rand_chacha-6f8ce4dd05d13bba = { package = "rand_chacha", version = "0.2", default-features = false, features = ["std"] }
 rgb = { version = "0.8", features = ["as-bytes", "bytemuck"] }
 rustix = { version = "0.35", features = ["fs", "io-lifetimes", "libc", "std", "use-libc-auxv"] }
