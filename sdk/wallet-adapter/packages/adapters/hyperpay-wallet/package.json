@@ -1,5 +1,5 @@
 {
-  "name": "@mysten/wallet-adapter-sui-wallet",
+  "name": "@mysten/wallet-adapter-hyperpay-wallet",
   "version": "0.2.0",
   "description": "Integration of Sui Wallet into the Sui Wallet Adapter",
   "license": "Apache-2.0",

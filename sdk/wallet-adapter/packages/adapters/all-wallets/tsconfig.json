@@ -8,6 +8,7 @@
   "references": [
     { "path": "../mock-wallet" },
     { "path": "../sui-wallet" },
+    { "path": "../hyperpay-wallet" },
     { "path": "../wallet-standard-adapter" }
   ]
 }

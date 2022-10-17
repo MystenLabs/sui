@@ -12,6 +12,9 @@
       "@mysten/wallet-adapter-sui-wallet": [
         "./packages/adapters/sui-wallet/src"
       ],
+      "@mysten/wallet-adapter-hyperpay-wallet": [
+        "./packages/adapters/hyperpay-wallet/src"
+      ],
       "@mysten/wallet-adapter-mock-wallet": [
         "./packages/adapters/mock-wallet/src"
       ],
@@ -31,6 +34,7 @@
     { "path": "./packages/adapters/all-wallets" },
     { "path": "./packages/adapters/base-adapter" },
     { "path": "./packages/adapters/sui-wallet" },
+    { "path": "./packages/adapters/hyperpay-wallet" },
     { "path": "./packages/adapters/mock-wallet" },
     { "path": "./packages/adapters/wallet-standard-adapter" }
   ]
