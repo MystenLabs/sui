@@ -8,6 +8,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::fmt::Write;
 use std::fmt::{Display, Formatter};
+use std::str::FromStr;
 
 use colored::Colorize;
 use itertools::Itertools;
@@ -2041,6 +2042,74 @@ pub enum SuiEvent {
     EpochChange(EpochId),
     /// New checkpoint
     Checkpoint(CheckpointSequenceNumber),
+}
+
+impl TryFrom<SuiEvent> for Event {
+    type Error = anyhow::Error;
+    fn try_from(event: SuiEvent) -> Result<Self, Self::Error> {
+        Ok(match event {
+            SuiEvent::MoveEvent {
+                package_id,
+                transaction_module,
+                sender,
+                type_,
+                fields: _,
+                bcs,
+            } => Event::MoveEvent {
+                package_id,
+                transaction_module: Identifier::from_str(&transaction_module)?,
+                sender,
+                type_: parse_sui_struct_tag(&type_)?,
+                contents: bcs,
+            },
+            SuiEvent::Publish { sender, package_id } => Event::Publish { sender, package_id },
+            SuiEvent::TransferObject {
+                package_id,
+                transaction_module,
+                sender,
+                recipient,
+                object_id,
+                version,
+                type_,
+                amount,
+            } => Event::TransferObject {
+                package_id,
+                transaction_module: Identifier::from_str(&transaction_module)?,
+                sender,
+                recipient,
+                object_id,
+                version,
+                type_,
+                amount,
+            },
+            SuiEvent::DeleteObject {
+                package_id,
+                transaction_module,
+                sender,
+                object_id,
+            } => Event::DeleteObject {
+                package_id,
+                transaction_module: Identifier::from_str(&transaction_module)?,
+                sender,
+                object_id,
+            },
+            SuiEvent::NewObject {
+                package_id,
+                transaction_module,
+                sender,
+                recipient,
+                object_id,
+            } => Event::NewObject {
+                package_id,
+                transaction_module: Identifier::from_str(&transaction_module)?,
+                sender,
+                recipient,
+                object_id,
+            },
+            SuiEvent::EpochChange(id) => Event::EpochChange(id),
+            SuiEvent::Checkpoint(seq) => Event::Checkpoint(seq),
+        })
+    }
 }
 
 impl SuiEvent {

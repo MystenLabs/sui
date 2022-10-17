@@ -478,6 +478,17 @@ fn debit_coins_and_transfer<S>(
                     Owner::AddressOwner(*recipient),
                     tx_ctx.digest(),
                 );
+                temporary_store.log_event(Event::TransferObject {
+                    package_id: ObjectID::from(SUI_FRAMEWORK_ADDRESS),
+                    transaction_module: Identifier::from(ident_str!("native")),
+                    sender: tx_ctx.sender(),
+                    recipient: Owner::AddressOwner(*recipient),
+                    object_id: new_coin.id(),
+                    version: new_coin.version(),
+                    type_: TransferType::Coin, // Should this be a separate type, like SuiCoin?
+                    amount: Some(amount),
+                });
+
                 temporary_store.write_object(new_coin, WriteKind::Create);
                 break; // done paying this recipieint, on to the next one
             } else {

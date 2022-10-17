@@ -260,8 +260,14 @@ impl PseudoBlockProvider {
                     }
                 }
 
-                let ops =
-                    Operation::from_data_and_effect(&tx.signed_data.data, &effect, &new_coins)?;
+                let ops = Operation::from_data_and_events(
+                    &tx.signed_data.data,
+                    &effect.status,
+                    &effect.events,
+                    effect.gas_used.net_gas_usage(),
+                    effect.gas_object.1,
+                    &new_coins,
+                )?;
 
                 self.blocks.write().await.push(new_block);
                 self.update_balance(index, ops).await.map_err(|e| {

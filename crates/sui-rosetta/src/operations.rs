@@ -7,18 +7,19 @@ use std::str::FromStr;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::{json, Value};
-
 use serde_with::serde_as;
 use serde_with::DisplayFromStr;
+
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::coin::{PAY_JOIN_FUNC_NAME, PAY_MODULE_NAME, PAY_SPLIT_VEC_FUNC_NAME};
 use sui_types::event::Event;
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::{
-    CallArg, InputObjectKind, MoveCall, ObjectArg, Pay, PayAllSui, PaySui, SingleTransactionKind,
-    TransactionData, TransactionEffects, TransferObject,
+    CallArg, ExecutionStatus, InputObjectKind, MoveCall, ObjectArg, Pay, PayAllSui, PaySui,
+    SingleTransactionKind, TransactionData, TransactionEffects, TransferObject,
 };
 use sui_types::move_package::disassemble_modules;
+use sui_types::object::Owner;
 use sui_types::{parse_sui_struct_tag, SUI_FRAMEWORK_OBJECT_ID};
 
 use crate::types::{
@@ -76,16 +77,19 @@ impl Operation {
             .collect::<Vec<_>>())
     }
 
-    pub fn from_data_and_effect(
+    pub fn from_data_and_events(
         data: &TransactionData,
-        effects: &TransactionEffects,
+        status: &ExecutionStatus,
+        events: &Vec<Event>,
+        net_gas_usage: i64,
+        gas_owner: Owner,
         new_coins: &[(GasCoin, ObjectRef)],
     ) -> Result<Vec<Operation>, anyhow::Error> {
         let budget = data.gas_budget;
         let gas = data.gas();
         let sender = data.signer();
         let mut counter = IndexCounter::default();
-        let status = Some((&effects.status).into());
+        let status = Some((status).into());
         let mut operations = data
             .kind
             .single_transactions()
@@ -97,27 +101,29 @@ impl Operation {
                     sender,
                     &mut counter,
                     status,
-                    Some(effects),
+                    Some(events),
                     new_coins,
                 )
             })
             .flatten()
             .collect::<Vec<_>>();
 
-        operations.push(Operation {
-            operation_identifier: counter.next_idx().into(),
-            related_operations: vec![],
-            type_: OperationType::GasSpent,
-            // We always charge gas
-            status: Some(OperationStatus::Success),
-            account: Some(AccountIdentifier { address: sender }),
-            amount: Some(Amount {
-                value: effects.gas_used.net_gas_usage().neg().into(),
-                currency: SUI.clone(),
-            }),
-            coin_change: None,
-            metadata: None,
-        });
+        if let Owner::AddressOwner(gas_owner) = gas_owner {
+            operations.push(Operation {
+                operation_identifier: counter.next_idx().into(),
+                related_operations: vec![],
+                type_: OperationType::GasSpent,
+                // We always charge gas
+                status: Some(OperationStatus::Success),
+                account: Some(AccountIdentifier { address: gas_owner }),
+                amount: Some(Amount {
+                    value: net_gas_usage.neg().into(),
+                    currency: SUI.clone(),
+                }),
+                coin_change: None,
+                metadata: None,
+            });
+        }
 
         Ok(operations)
     }
@@ -285,7 +291,7 @@ fn parse_operations(
     sender: SuiAddress,
     counter: &mut IndexCounter,
     status: Option<OperationStatus>,
-    effects: Option<&TransactionEffects>,
+    events: Option<&Vec<Event>>,
     new_coins: &[(GasCoin, ObjectRef)],
 ) -> Result<Vec<Operation>, anyhow::Error> {
     let mut operations = match tx {
@@ -341,11 +347,11 @@ fn parse_operations(
             parse_pay_all_sui(sender, gas, budget, pay_all_sui, counter, status)
         }
     };
-    if let Some(effects) = effects {
+    if let Some(events) = events {
         let coin_change_operations = Operation::get_coin_operation_from_events(
             &tx.input_objects()?,
             new_coins,
-            &effects.events,
+            events,
             status,
             counter,
         );

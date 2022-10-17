@@ -90,7 +90,7 @@ dependencies = [
 [[package]]
 name = "anemo"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=7da7c9a1913ed7fadbdd92ebc1b9f48e0c8cef0e#7da7c9a1913ed7fadbdd92ebc1b9f48e0c8cef0e"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=1b977fe20a615b7a7045f779f9aafa120389c2ab#1b977fe20a615b7a7045f779f9aafa120389c2ab"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -120,7 +120,7 @@ dependencies = [
 [[package]]
 name = "anemo-build"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=7da7c9a1913ed7fadbdd92ebc1b9f48e0c8cef0e#7da7c9a1913ed7fadbdd92ebc1b9f48e0c8cef0e"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=1b977fe20a615b7a7045f779f9aafa120389c2ab#1b977fe20a615b7a7045f779f9aafa120389c2ab"
 dependencies = [
  "prettyplease",
  "proc-macro2 1.0.47",
@@ -131,7 +131,7 @@ dependencies = [
 [[package]]
 name = "anemo-tower"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=7da7c9a1913ed7fadbdd92ebc1b9f48e0c8cef0e#7da7c9a1913ed7fadbdd92ebc1b9f48e0c8cef0e"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=1b977fe20a615b7a7045f779f9aafa120389c2ab#1b977fe20a615b7a7045f779f9aafa120389c2ab"
 dependencies = [
  "anemo",
  "bytes",
@@ -287,6 +287,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "ark-relations"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4cba4c1c99792a6834bd97f7fd76578ec2cd58d2afc5139a17e1d1bec65b38f6"
+dependencies = [
+ "ark-ff",
+ "ark-std",
+ "tracing",
+ "tracing-subscriber 0.2.25",
+]
+
+[[package]]
 name = "ark-serialize"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -303,9 +315,9 @@ version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8dd4e5f0bf8285d5ed538d27fab7411f3e297908fd93c62195de8bee3f199e82"
 dependencies = [
- "proc-macro2 1.0.47",
+ "proc-macro2 1.0.46",
  "quote 1.0.21",
- "syn 1.0.103",
+ "syn 1.0.102",
 ]
 
 [[package]]
@@ -2224,6 +2236,7 @@ dependencies = [
  "ff",
  "generic-array",
  "group",
+ "pkcs8",
  "rand_core 0.6.4",
  "sec1",
  "subtle",
@@ -3746,9 +3759,9 @@ dependencies = [
 
 [[package]]
 name = "libsqlite3-sys"
-version = "0.25.1"
+version = "0.24.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9f0455f2c1bc9a7caa792907026e469c1d91761fb0ea37cbb16427c77280cf35"
+checksum = "898745e570c7d0453cc1fbc4a701eb6c662ed54e8fec8b7d14be137ebeeb9d14"
 dependencies = [
  "cc",
  "pkg-config",
@@ -3816,6 +3829,15 @@ checksum = "abb12e687cfb44aa40f41fc3978ef76448f9b6038cad6aef4259d3c095a2382e"
 dependencies = [
  "cfg-if 1.0.0",
  "serde 1.0.147",
+]
+
+[[package]]
+name = "lru"
+version = "0.7.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e999beba7b6e8345721bd280141ed958096a2e4abdf74f67ff4ce49b4b54e47a"
+dependencies = [
+ "hashbrown",
 ]
 
 [[package]]
@@ -4880,24 +4902,37 @@ name = "narwhal-crypto"
 version = "0.1.0"
 dependencies = [
  "ark-bls12-377",
+ "ark-ec",
+ "ark-ff",
+ "ark-serialize",
+ "ark-std",
  "base64ct",
  "bincode",
+ "bls-crypto",
+ "blst",
+ "bulletproofs",
  "criterion",
+ "curve25519-dalek-ng",
+ "ed25519-consensus",
  "eyre",
  "fastcrypto",
  "hex",
  "hex-literal",
+ "hkdf",
+ "k256",
  "merlin",
  "once_cell",
  "proptest",
  "proptest-derive",
  "rand 0.8.5",
  "readonly",
+ "secp256k1",
  "serde 1.0.147",
  "serde-reflection",
  "serde_bytes",
  "serde_json",
  "serde_with 2.0.1",
+ "signature",
  "tokio",
  "workspace-hack",
  "zeroize",
@@ -5040,7 +5075,6 @@ dependencies = [
  "pretty_assertions",
  "prometheus",
  "rand 0.8.5",
- "reqwest",
  "serde-reflection",
  "serde_yaml",
  "structopt",
@@ -7221,6 +7255,7 @@ dependencies = [
  "base16ct",
  "der",
  "generic-array",
+ "pkcs8",
  "subtle",
  "zeroize",
 ]
@@ -7801,7 +7836,8 @@ dependencies = [
 [[package]]
 name = "sqlx"
 version = "0.6.2"
-source = "git+https://github.com/huitseeker/sqlx?branch=update_libsqlite3#fa4613e770a82a606b2cbaa4d36e3ca628c67dad"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9249290c05928352f71c077cc44a464d880c63f26f7534728cca008e135c0428"
 dependencies = [
  "sqlx-core",
  "sqlx-macros",
@@ -7810,7 +7846,8 @@ dependencies = [
 [[package]]
 name = "sqlx-core"
 version = "0.6.2"
-source = "git+https://github.com/huitseeker/sqlx?branch=update_libsqlite3#fa4613e770a82a606b2cbaa4d36e3ca628c67dad"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dcbc16ddba161afc99e14d1713a453747a2b07fc097d2009f4c300ec99286105"
 dependencies = [
  "ahash",
  "atoi",
@@ -7855,7 +7892,8 @@ dependencies = [
 [[package]]
 name = "sqlx-macros"
 version = "0.6.2"
-source = "git+https://github.com/huitseeker/sqlx?branch=update_libsqlite3#fa4613e770a82a606b2cbaa4d36e3ca628c67dad"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b850fa514dc11f2ee85be9d055c512aa866746adfacd1cb42d867d68e6a5b0d9"
 dependencies = [
  "dotenvy",
  "either",
@@ -7873,7 +7911,8 @@ dependencies = [
 [[package]]
 name = "sqlx-rt"
 version = "0.6.2"
-source = "git+https://github.com/huitseeker/sqlx?branch=update_libsqlite3#fa4613e770a82a606b2cbaa4d36e3ca628c67dad"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "24c5b2d25fa654cc5f841750b8e1cdedbe21189bf9a9382ee90bfa9dd3562396"
 dependencies = [
  "once_cell",
  "tokio",
@@ -8005,10 +8044,11 @@ checksum = "734676eb262c623cec13c3155096e08d1f8f29adce39ba17948b18dad1e54142"
 
 [[package]]
 name = "sui"
-version = "0.14.0"
+version = "0.12.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "base64ct",
  "bcs",
  "bip32",
  "camino",
@@ -8044,7 +8084,6 @@ dependencies = [
  "sui-framework-build",
  "sui-json",
  "sui-json-rpc-types",
- "sui-keys",
  "sui-macros",
  "sui-node",
  "sui-sdk",
@@ -8124,7 +8163,6 @@ dependencies = [
  "sui-config",
  "sui-core",
  "sui-json-rpc-types",
- "sui-keys",
  "sui-macros",
  "sui-network",
  "sui-node",
@@ -8162,7 +8200,6 @@ dependencies = [
  "sui-faucet",
  "sui-json",
  "sui-json-rpc-types",
- "sui-keys",
  "sui-sdk",
  "sui-swarm",
  "sui-transaction-builder",
@@ -8213,7 +8250,7 @@ dependencies = [
 
 [[package]]
 name = "sui-core"
-version = "0.14.0"
+version = "0.12.0"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -8317,7 +8354,7 @@ dependencies = [
 
 [[package]]
 name = "sui-faucet"
-version = "0.14.0"
+version = "0.12.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -8331,10 +8368,9 @@ dependencies = [
  "sui",
  "sui-config",
  "sui-json-rpc-types",
- "sui-keys",
  "sui-node",
+ "sui-sdk",
  "sui-types",
- "tap",
  "telemetry-subscribers 0.2.0",
  "test-utils",
  "thiserror",
@@ -8354,7 +8390,6 @@ dependencies = [
  "bcs",
  "better_any",
  "curve25519-dalek-ng",
- "digest 0.10.5",
  "fastcrypto",
  "linked-hash-map",
  "move-binary-format",
@@ -8370,6 +8405,7 @@ dependencies = [
  "move-vm-types",
  "num_enum",
  "once_cell",
+ "sha3 0.10.5",
  "serde 1.0.147",
  "sha3 0.10.6",
  "smallvec",
@@ -8412,7 +8448,6 @@ dependencies = [
  "sui-json",
  "sui-json-rpc",
  "sui-json-rpc-types",
- "sui-keys",
  "sui-node",
  "sui-sdk",
  "sui-types",
@@ -8497,25 +8532,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sui-keys"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "bip32",
- "fastcrypto",
- "rand 0.8.5",
- "serde 1.0.147",
- "serde_json",
- "sha3 0.10.6",
- "signature",
- "slip10_ed25519",
- "sui-types",
- "tempfile",
- "tiny-bip39",
- "workspace-hack",
-]
-
-[[package]]
 name = "sui-macros"
 version = "0.7.0"
 dependencies = [
@@ -8540,7 +8556,7 @@ dependencies = [
 
 [[package]]
 name = "sui-node"
-version = "0.14.0"
+version = "0.12.0"
 dependencies = [
  "anemo",
  "anemo-tower",
@@ -8574,22 +8590,27 @@ dependencies = [
 
 [[package]]
 name = "sui-open-rpc"
-version = "0.0.0"
+version = "0.6.1"
 dependencies = [
  "anyhow",
  "clap 3.2.22",
+ "hyper",
  "move-core-types",
+ "move-package",
  "pretty_assertions",
  "rand 0.8.5",
  "schemars",
  "serde 1.0.147",
  "serde_json",
  "sui",
+ "sui-config",
  "sui-core",
  "sui-json",
  "sui-json-rpc",
  "sui-json-rpc-types",
+ "sui-sdk",
  "sui-types",
+ "test-utils",
  "tokio",
  "workspace-hack",
 ]
@@ -8620,7 +8641,9 @@ dependencies = [
  "fastcrypto",
  "hyper",
  "move-core-types",
+ "move-package",
  "once_cell",
+ "rand 0.8.5",
  "serde 1.0.147",
  "serde_json",
  "serde_with 1.14.0",
@@ -8629,12 +8652,13 @@ dependencies = [
  "strum_macros",
  "sui-config",
  "sui-core",
- "sui-keys",
+ "sui-framework",
  "sui-node",
  "sui-sdk",
  "sui-types",
  "telemetry-subscribers 0.1.0",
  "tempfile",
+ "test-utils",
  "tokio",
  "tower",
  "tower-http",
@@ -8646,12 +8670,13 @@ dependencies = [
 
 [[package]]
 name = "sui-sdk"
-version = "0.14.0"
+version = "0.13.0"
 dependencies = [
  "anyhow",
  "async-recursion",
  "async-trait",
  "bcs",
+ "bip32",
  "clap 3.2.22",
  "dirs",
  "futures",
@@ -8664,15 +8689,17 @@ dependencies = [
  "serde 1.0.147",
  "serde_json",
  "sha3 0.10.6",
+ "signature",
+ "sui-adapter",
  "sui-config",
  "sui-core",
  "sui-json",
  "sui-json-rpc",
  "sui-json-rpc-types",
- "sui-keys",
  "sui-transaction-builder",
  "sui-types",
  "tempfile",
+ "tiny-bip39",
  "tokio",
  "workspace-hack",
 ]
@@ -8784,7 +8811,7 @@ dependencies = [
 
 [[package]]
 name = "sui-tool"
-version = "0.14.0"
+version = "0.12.0"
 dependencies = [
  "anyhow",
  "clap 3.2.22",
@@ -8861,6 +8888,7 @@ dependencies = [
  "base64ct",
  "bcs",
  "bincode",
+ "bip32",
  "byteorder",
  "curve25519-dalek",
  "digest 0.10.5",
@@ -8892,6 +8920,7 @@ dependencies = [
  "sha2 0.9.9",
  "sha3 0.10.6",
  "signature",
+ "slip10_ed25519",
  "static_assertions",
  "strum",
  "strum_macros",
@@ -9206,7 +9235,6 @@ dependencies = [
  "sui-framework-build",
  "sui-json-rpc",
  "sui-json-rpc-types",
- "sui-keys",
  "sui-node",
  "sui-sdk",
  "sui-simulator",
