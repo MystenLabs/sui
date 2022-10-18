@@ -17,6 +17,13 @@ use types::{Certificate, CertificateDigest, ConsensusStore, Round, SequenceNumbe
 #[path = "tests/bullshark_tests.rs"]
 pub mod bullshark_tests;
 
+#[derive(Default)]
+struct LastRound {
+    _round: Round,
+    leader_found: bool,
+    leader_has_support: bool,
+}
+
 pub struct Bullshark {
     /// The committee information.
     pub committee: Committee,
@@ -24,11 +31,15 @@ pub struct Bullshark {
     pub store: Arc<ConsensusStore>,
     /// The depth of the garbage collector.
     pub gc_depth: Round,
-    /// The last time we had a successful leader election
-    /// which had enough support
-    pub last_leader_election: Instant,
 
     pub metrics: Arc<ConsensusMetrics>,
+    /// The last time we had a successful leader election
+    /// which had enough support
+    last_leader_election_timestamp: Instant,
+    /// The last round for which a successful leader election took place
+    last_election_round: LastRound,
+    /// The most recent round of inserted certificate
+    max_inserted_certificate_round: Round,
 }
 
 impl ConsensusProtocol for Bullshark {
@@ -50,6 +61,22 @@ impl ConsensusProtocol for Bullshark {
             return Ok(Vec::new());
         }
 
+        if round != self.max_inserted_certificate_round && round % 2 == 0 {
+            // check when the last non successful leader election was - if it is != the round-2
+            // then report an unsuccessful election
+            let last_round = &self.last_election_round;
+
+            if !last_round.leader_found {
+                // increase the leader not found metric
+                self.metrics.leader_not_found.inc();
+            } else if !last_round.leader_has_support {
+                // increase the leader not enough support
+                self.metrics.leader_not_enough_support.inc();
+            }
+        }
+
+        self.max_inserted_certificate_round = self.max_inserted_certificate_round.max(round);
+
         // Try to order the dag to commit. Start from the highest round for which we have at least
         // f+1 certificates. This is because we need them to reveal the common coin.
         let r = round - 1;
@@ -68,7 +95,15 @@ impl ConsensusProtocol for Bullshark {
         let (leader_digest, leader) = match Self::leader(&self.committee, leader_round, &state.dag)
         {
             Some(x) => x,
-            None => return Ok(Vec::new()),
+            None => {
+                self.last_election_round = LastRound {
+                    _round: leader_round,
+                    leader_found: false,
+                    leader_has_support: false,
+                };
+                // leader has not been found - we don't have any certificate
+                return Ok(Vec::new());
+            }
         };
 
         // Check if the leader has f+1 support from its children (ie. round r-1).
@@ -81,6 +116,12 @@ impl ConsensusProtocol for Bullshark {
             .map(|(_, x)| self.committee.stake(&x.origin()))
             .sum();
 
+        self.last_election_round = LastRound {
+            _round: leader_round,
+            leader_found: true,
+            leader_has_support: false,
+        };
+
         // If it is the case, we can commit the leader. But first, we need to recursively go back to
         // the last committed leader, and commit all preceding leaders in the right order. Committing
         // a leader block means committing all its dependencies.
@@ -88,6 +129,8 @@ impl ConsensusProtocol for Bullshark {
             debug!("Leader {:?} does not have enough support", leader);
             return Ok(Vec::new());
         }
+
+        self.last_election_round.leader_has_support = true;
 
         // Get an ordered list of past leaders that are linked to the current leader.
         debug!("Leader {:?} has enough support", leader);
@@ -127,13 +170,15 @@ impl ConsensusProtocol for Bullshark {
         }
 
         // record the last time we got a successful leader election
-        let elapsed = self.last_leader_election.elapsed();
+        let elapsed = self.last_leader_election_timestamp.elapsed();
 
         self.metrics
             .commit_rounds_latency
             .observe(elapsed.as_secs_f64());
 
-        self.last_leader_election = Instant::now();
+        self.last_leader_election_timestamp = Instant::now();
+
+        self.metrics.leader_found.inc();
 
         // Log the latest committed round of every authority (for debug).
         // Performance note: if tracing at the debug log level is disabled, this is cheap, see
@@ -167,7 +212,9 @@ impl Bullshark {
             committee,
             store,
             gc_depth,
-            last_leader_election: Instant::now(),
+            last_leader_election_timestamp: Instant::now(),
+            last_election_round: LastRound::default(),
+            max_inserted_certificate_round: 0,
             metrics,
         }
     }

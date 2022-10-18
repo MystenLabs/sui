@@ -29,6 +29,16 @@ pub struct ConsensusMetrics {
     /// The number of certificates committed
     /// per commit round
     pub commit_depth: Histogram,
+    /// When a certificate is received on an odd round, we check
+    /// about the previous (even) round leader. If not found then
+    /// we increment this counter.
+    pub leader_not_found: IntCounter,
+    /// When a leader has been found and enough support exists
+    /// then this counter gets increased
+    pub leader_found: IntCounter,
+    /// When a leader has been found but have not enough support
+    /// then this counter gets increased
+    pub leader_not_enough_support: IntCounter,
 }
 
 impl ConsensusMetrics {
@@ -86,6 +96,21 @@ impl ConsensusMetrics {
             commit_depth: register_histogram_with_registry!(
                 "consensus_commit_depth",
                 "The number of certificates committed on a commit round",
+                registry
+            ).unwrap(),
+            leader_not_found: register_int_counter_with_registry!(
+                "leader_not_found",
+                "The number of times (rounds) on which we didn't manage to successfully perform a leader election",
+                registry
+            ).unwrap(),
+            leader_found: register_int_counter_with_registry!(
+                "leader_found",
+                "The number of times (rounds) on which we did manage to successfully perform a leader election",
+                registry
+            ).unwrap(),
+            leader_not_enough_support: register_int_counter_with_registry!(
+                "leader_not_enough_support",
+                "The number of times (rounds) on which a leader has been found but doesn't have enough support",
                 registry
             ).unwrap()
         }
