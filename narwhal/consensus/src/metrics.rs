@@ -1,8 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use prometheus::{
-    default_registry, register_int_counter_with_registry, register_int_gauge_vec_with_registry,
-    register_int_gauge_with_registry, IntCounter, IntGauge, IntGaugeVec, Registry,
+    default_registry, register_histogram_with_registry, register_int_counter_with_registry,
+    register_int_gauge_vec_with_registry, register_int_gauge_with_registry, Histogram, IntCounter,
+    IntGauge, IntGaugeVec, Registry,
 };
 
 #[derive(Clone, Debug)]
@@ -23,6 +24,11 @@ pub struct ConsensusMetrics {
     pub recovered_consensus_output: IntCounter,
     /// The approximate size in memory (including heap allocations) of the Dag.
     pub dag_size_bytes: IntGauge,
+    /// The latency between two successful commit rounds
+    pub commit_rounds_latency: Histogram,
+    /// The number of certificates committed
+    /// per commit round
+    pub commit_depth: Histogram,
 }
 
 impl ConsensusMetrics {
@@ -67,6 +73,21 @@ impl ConsensusMetrics {
                 "The approximate size in memory (including heap allocations) of the dag",
                 registry
             ).unwrap(),
+            commit_rounds_latency: register_histogram_with_registry!(
+                "consensus_commit_rounds_latency",
+                "The latency between two successful commit rounds (when we have successful leader election)",
+                // buckets in milliseconds
+                vec![
+                    100.0, 200.0, 500.0, 1_000.0, 2_000.0, 3_000.0, 4_000.0, 5_000.0, 8_000.0,
+                    10_000.0, 15_000.0, 20_000.0, 30_000.0, 50_000.0, 100_000.0, 200_000.0
+                ],
+                registry
+            ).unwrap(),
+            commit_depth: register_histogram_with_registry!(
+                "consensus_commit_depth",
+                "The number of certificates committed on a commit round",
+                registry
+            ).unwrap()
         }
     }
 }

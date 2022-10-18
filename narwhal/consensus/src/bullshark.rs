@@ -1,6 +1,7 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use crate::metrics::ConsensusMetrics;
 use crate::{
     consensus::{ConsensusProtocol, ConsensusState, Dag},
     utils, ConsensusOutput,
@@ -8,6 +9,7 @@ use crate::{
 use config::{Committee, Stake};
 use fastcrypto::{hash::Hash, traits::EncodeDecodeBase64};
 use std::{collections::BTreeSet, sync::Arc};
+use tokio::time::Instant;
 use tracing::{debug, error};
 use types::{Certificate, CertificateDigest, ConsensusStore, Round, SequenceNumber, StoreResult};
 
@@ -22,6 +24,11 @@ pub struct Bullshark {
     pub store: Arc<ConsensusStore>,
     /// The depth of the garbage collector.
     pub gc_depth: Round,
+    /// The last time we had a successful leader election
+    /// which had enough support
+    pub last_leader_election: Instant,
+
+    pub metrics: Arc<ConsensusMetrics>,
 }
 
 impl ConsensusProtocol for Bullshark {
@@ -35,36 +42,8 @@ impl ConsensusProtocol for Bullshark {
         let round = certificate.round();
         let mut consensus_index = consensus_index;
 
-        // We must have stored already the parents of this certiciate!
-        if round > 0 {
-            let parents = certificate.header.parents.clone();
-            if let Some(round_table) = state.dag.get(&(round - 1)) {
-                let store_parents: BTreeSet<&CertificateDigest> =
-                    round_table.iter().map(|(_, (digest, _))| digest).collect();
-
-                for parent_digest in parents {
-                    if !store_parents.contains(&parent_digest) {
-                        if round - 1 + self.gc_depth > state.last_committed_round {
-                            error!(
-                                "The store does not contain the parent of {:?}: Missing item digest={:?}",
-                                certificate, parent_digest
-                            );
-                        } else {
-                            debug!(
-                                "The store does not contain the parent of {:?}: Missing item digest={:?} (but below GC round)",
-                                certificate, parent_digest
-                            );
-                        }
-                    }
-                }
-            } else {
-                error!(
-                    "Round not present in Dag store: {:?} when looking for parents of {:?}",
-                    round - 1,
-                    certificate
-                );
-            }
-        }
+        // We must have stored already the parents of this certificate!
+        self.check_parents_exist(&certificate, state);
 
         // Add the new certificate to the local storage.
         if state.try_insert(certificate).is_err() {
@@ -147,12 +126,25 @@ impl ConsensusProtocol for Bullshark {
             }
         }
 
+        // record the last time we got a successful leader election
+        let elapsed = self.last_leader_election.elapsed();
+
+        self.metrics
+            .commit_rounds_latency
+            .observe(elapsed.as_secs_f64());
+
+        self.last_leader_election = Instant::now();
+
         // Log the latest committed round of every authority (for debug).
         // Performance note: if tracing at the debug log level is disabled, this is cheap, see
         // https://github.com/tokio-rs/tracing/pull/326
         for (name, round) in &state.last_committed {
             debug!("Latest commit of {}: Round {}", name.encode_base64(), round);
         }
+
+        debug!("Total committed certificates: {}", sequence.len());
+
+        self.metrics.commit_depth.observe(sequence.len() as f64);
 
         Ok(sequence)
     }
@@ -165,11 +157,54 @@ impl ConsensusProtocol for Bullshark {
 
 impl Bullshark {
     /// Create a new Bullshark consensus instance.
-    pub fn new(committee: Committee, store: Arc<ConsensusStore>, gc_depth: Round) -> Self {
+    pub fn new(
+        committee: Committee,
+        store: Arc<ConsensusStore>,
+        gc_depth: Round,
+        metrics: Arc<ConsensusMetrics>,
+    ) -> Self {
         Self {
             committee,
             store,
             gc_depth,
+            last_leader_election: Instant::now(),
+            metrics,
+        }
+    }
+
+    // Checks that the provided certificate's parents exist and prints the necessary
+    // log statements. This method does not take more actions other than printing
+    // log statements.
+    fn check_parents_exist(&mut self, certificate: &Certificate, state: &ConsensusState) {
+        let round = certificate.round();
+        if round > 0 {
+            let parents = certificate.header.parents.clone();
+            if let Some(round_table) = state.dag.get(&(round - 1)) {
+                let store_parents: BTreeSet<&CertificateDigest> =
+                    round_table.iter().map(|(_, (digest, _))| digest).collect();
+
+                for parent_digest in parents {
+                    if !store_parents.contains(&parent_digest) {
+                        if round - 1 + self.gc_depth > state.last_committed_round {
+                            error!(
+                                "The store does not contain the parent of {:?}: Missing item digest={:?}",
+                                certificate, parent_digest
+                            );
+                        } else {
+                            debug!(
+                                "The store does not contain the parent of {:?}: Missing item digest={:?} (but below GC round)",
+                                certificate, parent_digest
+                            );
+                        }
+                    }
+                }
+            } else {
+                error!(
+                    "Round not present in Dag store: {:?} when looking for parents of {:?}",
+                    round - 1,
+                    certificate
+                );
+            }
         }
     }
 
