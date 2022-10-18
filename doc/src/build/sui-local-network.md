@@ -12,13 +12,13 @@ To create a local Sui network, first install Sui. See [Install Sui to Build](ins
 
 To create the configuration files and objects for a local Sui network, run the `genesis` command. Genesis creates the network configuration files in the ~/.sui/sui_config folder. This includes a YAML file for fullnode, network, client, and each validator. It also creates a sui.keystore that stores client key pairs. When you start the network, Sui generates an authorities_db database directory that stores validator information.
 
-The network that genesis creates includes four validators and five user accounts that contain five coin objects each. To customize your local network configuration, see [Customize genesis](#customize-genesis).
+The network that genesis creates includes four validators and five user accounts that contain five coin objects each.
 
    ```shell
    $ sui genesis
    ```
 
-The first time you use the client CLI, it creates a client.yaml file. If you use the default values, it connects to a Sui Devnet Full node. When you run genesis to create a local network, if the .sui/sui_config folder contains a client.yaml file, the genesis process warns you that the folder must be empty. YOu can use the `--force` argument to replace the configuration files, or use `--working-dir` to specify a different directory for the network configuration files.
+The first time you use the client CLI, it creates a client.yaml file. If you use the default values, it connects to a Sui Devnet Full node. When you run genesis to create a local network, if the .sui/sui_config folder contains a client.yaml file, the genesis process warns you that the folder must be empty. You can use the `--force` argument to replace the configuration files, or use `--working-dir` to specify a different directory for the network configuration files.
 
 Use the following command to overwrite existing configuration files with default values.
    ```shell
@@ -53,7 +53,5 @@ Use the following command to use a network.yaml file in a directory other than t
 ```shell
 $ sui start --network.config /workspace/config-files/network.yaml
 ```
-
-When you run the `start` command, it may appear as though the terminal is not responding until the process completes.
 
 After the process completes, use the [Sui Client CLI](cli-client.md) to interact with the local network.
