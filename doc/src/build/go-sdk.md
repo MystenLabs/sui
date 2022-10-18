@@ -83,7 +83,7 @@ import (
 )
 
 func writeInChan(channel chan string, c *websocket.Conn) {
-	//replace req var for change method
+	//edit req var for change method
 	req := `{"jsonrpc":"2.0", "id": 1, "method": "sui_subscribeEvent", "params": [{"All":[]}]}`
 	log.Print("Sent: ", req)
 	err := c.WriteMessage(websocket.TextMessage, []byte(req))
