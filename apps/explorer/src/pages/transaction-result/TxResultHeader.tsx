@@ -4,6 +4,7 @@ import cl from 'clsx';
 
 import { ReactComponent as ContentSuccessStatus } from '../../assets/SVGIcons/12px/Check.svg';
 import { ReactComponent as ContentFailedStatus } from '../../assets/SVGIcons/12px/X.svg';
+import { ReactComponent as PayIcon } from '../../assets/SVGIcons/16px/Coins.svg';
 import { ReactComponent as CallTypeIcon } from '../../assets/SVGIcons/Call.svg';
 import { ReactComponent as InfoIcon } from '../../assets/SVGIcons/Info.svg';
 import { ReactComponent as PublishTypeIcon } from '../../assets/SVGIcons/Publish.svg';
@@ -32,7 +33,7 @@ function TxAddressHeader({ data }: { data: TxResultState }) {
         // TODO: use a different icon
         ChangeEpoch: CallTypeIcon,
         TransferSui: TransferObjectTypeIcon,
-        Pay: TransferObjectTypeIcon,
+        Pay: PayIcon,
     };
     const TxKindName = data.txKindName;
     const Icon = TxTransferTypeIcon[TxKindName];
@@ -45,8 +46,8 @@ function TxAddressHeader({ data }: { data: TxResultState }) {
 
     return (
         <div className={styles.txheader}>
-            <div className={resultheaderstyle.category}>
-                <Icon /> {TxKindName}
+            <div className={`${resultheaderstyle.category} ${styles.pagetype}`}>
+                <Icon /> <div>{TxKindName}</div>
             </div>
             <div>
                 <div

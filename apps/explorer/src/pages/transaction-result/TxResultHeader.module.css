@@ -36,6 +36,10 @@
     @apply fill-success-dark;
 }
 
+.pagetype svg {
+    @apply fill-sui-steel;
+}
+
 .failed.statuslabel svg {
     @apply fill-issue-dark;
 }
@@ -46,4 +50,8 @@
 
 .failed {
     @apply bg-issue-light text-issue-dark break-all leading-[16.9px] w-fit;
+}
+
+.pagetype {
+    @apply flex items-center gap-[8px] text-heading4 font-semibold;
 }
