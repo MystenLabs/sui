@@ -5,11 +5,11 @@ import cl from 'clsx';
 import { ReactComponent as ContentSuccessStatus } from '../../assets/SVGIcons/12px/Check.svg';
 import { ReactComponent as ContentFailedStatus } from '../../assets/SVGIcons/12px/X.svg';
 import { ReactComponent as PayIcon } from '../../assets/SVGIcons/16px/Coins.svg';
+import { ReactComponent as TransferObjectIcon } from '../../assets/SVGIcons/16px/TransferObject.svg';
 import { ReactComponent as TransferSuiIcon } from '../../assets/SVGIcons/16px/TransferSui.svg';
 import { ReactComponent as CallTypeIcon } from '../../assets/SVGIcons/Call.svg';
 import { ReactComponent as InfoIcon } from '../../assets/SVGIcons/Info.svg';
 import { ReactComponent as PublishTypeIcon } from '../../assets/SVGIcons/Publish.svg';
-import { ReactComponent as TransferObjectTypeIcon } from '../../assets/SVGIcons/TransferObject.svg';
 import Longtext from '../../components/longtext/Longtext';
 import resultheaderstyle from '../../styles/resultheader.module.css';
 
@@ -29,7 +29,7 @@ type TxResultState = {
 function TxAddressHeader({ data }: { data: TxResultState }) {
     const TxTransferTypeIcon = {
         Publish: PublishTypeIcon,
-        TransferObject: TransferObjectTypeIcon,
+        TransferObject: TransferObjectIcon,
         Call: CallTypeIcon,
         // TODO: use a different icon
         ChangeEpoch: CallTypeIcon,
