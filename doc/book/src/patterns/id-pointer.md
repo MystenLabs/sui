@@ -1,6 +1,6 @@
 # ID Pointer
 
-ID Pointer is a technique which allows separation of the main data (an object) and its accessors / capabilities by linking the latter to the original. There's a few different directions in which this pattern can be used:
+ID Pointer is a technique that separates the main data (an object) and its accessors / capabilities by linking the latter to the original. There's a few different directions in which this pattern can be used:
 
 - issuing transferable capabilities for shared objects (for example, a TransferCap that changes 'owner' field of a shared object)
 - splitting dynamic data and static (eg NFT and its Collection information)
