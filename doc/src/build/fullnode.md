@@ -24,7 +24,7 @@ A transaction requires a few round trips to 2f+1 validators to be able to form a
 This synchronization process is performed by:
 
 1. Following 2f+1 validators and listening for newly committed transactions.
-1. Requesting the transaction from one validator.
+1. Making sure the transaction is recognized by 2f+1 validators and hence reaches finality.
 1. Locally executing the transaction and updating the local DB.
 
 This synchronization process is far from ideal as it requires listening
