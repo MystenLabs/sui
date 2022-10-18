@@ -307,4 +307,3 @@ const signer = new RawSigner(
   new LocalTxnDataSerializer(provider)
 );
 ```
-
