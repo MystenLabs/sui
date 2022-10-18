@@ -38,7 +38,7 @@ $main-extra-space: sizing.$main-bottom-space;
     word-break: break-all;
     padding-right: 20px;
     position: relative;
-    font-weight: 500;
+    font-weight: 400;
     font-size: 13px;
     line-height: 130%;
 
@@ -85,7 +85,7 @@ $main-extra-space: sizing.$main-bottom-space;
 
 @mixin angled-arrow($color: colors.$gray-65) {
     transform: rotate(135deg);
-    font-weight: 300;
+    font-weight: 200;
     margin: 0;
     margin-right: 10px;
     font-size: 14px;
@@ -95,58 +95,58 @@ $main-extra-space: sizing.$main-bottom-space;
 @mixin typography($type) {
     @if $type == 'stat/col-header' {
         font-style: normal;
-        font-weight: 600;
+        font-weight: 500;
         font-size: 12px;
         text-transform: uppercase;
         color: colors.$gray-75;
     } @else if $type == 'page-description' {
         font-style: normal;
-        font-weight: 400;
+        font-weight: 300;
         font-size: 12px;
         color: colors.$gray-80;
     } @else if $type == 'tooltip/label' {
         font-style: normal;
-        font-weight: 600;
+        font-weight: 500;
         font-size: 11px;
         text-transform: uppercase;
         color: colors.$gray-80;
     } @else if $type == 'stats/text-lg' {
         font-style: normal;
-        font-weight: 600;
+        font-weight: 500;
         font-size: 18px;
         color: colors.$gray-100;
     } @else if $type == 'header/search-text' {
         font-style: normal;
-        font-weight: 500;
+        font-weight: 400;
         font-size: 14px;
         color: colors.$gray-70;
     } @else if $type == 'table/text-xs' {
         font-style: normal;
-        font-weight: 500;
+        font-weight: 400;
         font-size: 12px;
         color: colors.$gray-75;
     } @else if $type == 'table/text-sm' {
         font-style: normal;
-        font-weight: 500;
+        font-weight: 400;
         font-size: 13px;
         color: colors.$white;
     } @else if $type == 'table/text-lg' {
         font-style: normal;
-        font-weight: 500;
+        font-weight: 400;
         font-size: 14px;
     } @else if $type == 'table/title-sm' {
         font-style: normal;
-        font-weight: 600;
+        font-weight: 500;
         font-size: 14px;
         color: colors.$gray-100;
     } @else if $type == 'page-title' {
         font-style: normal;
-        font-weight: 600;
+        font-weight: 500;
         font-size: 16px;
         color: colors.$gray-100;
     } @else if $type == 'empty' {
         font-style: italic;
-        font-weight: 400;
+        font-weight: 300;
         font-size: 12px;
         text-align: center;
         color: colors.$gray-70;
@@ -154,85 +154,85 @@ $main-extra-space: sizing.$main-bottom-space;
         letter-spacing: 0;
     } @else if $type == 'Primary/BodySmall-M' {
         font-size: 13px;
-        font-weight: 500;
+        font-weight: 400;
         letter-spacing: 0;
     } @else if $type == 'Primary/Body-M' {
         font-size: 14px;
-        font-weight: 500;
+        font-weight: 400;
         letter-spacing: 0;
     } @else if $type == 'Primary/SubtitleSmall-M' {
         font-size: 11px;
-        font-weight: 500;
+        font-weight: 400;
         letter-spacing: 0;
     } @else if $type == 'Primary/BodySmall-SB' {
         font-size: 13px;
-        font-weight: 600;
+        font-weight: 500;
     } @else if $type == 'Primary/CAPTIONSMALL-M' {
         font-size: 11px;
-        font-weight: 500;
+        font-weight: 400;
         letter-spacing: 0.05em;
     } @else if $type == 'Primary/CAPTION-SB' {
         font-size: 12px;
-        font-weight: 600;
+        font-weight: 500;
         letter-spacing: 0.05em;
         text-align: center;
     } @else if $type == 'Primary/CAPTIONSMALL-SB' {
         font-size: 11px;
-        font-weight: 600;
+        font-weight: 500;
         line-height: 11px;
         letter-spacing: 0.05em;
     } @else if $type == 'Primary/CAPTION-B' {
         font-size: 12px;
-        font-weight: 700;
+        font-weight: 600;
         letter-spacing: 0.05em;
         text-align: center;
     } @else if $type == 'Primary/CAPTION-M' {
         font-size: 12px;
-        font-weight: 500;
+        font-weight: 400;
         letter-spacing: 0.05em;
         text-align: center;
     } @else if $type == 'ParagraphPrimary/P2-R' {
         font-size: 13px;
-        font-weight: 400;
+        font-weight: 300;
         letter-spacing: 0;
     } @else if $type == 'page-ex-small' {
-        font-weight: 500;
+        font-weight: 400;
         font-size: 10px;
         letter-spacing: 0;
     } @else if $type == 'Primary/Heading1-B' {
         font-size: 28px;
-        font-weight: 700;
+        font-weight: 600;
         letter-spacing: 0;
         text-align: center;
     } @else if $type == 'Primary/Heading3-SB' {
         font-size: 20px;
-        font-weight: 600;
+        font-weight: 500;
         letter-spacing: 0;
         text-align: center;
     } @else if $type == 'ParagraphPrimary/P1-M' {
         font-size: 14px;
-        font-weight: 500;
+        font-weight: 400;
         line-height: 130%;
         letter-spacing: 0;
         text-align: center;
     } @else if $type == 'ParagraphPrimary/P1-SB' {
         font-size: 14px;
-        font-weight: 600;
+        font-weight: 500;
         line-height: 18px;
         letter-spacing: 0;
     } @else if $type == 'ParagraphPrimary/P2-M' {
         font-size: 13px;
-        font-weight: 500;
+        font-weight: 400;
         line-height: 17px;
         letter-spacing: 0;
     } @else if $type == 'Primary/Body-SB' {
         font-size: 14px;
-        font-weight: 600;
+        font-weight: 500;
         letter-spacing: 0;
     } @else if $type == 'mono-type' {
         // TODO chanage to mono font
         font-style: normal;
-        font-weight: 500;
+        font-weight: 400;
         font-size: 14px;
         text-decoration: none;
         line-height: 90%;
