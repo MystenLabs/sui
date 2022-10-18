@@ -46,6 +46,8 @@ members = [
 # without significantly increasing binary size
 debug = true
 strip = 'debuginfo'
+# Exit process with SIGABRT when any thread panics
+panic = 'abort'
 
 [profile.bench]
 # Do not strip any debug info.  This helps the widest set of profiling tools
