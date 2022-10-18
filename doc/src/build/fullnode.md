@@ -2,7 +2,7 @@
 title: Run a Sui Full node
 ---
 
-Sui Full nodes run a service that stores the full blockchain state and history. They service reads, either for end clients or by helping other Full nodes get up-to-date with the latest transactions that have been committed to the chain.
+Sui Full nodes run a service that validates blockchain activities, including transactions, checkpoints, and epoch changes etc. It stores and services the queries for the blockchain state and history.
 
 This role enables [validators](../learn/architecture/validators.md) (or miners in
 other networks) to focus on servicing the write path and processing transactions as fast as possible. Once a validator has committed a new set of transactions (or a block of transactions), the validator will push that block to a Full node (potentially a number of Full nodes) who will then in turn disseminate it to the rest of the network.
