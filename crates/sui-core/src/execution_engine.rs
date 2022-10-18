@@ -538,7 +538,13 @@ fn pay<S>(
                 &coin_object.id(),
                 coin_object.version(),
                 DeleteKind::Normal,
-            )
+            );
+            temporary_store.log_event(Event::DeleteObject {
+                package_id: ObjectID::from(SUI_FRAMEWORK_ADDRESS),
+                transaction_module: Identifier::from(ident_str!("native")),
+                sender: tx_ctx.sender(),
+                object_id: coin_object.id(),
+            });
         } else {
             // unwrapped unsafe because we checked that it was a coin object above
             coin_object

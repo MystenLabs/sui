@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::str::FromStr;
 
+use anyhow::anyhow;
 use move_core_types::identifier::Identifier;
 use move_package::BuildConfig;
 use rand::seq::{IteratorRandom, SliceRandom};
@@ -12,7 +13,9 @@ use signature::rand_core::OsRng;
 
 use sui_config::utils::get_available_port;
 use sui_sdk::crypto::{AccountKeystore, Keystore};
-use sui_sdk::rpc_types::{SuiData, SuiEvent};
+use sui_sdk::rpc_types::{
+    OwnedObjectRef, SuiData, SuiEvent, SuiExecutionStatus, SuiPastObjectRead, SuiTransactionEffects,
+};
 use sui_sdk::{SuiClient, TransactionExecutionResult};
 use sui_types::base_types::{
     ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
@@ -166,32 +169,7 @@ async fn test_all_transaction_type() {
         .unwrap();
     let package = package.clone().reference.to_object_ref();
     // TODO: Improve tx response to make it easier to find objects.
-    let treasury = effect
-        .events
-        .iter()
-        .find_map(|event| {
-            if let SuiEvent::NewObject {
-                transaction_module,
-                object_id,
-                ..
-            } = event
-            {
-                if transaction_module == "managed" {
-                    Some(object_id)
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
-        })
-        .unwrap();
-    // Get objectRef from effect
-    let treasury = effect
-        .created
-        .iter()
-        .find(|obj| &obj.reference.object_id == treasury)
-        .unwrap();
+    let treasury = find_module_object(&effect, "managed").unwrap();
     let treasury = treasury.clone().reference.to_object_ref();
     let recipient = *network.accounts.choose(&mut OsRng::default()).unwrap();
     let tx = SingleTransactionKind::Call(MoveCall {
@@ -207,6 +185,29 @@ async fn test_all_transaction_type() {
     });
     test_transaction(&client, keystore, vec![], sender, tx).await;
 
+    // Test spilt coin
+    let sender = recipient;
+    let coin = get_random_gas(&client, sender, vec![]).await;
+    let tx = client
+        .transaction_builder()
+        .split_coin(sender, coin.0, vec![10000], None, 10000)
+        .await
+        .unwrap();
+    let tx = tx.kind.single_transactions().next().unwrap().clone();
+    test_transaction(&client, keystore, vec![], sender, tx).await;
+
+    // Test merge coin
+    let sender = *network.accounts.choose(&mut OsRng::default()).unwrap();
+    let coin = get_random_gas(&client, sender, vec![]).await;
+    let coin2 = get_random_gas(&client, sender, vec![coin.0]).await;
+    let tx = client
+        .transaction_builder()
+        .merge_coins(sender, coin.0, coin2.0, None, 10000)
+        .await
+        .unwrap();
+    let tx = tx.kind.single_transactions().next().unwrap().clone();
+    test_transaction(&client, keystore, vec![], sender, tx).await;
+
     // Test Pay
     let sender = *network.accounts.choose(&mut OsRng::default()).unwrap();
     let coin = get_random_gas(&client, sender, vec![]).await;
@@ -216,6 +217,29 @@ async fn test_all_transaction_type() {
         amounts: vec![10000],
     });
     test_transaction(&client, keystore, vec![recipient], sender, tx).await;
+}
+
+fn find_module_object(effects: &SuiTransactionEffects, module: &str) -> Option<OwnedObjectRef> {
+    effects
+        .events
+        .iter()
+        .find_map(|event| {
+            if let SuiEvent::NewObject {
+                transaction_module,
+                object_id,
+                ..
+            } = event
+            {
+                if transaction_module == module {
+                    return effects
+                        .created
+                        .iter()
+                        .find(|obj| &obj.reference.object_id == object_id);
+                }
+            };
+            None
+        })
+        .cloned()
 }
 
 async fn test_transaction(
@@ -257,9 +281,18 @@ async fn test_transaction(
             Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await
+        .map_err(|e| anyhow!("TX execution failed for {tx:#?}, error : {e}"))
         .unwrap();
 
     let effect = response.effects.clone().unwrap();
+
+    assert_eq!(
+        SuiExecutionStatus::Success,
+        effect.status,
+        "TX execution failed for {:#?}",
+        tx
+    );
+
     let events = effect
         .events
         .clone()
@@ -269,13 +302,28 @@ async fn test_transaction(
         .unwrap();
     let net_gas_used = effect.gas_used.computation_cost + effect.gas_used.storage_cost
         - effect.gas_used.storage_rebate;
+
+    let mut new_coins: Vec<(GasCoin, ObjectRef)> = vec![];
+    for oref in &effect.created {
+        let oref = &oref.reference;
+        if let Ok(SuiPastObjectRead::VersionFound(obj)) = client
+            .read_api()
+            .try_get_parsed_past_object(oref.object_id, oref.version)
+            .await
+        {
+            if let Ok(coin) = (&obj).try_into() {
+                new_coins.push((coin, oref.to_object_ref()))
+            }
+        }
+    }
+
     let ops = Operation::from_data_and_events(
         &data,
         &ExecutionStatus::Success,
         &events,
         net_gas_used as i64,
         effect.gas_object.owner,
-        &[],
+        &new_coins,
     )
     .unwrap();
     let balances_from_ops = extract_balance_changes_from_ops(ops).unwrap();

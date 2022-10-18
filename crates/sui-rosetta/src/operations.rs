@@ -214,10 +214,13 @@ impl Operation {
             Event::NewObject {
                 package_id: _,
                 transaction_module: _,
-                sender: _,
+                sender,
                 recipient,
                 object_id,
             } => {
+                if recipient.get_owner_address() == Ok(*sender) {
+                    return vec![];
+                }
                 if let Some((coin, (id, version, _))) =
                     new_coins.iter().find(|(_, (id, _, _))| id == object_id)
                 {
