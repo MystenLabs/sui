@@ -3,7 +3,7 @@
 
 use std::{collections::HashSet, sync::Arc};
 use sui_types::{base_types::TransactionDigest, error::SuiResult, messages::CertifiedTransaction};
-use tracing::{debug, info};
+use tracing::{debug, error, info};
 
 use crate::authority::AuthorityState;
 use crate::authority_client::AuthorityAPI;
@@ -12,6 +12,7 @@ use futures::{stream, StreamExt};
 
 use super::ActiveAuthority;
 
+use sui_types::error::SuiError;
 use tap::TapFallible;
 
 #[cfg(test)]
@@ -133,7 +134,13 @@ where
         // filter out errors
         .filter_map(|(result, (seq, digest))| async move {
             result
-                .tap_err(|e| info!(?seq, ?digest, "certificate execution failed: {}", e))
+                .tap_err(|e| {
+                    if matches!(e, SuiError::ValidatorHaltedAtEpochEnd) {
+                        debug!(?seq, ?digest, "certificate execution failed: {}", e)
+                    } else {
+                        error!(?seq, ?digest, "certificate execution failed: {}", e)
+                    }
+                })
                 .tap_ok(|_| debug!(?seq, ?digest, "certificate execution complete"))
                 .ok()
                 .map(|_| seq)
