@@ -6,7 +6,7 @@ The Sui Devnet network lets you experiment with Sui and provide feedback to help
 
 The Sui Devnet network currently consists of:
 
-* Four validator nodes operated by Mysten Labs. Clients send transactions and read requests via this endpoint: fullnode.devnet.sui.io:443 using [JSON-RPC](../build/json-rpc.md).
+* Four validator nodes operated by Mysten Labs. Clients send transactions and read requests via this endpoint: `https://fullnode.devnet.sui.io:443` using [JSON-RPC](../build/json-rpc.md).
 * A public network [Sui Explorer](https://explorer.devnet.sui.io) for browsing transaction history.
 * A [Discord channel](https://discordapp.com/channels/916379725201563759/971488439931392130) for requesting test coins that can be used to pay for gas on the test network. These coins have no financial value and will disappear each time we reset the network.
 
