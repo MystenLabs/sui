@@ -68,7 +68,7 @@ override this setting by providing a path to the directory where this
 file is stored:
 
 ```shell
-$ sui console --config /path/to/client/config/file
+$ sui console --config /workspace/config-files
 ```
 
 The Sui interactive client console supports the following shell functionality:
