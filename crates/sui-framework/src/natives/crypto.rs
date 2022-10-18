@@ -420,8 +420,8 @@ pub fn hmac_sha2_256(
     debug_assert!(ty_args.is_empty());
     debug_assert!(args.len() == 2);
 
-    let key = pop_arg!(args, VectorRef);
     let message = pop_arg!(args, VectorRef);
+    let key = pop_arg!(args, VectorRef);
     let hmac_key = HmacKey::from_bytes(&key.as_bytes_ref()).unwrap();
 
     // TODO: implement native gas cost estimation https://github.com/MystenLabs/sui/issues/3593
