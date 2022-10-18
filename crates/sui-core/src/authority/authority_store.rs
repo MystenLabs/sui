@@ -1114,7 +1114,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         Ok(())
     }
 
-    pub async fn consensus_message_processed(
+    pub fn consensus_message_processed(
         &self,
         digest: &TransactionDigest,
     ) -> Result<bool, SuiError> {

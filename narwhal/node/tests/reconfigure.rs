@@ -72,7 +72,7 @@ impl SimpleExecutionState {
 impl ExecutionState for SimpleExecutionState {
     async fn handle_consensus_transaction(
         &self,
-        _consensus_output: &ConsensusOutput,
+        _consensus_output: &Arc<ConsensusOutput>,
         execution_indices: ExecutionIndices,
         transaction: Vec<u8>,
     ) {

@@ -34,7 +34,7 @@ use tokio::{
 use sui_types::messages_checkpoint::CheckpointRequest;
 use sui_types::messages_checkpoint::CheckpointResponse;
 
-use crate::authority::ConsensusHandler;
+use crate::consensus_handler::ConsensusHandler;
 use tracing::{error, info, Instrument};
 
 #[cfg(test)]
