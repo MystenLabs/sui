@@ -48,9 +48,9 @@ async fn synchronize() {
     }
     #[async_trait]
     impl WorkerToWorker for MockWorkerToWorker {
-        async fn send_message(
+        async fn report_batch(
             &self,
-            _request: anemo::Request<WorkerMessage>,
+            _request: anemo::Request<WorkerBatchMessage>,
         ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
             unimplemented!();
         }

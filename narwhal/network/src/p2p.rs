@@ -17,8 +17,8 @@ use std::time::Duration;
 use tokio::{runtime::Handle, task::JoinHandle};
 use types::{
     Batch, BatchDigest, FetchCertificatesRequest, FetchCertificatesResponse, PrimaryMessage,
-    PrimaryToPrimaryClient, PrimaryToWorkerClient, RequestBatchRequest, WorkerBatchRequest,
-    WorkerBatchResponse, WorkerDeleteBatchesMessage, WorkerMessage, WorkerOthersBatchMessage,
+    PrimaryToPrimaryClient, PrimaryToWorkerClient, RequestBatchRequest, WorkerBatchMessage,
+    WorkerBatchRequest, WorkerBatchResponse, WorkerDeleteBatchesMessage, WorkerOthersBatchMessage,
     WorkerOurBatchMessage, WorkerPrimaryMessage, WorkerReconfigureMessage,
     WorkerSynchronizeMessage, WorkerToPrimaryClient, WorkerToWorkerClient,
 };
@@ -378,32 +378,32 @@ impl ReliableNetwork<WorkerOthersBatchMessage> for P2pNetwork {
 // Worker-to-Worker
 //
 
-impl UnreliableNetwork<WorkerMessage> for P2pNetwork {
+impl UnreliableNetwork<WorkerBatchMessage> for P2pNetwork {
     type Response = ();
     fn unreliable_send(
         &mut self,
         peer: NetworkPublicKey,
-        message: &WorkerMessage,
+        message: &WorkerBatchMessage,
     ) -> Result<JoinHandle<Result<anemo::Response<()>>>> {
         let message = message.to_owned();
         let f =
-            move |peer| async move { WorkerToWorkerClient::new(peer).send_message(message).await };
+            move |peer| async move { WorkerToWorkerClient::new(peer).report_batch(message).await };
         self.unreliable_send(peer, f)
     }
 }
 
 #[async_trait]
-impl ReliableNetwork<WorkerMessage> for P2pNetwork {
+impl ReliableNetwork<WorkerBatchMessage> for P2pNetwork {
     type Response = ();
     async fn send(
         &mut self,
         peer: NetworkPublicKey,
-        message: &WorkerMessage,
+        message: &WorkerBatchMessage,
     ) -> CancelOnDropHandler<Result<anemo::Response<()>>> {
         let message = message.to_owned();
         let f = move |peer| {
             let message = message.clone();
-            async move { WorkerToWorkerClient::new(peer).send_message(message).await }
+            async move { WorkerToWorkerClient::new(peer).report_batch(message).await }
         };
 
         self.send(peer, f).await

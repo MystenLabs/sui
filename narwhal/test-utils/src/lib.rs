@@ -28,8 +28,8 @@ use types::{
     Batch, BatchDigest, Certificate, CertificateDigest, ConsensusStore, FetchCertificatesRequest,
     FetchCertificatesResponse, Header, HeaderBuilder, PrimaryMessage, PrimaryToPrimary,
     PrimaryToPrimaryServer, PrimaryToWorker, PrimaryToWorkerServer, RequestBatchRequest,
-    RequestBatchResponse, Round, SequenceNumber, Transaction, Vote, WorkerBatchRequest,
-    WorkerBatchResponse, WorkerDeleteBatchesMessage, WorkerMessage, WorkerReconfigureMessage,
+    RequestBatchResponse, Round, SequenceNumber, Transaction, Vote, WorkerBatchMessage,
+    WorkerBatchRequest, WorkerBatchResponse, WorkerDeleteBatchesMessage, WorkerReconfigureMessage,
     WorkerSynchronizeMessage, WorkerToWorker, WorkerToWorkerServer,
 };
 
@@ -275,7 +275,7 @@ impl PrimaryToWorker for PrimaryToWorkerMockServer {
 }
 
 pub struct WorkerToWorkerMockServer {
-    msg_sender: Sender<WorkerMessage>,
+    batch_sender: Sender<WorkerBatchMessage>,
     batch_request_sender: Sender<WorkerBatchRequest>,
 }
 
@@ -284,15 +284,15 @@ impl WorkerToWorkerMockServer {
         keypair: NetworkKeyPair,
         address: Multiaddr,
     ) -> (
-        Receiver<WorkerMessage>,
+        Receiver<WorkerBatchMessage>,
         Receiver<WorkerBatchRequest>,
         anemo::Network,
     ) {
         let addr = network::multiaddr_to_address(&address).unwrap();
-        let (msg_sender, msg_receiver) = channel(1);
+        let (batch_sender, batch_receiver) = channel(1);
         let (batch_request_sender, batch_request_receiver) = channel(1);
         let service = WorkerToWorkerServer::new(Self {
-            msg_sender,
+            batch_sender,
             batch_request_sender,
         });
 
@@ -303,19 +303,19 @@ impl WorkerToWorkerMockServer {
             .start(routes)
             .unwrap();
         info!("starting network on: {}", network.local_addr());
-        (msg_receiver, batch_request_receiver, network)
+        (batch_receiver, batch_request_receiver, network)
     }
 }
 
 #[async_trait]
 impl WorkerToWorker for WorkerToWorkerMockServer {
-    async fn send_message(
+    async fn report_batch(
         &self,
-        request: anemo::Request<WorkerMessage>,
+        request: anemo::Request<WorkerBatchMessage>,
     ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
         let message = request.into_body();
 
-        self.msg_sender.send(message).await.unwrap();
+        self.batch_sender.send(message).await.unwrap();
 
         Ok(anemo::Response::new(()))
     }

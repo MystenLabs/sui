@@ -20,9 +20,9 @@ use tokio::sync::watch;
 use tracing::{debug, error, info, trace, warn};
 use types::{
     metered_channel::Sender, Batch, BatchDigest, PrimaryToWorker, ReconfigureNotification,
-    RequestBatchRequest, RequestBatchResponse, WorkerBatchRequest, WorkerBatchResponse,
-    WorkerDeleteBatchesMessage, WorkerMessage, WorkerOthersBatchMessage, WorkerReconfigureMessage,
-    WorkerSynchronizeMessage, WorkerToWorker, WorkerToWorkerClient,
+    RequestBatchRequest, RequestBatchResponse, WorkerBatchMessage, WorkerBatchRequest,
+    WorkerBatchResponse, WorkerDeleteBatchesMessage, WorkerOthersBatchMessage,
+    WorkerReconfigureMessage, WorkerSynchronizeMessage, WorkerToWorker, WorkerToWorkerClient,
 };
 
 #[cfg(test)]
@@ -39,25 +39,21 @@ pub struct WorkerReceiverHandler {
 
 #[async_trait]
 impl WorkerToWorker for WorkerReceiverHandler {
-    async fn send_message(
+    async fn report_batch(
         &self,
-        request: anemo::Request<WorkerMessage>,
+        request: anemo::Request<WorkerBatchMessage>,
     ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
         let message = request.into_body();
-        match message {
-            WorkerMessage::Batch(batch) => {
-                let digest = batch.digest();
-                self.store.write(digest, batch).await;
-                self.tx_others_batch
-                    .send(WorkerOthersBatchMessage {
-                        digest,
-                        worker_id: self.id,
-                    })
-                    .await
-            }
-        }
-        .map(|_| anemo::Response::new(()))
-        .map_err(|e| anemo::rpc::Status::internal(e.to_string()))
+        let digest = message.batch.digest();
+        self.store.write(digest, message.batch).await;
+        self.tx_others_batch
+            .send(WorkerOthersBatchMessage {
+                digest,
+                worker_id: self.id,
+            })
+            .await
+            .map(|_| anemo::Response::new(()))
+            .map_err(|e| anemo::rpc::Status::internal(e.to_string()))
     }
     async fn request_batches(
         &self,

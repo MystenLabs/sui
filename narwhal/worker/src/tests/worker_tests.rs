@@ -79,7 +79,7 @@ async fn handle_clients_transactions() {
     for worker in fixture.authorities().skip(1).map(|a| a.worker(worker_id)) {
         let mut mock_server = MockWorkerToWorker::new();
         mock_server
-            .expect_send_message()
+            .expect_report_batch()
             .returning(|_| Ok(anemo::Response::new(())));
         let routes = anemo::Router::new().add_rpc_service(WorkerToWorkerServer::new(mock_server));
         peer_networks.push(worker.new_network(routes));
