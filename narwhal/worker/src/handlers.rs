@@ -19,9 +19,9 @@ use tap::TapOptional;
 use tokio::sync::watch;
 use tracing::{debug, error, info, trace, warn};
 use types::{
-    error::DagError, metered_channel::Sender, Batch, BatchDigest, PrimaryToWorker,
-    ReconfigureNotification, RequestBatchRequest, RequestBatchResponse, WorkerBatchRequest,
-    WorkerBatchResponse, WorkerDeleteBatchesMessage, WorkerMessage, WorkerReconfigureMessage,
+    metered_channel::Sender, Batch, BatchDigest, PrimaryToWorker, ReconfigureNotification,
+    RequestBatchRequest, RequestBatchResponse, WorkerBatchRequest, WorkerBatchResponse,
+    WorkerDeleteBatchesMessage, WorkerMessage, WorkerOthersBatchMessage, WorkerReconfigureMessage,
     WorkerSynchronizeMessage, WorkerToWorker, WorkerToWorkerClient,
 };
 
@@ -32,7 +32,8 @@ pub mod handlers_tests;
 /// Defines how the network receiver handles incoming workers messages.
 #[derive(Clone)]
 pub struct WorkerReceiverHandler {
-    pub tx_processor: Sender<Batch>,
+    pub id: WorkerId,
+    pub tx_others_batch: Sender<WorkerOthersBatchMessage>,
     pub store: Store<BatchDigest, Batch>,
 }
 
@@ -44,11 +45,16 @@ impl WorkerToWorker for WorkerReceiverHandler {
     ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
         let message = request.into_body();
         match message {
-            WorkerMessage::Batch(batch) => self
-                .tx_processor
-                .send(batch)
-                .await
-                .map_err(|_| DagError::ShuttingDown),
+            WorkerMessage::Batch(batch) => {
+                let digest = batch.digest();
+                self.store.write(digest, batch).await;
+                self.tx_others_batch
+                    .send(WorkerOthersBatchMessage {
+                        digest,
+                        worker_id: self.id,
+                    })
+                    .await
+            }
         }
         .map(|_| anemo::Response::new(()))
         .map_err(|e| anemo::rpc::Status::internal(e.to_string()))
@@ -89,8 +95,6 @@ pub struct PrimaryReceiverHandler {
     pub request_batches_retry_nodes: usize,
     /// Send reconfiguration update to other tasks.
     pub tx_reconfigure: watch::Sender<ReconfigureNotification>,
-    // Output channel to process received batches.
-    pub tx_batch_processor: Sender<Batch>,
 }
 
 #[async_trait]
@@ -235,14 +239,9 @@ impl PrimaryToWorker for PrimaryReceiverHandler {
                 match result {
                     Ok(response) => {
                         for batch in response.into_body().batches {
-                            let digest = &batch.digest();
-                            if missing.remove(digest) {
-                                // Only send batch to processor if we haven't received it already
-                                // from another source.
-                                if self.tx_batch_processor.send(batch).await.is_err() {
-                                    // Assume error sending to processor means we're shutting down.
-                                    return Err(anemo::rpc::Status::internal("shutting down"));
-                                }
+                            let digest = batch.digest();
+                            if missing.remove(&digest) {
+                                self.store.write(digest, batch).await;
                             }
                         }
                         if missing.is_empty() {

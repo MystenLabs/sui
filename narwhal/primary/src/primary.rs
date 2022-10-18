@@ -11,8 +11,7 @@ use crate::{
     grpc_server::ConsensusAPIGrpc,
     header_waiter::HeaderWaiter,
     helper::Helper,
-    metrics::{initialise_metrics, PrimaryMetrics},
-    payload_receiver::PayloadReceiver,
+    metrics::initialise_metrics,
     proposer::Proposer,
     state_handler::StateHandler,
     synchronizer::Synchronizer,
@@ -51,8 +50,8 @@ use types::{
     metered_channel::{channel_with_total, Receiver, Sender},
     BatchDigest, Certificate, ConsensusStore, FetchCertificatesRequest, FetchCertificatesResponse,
     Header, HeaderDigest, PrimaryToPrimary, PrimaryToPrimaryServer, ReconfigureNotification,
-    RoundVoteDigestPair, WorkerInfoResponse, WorkerPrimaryMessage, WorkerToPrimary,
-    WorkerToPrimaryServer,
+    RoundVoteDigestPair, WorkerInfoResponse, WorkerOthersBatchMessage, WorkerOurBatchMessage,
+    WorkerPrimaryMessage, WorkerToPrimary, WorkerToPrimaryServer,
 };
 
 #[cfg(any(test))]
@@ -113,11 +112,6 @@ impl Primary {
         let node_metrics = Arc::new(metrics.node_metrics.unwrap());
         let network_connection_metrics = metrics.network_connection_metrics.unwrap();
 
-        let (tx_others_digests, rx_others_digests) = channel_with_total(
-            CHANNEL_CAPACITY,
-            &primary_channel_metrics.tx_others_digests,
-            &primary_channel_metrics.tx_others_digests_total,
-        );
         let (tx_our_digests, rx_our_digests) = channel_with_total(
             CHANNEL_CAPACITY,
             &primary_channel_metrics.tx_our_digests,
@@ -218,10 +212,9 @@ impl Primary {
         });
         let worker_service = WorkerToPrimaryServer::new(WorkerReceiverHandler {
             tx_our_digests,
-            tx_others_digests,
             tx_state_handler,
+            payload_store: payload_store.clone(),
             our_workers,
-            metrics: node_metrics.clone(),
         });
 
         let addr = network::multiaddr_to_address(&address).unwrap();
@@ -352,12 +345,6 @@ impl Primary {
             /* tx_proposer */ tx_parents,
             node_metrics.clone(),
             core_primary_network,
-        );
-
-        // Receives batch digests from other workers. They are only used to validate headers.
-        let payload_receiver_handle = PayloadReceiver::spawn(
-            payload_store.clone(),
-            /* rx_workers */ rx_others_digests,
         );
 
         let block_synchronizer_handler = Arc::new(BlockSynchronizerHandler::new(
@@ -522,7 +509,6 @@ impl Primary {
 
         let mut handles = vec![
             core_handle,
-            payload_receiver_handle,
             block_synchronizer_handle,
             header_waiter_handle,
             certificate_waiter_handle,
@@ -659,10 +645,9 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
 #[derive(Clone)]
 struct WorkerReceiverHandler {
     tx_our_digests: Sender<(BatchDigest, WorkerId)>,
-    tx_others_digests: Sender<(BatchDigest, WorkerId)>,
     tx_state_handler: Sender<ReconfigureNotification>,
+    payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
     our_workers: BTreeMap<WorkerId, WorkerInfo>,
-    metrics: Arc<PrimaryMetrics>,
 }
 
 #[async_trait]
@@ -674,26 +659,6 @@ impl WorkerToPrimary for WorkerReceiverHandler {
         let message = request.into_body();
 
         match message {
-            WorkerPrimaryMessage::OurBatch(digest, worker_id) => {
-                self.metrics
-                    .batches_received
-                    .with_label_values(&[&worker_id.to_string(), "our_batch"])
-                    .inc();
-                self.tx_our_digests
-                    .send((digest, worker_id))
-                    .await
-                    .map_err(|_| DagError::ShuttingDown)
-            }
-            WorkerPrimaryMessage::OthersBatch(digest, worker_id) => {
-                self.metrics
-                    .batches_received
-                    .with_label_values(&[&worker_id.to_string(), "others_batch"])
-                    .inc();
-                self.tx_others_digests
-                    .send((digest, worker_id))
-                    .await
-                    .map_err(|_| DagError::ShuttingDown)
-            }
             WorkerPrimaryMessage::Reconfigure(notification) => self
                 .tx_state_handler
                 .send(notification)
@@ -702,6 +667,29 @@ impl WorkerToPrimary for WorkerReceiverHandler {
         }
         .map(|_| anemo::Response::new(()))
         .map_err(|e| anemo::rpc::Status::internal(e.to_string()))
+    }
+
+    async fn report_our_batch(
+        &self,
+        request: anemo::Request<WorkerOurBatchMessage>,
+    ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
+        let message = request.into_body();
+        self.tx_our_digests
+            .send((message.digest, message.worker_id))
+            .await
+            .map(|_| anemo::Response::new(()))
+            .map_err(|e| anemo::rpc::Status::internal(e.to_string()))
+    }
+
+    async fn report_others_batch(
+        &self,
+        request: anemo::Request<WorkerOthersBatchMessage>,
+    ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
+        let message = request.into_body();
+        self.payload_store
+            .write((message.digest, message.worker_id), 0u8)
+            .await;
+        Ok(anemo::Response::new(()))
     }
 
     async fn worker_info(

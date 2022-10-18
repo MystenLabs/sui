@@ -363,8 +363,6 @@ pub struct PrimaryMetrics {
     pub certificates_processed: IntCounterVec,
     /// count number of certificates that the node suspended their processing
     pub certificates_suspended: IntCounterVec,
-    /// Batch digests received
-    pub batches_received: IntCounterVec,
     /// Latency to perform a garbage collection in core module
     pub gc_core_latency: HistogramVec,
     /// Number of cancel handlers for core module
@@ -441,13 +439,6 @@ impl PrimaryMetrics {
                 "certificates_suspended",
                 "Number of certificates that node suspended processing of",
                 &["epoch", "reason"],
-                registry
-            )
-            .unwrap(),
-            batches_received: register_int_counter_vec_with_registry!(
-                "batches_received",
-                "Number of batches received - either own or others",
-                &["worker_id", "source"],
                 registry
             )
             .unwrap(),
