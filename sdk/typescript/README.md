@@ -239,6 +239,9 @@ const subFoundAndRemoved = await provider.unsubscribeEvent(devNftSub);
 Subscribe to all events created by the `devnet_nft` module
 
 ```typescript
+import { JsonRpcProvider } from '@mysten/sui.js';
+const provider = new JsonRpcProvider('https://fullnode.devnet.sui.io:443');
+
 const devnetNftFilter = {
   All: [
     {EventType:  "MoveEvent"},
