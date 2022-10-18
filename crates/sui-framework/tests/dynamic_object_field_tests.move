@@ -14,6 +14,10 @@ struct Counter has key, store {
     count: u64,
 }
 
+struct Fake has key, store {
+    id: UID,
+}
+
 #[test]
 fun simple_all_functions() {
     let sender = @0x0;
@@ -57,6 +61,94 @@ fun simple_all_functions() {
     assert!(!exists_(&id, 0), 0);
     assert!(!exists_(&id, b""), 0);
     assert!(!exists_(&id, false), 0);
+    ts::end(scenario);
+    object::delete(id);
+}
+
+#[test]
+#[expected_failure(abort_code = 0)]
+fun add_duplicate() {
+    let sender = @0x0;
+    let scenario = ts::begin(sender);
+    let id = ts::new_object(&mut scenario);
+    add<u64, Counter>(&mut id, 0, new(ts::new_object(&mut scenario)));
+    add<u64, Counter>(&mut id, 0, new(ts::new_object(&mut scenario)));
+    abort 42
+}
+
+#[test]
+#[expected_failure(abort_code = 1)]
+fun borrow_missing() {
+    let sender = @0x0;
+    let scenario = ts::begin(sender);
+    let id = ts::new_object(&mut scenario);
+    borrow<u64, Counter>(&mut id, 0);
+    abort 42
+}
+
+#[test]
+#[expected_failure(abort_code = 2)]
+fun borrow_wrong_type() {
+    let sender = @0x0;
+    let scenario = ts::begin(sender);
+    let id = ts::new_object(&mut scenario);
+    add(&mut id, 0, new(ts::new_object(&mut scenario)));
+    borrow<u64, Fake>(&mut id, 0);
+    abort 42
+}
+
+#[test]
+#[expected_failure(abort_code = 1)]
+fun borrow_mut_missing() {
+    let sender = @0x0;
+    let scenario = ts::begin(sender);
+    let id = ts::new_object(&mut scenario);
+    borrow_mut<u64, Counter>(&mut id, 0);
+    abort 42
+}
+
+#[test]
+#[expected_failure(abort_code = 2)]
+fun borrow_mut_wrong_type() {
+    let sender = @0x0;
+    let scenario = ts::begin(sender);
+    let id = ts::new_object(&mut scenario);
+    add(&mut id, 0, new(ts::new_object(&mut scenario)));
+    borrow_mut<u64, Fake>(&mut id, 0);
+    abort 42
+}
+
+#[test]
+#[expected_failure(abort_code = 1)]
+fun remove_missing() {
+    let sender = @0x0;
+    let scenario = ts::begin(sender);
+    let id = ts::new_object(&mut scenario);
+    destroy(remove<u64, Counter>(&mut id, 0));
+    abort 42
+}
+
+#[test]
+#[expected_failure(abort_code = 2)]
+fun remove_wrong_type() {
+    let sender = @0x0;
+    let scenario = ts::begin(sender);
+    let id = ts::new_object(&mut scenario);
+    add(&mut id, 0, new(ts::new_object(&mut scenario)));
+    let Fake { id } = remove<u64, Fake>(&mut id, 0);
+    object::delete(id);
+    abort 42
+}
+
+#[test]
+fun sanity_check_exists() {
+    let sender = @0x0;
+    let scenario = ts::begin(sender);
+    let id = ts::new_object(&mut scenario);
+    assert!(!exists_<u64>(&id, 0), 0);
+    add(&mut id, 0, new(ts::new_object(&mut scenario)));
+    assert!(exists_<u64>(&id, 0), 0);
+    assert!(!exists_<u8>(&id, 0), 0);
     ts::end(scenario);
     object::delete(id);
 }

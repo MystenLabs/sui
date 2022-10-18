@@ -189,25 +189,34 @@ impl<'a> ObjectStore<'a> {
         child_layout: MoveTypeLayout,
         child_tag: StructTag,
     ) -> PartialVMResult<ObjectResult<&mut ChildObject>> {
-        if let btree_map::Entry::Vacant(e) = self.store.entry(child) {
-            let (ty, tag, value) = match self.inner.fetch_object_impl(
-                parent,
-                child,
-                child_ty,
-                child_layout,
-                child_tag,
-            )? {
-                ObjectResult::MismatchedType => return Ok(ObjectResult::MismatchedType),
-                ObjectResult::Loaded(res) => res,
-            };
-            e.insert(ChildObject {
-                owner: parent,
-                ty,
-                tag,
-                value,
-            });
-        }
-        Ok(ObjectResult::Loaded(self.store.get_mut(&child).unwrap()))
+        let child_object = match self.store.entry(child) {
+            btree_map::Entry::Vacant(e) => {
+                let (ty, tag, value) = match self.inner.fetch_object_impl(
+                    parent,
+                    child,
+                    child_ty,
+                    child_layout,
+                    child_tag,
+                )? {
+                    ObjectResult::MismatchedType => return Ok(ObjectResult::MismatchedType),
+                    ObjectResult::Loaded(res) => res,
+                };
+                e.insert(ChildObject {
+                    owner: parent,
+                    ty,
+                    tag,
+                    value,
+                })
+            }
+            btree_map::Entry::Occupied(e) => {
+                let child_object = e.into_mut();
+                if child_object.tag != child_tag {
+                    return Ok(ObjectResult::MismatchedType);
+                }
+                child_object
+            }
+        };
+        Ok(ObjectResult::Loaded(child_object))
     }
 
     pub(super) fn add_object(
