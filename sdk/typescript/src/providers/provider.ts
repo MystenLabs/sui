@@ -32,6 +32,13 @@ import {
 ///////////////////////////////
 // Exported Abstracts
 export abstract class Provider {
+  // API Version
+  /**
+   * Returns the current version of the RPC API that the provider is
+   * connected to
+   */
+  abstract getRpcApiVersion(): Promise<string>;
+
   // Objects
   /**
    * Get all objects owned by an address
