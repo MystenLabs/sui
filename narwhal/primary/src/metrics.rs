@@ -13,6 +13,10 @@ use prometheus::{
 use std::time::Duration;
 use tonic::Code;
 
+const LATENCY_SEC_BUCKETS: &[f64] = &[
+    0.1, 0.25, 0.5, 1., 2.5, 5., 7.5, 10., 12.5, 15., 20., 25., 30., 60., 90., 120., 180., 300.,
+];
+
 #[derive(Clone)]
 pub(crate) struct Metrics {
     pub(crate) endpoint_metrics: Option<EndpointMetrics>,
@@ -64,7 +68,7 @@ pub struct PrimaryChannelMetrics {
     /// occupancy of the channel from the `primary::Synchronizer` to the `primary::HeaderWaiter`
     pub tx_sync_headers: IntGauge,
     /// occupancy of the channel from the `primary::Synchronizer` to the `primary::CertificaterWaiter`
-    pub tx_sync_certificates: IntGauge,
+    pub tx_certificate_waiter: IntGauge,
     /// occupancy of the channel from the `primary::HeaderWaiter` to the `primary::Core`
     pub tx_headers_loopback: IntGauge,
     /// occupancy of the channel from the `primary::CertificateWaiter` to the `primary::Core`
@@ -98,7 +102,7 @@ pub struct PrimaryChannelMetrics {
     /// total received on channel from the `primary::Synchronizer` to the `primary::HeaderWaiter`
     pub tx_sync_headers_total: IntCounter,
     /// total received on channel from the `primary::Synchronizer` to the `primary::CertificaterWaiter`
-    pub tx_sync_certificates_total: IntCounter,
+    pub tx_certificate_waiter_total: IntCounter,
     /// total received on channel from the `primary::HeaderWaiter` to the `primary::Core`
     pub tx_headers_loopback_total: IntCounter,
     /// total received on channel from the `primary::CertificateWaiter` to the `primary::Core`
@@ -171,8 +175,8 @@ impl PrimaryChannelMetrics {
                 "occupancy of the channel from the `primary::Synchronizer` to the `primary::HeaderWaiter`",
                 registry
             ).unwrap(),
-            tx_sync_certificates: register_int_gauge_with_registry!(
-                "tx_sync_certificates",
+            tx_certificate_waiter: register_int_gauge_with_registry!(
+                "tx_certificate_waiter",
                 "occupancy of the channel from the `primary::Synchronizer` to the `primary::CertificaterWaiter`",
                 registry
             ).unwrap(),
@@ -253,8 +257,8 @@ impl PrimaryChannelMetrics {
                 "total received on channel from the `primary::Synchronizer` to the `primary::HeaderWaiter`",
                 registry
             ).unwrap(),
-            tx_sync_certificates_total: register_int_counter_with_registry!(
-                "tx_sync_certificates_total",
+            tx_certificate_waiter_total: register_int_counter_with_registry!(
+                "tx_certificate_waiter_total",
                 "total received on channel from the `primary::Synchronizer` to the `primary::CertificaterWaiter`",
                 registry
             ).unwrap(),
@@ -381,10 +385,14 @@ pub struct PrimaryMetrics {
     pub parent_requests_header_waiter: IntGaugeVec,
     /// Number of elements in the waiting (ready-to-deliver) list of header_waiter
     pub waiting_elements_header_waiter: IntGaugeVec,
-    /// Number of elements in pending list of certificate_waiter
-    pub pending_elements_certificate_waiter: IntGaugeVec,
-    /// Number of elements in the waiting (ready-to-deliver) list of certificate_waiter
-    pub waiting_elements_certificate_waiter: IntGaugeVec,
+    /// 0 if there is no inflight certificates fetching, 1 otherwise.
+    pub certificate_waiter_inflight_fetch: IntGaugeVec,
+    /// Number of attempts to fetch certificates in certificate waiter.
+    pub certificate_waiter_fetch_attempts: IntGaugeVec,
+    /// Number of fetched certificates successfully processed by core.
+    pub certificate_waiter_num_certificates_processed: IntGaugeVec,
+    /// Latency per iteration of fetching and processing certificates.
+    pub certificate_waiter_op_latency: HistogramVec,
     /// Number of votes that were requested but not sent due to previously having voted differently
     pub votes_dropped_equivocation_protection: IntCounterVec,
     /// Number of pending batches in proposer
@@ -513,17 +521,32 @@ impl PrimaryMetrics {
                 registry
             )
             .unwrap(),
-            pending_elements_certificate_waiter: register_int_gauge_vec_with_registry!(
-                "pending_elements_certificate_waiter",
-                "Number of pending elements in certificate waiter",
+            certificate_waiter_inflight_fetch: register_int_gauge_vec_with_registry!(
+                "certificate_waiter_inflight_fetch",
+                "0 if there is no inflight certificates fetching, 1 otherwise.",
                 &["epoch"],
                 registry
             )
             .unwrap(),
-            waiting_elements_certificate_waiter: register_int_gauge_vec_with_registry!(
-                "waiting_elements_certificate_waiter",
-                "Number of waiting elements in certificate waiter",
+            certificate_waiter_fetch_attempts: register_int_gauge_vec_with_registry!(
+                "certificate_waiter_fetch_attempts",
+                "Number of attempts to fetch certificates in certificate waiter.",
                 &["epoch"],
+                registry
+            )
+            .unwrap(),
+            certificate_waiter_num_certificates_processed: register_int_gauge_vec_with_registry!(
+                "certificate_waiter_num_certificates_processed",
+                "Number of fetched certificates successfully processed by core.",
+                &["epoch"],
+                registry
+            )
+            .unwrap(),
+            certificate_waiter_op_latency: register_histogram_vec_with_registry!(
+                "certificate_waiter_op_latency",
+                "Latency per iteration of fetching and processing certificates",
+                &["epoch"],
+                LATENCY_SEC_BUCKETS.to_vec(),
                 registry
             )
             .unwrap(),

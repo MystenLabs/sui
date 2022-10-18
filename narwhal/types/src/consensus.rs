@@ -68,6 +68,14 @@ impl ConsensusStore {
         self.last_committed.iter().collect()
     }
 
+    /// Load the last committed round of each validator.
+    pub fn read_last_committed_round(
+        &self,
+        validator: &PublicKey,
+    ) -> Result<Option<Round>, TypedStoreError> {
+        self.last_committed.get(validator)
+    }
+
     /// Load the certificate digests sequenced at a specific indices.
     pub fn read_sequenced_certificates(
         &self,

@@ -59,6 +59,15 @@ fn build_anemo_services(out_dir: &Path) {
                 .codec_path("anemo::rpc::codec::BincodeCodec")
                 .build(),
         )
+        .method(
+            anemo_build::manual::Method::builder()
+                .name("fetch_certificates")
+                .route_name("FetchCertificates")
+                .request_type("crate::FetchCertificatesRequest")
+                .response_type("crate::FetchCertificatesResponse")
+                .codec_path("anemo::rpc::codec::BincodeCodec")
+                .build(),
+        )
         .build();
 
     let primary_to_worker = anemo_build::manual::Service::builder()

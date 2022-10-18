@@ -4,6 +4,7 @@ use crate::{common::create_db_stores, helper::Helper, primary::PrimaryMessage, P
 use anemo::{types::PeerInfo, PeerId};
 use bincode::Options;
 use config::WorkerId;
+use crypto::PublicKey;
 use fastcrypto::{hash::Hash, traits::KeyPair};
 use itertools::Itertools;
 use network::P2pNetwork;
@@ -16,7 +17,7 @@ use storage::CertificateStore;
 use store::{reopen, rocks, rocks::DBMap, Store};
 use test_utils::{
     fixture_batch_with_transactions, temp_dir, CommitteeFixture, PrimaryToPrimaryMockServer,
-    CERTIFICATES_CF, CERTIFICATE_ID_BY_ROUND_CF, PAYLOAD_CF,
+    CERTIFICATES_CF, CERTIFICATE_ID_BY_ORIGIN_CF, CERTIFICATE_ID_BY_ROUND_CF, PAYLOAD_CF,
 };
 use tokio::{sync::watch, time::timeout};
 use types::{BatchDigest, Certificate, CertificateDigest, ReconfigureNotification, Round};
@@ -404,16 +405,26 @@ async fn test_process_payload_availability_when_failures() {
     let rocksdb = rocks::open_cf(
         temp_dir(),
         None,
-        &[CERTIFICATES_CF, CERTIFICATE_ID_BY_ROUND_CF, PAYLOAD_CF],
+        &[
+            CERTIFICATES_CF,
+            CERTIFICATE_ID_BY_ROUND_CF,
+            CERTIFICATE_ID_BY_ORIGIN_CF,
+            PAYLOAD_CF,
+        ],
     )
     .expect("Failed creating database");
 
-    let (certificate_map, certificate_id_by_round_map, payload_map) = reopen!(&rocksdb,
+    let (certificate_map, certificate_id_by_round_map, certificate_id_by_origin_map, payload_map) = reopen!(&rocksdb,
         CERTIFICATES_CF;<CertificateDigest, Certificate>,
-        CERTIFICATE_ID_BY_ROUND_CF;<(Round, CertificateDigest), u8>,
+        CERTIFICATE_ID_BY_ROUND_CF;<(Round, PublicKey), CertificateDigest>,
+        CERTIFICATE_ID_BY_ORIGIN_CF;<(PublicKey, Round), CertificateDigest>,
         PAYLOAD_CF;<(BatchDigest, WorkerId), PayloadToken>);
 
-    let certificate_store = CertificateStore::new(certificate_map, certificate_id_by_round_map);
+    let certificate_store = CertificateStore::new(
+        certificate_map,
+        certificate_id_by_round_map,
+        certificate_id_by_origin_map,
+    );
     let payload_store: Store<(BatchDigest, WorkerId), PayloadToken> = Store::new(payload_map);
 
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();

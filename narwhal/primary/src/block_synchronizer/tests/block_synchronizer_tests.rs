@@ -2,9 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
     block_synchronizer::{
-        responses::{
-            AvailabilityResponse, CertificateDigestsResponse, PayloadAvailabilityResponse,
-        },
+        responses::{AvailabilityResponse, PayloadAvailabilityResponse},
         BlockSynchronizer, CertificatesResponse, Command, PendingIdentifier, RequestID, SyncError,
     },
     common::{create_db_stores, worker_listener},
@@ -16,7 +14,7 @@ use fastcrypto::hash::Hash;
 use futures::{future::try_join_all, stream::FuturesUnordered};
 use network::P2pNetwork;
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{HashMap, HashSet},
     time::Duration,
 };
 use test_utils::{fixture_batch_with_transactions, CommitteeFixture, PrimaryToPrimaryMockServer};
@@ -25,211 +23,12 @@ use tokio::{
     task::JoinHandle,
     time::{sleep, timeout},
 };
-use types::{ReconfigureNotification, Round};
+use types::ReconfigureNotification;
 
 use crypto::NetworkKeyPair;
 use fastcrypto::traits::KeyPair as _;
-use tracing::{debug, info};
+use tracing::debug;
 use types::{Certificate, CertificateDigest};
-
-#[tokio::test]
-async fn test_successful_range_synchronization() {
-    telemetry_subscribers::init_for_testing();
-    // GIVEN
-    let (_, certificate_store, payload_store) = create_db_stores();
-
-    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
-    let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
-    let author = fixture.authorities().next().unwrap();
-    let primary = fixture.authorities().nth(1).unwrap();
-    let name = primary.public_key();
-    let network_key = primary.network_keypair().copy().private().0.to_bytes();
-    assert_eq!(
-        committee.size(),
-        4,
-        "This test assumes the committee has four members (with equal stake)"
-    );
-
-    let (_tx_reconfigure, rx_reconfigure) =
-        watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
-    let (tx_commands, rx_commands) = test_utils::test_channel!(10);
-    let (tx_availability_responses, rx_availability_responses) = test_utils::test_channel!(10);
-
-    let own_address = network::multiaddr_to_address(&committee.primary(&name).unwrap()).unwrap();
-    let network = anemo::Network::bind(own_address)
-        .server_name("narwhal")
-        .private_key(network_key)
-        .start(anemo::Router::new())
-        .unwrap();
-
-    // TODO: quite duplicated code (3 times in our repo)
-    for (_pubkey, address, network_pubkey) in committee.others_primaries(&name) {
-        let peer_id = PeerId(network_pubkey.0.to_bytes());
-        let address = network::multiaddr_to_address(&address).unwrap();
-        let peer_info = PeerInfo {
-            peer_id,
-            affinity: anemo::types::PeerAffinity::High,
-            address: vec![address],
-        };
-        network.known_peers().insert(peer_info);
-    }
-
-    // AND create the synchronizer
-    let _synchronizer_handle = BlockSynchronizer::spawn(
-        name.clone(),
-        committee.clone(),
-        worker_cache.clone(),
-        rx_reconfigure,
-        rx_commands,
-        rx_availability_responses,
-        P2pNetwork::new(network.clone()),
-        payload_store.clone(),
-        certificate_store.clone(),
-        Parameters::default(),
-    );
-
-    // AND propulate certificates from round 0 ~ 4 in the local store.
-    let worker_id_0 = 0;
-    let worker_id_1 = 1;
-    for r in 0..5 {
-        let batch_1 = fixture_batch_with_transactions(10);
-        let batch_2 = fixture_batch_with_transactions(10);
-
-        let mut header = author
-            .header_builder(&committee)
-            .with_payload_batch(batch_1.clone(), worker_id_0)
-            .with_payload_batch(batch_2.clone(), worker_id_1)
-            .build(author.keypair())
-            .unwrap();
-        header.round = r;
-        let certificate = fixture.certificate(&header);
-        // Intentionally only store one certificate per round.
-        certificate_store.write(certificate).unwrap();
-    }
-
-    // AND generate certificate digests for response from each authority (3 responses in total).
-    let mut certificate_ids = Vec::new();
-    for _ in 0..3 {
-        certificate_ids.push(BTreeMap::<Round, Vec<CertificateDigest>>::new());
-    }
-    for r in 5..20 {
-        for _ in 0..committee.size() {
-            let batch_1 = fixture_batch_with_transactions(10);
-            let batch_2 = fixture_batch_with_transactions(10);
-
-            let mut header = author
-                .header_builder(&committee)
-                .with_payload_batch(batch_1.clone(), worker_id_0)
-                .with_payload_batch(batch_2.clone(), worker_id_1)
-                .build(author.keypair())
-                .unwrap();
-            header.round = r;
-            let certificate = fixture.certificate(&header);
-            // Round 5 ~ 9: will exist in all 3 range sync responses.
-            // Round 10 ~ 14: will exist in 2 range sync responses.
-            // Round 15 ~ 19: will exist in only 1 range sync response, below the validity threshold (f + 1 stake).
-            for j in 0..(certificate_ids.len() - (r - 5) as usize / 5) {
-                certificate_ids[j]
-                    .entry(r)
-                    .or_default()
-                    .push(certificate.digest());
-            }
-        }
-    }
-
-    // AND the channel to respond to
-    let (tx_synchronize, mut rx_synchronize) = mpsc::channel(10);
-
-    // AND let's assume that all the primaries are responding with the full set
-    // of requested certificate digests.
-    let handlers: FuturesUnordered<JoinHandle<Vec<PrimaryMessage>>> = fixture
-        .authorities()
-        .filter(|a| a.public_key() != name)
-        .map(|a| {
-            let address = committee.primary(&a.public_key()).unwrap();
-            primary_listener(1, a.network_keypair().copy(), address)
-        })
-        .collect();
-
-    // Wait for connectivity
-    let (mut events, mut peers) = network.subscribe();
-    while peers.len() != committee.size() - 1 {
-        let event = events.recv().await.unwrap();
-        match event {
-            anemo::types::PeerEvent::NewPeer(peer_id) => peers.push(peer_id),
-            anemo::types::PeerEvent::LostPeer(_, _) => {
-                panic!("we shouldn't see any lost peer events")
-            }
-        }
-    }
-
-    // WHEN
-    tx_commands
-        .send(Command::SynchronizeRange {
-            respond_to: tx_synchronize,
-        })
-        .await
-        .ok()
-        .unwrap();
-
-    // wait for the primaries to receive all the requests
-    let mut result = timeout(Duration::from_secs(5), try_join_all(handlers))
-        .await
-        .unwrap()
-        .unwrap();
-    assert_eq!(result.len(), 3);
-    let mut primaries = committee.others_primaries(&name);
-    for i in 0..result.len() {
-        // ensure that only one request has been received
-        let primary_responses = &mut result[i];
-        assert_eq!(primary_responses.len(), 1, "Expected only one request");
-
-        match primary_responses.remove(0) {
-            PrimaryMessage::CertificatesRangeRequest {
-                range_start,
-                max_rounds,
-                requestor,
-            } => {
-                info!("Received range sync response from {requestor}");
-                assert_eq!(range_start, 5, "Start of requested range is incorrect");
-                assert_eq!(max_rounds, 50, "Max rounds is incorrect");
-                tx_availability_responses
-                    .send(AvailabilityResponse::CertificateDigest(
-                        CertificateDigestsResponse {
-                            certificate_ids: certificate_ids[i].clone(),
-                            from: primaries.pop().unwrap().0,
-                        },
-                    ))
-                    .await
-                    .unwrap();
-            }
-            _ => {
-                panic!("Unexpected request has been received!");
-            }
-        }
-    }
-
-    // THEN the received certificate digests should be expected.
-    let timer = sleep(Duration::from_secs(10));
-    tokio::pin!(timer);
-    tokio::select! {
-        Some(mut result) = rx_synchronize.recv() => {
-            // This response contains digests from rounds 5 ~ 14, which are the digests with total stake above validity threshold.
-            assert_eq!(result.len(), certificate_ids[1].len());
-            for (r, cert_ids) in &mut result {
-                cert_ids.sort();
-                let expected_cert_ids = certificate_ids[1].get_mut(r).unwrap();
-                expected_cert_ids.sort();
-                assert_eq!(cert_ids, expected_cert_ids, "Round {r} digests mismatch");
-            }
-            // Only one result is expected.
-        },
-        () = &mut timer => {
-            panic!("Timeout, no result has been received in time")
-        }
-    }
-}
 
 #[tokio::test]
 async fn test_successful_headers_synchronization() {
@@ -688,14 +487,11 @@ async fn test_multiple_overlapping_requests() {
         rx_commands,
         rx_availability_responses,
         pending_requests: HashMap::new(),
-        sync_range_state: Default::default(),
         map_certificate_responses_senders: HashMap::new(),
         map_payload_availability_responses_senders: HashMap::new(),
         network: P2pNetwork::new(network),
         payload_store,
         certificate_store,
-        range_request_max_rounds: 50,
-        range_synchronize_timeout: Duration::from_secs(10),
         certificates_synchronize_timeout: Duration::from_secs(1),
         payload_synchronize_timeout: Duration::from_secs(1),
         payload_availability_timeout: Duration::from_secs(1),
@@ -912,14 +708,11 @@ async fn test_reply_with_certificates_already_in_storage() {
         rx_commands,
         rx_availability_responses,
         pending_requests: Default::default(),
-        sync_range_state: Default::default(),
         map_certificate_responses_senders: Default::default(),
         map_payload_availability_responses_senders: Default::default(),
         network: P2pNetwork::new(network),
         certificate_store: certificate_store.clone(),
         payload_store,
-        range_request_max_rounds: Default::default(),
-        range_synchronize_timeout: Default::default(),
         certificates_synchronize_timeout: Default::default(),
         payload_synchronize_timeout: Default::default(),
         payload_availability_timeout: Default::default(),
@@ -1018,14 +811,11 @@ async fn test_reply_with_payload_already_in_storage() {
         rx_commands,
         rx_availability_responses,
         pending_requests: Default::default(),
-        sync_range_state: Default::default(),
         map_certificate_responses_senders: Default::default(),
         map_payload_availability_responses_senders: Default::default(),
         network: P2pNetwork::new(network),
         certificate_store: certificate_store.clone(),
         payload_store: payload_store.clone(),
-        range_request_max_rounds: Default::default(),
-        range_synchronize_timeout: Default::default(),
         certificates_synchronize_timeout: Default::default(),
         payload_synchronize_timeout: Default::default(),
         payload_availability_timeout: Default::default(),
@@ -1129,14 +919,11 @@ async fn test_reply_with_payload_already_in_storage_for_own_certificates() {
         rx_commands,
         rx_availability_responses,
         pending_requests: Default::default(),
-        sync_range_state: Default::default(),
         map_certificate_responses_senders: Default::default(),
         map_payload_availability_responses_senders: Default::default(),
         network: P2pNetwork::new(network),
         certificate_store: certificate_store.clone(),
         payload_store: payload_store.clone(),
-        range_request_max_rounds: Default::default(),
-        range_synchronize_timeout: Default::default(),
         certificates_synchronize_timeout: Default::default(),
         payload_synchronize_timeout: Default::default(),
         payload_availability_timeout: Default::default(),

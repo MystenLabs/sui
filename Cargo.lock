@@ -5067,6 +5067,7 @@ dependencies = [
  "dashmap",
  "fastcrypto",
  "futures",
+ "narwhal-crypto",
  "narwhal-test-utils",
  "narwhal-types",
  "tempfile",
