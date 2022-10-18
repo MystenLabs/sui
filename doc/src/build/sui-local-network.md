@@ -10,7 +10,7 @@ To create a local Sui network, first install Sui. See [Install Sui to Build](ins
 
 ## Genesis
 
-To create the configuration files and objects for a local Sui network, run the `genesis` command. Genesis creates the network configuration files in the ~/.sui/sui_config folder. This includes a YAML file for fullnode, network, client, and each validator. It also creates a sui.keystore that stores client key pairs. When you start the network, Sui generates an authorities_db database directory that stores validator information.
+To create the configuration files and objects for a local Sui network, run the `genesis` command. Genesis creates the network configuration files in the ~/.sui/sui_config folder. This includes a YAML file for fullnode, network, client, and each validator. It also creates a sui.keystore that stores client key pairs. 
 
 The network that genesis creates includes four validators and five user accounts that contain five coin objects each.
 
@@ -53,5 +53,6 @@ Use the following command to use a network.yaml file in a directory other than t
 ```shell
 $ sui start --network.config /workspace/config-files/network.yaml
 ```
+When you start the network, Sui generates an authorities_db directory that stores validator data, and a consensus_db directory that stores consensus data.
 
 After the process completes, use the [Sui Client CLI](cli-client.md) to interact with the local network.
