@@ -6,7 +6,7 @@ use fastcrypto::{
     bls12381::{BLS12381PublicKey, BLS12381Signature},
     bulletproofs::{BulletproofsRangeProof, PedersenCommitment},
     ed25519::{Ed25519PublicKey, Ed25519Signature},
-    hmac::hmac,
+    hmac::{hmac, HmacKey},
     secp256k1::{Secp256k1PublicKey, Secp256k1Signature},
     traits::ToFromBytes,
     Verifier,
@@ -21,7 +21,6 @@ use move_vm_types::{
 };
 use smallvec::smallvec;
 use std::collections::VecDeque;
-use fastcrypto::hmac::HmacKey;
 use sui_types::error::SuiError;
 
 pub const FAIL_TO_RECOVER_PUBKEY: u64 = 0;
@@ -411,7 +410,7 @@ pub fn ed25519_verify(
     }
 }
 
-/// Native implementation of hmac in public Move API, see crypto.move for specifications.
+/// Native implementation of hmac-sha2-256 in public Move API, see crypto.move for specifications.
 pub fn hmac_sha2_256(
     _context: &mut NativeContext,
     ty_args: Vec<Type>,

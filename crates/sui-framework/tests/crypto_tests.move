@@ -10,7 +10,6 @@ module sui::crypto_tests {
     use sui::hash;
     use std::vector;
 
-
     #[test]
     fun test_ecrecover_pubkey() {
         // test case generated against https://docs.rs/secp256k1/latest/secp256k1/
