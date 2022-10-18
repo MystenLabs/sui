@@ -228,7 +228,7 @@ const provider = new JsonRpcProvider('https://fullnode.devnet.sui.io:443');
 const subscriptionId = await provider.subscribeEvent(
   { SenderAddress: '0xbff6ccc8707aa517b4f1b95750a2a8c666012df3' },
   (event: SuiEventEnvelope) => {
-    // handle subscription notification message here
+    // handle subscription notification message here. This function is called once per subscription message.
   }
 );
 
