@@ -1,10 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { RawSigner, JsonRpcProvider } from '@mysten/sui.js';
+import {
+    RawSigner,
+    JsonRpcProvider,
+    LocalTxnDataSerializer,
+} from '@mysten/sui.js';
+
+import { FEATURES } from './experimentation/features';
 
 import type FeatureGating from './experimentation/feature-gating';
-import type { Ed25519Keypair } from '@mysten/sui.js';
+import type { Keypair } from '@mysten/sui.js';
 
 export enum API_ENV {
     local = 'local',
@@ -72,11 +78,19 @@ export default class ApiProvider {
     constructor(private _featureGating: FeatureGating) {}
 
     public setNewJsonRpcProvider(apiEnv: API_ENV = DEFAULT_API_ENV) {
-        this._apiProvider = new JsonRpcProvider(getDefaultAPI(apiEnv).gateway);
-        // TODO: based on _featureGating.isOn('deprecate-gateway') value,
-        // construct the transaction using local serializer or remote serializer
+        const apiVersion = this._featureGating.getFeatureValue(
+            FEATURES.RPC_API_VERSION,
+            '0.11.0'
+        );
+        this._apiProvider = new JsonRpcProvider(
+            getDefaultAPI(apiEnv).gateway,
+            true,
+            apiVersion
+        );
         this._apiFullNodeProvider = new JsonRpcProvider(
-            getDefaultAPI(apiEnv).fullNode
+            getDefaultAPI(apiEnv).fullNode,
+            true,
+            apiVersion
         );
         this._signer = null;
     }
@@ -93,12 +107,19 @@ export default class ApiProvider {
         };
     }
 
-    public getSignerInstance(keypair: Ed25519Keypair): RawSigner {
+    public getSignerInstance(keypair: Keypair): RawSigner {
         if (!this._apiFullNodeProvider) {
             this.setNewJsonRpcProvider();
         }
         if (!this._signer) {
-            this._signer = new RawSigner(keypair, this._apiProvider);
+            this._signer = this._featureGating.isOn(FEATURES.DEPRECATE_GATEWAY)
+                ? new RawSigner(
+                      keypair,
+                      this._apiFullNodeProvider,
+                      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+                      new LocalTxnDataSerializer(this._apiFullNodeProvider!)
+                  )
+                : new RawSigner(keypair, this._apiProvider);
         }
         return this._signer;
     }

@@ -1,68 +1,55 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use tokio::{sync::watch, task::JoinHandle};
-use types::ReconfigureNotification;
 
 use crate::metrics::NetworkConnectionMetrics;
+use tokio::task::JoinHandle;
 
 pub struct ConnectionMonitor {
-    network: anemo::Network,
+    network: anemo::NetworkRef,
     connection_metrics: NetworkConnectionMetrics,
-    /// Receive reconfiguration updates.
-    rx_reconfigure: watch::Receiver<ReconfigureNotification>,
 }
 
 impl ConnectionMonitor {
     #[must_use]
     pub fn spawn(
-        network: anemo::Network,
+        network: anemo::NetworkRef,
         connection_metrics: NetworkConnectionMetrics,
-        rx_reconfigure: watch::Receiver<ReconfigureNotification>,
     ) -> JoinHandle<()> {
-        tokio::spawn(async move {
+        tokio::spawn(
             Self {
                 network,
                 connection_metrics,
-                rx_reconfigure,
             }
-            .run()
-            .await;
-        })
+            .run(),
+        )
     }
 
-    async fn run(&mut self) {
-        let (mut subscriber, peers) = self.network.subscribe();
+    async fn run(self) {
+        let (mut subscriber, peers) = {
+            if let Some(network) = self.network.upgrade() {
+                network.subscribe()
+            } else {
+                return;
+            }
+        };
         for peer in peers.iter() {
             self.connection_metrics
                 .network_peer_connected
                 .with_label_values(&[&format!("{peer}")])
                 .set(1)
         }
-        loop {
-            tokio::select! {
-                Ok(event) = subscriber.recv() => {
-                    match event {
-                        anemo::types::PeerEvent::NewPeer(peer) => self
-                            .connection_metrics
-                            .network_peer_connected
-                            .with_label_values(&[&format!("{peer}")])
-                            .set(1),
-                        anemo::types::PeerEvent::LostPeer(peer, _) => self
-                            .connection_metrics
-                            .network_peer_connected
-                            .with_label_values(&[&format!("{peer}")])
-                            .set(0),
-                    }
-                },
-
-                // Trigger reconfigure.
-                result = self.rx_reconfigure.changed() => {
-                    result.expect("Committee channel dropped");
-                    let message = self.rx_reconfigure.borrow().clone();
-                    if let ReconfigureNotification::Shutdown = message {
-                        return;
-                    }
-                }
+        while let Ok(event) = subscriber.recv().await {
+            match event {
+                anemo::types::PeerEvent::NewPeer(peer) => self
+                    .connection_metrics
+                    .network_peer_connected
+                    .with_label_values(&[&format!("{peer}")])
+                    .set(1),
+                anemo::types::PeerEvent::LostPeer(peer, _) => self
+                    .connection_metrics
+                    .network_peer_connected
+                    .with_label_values(&[&format!("{peer}")])
+                    .set(0),
             }
         }
     }

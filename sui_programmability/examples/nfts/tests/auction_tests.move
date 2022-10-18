@@ -42,8 +42,8 @@ module nfts::auction_tests {
         let bidder1 = @0xFACE;
         let bidder2 = @0xCAFE;
 
-
-        let scenario = &mut test_scenario::begin(&auctioneer);
+        let scenario_val = test_scenario::begin(auctioneer);
+        let scenario = &mut scenario_val;
         {
             let bidders = vector::empty();
             vector::push_back(&mut bidders, bidder1);
@@ -52,7 +52,7 @@ module nfts::auction_tests {
         };
 
         // a transaction by the item owner to put it for auction
-        test_scenario::next_tx(scenario, &owner);
+        test_scenario::next_tx(scenario, owner);
         let ctx = test_scenario::ctx(scenario);
         let to_sell = SomeItemToSell {
             id: object::new(ctx),
@@ -70,61 +70,62 @@ module nfts::auction_tests {
         auction::create_auction(to_sell, id, auctioneer, ctx);
 
         // a transaction by the first bidder to create and put a bid
-        test_scenario::next_tx(scenario, &bidder1);
+        test_scenario::next_tx(scenario, bidder1);
         {
-            let coin = test_scenario::take_owned<Coin<SUI>>(scenario);
+            let coin = test_scenario::take_from_sender<Coin<SUI>>(scenario);
 
             auction::bid(coin, auction_id, auctioneer, test_scenario::ctx(scenario));
         };
 
         // a transaction by the auctioneer to update state of the auction
-        test_scenario::next_tx(scenario, &auctioneer);
+        test_scenario::next_tx(scenario, auctioneer);
         {
-            let auction = test_scenario::take_owned<Auction<SomeItemToSell>>(scenario);
+            let auction = test_scenario::take_from_sender<Auction<SomeItemToSell>>(scenario);
 
-            let bid = test_scenario::take_owned<Bid>(scenario);
+            let bid = test_scenario::take_from_sender<Bid>(scenario);
             auction::update_auction(&mut auction, bid, test_scenario::ctx(scenario));
 
-            test_scenario::return_owned(scenario, auction);
+            test_scenario::return_to_sender(scenario, auction);
         };
         // a transaction by the second bidder to create and put a bid (a
         // bid will fail as it has the same value as that of the first
         // bidder's)
-        test_scenario::next_tx(scenario, &bidder2);
+        test_scenario::next_tx(scenario, bidder2);
         {
-            let coin = test_scenario::take_owned<Coin<SUI>>(scenario);
+            let coin = test_scenario::take_from_sender<Coin<SUI>>(scenario);
 
             auction::bid(coin, auction_id, auctioneer, test_scenario::ctx(scenario));
         };
 
         // a transaction by the auctioneer to update state of the auction
-        test_scenario::next_tx(scenario, &auctioneer);
+        test_scenario::next_tx(scenario, auctioneer);
         {
-            let auction = test_scenario::take_owned<Auction<SomeItemToSell>>(scenario);
+            let auction = test_scenario::take_from_sender<Auction<SomeItemToSell>>(scenario);
 
-            let bid = test_scenario::take_owned<Bid>(scenario);
+            let bid = test_scenario::take_from_sender<Bid>(scenario);
             auction::update_auction(&mut auction, bid, test_scenario::ctx(scenario));
 
-            test_scenario::return_owned(scenario, auction);
+            test_scenario::return_to_sender(scenario, auction);
         };
 
         // a transaction by the auctioneer to end auction
-        test_scenario::next_tx(scenario, &auctioneer);
+        test_scenario::next_tx(scenario, auctioneer);
         {
-            let auction = test_scenario::take_owned<Auction<SomeItemToSell>>(scenario);
+            let auction = test_scenario::take_from_sender<Auction<SomeItemToSell>>(scenario);
 
             auction::end_auction(auction, test_scenario::ctx(scenario));
         };
 
         // a transaction to check if the first bidder won (as the
         // second bidder's bid was the same as that of the first one)
-        test_scenario::next_tx(scenario, &bidder1);
+        test_scenario::next_tx(scenario, bidder1);
         {
-            let acquired_item = test_scenario::take_owned<SomeItemToSell>(scenario);
+            let acquired_item = test_scenario::take_from_sender<SomeItemToSell>(scenario);
 
             assert!(acquired_item.value == 42, EWRONG_ITEM_VALUE);
 
-            test_scenario::return_owned(scenario, acquired_item);
+            test_scenario::return_to_sender(scenario, acquired_item);
         };
+        test_scenario::end(scenario_val);
     }
 }

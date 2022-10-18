@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::BTreeSet,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
@@ -14,19 +13,17 @@ use sui_types::{
     base_types::{ObjectID, SuiAddress},
     crypto::{get_key_pair, AccountKeyPair, AuthoritySignature, SuiAuthoritySignature},
     error::SuiError,
-    gas::SuiGasStatus,
-    messages::{InputObjects, SignatureAggregator, TransactionData},
+    messages::{SignatureAggregator, TransactionData},
     object::Object,
     SUI_SYSTEM_STATE_OBJECT_ID,
 };
 
+use crate::authority::AuthorityState;
 use crate::checkpoints::reconstruction::SpanGraph;
 use crate::{
-    authority::TemporaryStore,
     authority_active::ActiveAuthority,
     authority_aggregator::authority_aggregator_tests::init_local_authorities,
     checkpoints::{CheckpointLocals, CHECKPOINT_COUNT_PER_EPOCH},
-    execution_engine,
     test_utils::to_sender_signed_transaction,
 };
 
@@ -39,6 +36,7 @@ async fn test_start_epoch_change() {
     let genesis_objects = vec![object.clone(), gas_object.clone()];
     // Create authority_aggregator and authority states.
     let (net, states, _) = init_local_authorities(4, genesis_objects.clone()).await;
+    enable_reconfig(&states);
     let state = states[0].clone();
 
     // Check that we initialized the genesis epoch.
@@ -132,40 +130,7 @@ async fn test_start_epoch_change() {
 
     // Test that for certificates that have finished execution and is about to write effects,
     // they will also fail to get a ticket for the commit.
-    let tx_digest = *transaction.digest();
-    let temporary_store = TemporaryStore::new(
-        state.database.clone(),
-        InputObjects::new(
-            transaction
-                .signed_data
-                .data
-                .input_objects()
-                .unwrap()
-                .into_iter()
-                .zip(genesis_objects)
-                .collect(),
-        ),
-        tx_digest,
-    );
-    let (inner_temporary_store, effects, _) = execution_engine::execute_transaction_to_effects(
-        vec![],
-        temporary_store,
-        transaction.signed_data.data.clone(),
-        tx_digest,
-        BTreeSet::new(),
-        &state.move_vm,
-        &state._native_functions,
-        SuiGasStatus::new_with_budget(1000, 1.into(), 1.into()),
-        state.epoch(),
-    );
-    let signed_effects = effects.to_sign_effects(0, &state.name, &*state.secret);
-    assert_eq!(
-        state
-            .commit_certificate(inner_temporary_store, &certificate, &signed_effects, false)
-            .await
-            .unwrap_err(),
-        SuiError::ValidatorHaltedAtEpochEnd
-    );
+    assert!(state.batch_notifier.ticket(false).is_err());
 }
 
 #[tokio::test]
@@ -173,6 +138,7 @@ async fn test_finish_epoch_change() {
     // Create authority_aggregator and authority states.
     let genesis_objects = vec![];
     let (net, states, _) = init_local_authorities(4, genesis_objects.clone()).await;
+    enable_reconfig(&states);
     let actives: Vec<_> = states
         .iter()
         .map(|state| {
@@ -245,5 +211,11 @@ async fn test_finish_epoch_change() {
         assert!(response.signed_effects.is_some());
         assert!(response.certified_transaction.is_some());
         assert!(response.signed_effects.is_some());
+    }
+}
+
+fn enable_reconfig(states: &[Arc<AuthorityState>]) {
+    for state in states {
+        state.checkpoints.lock().enable_reconfig = true;
     }
 }

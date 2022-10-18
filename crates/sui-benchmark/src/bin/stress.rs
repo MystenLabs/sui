@@ -9,7 +9,6 @@ use prometheus::Registry;
 use rand::seq::SliceRandom;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Duration;
 use strum_macros::EnumString;
 use sui_benchmark::drivers::bench_driver::BenchDriver;
 use sui_benchmark::drivers::driver::Driver;
@@ -21,16 +20,9 @@ use sui_benchmark::workloads::workload::get_latest;
 use sui_benchmark::workloads::{
     make_combination_workload, make_shared_counter_workload, make_transfer_object_workload,
 };
-use sui_config::gateway::GatewayConfig;
-use sui_config::Config;
-use sui_config::PersistedConfig;
-use sui_core::authority_aggregator::AuthAggMetrics;
-use sui_core::authority_aggregator::AuthorityAggregator;
+use sui_core::authority_aggregator::{reconfig_from_genesis, AuthorityAggregatorBuilder};
 use sui_core::authority_client::AuthorityAPI;
 use sui_core::authority_client::NetworkAuthorityClient;
-use sui_core::epoch::committee_store::CommitteeStore;
-use sui_core::gateway_state::GatewayState;
-use sui_core::safe_client::SafeClientMetrics;
 use sui_node::metrics;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress;
@@ -41,7 +33,6 @@ use sui_types::messages::BatchInfoResponseItem;
 use sui_types::messages::TransactionInfoRequest;
 use tracing::log::info;
 
-use sui_core::authority_client::NetworkAuthorityClientMetrics;
 use test_utils::authority::spawn_test_authorities;
 use test_utils::authority::test_and_configure_authority_configs;
 use test_utils::objects::generate_gas_objects_with_owner;
@@ -68,15 +59,16 @@ struct Opts {
     pub num_client_threads: u64,
     #[clap(long, default_value = "", global = true)]
     pub log_path: String,
-    /// Path where gateway config is stored when running remote benchmark
-    /// This is also the path where gateway config is stored during local
-    /// benchmark
-    #[clap(long, default_value = "/tmp/gateway.yaml", global = true)]
-    pub gateway_config_path: String,
+    /// [Required for remote benchmark]
+    /// Path where genesis.blob is stored when running remote benchmark
+    #[clap(long, default_value = "/tmp/genesis.blob", global = true)]
+    pub genesis_blob_path: String,
+    /// [Required for remote benchmark]
     /// Path where keypair for primary gas account is stored. The format of
     /// this file is same as what `sui keytool generate` outputs
     #[clap(long, default_value = "", global = true)]
     pub keystore_path: String,
+    /// [Required for remote benchmark]
     /// Object id of the primary gas coin used for benchmark
     /// NOTE: THe remote network should have this coin in its genesis config
     /// with large enough gas i.e. u64::MAX
@@ -86,7 +78,7 @@ struct Opts {
     pub primary_gas_objects: u64,
     /// Whether to run local or remote benchmark
     /// NOTE: For running remote benchmark we must have the following
-    /// gateway_config_path, keypair_path and primary_gas_id
+    /// genesis_blob_path, keypair_path and primary_gas_id
     #[clap(long, parse(try_from_str), default_value = "true", global = true)]
     pub local: bool,
     /// Default workload is 100% transfer object
@@ -252,10 +244,14 @@ async fn main() -> Result<()> {
         config.log_file = Some(opts.log_path);
     }
     let _guard = config.with_env().init();
-
+    let registry: Arc<Registry> = Arc::new(metrics::start_prometheus_server(
+        format!("{}:{}", opts.client_metric_host, opts.client_metric_port)
+            .parse()
+            .unwrap(),
+    ));
     let barrier = Arc::new(Barrier::new(2));
     let cloned_barrier = barrier.clone();
-    let (primary_gas_id, owner, keypair, gateway_config) = if opts.local {
+    let (primary_gas_id, owner, keypair, aggregator) = if opts.local {
         eprintln!("Configuring local benchmark..");
         let configs = {
             let mut configs = test_and_configure_authority_configs(opts.committee_size as usize);
@@ -268,26 +264,20 @@ async fn main() -> Result<()> {
             });
             Arc::new(configs)
         };
-        let gateway_config = GatewayConfig {
-            epoch: 0,
-            validator_set: configs.validator_set().to_vec(),
-            send_timeout: Duration::from_secs(4),
-            recv_timeout: Duration::from_secs(4),
-            buffer_size: 650000,
-            db_folder_path: PathBuf::from("/tmp/client_db"),
-        };
-        gateway_config.save(&opts.gateway_config_path)?;
+
         // bring up servers ..
         let (owner, keypair): (SuiAddress, AccountKeyPair) = test_account_keys().pop().unwrap();
         let primary_gas = generate_gas_objects_with_owner(1, owner);
         let primary_gas_id = primary_gas.get(0).unwrap().id();
         // Make the client runtime wait until we are done creating genesis objects
-        let cloned_config = configs;
+        let cloned_config = configs.clone();
         let cloned_gas = primary_gas;
-        let auth_clients = GatewayState::make_authority_clients(
-            &gateway_config,
-            NetworkAuthorityClientMetrics::new_for_tests(),
-        );
+
+        let (aggregator, auth_clients) = AuthorityAggregatorBuilder::from_network_config(&configs)
+            .with_registry(registry.clone())
+            .build()
+            .unwrap();
+
         // spawn a thread to spin up sui nodes on the multi-threaded server runtime
         let _ = std::thread::spawn(move || {
             // create server runtime
@@ -321,7 +311,12 @@ async fn main() -> Result<()> {
                 join_all(follower_handles).await;
             });
         });
-        (primary_gas_id, owner, Arc::new(keypair), gateway_config)
+        (
+            primary_gas_id,
+            owner,
+            Arc::new(keypair),
+            Arc::new(aggregator),
+        )
     } else {
         eprintln!("Configuring remote benchmark..");
         std::thread::spawn(move || {
@@ -332,34 +327,23 @@ async fn main() -> Result<()> {
                     cloned_barrier.wait().await;
                 });
         });
-        let config_path = Some(&opts.gateway_config_path)
-            .filter(|s| !s.is_empty())
-            .map(PathBuf::from)
-            .ok_or_else(|| {
-                anyhow!(format!(
-                    "Failed to find gateway config at path: {}",
-                    opts.gateway_config_path
-                ))
-            })?;
-        let config: GatewayConfig = PersistedConfig::read(&config_path)?;
-        let committee = GatewayState::make_committee(&config)?;
-        let registry = Registry::new();
-        let authority_clients = GatewayState::make_authority_clients(
-            &config,
-            NetworkAuthorityClientMetrics::new(&registry),
+        let genesis = sui_config::node::Genesis::new_from_file(&opts.genesis_blob_path);
+        let genesis = genesis.genesis()?;
+        let (aggregator, _) = AuthorityAggregatorBuilder::from_genesis(genesis)
+            .with_registry(registry.clone())
+            .build()
+            .unwrap();
+
+        let aggregator = Arc::new(reconfig_from_genesis(aggregator).await?);
+        eprintln!(
+            "Reconfiguration - Reconfiguration to epoch {} is done",
+            aggregator.committee.epoch
         );
-        let committee_store = Arc::new(CommitteeStore::new_for_testing(&committee));
-        let aggregator = AuthorityAggregator::new(
-            committee,
-            committee_store,
-            authority_clients,
-            AuthAggMetrics::new(&registry),
-            SafeClientMetrics::new(&registry),
-        );
+
         let offset = ObjectID::from_hex_literal(&opts.primary_gas_id)?;
         let ids = ObjectID::in_range(offset, opts.primary_gas_objects)?;
         let primary_gas_id = ids.choose(&mut rand::thread_rng()).unwrap();
-        let primary_gas = get_latest(*primary_gas_id, Arc::new(aggregator))
+        let primary_gas = get_latest(*primary_gas_id, &aggregator)
             .await
             .ok_or_else(|| {
                 anyhow!(format!(
@@ -383,7 +367,7 @@ async fn main() -> Result<()> {
             *primary_gas_id,
             primary_gas_account,
             Arc::new(ed25519_keypair),
-            config,
+            aggregator,
         )
     };
     barrier.wait().await;
@@ -396,28 +380,10 @@ async fn main() -> Result<()> {
         .unwrap();
     let prev_benchmark_stats_path = opts.compare_with.clone();
     let curr_benchmark_stats_path = opts.benchmark_stats_path.clone();
+    let arc_agg = aggregator.clone();
+    let registry_clone = registry.clone();
     let handle = std::thread::spawn(move || {
         client_runtime.block_on(async move {
-            let committee = GatewayState::make_committee(&gateway_config).unwrap();
-            let registry: Registry = metrics::start_prometheus_server(
-                format!("{}:{}", opts.client_metric_host, opts.client_metric_port)
-                    .parse()
-                    .unwrap(),
-            );
-            let authority_clients = GatewayState::make_authority_clients(
-                &gateway_config,
-                NetworkAuthorityClientMetrics::new(&registry),
-            );
-
-            let committee_store = Arc::new(CommitteeStore::new_for_testing(&committee));
-            let aggregator = AuthorityAggregator::new(
-                committee,
-                committee_store,
-                authority_clients,
-                AuthAggMetrics::new(&registry),
-                SafeClientMetrics::new(&registry),
-            );
-            let arc_agg = Arc::new(aggregator);
             match opts.run_spec {
                 RunSpec::Bench {
                     target_qps,
@@ -492,7 +458,7 @@ async fn main() -> Result<()> {
                     let show_progress = interval.is_unbounded();
                     let driver = BenchDriver::new(stat_collection_interval);
                     driver
-                        .run(workloads, arc_agg, &registry, show_progress, interval)
+                        .run(workloads, arc_agg, &registry_clone, show_progress, interval)
                         .await
                 }
             }

@@ -1,9 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use blake2::digest::Update;
 use config::{Committee, SharedWorkerCache};
 use crypto::PublicKey;
-use fastcrypto::{Digest, Hash};
+use fastcrypto::hash::{Digest, Hash, HashFunction};
 use std::{
     collections::BTreeMap,
     fmt::{Debug, Display, Formatter},
@@ -15,12 +14,12 @@ use types::{Certificate, CertificateDigest, Round};
 // RequestID helps us identify an incoming request and
 // all the consequent network requests associated with it.
 #[derive(Clone, Copy, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct RequestID(pub [u8; fastcrypto::DIGEST_LEN]);
+pub struct RequestID(pub [u8; crypto::DIGEST_LENGTH]);
 
 impl RequestID {
     // Create a request key (deterministically) from arbitrary data.
     pub fn new(data: &[u8]) -> Self {
-        RequestID(fastcrypto::blake2b_256(|hasher| hasher.update(data)))
+        RequestID(crypto::DefaultHashFunction::digest(data).into())
     }
 }
 

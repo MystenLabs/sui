@@ -325,7 +325,6 @@ impl GossipDigestHandler {
         if let Some(certificate) = response.certified_transaction {
             let digest = *certificate.digest();
             state
-                .database
                 .add_pending_certificates(vec![(digest, Some(certificate))])
                 .tap_err(|e| error!(?digest, "add_pending_certificates failed: {}", e))?;
 

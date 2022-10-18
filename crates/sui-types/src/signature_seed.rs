@@ -3,9 +3,8 @@
 
 //! A secret seed value, useful for deterministic private key and SuiAddress generation.
 
-use fastcrypto::{hkdf::hkdf_generate_from_ikm, traits::KeyPair as KeypairTraits};
+use fastcrypto::{hash::Sha3_256, hmac::hkdf_generate_from_ikm, traits::KeyPair as KeypairTraits};
 use rand::{CryptoRng, RngCore};
-use sha3::Sha3_256;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use crate::base_types::SuiAddress;
@@ -236,7 +235,7 @@ impl SignatureSeed {
         id: &[u8],
         domain: Option<&[u8]>,
     ) -> Result<K, SuiError> {
-        hkdf_generate_from_ikm::<Sha3_256, K>(&self.0, id, domain)
+        hkdf_generate_from_ikm::<Sha3_256, K>(&self.0, id, domain.unwrap_or(&[]))
             .map_err(|_| SuiError::HkdfError("Deterministic keypair derivation failed".to_string()))
     }
 }

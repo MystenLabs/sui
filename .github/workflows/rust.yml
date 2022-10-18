@@ -98,11 +98,10 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
       - uses: taiki-e/install-action@nextest
+      - uses: arduino/setup-protoc@v1
       - name: cargo build
         run: |
           cargo build --all-features
-      # Ensure there are no uncommitted changes in the repo after running tests
-      - run: scripts/changed-files.sh
         shell: bash
 
 

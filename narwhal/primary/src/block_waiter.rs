@@ -4,7 +4,7 @@ use crate::block_synchronizer::handler::Handler;
 use anyhow::Result;
 use config::SharedWorkerCache;
 use crypto::PublicKey;
-use fastcrypto::Hash;
+use fastcrypto::hash::Hash;
 use futures::{
     stream::{FuturesOrdered, StreamExt as _},
     FutureExt,

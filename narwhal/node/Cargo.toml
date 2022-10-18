@@ -33,7 +33,7 @@ itertools = "0.10.5"
 
 config = { path = "../config", package = "narwhal-config" }
 consensus = { path = "../consensus", package = "narwhal-consensus" }
-fastcrypto = "0.1.2"
+fastcrypto.workspace = true
 crypto = { path = "../crypto", package = "narwhal-crypto" }
 executor = { path = "../executor", package = "narwhal-executor" }
 network = { path = "../network", package = "narwhal-network" }
@@ -45,7 +45,7 @@ worker = { path = "../worker", package = "narwhal-worker" }
 workspace-hack.workspace = true
 eyre = "0.6.8"
 
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "57c4af7d6cdbf47633e6715bcd67d98f300e2fd8" }
+anemo.workspace = true
 
 [dev-dependencies]
 hex = "0.4.3"

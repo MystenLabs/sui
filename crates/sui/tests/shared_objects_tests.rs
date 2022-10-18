@@ -3,13 +3,14 @@
 
 use std::sync::Arc;
 use sui_core::authority::GatewayStore;
+use sui_core::authority_aggregator::AuthorityAggregatorBuilder;
 use sui_core::authority_client::AuthorityAPI;
 use sui_core::gateway_state::{GatewayAPI, GatewayMetrics, GatewayState};
 use sui_types::messages::{
     CallArg, ExecutionStatus, ObjectArg, ObjectInfoRequest, ObjectInfoRequestKind,
 };
 use sui_types::object::OBJECT_START_VERSION;
-use test_utils::authority::{get_client, test_authority_aggregator};
+use test_utils::authority::get_client;
 use test_utils::transaction::{
     publish_counter_package, submit_shared_object_transaction, submit_single_owner_transaction,
 };
@@ -351,12 +352,19 @@ async fn shared_object_on_gateway() {
     let configs = test_authority_configs();
     let handles = spawn_test_authorities(gas_objects.clone(), &configs).await;
     let committee_store = handles[0].with(|h| h.state().committee_store().clone());
-    let clients = test_authority_aggregator(&configs, committee_store);
+    let (aggregator, _) = AuthorityAggregatorBuilder::from_network_config(&configs)
+        .with_committee_store(committee_store)
+        .build()
+        .unwrap();
     let path = tempfile::tempdir().unwrap().into_path();
     let gateway_store = Arc::new(GatewayStore::open(&path.join("store"), None));
     let gateway = Arc::new(
-        GatewayState::new_with_authorities(gateway_store, clients, GatewayMetrics::new_for_tests())
-            .unwrap(),
+        GatewayState::new_with_authorities(
+            gateway_store,
+            aggregator,
+            GatewayMetrics::new_for_tests(),
+        )
+        .unwrap(),
     );
 
     // Publish the move package to all authorities and get the new package ref.

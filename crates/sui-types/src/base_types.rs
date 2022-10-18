@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::borrow::Borrow;
-use std::collections::{BTreeSet, HashMap};
+use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
 use std::fmt;
 use std::str::FromStr;
@@ -413,13 +413,6 @@ impl TxContext {
     // for testing
     pub fn with_sender_for_testing_only(sender: &SuiAddress) -> Self {
         Self::new(sender, &TransactionDigest::random(), 0)
-    }
-
-    /// A function that lists all IDs created by this TXContext
-    pub fn recreate_all_ids(&self) -> BTreeSet<ObjectID> {
-        (0..self.ids_created)
-            .map(|seq| self.digest().derive_id(seq))
-            .collect()
     }
 }
 

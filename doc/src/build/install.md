@@ -169,9 +169,13 @@ for your operating system.
 
 Download and install [CMake](https://cmake.org/) from: https://cmake.org/download/
 
+### Protocol Buffers
+
+Download [Protocol Buffers](https://github.com/protocolbuffers/protobuf/releases) (protoc-xx.x-win32.zip or protoc-xx.x-win64.zip) and add the \bin directory to your Windows PATH environment variable.
+
 ### Additional tools for Windows
 
-Sui requires the following additional tools on computer running Windows.
+Sui requires the following additional tools on computers running Windows.
 
  * For Windows on ARM64 only - [Visual Studio 2022 Preview](https://visualstudio.microsoft.com/vs/preview/)
  * [C++ build tools](https://visualstudio.microsoft.com/downloads/)
@@ -194,6 +198,14 @@ $ cargo install --locked --git https://github.com/MystenLabs/sui.git --branch "d
 The command installs the following Sui components in `~/.cargo/bin`:
 * [`sui`](cli-client.md) - The Sui CLI tool contains subcommands for enabling `genesis` of validators and accounts, starting the Sui network, and [building and testing Move packages](move/index.md), as well as a [client](cli-client.md) for interacting with the Sui network.
 * [`rpc-server`](json-rpc.md) - run a local Sui gateway service accessible via an RPC interface.
+
+Trouble shooting:
+If the previous command fails, make sure you have the latest version of Rust installed:
+
+```
+rustup update stable
+source "$HOME/.cargo/env"
+```
 
 ### macOS and Linux
 

@@ -2,7 +2,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority_client::{AuthorityAPI, BatchInfoResponseItemStream};
+use crate::authority_client::{
+    AuthorityAPI, BatchInfoResponseItemStream, CheckpointStreamResponseItemStream,
+};
 use crate::epoch::committee_store::CommitteeStore;
 use crate::histogram::{Histogram, HistogramVec};
 use futures::StreamExt;
@@ -23,7 +25,20 @@ use sui_types::{
     error::{SuiError, SuiResult},
     messages::*,
 };
-use tracing::info;
+use tap::TapFallible;
+use tracing::{debug, error};
+
+macro_rules! check_error {
+    ($address:expr, $cond:expr, $msg:expr) => {
+        $cond.tap_err(|err| {
+            if matches!(err, SuiError::ValidatorHaltedAtEpochEnd) {
+                debug!(?err, authority=?$address, "Not a real client error");
+            } else {
+                error!(?err, authority=?$address, $msg);
+            }
+        })
+    }
+}
 
 /// Prometheus metrics which can be displayed in Grafana, queried and alerted on
 #[derive(Clone)]
@@ -88,7 +103,6 @@ pub struct SafeClient<C> {
     authority_client: C,
     committee_store: Arc<CommitteeStore>,
     address: AuthorityPublicKeyBytes,
-
     metrics_total_requests_handle_transaction_and_effects_info_request:
         GenericCounter<prometheus::core::AtomicU64>,
     metrics_total_ok_responses_handle_transaction_and_effects_info_request:
@@ -116,12 +130,12 @@ impl<C> SafeClient<C> {
         authority_client: C,
         committee_store: Arc<CommitteeStore>,
         address: AuthorityPublicKeyBytes,
-        safe_client_metrics: SafeClientMetrics,
+        safe_client_metrics: Arc<SafeClientMetrics>,
     ) -> Self {
         // Cache counters for efficiency
         let validator_address = address.to_string();
-        let requests_metrics_vec = safe_client_metrics.total_requests_by_address_method;
-        let responses_metrics_vec = safe_client_metrics.total_responses_by_address_method;
+        let requests_metrics_vec = &safe_client_metrics.total_requests_by_address_method;
+        let responses_metrics_vec = &safe_client_metrics.total_responses_by_address_method;
 
         let metrics_total_requests_handle_transaction_and_effects_info_request =
             requests_metrics_vec.with_label_values(&[
@@ -173,7 +187,6 @@ impl<C> SafeClient<C> {
             authority_client,
             committee_store,
             address,
-
             metrics_total_requests_handle_transaction_and_effects_info_request,
             metrics_total_ok_responses_handle_transaction_and_effects_info_request,
             metrics_total_requests_handle_transaction_info_request,
@@ -294,10 +307,15 @@ impl<C> SafeClient<C> {
         &self,
         request: &ObjectInfoRequest,
         response: &ObjectInfoResponse,
+        // We skip the signature check when there's potentially an epoch change.
+        // In this case we don't have the latest committee info locally until reconfig finishes.
+        skip_committee_check_during_reconfig: bool,
     ) -> SuiResult {
         // If we get a certificate make sure it is a valid certificate
-        if let Some(certificate) = &response.parent_certificate {
-            certificate.verify(&self.get_committee(&certificate.auth_sign_info.epoch)?)?;
+        if !skip_committee_check_during_reconfig {
+            if let Some(certificate) = &response.parent_certificate {
+                certificate.verify(&self.get_committee(&certificate.auth_sign_info.epoch)?)?;
+            }
         }
 
         // Check the right object ID and version is returned
@@ -433,11 +451,8 @@ impl<C> SafeClient<C> {
         Ok(())
     }
 
-    /// This function is used by the higher level authority logic to report an
-    /// error that could be due to this authority.
-    /// TODO: Get rid of this. https://github.com/MystenLabs/sui/issues/3740
-    pub fn report_client_error(&self, error: &SuiError) {
-        info!(?error, authority =? self.address, "Client error");
+    pub fn address(&self) -> &AuthorityPublicKeyBytes {
+        &self.address
     }
 }
 
@@ -456,10 +471,11 @@ where
             .authority_client
             .handle_transaction(transaction)
             .await?;
-        if let Err(err) = self.check_transaction_response(&digest, None, &transaction_info) {
-            self.report_client_error(&err);
-            return Err(err);
-        }
+        check_error!(
+            self.address,
+            self.check_transaction_response(&digest, None, &transaction_info),
+            "Client error in handle_transaction"
+        )?;
         Ok(transaction_info)
     }
 
@@ -491,10 +507,11 @@ where
             .handle_certificate(certificate)
             .await?;
 
-        if let Err(err) = self.verify_certificate_response(&digest, &transaction_info) {
-            self.report_client_error(&err);
-            return Err(err);
-        }
+        check_error!(
+            self.address,
+            self.verify_certificate_response(&digest, &transaction_info),
+            "Client error in handle_certificate"
+        )?;
         Ok(transaction_info)
     }
 
@@ -507,9 +524,12 @@ where
             .await
     }
 
+    /// Pass `skip_committee_check_during_reconfig = true` during reconfiguration, so that
+    /// we can tolerate missing committee information when processing the object data.
     pub async fn handle_object_info_request(
         &self,
         request: ObjectInfoRequest,
+        skip_committee_check_during_reconfig: bool,
     ) -> Result<ObjectInfoResponse, SuiError> {
         self.metrics_total_requests_handle_object_info_request.inc();
 
@@ -518,8 +538,10 @@ where
             .authority_client
             .handle_object_info_request(request.clone())
             .await?;
-        if let Err(err) = self.check_object_response(&request, &response) {
-            self.report_client_error(&err);
+        if let Err(err) =
+            self.check_object_response(&request, &response, skip_committee_check_during_reconfig)
+        {
+            error!(?err, authority=?self.address, "Client error in handle_object_info_request");
             return Err(err);
         }
         self.metrics_total_ok_responses_handle_object_info_request
@@ -544,7 +566,7 @@ where
             .await?;
 
         if let Err(err) = self.check_transaction_response(&digest, None, &transaction_info) {
-            self.report_client_error(&err);
+            error!(?err, authority=?self.address, "Client error in handle_transaction_info_request");
             return Err(err);
         }
         self.metrics_total_ok_responses_handle_transaction_info_request
@@ -569,7 +591,7 @@ where
             Some(&digests.effects),
             &transaction_info,
         ) {
-            self.report_client_error(&err);
+            error!(?err, authority=?self.address, "Client error in handle_transaction_and_effects_info_request");
             return Err(err);
         }
         self.metrics_total_ok_responses_handle_transaction_and_effects_info_request
@@ -729,11 +751,33 @@ where
             .handle_checkpoint(request.clone())
             .await?;
         self.verify_checkpoint_response(&request, &resp)
-            .map_err(|err| {
-                self.report_client_error(&err);
-                err
+            .tap_err(|err| {
+                error!(?err, authority=?self.address, "Client error in handle_checkpoint");
             })?;
         Ok(resp)
+    }
+
+    pub async fn handle_checkpoint_stream(
+        &self,
+        request: CheckpointStreamRequest,
+    ) -> Result<CheckpointStreamResponseItemStream, SuiError> {
+        let checkpoint_info_items = self
+            .authority_client
+            .handle_checkpoint_stream(request)
+            .await?;
+
+        let client = self.clone();
+
+        let stream = Box::pin(checkpoint_info_items.scan((), move |_, item| {
+            let process_item = |item: SuiResult<CheckpointStreamResponseItem>| -> SuiResult<CheckpointStreamResponseItem> {
+                let item = item?;
+                let CheckpointStreamResponseItem { ref checkpoint, .. } = item;
+                checkpoint.verify(&client.get_committee(&checkpoint.epoch())?, None)?;
+                Ok(item)
+            };
+            futures::future::ready(Some(process_item(item)))
+        }));
+        Ok(Box::pin(stream))
     }
 
     /// Handle Batch information requests for this authority.
@@ -769,7 +813,7 @@ where
                             signed_batch,
                             txs_and_last_batch,
                         ) {
-                            client.report_client_error(&err);
+                            error!(?err, authority=?address, "Client error in handle_batch_stream");
                             Some(Err(err))
                         } else {
                             // Insert a fresh vector for the new batch of transactions
@@ -787,7 +831,7 @@ where
                                     authority: address,
                                     reason: "Stream does not start with a batch".to_string(),
                                 };
-                                client.report_client_error(&err);
+                                error!(?err, authority=?address, "Client error in handle_batch_stream");
                                 Some(Err(err))
                             }
                             Some(txs) => {

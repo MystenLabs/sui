@@ -9,7 +9,7 @@ use crate::{
         authority_aggregator_tests::transfer_coin_transaction, AuthorityAggregator,
     },
     authority_batch::batch_tests::init_state_parameters_from_rng,
-    authority_client::LocalAuthorityClient,
+    authority_client::{LocalAuthorityClient, NetworkAuthorityClientMetrics},
     checkpoints::causal_order_effects::TestCausalOrderNoop,
     safe_client::SafeClientMetrics,
 };
@@ -68,6 +68,7 @@ fn random_ckpoint_store_num(
                 &committee,
                 k.public().into(),
                 Arc::pin(k.copy()),
+                false,
             )
             .unwrap();
             (path, cps)
@@ -97,6 +98,7 @@ fn crash_recovery() {
         &committee,
         k.public().into(),
         Arc::pin(k.copy()),
+        false,
     )
     .unwrap();
 
@@ -141,6 +143,7 @@ fn crash_recovery() {
         &committee,
         k.public().into(),
         Arc::pin(k.copy()),
+        false,
     )
     .unwrap();
 
@@ -751,6 +754,7 @@ fn checkpoint_integration() {
         &committee,
         k.public().into(),
         Arc::pin(k.copy()),
+        false,
     )
     .unwrap();
 
@@ -1597,7 +1601,7 @@ pub async fn checkpoint_tests_setup(
                 } else if let Err(err) = cps.lock().handle_internal_fragment(
                     seq.clone(),
                     msg.clone(),
-                    authority.database.clone(),
+                    authority.as_ref(),
                     &c,
                 ) {
                     println!("Error: {:?}", err);
@@ -1622,7 +1626,8 @@ pub async fn checkpoint_tests_setup(
             })
             .collect(),
         AuthAggMetrics::new_for_tests(),
-        SafeClientMetrics::new_for_tests(),
+        Arc::new(SafeClientMetrics::new_for_tests()),
+        Arc::new(NetworkAuthorityClientMetrics::new_for_tests()),
     );
 
     TestSetup {

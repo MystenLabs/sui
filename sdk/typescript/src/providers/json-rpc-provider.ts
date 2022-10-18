@@ -7,42 +7,48 @@ import {
   isGetObjectDataResponse,
   isGetOwnedObjectsResponse,
   isGetTxnDigestsResponse,
-  isSuiTransactionResponse,
-  isSuiMoveFunctionArgTypes,
-  isSuiMoveNormalizedModules,
-  isSuiMoveNormalizedModule,
-  isSuiMoveNormalizedFunction,
-  isSuiMoveNormalizedStruct,
-  isSuiExecuteTransactionResponse,
+  isGetTxnDigestsResponse__DEPRECATED,
+  isPaginatedTransactionDigests,
   isSuiEvents,
+  isSuiExecuteTransactionResponse,
+  isSuiMoveFunctionArgTypes,
+  isSuiMoveNormalizedFunction,
+  isSuiMoveNormalizedModule,
+  isSuiMoveNormalizedModules,
+  isSuiMoveNormalizedStruct,
+  isSuiTransactionResponse,
 } from '../types/index.guard';
 import {
-  GatewayTxSeqNumber,
-  GetTxnDigestsResponse,
-  GetObjectDataResponse,
-  SuiObjectInfo,
-  SuiMoveFunctionArgTypes,
-  SuiMoveNormalizedModules,
-  SuiMoveNormalizedModule,
-  SuiMoveNormalizedFunction,
-  SuiMoveNormalizedStruct,
-  TransactionDigest,
-  SuiTransactionResponse,
-  SuiObjectRef,
-  getObjectReference,
   Coin,
-  SuiEventFilter,
-  SuiEventEnvelope,
-  SubscriptionId,
-  ExecuteTransactionRequestType,
-  SuiExecuteTransactionResponse,
-  SuiAddress,
-  ObjectOwner,
-  ObjectId,
-  SuiEvents,
-  EVENT_QUERY_MAX_LIMIT,
-  DEFAULT_START_TIME,
   DEFAULT_END_TIME,
+  DEFAULT_START_TIME,
+  EVENT_QUERY_MAX_LIMIT,
+  ExecuteTransactionRequestType,
+  GatewayTxSeqNumber,
+  GetObjectDataResponse,
+  getObjectReference,
+  GetTxnDigestsResponse,
+  ObjectId,
+  ObjectOwner,
+  Ordering,
+  PaginatedTransactionDigests,
+  SubscriptionId,
+  SuiAddress,
+  SuiEventEnvelope,
+  SuiEventFilter,
+  SuiEvents,
+  SuiExecuteTransactionResponse,
+  SuiMoveFunctionArgTypes,
+  SuiMoveNormalizedFunction,
+  SuiMoveNormalizedModule,
+  SuiMoveNormalizedModules,
+  SuiMoveNormalizedStruct,
+  SuiObjectInfo,
+  SuiObjectRef,
+  SuiTransactionResponse,
+  TransactionDigest,
+  TransactionQuery,
+  SUI_TYPE_ARG,
 } from '../types';
 import { SignatureScheme } from '../cryptography/publickey';
 import {
@@ -53,6 +59,9 @@ import {
 
 const isNumber = (val: any): val is number => typeof val === 'number';
 const isAny = (_val: any): _val is any => true;
+
+const PRE_PAGINATION_API_VERSION = '0.11.0';
+export const LATEST_RPC_API_VERSION = 'latest';
 
 export class JsonRpcProvider extends Provider {
   protected client: JsonRpcClient;
@@ -70,10 +79,13 @@ export class JsonRpcProvider extends Provider {
    * the version compatibility of the SDK, as not all the schema
    * changes in the RPC response will affect the caller, but the caller needs to
    * understand that the data may not match the TypeSrcript definitions.
+   * @param rpcAPIVersion controls which type of RPC API version to use.
    */
   constructor(
     public endpoint: string,
     public skipDataValidation: boolean = true,
+    // TODO: Update the default value after we deploy 0.12.0
+    private rpcAPIVersion: string = PRE_PAGINATION_API_VERSION,
     public socketOptions: WebsocketClientOptions = DEFAULT_CLIENT_OPTIONS
   ) {
     super();
@@ -219,6 +231,34 @@ export class JsonRpcProvider extends Provider {
     return await this.getObjectBatch(coinIds);
   }
 
+  async selectCoinsWithBalanceGreaterThanOrEqual(
+    address: string,
+    amount: bigint,
+    typeArg: string = SUI_TYPE_ARG,
+    exclude: ObjectId[] = []
+  ): Promise<GetObjectDataResponse[]> {
+    const coins = await this.getCoinBalancesOwnedByAddress(address, typeArg);
+    return (await Coin.selectCoinsWithBalanceGreaterThanOrEqual(
+      coins,
+      amount,
+      exclude
+    )) as GetObjectDataResponse[];
+  }
+
+  async selectCoinSetWithCombinedBalanceGreaterThanOrEqual(
+    address: string,
+    amount: bigint,
+    typeArg: string = SUI_TYPE_ARG,
+    exclude: ObjectId[] = []
+  ): Promise<GetObjectDataResponse[]> {
+    const coins = await this.getCoinBalancesOwnedByAddress(address, typeArg);
+    return (await Coin.selectCoinSetWithCombinedBalanceGreaterThanOrEqual(
+      coins,
+      amount,
+      exclude
+    )) as GetObjectDataResponse[];
+  }
+
   async getObjectsOwnedByObject(objectId: string): Promise<SuiObjectInfo[]> {
     try {
       return await this.client.requestWithType(
@@ -269,28 +309,73 @@ export class JsonRpcProvider extends Provider {
   }
 
   // Transactions
+  async getTransactions(
+    query: TransactionQuery,
+    cursor: TransactionDigest | null,
+    limit: number | null,
+    order: Ordering
+  ): Promise<PaginatedTransactionDigests> {
+    try {
+      return await this.client.requestWithType(
+        'sui_getTransactions',
+        [query, cursor, limit, order],
+        isPaginatedTransactionDigests,
+        this.skipDataValidation
+      );
+    } catch (err) {
+      throw new Error(
+        `Error getting transactions for query: ${err} for query ${query}`
+      );
+    }
+  }
 
   async getTransactionsForObject(
     objectID: string
   ): Promise<GetTxnDigestsResponse> {
+    // TODO: remove after we deploy 0.12.0 DevNet
+    if (this.rpcAPIVersion === PRE_PAGINATION_API_VERSION) {
+      const requests = [
+        {
+          method: 'sui_getTransactionsByInputObject',
+          args: [objectID],
+        },
+        {
+          method: 'sui_getTransactionsByMutatedObject',
+          args: [objectID],
+        },
+      ];
+
+      try {
+        const results = await this.client.batchRequestWithType(
+          requests,
+          isGetTxnDigestsResponse__DEPRECATED,
+          this.skipDataValidation
+        );
+        return [...results[0], ...results[1]].map((tx) => tx[1]);
+      } catch (err) {
+        throw new Error(
+          `Error getting transactions for object: ${err} for id ${objectID}`
+        );
+      }
+    }
     const requests = [
       {
-        method: 'sui_getTransactionsByInputObject',
-        args: [objectID],
+        method: 'sui_getTransactions',
+        args: [{ InputObject: objectID }, null, null, 'Ascending'],
       },
       {
-        method: 'sui_getTransactionsByMutatedObject',
-        args: [objectID],
+        method: 'sui_getTransactions',
+        args: [{ MutatedObject: objectID }, null, null, 'Ascending'],
       },
     ];
 
     try {
       const results = await this.client.batchRequestWithType(
         requests,
-        isGetTxnDigestsResponse,
+        isPaginatedTransactionDigests,
         this.skipDataValidation
       );
-      return [...results[0], ...results[1]];
+      return [...results[0].data, ...results[1].data];
     } catch (err) {
       throw new Error(
         `Error getting transactions for object: ${err} for id ${objectID}`
@@ -301,24 +386,48 @@ export class JsonRpcProvider extends Provider {
   async getTransactionsForAddress(
     addressID: string
   ): Promise<GetTxnDigestsResponse> {
+    // TODO: remove after we deploy 0.12.0 DevNet
+    if (this.rpcAPIVersion === PRE_PAGINATION_API_VERSION) {
+      const requests = [
+        {
+          method: 'sui_getTransactionsToAddress',
+          args: [addressID],
+        },
+        {
+          method: 'sui_getTransactionsFromAddress',
+          args: [addressID],
+        },
+      ];
+      try {
+        const results = await this.client.batchRequestWithType(
+          requests,
+          isGetTxnDigestsResponse__DEPRECATED,
+          this.skipDataValidation
+        );
+        return [...results[0], ...results[1]].map((r) => r[1]);
+      } catch (err) {
+        throw new Error(
+          `Error getting transactions for address: ${err} for id ${addressID}`
+        );
+      }
+    }
     const requests = [
       {
-        method: 'sui_getTransactionsToAddress',
-        args: [addressID],
+        method: 'sui_getTransactions',
+        args: [{ ToAddress: addressID }, null, null, 'Ascending'],
       },
       {
-        method: 'sui_getTransactionsFromAddress',
-        args: [addressID],
+        method: 'sui_getTransactions',
+        args: [{ FromAddress: addressID }, null, null, 'Ascending'],
       },
     ];
-
     try {
       const results = await this.client.batchRequestWithType(
         requests,
-        isGetTxnDigestsResponse,
+        isPaginatedTransactionDigests,
         this.skipDataValidation
       );
-      return [...results[0], ...results[1]];
+      return [...results[0].data, ...results[1].data];
     } catch (err) {
       throw new Error(
         `Error getting transactions for address: ${err} for id ${addressID}`

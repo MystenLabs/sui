@@ -6,12 +6,17 @@ use move_bytecode_utils::Modules;
 use move_cli::base::test::UnitTestResult;
 use move_core_types::gas_algebra::InternalGas;
 use move_package::{compilation::compiled_package::CompiledPackage, BuildConfig};
-use move_unit_test::UnitTestingConfig;
-use num_enum::TryFromPrimitive;
+use move_unit_test::{extensions::set_extension_hook, UnitTestingConfig};
+use move_vm_runtime::native_extensions::NativeContextExtensions;
+use natives::object_runtime::ObjectRuntime;
 use once_cell::sync::Lazy;
-use std::path::Path;
+use std::{collections::BTreeMap, path::Path};
 use sui_types::{
+    base_types::TransactionDigest,
     error::{SuiError, SuiResult},
+    in_memory_storage::InMemoryStorage,
+    messages::InputObjects,
+    temporary_store::TemporaryStore,
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
 
@@ -48,6 +53,19 @@ static MOVE_STDLIB: Lazy<Vec<CompiledModule>> = Lazy::new(|| {
         .collect()
 });
 
+static SET_EXTENSION_HOOK: Lazy<()> =
+    Lazy::new(|| set_extension_hook(Box::new(new_testing_object_runtime)));
+
+fn new_testing_object_runtime(ext: &mut NativeContextExtensions) {
+    let store = InMemoryStorage::new(vec![]);
+    let state_view = TemporaryStore::new(
+        store,
+        InputObjects::new(vec![]),
+        TransactionDigest::random(),
+    );
+    ext.add(ObjectRuntime::new(Box::new(state_view), BTreeMap::new()))
+}
+
 pub fn get_sui_framework() -> Vec<CompiledModule> {
     Lazy::force(&SUI_FRAMEWORK).to_owned()
 }
@@ -58,27 +76,11 @@ pub fn get_move_stdlib() -> Vec<CompiledModule> {
 
 pub const DEFAULT_FRAMEWORK_PATH: &str = env!("CARGO_MANIFEST_DIR");
 
-#[derive(TryFromPrimitive, PartialEq, Eq)]
-#[repr(u8)]
-pub enum EventType {
-    /// System event: transfer between addresses
-    TransferToAddress,
-    /// System event: transfer object to another object
-    TransferToObject,
-    /// System event: freeze object
-    FreezeObject,
-    /// System event: turn an object into a shared object
-    ShareObject,
-    /// System event: an object ID is deleted. This does not necessarily
-    /// mean an object is being deleted. However whenever an object is being
-    /// deleted, the object ID must be deleted and this event will be
-    /// emitted.
-    DeleteObjectID,
-    /// User-defined event
-    User,
+// TODO: remove these in favor of new costs
+pub fn legacy_test_cost() -> InternalGas {
+    InternalGas::new(0)
 }
 
-// TODO: remove these in favor of new costs
 pub fn legacy_emit_cost() -> InternalGas {
     InternalGas::new(52)
 }
@@ -131,12 +133,17 @@ pub fn build_and_verify_package(
     Ok(modules)
 }
 
+/// This function returns a result of UnitTestResult. The outer result indicates whether it
+/// successfully started running the test, and the inner result indicatests whether all tests pass.
 pub fn run_move_unit_tests(
     path: &Path,
     build_config: BuildConfig,
     config: Option<UnitTestingConfig>,
     compute_coverage: bool,
 ) -> anyhow::Result<UnitTestResult> {
+    // bind the extension hook if it has not yet been done
+    Lazy::force(&SET_EXTENSION_HOOK);
+
     let config = config
         .unwrap_or_else(|| UnitTestingConfig::default_with_bound(Some(MAX_UNIT_TEST_INSTRUCTIONS)));
 
@@ -232,18 +239,9 @@ mod tests {
     fn run_framework_move_unit_tests() {
         get_sui_framework();
         get_move_stdlib();
-        build_and_verify_package(
-            &PathBuf::from(DEFAULT_FRAMEWORK_PATH),
-            BuildConfig::default(),
-        )
-        .unwrap();
-        run_move_unit_tests(
-            Path::new(env!("CARGO_MANIFEST_DIR")),
-            BuildConfig::default(),
-            None,
-            false,
-        )
-        .unwrap();
+        let path = PathBuf::from(DEFAULT_FRAMEWORK_PATH);
+        build_and_verify_package(&path, BuildConfig::default()).unwrap();
+        check_move_unit_tests(&path);
     }
 
     #[test]
@@ -263,7 +261,7 @@ mod tests {
                 .join("../../sui_programmability/examples")
                 .join(example);
             build_and_verify_package(&path, BuildConfig::default()).unwrap();
-            run_move_unit_tests(&path, BuildConfig::default(), None, false).unwrap();
+            check_move_unit_tests(&path);
         }
     }
 
@@ -273,6 +271,13 @@ mod tests {
         let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../doc/book/examples");
 
         build_and_verify_package(&path, BuildConfig::default()).unwrap();
-        run_move_unit_tests(&path, BuildConfig::default(), None, false).unwrap();
+        check_move_unit_tests(&path);
+    }
+
+    fn check_move_unit_tests(path: &Path) {
+        assert_eq!(
+            run_move_unit_tests(path, BuildConfig::default(), None, false).unwrap(),
+            UnitTestResult::Success
+        );
     }
 }

@@ -25,6 +25,7 @@ use sui_network::{
 };
 
 use sui_types::{error::*, messages::*};
+use tap::TapFallible;
 use tokio::{
     sync::mpsc::{channel, Receiver, Sender},
     task::JoinHandle,
@@ -34,7 +35,7 @@ use sui_types::messages_checkpoint::CheckpointRequest;
 use sui_types::messages_checkpoint::CheckpointResponse;
 
 use crate::authority::ConsensusHandler;
-use tracing::{info, Instrument};
+use tracing::{error, info, Instrument};
 
 #[cfg(test)]
 #[path = "unit_tests/server_tests.rs"]
@@ -444,13 +445,22 @@ impl ValidatorService {
             tx_kind = certificate.signed_data.data.kind_as_str()
         );
 
-        let response = state
-            .handle_certificate(certificate)
+        match state
+            .handle_certificate(certificate.clone())
             .instrument(span)
             .await
-            .map_err(|e| tonic::Status::internal(e.to_string()))?;
-
-        Ok(tonic::Response::new(response))
+            .map_err(|e| tonic::Status::internal(e.to_string()))
+        {
+            Err(e) => {
+                // Record the cert for later execution, including causal completion if necessary.
+                let tx_digest = *tx_digest;
+                let _ = state
+                    .add_pending_certificates(vec![(tx_digest, Some(certificate))])
+                    .tap_err(|e| error!(?tx_digest, "add_pending_certificates failed: {}", e));
+                Err(e)
+            }
+            Ok(response) => Ok(tonic::Response::new(response)),
+        }
     }
 }
 
@@ -563,6 +573,24 @@ impl Validator for ValidatorService {
             .map_err(|e| tonic::Status::internal(e.to_string()))?;
 
         return Ok(tonic::Response::new(response));
+    }
+
+    type FollowCheckpointStreamStream =
+        BoxStream<'static, Result<CheckpointStreamResponseItem, tonic::Status>>;
+    async fn checkpoint_info(
+        &self,
+        request: tonic::Request<CheckpointStreamRequest>,
+    ) -> Result<tonic::Response<Self::FollowCheckpointStreamStream>, tonic::Status> {
+        let request = request.into_inner();
+        let xstream = self
+            .state
+            .handle_checkpoint_streaming(request)
+            .await
+            .map_err(|e| tonic::Status::internal(e.to_string()))?;
+
+        let response = xstream.map_err(|e| tonic::Status::internal(e.to_string()));
+
+        Ok(tonic::Response::new(Box::pin(response)))
     }
 
     async fn committee_info(

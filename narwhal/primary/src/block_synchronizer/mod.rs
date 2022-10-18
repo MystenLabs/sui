@@ -11,7 +11,7 @@ use crate::{
 };
 use config::{Committee, Parameters, SharedWorkerCache, Stake, WorkerId};
 use crypto::PublicKey;
-use fastcrypto::Hash;
+use fastcrypto::hash::Hash;
 use futures::{
     future::{join_all, BoxFuture},
     stream::FuturesUnordered,
@@ -375,11 +375,9 @@ impl BlockSynchronizer {
                     let message = self.rx_reconfigure.borrow().clone();
                     match message {
                         ReconfigureNotification::NewEpoch(new_committee)=> {
-                            self.network.cleanup(self.committee.network_diff(&new_committee));
                             self.committee = new_committee;
                         }
                         ReconfigureNotification::UpdateCommittee(new_committee)=> {
-                            self.network.cleanup(self.committee.network_diff(&new_committee));
                             self.committee = new_committee;
                         }
                         ReconfigureNotification::Shutdown => return
@@ -449,7 +447,7 @@ impl BlockSynchronizer {
             return;
         }
         if self.committee.primary(&from).is_err() {
-            warn!("dropping range sync response from an origin that is not in the committe");
+            warn!("dropping range sync response from an origin that is not in the committee");
             return;
         }
         let state = &mut self.sync_range_state;

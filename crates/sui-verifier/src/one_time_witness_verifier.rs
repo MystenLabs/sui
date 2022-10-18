@@ -52,13 +52,23 @@ pub fn verify_module(module: &CompiledModule) -> Result<(), ExecutionError> {
         let struct_handle = module.struct_handle_at(def.struct_handle);
         let struct_name = view.identifier_at(struct_handle.name).as_str();
         if mod_name.to_ascii_uppercase() == struct_name {
-            verify_one_time_witness(module, struct_name, struct_handle, def)
-                .map_err(verification_failure)?;
-            // if we reached this point, it means we have a legitimate one-time witness type
-            // candidate and we have to make sure that both the init function's signature reflects
-            // this and that this type is not instantiated in any function of the module
-            one_time_witness_candidate = Some((struct_name, struct_handle, def));
-            break; // no reason to look any further
+            // one-time witness candidate's type name must be the same as capitalized module name
+            if let Ok(field_count) = def.declared_field_count() {
+                // checks if the struct is non-native (and if it isn't then that's why unwrap below
+                // is safe)
+                if field_count == 1 && def.field(0).unwrap().signature.0 == SignatureToken::Bool {
+                    // a single boolean field means that we found a one-time witness candidate -
+                    // make sure that the remaining properties hold
+                    verify_one_time_witness(module, struct_name, struct_handle)
+                        .map_err(verification_failure)?;
+                    // if we reached this point, it means we have a legitimate one-time witness type
+                    // candidate and we have to make sure that both the init function's signature
+                    // reflects this and that this type is not instantiated in any function of the
+                    // module
+                    one_time_witness_candidate = Some((struct_name, struct_handle, def));
+                    break; // no reason to look any further
+                }
+            }
         }
     }
     for fn_def in &module.function_defs {
@@ -88,12 +98,11 @@ pub fn verify_module(module: &CompiledModule) -> Result<(), ExecutionError> {
 }
 
 // Verifies all required properties of a one-time witness type candidate (that is a type whose name
-// is the same as the name of a
+// is the same as the name of a module but capitalized)
 fn verify_one_time_witness(
     module: &CompiledModule,
     candidate_name: &str,
     candidate_handle: &StructHandle,
-    candidate_def: &StructDefinition,
 ) -> Result<(), String> {
     // must have only one ability: drop
     let drop_set = AbilitySet::EMPTY | Ability::Drop;
@@ -101,23 +110,6 @@ fn verify_one_time_witness(
     if abilities != drop_set {
         return Err(format!(
             "one-time witness type candidate {}::{} must have a single ability: drop",
-            module.self_id(),
-            candidate_name,
-        ));
-    }
-    let field_count = candidate_def.declared_field_count().map_err(|_| {
-        format!(
-            "one-time witness type candidate {}::{} cannot be a native structure",
-            module.self_id(),
-            candidate_name
-        )
-    })?;
-
-    // unwrap below is safe as it will always be successful if declared_field_count call above is
-    // successful
-    if field_count != 1 || candidate_def.field(0).unwrap().signature.0 != SignatureToken::Bool {
-        return Err(format!(
-            "one-time witness type candidate {}::{} must have a single bool field only (or no fields)",
             module.self_id(),
             candidate_name,
         ));
@@ -146,7 +138,9 @@ fn verify_init_one_time_witness(
         // check only the first parameter - the other one is checked in entry_points verification
         // pass
         return Err(format!(
-            "init function of a module containing one-time witness type candidate must have {}::{} as the first parameter",
+            "init function of a module containing one-time witness type candidate must have \
+             {}::{} as the first parameter (a struct which has no fields or a single field of type \
+             bool)",
             module.self_id(),
             candidate_name,
         ));
@@ -174,8 +168,9 @@ fn verify_init_single_param(
     if fn_sig.len() != 1 {
         return Err(format!(
             "Expected last (and at most second) parameter for {}::{} to be &mut {}::{}::{}; \
-             optional first parameter must be of one-time witness type whose name is \
-             the same as the capitalized module name: {}::{}",
+             optional first parameter must be of one-time witness type whose name is the same as \
+             the capitalized module name ({}::{}) and which has no fields or a single field of type \
+             bool",
             module.self_id(),
             INIT_FN_NAME,
             SUI_FRAMEWORK_ADDRESS,

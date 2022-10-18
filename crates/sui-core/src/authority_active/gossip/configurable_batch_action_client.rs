@@ -5,7 +5,9 @@
 use crate::authority::AuthorityState;
 use crate::authority_aggregator::authority_aggregator_tests::*;
 use crate::authority_aggregator::{AuthAggMetrics, AuthorityAggregator};
-use crate::authority_client::{AuthorityAPI, BatchInfoResponseItemStream};
+use crate::authority_client::{
+    AuthorityAPI, BatchInfoResponseItemStream, CheckpointStreamResponseItemStream,
+};
 use crate::epoch::committee_store::CommitteeStore;
 use crate::safe_client::SafeClient;
 use async_trait::async_trait;
@@ -21,8 +23,9 @@ use sui_types::crypto::{get_key_pair, AuthorityKeyPair};
 use sui_types::error::SuiError;
 use sui_types::messages::{
     AccountInfoRequest, AccountInfoResponse, BatchInfoRequest, BatchInfoResponseItem,
-    CertifiedTransaction, CommitteeInfoRequest, CommitteeInfoResponse, ObjectInfoRequest,
-    ObjectInfoResponse, Transaction, TransactionInfoRequest, TransactionInfoResponse,
+    CertifiedTransaction, CheckpointStreamRequest, CommitteeInfoRequest, CommitteeInfoResponse,
+    ObjectInfoRequest, ObjectInfoResponse, Transaction, TransactionInfoRequest,
+    TransactionInfoResponse,
 };
 use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
 use sui_types::object::Object;
@@ -186,6 +189,14 @@ impl AuthorityAPI for ConfigurableBatchActionClient {
         Ok(Box::pin(tokio_stream::iter(items)))
     }
 
+    async fn handle_checkpoint_stream(
+        &self,
+        request: CheckpointStreamRequest,
+    ) -> Result<CheckpointStreamResponseItemStream, SuiError> {
+        let stream = self.state.handle_checkpoint_streaming(request).await?;
+        Ok(Box::pin(stream))
+    }
+
     async fn handle_checkpoint(
         &self,
         request: CheckpointRequest,
@@ -213,7 +224,7 @@ pub async fn init_configurable_authorities(
     use fastcrypto::traits::KeyPair;
     use sui_types::crypto::AccountKeyPair;
 
-    use crate::safe_client::SafeClientMetrics;
+    use crate::{authority_client::NetworkAuthorityClientMetrics, safe_client::SafeClientMetrics};
 
     let authority_count = 4;
     let (addr1, key1): (_, AccountKeyPair) = get_key_pair();
@@ -255,7 +266,7 @@ pub async fn init_configurable_authorities(
             client,
             committee_store,
             authority_name,
-            SafeClientMetrics::new_for_tests(),
+            Arc::new(SafeClientMetrics::new_for_tests()),
         ));
     }
 
@@ -338,7 +349,8 @@ pub async fn init_configurable_authorities(
         committee_store,
         authority_clients,
         AuthAggMetrics::new_for_tests(),
-        SafeClientMetrics::new_for_tests(),
+        Arc::new(SafeClientMetrics::new_for_tests()),
+        Arc::new(NetworkAuthorityClientMetrics::new_for_tests()),
     );
     (net, states, executed_digests)
 }

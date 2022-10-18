@@ -30,6 +30,33 @@ pub fn init_static_initializers(_args: TokenStream, item: TokenStream) -> TokenS
                 ::sui_simulator::telemetry_subscribers::init_for_testing();
                 ::sui_simulator::sui_framework::get_move_stdlib();
                 ::sui_simulator::sui_framework::get_sui_framework();
+                ::sui_simulator::sui_types::gas::SuiGasStatus::new_unmetered();
+
+                use ::sui_simulator::fastcrypto::traits::KeyPair;
+
+                // anemo uses x509-parser, which has many lazy static variables. start a network to
+                // initialize all that static state before the first test.
+                let rt = ::sui_simulator::runtime::Runtime::new();
+                rt.block_on(async move {
+                    use ::sui_simulator::anemo::{Network, Request};
+
+                    let make_network = |port: u16| {
+                        Network::bind(format!("127.0.0.1:{}", port))
+                            .server_name("static-init-network")
+                            .private_key(
+                                ::sui_simulator::fastcrypto::ed25519::Ed25519KeyPair::generate(&mut rand::rngs::OsRng)
+                                    .private()
+                                    .0
+                                    .to_bytes(),
+                            )
+                            .start(::sui_simulator::anemo::Router::new())
+                            .unwrap()
+                    };
+                    let n1 = make_network(80);
+                    let n2 = make_network(81);
+
+                    let _peer = n1.connect(n2.local_addr()).await.unwrap();
+                });
             }).join().unwrap();
 
             #body

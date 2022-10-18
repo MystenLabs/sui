@@ -24,7 +24,8 @@ def local(ctx, debug=True):
         'mem_profiling': False
     }
     node_params = {
-        'header_size': 1_000,  # bytes
+        'header_num_of_batches_threshold': 32,
+        'max_header_num_of_batches': 1000,
         'max_header_delay': '200ms',  # ms
         'gc_depth': 50,  # rounds
         'sync_retry_delay': '10_000ms',  # ms
@@ -46,7 +47,12 @@ def local(ctx, debug=True):
         'max_concurrent_requests': 500_000,
         'prometheus_metrics': {
             "socket_addr": "/ip4/127.0.0.1/tcp/0/http"
-        }
+        },
+        "network_admin_server": {
+            # Use a random available local port.
+            "primary_network_admin_server_port": 0,
+            "worker_network_admin_server_base_port": 0
+        },
     }
     try:
         ret = LocalBench(bench_params, node_params).run(debug)
@@ -83,7 +89,8 @@ def demo(ctx, debug=True):
             "socket_addr": "/ip4/0.0.0.0/tcp/0/http"
         },
         "gc_depth": 50,  # rounds
-        "header_size": 1000,  # bytes
+        'header_num_of_batches_threshold': 32,
+        "max_header_num_of_batches": 1000,
         "max_batch_delay": "200ms",  # ms
         "max_concurrent_requests": 500_000,
         "max_header_delay": "2000ms",  # ms
@@ -188,7 +195,8 @@ def remote(ctx, debug=False):
         'mem_profiling': False
     }
     node_params = {
-        'header_size': 1_000,  # bytes
+        'header_num_of_batches_threshold': 32,
+        'max_header_num_of_batches': 1000,
         'max_header_delay': '200ms',  # ms
         'gc_depth': 50,  # rounds
         'sync_retry_delay': '10_000ms',  # ms
@@ -209,8 +217,13 @@ def remote(ctx, debug=False):
         },
         'max_concurrent_requests': 500_000,
         'prometheus_metrics': {
-            "socket_addr": "/ip4/127.0.0.1/tcp/0/http"
-        }
+            "socket_addr": "/ip4/0.0.0.0/tcp/0/http"
+        },
+        "network_admin_server": {
+            # Use a random available local port.
+            "primary_network_admin_server_port": 0,
+            "worker_network_admin_server_base_port": 0
+        },
     }
     try:
         Bench(ctx).run(bench_params, node_params, debug)

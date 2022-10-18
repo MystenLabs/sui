@@ -12,8 +12,8 @@ use test_utils::{
     PAYLOAD_CF, VOTES_CF,
 };
 use types::{
-    BatchDigest, Certificate, CertificateDigest, Header, HeaderDigest, PrimaryWorkerMessage, Round,
-    RoundVoteDigestPair, WorkerSynchronizeMessage,
+    BatchDigest, Certificate, CertificateDigest, Header, HeaderDigest, Round, RoundVoteDigestPair,
+    WorkerReconfigureMessage, WorkerSynchronizeMessage,
 };
 
 use crypto::PublicKey;
@@ -63,7 +63,7 @@ pub fn worker_listener(
     num_of_expected_responses: i32,
     address: multiaddr::Multiaddr,
     keypair: NetworkKeyPair,
-) -> JoinHandle<(Vec<PrimaryWorkerMessage>, Vec<WorkerSynchronizeMessage>)> {
+) -> JoinHandle<(Vec<WorkerReconfigureMessage>, Vec<WorkerSynchronizeMessage>)> {
     tokio::spawn(async move {
         let (mut recv_msg, mut recv_sync, _network) =
             PrimaryToWorkerMockServer::spawn(keypair, address);

@@ -10,7 +10,7 @@ use crate::{
 use async_recursion::async_recursion;
 use config::{Committee, Epoch, SharedWorkerCache};
 use crypto::{PublicKey, Signature};
-use fastcrypto::{Hash as _, SignatureService};
+use fastcrypto::{hash::Hash as _, SignatureService};
 use network::{CancelOnDropHandler, P2pNetwork, ReliableNetwork};
 use std::{
     collections::{HashMap, HashSet},
@@ -46,7 +46,7 @@ pub struct Core {
     /// Handles synchronization with other nodes and our workers.
     synchronizer: Synchronizer,
     /// Service to sign headers.
-    signature_service: SignatureService<Signature>,
+    signature_service: SignatureService<Signature, { crypto::DIGEST_LENGTH }>,
     /// Get a signal when the round changes
     rx_consensus_round_updates: watch::Receiver<u64>,
     /// The depth of the garbage collector.
@@ -102,7 +102,7 @@ impl Core {
         certificate_store: CertificateStore,
         vote_digest_store: Store<PublicKey, RoundVoteDigestPair>,
         synchronizer: Synchronizer,
-        signature_service: SignatureService<Signature>,
+        signature_service: SignatureService<Signature, { crypto::DIGEST_LENGTH }>,
         rx_consensus_round_updates: watch::Receiver<u64>,
         gc_depth: Round,
         rx_committee: watch::Receiver<ReconfigureNotification>,
@@ -637,10 +637,6 @@ impl Core {
 
     /// Update the committee and cleanup internal state.
     async fn change_epoch(&mut self, committee: Committee) {
-        // Cleanup the network.
-        self.network
-            .cleanup(self.committee.network_diff(&committee));
-
         // Cleanup internal state.
         let keys = self.vote_digest_store.iter(None).await.into_keys();
         if let Err(e) = self.vote_digest_store.remove_all(keys).await {
@@ -708,9 +704,6 @@ impl Core {
                             self.change_epoch(new_committee).await;
                         },
                         ReconfigureNotification::UpdateCommittee(new_committee) => {
-                            // Cleanup the network.
-                            self.network.cleanup(self.committee.network_diff(&new_committee));
-
                             // Update the committee.
                             self.committee = new_committee;
                         },

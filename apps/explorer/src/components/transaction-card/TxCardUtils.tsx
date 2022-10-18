@@ -15,7 +15,6 @@ import {
     type ExecutionStatusType,
     type TransactionKindName,
 } from '@mysten/sui.js';
-import BN from 'bn.js';
 
 import { DefaultRpcClient } from '../../utils/api/DefaultRpcClient';
 import { type Network } from '../../utils/api/rpcSetting';
@@ -28,21 +27,20 @@ import styles from './RecentTxCard.module.css';
 
 export type TxnData = {
     To?: string;
-    seq: number;
     txId: string;
     status: ExecutionStatusType;
     txGas: number;
-    suiAmount: BN;
+    suiAmount: bigint;
     kind: TransactionKindName | undefined;
     From: string;
     timestamp_ms?: number;
 };
 
-export function SuiAmount({ amount }: { amount: BN | string | undefined }) {
+export function SuiAmount({ amount }: { amount: bigint | string | undefined }) {
     if (amount) {
         const SuiSuffix = <abbr className={styles.suisuffix}>SUI</abbr>;
 
-        if (BN.isBN(amount)) {
+        if (typeof amount === 'bigint') {
             return (
                 <span>
                     {presentBN(amount)}
@@ -70,7 +68,7 @@ export const genTableDataFromTxData = (
 ) => {
     return {
         data: results.map((txn) => ({
-            date: `${timeAgo(txn.timestamp_ms, undefined, true)} ago`,
+            date: `${timeAgo(txn.timestamp_ms, undefined, true)}`,
             transactionId: [
                 {
                     url: txn.txId,
@@ -146,9 +144,9 @@ export const getDataOnTxDigests = (
             return (
                 txEffs
                     .map((txEff) => {
-                        const [seq, digest] = transactions.filter(
+                        const digest = transactions.filter(
                             (transactionId) =>
-                                transactionId[1] ===
+                                transactionId ===
                                 getTransactionDigest(txEff.certificate)
                         )[0];
                         const res: CertifiedTransaction = txEff.certificate;
@@ -168,7 +166,6 @@ export const getDataOnTxDigests = (
                             getTransferSuiTransaction(txn)?.recipient;
 
                         return {
-                            seq,
                             txId: digest,
                             status: getExecutionStatusType(txEff)!,
                             txGas: getTotalGasUsed(txEff),
@@ -185,6 +182,5 @@ export const getDataOnTxDigests = (
                     })
                     // Remove failed transactions and sort by sequence number
                     .filter((itm) => itm)
-                    .sort((a, b) => b!.seq - a!.seq)
             );
         });

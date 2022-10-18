@@ -42,6 +42,7 @@ use tokio::sync::oneshot;
 use tokio::{sync::watch, task::JoinHandle};
 use tower::ServiceBuilder;
 use tracing::info;
+pub use types::PrimaryMessage;
 use types::{
     error::DagError,
     metered_channel::{channel_with_total, Receiver, Sender},
@@ -49,7 +50,6 @@ use types::{
     ReconfigureNotification, RoundVoteDigestPair, WorkerInfoResponse, WorkerPrimaryMessage,
     WorkerToPrimary, WorkerToPrimaryServer,
 };
-pub use types::{PrimaryMessage, PrimaryWorkerMessage};
 
 #[cfg(any(test))]
 #[path = "tests/primary_tests.rs"]
@@ -225,14 +225,14 @@ impl Primary {
             .add_rpc_service(worker_service);
 
         let service = ServiceBuilder::new()
-            .layer(TraceLayer::new())
+            .layer(TraceLayer::new_for_server_errors())
             .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
                 inbound_network_metrics,
             )))
             .service(routes);
 
         let outbound_layer = ServiceBuilder::new()
-            .layer(TraceLayer::new())
+            .layer(TraceLayer::new_for_client_and_server_errors())
             .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
                 outbound_network_metrics,
             )))
@@ -264,9 +264,8 @@ impl Primary {
         info!("Primary {} listening on {}", name.encode_base64(), address);
 
         let connection_monitor_handle = network::connectivity::ConnectionMonitor::spawn(
-            network.clone(),
+            network.downgrade(),
             network_connection_metrics,
-            tx_reconfigure.subscribe(),
         );
 
         let primaries = committee
@@ -424,7 +423,8 @@ impl Primary {
             (**committee.load()).clone(),
             signature_service,
             proposer_store,
-            parameters.header_size,
+            parameters.header_num_of_batches_threshold,
+            parameters.max_header_num_of_batches,
             parameters.max_header_delay,
             network_model,
             tx_reconfigure.subscribe(),
@@ -456,7 +456,6 @@ impl Primary {
             tx_consensus_round_updates,
             rx_state_handler,
             tx_reconfigure,
-            P2pNetwork::new(network.clone()),
         );
 
         let consensus_api_handle = if !internal_consensus {

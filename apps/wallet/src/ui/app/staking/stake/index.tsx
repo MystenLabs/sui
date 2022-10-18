@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { getTransactionDigest } from '@mysten/sui.js';
 import { Formik } from 'formik';
 import { useCallback, useMemo, useState } from 'react';
 import { useIntl } from 'react-intl';
@@ -88,7 +89,7 @@ function StakePage() {
                         tokenTypeArg: coinType,
                     })
                 ).unwrap();
-                const txDigest = response.certificate.transactionDigest;
+                const txDigest = getTransactionDigest(response);
                 resetForm();
                 navigate(`/tx/${encodeURIComponent(txDigest)}`);
             } catch (e) {

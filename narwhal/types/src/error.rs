@@ -3,9 +3,13 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{HeaderDigest, Round};
 use config::Epoch;
-use fastcrypto::Digest;
+use fastcrypto::hash::Digest;
 use store::StoreError;
 use thiserror::Error;
+
+#[cfg(test)]
+#[path = "./tests/error_test.rs"]
+mod error_test;
 
 #[macro_export]
 macro_rules! bail {
@@ -20,24 +24,6 @@ macro_rules! ensure {
         if !($cond) {
             bail!($e);
         }
-    };
-}
-
-#[macro_export]
-macro_rules! try_fut_and_permit {
-    ($fut:expr, $sender:expr) => {
-        futures::future::TryFutureExt::unwrap_or_else(
-            futures::future::try_join(
-                $fut,
-                futures::TryFutureExt::map_err($sender.reserve(), |_e| {
-                    DagError::ClosedChannel(stringify!(sender).to_owned())
-                }),
-            ),
-            |e| {
-                tracing::error!("{e}");
-                panic!("I/O failure, killing the node.");
-            },
-        )
     };
 }
 
@@ -72,7 +58,7 @@ pub enum DagError {
     #[error("Authority {0} appears in quorum more than once")]
     AuthorityReuse(String),
 
-    #[error("Received unexpected vote fo header {0}")]
+    #[error("Received unexpected vote for header {0}")]
     UnexpectedVote(HeaderDigest),
 
     #[error("Received certificate without a quorum")]
@@ -82,13 +68,16 @@ pub enum DagError {
     HeaderRequiresQuorum(HeaderDigest),
 
     #[error("Message {0} (round {1}) too old for GC round {2}")]
-    TooOld(Digest, Round, Round),
+    TooOld(Digest<{ crypto::DIGEST_LENGTH }>, Round, Round),
 
     #[error("Vote {0} (round {1}) too old for round {2}")]
-    VoteTooOld(Digest, Round, Round),
+    VoteTooOld(Digest<{ crypto::DIGEST_LENGTH }>, Round, Round),
 
     #[error("Invalid epoch (expected {expected}, received {received})")]
     InvalidEpoch { expected: Epoch, received: Epoch },
+
+    #[error("Network error: {0}")]
+    NetworkError(String),
 
     #[error("System shutting down")]
     ShuttingDown,

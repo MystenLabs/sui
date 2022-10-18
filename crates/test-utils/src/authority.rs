@@ -3,22 +3,19 @@
 use crate::TEST_COMMITTEE_SIZE;
 use prometheus::Registry;
 use rand::{prelude::StdRng, SeedableRng};
-use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_config::{NetworkConfig, NodeConfig, ValidatorInfo};
 use sui_core::authority_client::{AuthorityAPI, NetworkAuthorityClientMetrics};
-use sui_core::epoch::committee_store::CommitteeStore;
 use sui_core::{
     authority_active::{
         checkpoint_driver::{CheckpointMetrics, CheckpointProcessControl},
         ActiveAuthority,
     },
-    authority_aggregator::{AuthAggMetrics, AuthorityAggregator},
+    authority_aggregator::AuthorityAggregatorBuilder,
     authority_client::NetworkAuthorityClient,
-    safe_client::SafeClientMetrics,
 };
-use sui_types::{committee::Committee, object::Object};
+use sui_types::object::Object;
 
 pub use sui_node::{SuiNode, SuiNodeHandle};
 use sui_types::base_types::ObjectID;
@@ -46,7 +43,7 @@ pub fn test_and_configure_authority_configs(committee_size: usize) -> NetworkCon
         let parameters = &mut config.consensus_config.as_mut().unwrap().narwhal_config;
         // NOTE: the following parameters are important to ensure tests run fast. Using the default
         // Narwhal parameters may result in tests taking >60 seconds.
-        parameters.header_size = 1;
+        parameters.header_num_of_batches_threshold = 1;
         parameters.max_header_delay = Duration::from_millis(200);
         parameters.batch_size = 1;
         parameters.max_batch_delay = Duration::from_millis(200);
@@ -82,7 +79,7 @@ pub async fn start_node(config: &NodeConfig, prom_registry: Registry) -> SuiNode
     let builder = handle.create_node();
     let node = builder
         .ip(ip)
-        .name(format!("{}", config.protocol_public_key()))
+        .name(format!("{:?}", config.protocol_public_key().concise()))
         .init(|| async {
             tracing::info!("node restarted");
         })
@@ -126,8 +123,10 @@ pub async fn spawn_checkpoint_processes(configs: &NetworkConfig, handles: &[SuiN
             .with_async(|authority| async move {
                 let state = authority.state();
 
-                let aggregator =
-                    test_authority_aggregator(configs, authority.state().committee_store().clone());
+                let (aggregator, _) = AuthorityAggregatorBuilder::from_network_config(configs)
+                    .with_committee_store(authority.state().committee_store().clone())
+                    .build()
+                    .unwrap();
 
                 let inner_agg = aggregator.clone();
                 let active_state = Arc::new(
@@ -141,43 +140,11 @@ pub async fn spawn_checkpoint_processes(configs: &NetworkConfig, handles: &[SuiN
                     .spawn_checkpoint_process_with_config(
                         checkpoint_process_control,
                         CheckpointMetrics::new_for_tests(),
-                        false,
                     )
                     .await;
             })
             .await;
     }
-}
-
-/// Create a test authority aggregator.
-pub fn test_authority_aggregator(
-    config: &NetworkConfig,
-    committee_store: Arc<CommitteeStore>,
-) -> AuthorityAggregator<NetworkAuthorityClient> {
-    let validators_info = config.validator_set();
-    let committee = Committee::new(0, ValidatorInfo::voting_rights(validators_info)).unwrap();
-    // TODO: duplicated at test_utils.rs
-    let clients: BTreeMap<_, _> = validators_info
-        .iter()
-        .map(|config| {
-            (
-                config.protocol_key(),
-                NetworkAuthorityClient::connect_lazy(
-                    config.network_address(),
-                    Arc::new(NetworkAuthorityClientMetrics::new_for_tests()),
-                )
-                .unwrap(),
-            )
-        })
-        .collect();
-    let registry = Registry::new();
-    AuthorityAggregator::new(
-        committee,
-        committee_store,
-        clients,
-        AuthAggMetrics::new(&registry),
-        SafeClientMetrics::new(&registry),
-    )
 }
 
 /// Get a network client to communicate with the consensus.

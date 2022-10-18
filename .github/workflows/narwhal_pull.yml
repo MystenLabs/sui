@@ -2,9 +2,12 @@ name: Update Dependencies
 on:
   ## Allow triggering this workflow manually via GitHub CLI/web
   workflow_dispatch:
-  schedule:
+  # Running this workflow automatically was relevant when Narwhal development was split
+  # at https://github.com/mystenlabs/narwhal, but it is now shared in this repo.
+  # This should be re-activated when NW development happens there again.
+  # schedule:
     # Update on every hour at 10 past the hour
-    - cron:  '10 * * * *'
+    # - cron:  '10 * * * *'
 
 jobs:
   update-dep:

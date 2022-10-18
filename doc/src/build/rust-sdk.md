@@ -43,7 +43,7 @@ use sui_sdk::SuiClient;
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    let sui = SuiClient::new_rpc_client("https://gateway.devnet.sui.io:443", None).await?;
+    let sui = SuiClient::new_rpc_client("https://fullnode.devnet.sui.io:443", None).await?;
     let address = SuiAddress::from_str("0xec11cad080d0496a53bafcea629fcbcfff2a9866")?;
     let objects = sui.read_api().get_objects_owned_by_address(address).await?;
     println!("{:?}", objects);
@@ -51,7 +51,7 @@ async fn main() -> Result<(), anyhow::Error> {
 }
 ```
 
-You can verify the result with the [Sui Explorer](https://explorer.devnet.sui.io/) if you are using the Sui Devnet Gateway.
+You can verify the result with the [Sui Explorer](https://explorer.devnet.sui.io/) if you are using the Sui Devnet Full node.
 
 ### Example 2 - Create and execute transaction
 
@@ -71,7 +71,7 @@ use sui_sdk::{
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    let sui = SuiClient::new_rpc_client("https://gateway.devnet.sui.io:443", None).await?;
+    let sui = SuiClient::new_rpc_client("https://fullnode.devnet.sui.io:443", None).await?;
     // Load keystore from ~/.sui/sui_config/sui.keystore
     let keystore_path = match dirs::home_dir() {
         Some(v) => v.join(".sui").join("sui_config").join("sui.keystore"),
@@ -115,7 +115,7 @@ use sui_sdk::SuiClient;
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    let sui = SuiClient::new_rpc_client("https://gateway.devnet.sui.io:443", Some("ws://127.0.0.1:9001")).await?;
+    let sui = SuiClient::new_rpc_client("https://fullnode.devnet.sui.io:443", Some("ws://127.0.0.1:9001")).await?;
     let mut subscribe_all = sui.event_api().subscribe_event(SuiEventFilter::All(vec![])).await?;
     loop {
         println!("{:?}", subscribe_all.next().await);

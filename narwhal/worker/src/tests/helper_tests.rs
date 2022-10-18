@@ -2,7 +2,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
-use fastcrypto::Hash;
+use fastcrypto::hash::Hash;
 use store::rocks;
 use test_utils::{batch, temp_dir, test_network, CommitteeFixture, WorkerToWorkerMockServer};
 use types::BatchDigest;

@@ -1,28 +1,23 @@
-$error-color: #8b1111;
+@use '_values/colors';
+@use '_utils';
 
 .container {
     display: flex;
     flex-flow: row nowrap;
-    padding: 8px;
-    border: 1px solid;
-    border-radius: 4px;
     align-items: center;
-
-    &.error {
-        border-color: $error-color;
-    }
+    padding: 8px 10px;
+    gap: 6px;
+    border-radius: 10px;
+    background-color: colors.$issue-light;
+    color: colors.$issue-dark;
 }
 
 .icon {
-    align-self: flex-start;
-    font-size: 20px;
-
-    .error & {
-        color: $error-color;
-    }
+    font-size: 16px;
 }
 
 .message {
-    margin-left: 12px;
     overflow-wrap: anywhere;
+
+    @include utils.typography('ParagraphPrimary/P2-M');
 }

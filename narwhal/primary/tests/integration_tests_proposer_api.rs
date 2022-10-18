@@ -7,8 +7,8 @@ use config::{Epoch, Parameters};
 use consensus::{dag::Dag, metrics::ConsensusMetrics};
 use crypto::PublicKey;
 use fastcrypto::{
+    hash::Hash,
     traits::{KeyPair as _, ToFromBytes},
-    Hash,
 };
 use narwhal_primary as primary;
 use node::NodeStorage;

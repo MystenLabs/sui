@@ -61,7 +61,7 @@ function SingleCoinView({
                     {subObjList[0]._isCoin &&
                     subObjList.every((el) => el.balance !== undefined)
                         ? `${subObjList.reduce(
-                              (prev, current) => prev.add(current.balance!),
+                              (prev, current) => prev + current.balance!,
                               Coin.getZero()
                           )}`
                         : ''}

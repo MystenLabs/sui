@@ -19,12 +19,14 @@ tokio = "1.20.1"
 once_cell = "1.13.1"
 serde_with = "1.14.0"
 signature = "1.6.0"
-bcs = "0.1.3"
+bcs = "0.1.4"
 hyper = "0.14.20"
 strum = "0.24.1"
 strum_macros = "0.24.3"
 async-trait = "0.1.57"
 clap = { version = "3.2.17", features = ["derive"] }
+
+fastcrypto.workspace = true
 
 sui-types = { path = "../sui-types" }
 sui-core = { path = "../sui-core" }

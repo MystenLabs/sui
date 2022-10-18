@@ -111,7 +111,7 @@ const transformTransactionResponse = (
     return {
         ...txObj.certificate,
         status: getExecutionStatusType(txObj)!,
-        gasFee: getTotalGasUsed(txObj),
+        gasFee: getTotalGasUsed(txObj)!,
         txError: getExecutionStatusError(txObj) ?? '',
         txId: id,
         loadState: 'loaded',

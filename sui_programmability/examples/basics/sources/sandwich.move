@@ -126,16 +126,17 @@ module basics::test_sandwich {
         let owner = @0x1;
         let the_guy = @0x2;
 
-        let scenario = &mut test_scenario::begin(&owner);
-        test_scenario::next_tx(scenario, &owner);
+        let scenario_val = test_scenario::begin(owner);
+        let scenario = &mut scenario_val;
+        test_scenario::next_tx(scenario, owner);
         {
             sandwich::init_for_testing(test_scenario::ctx(scenario));
         };
 
-        test_scenario::next_tx(scenario, &the_guy);
+        test_scenario::next_tx(scenario, the_guy);
         {
-            let grocery_wrapper = test_scenario::take_shared<Grocery>(scenario);
-            let grocery = test_scenario::borrow_mut(&mut grocery_wrapper);
+            let grocery_val = test_scenario::take_shared<Grocery>(scenario);
+            let grocery = &mut grocery_val;
             let ctx = test_scenario::ctx(scenario);
 
             sandwich::buy_ham(
@@ -150,29 +151,30 @@ module basics::test_sandwich {
                 ctx
             );
 
-            test_scenario::return_shared(scenario, grocery_wrapper);
+            test_scenario::return_shared( grocery_val);
         };
 
-        test_scenario::next_tx(scenario, &the_guy);
+        test_scenario::next_tx(scenario, the_guy);
         {
-            let ham = test_scenario::take_owned<Ham>(scenario);
-            let bread = test_scenario::take_owned<Bread>(scenario);
+            let ham = test_scenario::take_from_sender<Ham>(scenario);
+            let bread = test_scenario::take_from_sender<Bread>(scenario);
 
             sandwich::make_sandwich(ham, bread, test_scenario::ctx(scenario));
         };
 
-        test_scenario::next_tx(scenario, &owner);
+        test_scenario::next_tx(scenario, owner);
         {
-            let grocery_wrapper = test_scenario::take_shared<Grocery>(scenario);
-            let grocery = test_scenario::borrow_mut(&mut grocery_wrapper);
-            let capability = test_scenario::take_owned<GroceryOwnerCapability>(scenario);
+            let grocery_val = test_scenario::take_shared<Grocery>(scenario);
+            let grocery = &mut grocery_val;
+            let capability = test_scenario::take_from_sender<GroceryOwnerCapability>(scenario);
 
             assert!(sandwich::profits(grocery) == 12, 0);
             sandwich::collect_profits(&capability, grocery, test_scenario::ctx(scenario));
             assert!(sandwich::profits(grocery) == 0, 0);
 
-            test_scenario::return_owned(scenario, capability);
-            test_scenario::return_shared(scenario, grocery_wrapper);
+            test_scenario::return_to_sender(scenario, capability);
+            test_scenario::return_shared(grocery_val);
         };
+        test_scenario::end(scenario_val);
     }
 }

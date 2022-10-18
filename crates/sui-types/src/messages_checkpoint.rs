@@ -153,6 +153,20 @@ impl AuthenticatedCheckpoint {
             Self::Certified(c) => c.verify(committee, detail),
         }
     }
+
+    pub fn sequence_number(&self) -> CheckpointSequenceNumber {
+        match self {
+            Self::Signed(s) => s.summary.sequence_number,
+            Self::Certified(c) => c.summary.sequence_number,
+        }
+    }
+
+    pub fn epoch(&self) -> EpochId {
+        match self {
+            Self::Signed(s) => s.summary.epoch,
+            Self::Certified(c) => c.summary.epoch,
+        }
+    }
 }
 
 pub type CheckpointDigest = [u8; 32];

@@ -90,7 +90,7 @@ module sui::devnet_nft {
 #[test_only]
 module sui::devnet_nftTests {
     use sui::devnet_nft::{Self, DevNetNFT};
-    use sui::test_scenario;
+    use sui::test_scenario as ts;
     use sui::transfer;
     use std::string;
 
@@ -99,29 +99,30 @@ module sui::devnet_nftTests {
         let addr1 = @0xA;
         let addr2 = @0xB;
         // create the NFT
-        let scenario = test_scenario::begin(&addr1);
+        let scenario = ts::begin(addr1);
         {
-            devnet_nft::mint(b"test", b"a test", b"https://www.sui.io", test_scenario::ctx(&mut scenario))
+            devnet_nft::mint(b"test", b"a test", b"https://www.sui.io", ts::ctx(&mut scenario))
         };
         // send it from A to B
-        test_scenario::next_tx(&mut scenario, &addr1);
+        ts::next_tx(&mut scenario, addr1);
         {
-            let nft = test_scenario::take_owned<DevNetNFT>(&mut scenario);
+            let nft = ts::take_from_sender<DevNetNFT>(&mut scenario);
             transfer::transfer(nft, addr2);
         };
         // update its description
-        test_scenario::next_tx(&mut scenario, &addr2);
+        ts::next_tx(&mut scenario, addr2);
         {
-            let nft = test_scenario::take_owned<DevNetNFT>(&mut scenario);
-            devnet_nft::update_description(&mut nft, b"a new description", test_scenario::ctx(&mut scenario)) ;
+            let nft = ts::take_from_sender<DevNetNFT>(&mut scenario);
+            devnet_nft::update_description(&mut nft, b"a new description", ts::ctx(&mut scenario)) ;
             assert!(*string::bytes(devnet_nft::description(&nft)) == b"a new description", 0);
-            test_scenario::return_owned(&mut scenario, nft);
+            ts::return_to_sender(&mut scenario, nft);
         };
         // burn it
-        test_scenario::next_tx(&mut scenario, &addr2);
+        ts::next_tx(&mut scenario, addr2);
         {
-            let nft = test_scenario::take_owned<DevNetNFT>(&mut scenario);
-            devnet_nft::burn(nft, test_scenario::ctx(&mut scenario))
-        }
+            let nft = ts::take_from_sender<DevNetNFT>(&mut scenario);
+            devnet_nft::burn(nft, ts::ctx(&mut scenario))
+        };
+        ts::end(scenario);
     }
 }

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use dashmap::DashMap;
-use fastcrypto::Hash;
+use fastcrypto::hash::Hash;
 use std::{collections::VecDeque, iter, sync::Arc};
 use store::{
     rocks::{DBMap, TypedStoreError::RocksDBError},
@@ -330,7 +330,7 @@ impl CertificateStore {
 #[cfg(test)]
 mod test {
     use crate::certificate_store::{CertificateStore, CertificateToken};
-    use fastcrypto::Hash;
+    use fastcrypto::hash::Hash;
     use futures::future::join_all;
     use std::{
         collections::{BTreeSet, HashSet},

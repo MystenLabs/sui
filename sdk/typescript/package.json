@@ -2,7 +2,7 @@
   "name": "@mysten/sui.js",
   "author": "Mysten Labs <build@mystenlabs.com>",
   "description": "Sui TypeScript API(Work in Progress)",
-  "version": "0.11.0",
+  "version": "0.13.0",
   "license": "Apache-2.0",
   "files": [
     "dist",
@@ -28,6 +28,7 @@
     "test": "pnpm test:unit && pnpm test:e2e",
     "test:unit": "vitest unit",
     "test:e2e": "wait-on http://127.0.0.1:9123 -l --timeout 120000 && vitest e2e",
+    "prepare:e2e": "cargo build --bin sui-test-validator --bin sui --profile dev && cargo run --bin sui-test-validator",
     "lint": "eslint './{src,test}/**.{ts,js}'",
     "prepublishOnly": "pnpm build",
     "size": "size-limit",
@@ -61,7 +62,6 @@
     }
   ],
   "devDependencies": {
-    "@mysten/sui-open-rpc": "file:../../crates/sui-open-rpc",
     "@size-limit/preset-small-lib": "^7.0.8",
     "@types/bn.js": "^5.1.0",
     "@types/lossless-json": "^1.0.1",

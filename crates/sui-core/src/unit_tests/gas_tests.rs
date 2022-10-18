@@ -293,6 +293,7 @@ async fn test_publish_gas() -> anyhow::Result<()> {
     // Mimic the gas charge behavior and cross check the result with above.
     let mut gas_status = SuiGasStatus::new_with_budget(*MAX_GAS_BUDGET, 1.into(), 1.into());
     gas_status.charge_min_tx_gas()?;
+    gas_status.charge_vm_gas()?;
     gas_status.charge_storage_read(
         genesis_objects
             .iter()

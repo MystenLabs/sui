@@ -8,88 +8,112 @@ import {
 } from '@reduxjs/toolkit';
 import Browser from 'webextension-polyfill';
 
+import { isKeyringPayload } from '_payloads/keyring';
 import { suiObjectsAdapterSelectors } from '_redux/slices/sui-objects';
 import { Coin } from '_redux/slices/sui-objects/Coin';
-import { generateMnemonic } from '_src/shared/utils/bip39';
 
 import type { SuiAddress, SuiMoveObject } from '@mysten/sui.js';
-import type { PayloadAction } from '@reduxjs/toolkit';
+import type { PayloadAction, Reducer } from '@reduxjs/toolkit';
+import type { KeyringPayload } from '_payloads/keyring';
 import type { RootState } from '_redux/RootReducer';
+import type { AppThunkConfig } from '_store/thunk-extras';
 
-export const loadAccountFromStorage = createAsyncThunk(
-    'account/loadAccount',
-    async (): Promise<string | null> => {
-        const { mnemonic } = await Browser.storage.local.get('mnemonic');
-        return mnemonic || null;
-    }
-);
-
-export const createMnemonic = createAsyncThunk(
+export const createMnemonic = createAsyncThunk<
+    string,
+    {
+        importedMnemonic?: string;
+        password: string;
+    },
+    AppThunkConfig
+>(
     'account/createMnemonic',
-    async (existingMnemonic?: string): Promise<string> => {
-        const mnemonic = existingMnemonic || generateMnemonic();
-        await Browser.storage.local.set({ mnemonic });
-        return mnemonic;
+    async ({ importedMnemonic, password }, { extra: { background } }) => {
+        const { payload } = await background.createMnemonic(
+            password,
+            importedMnemonic
+        );
+        await background.unlockWallet(password);
+        if (!isKeyringPayload<'createMnemonic'>(payload, 'createMnemonic')) {
+            throw new Error('Unknown payload');
+        }
+        if (!payload.return?.mnemonic) {
+            throw new Error('Empty mnemonic in payload');
+        }
+        return payload.return.mnemonic;
     }
 );
 
-export const logout = createAsyncThunk(
+export const loadMnemonicFromKeyring = createAsyncThunk<
+    string,
+    { password?: string }, // can be undefined when we know Keyring is unlocked
+    AppThunkConfig
+>(
+    'account/loadMnemonicFromKeyring',
+    async ({ password }, { extra: { background } }) =>
+        await background.getMnemonic(password)
+);
+
+export const logout = createAsyncThunk<void, void, AppThunkConfig>(
     'account/logout',
-    async (): Promise<void> => {
+    async (_, { extra: { background } }): Promise<void> => {
         await Browser.storage.local.clear();
-        window.location.reload();
+        await background.clearWallet();
     }
 );
 
 type AccountState = {
-    loading: boolean;
-    mnemonic: string | null;
     creating: boolean;
-    createdMnemonic: string | null;
     address: SuiAddress | null;
+    isLocked: boolean | null;
+    isInitialized: boolean | null;
 };
 
 const initialState: AccountState = {
-    loading: true,
-    mnemonic: null,
     creating: false,
-    createdMnemonic: null,
     address: null,
+    isLocked: null,
+    isInitialized: null,
 };
 
 const accountSlice = createSlice({
     name: 'account',
     initialState,
     reducers: {
-        setMnemonic: (state, action: PayloadAction<string>) => {
-            state.mnemonic = action.payload;
-        },
         setAddress: (state, action: PayloadAction<string | null>) => {
             state.address = action.payload;
+        },
+        setKeyringStatus: (
+            state,
+            {
+                payload,
+            }: PayloadAction<KeyringPayload<'walletStatusUpdate'>['return']>
+        ) => {
+            if (typeof payload?.isLocked !== 'undefined') {
+                state.isLocked = payload.isLocked;
+            }
+            if (typeof payload?.isInitialized !== 'undefined') {
+                state.isInitialized = payload.isInitialized;
+            }
         },
     },
     extraReducers: (builder) =>
         builder
-            .addCase(loadAccountFromStorage.fulfilled, (state, action) => {
-                state.loading = false;
-                state.mnemonic = action.payload;
-            })
             .addCase(createMnemonic.pending, (state) => {
                 state.creating = true;
             })
             .addCase(createMnemonic.fulfilled, (state, action) => {
                 state.creating = false;
-                state.createdMnemonic = action.payload;
+                state.isInitialized = true;
             })
             .addCase(createMnemonic.rejected, (state) => {
                 state.creating = false;
-                state.createdMnemonic = null;
             }),
 });
 
-export const { setMnemonic, setAddress } = accountSlice.actions;
+export const { setAddress, setKeyringStatus } = accountSlice.actions;
 
-export default accountSlice.reducer;
+const reducer: Reducer<typeof initialState> = accountSlice.reducer;
+export default reducer;
 
 export const activeAccountSelector = ({ account }: RootState) =>
     account.address;

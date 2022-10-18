@@ -6,7 +6,7 @@ use crate::metrics::initialise_metrics;
 use arc_swap::ArcSwap;
 use bytes::Bytes;
 use consensus::{dag::Dag, metrics::ConsensusMetrics};
-use fastcrypto::Hash;
+use fastcrypto::hash::Hash;
 use node::NodeStorage;
 use primary::{NetworkModel, Primary, CHANNEL_CAPACITY};
 use prometheus::Registry;

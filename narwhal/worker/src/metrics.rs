@@ -4,9 +4,8 @@ use mysten_network::metrics::MetricsCallbackProvider;
 use network::metrics::{NetworkConnectionMetrics, NetworkMetrics};
 use prometheus::{
     default_registry, register_histogram_vec_with_registry, register_int_counter_vec_with_registry,
-    register_int_counter_with_registry, register_int_gauge_vec_with_registry,
-    register_int_gauge_with_registry, HistogramVec, IntCounter, IntCounterVec, IntGauge,
-    IntGaugeVec, Registry,
+    register_int_counter_with_registry, register_int_gauge_with_registry, HistogramVec, IntCounter,
+    IntCounterVec, IntGauge, Registry,
 };
 use std::time::Duration;
 use tonic::Code;
@@ -51,8 +50,6 @@ pub fn initialise_metrics(metrics_registry: &Registry) -> Metrics {
 
 #[derive(Clone)]
 pub struct WorkerMetrics {
-    /// Number of elements pending elements in the worker synchronizer
-    pub pending_elements_worker_synchronizer: IntGaugeVec,
     /// Number of created batches from the batch_maker
     pub created_batch_size: HistogramVec,
 }
@@ -60,17 +57,24 @@ pub struct WorkerMetrics {
 impl WorkerMetrics {
     pub fn new(registry: &Registry) -> Self {
         Self {
-            pending_elements_worker_synchronizer: register_int_gauge_vec_with_registry!(
-                "pending_elements_worker_synchronizer",
-                "Number of pending elements in worker block synchronizer",
-                &["epoch"],
-                registry
-            )
-            .unwrap(),
             created_batch_size: register_histogram_vec_with_registry!(
                 "created_batch_size",
                 "Size in bytes of the created batches",
                 &["epoch", "reason"],
+                // buckets with size in bytes
+                vec![
+                    100.0,
+                    500.0,
+                    1_000.0,
+                    5_000.0,
+                    10_000.0,
+                    20_000.0,
+                    50_000.0,
+                    100_000.0,
+                    250_000.0,
+                    500_000.0,
+                    1_000_000.0
+                ],
                 registry
             )
             .unwrap(),
@@ -88,10 +92,6 @@ impl Default for WorkerMetrics {
 pub struct WorkerChannelMetrics {
     /// occupancy of the channel from various handlers to the `worker::PrimaryConnector`
     pub tx_primary: IntGauge,
-    /// occupancy of the channel from the `handlers::PrimaryReceiverHandler` to the `worker::Synchronizer`
-    pub tx_synchronizer: IntGauge,
-    /// occupancy of the channel from the `handlers::PrimaryReceiverHandler` to the `handlers::ChildRpcSender`
-    pub tx_request_batches_rpc: IntGauge,
     /// occupancy of the channel from the `worker::TxReceiverhandler` to the `worker::BatchMaker`
     pub tx_batch_maker: IntGauge,
     /// occupancy of the channel from the `worker::BatchMaker` to the `worker::QuorumWaiter`
@@ -100,16 +100,10 @@ pub struct WorkerChannelMetrics {
     pub tx_worker_processor: IntGauge,
     /// occupancy of the channel from the `worker::QuorumWaiter` to the `worker::Processor`
     pub tx_client_processor: IntGauge,
-    /// occupancy of the channel from the `worker::WorkerReceiverHandler` to the `worker::Helper` (carrying worker requests)
-    pub tx_worker_helper: IntGauge,
 
     // Record the total events received to infer progress rates
     /// total received from the channel from various handlers to the `worker::PrimaryConnector`
     pub tx_primary_total: IntCounter,
-    /// total received from the channel from the `handlers::PrimaryReceiverHandler` to the `worker::Synchronizer`
-    pub tx_synchronizer_total: IntCounter,
-    /// total received from the channel from the `handlers::PrimaryReceiverHandler` to the `handlers::ChildRpcSender`
-    pub tx_request_batches_rpc_total: IntCounter,
     /// total received from the channel from the `worker::TxReceiverhandler` to the `worker::BatchMaker`
     pub tx_batch_maker_total: IntCounter,
     /// total received from the channel from the `worker::BatchMaker` to the `worker::QuorumWaiter`
@@ -118,8 +112,6 @@ pub struct WorkerChannelMetrics {
     pub tx_worker_processor_total: IntCounter,
     /// total received from the channel from the `worker::QuorumWaiter` to the `worker::Processor`
     pub tx_client_processor_total: IntCounter,
-    /// total received from the channel from the `worker::WorkerReceiverHandler` to the `worker::Helper` (carrying worker requests)
-    pub tx_worker_helper_total: IntCounter,
 }
 
 impl WorkerChannelMetrics {
@@ -128,16 +120,6 @@ impl WorkerChannelMetrics {
             tx_primary: register_int_gauge_with_registry!(
                 "tx_primary",
                 "occupancy of the channel from various handlers to the `worker::PrimaryConnector`",
-                registry
-            ).unwrap(),
-            tx_synchronizer: register_int_gauge_with_registry!(
-                "tx_synchronizer",
-                "occupancy of the channel from the `worker::PrimaryReceiverHandler` to the `worker::Synchronizer`",
-                registry
-            ).unwrap(),
-            tx_request_batches_rpc: register_int_gauge_with_registry!(
-                "tx_request_batches_rpc",
-                "occupancy of the channel from the `handlers::PrimaryReceiverHandler` to the `handlers::ChildRpcSender`",
                 registry
             ).unwrap(),
             tx_batch_maker: register_int_gauge_with_registry!(
@@ -160,27 +142,12 @@ impl WorkerChannelMetrics {
                 "occupancy of the channel from the `worker::QuorumWaiter` to the `worker::Processor`",
                 registry
             ).unwrap(),
-            tx_worker_helper: register_int_gauge_with_registry!(
-                "tx_worker_helper",
-                "occupancy of the channel from the `worker::WorkerReceiverHandler` to the `worker::Helper` (carrying worker requests)",
-                registry
-            ).unwrap(),
 
             // Totals:
 
             tx_primary_total: register_int_counter_with_registry!(
                 "tx_primary_total",
                 "total received from the channel from various handlers to the `worker::PrimaryConnector`",
-                registry
-            ).unwrap(),
-            tx_synchronizer_total: register_int_counter_with_registry!(
-                "tx_synchronizer_total",
-                "total received from the channel from the `worker::PrimaryReceiverHandler` to the `worker::Synchronizer`",
-                registry
-            ).unwrap(),
-            tx_request_batches_rpc_total: register_int_counter_with_registry!(
-                "tx_request_batches_rpc_total",
-                "total received from the channel from the `handlers::PrimaryReceiverHandler` to the `handlers::ChildRpcSender`",
                 registry
             ).unwrap(),
             tx_batch_maker_total: register_int_counter_with_registry!(
@@ -203,12 +170,6 @@ impl WorkerChannelMetrics {
                 "total received from the channel from the `worker::QuorumWaiter` to the `worker::Processor`",
                 registry
             ).unwrap(),
-            tx_worker_helper_total: register_int_counter_with_registry!(
-                "tx_worker_helper_total",
-                "total received from the channel from the `worker::WorkerReceiverHandler` to the `worker::Helper` (carrying worker requests)",
-                registry
-            ).unwrap(),
-
         }
     }
 }
