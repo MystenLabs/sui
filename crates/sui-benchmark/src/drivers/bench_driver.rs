@@ -287,7 +287,7 @@ impl Driver<BenchmarkStats> for BenchDriver {
                     hdrhistogram::Histogram::<u64>::new_with_max(100000, 2).unwrap();
                 let mut request_interval =
                     time::interval(Duration::from_micros(request_delay_micros));
-                request_interval.set_missed_tick_behavior(time::MissedTickBehavior::Delay);
+                request_interval.set_missed_tick_behavior(time::MissedTickBehavior::Burst);
                 let mut stat_interval = time::interval(Duration::from_micros(stat_delay_micros));
                 let mut futures: FuturesUnordered<BoxFuture<NextOp>> = FuturesUnordered::new();
 
