@@ -233,7 +233,7 @@ const subscriptionId = await provider.subscribeEvent(
 );
 
 // later, to unsubscribe
-const subFoundAndRemoved = await provider.unsubscribeEvent(devNftSub);
+const subFoundAndRemoved = await provider.unsubscribeEvent(subscriptionId);
 ```
 
 Subscribe to all events created by the `devnet_nft` module
