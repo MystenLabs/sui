@@ -428,6 +428,8 @@ pub fn hmac_sha2_256(
 
     Ok(NativeResult::ok(
         cost,
-        smallvec![Value::vector_u8(hmac(&hmac_key, &message.as_bytes_ref()).to_vec())],
+        smallvec![Value::vector_u8(
+            hmac(&hmac_key, &message.as_bytes_ref()).to_vec()
+        )],
     ))
 }
