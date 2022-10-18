@@ -71,3 +71,69 @@ You can verify the result with the [Sui Explorer](https://explorer.devnet.sui.io
 ### Example 2 - Subscribe to JSON-RPC Real-Time Events
 
 Subscribe to a real-time event stream generated from Move or from the Sui network. More information [here](https://docs.sui.io/devnet/build/pubsub)
+```go
+package main
+
+import (
+	"log"
+	"net/url"
+	"os"
+	"os/signal"
+	"github.com/gorilla/websocket"
+)
+
+func writeInChan(channel chan string, c *websocket.Conn) {
+	//replace req var for change method
+	req := `{"jsonrpc":"2.0", "id": 1, "method": "sui_subscribeEvent", "params": [{"All":[]}]}`
+	log.Print("Sent: ", req)
+	err := c.WriteMessage(websocket.TextMessage, []byte(req))
+	if err != nil {
+		log.Println("write:", err)
+		return
+	}
+
+	for {
+		_, message, err := c.ReadMessage()
+		if err != nil {
+			log.Println("read:", err)
+			return
+		}
+		channel <- string(message)
+	}
+}
+
+func main() {
+	interrupt := make(chan os.Signal, 1)
+	income := make(chan string)
+
+	signal.Notify(interrupt, os.Interrupt)
+	u := url.URL{Scheme: "ws", Host: "136.243.36.109:9001"}
+	log.Printf("connecting to %s", u.String())
+	c, resp, err := websocket.DefaultDialer.Dial(u.String(), nil)
+
+	if err != nil {
+		log.Printf("handshake failed with status %d", resp.StatusCode)
+		log.Fatal("dial:", err)
+	}
+	//When the program closes close the connection
+	defer c.Close()
+
+	go writeInChan(income, c)
+
+	for {
+		select {
+		case msg := <-income:
+			log.Println(msg)
+
+		case <-interrupt:
+			log.Println("interrupt")
+			err := c.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+			if err != nil {
+				log.Println("write close:", err)
+				return
+			}
+			return
+		}
+	}
+}
+```
