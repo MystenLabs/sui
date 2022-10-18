@@ -4,10 +4,10 @@
 use crate::metrics::PrimaryMetrics;
 use config::Committee;
 use crypto::{NetworkPublicKey, PublicKey};
-use futures::{stream::FuturesUnordered, Future, FutureExt, StreamExt};
+use futures::{future::BoxFuture, stream::FuturesUnordered, FutureExt, StreamExt};
 use network::{P2pNetwork, PrimaryToPrimaryRpc};
 use rand::{rngs::ThreadRng, seq::SliceRandom};
-use std::{collections::BTreeMap, future::pending, pin::Pin, sync::Arc, time::Duration};
+use std::{collections::BTreeMap, future::pending, sync::Arc, time::Duration};
 use storage::CertificateStore;
 use tokio::{
     sync::{oneshot, watch},
@@ -72,8 +72,7 @@ pub(crate) struct CertificateWaiter {
     targets: BTreeMap<PublicKey, Round>,
     /// Keeps the handle to the inflight fetch certificates task.
     /// Contains a pending future that never returns, and at most 1 other task.
-    fetch_certificates_task:
-        FuturesUnordered<Pin<Box<dyn Future<Output = Result<(), JoinError>> + Send>>>,
+    fetch_certificates_task: FuturesUnordered<BoxFuture<'static, Result<(), JoinError>>>,
 }
 
 /// Thread-safe internal state of CertificateWaiter shared with its fetch task.
@@ -195,6 +194,8 @@ impl CertificateWaiter {
                         ReconfigureNotification::NewEpoch(committee) => {
                             self.committee = committee;
                             self.targets.clear();
+                            self.fetch_certificates_task = FuturesUnordered::new();
+                            self.fetch_certificates_task.push(pending().boxed());
                         },
                         ReconfigureNotification::UpdateCommittee(committee) => {
                             self.committee = committee;
@@ -304,6 +305,9 @@ impl CertificateWaiter {
             Some(consensus_store) => Ok(consensus_store
                 .read_last_committed_round(authority)?
                 .unwrap_or(0)),
+            // When using external consensus, consensus_store is empty.
+            // TODO: use all origins and rounds of written certs above gc_round, instead of just
+            // the last written rounds.
             None => Ok(self
                 .certificate_store
                 .last_round_number(authority)?
@@ -324,6 +328,7 @@ impl CertificateWaiter {
 }
 
 #[allow(clippy::mutable_key_type)]
+#[instrument(level = "debug", skip_all)]
 async fn run_fetch_task(
     state: Arc<CertificateWaiterState>,
     committee: Committee,

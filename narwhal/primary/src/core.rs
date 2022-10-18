@@ -21,7 +21,7 @@ use std::{
 use storage::CertificateStore;
 use store::Store;
 use tokio::{sync::watch, task::JoinHandle};
-use tracing::{debug, error, info, instrument, warn};
+use tracing::{debug, error, info, instrument, trace, warn};
 use types::{
     ensure,
     error::{DagError, DagError::StoreError, DagResult},
@@ -33,8 +33,9 @@ use types::{
 #[path = "tests/core_tests.rs"]
 pub mod core_tests;
 
+// TODO: enable below.
 // Rejects a header if it requires catching up the following number of rounds.
-const MAX_HEADER_ROUND_CATCHUP_THRESHOLD: u64 = 20;
+// const MAX_HEADER_ROUND_CATCHUP_THRESHOLD: u64 = 20;
 
 pub struct Core {
     /// The public key of this primary.
@@ -119,12 +120,6 @@ impl Core {
         metrics: Arc<PrimaryMetrics>,
         primary_network: P2pNetwork,
     ) -> JoinHandle<()> {
-        let last_round = certificate_store
-            .last_round()
-            .unwrap()
-            .first()
-            .map(|c| c.round())
-            .unwrap_or(0);
         tokio::spawn(async move {
             Self {
                 name,
@@ -144,8 +139,8 @@ impl Core {
                 tx_consensus,
                 tx_proposer,
                 gc_round: 0,
-                highest_received_round: last_round,
-                highest_processed_round: last_round,
+                highest_received_round: 0,
+                highest_processed_round: 0,
                 processing: HashMap::with_capacity(2 * gc_depth as usize),
                 current_header: Header::default(),
                 vote_digest_store,
@@ -170,12 +165,17 @@ impl Core {
             .certificate_store
             .last_round()
             .expect("Failed recovering certificates in primary core");
-
+        let last_round_number = last_round_certificates
+            .first()
+            .map(|c| c.round())
+            .unwrap_or(0);
         for certificate in last_round_certificates {
             self.append_certificate_in_aggregator(certificate)
                 .await
                 .expect("Failed appending recovered certificates to aggregator in primary core");
         }
+        self.highest_received_round = last_round_number;
+        self.highest_processed_round = last_round_number;
         self
     }
 
@@ -248,6 +248,8 @@ impl Core {
 
         // If the header has been signed, there is no point in trying to vote.
         // Also any missing parent will be fetched by certificate waiter.
+        // TODO: call this directly from process_certificate(), and avoid looping back
+        // the header.
         if signed {
             if self.synchronizer.missing_payload(header).await? {
                 debug!("Downloading the certificate payload of {header}");
@@ -436,7 +438,10 @@ impl Core {
     #[instrument(level = "debug", skip_all, fields(certificate_digest = ?certificate.digest()))]
     async fn process_certificate(&mut self, certificate: Certificate) -> DagResult<()> {
         if self.certificate_store.read(certificate.digest())?.is_some() {
-            // Certificate already processed.
+            trace!(
+                "Certificate {} has already been processed. Skip processing.",
+                certificate.digest()
+            );
             return Ok(());
         }
 
@@ -575,12 +580,13 @@ impl Core {
             self.gc_round < header.round,
             DagError::TooOld(header.id.into(), header.round, self.gc_round)
         );
+        // TODO: enable below.
         // The header round is too high for this node, which is unlikely to acquire all
         // parent certificates in time.
-        ensure!(
-            self.highest_processed_round + MAX_HEADER_ROUND_CATCHUP_THRESHOLD > header.round,
-            DagError::TooNew(header.id.into(), header.round, self.gc_round)
-        );
+        // ensure!(
+        //     self.highest_processed_round + MAX_HEADER_ROUND_CATCHUP_THRESHOLD > header.round,
+        //     DagError::TooNew(header.id.into(), header.round, self.gc_round)
+        // );
 
         // Verify the header's signature.
         header.verify(&self.committee, self.worker_cache.clone())?;

@@ -474,6 +474,34 @@ mod test {
     }
 
     #[tokio::test]
+    async fn test_next_round_number() {
+        // GIVEN
+        let store = new_store(temp_dir());
+
+        // Create certificates for round 1, 2, 4, 6, 9, 10.
+        let cert = certificates(1).first().unwrap().clone();
+        let origin = cert.origin();
+        let rounds = vec![1, 2, 4, 6, 9, 10];
+        let mut certs = Vec::new();
+        for r in &rounds {
+            let mut c = cert.clone();
+            c.header.round = *r as u64;
+            certs.push(c);
+        }
+
+        store.write_all(certs).unwrap();
+
+        // THEN
+        let mut i = 0;
+        let mut current_round = 0;
+        while let Some(r) = store.next_round_number(&origin, current_round).unwrap() {
+            assert_eq!(rounds[i], r);
+            i += 1;
+            current_round = r;
+        }
+    }
+
+    #[tokio::test]
     async fn test_last_round() {
         // GIVEN
         let store = new_store(temp_dir());
