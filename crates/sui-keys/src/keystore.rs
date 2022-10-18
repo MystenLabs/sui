@@ -17,9 +17,11 @@ use std::path::{Path, PathBuf};
 
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{
-    derive_key_pair_from_path, enum_dispatch, get_key_pair_from_rng, EncodeDecodeBase64, PublicKey,
-    Signature, SignatureScheme, SuiKeyPair,
+    enum_dispatch, get_key_pair_from_rng, EncodeDecodeBase64, PublicKey, Signature,
+    SignatureScheme, SuiKeyPair,
 };
+
+use crate::key_derive::derive_key_pair_from_path;
 
 #[derive(Serialize, Deserialize)]
 #[enum_dispatch(AccountKeystore)]

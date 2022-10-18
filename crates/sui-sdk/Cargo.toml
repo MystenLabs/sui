@@ -14,12 +14,9 @@ serde = { version = "1.0.144", features = ["derive"] }
 serde_json = "1.0.83"
 futures-core = "0.3.21"
 futures = "0.3.23"
-signature = "1.6.0"
 tokio = "1.20.1"
 rand = "0.8.5"
 bcs = "0.1.4"
-tiny-bip39 = "1.0.0"
-bip32 = "0.4.0"
 
 sui-json-rpc = { path = "../sui-json-rpc" }
 sui-transaction-builder = { path = "../sui-transaction-builder" }
@@ -28,7 +25,7 @@ sui-types = { path = "../sui-types" }
 sui-json = { path = "../sui-json" }
 sui-core = { path = "../sui-core" }
 sui-config = { path = "../sui-config" }
-sui-adapter =  { path = "../sui-adapter" }
+sui-keys =  { path = "../sui-keys" }
 
 move-core-types.workspace = true
 move-bytecode-utils.workspace = true
@@ -39,7 +36,6 @@ workspace-hack.workspace = true
 [dev-dependencies]
 clap = { version = "3.2.17", features = ["derive"] }
 dirs = "4.0.0"
-tokio = "1.20.1"
 async-recursion = "1.0.0"
 tempfile = "3.3.0"
 sha3 = "0.10.4"

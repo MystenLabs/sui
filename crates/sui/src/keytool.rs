@@ -9,15 +9,16 @@ use bip32::{DerivationPath, Mnemonic};
 use clap::*;
 use fastcrypto::traits::{ToFromBytes, VerifyingKey};
 use signature::rand_core::OsRng;
+use sui_keys::key_derive::derive_key_pair_from_path;
 use tracing::info;
 
 use fastcrypto::ed25519::{Ed25519KeyPair, Ed25519PrivateKey, Ed25519PublicKey};
-use sui_sdk::crypto::{AccountKeystore, Keystore};
+use sui_keys::keystore::{AccountKeystore, Keystore};
 use sui_types::base_types::SuiAddress;
 use sui_types::base_types::{decode_bytes_hex, encode_bytes_hex};
 use sui_types::crypto::{
-    derive_key_pair_from_path, get_key_pair, AuthorityKeyPair, Ed25519SuiSignature,
-    EncodeDecodeBase64, NetworkKeyPair, SignatureScheme, SuiKeyPair, SuiSignatureInner,
+    get_key_pair, AuthorityKeyPair, Ed25519SuiSignature, EncodeDecodeBase64, NetworkKeyPair,
+    SignatureScheme, SuiKeyPair, SuiSignatureInner,
 };
 use sui_types::sui_serde::{Base64, Encoding};
 

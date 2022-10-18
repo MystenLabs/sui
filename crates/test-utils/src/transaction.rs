@@ -21,7 +21,7 @@ use sui_core::authority_client::AuthorityAPI;
 use sui_json_rpc_types::SuiCertifiedTransaction;
 use sui_json_rpc_types::SuiObjectRead;
 use sui_json_rpc_types::SuiTransactionEffects;
-use sui_sdk::crypto::AccountKeystore;
+use sui_keys::keystore::AccountKeystore;
 use sui_sdk::json::SuiJsonValue;
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
