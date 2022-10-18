@@ -517,7 +517,7 @@ fn process_successful_execution<S: Storage + ParentSync>(
     }
     let tx_digest = ctx.digest();
 
-    for (id, (write_kind, recipient, tag, abilities, contents)) in writes {
+    for (id, (write_kind, mut recipient, tag, abilities, contents)) in writes {
         let has_public_transfer = abilities.has_store();
         debug_assert_eq!(
             id,
@@ -568,6 +568,22 @@ fn process_successful_execution<S: Storage + ParentSync>(
         // freshly created, this means that its version will now be 1.
         // thus, all objects in the global object pool have version > 0
         move_obj.increment_version();
+
+        // Remember the version this object was shared at, if this write was the one that shared it.
+        if let Owner::Shared {
+            initial_shared_version,
+        } = &mut recipient
+        {
+            // TODO Consider a distinct Recipient enum within ObjectRuntime to enforce this
+            // invariant at the type level.
+            assert_eq!(
+                *initial_shared_version,
+                SequenceNumber::new(),
+                "Initial version should be blank before this point",
+            );
+            *initial_shared_version = move_obj.version();
+        }
+
         // A to-be-transferred object can come from 3 sources:
         //   1. Passed in by-value (in `by_value_objects`, i.e. old_object is not none)
         //   2. Created in this transaction (in `newly_generated_ids`)
