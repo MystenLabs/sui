@@ -4,9 +4,9 @@ use clap::*;
 
 #[derive(Parser, Clone, ArgEnum)]
 pub enum Env {
-    DevNet,
+    Devnet,
     Staging,
-    Continuous,
+    Ci,
     Testnet,
     CustomRemote,
     NewLocal,

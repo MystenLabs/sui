@@ -4,7 +4,7 @@
 use super::{Dag, ValidatorDagError};
 use crate::metrics::ConsensusMetrics;
 use dag::node_dag::NodeDagError;
-use fastcrypto::Hash;
+use fastcrypto::hash::Hash;
 use indexmap::IndexMap;
 use prometheus::Registry;
 use std::{collections::BTreeSet, sync::Arc};

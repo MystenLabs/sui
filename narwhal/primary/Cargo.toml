@@ -12,7 +12,6 @@ async-recursion = "1.0.0"
 async-trait = "0.1.57"
 base64 = "0.13.0"
 bincode = "1.3.3"
-blake2 = "0.9"
 bytes = "1.2.1"
 config = { path = "../config", package = "narwhal-config" }
 dashmap = "5.4.0"
@@ -45,8 +44,8 @@ mysten-network.workspace = true
 store.workspace = true
 workspace-hack.workspace = true
 
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "57c4af7d6cdbf47633e6715bcd67d98f300e2fd8" }
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "57c4af7d6cdbf47633e6715bcd67d98f300e2fd8" }
+anemo.workspace = true
+anemo-tower.workspace = true
 
 [dev-dependencies]
 arc-swap = { version = "1.5.1", features = ["serde"] }

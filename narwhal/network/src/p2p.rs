@@ -101,6 +101,7 @@ impl P2pNetwork {
             .map_err(|e| anemo::Error::msg(e.to_string()))
     }
 
+    // TODO: remove async in a cleanup, this doesn't need it anymore.
     async fn send<F, R, Fut>(
         &mut self,
         peer: NetworkPublicKey,
@@ -241,9 +242,34 @@ impl UnreliableNetwork<WorkerSynchronizeMessage> for P2pNetwork {
         message: &WorkerSynchronizeMessage,
     ) -> Result<JoinHandle<Result<anemo::Response<()>>>> {
         let message = message.to_owned();
-        let f =
-            move |peer| async move { PrimaryToWorkerClient::new(peer).synchronize(message).await };
+        let f = move |peer| async move {
+            // Set a timeout on unreliable sends of synchronize, so it doesn't run forever.
+            const UNRELIABLE_SYNCHRONIZE_TIMEOUT: Duration = Duration::from_secs(30);
+            PrimaryToWorkerClient::new(peer)
+                .synchronize(
+                    anemo::Request::new(message).with_timeout(UNRELIABLE_SYNCHRONIZE_TIMEOUT),
+                )
+                .await
+        };
         self.unreliable_send(peer, f)
+    }
+}
+
+#[async_trait]
+impl ReliableNetwork<WorkerSynchronizeMessage> for P2pNetwork {
+    type Response = ();
+    async fn send(
+        &mut self,
+        peer: NetworkPublicKey,
+        message: &WorkerSynchronizeMessage,
+    ) -> CancelOnDropHandler<Result<anemo::Response<()>>> {
+        let message = message.to_owned();
+        let f = move |peer| {
+            let message = message.clone();
+            async move { PrimaryToWorkerClient::new(peer).synchronize(message).await }
+        };
+
+        self.send(peer, f).await
     }
 }
 

@@ -91,6 +91,24 @@ export class CallArgSerializer {
       return { Object: await this.newObjectArg(argVal) };
     }
 
+    if (
+      typeof expectedType === 'object' &&
+      'Vector' in expectedType &&
+      typeof expectedType.Vector === 'object' &&
+      'Struct' in expectedType.Vector
+    ) {
+      if (!Array.isArray(argVal)) {
+        throw new Error(
+          `Expect ${argVal} to be a array, received ${typeof argVal}`
+        );
+      }
+      return {
+        ObjVec: await Promise.all(
+          argVal.map((arg) => this.newObjectArg(arg as string))
+        ),
+      };
+    }
+
     let serType = this.getPureSerializationType(expectedType, argVal);
     return {
       Pure: bcs.ser(serType, argVal).toBytes(),
@@ -152,9 +170,12 @@ export class CallArgSerializer {
       return res;
     }
 
-    // TODO: update this once we support vector of object ids
     throw new Error(
-      `${MOVE_CALL_SER_ERROR} unknown normalized type ${normalizedType}`
+      `${MOVE_CALL_SER_ERROR} unknown normalized type ${JSON.stringify(
+        normalizedType,
+        null,
+        2
+      )}`
     );
   }
 

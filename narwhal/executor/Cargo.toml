@@ -9,7 +9,6 @@ publish = false
 [dependencies]
 async-trait = "0.1.57"
 bincode = "1.3.3"
-blake2 = "0.9"
 bytes = "1.2.1"
 config = { path = "../config", package = "narwhal-config" }
 consensus = { path = "../consensus", package = "narwhal-consensus" }

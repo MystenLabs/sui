@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{HeaderDigest, Round};
 use config::Epoch;
-use fastcrypto::Digest;
+use fastcrypto::hash::Digest;
 use store::StoreError;
 use thiserror::Error;
 
@@ -58,7 +58,7 @@ pub enum DagError {
     #[error("Authority {0} appears in quorum more than once")]
     AuthorityReuse(String),
 
-    #[error("Received unexpected vote fo header {0}")]
+    #[error("Received unexpected vote for header {0}")]
     UnexpectedVote(HeaderDigest),
 
     #[error("Received certificate without a quorum")]
@@ -68,13 +68,16 @@ pub enum DagError {
     HeaderRequiresQuorum(HeaderDigest),
 
     #[error("Message {0} (round {1}) too old for GC round {2}")]
-    TooOld(Digest, Round, Round),
+    TooOld(Digest<{ crypto::DIGEST_LENGTH }>, Round, Round),
 
     #[error("Vote {0} (round {1}) too old for round {2}")]
-    VoteTooOld(Digest, Round, Round),
+    VoteTooOld(Digest<{ crypto::DIGEST_LENGTH }>, Round, Round),
 
     #[error("Invalid epoch (expected {expected}, received {received})")]
     InvalidEpoch { expected: Epoch, received: Epoch },
+
+    #[error("Network error: {0}")]
+    NetworkError(String),
 
     #[error("System shutting down")]
     ShuttingDown,

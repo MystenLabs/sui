@@ -378,6 +378,33 @@
       ]
     },
     {
+      "name": "sui_getCommitteeInfo",
+      "tags": [
+        {
+          "name": "Full Node API"
+        }
+      ],
+      "description": "Return the committee information for the asked epoch",
+      "params": [
+        {
+          "name": "epoch",
+          "description": "The epoch of interest. If None, default to the latest epoch",
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        }
+      ],
+      "result": {
+        "name": "CommitteeInfoResponse",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/CommitteeInfoResponse"
+        }
+      }
+    },
+    {
       "name": "sui_getEventsByModule",
       "tags": [
         {
@@ -2494,6 +2521,14 @@
   ],
   "components": {
     "schemas": {
+      "AuthorityPublicKeyBytes": {
+        "description": "Defines the compressed version of the public key that we pass around in Sui",
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Base64"
+          }
+        ]
+      },
       "AuthorityQuorumSignInfo": {
         "description": "Represents at least a quorum (could be more) of authority signatures. STRONG_THRESHOLD indicates whether to use the quorum threshold for quorum check. When STRONG_THRESHOLD is true, the quorum is valid when the total stake is at least the quorum threshold (2f+1) of the committee; when STRONG_THRESHOLD is false, the quorum is valid when the total stake is at least the validity threshold (f+1) of the committee.",
         "type": "object",
@@ -2574,6 +2609,40 @@
           },
           "transactionEffectsDigest": {
             "$ref": "#/components/schemas/TransactionEffectsDigest"
+          }
+        }
+      },
+      "CommitteeInfoResponse": {
+        "type": "object",
+        "required": [
+          "epoch"
+        ],
+        "properties": {
+          "committee_info": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "array",
+              "items": [
+                {
+                  "$ref": "#/components/schemas/AuthorityPublicKeyBytes"
+                },
+                {
+                  "type": "integer",
+                  "format": "uint64",
+                  "minimum": 0.0
+                }
+              ],
+              "maxItems": 2,
+              "minItems": 2
+            }
+          },
+          "epoch": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
           }
         }
       },
@@ -3077,15 +3146,56 @@
       },
       "EventType": {
         "description": "Auto-generated discriminant enum variants",
-        "type": "string",
-        "enum": [
-          "MoveEvent",
-          "Publish",
-          "TransferObject",
-          "DeleteObject",
-          "NewObject",
-          "EpochChange",
-          "Checkpoint"
+        "oneOf": [
+          {
+            "description": "Move-specific event",
+            "type": "string",
+            "enum": [
+              "MoveEvent"
+            ]
+          },
+          {
+            "description": "Module published",
+            "type": "string",
+            "enum": [
+              "Publish"
+            ]
+          },
+          {
+            "description": "Transfer objects to new address / wrap in another object / coin",
+            "type": "string",
+            "enum": [
+              "TransferObject"
+            ]
+          },
+          {
+            "description": "Delete object",
+            "type": "string",
+            "enum": [
+              "DeleteObject"
+            ]
+          },
+          {
+            "description": "New object creation",
+            "type": "string",
+            "enum": [
+              "NewObject"
+            ]
+          },
+          {
+            "description": "Epoch change",
+            "type": "string",
+            "enum": [
+              "EpochChange"
+            ]
+          },
+          {
+            "description": "New checkpoint",
+            "type": "string",
+            "enum": [
+              "Checkpoint"
+            ]
+          }
         ]
       },
       "ExecuteTransactionRequestType": {
@@ -3576,13 +3686,6 @@
       "Owner": {
         "oneOf": [
           {
-            "type": "string",
-            "enum": [
-              "Shared",
-              "Immutable"
-            ]
-          },
-          {
             "description": "Object is exclusively owned by a single address, and is mutable.",
             "type": "object",
             "required": [
@@ -3607,6 +3710,20 @@
               }
             },
             "additionalProperties": false
+          },
+          {
+            "description": "Object is shared, can be used by any address, and is mutable.",
+            "type": "string",
+            "enum": [
+              "Shared"
+            ]
+          },
+          {
+            "description": "Object is immutable, and hence ownership doesn't matter.",
+            "type": "string",
+            "enum": [
+              "Immutable"
+            ]
           }
         ]
       },

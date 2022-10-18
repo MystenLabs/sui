@@ -5,7 +5,7 @@ use anemo::PeerId;
 use config::{Committee, WorkerId};
 use consensus::{dag::Dag, metrics::ConsensusMetrics};
 use crypto::traits::KeyPair;
-use fastcrypto::Hash;
+use fastcrypto::hash::Hash;
 use futures::future::join_all;
 use network::P2pNetwork;
 use prometheus::Registry;

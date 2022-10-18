@@ -117,7 +117,6 @@ impl Worker {
             request_batches_timeout: worker.parameters.sync_retry_delay,
             request_batches_retry_nodes: worker.parameters.sync_retry_nodes,
             tx_reconfigure,
-            tx_primary: tx_primary.clone(),
             tx_batch_processor: tx_worker_processor,
         });
 
@@ -139,14 +138,14 @@ impl Worker {
             .add_rpc_service(primary_service);
 
         let service = ServiceBuilder::new()
-            .layer(TraceLayer::new())
+            .layer(TraceLayer::new_for_server_errors())
             .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
                 inbound_network_metrics,
             )))
             .service(routes);
 
         let outbound_layer = ServiceBuilder::new()
-            .layer(TraceLayer::new())
+            .layer(TraceLayer::new_for_client_and_server_errors())
             .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
                 outbound_network_metrics,
             )))
@@ -174,9 +173,8 @@ impl Worker {
         info!("Worker {} listening to worker messages on {}", id, address);
 
         let connection_monitor_handle = network::connectivity::ConnectionMonitor::spawn(
-            network.clone(),
+            network.downgrade(),
             network_connection_metrics,
-            rx_reconfigure.clone(),
         );
 
         let other_workers = worker

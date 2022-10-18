@@ -4,6 +4,7 @@
 import { GrowthBookProvider } from '@growthbook/growthbook-react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
+import { Toaster } from 'react-hot-toast';
 
 import Footer from '../components/footer/Footer';
 import Header from '../components/header/Header';
@@ -48,6 +49,29 @@ function App() {
                         </main>
                         <Footer />
                     </div>
+
+                    <Toaster
+                        position="bottom-center"
+                        gutter={8}
+                        toastOptions={{
+                            duration: 4000,
+                            success: {
+                                className:
+                                    '!bg-success-light !text-success-dark',
+                                iconTheme: {
+                                    primary: 'var(--success-light)',
+                                    secondary: 'var(--success-dark)',
+                                },
+                            },
+                            error: {
+                                className: '!bg-issue-light !text-issue-dark',
+                                iconTheme: {
+                                    primary: 'var(--issue-light)',
+                                    secondary: 'var(--issue-dark)',
+                                },
+                            },
+                        }}
+                    />
                 </NetworkContext.Provider>
             </QueryClientProvider>
         </GrowthBookProvider>

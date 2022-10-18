@@ -7,11 +7,6 @@ import FieldLabel from '_app/shared/field-label';
 import PasswordInput from '_app/shared/input/password';
 import Alert from '_components/alert';
 
-import st from './PasswordFields.module.scss';
-
-const PASSWORD_INFO_ERROR =
-    'Minimum 8 characters. Password must include at least one number and uppercase letter.';
-
 export type PasswordFieldsValues = {
     password: string;
     confirmPassword: string;
@@ -24,10 +19,8 @@ export default function PasswordFields() {
             <FieldLabel txt="Create Password">
                 <Field name="password" component={PasswordInput} />
                 {touched['password'] && errors['password'] ? (
-                    <Alert>{PASSWORD_INFO_ERROR}</Alert>
-                ) : (
-                    <div className={st.info}>{PASSWORD_INFO_ERROR}</div>
-                )}
+                    <Alert>{errors['password']}</Alert>
+                ) : null}
             </FieldLabel>
             <FieldLabel txt="Confirm Password">
                 <Field name="confirmPassword" component={PasswordInput} />

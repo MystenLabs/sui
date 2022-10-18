@@ -4,7 +4,7 @@
 use config::Committee;
 use crypto::PublicKey;
 use dag::node_dag::{NodeDag, NodeDagError};
-use fastcrypto::Hash;
+use fastcrypto::hash::Hash;
 use std::{
     borrow::Borrow,
     collections::{BTreeMap, HashMap, HashSet, VecDeque},

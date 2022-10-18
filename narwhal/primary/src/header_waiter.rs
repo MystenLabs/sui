@@ -5,11 +5,11 @@ use crate::{
     metrics::PrimaryMetrics,
     primary::{PayloadToken, PrimaryMessage},
 };
+use anyhow::Result;
 use config::{Committee, SharedWorkerCache, WorkerId};
 use crypto::PublicKey;
 use futures::future::{try_join_all, BoxFuture};
-use network::{LuckyNetwork, P2pNetwork, UnreliableNetwork};
-use serde::{de::DeserializeOwned, Serialize};
+use network::{CancelOnDropHandler, LuckyNetwork, P2pNetwork, ReliableNetwork, UnreliableNetwork};
 use std::{
     collections::HashMap,
     sync::Arc,
@@ -140,23 +140,23 @@ impl HeaderWaiter {
         })
     }
 
-    /// Helper function. It waits for particular data to become available in the storage
-    /// and then delivers the specified header.
-    async fn waiter<T, V>(
-        missing: Vec<T>,
-        store: Store<T, V>,
+    async fn wait_for_batches(
+        digests: HashMap<u32, Vec<BatchDigest>>,
+        synchronize_handles: Vec<CancelOnDropHandler<Result<anemo::Response<()>>>>,
+        store: Store<(BatchDigest, WorkerId), PayloadToken>,
         deliver: Header,
         handler: oneshot::Receiver<()>,
-    ) -> DagResult<Option<Header>>
-    where
-        T: Serialize + DeserializeOwned + Send + Clone,
-        V: Serialize + DeserializeOwned + Send,
-    {
-        let waiting: Vec<_> = missing.into_iter().map(|x| store.notify_read(x)).collect();
+    ) -> DagResult<Option<Header>> {
         tokio::select! {
-            result = try_join_all(waiting) => {
-                result.map(|_| Some(deliver)).map_err(DagError::from)
-            }
+            result = try_join_all(synchronize_handles) => {
+                result.map_err(|e| DagError::NetworkError(format!("{e:?}")))?;
+                for (worker_id, worker_digests) in digests {
+                    for digest in worker_digests {
+                        store.write((digest, worker_id), 0u8).await;
+                    }
+                }
+                Ok(Some(deliver))
+            },
             _ = handler => Ok(None),
         }
     }
@@ -205,17 +205,6 @@ impl HeaderWaiter {
                                 continue;
                             }
 
-                            // Add the header to the waiter pool. The waiter will return it to when all
-                            // its parents are in the store.
-                            let wait_for = missing
-                                .iter().map(|(x, y)| (*x, *y))
-                                .collect();
-                            let (tx_cancel, rx_cancel) = oneshot::channel();
-                            self.pending.insert(header_id, (round, tx_cancel));
-                            let fut = Self::waiter(wait_for, self.payload_store.clone(), header, rx_cancel);
-                            // pointer-size allocation, bounded by the # of blocks (may eventually go away, see rust RFC #1909)
-                            waiting.push(Box::pin(fut)).await;
-
                             // Ensure we didn't already send a sync request for these parents.
                             let mut requires_sync = HashMap::new();
                             for (digest, worker_id) in missing.into_iter() {
@@ -224,17 +213,31 @@ impl HeaderWaiter {
                                     round
                                 });
                             }
-                            for (worker_id, digests) in requires_sync {
+                            let mut synchronize_handles = Vec::new();
+                            for (worker_id, digests) in requires_sync.clone() {
                                 let worker_name = self.worker_cache
                                     .load()
                                     .worker(&self.name, &worker_id)
                                     .expect("Author of valid header is not in the worker cache")
                                     .name;
 
-                                // TODO [issue #423]: This network transmission needs to be reliable: the worker may crash-recover.
                                 let message = WorkerSynchronizeMessage{digests, target: author.clone()};
-                                let _ = self.network.unreliable_send(worker_name, &message);
+                                synchronize_handles.push(self.network.send(worker_name, &message).await);
                             }
+
+                            // Add the header to the waiter pool. The waiter will return it to when all
+                            // its parents are in the store.
+                            let (tx_cancel, rx_cancel) = oneshot::channel();
+                            self.pending.insert(header_id, (round, tx_cancel));
+                            let fut = Self::wait_for_batches(
+                                requires_sync,
+                                synchronize_handles,
+                                self.payload_store.clone(),
+                                header,
+                                rx_cancel);
+                            // pointer-size allocation, bounded by the # of blocks
+                            // (may eventually go away, see rust RFC #1909)
+                            waiting.push(Box::pin(fut)).await;
                         }
 
                         WaiterMessage::SyncParents(missing, header) => {

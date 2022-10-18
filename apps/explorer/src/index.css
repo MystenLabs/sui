@@ -21,8 +21,18 @@
     src: url('./assets/Fonts/SpaceMono-Regular.ttf') format('truetype');
 }
 
+/* Define some colors as CSS variables for use outside of the Tailwind class context: */
+:root {
+    --success-light: theme('colors.success.light');
+    --success-dark: theme('colors.success.dark');
+    --warning-light: theme('colors.warning.light');
+    --warning-dark: theme('colors.warning.dark');
+    --issue-light: theme('colors.issue.light');
+    --issue-dark: theme('colors.issue.dark');
+}
+
 body {
-    @apply m-0 text-offblack;
+    @apply m-0 text-offblack font-sans;
 }
 
 input:focus,

@@ -4,7 +4,7 @@ use crate::{common::create_db_stores, helper::Helper, primary::PrimaryMessage, P
 use anemo::{types::PeerInfo, PeerId};
 use bincode::Options;
 use config::WorkerId;
-use fastcrypto::{traits::KeyPair, Hash};
+use fastcrypto::{hash::Hash, traits::KeyPair};
 use itertools::Itertools;
 use network::P2pNetwork;
 use std::{

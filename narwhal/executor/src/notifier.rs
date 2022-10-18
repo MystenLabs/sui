@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{ExecutionIndices, ExecutionState, ExecutorMetrics};
 use consensus::ConsensusOutput;
-use fastcrypto::Hash;
+use fastcrypto::hash::Hash;
 use std::sync::Arc;
 use tokio::task::JoinHandle;
 use tracing::debug;

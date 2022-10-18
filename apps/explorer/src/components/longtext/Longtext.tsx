@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useCallback, useState, useContext } from 'react';
+import toast from 'react-hot-toast';
 import { Link, useNavigate } from 'react-router-dom';
 
 import { ReactComponent as ContentArrowRight } from '../../assets/SVGIcons/12px/ArrowRight.svg';
@@ -34,17 +35,14 @@ function Longtext({
     copyButton?: '16' | '24' | 'none';
     showIconButton?: boolean;
 }) {
-    const [isCopyIcon, setCopyIcon] = useState(true);
-
     const [pleaseWait, setPleaseWait] = useState(false);
     const [network] = useContext(NetworkContext);
     const navigate = useNavigate();
 
     const handleCopyEvent = useCallback(() => {
         navigator.clipboard.writeText(text);
-        setCopyIcon(false);
-        setTimeout(() => setCopyIcon(true), 1000);
-    }, [setCopyIcon, text]);
+        toast.success('Copied!');
+    }, [text]);
 
     let icon;
     let iconButton = <></>;
@@ -52,7 +50,7 @@ function Longtext({
     if (copyButton !== 'none') {
         if (pleaseWait) {
             icon = <div className={styles.copied}>&#8987; Please Wait</div>;
-        } else if (isCopyIcon) {
+        } else {
             icon = (
                 <div
                     className={
@@ -66,12 +64,6 @@ function Longtext({
                         <ContentCopyIcon24 />
                     )}
                 </div>
-            );
-        } else {
-            icon = (
-                <span className={styles.copied}>
-                    <span>&#10003;</span> <span>Copied</span>
-                </span>
             );
         }
     } else {

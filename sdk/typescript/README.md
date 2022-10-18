@@ -43,9 +43,19 @@ For the latest docs for the `main` branch, run `pnpm doc` and open the [doc/inde
 
 ## Testing
 
+To run unit tests
+
 ```
 cd sdk/typescript
-pnpm run test
+pnpm run test:unit
+```
+
+To run E2E tests against local network
+
+```
+cd sdk/typescript
+pnpm run prepare:e2e
+pnpm run test:e2e
 ```
 
 ## Usage
