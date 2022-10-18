@@ -9,7 +9,6 @@ module sui::crypto_tests {
     use sui::elliptic_curve as ec;
     use sui::hash;
     use std::vector;
-    use std::debug;
 
 
     #[test]
