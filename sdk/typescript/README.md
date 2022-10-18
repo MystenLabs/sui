@@ -225,6 +225,8 @@ Subscribe to all events created by transactions sent by account `0xbff6ccc8707aa
 import { JsonRpcProvider } from '@mysten/sui.js';
 const provider = new JsonRpcProvider('https://fullnode.devnet.sui.io:443');
 
+// calls RPC method 'sui_subscribeEvent' with params:
+// [ { SenderAddress: '0xbff6ccc8707aa517b4f1b95750a2a8c666012df3' } ]
 const subscriptionId = await provider.subscribeEvent(
   { SenderAddress: '0xbff6ccc8707aa517b4f1b95750a2a8c666012df3' },
   (event: SuiEventEnvelope) => {
@@ -233,6 +235,7 @@ const subscriptionId = await provider.subscribeEvent(
 );
 
 // later, to unsubscribe
+// calls RPC method 'sui_unsubscribeEvent' with params: [ subscriptionId ]
 const subFoundAndRemoved = await provider.unsubscribeEvent(subscriptionId);
 ```
 
