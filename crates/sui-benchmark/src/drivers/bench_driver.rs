@@ -182,7 +182,6 @@ impl BenchDriver {
     pub async fn make_workers(
         &self,
         workload_info: &WorkloadInfo,
-        // aggregator: Arc<AuthorityAggregator<NetworkAuthorityClient>>,
         proxy: Arc<dyn ValidatorProxy + Sync + Send>,
     ) -> Vec<BenchWorker> {
         let mut num_requests = workload_info.max_in_flight_ops / workload_info.num_workers;
@@ -328,7 +327,7 @@ impl Driver<BenchmarkStats> for BenchDriver {
                                 metrics_cloned.num_submitted.with_label_values(&[&b.1.get_workload_type().to_string()]).inc();
                                 let metrics_cloned = metrics_cloned.clone();
                                 // TODO: clone committee for each request is not ideal.
-                                let committee_cloned = Arc::new(proxy.get_committee().await);
+                                let committee_cloned = Arc::new(proxy.clone_committee());
                                 let proxy_clone = proxy.clone();
                                 let start = Arc::new(Instant::now());
                                 let res = proxy
@@ -336,7 +335,7 @@ impl Driver<BenchmarkStats> for BenchDriver {
                                     .then(|res| async move  {
                                         match res {
                                             Ok((cert, effects)) => {
-                                                let new_version = effects.effects.mutated.iter().find(|(object_ref, _)| {
+                                                let new_version = effects.mutated().iter().find(|(object_ref, _)| {
                                                     object_ref.0 == b.1.get_object_id()
                                                 }).map(|x| x.0).unwrap();
                                                 let latency = start.elapsed();
@@ -344,10 +343,12 @@ impl Driver<BenchmarkStats> for BenchDriver {
                                                 metrics_cloned.num_success.with_label_values(&[&b.1.get_workload_type().to_string()]).inc();
                                                 metrics_cloned.num_in_flight.with_label_values(&[&b.1.get_workload_type().to_string()]).dec();
                                                 cert.auth_sign_info.authorities(&committee_cloned).for_each(|name| metrics_cloned.validators_in_tx_cert.with_label_values(&[&name.unwrap().to_string()]).inc());
-                                                effects.auth_signature.authorities(&committee_cloned).for_each(|name| metrics_cloned.validators_in_effects_cert.with_label_values(&[&name.unwrap().to_string()]).inc());
+                                                if let Some(sig_info) = effects.quorum_sig() {
+                                                    sig_info.authorities(&committee_cloned).for_each(|name| metrics_cloned.validators_in_effects_cert.with_label_values(&[&name.unwrap().to_string()]).inc())
+                                                }
                                                 NextOp::Response(Some((
                                                     latency,
-                                                    b.1.make_new_payload(new_version, effects.effects.gas_object.0),
+                                                    b.1.make_new_payload(new_version, effects.gas_object().0),
                                                 ),
                                                 ))
                                             }
@@ -384,13 +385,13 @@ impl Driver<BenchmarkStats> for BenchDriver {
                                 let metrics_cloned = metrics_cloned.clone();
                                 let proxy_clone = proxy.clone();
                                 // TODO: clone committee for each request is not ideal.
-                                let committee_cloned = Arc::new(proxy.get_committee().await);
+                                let committee_cloned = Arc::new(proxy.clone_committee());
                                 let res = proxy
                                     .execute_transaction(tx.clone())
                                 .then(|res| async move {
                                     match res {
                                         Ok((cert, effects)) => {
-                                            let new_version = effects.effects.mutated.iter().find(|(object_ref, _)| {
+                                            let new_version = effects.mutated().iter().find(|(object_ref, _)| {
                                                 object_ref.0 == payload.get_object_id()
                                             }).map(|x| x.0).unwrap();
                                             let latency = start.elapsed();
@@ -398,10 +399,10 @@ impl Driver<BenchmarkStats> for BenchDriver {
                                             metrics_cloned.num_success.with_label_values(&[&payload.get_workload_type().to_string()]).inc();
                                             metrics_cloned.num_in_flight.with_label_values(&[&payload.get_workload_type().to_string()]).dec();
                                             cert.auth_sign_info.authorities(&committee_cloned).for_each(|name| metrics_cloned.validators_in_tx_cert.with_label_values(&[&name.unwrap().to_string()]).inc());
-                                            effects.auth_signature.authorities(&committee_cloned).for_each(|name| metrics_cloned.validators_in_effects_cert.with_label_values(&[&name.unwrap().to_string()]).inc());
+                                            if let Some(sig_info) = effects.quorum_sig() { sig_info.authorities(&committee_cloned).for_each(|name| metrics_cloned.validators_in_effects_cert.with_label_values(&[&name.unwrap().to_string()]).inc()) }
                                             NextOp::Response(Some((
                                                 latency,
-                                                payload.make_new_payload(new_version, effects.effects.gas_object.0),
+                                                payload.make_new_payload(new_version, effects.gas_object().0),
                                             )))
                                         }
                                         Err(err) => {

@@ -91,7 +91,7 @@ pub async fn publish_basics_package(
     path.push("../../sui_programmability/examples/basics");
     let transaction = create_publish_move_package_transaction(gas, path, sender, keypair);
     let (_, effects) = proxy.execute_transaction(transaction).await.unwrap();
-    parse_package_ref(&effects.effects).unwrap()
+    parse_package_ref(&effects.created()).unwrap()
 }
 
 #[async_trait]
@@ -169,12 +169,12 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
                 );
                 if let Ok((_, effects)) = proxy_ref.execute_transaction(transaction).await {
                     let effects = effects.effects;
-                    let counter_ref = effects.created[0].0;
+                    let counter_ref = effects.created()[0].0,
                     Box::new(SharedCounterTestPayload {
                         package_ref: self.basics_package_ref.unwrap(),
                         counter_id: counter_ref.0,
                         counter_initial_shared_version: counter_ref.1,
-                        gas: effects.gas_object,
+                        gas: effects.gas_object(),
                         sender,
                         keypair: Arc::new(keypair),
                     })

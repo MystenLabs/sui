@@ -13,10 +13,7 @@ use sui_types::{
 };
 
 use futures::FutureExt;
-use sui_types::{
-    base_types::SuiAddress,
-    crypto::AccountKeyPair,
-};
+use sui_types::{base_types::SuiAddress, crypto::AccountKeyPair};
 use test_utils::messages::make_transfer_sui_transaction;
 use tracing::error;
 
@@ -52,10 +49,11 @@ pub async fn transfer_sui_for_testing(
         .map(move |res| match res {
             Ok((_, effects)) => {
                 // let (_, effects) = *result;
-                let minted = effects.effects.created.get(0).unwrap().0;
+                // let minted = effects.effects.created.get(0).unwrap().0;
+                let minted = effects.created().get(0).unwrap().0;
                 let updated = effects
-                    .effects
-                    .mutated
+                    // .effects.mutated
+                    .mutated()
                     .iter()
                     .find(|(k, _)| k.0 == gas.0 .0)
                     .unwrap()

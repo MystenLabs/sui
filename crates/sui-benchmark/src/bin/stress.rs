@@ -7,7 +7,6 @@ use futures::future::try_join_all;
 use futures::StreamExt;
 use prometheus::Registry;
 use rand::seq::SliceRandom;
-use sui_core::authority_aggregator::reconfig_from_genesis;
 use std::path::PathBuf;
 use std::sync::Arc;
 use strum_macros::EnumString;
@@ -20,9 +19,11 @@ use sui_benchmark::util::get_ed25519_keypair_from_keystore;
 use sui_benchmark::workloads::{
     make_combination_workload, make_shared_counter_workload, make_transfer_object_workload,
 };
-use sui_benchmark::LocalValidatorAggregator;
+use sui_benchmark::FullNodeProxy;
+use sui_benchmark::LocalValidatorAggregatorProxy;
 use sui_benchmark::ValidatorProxy;
-use sui_core::authority_aggregator:: AuthorityAggregatorBuilder;
+use sui_core::authority_aggregator::reconfig_from_genesis;
+use sui_core::authority_aggregator::AuthorityAggregatorBuilder;
 use sui_core::authority_client::AuthorityAPI;
 use sui_core::authority_client::NetworkAuthorityClient;
 use sui_node::metrics;
@@ -83,6 +84,11 @@ struct Opts {
     /// genesis_blob_path, keypair_path and primary_gas_id
     #[clap(long, parse(try_from_str), default_value = "true", global = true)]
     pub local: bool,
+    /// If provided, use FullNodeProxy to submit transactions and read data.
+    /// This param only matters when local = false, namely local runs always
+    /// use a LocalValidatorAggregatorProxy.
+    #[clap(long, global = true)]
+    pub fullnode_rpc_address: Option<String>,
     /// Default workload is 100% transfer object
     #[clap(subcommand)]
     run_spec: RunSpec,
@@ -280,9 +286,9 @@ async fn main() -> Result<()> {
             .build()
             .unwrap();
 
-        let proxy = Arc::new(LocalValidatorAggregator::from_auth_agg(Arc::new(
-            aggregator,
-        )));
+        let proxy: Arc<dyn ValidatorProxy + Send + Sync> = Arc::new(
+            LocalValidatorAggregatorProxy::from_auth_agg(Arc::new(aggregator)),
+        );
 
         // spawn a thread to spin up sui nodes on the multi-threaded server runtime
         let _ = std::thread::spawn(move || {
@@ -328,20 +334,27 @@ async fn main() -> Result<()> {
                     cloned_barrier.wait().await;
                 });
         });
-        let genesis = sui_config::node::Genesis::new_from_file(&opts.genesis_blob_path);
-        let genesis = genesis.genesis()?;
-        let (aggregator, _) = AuthorityAggregatorBuilder::from_genesis(genesis)
-            .with_registry(registry.clone())
-            .build()
-            .unwrap();
 
-        let aggregator = reconfig_from_genesis(aggregator).await?;
-        let proxy = Arc::new(LocalValidatorAggregator::from_auth_agg(Arc::new(
-            aggregator,
-        )));
+        let proxy: Arc<dyn ValidatorProxy + Send + Sync> =
+            if let Some(fullnode_url) = opts.fullnode_rpc_address {
+                eprintln!("Using Full node: {fullnode_url}..");
+                Arc::new(FullNodeProxy::from_url(&fullnode_url).await.unwrap())
+            } else {
+                let genesis = sui_config::node::Genesis::new_from_file(&opts.genesis_blob_path);
+                let genesis = genesis.genesis()?;
+                let (aggregator, _) = AuthorityAggregatorBuilder::from_genesis(genesis)
+                    .with_registry(registry.clone())
+                    .build()
+                    .unwrap();
+
+                let aggregator = reconfig_from_genesis(aggregator).await?;
+                Arc::new(LocalValidatorAggregatorProxy::from_auth_agg(Arc::new(
+                    aggregator,
+                )))
+            };
         eprintln!(
             "Reconfiguration - Reconfiguration to epoch {} is done",
-            proxy.get_current_epoch().await,
+            proxy.get_current_epoch(),
         );
 
         let offset = ObjectID::from_hex_literal(&opts.primary_gas_id)?;
