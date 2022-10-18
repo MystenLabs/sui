@@ -48,11 +48,8 @@ pub async fn transfer_sui_for_testing(
         .execute_transaction(tx)
         .map(move |res| match res {
             Ok((_, effects)) => {
-                // let (_, effects) = *result;
-                // let minted = effects.effects.created.get(0).unwrap().0;
                 let minted = effects.created().get(0).unwrap().0;
                 let updated = effects
-                    // .effects.mutated
                     .mutated()
                     .iter()
                     .find(|(k, _)| k.0 == gas.0 .0)

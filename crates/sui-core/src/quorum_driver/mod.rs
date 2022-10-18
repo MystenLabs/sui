@@ -252,7 +252,7 @@ where
     /// Create a new QuorumDriverHandler based on the same AuthorityAggregator.
     /// Note: the new QuorumDriverHandler will have a new ArcSwap<AuthorityAggregator>
     /// that is NOT tied to the original one. So if there are multiple QuorumDriver(Handler)
-    /// then all of them needs to do reconfigs on their own.
+    /// then all of them need to do reconfigs on their own.
     pub fn clone_new(&self) -> Self {
         let (task_sender, task_rx) = mpsc::channel::<QuorumTask>(TASK_QUEUE_SIZE);
         let (effects_subscribe_sender, subscriber_rx) = tokio::sync::broadcast::channel::<_>(100);

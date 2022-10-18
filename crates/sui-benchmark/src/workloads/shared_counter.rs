@@ -96,7 +96,6 @@ pub async fn publish_basics_package(
 
 #[async_trait]
 impl Workload<dyn Payload> for SharedCounterWorkload {
-    // async fn init(&mut self, aggregator: Arc<AuthorityAggregator<NetworkAuthorityClient>>) {
     async fn init(&mut self, proxy: Arc<dyn ValidatorProxy + Sync + Send>) {
         if self.basics_package_ref.is_some() {
             return;

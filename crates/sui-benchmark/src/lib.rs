@@ -33,6 +33,65 @@ pub mod drivers;
 pub mod util;
 pub mod workloads;
 
+/// A wrapper on execution results to accommodate different types of
+/// responses from LocalValidatorAggregatorProxy and FullNodeProxy
+#[allow(clippy::large_enum_variant)]
+pub enum ExecutionEffects {
+    CertifiedTransactionEffects(CertifiedTransactionEffects),
+    SuiTransactionEffects(SuiTransactionEffects),
+}
+
+impl ExecutionEffects {
+    pub fn mutated(&self) -> Vec<(ObjectRef, Owner)> {
+        match self {
+            ExecutionEffects::CertifiedTransactionEffects(certified_effects) => {
+                certified_effects.effects.mutated.clone()
+            }
+            ExecutionEffects::SuiTransactionEffects(sui_tx_effects) => sui_tx_effects
+                .mutated
+                .clone()
+                .into_iter()
+                .map(|refe| (refe.reference.to_object_ref(), refe.owner))
+                .collect(),
+        }
+    }
+
+    pub fn created(&self) -> Vec<(ObjectRef, Owner)> {
+        match self {
+            ExecutionEffects::CertifiedTransactionEffects(certified_effects) => {
+                certified_effects.effects.created.clone()
+            }
+            ExecutionEffects::SuiTransactionEffects(sui_tx_effects) => sui_tx_effects
+                .created
+                .clone()
+                .into_iter()
+                .map(|refe| (refe.reference.to_object_ref(), refe.owner))
+                .collect(),
+        }
+    }
+
+    pub fn quorum_sig(&self) -> Option<&AuthorityStrongQuorumSignInfo> {
+        match self {
+            ExecutionEffects::CertifiedTransactionEffects(certified_effects) => {
+                Some(&certified_effects.auth_signature)
+            }
+            ExecutionEffects::SuiTransactionEffects(_) => None,
+        }
+    }
+
+    pub fn gas_object(&self) -> (ObjectRef, Owner) {
+        match self {
+            ExecutionEffects::CertifiedTransactionEffects(certified_effects) => {
+                certified_effects.effects.gas_object
+            }
+            ExecutionEffects::SuiTransactionEffects(sui_tx_effects) => {
+                let refe = &sui_tx_effects.gas_object;
+                (refe.reference.to_object_ref(), refe.owner)
+            }
+        }
+    }
+}
+
 #[async_trait]
 pub trait ValidatorProxy {
     async fn get_object(&self, object_id: ObjectID) -> Result<Object, anyhow::Error>;
@@ -152,65 +211,6 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
             _qd_handler: qdh,
             qd,
         })
-    }
-}
-
-/// A wrapper on execution results to accommodate different types of
-/// responses from LocalValidatorAggregatorProxy and FullNodeProxy
-#[allow(clippy::large_enum_variant)]
-pub enum ExecutionEffects {
-    CertifiedTransactionEffects(CertifiedTransactionEffects),
-    SuiTransactionEffects(SuiTransactionEffects),
-}
-
-impl ExecutionEffects {
-    pub fn mutated(&self) -> Vec<(ObjectRef, Owner)> {
-        match self {
-            ExecutionEffects::CertifiedTransactionEffects(certified_effects) => {
-                certified_effects.effects.mutated.clone()
-            }
-            ExecutionEffects::SuiTransactionEffects(sui_tx_effects) => sui_tx_effects
-                .mutated
-                .clone()
-                .into_iter()
-                .map(|refe| (refe.reference.to_object_ref(), refe.owner))
-                .collect(),
-        }
-    }
-
-    pub fn created(&self) -> Vec<(ObjectRef, Owner)> {
-        match self {
-            ExecutionEffects::CertifiedTransactionEffects(certified_effects) => {
-                certified_effects.effects.created.clone()
-            }
-            ExecutionEffects::SuiTransactionEffects(sui_tx_effects) => sui_tx_effects
-                .created
-                .clone()
-                .into_iter()
-                .map(|refe| (refe.reference.to_object_ref(), refe.owner))
-                .collect(),
-        }
-    }
-
-    pub fn quorum_sig(&self) -> Option<&AuthorityStrongQuorumSignInfo> {
-        match self {
-            ExecutionEffects::CertifiedTransactionEffects(certified_effects) => {
-                Some(&certified_effects.auth_signature)
-            }
-            ExecutionEffects::SuiTransactionEffects(_) => None,
-        }
-    }
-
-    pub fn gas_object(&self) -> (ObjectRef, Owner) {
-        match self {
-            ExecutionEffects::CertifiedTransactionEffects(certified_effects) => {
-                certified_effects.effects.gas_object
-            }
-            ExecutionEffects::SuiTransactionEffects(sui_tx_effects) => {
-                let refe = &sui_tx_effects.gas_object;
-                (refe.reference.to_object_ref(), refe.owner)
-            }
-        }
     }
 }
 
