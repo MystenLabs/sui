@@ -16,8 +16,8 @@
 
 ## Function `hmac_sha2_256`
 
-@param key: HMAC key, arbitrary bytes
-@param msg: message to sign, arbitrary bytes
+@param key: HMAC key, arbitrary bytes.
+@param msg: message to sign, arbitrary bytes.
 Returns the 32 bytes output of HMAC-SHA2-256(key, msg).
 
 

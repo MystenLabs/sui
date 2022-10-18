@@ -410,7 +410,7 @@ pub fn ed25519_verify(
     }
 }
 
-/// Native implementation of hmac-sha2-256 in public Move API, see crypto.move for specifications.
+/// Native implementation of hmac-sha2-256 in public Move API, see hash.move for specifications.
 pub fn hmac_sha2_256(
     _context: &mut NativeContext,
     ty_args: Vec<Type>,
