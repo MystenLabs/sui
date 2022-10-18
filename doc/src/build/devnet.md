@@ -40,7 +40,7 @@ If the command doesn't return a path to the command you need to install Sui.
 
 ## Configure Sui client
 
-Now set up your Sui Client CLI to connect to Sui Devnet. You can manually change the RPC endpoint URL if you previously configured a Sui client.
+Now set up your Sui Client CLI to connect to Sui Devnet.
 
 To connect the Sui client to Sui Devnet, run the following command:
 ```shell

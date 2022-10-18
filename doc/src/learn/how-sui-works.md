@@ -6,9 +6,11 @@ This document is written for engineers, developers, and technical readers knowle
 
 ## tl;dr
 
-The Sui blockchain operates at a speed and scale previously thought unattainable. Sui assumes the typical blockchain transaction is a simple transfer and optimizes for that use. Sui does this by making each request idempotent, holding network connections open longer, and ensuring transactions complete immediately. Sui optimizes for single-writer objects, allowing a design that forgoes consensus for simple transactions.
+The Sui blockchain operates at a speed and scale previously thought unattainable. Sui assumes most blockchain transactions touch non-overlapping states, meaning that transactions can run in parallel. Sui optimizes for single-writer objects, allowing a design that forgoes consensus for simple transactions.
 
-Instead of the traditional blockchain’s fire-and-forget broadcast, Sui ensures a two-way handshake between the requestor and approving validators, with simple transactions having near instant finality. With this low latency, transactions can easily be incorporated into games and other settings that need completion in real time. Furthermore, Sui supports smart contracts written in Move, a language designed for blockchains with strong inherent security and a more understandable programming model.
+Instead of the traditional blockchain’s fire-and-forget broadcast, Sui's design enables a requestor or a proxy to proactively talk to validators to bring a transaction to finality. This results in near instant finality for simple transactions.
+
+With this low latency, Sui makes it easy to incorporate transactions into games and other settings that need completion in real time. Sui also supports smart contracts written in Move, a language designed for blockchains with strong inherent security and a more understandable programming model.
 
 In a world where the cost of bandwidth is diminishing steadily, we are creating an ecosystem of services that will find it easy, fun, and perhaps profitable to ensure transaction voting on behalf of users.
 

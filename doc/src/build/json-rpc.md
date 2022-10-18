@@ -1,39 +1,20 @@
 ---
-title: RPC Server & JSON-RPC API Quick Start
+title: JSON-RPC API Quick Start
 ---
 
-Welcome to the guide for making remote procedure calls (RPC) to the Sui network. This document walks you through connecting to Sui and using the Sui JSON-RPC API to interact with the Sui network. Use the RPC layer to send your dApp transactions to [Sui validators](../learn/architecture/validators.md) for verification.
+Welcome to the guide for making remote procedure calls (RPC) to the Sui network. This document walks you through connecting to Sui and how to the Sui JSON-RPC API to interact with the Sui network. Use the RPC layer to send your dApp transactions to [Sui validators](../learn/architecture/validators.md) for verification.
 
 This guide is useful for developers interested in Sui network interactions via API and should be used in conjunction with the [SuiJSON format](sui-json.md) for aligning JSON inputs with Move Call arguments.
 
 For a similar guide on Sui network interactions via CLI, refer to the [Sui CLI client](cli-client.md) documentation.
 
-## Set up RPC server
 Follow the instructions to [install Sui binaries](install.md).
 
-### Connect to Sui network
+### Connect to a Sui network
 
-#### Remote Devnet
-Simply [connect to the Sui Devnet](../build/devnet.md) to start making RPC calls to our remote server, build on top of Sui.
+You can connect to a Sui Full node on Devnet. Follow the guidance in the [Connect to Sui Devnet](../build/devnet.md) topic to start making RPC calls to the Sui network.
 
-#### Local Sui Network
-Alternatively, to [contribute](../contribute/index.md) to Sui itself, you may follow the instructions to [create](cli-client.md#genesis) and [start](cli-client.md#starting-the-network) a local Sui network.
-
-The genesis process will create a `gateway.yaml` configuration file that will be used by the RPC server.
-
-### Start RPC server
-
-Use the following command to start an RPC server:
-```shell
-$ rpc-server
-```
-> **Note:** For additional logs, set `RUST_LOG=debug` before invoking `rpc-server`.
-
-Export a local user variable to store the hardcoded hostname + port for the local RPC server. You can then use it in `curl` commands.
-
-```shell
-export SUI_RPC_HOST=http://127.0.0.1:5001
-```
+To configure your own Sui Full node, see [Configure a Sui Full node](fullnode.md).
 
 ## Sui SDKs
 

@@ -18,7 +18,10 @@ The network that genesis creates includes four validators and five user accounts
    $ sui genesis
    ```
 
-The first time you use the client CLI, it creates a client.yaml file. If you use the default values, it connects to a Sui Devnet Full node. When you run genesis to create a local network, if the .sui/sui_config folder contains a client.yaml file, the genesis process warns you that the folder must be empty. You can use the `--force` argument to replace the configuration files, or use `--working-dir` to specify a different directory for the network configuration files.
+### Run genesis after using the Client CLI
+If you used the Sui Client CLI before you create a local network, it created a client.yaml file. If you used the default values, it connects to a Sui Devnet Full node. 
+
+When you run genesis to create a local network, if the .sui/sui_config folder - where the client.yaml is stored - already contains a client.yaml file, the genesis process warns you that the folder must be empty. You can use the `--force` argument to replace the configuration files, or use `--working-dir` to specify a different directory for the network configuration files.
 
 Use the following command to overwrite existing configuration files with default values.
    ```shell
@@ -34,7 +37,7 @@ The directory must already exist, and be empty, before you run the command.
 
 #### Embedded gateway
 
-You can use an embedded gateway with your local network. The gateway.yaml file contains information about the embedded gateway.
+You can use an embedded gateway with your local network. The gateway.yaml file contains information about the embedded gateway. The embedded gateway will be deprecated in a future release of Sui.
 
 ## Start the local network
 

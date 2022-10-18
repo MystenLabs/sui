@@ -4,10 +4,6 @@ title: Sui Glossary
 
 Find terms used in Sui defined below. Where possible, we link to a canonical definition and focus upon Sui’s use of the term.
 
-### Accumulator
-
-An *accumulator* makes sure the transaction is received by a quorum of validators, collects a quorum of votes, submits the certificate to the validators, and replies to the client. The accumulator enables transactions to be certified.
-
 ### Causal history
 
 Causal history is the relationship between an object in Sui and its direct predecessors and successors. This history is essential to the causal order Sui uses to process transactions. In contrast, other blockchains read the entire state of their world for each transaction,

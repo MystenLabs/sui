@@ -4,8 +4,7 @@ title: Run a Sui Full node
 
 Sui Full nodes run a service that validates blockchain activities, including transactions, checkpoints, and epoch changes etc. It stores and services the queries for the blockchain state and history.
 
-This role enables [validators](../learn/architecture/validators.md) (or miners in
-other networks) to focus on servicing the write path and processing transactions as fast as possible. Once a validator has committed a new set of transactions (or a block of transactions), the validator will push that block to connected Full nodes who will then service the queries from clients.
+This role enables [validators](../learn/architecture/validators.md) to focus on servicing and processing transactions as fast as possible. When a validator commits a new set of transactions (or a block of transactions), the validator pushes that block to all connected Full nodes that then service the queries from clients.
 
 ## Features
 
@@ -13,13 +12,12 @@ Sui Full nodes:
 
 * Track and verify the state of the blockchain, independently and locally.
 * Serve read requests from clients.
-* Conduct local app testing against verified data.
 
 ## State synchronization
 
-Sui Full nodes sync with validators to receive newly committed transactions.
+Sui Full nodes sync with validators to receive new transactions on the network.
 
-A transaction requires a few round trips to 2f+1 validators to be able to form a TxCert, at which point a transaction is guaranteed to be committed and executed.
+A transaction requires a few round trips to 2f+1 validators to form a transaction certificate (TxCert).
 
 This synchronization process is performed by:
 
@@ -62,36 +60,21 @@ We recommend the following minimum hardware requirements for running a Full node
 
 ### Software requirements
 
-We recommend running Sui Full nodes on Linux. The Sui team supports the Ubuntu and
-Debian distributions and tests against
-[Ubuntu version 18.04 (Bionic Beaver)](https://releases.ubuntu.com/18.04/).
+We recommend running Sui Full nodes on Linux. Sui supports the Ubuntu and
+Debian distributions and tests against [Ubuntu version 18.04 (Bionic Beaver)](https://releases.ubuntu.com/18.04/).
 
-That said, you are welcome to run a Sui Full node on the operating system of your
-choosing and submit changes to accommodate that environment. See [Install Sui](../build/install.md)
-for setup instructions for each operating system.
+Sui also supports macOS and Windows operating systems. See [Install Sui](../build/install.md) for setup instructions for each operating system.
 
-Specifically, ensure the required tools are installed and updated in your environment as
-outlined in the [Prerequisites](../build/install.md#prerequisites) section. In particular,
-ensure [Rust](../build/install.md#rust) is up-to-date.
-
-Similarly, if you are using Windows Subsystem for Linux (WSL), install a fresh copy of
-[CLang/LLVM](https://releases.llvm.org/download.html), as described in [Prerequisites](../build/install.md#prerequisites).
-
-Note, you will fork the Sui repository here rather than clone it as described in
-*Prerequisites*. So you can skip that step.
+Make sure to update to the latest version of [Rust](../build/install.md#rust).
 
 If you are using Linux, install these extra dependencies. For example, in Ubuntu, run:
 ```shell
     $ apt-get update \
     && apt-get install -y --no-install-recommends \
     tzdata \
-    git \
     ca-certificates \
-    curl \
     build-essential \
-    libssl-dev \
     pkg-config \
-    libclang-dev \
     cmake
 ```
 
@@ -99,14 +82,13 @@ If you are using macOS or Windows Subsystem for Linux (WSL), the command will be
 
 ## Configure a Full node
 
-You may run a Full node either by employing Docker or by building from
+You can configure a Sui Full node either using Docker or by building from
 source.
 
 ### Using Docker Compose
 
 Follow the instructions in the
-[Full node Docker README](https://github.com/MystenLabs/sui/tree/main/docker/fullnode#readme)
-to run a Sui Full node using Docker, including [resetting the environment](https://github.com/MystenLabs/sui/tree/main/docker/fullnode#reset-the-environment).
+[Full node Docker README](https://github.com/MystenLabs/sui/tree/main/docker/fullnode#readme) to run a Sui Full node using Docker, including [resetting the environment](https://github.com/MystenLabs/sui/tree/main/docker/fullnode#reset-the-environment).
 
 ### Building from source
 
