@@ -219,6 +219,38 @@ const moveCallTxn = await signer.executeMoveCallWithRequestType({
 console.log('moveCallTxn', moveCallTxn);
 ```
 
+Subscribe to all events created by transactions sent by account `0xbff6ccc8707aa517b4f1b95750a2a8c666012df3`
+
+```typescript
+import { JsonRpcProvider } from '@mysten/sui.js';
+const provider = new JsonRpcProvider('https://fullnode.devnet.sui.io:443');
+
+const subscriptionId = await provider.subscribeEvent(
+  { SenderAddress: '0xbff6ccc8707aa517b4f1b95750a2a8c666012df3' },
+  (eventMessage: SuiEventEnvelope) => {
+    // handle subscription notification message here
+  }
+);
+
+// later, to unsubscribe
+const subFoundAndRemoved = await provider.unsubscribeEvent(devNftSub);
+```
+
+Subscribe to all events created by the `devnet_nft` module
+
+```typescript
+const devnetNftFilter = {
+  All: [
+    {EventType:  "MoveEvent"},
+    {Package: "0x2"},
+    {Module: "devnet_nft"}
+  ]
+};
+const devNftSub = await provider.subscribeEvent(devnetNftFilter, (event: SuiEventEnvelope) => {
+    // handle subscription notification message here
+});
+```
+
 To publish a package:
 
 ```typescript
@@ -272,3 +304,4 @@ const signer = new RawSigner(
   new LocalTxnDataSerializer(provider)
 );
 ```
+
