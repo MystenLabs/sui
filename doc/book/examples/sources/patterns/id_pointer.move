@@ -12,9 +12,6 @@
 /// this approach is that the target asset is always discoverable while its
 /// `Key` can be wrapped into another object (eg a marketplace listing).
 module examples::lock_and_key {
-    use sui::transfer;
-    use sui::tx_context::{TxContext};
-
     use sui::object::{Self, ID, UID};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
