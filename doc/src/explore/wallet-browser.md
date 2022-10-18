@@ -89,8 +89,9 @@ You can also set a timer to automatically lock your wallet after a period of idl
 
 1. Click the menu (the three bars) at the top-right corner of the Sui Wallet interface.
 1. Click **Account**.
-1. In the field under **AUTO-LOCK TIMER**, enter a number for the number of minutes of idle time before the wallet locks, and then click **Save**.
+1. In the field under **AUTO-LOCK TIMER**, enter the number of minutes to wait, up to 30, before the wallet locks, and then click **Save**.
 
+Sui Wallet locks automatically if you change tabs in your browser.
 
 ## Change the active network
 
