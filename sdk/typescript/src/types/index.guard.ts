@@ -1286,7 +1286,14 @@ export function isCallArg(obj: any, _argumentName?: string): obj is CallArg {
             (obj !== null &&
                 typeof obj === "object" ||
                 typeof obj === "function") &&
-            isObjectArg(obj.Object) as boolean)
+            isObjectArg(obj.Object) as boolean ||
+            (obj !== null &&
+                typeof obj === "object" ||
+                typeof obj === "function") &&
+            (obj.ObjVec !== null &&
+                typeof obj.ObjVec === "object" ||
+                typeof obj.ObjVec === "function") &&
+            isSuiMoveTypeParameterIndex(obj.ObjVec.length) as boolean)
     )
 }
 

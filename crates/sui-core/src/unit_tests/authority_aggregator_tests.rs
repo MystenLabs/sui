@@ -8,9 +8,9 @@ use multiaddr::Multiaddr;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use sui_config::gateway::GatewayConfig;
 use sui_config::genesis::Genesis;
 use sui_config::ValidatorInfo;
+use sui_network::{DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_REQUEST_TIMEOUT_SEC};
 use sui_types::crypto::{
     generate_proof_of_possession, get_authority_key_pair, get_key_pair, AccountKeyPair,
     AuthorityKeyPair, AuthorityPublicKeyBytes, NetworkKeyPair, SuiKeyPair,
@@ -40,27 +40,20 @@ use tokio::time::Instant;
 #[cfg(msim)]
 use sui_simulator::configs::constant_latency_ms;
 
-pub async fn init_network_authorities(
+async fn init_network_authorities(
     committee_size: usize,
     genesis_objects: Vec<Object>,
 ) -> AuthorityAggregator<NetworkAuthorityClient> {
     let configs = test_and_configure_authority_configs(committee_size);
     let _nodes = spawn_test_authorities(genesis_objects, &configs).await;
-    let gateway_config = GatewayConfig {
-        epoch: 0,
-        validator_set: configs.validator_set().to_vec(),
-        send_timeout: Duration::from_secs(4),
-        recv_timeout: Duration::from_secs(4),
-        buffer_size: 650000,
-        db_folder_path: PathBuf::from("/tmp/client_db"),
-    };
-    let committee = make_committee(gateway_config.epoch, &gateway_config.validator_set).unwrap();
+
+    let committee = make_committee(0, configs.validator_set()).unwrap();
     let committee_store = Arc::new(CommitteeStore::new_for_testing(&committee));
 
     let auth_clients = make_authority_clients(
-        &gateway_config.validator_set,
-        gateway_config.send_timeout,
-        gateway_config.recv_timeout,
+        configs.validator_set(),
+        DEFAULT_CONNECT_TIMEOUT_SEC,
+        DEFAULT_REQUEST_TIMEOUT_SEC,
         Arc::new(NetworkAuthorityClientMetrics::new_for_tests()),
     );
 

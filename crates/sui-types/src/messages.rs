@@ -2116,7 +2116,7 @@ pub struct CommitteeInfoRequest {
     pub epoch: Option<EpochId>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, schemars::JsonSchema, Debug)]
 pub struct CommitteeInfoResponse {
     pub epoch: EpochId,
     pub committee_info: Option<Vec<(AuthorityName, StakeUnit)>>,

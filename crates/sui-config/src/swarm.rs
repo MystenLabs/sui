@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::p2p::P2pConfig;
 use crate::{builder, genesis, utils, Config, NodeConfig, ValidatorInfo, FULL_NODE_DB_PATH};
 use rand::rngs::OsRng;
 use rand::RngCore;
@@ -95,13 +96,20 @@ impl NetworkConfig {
         } else {
             FULL_NODE_DB_PATH.to_string()
         };
+
+        let network_address = utils::new_network_address();
+        let p2p_config = P2pConfig {
+            listen_address: utils::available_local_socket_address(),
+            ..Default::default()
+        };
+
         NodeConfig {
             protocol_key_pair,
             worker_key_pair,
             account_key_pair,
             network_key_pair,
             db_path: db_path.join(dir_name),
-            network_address: utils::new_network_address(),
+            network_address,
             metrics_address: utils::available_local_socket_address(),
             admin_interface_port: utils::get_available_port(),
             json_rpc_address: utils::available_local_socket_address(),
@@ -118,6 +126,7 @@ impl NetworkConfig {
             genesis: validator_config.genesis.clone(),
             grpc_load_shed: None,
             grpc_concurrency_limit: None,
+            p2p_config,
         }
     }
 }

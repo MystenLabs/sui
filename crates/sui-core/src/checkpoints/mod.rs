@@ -381,6 +381,14 @@ impl CheckpointStore {
         effects_store: impl CausalOrder,
         next_epoch_committee: Option<Committee>,
     ) -> SuiResult {
+        // Make sure that all transactions in the checkpoint show up in extra_transactions.
+        // Although this is not needed when storing a new checkpoint certificate, it is required
+        // when signing a new checkpoint locally. This is because in order to sign a new checkpoint
+        // we need to causally order the transactions in it. The causal ordering process requires
+        // knowing whether all dependencies are either already checkpointed or included in the new
+        // checkpoint.
+        self.check_checkpoint_transactions(transactions.clone())?;
+
         let previous_digest = self.get_prev_checkpoint_digest(sequence_number)?;
 
         // Create a causal order of all transactions in the checkpoint.
@@ -767,10 +775,22 @@ impl CheckpointStore {
         committee: &Committee,
     ) -> SuiResult {
         checkpoint.verify(committee, None)?;
-        debug_assert!(matches!(
-            self.latest_stored_checkpoint(),
-            Some(AuthenticatedCheckpoint::Signed(_))
-        ));
+        match self.latest_stored_checkpoint() {
+            Some(AuthenticatedCheckpoint::Signed(s)) => {
+                if s.summary != checkpoint.summary {
+                    error!(
+                        cp_seq=checkpoint.summary.sequence_number,
+                        "Local signed checkpoint is not the same as the checkpoint cert. Most likely local checkpoint has forked. cert: {}, local signed: {}",
+                        checkpoint.summary,
+                        s.summary,
+                    );
+                    panic!();
+                }
+            }
+            _ => {
+                unreachable!("Can never call promote_signed_checkpoint_to_cert when there is no signed checkpoint locally");
+            }
+        }
         let seq = checkpoint.summary.sequence_number();
         self.tables
             .checkpoints
@@ -778,6 +798,20 @@ impl CheckpointStore {
         self.notify_new_checkpoint(checkpoint.clone());
         self.clear_proposal(*seq + 1)?;
         Ok(())
+    }
+
+    /// Processes a checkpoint certificate that this validator just learned about.
+    /// Such certificate may either be created locally based on a quorum of signed checkpoints,
+    /// or downloaded from other validators to sync local checkpoint state.
+    #[cfg(test)]
+    pub fn process_new_checkpoint_certificate(
+        &mut self,
+        checkpoint: &CertifiedCheckpointSummary,
+        contents: &CheckpointContents,
+        committee: &Committee,
+    ) -> SuiResult {
+        self.check_checkpoint_transactions(contents.iter())?;
+        self.process_synced_checkpoint_certificate(checkpoint, contents, committee)
     }
 
     /// Unlike process_new_checkpoint_certificate this does not verify that transactions are executed
@@ -955,12 +989,33 @@ impl CheckpointStore {
         Ok(checkpoint_proposal)
     }
 
+    fn check_checkpoint_transactions<'a>(
+        &self,
+        transactions: impl Iterator<Item = &'a ExecutionDigests> + Clone,
+    ) -> SuiResult {
+        fp_ensure!(
+            self.tables
+                .extra_transactions
+                .multi_get(transactions)?
+                .into_iter()
+                .all(|s| s.is_some()),
+            // This should never happen (unless called directly from tests).
+            SuiError::CheckpointingError {
+                error: "Some transactions are not in extra_transactions".to_string()
+            }
+        );
+        Ok(())
+    }
+
     #[cfg(test)]
     pub fn update_new_checkpoint(
         &mut self,
         seq: CheckpointSequenceNumber,
         transactions: &CheckpointContents,
     ) -> Result<(), SuiError> {
+        // Ensure we have processed all transactions contained in this checkpoint.
+        self.check_checkpoint_transactions(transactions.iter())?;
+
         let batch = self.tables.transactions_to_checkpoint.batch();
         self.update_new_checkpoint_inner(seq, transactions, batch)?;
         Ok(())
