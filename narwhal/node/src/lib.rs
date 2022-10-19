@@ -187,7 +187,7 @@ impl Node {
             PrimaryChannelMetrics::DESC_COMMITTED_CERTS,
         )
         .unwrap();
-        let (tx_consensus, rx_consensus) =
+        let (tx_committed_certificates, rx_committed_certificates) =
             metered_channel::channel(Self::CHANNEL_CAPACITY, &committed_certificates_counter);
 
         // Compute the public key of this authority.
@@ -213,7 +213,7 @@ impl Node {
                 execution_state,
                 &tx_reconfigure,
                 rx_new_certificates,
-                tx_consensus.clone(),
+                tx_committed_certificates.clone(),
                 registry,
             )
             .await?;
@@ -252,11 +252,11 @@ impl Node {
             store.vote_digest_store.clone(),
             store.consensus_store.clone(),
             tx_new_certificates,
-            rx_consensus,
+            rx_committed_certificates,
             dag,
             network_model,
             tx_reconfigure,
-            tx_consensus,
+            tx_committed_certificates,
             registry,
             Some(rx_executor_network),
         );
@@ -293,7 +293,7 @@ impl Node {
         execution_state: State,
         tx_reconfigure: &watch::Sender<ReconfigureNotification>,
         rx_new_certificates: metered_channel::Receiver<Certificate>,
-        tx_feedback: metered_channel::Sender<Certificate>,
+        tx_committed_certificates: metered_channel::Sender<Certificate>,
         registry: &Registry,
     ) -> SubscriberResult<Vec<JoinHandle<()>>>
     where
@@ -339,9 +339,9 @@ impl Node {
             store.consensus_store.clone(),
             store.certificate_store.clone(),
             tx_reconfigure.subscribe(),
-            /* rx_primary */ rx_new_certificates,
-            /* tx_primary */ tx_feedback,
-            /* tx_output */ tx_sequence,
+            rx_new_certificates,
+            tx_committed_certificates,
+            tx_sequence,
             ordering_engine,
             consensus_metrics.clone(),
             parameters.gc_depth,
@@ -356,7 +356,7 @@ impl Node {
             (**committee.load()).clone(),
             execution_state,
             tx_reconfigure,
-            /* rx_consensus */ rx_sequence,
+            rx_sequence,
             registry,
             restored_consensus_output,
         )?;

@@ -66,7 +66,7 @@ pub struct PrimaryChannelMetrics {
     /// occupancy of the channel from the `primary::Proposer` to the `primary::Core`
     pub tx_headers: IntGauge,
     /// occupancy of the channel from the `primary::Synchronizer` to the `primary::HeaderWaiter`
-    pub tx_sync_headers: IntGauge,
+    pub tx_header_waiter: IntGauge,
     /// occupancy of the channel from the `primary::Synchronizer` to the `primary::CertificaterWaiter`
     pub tx_certificate_waiter: IntGauge,
     /// occupancy of the channel from the `primary::HeaderWaiter` to the `primary::Core`
@@ -100,7 +100,7 @@ pub struct PrimaryChannelMetrics {
     /// total received on channel from the `primary::Proposer` to the `primary::Core`
     pub tx_headers_total: IntCounter,
     /// total received on channel from the `primary::Synchronizer` to the `primary::HeaderWaiter`
-    pub tx_sync_headers_total: IntCounter,
+    pub tx_header_waiter_total: IntCounter,
     /// total received on channel from the `primary::Synchronizer` to the `primary::CertificaterWaiter`
     pub tx_certificate_waiter_total: IntCounter,
     /// total received on channel from the `primary::HeaderWaiter` to the `primary::Core`
@@ -170,7 +170,7 @@ impl PrimaryChannelMetrics {
                 "occupancy of the channel from the `primary::Proposer` to the `primary::Core`",
                 registry
             ).unwrap(),
-            tx_sync_headers: register_int_gauge_with_registry!(
+            tx_header_waiter: register_int_gauge_with_registry!(
                 "tx_sync_headers",
                 "occupancy of the channel from the `primary::Synchronizer` to the `primary::HeaderWaiter`",
                 registry
@@ -252,7 +252,7 @@ impl PrimaryChannelMetrics {
                 "total received on channel from the `primary::Proposer` to the `primary::Core`",
                 registry
             ).unwrap(),
-            tx_sync_headers_total: register_int_counter_with_registry!(
+            tx_header_waiter_total: register_int_counter_with_registry!(
                 "tx_sync_headers_total",
                 "total received on channel from the `primary::Synchronizer` to the `primary::HeaderWaiter`",
                 registry

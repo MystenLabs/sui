@@ -60,17 +60,17 @@ pub struct Core {
     /// Watch channel to reconfigure the committee.
     rx_reconfigure: watch::Receiver<ReconfigureNotification>,
     /// Receiver for dag messages (headers, votes, certificates).
-    rx_primaries: Receiver<PrimaryMessage>,
+    rx_primary_messages: Receiver<PrimaryMessage>,
     /// Receives loopback headers from the `HeaderWaiter`.
     rx_headers_loopback: Receiver<Header>,
     /// Receives loopback certificates from the `CertificateWaiter`.
     rx_certificates_loopback: Receiver<CertificateLoopbackMessage>,
     /// Receives our newly created headers from the `Proposer`.
-    rx_proposer: Receiver<Header>,
+    rx_headers: Receiver<Header>,
     /// Output all certificates to the consensus layer.
-    tx_consensus: Sender<Certificate>,
+    tx_new_certificates: Sender<Certificate>,
     /// Send valid a quorum of certificates' ids to the `Proposer` (along with their round).
-    tx_proposer: Sender<(Vec<Certificate>, Round, Epoch)>,
+    tx_parents: Sender<(Vec<Certificate>, Round, Epoch)>,
 
     /// The last garbage collected round.
     gc_round: Round,
@@ -110,13 +110,13 @@ impl Core {
         signature_service: SignatureService<Signature, { crypto::DIGEST_LENGTH }>,
         rx_consensus_round_updates: watch::Receiver<u64>,
         gc_depth: Round,
-        rx_committee: watch::Receiver<ReconfigureNotification>,
-        rx_primaries: Receiver<PrimaryMessage>,
+        rx_reconfigure: watch::Receiver<ReconfigureNotification>,
+        rx_primary_messages: Receiver<PrimaryMessage>,
         rx_headers_loopback: Receiver<Header>,
         rx_certificates_loopback: Receiver<CertificateLoopbackMessage>,
-        rx_proposer: Receiver<Header>,
-        tx_consensus: Sender<Certificate>,
-        tx_proposer: Sender<(Vec<Certificate>, Round, Epoch)>,
+        rx_headers: Receiver<Header>,
+        tx_new_certificates: Sender<Certificate>,
+        tx_parents: Sender<(Vec<Certificate>, Round, Epoch)>,
         metrics: Arc<PrimaryMetrics>,
         primary_network: P2pNetwork,
     ) -> JoinHandle<()> {
@@ -131,13 +131,13 @@ impl Core {
                 signature_service,
                 rx_consensus_round_updates,
                 gc_depth,
-                rx_reconfigure: rx_committee,
-                rx_primaries,
+                rx_reconfigure,
+                rx_primary_messages,
                 rx_headers_loopback,
                 rx_certificates_loopback,
-                rx_proposer,
-                tx_consensus,
-                tx_proposer,
+                rx_headers,
+                tx_new_certificates,
+                tx_parents,
                 gc_round: 0,
                 highest_received_round: 0,
                 highest_processed_round: 0,
@@ -470,7 +470,7 @@ impl Core {
         //
         // This allows the proposer not to fire proposals at rounds strictly below the certificate we witnessed.
         let minimal_round_for_parents = certificate.round().saturating_sub(1);
-        self.tx_proposer
+        self.tx_parents
             .send((vec![], minimal_round_for_parents, certificate.epoch()))
             .await
             .map_err(|_| DagError::ShuttingDown)?;
@@ -523,7 +523,7 @@ impl Core {
 
         // Send it to the consensus layer.
         let id = certificate.header.id;
-        if let Err(e) = self.tx_consensus.send(certificate).await {
+        if let Err(e) = self.tx_new_certificates.send(certificate).await {
             warn!(
                 "Failed to deliver certificate {} to the consensus: {}",
                 id, e
@@ -544,7 +544,7 @@ impl Core {
             .append(certificate.clone(), &self.committee)
         {
             // Send it to the `Proposer`.
-            self.tx_proposer
+            self.tx_parents
                 .send((parents, certificate.round(), certificate.epoch()))
                 .await
                 .map_err(|_| DagError::ShuttingDown)?;
@@ -690,7 +690,7 @@ impl Core {
         loop {
             let result = tokio::select! {
                 // We receive here messages from other primaries.
-                Some(message) = self.rx_primaries.recv() => {
+                Some(message) = self.rx_primary_messages.recv() => {
                     match message {
                         PrimaryMessage::Header(header) => {
                             match self.sanitize_header(&header).await {
@@ -741,7 +741,7 @@ impl Core {
                 },
 
                 // We also receive here our new headers created by the `Proposer`.
-                Some(header) = self.rx_proposer.recv() => self.process_own_header(header).await,
+                Some(header) = self.rx_headers.recv() => self.process_own_header(header).await,
 
                 // Check whether the committee changed.
                 result = self.rx_reconfigure.changed() => {

@@ -66,7 +66,7 @@ impl Executor {
 
         execution_state: State,
         tx_reconfigure: &watch::Sender<ReconfigureNotification>,
-        rx_consensus: metered_channel::Receiver<ConsensusOutput>,
+        rx_sequence: metered_channel::Receiver<ConsensusOutput>,
         registry: &Registry,
         restored_consensus_output: Vec<ConsensusOutput>,
     ) -> SubscriberResult<Vec<JoinHandle<()>>>
@@ -88,7 +88,7 @@ impl Executor {
             worker_cache,
             committee,
             tx_reconfigure.subscribe(),
-            rx_consensus,
+            rx_sequence,
             tx_notifier,
             arc_metrics.clone(),
             restored_consensus_output,

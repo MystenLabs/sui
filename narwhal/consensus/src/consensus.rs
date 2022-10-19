@@ -206,11 +206,11 @@ pub struct Consensus<ConsensusProtocol> {
     rx_reconfigure: watch::Receiver<ReconfigureNotification>,
     /// Receives new certificates from the primary. The primary should send us new certificates only
     /// if it already sent us its whole history.
-    rx_primary: metered_channel::Receiver<Certificate>,
+    rx_new_certificates: metered_channel::Receiver<Certificate>,
     /// Outputs the sequence of ordered certificates to the primary (for cleanup and feedback).
-    tx_primary: metered_channel::Sender<Certificate>,
+    tx_committed_certificates: metered_channel::Sender<Certificate>,
     /// Outputs the sequence of ordered certificates to the application layer.
-    tx_output: metered_channel::Sender<ConsensusOutput>,
+    tx_sequence: metered_channel::Sender<ConsensusOutput>,
 
     /// The (global) consensus index. We assign one index to each sequenced certificate. this is
     /// helpful for clients.
@@ -236,9 +236,9 @@ where
         store: Arc<ConsensusStore>,
         cert_store: CertificateStore,
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
-        rx_primary: metered_channel::Receiver<Certificate>,
-        tx_primary: metered_channel::Sender<Certificate>,
-        tx_output: metered_channel::Sender<ConsensusOutput>,
+        rx_new_certificates: metered_channel::Receiver<Certificate>,
+        tx_committed_certificates: metered_channel::Sender<Certificate>,
+        tx_sequence: metered_channel::Sender<ConsensusOutput>,
         protocol: Protocol,
         metrics: Arc<ConsensusMetrics>,
         gc_depth: Round,
@@ -260,9 +260,9 @@ where
         let s = Self {
             committee,
             rx_reconfigure,
-            rx_primary,
-            tx_primary,
-            tx_output,
+            rx_new_certificates,
+            tx_committed_certificates,
+            tx_sequence,
             consensus_index,
             protocol,
             metrics,
@@ -290,7 +290,7 @@ where
         // Listen to incoming certificates.
         loop {
             tokio::select! {
-                Some(certificate) = self.rx_primary.recv() => {
+                Some(certificate) = self.rx_new_certificates.recv() => {
                     // If the core already moved to the next epoch we should pull the next
                     // committee as well.
                     match certificate.epoch().cmp(&self.committee.epoch()) {
@@ -350,12 +350,12 @@ where
                                 .set((mysten_util_mem::malloc_size(&self.state.dag) + std::mem::size_of::<Dag>()) as i64);
                         }
 
-                        self.tx_primary
+                        self.tx_committed_certificates
                             .send(certificate.clone())
                             .await
                             .expect("Failed to send certificate to primary");
 
-                        if let Err(e) = self.tx_output.send(output).await {
+                        if let Err(e) = self.tx_sequence.send(output).await {
                             tracing::warn!("Failed to output certificate: {e}");
                         }
                     }

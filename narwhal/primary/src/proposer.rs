@@ -45,12 +45,12 @@ pub struct Proposer {
 
     /// Watch channel to reconfigure the committee.
     rx_reconfigure: watch::Receiver<ReconfigureNotification>,
-    /// Receives the parents to include in the next header (along with their round number).
-    rx_core: Receiver<(Vec<Certificate>, Round, Epoch)>,
+    /// Receives the parents to include in the next header (along with their round number) from core.
+    rx_parents: Receiver<(Vec<Certificate>, Round, Epoch)>,
     /// Receives the batches' digests from our workers.
-    rx_workers: Receiver<(BatchDigest, WorkerId)>,
+    rx_our_digests: Receiver<(BatchDigest, WorkerId)>,
     /// Sends newly created headers to the `Core`.
-    tx_core: Sender<Header>,
+    tx_headers: Sender<Header>,
 
     /// The proposer store for persisting the last header.
     proposer_store: ProposerStore,
@@ -79,9 +79,9 @@ impl Proposer {
         max_header_delay: Duration,
         network_model: NetworkModel,
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
-        rx_core: Receiver<(Vec<Certificate>, Round, Epoch)>,
-        rx_workers: Receiver<(BatchDigest, WorkerId)>,
-        tx_core: Sender<Header>,
+        rx_parents: Receiver<(Vec<Certificate>, Round, Epoch)>,
+        rx_our_digests: Receiver<(BatchDigest, WorkerId)>,
+        tx_headers: Sender<Header>,
         metrics: Arc<PrimaryMetrics>,
     ) -> JoinHandle<()> {
         let genesis = Certificate::genesis(&committee);
@@ -95,9 +95,9 @@ impl Proposer {
                 max_header_delay,
                 network_model,
                 rx_reconfigure,
-                rx_core,
-                rx_workers,
-                tx_core,
+                rx_parents,
+                rx_our_digests,
+                tx_headers,
                 proposer_store,
                 round: 0,
                 last_parents: genesis,
@@ -152,7 +152,7 @@ impl Proposer {
         }
 
         // Send the new header to the `Core` that will broadcast and process it.
-        self.tx_core
+        self.tx_headers
             .send(header)
             .await
             .map_err(|_| DagError::ShuttingDown)
@@ -299,7 +299,7 @@ impl Proposer {
             }
 
             tokio::select! {
-                Some((parents, round, epoch)) = self.rx_core.recv() => {
+                Some((parents, round, epoch)) = self.rx_parents.recv() => {
                     // If the core already moved to the next epoch we should pull the next
                     // committee as well.
                     match epoch.cmp(&self.committee.epoch()) {
@@ -352,7 +352,7 @@ impl Proposer {
                 }
 
                 // Receive digests from our workers.
-                Some((digest, worker_id)) = self.rx_workers.recv() => {
+                Some((digest, worker_id)) = self.rx_our_digests.recv() => {
                     self.digests.push((digest, worker_id));
                 }
 
