@@ -596,7 +596,7 @@ pub async fn send_and_confirm_transaction_with_shared(
 
     // Submit the confirmation. *Now* execution actually happens, and it should fail when we try to look up our dummy module.
     // we unfortunately don't get a very descriptive error message, but we can at least see that something went wrong inside the VM
-    authority.handle_certificate(certificate).await
+    authority.handle_certificate(&certificate).await
 }
 
 /// Create a `CompiledModule` that depends on `m`
@@ -867,7 +867,7 @@ async fn test_handle_confirmation_transaction_unknown_sender() {
     );
 
     assert!(authority_state
-        .handle_certificate(certified_transfer_transaction)
+        .handle_certificate(&certified_transfer_transaction)
         .await
         .is_err());
 }
@@ -934,7 +934,7 @@ async fn test_handle_confirmation_transaction_bad_sequence_number() {
     // Explanation: providing an old cert that has already need applied
     //              returns a Ok(_) with info about the new object states.
     let response = authority_state
-        .handle_certificate(certified_transfer_transaction)
+        .handle_certificate(&certified_transfer_transaction)
         .await
         .unwrap();
     assert!(response.signed_effects.is_none());
@@ -978,7 +978,7 @@ async fn test_handle_confirmation_transaction_receiver_equal_sender() {
         &authority_state,
     );
     let response = authority_state
-        .handle_certificate(certified_transfer_transaction)
+        .handle_certificate(&certified_transfer_transaction)
         .await
         .unwrap();
     response.signed_effects.unwrap().effects.status.unwrap();
@@ -1032,7 +1032,7 @@ async fn test_handle_confirmation_transaction_ok() {
     next_sequence_number = next_sequence_number.increment();
 
     let info = authority_state
-        .handle_certificate(certified_transfer_transaction.clone())
+        .handle_certificate(&certified_transfer_transaction.clone())
         .await
         .unwrap();
     info.signed_effects.unwrap().effects.status.unwrap();
@@ -1173,7 +1173,7 @@ async fn test_handle_certificate_interrupted_retry() {
         let state1 = authority_state.clone();
 
         let limited_fut = Box::pin(LimitedPoll::new(*limit, async move {
-            state1.handle_certificate(clone1).await.unwrap();
+            state1.handle_certificate(&clone1).await.unwrap();
         }));
 
         let res = limited_fut.await;
@@ -1195,7 +1195,7 @@ async fn test_handle_certificate_interrupted_retry() {
 
         // Now run the tx to completion
         let info = authority_state
-            .handle_certificate(shared_object_cert.clone())
+            .handle_certificate(&shared_object_cert)
             .await
             .unwrap();
 
@@ -1235,13 +1235,13 @@ async fn test_handle_confirmation_transaction_idempotent() {
     );
 
     let info = authority_state
-        .handle_certificate(certified_transfer_transaction.clone())
+        .handle_certificate(&certified_transfer_transaction)
         .await
         .unwrap();
     assert!(info.signed_effects.as_ref().unwrap().effects.status.is_ok());
 
     let info2 = authority_state
-        .handle_certificate(certified_transfer_transaction.clone())
+        .handle_certificate(&certified_transfer_transaction)
         .await
         .unwrap();
     assert!(info2
@@ -1377,7 +1377,7 @@ async fn test_move_call_insufficient_gas() {
         &authority_state,
     );
     let effects = authority_state
-        .handle_certificate(certified_transfer_transaction)
+        .handle_certificate(&certified_transfer_transaction)
         .await
         .unwrap()
         .signed_effects
@@ -1703,7 +1703,7 @@ async fn test_idempotent_reversed_confirmation() {
         &authority_state,
     );
     let result1 = authority_state
-        .handle_certificate(certified_transfer_transaction.clone())
+        .handle_certificate(&certified_transfer_transaction)
         .await;
     assert!(result1.is_ok());
     let result2 = authority_state
@@ -1762,7 +1762,7 @@ async fn test_change_epoch_transaction() {
         .unwrap()
         .unwrap();
     let result = authority_state
-        .handle_certificate(certificate)
+        .handle_certificate(&certificate)
         .await
         .unwrap();
     assert!(result.signed_effects.unwrap().effects.status.is_ok());
@@ -1796,7 +1796,7 @@ async fn test_transfer_sui_no_amount() {
 
     let certificate = init_certified_transaction(transaction, &authority_state);
     let response = authority_state
-        .handle_certificate(certificate)
+        .handle_certificate(&certificate)
         .await
         .unwrap();
     let effects = response.signed_effects.unwrap().effects;
@@ -1839,7 +1839,7 @@ async fn test_transfer_sui_with_amount() {
     let transaction = to_sender_signed_transaction(tx_data, &sender_key);
     let certificate = init_certified_transaction(transaction, &authority_state);
     let response = authority_state
-        .handle_certificate(certificate)
+        .handle_certificate(&certificate)
         .await
         .unwrap();
     let effects = response.signed_effects.unwrap().effects;
@@ -1893,7 +1893,7 @@ async fn test_store_revert_state_update() {
     let certificate = init_certified_transaction(transaction, &authority_state);
     let tx_digest = *certificate.digest();
     authority_state
-        .handle_certificate(certificate)
+        .handle_certificate(&certificate)
         .await
         .unwrap();
 
@@ -2286,7 +2286,7 @@ async fn shared_object() {
     let transaction_digest = certificate.digest();
 
     // Sending the certificate now fails since it was not sequenced.
-    let result = authority.handle_certificate(certificate.clone()).await;
+    let result = authority.handle_certificate(&certificate).await;
     assert!(
         matches!(
             result,
@@ -2309,10 +2309,7 @@ async fn shared_object() {
 
     // Finally process the certificate and execute the contract. Ensure that the
     // shared object lock is cleaned up and that its sequence number increased.
-    authority
-        .handle_certificate(certificate.clone())
-        .await
-        .unwrap();
+    authority.handle_certificate(&certificate).await.unwrap();
 
     let shared_object_lock = authority
         .db()
@@ -2375,7 +2372,7 @@ async fn test_consensus_message_processed() {
         if let TransactionInfoResponse {
             signed_effects: Some(effects),
             ..
-        } = authority.handle_certificate(cert.clone()).await.unwrap()
+        } = authority.handle_certificate(cert).await.unwrap()
         {
             effects
         } else {
