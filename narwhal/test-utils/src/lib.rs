@@ -258,13 +258,6 @@ impl PrimaryToWorker for PrimaryToWorkerMockServer {
         Ok(anemo::Response::new(()))
     }
 
-    async fn request_batch(
-        &self,
-        _request: anemo::Request<RequestBatchRequest>,
-    ) -> Result<anemo::Response<RequestBatchResponse>, anemo::rpc::Status> {
-        tracing::error!("Not implemented PrimaryToWorkerMockServer::request_batch");
-        Err(anemo::rpc::Status::internal("Unimplemented"))
-    }
     async fn delete_batches(
         &self,
         _request: anemo::Request<WorkerDeleteBatchesMessage>,
@@ -331,6 +324,14 @@ impl WorkerToWorker for WorkerToWorkerMockServer {
         Ok(anemo::Response::new(WorkerBatchResponse {
             batches: vec![],
         }))
+    }
+
+    async fn request_batch(
+        &self,
+        _request: anemo::Request<RequestBatchRequest>,
+    ) -> Result<anemo::Response<RequestBatchResponse>, anemo::rpc::Status> {
+        tracing::error!("Not implemented WorkerToWorkerMockServer::request_batch");
+        Err(anemo::rpc::Status::internal("Unimplemented"))
     }
 }
 
