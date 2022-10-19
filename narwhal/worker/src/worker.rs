@@ -9,7 +9,11 @@ use crate::{
     quorum_waiter::QuorumWaiter,
 };
 use anemo::{types::PeerInfo, PeerId};
-use anemo_tower::{callback::CallbackLayer, trace::TraceLayer};
+use anemo_tower::{
+    auth::{AllowedPeers, RequireAuthorizationLayer},
+    callback::CallbackLayer,
+    trace::TraceLayer,
+};
 use async_trait::async_trait;
 use config::{Parameters, SharedCommittee, SharedWorkerCache, WorkerId};
 use crypto::{traits::KeyPair as _, NetworkKeyPair, PublicKey};
@@ -131,9 +135,20 @@ impl Worker {
         let addr = network::multiaddr_to_address(&address).unwrap();
 
         // Set up anemo Network.
+        let our_primary_peer_id = committee
+            .load()
+            .network_key(&primary_name)
+            .map(|public_key| PeerId(public_key.0.to_bytes()))
+            .unwrap();
+        let primary_to_worker_router = anemo::Router::new()
+            .add_rpc_service(primary_service)
+            // Add an Authorization Layer to ensure that we only service requests from our primary
+            .route_layer(RequireAuthorizationLayer::new(AllowedPeers::new([
+                our_primary_peer_id,
+            ])));
         let routes = anemo::Router::new()
             .add_rpc_service(worker_service)
-            .add_rpc_service(primary_service);
+            .merge(primary_to_worker_router);
 
         let service = ServiceBuilder::new()
             .layer(TraceLayer::new_for_server_errors())
