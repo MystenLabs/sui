@@ -176,20 +176,20 @@
         "title": "Connect to Sui",
         "items": [
           {
-            "label": "Connect with Sui RPC Server",
+            "label": "JSON-RPC API",
             "fileName": "build/json-rpc"
           },
           {
-            "label": "Use Rust SDK",
+            "label": "Rust SDK",
             "fileName": "build/rust-sdk"
           },
           {
-            "label": "Use TypeScript/JavaScript SDK",
+            "label": "TypeScript/JavaScript SDK",
             "link": "https://github.com/MystenLabs/sui/tree/main/sdk/typescript",
             "external": true
           },
           {
-            "label": "Run a Fullnode",
+            "label": "Sui Full node",
             "fileName": "build/fullnode"
           },
           {
@@ -221,11 +221,11 @@
         "fileName": "explore/sui-explorer"
       },
       {
-        "label": "Wallet in Browser",
+        "label": "Sui Wallet",
         "fileName": "explore/wallet-browser"
       },
       {
-        "label": "Tutorial",
+        "label": "Tutorials",
         "fileName": "explore/tutorials"
       },
       {
@@ -261,11 +261,6 @@
       {
         "label": "Code of Conduct",
         "fileName": "contribute/code-of-conduct"
-      },
-      {
-        "label": "About Mysten Labs",
-        "link": "https://mystenlabs.com/",
-        "external": true
       }
     ]
   }
