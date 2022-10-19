@@ -567,9 +567,7 @@ fn test_user_signature_committed_in_checkpoints() {
             [execution_digest_a].into_iter(),
         ),
         None,
-        effects_a.gas_used.storage_cost,
-        effects_a.gas_used.computation_cost,
-        effects_a.gas_used.storage_rebate,
+        effects_a.gas_used,
         None,
     );
     let checkpoint_summary_b = CheckpointSummary::new(
@@ -579,9 +577,7 @@ fn test_user_signature_committed_in_checkpoints() {
             [execution_digest_b].into_iter(),
         ),
         None,
-        effects_b.gas_used.storage_cost,
-        effects_b.gas_used.computation_cost,
-        effects_b.gas_used.storage_rebate,
+        effects_b.gas_used,
         None,
     );
 

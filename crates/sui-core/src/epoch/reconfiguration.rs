@@ -97,9 +97,9 @@ where
                 .iter()
                 .map(|cp| {
                     (
-                        cp.summary().total_computation_charge,
-                        cp.summary().total_storage_charge,
-                        cp.summary().total_storage_rebate,
+                        cp.summary().gas_cost_summary.storage_cost,
+                        cp.summary().gas_cost_summary.computation_cost,
+                        cp.summary().gas_cost_summary.storage_rebate,
                     )
                 })
                 .multiunzip();

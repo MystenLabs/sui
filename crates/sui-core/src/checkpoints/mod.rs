@@ -401,39 +401,20 @@ impl CheckpointStore {
 
         let previous_digest = self.get_prev_checkpoint_digest(sequence_number)?;
 
+        let (causally_ordered_transactions, gas_cost_summary) =
+            effects_store.get_causal_order_and_gas_summary_from_effects(transactions, self)?;
+
         // Create a causal order of all transactions in the checkpoint.
         let ordered_contents = CheckpointContents::new_with_causally_ordered_transactions(
-            effects_store
-                .get_complete_causal_order(transactions.clone(), self)?
-                .into_iter(),
+            causally_ordered_transactions.into_iter(),
         );
-
-        let (storage_charges, computation_charges, storage_rebates): (
-            Vec<u64>,
-            Vec<u64>,
-            Vec<u64>,
-        ) = effects_store
-            .get_effects(transactions)?
-            .into_iter()
-            .map(|effect| {
-                effect.map_or((0, 0, 0), |e| {
-                    (
-                        e.gas_used.storage_cost,
-                        e.gas_used.computation_cost,
-                        e.gas_used.storage_rebate,
-                    )
-                })
-            })
-            .multiunzip();
 
         let summary = CheckpointSummary::new(
             epoch,
             sequence_number,
             &ordered_contents,
             previous_digest,
-            storage_charges.iter().sum(),
-            computation_charges.iter().sum(),
-            storage_rebates.iter().sum(),
+            gas_cost_summary,
             next_epoch_committee,
         );
 

@@ -9,6 +9,7 @@ use crate::base_types::ExecutionDigests;
 use crate::committee::{EpochId, StakeUnit};
 use crate::crypto::{AuthoritySignInfo, AuthoritySignInfoTrait, AuthorityWeakQuorumSignInfo};
 use crate::error::SuiResult;
+use crate::gas::GasCostSummary;
 use crate::messages::CertifiedTransaction;
 use crate::waypoint::{Waypoint, WaypointDiff};
 use crate::{
@@ -180,12 +181,8 @@ pub struct CheckpointSummary {
     pub sequence_number: CheckpointSequenceNumber,
     pub content_digest: CheckpointContentsDigest,
     pub previous_digest: Option<CheckpointDigest>,
-    /// The sum of storage charges of all transactions included in the checkpoint.
-    pub total_storage_charge: u64,
-    /// The sum of computation charges of all transactions included in the checkpoint.
-    pub total_computation_charge: u64,
-    /// The sum of storage rebates of all transactions included in the checkpoint.
-    pub total_storage_rebate: u64,
+    /// The total gas costs of all transactions included in this checkpoint.
+    pub gas_cost_summary: GasCostSummary,
     /// If this checkpoint is the last checkpoint of the epoch, we also include the committee
     /// of the next epoch. This allows anyone receiving this checkpoint know that the epoch
     /// will change after this checkpoint, as well as what the new committee is.
@@ -202,9 +199,7 @@ impl CheckpointSummary {
         sequence_number: CheckpointSequenceNumber,
         transactions: &CheckpointContents,
         previous_digest: Option<CheckpointDigest>,
-        total_storage_charge: u64,
-        total_computation_charge: u64,
-        total_storage_rebate: u64,
+        gas_cost_summary: GasCostSummary,
         next_epoch_committee: Option<Committee>,
     ) -> CheckpointSummary {
         let mut waypoint = Box::new(Waypoint::default());
@@ -219,9 +214,7 @@ impl CheckpointSummary {
             sequence_number,
             content_digest,
             previous_digest,
-            total_storage_charge,
-            total_computation_charge,
-            total_storage_rebate,
+            gas_cost_summary,
             next_epoch_committee: next_epoch_committee.map(|c| c.voting_rights),
         }
     }
@@ -240,13 +233,11 @@ impl Display for CheckpointSummary {
         write!(
             f,
             "CheckpointSummary {{ epoch: {:?}, seq: {:?}, content_digest: {}, 
-            total_storage_charge: {}, total_computation_charge: {}, total_storage_rebate: {}}}",
+            gas_cost_summary: {:?}}}",
             self.epoch,
             self.sequence_number,
             hex::encode(self.content_digest),
-            self.total_storage_charge,
-            self.total_computation_charge,
-            self.total_storage_rebate,
+            self.gas_cost_summary,
         )
     }
 }
@@ -276,9 +267,7 @@ impl SignedCheckpointSummary {
         signer: &dyn signature::Signer<AuthoritySignature>,
         transactions: &CheckpointContents,
         previous_digest: Option<CheckpointDigest>,
-        total_storage_charge: u64,
-        total_computation_charge: u64,
-        total_storage_rebate: u64,
+        gas_cost_summary: GasCostSummary,
         next_epoch_committee: Option<Committee>,
     ) -> SignedCheckpointSummary {
         let checkpoint = CheckpointSummary::new(
@@ -286,9 +275,7 @@ impl SignedCheckpointSummary {
             sequence_number,
             transactions,
             previous_digest,
-            total_storage_charge,
-            total_computation_charge,
-            total_storage_rebate,
+            gas_cost_summary,
             next_epoch_committee,
         );
         SignedCheckpointSummary::new_from_summary(checkpoint, authority, signer)
@@ -751,7 +738,16 @@ mod tests {
             .map(|k| {
                 let name = k.public().into();
 
-                SignedCheckpointSummary::new(committee.epoch, 1, name, k, &set, None, 0, 0, 0, None)
+                SignedCheckpointSummary::new(
+                    committee.epoch,
+                    1,
+                    name,
+                    k,
+                    &set,
+                    None,
+                    GasCostSummary::default(),
+                    None,
+                )
             })
             .collect();
 
@@ -779,7 +775,16 @@ mod tests {
             .map(|k| {
                 let name = k.public().into();
 
-                SignedCheckpointSummary::new(committee.epoch, 1, name, k, &set, None, 0, 0, 0, None)
+                SignedCheckpointSummary::new(
+                    committee.epoch,
+                    1,
+                    name,
+                    k,
+                    &set,
+                    None,
+                    GasCostSummary::default(),
+                    None,
+                )
             })
             .collect();
 
@@ -798,7 +803,16 @@ mod tests {
                     [ExecutionDigests::random()].into_iter(),
                 );
 
-                SignedCheckpointSummary::new(committee.epoch, 1, name, k, &set, None, 0, 0, 0, None)
+                SignedCheckpointSummary::new(
+                    committee.epoch,
+                    1,
+                    name,
+                    k,
+                    &set,
+                    None,
+                    GasCostSummary::default(),
+                    None,
+                )
             })
             .collect();
 
