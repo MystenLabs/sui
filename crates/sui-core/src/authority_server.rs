@@ -390,7 +390,17 @@ impl ValidatorService {
             metrics.handle_certificate_non_consensus_latency.clone()
         });
 
-        // 1) Verify certificate
+        // 1) Check if cert already executed
+        let tx_digest = *certificate.digest();
+        if let Some(response) = state
+            .get_tx_info_already_executed(&tx_digest)
+            .await
+            .map_err(|e| tonic::Status::internal(e.to_string()))?
+        {
+            return Ok(tonic::Response::new(response));
+        }
+
+        // 2) Verify cert signatures
         let cert_verif_metrics_guard = start_timer(metrics.cert_verification_latency.clone());
 
         certificate
@@ -399,16 +409,6 @@ impl ValidatorService {
         drop(cert_verif_metrics_guard);
         // TODO This is really really bad, we should have different types for signature verified transactions
         certificate.is_verified = true;
-
-        // 2) Check idempotency
-        let tx_digest = certificate.digest();
-        if let Some(response) = state
-            .get_tx_info_already_executed(tx_digest)
-            .await
-            .map_err(|e| tonic::Status::internal(e.to_string()))?
-        {
-            return Ok(tonic::Response::new(response));
-        }
 
         // 3) If the validator is already halted, we stop here, to avoid
         // sending the transaction to consensus.
@@ -478,7 +478,6 @@ impl ValidatorService {
                 }
                 Err(e) => {
                     // Record the cert for later execution, including causal completion if necessary.
-                    let tx_digest = *tx_digest;
                     let _ = state
                         .add_pending_certificates(vec![(tx_digest, Some(certificate))])
                         .tap_err(|e| error!(?tx_digest, "add_pending_certificates failed: {}", e));
