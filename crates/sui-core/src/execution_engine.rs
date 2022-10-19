@@ -9,6 +9,7 @@ use sui_types::storage::{DeleteKind, ObjectResolver, ParentSync, WriteKind};
 #[cfg(test)]
 use sui_types::temporary_store;
 use sui_types::temporary_store::InnerTemporaryStore;
+use sui_types::SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION;
 
 use crate::authority::TemporaryStore;
 use move_core_types::language_storage::ModuleId;
@@ -227,7 +228,10 @@ fn execute_transaction<S: BackingPackageStore + ParentSync>(
                         &function,
                         vec![],
                         vec![
-                            CallArg::Object(ObjectArg::SharedObject(SUI_SYSTEM_STATE_OBJECT_ID)),
+                            CallArg::Object(ObjectArg::SharedObject {
+                                id: SUI_SYSTEM_STATE_OBJECT_ID,
+                                initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+                            }),
                             CallArg::Pure(bcs::to_bytes(&epoch).unwrap()),
                             CallArg::Pure(bcs::to_bytes(&storage_charge).unwrap()),
                             CallArg::Pure(bcs::to_bytes(&computation_charge).unwrap()),

@@ -446,7 +446,7 @@ impl ValidatorService {
         );
 
         match state
-            .handle_certificate(certificate.clone())
+            .handle_certificate(&certificate)
             .instrument(span)
             .await
             .map_err(|e| tonic::Status::internal(e.to_string()))

@@ -8451,27 +8451,22 @@ dependencies = [
 
 [[package]]
 name = "sui-open-rpc"
-version = "0.6.1"
+version = "0.0.0"
 dependencies = [
  "anyhow",
  "clap 3.2.22",
- "hyper",
  "move-core-types",
- "move-package",
  "pretty_assertions",
  "rand 0.8.5",
  "schemars",
  "serde 1.0.145",
  "serde_json",
  "sui",
- "sui-config",
  "sui-core",
  "sui-json",
  "sui-json-rpc",
  "sui-json-rpc-types",
- "sui-sdk",
  "sui-types",
- "test-utils",
  "tokio",
  "workspace-hack",
 ]
@@ -8527,7 +8522,7 @@ dependencies = [
 
 [[package]]
 name = "sui-sdk"
-version = "0.0.0"
+version = "0.12.0"
 dependencies = [
  "anyhow",
  "async-recursion",

@@ -76,8 +76,9 @@ pub struct JsonRpcServerBuilder {
     rpc_doc: Project,
 }
 
-pub fn sui_rpc_doc() -> Project {
+pub fn sui_rpc_doc(version: &str) -> Project {
     Project::new(
+        version,
         "Sui JSON-RPC",
         "Sui JSON-RPC API for interaction with Sui Full node.",
         "Mysten Labs",
@@ -90,6 +91,7 @@ pub fn sui_rpc_doc() -> Project {
 
 impl JsonRpcServerBuilder {
     pub fn new(
+        version: &str,
         use_websocket: bool,
         prometheus_registry: &prometheus::Registry,
     ) -> anyhow::Result<Self> {
@@ -128,7 +130,7 @@ impl JsonRpcServerBuilder {
         Ok(Self {
             module,
             server_builder,
-            rpc_doc: sui_rpc_doc(),
+            rpc_doc: sui_rpc_doc(version),
         })
     }
 
@@ -150,7 +152,7 @@ impl JsonRpcServerBuilder {
         Ok(Self {
             module,
             server_builder,
-            rpc_doc: sui_rpc_doc(),
+            rpc_doc: sui_rpc_doc("0.0.0"),
         })
     }
 

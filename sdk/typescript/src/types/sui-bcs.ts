@@ -130,9 +130,23 @@ bcs.registerStructType('PublishTx', {
 // ========== Move Call Tx ===========
 
 /**
+ * A reference to a shared object.
+ */
+export type SharedObjectRef = {
+  /** Hex code as string representing the object id */
+  objectId: string;
+
+  /** The version the object was shared at */
+  initialSharedVersion: number;
+};
+
+/**
  * An object argument.
  */
-export type ObjectArg = { ImmOrOwned: SuiObjectRef } | { Shared: string };
+export type ObjectArg =
+  | { ImmOrOwned: SuiObjectRef }
+  | { Shared: SharedObjectRef }
+  | { Shared_Deprecated: string };
 
 /**
  * An argument for the transaction. It is a 'meant' enum which expects to have
@@ -141,9 +155,12 @@ export type ObjectArg = { ImmOrOwned: SuiObjectRef } | { Shared: string };
  *
  * Example:
  * ```js
- * let arg1: CallArg = { Object: { Shared: '5460cf92b5e3e7067aaace60d88324095fd22944' } };
+ * let arg1: CallArg = { Object: { Shared: {
+ *   objectId: '5460cf92b5e3e7067aaace60d88324095fd22944',
+ *   initialSharedVersion: 1,
+ * } } };
  * let arg2: CallArg = { Pure: bcs.set(bcs.STRING, 100000).toBytes() };
- * let arg3: CallArg = { Object: { ImmOrOwnedObject: {
+ * let arg3: CallArg = { Object: { ImmOrOwned: {
  *   objectId: '4047d2e25211d87922b6650233bd0503a6734279',
  *   version: 1,
  *   digest: 'bCiANCht4O9MEUhuYjdRCqRPZjr2rJ8MfqNiwyhmRgA='
@@ -159,9 +176,13 @@ export type CallArg =
   | { ObjVec: ArrayLike<ObjectArg> };
 
 bcs
+  .registerStructType('SharedObjectRef', {
+    objectId: 'ObjectID',
+    initialSharedVersion: 'u64',
+  })
   .registerEnumType('ObjectArg', {
     ImmOrOwned: 'SuiObjectRef',
-    Shared: 'ObjectID',
+    Shared: 'SharedObjectRef',
   })
   .registerVectorType('vector<ObjectArg>', 'ObjectArg')
   .registerEnumType('CallArg', {
@@ -291,5 +312,54 @@ bcs.registerStructType('TransactionData', {
   gasPrice: 'u64',
   gasBudget: 'u64',
 });
+
+// ========== Deprecated ===========
+
+/**
+ * Temporary support for older protocol types that don't require an initial
+ * shared version to be provided when referring to a shared object.  Remove
+ * after the devnet launch that adds support for the new protocol.
+ */
+bcs
+  .registerEnumType('ObjectArg_Deprecated', {
+    ImmOrOwned: 'SuiObjectRef',
+    Shared_Deprecated: 'ObjectID',
+  })
+  .registerVectorType('vector<ObjectArg_Deprecated>', 'ObjectArg_Deprecated')
+  .registerEnumType('CallArg_Deprecated', {
+    Pure: 'vector<u8>',
+    Object: 'ObjectArg_Deprecated',
+    ObjVec: 'vector<ObjectArg_Deprecated>',
+  })
+  .registerVectorType('vector<CallArg_Deprecated>', 'CallArg_Deprecated')
+  .registerStructType('MoveCallTx_Deprecated', {
+    package: 'SuiObjectRef',
+    module: 'string',
+    function: 'string',
+    typeArguments: 'vector<TypeTag>',
+    arguments: 'vector<CallArg_Deprecated>',
+  })
+  .registerEnumType('Transaction_Deprecated', {
+    TransferObject: 'TransferObjectTx',
+    Publish: 'PublishTx',
+    Call: 'MoveCallTx_Deprecated',
+    TransferSui: 'TransferSuiTx',
+    Pay: 'PayTx',
+  })
+  .registerVectorType(
+    'vector<Transaction_Deprecated>',
+    'Transaction_Deprecated'
+  )
+  .registerEnumType('TransactionKind_Deprecated', {
+    Single: 'Transaction_Deprecated',
+    Batch: 'vector<Transaction_Deprecated>',
+  })
+  .registerStructType('TransactionData_Deprecated', {
+    kind: 'TransactionKind_Deprecated',
+    sender: 'SuiAddress',
+    gasPayment: 'SuiObjectRef',
+    gasPrice: 'u64',
+    gasBudget: 'u64',
+  });
 
 export { bcs };

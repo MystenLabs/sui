@@ -1415,7 +1415,14 @@ pub fn make_response_from_sui_system_state(
             move_content,
         )
     };
-    let object = Object::new_move(move_object, Owner::Shared, *tx_cert.digest());
+    let initial_shared_version = move_object.version();
+    let object = Object::new_move(
+        move_object,
+        Owner::Shared {
+            initial_shared_version,
+        },
+        *tx_cert.digest(),
+    );
     let obj_digest = object.compute_object_reference();
     Ok(ObjectInfoResponse {
         parent_certificate: Some(tx_cert),

@@ -4,6 +4,7 @@
 import { SignatureScheme } from '../cryptography/publickey';
 import {
   CertifiedTransaction,
+  CoinDenominationInfoResponse,
   TransactionDigest,
   GetTxnDigestsResponse,
   GatewayTxSeqNumber,
@@ -46,6 +47,12 @@ export class VoidProvider extends Provider {
     _address: string
   ): Promise<SuiObjectInfo[]> {
     throw this.newError('getGasObjectsOwnedByAddress');
+  }
+
+  getCoinDenominationInfo(
+    _coin_type: string,
+  ): CoinDenominationInfoResponse {
+    throw this.newError('getCoinDenominationInfo');
   }
 
   async getCoinBalancesOwnedByAddress(

@@ -530,7 +530,7 @@ impl AuthorityState {
 
         // Validators should never sign an external system transaction.
         fp_ensure!(
-            !transaction.signed_data.data.kind.is_system_tx(),
+            !transaction.is_system_tx(),
             SuiError::InvalidSystemTransaction
         );
 
@@ -653,7 +653,7 @@ impl AuthorityState {
     #[instrument(level = "trace", skip_all)]
     pub async fn handle_certificate(
         &self,
-        certificate: CertifiedTransaction,
+        certificate: &CertifiedTransaction,
     ) -> SuiResult<TransactionInfoResponse> {
         let _metrics_guard = start_timer(self.metrics.handle_certificate_latency.clone());
         self.handle_certificate_impl(certificate, false).await
@@ -662,7 +662,7 @@ impl AuthorityState {
     #[instrument(level = "trace", skip_all)]
     pub async fn handle_certificate_bypass_validator_halt(
         &self,
-        certificate: CertifiedTransaction,
+        certificate: &CertifiedTransaction,
     ) -> SuiResult<TransactionInfoResponse> {
         self.handle_certificate_impl(certificate, true).await
     }
@@ -670,7 +670,7 @@ impl AuthorityState {
     #[instrument(level = "trace", skip_all)]
     async fn handle_certificate_impl(
         &self,
-        certificate: CertifiedTransaction,
+        certificate: &CertifiedTransaction,
         bypass_validator_halt: bool,
     ) -> SuiResult<TransactionInfoResponse> {
         self.metrics.total_cert_attempts.inc();
@@ -700,11 +700,16 @@ impl AuthorityState {
         );
         let tx_guard = self
             .database
-            .acquire_tx_guard(&certificate)
+            .acquire_tx_guard(certificate)
             .instrument(span)
             .await?;
 
-        self.process_certificate(tx_guard, &certificate, bypass_validator_halt)
+        if !certificate.is_system_tx() && self.is_cert_awaiting_sequencing(certificate)? {
+            debug!("shared object cert has not been sequenced by narwhal");
+            return Err(SuiError::SharedObjectLockNotSetError);
+        }
+
+        self.process_certificate(tx_guard, certificate, bypass_validator_halt)
             .await
             .tap_err(|e| debug!(?tx_digest, "process_certificate failed: {e}"))
     }
@@ -783,7 +788,7 @@ impl AuthorityState {
 
         // We also bypass validator halt if this is the system transaction.
         // TODO: Shared object transactions should also bypass validator halt.
-        bypass_validator_halt |= certificate.signed_data.data.kind.is_system_tx();
+        bypass_validator_halt |= certificate.is_system_tx();
 
         if self.is_halted() && !bypass_validator_halt {
             tx_guard.release();
@@ -1533,7 +1538,8 @@ impl AuthorityState {
             None => &default_genesis,
         };
 
-        let store = Arc::new(AuthorityStore::open(&path.join("store"), None));
+        // unwrap ok - for testing only.
+        let store = Arc::new(AuthorityStore::open(&path.join("store"), None).unwrap());
         let mut checkpoints = CheckpointStore::open(
             &path.join("checkpoints"),
             None,
@@ -2079,13 +2085,27 @@ impl AuthorityState {
         Ok(())
     }
 
+    /// Returns true if certificate is a shared-object cert but has not been sequenced.
+    fn is_cert_awaiting_sequencing(&self, certificate: &CertifiedTransaction) -> SuiResult<bool> {
+        // always an error to call this on fullnode.
+        assert!(!self.is_fullnode());
+
+        if !certificate.contains_shared_object() {
+            Ok(false)
+        } else {
+            self.database
+                .consensus_message_processed(certificate.digest())
+                .map(|r| !r)
+        }
+    }
+
     /// Check whether a shared-object certificate has already been given shared-locks.
     pub async fn transaction_shared_locks_exist(
         &self,
         certificate: &CertifiedTransaction,
     ) -> SuiResult<bool> {
         let digest = certificate.digest();
-        let shared_inputs = certificate.shared_input_objects();
+        let shared_inputs = certificate.shared_input_objects().map(|(id, _)| id);
         let shared_locks = self
             .database
             .get_assigned_object_versions(digest, shared_inputs)?;

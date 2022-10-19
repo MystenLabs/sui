@@ -211,7 +211,7 @@ impl std::fmt::Display for OwnerOutput {
             Owner::Immutable => {
                 write!(f, "immutable")
             }
-            Owner::Shared => {
+            Owner::Shared { .. } => {
                 write!(f, "shared")
             }
         }

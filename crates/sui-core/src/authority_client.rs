@@ -410,11 +410,12 @@ impl AuthorityAPI for LocalAuthorityClient {
         certificate: CertifiedTransaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
         let state = self.state.clone();
-        let cert = certificate.clone();
         let fault_config = self.fault_config;
-        tokio::spawn(async move { Self::handle_certificate(state, cert, fault_config).await })
-            .await
-            .unwrap()
+        tokio::spawn(
+            async move { Self::handle_certificate(state, &certificate, fault_config).await },
+        )
+        .await
+        .unwrap()
     }
 
     async fn handle_account_info_request(
@@ -524,7 +525,7 @@ impl LocalAuthorityClient {
 
     async fn handle_certificate(
         state: Arc<AuthorityState>,
-        certificate: CertifiedTransaction,
+        certificate: &CertifiedTransaction,
         fault_config: LocalAuthorityClientFaultConfig,
     ) -> Result<TransactionInfoResponse, SuiError> {
         if fault_config.fail_before_handle_confirmation {

@@ -195,7 +195,7 @@ impl<A> GatewayState<A> {
         let gateway_metrics = GatewayMetrics::new(prometheus_registry);
         let auth_agg_metrics = AuthAggMetrics::new(prometheus_registry);
         let safe_client_metrics = Arc::new(SafeClientMetrics::new(prometheus_registry));
-        let gateway_store = Arc::new(GatewayStore::open(&base_path.join("store"), None));
+        let gateway_store = Arc::new(GatewayStore::open(&base_path.join("store"), None)?);
         let committee_store = Arc::new(CommitteeStore::new(
             base_path.join("epochs"),
             &committee,
@@ -1163,10 +1163,16 @@ where
         objects: &mut BTreeMap<ObjectID, Object>,
     ) -> Result<ObjectArg, anyhow::Error> {
         let obj = self.get_object_internal(&id).await?;
-        let arg = if obj.is_shared() {
-            ObjectArg::SharedObject(id)
-        } else {
-            ObjectArg::ImmOrOwnedObject(obj.compute_object_reference())
+        let arg = match obj.owner {
+            Owner::Shared {
+                initial_shared_version,
+            } => ObjectArg::SharedObject {
+                id: obj.id(),
+                initial_shared_version,
+            },
+            Owner::AddressOwner(_) | Owner::ObjectOwner(_) | Owner::Immutable => {
+                ObjectArg::ImmOrOwnedObject(obj.compute_object_reference())
+            }
         };
         objects.insert(id, obj);
         Ok(arg)

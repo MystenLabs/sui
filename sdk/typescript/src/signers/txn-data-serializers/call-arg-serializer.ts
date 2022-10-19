@@ -6,10 +6,12 @@ import {
   extractMutableReference,
   extractStructTag,
   getObjectReference,
+  getSharedObjectInitialVersion,
   isSharedObject,
   isValidSuiAddress,
   normalizeSuiObjectId,
   ObjectId,
+  shouldUseOldSharedObjectAPI,
   SuiJsonValue,
   SuiMoveNormalizedType,
 } from '../../types';
@@ -29,9 +31,13 @@ export class CallArgSerializer {
       .map((arg) => {
         if ('Object' in arg) {
           const objectArg = arg.Object;
-          return 'Shared' in objectArg
-            ? objectArg.Shared
-            : objectArg.ImmOrOwned.objectId;
+          if ('Shared_Deprecated' in objectArg) {
+            return objectArg.Shared_Deprecated;
+          } else if ('Shared' in objectArg) {
+            return objectArg.Shared.objectId;
+          } else {
+            return objectArg.ImmOrOwned.objectId;
+          }
         }
         return null;
       })
@@ -70,8 +76,17 @@ export class CallArgSerializer {
 
   async newObjectArg(objectId: string): Promise<ObjectArg> {
     const object = await this.provider.getObject(objectId);
-    if (isSharedObject(object)) {
-      return { Shared: objectId };
+    const version = await this.provider.getRpcApiVersion();
+
+    if (shouldUseOldSharedObjectAPI(version)) {
+      if (isSharedObject(object)) {
+        return { Shared_Deprecated: objectId };
+      }
+    } else {
+      const initialSharedVersion = getSharedObjectInitialVersion(object);
+      if (initialSharedVersion) {
+        return { Shared: { objectId, initialSharedVersion } };
+      }
     }
 
     return { ImmOrOwned: getObjectReference(object)! };

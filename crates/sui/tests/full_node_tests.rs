@@ -98,10 +98,10 @@ async fn test_full_node_shared_objects() -> Result<(), anyhow::Error> {
     let context = &mut test_cluster.wallet;
 
     let sender = context.config.keystore.addresses().get(0).cloned().unwrap();
-    let (package_ref, counter_id) = publish_basics_package_and_make_counter(context, sender).await;
+    let (package_ref, counter_ref) = publish_basics_package_and_make_counter(context, sender).await;
 
     let (tx_cert, _effects_cert) =
-        increment_counter(context, sender, None, package_ref, counter_id).await;
+        increment_counter(context, sender, None, package_ref, counter_ref.0).await;
     let digest = tx_cert.transaction_digest;
     wait_for_tx(digest, node.state().clone()).await;
 
@@ -118,9 +118,9 @@ async fn test_full_node_move_function_index() -> Result<(), anyhow::Error> {
     let sender = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
 
-    let (package_ref, counter_id) = publish_basics_package_and_make_counter(context, sender).await;
+    let (package_ref, counter_ref) = publish_basics_package_and_make_counter(context, sender).await;
     let (tx_cert, _effects_cert) =
-        increment_counter(context, sender, None, package_ref, counter_id).await;
+        increment_counter(context, sender, None, package_ref, counter_ref.0).await;
     let digest = tx_cert.transaction_digest;
 
     wait_for_tx(digest, node.state().clone()).await;
@@ -362,7 +362,8 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
 
     let mut futures = Vec::new();
 
-    let (package_ref, counter_id) = publish_basics_package_and_make_counter(&context, sender).await;
+    let (package_ref, counter_ref) =
+        publish_basics_package_and_make_counter(&context, sender).await;
 
     let context = Arc::new(Mutex::new(context));
 
@@ -413,7 +414,7 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
                         sender,
                         Some(gas_object_id),
                         package_ref,
-                        counter_id,
+                        counter_ref.0,
                     )
                     .await
                     .0

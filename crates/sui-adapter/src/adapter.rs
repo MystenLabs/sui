@@ -110,7 +110,7 @@ pub fn execute<
         .filter_map(|arg| match arg {
             CallArg::Pure(_) => None,
             CallArg::Object(ObjectArg::ImmOrOwnedObject((id, _, _)))
-            | CallArg::Object(ObjectArg::SharedObject(id)) => {
+            | CallArg::Object(ObjectArg::SharedObject { id, .. }) => {
                 Some(vec![(*id, state_view.read_object(id)?)])
             }
             CallArg::ObjVec(vec) => {
@@ -121,7 +121,7 @@ pub fn execute<
                     vec.iter()
                         .filter_map(|obj_arg| match obj_arg {
                             ObjectArg::ImmOrOwnedObject((id, _, _))
-                            | ObjectArg::SharedObject(id) => {
+                            | ObjectArg::SharedObject { id, .. } => {
                                 Some((*id, state_view.read_object(id)?))
                             }
                         })
@@ -517,7 +517,7 @@ fn process_successful_execution<S: Storage + ParentSync>(
     }
     let tx_digest = ctx.digest();
 
-    for (id, (write_kind, recipient, tag, abilities, contents)) in writes {
+    for (id, (write_kind, mut recipient, tag, abilities, contents)) in writes {
         let has_public_transfer = abilities.has_store();
         debug_assert_eq!(
             id,
@@ -568,6 +568,22 @@ fn process_successful_execution<S: Storage + ParentSync>(
         // freshly created, this means that its version will now be 1.
         // thus, all objects in the global object pool have version > 0
         move_obj.increment_version();
+
+        // Remember the version this object was shared at, if this write was the one that shared it.
+        if let Owner::Shared {
+            initial_shared_version,
+        } = &mut recipient
+        {
+            // TODO Consider a distinct Recipient enum within ObjectRuntime to enforce this
+            // invariant at the type level.
+            assert_eq!(
+                *initial_shared_version,
+                SequenceNumber::new(),
+                "Initial version should be blank before this point",
+            );
+            *initial_shared_version = move_obj.version();
+        }
+
         // A to-be-transferred object can come from 3 sources:
         //   1. Passed in by-value (in `by_value_objects`, i.e. old_object is not none)
         //   2. Created in this transaction (in `newly_generated_ids`)
@@ -814,9 +830,15 @@ pub fn resolve_and_type_check(
                     type_check_struct(view, type_args, idx, arg_type, param_type)?;
                     o
                 }
-                CallArg::Object(ObjectArg::SharedObject(id)) => {
+                CallArg::Object(ObjectArg::SharedObject {
+                    id,
+                    initial_shared_version,
+                }) => {
                     let (o, arg_type, param_type) = serialize_object(
-                        InputObjectKind::SharedMoveObject(id),
+                        InputObjectKind::SharedMoveObject {
+                            id,
+                            initial_shared_version,
+                        },
                         idx,
                         param_type,
                         objects,
@@ -842,7 +864,13 @@ pub fn resolve_and_type_check(
                             ObjectArg::ImmOrOwnedObject(ref_) => {
                                 InputObjectKind::ImmOrOwnedMoveObject(ref_)
                             }
-                            ObjectArg::SharedObject(id) => InputObjectKind::SharedMoveObject(id),
+                            ObjectArg::SharedObject {
+                                id,
+                                initial_shared_version,
+                            } => InputObjectKind::SharedMoveObject {
+                                id,
+                                initial_shared_version,
+                            },
                         };
                         let (o, arg_type, param_type) = serialize_object(
                             object_kind,
@@ -1052,7 +1080,7 @@ fn serialize_object<'a>(
                 error,
             ));
         }
-        InputObjectKind::SharedMoveObject(_) if !object.is_shared() => {
+        InputObjectKind::SharedMoveObject { .. } if !object.is_shared() => {
             let error = format!(
                 "Argument at index {} populated with an immutable or owned object id {} \
                         but an shared object was expected",
@@ -1149,7 +1177,7 @@ fn inner_param_type<'a>(
         | t @ SignatureToken::TypeParameter(_) => {
             match &object.owner {
                 Owner::AddressOwner(_) | Owner::ObjectOwner(_) => (),
-                Owner::Shared | Owner::Immutable => {
+                Owner::Shared { .. } | Owner::Immutable => {
                     return Err(ExecutionError::new_with_source(
                         ExecutionErrorKind::entry_argument_error(
                             idx,
