@@ -165,6 +165,28 @@ fun delete_uid_with_fields() {
     object::delete(id);
 }
 
+// transfer an object field from one "parent" to another
+#[test]
+fun transfer_object() {
+    let sender = @0x0;
+    let scenario = ts::begin(sender);
+    let id1 = ts::new_object(&mut scenario);
+    let id2 = ts::new_object(&mut scenario);
+    add(&mut id1, 0, new(ts::new_object(&mut scenario)));
+    assert!(exists_<u64>(&mut id1, 0), 0);
+    assert!(!exists_<u64>(&mut id2, 0), 0);
+    bump(borrow_mut(&mut id1, 0));
+    let c: Counter = remove(&mut id1, 0);
+    add(&mut id2, 0, c);
+    assert!(!exists_<u64>(&mut id1, 0), 0);
+    assert!(exists_<u64>(&mut id2, 0), 0);
+    bump(borrow_mut(&mut id2, 0));
+    assert!(count(borrow(&id2, 0)) == 2, 0);
+    ts::end(scenario);
+    object::delete(id1);
+    object::delete(id2);
+}
+
 fun new(id: UID): Counter {
     Counter { id, count: 0 }
 }
