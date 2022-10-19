@@ -34,7 +34,7 @@ use tokio::{
 use sui_types::messages_checkpoint::CheckpointRequest;
 use sui_types::messages_checkpoint::CheckpointResponse;
 
-use crate::authority::ConsensusHandler;
+use crate::consensus_handler::ConsensusHandler;
 use tracing::{error, info, Instrument};
 
 #[cfg(test)]
@@ -446,7 +446,7 @@ impl ValidatorService {
         );
 
         match state
-            .handle_certificate(certificate.clone())
+            .handle_certificate(&certificate)
             .instrument(span)
             .await
             .map_err(|e| tonic::Status::internal(e.to_string()))

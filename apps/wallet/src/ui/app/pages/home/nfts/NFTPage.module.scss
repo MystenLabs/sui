@@ -1,6 +1,6 @@
 .nft-gallery-container {
     margin-top: 20px;
-    padding-bottom: 50px;
+    padding-bottom: 65px;
     flex-grow: 1;
     padding-left: 25px;
     padding-right: 25px;
@@ -12,7 +12,7 @@
     .nft-gallery {
         display: grid;
         grid-template-columns: repeat(1, 1fr) 50%;
-        grid-gap: 30px 10px;
+        grid-gap: 16px 10px;
 
         a {
             text-decoration: none;

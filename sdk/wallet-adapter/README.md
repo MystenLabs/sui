@@ -93,7 +93,8 @@ The following wallets are known to work with the Wallet Standard:
 
 - **[Sui Wallet](https://docs.sui.io/devnet/explore/wallet-browser)**
 - **[Ethos Wallet](https://chrome.google.com/webstore/detail/ethos-wallet/mcbigmjiafegjnnogedioegffbooigli)**
-
+- **[Suiet Wallet](https://suiet.app/)**
+ 
 ## Demo app
 
 This repo has a simple demo app to test the behavior of the wallet adapters. You can run it using the following commands:

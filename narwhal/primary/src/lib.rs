@@ -17,7 +17,6 @@ mod core;
 mod grpc_server;
 mod header_waiter;
 mod helper;
-mod payload_receiver;
 mod primary;
 mod proposer;
 mod state_handler;

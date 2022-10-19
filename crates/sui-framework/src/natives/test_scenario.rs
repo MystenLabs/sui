@@ -27,7 +27,7 @@ use move_vm_types::{
 use smallvec::smallvec;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use sui_types::{
-    base_types::{ObjectID, SuiAddress},
+    base_types::{ObjectID, SequenceNumber, SuiAddress},
     id::UID,
     object::Owner,
     storage::WriteKind,
@@ -55,7 +55,7 @@ pub fn end_transaction(
         .test_inventories
         .taken
         .iter()
-        .filter(|(_id, owner)| matches!(owner, Owner::Shared | Owner::Immutable))
+        .filter(|(_id, owner)| matches!(owner, Owner::Shared { .. } | Owner::Immutable))
         .map(|(id, owner)| (*id, *owner))
         .collect();
     // set to true if a shared or imm object was:
@@ -159,7 +159,7 @@ pub fn end_transaction(
                     .insert(id, ());
             }
             Owner::ObjectOwner(_) => (),
-            Owner::Shared => {
+            Owner::Shared { .. } => {
                 inventories
                     .shared_inventory
                     .entry(ty)
@@ -395,7 +395,7 @@ pub fn take_shared_by_id(
         &mut inventories.taken,
         &mut object_runtime.state.input_objects,
         id,
-        Owner::Shared,
+        Owner::Shared { initial_shared_version: /* dummy */ SequenceNumber::new() },
     ))
 }
 
@@ -434,7 +434,7 @@ pub fn was_taken_shared(
     let was_taken = inventories
         .taken
         .get(&id)
-        .map(|owner| owner == &Owner::Shared)
+        .map(|owner| matches!(owner, Owner::Shared { .. }))
         .unwrap_or(false);
     Ok(NativeResult::ok(
         legacy_test_cost(),
@@ -535,7 +535,7 @@ fn transaction_effects(
                 transferred_to_account.push((pack_id(id), Value::address(a.into())))
             }
             Owner::ObjectOwner(o) => transferred_to_object.push((pack_id(id), pack_id(o))),
-            Owner::Shared => shared.push(id),
+            Owner::Shared { .. } => shared.push(id),
             Owner::Immutable => frozen.push(id),
         }
     }

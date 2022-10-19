@@ -345,8 +345,11 @@ ObjectArg:
             - TYPENAME: ObjectDigest
     1:
       SharedObject:
-        NEWTYPE:
-          TYPENAME: ObjectID
+        STRUCT:
+          - id:
+              TYPENAME: ObjectID
+          - initial_shared_version:
+              TYPENAME: SequenceNumber
 ObjectDigest:
   NEWTYPESTRUCT: BYTES
 ObjectFormatOptions:
@@ -383,7 +386,10 @@ Owner:
         NEWTYPE:
           TYPENAME: SuiAddress
     2:
-      Shared: UNIT
+      Shared:
+        STRUCT:
+          - initial_shared_version:
+              TYPENAME: SequenceNumber
     3:
       Immutable: UNIT
 Pay:

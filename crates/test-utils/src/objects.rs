@@ -74,5 +74,8 @@ pub fn test_shared_object() -> Object {
     let shared_object_id = ObjectID::from_hex_literal(seed).unwrap();
     let content = GasCoin::new(shared_object_id, 10);
     let obj = MoveObject::new_gas_coin(OBJECT_START_VERSION, content.to_bcs_bytes());
-    Object::new_move(obj, Owner::Shared, TransactionDigest::genesis())
+    let owner = Owner::Shared {
+        initial_shared_version: obj.version(),
+    };
+    Object::new_move(obj, owner, TransactionDigest::genesis())
 }

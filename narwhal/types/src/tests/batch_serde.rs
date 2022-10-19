@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{serialized_batch_digest, Batch, WorkerMessage};
+use crate::{serialized_batch_digest, Batch, WorkerBatchMessage};
 use fastcrypto::hash::Hash;
 use proptest::arbitrary::Arbitrary;
 use serde_test::{assert_tokens, Token};
@@ -65,16 +65,16 @@ fn test_bincode_serde_batch() {
 fn test_bincode_serde_batch_message() {
     let tx = || vec![1; 5];
 
-    let txes: WorkerMessage = WorkerMessage::Batch(Batch((0..2).map(|_| tx()).collect()));
+    let txes = WorkerBatchMessage {
+        batch: Batch((0..2).map(|_| tx()).collect()),
+    };
 
     let txes_bytes = bincode::serialize(&txes).unwrap();
 
-    // We expect the difference with the above test will be the enum variant above on 4 bytes,
-    // see https://github.com/bincode-org/bincode/blob/75a2e0bc9d35cfa7537633b07a9307bf71da84b5/src/features/serde/ser.rs#L212-L224
-
-    // Variant index 0 (4 bytes), Length-prefix 2, length-prefix 5, 11111, length-prefix 5, 11111
+    // We expect this will be the same as the above.
+    // Length-prefix 2, length-prefix 5, 11111, length-prefix 5, 11111
     let expected_bytes =
-        hex::decode("0000000002000000000000000500000000000000010101010105000000000000000101010101")
+        hex::decode("02000000000000000500000000000000010101010105000000000000000101010101")
             .unwrap();
 
     assert_eq!(
@@ -92,7 +92,7 @@ proptest::proptest! {
         batch in Batch::arbitrary()
     ) {
         let digest = batch.digest();
-        let message = WorkerMessage::Batch(batch);
+        let message = WorkerBatchMessage{batch};
         let serialized = bincode::serialize(&message).expect("Failed to serialize our own batch");
         let digest_from_serialized = serialized_batch_digest(&serialized).expect("Failed to hash serialized batch");
         assert_eq!(digest, digest_from_serialized);

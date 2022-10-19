@@ -44,7 +44,7 @@ impl ObjectRootAncestorMap {
                             );
                         }
                     }
-                    Owner::AddressOwner(_) | Owner::Immutable | Owner::Shared => {
+                    Owner::AddressOwner(_) | Owner::Immutable | Owner::Shared { .. } => {
                         break (cur_id, cur_owner);
                     }
                 };

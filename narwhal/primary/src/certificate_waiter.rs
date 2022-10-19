@@ -3,164 +3,189 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::metrics::PrimaryMetrics;
 use config::Committee;
-use dashmap::DashMap;
-use futures::future::try_join_all;
-use once_cell::sync::OnceCell;
-use std::sync::Arc;
+use crypto::{NetworkPublicKey, PublicKey};
+use futures::{future::BoxFuture, stream::FuturesUnordered, FutureExt, StreamExt};
+use network::{P2pNetwork, PrimaryToPrimaryRpc};
+use rand::{rngs::ThreadRng, seq::SliceRandom};
+use std::{collections::BTreeMap, future::pending, sync::Arc, time::Duration};
 use storage::CertificateStore;
 use tokio::{
     sync::{oneshot, watch},
-    task::JoinHandle,
-    time::{sleep, Duration, Instant},
+    task::{JoinError, JoinHandle},
+    time::{self, Instant},
 };
-use tracing::{info, warn};
-use types::metered_channel::WithPermit;
+use tracing::{debug, error, instrument, trace, warn};
 use types::{
-    bounded_future_queue::BoundedFuturesUnordered,
     error::{DagError, DagResult},
     metered_channel::{Receiver, Sender},
-    Certificate, CertificateDigest, HeaderDigest, ReconfigureNotification, Round,
+    Certificate, ConsensusStore, FetchCertificatesRequest, FetchCertificatesResponse,
+    ReconfigureNotification, Round,
 };
 
 #[cfg(test)]
 #[path = "tests/certificate_waiter_tests.rs"]
 pub mod certificate_waiter_tests;
 
-/// The resolution of the timer that checks whether we received replies to our parent requests, and triggers
-/// a round of GC if we didn't.
-const GC_RESOLUTION: u64 = 10_000;
+// Maximum number of certficates to fetch with one request.
+const MAX_CERTIFICATES_TO_FETCH: usize = 1000;
+// Seconds to wait for a response before issuing another parallel fetch request.
+const PARALLEL_FETCH_REQUEST_INTERVAL_SECS: u64 = 5;
 
-/// Waits to receive all the ancestors of a certificate before looping it back to the `Core`
-/// for further processing.
-pub struct CertificateWaiter {
+/// Message format from CertificateWaiter to core on the loopback channel.
+pub struct CertificateLoopbackMessage {
+    /// Certificates to be processed by the core.
+    /// In normal case processing the certificates in order should not encounter any missing parent.
+    pub certificates: Vec<Certificate>,
+    /// Used by core to signal back that it is done with the certificates.
+    pub done: oneshot::Sender<()>,
+}
+
+/// The CertificateWaiter is responsible for fetching certificates that this node is missing
+/// from other primaries. It operates two loops:
+/// Loop 1: listens for certificates missing parents from the core, tracks the highest missing
+/// round per origin, and kicks start fetch tasks if needed.
+/// Loop 2: runs fetch task to request certificates from other primaries continuously, until all
+/// highest missing rounds have been met.
+pub(crate) struct CertificateWaiter {
+    /// Internal state of CertificateWaiter.
+    state: Arc<CertificateWaiterState>,
     /// The committee information.
     committee: Committee,
-    /// The persistent storage.
-    store: CertificateStore,
-    /// Receiver for signal of round change
+    /// Persistent storage for certificates. Read-only usage.
+    certificate_store: CertificateStore,
+    /// Persistent storage for consensus when using internal consensus. Read-only usage.
+    consensus_store: Option<Arc<ConsensusStore>>,
+    /// Receiver for signal of round changes. Used for calculating gc_round.
     rx_consensus_round_updates: watch::Receiver<u64>,
     /// The depth of the garbage collector.
     gc_depth: Round,
     /// Watch channel notifying of epoch changes, it is only used for cleanup.
     rx_reconfigure: watch::Receiver<ReconfigureNotification>,
-    /// Receives sync commands from the `Synchronizer`.
-    rx_synchronizer: Receiver<Certificate>,
-    /// Loops back to the core certificates for which we got all parents.
-    tx_core: Sender<Certificate>,
-    /// List of digests (certificates) that are waiting to be processed. Their processing will
-    /// resume when we get all their dependencies. The map holds a cancellation `Sender`
-    /// which we can use to give up on a certificate.
-    // TODO: remove the OnceCell once drain_filter stabilizes
-    pending: DashMap<HeaderDigest, (Round, OnceCell<oneshot::Sender<()>>)>,
+    /// Receives certificates with missing parents from the `Synchronizer`.
+    rx_certificate_waiter: Receiver<Certificate>,
+    /// Map of validator to target rounds that local store must catch up to.
+    /// The targets are updated with each certificate missing parents sent from the core.
+    /// Each fetch task may satisfy some / all / none of the targets.
+    /// TODO: rethink the stopping criteria for fetching, balance simplicity with completeness
+    /// of certificates (for avoiding jitters of voting / processing certificates instead of
+    /// correctness).
+    targets: BTreeMap<PublicKey, Round>,
+    /// Keeps the handle to the inflight fetch certificates task.
+    /// Contains a pending future that never returns, and at most 1 other task.
+    fetch_certificates_task: FuturesUnordered<BoxFuture<'static, Result<(), JoinError>>>,
+}
+
+/// Thread-safe internal state of CertificateWaiter shared with its fetch task.
+struct CertificateWaiterState {
+    /// Identity of the current authority.
+    name: PublicKey,
+    /// Network client to fetch certificates from other primaries.
+    network: P2pNetwork,
+    /// Loops fetched certificates back to the core. Certificates are ensured to have all parents.
+    tx_certificates_loopback: Sender<CertificateLoopbackMessage>,
     /// The metrics handler
     metrics: Arc<PrimaryMetrics>,
 }
 
 impl CertificateWaiter {
-    /// Returns the max amount of pending certificates we should expect. In the worst case of causal completion,
-    /// this can be `self.gc_depth` x `self.committee.len()`
-    pub fn max_pending_certificates(&self) -> usize {
-        self.gc_depth as usize * self.committee.size() * 2
-    }
-
     #[must_use]
     pub fn spawn(
+        name: PublicKey,
         committee: Committee,
-        store: CertificateStore,
+        network: P2pNetwork,
+        certificate_store: CertificateStore,
+        consensus_store: Option<Arc<ConsensusStore>>,
         rx_consensus_round_updates: watch::Receiver<u64>,
         gc_depth: Round,
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
-        rx_synchronizer: Receiver<Certificate>,
-        tx_core: Sender<Certificate>,
+        rx_certificate_waiter: Receiver<Certificate>,
+        tx_certificates_loopback: Sender<CertificateLoopbackMessage>,
         metrics: Arc<PrimaryMetrics>,
     ) -> JoinHandle<()> {
+        let state = Arc::new(CertificateWaiterState {
+            name,
+            network,
+            tx_certificates_loopback,
+            metrics,
+        });
+        // Add a future that never returns to fetch_certificates_task, so it is blocked when empty.
+        let fetch_certificates_task = FuturesUnordered::new();
+        fetch_certificates_task.push(pending().boxed());
         tokio::spawn(async move {
             Self {
+                state,
                 committee,
-                store,
+                certificate_store,
+                consensus_store,
                 rx_consensus_round_updates,
                 gc_depth,
                 rx_reconfigure,
-                rx_synchronizer,
-                tx_core,
-                pending: DashMap::new(),
-                metrics,
+                rx_certificate_waiter,
+                targets: BTreeMap::new(),
+                fetch_certificates_task,
             }
             .run()
             .await;
         })
     }
 
-    /// Helper function. It waits for particular data to become available in the storage and then
-    /// delivers the specified header.
-    async fn waiter(
-        missing: Vec<CertificateDigest>,
-        store: CertificateStore,
-        deliver: Certificate,
-        cancel_handle: oneshot::Receiver<()>,
-    ) -> DagResult<Certificate> {
-        let waiting: Vec<_> = missing.into_iter().map(|x| store.notify_read(x)).collect();
-
-        tokio::select! {
-            result = try_join_all(waiting) => {
-                result.map(|_| deliver).map_err(DagError::from)
-            }
-            // the request for this certificate is obsolete, for instance because its round is obsolete (GC'd).
-            _ = cancel_handle => Ok(deliver),
-        }
-    }
-
     async fn run(&mut self) {
-        let mut waiting = BoundedFuturesUnordered::with_capacity(self.max_pending_certificates());
-        let timer = sleep(Duration::from_millis(GC_RESOLUTION));
-        tokio::pin!(timer);
-        let mut attempt_garbage_collection;
-
-        info!("CertificateWaiter has started successfully.");
         loop {
-            // Initially set to not garbage collect
-            attempt_garbage_collection = false;
-
             tokio::select! {
-                // We only accept new elements if we have "room" for them
-                Some(certificate) = self.rx_synchronizer.recv(), if waiting.available_permits() > 0 => {
-                    if certificate.epoch() < self.committee.epoch() {
+                Some(certificate) = self.rx_certificate_waiter.recv() => {
+                    let header = &certificate.header;
+                    if header.epoch != self.committee.epoch() {
                         continue;
                     }
+                    // Unnecessary to validate the header and certificate further, since it has
+                    // already been validated.
 
-                    // Ensure we process only once this certificate.
-                    let header_id = certificate.header.id;
-                    if self.pending.contains_key(&header_id) {
-                        continue;
-                    }
-
-                    // Add the certificate to the waiter pool. The waiter will return it to us when
-                    // all its parents are in the store.
-                    let wait_for = certificate.header.parents.iter().cloned().collect();
-                    let (tx_cancel, rx_cancel) = oneshot::channel();
-                    // TODO: remove all this once drain_filter is stabilized.
-                    let once_cancel = {
-                        let inner = OnceCell::new();
-                        inner.set(tx_cancel).expect("OnceCell invariant violated");
-                        inner
-                    };
-                    self.pending.insert(header_id, (certificate.round(), once_cancel));
-                    let fut = Self::waiter(wait_for, self.store.clone(), certificate, rx_cancel);
-                    waiting.push(fut).await;
-                }
-                // we poll the availability of a slot to send the result to the core simultaneously
-                Some((permit, Some(certificate))) = self.tx_core.with_permit(waiting.next()) => {
-                    let certificate = match certificate{
-                        Err(err) => {
-                            warn!("Error fetching certificate {}", err);
+                    if let Some(r) = self.targets.get(&header.author) {
+                        if header.round <= *r {
+                            // Ignore fetch request when we already need to sync to a later
+                            // certificate from the same authority. Although this certificate may
+                            // not be the parent of the later certificate, this should be ok
+                            // because eventually a child of this certificate will miss parents and
+                            // get inserted into the targets.
+                            //
+                            // Basically, it is ok to stop fetching without this certificate.
+                            // If this certificate becomes a parent of other certificates, another
+                            // fetch will be triggered eventually because of missing certificates.
                             continue;
-                        },
-                        Ok(certificate) => certificate,
+                        }
+                    }
+
+                    // The header should have been verified as part of the certificate.
+                    match self.last_committed_round(&header.author) {
+                        Ok(r) => {
+                            if r >= header.round {
+                                // Ignore fetch request. Possibly the certificate was processed
+                                // while the message is in the queue.
+                                continue;
+                            }
+                            // Otherwise, continue to update fetch targets.
+                        }
+                        Err(e) => {
+                            // If this happens, it is most likely due to bincode serialization error.
+                            error!("Failed to read latest round for {}: {}", header.author, e);
+                            continue;
+                        }
                     };
-                        // TODO [issue #115]: To ensure crash-recovery of consensus, it is not enough to send every
-                        // certificate for which their ancestors are in the storage. After recovery, we may also
-                        // need to send a all parents certificates with rounds greater then `last_committed`.
-                        permit.send(certificate);
+
+                    // Update the target rounds for the authority.
+                    self.targets.insert(header.author.clone(), header.round);
+
+                    // Kick start a fetch task if there is no task other than the pending task running.
+                    if self.fetch_certificates_task.len() == 1 {
+                        self.kickstart();
+                    }
+                },
+                _ = self.fetch_certificates_task.next() => {
+                    // Kick start another fetch task after the previous one terminates.
+                    // If all targets have been fetched, the new task will clean up the targets and exit.
+                    if self.fetch_certificates_task.len() == 1 {
+                        self.kickstart();
+                    }
                 },
                 result = self.rx_reconfigure.changed() => {
                     result.expect("Committee channel dropped");
@@ -168,68 +193,245 @@ impl CertificateWaiter {
                     match message {
                         ReconfigureNotification::NewEpoch(committee) => {
                             self.committee = committee;
-                            self.pending.clear();
+                            self.targets.clear();
+                            self.fetch_certificates_task = FuturesUnordered::new();
+                            self.fetch_certificates_task.push(pending().boxed());
                         },
                         ReconfigureNotification::UpdateCommittee(committee) => {
                             self.committee = committee;
+                            // There should be no committee membership change so self.targets does
+                            // not need to be updated.
                         },
                         ReconfigureNotification::Shutdown => return
                     }
-                    tracing::debug!("Committee updated to {}", self.committee);
-
-                }
-                () = &mut timer => {
-                    // We still would like to GC even if we do not receive anything from either the synchronizer or
-                    //  the Waiter. This can happen, as we may have asked for certificates that (at the time of ask)
-                    // were not past our GC bound, but which round swept up past our GC bound as we advanced rounds
-                    // & caught up with the network.
-                    // Those certificates may get stuck in pending, unless we periodically clean up.
-
-                    // Reschedule the timer.
-                    timer.as_mut().reset(Instant::now() + Duration::from_millis(GC_RESOLUTION));
-                    attempt_garbage_collection = true;
-                },
-
-                Ok(()) = self.rx_consensus_round_updates.changed() => {
-                    attempt_garbage_collection = true;
-                }
-
-            }
-
-            // Either upon time-out or round change
-            if attempt_garbage_collection {
-                let round = *self.rx_consensus_round_updates.borrow();
-                if round > self.gc_depth {
-                    let gc_round = round - self.gc_depth;
-
-                    self.pending.retain(|_digest, (r, once_cancel)| {
-                        if *r <= gc_round {
-                            // note: this send can fail, harmlessly, if the certificate has been delivered (`notify_read`)
-                            // and the present code path fires before the corresponding `waiting` item is unpacked above.
-                            let _ = once_cancel
-                                .take()
-                                .expect("This should be protected by a write lock")
-                                .send(());
-                            false
-                        } else {
-                            true
-                        }
-                    });
+                    debug!("Committee updated to {}", self.committee);
                 }
             }
-
-            self.update_metrics(waiting.len());
         }
     }
 
-    fn update_metrics(&self, waiting_len: usize) {
-        self.metrics
-            .pending_elements_certificate_waiter
-            .with_label_values(&[&self.committee.epoch.to_string()])
-            .set(self.pending.len() as i64);
-        self.metrics
-            .waiting_elements_certificate_waiter
-            .with_label_values(&[&self.committee.epoch.to_string()])
-            .set(waiting_len as i64);
+    // Starts a task to fetch missing certificates from other primaries.
+    // A call to kickstart() can be triggered by a certificate with missing parents or the end of a
+    // fetch task. Each iteration of kickstart() updates the target rounds, and iterations will
+    // continue until there are no more target rounds to catch up to.
+    #[allow(clippy::mutable_key_type)]
+    fn kickstart(&mut self) {
+        let gc_round = self.gc_round();
+        let committed_rounds: BTreeMap<_, _> = match self.all_committed_rounds() {
+            Ok(committed_rounds) => committed_rounds,
+            Err(e) => {
+                warn!("Failed to read rounds per authority from the certificate store: {e}");
+                return;
+            }
+        }
+        .into_iter()
+        .map(|(key, r)| (key, r.max(gc_round)))
+        .collect();
+        self.targets.retain(|origin, target_round| {
+            let committed_round = committed_rounds.get(origin).unwrap_or(&gc_round);
+            // Drop sync target when cert store already has an equal or higher round for the origin.
+            // This will apply GC to targets as well.
+            //
+            // Similarly, even if the store actually does not have target_round for the origin,
+            // it is ok to stop fetching without this certificate.
+            // If this certificate becomes a parent of other certificates, another
+            // fetch will be triggered eventually because of missing certificates.
+            committed_round < target_round
+        });
+        if self.targets.is_empty() {
+            trace!("Certificates have caught up. Skip fetching.");
+            return;
+        }
+
+        let state = self.state.clone();
+        let committee = self.committee.clone();
+
+        debug!(
+            "Starting task to fetch missing certificates: max target {}, committed {:?}",
+            self.targets.values().max().unwrap_or(&0),
+            committed_rounds.values()
+        );
+        self.fetch_certificates_task.push(
+            tokio::task::spawn(async move {
+                state
+                    .metrics
+                    .certificate_waiter_inflight_fetch
+                    .with_label_values(&[&committee.epoch.to_string()])
+                    .inc();
+                state
+                    .metrics
+                    .certificate_waiter_fetch_attempts
+                    .with_label_values(&[&committee.epoch.to_string()])
+                    .inc();
+
+                let now = Instant::now();
+                match run_fetch_task(state.clone(), committee.clone(), committed_rounds).await {
+                    Ok(_) => {
+                        debug!(
+                            "Finished task to fetch certificates successfully, elapsed = {}s",
+                            now.elapsed().as_secs_f64()
+                        );
+                    }
+                    Err(e) => {
+                        debug!("Error from task to fetch certificates: {e}");
+                    }
+                };
+
+                state
+                    .metrics
+                    .certificate_waiter_op_latency
+                    .with_label_values(&[&committee.epoch.to_string()])
+                    .observe(now.elapsed().as_secs_f64());
+                state
+                    .metrics
+                    .certificate_waiter_inflight_fetch
+                    .with_label_values(&[&committee.epoch.to_string()])
+                    .dec();
+            })
+            .boxed(),
+        );
     }
+
+    fn gc_round(&self) -> Round {
+        self.rx_consensus_round_updates
+            .borrow()
+            .to_owned()
+            .saturating_sub(self.gc_depth)
+    }
+
+    fn last_committed_round(&self, authority: &PublicKey) -> DagResult<Round> {
+        match &self.consensus_store {
+            // Last round is 0 (genesis) when authority is not found in store.
+            Some(consensus_store) => Ok(consensus_store
+                .read_last_committed_round(authority)?
+                .unwrap_or(0)),
+            // When using external consensus, consensus_store is empty.
+            // TODO: use all origins and rounds of written certs above gc_round, instead of just
+            // the last written rounds.
+            None => Ok(self
+                .certificate_store
+                .last_round_number(authority)?
+                .unwrap_or(0)),
+        }
+    }
+
+    #[allow(clippy::mutable_key_type)]
+    fn all_committed_rounds(&self) -> DagResult<BTreeMap<PublicKey, Round>> {
+        let mut all_committed_rounds = BTreeMap::new();
+        for (name, _) in self.committee.authorities() {
+            // Last round is 0 (genesis) when authority is not found in store.
+            let last_round = self.last_committed_round(name)?;
+            all_committed_rounds.insert(name.clone(), last_round);
+        }
+        Ok(all_committed_rounds)
+    }
+}
+
+#[allow(clippy::mutable_key_type)]
+#[instrument(level = "debug", skip_all)]
+async fn run_fetch_task(
+    state: Arc<CertificateWaiterState>,
+    committee: Committee,
+    committed_rounds: BTreeMap<PublicKey, Round>,
+) -> DagResult<()> {
+    // Send request to fetch certificates.
+    // TODO: use a BTreeSet / RoaringTreemap to represent existing certificates per validator,
+    // from the last committed round or even gc round.
+    let request = FetchCertificatesRequest {
+        exclusive_lower_bounds: committed_rounds.into_iter().collect(),
+        max_items: MAX_CERTIFICATES_TO_FETCH,
+    };
+    let response =
+        fetch_certificates_helper(&state.name, &state.network, &committee, request).await;
+
+    // Process and store fetched certificates.
+    let num_certs_fetched = response.certificates.len();
+    process_certificates_helper(response, &state.tx_certificates_loopback).await?;
+    state
+        .metrics
+        .certificate_waiter_num_certificates_processed
+        .with_label_values(&[&committee.epoch().to_string()])
+        .add(num_certs_fetched as i64);
+
+    debug!("Successfully fetched and processed {num_certs_fetched} certificates");
+    Ok(())
+}
+
+/// Fetches certificates from other primaries concurrently, with ~5 sec interval between each request.
+/// Terminates after the 1st successful response is received.
+#[instrument(level = "debug", skip_all)]
+async fn fetch_certificates_helper(
+    name: &PublicKey,
+    network: &P2pNetwork,
+    committee: &Committee,
+    request: FetchCertificatesRequest,
+) -> FetchCertificatesResponse {
+    trace!("Start sending fetch certificates requests");
+    // TODO: make this a config parameter.
+    let request_interval = Duration::from_secs(PARALLEL_FETCH_REQUEST_INTERVAL_SECS);
+    let mut peers: Vec<NetworkPublicKey> = committee
+        .others_primaries(name)
+        .into_iter()
+        .map(|(_, _, network_key)| network_key)
+        .collect();
+    loop {
+        // TODO: order by stake weight instead. Possibly shuffle within a few buckets.
+        peers.shuffle(&mut ThreadRng::default());
+        let mut fut = FuturesUnordered::new();
+        for peer in peers.iter() {
+            fut.push(network.fetch_certificates(peer, request.clone()));
+            let mut interval = Box::pin(time::sleep(request_interval));
+            tokio::select! {
+                res = fut.next() => match res {
+                    Some(Ok(resp)) => {
+                        return resp;
+                    }
+                    Some(Err(e)) => {
+                        debug!("Failed to fetch certificates: {e}");
+                        // Issue request to another primary immediately.
+                    }
+                    None => {}
+                },
+                _ = &mut interval => {
+                    debug!("fetch_certificates_helper: no response yet. Sending out an additional fetch request in parallel.");
+                }
+            };
+        }
+    }
+}
+
+#[instrument(level = "debug", skip_all)]
+async fn process_certificates_helper(
+    response: FetchCertificatesResponse,
+    tx_certificates_loopback: &Sender<CertificateLoopbackMessage>,
+) -> DagResult<()> {
+    trace!("Start sending fetched certificates to processing");
+    if response.certificates.len() > MAX_CERTIFICATES_TO_FETCH {
+        return Err(DagError::TooManyFetchedCertificatesReturned(
+            response.certificates.len(),
+            MAX_CERTIFICATES_TO_FETCH,
+        ));
+    }
+    let (tx_done, rx_done) = oneshot::channel();
+    if let Err(e) = tx_certificates_loopback
+        .send(CertificateLoopbackMessage {
+            certificates: response.certificates,
+            done: tx_done,
+        })
+        .await
+    {
+        return Err(DagError::ClosedChannel(format!(
+            "Failed to send fetched certificate to processing. tx_certificates_loopback error: {}",
+            e
+        )));
+    }
+    if let Err(e) = rx_done.await {
+        return Err(DagError::ClosedChannel(format!(
+            "Failed to wait for core to process loopback certificates: {}",
+            e
+        )));
+    }
+    trace!("Fetched certificates have finished processing");
+
+    Ok(())
 }

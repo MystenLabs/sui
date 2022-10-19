@@ -30,7 +30,7 @@ impl TestCaseImpl for SharedCounterTest {
 
         let wallet_context: &WalletContext = ctx.get_wallet();
         let address = ctx.get_wallet_address();
-        let (package_ref, counter_id) =
+        let (package_ref, (counter_id, counter_version, _)) =
             publish_basics_package_and_make_counter(wallet_context, address).await;
         let (tx_cert, effects) =
             increment_counter(wallet_context, address, None, package_ref, counter_id).await;
@@ -51,7 +51,9 @@ impl TestCaseImpl for SharedCounterTest {
             .await;
 
         let counter_object = ObjectChecker::new(counter_id)
-            .owner(Owner::Shared)
+            .owner(Owner::Shared {
+                initial_shared_version: counter_version,
+            })
             .check_into_object(ctx.get_fullnode_client())
             .await;
 

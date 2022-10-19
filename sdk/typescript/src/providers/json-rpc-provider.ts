@@ -24,6 +24,7 @@ import {
   DEFAULT_START_TIME,
   EVENT_QUERY_MAX_LIMIT,
   ExecuteTransactionRequestType,
+  CoinDenominationInfoResponse,
   GatewayTxSeqNumber,
   GetObjectDataResponse,
   getObjectReference,
@@ -49,6 +50,7 @@ import {
   TransactionDigest,
   TransactionQuery,
   SUI_TYPE_ARG,
+  normalizeSuiAddress,
 } from '../types';
 import { SignatureScheme } from '../cryptography/publickey';
 import {
@@ -96,6 +98,12 @@ export class JsonRpcProvider extends Provider {
       skipDataValidation,
       socketOptions
     );
+  }
+
+  async getRpcApiVersion(): Promise<string> {
+    // TODO: we should fetch the API version from
+    // the RPC endpoint instead
+    return this.rpcAPIVersion;
   }
 
   // Move info
@@ -213,6 +221,23 @@ export class JsonRpcProvider extends Provider {
   async getGasObjectsOwnedByAddress(address: string): Promise<SuiObjectInfo[]> {
     const objects = await this.getObjectsOwnedByAddress(address);
     return objects.filter((obj: SuiObjectInfo) => Coin.isSUI(obj));
+  }
+
+  getCoinDenominationInfo(
+    coinType: string,
+  ): CoinDenominationInfoResponse {
+    const [packageId, module, symbol] = coinType.split('::');
+    if (normalizeSuiAddress(packageId) !== normalizeSuiAddress('0x2') || module != 'sui' || symbol !== 'SUI') {
+      throw new Error(
+        'only SUI coin is supported in getCoinDenominationInfo for now.'
+      );
+    }
+
+    return {
+      coinType: coinType,
+      basicUnit: 'MIST',
+      decimalNumber: 9,
+    };
   }
 
   async getCoinBalancesOwnedByAddress(
@@ -333,7 +358,7 @@ export class JsonRpcProvider extends Provider {
     objectID: string
   ): Promise<GetTxnDigestsResponse> {
     // TODO: remove after we deploy 0.12.0 DevNet
-    if (this.rpcAPIVersion === PRE_PAGINATION_API_VERSION) {
+    if ((await this.getRpcApiVersion()) === PRE_PAGINATION_API_VERSION) {
       const requests = [
         {
           method: 'sui_getTransactionsByInputObject',
@@ -387,7 +412,7 @@ export class JsonRpcProvider extends Provider {
     addressID: string
   ): Promise<GetTxnDigestsResponse> {
     // TODO: remove after we deploy 0.12.0 DevNet
-    if (this.rpcAPIVersion === PRE_PAGINATION_API_VERSION) {
+    if ((await this.getRpcApiVersion()) === PRE_PAGINATION_API_VERSION) {
       const requests = [
         {
           method: 'sui_getTransactionsToAddress',

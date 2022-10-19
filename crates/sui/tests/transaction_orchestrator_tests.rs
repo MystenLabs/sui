@@ -162,16 +162,22 @@ async fn test_local_execution_with_missing_parents() -> Result<(), anyhow::Error
 
     let signer = context.config.keystore.addresses().get(0).cloned().unwrap();
     let (pkg_ref, counter_id) = publish_basics_package_and_make_counter(context, signer).await;
+    let counter_shared_at = counter_id.1;
 
     // 0. Execute transaction through another fullnode (the one in WalletContext)
-    let digests0 = increment(context, &signer, counter_id, 20, pkg_ref).await;
+    let digests0 = increment(context, &signer, counter_id.0, 20, pkg_ref).await;
     // Since the node sync process is disabled, the node does not know about these txns
     tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
     node_does_not_know_txes(node, &digests0).await;
 
-    let tx0 =
-        make_counter_increment_transaction_with_wallet_context(context, signer, counter_id, None)
-            .await;
+    let tx0 = make_counter_increment_transaction_with_wallet_context(
+        context,
+        signer,
+        counter_id.0,
+        counter_shared_at,
+        None,
+    )
+    .await;
     let digest0 = *tx0.digest();
     // Then we use this node's Quorum Driver to submit transaction.
     orchestrator
@@ -193,11 +199,16 @@ async fn test_local_execution_with_missing_parents() -> Result<(), anyhow::Error
 
     // 1. Execute with Orchestrator, WaitForLocalExecution
     // WaitForLocalExecution synchronuously executes all previous txns
-    let digests1 = increment(context, &signer, counter_id, 20, pkg_ref).await;
+    let digests1 = increment(context, &signer, counter_id.0, 20, pkg_ref).await;
 
-    let tx1 =
-        make_counter_increment_transaction_with_wallet_context(context, signer, counter_id, None)
-            .await;
+    let tx1 = make_counter_increment_transaction_with_wallet_context(
+        context,
+        signer,
+        counter_id.0,
+        counter_shared_at,
+        None,
+    )
+    .await;
     let digest1 = *tx1.digest();
     let res = execute_with_orchestrator(
         &orchestrator,
@@ -216,12 +227,17 @@ async fn test_local_execution_with_missing_parents() -> Result<(), anyhow::Error
     // ImmediateReturn does not wait for execution results.
     // But the execution asynchronuously triggers all dependencies to
     // be executed as well.
-    let digests2 = increment(context, &signer, counter_id, 20, pkg_ref).await;
+    let digests2 = increment(context, &signer, counter_id.0, 20, pkg_ref).await;
     node_does_not_know_txes(node, &digests2).await;
 
-    let tx2 =
-        make_counter_increment_transaction_with_wallet_context(context, signer, counter_id, None)
-            .await;
+    let tx2 = make_counter_increment_transaction_with_wallet_context(
+        context,
+        signer,
+        counter_id.0,
+        counter_shared_at,
+        None,
+    )
+    .await;
     let digest2 = *tx2.digest();
     execute_with_orchestrator(
         &orchestrator,
