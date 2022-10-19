@@ -52,7 +52,7 @@ You can use your Sui Wallet on multiple devices and browsers. After you create a
 
 ## Add SUI tokens to your Sui Wallet
 
-When you first open the wallet you have no coins in it. You can add SUI tokens to your wallet through Discord. You need an active Discord account to access the Sui channels.
+When you first open the wallet, you have no coins in it. You can add SUI tokens to your wallet through Discord. You need an active Discord account to access the Sui channels.
 
 1. Click **Coins**.
 1. Click the small clipboard icon next to your address to copy it. 
