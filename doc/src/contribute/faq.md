@@ -50,15 +50,6 @@ You can also join the [Move](https://discord.gg/8prNjUqyFj) and [Sui](https://di
 
 We are seeking partners that can contribute to the ecosystem primarily in development by building apps with the SDK now so they can be ready to launch when the network goes live. If interested, please apply using the [Sui Partnerships Form](https://bit.ly/suiform).
 
-## Who can I talk to about a partnership or strategic investment? How can I discuss Sui in person?
-
-Start in [Discord](https://discord.gg/sui).
-
-## Where can I see the investors of the project?
-
-See the [mystenlabs.com](https://mystenlabs.com/) website for company details.
-
-
 ## Do you need moderators in Discord? Can I be the mod for my country?
 
 The Sui Community Mod Program is officially accepting applications. [Apply here](https://bit.ly/suimods)
