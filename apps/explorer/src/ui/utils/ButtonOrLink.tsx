@@ -10,7 +10,7 @@ export interface ButtonOrLinkProps
         'ref'
     > {}
 
-export default forwardRef<
+export const ButtonOrLink = forwardRef<
     HTMLAnchorElement | HTMLButtonElement,
     ButtonOrLinkProps
 >(({ href, to, ...props }, ref: any) => {
