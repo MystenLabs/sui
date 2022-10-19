@@ -12,16 +12,29 @@ export default {
 export const Heading1: StoryObj<HeadingProps> = {
     render: (props) => {
         return (
-            <div>
-                <Heading {...props} weight="bold">
-                    This is a sample heading.
-                </Heading>
-                <Heading {...props} weight="semibold">
-                    This is a sample heading.
-                </Heading>
-                <Heading {...props} weight="medium">
-                    This is a sample heading.
-                </Heading>
+            <div className="space-y-2">
+                <div>
+                    <Heading {...props} weight="bold">
+                        This is a sample heading.
+                    </Heading>
+                    <Heading {...props} weight="semibold">
+                        This is a sample heading.
+                    </Heading>
+                    <Heading {...props} weight="medium">
+                        This is a sample heading.
+                    </Heading>
+                </div>
+                <div>
+                    <Heading {...props} weight="bold" fixed>
+                        This is a sample heading. (fixed)
+                    </Heading>
+                    <Heading {...props} weight="semibold" fixed>
+                        This is a sample heading. (fixed)
+                    </Heading>
+                    <Heading {...props} weight="medium" fixed>
+                        This is a sample heading. (fixed)
+                    </Heading>
+                </div>
             </div>
         );
     },
