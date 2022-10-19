@@ -577,10 +577,10 @@ where
 
         let result = if bypass_validator_halt {
             self.state()
-                .handle_certificate_bypass_validator_halt(cert.clone())
+                .handle_certificate_bypass_validator_halt(&cert)
                 .await
         } else {
-            self.state().handle_certificate(cert.clone()).await
+            self.state().handle_certificate(&cert).await
         };
         match result {
             Ok(_) => Ok(SyncStatus::CertExecuted),
@@ -602,10 +602,10 @@ where
                 debug!(?digest, "parents executed, re-attempting cert");
                 if bypass_validator_halt {
                     self.state()
-                        .handle_certificate_bypass_validator_halt(cert.clone())
+                        .handle_certificate_bypass_validator_halt(&cert)
                         .await
                 } else {
-                    self.state().handle_certificate(cert.clone()).await
+                    self.state().handle_certificate(&cert).await
                 }?;
                 Ok(SyncStatus::CertExecuted)
             }

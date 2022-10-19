@@ -103,7 +103,7 @@ impl AuthorityAPI for ConfigurableBatchActionClient {
         certificate: CertifiedTransaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
         let state = self.state.clone();
-        state.handle_certificate(certificate).await
+        state.handle_certificate(&certificate).await
     }
 
     async fn handle_account_info_request(

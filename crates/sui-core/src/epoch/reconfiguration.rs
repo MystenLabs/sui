@@ -144,7 +144,7 @@ where
                 .process_transaction(advance_epoch_tx.clone().to_transaction())
                 .await
             {
-                Ok(certificate) => match self.state.handle_certificate(certificate).await {
+                Ok(certificate) => match self.state.handle_certificate(&certificate).await {
                     Ok(_) => {
                         break;
                     }

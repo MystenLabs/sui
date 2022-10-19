@@ -653,7 +653,7 @@ impl AuthorityState {
     #[instrument(level = "trace", skip_all)]
     pub async fn handle_certificate(
         &self,
-        certificate: CertifiedTransaction,
+        certificate: &CertifiedTransaction,
     ) -> SuiResult<TransactionInfoResponse> {
         let _metrics_guard = start_timer(self.metrics.handle_certificate_latency.clone());
         self.handle_certificate_impl(certificate, false).await
@@ -662,7 +662,7 @@ impl AuthorityState {
     #[instrument(level = "trace", skip_all)]
     pub async fn handle_certificate_bypass_validator_halt(
         &self,
-        certificate: CertifiedTransaction,
+        certificate: &CertifiedTransaction,
     ) -> SuiResult<TransactionInfoResponse> {
         self.handle_certificate_impl(certificate, true).await
     }
@@ -670,7 +670,7 @@ impl AuthorityState {
     #[instrument(level = "trace", skip_all)]
     async fn handle_certificate_impl(
         &self,
-        certificate: CertifiedTransaction,
+        certificate: &CertifiedTransaction,
         bypass_validator_halt: bool,
     ) -> SuiResult<TransactionInfoResponse> {
         self.metrics.total_cert_attempts.inc();
@@ -700,11 +700,11 @@ impl AuthorityState {
         );
         let tx_guard = self
             .database
-            .acquire_tx_guard(&certificate)
+            .acquire_tx_guard(certificate)
             .instrument(span)
             .await?;
 
-        self.process_certificate(tx_guard, &certificate, bypass_validator_halt)
+        self.process_certificate(tx_guard, certificate, bypass_validator_halt)
             .await
             .tap_err(|e| debug!(?tx_digest, "process_certificate failed: {e}"))
     }
