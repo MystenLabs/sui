@@ -11,12 +11,10 @@ use thiserror::Error;
 #[path = "tests/batch_serde.rs"]
 mod batch_serde;
 
-/// Unsolicited messages exchanged between workers.
-#[allow(clippy::large_enum_variant)]
+/// Used by workers to send a new batch.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-pub enum WorkerMessage {
-    /// Used by workers to send a new batch.
-    Batch(Batch),
+pub struct WorkerBatchMessage {
+    pub batch: Batch,
 }
 
 /// Used by workers to request batches from other workers.
@@ -54,7 +52,7 @@ pub struct RequestBatchResponse {
 /// TODO: update batch hashing to reflect hashing fixed sequences of transactions, see #87.
 pub fn serialized_batch_digest<K: AsRef<[u8]>>(sbm: K) -> Result<BatchDigest, DigestError> {
     let sbm = sbm.as_ref();
-    let mut offset = 4; // skip the enum variant selector
+    let mut offset = 0;
     let num_transactions = u64::from_le_bytes(
         sbm[offset..offset + 8]
             .try_into()

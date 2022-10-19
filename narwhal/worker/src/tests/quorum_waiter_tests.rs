@@ -2,7 +2,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
-use crate::worker::WorkerMessage;
 use test_utils::{batch, test_network, CommitteeFixture, WorkerToWorkerMockServer};
 
 #[tokio::test]
@@ -36,7 +35,9 @@ async fn wait_for_quorum() {
 
     // Make a batch.
     let batch = batch();
-    let message = WorkerMessage::Batch(batch.clone());
+    let message = WorkerBatchMessage {
+        batch: batch.clone(),
+    };
 
     // Spawn enough listeners to acknowledge our batches.
     let mut listener_handles = Vec::new();

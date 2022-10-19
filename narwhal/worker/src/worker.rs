@@ -39,7 +39,6 @@ pub mod worker_tests;
 pub const CHANNEL_CAPACITY: usize = 1_000;
 
 use crate::metrics::{Metrics, WorkerEndpointMetrics, WorkerMetrics};
-pub use types::WorkerMessage;
 
 pub struct Worker {
     /// The public key of this authority.

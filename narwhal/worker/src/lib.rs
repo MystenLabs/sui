@@ -15,4 +15,4 @@ mod primary_connector;
 mod quorum_waiter;
 mod worker;
 
-pub use crate::worker::{Worker, WorkerMessage};
+pub use crate::worker::Worker;

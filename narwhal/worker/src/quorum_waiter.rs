@@ -11,7 +11,7 @@ use tokio::{sync::watch, task::JoinHandle};
 use types::{
     error::DagError,
     metered_channel::{Receiver, Sender},
-    Batch, BatchDigest, ReconfigureNotification, WorkerMessage, WorkerOurBatchMessage,
+    Batch, BatchDigest, ReconfigureNotification, WorkerBatchMessage, WorkerOurBatchMessage,
 };
 
 #[cfg(test)]
@@ -94,7 +94,7 @@ impl QuorumWaiter {
                         .map(|(name, info)| (name, info.name))
                         .collect();
                     let (primary_names, worker_names): (Vec<_>, _) = workers.into_iter().unzip();
-                    let message = WorkerMessage::Batch(batch.clone());
+                    let message = WorkerBatchMessage{batch: batch.clone()};
                     let handlers = self.network.broadcast(worker_names, &message).await;
 
                     // Collect all the handlers to receive acknowledgements.
