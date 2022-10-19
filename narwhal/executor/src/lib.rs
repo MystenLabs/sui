@@ -44,7 +44,7 @@ pub trait ExecutionState {
     /// also return a new committee to reconfigure the system.
     async fn handle_consensus_transaction(
         &self,
-        consensus_output: &ConsensusOutput,
+        consensus_output: &Arc<ConsensusOutput>,
         execution_indices: ExecutionIndices,
         transaction: Vec<u8>,
     );
@@ -143,7 +143,7 @@ pub async fn get_restored_consensus_output<State: ExecutionState>(
 impl<T: ExecutionState + 'static + Send + Sync> ExecutionState for Arc<T> {
     async fn handle_consensus_transaction(
         &self,
-        consensus_output: &ConsensusOutput,
+        consensus_output: &Arc<ConsensusOutput>,
         execution_indices: ExecutionIndices,
         transaction: Vec<u8>,
     ) {

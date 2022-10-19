@@ -6,7 +6,6 @@ import { type ReactNode } from 'react';
 
 const headingStyles = cva(
     [
-        'font-sans',
         // TODO: Remove when CSS reset is applied.
         'my-0',
     ],

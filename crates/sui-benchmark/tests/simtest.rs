@@ -8,7 +8,7 @@ mod test {
     use std::sync::Arc;
     use std::time::Duration;
     use sui_config::SUI_KEYSTORE_FILENAME;
-    use sui_core::test_utils::test_authority_aggregator;
+    use sui_core::authority_aggregator::AuthorityAggregatorBuilder;
     use test_utils::{
         messages::get_gas_object_with_wallet_context, network::init_cluster_builder_env_aware,
     };
@@ -76,7 +76,10 @@ mod test {
             1,  // transfer_object_weight
         )];
 
-        let aggregator = Arc::new(test_authority_aggregator(swarm.config()));
+        let (aggregator, _) = AuthorityAggregatorBuilder::from_network_config(swarm.config())
+            .build()
+            .unwrap();
+        let aggregator = Arc::new(aggregator);
 
         for w in workloads.iter_mut() {
             w.workload.init(aggregator.clone()).await;

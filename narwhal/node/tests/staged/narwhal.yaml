@@ -89,19 +89,19 @@ WorkerInfo:
         TYPENAME: Ed25519PublicKey
     - transactions: BYTES
     - worker_address: BYTES
+WorkerOthersBatchMessage:
+  STRUCT:
+    - digest:
+        TYPENAME: BatchDigest
+    - worker_id: U32
+WorkerOurBatchMessage:
+  STRUCT:
+    - digest:
+        TYPENAME: BatchDigest
+    - worker_id: U32
 WorkerPrimaryMessage:
   ENUM:
     0:
-      OurBatch:
-        TUPLE:
-          - TYPENAME: BatchDigest
-          - U32
-    1:
-      OthersBatch:
-        TUPLE:
-          - TYPENAME: BatchDigest
-          - U32
-    2:
       Reconfigure:
         NEWTYPE:
           TYPENAME: ReconfigureNotification

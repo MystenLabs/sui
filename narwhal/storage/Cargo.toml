@@ -18,6 +18,7 @@ tokio = { version = "1.20.1", features = ["sync", "rt", "macros"] }
 tokio-util = { version = "0.7.4", features = ["codec"] }
 tonic = { version = "0.8.2", features = ["tls"] }
 tracing = "0.1.36"
+crypto = { path = "../crypto", package = "narwhal-crypto" }
 types = { path = "../types", package = "narwhal-types" }
 
 workspace-hack.workspace = true

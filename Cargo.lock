@@ -90,7 +90,7 @@ dependencies = [
 [[package]]
 name = "anemo"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=57c4af7d6cdbf47633e6715bcd67d98f300e2fd8#57c4af7d6cdbf47633e6715bcd67d98f300e2fd8"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=1b977fe20a615b7a7045f779f9aafa120389c2ab#1b977fe20a615b7a7045f779f9aafa120389c2ab"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -120,7 +120,7 @@ dependencies = [
 [[package]]
 name = "anemo-build"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=57c4af7d6cdbf47633e6715bcd67d98f300e2fd8#57c4af7d6cdbf47633e6715bcd67d98f300e2fd8"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=1b977fe20a615b7a7045f779f9aafa120389c2ab#1b977fe20a615b7a7045f779f9aafa120389c2ab"
 dependencies = [
  "prettyplease",
  "proc-macro2 1.0.46",
@@ -131,7 +131,7 @@ dependencies = [
 [[package]]
 name = "anemo-tower"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=57c4af7d6cdbf47633e6715bcd67d98f300e2fd8#57c4af7d6cdbf47633e6715bcd67d98f300e2fd8"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=1b977fe20a615b7a7045f779f9aafa120389c2ab#1b977fe20a615b7a7045f779f9aafa120389c2ab"
 dependencies = [
  "anemo",
  "bytes",
@@ -4950,6 +4950,7 @@ dependencies = [
  "tokio",
  "tokio-util 0.7.4",
  "tonic",
+ "tower",
  "tracing",
  "workspace-hack",
 ]
@@ -5066,6 +5067,7 @@ dependencies = [
  "dashmap",
  "fastcrypto",
  "futures",
+ "narwhal-crypto",
  "narwhal-test-utils",
  "narwhal-types",
  "tempfile",
@@ -8076,6 +8078,7 @@ dependencies = [
 name = "sui-config"
 version = "0.0.0"
 dependencies = [
+ "anemo",
  "anyhow",
  "arc-swap",
  "bcs",
@@ -8416,6 +8419,8 @@ dependencies = [
 name = "sui-node"
 version = "0.12.0"
 dependencies = [
+ "anemo",
+ "anemo-tower",
  "anyhow",
  "axum",
  "chrono",
@@ -8425,6 +8430,7 @@ dependencies = [
  "jemallocator",
  "multiaddr",
  "mysten-network",
+ "narwhal-network",
  "parking_lot 0.12.1",
  "prometheus",
  "sui-config",
@@ -8437,6 +8443,7 @@ dependencies = [
  "sui-types",
  "telemetry-subscribers 0.2.0",
  "tokio",
+ "tower",
  "tracing",
  "typed-store",
  "workspace-hack",

@@ -5,11 +5,11 @@ use crate::{
     metrics::PrimaryMetrics,
     primary::{PayloadToken, PrimaryMessage},
 };
+use anyhow::Result;
 use config::{Committee, SharedWorkerCache, WorkerId};
 use crypto::PublicKey;
 use futures::future::{try_join_all, BoxFuture};
-use network::{LuckyNetwork, P2pNetwork, UnreliableNetwork};
-use serde::{de::DeserializeOwned, Serialize};
+use network::{CancelOnDropHandler, P2pNetwork, ReliableNetwork, UnreliableNetwork};
 use std::{
     collections::HashMap,
     sync::Arc,
@@ -20,10 +20,9 @@ use store::Store;
 use tokio::{
     sync::{oneshot, watch},
     task::JoinHandle,
-    time::{sleep, Duration, Instant},
+    time::Instant,
 };
 use tracing::{debug, info, warn};
-use types::metered_channel::WithPermit;
 use types::{
     bounded_future_queue::BoundedFuturesUnordered,
     error::{DagError, DagResult},
@@ -35,10 +34,6 @@ use types::{
 #[cfg(test)]
 #[path = "tests/header_waiter_tests.rs"]
 pub mod header_waiter_tests;
-
-/// The resolution of the timer that checks whether we received replies to our sync requests, and triggers
-/// new sync requests if we didn't.
-const TIMER_RESOLUTION: u64 = 1_000;
 
 /// The commands that can be sent to the `Waiter`.
 #[derive(Debug)]
@@ -63,17 +58,13 @@ pub struct HeaderWaiter {
     rx_consensus_round_updates: watch::Receiver<u64>,
     /// The depth of the garbage collector.
     gc_depth: Round,
-    /// The delay to wait before re-trying sync requests.
-    sync_retry_delay: Duration,
-    /// Determine with how many nodes to sync when re-trying to send sync-request.
-    sync_retry_nodes: usize,
 
     /// Watch channel to reconfigure the committee.
     rx_reconfigure: watch::Receiver<ReconfigureNotification>,
     /// Receives sync commands from the `Synchronizer`.
-    rx_synchronizer: Receiver<WaiterMessage>,
-    /// Loops back to the core headers for which we got all parents and batches.
-    tx_core: Sender<Header>,
+    rx_header_waiter: Receiver<WaiterMessage>,
+    /// Loops back to core the headers for which we got all parents and batches.
+    tx_headers_loopback: Sender<Header>,
 
     /// Network driver allowing to send messages.
     network: P2pNetwork,
@@ -107,11 +98,9 @@ impl HeaderWaiter {
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
         rx_consensus_round_updates: watch::Receiver<u64>,
         gc_depth: Round,
-        sync_retry_delay: Duration,
-        sync_retry_nodes: usize,
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
-        rx_synchronizer: Receiver<WaiterMessage>,
-        tx_core: Sender<Header>,
+        rx_header_waiter: Receiver<WaiterMessage>,
+        tx_headers_loopback: Sender<Header>,
         metrics: Arc<PrimaryMetrics>,
         primary_network: P2pNetwork,
     ) -> JoinHandle<()> {
@@ -124,11 +113,9 @@ impl HeaderWaiter {
                 payload_store,
                 rx_consensus_round_updates,
                 gc_depth,
-                sync_retry_delay,
-                sync_retry_nodes,
                 rx_reconfigure,
-                rx_synchronizer,
-                tx_core,
+                rx_header_waiter,
+                tx_headers_loopback,
                 network: primary_network,
                 parent_requests: HashMap::new(),
                 batch_requests: HashMap::new(),
@@ -140,23 +127,23 @@ impl HeaderWaiter {
         })
     }
 
-    /// Helper function. It waits for particular data to become available in the storage
-    /// and then delivers the specified header.
-    async fn waiter<T, V>(
-        missing: Vec<T>,
-        store: Store<T, V>,
+    async fn wait_for_batches(
+        digests: HashMap<u32, Vec<BatchDigest>>,
+        synchronize_handles: Vec<CancelOnDropHandler<Result<anemo::Response<()>>>>,
+        store: Store<(BatchDigest, WorkerId), PayloadToken>,
         deliver: Header,
         handler: oneshot::Receiver<()>,
-    ) -> DagResult<Option<Header>>
-    where
-        T: Serialize + DeserializeOwned + Send + Clone,
-        V: Serialize + DeserializeOwned + Send,
-    {
-        let waiting: Vec<_> = missing.into_iter().map(|x| store.notify_read(x)).collect();
+    ) -> DagResult<Option<Header>> {
         tokio::select! {
-            result = try_join_all(waiting) => {
-                result.map(|_| Some(deliver)).map_err(DagError::from)
-            }
+            result = try_join_all(synchronize_handles) => {
+                result.map_err(|e| DagError::NetworkError(format!("{e:?}")))?;
+                for (worker_id, worker_digests) in digests {
+                    for digest in worker_digests {
+                        store.write((digest, worker_id), 0u8).await;
+                    }
+                }
+                Ok(Some(deliver))
+            },
             _ = handler => Ok(None),
         }
     }
@@ -181,9 +168,6 @@ impl HeaderWaiter {
         let mut waiting: BoundedFuturesUnordered<BoxFuture<'_, _>> =
             BoundedFuturesUnordered::with_capacity(self.max_pending_header_waiter_requests());
 
-        let timer = sleep(Duration::from_millis(TIMER_RESOLUTION));
-        tokio::pin!(timer);
-
         info!(
             "HeaderWaiter on node {} has started successfully.",
             self.name
@@ -192,7 +176,7 @@ impl HeaderWaiter {
             let mut attempt_garbage_collection = false;
 
             tokio::select! {
-                Some(message) = self.rx_synchronizer.recv(), if waiting.available_permits() > 0 => {
+                Some(message) = self.rx_header_waiter.recv(), if waiting.available_permits() > 0 => {
                     match message {
                         WaiterMessage::SyncBatches(missing, header) => {
                             debug!("Synching the payload of {header}");
@@ -205,17 +189,6 @@ impl HeaderWaiter {
                                 continue;
                             }
 
-                            // Add the header to the waiter pool. The waiter will return it to when all
-                            // its parents are in the store.
-                            let wait_for = missing
-                                .iter().map(|(x, y)| (*x, *y))
-                                .collect();
-                            let (tx_cancel, rx_cancel) = oneshot::channel();
-                            self.pending.insert(header_id, (round, tx_cancel));
-                            let fut = Self::waiter(wait_for, self.payload_store.clone(), header, rx_cancel);
-                            // pointer-size allocation, bounded by the # of blocks (may eventually go away, see rust RFC #1909)
-                            waiting.push(Box::pin(fut)).await;
-
                             // Ensure we didn't already send a sync request for these parents.
                             let mut requires_sync = HashMap::new();
                             for (digest, worker_id) in missing.into_iter() {
@@ -224,17 +197,31 @@ impl HeaderWaiter {
                                     round
                                 });
                             }
-                            for (worker_id, digests) in requires_sync {
+                            let mut synchronize_handles = Vec::new();
+                            for (worker_id, digests) in requires_sync.clone() {
                                 let worker_name = self.worker_cache
                                     .load()
                                     .worker(&self.name, &worker_id)
                                     .expect("Author of valid header is not in the worker cache")
                                     .name;
 
-                                // TODO [issue #423]: This network transmission needs to be reliable: the worker may crash-recover.
                                 let message = WorkerSynchronizeMessage{digests, target: author.clone()};
-                                let _ = self.network.unreliable_send(worker_name, &message);
+                                synchronize_handles.push(self.network.send(worker_name, &message).await);
                             }
+
+                            // Add the header to the waiter pool. The waiter will return it to when all
+                            // its parents are in the store.
+                            let (tx_cancel, rx_cancel) = oneshot::channel();
+                            self.pending.insert(header_id, (round, tx_cancel));
+                            let fut = Self::wait_for_batches(
+                                requires_sync,
+                                synchronize_handles,
+                                self.payload_store.clone(),
+                                header,
+                                rx_cancel);
+                            // pointer-size allocation, bounded by the # of blocks
+                            // (may eventually go away, see rust RFC #1909)
+                            waiting.push(Box::pin(fut)).await;
                         }
 
                         WaiterMessage::SyncParents(missing, header) => {
@@ -282,7 +269,7 @@ impl HeaderWaiter {
                 },
 
                 // we poll the availability of a slot to send the result to the core simultaneously
-                Some((permit, Some(header))) = self.tx_core.with_permit(waiting.next()) => {
+                Some(header) = waiting.next() => {
                     let header = match header{
                         Err(err) => {
                             warn!("Error fetching header {}", err);
@@ -291,48 +278,19 @@ impl HeaderWaiter {
                         Ok(header) => header,
                     };
                     if let Some(header) = header {
-                        let _ = self.pending.remove(&header.id);
+                        if let Some((_, tx_cancel)) = self.pending.remove(&header.id) {
+                            let _ = tx_cancel.send(());
+                        }
                         for x in header.payload.keys() {
                             let _ = self.batch_requests.remove(x);
                         }
                         for x in &header.parents {
                             let _ = self.parent_requests.remove(x);
                         }
-                        permit.send(header);
+                        // Ok to drop the header if core is overloaded.
+                        let _ = self.tx_headers_loopback.try_send(header);
                     }
                 },  // This request has been canceled when result is None.
-
-                () = &mut timer => {
-                    // We optimistically sent sync requests to a single node. If this timer triggers,
-                    // it means we were wrong to trust it. We are done waiting for a reply and we now
-                    // broadcast the request to all nodes.
-                    let now = SystemTime::now()
-                        .duration_since(UNIX_EPOCH)
-                        .expect("Failed to measure time")
-                        .as_millis();
-
-                    let mut retry = Vec::new();
-                    for (digest, (_, timestamp)) in self.parent_requests.iter_mut() {
-                        if *timestamp + self.sync_retry_delay.as_millis() < now {
-                            debug!("Requesting sync for certificate {digest} (retry)");
-                            retry.push(*digest);
-                            // reset the time at which this request was last issued
-                            *timestamp = now;
-                        }
-                    }
-
-                    if !retry.is_empty() {
-                        let network_keys = self.committee
-                            .others_primaries(&self.name)
-                            .into_iter()
-                            .map(|(_, _, network_key)| network_key)
-                            .collect();
-                        let message = PrimaryMessage::CertificatesRequest(retry, self.name.clone());
-                        self.network.lucky_broadcast(network_keys, &message, self.sync_retry_nodes);
-                    }
-                    // Reschedule the timer.
-                    timer.as_mut().reset(Instant::now() + Duration::from_millis(TIMER_RESOLUTION));
-                },
 
                 // Check whether the committee changed.
                 result = self.rx_reconfigure.changed() => {

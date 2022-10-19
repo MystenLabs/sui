@@ -98,6 +98,12 @@ export class JsonRpcProvider extends Provider {
     );
   }
 
+  async getRpcApiVersion(): Promise<string> {
+    // TODO: we should fetch the API version from
+    // the RPC endpoint instead
+    return this.rpcAPIVersion;
+  }
+
   // Move info
   async getMoveFunctionArgTypes(
     packageId: string,
@@ -333,7 +339,7 @@ export class JsonRpcProvider extends Provider {
     objectID: string
   ): Promise<GetTxnDigestsResponse> {
     // TODO: remove after we deploy 0.12.0 DevNet
-    if (this.rpcAPIVersion === PRE_PAGINATION_API_VERSION) {
+    if ((await this.getRpcApiVersion()) === PRE_PAGINATION_API_VERSION) {
       const requests = [
         {
           method: 'sui_getTransactionsByInputObject',
@@ -387,7 +393,7 @@ export class JsonRpcProvider extends Provider {
     addressID: string
   ): Promise<GetTxnDigestsResponse> {
     // TODO: remove after we deploy 0.12.0 DevNet
-    if (this.rpcAPIVersion === PRE_PAGINATION_API_VERSION) {
+    if ((await this.getRpcApiVersion()) === PRE_PAGINATION_API_VERSION) {
       const requests = [
         {
           method: 'sui_getTransactionsToAddress',

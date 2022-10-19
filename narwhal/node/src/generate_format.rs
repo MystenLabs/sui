@@ -13,8 +13,8 @@ use std::{fs::File, io::Write};
 use structopt::{clap::arg_enum, StructOpt};
 use types::{
     Batch, BatchDigest, Certificate, CertificateDigest, Header, HeaderDigest,
-    ReconfigureNotification, WorkerPrimaryMessage, WorkerReconfigureMessage,
-    WorkerSynchronizeMessage,
+    ReconfigureNotification, WorkerOthersBatchMessage, WorkerOurBatchMessage, WorkerPrimaryMessage,
+    WorkerReconfigureMessage, WorkerSynchronizeMessage,
 };
 
 fn get_registry() -> Result<Registry> {
@@ -111,6 +111,14 @@ fn get_registry() -> Result<Registry> {
     );
     tracer.trace_value(&mut samples, &worker_index)?;
 
+    let our_batch = WorkerOurBatchMessage {
+        digest: BatchDigest([0u8; 32]),
+        worker_id: 0,
+    };
+    let others_batch = WorkerOthersBatchMessage {
+        digest: BatchDigest([0u8; 32]),
+        worker_id: 0,
+    };
     let sync = WorkerSynchronizeMessage {
         digests: vec![BatchDigest([0u8; 32])],
         target: pk,
@@ -124,6 +132,8 @@ fn get_registry() -> Result<Registry> {
     let shutdown = WorkerReconfigureMessage {
         message: ReconfigureNotification::Shutdown,
     };
+    tracer.trace_value(&mut samples, &our_batch)?;
+    tracer.trace_value(&mut samples, &others_batch)?;
     tracer.trace_value(&mut samples, &sync)?;
     tracer.trace_value(&mut samples, &epoch_change)?;
     tracer.trace_value(&mut samples, &update_committee)?;

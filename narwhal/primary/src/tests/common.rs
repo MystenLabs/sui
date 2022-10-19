@@ -8,8 +8,8 @@ use std::time::Duration;
 use storage::CertificateStore;
 use store::{reopen, rocks, rocks::DBMap, Store};
 use test_utils::{
-    temp_dir, PrimaryToWorkerMockServer, CERTIFICATES_CF, CERTIFICATE_ID_BY_ROUND_CF, HEADERS_CF,
-    PAYLOAD_CF, VOTES_CF,
+    temp_dir, PrimaryToWorkerMockServer, CERTIFICATES_CF, CERTIFICATE_ID_BY_ORIGIN_CF,
+    CERTIFICATE_ID_BY_ROUND_CF, HEADERS_CF, PAYLOAD_CF, VOTES_CF,
 };
 use types::{
     BatchDigest, Certificate, CertificateDigest, Header, HeaderDigest, Round, RoundVoteDigestPair,
@@ -32,20 +32,32 @@ pub fn create_db_stores() -> (
             HEADERS_CF,
             CERTIFICATES_CF,
             CERTIFICATE_ID_BY_ROUND_CF,
+            CERTIFICATE_ID_BY_ORIGIN_CF,
             PAYLOAD_CF,
         ],
     )
     .expect("Failed creating database");
 
-    let (header_map, certificate_map, certificate_id_by_round_map, payload_map) = reopen!(&rocksdb,
+    let (
+        header_map,
+        certificate_map,
+        certificate_id_by_round_map,
+        certificate_id_by_origin_map,
+        payload_map,
+    ) = reopen!(&rocksdb,
         HEADERS_CF;<HeaderDigest, Header>,
         CERTIFICATES_CF;<CertificateDigest, Certificate>,
-        CERTIFICATE_ID_BY_ROUND_CF;<(Round, CertificateDigest), u8>,
+        CERTIFICATE_ID_BY_ROUND_CF;<(Round, PublicKey), CertificateDigest>,
+        CERTIFICATE_ID_BY_ORIGIN_CF;<(PublicKey, Round), CertificateDigest>,
         PAYLOAD_CF;<(BatchDigest, WorkerId), PayloadToken>);
 
     (
         Store::new(header_map),
-        CertificateStore::new(certificate_map, certificate_id_by_round_map),
+        CertificateStore::new(
+            certificate_map,
+            certificate_id_by_round_map,
+            certificate_id_by_origin_map,
+        ),
         Store::new(payload_map),
     )
 }

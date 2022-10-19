@@ -24,11 +24,19 @@ import {
   ObjectOwner,
   SuiAddress,
   ObjectId,
-  SuiEvents, TransactionQuery, Ordering, PaginatedTransactionDigests,
+  SuiEvents,
+  TransactionQuery,
+  Ordering,
+  PaginatedTransactionDigests,
 } from '../types';
 import { Provider } from './provider';
 
 export class VoidProvider extends Provider {
+  // API Version
+  async getRpcApiVersion(): Promise<string> {
+    throw this.newError('getRpcApiVersion');
+  }
+
   // Objects
   async getObjectsOwnedByAddress(_address: string): Promise<SuiObjectInfo[]> {
     throw this.newError('getObjectsOwnedByAddress');
@@ -231,10 +239,11 @@ export class VoidProvider extends Provider {
     return new Error(`Please use a valid provider for ${operation}`);
   }
 
-  async getTransactions(_query: TransactionQuery,
-                        _cursor: TransactionDigest | null,
-                        _limit: number | null,
-                        _order: Ordering
+  async getTransactions(
+    _query: TransactionQuery,
+    _cursor: TransactionDigest | null,
+    _limit: number | null,
+    _order: Ordering
   ): Promise<PaginatedTransactionDigests> {
     throw this.newError('getTransactions');
   }

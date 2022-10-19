@@ -2105,18 +2105,16 @@ fn init_certified_transaction(
 
 #[cfg(test)]
 async fn send_consensus(authority: &AuthorityState, cert: &CertifiedTransaction) {
-    authority
-        .handle_consensus_transaction(
-            // TODO [2533]: use this once integrating Narwhal reconfiguration
-            &narwhal_consensus::ConsensusOutput {
-                certificate: narwhal_types::Certificate::default(),
-                consensus_index: narwhal_types::SequenceNumber::default(),
-            },
-            /* last_consensus_index */ Default::default(),
-            ConsensusTransaction::new_certificate_message(&authority.name, cert.clone()),
-        )
-        .await
-        .unwrap();
+    let transaction = SequencedConsensusTransaction::new_test(
+        ConsensusTransaction::new_certificate_message(&authority.name, cert.clone()),
+    );
+
+    if let Ok(transaction) = authority.verify_consensus_transaction(transaction) {
+        authority
+            .handle_consensus_transaction(transaction)
+            .await
+            .unwrap();
+    }
 }
 
 pub async fn call_move(

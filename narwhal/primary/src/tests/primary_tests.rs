@@ -1,17 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use super::{NetworkModel, Primary, CHANNEL_CAPACITY};
-use crate::metrics::PrimaryChannelMetrics;
+use super::{NetworkModel, Primary, PrimaryReceiverHandler, CHANNEL_CAPACITY};
+use crate::{common::create_db_stores, metrics::PrimaryChannelMetrics};
 use arc_swap::ArcSwap;
 use config::Parameters;
 use consensus::{dag::Dag, metrics::ConsensusMetrics};
-use fastcrypto::traits::KeyPair;
+use crypto::PublicKey;
+use fastcrypto::{hash::Hash, traits::KeyPair};
+use itertools::Itertools;
 use node::NodeStorage;
 use prometheus::Registry;
-use std::{sync::Arc, time::Duration};
+use std::{collections::BTreeSet, num::NonZeroUsize, sync::Arc, time::Duration};
 use test_utils::{temp_dir, CommitteeFixture};
 use tokio::sync::watch;
-use types::ReconfigureNotification;
+use types::{Certificate, FetchCertificatesRequest, PrimaryToPrimary, ReconfigureNotification};
 use worker::{metrics::initialise_metrics, Worker};
 
 #[tokio::test]
@@ -67,6 +69,7 @@ async fn get_network_peers_from_admin_server() {
         store.proposer_store.clone(),
         store.payload_store.clone(),
         store.vote_digest_store.clone(),
+        store.consensus_store.clone(),
         /* tx_consensus */ tx_new_certificates,
         /* rx_consensus */ rx_feedback,
         /* dag */
@@ -178,6 +181,7 @@ async fn get_network_peers_from_admin_server() {
         store.proposer_store.clone(),
         store.payload_store.clone(),
         store.vote_digest_store.clone(),
+        store.consensus_store.clone(),
         /* tx_consensus */ tx_new_certificates_2,
         /* rx_consensus */ rx_feedback_2,
         /* dag */
@@ -237,4 +241,102 @@ async fn get_network_peers_from_admin_server() {
     // Assert peer ids are correct
     let expected_peer_ids = vec![&primary_1_peer_id, &worker_1_peer_id];
     assert!(expected_peer_ids.iter().all(|e| resp.contains(e)));
+}
+
+#[tokio::test]
+async fn test_fetch_certificates_handler() {
+    let fixture = CommitteeFixture::builder()
+        .randomize_ports(true)
+        .committee_size(NonZeroUsize::new(4).unwrap())
+        .build();
+    let committee = fixture.committee();
+
+    let (tx_primary_messages, _) = test_utils::test_channel!(1);
+    let (tx_helper_requests, _) = test_utils::test_channel!(1);
+    let (tx_availability_responses, _) = test_utils::test_channel!(1);
+    let (_, certificate_store, _) = create_db_stores();
+    let handler = PrimaryReceiverHandler {
+        tx_primary_messages,
+        tx_helper_requests,
+        tx_availability_responses,
+        certificate_store: certificate_store.clone(),
+    };
+
+    let mut current_round: Vec<_> = Certificate::genesis(&committee)
+        .into_iter()
+        .map(|cert| cert.header)
+        .collect();
+    let mut headers = vec![];
+    let total_rounds = 4;
+    for i in 0..total_rounds {
+        let parents: BTreeSet<_> = current_round
+            .into_iter()
+            .map(|header| fixture.certificate(&header).digest())
+            .collect();
+        (_, current_round) = fixture.headers_round(i, &parents);
+        headers.extend(current_round.clone());
+    }
+
+    let total_authorities = fixture.authorities().count();
+    let total_certificates = total_authorities * total_rounds as usize;
+    // Create certificates test data.
+    let mut certificates = vec![];
+    for header in headers.into_iter() {
+        certificates.push(fixture.certificate(&header));
+    }
+    assert_eq!(certificates.len(), total_certificates);
+    assert_eq!(16, total_certificates);
+
+    // Populate certificate store such that each authority has the following rounds:
+    // Authority 0: 1
+    // Authority 1: 1 2
+    // Authority 2: 1 2 3
+    // Authority 3: 1 2 3 4
+    // This is unrealistic because in practice a certificate can only be stored with 2f+1 parents
+    // already in store. But this does not matter for testing here.
+    let mut authorities = Vec::<PublicKey>::new();
+    for i in 0..total_authorities {
+        authorities.push(certificates[i].header.author.clone());
+        for j in 0..=i {
+            let cert = certificates[i + j * total_authorities].clone();
+            assert_eq!(&cert.header.author, authorities.last().unwrap());
+            certificate_store
+                .write(cert)
+                .expect("Writing certificate to store failed");
+        }
+    }
+
+    // Each test case contains (rounds exclusive_lower_bounds, max items, expected output).
+    let test_cases = vec![
+        (vec![0u64, 0, 0, 0], 20, vec![1, 1, 1, 1, 2, 2, 2, 3, 3, 4]),
+        (vec![1u64, 1, 0, 0], 20, vec![1, 1, 2, 2, 2, 3, 3, 4]),
+        (vec![0u64, 0, 1, 1], 20, vec![1, 1, 2, 2, 2, 3, 3, 4]),
+        (vec![1u64, 1, 2, 2], 4, vec![2, 3, 3, 4]),
+        (vec![1u64, 1, 3, 3], 2, vec![2, 4]),
+        (vec![1u64, 1, 2, 2], 2, vec![2, 3]),
+        (vec![2u64, 2, 2, 2], 3, vec![3, 3, 4]),
+        (vec![2u64, 2, 2, 2], 2, vec![3, 3]),
+    ];
+    for (rounds_exclusive_lower_bounds, max_items, expected_rounds) in test_cases {
+        let req = FetchCertificatesRequest {
+            exclusive_lower_bounds: authorities
+                .clone()
+                .into_iter()
+                .zip(rounds_exclusive_lower_bounds)
+                .collect_vec(),
+            max_items,
+        };
+        let resp = handler
+            .fetch_certificates(anemo::Request::new(req.clone()))
+            .await
+            .unwrap()
+            .into_body();
+        assert_eq!(
+            resp.certificates
+                .iter()
+                .map(|cert| cert.round())
+                .collect_vec(),
+            expected_rounds
+        );
+    }
 }
