@@ -7,7 +7,7 @@ describe('Address', () => {
     it('can be directly visted', () => {
         cy.task('faucet').then((address) => {
             cy.visit(`/addresses/${address}`);
-            cy.get('#addressID').contains(address);
+            cy.get('[data-testid=pageheader]').contains(address);
         });
     });
 });

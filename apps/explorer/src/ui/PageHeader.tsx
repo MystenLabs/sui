@@ -56,7 +56,7 @@ const STATUS_TO_TEXT = {
 export function PageHeader({ title, subtitle, type, status }: PageHeaderProps) {
     const Icon = TYPE_TO_ICON[type];
     return (
-        <div>
+        <div data-testid="pageheader">
             <div className="text-sui-grey-85 flex items-center gap-2 mb-3">
                 <Icon className="text-sui-steel" />
                 <Heading variant="heading4" weight="semibold">
