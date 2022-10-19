@@ -24,7 +24,7 @@ pub use crate::{
     retry::RetryConfig,
     traits::{
         Lucky, LuckyNetwork, PrimaryToPrimaryRpc, PrimaryToWorkerRpc, ReliableNetwork,
-        UnreliableNetwork,
+        UnreliableNetwork, WorkerRpc,
     },
 };
 

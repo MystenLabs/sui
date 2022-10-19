@@ -61,6 +61,12 @@ async fn synchronize() {
             assert_eq!(*request.body(), self.expected_request);
             Ok(anemo::Response::new(self.response.clone()))
         }
+        async fn request_batch(
+            &self,
+            _request: anemo::Request<RequestBatchRequest>,
+        ) -> Result<anemo::Response<RequestBatchResponse>, anemo::rpc::Status> {
+            unimplemented!();
+        }
     }
 
     let routes =

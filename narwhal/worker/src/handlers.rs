@@ -55,6 +55,7 @@ impl WorkerToWorker for WorkerReceiverHandler {
             .map(|_| anemo::Response::new(()))
             .map_err(|e| anemo::rpc::Status::internal(e.to_string()))
     }
+
     async fn request_batches(
         &self,
         request: anemo::Request<WorkerBatchRequest>,
@@ -71,6 +72,20 @@ impl WorkerToWorker for WorkerReceiverHandler {
             .flatten()
             .collect();
         Ok(anemo::Response::new(WorkerBatchResponse { batches }))
+    }
+
+    async fn request_batch(
+        &self,
+        request: anemo::Request<RequestBatchRequest>,
+    ) -> Result<anemo::Response<RequestBatchResponse>, anemo::rpc::Status> {
+        let batch = request.into_body().batch;
+        let batch = self
+            .store
+            .read(batch)
+            .await
+            .map_err(|e| anemo::rpc::Status::from_error(Box::new(e)))?;
+
+        Ok(anemo::Response::new(RequestBatchResponse { batch }))
     }
 }
 
@@ -254,20 +269,6 @@ impl PrimaryToWorker for PrimaryReceiverHandler {
                 first_attempt = false;
             }
         }
-    }
-
-    async fn request_batch(
-        &self,
-        request: anemo::Request<RequestBatchRequest>,
-    ) -> Result<anemo::Response<RequestBatchResponse>, anemo::rpc::Status> {
-        let batch = request.into_body().batch;
-        let batch = self
-            .store
-            .read(batch)
-            .await
-            .map_err(|e| anemo::rpc::Status::from_error(Box::new(e)))?;
-
-        Ok(anemo::Response::new(RequestBatchResponse { batch }))
     }
 
     async fn delete_batches(

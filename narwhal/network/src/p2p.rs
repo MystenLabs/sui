@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::traits::{PrimaryToPrimaryRpc, PrimaryToWorkerRpc};
+use crate::traits::{PrimaryToPrimaryRpc, PrimaryToWorkerRpc, WorkerRpc};
 use crate::{
     traits::{Lucky, ReliableNetwork, UnreliableNetwork},
     BoundedExecutor, CancelOnDropHandler, RetryConfig, MAX_TASK_CONCURRENCY,
@@ -429,27 +429,6 @@ impl UnreliableNetwork<WorkerBatchRequest> for P2pNetwork {
 
 #[async_trait]
 impl PrimaryToWorkerRpc for P2pNetwork {
-    async fn request_batch(
-        &self,
-        peer: NetworkPublicKey,
-        batch: BatchDigest,
-    ) -> Result<Option<Batch>> {
-        const BATCH_REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
-
-        let peer_id = PeerId(peer.0.to_bytes());
-        let peer = self
-            .network
-            .peer(peer_id)
-            .ok_or_else(|| format_err!("Network has no connection with peer {peer_id}"))?;
-        let request =
-            anemo::Request::new(RequestBatchRequest { batch }).with_timeout(BATCH_REQUEST_TIMEOUT);
-        let response = PrimaryToWorkerClient::new(peer)
-            .request_batch(request)
-            .await
-            .map_err(|e| format_err!("Network error {:?}", e))?;
-        Ok(response.into_body().batch)
-    }
-
     async fn delete_batches(
         &self,
         peer: NetworkPublicKey,
@@ -469,6 +448,30 @@ impl PrimaryToWorkerRpc for P2pNetwork {
             .await
             .map(|_| ())
             .map_err(|e| format_err!("DeleteBatches error: {e:?}"))
+    }
+}
+
+#[async_trait]
+impl WorkerRpc for P2pNetwork {
+    async fn request_batch(
+        &self,
+        peer: NetworkPublicKey,
+        batch: BatchDigest,
+    ) -> Result<Option<Batch>> {
+        const BATCH_REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
+
+        let peer_id = PeerId(peer.0.to_bytes());
+        let peer = self
+            .network
+            .peer(peer_id)
+            .ok_or_else(|| format_err!("Network has no connection with peer {peer_id}"))?;
+        let request =
+            anemo::Request::new(RequestBatchRequest { batch }).with_timeout(BATCH_REQUEST_TIMEOUT);
+        let response = WorkerToWorkerClient::new(peer)
+            .request_batch(request)
+            .await
+            .map_err(|e| format_err!("Network error {:?}", e))?;
+        Ok(response.into_body().batch)
     }
 }
 
