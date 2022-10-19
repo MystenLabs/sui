@@ -7,13 +7,13 @@
         "link": "doc-updates"
       },
       {
+        "label": "Sui Framework Reference",
+        "link": "reference/sui-framework"
+      },
+      {
         "label": "Sui by Example",
         "link": "https://examples.sui.io/",
         "external": true
-      },
-      {
-        "label": "Connect to Sui Devnet",
-        "link": "build/devnet"
       }
     ]
   },
@@ -197,23 +197,22 @@
             "fileName": "build/pubsub"
           }
         ]
-      },
-      {
-        "label": "Reference",
-        "fileName": "build/reference",
-        "title": "Reference",
-        "items": [
-          {
-            "label": "JSON-RPC API Reference",
-            "link": "https://docs.sui.io/sui-jsonrpc",
-            "external": true
-          },
-          {
-            "label": "SuiJSON Format",
-            "fileName": "build/sui-json"
-          }
-        ]
       }
+    ],
+    "reference": [
+      {
+          "label": "TypeScript/JavaScript SDK",
+          "link": "https://github.com/MystenLabs/sui/tree/main/sdk/typescript",
+          "external": true
+        },
+      {
+          "label": "SuiJSON Format",
+          "fileName": "reference/sui-json"
+        },
+      {
+          "label": "Sui Framework Reference",
+          "fileName": "reference/framework"
+        }
     ],
     "explore": [
       {

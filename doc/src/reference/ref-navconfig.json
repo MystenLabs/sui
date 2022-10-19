@@ -1,0 +1,128 @@
+"reference": [
+    {
+        "label": "TypeScript/JavaScript SDK",
+        "link": "https://github.com/MystenLabs/sui/tree/main/sdk/typescript",
+        "external": true
+      },
+    {
+        "label": "SuiJSON Format",
+        "fileName": "reference/framework/sui-json"
+      },
+    {
+        "label": "Sui Framework Reference",
+        "fileName": "reference/framework/sui-framework",
+        "title": "Sui Reference Framework",
+        "items": [
+            {
+            "label": "balance",
+            "fileName": "reference/framework/balance"
+            },
+            {
+                "label": "bls12381",
+                "fileName": "reference/framework/bls12381"
+            },
+            {
+                "label": "bulletproofs",
+                "fileName": "reference/framework/bulletproofs"
+            },
+            {
+                "label": "coin",
+                "fileName": "reference/framework/coin"
+            },
+            {
+                "label": "devnet_nft",
+                "fileName": "reference/framework/devnet_nft"
+            },
+            {
+                "label": "ecdsa",
+                "fileName": "reference/framework/ecdsa"
+            },
+            {
+                "label": "ed25519",
+                "fileName": "reference/framework/ed25519"
+            },
+            {
+                "label": "elliptic_curve",
+                "fileName": "reference/framework/elliptic_curve"
+            },
+            {
+                "label": "epoch_time_lock",
+                "fileName": "reference/framework/epoch_time_lock"
+            },
+            {
+                "label": "erc721_metadata",
+                "fileName": "reference/framework/erc721_metadata"
+            },
+            {
+                "label": "event",
+                "fileName": "reference/framework/event"
+            },
+            {
+                "label": "genesis",
+                "fileName": "reference/framework/genesis"
+            },
+            {
+                "label": "locked_coin",
+                "fileName": "reference/framework/locked_coin"
+            },
+            {
+                "label": "object",
+                "fileName": "reference/framework/object"
+            },
+            {
+                "label": "priority_queue",
+                "fileName": "reference/framework/priority_queue"
+            },
+            {
+                "label": "stake",
+                "fileName": "reference/framework/stake"
+            },
+            {
+                "label": "staking_pool",
+                "fileName": "reference/framework/staking_pool"
+            },
+            {
+                "label": "sui",
+                "fileName": "reference/framework/sui"
+            },
+            {
+                "label": "sui_system",
+                "fileName": "reference/framework/sui_system"
+            },
+            {
+                "label": "transfer",
+                "fileName": "reference/framework/transfer"
+            },
+            {
+                "label": "tx_context",
+                "fileName": "reference/framework/tx_context"
+            },
+            {
+                "label": "typed_id",
+                "fileName": "reference/framework/typed_id"
+            },
+            {
+                "label": "types",
+                "fileName": "reference/framework/types"
+            },
+            {
+                "label": "url",
+                "fileName": "reference/framework/url"
+            },
+            {
+                "label": "validator",
+                "fileName": "reference/framework/validator"
+            },
+            {
+                "label": "validator_set",
+                "fileName": "reference/framework/validator_set"
+            },
+            {
+                "label": "vec_map",
+                "fileName": "reference/framework/vec_map"
+            },
+            {
+                "label": "vec_set",
+                "fileName": "reference/framework/vec_set"
+            }
+  ]
