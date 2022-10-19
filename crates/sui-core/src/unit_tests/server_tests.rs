@@ -21,40 +21,6 @@ use sui_types::{
 use crate::safe_client::SafeClient;
 use typed_store::Map;
 
-#[tokio::test]
-async fn test_start_stop_batch_subsystem() {
-    let sender = dbg_addr(1);
-    let object_id = dbg_object_id(1);
-    let mut authority_state = init_state_with_object_id(sender, object_id).await;
-    authority_state
-        .init_batches_from_database()
-        .expect("Init batches failed!");
-
-    // The following two fields are only needed for shared objects (not by this bench).
-    let consensus_address = "/ip4/127.0.0.1/tcp/0/http".parse().unwrap();
-    let (tx_consensus_listener, _rx_consensus_listener) = tokio::sync::mpsc::channel(1);
-
-    let server = Arc::new(AuthorityServer::new_for_test(
-        "/ip4/127.0.0.1/tcp/999/http".parse().unwrap(),
-        Arc::new(authority_state),
-        consensus_address,
-        tx_consensus_listener,
-    ));
-    let join = server
-        .spawn_batch_subsystem(1000, Duration::from_secs(50))
-        .await
-        .expect("Problem launching subsystem.");
-
-    // Now drop the server to simulate the authority server ending processing.
-    server.state.batch_notifier.close();
-    drop(server);
-
-    // This should return immediately.
-    join.await
-        .expect("Error stopping subsystem")
-        .expect("Subsystem crashed?");
-}
-
 //This is the most basic example of how to test the server logic
 #[tokio::test]
 async fn test_simple_request() {
