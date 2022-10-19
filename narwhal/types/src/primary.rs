@@ -22,6 +22,7 @@ use mysten_util_mem::MallocSizeOf;
 use proptest_derive::Arbitrary;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
+use std::time::{Duration, SystemTime};
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
     fmt,
@@ -30,9 +31,43 @@ use std::{
 /// The round number.
 pub type Round = u64;
 
+/// The epoch UNIX timestamp in milliseconds
+pub type TimestampMs = u64;
+
+pub trait Timestamp {
+    fn elapsed(&self) -> Duration;
+}
+
+impl Timestamp for TimestampMs {
+    fn elapsed(&self) -> Duration {
+        let diff = now() - self;
+        Duration::from_millis(diff)
+    }
+}
+// Returns the current time expressed as UNIX
+// timestamp in milliseconds
+fn now() -> TimestampMs {
+    match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
+        Ok(n) => n.as_millis() as TimestampMs,
+        Err(_) => panic!("SystemTime before UNIX EPOCH!"),
+    }
+}
+
 pub type Transaction = Vec<u8>;
 #[derive(Clone, Serialize, Deserialize, Default, Debug, PartialEq, Eq, Arbitrary)]
-pub struct Batch(pub Vec<Transaction>);
+pub struct Batch {
+    pub transactions: Vec<Transaction>,
+    pub timestamp: TimestampMs,
+}
+
+impl Batch {
+    pub fn new(transactions: Vec<Transaction>) -> Self {
+        Batch {
+            transactions,
+            timestamp: now(),
+        }
+    }
+}
 
 #[derive(
     Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq, Hash, PartialOrd, Ord, MallocSizeOf,
@@ -67,7 +102,9 @@ impl Hash<{ crypto::DIGEST_LENGTH }> for Batch {
     type TypedDigest = BatchDigest;
 
     fn digest(&self) -> Self::TypedDigest {
-        BatchDigest::new(crypto::DefaultHashFunction::digest_iterator(self.0.iter()).into())
+        BatchDigest::new(
+            crypto::DefaultHashFunction::digest_iterator(self.transactions.iter()).into(),
+        )
     }
 }
 
@@ -82,6 +119,7 @@ pub struct Header {
     pub parents: BTreeSet<CertificateDigest>,
     pub id: HeaderDigest,
     pub signature: Signature,
+    pub timestamp: TimestampMs,
 }
 
 impl HeaderBuilder {
@@ -97,6 +135,7 @@ impl HeaderBuilder {
             parents: self.parents.unwrap(),
             id: HeaderDigest::default(),
             signature: Signature::default(),
+            timestamp: 0,
         };
 
         Ok(Header {
@@ -138,6 +177,7 @@ impl Header {
             parents,
             id: HeaderDigest::default(),
             signature: Signature::default(),
+            timestamp: now(),
         };
         let id = header.digest();
         let signature = signature_service.request_signature(id.into()).await;
@@ -388,6 +428,7 @@ pub struct Certificate {
     aggregated_signature: AggregateSignature,
     #[serde_as(as = "NarwhalBitmap")]
     signed_authorities: roaring::RoaringBitmap,
+    timestamp: TimestampMs,
 }
 
 impl Certificate {
@@ -482,6 +523,7 @@ impl Certificate {
             header,
             aggregated_signature,
             signed_authorities,
+            timestamp: now(),
         })
     }
 
@@ -780,6 +822,8 @@ impl fmt::Display for BlockErrorKind {
 pub struct WorkerOurBatchMessage {
     pub digest: BatchDigest,
     pub worker_id: WorkerId,
+    /// The time when the batch was created
+    pub timestamp: TimestampMs,
 }
 
 /// Used by worker to inform primary it received a batch from another authority.
@@ -801,4 +845,21 @@ pub struct RoundVoteDigestPair {
     pub round: Round,
     /// The hash of the vote used to ensure equality
     pub vote_digest: VoteDigest,
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{Batch, Timestamp};
+    use std::time::Duration;
+    use tokio::time::sleep;
+
+    #[tokio::test]
+    async fn test_timestamp() {
+        let batch = Batch::new(vec![]);
+        assert!(batch.timestamp > 0);
+
+        sleep(Duration::from_secs(2)).await;
+
+        assert!(batch.timestamp.elapsed().as_secs_f64() >= 2.0);
+    }
 }

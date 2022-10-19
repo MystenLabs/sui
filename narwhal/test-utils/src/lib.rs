@@ -150,7 +150,7 @@ pub fn fixture_batch_with_transactions(number_of_transactions: u32) -> Batch {
         .map(|_v| transaction())
         .collect();
 
-    Batch(transactions)
+    Batch::new(transactions)
 }
 
 // Fixture
@@ -341,7 +341,7 @@ impl WorkerToWorker for WorkerToWorkerMockServer {
 
 // Fixture
 pub fn batch() -> Batch {
-    Batch(vec![transaction(), transaction()])
+    Batch::new(vec![transaction(), transaction()])
 }
 
 /// generate multiple fixture batches. The number of generated batches
@@ -363,7 +363,7 @@ pub fn batch_with_transactions(num_of_transactions: usize) -> Batch {
         transactions.push(transaction());
     }
 
-    Batch(transactions)
+    Batch::new(transactions)
 }
 
 const BATCHES_CF: &str = "batches";

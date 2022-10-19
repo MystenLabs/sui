@@ -62,7 +62,8 @@ async fn wait_for_quorum() {
         output,
         WorkerOurBatchMessage {
             digest: batch.digest(),
-            worker_id: 0
+            worker_id: 0,
+            timestamp: batch.timestamp
         }
     );
     assert_eq!(store.read(batch.digest()).await.unwrap().unwrap(), batch);

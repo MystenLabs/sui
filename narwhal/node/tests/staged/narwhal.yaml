@@ -13,9 +13,11 @@ BLS12381Signature:
   STRUCT:
     - sig: BYTES
 Batch:
-  NEWTYPESTRUCT:
-    SEQ:
-      SEQ: U8
+  STRUCT:
+    - transactions:
+        SEQ:
+          SEQ: U8
+    - timestamp: U64
 BatchDigest:
   NEWTYPESTRUCT:
     TUPLEARRAY:
@@ -28,6 +30,7 @@ Certificate:
     - aggregated_signature:
         TYPENAME: BLS12381AggregateSignature
     - signed_authorities: BYTES
+    - timestamp: U64
 CertificateDigest:
   NEWTYPESTRUCT:
     TUPLEARRAY:
@@ -60,6 +63,7 @@ Header:
         TYPENAME: HeaderDigest
     - signature:
         TYPENAME: BLS12381Signature
+    - timestamp: U64
 HeaderDigest:
   NEWTYPESTRUCT:
     TUPLEARRAY:
@@ -95,6 +99,7 @@ WorkerOurBatchMessage:
     - digest:
         TYPENAME: BatchDigest
     - worker_id: U32
+    - timestamp: U64
 WorkerReconfigureMessage:
   STRUCT:
     - message:

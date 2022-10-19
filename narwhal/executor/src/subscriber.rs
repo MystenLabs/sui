@@ -401,8 +401,8 @@ mod tests {
     #[tokio::test]
     pub async fn test_fetcher() {
         let mut network = TestSubscriberNetwork::new();
-        let batch1 = Batch(vec![vec![1]]);
-        let batch2 = Batch(vec![vec![2]]);
+        let batch1 = Batch::new(vec![vec![1]]);
+        let batch2 = Batch::new(vec![vec![2]]);
         network.put(&[1, 2], batch1.clone());
         network.put(&[2, 3], batch2.clone());
         let fetcher = Fetcher {

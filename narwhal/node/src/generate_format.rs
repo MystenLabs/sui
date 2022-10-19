@@ -114,6 +114,7 @@ fn get_registry() -> Result<Registry> {
     let our_batch = WorkerOurBatchMessage {
         digest: BatchDigest([0u8; 32]),
         worker_id: 0,
+        timestamp: 0,
     };
     let others_batch = WorkerOthersBatchMessage {
         digest: BatchDigest([0u8; 32]),

@@ -10,12 +10,19 @@ use serde_test::{assert_tokens, Token};
 fn test_serde_batch() {
     let tx = || vec![1; 5];
 
-    let txes: Batch = Batch((0..2).map(|_| tx()).collect());
+    let batch: Batch = Batch {
+        transactions: (0..2).map(|_| tx()).collect(),
+        timestamp: 1666205365890,
+    };
 
     assert_tokens(
-        &txes,
+        &batch,
         &[
-            Token::NewtypeStruct { name: "Batch" },
+            Token::Struct {
+                name: "Batch",
+                len: 2,
+            },
+            Token::Str("transactions"),
             Token::Seq { len: Some(2) },
             Token::Seq { len: Some(5) },
             Token::U8(1),
@@ -32,6 +39,9 @@ fn test_serde_batch() {
             Token::U8(1),
             Token::SeqEnd,
             Token::SeqEnd,
+            Token::Str("timestamp"),
+            Token::U64(1666205365890),
+            Token::StructEnd,
         ],
     );
 }
@@ -40,7 +50,10 @@ fn test_serde_batch() {
 fn test_bincode_serde_batch() {
     let tx = || vec![1; 5];
 
-    let txes: Batch = Batch((0..2).map(|_| tx()).collect());
+    let txes: Batch = Batch {
+        transactions: (0..2).map(|_| tx()).collect(),
+        timestamp: 1666205365890,
+    };
 
     let txes_bytes = bincode::serialize(&txes).unwrap();
 
@@ -48,10 +61,11 @@ fn test_bincode_serde_batch() {
     let bytes: [u8; 8] = hex::decode("0200000000000000").unwrap().try_into().unwrap();
     assert_eq!(u64::from_le_bytes(bytes), 2u64);
 
-    // Length-prefix 2, length-prefix 5, 11111, length-prefix 5, 11111
-    let expected_bytes =
-        hex::decode("02000000000000000500000000000000010101010105000000000000000101010101")
-            .unwrap();
+    // Length-prefix 2, length-prefix 5, 11111, length-prefix 5, 11111,
+    let expected_bytes = hex::decode(
+        "02000000000000000500000000000000010101010105000000000000000101010101823694f183010000",
+    )
+    .unwrap();
 
     assert_eq!(
         txes_bytes.clone(),
@@ -66,16 +80,20 @@ fn test_bincode_serde_batch_message() {
     let tx = || vec![1; 5];
 
     let txes = WorkerBatchMessage {
-        batch: Batch((0..2).map(|_| tx()).collect()),
+        batch: Batch {
+            transactions: (0..2).map(|_| tx()).collect(),
+            timestamp: 1666205365890,
+        },
     };
 
     let txes_bytes = bincode::serialize(&txes).unwrap();
 
     // We expect this will be the same as the above.
     // Length-prefix 2, length-prefix 5, 11111, length-prefix 5, 11111
-    let expected_bytes =
-        hex::decode("02000000000000000500000000000000010101010105000000000000000101010101")
-            .unwrap();
+    let expected_bytes = hex::decode(
+        "02000000000000000500000000000000010101010105000000000000000101010101823694f183010000",
+    )
+    .unwrap();
 
     assert_eq!(
         txes_bytes.clone(),

@@ -1055,7 +1055,7 @@ async fn test_get_collections_with_missing_certificates() {
 
                 if let Some(expected_batch) = batches_map.get(&id) {
                     assert_eq!(
-                        result_transactions, *expected_batch.0,
+                        result_transactions, *expected_batch.transactions,
                         "Batch payload doesn't match"
                     );
                 } else {

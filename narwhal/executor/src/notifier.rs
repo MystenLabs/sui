@@ -41,7 +41,7 @@ impl<State: ExecutionState + Send + Sync + 'static> Notifier<State> {
             debug!("Notifier processes batch {}", batch.digest());
             self.metrics.notifier_processed_batches.inc();
             let mut bytes = 0usize;
-            for (transaction_index, transaction) in batch.0.into_iter().enumerate() {
+            for (transaction_index, transaction) in batch.transactions.into_iter().enumerate() {
                 let execution_indices = ExecutionIndices {
                     next_certificate_index: index.next_certificate_index,
                     next_batch_index: index.batch_index + 1,
