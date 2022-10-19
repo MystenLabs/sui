@@ -367,6 +367,17 @@ impl Proposer {
                     // Check whether we can advance to the next round. Note that if we timeout,
                     // we ignore this check and advance anyway.
                     advance = self.ready();
+
+                    let round_type = if self.round % 2 == 0 {
+                        "even"
+                    } else {
+                        "odd"
+                    };
+
+                    self.metrics
+                    .proposer_ready_to_advance
+                    .with_label_values(&[&self.committee.epoch.to_string(), &advance.to_string(), round_type])
+                    .inc();
                 }
 
                 // Receive digests from our workers.

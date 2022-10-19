@@ -398,6 +398,9 @@ pub struct PrimaryMetrics {
     /// A histogram to track the number of batches included
     /// per header.
     pub num_of_batch_digests_in_header: HistogramVec,
+    /// A counter that keeps the number of instances where the proposer
+    /// is ready/not ready to advance.
+    pub proposer_ready_to_advance: IntCounterVec,
 }
 
 impl PrimaryMetrics {
@@ -563,6 +566,12 @@ impl PrimaryMetrics {
                 &["epoch", "reason"],
                 // buckets in number of digests
                 vec![0.0, 5.0, 10.0, 15.0, 32.0, 50.0, 100.0, 200.0, 500.0, 1000.0],
+                registry
+            ).unwrap(),
+            proposer_ready_to_advance: register_int_counter_vec_with_registry!(
+                "proposer_ready_to_advance",
+                "The number of times where the proposer is ready/not ready to advance.",
+                &["epoch", "ready", "round"],
                 registry
             ).unwrap()
         }
