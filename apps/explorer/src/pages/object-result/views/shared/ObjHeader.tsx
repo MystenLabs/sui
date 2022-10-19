@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { ReactComponent as ObjIcon } from '../../../../assets/SVGIcons/Call.svg';
+import { ReactComponent as ObjIcon } from '../../../../assets/SVGIcons/16px/Image.svg';
 import Longtext from '../../../../components/longtext/Longtext';
 import resultheaderstyle from '../../../../styles/resultheader.module.css';
 
@@ -18,7 +18,7 @@ function ObjAddressHeader({ data }: { data: ObjHeaderData }) {
         <div
             className={`${resultheaderstyle.btmborder} ${styles.objcontainer}`}
         >
-            <div className={resultheaderstyle.category}>
+            <div className={`${resultheaderstyle.category} ${styles.pagetype}`}>
                 <ObjIcon /> {data.objKind}
             </div>
             <div className={resultheaderstyle.address}>

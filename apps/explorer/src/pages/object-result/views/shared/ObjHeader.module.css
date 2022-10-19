@@ -5,3 +5,11 @@
 .objcontainer {
     @apply pb-[40px] mb-[30px];
 }
+
+.pagetype svg {
+    @apply fill-sui-steel;
+}
+
+.pagetype {
+    @apply flex items-center gap-[8px] text-heading4 font-semibold;
+}
