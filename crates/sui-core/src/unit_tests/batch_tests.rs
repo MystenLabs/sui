@@ -200,7 +200,7 @@ async fn test_batch_manager_happy_path() {
     let inner_state = authority_state.clone();
     let _join = tokio::task::spawn(async move {
         inner_state
-            .run_batch_service(1000, Duration::from_millis(500))
+            .run_batch_service_once(1000, Duration::from_millis(500))
             .await
     });
 
@@ -261,7 +261,7 @@ async fn test_batch_manager_out_of_order() {
     let inner_state = authority_state.clone();
     let _join = tokio::task::spawn(async move {
         inner_state
-            .run_batch_service(1000, Duration::from_millis(500))
+            .run_batch_service_once(1000, Duration::from_millis(500))
             .await
     });
     // Send transactions out of order
@@ -333,7 +333,7 @@ async fn test_batch_manager_drop_out_of_order() {
         inner_state
             // Make sure that a batch will not be formed due to time, but will be formed
             // when there are 4 transactions.
-            .run_batch_service(4, Duration::from_millis(10000))
+            .run_batch_service_once(4, Duration::from_millis(10000))
             .await
     });
     // Send transactions out of order
@@ -397,7 +397,7 @@ async fn test_handle_move_order_with_batch() {
     let inner_state = authority_state.clone();
     let _join = tokio::task::spawn(async move {
         inner_state
-            .run_batch_service(1000, Duration::from_millis(500))
+            .run_batch_service_once(1000, Duration::from_millis(500))
             .await
     });
     // Send transactions out of order
@@ -448,7 +448,7 @@ async fn test_batch_store_retrieval() {
     let inner_state = authority_state.clone();
     let _join = tokio::task::spawn(async move {
         inner_state
-            .run_batch_service(10, Duration::from_secs(6000))
+            .run_batch_service_once(10, Duration::from_secs(6000))
             .await
     });
     // Send transactions out of order

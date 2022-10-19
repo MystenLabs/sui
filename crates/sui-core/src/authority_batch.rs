@@ -127,7 +127,20 @@ impl crate::authority::AuthorityState {
         Ok(last_batch)
     }
 
-    pub async fn run_batch_service(
+    pub async fn run_batch_service(&self, min_batch_size: u64, max_delay: Duration) {
+        loop {
+            match self.run_batch_service_once(min_batch_size, max_delay).await {
+                Ok(()) => error!("Restarting batch service, which exited without error"),
+                Err(e) => {
+                    error!("Restarting batch service, which failed with error: {e:?}")
+                }
+            };
+            // Sleep before restart to prevent CPU pegging in case of immediate error.
+            tokio::time::sleep(Duration::from_secs(1)).await;
+        }
+    }
+
+    pub async fn run_batch_service_once(
         &self,
         min_batch_size: u64,
         max_delay: Duration,
