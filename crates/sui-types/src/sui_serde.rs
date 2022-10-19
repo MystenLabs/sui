@@ -310,7 +310,7 @@ impl SerializeAs<AuthoritySignature> for AuthSignature {
     where
         S: Serializer,
     {
-        base64ct::Base64::encode_string(value.as_ref()).serialize(serializer)
+        Base64::encode(value.as_ref()).serialize(serializer)
     }
 }
 
@@ -320,7 +320,7 @@ impl<'de> DeserializeAs<'de, AuthoritySignature> for AuthSignature {
         D: Deserializer<'de>,
     {
         let s = String::deserialize(deserializer)?;
-        let sig_bytes = base64ct::Base64::decode_vec(&s).map_err(to_custom_error::<'de, D, _>)?;
+        let sig_bytes = Base64::decode(&s).map_err(to_custom_error::<'de, D, _>)?;
         AuthoritySignature::from_bytes(&sig_bytes[..]).map_err(to_custom_error::<'de, D, _>)
     }
 }
@@ -335,7 +335,7 @@ impl SerializeAs<AggregateAuthoritySignature> for AggrAuthSignature {
     where
         S: Serializer,
     {
-        base64ct::Base64::encode_string(value.as_ref()).serialize(serializer)
+        Base64::encode(value.as_ref()).serialize(serializer)
     }
 }
 
@@ -345,7 +345,7 @@ impl<'de> DeserializeAs<'de, AggregateAuthoritySignature> for AggrAuthSignature 
         D: Deserializer<'de>,
     {
         let s = String::deserialize(deserializer)?;
-        let sig_bytes = base64ct::Base64::decode_vec(&s).map_err(to_custom_error::<'de, D, _>)?;
+        let sig_bytes = Base64::decode(&s).map_err(to_custom_error::<'de, D, _>)?;
         AggregateAuthoritySignature::from_bytes(&sig_bytes[..])
             .map_err(to_custom_error::<'de, D, _>)
     }

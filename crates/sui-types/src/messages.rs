@@ -15,9 +15,8 @@ use crate::messages_checkpoint::{
 };
 use crate::object::{Object, ObjectFormatOptions, Owner, OBJECT_START_VERSION};
 use crate::storage::{DeleteKind, WriteKind};
-use crate::sui_serde::Base64;
+use crate::sui_serde::{Base64, Encoding};
 use crate::{SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION};
-use base64ct::Encoding;
 use byteorder::{BigEndian, ReadBytesExt};
 use itertools::Either;
 use move_binary_format::access::ModuleAccess;
@@ -618,7 +617,7 @@ impl TransactionData {
     }
 
     pub fn to_base64(&self) -> String {
-        base64ct::Base64::encode_string(&self.to_bytes())
+        Base64::encode(&self.to_bytes())
     }
 
     pub fn gas_payment_object_ref(&self) -> &ObjectRef {

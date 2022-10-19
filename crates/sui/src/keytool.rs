@@ -5,7 +5,6 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::anyhow;
-use base64ct::Encoding as _;
 use bip32::{DerivationPath, Mnemonic};
 use clap::*;
 use fastcrypto::traits::{ToFromBytes, VerifyingKey};
@@ -230,8 +229,7 @@ pub fn read_network_keypair_from_file<P: AsRef<std::path::Path>>(
     path: P,
 ) -> anyhow::Result<NetworkKeyPair> {
     let value = std::fs::read_to_string(path)?;
-    let bytes =
-        base64ct::Base64::decode_vec(value.as_str()).map_err(|e| anyhow!("{}", e.to_string()))?;
+    let bytes = Base64::decode(value.as_str())?;
     if let Some(flag) = bytes.first() {
         if flag == &Ed25519SuiSignature::SCHEME.flag() {
             let sk = Ed25519PrivateKey::from_bytes(&bytes[1 + Ed25519PublicKey::LENGTH..])?;
