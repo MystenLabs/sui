@@ -2,7 +2,7 @@
 title: Run a Sui Full node
 ---
 
-Sui Full nodes run a service that validates blockchain activities, including transactions, checkpoints, and epoch changes etc. It stores and services the queries for the blockchain state and history.
+Sui Full nodes validate blockchain activities, including transactions, checkpoints, and epoch changes. Each Full node stores and services the queries for the blockchain state and history.
 
 This role enables [validators](../learn/architecture/validators.md) to focus on servicing and processing transactions as fast as possible. When a validator commits a new set of transactions (or a block of transactions), the validator pushes that block to all connected Full nodes that then service the queries from clients.
 
@@ -22,29 +22,21 @@ A transaction requires a few round trips to 2f+1 validators to form a transactio
 This synchronization process is performed by:
 
 1. Following 2f+1 validators and listening for newly committed transactions.
-1. Making sure the transaction is recognized by 2f+1 validators and hence reaches finality.
-1. Locally executing the transaction and updating the local DB.
+1. Making sure that 2f+1 validators recognize the transaction and that it reaches finality.
+1. Executing the transaction locally and updating the local DB.
 
-This synchronization process is far from ideal as it requires listening
-to at a minimum 2f+1 validators to ensure that a Full node has properly seen all
-new transactions. Over time, we will improve this process (e.g. with the
-introduction of checkpoints, ability to synchronize with other Full nodes,
-etc.) in order to have better guarantees around a Full node’s ability to be
-confident it has seen all recent transactions.
+This synchronization process requires listening to at a minimum 2f+1 validators to ensure that a Full node has properly processed all new transactions. Sui will improve the synchronization process with the introduction of checkpoints and the ability to synchronize with other Full nodes.
 
 ## Architecture
 
-The Sui Full node is essentially a read-only view of the network state. Unlike
-validator nodes, Full nodes cannot sign transactions, although they can validate
+A Sui Full node is essentially a read-only view of the network state. Unlike
+validator nodes, full nodes cannot sign transactions, although they can validate
 the integrity of the chain by re-executing transactions that were previously
 committed by a quorum of validators.
 
-Today, a Full node is expected to maintain the full history of the chain; in the
-future, sufficiently old history may need to be pruned and offloaded to cheaper
-storage.
+Today, a Full node maintains the full history of the chain.
 
-Conversely, a validator needs to store only the latest transactions on the
-*frontier* of the object graph (e.g., txes with >0 unspent output objects).
+Validator nodes store only the latest transactions on the *frontier* of the object graph (for example, transactions with >0 unspent output objects).
 
 ## Full node setup
 
