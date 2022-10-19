@@ -476,10 +476,6 @@ impl CheckpointStore {
         // Update the transactions databases.
         self.update_new_checkpoint_inner(checkpoint_sequence_number, contents, batch)?;
 
-        if let AuthenticatedCheckpoint::Certified(summary) = checkpoint {
-            self.notify_new_checkpoint(summary.clone());
-        }
-
         // TODO: Make the following atomic with above db writes.
         let locals = self.get_locals();
         let mut new_locals = locals.as_ref().clone();
@@ -831,6 +827,7 @@ impl CheckpointStore {
             &AuthenticatedCheckpoint::Certified(checkpoint.clone()),
             contents,
         )?;
+        self.notify_new_checkpoint(checkpoint.clone());
         self.clear_proposal(*seq + 1)?;
         Ok(())
     }
