@@ -882,7 +882,7 @@ async fn test_batch_to_checkpointing() {
     let inner_state = authority_state.clone();
     let _join = tokio::task::spawn(async move {
         inner_state
-            .run_batch_service(1000, Duration::from_millis(500))
+            .run_batch_service_once(1000, Duration::from_millis(500))
             .await
     });
     // Send transactions out of order
@@ -982,7 +982,7 @@ async fn test_batch_to_checkpointing_init_crash() {
         let inner_state = authority_state.clone();
         let _join = tokio::task::spawn(async move {
             inner_state
-                .run_batch_service(1000, Duration::from_millis(500))
+                .run_batch_service_once(1000, Duration::from_millis(500))
                 .await
         });
 
@@ -1566,10 +1566,11 @@ pub async fn checkpoint_tests_setup(
             .await;
 
         let inner_state = authority.clone();
-        let _join =
-            tokio::task::spawn(
-                async move { inner_state.run_batch_service(1000, batch_interval).await },
-            );
+        let _join = tokio::task::spawn(async move {
+            inner_state
+                .run_batch_service_once(1000, batch_interval)
+                .await
+        });
 
         let checkpoint = authority.checkpoints.clone();
         authorities.push(TestAuthority {
