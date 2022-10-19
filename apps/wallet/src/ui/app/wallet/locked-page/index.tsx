@@ -97,10 +97,10 @@ export default function LockedPage() {
                                         size="large"
                                     >
                                         <Icon
-                                            icon={SuiIcons.CheckFill}
+                                            icon={SuiIcons.Unlocked}
                                             className={st.btnIcon}
                                         />
-                                        Unlock
+                                        Unlock Wallet
                                     </Button>
                                     <Link
                                         to="/forgot-password"
