@@ -19,7 +19,11 @@ use crate::{
 };
 
 use anemo::{types::PeerInfo, PeerId};
-use anemo_tower::{callback::CallbackLayer, trace::TraceLayer};
+use anemo_tower::{
+    auth::{AllowedPeers, RequireAuthorizationLayer},
+    callback::CallbackLayer,
+    trace::TraceLayer,
+};
 use async_trait::async_trait;
 use config::{Parameters, SharedCommittee, SharedWorkerCache, WorkerId, WorkerInfo};
 use consensus::dag::Dag;
@@ -217,9 +221,22 @@ impl Primary {
 
         let addr = network::multiaddr_to_address(&address).unwrap();
 
+        let our_worker_peer_ids = worker_cache
+            .load()
+            .our_workers(&name)
+            .unwrap()
+            .into_iter()
+            .map(|worker_info| PeerId(worker_info.name.0.to_bytes()));
+        let worker_to_primary_router = anemo::Router::new()
+            .add_rpc_service(worker_service)
+            // Add an Authorization Layer to ensure that we only service requests from our workers
+            .route_layer(RequireAuthorizationLayer::new(AllowedPeers::new(
+                our_worker_peer_ids,
+            )));
+
         let routes = anemo::Router::new()
             .add_rpc_service(primary_service)
-            .add_rpc_service(worker_service);
+            .merge(worker_to_primary_router);
 
         let service = ServiceBuilder::new()
             .layer(TraceLayer::new_for_server_errors())
