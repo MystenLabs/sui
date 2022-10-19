@@ -33,6 +33,7 @@ use sui_types::crypto::{
 };
 use sui_types::{base_types::ObjectID, crypto::get_key_pair, gas_coin::GasCoin};
 use sui_types::{sui_framework_address_concat_string, SUI_FRAMEWORK_ADDRESS};
+use test_utils::messages::make_transactions_with_wallet_context;
 use test_utils::network::init_cluster_builder_env_aware;
 
 use sui_macros::sim_test;
@@ -1185,5 +1186,49 @@ async fn test_signature_flag() -> Result<(), anyhow::Error> {
 
     let res = SignatureScheme::from_flag("something");
     assert!(res.is_err());
+    Ok(())
+}
+
+#[sim_test]
+async fn test_execute_signed_tx() -> Result<(), anyhow::Error> {
+    let mut test_cluster = init_cluster_builder_env_aware().build().await?;
+    let context = &mut test_cluster.wallet;
+    let mut txns = make_transactions_with_wallet_context(context, 1).await;
+    let txn = txns.swap_remove(0);
+
+    let (tx_data, scheme, signature, pubkey) = txn.to_network_data_for_execution();
+    SuiClientCommands::ExecuteSignedTx {
+        tx_data: tx_data.encoded(),
+        scheme,
+        pubkey: pubkey.encoded(),
+        signature: signature.encoded(),
+    }
+    .execute(context)
+    .await?;
+    Ok(())
+}
+
+#[sim_test]
+async fn test_serialize_tx() -> Result<(), anyhow::Error> {
+    let mut test_cluster = init_cluster_builder_env_aware().build().await?;
+    let address = test_cluster.get_address_0();
+    let address1 = test_cluster.get_address_1();
+    let context = &mut test_cluster.wallet;
+
+    let object_refs = context
+        .client
+        .read_api()
+        .get_objects_owned_by_address(address)
+        .await?;
+    let coin = object_refs.get(1).unwrap().object_id;
+
+    SuiClientCommands::SerializeTransferSui {
+        to: address1,
+        sui_coin_object_id: coin,
+        gas_budget: 1000,
+        amount: Some(1),
+    }
+    .execute(context)
+    .await?;
     Ok(())
 }
