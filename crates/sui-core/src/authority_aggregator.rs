@@ -1538,6 +1538,9 @@ where
             signatures: Vec<(AuthorityName, AuthoritySignature)>,
             // A certificate if we manage to make or find one
             certificate: Option<CertifiedTransaction>,
+            // A map to keep track of transaction certs received for previous epochs, and the sum
+            // of the stake. See the comments below for why we need it.
+            prev_certs_and_effects: BTreeMap<EpochId, (CertifiedTransaction, StakeUnit)>,
             // The list of errors gathered at any point
             errors: Vec<SuiError>,
             // Tally of stake for good vs bad responses.
@@ -1548,6 +1551,7 @@ where
         let state = ProcessTransactionState {
             signatures: vec![],
             certificate: None,
+            prev_certs_and_effects: BTreeMap::new(),
             errors: vec![],
             good_stake: 0,
             bad_stake: 0,
@@ -1565,21 +1569,49 @@ where
                 |mut state, name, weight, result| {
                     Box::pin(async move {
                         match result {
-                            // If we are given back a certificate, then we do not need
-                            // to re-submit this transaction, we just returned the ready made
+                            // If we are given back a certificate from the current epoch, we do not
+                            // need to re-submit this transaction, we just returned the ready made
                             // certificate.
                             Ok(TransactionInfoResponse {
-                                certified_transaction: Some(inner_certificate),
-                                ..
-                            }) if inner_certificate.epoch() == self.committee.epoch  => {
-                                // A validator could return a certificate from an epoch that's
-                                // different from what the authority aggregator is expecting.
-                                // In that case, we should not accept that certificate.
+                                   certified_transaction: Some(inner_certificate),
+                                   ..
+                               }) if inner_certificate.epoch() == self.committee.epoch => {
                                 let tx_digest = inner_certificate.digest();
                                 debug!(tx_digest = ?tx_digest, ?name, weight, "Received prev certificate from validator handle_transaction");
                                 state.certificate = Some(inner_certificate);
                             }
-
+                            // If we received both cert and signed effects, and since we didn't fall
+                            // into the previous match arm, the cert and effects are from a previous
+                            // epoch. SafeClient already checked to make sure they are from the same
+                            // epoch. A honest validator will not keep around effects if the tx was
+                            // not final in previous epoch (they would have been reverted). But a
+                            // byzantine validator could still keep it around. When we receive a
+                            // cert/effect pair, we are not 100% sure if this was a finalized tx
+                            // from previous epochs. To confirm this, we add it to
+                            // prev_certs_and_effects, and when we have f + 1 of them, we know
+                            // the cert must be valid and can return it.
+                            Ok(TransactionInfoResponse {
+                                certified_transaction: Some(inner_certificate),
+                                signed_effects: Some(_),
+                                ..
+                            }) => {
+                                let tx_digest = inner_certificate.digest();
+                                debug!(
+                                    tx_digest = ?tx_digest,
+                                    ?name,
+                                    weight,
+                                    epoch = ?inner_certificate.epoch(),
+                                    "Received prev certificate and effects from validator handle_transaction"
+                                );
+                                let entry = state
+                                    .prev_certs_and_effects
+                                    .entry(inner_certificate.epoch())
+                                    .or_insert((inner_certificate, 0));
+                                entry.1 += weight;
+                                if entry.1 >= self.committee.validity_threshold() {
+                                    state.certificate = Some(entry.0.clone());
+                                }
+                            }
                             // If we get back a signed transaction, then we aggregate the
                             // new signature and check whether we have enough to form
                             // a certificate.

@@ -226,11 +226,10 @@ impl<C> SafeClient<C> {
         effects_digest: Option<&TransactionEffectsDigest>,
         response: &TransactionInfoResponse,
     ) -> SuiResult {
-        let mut committee = None;
         if let Some(signed_transaction) = &response.signed_transaction {
-            committee = Some(self.get_committee(&signed_transaction.auth_sign_info.epoch)?);
+            let committee = self.get_committee(&signed_transaction.auth_sign_info.epoch)?;
             // Check the transaction signature
-            signed_transaction.verify(committee.as_ref().unwrap())?;
+            signed_transaction.verify(&committee)?;
             // Check it has the right signer
             fp_ensure!(
                 signed_transaction.auth_sign_info.authority == self.address,
@@ -250,11 +249,9 @@ impl<C> SafeClient<C> {
         }
 
         if let Some(certificate) = &response.certified_transaction {
-            if committee.is_none() {
-                committee = Some(self.get_committee(&certificate.auth_sign_info.epoch)?);
-            }
+            let committee = self.get_committee(&certificate.auth_sign_info.epoch)?;
             // Check signatures and quorum
-            certificate.verify(committee.as_ref().unwrap())?;
+            certificate.verify(&committee)?;
             // Check it's the right transaction
             fp_ensure!(
                 certificate.digest() == digest,
@@ -266,11 +263,9 @@ impl<C> SafeClient<C> {
         }
 
         if let Some(signed_effects) = &response.signed_effects {
-            if committee.is_none() {
-                committee = Some(self.get_committee(&signed_effects.auth_signature.epoch)?);
-            }
+            let committee = self.get_committee(&signed_effects.auth_signature.epoch)?;
             // Check signature
-            signed_effects.verify(committee.as_ref().unwrap())?;
+            signed_effects.verify(&committee)?;
             // Check it has the right signer
             fp_ensure!(
                 signed_effects.auth_signature.authority == self.address,
@@ -297,6 +292,25 @@ impl<C> SafeClient<C> {
                         reason: "Effects digest does not match with expected digest".to_string()
                     }
                 );
+            }
+            if let Some(cert) = &response.certified_transaction {
+                // If we have both tx cert and signed effects, they must be from the same epoch.
+                fp_ensure!(
+                    cert.epoch() == signed_effects.auth_signature.epoch,
+                    SuiError::ByzantineAuthoritySuspicion {
+                        authority: self.address,
+                        reason: format!(
+                            "Effects are signed at epoch {:?}, while cert was formed at epoch {:?}",
+                            signed_effects.auth_signature.epoch,
+                            cert.epoch()
+                        )
+                    }
+                );
+            } else {
+                return Err(SuiError::ByzantineAuthoritySuspicion {
+                    authority: self.address,
+                    reason: "Validator has signed effects but no transaction cert".to_string(),
+                });
             }
         }
 
