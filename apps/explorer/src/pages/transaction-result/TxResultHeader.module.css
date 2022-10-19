@@ -36,8 +36,12 @@
     @apply fill-success-dark;
 }
 
-.pagetype svg {
+.pagetype.fillcolor svg {
     @apply fill-sui-steel;
+}
+
+.pagetype.strokecolor svg {
+    @apply stroke-sui-steel;
 }
 
 .failed.statuslabel svg {
