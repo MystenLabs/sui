@@ -573,6 +573,7 @@ where
         bypass_validator_halt: bool,
     ) -> SyncResult {
         trace!(?digest, "validator pending execution requested");
+
         let cert = self.get_cert(epoch_id, digest).await?;
 
         let result = if bypass_validator_halt {
@@ -584,9 +585,7 @@ where
         };
         match result {
             Ok(_) => Ok(SyncStatus::CertExecuted),
-            Err(SuiError::ObjectNotFound { .. })
-            | Err(SuiError::ObjectErrors { .. })
-            | Err(SuiError::SharedObjectLockNotSetError) => {
+            Err(SuiError::ObjectNotFound { .. }) | Err(SuiError::ObjectErrors { .. }) => {
                 debug!(?digest, "cert execution failed due to missing parents");
 
                 let effects = self.get_true_effects(epoch_id, &cert).await?;

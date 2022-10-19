@@ -2288,11 +2288,7 @@ async fn shared_object() {
     // Sending the certificate now fails since it was not sequenced.
     let result = authority.handle_certificate(&certificate).await;
     assert!(
-        matches!(
-            result,
-            Err(SuiError::ObjectErrors { ref errors })
-                if errors.len() == 1 && matches!(errors[0], SuiError::SharedObjectLockNotSetError)
-        ),
+        matches!(result, Err(SuiError::SharedObjectLockNotSetError)),
         "{:#?}",
         result
     );

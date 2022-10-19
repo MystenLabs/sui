@@ -530,7 +530,7 @@ impl AuthorityState {
 
         // Validators should never sign an external system transaction.
         fp_ensure!(
-            !transaction.signed_data.data.kind.is_system_tx(),
+            !transaction.is_system_tx(),
             SuiError::InvalidSystemTransaction
         );
 
@@ -704,6 +704,11 @@ impl AuthorityState {
             .instrument(span)
             .await?;
 
+        if !certificate.is_system_tx() && self.is_cert_awaiting_sequencing(certificate)? {
+            debug!("shared object cert has not been sequenced by narwhal");
+            return Err(SuiError::SharedObjectLockNotSetError);
+        }
+
         self.process_certificate(tx_guard, certificate, bypass_validator_halt)
             .await
             .tap_err(|e| debug!(?tx_digest, "process_certificate failed: {e}"))
@@ -783,7 +788,7 @@ impl AuthorityState {
 
         // We also bypass validator halt if this is the system transaction.
         // TODO: Shared object transactions should also bypass validator halt.
-        bypass_validator_halt |= certificate.signed_data.data.kind.is_system_tx();
+        bypass_validator_halt |= certificate.is_system_tx();
 
         if self.is_halted() && !bypass_validator_halt {
             tx_guard.release();
@@ -2077,6 +2082,20 @@ impl AuthorityState {
         // We only notify i.e. update low watermark once database changes are committed
         notifier_ticket.notify();
         Ok(())
+    }
+
+    /// Returns true if certificate is a shared-object cert but has not been sequenced.
+    fn is_cert_awaiting_sequencing(&self, certificate: &CertifiedTransaction) -> SuiResult<bool> {
+        // always an error to call this on fullnode.
+        assert!(!self.is_fullnode());
+
+        if !certificate.contains_shared_object() {
+            Ok(false)
+        } else {
+            self.database
+                .consensus_message_processed(certificate.digest())
+                .map(|r| !r)
+        }
     }
 
     /// Check whether a shared-object certificate has already been given shared-locks.

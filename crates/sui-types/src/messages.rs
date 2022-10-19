@@ -721,6 +721,10 @@ impl<S> TransactionEnvelope<S> {
             .map(InputObjectKind::MovePackage)
             .collect::<Vec<_>>()
     }
+
+    pub fn is_system_tx(&self) -> bool {
+        self.signed_data.data.kind.is_system_tx()
+    }
 }
 
 // In combination with #[serde(remote = "TransactionEnvelope")].
