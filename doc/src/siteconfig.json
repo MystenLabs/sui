@@ -93,8 +93,8 @@
             "external": true
           },
           {
-            "name": "Sui Tokenomics white paper",
-            "url": "https://github.com/MystenLabs/sui/blob/main/doc/paper/sui.pdf",
+            "name": "Sui Partners",
+            "url": "https://sui.io/ecosystem/",
             "external": true            
           },
           {
@@ -104,31 +104,6 @@
           {
             "name": "Why We Created Sui Move",
             "url": "https://medium.com/mysten-labs/why-we-created-sui-move-6a234656c36b"
-          }
-        ]
-      },
-      {
-        "name": "Join the Community",
-        "sublist": [
-          {
-            "name": "GitHub",
-            "url": "https://github.com/MystenLabs",
-            "external": true
-          },
-          {
-            "name": "Discord",
-            "url": "https://discord.gg/sui",
-            "external": true
-          },
-          {
-            "name": "Twitter",
-            "url": "https://twitter.com/SuiNetwork/",
-            "external": true
-          },
-          {
-            "name": "Medium",
-            "url": "https://medium.com/mysten-labs/",
-            "external": true
           }
         ]
       }
