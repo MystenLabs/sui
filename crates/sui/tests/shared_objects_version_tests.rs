@@ -65,7 +65,11 @@ async fn initial_shared_version_mismatch_start_version() {
         .await;
 
     let err = fx.expect_err("Transaction fails");
-    assert!(is_txn_input_error(&err, "SharedObjectStartingVersionMismatch"), "{}", err);
+    assert!(
+        is_txn_input_error(&err, "SharedObjectStartingVersionMismatch"),
+        "{}",
+        err
+    );
 }
 
 #[sim_test]
@@ -97,7 +101,11 @@ async fn initial_shared_version_mismatch_arbitrary() {
         .increment_shared_counter(counter, SequenceNumber::from_u64(42))
         .await;
     let err = fx.expect_err("Transaction fails");
-    assert!(is_txn_input_error(&err, "SharedObjectStartingVersionMismatch"), "{}", err);
+    assert!(
+        is_txn_input_error(&err, "SharedObjectStartingVersionMismatch"),
+        "{}",
+        err
+    );
 }
 
 fn is_txn_input_error(err: &SuiError, err_case: &str) -> bool {

@@ -1122,7 +1122,9 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
 
         let mut sequenced_to_write = Vec::new();
         let mut schedule_to_write = Vec::new();
-        for ((id, initial_shared_version), v) in certificate.shared_input_objects().zip(versions.iter()) {
+        for ((id, initial_shared_version), v) in
+            certificate.shared_input_objects().zip(versions.iter())
+        {
             // If it is the first time the shared object has been sequenced, assign it the version
             // that the object was shared at.  This `initial_shared_version` will be the initial
             // version for the object if it was created as a shared object, or will be the version
