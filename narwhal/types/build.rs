@@ -109,15 +109,6 @@ fn build_anemo_services(out_dir: &Path) {
         .attributes(automock_attribute.clone())
         .method(
             anemo_build::manual::Method::builder()
-                .name("send_message")
-                .route_name("SendMessage")
-                .request_type("crate::WorkerPrimaryMessage")
-                .response_type("()")
-                .codec_path("anemo::rpc::codec::BincodeCodec")
-                .build(),
-        )
-        .method(
-            anemo_build::manual::Method::builder()
                 .name("report_our_batch")
                 .route_name("ReportOurBatch")
                 .request_type("crate::WorkerOurBatchMessage")

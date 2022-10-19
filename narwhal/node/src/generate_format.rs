@@ -13,7 +13,7 @@ use std::{fs::File, io::Write};
 use structopt::{clap::arg_enum, StructOpt};
 use types::{
     Batch, BatchDigest, Certificate, CertificateDigest, Header, HeaderDigest,
-    ReconfigureNotification, WorkerOthersBatchMessage, WorkerOurBatchMessage, WorkerPrimaryMessage,
+    ReconfigureNotification, WorkerOthersBatchMessage, WorkerOurBatchMessage,
     WorkerReconfigureMessage, WorkerSynchronizeMessage,
 };
 
@@ -145,8 +145,6 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<HeaderDigest>(&samples)?;
     tracer.trace_type::<CertificateDigest>(&samples)?;
 
-    // The final entry points that we must document
-    tracer.trace_type::<WorkerPrimaryMessage>(&samples)?;
     tracer.registry()
 }
 

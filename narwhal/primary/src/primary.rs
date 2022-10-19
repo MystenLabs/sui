@@ -51,7 +51,7 @@ use types::{
     BatchDigest, Certificate, ConsensusStore, FetchCertificatesRequest, FetchCertificatesResponse,
     Header, HeaderDigest, PrimaryToPrimary, PrimaryToPrimaryServer, ReconfigureNotification,
     RoundVoteDigestPair, WorkerInfoResponse, WorkerOthersBatchMessage, WorkerOurBatchMessage,
-    WorkerPrimaryMessage, WorkerToPrimary, WorkerToPrimaryServer,
+    WorkerToPrimary, WorkerToPrimaryServer,
 };
 
 #[cfg(any(test))]
@@ -211,7 +211,6 @@ impl Primary {
         });
         let worker_service = WorkerToPrimaryServer::new(WorkerReceiverHandler {
             tx_our_digests,
-            tx_state_handler,
             payload_store: payload_store.clone(),
             our_workers,
         });
@@ -297,6 +296,7 @@ impl Primary {
                 .primary_network_admin_server_port,
             network.clone(),
             tx_reconfigure.subscribe(),
+            Some(tx_state_handler),
         );
 
         // The `Synchronizer` provides auxiliary methods helping the `Core` to sync.
@@ -453,6 +453,7 @@ impl Primary {
             tx_consensus_round_updates,
             rx_state_handler,
             tx_reconfigure,
+            P2pNetwork::new(network.clone()),
         );
 
         let consensus_api_handle = if !internal_consensus {
@@ -644,30 +645,12 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
 #[derive(Clone)]
 struct WorkerReceiverHandler {
     tx_our_digests: Sender<(BatchDigest, WorkerId)>,
-    tx_state_handler: Sender<ReconfigureNotification>,
     payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
     our_workers: BTreeMap<WorkerId, WorkerInfo>,
 }
 
 #[async_trait]
 impl WorkerToPrimary for WorkerReceiverHandler {
-    async fn send_message(
-        &self,
-        request: anemo::Request<WorkerPrimaryMessage>,
-    ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
-        let message = request.into_body();
-
-        match message {
-            WorkerPrimaryMessage::Reconfigure(notification) => self
-                .tx_state_handler
-                .send(notification)
-                .await
-                .map_err(|_| DagError::ShuttingDown),
-        }
-        .map(|_| anemo::Response::new(()))
-        .map_err(|e| anemo::rpc::Status::internal(e.to_string()))
-    }
-
     async fn report_our_batch(
         &self,
         request: anemo::Request<WorkerOurBatchMessage>,

@@ -1,5 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
+#![allow(clippy::mutable_key_type)]
+
 use arc_swap::ArcSwap;
 use bytes::Bytes;
 use config::{Committee, Parameters, SharedWorkerCache, WorkerCache, WorkerId};
@@ -9,19 +12,18 @@ use executor::{ExecutionIndices, ExecutionState};
 use fastcrypto::traits::KeyPair as _;
 use futures::future::join_all;
 use narwhal_node as node;
-use network::{P2pNetwork, ReliableNetwork};
 use node::{restarter::NodeRestarter, Node, NodeStorage};
 use prometheus::Registry;
-use std::sync::{Arc, Mutex};
-use test_utils::{random_network, CommitteeFixture};
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
+use test_utils::CommitteeFixture;
 use tokio::{
     sync::mpsc::{channel, Receiver, Sender},
     time::{interval, sleep, Duration, MissedTickBehavior},
 };
-use types::{
-    ReconfigureNotification, TransactionProto, TransactionsClient, WorkerPrimaryMessage,
-    WorkerReconfigureMessage,
-};
+use types::{ReconfigureNotification, TransactionProto, TransactionsClient};
 
 /// A simple/dumb execution engine.
 struct SimpleExecutionState {
@@ -255,11 +257,19 @@ async fn epoch_change() {
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
     let worker_cache = fixture.shared_worker_cache();
-    let parameters = Parameters {
-        batch_size: 200,
-        max_header_num_of_batches: 1,
-        ..Parameters::default()
-    };
+    let parameters = fixture
+        .authorities()
+        .map(|a| {
+            (
+                a.public_key(),
+                Parameters {
+                    batch_size: 200,
+                    header_num_of_batches_threshold: 1, // One batch digest
+                    ..Parameters::default()
+                },
+            )
+        })
+        .collect::<HashMap<_, _>>();
 
     // Spawn the nodes.
     let mut rx_nodes = Vec::new();
@@ -281,65 +291,34 @@ async fn epoch_change() {
         ));
 
         // Start a task that will broadcast the committee change signal.
-        let name_clone = name.clone();
-        let worker_cache_clone = worker_cache.clone();
+        let parameters_clone = parameters.get(&name).unwrap().clone();
         tokio::spawn(async move {
-            let network = random_network();
+            let client = reqwest::Client::new();
 
             while let Some((_, _, committee, _, _)) = rx_node_reconfigure.recv().await {
-                // TODO: shutdown message should probably be sent in a better way than by injecting
-                // it through the networking stack.
-                let address = network::multiaddr_to_address(
-                    &committee
-                        .primary(&name_clone)
-                        .expect("Our key is not in the committee"),
-                )
-                .unwrap();
-                let network_key = committee
-                    .network_key(&name_clone)
-                    .expect("Our key is not in the committee");
-                let mut primary_network =
-                    P2pNetwork::new_for_single_address(network_key.to_owned(), address).await;
-                let message = WorkerPrimaryMessage::Reconfigure(ReconfigureNotification::NewEpoch(
-                    committee.clone(),
-                ));
-                let primary_cancel_handle =
-                    primary_network.send(network_key.to_owned(), &message).await;
-
-                let message = WorkerReconfigureMessage {
-                    message: ReconfigureNotification::NewEpoch(committee.clone()),
-                };
-                let mut worker_names = Vec::new();
-                for worker in worker_cache_clone
-                    .load()
-                    .our_workers(&name_clone)
-                    .expect("Our key is not in the worker cache")
-                {
-                    let address = network::multiaddr_to_address(&worker.worker_address).unwrap();
-                    let peer_id = anemo::PeerId(worker.name.0.to_bytes());
-                    network
-                        .connect_with_peer_id(address, peer_id)
-                        .await
-                        .unwrap();
-                    worker_names.push(worker.name);
-                }
-                let worker_cancel_handles = P2pNetwork::new(network.clone())
-                    .broadcast(worker_names, &message)
-                    .await;
-
-                // Ensure the message has been received.
-                primary_cancel_handle.await.unwrap();
-                join_all(worker_cancel_handles).await;
+                let message = ReconfigureNotification::NewEpoch(committee.clone());
+                client
+                    .post(format!(
+                        "http://127.0.0.1:{}/reconfigure",
+                        parameters_clone
+                            .network_admin_server
+                            .primary_network_admin_server_port
+                    ))
+                    .json(&message)
+                    .send()
+                    .await
+                    .unwrap();
             }
         });
 
+        let p = parameters.get(&name).unwrap().clone();
         let _primary_handles = Node::spawn_primary(
             a.keypair().copy(),
             a.network_keypair().copy(),
             Arc::new(ArcSwap::new(Arc::new(committee.clone()))),
             worker_cache.clone(),
             &store,
-            parameters.clone(),
+            p.clone(),
             /* consensus */ true,
             execution_state,
             &Registry::new(),
@@ -353,7 +332,7 @@ async fn epoch_change() {
             Arc::new(ArcSwap::new(Arc::new(committee.clone()))),
             worker_cache.clone(),
             &store,
-            parameters.clone(),
+            p,
             &Registry::new(),
         );
 
