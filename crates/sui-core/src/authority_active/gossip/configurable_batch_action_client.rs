@@ -139,14 +139,13 @@ impl AuthorityAPI for ConfigurableBatchActionClient {
     ) -> Result<BatchInfoResponseItemStream, SuiError> {
         let mut last_batch = AuthorityBatch::initial();
         let actions = &self.action_sequence_internal;
-        let secret = self.state.secret.clone();
         let name = self.state.name;
         let mut items: Vec<Result<BatchInfoResponseItem, SuiError>> = Vec::new();
         let mut seq = 0;
         let zero_batch = SignedBatch::new(
             self.state.epoch(),
             AuthorityBatch::initial(),
-            &*secret,
+            &*self.state.secret,
             name,
         );
         items.push(Ok(BatchInfoResponseItem(UpdateItem::Batch(zero_batch))));
@@ -169,7 +168,7 @@ impl AuthorityAPI for ConfigurableBatchActionClient {
                         let item = SignedBatch::new(
                             self.state.epoch(),
                             last_batch.clone(),
-                            &*secret,
+                            &*self.state.secret,
                             name,
                         );
                         Ok(BatchInfoResponseItem(UpdateItem::Batch(item)))
