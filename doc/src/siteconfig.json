@@ -1,10 +1,10 @@
 {
   "title": "Sui Documentation",
-  "tagline": "Welcome to Sui, a next-generation smart contract platform with high throughput, low latency, and an asset-oriented programming model powered by Move.",
+  "tagline": "Documentation for Sui, a next-generation smart contract platform with high throughput, low latency, and an asset-oriented programming model powered by Move.",
   "URL": "https://docs.sui.io/",
   "baseUrl": "/",
   "favIcon": "/favicon2.png",
-  "organizationName": "Mysten Labs",
+  "organizationName": "Mysten Labs, Inc.",
   "projectName": "Dev Portal",
   "footerData": {
     "copyRight": "©2022 Copyright Sui. All rights reserved.",
@@ -28,6 +28,10 @@
         "link": "/build"
       },
       {
+        "title": "Reference",
+        "link": "/reference"
+      },
+      {
         "title": "Explore",
         "link": "/explore"
       },
@@ -39,7 +43,7 @@
   },
   "HomePage": {
     "title": "Sui Documentation",
-    "subTitle": "Welcome to Sui, a next-generation smart contract platform with high throughput, low latency, and an asset-oriented programming model powered by Move.",
+    "subTitle": "Documentation for Sui, a next-generation smart contract platform with high throughput, low latency, and an asset-oriented programming model powered by Move.",
     "cta": [
       {
         "name": "What's New",
@@ -81,55 +85,25 @@
         ]
       },
       {
-        "name": "Learn about Sui",
+        "name": "Sui Resources",
         "sublist": [
           {
-            "name": "How Sui Works",
-            "url": "/learn/how-sui-works"
-          },
-          {
-            "name": "Sui Compared to other Blockchains",
-            "url": "/learn/sui-compared"
-          },
-          {
-            "name": "Why Move?",
-            "url": "/learn/why-move"
-          },
-          {
-            "name": "How Sui Move and Core Move differ",
-            "url": "/learn/sui-move-diffs"
-          }
-        ]
-      },
-      {
-        "name": "See Sui in Action",
-        "sublist": [
-          {
-            "name": "Create and play Tic-Tac-Toe on Sui",
-            "url": "/explore/tutorials"
-          },
-          {
-            "name": "See two games with mutable, expressive NFTs",
-            "url": "/explore/prototypes"
-          }
-        ]
-      },
-      {
-        "name": "Build with Examples",
-        "sublist": [
-          {
-            "name": "Create an escrow",
-            "url": "https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/defi/sources/escrow.move",
+            "name": "Sui Blog (Medium)",
+            "url": "https://sui.io/resources/",
             "external": true
           },
           {
-            "name": "Try A flash loan",
-            "url": "https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/defi/sources/flash_lender.move",
-            "external": true
+            "name": "Sui Tokenomics white paper",
+            "url": "https://github.com/MystenLabs/sui/blob/main/doc/paper/sui.pdf",
+            "external": true            
           },
           {
-            "name": "See all examples",
-            "url": "/explore/examples"
+            "name": "Sui by Example",
+            "url": "https://examples.sui.io/"
+          },
+          {
+            "name": "Why We Created Sui Move",
+            "url": "https://medium.com/mysten-labs/why-we-created-sui-move-6a234656c36b"
           }
         ]
       },

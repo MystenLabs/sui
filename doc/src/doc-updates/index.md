@@ -4,11 +4,25 @@ title: Sui Documentation Updates
 
 This topic lists the significant updates to the [Sui documentation](https://docs.sui.io) site so that you can easily identify new or updated information. 
 
+## Week ending 10/22/22
+
+| Topic | Update | 
+| :------ | :------- |
+| [Reference](../reference) | Added a new Reference top-level node. Moved filed from the Reference section previously in the Build node. |
+
+
+## Week ending 10/15/22
+
+| Topic | Update | 
+| :------ | :------- |
+| [Multiple topics](https://github.com/MystenLabs/sui/pull/4960/files) | Copyedits for improved readability and consistency. |
+
 ## Week ending 10/08/22
 
 | Topic | Update | 
 | :------ | :------- |
 | [Install Sui](../build/install.md) | Removed the setup script (sui-setup.sh) until we can resolve the errors with the latest version of Sui. |
+| [Explore Sui](../explore/index.md) | General copyedits for style, removed some stale images and examples. |
 
 
 ## Week ending 10/01/22
