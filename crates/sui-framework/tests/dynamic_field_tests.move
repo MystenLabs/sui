@@ -132,4 +132,16 @@ fun sanity_check_exists() {
     object::delete(id);
 }
 
+// should be able to do delete a UID even though it has a dynamic field
+#[test]
+fun delete_uid_with_fields() {
+    let sender = @0x0;
+    let scenario = ts::begin(sender);
+    let id = ts::new_object(&mut scenario);
+    add(&mut id, 0, 0);
+    assert!(exists_with_type<u64, u64>(&mut id, 0), 0);
+    ts::end(scenario);
+    object::delete(id);
+}
+
 }
