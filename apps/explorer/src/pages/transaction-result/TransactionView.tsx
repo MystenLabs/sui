@@ -39,6 +39,7 @@ import type {
 
 import styles from './TransactionResult.module.css';
 
+import { Banner } from '~/ui/Banner';
 import { PageHeader } from '~/ui/PageHeader';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 
@@ -388,8 +389,12 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                     type={txKindName}
                     title={txdata.txId}
                     status={txdata.status}
-                    // error={txdata.txError}
                 />
+                {txdata.txError && (
+                    <div className="mt-2">
+                        <Banner variant="error">{txdata.txError}</Banner>
+                    </div>
+                )}
             </div>
             <TabGroup size="lg">
                 <TabList>
