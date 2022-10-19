@@ -296,7 +296,7 @@ async fn test_object_owning_another_object() {
     // Check that the child is now owned by the parent.
     let field_id = match child_effect.1 {
         Owner::ObjectOwner(field_id) => field_id.into(),
-        Owner::Shared | Owner::Immutable | Owner::AddressOwner(_) => panic!(),
+        Owner::Shared { .. } | Owner::Immutable | Owner::AddressOwner(_) => panic!(),
     };
     let field_object = authority.get_object(&field_id).await.unwrap().unwrap();
     assert_eq!(field_object.owner, parent.0);
@@ -395,7 +395,7 @@ async fn test_object_owning_another_object() {
     assert_eq!(type_, TransferType::ToObject);
     let new_field_id = match recipient {
         Owner::ObjectOwner(field_id) => field_id.into(),
-        Owner::Shared | Owner::Immutable | Owner::AddressOwner(_) => panic!(),
+        Owner::Shared { .. } | Owner::Immutable | Owner::AddressOwner(_) => panic!(),
     };
     let new_field_object = authority.get_object(&new_field_id).await.unwrap().unwrap();
     assert_eq!(
