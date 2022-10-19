@@ -27,6 +27,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::drivers::driver::Driver;
 use crate::drivers::HistogramWrapper;
+use crate::drivers::NETWORK_TIMEOUT_SEC;
 use crate::workloads::workload::Payload;
 use crate::workloads::workload::WorkloadInfo;
 use std::collections::{BTreeMap, VecDeque};
@@ -578,7 +579,10 @@ async fn reconfig(cur_epoch: EpochId, qd: Arc<QuorumDriver<NetworkAuthorityClien
             )
         }
         Ok(committee_info) => {
-            let network_config = default_mysten_network_config();
+            let mut network_config = default_mysten_network_config();
+            network_config.connect_timeout = Some(Duration::from_secs(NETWORK_TIMEOUT_SEC));
+            network_config.request_timeout = Some(Duration::from_secs(NETWORK_TIMEOUT_SEC));
+
             let new_epoch = committee_info.committee.epoch;
             // Check if we already advanced.
             let cur_epoch = qd.current_epoch();

@@ -2294,6 +2294,8 @@ pub struct AuthorityAggregatorBuilder<'a> {
     genesis: Option<&'a Genesis>,
     committee_store: Option<Arc<CommitteeStore>>,
     registry: Option<Arc<Registry>>,
+    connect_timeout: Option<Duration>,
+    request_timeout: Option<Duration>,
 }
 
 impl<'a> AuthorityAggregatorBuilder<'a> {
@@ -2303,6 +2305,8 @@ impl<'a> AuthorityAggregatorBuilder<'a> {
             genesis: None,
             committee_store: None,
             registry: None,
+            connect_timeout: None,
+            request_timeout: None,
         }
     }
 
@@ -2312,7 +2316,19 @@ impl<'a> AuthorityAggregatorBuilder<'a> {
             genesis: Some(genesis),
             committee_store: None,
             registry: None,
+            connect_timeout: None,
+            request_timeout: None,
         }
+    }
+
+    pub fn with_connect_timeout(mut self, timeout: Duration) -> Self {
+        self.connect_timeout = Some(timeout);
+        self
+    }
+
+    pub fn with_request_timeout(mut self, timeout: Duration) -> Self {
+        self.request_timeout = Some(timeout);
+        self
     }
 
     pub fn with_committee_store(mut self, committee_store: Arc<CommitteeStore>) -> Self {
@@ -2346,8 +2362,8 @@ impl<'a> AuthorityAggregatorBuilder<'a> {
 
         let auth_clients = make_authority_clients(
             validator_info,
-            DEFAULT_CONNECT_TIMEOUT_SEC,
-            DEFAULT_REQUEST_TIMEOUT_SEC,
+            self.connect_timeout.unwrap_or(DEFAULT_CONNECT_TIMEOUT_SEC),
+            self.request_timeout.unwrap_or(DEFAULT_REQUEST_TIMEOUT_SEC),
             network_metrics.clone(),
         );
         let committee_store = if let Some(committee_store) = self.committee_store {

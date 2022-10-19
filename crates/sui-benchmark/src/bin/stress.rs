@@ -9,12 +9,14 @@ use prometheus::Registry;
 use rand::seq::SliceRandom;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 use strum_macros::EnumString;
 use sui_benchmark::drivers::bench_driver::BenchDriver;
 use sui_benchmark::drivers::driver::Driver;
 use sui_benchmark::drivers::BenchmarkCmp;
 use sui_benchmark::drivers::BenchmarkStats;
 use sui_benchmark::drivers::Interval;
+use sui_benchmark::drivers::NETWORK_TIMEOUT_SEC;
 use sui_benchmark::util::get_ed25519_keypair_from_keystore;
 use sui_benchmark::workloads::workload::get_latest;
 use sui_benchmark::workloads::{
@@ -274,6 +276,8 @@ async fn main() -> Result<()> {
         let cloned_gas = primary_gas;
 
         let (aggregator, auth_clients) = AuthorityAggregatorBuilder::from_network_config(&configs)
+            .with_connect_timeout(Duration::from_secs(NETWORK_TIMEOUT_SEC))
+            .with_request_timeout(Duration::from_secs(NETWORK_TIMEOUT_SEC))
             .with_registry(registry.clone())
             .build()
             .unwrap();
@@ -330,6 +334,8 @@ async fn main() -> Result<()> {
         let genesis = sui_config::node::Genesis::new_from_file(&opts.genesis_blob_path);
         let genesis = genesis.genesis()?;
         let (aggregator, _) = AuthorityAggregatorBuilder::from_genesis(genesis)
+            .with_connect_timeout(Duration::from_secs(NETWORK_TIMEOUT_SEC))
+            .with_request_timeout(Duration::from_secs(NETWORK_TIMEOUT_SEC))
             .with_registry(registry.clone())
             .build()
             .unwrap();

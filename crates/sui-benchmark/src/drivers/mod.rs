@@ -9,6 +9,8 @@ pub mod driver;
 use comfy_table::{Cell, Color, ContentArrangement, Row, Table};
 use hdrhistogram::{serialization::Serializer, Histogram};
 
+pub const NETWORK_TIMEOUT_SEC: u64 = 4;
+
 #[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
 pub enum Interval {
     Count(u64),
