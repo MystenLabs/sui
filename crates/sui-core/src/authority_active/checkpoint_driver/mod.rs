@@ -857,6 +857,7 @@ where
     // Get a client
     let client = active_authority.net.load().authority_clients[&authority].clone();
 
+    // TODO: We should make this a loop and exit until the first success.
     match client
         .handle_checkpoint(CheckpointRequest::proposal(true))
         .await
@@ -883,6 +884,10 @@ where
 
                 // For some reason the proposal is empty?
                 if proposal.is_none() || proposal_contents.is_none() {
+                    debug!(
+                        validator=?authority.concise(),
+                        "Queried validator doesn't have a proposal yet"
+                    );
                     return None;
                 }
 
@@ -891,6 +896,11 @@ where
                     != my_proposal.sequence_number()
                 {
                     // Target validator may be byzantine or behind, ignore it.
+                    debug!(
+                        validator=?authority.concise(),
+                        received_cp_seq=proposal.as_ref().unwrap().summary.sequence_number,
+                        "Queried validator is behind"
+                    );
                     return None;
                 }
 
@@ -942,6 +952,11 @@ where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
     let mut diff_certs: BTreeMap<ExecutionDigests, CertifiedTransaction> = BTreeMap::new();
+    debug!(
+        our_size = fragment.diff.second.items.len(),
+        other_size = fragment.diff.first.items.len(),
+        "Augmenting fragment with diff transactions"
+    );
 
     // These are the transactions that we have that the other validator does not
     // have, so we can read them from our local database.
@@ -963,6 +978,9 @@ where
         .load()
         .clone_client(fragment.other.authority());
     for tx_digest in &fragment.diff.first.items {
+        // TODO: It's possible that by the time we received the proposal we already have some of
+        // the certs. Should do a filter first before trying to download every of them.
+        // The downloading can probably also happen in parallel.
         let response = client
             .handle_transaction_info_request(TransactionInfoRequest::from(tx_digest.transaction))
             .await?;
