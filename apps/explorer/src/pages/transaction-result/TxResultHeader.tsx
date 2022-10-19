@@ -7,10 +7,10 @@ import { ReactComponent as ContentFailedStatus } from '../../assets/SVGIcons/12p
 import { ReactComponent as CallTypeIcon } from '../../assets/SVGIcons/16px/Call.svg';
 import { ReactComponent as ChangeEpochIcon } from '../../assets/SVGIcons/16px/ChangeEpoch.svg';
 import { ReactComponent as PayIcon } from '../../assets/SVGIcons/16px/Coins.svg';
+import { ReactComponent as PublishTypeIcon } from '../../assets/SVGIcons/16px/Publish.svg';
 import { ReactComponent as TransferObjectIcon } from '../../assets/SVGIcons/16px/TransferObject.svg';
 import { ReactComponent as TransferSuiIcon } from '../../assets/SVGIcons/16px/TransferSui.svg';
 import { ReactComponent as InfoIcon } from '../../assets/SVGIcons/Info.svg';
-import { ReactComponent as PublishTypeIcon } from '../../assets/SVGIcons/Publish.svg';
 import Longtext from '../../components/longtext/Longtext';
 import resultheaderstyle from '../../styles/resultheader.module.css';
 
