@@ -92,6 +92,7 @@ The `WalletStandardAdapterProvider` adapter (published under `@mysten/wallet-ada
 The following wallets are known to work with the Wallet Standard:
 
 - **[Sui Wallet](https://docs.sui.io/devnet/explore/wallet-browser)**
+- **[Suiet Wallet](https://github.com/suiet/suiet)** - A open-source wallet for Sui. ([Chrome store](https://chrome.google.com/webstore/detail/suiet-sui-wallet/khpkpbbcccdmmclmpigdgddabeilkdpd), [Website](https://suiet.app/))
 - **[Ethos Wallet](https://chrome.google.com/webstore/detail/ethos-wallet/mcbigmjiafegjnnogedioegffbooigli)**
 
 ## Demo app
