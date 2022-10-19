@@ -3,6 +3,7 @@
 
 import { SignatureScheme } from '../cryptography/publickey';
 import {
+  CoinDenominationInfoResponse,
   GetObjectDataResponse,
   SuiObjectInfo,
   GatewayTxSeqNumber,
@@ -94,6 +95,25 @@ export abstract class Provider {
     typeArg: string,
     exclude: ObjectId[]
   ): Promise<GetObjectDataResponse[]>;
+
+  /**
+   * Method to look up denomination of a specific type of coin.
+   * TODO: now only SUI coins are supported, will scale to other types
+   * based on their definitions in Move.
+   * 
+   * @param coin_type coin type, e.g., '0x2::sui::SUI'
+   * @return denomination info of the coin including,
+   * coin type, the same as input coin type
+   * basic unit, the min unit of the coin, e.g., MIST;
+   * canonical unit, the commonly used unit, e.g., SUI;
+   * denomination, the value of 1 canonical over 1 basic unit,
+   * for example 1_000_000_000 = 1 SUI / 1 MIST;
+   * decimal number, the number of zeros in the denomination,
+   * e.g., 9 here for SUI coin.
+   */
+  abstract getCoinDenominationInfo(
+    coin_type: string,
+  ): CoinDenominationInfoResponse;
 
   /**
    * Get details about an object

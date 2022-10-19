@@ -24,6 +24,7 @@ import {
   DEFAULT_START_TIME,
   EVENT_QUERY_MAX_LIMIT,
   ExecuteTransactionRequestType,
+  CoinDenominationInfoResponse,
   GatewayTxSeqNumber,
   GetObjectDataResponse,
   getObjectReference,
@@ -49,6 +50,7 @@ import {
   TransactionDigest,
   TransactionQuery,
   SUI_TYPE_ARG,
+  normalizeSuiAddress,
 } from '../types';
 import { SignatureScheme } from '../cryptography/publickey';
 import {
@@ -219,6 +221,23 @@ export class JsonRpcProvider extends Provider {
   async getGasObjectsOwnedByAddress(address: string): Promise<SuiObjectInfo[]> {
     const objects = await this.getObjectsOwnedByAddress(address);
     return objects.filter((obj: SuiObjectInfo) => Coin.isSUI(obj));
+  }
+
+  getCoinDenominationInfo(
+    coinType: string,
+  ): CoinDenominationInfoResponse {
+    const [packageId, module, symbol] = coinType.split('::');
+    if (normalizeSuiAddress(packageId) !== normalizeSuiAddress('0x2') || module != 'sui' || symbol !== 'SUI') {
+      throw new Error(
+        'only SUI coin is supported in getCoinDenominationInfo for now.'
+      );
+    }
+
+    return {
+      coinType: coinType,
+      basicUnit: 'MIST',
+      decimalNumber: 9,
+    };
   }
 
   async getCoinBalancesOwnedByAddress(
