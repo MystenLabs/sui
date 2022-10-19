@@ -357,7 +357,7 @@ async fn shared_object_on_gateway() {
         .build()
         .unwrap();
     let path = tempfile::tempdir().unwrap().into_path();
-    let gateway_store = Arc::new(GatewayStore::open(&path.join("store"), None));
+    let gateway_store = Arc::new(GatewayStore::open(&path.join("store"), None).unwrap());
     let gateway = Arc::new(
         GatewayState::new_with_authorities(
             gateway_store,

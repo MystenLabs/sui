@@ -1538,7 +1538,8 @@ impl AuthorityState {
             None => &default_genesis,
         };
 
-        let store = Arc::new(AuthorityStore::open(&path.join("store"), None));
+        // unwrap ok - for testing only.
+        let store = Arc::new(AuthorityStore::open(&path.join("store"), None).unwrap());
         let mut checkpoints = CheckpointStore::open(
             &path.join("checkpoints"),
             None,

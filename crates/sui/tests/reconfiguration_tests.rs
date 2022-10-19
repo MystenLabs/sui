@@ -11,13 +11,14 @@ use sui_core::authority_active::checkpoint_driver::{
     checkpoint_process_step, CheckpointProcessControl,
 };
 use sui_node::SuiNodeHandle;
-use sui_types::base_types::{ObjectRef, SequenceNumber, SuiAddress};
+use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress};
+use sui_types::committee::Committee;
 use sui_types::crypto::{
     generate_proof_of_possession, get_key_pair, AuthorityKeyPair, AuthoritySignature,
     KeypairTraits, NetworkKeyPair,
 };
 use sui_types::error::SuiResult;
-use sui_types::messages::{CallArg, ObjectArg, TransactionEffects};
+use sui_types::messages::{CallArg, ExecutionStatus, ObjectArg, TransactionEffects};
 use sui_types::messages_checkpoint::AuthenticatedCheckpoint;
 use sui_types::object::Object;
 use sui_types::SUI_SYSTEM_STATE_OBJECT_ID;
@@ -25,7 +26,10 @@ use test_utils::authority::{get_object, start_node, test_authority_configs};
 use test_utils::messages::{make_transfer_sui_transaction, move_transaction};
 use test_utils::objects::{generate_gas_object_with_balance, test_gas_objects};
 use test_utils::test_account_keys;
-use test_utils::transaction::{submit_shared_object_transaction, submit_single_owner_transaction};
+use test_utils::transaction::{
+    publish_counter_package, submit_shared_object_transaction,
+    submit_shared_object_transaction_with_committee, submit_single_owner_transaction,
+};
 
 use sui_macros::sim_test;
 
@@ -44,6 +48,7 @@ async fn reconfig_end_to_end_tests() {
     let validator_stake = generate_gas_object_with_balance(100000000000000);
 
     let handles = init_validators(&configs, gas_objects.clone(), &validator_stake).await;
+    let orig_committee = handles[0].with(|node| node.state().committee.load().clone());
 
     // get sui system state and confirm it matches network info
     let configs = configs.clone();
@@ -96,6 +101,51 @@ async fn reconfig_end_to_end_tests() {
         })
         .await;
 
+    let (sender, key_pair) = test_account_keys().pop().unwrap();
+    let object_ref = gas_objects.pop().unwrap().compute_object_reference();
+    let transaction = make_transfer_sui_transaction(
+        object_ref,
+        SuiAddress::random_for_testing_only(),
+        None,
+        sender,
+        &key_pair,
+    );
+    let owned_tx_digest = *transaction.digest();
+
+    let package_ref = publish_counter_package(gas_objects.pop().unwrap(), validator_info).await;
+
+    let publish_tx = move_transaction(
+        gas_objects.pop().unwrap(),
+        "counter",
+        "create",
+        package_ref,
+        /* arguments */ Vec::default(),
+    );
+    let effects = submit_single_owner_transaction(publish_tx, validator_info).await;
+    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
+    let ((counter_id, _, _), _) = effects.created[0];
+    increment_counter(
+        gas_objects.pop().unwrap(),
+        package_ref,
+        counter_id,
+        validator_info,
+        &orig_committee,
+    )
+    .await;
+
+    // lock a transaction on one validator.
+    handles[0]
+        .with_async(|node| async move {
+            node.state().handle_transaction(transaction).await.unwrap();
+            node.state()
+                .handle_transaction_info_request(owned_tx_digest.into())
+                .await
+                .unwrap()
+                .signed_transaction
+                .unwrap();
+        })
+        .await;
+
     fast_forward_to_ready_for_reconfig_start(&handles).await;
     // Start epoch change and halt all validators.
     start_epoch_change(&handles).await;
@@ -143,6 +193,47 @@ async fn reconfig_end_to_end_tests() {
             assert_eq!(sui_system_state.validators.active_validators.len(), 5);
         })
         .await;
+
+    handles[0]
+        .with_async(|node| async move {
+            // verify validator has forgotten about locked tx.
+            assert!(node
+                .state()
+                .handle_transaction_info_request(owned_tx_digest.into())
+                .await
+                .unwrap()
+                .signed_transaction
+                .is_none());
+        })
+        .await;
+
+    let new_committee = handles[0].with(|node| node.state().committee.load().clone());
+    increment_counter(
+        gas_objects.pop().unwrap(),
+        package_ref,
+        counter_id,
+        validator_info,
+        &new_committee,
+    )
+    .await;
+
+    for h in &handles {
+        h.with_async(|node| async move {
+            let objref = node
+                .state()
+                .get_latest_parent_entry(counter_id)
+                .await
+                .unwrap()
+                .unwrap()
+                .0;
+            // counter was:
+            // - v1 at creation
+            // - v2 after first increment.
+            // - should now be v3 after increment in new epoch.
+            assert_eq!(objref.1.value(), 3);
+        })
+        .await;
+    }
 }
 
 #[sim_test]
@@ -362,4 +453,26 @@ async fn fast_forward_to_ready_for_reconfig_finish(handles: &[SuiNodeHandle]) {
 
     // Wait for all validators to be ready for epoch change.
     join_all(futures).await;
+}
+
+async fn increment_counter(
+    gas_object: Object,
+    package_ref: ObjectRef,
+    counter_id: ObjectID,
+    validator_info: &[ValidatorInfo],
+    committee: &Committee,
+) {
+    // Make a transaction to increment the counter.
+    let transaction = move_transaction(
+        gas_object,
+        "counter",
+        "increment",
+        package_ref,
+        vec![CallArg::Object(ObjectArg::SharedObject(counter_id))],
+    );
+    let effects =
+        submit_shared_object_transaction_with_committee(transaction, validator_info, committee)
+            .await
+            .unwrap();
+    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
 }

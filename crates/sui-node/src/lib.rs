@@ -99,7 +99,7 @@ impl SuiNode {
 
         let secret = Arc::pin(config.protocol_key_pair().copy());
         let committee = genesis.committee()?;
-        let store = Arc::new(AuthorityStore::open(&config.db_path().join("store"), None));
+        let store = Arc::new(AuthorityStore::open(&config.db_path().join("store"), None)?);
         let committee_store = Arc::new(CommitteeStore::new(
             config.db_path().join("epochs"),
             &committee,
