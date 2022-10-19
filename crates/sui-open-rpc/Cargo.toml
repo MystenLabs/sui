@@ -1,6 +1,6 @@
 [package]
 name = "sui-open-rpc"
-version = "0.6.1"
+version = "0.0.0"
 authors = ["Mysten Labs <build@mystenlabs.com>"]
 license = "Apache-2.0"
 publish = false
@@ -16,9 +16,7 @@ workspace-hack.workspace = true
 anyhow = { version = "1.0.64", features = ["backtrace"] }
 clap = { version = "3.2.17", features = ["derive"] }
 pretty_assertions = "1.2.0"
-serde_json = "1.0.83"
 tokio = { version = "1.20.1", features = ["full"] }
-hyper = { version = "0.14.20", features = ["full"] }
 
 sui = { path = "../sui" }
 sui-core = { path = "../sui-core"}
@@ -26,12 +24,8 @@ sui-json-rpc = { path = "../sui-json-rpc" }
 sui-json-rpc-types = { path = "../sui-json-rpc-types" }
 sui-json = { path = "../sui-json" }
 sui-types = { path = "../sui-types" }
-sui-sdk = { path = "../sui-sdk" }
-sui-config = { path = "../sui-config" }
-test-utils = { path = "../test-utils" }
 rand = "0.8.5"
 
-move-package.workspace = true
 move-core-types.workspace = true
 
 [[example]]

@@ -1,14 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::client_commands::{SuiClientCommands, WalletContext};
-use crate::config::SuiClientConfig;
-use crate::console::start_console;
-use crate::genesis_ceremony::{run, Ceremony};
-use crate::keytool::KeyToolCommand;
-use crate::sui_move::{self, execute_move_command};
-use fastcrypto::traits::KeyPair;
-use move_package::BuildConfig;
 use std::io::{stderr, stdout, Write};
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
@@ -16,7 +8,10 @@ use std::{fs, io};
 
 use anyhow::{anyhow, bail};
 use clap::*;
-use tracing::info;
+use colored::Colorize;
+use fastcrypto::traits::KeyPair;
+use move_package::BuildConfig;
+use tracing::{info, warn};
 
 use sui_config::gateway::GatewayConfig;
 use sui_config::{builder::ConfigBuilder, NetworkConfig, SUI_DEV_NET_URL, SUI_KEYSTORE_FILENAME};
@@ -29,6 +24,13 @@ use sui_sdk::crypto::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_sdk::ClientType;
 use sui_swarm::memory::Swarm;
 use sui_types::crypto::{SignatureScheme, SuiKeyPair};
+
+use crate::client_commands::{SuiClientCommands, WalletContext};
+use crate::config::SuiClientConfig;
+use crate::console::start_console;
+use crate::genesis_ceremony::{run, Ceremony};
+use crate::keytool::KeyToolCommand;
+use crate::sui_move::{self, execute_move_command};
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Parser)]
@@ -341,6 +343,10 @@ impl SuiCommand {
                     if !matches!(cmd, SuiClientCommands::Switch { rpc: Some(_), .. }) {
                         sync_accounts(&mut context).await?;
                     }
+                    if let Err(e) = context.client.check_api_version() {
+                        warn!("{e}");
+                        println!("{}", format!("[warn] {e}").yellow().bold());
+                    };
                     cmd.execute(&mut context).await?.print(!json);
                 } else {
                     // Print help
