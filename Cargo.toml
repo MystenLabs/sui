@@ -96,9 +96,9 @@ move-prover-boogie-backend = { git = "https://github.com/move-language/move", re
 fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "7c685a4b67680ef3e5d48117f4e2e3aef5c50526" }
 
 # anemo dependencies
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "1b977fe20a615b7a7045f779f9aafa120389c2ab" }
-anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "1b977fe20a615b7a7045f779f9aafa120389c2ab" }
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "1b977fe20a615b7a7045f779f9aafa120389c2ab" }
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "7da7c9a1913ed7fadbdd92ebc1b9f48e0c8cef0e" }
+anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "7da7c9a1913ed7fadbdd92ebc1b9f48e0c8cef0e" }
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "7da7c9a1913ed7fadbdd92ebc1b9f48e0c8cef0e" }
 
 # Use the same workspace-hack across crates.
 workspace-hack = { path = "crates/workspace-hack" }
