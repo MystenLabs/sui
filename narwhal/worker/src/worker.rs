@@ -212,6 +212,7 @@ impl Worker {
             network_admin_server_base_port,
             network.clone(),
             rx_reconfigure.clone(),
+            None,
         );
 
         // Connect worker to its corresponding primary.

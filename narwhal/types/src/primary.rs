@@ -775,13 +775,6 @@ impl fmt::Display for BlockErrorKind {
     }
 }
 
-/// The messages sent by the workers to their primary.
-#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
-pub enum WorkerPrimaryMessage {
-    /// Reconfiguration message sent by the executor (usually upon epoch change).
-    Reconfigure(ReconfigureNotification),
-}
-
 /// Used by worker to inform primary it sealed a new batch.
 #[derive(Clone, Serialize, Deserialize, Eq, PartialEq, Debug)]
 pub struct WorkerOurBatchMessage {
