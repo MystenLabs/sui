@@ -2105,7 +2105,7 @@ impl AuthorityState {
         certificate: &CertifiedTransaction,
     ) -> SuiResult<bool> {
         let digest = certificate.digest();
-        let shared_inputs = certificate.shared_input_objects();
+        let shared_inputs = certificate.shared_input_objects().map(|(id, _)| id);
         let shared_locks = self
             .database
             .get_assigned_object_versions(digest, shared_inputs)?;

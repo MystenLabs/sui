@@ -22,7 +22,7 @@ use sui_storage::{
 };
 use sui_types::batch::{SignedBatch, TxSequenceNumber};
 use sui_types::crypto::{AuthoritySignInfo, EmptySignInfo};
-use sui_types::object::{Owner, OBJECT_START_VERSION};
+use sui_types::object::Owner;
 use sui_types::storage::WriteKind;
 use sui_types::{base_types::SequenceNumber, storage::ParentSync};
 use tokio::sync::Notify;
@@ -316,7 +316,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         let mut errors = Vec::new();
         for kind in objects {
             let obj = match kind {
-                InputObjectKind::MovePackage(id) | InputObjectKind::SharedMoveObject(id) => {
+                InputObjectKind::MovePackage(id) | InputObjectKind::SharedMoveObject { id, .. } => {
                     self.get_object(id)?
                 }
                 InputObjectKind::ImmOrOwnedMoveObject(objref) => {
@@ -348,7 +348,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         for kind in objects {
             let obj = match kind {
                 InputObjectKind::MovePackage(id) => self.get_object(id)?,
-                InputObjectKind::SharedMoveObject(id) => match shared_locks.get(id) {
+                InputObjectKind::SharedMoveObject { id, .. } => match shared_locks.get(id) {
                     Some(version) => self.get_object_by_key(id, *version)?,
                     None => {
                         errors.push(SuiError::SharedObjectLockNotSetError);
@@ -1047,7 +1047,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     ) -> SuiResult {
         let mut sequenced_to_delete = Vec::new();
         let mut schedule_to_delete = Vec::new();
-        for object_id in transaction.shared_input_objects() {
+        for (object_id, _) in transaction.shared_input_objects() {
             sequenced_to_delete.push((*transaction_digest, *object_id));
             if self.get_object(object_id)?.is_none() {
                 schedule_to_delete.push(*object_id);
@@ -1117,22 +1117,19 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         let transaction_digest = *certificate.digest();
 
         // Make an iterator to update the locks of the transaction's shared objects.
-        let ids = certificate.shared_input_objects();
+        let ids = certificate.shared_input_objects().map(|(id, _)| id);
         let versions = self.epoch_tables().next_object_versions.multi_get(ids)?;
 
-        let ids = certificate.shared_input_objects();
-        type LockWrite = (
-            ((TransactionDigest, ObjectID), SequenceNumber),
-            (ObjectID, SequenceNumber),
-        );
         let mut sequenced_to_write = Vec::new();
         let mut schedule_to_write = Vec::new();
-
-        for (id, v) in ids.zip(versions.iter()) {
-            // The object may have been sequenced in a previous epoch - if so the start version
-            // is the latest available version of the object. Otherwise, this is the first time
-            // the shared object has been sequenced, so we use OBJECT_START_VERSION.
-            // Otherwise use the `scheduled` map to to assign the next sequence number.
+        for ((id, initial_shared_version), v) in
+            certificate.shared_input_objects().zip(versions.iter())
+        {
+            // If it is the first time the shared object has been sequenced, assign it the version
+            // that the object was shared at.  This `initial_shared_version` will be the initial
+            // version for the object if it was created as a shared object, or will be the version
+            // it was upgraded to a shared object.  We can trust this number as validity is checked
+            // when creating a certificate
             let version = match v {
                 Some(v) => *v,
                 None => self
@@ -1140,7 +1137,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
                     // we must make this read strongly consistent somehow!
                     .get_latest_parent_entry(*id)?
                     .map(|(objref, _)| objref.1)
-                    .unwrap_or(OBJECT_START_VERSION),
+                    .unwrap_or_else(|| *initial_shared_version),
             };
             let next_version = version.increment();
 

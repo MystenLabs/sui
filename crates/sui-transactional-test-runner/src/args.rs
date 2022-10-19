@@ -9,6 +9,7 @@ use move_compiler::shared::parse_u128;
 use move_core_types::identifier::Identifier;
 use move_core_types::value::{MoveStruct, MoveValue};
 use sui_types::messages::{CallArg, ObjectArg};
+use sui_types::object::Owner;
 
 use crate::test_adapter::SuiTestAdapter;
 
@@ -112,11 +113,17 @@ impl SuiValue {
             Some(obj) => obj,
             None => bail!("INVALID TEST. Could not load object argument {}", id),
         };
-        if obj.is_shared() {
-            Ok(ObjectArg::SharedObject(id))
-        } else {
-            let obj_ref = obj.compute_object_reference();
-            Ok(ObjectArg::ImmOrOwnedObject(obj_ref))
+        match obj.owner {
+            Owner::Shared {
+                initial_shared_version,
+            } => Ok(ObjectArg::SharedObject {
+                id,
+                initial_shared_version,
+            }),
+            Owner::AddressOwner(_) | Owner::ObjectOwner(_) | Owner::Immutable => {
+                let obj_ref = obj.compute_object_reference();
+                Ok(ObjectArg::ImmOrOwnedObject(obj_ref))
+            }
         }
     }
 

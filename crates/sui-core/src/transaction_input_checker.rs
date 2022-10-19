@@ -285,20 +285,36 @@ fn check_one_object(
                         }
                     );
                 }
-                Owner::Shared => {
+                Owner::Shared { .. } => {
                     // This object is a mutable shared object. However the transaction
                     // specifies it as an owned object. This is inconsistent.
                     return Err(SuiError::NotSharedObjectError);
                 }
             };
         }
-        InputObjectKind::SharedMoveObject(..) => {
+        InputObjectKind::SharedMoveObject {
+            initial_shared_version: input_initial_shared_version,
+            ..
+        } => {
             fp_ensure!(
                 object.version() < SequenceNumber::MAX,
                 SuiError::InvalidSequenceNumber
             );
-            // When someone locks an object as shared it must be shared already.
-            fp_ensure!(object.is_shared(), SuiError::NotSharedObjectError);
+
+            match object.owner {
+                Owner::AddressOwner(_) | Owner::ObjectOwner(_) | Owner::Immutable => {
+                    // When someone locks an object as shared it must be shared already.
+                    return Err(SuiError::NotSharedObjectError);
+                }
+                Owner::Shared {
+                    initial_shared_version: actual_initial_shared_version,
+                } => {
+                    fp_ensure!(
+                        input_initial_shared_version == actual_initial_shared_version,
+                        SuiError::SharedObjectStartingVersionMismatch
+                    )
+                }
+            }
         }
     };
     Ok(())

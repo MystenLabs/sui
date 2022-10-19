@@ -150,7 +150,7 @@ impl ObjectRuntimeState {
         let input_owner_map = input_objects
             .iter()
             .filter_map(|(id, (_by_value, owner))| match owner {
-                Owner::AddressOwner(_) | Owner::Shared | Owner::Immutable => None,
+                Owner::AddressOwner(_) | Owner::Shared { .. } | Owner::Immutable => None,
                 Owner::ObjectOwner(parent) => Some((*id, (*parent).into())),
             })
             .collect();
@@ -216,7 +216,7 @@ fn update_owner_map(
     for (id, recipient) in transfers {
         object_owner_map.remove(&id);
         match recipient {
-            Owner::AddressOwner(_) | Owner::Shared | Owner::Immutable => (),
+            Owner::AddressOwner(_) | Owner::Shared { .. } | Owner::Immutable => (),
             Owner::ObjectOwner(new_owner) => {
                 let new_owner: ObjectID = new_owner.into();
                 let mut cur = new_owner;

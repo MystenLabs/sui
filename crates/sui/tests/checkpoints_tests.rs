@@ -330,7 +330,11 @@ async fn checkpoint_with_shared_objects() {
         effects.effects.status,
         ExecutionStatus::Success { .. }
     ));
-    let ((counter_id, _, _), _) = effects.effects.created[0];
+    let ((counter_id, counter_initial_shared_version, _), _) = effects.effects.created[0];
+    let counter_object_arg = ObjectArg::SharedObject {
+        id: counter_id,
+        initial_shared_version: counter_initial_shared_version,
+    };
 
     // We can finally make a valid shared-object transaction (incrementing the counter).
     let increment_counter_transaction = move_transaction(
@@ -338,7 +342,7 @@ async fn checkpoint_with_shared_objects() {
         "counter",
         "increment",
         package_ref,
-        vec![CallArg::Object(ObjectArg::SharedObject(counter_id))],
+        vec![CallArg::Object(counter_object_arg)],
     );
     let effects = submit_shared_object_transaction(
         increment_counter_transaction.clone(),

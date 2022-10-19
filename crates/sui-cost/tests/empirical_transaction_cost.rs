@@ -199,7 +199,12 @@ async fn create_txes(
     let effects =
         submit_single_owner_transaction(transaction.clone(), configs.validator_set()).await;
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
-    let ((counter_id, _, _), _) = effects.created[0];
+    let ((counter_id, counter_initial_shared_version, _), _) = effects.created[0];
+    let counter_object_arg = ObjectArg::SharedObject {
+        id: counter_id,
+        initial_shared_version: counter_initial_shared_version,
+    };
+
     ret.insert(CommonTransactionCosts::SharedCounterCreate, transaction);
 
     // Ensure the value of the counter is `0`.
@@ -210,7 +215,7 @@ async fn create_txes(
         "assert_value",
         package_ref,
         vec![
-            CallArg::Object(ObjectArg::SharedObject(counter_id)),
+            CallArg::Object(counter_object_arg),
             CallArg::Pure(0u64.to_le_bytes().to_vec()),
         ],
     );
@@ -227,7 +232,7 @@ async fn create_txes(
         "counter",
         "increment",
         package_ref,
-        vec![CallArg::Object(ObjectArg::SharedObject(counter_id))],
+        vec![CallArg::Object(counter_object_arg)],
     );
 
     ret.insert(CommonTransactionCosts::SharedCounterIncrement, transaction);

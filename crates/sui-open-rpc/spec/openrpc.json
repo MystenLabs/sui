@@ -3304,7 +3304,19 @@
             ],
             "properties": {
               "SharedMoveObject": {
-                "$ref": "#/components/schemas/ObjectID"
+                "type": "object",
+                "required": [
+                  "id",
+                  "initial_shared_version"
+                ],
+                "properties": {
+                  "id": {
+                    "$ref": "#/components/schemas/ObjectID"
+                  },
+                  "initial_shared_version": {
+                    "$ref": "#/components/schemas/SequenceNumber"
+                  }
+                }
               }
             },
             "additionalProperties": false
@@ -3713,10 +3725,29 @@
           },
           {
             "description": "Object is shared, can be used by any address, and is mutable.",
-            "type": "string",
-            "enum": [
+            "type": "object",
+            "required": [
               "Shared"
-            ]
+            ],
+            "properties": {
+              "Shared": {
+                "type": "object",
+                "required": [
+                  "initial_shared_version"
+                ],
+                "properties": {
+                  "initial_shared_version": {
+                    "description": "The version at which the object became shared",
+                    "allOf": [
+                      {
+                        "$ref": "#/components/schemas/SequenceNumber"
+                      }
+                    ]
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
           },
           {
             "description": "Object is immutable, and hence ownership doesn't matter.",

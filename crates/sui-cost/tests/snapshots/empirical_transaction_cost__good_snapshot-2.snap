@@ -4,48 +4,48 @@ expression: common_costs_estimate
 ---
 {
   "MergeCoin": {
-    "computation_cost": 6289,
-    "storage_cost": 6324,
+    "computation_cost": 6291,
+    "storage_cost": 6326,
     "storage_rebate": 0
   },
   "Publish": {
     "computation_cost": 6279,
-    "storage_cost": 6260,
+    "storage_cost": 6261,
     "storage_rebate": 0
   },
   "SharedCounterAssertValue": {
-    "computation_cost": 2682,
-    "storage_cost": 832,
+    "computation_cost": 2683,
+    "storage_cost": 833,
     "storage_rebate": 0
   },
   "SharedCounterCreate": {
-    "computation_cost": 2561,
-    "storage_cost": 801,
+    "computation_cost": 2562,
+    "storage_cost": 802,
     "storage_rebate": 0
   },
   "SharedCounterIncrement": {
-    "computation_cost": 2682,
-    "storage_cost": 832,
+    "computation_cost": 2683,
+    "storage_cost": 833,
     "storage_rebate": 0
   },
   "SplitCoin": {
-    "computation_cost": 6268,
-    "storage_cost": 6292,
+    "computation_cost": 6269,
+    "storage_cost": 6294,
     "storage_rebate": 0
   },
   "TransferPortionSuiCoin": {
-    "computation_cost": 55,
-    "storage_cost": 51,
+    "computation_cost": 56,
+    "storage_cost": 52,
     "storage_rebate": 0
   },
   "TransferWholeCoin": {
     "computation_cost": 77,
-    "storage_cost": 83,
+    "storage_cost": 84,
     "storage_rebate": 0
   },
   "TransferWholeSuiCoin": {
-    "computation_cost": 55,
-    "storage_cost": 51,
+    "computation_cost": 56,
+    "storage_cost": 52,
     "storage_rebate": 0
   }
 }

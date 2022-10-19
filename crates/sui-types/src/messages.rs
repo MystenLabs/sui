@@ -16,7 +16,7 @@ use crate::messages_checkpoint::{
 use crate::object::{Object, ObjectFormatOptions, Owner, OBJECT_START_VERSION};
 use crate::storage::{DeleteKind, WriteKind};
 use crate::sui_serde::Base64;
-use crate::SUI_SYSTEM_STATE_OBJECT_ID;
+use crate::{SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION};
 use base64ct::Encoding;
 use byteorder::{BigEndian, ReadBytesExt};
 use itertools::Either;
@@ -57,12 +57,15 @@ pub enum CallArg {
     ObjVec(Vec<ObjectArg>),
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize)]
 pub enum ObjectArg {
     // A Move object, either immutable, or owned mutable.
     ImmOrOwnedObject(ObjectRef),
     // A Move object that's shared and mutable.
-    SharedObject(ObjectID),
+    SharedObject {
+        id: ObjectID,
+        initial_shared_version: SequenceNumber,
+    },
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
@@ -149,19 +152,28 @@ impl SingleTransactionKind {
         self.shared_input_objects().next().is_some()
     }
 
-    pub fn shared_input_objects(&self) -> impl Iterator<Item = &ObjectID> {
+    pub fn shared_input_objects(
+        &self,
+    ) -> impl Iterator<Item = (&ObjectID, /* shared at version */ &SequenceNumber)> {
         match &self {
             Self::Call(MoveCall { arguments, .. }) => Either::Left(
                 arguments
                     .iter()
                     .filter_map(|arg| match arg {
                         CallArg::Pure(_) | CallArg::Object(ObjectArg::ImmOrOwnedObject(_)) => None,
-                        CallArg::Object(ObjectArg::SharedObject(id)) => Some(vec![id]),
+                        CallArg::Object(ObjectArg::SharedObject {
+                            id,
+                            initial_shared_version,
+                        }) => Some(vec![(id, initial_shared_version)]),
                         CallArg::ObjVec(vec) => Some(
                             vec.iter()
                                 .filter_map(|obj_arg| {
-                                    if let ObjectArg::SharedObject(id) = obj_arg {
-                                        Some(id)
+                                    if let ObjectArg::SharedObject {
+                                        id,
+                                        initial_shared_version,
+                                    } = obj_arg
+                                    {
+                                        Some((id, initial_shared_version))
                                     } else {
                                         None
                                     }
@@ -200,8 +212,16 @@ impl SingleTransactionKind {
                     CallArg::Object(ObjectArg::ImmOrOwnedObject(object_ref)) => {
                         Some(vec![InputObjectKind::ImmOrOwnedMoveObject(*object_ref)])
                     }
-                    CallArg::Object(ObjectArg::SharedObject(id)) => {
-                        Some(vec![InputObjectKind::SharedMoveObject(*id)])
+                    CallArg::Object(ObjectArg::SharedObject {
+                        id,
+                        initial_shared_version,
+                    }) => {
+                        let id = *id;
+                        let initial_shared_version = *initial_shared_version;
+                        Some(vec![InputObjectKind::SharedMoveObject {
+                            id,
+                            initial_shared_version,
+                        }])
                     }
                     CallArg::ObjVec(vec) => Some(
                         vec.iter()
@@ -209,8 +229,16 @@ impl SingleTransactionKind {
                                 ObjectArg::ImmOrOwnedObject(object_ref) => {
                                     InputObjectKind::ImmOrOwnedMoveObject(*object_ref)
                                 }
-                                ObjectArg::SharedObject(id) => {
-                                    InputObjectKind::SharedMoveObject(*id)
+                                ObjectArg::SharedObject {
+                                    id,
+                                    initial_shared_version,
+                                } => {
+                                    let id = *id;
+                                    let initial_shared_version = *initial_shared_version;
+                                    InputObjectKind::SharedMoveObject {
+                                        id,
+                                        initial_shared_version,
+                                    }
                                 }
                             })
                             .collect(),
@@ -245,9 +273,10 @@ impl SingleTransactionKind {
                 .map(|o| InputObjectKind::ImmOrOwnedMoveObject(*o))
                 .collect(),
             Self::ChangeEpoch(_) => {
-                vec![InputObjectKind::SharedMoveObject(
-                    SUI_SYSTEM_STATE_OBJECT_ID,
-                )]
+                vec![InputObjectKind::SharedMoveObject {
+                    id: SUI_SYSTEM_STATE_OBJECT_ID,
+                    initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+                }]
             }
         };
         // Ensure that there are no duplicate inputs. This cannot be removed because:
@@ -362,7 +391,9 @@ impl TransactionKind {
         Ok(inputs)
     }
 
-    pub fn shared_input_objects(&self) -> impl Iterator<Item = &ObjectID> {
+    pub fn shared_input_objects(
+        &self,
+    ) -> impl Iterator<Item = (&ObjectID, /* shared at version */ &SequenceNumber)> {
         match &self {
             TransactionKind::Single(s) => Either::Left(s.shared_input_objects()),
             TransactionKind::Batch(b) => {
@@ -690,7 +721,9 @@ impl<S> TransactionEnvelope<S> {
         self.shared_input_objects().next().is_some()
     }
 
-    pub fn shared_input_objects(&self) -> impl Iterator<Item = &ObjectID> {
+    pub fn shared_input_objects(
+        &self,
+    ) -> impl Iterator<Item = (&ObjectID, /* shared at version */ &SequenceNumber)> {
         self.signed_data.data.kind.shared_input_objects()
     }
 
@@ -1735,7 +1768,10 @@ pub enum InputObjectKind {
     // A Move object, either immutable, or owned mutable.
     ImmOrOwnedMoveObject(ObjectRef),
     // A Move object that's shared and mutable.
-    SharedMoveObject(ObjectID),
+    SharedMoveObject {
+        id: ObjectID,
+        initial_shared_version: SequenceNumber,
+    },
 }
 
 impl InputObjectKind {
@@ -1743,15 +1779,15 @@ impl InputObjectKind {
         match self {
             Self::MovePackage(id) => *id,
             Self::ImmOrOwnedMoveObject((id, _, _)) => *id,
-            Self::SharedMoveObject(id) => *id,
+            Self::SharedMoveObject { id, .. } => *id,
         }
     }
 
-    pub fn version(&self) -> SequenceNumber {
+    pub fn version(&self) -> Option<SequenceNumber> {
         match self {
-            Self::MovePackage(..) => OBJECT_START_VERSION,
-            Self::ImmOrOwnedMoveObject((_, version, _)) => *version,
-            Self::SharedMoveObject(..) => OBJECT_START_VERSION,
+            Self::MovePackage(..) => Some(OBJECT_START_VERSION),
+            Self::ImmOrOwnedMoveObject((_, version, _)) => Some(*version),
+            Self::SharedMoveObject { .. } => None,
         }
     }
 
@@ -1759,7 +1795,7 @@ impl InputObjectKind {
         match *self {
             Self::MovePackage(package_id) => SuiError::DependentPackageNotFound { package_id },
             Self::ImmOrOwnedMoveObject((object_id, _, _)) => SuiError::ObjectNotFound { object_id },
-            Self::SharedMoveObject(object_id) => SuiError::ObjectNotFound { object_id },
+            Self::SharedMoveObject { id, .. } => SuiError::ObjectNotFound { object_id: id },
         }
     }
 }
@@ -1794,7 +1830,7 @@ impl InputObjects {
                         Some(*object_ref)
                     }
                 }
-                InputObjectKind::SharedMoveObject(_) => None,
+                InputObjectKind::SharedMoveObject { .. } => None,
             })
             .collect();
 
@@ -1809,7 +1845,7 @@ impl InputObjects {
     pub fn filter_shared_objects(&self) -> Vec<ObjectRef> {
         self.objects
             .iter()
-            .filter(|(kind, _)| matches!(kind, InputObjectKind::SharedMoveObject(_)))
+            .filter(|(kind, _)| matches!(kind, InputObjectKind::SharedMoveObject { .. }))
             .map(|(_, obj)| obj.compute_object_reference())
             .collect()
     }
@@ -1833,7 +1869,7 @@ impl InputObjects {
                         Some(*object_ref)
                     }
                 }
-                InputObjectKind::SharedMoveObject(_) => Some(object.compute_object_reference()),
+                InputObjectKind::SharedMoveObject { .. } => Some(object.compute_object_reference()),
             })
             .collect()
     }

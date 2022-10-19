@@ -185,7 +185,7 @@ pub async fn submit_move_transaction(
 pub async fn publish_basics_package_and_make_counter(
     context: &WalletContext,
     sender: SuiAddress,
-) -> (ObjectRef, ObjectID) {
+) -> (ObjectRef, ObjectRef) {
     let package_ref = publish_basics_package(context, sender).await;
 
     debug!(?package_ref);
@@ -201,15 +201,15 @@ pub async fn publish_basics_package_and_make_counter(
     )
     .await;
 
-    let counter_id = effects
+    let counter_ref = effects
         .created
         .iter()
-        .find(|obj_ref| obj_ref.owner == Owner::Shared)
+        .find(|obj_ref| matches!(obj_ref.owner, Owner::Shared { .. }))
         .unwrap()
         .reference
-        .object_id;
-    debug!(?counter_id);
-    (package_ref, counter_id)
+        .to_object_ref();
+    debug!(?counter_ref);
+    (package_ref, counter_ref)
 }
 
 pub async fn increment_counter(

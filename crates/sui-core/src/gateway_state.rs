@@ -1163,10 +1163,16 @@ where
         objects: &mut BTreeMap<ObjectID, Object>,
     ) -> Result<ObjectArg, anyhow::Error> {
         let obj = self.get_object_internal(&id).await?;
-        let arg = if obj.is_shared() {
-            ObjectArg::SharedObject(id)
-        } else {
-            ObjectArg::ImmOrOwnedObject(obj.compute_object_reference())
+        let arg = match obj.owner {
+            Owner::Shared {
+                initial_shared_version,
+            } => ObjectArg::SharedObject {
+                id: obj.id(),
+                initial_shared_version,
+            },
+            Owner::AddressOwner(_) | Owner::ObjectOwner(_) | Owner::Immutable => {
+                ObjectArg::ImmOrOwnedObject(obj.compute_object_reference())
+            }
         };
         objects.insert(id, obj);
         Ok(arg)

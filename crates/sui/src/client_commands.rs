@@ -849,7 +849,7 @@ impl Display for SuiClientCommandResult {
                     let owner_type = match oref.owner {
                         Owner::AddressOwner(_) => "AddressOwner",
                         Owner::ObjectOwner(_) => "object_owner",
-                        Owner::Shared => "Shared",
+                        Owner::Shared { .. } => "Shared",
                         Owner::Immutable => "Immutable",
                     };
                     writeln!(
