@@ -6,7 +6,6 @@
 
 use std::str::FromStr;
 
-use base64ct::{Base64, Encoding};
 use move_binary_format::file_format;
 
 use crate::crypto::bcs_signable_test::{Bar, Foo};
@@ -14,6 +13,7 @@ use crate::crypto::{
     get_key_pair_from_bytes, AccountKeyPair, AuthorityKeyPair, AuthoritySignature,
     SuiAuthoritySignature, SuiSignature,
 };
+use crate::sui_serde::Encoding;
 use crate::{
     crypto::{get_key_pair, Signature},
     gas_coin::GasCoin,
@@ -281,10 +281,7 @@ fn test_transaction_digest_serde_not_human_readable() {
 fn test_transaction_digest_serde_human_readable() {
     let digest = TransactionDigest::random();
     let serialized = serde_json::to_string(&digest).unwrap();
-    assert_eq!(
-        format!("\"{}\"", Base64::encode_string(&digest.0)),
-        serialized
-    );
+    assert_eq!(format!("\"{}\"", Base64::encode(&digest.0)), serialized);
     let deserialized: TransactionDigest = serde_json::from_str(&serialized).unwrap();
     assert_eq!(deserialized, digest);
 }
@@ -307,7 +304,7 @@ fn test_authority_signature_serde_human_readable() {
     let sig = AuthoritySignature::new(&Foo("some data".to_string()), &key);
     let serialized = serde_json::to_string(&sig).unwrap();
     assert_eq!(
-        format!(r#"{{"sig":"{}"}}"#, Base64::encode_string(sig.as_ref())),
+        format!(r#"{{"sig":"{}"}}"#, Base64::encode(sig.as_ref())),
         serialized
     );
     let deserialized: AuthoritySignature = serde_json::from_str(&serialized).unwrap();

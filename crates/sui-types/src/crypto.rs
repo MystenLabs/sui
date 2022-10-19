@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use anyhow::{anyhow, Error};
-use base64ct::Encoding;
 use bip32::{ChildNumber, DerivationPath, XPrv};
 use digest::Digest;
 use fastcrypto::bls12381::{
@@ -35,7 +34,7 @@ use crate::base_types::{AuthorityName, SuiAddress};
 use crate::committee::{Committee, EpochId};
 use crate::error::{SuiError, SuiResult};
 use crate::intent::{Intent, IntentMessage};
-use crate::sui_serde::{AggrAuthSignature, Base64, Readable, SuiBitmap};
+use crate::sui_serde::{AggrAuthSignature, Base64, Encoding, Readable, SuiBitmap};
 pub use enum_dispatch::enum_dispatch;
 
 // Authority Objects
@@ -149,12 +148,11 @@ impl EncodeDecodeBase64 for SuiKeyPair {
                 bytes.extend_from_slice(kp1.private().as_ref());
             }
         }
-        base64ct::Base64::encode_string(&bytes[..])
+        Base64::encode(&bytes[..])
     }
 
     fn decode_base64(value: &str) -> Result<Self, eyre::Report> {
-        let bytes =
-            base64ct::Base64::decode_vec(value).map_err(|e| eyre::eyre!("{}", e.to_string()))?;
+        let bytes = Base64::decode(value).map_err(|e| eyre::eyre!("{}", e.to_string()))?;
         match bytes.first() {
             Some(x) => {
                 if x == &Ed25519SuiSignature::SCHEME.flag() {
@@ -239,12 +237,11 @@ impl EncodeDecodeBase64 for PublicKey {
         let mut bytes: Vec<u8> = Vec::new();
         bytes.extend_from_slice(&[self.flag()]);
         bytes.extend_from_slice(self.as_ref());
-        base64ct::Base64::encode_string(&bytes[..])
+        Base64::encode(&bytes[..])
     }
 
     fn decode_base64(value: &str) -> Result<Self, eyre::Report> {
-        let bytes =
-            base64ct::Base64::decode_vec(value).map_err(|e| eyre::eyre!("{}", e.to_string()))?;
+        let bytes = Base64::decode(value).map_err(|e| eyre::eyre!("{}", e.to_string()))?;
         match bytes.first() {
             Some(x) => {
                 if x == &<Ed25519PublicKey as SuiPublicKey>::SIGNATURE_SCHEME.flag() {
@@ -733,7 +730,7 @@ impl Serialize for Signature {
         let bytes = self.as_ref();
 
         if serializer.is_human_readable() {
-            let s = base64ct::Base64::encode_string(bytes);
+            let s = Base64::encode(bytes);
             serializer.serialize_str(&s)
         } else {
             serializer.serialize_bytes(bytes)
@@ -750,7 +747,7 @@ impl<'de> Deserialize<'de> for Signature {
 
         let bytes = if deserializer.is_human_readable() {
             let s = String::deserialize(deserializer)?;
-            base64ct::Base64::decode_vec(&s).map_err(|e| Error::custom(e.to_string()))?
+            Base64::decode(&s).map_err(|e| Error::custom(e.to_string()))?
         } else {
             let data: Vec<u8> = Vec::deserialize(deserializer)?;
             data
@@ -820,9 +817,9 @@ impl signature::Signature for Signature {
 
 impl std::fmt::Debug for Signature {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
-        let flag = base64ct::Base64::encode_string(&[self.scheme().flag()]);
-        let s = base64ct::Base64::encode_string(self.signature_bytes());
-        let p = base64ct::Base64::encode_string(self.public_key_bytes());
+        let flag = Base64::encode(&[self.scheme().flag()]);
+        let s = Base64::encode(self.signature_bytes());
+        let p = Base64::encode(self.public_key_bytes());
         write!(f, "{flag}@{s}@{p}")?;
         Ok(())
     }
