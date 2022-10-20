@@ -153,11 +153,6 @@ export type SuiExecuteTransactionResponse =
 export type GatewayTxSeqNumber = number;
 
 export type GetTxnDigestsResponse = TransactionDigest[];
-// TODO: remove after we deploy 0.12.0 DevNet
-export type GetTxnDigestsResponse__DEPRECATED = [
-  GatewayTxSeqNumber,
-  TransactionDigest
-][];
 
 export type PaginatedTransactionDigests = {
   data: TransactionDigest[];
