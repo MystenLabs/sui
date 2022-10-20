@@ -26,7 +26,6 @@ import { type LinkObj, TxAddresses } from '../../components/table/TableCard';
 import { presentBN } from '../../utils/stringUtils';
 import SendReceiveView from './SendReceiveView';
 import TxLinks from './TxLinks';
-import TxResultHeader from './TxResultHeader';
 
 import type { DataType, Category } from './TransactionResultType';
 import type {
@@ -40,6 +39,8 @@ import type {
 
 import styles from './TransactionResult.module.css';
 
+import { Banner } from '~/ui/Banner';
+import { PageHeader } from '~/ui/PageHeader';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 
 type TxDataProps = CertifiedTransaction & {
@@ -244,13 +245,6 @@ function TransactionView({ txdata }: { txdata: DataType }) {
         getTransferSuiTransaction(txdetails);
     const txKindData = formatByTransactionKind(txKindName, txdetails, sender);
 
-    const txHeaderData = {
-        txId: txdata.txId,
-        status: txdata.status,
-        txKindName: txKindName,
-        ...(txdata.txError ? { error: txdata.txError } : {}),
-    };
-
     const txEventData = txdata.events?.map(eventToDisplay);
 
     let eventTitles: string[] = [];
@@ -390,7 +384,18 @@ function TransactionView({ txdata }: { txdata: DataType }) {
 
     return (
         <div className={cl(styles.txdetailsbg)}>
-            <TxResultHeader data={txHeaderData} />
+            <div className="mt-5 mb-10">
+                <PageHeader
+                    type={txKindName}
+                    title={txdata.txId}
+                    status={txdata.status}
+                />
+                {txdata.txError && (
+                    <div className="mt-2">
+                        <Banner variant="error">{txdata.txError}</Banner>
+                    </div>
+                )}
+            </div>
             <TabGroup size="lg">
                 <TabList>
                     <Tab>Details</Tab>

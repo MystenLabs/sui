@@ -24,6 +24,7 @@ export type PageHeaderType =
 
 export interface PageHeaderProps {
     title: string;
+    subtitle?: string;
     type: PageHeaderType;
     status?: 'success' | 'failure';
 }
@@ -52,11 +53,11 @@ const STATUS_TO_TEXT = {
     failure: 'Failure',
 };
 
-export function PageHeader({ title, type, status }: PageHeaderProps) {
+export function PageHeader({ title, subtitle, type, status }: PageHeaderProps) {
     const Icon = TYPE_TO_ICON[type];
     return (
-        <div className="flex flex-col gap-3">
-            <div className="text-sui-grey-85 flex items-center gap-2">
+        <div data-testid="pageheader">
+            <div className="text-sui-grey-85 flex items-center gap-2 mb-3">
                 <Icon className="text-sui-steel" />
                 <Heading variant="heading4" weight="semibold">
                     {type}
@@ -86,6 +87,13 @@ export function PageHeader({ title, type, status }: PageHeaderProps) {
                     </div>
                 )}
             </div>
+            {subtitle && (
+                <div className="text-sui-grey-75 mt-2">
+                    <Heading variant="heading4" weight="semibold">
+                        {subtitle}
+                    </Heading>
+                </div>
+            )}
         </div>
     );
 }

@@ -1,7 +1,0 @@
-.objname {
-    @apply text-sui-grey-75 font-semibold text-[1.125rem] leading-[1.125rem];
-}
-
-.objcontainer {
-    @apply pb-[40px] mb-[30px];
-}
