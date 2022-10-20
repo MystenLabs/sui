@@ -32,11 +32,12 @@ const HomePage = ({ disableNavigation, limitToPopUpSize = true }: Props) => {
         const callback = () => {
             setVisibility(document.visibilityState);
         };
+        callback();
         document.addEventListener('visibilitychange', callback);
         return () => {
             document.removeEventListener('visibilitychange', callback);
         };
-    });
+    }, []);
     useEffect(() => {
         const sub = of(guardChecking || visibility === 'hidden')
             .pipe(
