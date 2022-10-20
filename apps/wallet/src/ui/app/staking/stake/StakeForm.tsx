@@ -3,8 +3,8 @@
 
 import { ErrorMessage, Field, Form, useFormikContext } from 'formik';
 import { useEffect, useRef, memo } from 'react';
-import { useIntl } from 'react-intl';
 
+import { useFormatCoin } from '../../hooks/useFormatCoin';
 import Alert from '_components/alert';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
 import NumberInput from '_components/number-input';
@@ -12,7 +12,6 @@ import {
     DEFAULT_GAS_BUDGET_FOR_STAKE,
     GAS_SYMBOL,
 } from '_redux/slices/sui-objects/Coin';
-import { balanceFormatOptions } from '_shared/formatting';
 
 import type { FormValues } from '.';
 
@@ -22,7 +21,7 @@ export type StakeFromProps = {
     submitError: string | null;
     // TODO(ggao): remove this if needed
     coinBalance: string;
-    coinSymbol: string;
+    coinType: string;
     onClearSubmitError: () => void;
 };
 
@@ -30,7 +29,7 @@ function StakeForm({
     submitError,
     // TODO(ggao): remove this if needed
     coinBalance,
-    coinSymbol,
+    coinType,
     onClearSubmitError,
 }: StakeFromProps) {
     const {
@@ -44,7 +43,9 @@ function StakeForm({
     useEffect(() => {
         onClearRef.current();
     }, [amount]);
-    const intl = useIntl();
+
+    const [formatted, symbol] = useFormatCoin(coinBalance, coinType);
+
     return (
         <Form className={st.container} autoComplete="off" noValidate={true}>
             <div className={st.group}>
@@ -53,16 +54,11 @@ function StakeForm({
                     component={NumberInput}
                     allowNegative={false}
                     name="amount"
-                    placeholder={`Total ${coinSymbol.toLocaleUpperCase()} to stake`}
+                    placeholder={`Total ${symbol} to stake`}
                     className={st.input}
                 />
                 <div className={st.muted}>
-                    Available balance:{' '}
-                    {intl.formatNumber(
-                        BigInt(coinBalance),
-                        balanceFormatOptions
-                    )}{' '}
-                    {coinSymbol}
+                    Available balance: {formatted} {symbol}
                 </div>
                 <ErrorMessage
                     className={st.error}

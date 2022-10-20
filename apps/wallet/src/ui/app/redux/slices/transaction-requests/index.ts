@@ -76,7 +76,7 @@ export const respondToTransactionRequest = createAsyncThunk<
     'respond-to-transaction-request',
     async (
         { txRequestID, approved },
-        { extra: { background, api, keypairVault, featureGating }, getState }
+        { extra: { background, api, keypairVault, growthbook }, getState }
     ) => {
         const state = getState();
         const txRequest = txRequestsSelectors.selectById(state, txRequestID);
@@ -88,7 +88,7 @@ export const respondToTransactionRequest = createAsyncThunk<
         if (approved) {
             const signer = api.getSignerInstance(keypairVault.getKeyPair());
             try {
-                if (featureGating.isOn(FEATURES.DEPRECATE_GATEWAY)) {
+                if (growthbook.isOn(FEATURES.DEPRECATE_GATEWAY)) {
                     let response: SuiExecuteTransactionResponse;
                     if (
                         txRequest.tx.type === 'v2' ||

@@ -83,6 +83,7 @@
     "dependencies": {
         "@floating-ui/react-dom-interactions": "^0.10.1",
         "@growthbook/growthbook": "^0.18.1",
+        "@growthbook/growthbook-react": "^0.9.1",
         "@metamask/browser-passworder": "^3.0.0",
         "@mysten/core": "workspace:*",
         "@mysten/sui.js": "workspace:*",
@@ -90,6 +91,8 @@
         "@reduxjs/toolkit": "^1.8.3",
         "@scure/bip32": "^1.1.0",
         "@scure/bip39": "^1.1.0",
+        "@tanstack/react-query": "^4.0.10",
+        "bignumber.js": "^9.1.0",
         "bootstrap-icons": "^1.9.1",
         "buffer": "^6.0.3",
         "classnames": "^2.3.1",

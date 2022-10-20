@@ -3,14 +3,13 @@
 
 import cl from 'classnames';
 import { memo } from 'react';
-import { useIntl } from 'react-intl';
 import { Link } from 'react-router-dom';
 
+import { useFormatCoin } from '../../hooks/useFormatCoin';
+import { GAS_TYPE_ARG } from '../../redux/slices/sui-objects/Coin';
 import Icon, { SuiIcons } from '_components/icon';
 import { formatDate } from '_helpers';
 import { useMiddleEllipsis } from '_hooks';
-import { GAS_SYMBOL } from '_redux/slices/sui-objects/Coin';
-import { balanceFormatOptions } from '_shared/formatting';
 
 import type { TxResultState } from '_redux/slices/txresults';
 
@@ -23,8 +22,6 @@ const TRUNCATE_PREFIX_LENGTH = 4;
 const TRUNCATE_MAX_CHAR = 35;
 
 function TransactionCard({ txn }: { txn: TxResultState }) {
-    const intl = useIntl();
-
     const toAddrStr = useMiddleEllipsis(
         txn.to || '',
         TRUNCATE_MAX_LENGTH,
@@ -46,8 +43,6 @@ function TransactionCard({ txn }: { txn: TxResultState }) {
         TRUNCATE_MAX_CHAR,
         TRUNCATE_MAX_CHAR - 1
     );
-
-    const coinSymbol = txn.coinSymbol || GAS_SYMBOL;
 
     // TODO: update to account for bought, minted, swapped, etc
     const transferType =
@@ -107,6 +102,11 @@ function TransactionCard({ txn }: { txn: TxResultState }) {
         <span className={st.callFnName}>({txn?.callFunctionName})</span>
     ) : null;
 
+    const [formattedAmount, symbol] = useFormatCoin(
+        transferMeta[transferType].amount,
+        txn.coinType || GAS_TYPE_ARG
+    );
+
     return (
         <Link
             to={`/receipt?${new URLSearchParams({
@@ -133,11 +133,7 @@ function TransactionCard({ txn }: { txn: TxResultState }) {
 
                         <div className={st.txTransferred}>
                             <div className={st.txAmount}>
-                                {intl.formatNumber(
-                                    BigInt(transferMeta[transferType].amount),
-                                    balanceFormatOptions
-                                )}{' '}
-                                <span>{coinSymbol}</span>
+                                {formattedAmount} <span>{symbol}</span>
                             </div>
                         </div>
                     </div>

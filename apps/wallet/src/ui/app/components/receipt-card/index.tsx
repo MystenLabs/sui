@@ -4,12 +4,12 @@
 import cl from 'classnames';
 import { useIntl } from 'react-intl';
 
+import { useFormatCoin } from '../../hooks/useFormatCoin';
 import ExplorerLink from '_components/explorer-link';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
 import { formatDate } from '_helpers';
 import { useMiddleEllipsis } from '_hooks';
-import { GAS_SYMBOL } from '_redux/slices/sui-objects/Coin';
-import { balanceFormatOptions } from '_shared/formatting';
+import { GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
 
 import type { TxResultState } from '_redux/slices/txresults';
 
@@ -122,6 +122,20 @@ function ReceiptCard({ txDigest }: TxResponseProps) {
     const statusClassName =
         txDigest.status === 'success' ? st.success : st.failed;
 
+    const [formatted, symbol] = useFormatCoin(
+        txDigest.amount || txDigest.balance || 0,
+        txDigest.coinType
+    );
+
+    const [gas, gasSymbol] = useFormatCoin(txDigest.txGas, GAS_TYPE_ARG);
+
+    const [total, totalSymbol] = useFormatCoin(
+        txDigest.amount && txDigest.isSender
+            ? txDigest.amount + txDigest.txGas
+            : null,
+        GAS_TYPE_ARG
+    );
+
     return (
         <>
             <div className={cl(st.txnResponse, statusClassName)}>
@@ -142,15 +156,8 @@ function ReceiptCard({ txDigest }: TxResponseProps) {
                             </div>
                             {(txDigest.amount || txDigest.balance) && (
                                 <div className={st.amount}>
-                                    {intl.formatNumber(
-                                        BigInt(
-                                            txDigest.amount ||
-                                                txDigest.balance ||
-                                                0
-                                        ),
-                                        balanceFormatOptions
-                                    )}
-                                    <span>{txDigest.coinSymbol}</span>
+                                    {formatted}
+                                    <span>{symbol}</span>
                                 </div>
                             )}
                         </div>
@@ -190,7 +197,7 @@ function ReceiptCard({ txDigest }: TxResponseProps) {
                         >
                             <div className={st.label}>Gas Fees</div>
                             <div className={st.value}>
-                                {txDigest.txGas} {GAS_SYMBOL}
+                                {gas} {gasSymbol}
                             </div>
                         </div>
                     )}
@@ -199,13 +206,7 @@ function ReceiptCard({ txDigest }: TxResponseProps) {
                         <div className={cl(st.txFees, st.txnItem)}>
                             <div className={st.txInfoLabel}>Total Amount</div>
                             <div className={st.walletInfoValue}>
-                                {intl.formatNumber(
-                                    BigInt(
-                                        txDigest.amount + txDigest.txGas || 0
-                                    ),
-                                    balanceFormatOptions
-                                )}{' '}
-                                {GAS_SYMBOL}
+                                {total} {totalSymbol}
                             </div>
                         </div>
                     )}

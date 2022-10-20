@@ -2,12 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import cl from 'classnames';
-import { memo, useMemo } from 'react';
-import { useIntl } from 'react-intl';
+import { memo } from 'react';
 
 import { useMiddleEllipsis } from '_hooks';
-import { Coin } from '_redux/slices/sui-objects/Coin';
-import { balanceFormatOptions } from '_shared/formatting';
+import { useFormatCoin } from '_src/ui/app/hooks/useFormatCoin';
 
 import st from './CoinBalance.module.scss';
 
@@ -19,20 +17,13 @@ export type CoinProps = {
 };
 
 function CoinBalance({ type, balance, mode = 'row-item' }: CoinProps) {
-    const symbol = useMemo(() => Coin.getCoinSymbol(type), [type]);
-    const intl = useIntl();
-    const balanceFormatted = useMemo(
-        () => intl.formatNumber(balance, balanceFormatOptions),
-        [intl, balance]
-    );
+    const [formatted, symbol] = useFormatCoin(balance, type);
 
     const shortenType = useMiddleEllipsis(type, 30);
     return (
         <div className={cl(st.container, st[mode])}>
             <div className={cl(st.valuesContainer, st[mode])}>
-                <span className={cl(st.value, st[mode])}>
-                    {balanceFormatted}
-                </span>
+                <span className={cl(st.value, st[mode])}>{formatted}</span>
                 <span className={cl(st.symbol, st[mode])}>{symbol}</span>
             </div>
             <div className={cl(st.typeActionsContainer, st[mode])}>

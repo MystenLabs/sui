@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import BigNumber from 'bignumber.js';
 import cl from 'classnames';
 import { Field, Form, useFormikContext } from 'formik';
-import { useEffect, useRef, memo } from 'react';
-import { useIntl } from 'react-intl';
+import { useEffect, useRef, memo, useMemo } from 'react';
 
 import { Content, Menu } from '_app/shared/bottom-menu-layout';
 import Button from '_app/shared/button';
@@ -14,8 +14,12 @@ import LoadingIndicator from '_components/loading/LoadingIndicator';
 import {
     DEFAULT_GAS_BUDGET_FOR_TRANSFER,
     GAS_SYMBOL,
+    GAS_TYPE_ARG,
 } from '_redux/slices/sui-objects/Coin';
-import { balanceFormatOptions } from '_shared/formatting';
+import {
+    useCoinDecimals,
+    useFormatCoin,
+} from '_src/ui/app/hooks/useFormatCoin';
 
 import type { FormValues } from '../';
 
@@ -42,8 +46,6 @@ function StepTwo({
         values: { amount, to },
     } = useFormikContext<FormValues>();
 
-    const intl = useIntl();
-
     const onClearRef = useRef(onClearSubmitError);
     onClearRef.current = onClearSubmitError;
 
@@ -51,11 +53,24 @@ function StepTwo({
         onClearRef.current();
     }, [amount, to]);
 
-    const totalAmount =
-        (GAS_SYMBOL === coinSymbol ? parseFloat(amount) : 0) +
-        DEFAULT_GAS_BUDGET_FOR_TRANSFER;
+    const [decimals] = useCoinDecimals(coinType);
+    const amountWithoutDecimals = useMemo(
+        () => new BigNumber(amount).shiftedBy(decimals).toString(),
+        [amount, decimals]
+    );
+
+    const totalAmount = new BigNumber(DEFAULT_GAS_BUDGET_FOR_TRANSFER)
+        .plus(GAS_SYMBOL === coinSymbol ? amountWithoutDecimals : 0)
+        .toString();
 
     const validAddressBtn = !isValid || to === '' || isSubmitting;
+
+    const [formattedBalance] = useFormatCoin(amountWithoutDecimals, coinType);
+    const [formattedTotal] = useFormatCoin(totalAmount, GAS_TYPE_ARG);
+    const [formattedGas] = useFormatCoin(
+        DEFAULT_GAS_BUDGET_FOR_TRANSFER,
+        GAS_TYPE_ARG
+    );
 
     return (
         <Form className={st.container} autoComplete="off" noValidate={true}>
@@ -78,29 +93,21 @@ function StepTwo({
 
                 <div className={st.responseCard}>
                     <div className={st.amount}>
-                        {intl.formatNumber(
-                            BigInt(amount || 0),
-                            balanceFormatOptions
-                        )}{' '}
-                        <span>{coinSymbol}</span>
+                        {formattedBalance} <span>{coinSymbol}</span>
                     </div>
 
                     <div className={st.details}>
                         <div className={st.txFees}>
                             <div className={st.txInfoLabel}>Gas Fee</div>
                             <div className={st.walletInfoValue}>
-                                {DEFAULT_GAS_BUDGET_FOR_TRANSFER} {GAS_SYMBOL}
+                                {formattedGas} {GAS_SYMBOL}
                             </div>
                         </div>
 
                         <div className={st.txFees}>
                             <div className={st.txInfoLabel}>Total Amount</div>
                             <div className={st.walletInfoValue}>
-                                {intl.formatNumber(
-                                    BigInt(totalAmount || 0),
-                                    balanceFormatOptions
-                                )}{' '}
-                                {GAS_SYMBOL}
+                                {formattedTotal} {GAS_SYMBOL}
                             </div>
                         </div>
                     </div>

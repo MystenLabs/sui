@@ -96,9 +96,9 @@ export const batchFetchObject = createAsyncThunk<
 
 export const mintDemoNFT = createAsyncThunk<void, void, AppThunkConfig>(
     'mintDemoNFT',
-    async (_, { extra: { api, keypairVault, featureGating }, dispatch }) => {
+    async (_, { extra: { api, keypairVault, growthbook }, dispatch }) => {
         const signer = api.getSignerInstance(keypairVault.getKeyPair());
-        if (featureGating.isOn(FEATURES.DEPRECATE_GATEWAY)) {
+        if (growthbook.isOn(FEATURES.DEPRECATE_GATEWAY)) {
             await ExampleNFT.mintExampleNFTWithFullnode(signer);
         } else {
             await ExampleNFT.mintExampleNFT(signer);
@@ -121,10 +121,10 @@ export const transferSuiNFT = createAsyncThunk<
     AppThunkConfig
 >(
     'transferSuiNFT',
-    async (data, { extra: { api, keypairVault, featureGating }, dispatch }) => {
+    async (data, { extra: { api, keypairVault, growthbook }, dispatch }) => {
         let txn: SuiTransactionResponse | SuiExecuteTransactionResponse;
         const signer = api.getSignerInstance(keypairVault.getKeyPair());
-        if (featureGating.isOn(FEATURES.DEPRECATE_GATEWAY)) {
+        if (growthbook.isOn(FEATURES.DEPRECATE_GATEWAY)) {
             txn = await ExampleNFT.TransferNFTWithFullnode(
                 signer,
                 data.nftId,

@@ -25,7 +25,9 @@ export async function loadFeatures() {
             throw new Error(res.statusText);
         }
 
-        growthbook.setFeatures(await res.json());
+        const data = await res.json();
+
+        growthbook.setFeatures(data.features);
     } catch (e) {
         console.warn('Failed to fetch feature definitions from Growthbook', e);
     }
