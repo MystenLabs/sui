@@ -24,6 +24,11 @@ module sui::vec_set {
         VecSet { contents: vector::empty() }
     }
 
+    /// Create a singleton `VecSet` that only contains one element.
+    public fun singleton<K: copy + drop>(key: K): VecSet<K> {
+        VecSet { contents: vector::singleton(key) }
+    }
+
     /// Insert a `key` into self.
     /// Aborts if `key` is already present in `self`.
     public fun insert<K: copy + drop>(self: &mut VecSet<K>, key: K) {

@@ -13,6 +13,8 @@ module sui::validator_set {
     use sui::staking_pool::{Self, Delegation, StakedSui};
     use sui::epoch_time_lock::EpochTimeLock;
     use sui::priority_queue as pq;
+    use sui::vec_map::VecMap;
+    use sui::vec_set::VecSet;
 
     friend sui::sui_system;
 
@@ -225,6 +227,7 @@ module sui::validator_set {
         self: &mut ValidatorSet,
         validator_reward: &mut Balance<SUI>,
         delegator_reward: &mut Balance<SUI>,
+        _validator_report_records: &VecMap<address, VecSet<address>>,
         ctx: &mut TxContext,
     ) {
         // `compute_reward_distribution` must be called before `adjust_stake` to make sure we are using the current
@@ -241,6 +244,8 @@ module sui::validator_set {
         // each validator's pending stake, and that shouldn't be available in the next epoch.
         adjust_stake_and_gas_price(&mut self.active_validators);
 
+        // TODO: use `validator_report_records` and punish validators whose numbers of reports receives are greater than
+        // some threshold.
         distribute_reward(
             &mut self.active_validators, 
             &validator_reward_amounts, 
