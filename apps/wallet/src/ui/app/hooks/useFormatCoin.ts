@@ -10,6 +10,15 @@ import { api } from '../redux/store/thunk-extras';
 
 type FormattedCoin = [formattedBalance: string, coinSymbol: string];
 
+export function formatBalance(
+    balance: bigint | number | string,
+    decimals: number
+) {
+    const bn = new BigNumber(balance.toString()).shiftedBy(-1 * decimals);
+
+    return bn.toFormat(bn.gte(1) ? 2 : undefined);
+}
+
 export function useCoinDecimals(coinType?: string | null) {
     const suiDenomination = useFeature(FEATURES.SUI_DENOMINATION).on;
 
@@ -25,22 +34,18 @@ export function useCoinDecimals(coinType?: string | null) {
             return api.instance.fullNode.getCoinDenominationInfo(coinType);
         },
         {
-            // This is expected to fail, so disable retries:
+            // This is currently expected to fail for non-SUI tokens, so disable retries:
             retry: false,
             enabled: suiDenomination && !!coinType,
+            // Never consider this data to be stale:
+            staleTime: Infinity,
+            // Keep this data in the cache for 24 hours.
+            // We allow this to be GC'd after a very long time to avoid unbounded cache growth.
+            cacheTime: 24 * 60 * 60 * 1000,
         }
     );
 
     return [queryResult.data?.decimalNumber || 0, queryResult] as const;
-}
-
-export function formatBalance(
-    balance: bigint | number | string,
-    decimals: number
-) {
-    const bn = new BigNumber(balance.toString()).shiftedBy(-1 * decimals);
-
-    return bn.toFormat(bn.gte(1) ? 2 : undefined);
 }
 
 // TODO: This handles undefined values to make it easier to integrate with the reset of the app as it is
