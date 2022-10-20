@@ -17,10 +17,18 @@ use types::{Certificate, CertificateDigest, ConsensusStore, Round, SequenceNumbe
 #[path = "tests/bullshark_tests.rs"]
 pub mod bullshark_tests;
 
+/// LastRound is a helper struct to keep necessary info
+/// around the leader election on the last election round.
+/// When both the leader_found = true & leader_has_support = true
+/// then we know that we do have a "successful" leader election
+/// and consequently a commit.
 #[derive(Default)]
 struct LastRound {
-    _round: Round,
+    /// True when the leader has actually proposed a certificate
+    /// and found in our DAG
     leader_found: bool,
+    /// When the leader has enough support from downstream
+    /// certificates
     leader_has_support: bool,
 }
 
@@ -34,10 +42,9 @@ pub struct Bullshark {
 
     pub metrics: Arc<ConsensusMetrics>,
     /// The last time we had a successful leader election
-    /// which had enough support
-    last_leader_election_timestamp: Instant,
-    /// The last round for which a successful leader election took place
-    last_election_round: LastRound,
+    last_successful_leader_election_timestamp: Instant,
+    /// The last round leader election result
+    last_leader_election: LastRound,
     /// The most recent round of inserted certificate
     max_inserted_certificate_round: Round,
 }
@@ -54,24 +61,27 @@ impl ConsensusProtocol for Bullshark {
         let mut consensus_index = consensus_index;
 
         // We must have stored already the parents of this certificate!
-        self.check_parents_exist(&certificate, state);
+        self.log_error_if_missing_parents(&certificate, state);
 
         // Add the new certificate to the local storage.
         if state.try_insert(certificate).is_err() {
             return Ok(Vec::new());
         }
 
-        if round != self.max_inserted_certificate_round && round % 2 == 0 {
-            // check when the last non successful leader election was - if it is != the round-2
-            // then report an unsuccessful election
-            let last_round = &self.last_election_round;
+        // Report last leader election if was unsuccessful
+        if round > self.max_inserted_certificate_round && round % 2 == 0 {
+            let last_election_round = &self.last_leader_election;
 
-            if !last_round.leader_found {
-                // increase the leader not found metric
-                self.metrics.leader_not_found.inc();
-            } else if !last_round.leader_has_support {
-                // increase the leader not enough support
-                self.metrics.leader_not_enough_support.inc();
+            if !last_election_round.leader_found {
+                self.metrics
+                    .leader_election
+                    .with_label_values(&["not_found"])
+                    .inc();
+            } else if !last_election_round.leader_has_support {
+                self.metrics
+                    .leader_election
+                    .with_label_values(&["not_enough_support"])
+                    .inc();
             }
         }
 
@@ -96,8 +106,7 @@ impl ConsensusProtocol for Bullshark {
         {
             Some(x) => x,
             None => {
-                self.last_election_round = LastRound {
-                    _round: leader_round,
+                self.last_leader_election = LastRound {
                     leader_found: false,
                     leader_has_support: false,
                 };
@@ -116,8 +125,7 @@ impl ConsensusProtocol for Bullshark {
             .map(|(_, x)| self.committee.stake(&x.origin()))
             .sum();
 
-        self.last_election_round = LastRound {
-            _round: leader_round,
+        self.last_leader_election = LastRound {
             leader_found: true,
             leader_has_support: false,
         };
@@ -130,7 +138,7 @@ impl ConsensusProtocol for Bullshark {
             return Ok(Vec::new());
         }
 
-        self.last_election_round.leader_has_support = true;
+        self.last_leader_election.leader_has_support = true;
 
         // Get an ordered list of past leaders that are linked to the current leader.
         debug!("Leader {:?} has enough support", leader);
@@ -170,15 +178,18 @@ impl ConsensusProtocol for Bullshark {
         }
 
         // record the last time we got a successful leader election
-        let elapsed = self.last_leader_election_timestamp.elapsed();
+        let elapsed = self.last_successful_leader_election_timestamp.elapsed();
 
         self.metrics
             .commit_rounds_latency
             .observe(elapsed.as_secs_f64());
 
-        self.last_leader_election_timestamp = Instant::now();
+        self.last_successful_leader_election_timestamp = Instant::now();
 
-        self.metrics.leader_found.inc();
+        self.metrics
+            .leader_election
+            .with_label_values(&["elected"])
+            .inc();
 
         // Log the latest committed round of every authority (for debug).
         // Performance note: if tracing at the debug log level is disabled, this is cheap, see
@@ -212,8 +223,8 @@ impl Bullshark {
             committee,
             store,
             gc_depth,
-            last_leader_election_timestamp: Instant::now(),
-            last_election_round: LastRound::default(),
+            last_successful_leader_election_timestamp: Instant::now(),
+            last_leader_election: LastRound::default(),
             max_inserted_certificate_round: 0,
             metrics,
         }
@@ -222,7 +233,7 @@ impl Bullshark {
     // Checks that the provided certificate's parents exist and prints the necessary
     // log statements. This method does not take more actions other than printing
     // log statements.
-    fn check_parents_exist(&mut self, certificate: &Certificate, state: &ConsensusState) {
+    fn log_error_if_missing_parents(&self, certificate: &Certificate, state: &ConsensusState) {
         let round = certificate.round();
         if round > 0 {
             let parents = certificate.header.parents.clone();

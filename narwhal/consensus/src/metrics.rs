@@ -1,9 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use prometheus::{
-    default_registry, register_histogram_with_registry, register_int_counter_with_registry,
-    register_int_gauge_vec_with_registry, register_int_gauge_with_registry, Histogram, IntCounter,
-    IntGauge, IntGaugeVec, Registry,
+    default_registry, register_histogram_with_registry, register_int_counter_vec_with_registry,
+    register_int_counter_with_registry, register_int_gauge_vec_with_registry,
+    register_int_gauge_with_registry, Histogram, IntCounter, IntCounterVec, IntGauge, IntGaugeVec,
+    Registry,
 };
 
 #[derive(Clone, Debug)]
@@ -26,19 +27,15 @@ pub struct ConsensusMetrics {
     pub dag_size_bytes: IntGauge,
     /// The latency between two successful commit rounds
     pub commit_rounds_latency: Histogram,
-    /// The number of certificates committed
-    /// per commit round
+    /// The number of certificates committed per commit round
     pub commit_depth: Histogram,
     /// When a certificate is received on an odd round, we check
-    /// about the previous (even) round leader. If not found then
-    /// we increment this counter.
-    pub leader_not_found: IntCounter,
-    /// When a leader has been found and enough support exists
-    /// then this counter gets increased
-    pub leader_found: IntCounter,
-    /// When a leader has been found but have not enough support
-    /// then this counter gets increased
-    pub leader_not_enough_support: IntCounter,
+    /// about the previous (even) round leader. We do have three possible cases which
+    /// are tagged as values of the label "outcome":
+    /// * not_found: the leader certificate has not been found at all
+    /// * not_enough_support: when the leader certificate has been found but there was not enough support
+    /// * elected: when the leader certificate has been found and had enough support
+    pub leader_election: IntCounterVec,
 }
 
 impl ConsensusMetrics {
@@ -96,23 +93,19 @@ impl ConsensusMetrics {
             commit_depth: register_histogram_with_registry!(
                 "consensus_commit_depth",
                 "The number of certificates committed on a commit round",
+                // buckets in number of certificates
+                vec![
+                    0.0, 5.0, 10.0, 20.0, 30.0, 40.0, 50.0, 100.0, 150.0,
+                    200.0, 300.0, 400.0, 500.0, 1_000.0, 2_000.0, 5_000.0
+                ],
                 registry
             ).unwrap(),
-            leader_not_found: register_int_counter_with_registry!(
-                "leader_not_found",
-                "The number of times (rounds) on which we didn't manage to successfully perform a leader election",
+            leader_election: register_int_counter_vec_with_registry!(
+                "leader_election",
+                "The outcome of a leader election round",
+                &["outcome"],
                 registry
             ).unwrap(),
-            leader_found: register_int_counter_with_registry!(
-                "leader_found",
-                "The number of times (rounds) on which we did manage to successfully perform a leader election",
-                registry
-            ).unwrap(),
-            leader_not_enough_support: register_int_counter_with_registry!(
-                "leader_not_enough_support",
-                "The number of times (rounds) on which a leader has been found but doesn't have enough support",
-                registry
-            ).unwrap()
         }
     }
 }

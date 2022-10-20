@@ -45,7 +45,7 @@ pub struct BatchMaker {
     node_metrics: Arc<WorkerMetrics>,
     /// The timestamp of the first transaction received
     /// to be included on the next batch
-    start_batch_timestamp: Instant,
+    batch_start_timestamp: Instant,
 }
 
 impl BatchMaker {
@@ -69,7 +69,7 @@ impl BatchMaker {
                 tx_quorum_waiter,
                 current_batch: Batch(Vec::with_capacity(batch_size * 2)),
                 current_batch_size: 0,
-                start_batch_timestamp: Instant::now(),
+                batch_start_timestamp: Instant::now(),
                 node_metrics,
             }
             .run()
@@ -91,7 +91,7 @@ impl BatchMaker {
                         // only when we do have transactions to include. Thus we reset
                         // the timer on the first transaction we receive to include on
                         // an empty batch.
-                        self.start_batch_timestamp = Instant::now();
+                        self.batch_start_timestamp = Instant::now();
                     }
 
                     self.current_batch_size += transaction.len();
@@ -205,11 +205,11 @@ impl BatchMaker {
         }
 
         // we are deliberately measuring this after the sending to the downstream
-        // channel tx_message as the operating is blocking and affects any further
+        // channel tx_message as the operation is blocking and affects any further
         // batch creation.
         self.node_metrics
             .created_batch_latency
             .with_label_values(&[self.committee.epoch.to_string().as_str(), reason])
-            .observe(self.start_batch_timestamp.elapsed().as_secs_f64());
+            .observe(self.batch_start_timestamp.elapsed().as_secs_f64());
     }
 }

@@ -110,7 +110,7 @@ impl Proposer {
         })
     }
 
-    /// maker_header creates a new Header, persists it to database
+    /// make_header creates a new Header, persists it to database
     /// and sends it to core for processing. If successful, it returns
     /// the number of batch digests included in header.
     async fn make_header(&mut self) -> DagResult<usize> {
@@ -300,7 +300,7 @@ impl Proposer {
                         let reason = if timer_expired {
                             "timeout"
                         } else {
-                            "size_reached"
+                            "threshold_size_reached"
                         };
 
                         self.metrics
