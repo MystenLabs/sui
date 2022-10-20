@@ -9,7 +9,6 @@ use tap::tap::TapFallible;
 
 #[cfg(test)]
 use std::collections::HashSet;
-use std::sync::Arc;
 
 use sui::client_commands::{SuiClientCommands, WalletContext};
 use sui_json_rpc_types::{
@@ -35,8 +34,8 @@ use crate::{CoinInfo, Faucet, FaucetError, FaucetReceipt};
 pub struct SimpleFaucet {
     wallet: WalletContext,
     active_address: SuiAddress,
-    producer: Arc<Mutex<Sender<ObjectID>>>,
-    consumer: Arc<Mutex<Receiver<ObjectID>>>,
+    producer: Mutex<Sender<ObjectID>>,
+    consumer: Mutex<Receiver<ObjectID>>,
     metrics: FaucetMetrics,
 }
 
@@ -87,8 +86,8 @@ impl SimpleFaucet {
         Ok(Self {
             wallet,
             active_address,
-            producer: Arc::new(Mutex::new(producer)),
-            consumer: Arc::new(Mutex::new(consumer)),
+            producer: Mutex::new(producer),
+            consumer: Mutex::new(consumer),
             metrics,
         })
     }
@@ -107,7 +106,9 @@ impl SimpleFaucet {
         let mut consumer = self.consumer.lock().await;
         debug!(?uuid, "Got consumer lock, pulling coins.");
         let mut coins = Vec::with_capacity(number_of_coins);
-        while let Some(coin) = consumer.recv().await {
+        while let Ok(Some(coin)) =
+            tokio::time::timeout(Duration::from_secs(10), consumer.recv()).await
+        {
             debug!(?uuid, "Pulling coin from pool {:?}", coin);
             let gas_coin = self.get_gas_coin(coin).await?;
             if let Some(gas_coin) = gas_coin {
