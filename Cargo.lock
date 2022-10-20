@@ -8223,6 +8223,7 @@ dependencies = [
  "sui-node",
  "sui-sdk",
  "sui-types",
+ "tap",
  "telemetry-subscribers 0.2.0",
  "test-utils",
  "thiserror",

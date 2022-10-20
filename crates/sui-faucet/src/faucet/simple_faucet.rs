@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::metrics::FaucetMetrics;
 use anyhow::anyhow;
 use async_trait::async_trait;
-
-use crate::metrics::FaucetMetrics;
 use prometheus::Registry;
+use tap::tap::TapFallible;
 
 #[cfg(test)]
 use std::collections::HashSet;
@@ -73,12 +73,14 @@ impl SimpleFaucet {
 
         let (producer, consumer) = mpsc::channel(coins.len());
         for coin in &coins {
-            if let Err(e) = producer.send(*coin.id()).await {
-                panic!("Failed to set up gas pools: {:?}", e);
-            }
+            let coin_id = *coin.id();
+            producer
+                .send(coin_id)
+                .await
+                .tap_ok(|_| info!("Adding coin {:?} to gas pool", coin_id))
+                .tap_err(|e| error!("Failed to add gas coin {} to pools: {:?}", coin_id, e))
+                .unwrap();
         }
-
-        debug!("Using coins: {:?}", coins);
 
         let metrics = FaucetMetrics::new(prometheus_registry);
 
@@ -95,6 +97,7 @@ impl SimpleFaucet {
         &self,
         number_of_coins: usize,
         transfer_amount: u64,
+        uuid: Uuid,
     ) -> anyhow::Result<Vec<ObjectID>> {
         assert!(number_of_coins > 0);
         // If the gas candidate queue is exhausted, the request will be
@@ -102,35 +105,50 @@ impl SimpleFaucet {
         // gas objects. At the same time, other requests will be blocked by the
         // lock acquisition as well.
         let mut consumer = self.consumer.lock().await;
+        debug!(?uuid, "Got consumer lock, pulling coins.");
         let mut coins = Vec::with_capacity(number_of_coins);
-        let mut coins_to_immediately_recycle = Vec::new();
-        while let Some(coin) = consumer.recv().await {
-            let gas_coin = self.get_gas_coin(coin).await?;
-            if let Some(gas_coin) = gas_coin {
-                if gas_coin.value() >= transfer_amount + TRANSFER_SUI_GAS {
-                    coins.push(coin);
-                    if coins.len() == number_of_coins {
-                        break;
+        loop {
+            match tokio::time::timeout(Duration::from_secs(30), consumer.recv()).await {
+                Ok(Some(coin)) => {
+                    debug!(?uuid, "Pulling coin from pool {:?}", coin);
+                    let gas_coin = self.get_gas_coin(coin).await?;
+                    if let Some(gas_coin) = gas_coin {
+                        if gas_coin.value() >= transfer_amount + TRANSFER_SUI_GAS {
+                            info!(
+                                ?uuid,
+                                "Planning to use coin from pool {:?}, current balance: {}",
+                                coin,
+                                gas_coin.value()
+                            );
+                            coins.push(coin);
+                            if coins.len() == number_of_coins {
+                                break;
+                            }
+                        } else {
+                            // If amount is not big enough, remove it
+                            warn!(
+                                ?uuid,
+                                "Coin {:?} does not have enough balance ({:?}), removing from pool",
+                                coin,
+                                gas_coin.value(),
+                            );
+                        }
+                    } else {
+                        // Invalid gas, remove it
+                        warn!(
+                            ?uuid,
+                            "Coin {:?} is not longer valid, removing from pool", coin
+                        );
                     }
-                } else {
-                    // If amount is not big enough, we still put it back to the queue
-                    coins_to_immediately_recycle.push(coin);
                 }
-            } else {
-                // Invalid gas, do not put it back to the queue.
-            }
-        }
-        if !coins_to_immediately_recycle.is_empty() {
-            // Immediately release consumer lock to prevent deadlock
-            drop(consumer);
-            // Put coins that are not selected (e.g. balance not enough) back to the queue
-            let producer = self.producer.lock().await;
-            for coin in coins_to_immediately_recycle {
-                if let Err(e) = producer.send(coin).await {
-                    panic!("Failed to put coin {:?} back to queue: {:?}", coin, e);
+                Ok(None) => {
+                    unreachable!("channel is closed");
+                }
+                Err(_) => {
+                    error!(?uuid, "Timeout when getting coins from the queue");
+                    break;
                 }
             }
-            drop(producer);
         }
 
         Ok(coins)
@@ -173,12 +191,19 @@ impl SimpleFaucet {
         let number_of_coins = amounts.len();
         // We assume the amounts are the same
         let coins = self
-            .select_coins(number_of_coins, amounts[0])
+            .select_coins(number_of_coins, amounts[0], uuid)
             .await
+            .tap_ok(|res| {
+                debug!(recipient=?to, ?uuid, "Planning to use coins: {:?}", res);
+            })
+            .tap_err(|err| error!(?uuid, "Failed to select coins: {:?}", err.to_string()))
             .map_err(|err| {
                 FaucetError::Internal(format!("Failed to select coins: {:?}", err.to_string()))
             })?;
-        debug!(recipient=?to, ?uuid, "Planning to use coins: {:?}", coins);
+
+        if coins.is_empty() {
+            return Err(FaucetError::Internal("Failed to select coins".into()));
+        }
 
         let futures: Vec<_> = coins
             .iter()
@@ -201,10 +226,12 @@ impl SimpleFaucet {
         // we put back the coins. The producer should never wait indefinitely,
         // in that the channel is initialized with big enough capacity.
         let producer = self.producer.lock().await;
+        debug!(?uuid, "Got producer lock, putting back coins.");
         for coin in coins {
-            if let Err(e) = producer.send(coin).await {
-                panic!("Failed to put coin {:?} back to queue: {:?}", coin, e);
-            }
+            producer
+                .try_send(coin)
+                .expect("unexpected - queue is large enough to hold all coins");
+            debug!(?uuid, "Recycling coin {:?}", coin);
         }
         drop(producer);
 
@@ -214,7 +241,7 @@ impl SimpleFaucet {
                 if res.is_ok() {
                     true
                 } else {
-                    error!("Encountered error in transfer sui: {:?}", res);
+                    error!(?uuid, "Encountered error in transfer sui: {:?}", res);
                     false
                 }
             })
@@ -325,7 +352,14 @@ impl SimpleFaucet {
         let signature = context.config.keystore.sign(&signer, &data.to_bytes())?;
 
         let tx = Transaction::new(data, signature);
-        info!(tx_digest = ?tx.digest(), ?recipient, ?coin_id, ?uuid, "Broadcasting transfer obj txn");
+        let tx_digest = *tx.digest();
+        info!(
+            ?tx_digest,
+            ?recipient,
+            ?coin_id,
+            ?uuid,
+            "Broadcasting transfer obj txn"
+        );
         let response = context
             .client
             .quorum_driver()
@@ -333,7 +367,17 @@ impl SimpleFaucet {
                 tx,
                 Some(ExecuteTransactionRequestType::WaitForLocalExecution),
             )
-            .await?;
+            .await
+            .tap_err(|e| {
+                error!(
+                    ?tx_digest,
+                    ?recipient,
+                    ?coin_id,
+                    ?uuid,
+                    "Transfer Transaction failed: {:?}",
+                    e
+                )
+            })?;
         let tx_cert = response
             .tx_cert
             .ok_or_else(|| anyhow!("Expect Some(tx_cert)"))?;
@@ -400,11 +444,18 @@ impl Faucet for SimpleFaucet {
         let results = self.transfer_gases(amounts, recipient, id).await?;
 
         if results.len() != amounts.len() {
-            return Err(FaucetError::Transfer(format!(
+            error!(
+                uuid = ?id, ?recipient,
                 "Requested {} coins but only got {}",
                 amounts.len(),
                 results.len()
-            )));
+            );
+        }
+
+        if results.is_empty() {
+            return Err(FaucetError::Transfer(
+                "Failed to transfer any coins to the requestor".into(),
+            ));
         }
 
         let elapsed = timer.stop_and_record();
@@ -476,7 +527,7 @@ mod tests {
 
         let number_of_coins = gases.len();
         let amounts = &vec![1; number_of_coins];
-        let _ = futures::future::join_all([0..30].iter().map(|_| {
+        let _ = futures::future::join_all((0..30).map(|_| {
             faucet.send(
                 Uuid::new_v4(),
                 SuiAddress::random_for_testing_only(),
@@ -530,7 +581,7 @@ mod tests {
         let number_of_coins = gases.len();
         let amounts = &vec![1; number_of_coins];
         // We traverse the the list twice, which must trigger the transferred gas to be kicked out
-        let _ = futures::future::join_all([0..2].iter().map(|_| {
+        let _ = futures::future::join_all((0..2).map(|_| {
             faucet.send(
                 Uuid::new_v4(),
                 SuiAddress::random_for_testing_only(),
@@ -553,7 +604,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_recycle_smaller_amount_gas() {
+    async fn test_discard_smaller_amount_gas() {
+        telemetry_subscribers::init_for_testing();
         let test_cluster = TestClusterBuilder::new().build().await.unwrap();
         let address = test_cluster.get_address_0();
         let mut context = test_cluster.wallet;
@@ -589,7 +641,7 @@ mod tests {
             .value();
         assert_eq!(tiny_amount, tiny_value + TRANSFER_SUI_GAS);
 
-        let gases = HashSet::from_iter(gases.into_iter().map(|gas| *gas.id()));
+        let gases: HashSet<ObjectID> = HashSet::from_iter(gases.into_iter().map(|gas| *gas.id()));
 
         let prom_registry = Registry::new();
         let mut faucet = SimpleFaucet::new(context, &prom_registry).await.unwrap();
@@ -598,7 +650,7 @@ mod tests {
         // Ask for a value higher than tiny coin + TRANSFER_SUI_GAS
         let amounts = &vec![tiny_value + 1; number_of_coins - 1];
         // We traverse the the list twice, which must trigger the tiny gas to be examined but not used
-        let _ = futures::future::join_all([0..2].iter().map(|_| {
+        let _ = futures::future::join_all((0..2).map(|_| {
             faucet.send(
                 Uuid::new_v4(),
                 SuiAddress::random_for_testing_only(),
@@ -611,12 +663,8 @@ mod tests {
         .collect::<Vec<_>>();
 
         // Verify that the tiny gas is still in the queue.
-        let candidates = faucet.drain_gas_queue(gases.len()).await;
-        assert_eq!(
-            candidates, gases,
-            "gases: {:?}, candidates: {:?}",
-            gases, candidates
-        );
+        let candidates = faucet.drain_gas_queue(gases.len() - 1).await;
+        assert!(candidates.get(&tiny_coin_id).is_none());
     }
 
     async fn test_basic_interface(faucet: impl Faucet) {
