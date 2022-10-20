@@ -105,9 +105,10 @@ impl SimpleFaucet {
         // gas objects. At the same time, other requests will be blocked by the
         // lock acquisition as well.
         let mut consumer = self.consumer.lock().await;
+        debug!(?uuid, "Got consumer lock, pulling coins.");
         let mut coins = Vec::with_capacity(number_of_coins);
         while let Some(coin) = consumer.recv().await {
-            debug!(?uuid, "Taking coin from pool {:?}", coin);
+            debug!(?uuid, "Pulling coin from pool {:?}", coin);
             let gas_coin = self.get_gas_coin(coin).await?;
             if let Some(gas_coin) = gas_coin {
                 if gas_coin.value() >= transfer_amount + TRANSFER_SUI_GAS {
@@ -181,10 +182,13 @@ impl SimpleFaucet {
         let coins = self
             .select_coins(number_of_coins, amounts[0], uuid)
             .await
+            .tap_ok(|res| {
+                debug!(recipient=?to, ?uuid, "Planning to use coins: {:?}", res);
+            })
+            .tap_err(|err| error!(?uuid, "Failed to select coins: {:?}", err.to_string()))
             .map_err(|err| {
                 FaucetError::Internal(format!("Failed to select coins: {:?}", err.to_string()))
             })?;
-        debug!(recipient=?to, ?uuid, "Planning to use coins: {:?}", coins);
 
         let futures: Vec<_> = coins
             .iter()
