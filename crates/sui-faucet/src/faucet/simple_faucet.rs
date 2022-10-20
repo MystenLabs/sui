@@ -9,6 +9,7 @@ use tap::tap::TapFallible;
 
 #[cfg(test)]
 use std::collections::HashSet;
+use std::sync::Arc;
 
 use sui::client_commands::{SuiClientCommands, WalletContext};
 use sui_json_rpc_types::{
@@ -34,8 +35,8 @@ use crate::{CoinInfo, Faucet, FaucetError, FaucetReceipt};
 pub struct SimpleFaucet {
     wallet: WalletContext,
     active_address: SuiAddress,
-    producer: Mutex<Sender<ObjectID>>,
-    consumer: Mutex<Receiver<ObjectID>>,
+    producer: Arc<Mutex<Sender<ObjectID>>>,
+    consumer: Arc<Mutex<Receiver<ObjectID>>>,
     metrics: FaucetMetrics,
 }
 
@@ -86,8 +87,8 @@ impl SimpleFaucet {
         Ok(Self {
             wallet,
             active_address,
-            producer: Mutex::new(producer),
-            consumer: Mutex::new(consumer),
+            producer: Arc::new(Mutex::new(producer)),
+            consumer: Arc::new(Mutex::new(consumer)),
             metrics,
         })
     }
@@ -105,7 +106,6 @@ impl SimpleFaucet {
         // lock acquisition as well.
         let mut consumer = self.consumer.lock().await;
         let mut coins = Vec::with_capacity(number_of_coins);
-        // let mut coins_to_immediately_recycle = Vec::new();
         while let Some(coin) = consumer.recv().await {
             debug!(?uuid, "Taking coin from pool {:?}", coin);
             let gas_coin = self.get_gas_coin(coin).await?;
@@ -125,11 +125,10 @@ impl SimpleFaucet {
                     // If amount is not big enough, we still put it back to the queue
                     warn!(
                         ?uuid,
-                        "Coin {:?} does not have enough balance {:?}, removing from pool",
+                        "Coin {:?} does not have enough balance ({:?}), removing from pool",
                         coin,
                         gas_coin.value(),
                     );
-                    // coins_to_immediately_recycle.push(coin);
                 }
             } else {
                 // Invalid gas, do not put it back to the queue.
@@ -139,22 +138,6 @@ impl SimpleFaucet {
                 );
             }
         }
-        // if !coins_to_immediately_recycle.is_empty() {
-        //     // Immediately release consumer lock to prevent deadlock
-        //     drop(consumer);
-        //     debug!(
-        //         ?uuid,
-        //         "Putting back coins with insufficient balance: {:?}", coins_to_immediately_recycle
-        //     );
-        //     // Put coins that are not selected (e.g. balance not enough) back to the queue
-        //     let producer = self.producer.lock().await;
-        //     for coin in coins_to_immediately_recycle {
-        //         if let Err(e) = producer.send(coin).await {
-        //             panic!("Failed to put coin {:?} back to queue: {:?}", coin, e);
-        //         }
-        //     }
-        //     drop(producer);
-        // }
 
         Ok(coins)
     }
@@ -487,125 +470,125 @@ mod tests {
 
     use super::*;
 
-    // #[tokio::test]
-    // async fn simple_faucet_basic_interface_should_work() {
-    //     telemetry_subscribers::init_for_testing();
-    //     let test_cluster = TestClusterBuilder::new().build().await.unwrap();
+    #[tokio::test]
+    async fn simple_faucet_basic_interface_should_work() {
+        telemetry_subscribers::init_for_testing();
+        let test_cluster = TestClusterBuilder::new().build().await.unwrap();
 
-    //     let prom_registry = prometheus::Registry::new();
-    //     let faucet = SimpleFaucet::new(test_cluster.wallet, &prom_registry)
-    //         .await
-    //         .unwrap();
-    //     test_basic_interface(faucet).await;
-    // }
+        let prom_registry = prometheus::Registry::new();
+        let faucet = SimpleFaucet::new(test_cluster.wallet, &prom_registry)
+            .await
+            .unwrap();
+        test_basic_interface(faucet).await;
+    }
 
-    // #[tokio::test]
-    // async fn test_init_gas_queue() {
-    //     let test_cluster = TestClusterBuilder::new().build().await.unwrap();
-    //     let address = test_cluster.get_address_0();
-    //     let mut context = test_cluster.wallet;
-    //     let gases = get_current_gases(address, &mut context).await;
-    //     let gases = HashSet::from_iter(gases.into_iter().map(|gas| *gas.id()));
-    //     let prom_registry = Registry::new();
-    //     let mut faucet = SimpleFaucet::new(context, &prom_registry).await.unwrap();
+    #[tokio::test]
+    async fn test_init_gas_queue() {
+        let test_cluster = TestClusterBuilder::new().build().await.unwrap();
+        let address = test_cluster.get_address_0();
+        let mut context = test_cluster.wallet;
+        let gases = get_current_gases(address, &mut context).await;
+        let gases = HashSet::from_iter(gases.into_iter().map(|gas| *gas.id()));
+        let prom_registry = Registry::new();
+        let mut faucet = SimpleFaucet::new(context, &prom_registry).await.unwrap();
 
-    //     let candidates = faucet.drain_gas_queue(gases.len()).await;
-    //     assert_eq!(
-    //         candidates, gases,
-    //         "gases: {:?}, candidates: {:?}",
-    //         gases, candidates
-    //     );
-    // }
+        let candidates = faucet.drain_gas_queue(gases.len()).await;
+        assert_eq!(
+            candidates, gases,
+            "gases: {:?}, candidates: {:?}",
+            gases, candidates
+        );
+    }
 
-    // #[tokio::test]
-    // async fn test_transfer_state() {
-    //     let test_cluster = TestClusterBuilder::new().build().await.unwrap();
-    //     let address = test_cluster.get_address_0();
-    //     let mut context = test_cluster.wallet;
-    //     let gases = get_current_gases(address, &mut context).await;
+    #[tokio::test]
+    async fn test_transfer_state() {
+        let test_cluster = TestClusterBuilder::new().build().await.unwrap();
+        let address = test_cluster.get_address_0();
+        let mut context = test_cluster.wallet;
+        let gases = get_current_gases(address, &mut context).await;
 
-    //     let gases = HashSet::from_iter(gases.into_iter().map(|gas| *gas.id()));
+        let gases = HashSet::from_iter(gases.into_iter().map(|gas| *gas.id()));
 
-    //     let prom_registry = prometheus::Registry::new();
-    //     let mut faucet = SimpleFaucet::new(context, &prom_registry).await.unwrap();
+        let prom_registry = prometheus::Registry::new();
+        let mut faucet = SimpleFaucet::new(context, &prom_registry).await.unwrap();
 
-    //     let number_of_coins = gases.len();
-    //     let amounts = &vec![1; number_of_coins];
-    //     let _ = futures::future::join_all((0..30).map(|_| {
-    //         faucet.send(
-    //             Uuid::new_v4(),
-    //             SuiAddress::random_for_testing_only(),
-    //             amounts,
-    //         )
-    //     }))
-    //     .await
-    //     .into_iter()
-    //     .map(|res| res.unwrap())
-    //     .collect::<Vec<_>>();
+        let number_of_coins = gases.len();
+        let amounts = &vec![1; number_of_coins];
+        let _ = futures::future::join_all((0..30).map(|_| {
+            faucet.send(
+                Uuid::new_v4(),
+                SuiAddress::random_for_testing_only(),
+                amounts,
+            )
+        }))
+        .await
+        .into_iter()
+        .map(|res| res.unwrap())
+        .collect::<Vec<_>>();
 
-    //     // After all transfer requests settle, we still have the original candidates gas in queue.
-    //     let candidates = faucet.drain_gas_queue(gases.len()).await;
-    //     assert_eq!(
-    //         candidates, gases,
-    //         "gases: {:?}, candidates: {:?}",
-    //         gases, candidates
-    //     );
-    // }
+        // After all transfer requests settle, we still have the original candidates gas in queue.
+        let candidates = faucet.drain_gas_queue(gases.len()).await;
+        assert_eq!(
+            candidates, gases,
+            "gases: {:?}, candidates: {:?}",
+            gases, candidates
+        );
+    }
 
-    // #[tokio::test]
-    // async fn test_discard_invalid_gas() {
-    //     let test_cluster = TestClusterBuilder::new().build().await.unwrap();
-    //     let address = test_cluster.get_address_0();
-    //     let mut context = test_cluster.wallet;
-    //     let mut gases = get_current_gases(address, &mut context).await;
+    #[tokio::test]
+    async fn test_discard_invalid_gas() {
+        let test_cluster = TestClusterBuilder::new().build().await.unwrap();
+        let address = test_cluster.get_address_0();
+        let mut context = test_cluster.wallet;
+        let mut gases = get_current_gases(address, &mut context).await;
 
-    //     let bad_gas = gases.swap_remove(0);
-    //     let gases = HashSet::from_iter(gases.into_iter().map(|gas| *gas.id()));
+        let bad_gas = gases.swap_remove(0);
+        let gases = HashSet::from_iter(gases.into_iter().map(|gas| *gas.id()));
 
-    //     let prom_registry = prometheus::Registry::new();
-    //     let mut faucet = SimpleFaucet::new(context, &prom_registry).await.unwrap();
+        let prom_registry = prometheus::Registry::new();
+        let mut faucet = SimpleFaucet::new(context, &prom_registry).await.unwrap();
 
-    //     // Now we transfer one gas out
-    //     let res = SuiClientCommands::TransferSui {
-    //         to: SuiAddress::random_for_testing_only(),
-    //         sui_coin_object_id: *bad_gas.id(),
-    //         amount: None,
-    //         gas_budget: 50000,
-    //     }
-    //     .execute(faucet.wallet_mut())
-    //     .await
-    //     .unwrap();
+        // Now we transfer one gas out
+        let res = SuiClientCommands::TransferSui {
+            to: SuiAddress::random_for_testing_only(),
+            sui_coin_object_id: *bad_gas.id(),
+            amount: None,
+            gas_budget: 50000,
+        }
+        .execute(faucet.wallet_mut())
+        .await
+        .unwrap();
 
-    //     if let SuiClientCommandResult::TransferSui(_tx_cert, effects) = res {
-    //         assert!(matches!(effects.status, SuiExecutionStatus::Success));
-    //     } else {
-    //         panic!("transfer command did not return SuiClientCommandResult::TransferSui");
-    //     };
+        if let SuiClientCommandResult::TransferSui(_tx_cert, effects) = res {
+            assert!(matches!(effects.status, SuiExecutionStatus::Success));
+        } else {
+            panic!("transfer command did not return SuiClientCommandResult::TransferSui");
+        };
 
-    //     let number_of_coins = gases.len();
-    //     let amounts = &vec![1; number_of_coins];
-    //     // We traverse the the list twice, which must trigger the transferred gas to be kicked out
-    //     let _ = futures::future::join_all((0..2).map(|_| {
-    //         faucet.send(
-    //             Uuid::new_v4(),
-    //             SuiAddress::random_for_testing_only(),
-    //             amounts,
-    //         )
-    //     }))
-    //     .await
-    //     .into_iter()
-    //     .map(|res| res.unwrap())
-    //     .collect::<Vec<_>>();
+        let number_of_coins = gases.len();
+        let amounts = &vec![1; number_of_coins];
+        // We traverse the the list twice, which must trigger the transferred gas to be kicked out
+        let _ = futures::future::join_all((0..2).map(|_| {
+            faucet.send(
+                Uuid::new_v4(),
+                SuiAddress::random_for_testing_only(),
+                amounts,
+            )
+        }))
+        .await
+        .into_iter()
+        .map(|res| res.unwrap())
+        .collect::<Vec<_>>();
 
-    //     // Verify that the bad gas is no longer in the queue.
-    //     // Note `gases` does not contain the bad gas.
-    //     let candidates = faucet.drain_gas_queue(gases.len()).await;
-    //     assert_eq!(
-    //         candidates, gases,
-    //         "gases: {:?}, candidates: {:?}",
-    //         gases, candidates
-    //     );
-    // }
+        // Verify that the bad gas is no longer in the queue.
+        // Note `gases` does not contain the bad gas.
+        let candidates = faucet.drain_gas_queue(gases.len()).await;
+        assert_eq!(
+            candidates, gases,
+            "gases: {:?}, candidates: {:?}",
+            gases, candidates
+        );
+    }
 
     #[tokio::test]
     async fn test_discard_smaller_amount_gas() {
@@ -614,7 +597,6 @@ mod tests {
         let address = test_cluster.get_address_0();
         let mut context = test_cluster.wallet;
         let gases = get_current_gases(address, &mut context).await;
-        info!("@@@@@@@@@@@ current gases: {:?}", gases);
 
         // split out a coin that has a very small balance such that
         // this coin will be not used later on.
@@ -637,7 +619,6 @@ mod tests {
             panic!("transfer command did not return SuiClientCommandResult::TransferSui");
         };
 
-        info!("@@@@@@@@@@@ tiny coin : {:?}", tiny_coin_id);
         // Get the latest list of gas
         let gases = get_current_gases(address, &mut context).await;
         let tiny_amount = gases
@@ -671,25 +652,20 @@ mod tests {
         // Verify that the tiny gas is still in the queue.
         let candidates = faucet.drain_gas_queue(gases.len() - 1).await;
         assert!(candidates.get(&tiny_coin_id).is_none());
-        // assert_eq!(
-        //     candidates, gases,
-        //     "gases: {:?}, candidates: {:?}",
-        //     gases, candidates
-        // );
     }
 
-    // async fn test_basic_interface(faucet: impl Faucet) {
-    //     let recipient = SuiAddress::random_for_testing_only();
-    //     let amounts = vec![1, 2, 3];
+    async fn test_basic_interface(faucet: impl Faucet) {
+        let recipient = SuiAddress::random_for_testing_only();
+        let amounts = vec![1, 2, 3];
 
-    //     let FaucetReceipt { sent } = faucet
-    //         .send(Uuid::new_v4(), recipient, &amounts)
-    //         .await
-    //         .unwrap();
-    //     let mut actual_amounts: Vec<u64> = sent.iter().map(|c| c.amount).collect();
-    //     actual_amounts.sort_unstable();
-    //     assert_eq!(actual_amounts, amounts);
-    // }
+        let FaucetReceipt { sent } = faucet
+            .send(Uuid::new_v4(), recipient, &amounts)
+            .await
+            .unwrap();
+        let mut actual_amounts: Vec<u64> = sent.iter().map(|c| c.amount).collect();
+        actual_amounts.sort_unstable();
+        assert_eq!(actual_amounts, amounts);
+    }
 
     async fn get_current_gases(address: SuiAddress, context: &mut WalletContext) -> Vec<GasCoin> {
         // Get the latest list of gas
