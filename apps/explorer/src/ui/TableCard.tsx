@@ -61,8 +61,8 @@ export type TableType = {
 const cellStyle = cva(['text-sui-grey-75 h-[30px] px-[4px]'], {
     variants: {
         variant: {
-            th: 'text-left font-semibold uppercase text-xs',
-            td: 'group-hover:text-sui-grey-90 group-hover:bg-sui-grey-40 text-sm group-hover:first:rounded-l-[4px] group-hover:last:rounded-r-[4px]',
+            th: 'text-left font-semibold uppercase text-subtitle',
+            td: 'group-hover:text-sui-grey-90 group-hover:bg-sui-grey-40 text-body group-hover:first:rounded-l-[4px] group-hover:last:rounded-r-[4px]',
         },
     },
     defaultVariants: {
@@ -87,7 +87,7 @@ export function TableCard({ tabledata }: { tabledata: TableType }) {
         <div className={'w-full overflow-x-auto'}>
             <table
                 className={
-                    'text-sm text-left min-w-max border-collapse w-full  border-solid border-[#f0f1f2] border-b-[1px] border-0'
+                    'text-left min-w-max border-collapse w-full  border-solid border-[#f0f1f2] border-b-[1px] border-0'
                 }
             >
                 <thead>
