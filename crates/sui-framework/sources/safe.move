@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Mysten Labs, Inc.
+// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 /// The Safe standard is a minimalistic shared wrapper around a coin. It provides a way for users to provide third-party dApps with
