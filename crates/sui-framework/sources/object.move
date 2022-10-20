@@ -62,6 +62,16 @@ module sui::object {
         id.bytes
     }
 
+    /// Make an `ID` from raw bytes.
+    public fun id_from_bytes(bytes: vector<u8>): ID {
+        id_from_address(address_from_bytes(bytes))
+    }
+
+    /// Make an `ID` from an address.
+    public fun id_from_address(bytes: address): ID {
+        ID { bytes }
+    }
+
     // === uid ===
 
     /// Create the `UID` for the singleton `SuiSystemState` object.
@@ -143,15 +153,6 @@ module sui::object {
     public(friend) fun new_uid_from_hash(bytes: address): UID {
         record_new_uid(bytes);
         UID { id: ID { bytes } }
-    }
-
-    // === test functions ===
-
-    #[test_only]
-    /// Test only helper to create a specific ID.
-    /// This is limited to tests to ensure that IDs are generated from objects
-    public fun id_from_address(bytes: address): ID {
-        ID { bytes }
     }
 
     // === internal functions ===

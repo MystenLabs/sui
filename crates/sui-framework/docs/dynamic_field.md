@@ -153,6 +153,8 @@ Aborts with <code><a href="dynamic_field.md#0x2_dynamic_field_EFieldAlreadyExist
         };
         <a href="dynamic_field.md#0x2_dynamic_field_add_child_object">add_child_object</a>(object_addr, field)
     };
+    // TODO remove once we have lamport timestamps
+    <b>assert</b>!(<a href="dynamic_field.md#0x2_dynamic_field_has_child_object_with_ty">has_child_object_with_ty</a>&lt;<a href="dynamic_field.md#0x2_dynamic_field_Field">Field</a>&lt;Name, Value&gt;&gt;(object_addr, hash), <a href="dynamic_field.md#0x2_dynamic_field_EFieldAlreadyExists">EFieldAlreadyExists</a>);
     <b>let</b> field = <a href="dynamic_field.md#0x2_dynamic_field_borrow_child_object">borrow_child_object</a>&lt;<a href="dynamic_field.md#0x2_dynamic_field_Field">Field</a>&lt;Name, Value&gt;&gt;(object_addr, hash);
     <b>assert</b>!(<a href="_is_none">option::is_none</a>(&field.value), <a href="dynamic_field.md#0x2_dynamic_field_EFieldAlreadyExists">EFieldAlreadyExists</a>);
     <a href="_fill">option::fill</a>(&<b>mut</b> field.value, value);
@@ -274,7 +276,7 @@ type.
 ## Function `exists_with_type`
 
 Returns true if and only if the <code><a href="object.md#0x2_object">object</a></code> has a dynamic field with the name specified by
-<code>name: Name</code>.
+<code>name: Name</code> with an assigned value of type <code>Value</code>.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="dynamic_field.md#0x2_dynamic_field_exists_with_type">exists_with_type</a>&lt;Name: <b>copy</b>, drop, store, Value: store&gt;(<a href="object.md#0x2_object">object</a>: &<a href="object.md#0x2_object_UID">object::UID</a>, name: Name): bool
@@ -308,7 +310,7 @@ Returns true if and only if the <code><a href="object.md#0x2_object">object</a><
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="dynamic_field.md#0x2_dynamic_field_field_ids">field_ids</a>&lt;Name: <b>copy</b>, drop, store&gt;(<a href="object.md#0x2_object">object</a>: &<a href="object.md#0x2_object_UID">object::UID</a>, name: Name): (<a href="object.md#0x2_object_ID">object::ID</a>, <a href="object.md#0x2_object_ID">object::ID</a>)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="dynamic_field.md#0x2_dynamic_field_field_ids">field_ids</a>&lt;Name: <b>copy</b>, drop, store&gt;(<a href="object.md#0x2_object">object</a>: &<a href="object.md#0x2_object_UID">object::UID</a>, name: Name): (<b>address</b>, <b>address</b>)
 </code></pre>
 
 
@@ -320,12 +322,12 @@ Returns true if and only if the <code><a href="object.md#0x2_object">object</a><
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="dynamic_field.md#0x2_dynamic_field_field_ids">field_ids</a>&lt;Name: <b>copy</b> + drop + store&gt;(
     <a href="object.md#0x2_object">object</a>: &UID,
     name: Name,
-): (ID, ID) {
+): (<b>address</b>, <b>address</b>) {
     <b>let</b> object_addr = <a href="object.md#0x2_object_uid_to_address">object::uid_to_address</a>(<a href="object.md#0x2_object">object</a>);
     <b>let</b> hash = <a href="dynamic_field.md#0x2_dynamic_field_hash_type_and_key">hash_type_and_key</a>(object_addr, name);
     <b>let</b> field = <a href="dynamic_field.md#0x2_dynamic_field_borrow_child_object">borrow_child_object</a>&lt;<a href="dynamic_field.md#0x2_dynamic_field_Field">Field</a>&lt;Name, ID&gt;&gt;(object_addr, hash);
     <b>assert</b>!(<a href="_is_some">option::is_some</a>(&field.value), <a href="dynamic_field.md#0x2_dynamic_field_EFieldDoesNotExist">EFieldDoesNotExist</a>);
-    (<a href="object.md#0x2_object_uid_to_inner">object::uid_to_inner</a>(&field.id), <a href="_destroy_some">option::destroy_some</a>(field.value))
+    (<a href="object.md#0x2_object_uid_to_address">object::uid_to_address</a>(&field.id), <a href="object.md#0x2_object_id_to_address">object::id_to_address</a>(&<a href="_destroy_some">option::destroy_some</a>(field.value)))
 }
 </code></pre>
 
@@ -406,7 +408,7 @@ or throws <code><a href="dynamic_field.md#0x2_dynamic_field_EFieldTypeMismatch">
 ## Function `remove_child_object`
 
 throws <code><a href="dynamic_field.md#0x2_dynamic_field_EFieldDoesNotExist">EFieldDoesNotExist</a></code> if a child does not exist with that ID
-/// or throws <code><a href="dynamic_field.md#0x2_dynamic_field_EFieldTypeMismatch">EFieldTypeMismatch</a></code> if the type does not match
+or throws <code><a href="dynamic_field.md#0x2_dynamic_field_EFieldTypeMismatch">EFieldTypeMismatch</a></code> if the type does not match
 
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="dynamic_field.md#0x2_dynamic_field_remove_child_object">remove_child_object</a>&lt;Child: key&gt;(parent: <b>address</b>, id: <b>address</b>): Child

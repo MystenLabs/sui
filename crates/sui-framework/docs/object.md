@@ -12,6 +12,8 @@ Sui object identifiers
 -  [Function `address_from_bytes`](#0x2_object_address_from_bytes)
 -  [Function `id_to_bytes`](#0x2_object_id_to_bytes)
 -  [Function `id_to_address`](#0x2_object_id_to_address)
+-  [Function `id_from_bytes`](#0x2_object_id_from_bytes)
+-  [Function `id_from_address`](#0x2_object_id_from_address)
 -  [Function `sui_system_state`](#0x2_object_sui_system_state)
 -  [Function `uid_as_inner`](#0x2_object_uid_as_inner)
 -  [Function `uid_to_inner`](#0x2_object_uid_to_inner)
@@ -193,6 +195,56 @@ Get the inner bytes of <code>id</code> as an address.
 
 <pre><code><b>public</b> <b>fun</b> <a href="object.md#0x2_object_id_to_address">id_to_address</a>(id: &<a href="object.md#0x2_object_ID">ID</a>): <b>address</b> {
     id.bytes
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_object_id_from_bytes"></a>
+
+## Function `id_from_bytes`
+
+Make an <code><a href="object.md#0x2_object_ID">ID</a></code> from raw bytes.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="object.md#0x2_object_id_from_bytes">id_from_bytes</a>(bytes: <a href="">vector</a>&lt;u8&gt;): <a href="object.md#0x2_object_ID">object::ID</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="object.md#0x2_object_id_from_bytes">id_from_bytes</a>(bytes: <a href="">vector</a>&lt;u8&gt;): <a href="object.md#0x2_object_ID">ID</a> {
+    <a href="object.md#0x2_object_id_from_address">id_from_address</a>(<a href="object.md#0x2_object_address_from_bytes">address_from_bytes</a>(bytes))
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_object_id_from_address"></a>
+
+## Function `id_from_address`
+
+Make an <code><a href="object.md#0x2_object_ID">ID</a></code> from an address.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="object.md#0x2_object_id_from_address">id_from_address</a>(bytes: <b>address</b>): <a href="object.md#0x2_object_ID">object::ID</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="object.md#0x2_object_id_from_address">id_from_address</a>(bytes: <b>address</b>): <a href="object.md#0x2_object_ID">ID</a> {
+    <a href="object.md#0x2_object_ID">ID</a> { bytes }
 }
 </code></pre>
 

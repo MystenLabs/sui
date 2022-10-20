@@ -5,7 +5,15 @@
 module sui::dynamic_object_field_tests {
 
 use std::option;
-use sui::dynamic_object_field::{add, exists_, borrow, borrow_mut, remove, id as field_id};
+use sui::dynamic_object_field::{
+    add,
+    borrow,
+    borrow_mut,
+    exists_,
+    exists_with_type,
+    remove,
+    id as field_id,
+};
 use sui::object::{Self, UID};
 use sui::test_scenario as ts;
 
@@ -73,6 +81,17 @@ fun add_duplicate() {
     let id = ts::new_object(&mut scenario);
     add<u64, Counter>(&mut id, 0, new(ts::new_object(&mut scenario)));
     add<u64, Counter>(&mut id, 0, new(ts::new_object(&mut scenario)));
+    abort 42
+}
+
+#[test]
+#[expected_failure(abort_code = 0)]
+fun add_duplicate_mismatched_type() {
+    let sender = @0x0;
+    let scenario = ts::begin(sender);
+    let id = ts::new_object(&mut scenario);
+    add<u64, Counter>(&mut id, 0, new(ts::new_object(&mut scenario)));
+    add<u64, Fake>(&mut id, 0, Fake { id: ts::new_object(&mut scenario) });
     abort 42
 }
 
@@ -149,6 +168,21 @@ fun sanity_check_exists() {
     add(&mut id, 0, new(ts::new_object(&mut scenario)));
     assert!(exists_<u64>(&id, 0), 0);
     assert!(!exists_<u8>(&id, 0), 0);
+    ts::end(scenario);
+    object::delete(id);
+}
+
+#[test]
+fun sanity_check_exists_with_type() {
+    let sender = @0x0;
+    let scenario = ts::begin(sender);
+    let id = ts::new_object(&mut scenario);
+    assert!(!exists_with_type<u64, Counter>(&id, 0), 0);
+    assert!(!exists_with_type<u64, Fake>(&id, 0), 0);
+    add(&mut id, 0, new(ts::new_object(&mut scenario)));
+    assert!(exists_with_type<u64, Counter>(&id, 0), 0);
+    assert!(!exists_with_type<u8, Counter>(&id, 0), 0);
+    assert!(!exists_with_type<u8, Fake>(&id, 0), 0);
     ts::end(scenario);
     object::delete(id);
 }

@@ -16,6 +16,7 @@ for external tools. The difference is otherwise not observable from within Move.
 -  [Function `borrow_mut`](#0x2_dynamic_object_field_borrow_mut)
 -  [Function `remove`](#0x2_dynamic_object_field_remove)
 -  [Function `exists_`](#0x2_dynamic_object_field_exists_)
+-  [Function `exists_with_type`](#0x2_dynamic_object_field_exists_with_type)
 -  [Function `id`](#0x2_dynamic_object_field_id)
 
 
@@ -126,7 +127,7 @@ Aborts with <code><a href="dynamic_object_field.md#0x2_dynamic_object_field_EFie
     <b>let</b> id = <a href="object.md#0x2_object_id">object::id</a>(&value);
     field::add(<a href="object.md#0x2_object">object</a>, key, id);
     <b>let</b> (field_id, _) = field::field_ids&lt;<a href="dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a>&lt;Name&gt;&gt;(<a href="object.md#0x2_object">object</a>, key);
-    add_child_object(<a href="object.md#0x2_object_id_to_address">object::id_to_address</a>(&field_id), value);
+    add_child_object(field_id, value);
 }
 </code></pre>
 
@@ -159,7 +160,7 @@ specified type.
 ): &Value {
     <b>let</b> key = <a href="dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a> { name };
     <b>let</b> (field_id, value_id) = field::field_ids&lt;<a href="dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a>&lt;Name&gt;&gt;(<a href="object.md#0x2_object">object</a>, key);
-    borrow_child_object&lt;Value&gt;(<a href="object.md#0x2_object_id_to_address">object::id_to_address</a>(&field_id), <a href="object.md#0x2_object_id_to_address">object::id_to_address</a>(&value_id))
+    borrow_child_object&lt;Value&gt;(field_id, value_id)
 }
 </code></pre>
 
@@ -192,7 +193,7 @@ specified type.
 ): &<b>mut</b> Value {
     <b>let</b> key = <a href="dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a> { name };
     <b>let</b> (field_id, value_id) = field::field_ids&lt;<a href="dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a>&lt;Name&gt;&gt;(<a href="object.md#0x2_object">object</a>, key);
-    borrow_child_object&lt;Value&gt;(<a href="object.md#0x2_object_id_to_address">object::id_to_address</a>(&field_id), <a href="object.md#0x2_object_id_to_address">object::id_to_address</a>(&value_id))
+    borrow_child_object&lt;Value&gt;(field_id, value_id)
 }
 </code></pre>
 
@@ -226,10 +227,7 @@ specified type.
 ): Value {
     <b>let</b> key = <a href="dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a> { name };
     <b>let</b> (field_id, value_id) = field::field_ids&lt;<a href="dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a>&lt;Name&gt;&gt;(<a href="object.md#0x2_object">object</a>, key);
-    <b>let</b> value = remove_child_object&lt;Value&gt;(
-        <a href="object.md#0x2_object_id_to_address">object::id_to_address</a>(&field_id),
-        <a href="object.md#0x2_object_id_to_address">object::id_to_address</a>(&value_id),
-    );
+    <b>let</b> value = remove_child_object&lt;Value&gt;(field_id, value_id);
     field::remove&lt;<a href="dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a>&lt;Name&gt;, ID&gt;(<a href="object.md#0x2_object">object</a>, key);
     value
 }
@@ -269,6 +267,38 @@ Returns true if and only if the <code><a href="object.md#0x2_object">object</a><
 
 </details>
 
+<a name="0x2_dynamic_object_field_exists_with_type"></a>
+
+## Function `exists_with_type`
+
+Returns true if and only if the <code><a href="object.md#0x2_object">object</a></code> has a dynamic field with the name specified by
+<code>name: Name</code> with an assigned value of type <code>Value</code>.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="dynamic_object_field.md#0x2_dynamic_object_field_exists_with_type">exists_with_type</a>&lt;Name: <b>copy</b>, drop, store, Value: store, key&gt;(<a href="object.md#0x2_object">object</a>: &<a href="object.md#0x2_object_UID">object::UID</a>, name: Name): bool
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="dynamic_object_field.md#0x2_dynamic_object_field_exists_with_type">exists_with_type</a>&lt;Name: <b>copy</b> + drop + store, Value: key + store&gt;(
+    <a href="object.md#0x2_object">object</a>: &UID,
+    name: Name,
+): bool {
+    <b>let</b> key = <a href="dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a> { name };
+    <b>if</b> (!field::exists_with_type&lt;<a href="dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a>&lt;Name&gt;, ID&gt;(<a href="object.md#0x2_object">object</a>, key)) <b>return</b> <b>false</b>;
+    <b>let</b> (field_id, value_id) = field::field_ids&lt;<a href="dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a>&lt;Name&gt;&gt;(<a href="object.md#0x2_object">object</a>, key);
+    field::has_child_object_with_ty&lt;Value&gt;(field_id, value_id)
+}
+</code></pre>
+
+
+
+</details>
+
 <a name="0x2_dynamic_object_field_id"></a>
 
 ## Function `id`
@@ -293,7 +323,7 @@ Returns none otherwise
     <b>let</b> key = <a href="dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a> { name };
     <b>if</b> (!field::exists_with_type&lt;<a href="dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a>&lt;Name&gt;, ID&gt;(<a href="object.md#0x2_object">object</a>, key)) <b>return</b> <a href="_none">option::none</a>();
     <b>let</b> (_field_id, value_id) = field::field_ids&lt;<a href="dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a>&lt;Name&gt;&gt;(<a href="object.md#0x2_object">object</a>, key);
-    <a href="_some">option::some</a>(value_id)
+    <a href="_some">option::some</a>(<a href="object.md#0x2_object_id_from_address">object::id_from_address</a>(value_id))
 }
 </code></pre>
 
