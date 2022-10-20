@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type ComponentStory, type ComponentMeta } from '@storybook/react';
+import { type StoryObj, type Meta } from '@storybook/react';
 
-import { TableCard } from '../TableCard';
+import { TableCard, type TableCardProps } from '../TableCard';
 
 const data = {
     data: [
@@ -58,10 +58,9 @@ const data = {
 };
 
 export default {
-    title: 'UI/TableCard',
     component: TableCard,
-} as ComponentMeta<typeof TableCard>;
+} as Meta;
 
-export const VaryingWidth: ComponentStory<typeof TableCard> = (args) => (
-    <TableCard data={data.data} columns={data.columns} />
-);
+export const VaryingWidth: StoryObj<TableCardProps> = {
+    render: () => <TableCard data={data.data} columns={data.columns} />,
+};

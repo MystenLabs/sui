@@ -1,20 +1,24 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type ComponentStory, type ComponentMeta } from '@storybook/react';
+import { type StoryObj, type Meta } from '@storybook/react';
 
-import { PlaceholderTable } from '../PlaceholderTable';
+import {
+    PlaceholderTable,
+    type PlaceholderTableProps,
+} from '../PlaceholderTable';
 
 export default {
-    title: 'UI/PlaceholderTable',
     component: PlaceholderTable,
-} as ComponentMeta<typeof PlaceholderTable>;
+} as Meta;
 
-export const VaryingWidth: ComponentStory<typeof PlaceholderTable> = (args) => (
-    <PlaceholderTable
-        rowCount={5}
-        rowHeight="16px"
-        colHeadings={['Sardine', 'Herring', 'Salmon', 'Barracuda']}
-        colWidths={['38px', '90px', '120px', '204px']}
-    />
-);
+export const VaryingWidth: StoryObj<PlaceholderTableProps> = {
+    render: () => (
+        <PlaceholderTable
+            rowCount={5}
+            rowHeight="16px"
+            colHeadings={['Sardine', 'Herring', 'Salmon', 'Barracuda']}
+            colWidths={['38px', '90px', '120px', '204px']}
+        />
+    ),
+};

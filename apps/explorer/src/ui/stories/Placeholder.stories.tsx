@@ -1,23 +1,22 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type ComponentStory, type ComponentMeta } from '@storybook/react';
+import { type StoryObj, type Meta } from '@storybook/react';
 
-import { Placeholder } from '../Placeholder';
+import { Placeholder, type PlaceholderProps } from '../Placeholder';
 
 export default {
-    title: 'UI/Placeholder',
     component: Placeholder,
-} as ComponentMeta<typeof Placeholder>;
+} as Meta;
 
-export const VaryingWidthAndHeight: ComponentStory<typeof Placeholder> = (
-    args
-) => (
-    <div>
-        <Placeholder width="120px" height="12px" />
-        <br />
-        <Placeholder width="90px" height="16px" />
-        <br />
-        <Placeholder width="59px" height="32px" />
-    </div>
-);
+export const VaryingWidthAndHeight: StoryObj<PlaceholderProps> = {
+    render: () => (
+        <div>
+            <Placeholder width="120px" height="12px" />
+            <br />
+            <Placeholder width="90px" height="16px" />
+            <br />
+            <Placeholder width="59px" height="32px" />
+        </div>
+    ),
+};
