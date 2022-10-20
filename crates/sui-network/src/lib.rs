@@ -8,8 +8,8 @@ pub mod api;
 
 pub use tonic;
 
-pub const DEFAULT_CONNECT_TIMEOUT_SEC: Duration = Duration::from_secs(5);
-pub const DEFAULT_REQUEST_TIMEOUT_SEC: Duration = Duration::from_secs(5);
+pub const DEFAULT_CONNECT_TIMEOUT_SEC: Duration = Duration::from_secs(10);
+pub const DEFAULT_REQUEST_TIMEOUT_SEC: Duration = Duration::from_secs(30);
 pub const DEFAULT_HTTP2_KEEPALIVE_SEC: Duration = Duration::from_secs(5);
 
 pub fn default_mysten_network_config() -> Config {
