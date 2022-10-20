@@ -105,7 +105,7 @@ impl SimpleFaucet {
         // lock acquisition as well.
         let mut consumer = self.consumer.lock().await;
         let mut coins = Vec::with_capacity(number_of_coins);
-        let mut coins_to_immediately_recycle = Vec::new();
+        // let mut coins_to_immediately_recycle = Vec::new();
         while let Some(coin) = consumer.recv().await {
             debug!(?uuid, "Taking coin from pool {:?}", coin);
             let gas_coin = self.get_gas_coin(coin).await?;
@@ -118,7 +118,11 @@ impl SimpleFaucet {
                     }
                 } else {
                     // If amount is not big enough, we still put it back to the queue
-                    coins_to_immediately_recycle.push(coin);
+                    warn!(
+                        ?uuid,
+                        "Coin {:?} does have enough balance, removing from pool", coin
+                    );
+                    // coins_to_immediately_recycle.push(coin);
                 }
             } else {
                 // Invalid gas, do not put it back to the queue.
@@ -128,22 +132,22 @@ impl SimpleFaucet {
                 );
             }
         }
-        if !coins_to_immediately_recycle.is_empty() {
-            // Immediately release consumer lock to prevent deadlock
-            drop(consumer);
-            debug!(
-                ?uuid,
-                "Putting back coins with insufficient balance: {:?}", coins_to_immediately_recycle
-            );
-            // Put coins that are not selected (e.g. balance not enough) back to the queue
-            let producer = self.producer.lock().await;
-            for coin in coins_to_immediately_recycle {
-                if let Err(e) = producer.send(coin).await {
-                    panic!("Failed to put coin {:?} back to queue: {:?}", coin, e);
-                }
-            }
-            drop(producer);
-        }
+        // if !coins_to_immediately_recycle.is_empty() {
+        //     // Immediately release consumer lock to prevent deadlock
+        //     drop(consumer);
+        //     debug!(
+        //         ?uuid,
+        //         "Putting back coins with insufficient balance: {:?}", coins_to_immediately_recycle
+        //     );
+        //     // Put coins that are not selected (e.g. balance not enough) back to the queue
+        //     let producer = self.producer.lock().await;
+        //     for coin in coins_to_immediately_recycle {
+        //         if let Err(e) = producer.send(coin).await {
+        //             panic!("Failed to put coin {:?} back to queue: {:?}", coin, e);
+        //         }
+        //     }
+        //     drop(producer);
+        // }
 
         Ok(coins)
     }
@@ -590,7 +594,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_recycle_smaller_amount_gas() {
+    async fn test_discard_smaller_amount_gas() {
         let test_cluster = TestClusterBuilder::new().build().await.unwrap();
         let address = test_cluster.get_address_0();
         let mut context = test_cluster.wallet;
@@ -626,7 +630,7 @@ mod tests {
             .value();
         assert_eq!(tiny_amount, tiny_value + TRANSFER_SUI_GAS);
 
-        let gases = HashSet::from_iter(gases.into_iter().map(|gas| *gas.id()));
+        let gases: HashSet<ObjectID> = HashSet::from_iter(gases.into_iter().map(|gas| *gas.id()));
 
         let prom_registry = Registry::new();
         let mut faucet = SimpleFaucet::new(context, &prom_registry).await.unwrap();
@@ -648,12 +652,13 @@ mod tests {
         .collect::<Vec<_>>();
 
         // Verify that the tiny gas is still in the queue.
-        let candidates = faucet.drain_gas_queue(gases.len()).await;
-        assert_eq!(
-            candidates, gases,
-            "gases: {:?}, candidates: {:?}",
-            gases, candidates
-        );
+        let candidates = faucet.drain_gas_queue(gases.len() - 1).await;
+        assert!(candidates.get(&tiny_coin_id).is_none());
+        // assert_eq!(
+        //     candidates, gases,
+        //     "gases: {:?}, candidates: {:?}",
+        //     gases, candidates
+        // );
     }
 
     async fn test_basic_interface(faucet: impl Faucet) {
