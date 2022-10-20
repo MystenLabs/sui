@@ -34,9 +34,9 @@ pub struct BatchMaker {
     /// Receive reconfiguration updates.
     rx_reconfigure: watch::Receiver<ReconfigureNotification>,
     /// Channel to receive transactions from the network.
-    rx_transaction: Receiver<Transaction>,
+    rx_batch_maker: Receiver<Transaction>,
     /// Output channel to deliver sealed batches to the `QuorumWaiter`.
-    tx_message: Sender<Batch>,
+    tx_quorum_waiter: Sender<Batch>,
     /// Holds the current batch.
     current_batch: Batch,
     /// Holds the size of the current batch (in bytes).
@@ -52,8 +52,8 @@ impl BatchMaker {
         batch_size: usize,
         max_batch_delay: Duration,
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
-        rx_transaction: Receiver<Transaction>,
-        tx_message: Sender<Batch>,
+        rx_batch_maker: Receiver<Transaction>,
+        tx_quorum_waiter: Sender<Batch>,
         node_metrics: Arc<WorkerMetrics>,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
@@ -62,8 +62,8 @@ impl BatchMaker {
                 batch_size,
                 max_batch_delay,
                 rx_reconfigure,
-                rx_transaction,
-                tx_message,
+                rx_batch_maker,
+                tx_quorum_waiter,
                 current_batch: Batch(Vec::with_capacity(batch_size * 2)),
                 current_batch_size: 0,
                 node_metrics,
@@ -81,7 +81,7 @@ impl BatchMaker {
         loop {
             tokio::select! {
                 // Assemble client transactions into batches of preset size.
-                Some(transaction) = self.rx_transaction.recv() => {
+                Some(transaction) = self.rx_batch_maker.recv() => {
                     self.current_batch_size += transaction.len();
                     self.current_batch.0.push(transaction);
                     if self.current_batch_size >= self.batch_size {
@@ -188,7 +188,7 @@ impl BatchMaker {
             .observe(size as f64);
 
         // Send the batch through the deliver channel for further processing.
-        if self.tx_message.send(batch).await.is_err() {
+        if self.tx_quorum_waiter.send(batch).await.is_err() {
             tracing::debug!("{}", DagError::ShuttingDown);
         }
     }

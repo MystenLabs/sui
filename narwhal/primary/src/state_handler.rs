@@ -18,11 +18,11 @@ pub struct StateHandler {
     /// The worker information cache.
     worker_cache: SharedWorkerCache,
     /// Receives the ordered certificates from consensus.
-    rx_consensus: Receiver<Certificate>,
+    rx_committed_certificates: Receiver<Certificate>,
     /// Signals a new consensus round
     tx_consensus_round_updates: watch::Sender<u64>,
     /// Receives notifications to reconfigure the system.
-    rx_reconfigure: Receiver<ReconfigureNotification>,
+    rx_state_handler: Receiver<ReconfigureNotification>,
     /// Channel to signal committee changes.
     tx_reconfigure: watch::Sender<ReconfigureNotification>,
     /// The latest round committed by consensus.
@@ -35,9 +35,9 @@ impl StateHandler {
         name: PublicKey,
         committee: SharedCommittee,
         worker_cache: SharedWorkerCache,
-        rx_consensus: Receiver<Certificate>,
+        rx_committed_certificates: Receiver<Certificate>,
         tx_consensus_round_updates: watch::Sender<u64>,
-        rx_reconfigure: Receiver<ReconfigureNotification>,
+        rx_state_handler: Receiver<ReconfigureNotification>,
         tx_reconfigure: watch::Sender<ReconfigureNotification>,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
@@ -45,9 +45,9 @@ impl StateHandler {
                 name,
                 committee,
                 worker_cache,
-                rx_consensus,
+                rx_committed_certificates,
                 tx_consensus_round_updates,
-                rx_reconfigure,
+                rx_state_handler,
                 tx_reconfigure,
                 last_committed_round: 0,
             }
@@ -75,11 +75,11 @@ impl StateHandler {
         );
         loop {
             tokio::select! {
-                Some(certificate) = self.rx_consensus.recv() => {
+                Some(certificate) = self.rx_committed_certificates.recv() => {
                     self.handle_sequenced(certificate).await;
                 },
 
-                Some(message) = self.rx_reconfigure.recv() => {
+                Some(message) = self.rx_state_handler.recv() => {
                     let shutdown = match &message {
                         ReconfigureNotification::NewEpoch(committee) => {
                             // TODO: Duplicated code in the same file.

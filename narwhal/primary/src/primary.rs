@@ -90,8 +90,8 @@ impl Primary {
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
         vote_digest_store: Store<PublicKey, RoundVoteDigestPair>,
         consensus_store: Arc<ConsensusStore>,
-        tx_consensus: Sender<Certificate>,
-        rx_consensus: Receiver<Certificate>,
+        tx_new_certificates: Sender<Certificate>,
+        rx_committed_certificates: Receiver<Certificate>,
         dag: Option<Arc<Dag>>,
         network_model: NetworkModel,
         tx_reconfigure: watch::Sender<ReconfigureNotification>,
@@ -127,10 +127,10 @@ impl Primary {
             &primary_channel_metrics.tx_headers,
             &primary_channel_metrics.tx_headers_total,
         );
-        let (tx_sync_headers, rx_sync_headers) = channel_with_total(
+        let (tx_header_waiter, rx_header_waiter) = channel_with_total(
             CHANNEL_CAPACITY,
-            &primary_channel_metrics.tx_sync_headers,
-            &primary_channel_metrics.tx_sync_headers_total,
+            &primary_channel_metrics.tx_header_waiter,
+            &primary_channel_metrics.tx_header_waiter_total,
         );
         let (tx_certificate_waiter, rx_certificate_waiter) = channel_with_total(
             CHANNEL_CAPACITY,
@@ -175,14 +175,13 @@ impl Primary {
 
         // we need to hack the gauge from this consensus channel into the primary registry
         // This avoids a cyclic dependency in the initialization of consensus and primary
-        // TODO: this (tx_committed_certificates, rx_consensus) channel pair name is highly counterintuitive: see initialization in node and rename(?)
         let committed_certificates_gauge = tx_committed_certificates.gauge().clone();
         primary_channel_metrics.replace_registered_committed_certificates_metric(
             registry,
             Box::new(committed_certificates_gauge),
         );
 
-        let new_certificates_gauge = tx_consensus.gauge().clone();
+        let new_certificates_gauge = tx_new_certificates.gauge().clone();
         primary_channel_metrics
             .replace_registered_new_certificates_metric(registry, Box::new(new_certificates_gauge));
 
@@ -306,7 +305,7 @@ impl Primary {
             &committee.load(),
             certificate_store.clone(),
             payload_store.clone(),
-            /* tx_header_waiter */ tx_sync_headers,
+            tx_header_waiter,
             tx_certificate_waiter,
             dag.clone(),
         );
@@ -337,12 +336,12 @@ impl Primary {
             rx_consensus_round_updates.clone(),
             parameters.gc_depth,
             tx_reconfigure.subscribe(),
-            /* rx_primaries */ rx_primary_messages,
-            /* rx_header_waiter */ rx_headers_loopback,
+            rx_primary_messages,
+            rx_headers_loopback,
             rx_certificates_loopback,
-            /* rx_proposer */ rx_headers,
-            tx_consensus,
-            /* tx_proposer */ tx_parents,
+            rx_headers,
+            tx_new_certificates,
+            tx_parents,
             node_metrics.clone(),
             core_primary_network,
         );
@@ -388,8 +387,8 @@ impl Primary {
             rx_consensus_round_updates.clone(),
             parameters.gc_depth,
             tx_reconfigure.subscribe(),
-            /* rx_synchronizer */ rx_sync_headers,
-            /* tx_core */ tx_headers_loopback,
+            rx_header_waiter,
+            tx_headers_loopback,
             node_metrics.clone(),
             header_waiter_primary_network,
         );
@@ -426,9 +425,9 @@ impl Primary {
             parameters.max_header_delay,
             network_model,
             tx_reconfigure.subscribe(),
-            /* rx_core */ rx_parents,
-            /* rx_workers */ rx_our_digests,
-            /* tx_core */ tx_headers,
+            rx_parents,
+            rx_our_digests,
+            tx_headers,
             node_metrics,
         );
 
@@ -450,7 +449,7 @@ impl Primary {
             name.clone(),
             committee.clone(),
             worker_cache.clone(),
-            rx_consensus,
+            rx_committed_certificates,
             tx_consensus_round_updates,
             rx_state_handler,
             tx_reconfigure,

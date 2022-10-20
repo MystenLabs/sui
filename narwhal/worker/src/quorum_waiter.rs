@@ -33,9 +33,9 @@ pub struct QuorumWaiter {
     /// Receive reconfiguration updates.
     rx_reconfigure: watch::Receiver<ReconfigureNotification>,
     /// Input Channel to receive commands.
-    rx_message: Receiver<Batch>,
+    rx_quorum_waiter: Receiver<Batch>,
     /// Channel to deliver batches for which we have enough acknowledgments.
-    tx_batch: Sender<WorkerOurBatchMessage>,
+    tx_our_batch: Sender<WorkerOurBatchMessage>,
     /// A network sender to broadcast the batches to the other workers.
     network: P2pNetwork,
 }
@@ -50,8 +50,8 @@ impl QuorumWaiter {
         committee: Committee,
         worker_cache: SharedWorkerCache,
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
-        rx_message: Receiver<Batch>,
-        tx_batch: Sender<WorkerOurBatchMessage>,
+        rx_quorum_waiter: Receiver<Batch>,
+        tx_our_batch: Sender<WorkerOurBatchMessage>,
         network: P2pNetwork,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
@@ -62,8 +62,8 @@ impl QuorumWaiter {
                 committee,
                 worker_cache,
                 rx_reconfigure,
-                rx_message,
-                tx_batch,
+                rx_quorum_waiter,
+                tx_our_batch,
                 network,
             }
             .run()
@@ -84,7 +84,7 @@ impl QuorumWaiter {
     async fn run(&mut self) {
         loop {
             tokio::select! {
-                Some(batch) = self.rx_message.recv() => {
+                Some(batch) = self.rx_quorum_waiter.recv() => {
                     // Broadcast the batch to the other workers.
                     let workers: Vec<_> = self
                         .worker_cache
@@ -119,7 +119,7 @@ impl QuorumWaiter {
                                 if total_stake >= threshold {
                                     let digest = batch.digest();
                                     self.store.write(digest, batch).await;
-                                    if self.tx_batch.send(WorkerOurBatchMessage{
+                                    if self.tx_our_batch.send(WorkerOurBatchMessage{
                                         digest,
                                         worker_id: self.id}).await.is_err() {
                                         tracing::debug!("{}", DagError::ShuttingDown);

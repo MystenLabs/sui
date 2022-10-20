@@ -309,8 +309,8 @@ impl Worker {
             self.parameters.batch_size,
             self.parameters.max_batch_delay,
             rx_reconfigure.clone(),
-            /* rx_transaction */ rx_batch_maker,
-            /* tx_message */ tx_quorum_waiter,
+            rx_batch_maker,
+            tx_quorum_waiter,
             node_metrics,
         );
 
@@ -323,8 +323,8 @@ impl Worker {
             (*(*(*self.committee).load()).clone()).clone(),
             self.worker_cache.clone(),
             rx_reconfigure,
-            /* rx_message */ rx_quorum_waiter,
-            /* tx_batch */ tx_our_batch,
+            rx_quorum_waiter,
+            tx_our_batch,
             P2pNetwork::new(network),
         );
 

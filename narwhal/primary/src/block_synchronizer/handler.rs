@@ -101,7 +101,7 @@ pub struct BlockSynchronizerHandler {
     /// Channel to send the fetched certificates to Core for
     /// further processing, validation and possibly causal
     /// completion.
-    tx_core: metered_channel::Sender<PrimaryMessage>,
+    tx_primary_messages: metered_channel::Sender<PrimaryMessage>,
 
     /// The store that holds the certificates.
     certificate_store: CertificateStore,
@@ -114,13 +114,13 @@ pub struct BlockSynchronizerHandler {
 impl BlockSynchronizerHandler {
     pub fn new(
         tx_block_synchronizer: metered_channel::Sender<Command>,
-        tx_core: metered_channel::Sender<PrimaryMessage>,
+        tx_primary_messages: metered_channel::Sender<PrimaryMessage>,
         certificate_store: CertificateStore,
         certificate_deliver_timeout: Duration,
     ) -> Self {
         Self {
             tx_block_synchronizer,
-            tx_core,
+            tx_primary_messages,
             certificate_store,
             certificate_deliver_timeout,
         }
@@ -183,7 +183,7 @@ impl Handler for BlockSynchronizerHandler {
                     if !block_header.fetched_from_storage {
                         // we need to perform causal completion since this
                         // entity has not been fetched from storage.
-                        self.tx_core
+                        self.tx_primary_messages
                             .send(PrimaryMessage::Certificate(
                                 block_header.certificate.clone(),
                             ))
