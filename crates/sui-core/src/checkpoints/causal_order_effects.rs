@@ -105,8 +105,6 @@ pub trait EffectsStore {
             })
             .collect();
 
-        let gas_summary = get_total_gas_costs_from_txn_effects(effect_map.values().cloned());
-
         // Build a forward index of transactions. This will allow us to start with the initial
         // and then sequenced trasnactions and efficiently determine which other transactions
         // become candidates for sequencing.
@@ -172,6 +170,11 @@ pub trait EffectsStore {
         // they may not be checkpointed. That is ok, since we promise finality only if >2/3 honest
         // eventually include a transactions in a proposal, which means that at least 1 honest will
         // include it in a proposal and honest nodes include full causal sequences in proposals.
+
+        // Calculate total gas costs of all transactions that still remain.
+        let gas_summary = get_total_gas_costs_from_txn_effects(
+            final_sequence.iter().map(|d| *effect_map.get(*d).unwrap()),
+        );
 
         // Map transaction digest back to correct execution digest.
         let execution_digests = final_sequence
