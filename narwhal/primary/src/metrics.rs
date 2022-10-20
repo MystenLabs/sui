@@ -395,6 +395,12 @@ pub struct PrimaryMetrics {
     pub votes_dropped_equivocation_protection: IntCounterVec,
     /// Number of pending batches in proposer
     pub num_of_pending_batches_in_proposer: IntGaugeVec,
+    /// A histogram to track the number of batches included
+    /// per header.
+    pub num_of_batch_digests_in_header: HistogramVec,
+    /// A counter that keeps the number of instances where the proposer
+    /// is ready/not ready to advance.
+    pub proposer_ready_to_advance: IntCounterVec,
 }
 
 impl PrimaryMetrics {
@@ -552,6 +558,20 @@ impl PrimaryMetrics {
                 "num_of_pending_batches_in_proposer",
                 "Number of batch digests pending in proposer for next header proposal",
                 &["epoch"],
+                registry
+            ).unwrap(),
+            num_of_batch_digests_in_header: register_histogram_vec_with_registry!(
+                "num_of_batch_digests_in_header",
+                "The number of batch digests included in a proposed header. A reason label is included.",
+                &["epoch", "reason"],
+                // buckets in number of digests
+                vec![0.0, 5.0, 10.0, 15.0, 32.0, 50.0, 100.0, 200.0, 500.0, 1000.0],
+                registry
+            ).unwrap(),
+            proposer_ready_to_advance: register_int_counter_vec_with_registry!(
+                "proposer_ready_to_advance",
+                "The number of times where the proposer is ready/not ready to advance.",
+                &["epoch", "ready", "round"],
                 registry
             ).unwrap()
         }

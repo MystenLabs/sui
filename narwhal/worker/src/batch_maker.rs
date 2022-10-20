@@ -43,6 +43,9 @@ pub struct BatchMaker {
     current_batch_size: usize,
     /// Metrics handler
     node_metrics: Arc<WorkerMetrics>,
+    /// The timestamp of the first transaction received
+    /// to be included on the next batch
+    batch_start_timestamp: Instant,
 }
 
 impl BatchMaker {
@@ -66,6 +69,7 @@ impl BatchMaker {
                 tx_quorum_waiter,
                 current_batch: Batch(Vec::with_capacity(batch_size * 2)),
                 current_batch_size: 0,
+                batch_start_timestamp: Instant::now(),
                 node_metrics,
             }
             .run()
@@ -82,6 +86,14 @@ impl BatchMaker {
             tokio::select! {
                 // Assemble client transactions into batches of preset size.
                 Some(transaction) = self.rx_batch_maker.recv() => {
+                    if self.current_batch.0.is_empty() {
+                        // We are interested to measure the time to seal a batch
+                        // only when we do have transactions to include. Thus we reset
+                        // the timer on the first transaction we receive to include on
+                        // an empty batch.
+                        self.batch_start_timestamp = Instant::now();
+                    }
+
                     self.current_batch_size += transaction.len();
                     self.current_batch.0.push(transaction);
                     if self.current_batch_size >= self.batch_size {
@@ -191,5 +203,13 @@ impl BatchMaker {
         if self.tx_quorum_waiter.send(batch).await.is_err() {
             tracing::debug!("{}", DagError::ShuttingDown);
         }
+
+        // we are deliberately measuring this after the sending to the downstream
+        // channel tx_message as the operation is blocking and affects any further
+        // batch creation.
+        self.node_metrics
+            .created_batch_latency
+            .with_label_values(&[self.committee.epoch.to_string().as_str(), reason])
+            .observe(self.batch_start_timestamp.elapsed().as_secs_f64());
     }
 }

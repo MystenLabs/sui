@@ -52,6 +52,8 @@ pub fn initialise_metrics(metrics_registry: &Registry) -> Metrics {
 pub struct WorkerMetrics {
     /// Number of created batches from the batch_maker
     pub created_batch_size: HistogramVec,
+    /// Time taken to create a batch
+    pub created_batch_latency: HistogramVec,
 }
 
 impl WorkerMetrics {
@@ -74,6 +76,18 @@ impl WorkerMetrics {
                     250_000.0,
                     500_000.0,
                     1_000_000.0
+                ],
+                registry
+            )
+            .unwrap(),
+            created_batch_latency: register_histogram_vec_with_registry!(
+                "created_batch_latency",
+                "The latency of creating (sealing) a batch",
+                &["epoch", "reason"],
+                // buckets in milliseconds
+                vec![
+                    10.0, 50.0, 100.0, 200.0, 500.0, 1_000.0, 5_000.0, 10_000.0, 20_000.0,
+                    50_000.0, 100_000.0
                 ],
                 registry
             )
