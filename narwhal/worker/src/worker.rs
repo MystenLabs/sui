@@ -42,6 +42,9 @@ pub mod worker_tests;
 /// The default channel capacity for each channel of the worker.
 pub const CHANNEL_CAPACITY: usize = 1_000;
 
+/// The maximum allowed size of transactions into Narwhal.
+pub const MAX_ALLOWED_TRANSACTION_SIZE: usize = 6 * 1024 * 1024;
+
 use crate::metrics::{Metrics, WorkerEndpointMetrics, WorkerMetrics};
 
 pub struct Worker {
@@ -401,6 +404,13 @@ impl Transactions for TxReceiverHandler {
         request: Request<TransactionProto>,
     ) -> Result<Response<Empty>, Status> {
         let message = request.into_inner().transaction;
+        if message.len() > MAX_ALLOWED_TRANSACTION_SIZE {
+            return Err(Status::resource_exhausted(format!(
+                "Transaction size is too large: {} > {}",
+                message.len(),
+                MAX_ALLOWED_TRANSACTION_SIZE
+            )));
+        }
         // Send the transaction to the batch maker.
         self.tx_batch_maker
             .send(message.to_vec())

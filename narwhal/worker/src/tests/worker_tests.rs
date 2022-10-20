@@ -105,6 +105,11 @@ async fn handle_clients_transactions() {
 
     // Wait for batch to be reported to primary.
     rx_await_batch.recv().await.unwrap();
+
+    let txn = TransactionProto {
+        transaction: Bytes::from(vec![8u8; 10 * 1024 * 1024]),
+    };
+    assert!(client.submit_transaction(txn).await.is_err());
 }
 
 #[tokio::test]
