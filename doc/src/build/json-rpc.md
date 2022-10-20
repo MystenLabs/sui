@@ -55,11 +55,11 @@ curl --location --request POST $SUI_RPC_HOST \
   "jsonrpc": "2.0",
   "id": 1,
   "method": "sui_transferObject",
-  "params": [ 
-    {{tx_bytes}},
-    {{sig_scheme}},
-    {{signature}},
-    {{pub_key}},
+  "params":["{{owner_address}}",
+    "{{object_id}}",
+    "{{gas_object_id}}",
+    {{gas_budget}},
+    "{{to_address}}"],
   ]
 }'
 ```
