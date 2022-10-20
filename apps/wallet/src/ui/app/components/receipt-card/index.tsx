@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import cl from 'classnames';
-import { useIntl } from 'react-intl';
 
 import { useFormatCoin } from '../../hooks/useFormatCoin';
 import ExplorerLink from '_components/explorer-link';
@@ -88,8 +87,6 @@ function ReceiptCard({ txDigest }: TxResponseProps) {
             failedMsg: '',
         },
     };
-
-    const intl = useIntl();
 
     const imgUrl = txDigest?.url
         ? txDigest?.url.replace(/^ipfs:\/\//, 'https://ipfs.io/ipfs/')
