@@ -446,7 +446,7 @@ pub struct Certificate {
     aggregated_signature: AggregateSignature,
     #[serde_as(as = "NarwhalBitmap")]
     signed_authorities: roaring::RoaringBitmap,
-    metadata: Metadata,
+    pub metadata: Metadata,
 }
 
 impl Certificate {

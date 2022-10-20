@@ -30,7 +30,7 @@ use tokio::{
 };
 use tracing::{debug, error, warn};
 use tracing::{info, instrument};
-use types::{metered_channel, Batch, BatchDigest, Certificate, ReconfigureNotification};
+use types::{metered_channel, Batch, BatchDigest, Certificate, ReconfigureNotification, Timestamp};
 
 /// The `Subscriber` receives certificates sequenced by the consensus and waits until the
 /// downloaded all the transactions references by the certificates; it then
@@ -173,6 +173,15 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
             .subscriber_current_round
             .set(deliver.certificate.round() as i64);
         self.metrics.subscriber_processed_certificates.inc();
+        self.metrics.subscriber_certificate_latency.observe(
+            deliver
+                .certificate
+                .metadata
+                .timestamp
+                .elapsed()
+                .as_secs_f64(),
+        );
+
         debug!("Fetching payload for {:?}", deliver);
         let mut ret = Vec::with_capacity(deliver.certificate.header.payload.len());
         let deliver = Arc::new(deliver);

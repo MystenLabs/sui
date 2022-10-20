@@ -14,7 +14,8 @@ use std::time::Duration;
 use tonic::Code;
 
 const LATENCY_SEC_BUCKETS: &[f64] = &[
-    0.1, 0.25, 0.5, 1., 2.5, 5., 7.5, 10., 12.5, 15., 20., 25., 30., 60., 90., 120., 180., 300.,
+    0.05, 0.1, 0.25, 0.5, 1., 2.5, 5., 7.5, 10., 12.5, 15., 20., 25., 30., 60., 90., 120., 180.,
+    300.,
 ];
 
 #[derive(Clone)]
@@ -404,6 +405,8 @@ pub struct PrimaryMetrics {
     /// The latency of a batch between the time it has been
     /// created and until it has been included to a header proposal.
     pub proposer_batch_latency: Histogram,
+    /// Time it takes for a header to be materialised to a certificate
+    pub header_to_certificate_latency: HistogramVec,
 }
 
 impl PrimaryMetrics {
@@ -580,6 +583,13 @@ impl PrimaryMetrics {
             proposer_batch_latency: register_histogram_with_registry!(
                 "proposer_batch_latency",
                 "The latency of a batch between the time it has been created and until it has been included to a header proposal.",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry
+            ).unwrap(),
+            header_to_certificate_latency: register_histogram_vec_with_registry!(
+                "header_to_certificate_latency",
+                "Time it takes for a header to be materialised to a certificate",
+                &["epoch"],
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry
             ).unwrap()

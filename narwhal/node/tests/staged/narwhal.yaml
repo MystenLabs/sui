@@ -17,7 +17,8 @@ Batch:
     - transactions:
         SEQ:
           SEQ: U8
-    - timestamp: U64
+    - metadata:
+        TYPENAME: Metadata
 BatchDigest:
   NEWTYPESTRUCT:
     TUPLEARRAY:
@@ -30,7 +31,8 @@ Certificate:
     - aggregated_signature:
         TYPENAME: BLS12381AggregateSignature
     - signed_authorities: BYTES
-    - timestamp: U64
+    - metadata:
+        TYPENAME: Metadata
 CertificateDigest:
   NEWTYPESTRUCT:
     TUPLEARRAY:
@@ -63,12 +65,16 @@ Header:
         TYPENAME: HeaderDigest
     - signature:
         TYPENAME: BLS12381Signature
-    - timestamp: U64
+    - metadata:
+        TYPENAME: Metadata
 HeaderDigest:
   NEWTYPESTRUCT:
     TUPLEARRAY:
       CONTENT: U8
       SIZE: 32
+Metadata:
+  STRUCT:
+    - timestamp: U64
 ReconfigureNotification:
   ENUM:
     0:

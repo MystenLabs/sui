@@ -7,7 +7,7 @@ use std::sync::Arc;
 use tokio::task::JoinHandle;
 use tracing::debug;
 
-use types::{metered_channel, Batch};
+use types::{metered_channel, Batch, Timestamp};
 
 #[derive(Clone, Debug)]
 pub struct BatchIndex {
@@ -56,6 +56,9 @@ impl<State: ExecutionState + Send + Sync + 'static> Notifier<State> {
                     )
                     .await;
             }
+            self.metrics
+                .batch_execution_latency
+                .observe(batch.metadata.timestamp.elapsed().as_secs_f64());
             self.metrics.notifier_processed_bytes.inc_by(bytes as u64);
         }
     }
