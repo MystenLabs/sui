@@ -3,8 +3,10 @@
 
 module object_owner::object_owner {
     use std::option::{Self, Option};
+    use sui::dynamic_object_field;
+    use sui::dynamic_field;
     use sui::object::{Self, ID, UID};
-    use sui::transfer;
+    use sui::transfer::transfer;
     use sui::tx_context::{Self, TxContext};
 
     struct Parent has key {
@@ -12,7 +14,7 @@ module object_owner::object_owner {
         child: Option<ID>,
     }
 
-    struct Child has key {
+    struct Child has key, store {
         id: UID,
     }
 
@@ -22,7 +24,7 @@ module object_owner::object_owner {
     }
 
     public entry fun create_child(ctx: &mut TxContext) {
-        transfer::transfer(
+        transfer(
             Child { id: object::new(ctx) },
             tx_context::sender(ctx),
         );
@@ -33,59 +35,67 @@ module object_owner::object_owner {
             id: object::new(ctx),
             child: option::none(),
         };
-        transfer::transfer(parent, tx_context::sender(ctx));
+        transfer(parent, tx_context::sender(ctx));
     }
 
     public entry fun create_parent_and_child(ctx: &mut TxContext) {
         let parent_id = object::new(ctx);
         let child = Child { id: object::new(ctx) };
         let child_id = object::id(&child);
-        transfer::transfer_to_object_id(child, &mut parent_id);
+        dynamic_object_field::add(&mut parent_id, 0, child);
         let parent = Parent {
             id: parent_id,
             child: option::some(child_id),
         };
-        transfer::transfer(parent, tx_context::sender(ctx));
+        transfer(parent, tx_context::sender(ctx));
     }
 
     public entry fun add_child(parent: &mut Parent, child: Child) {
         let child_id = object::id(&child);
-        transfer::transfer_to_object(child, parent);
         option::fill(&mut parent.child, child_id);
+        dynamic_object_field::add(&mut parent.id, 0, child);
+    }
+
+    public entry fun add_child_wrapped(parent: &mut Parent, child: Child) {
+        let child_id = object::id(&child);
+        option::fill(&mut parent.child, child_id);
+        dynamic_field::add(&mut parent.id, 0, child);
     }
 
     // Call to mutate_child will fail if its owned by a parent,
     // since all owners must be in the arguments for authentication.
     public entry fun mutate_child(_child: &mut Child) {}
 
-    // This should always succeeds, even when child is not owned by parent.
+    // TODO should fail when child is owned by parent.
     public entry fun mutate_child_with_parent(_child: &mut Child, _parent: &mut Parent) {}
 
-    public entry fun transfer_child(parent: &mut Parent, child: Child, new_parent: &mut Parent) {
+    public entry fun transfer_child(parent: &mut Parent, new_parent: &mut Parent) {
         let child_id = option::extract(&mut parent.child);
+        let child: Child = dynamic_object_field::remove(&mut parent.id, 0);
         assert!(object::id(&child) == child_id, 0);
-        transfer::transfer_to_object(child, new_parent);
         option::fill(&mut new_parent.child, child_id);
+        dynamic_object_field::add(&mut new_parent.id, 0, child);
     }
 
-    public entry fun remove_child(parent: &mut Parent, child: Child, ctx: &mut TxContext) {
+    public entry fun remove_child(parent: &mut Parent, ctx: &mut TxContext) {
         let child_id = option::extract(&mut parent.child);
+        let child: Child = dynamic_object_field::remove(&mut parent.id, 0);
         assert!(object::id(&child) == child_id, 0);
-        transfer::transfer(child, tx_context::sender(ctx));
+        transfer(child, tx_context::sender(ctx));
     }
 
-    // Call to delete_child can fail if it's still owned by a parent.
-    public entry fun delete_child(child: Child, _parent: &mut Parent) {
+    // Call to delete_child
+    public entry fun delete_child(child: Child) {
         let Child { id } = child;
         object::delete(id);
     }
 
-    public entry fun delete_parent_and_child(parent: Parent, child: Child) {
+    public entry fun delete_parent_and_child(parent: Parent) {
         let Parent { id: parent_id, child: child_ref_opt } = parent;
         let child_id = option::extract(&mut child_ref_opt);
+        let child: Child = dynamic_object_field::remove(&mut parent_id, 0);
         assert!(object::id(&child) == child_id, 0);
         object::delete(parent_id);
-
         let Child { id: child_id } = child;
         object::delete(child_id);
     }
@@ -93,11 +103,33 @@ module object_owner::object_owner {
     public entry fun create_another_parent(child: Child, ctx: &mut TxContext) {
         let id = object::new(ctx);
         let child_id = object::id(&child);
-        transfer::transfer_to_object_id(child, &mut id);
+        dynamic_object_field::add(&mut id, 0, child);
         let parent = AnotherParent {
             id,
             child: child_id,
         };
-        transfer::transfer(parent, tx_context::sender(ctx));
+        transfer(parent, tx_context::sender(ctx));
+    }
+
+    public entry fun create_parent_and_child_wrapped(ctx: &mut TxContext) {
+        let parent_id = object::new(ctx);
+        let child = Child { id: object::new(ctx) };
+        let child_id = object::id(&child);
+        dynamic_field::add(&mut parent_id, 0, child);
+        let parent = Parent {
+            id: parent_id,
+            child: option::some(child_id),
+        };
+        transfer(parent, tx_context::sender(ctx));
+    }
+
+    public entry fun delete_parent_and_child_wrapped(parent: Parent) {
+        let Parent { id: parent_id, child: child_ref_opt } = parent;
+        let child_id = option::extract(&mut child_ref_opt);
+        let child: Child = dynamic_field::remove(&mut parent_id, 0);
+        assert!(object::id(&child) == child_id, 0);
+        object::delete(parent_id);
+        let Child { id: child_id } = child;
+        object::delete(child_id);
     }
 }

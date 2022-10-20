@@ -287,14 +287,19 @@ async fn test_object_owning_another_object() {
     )
     .await
     .unwrap();
-    assert!(effects.status.is_ok());
+    effects.status.unwrap();
     let child_effect = effects
         .mutated
         .iter()
         .find(|((id, _, _), _)| id == &child.0)
         .unwrap();
     // Check that the child is now owned by the parent.
-    assert_eq!(child_effect.1, parent.0);
+    let field_id = match child_effect.1 {
+        Owner::ObjectOwner(field_id) => field_id.into(),
+        Owner::Shared { .. } | Owner::Immutable | Owner::AddressOwner(_) => panic!(),
+    };
+    let field_object = authority.get_object(&field_id).await.unwrap().unwrap();
+    assert_eq!(field_object.owner, parent.0);
 
     // Mutate the child directly will now fail because we need the parent to authenticate.
     let result = call_move(
@@ -311,7 +316,7 @@ async fn test_object_owning_another_object() {
     .await;
     assert!(result.is_err());
 
-    // Mutate the child with the parent will succeed.
+    // Mutate the child with the parent will not succeed.
     let effects = call_move(
         &authority,
         &gas,
@@ -323,9 +328,8 @@ async fn test_object_owning_another_object() {
         vec![],
         vec![TestCallArg::Object(child.0), TestCallArg::Object(parent.0)],
     )
-    .await
-    .unwrap();
-    assert!(effects.status.is_ok());
+    .await;
+    assert!(effects.is_err());
 
     // Create another parent.
     let effects = call_move(
@@ -358,26 +362,46 @@ async fn test_object_owning_another_object() {
         vec![],
         vec![
             TestCallArg::Object(parent.0),
-            TestCallArg::Object(child.0),
             TestCallArg::Object(new_parent.0),
         ],
     )
     .await
     .unwrap();
     assert!(effects.status.is_ok());
-    assert_eq!(effects.events.len(), 1);
-    let event1 = effects.events[0].clone();
-    assert_eq!(event1.event_type(), EventType::TransferObject);
-    assert_eq!(event1.object_id(), Some(child.0));
-    if let Event::TransferObject {
-        recipient, type_, ..
-    } = event1
-    {
-        assert_eq!(type_, TransferType::ToObject);
-        assert_eq!(recipient, Owner::ObjectOwner(new_parent.0.into()));
-    } else {
-        panic!("Unexpected event type: {:?}", event1);
-    }
+    assert_eq!(effects.events.len(), 3);
+    let num_transfers = effects
+        .events
+        .iter()
+        .filter(|e| matches!(e.event_type(), EventType::TransferObject { .. }))
+        .count();
+    assert_eq!(num_transfers, 2);
+    let num_created = effects
+        .events
+        .iter()
+        .filter(|e| matches!(e.event_type(), EventType::NewObject { .. }))
+        .count();
+    assert_eq!(num_created, 1);
+    let child_event = effects
+        .events
+        .iter()
+        .find(|e| e.object_id() == Some(child.0))
+        .unwrap();
+    let (recipient, type_) = match *child_event {
+        Event::TransferObject {
+            recipient, type_, ..
+        } => (recipient, type_),
+        _ => panic!("Unexpected event type: {:?}", child_event),
+    };
+    assert_eq!(type_, TransferType::ToObject);
+    let new_field_id = match recipient {
+        Owner::ObjectOwner(field_id) => field_id.into(),
+        Owner::Shared { .. } | Owner::Immutable | Owner::AddressOwner(_) => panic!(),
+    };
+    let new_field_object = authority.get_object(&new_field_id).await.unwrap().unwrap();
+    assert_eq!(
+        new_field_object.owner,
+        Owner::ObjectOwner(new_parent.0.into())
+    );
 
     let child_effect = effects
         .mutated
@@ -385,10 +409,9 @@ async fn test_object_owning_another_object() {
         .find(|((id, _, _), _)| id == &child.0)
         .unwrap();
     // Check that the child is now owned by the new parent.
-    assert_eq!(child_effect.1, new_parent.0);
+    assert_eq!(child_effect.1, new_field_id);
 
-    // Delete the child. This should fail because the child is still owned by a parent,
-    // it cannot yet be deleted.
+    // Delete the child. This should fail as the child cannot be used as a transaction argument
     let effects = call_move(
         &authority,
         &gas,
@@ -398,18 +421,23 @@ async fn test_object_owning_another_object() {
         "object_owner",
         "delete_child",
         vec![],
-        vec![
-            TestCallArg::Object(child.0),
-            TestCallArg::Object(new_parent.0),
-        ],
+        vec![TestCallArg::Object(child.0)],
     )
-    .await
-    .unwrap();
-    // we expect this to be and error due to Deleting an Object Owned Object
-    assert!(effects.status.is_ok());
+    .await;
+    assert!(effects.is_err());
+}
 
-    // Create a parent and a child together. This tests the
-    // transfer::transfer_to_object_id() API.
+#[tokio::test]
+async fn test_create_then_delete_parent_child() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas = ObjectID::random();
+    let authority = init_state_with_ids(vec![(sender, gas)]).await;
+
+    let package =
+        build_and_publish_test_package(&authority, &sender, &sender_key, &gas, "object_owner")
+            .await;
+
+    // Create a parent and a child together
     let effects = call_move(
         &authority,
         &gas,
@@ -424,15 +452,15 @@ async fn test_object_owning_another_object() {
     .await
     .unwrap();
     assert!(effects.status.is_ok());
-    assert_eq!(effects.created.len(), 2);
-    // Check that one of them is the parent and the other is the child.
-    let (parent, child) = if effects.created[0].1 == sender {
-        assert_eq!(effects.created[1].1, effects.created[0].0 .0);
-        (effects.created[0].0, effects.created[1].0)
-    } else {
-        assert!(effects.created[1].1 == sender && effects.created[0].1 == effects.created[1].0 .0);
-        (effects.created[1].0, effects.created[0].0)
-    };
+    // Creates 3 objects, the parent, a field, and the child
+    assert_eq!(effects.created.len(), 3);
+    assert_eq!(effects.events.len(), 3);
+    let parent = effects
+        .created
+        .iter()
+        .find(|(_, owner)| matches!(owner, Owner::AddressOwner(_)))
+        .unwrap()
+        .0;
 
     // Delete the parent and child altogether.
     let effects = call_move(
@@ -444,13 +472,164 @@ async fn test_object_owning_another_object() {
         "object_owner",
         "delete_parent_and_child",
         vec![],
-        vec![TestCallArg::Object(parent.0), TestCallArg::Object(child.0)],
+        vec![TestCallArg::Object(parent.0)],
     )
     .await
     .unwrap();
     assert!(effects.status.is_ok());
     // Check that both objects were deleted.
+    // TODO field object should be deleted too
     assert_eq!(effects.deleted.len(), 2);
+    assert_eq!(effects.events.len(), 3);
+}
+
+#[tokio::test]
+async fn test_create_then_delete_parent_child_wrap() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas = ObjectID::random();
+    let authority = init_state_with_ids(vec![(sender, gas)]).await;
+
+    let package =
+        build_and_publish_test_package(&authority, &sender, &sender_key, &gas, "object_owner")
+            .await;
+
+    // Create a parent and a child together
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package,
+        "object_owner",
+        "create_parent_and_child_wrapped",
+        vec![],
+        vec![],
+    )
+    .await
+    .unwrap();
+    assert!(effects.status.is_ok());
+    // Creates 3 objects, the parent, a field, and the child
+    assert_eq!(effects.created.len(), 2);
+    // not wrapped as it wasn't first created
+    assert_eq!(effects.wrapped.len(), 0);
+    assert_eq!(effects.events.len(), 2);
+
+    let parent = effects
+        .created
+        .iter()
+        .find(|(_, owner)| matches!(owner, Owner::AddressOwner(_)))
+        .unwrap()
+        .0;
+
+    // Delete the parent and child altogether.
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package,
+        "object_owner",
+        "delete_parent_and_child_wrapped",
+        vec![],
+        vec![TestCallArg::Object(parent.0)],
+    )
+    .await
+    .unwrap();
+    assert!(effects.status.is_ok());
+    // Check that both objects were deleted.
+    // TODO field object should be deleted too
+    assert_eq!(effects.deleted.len(), 2);
+    assert_eq!(effects.events.len(), 3);
+}
+
+#[tokio::test]
+async fn test_create_then_delete_parent_child_wrap_separate() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas = ObjectID::random();
+    let authority = init_state_with_ids(vec![(sender, gas)]).await;
+
+    let package =
+        build_and_publish_test_package(&authority, &sender, &sender_key, &gas, "object_owner")
+            .await;
+
+    // Create a parent.
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package,
+        "object_owner",
+        "create_parent",
+        vec![],
+        vec![],
+    )
+    .await
+    .unwrap();
+    assert!(effects.status.is_ok());
+    assert_eq!(effects.events.len(), 1);
+    assert_eq!(effects.events[0].event_type(), EventType::NewObject);
+    let parent = effects.created[0].0;
+    assert_eq!(effects.events[0].object_id(), Some(parent.0));
+
+    // Create a child.
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package,
+        "object_owner",
+        "create_child",
+        vec![],
+        vec![],
+    )
+    .await
+    .unwrap();
+    assert!(effects.status.is_ok());
+    assert_eq!(effects.events.len(), 1);
+    assert_eq!(effects.events[0].event_type(), EventType::NewObject);
+    let child = effects.created[0].0;
+
+    // Add the child to the parent.
+    println!("add_child_wrapped");
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package,
+        "object_owner",
+        "add_child_wrapped",
+        vec![],
+        vec![TestCallArg::Object(parent.0), TestCallArg::Object(child.0)],
+    )
+    .await
+    .unwrap();
+    assert!(effects.status.is_ok());
+    assert_eq!(effects.created.len(), 1);
+    assert_eq!(effects.wrapped.len(), 1);
+    assert_eq!(effects.events.len(), 2);
+
+    // Delete the parent and child altogether.
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package,
+        "object_owner",
+        "delete_parent_and_child_wrapped",
+        vec![],
+        vec![TestCallArg::Object(parent.0)],
+    )
+    .await
+    .unwrap();
+    assert!(effects.status.is_ok());
+    // Check that both objects were deleted.
+    // TODO field object should be deleted too
+    assert_eq!(effects.deleted.len(), 2);
+    assert_eq!(effects.events.len(), 3);
 }
 
 #[tokio::test]

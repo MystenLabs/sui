@@ -295,87 +295,6 @@ module sui::test_scenarioTests {
         ts::end(scenario);
     }
 
-    // TODO(dyn-child) redo test with dynamic child object loading
-    // #[test]
-    // fun test_take_child_object() {
-    //     let sender = @0x0;
-    //     let scenario = ts::begin(sender);
-    //     create_parent_and_object(&mut scenario);
-
-    //     ts::next_tx(&mut scenario, sender);
-    //     {
-    //         // sender cannot take object directly.
-    //         assert!(!ts::has_most_recent_for_sender<Object>(&scenario), 0);
-    //         // sender can take parent, however.
-    //         assert!(ts::has_most_recent_for_sender<Parent>(&scenario), 0);
-
-    //         let parent = ts::take_from_sender<Parent>(&mut scenario);
-    //         // Make sure we can take the child object with the parent object.
-    //         let child = ts::take_child_object<Parent, Object>(&mut scenario, &parent);
-    //         ts::return_to_sender(&mut scenario, parent);
-    //         ts::return_to_sender(&mut scenario, child);
-    //     };
-    // }
-
-    // #[expected_failure(abort_code = 3 /* EMPTY_INVENTORY */)]
-    // #[test]
-    // fun test_take_child_object_incorrect_signer() {
-    //     let sender = @0x0;
-    //     let scenario = ts::begin(sender);
-    //     create_parent_and_object(&mut scenario);
-
-    //     ts::next_tx(&mut scenario, sender);
-    //     let parent = ts::take_from_sender<Parent>(&mut scenario);
-
-    //     let another = @0x1;
-    //     ts::next_tx(&mut scenario, &another);
-    //     // This should fail even though we have parent object here.
-    //     // Because the signer doesn't match.
-    //     let child = ts::take_child_object<Parent, Object>(&mut scenario, &parent);
-    //     ts::return_to_sender(&mut scenario, child);
-
-    //     ts::return_to_sender(&mut scenario, parent);
-    // }
-
-    // #[test]
-    // fun test_take_child_object_by_id() {
-    //     let sender = @0x0;
-    //     let scenario = ts::begin(sender);
-    //     // Create two children and a parent object.
-    //     let child1 = Object {
-    //         id: ts::new_object(&mut scenario),
-    //         value: 10,
-    //     };
-    //     let child1_id = object::id(&child1);
-    //     let child2 = Object {
-    //         id: ts::new_object(&mut scenario),
-    //         value: 20,
-    //     };
-    //     let child2_id = object::id(&child2);
-    //     let parent_id = ts::new_object(&mut scenario);
-    //     transfer::transfer_to_object_id(child1, &mut parent_id);
-    //     transfer::transfer_to_object_id(child2, &mut parent_id);
-
-    //     let parent = MultiChildParent {
-    //         id: parent_id,
-    //         child1: child1_id,
-    //         child2: child2_id,
-    //     };
-    //     transfer::transfer(parent, sender);
-
-    //     ts::next_tx(&mut scenario, sender);
-    //         {
-    //             let parent = ts::take_from_sender<MultiChildParent>(&mut scenario);
-    //             let child1 = ts::take_child_object_by_id<MultiChildParent, Object>(&mut scenario, &parent, child1_id);
-    //             let child2 = ts::take_child_object_by_id<MultiChildParent, Object>(&mut scenario, &parent, child2_id);
-    //             assert!(child1.value == 10, 0);
-    //             assert!(child2.value == 20, 0);
-    //             ts::return_to_sender(&mut scenario, parent);
-    //             ts::return_to_sender(&mut scenario, child1);
-    //             ts::return_to_sender(&mut scenario, child2);
-    //         };
-    // }
-
     #[test]
     fun test_take_shared_by_id() {
         let sender = @0x0;
@@ -667,6 +586,126 @@ module sui::test_scenarioTests {
         let id = object::uid_to_inner(&uid);
         transfer::freeze_object(Object { id: uid, value: 10 });
         ts::return_immutable(ts::take_immutable_by_id<Wrapper>(&scenario, id));
+        abort 42
+    }
+
+    #[test]
+    fun test_dynamic_field_still_borrowed() {
+        let sender = @0x0;
+        let scenario = ts::begin(sender);
+        let parent = ts::new_object(&mut scenario);
+        sui::dynamic_field::add(&mut parent, b"", 10);
+        let r = sui::dynamic_field::borrow<vector<u8>, u64>(&mut parent, b"");
+        ts::end(scenario);
+        assert!(*r == 10, 0);
+        object::delete(parent);
+    }
+
+    #[test]
+    fun test_dynamic_object_field_still_borrowed() {
+        let sender = @0x0;
+        let scenario = ts::begin(sender);
+        let parent = ts::new_object(&mut scenario);
+        let id = ts::new_object(&mut scenario);
+        sui::dynamic_object_field::add(&mut parent, b"", Object { id, value: 10});
+        let obj = sui::dynamic_object_field::borrow<vector<u8>, Object>(&mut parent, b"");
+        ts::end(scenario);
+        assert!(obj.value == 10, 0);
+        object::delete(parent);
+    }
+
+    #[test]
+    fun test_dynamic_object_field_not_retrievable() {
+        let sender = @0x0;
+        let scenario = ts::begin(sender);
+        let parent = ts::new_object(&mut scenario);
+        let uid = ts::new_object(&mut scenario);
+        let obj = Object { id: uid, value: 10};
+        let id = object::id(&obj);
+        transfer::transfer(obj, sender);
+        ts::next_tx(&mut scenario, sender);
+        assert!(ts::has_most_recent_for_address<Object>(sender), 0);
+        let obj = ts::take_from_sender<Object>(&mut scenario);
+        assert!(object::id(&obj) == id, 0);
+        assert!(!ts::has_most_recent_for_address<Object>(sender), 0);
+        sui::dynamic_object_field::add(&mut parent, b"", obj);
+        ts::next_tx(&mut scenario, sender);
+        assert!(!ts::has_most_recent_for_address<Object>(sender), 0);
+        ts::end(scenario);
+        object::delete(parent);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = 1 /* EInvalidSharedOrImmutableUsage */)]
+    fun test_dynamic_field_shared_misuse() {
+        let sender = @0x0;
+        let scenario = ts::begin(sender);
+        let parent = ts::new_object(&mut scenario);
+        let uid = ts::new_object(&mut scenario);
+        let obj = Object { id: uid, value: 10};
+        let id = object::id(&obj);
+        transfer::share_object(obj);
+        ts::next_tx(&mut scenario, sender);
+        let obj = ts::take_shared<Object>(&mut scenario);
+        assert!(object::id(&obj) == id, 0);
+        // wraps the object
+        sui::dynamic_field::add(&mut parent, b"", obj);
+        ts::next_tx(&mut scenario, sender);
+        abort 42
+    }
+
+    #[test]
+    #[expected_failure(abort_code = 1 /* EInvalidSharedOrImmutableUsage */)]
+    fun test_dynamic_field_immutable_misuse() {
+        let sender = @0x0;
+        let scenario = ts::begin(sender);
+        let parent = ts::new_object(&mut scenario);
+        let uid = ts::new_object(&mut scenario);
+        let obj = Object { id: uid, value: 10};
+        let id = object::id(&obj);
+        transfer::freeze_object(obj);
+        ts::next_tx(&mut scenario, sender);
+        let obj = ts::take_immutable<Object>(&mut scenario);
+        assert!(object::id(&obj) == id, 0);
+        // wraps the object
+        sui::dynamic_field::add(&mut parent, b"", obj);
+        ts::next_tx(&mut scenario, sender);
+        abort 42
+    }
+
+        #[test]
+    #[expected_failure(abort_code = 1 /* EInvalidSharedOrImmutableUsage */)]
+    fun test_dynamic_object_field_shared_misuse() {
+        let sender = @0x0;
+        let scenario = ts::begin(sender);
+        let parent = ts::new_object(&mut scenario);
+        let uid = ts::new_object(&mut scenario);
+        let obj = Object { id: uid, value: 10};
+        let id = object::id(&obj);
+        transfer::share_object(obj);
+        ts::next_tx(&mut scenario, sender);
+        let obj = ts::take_shared<Object>(&mut scenario);
+        assert!(object::id(&obj) == id, 0);
+        sui::dynamic_object_field::add(&mut parent, b"", obj);
+        ts::next_tx(&mut scenario, sender);
+        abort 42
+    }
+
+    #[test]
+    #[expected_failure(abort_code = 1 /* EInvalidSharedOrImmutableUsage */)]
+    fun test_dynamic_object_field_immutable_misuse() {
+        let sender = @0x0;
+        let scenario = ts::begin(sender);
+        let parent = ts::new_object(&mut scenario);
+        let uid = ts::new_object(&mut scenario);
+        let obj = Object { id: uid, value: 10};
+        let id = object::id(&obj);
+        transfer::freeze_object(obj);
+        ts::next_tx(&mut scenario, sender);
+        let obj = ts::take_immutable<Object>(&mut scenario);
+        assert!(object::id(&obj) == id, 0);
+        sui::dynamic_object_field::add(&mut parent, b"", obj);
+        ts::next_tx(&mut scenario, sender);
         abort 42
     }
 

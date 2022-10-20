@@ -25,7 +25,10 @@ use move_vm_types::{
     values::{self, StructRef, Value},
 };
 use smallvec::smallvec;
-use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use std::{
+    borrow::Borrow,
+    collections::{BTreeMap, BTreeSet, VecDeque},
+};
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
     id::UID,
@@ -63,52 +66,16 @@ pub fn end_transaction(
     // - wraps the object
     // if true, we will "abort"
     let mut incorrect_shared_or_imm_handling = false;
-    let mut new_object_values = LinkedHashMap::new();
-    let mut transferred = vec![];
-    for (id, owner, ty, _, value) in &object_runtime_ref.state.transfers {
-        new_object_values.insert(*id, (ty.clone(), value.copy_value().unwrap()));
-        transferred.push((*id, *owner));
-        // mark as "incorrect" if the shared/imm owner was changed
-        incorrect_shared_or_imm_handling = incorrect_shared_or_imm_handling
-            || taken_shared_or_imm
-                .get(id)
-                .map(|shared_or_imm_owner| shared_or_imm_owner != owner)
-                .unwrap_or(/* not incorrect */ false);
-    }
-    for id in object_runtime_ref.state.deleted_ids.keys() {
-        // mark as "incorrect" if the shared/imm owner was deleted
-        incorrect_shared_or_imm_handling =
-            incorrect_shared_or_imm_handling || taken_shared_or_imm.contains_key(id);
-    }
-    let mut object_runtime_state = object_runtime_ref.take_state();
-    // find all wrapped objects
-    let all_wrapped = find_all_wrapped_objects(context, &new_object_values);
-    // mark as "incorrect" if a shared/imm object was wrapped
-    incorrect_shared_or_imm_handling = incorrect_shared_or_imm_handling
-        || taken_shared_or_imm
-            .keys()
-            .any(|id| all_wrapped.contains(id));
-    // if incorrect handling, return with an 'abort'
-    if incorrect_shared_or_imm_handling {
-        return Ok(NativeResult::err(
-            legacy_test_cost(),
-            E_INVALID_SHARED_OR_IMMUTABLE_USAGE,
-        ));
-    }
-    // set all wrapped objects to being by_value so they get correctly marked as
-    // wrapped
-    for wrapped in &all_wrapped {
-        object_runtime_state
-            .input_objects
-            .entry(*wrapped)
-            .and_modify(|(by_value, _owner)| *by_value = true);
-    }
+
+    let object_runtime_state = object_runtime_ref.take_state();
     // Determine writes and deletes
-    let results = object_runtime_state.finish();
+    // We pass an empty map as we do not expose dynamic field objects in the system
+    let results = object_runtime_state.finish(BTreeMap::new());
     let RuntimeResults {
         writes,
         deletions,
         user_events,
+        loaded_child_objects: _,
     } = match results {
         Ok(res) => res,
         Err(_) => {
@@ -118,13 +85,23 @@ pub fn end_transaction(
             ));
         }
     };
-    let object_runtime_ref: &mut ObjectRuntime = context.extensions_mut().get_mut();
+    let all_active_child_objects = object_runtime_ref
+        .all_active_child_objects()
+        .map(|(id, _, _)| *id)
+        .collect::<BTreeSet<_>>();
     let inventories = &mut object_runtime_ref.test_inventories;
+    let mut new_object_values = LinkedHashMap::new();
+    let mut transferred = vec![];
     // cleanup inventories
     // we will remove all changed objects
     // - deleted objects need to be removed to mark deletions
     // - written objects are removed and later replaced to mark new values and new owners
-    for id in deletions.keys().chain(writes.keys()) {
+    // - child objects will not be reflected in transfers, but need to be no longer retrievable
+    for id in deletions
+        .keys()
+        .chain(writes.keys())
+        .chain(&all_active_child_objects)
+    {
         for addr_inventory in inventories.address_inventories.values_mut() {
             for s in addr_inventory.values_mut() {
                 s.remove(id);
@@ -141,9 +118,14 @@ pub fn end_transaction(
     // handle transfers, inserting transferred/written objects into their respective inventory
     let mut created = vec![];
     let mut written = vec![];
-    for (id, (kind, owner, ty, _, _)) in writes {
-        let (_, value) = new_object_values.remove(&id).unwrap();
-        inventories.objects.insert(id, value);
+    for (id, (kind, owner, ty, _tag, value)) in writes {
+        new_object_values.insert(id, (ty.clone(), value.copy_value().unwrap()));
+        transferred.push((id, owner));
+        incorrect_shared_or_imm_handling = incorrect_shared_or_imm_handling
+            || taken_shared_or_imm
+                .get(&id)
+                .map(|shared_or_imm_owner| shared_or_imm_owner != &owner)
+                .unwrap_or(/* not incorrect */ false);
         match kind {
             WriteKind::Create => created.push(id),
             WriteKind::Mutate | WriteKind::Unwrap => written.push(id),
@@ -178,18 +160,71 @@ pub fn end_transaction(
     // deletions already handled above, but we drop the delete kind for the effects
     let mut deleted = vec![];
     for (id, _) in deletions {
+        incorrect_shared_or_imm_handling =
+            incorrect_shared_or_imm_handling || taken_shared_or_imm.contains_key(&id);
         deleted.push(id);
+    }
+    // find all wrapped objects
+    let mut all_wrapped = BTreeSet::new();
+    let object_runtime_ref: &ObjectRuntime = context.extensions().get();
+    find_all_wrapped_objects(
+        context,
+        &mut all_wrapped,
+        new_object_values
+            .iter()
+            .map(|(id, (ty, value))| (id, ty, value)),
+    );
+    find_all_wrapped_objects(
+        context,
+        &mut all_wrapped,
+        object_runtime_ref
+            .all_active_child_objects()
+            .map(|(id, ty, value)| (id, ty, value)),
+    );
+    // mark as "incorrect" if a shared/imm object was wrapped or is a child object
+    incorrect_shared_or_imm_handling = incorrect_shared_or_imm_handling
+        || taken_shared_or_imm
+            .keys()
+            .any(|id| all_wrapped.contains(id) || all_active_child_objects.contains(id));
+    // if incorrect handling, return with an 'abort'
+    if incorrect_shared_or_imm_handling {
+        return Ok(NativeResult::err(
+            legacy_test_cost(),
+            E_INVALID_SHARED_OR_IMMUTABLE_USAGE,
+        ));
+    }
+    // mark all wrapped as deleted
+    for wrapped in all_wrapped {
+        deleted.push(wrapped)
     }
 
     // new input objects are remaining taken objects not written/deleted
-    object_runtime_ref.state.input_objects = inventories
+    let object_runtime_ref: &mut ObjectRuntime = context.extensions_mut().get_mut();
+    object_runtime_ref.state.input_objects = object_runtime_ref
+        .test_inventories
         .taken
         .iter()
         .map(|(id, owner)| {
-            // by value will be set to true later, if wrapped
             (*id, (/* by_value */ false, *owner))
         })
         .collect::<BTreeMap<_, _>>();
+    // update inventories
+    for (id, (_, value)) in new_object_values {
+        debug_assert!(!all_active_child_objects.contains(&id));
+        object_runtime_ref
+            .test_inventories
+            .objects
+            .insert(id, value);
+    }
+    // remove deleted
+    for id in &deleted {
+        object_runtime_ref.test_inventories.objects.remove(id);
+    }
+    // remove active child objects
+    for id in all_active_child_objects {
+        object_runtime_ref.test_inventories.objects.remove(&id);
+    }
+
     let effects = transaction_effects(
         created,
         written,
@@ -570,12 +605,12 @@ fn pack_option(opt: Option<Value>) -> Value {
     )]))
 }
 
-fn find_all_wrapped_objects(
-    context: &mut NativeContext,
-    new_object_values: &LinkedHashMap<ObjectID, (Type, Value)>,
-) -> BTreeSet<ObjectID> {
-    let mut ids = BTreeSet::new();
-    for (ty, value) in new_object_values.values() {
+fn find_all_wrapped_objects<'a>(
+    context: &NativeContext,
+    ids: &mut BTreeSet<ObjectID>,
+    new_object_values: impl IntoIterator<Item = (&'a ObjectID, &'a Type, impl Borrow<Value>)>,
+) {
+    for (_id, ty, value) in new_object_values {
         let layout = match context.type_to_type_layout(ty) {
             Ok(Some(layout)) => layout,
             _ => {
@@ -590,7 +625,7 @@ fn find_all_wrapped_objects(
                 continue;
             }
         };
-        let blob = value.simple_serialize(&layout).unwrap();
+        let blob = value.borrow().simple_serialize(&layout).unwrap();
         let move_value = MoveValue::simple_deserialize(&blob, &annotated_layout).unwrap();
         let uid = UID::type_();
         visit_structs(
@@ -625,7 +660,6 @@ fn find_all_wrapped_objects(
             },
         )
     }
-    ids
 }
 
 fn visit_structs<FVisitTypes>(

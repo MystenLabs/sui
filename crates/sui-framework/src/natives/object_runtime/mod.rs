@@ -1,20 +1,31 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
-
 use better_any::{Tid, TidAble};
 use linked_hash_map::LinkedHashMap;
 use move_binary_format::errors::PartialVMResult;
-use move_core_types::{account_address::AccountAddress, language_storage::StructTag};
-use move_vm_types::{loaded_data::runtime_types::Type, values::Value};
+use move_core_types::{
+    account_address::AccountAddress, effects::Op, language_storage::StructTag,
+    value::MoveTypeLayout,
+};
+use move_vm_types::{
+    loaded_data::runtime_types::Type,
+    values::{GlobalValue, Value},
+};
+use std::collections::{BTreeMap, BTreeSet};
 use sui_types::{
-    base_types::{ObjectID, SuiAddress},
+    base_types::{ObjectID, SequenceNumber, SuiAddress},
     error::{ExecutionError, ExecutionErrorKind},
     object::{MoveObject, Owner},
-    storage::{DeleteKind, ObjectResolver, WriteKind},
+    storage::{ChildObjectResolver, DeleteKind, WriteKind},
     SUI_SYSTEM_STATE_OBJECT_ID,
 };
+
+pub(crate) mod object_store;
+
+use object_store::ObjectStore;
+
+use self::object_store::{ChildObjectEffect, ObjectResult};
 
 use super::get_object_id;
 
@@ -43,27 +54,26 @@ pub struct RuntimeResults {
     pub writes: LinkedHashMap<ObjectID, (WriteKind, Owner, Type, StructTag, Value)>,
     pub deletions: LinkedHashMap<ObjectID, DeleteKind>,
     pub user_events: Vec<(Type, StructTag, Value)>,
+    // loaded child objects and their versions
+    pub loaded_child_objects: BTreeMap<ObjectID, SequenceNumber>,
 }
 
 #[derive(Default)]
 pub(crate) struct ObjectRuntimeState {
-    // will eventually need a reference to the state view to access child objects
-    // pub(crate) state_view: &'a mut dyn ____,
     pub(crate) input_objects: BTreeMap<ObjectID, (/* by_value */ bool, Owner)>,
     // new ids from object::new
     new_ids: Set<ObjectID>,
     // ids passed to object::delete
-    pub(crate) deleted_ids: Set<ObjectID>,
+    deleted_ids: Set<ObjectID>,
     // transfers to a new owner (shared, immutable, object, or account address)
     // TODO these struct tags can be removed if type_to_type_tag was exposed in the session
-    pub(crate) transfers: Vec<(ObjectID, Owner, Type, StructTag, Value)>,
+    transfers: LinkedHashMap<ObjectID, (Owner, Type, StructTag, Value)>,
     events: Vec<(Type, StructTag, Value)>,
 }
 
 #[derive(Tid)]
 pub struct ObjectRuntime<'a> {
-    // eventually used to load dynamic child objects
-    _object_resolver: Box<dyn ObjectResolver + 'a>,
+    object_store: ObjectStore<'a>,
     // inventories for test scenario
     pub(crate) test_inventories: TestInventories,
     // the internal state
@@ -78,17 +88,17 @@ impl TestInventories {
 
 impl<'a> ObjectRuntime<'a> {
     pub fn new(
-        _object_resolver: Box<dyn ObjectResolver + 'a>,
+        object_resolver: Box<dyn ChildObjectResolver + 'a>,
         input_objects: BTreeMap<ObjectID, (/* by_value */ bool, Owner)>,
     ) -> Self {
         Self {
-            _object_resolver,
+            object_store: ObjectStore::new(object_resolver),
             test_inventories: TestInventories::new(),
             state: ObjectRuntimeState {
                 input_objects,
                 new_ids: Set::new(),
                 deleted_ids: Set::new(),
-                transfers: vec![],
+                transfers: LinkedHashMap::new(),
                 events: vec![],
             },
         }
@@ -115,7 +125,7 @@ impl<'a> ObjectRuntime<'a> {
         let id: ObjectID = get_object_id(obj.copy_value()?)?
             .value_as::<AccountAddress>()?
             .into();
-        self.state.transfers.push((id, owner, ty, tag, obj));
+        self.state.transfers.insert(id, (owner, ty, tag, obj));
         Ok(())
     }
 
@@ -123,23 +133,131 @@ impl<'a> ObjectRuntime<'a> {
         self.state.events.push((ty, tag, event))
     }
 
+    pub(crate) fn child_object_exists(
+        &mut self,
+        parent: ObjectID,
+        child: ObjectID,
+    ) -> PartialVMResult<bool> {
+        self.object_store.object_exists(parent, child)
+    }
+
+    pub(crate) fn child_object_exists_and_has_type(
+        &mut self,
+        parent: ObjectID,
+        child: ObjectID,
+        child_tag: StructTag,
+    ) -> PartialVMResult<bool> {
+        self.object_store
+            .object_exists_and_has_type(parent, child, child_tag)
+    }
+
+    pub(crate) fn get_or_fetch_child_object(
+        &mut self,
+        parent: ObjectID,
+        child: ObjectID,
+        child_ty: &Type,
+        child_layout: MoveTypeLayout,
+        child_tag: StructTag,
+    ) -> PartialVMResult<ObjectResult<&mut GlobalValue>> {
+        let res = self.object_store.get_or_fetch_object(
+            parent,
+            child,
+            child_ty,
+            child_layout,
+            child_tag,
+        )?;
+        Ok(match res {
+            ObjectResult::MismatchedType => ObjectResult::MismatchedType,
+            ObjectResult::Loaded(child_object) => ObjectResult::Loaded(&mut child_object.value),
+        })
+    }
+
+    pub(crate) fn add_child_object(
+        &mut self,
+        parent: ObjectID,
+        child: ObjectID,
+        child_ty: &Type,
+        child_tag: StructTag,
+        child_value: Value,
+    ) -> PartialVMResult<()> {
+        self.object_store
+            .add_object(parent, child, child_ty, child_tag, child_value)
+    }
+
+    // returns None if a child object is still borrowed
     pub(crate) fn take_state(&mut self) -> ObjectRuntimeState {
         std::mem::take(&mut self.state)
     }
 
-    pub fn finish(self) -> Result<RuntimeResults, ExecutionError> {
-        self.state.finish()
+    pub fn finish(mut self) -> Result<RuntimeResults, ExecutionError> {
+        let child_effects = self.object_store.take_effects();
+        self.state.finish(child_effects)
+    }
+
+    pub(crate) fn all_active_child_objects(
+        &self,
+    ) -> impl Iterator<Item = (&ObjectID, &Type, Value)> {
+        self.object_store.all_active_objects()
     }
 }
 
 impl ObjectRuntimeState {
     /// Update `state_view` with the effects of successfully executing a transaction:
+    /// - Given the effects `Op<Value>` of child objects, processes the changes in terms of
+    ///   object writes/deletes
     /// - Process `transfers` and `input_objects` to determine whether the type of change
     ///   (WriteKind) to the object
-    /// - Process `deleted_ids` with previously determiend information to determine the
+    /// - Process `deleted_ids` with previously determined information to determine the
     ///   DeleteKind
     /// - Passes through user events
-    pub fn finish(self) -> Result<RuntimeResults, ExecutionError> {
+    pub(crate) fn finish(
+        mut self,
+        child_object_effects: BTreeMap<ObjectID, ChildObjectEffect>,
+    ) -> Result<RuntimeResults, ExecutionError> {
+        let mut wrapped_children = BTreeSet::new();
+        let mut loaded_child_objects = BTreeMap::new();
+        for (child, child_object_effect) in child_object_effects {
+            let ChildObjectEffect {
+                owner: parent,
+                loaded_version,
+                ty,
+                tag,
+                effect,
+            } = child_object_effect;
+            if let Some(v) = loaded_version {
+                loaded_child_objects.insert(child, v);
+            }
+            match effect {
+                // was modified, so mark it as mutated and transferred
+                Op::Modify(v) => {
+                    debug_assert!(!self.transfers.contains_key(&child));
+                    debug_assert!(!self.new_ids.contains_key(&child));
+                    debug_assert!(loaded_version.is_some());
+                    self.transfers
+                        .insert(child, (Owner::ObjectOwner(parent.into()), ty, tag, v));
+                }
+
+                Op::New(v) => {
+                    debug_assert!(!self.transfers.contains_key(&child));
+                    self.transfers
+                        .insert(child, (Owner::ObjectOwner(parent.into()), ty, tag, v));
+                }
+                // was transferred so not actually deleted
+                Op::Delete if self.transfers.contains_key(&child) => {
+                    debug_assert!(!self.deleted_ids.contains_key(&child));
+                }
+                // ID was deleted too was deleted so mark as deleted
+                Op::Delete if self.deleted_ids.contains_key(&child) => {
+                    debug_assert!(!self.transfers.contains_key(&child));
+                }
+                // was new so the object is transient and does not need to be marked as deleted
+                Op::Delete if self.new_ids.contains_key(&child) => {}
+                // otherwise it must have been wrapped
+                Op::Delete => {
+                    wrapped_children.insert(child);
+                }
+            }
+        }
         let ObjectRuntimeState {
             input_objects,
             new_ids,
@@ -156,22 +274,24 @@ impl ObjectRuntimeState {
             .collect();
         // update the input owners with the new owners from transfers
         // reports an error on cycles
+        // TODO can we have cycles in the new system?
         update_owner_map(
             input_owner_map,
-            transfers.iter().map(|(id, owner, _, _, _)| (*id, *owner)),
+            transfers.iter().map(|(id, (owner, _, _, _))| (*id, *owner)),
         )?;
         // determine write kinds
         let writes: LinkedHashMap<_, _> = transfers
             .into_iter()
-            .map(|(id, owner, type_, tag, value)| {
-                let write_kind = if input_objects.contains_key(&id) {
-                    debug_assert!(!new_ids.contains_key(&id));
-                    WriteKind::Mutate
-                } else if id == SUI_SYSTEM_STATE_OBJECT_ID || new_ids.contains_key(&id) {
-                    WriteKind::Create
-                } else {
-                    WriteKind::Unwrap
-                };
+            .map(|(id, (owner, type_, tag, value))| {
+                let write_kind =
+                    if input_objects.contains_key(&id) || loaded_child_objects.contains_key(&id) {
+                        debug_assert!(!new_ids.contains_key(&id));
+                        WriteKind::Mutate
+                    } else if id == SUI_SYSTEM_STATE_OBJECT_ID || new_ids.contains_key(&id) {
+                        WriteKind::Create
+                    } else {
+                        WriteKind::Unwrap
+                    };
                 (id, (write_kind, owner, type_, tag, value))
             })
             .collect();
@@ -180,11 +300,12 @@ impl ObjectRuntimeState {
             .into_iter()
             .map(|(id, ())| {
                 debug_assert!(!new_ids.contains_key(&id));
-                let delete_kind = if input_objects.contains_key(&id) {
-                    DeleteKind::Normal
-                } else {
-                    DeleteKind::UnwrapThenDelete
-                };
+                let delete_kind =
+                    if input_objects.contains_key(&id) || loaded_child_objects.contains_key(&id) {
+                        DeleteKind::Normal
+                    } else {
+                        DeleteKind::UnwrapThenDelete
+                    };
                 (id, delete_kind)
             })
             .collect();
@@ -199,12 +320,18 @@ impl ObjectRuntimeState {
         for id in remaining_by_value_objects {
             deletions.insert(id, DeleteKind::Wrap);
         }
+        // children that weren't deleted or transferred must be wrapped
+        for id in wrapped_children {
+            deletions.insert(id, DeleteKind::Wrap);
+        }
+
         debug_assert!(writes.keys().all(|id| !deletions.contains_key(id)));
         debug_assert!(deletions.keys().all(|id| !writes.contains_key(id)));
         Ok(RuntimeResults {
             writes,
             deletions,
             user_events,
+            loaded_child_objects,
         })
     }
 }

@@ -336,33 +336,10 @@ module sui::test_scenario {
     /// Returns true if the object with `ID` id was an shared object in the global inventory
     native fun was_taken_shared(id: ID): bool;
 
-    // // == child objects ==
-
-    // /// Remove the shared object of type `T` with ID `id` from the global inventory
-    // /// Aborts if there is no object of type `T` in the inventory with ID `id`
-    // public native fun take_child_object<T: key>(id: ID): T;
-
-    // /// Returns the most recent shared object of type `T`
-    // public native fun most_recent_id_shared<T: key>(): Option<ID>;
-
-    // /// Helper combining `take_shared_by_id` and `most_recent_id_shared`
-    // /// Aborts if there is no shared object of type `T` in the global inventory
-    // public fun take_shared<T: key>(): T {
-    //     let id = option::destroy_some(most_recent_id_shared<T>());
-    //     take_shared_by_id(id)
-    // }
-
-    // /// Return `t` to the global inventory
-    // /// Note that this is object will now be returned from `most_recent_id_shared`
-    // public fun return_shared<T: key>(t: T) {
-    //     sui::transfer::share_object(t)
-    // }
-
     // == internal ==
 
     // internal function that ends the transaction, realizing changes
     native fun end_transaction(): TransactionEffects;
-
 
     // TODO: Add API's for inspecting user events, printing the user's inventory, ...
 

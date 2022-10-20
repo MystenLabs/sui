@@ -6,6 +6,8 @@ module sui::object {
     use std::bcs;
     use sui::tx_context::{Self, TxContext};
 
+    friend sui::dynamic_field;
+    friend sui::dynamic_object_field;
     friend sui::sui_system;
     friend sui::transfer;
 
@@ -137,6 +139,12 @@ module sui::object {
     /// restrictable in the object's module.
     native fun borrow_uid<T: key>(obj: &T): &UID;
 
+    /// Generate a new UID specifically used for creating a UID from a hash
+    public(friend) fun new_uid_from_hash(bytes: address): UID {
+        record_new_uid(bytes);
+        UID { id: ID { bytes } }
+    }
+
     // === test functions ===
 
     #[test_only]
@@ -150,6 +158,9 @@ module sui::object {
 
     // helper for delete
     native fun delete_impl(id: address);
+
+    // marks newly created UIDs from hash
+    native fun record_new_uid(id: address);
 
     // Cost calibration functions
     #[test_only]
