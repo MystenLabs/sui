@@ -2278,9 +2278,10 @@ impl AuthorityState {
                 debug!(
                     ?consensus_index,
                     ?cp_seq,
-                    "handle_consensus_transaction Checkpoint. Proposer: {}, Other: {}",
-                    fragment.proposer.authority(),
-                    fragment.other.authority(),
+                    ?tracking_id,
+                    proposer=?fragment.proposer.authority().concise(),
+                    other=?fragment.other.authority().concise(),
+                    "handle_consensus_transaction Checkpoint."
                 );
 
                 let mut checkpoint = self.checkpoints.lock();

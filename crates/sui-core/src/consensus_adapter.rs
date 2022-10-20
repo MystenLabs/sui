@@ -644,9 +644,10 @@ impl CheckpointConsensusAdapter {
                         ?tracking_id,
                         ?cp_seq,
                         size=?serialized.len(),
-                        "Checkpoint fragment consensus message created. Proposer: {}, Other: {}",
-                        proposer,
-                        other,
+                        proposer=?proposer.concise(),
+                        other=?other.concise(),
+                        "Checkpoint fragment consensus message created.",
+
                     );
                     self.buffer.push_front((serialized, sequence_number));
                 },
