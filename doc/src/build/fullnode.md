@@ -4,7 +4,7 @@ title: Run a Sui Full node
 
 Sui Full nodes validate blockchain activities, including transactions, checkpoints, and epoch changes. Each Full node stores and services the queries for the blockchain state and history.
 
-This role enables [validators](../learn/architecture/validators.md) to focus on servicing and processing transactions as fast as possible. When a validator commits a new set of transactions (or a block of transactions), the validator pushes that block to all connected Full nodes that then service the queries from clients.
+This role enables [validators](../learn/architecture/validators.md) to focus on servicing and processing transactions. When a validator commits a new set of transactions (or a block of transactions), the validator pushes that block to all connected Full nodes that then service the queries from clients.
 
 ## Features
 
@@ -44,7 +44,7 @@ Follow the instructions here to run your own Sui Full node.
 
 ### Hardware requirements
 
-We recommend the following minimum hardware requirements for running a Full node:
+Minimum hardware requirements for running a Sui Full node:
 
 * CPUs: 2
 * RAM: 8GB
@@ -57,9 +57,9 @@ Debian distributions and tests against [Ubuntu version 18.04 (Bionic Beaver)](ht
 
 Sui also supports macOS and Windows operating systems. See [Install Sui](../build/install.md) for setup instructions for each operating system.
 
-Make sure to update to the latest version of [Rust](../build/install.md#rust).
+Make sure to update [Rust](../build/install.md#rust).
 
-If you are using Linux, install these extra dependencies. For example, in Ubuntu, run:
+Use the following command to install additional Linux dependencies.
 ```shell
     $ apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -70,7 +70,7 @@ If you are using Linux, install these extra dependencies. For example, in Ubuntu
     cmake
 ```
 
-If you are using macOS or Windows Subsystem for Linux (WSL), the command will be similar. Remember to install [CLang](https://clang.llvm.org/) in WSL.
+On macOS or Windows Subsystem for Linux (WSL), the command is similar. Remember to install [CLang](https://clang.llvm.org/) in WSL.
 
 ## Configure a Full node
 
@@ -79,15 +79,11 @@ source.
 
 ### Using Docker Compose
 
-Follow the instructions in the
-[Full node Docker README](https://github.com/MystenLabs/sui/tree/main/docker/fullnode#readme) to run a Sui Full node using Docker, including [resetting the environment](https://github.com/MystenLabs/sui/tree/main/docker/fullnode#reset-the-environment).
+Follow the instructions in the [Full node Docker README](https://github.com/MystenLabs/sui/tree/main/docker/fullnode#readme) to run a Sui Full node using Docker, including [resetting the environment](https://github.com/MystenLabs/sui/tree/main/docker/fullnode#reset-the-environment).
 
 ### Building from source
 
-1. Install the required tools in your environment as
-outlined in the [Prerequisites](../build/install.md#prerequisites) section if you
-haven't already. Make sure your entire toolchain stays up-to-date. If you encounter
-issues building and installing the Sui binaries, update all packages above and re-install.
+1. Install the required [Prerequisites](../build/install.md#prerequisites).
 1. Set up your fork of the Sui repository:
     1. Go to the [Sui repository](https://github.com/MystenLabs/sui) on GitHub
        and click the *Fork* button in the top right-hand corner of the screen.
@@ -112,66 +108,54 @@ issues building and installing the Sui binaries, update all packages above and r
     ```shell
     $ git checkout --track upstream/devnet
     ```
-1. Make a copy of the [Full node configuration template](https://github.com/MystenLabs/sui/blob/main/crates/sui-config/data/fullnode-template.yaml):
+1. Make a copy of the [Full node YAML template](https://github.com/MystenLabs/sui/blob/main/crates/sui-config/data/fullnode-template.yaml):
    ```shell
    $ cp crates/sui-config/data/fullnode-template.yaml fullnode.yaml
    ```
-1. Download the latest
-   [`genesis`](https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob)
-   state for Devnet by clicking that link or by running the following in your
-   terminal:
+1. Download the [`genesis`](https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob) state for Devnet:
     ```shell
     $ curl -fLJO https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob
     ```
-1. Optional: You can skip this set of steps if you are willing to accept the default paths to
-    resources. If you need custom paths, edit your `fullnode.yaml` file to reflect the paths
-    you employ:
-    1. Update the `db-path` field with the path to where the Full node's database
-       is located. By default this will create the database in a directory
-       `./suidb` relative to your current directory:
+1. Optional: Skip this step to accept the default paths to resources. Edit the `fullnode.yaml` file to use custom paths.
+   * Update the `db-path` field with the path to the Full node database.
        ```yaml
-       db-path: "/path/to/suidb"
+       db-path: "/db-files/sui-fullnode"
        ```
-    1. Update the `genesis-file-location` with the path to the `genesis` file.
-       By default, the config looks for the file `genesis.blob` in your
-       current directory:
+   * Update the `genesis-file-location` with the path to `genesis.blob`.
        ```yaml
        genesis:
-       genesis-file-location: "/path/to/genesis.blob"
+       genesis-file-location: "/sui-fullnode/genesis.blob"
        ```
 1. Start your Sui Full node:
     ```shell
     $ cargo run --release --bin sui-node -- --config-path fullnode.yaml
     ```
-1. Post build, receive the success confirmation message, `SuiNode started!`
 1. Optional: [Publish / subscribe](pubsub.md) to notifications using JSON-RPC via websocket.
 
 Your Full node will now be serving the read endpoints of the [Sui JSON-RPC
 API](../build/json-rpc.md#sui-json-rpc-api) at:
 `http://127.0.0.1:9000`
 
-## Using Sui Explorer with your Full node
+## Sui Explorer with your Full node
 
-[Sui Explorer](https://explorer.devnet.sui.io/) lets you configure where
-it should issue read requests to query the blockchain. This enables you to
-point the Explorer at your locally running Full node and see the
-transactions it has synced from the network. To make this change:
+[Sui Explorer](https://explorer.devnet.sui.io/) supports connections to custom RPC URLS and local networks. You can point the Explorer to your local Full node and see the
+transactions it syncs from the network. To make this change:
 
 1. Open a browser and go to: https://explorer.devnet.sui.io/
 1. Click the **Devnet** button in the top right-hand corner of Sui Explorer and select
-   the *Local* network from the drop-down menu.
-1. Close the *Choose a Network* menu to see the latest transactions. 
+   **Local** from the drop-down menu.
+1. Close the **Choose a Network** menu to see the latest transactions. 
 
 Sui Explorer now uses your local Full node to explore the state of the chain.
 
 ## Monitoring
 
 Monitor your Full node using the instructions at [Logging, Tracing, Metrics, and
-Observability](https://docs.sui.io/contribute/observability).
+Observability](../contribute/observability.md).
 
-Note the default metrics port is 9184 yet configurable in your `fullnode.yaml` file.
+Note the default metrics port is 9184. To change the port, edit your `fullnode.yaml` file.
 
-## Updating your Full node with new releases
+## Update your Full node
 
 Whenever Sui releases a new version, Devnet restarts as a new network with no data. You must update your Full node with each Sui release to ensure compatibility with the network.
 
@@ -183,7 +167,7 @@ namely by running the command:
 $ docker-compose down --volumes
 ```
 
-### Built from source
+### Build from source
 
 If you followed the instructions for [Building from
 Source](#building-from-source), update your Full node as follows:
@@ -205,15 +189,13 @@ Source](#building-from-source), update your Full node as follows:
     ```shell
     $ git checkout -B devnet --track upstream/devnet
     ```
-1. Download the latest
-   [`genesis`](https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob)
-   state for Devnet as described above.
+1. Download the latest [`genesis`](https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob) state for Devnet as described above.
 1. Update your `fullnode.yaml` configuration file if needed.
 1. Restart your Sui Full node:
     ```shell
     $ cargo run --release --bin sui-node -- --config-path fullnode.yaml
     ```
-Your Full node will once again be running at:
+Your Full node starts on:
 `http://127.0.0.1:9000`
 
 ## Future plans
