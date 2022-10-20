@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { of, filter, switchMap, from, defer, repeat } from 'rxjs';
 
@@ -24,11 +24,23 @@ const HomePage = ({ disableNavigation, limitToPopUpSize = true }: Props) => {
     const initChecking = useInitializedGuard(true);
     const lockedChecking = useLockedGuard(false);
     const guardChecking = initChecking || lockedChecking;
+    const [visibility, setVisibility] = useState(
+        document?.visibilityState || null
+    );
     const dispatch = useAppDispatch();
     useEffect(() => {
-        const sub = of(guardChecking)
+        const callback = () => {
+            setVisibility(document.visibilityState);
+        };
+        document.addEventListener('visibilitychange', callback);
+        return () => {
+            document.removeEventListener('visibilitychange', callback);
+        };
+    });
+    useEffect(() => {
+        const sub = of(guardChecking || visibility === 'hidden')
             .pipe(
-                filter(() => !guardChecking),
+                filter((paused) => !paused),
                 switchMap(() =>
                     defer(() =>
                         from(dispatch(fetchAllOwnedAndRequiredObjects()))
@@ -37,7 +49,7 @@ const HomePage = ({ disableNavigation, limitToPopUpSize = true }: Props) => {
             )
             .subscribe();
         return () => sub.unsubscribe();
-    }, [guardChecking, dispatch]);
+    }, [guardChecking, visibility, dispatch]);
 
     usePageView();
     return (
