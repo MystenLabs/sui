@@ -30,7 +30,7 @@ import {
 import styles from './RecentTxCard.module.css';
 
 import { PlaceholderTable } from '~/ui/PlaceholderTable';
-import { TableCard, type TableType } from '~/ui/TableCard';
+import { TableCard, type TableCardProps } from '~/ui/TableCard';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 
 const TRUNCATE_LENGTH = 10;
@@ -143,7 +143,7 @@ function LatestTxCard({ ...data }: RecentTx) {
     );
 
     const [results, setResults] = useState(initState);
-    const [recentTx, setRecentTx] = useState<null | TableType>(null);
+    const [recentTx, setRecentTx] = useState<null | TableCardProps>(null);
     const [txCount, setTxCount] = useState({ loadState: 'pending', data: 0 });
 
     const [network] = useContext(NetworkContext);
@@ -268,7 +268,10 @@ function LatestTxCard({ ...data }: RecentTx) {
                 <TabPanels>
                     <TabPanel>
                         {recentTx ? (
-                            <TableCard tabledata={recentTx} />
+                            <TableCard
+                                data={recentTx.data}
+                                columns={recentTx.columns}
+                            />
                         ) : (
                             <PlaceholderTable
                                 rowCount={15}

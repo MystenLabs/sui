@@ -168,7 +168,10 @@ function TopValidatorsCard({ state }: { state: ValidatorState }): JSX.Element {
                 </TabList>
                 <TabPanels>
                     <TabPanel>
-                        <TableCard tabledata={tableData} />
+                        <TableCard
+                            data={tableData.data}
+                            columns={tableData.columns}
+                        />
                     </TabPanel>
                 </TabPanels>
             </TabGroup>

@@ -215,7 +215,7 @@ function ValidatorsPage({ state }: { state: ValidatorState }): JSX.Element {
                 Validators
             </Heading>
             <div className="mt-8">
-                <TableCard tabledata={tableData} />
+                <TableCard data={tableData.data} columns={tableData.columns} />
                 <TabFooter stats={getTabFooter(validatorsData.length).stats}>
                     <Longtext
                         text=""

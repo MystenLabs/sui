@@ -46,7 +46,7 @@ function TxForIDView({ showData }: { showData: TxnData[] | undefined }) {
 
     return (
         <div data-testid="tx">
-            <TableCard tabledata={tableData} />
+            <TableCard data={tableData.data} columns={tableData.columns} />
         </div>
     );
 }

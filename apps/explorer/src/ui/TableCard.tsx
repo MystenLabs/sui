@@ -54,10 +54,8 @@ function columnsContent(columns: TableColumn[]) {
 }
 
 export interface TableCardProps {
-    tabledata: {
-        data: DataType[];
-        columns: TableColumn[];
-    };
+    data: DataType[];
+    columns: TableColumn[];
 }
 
 const cellStyle = cva(['text-sui-grey-75 h-[30px] px-[4px]'], {
@@ -72,16 +70,12 @@ const cellStyle = cva(['text-sui-grey-75 h-[30px] px-[4px]'], {
     },
 });
 
-export function TableCard({ tabledata }: TableCardProps) {
-    const data = tabledata.data;
+export function TableCard({ data, columns }: TableCardProps) {
     // Use Columns to create a table
-    const columns = useMemo(
-        () => columnsContent(tabledata.columns),
-        [tabledata.columns]
-    );
+    const processedcol = useMemo(() => columnsContent(columns), [columns]);
     const table = useReactTable({
         data,
-        columns,
+        columns: processedcol,
         getCoreRowModel: getCoreRowModel(),
     });
 

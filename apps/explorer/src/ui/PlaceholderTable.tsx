@@ -36,5 +36,7 @@ export function PlaceholderTable({
         })),
     };
 
-    return <TableCard tabledata={loadingTable} />;
+    return (
+        <TableCard data={loadingTable.data} columns={loadingTable.columns} />
+    );
 }

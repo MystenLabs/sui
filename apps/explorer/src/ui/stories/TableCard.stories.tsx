@@ -63,5 +63,5 @@ export default {
 } as ComponentMeta<typeof TableCard>;
 
 export const VaryingWidth: ComponentStory<typeof TableCard> = (args) => (
-    <TableCard tabledata={data} />
+    <TableCard data={data.data} columns={data.columns} />
 );
