@@ -10,7 +10,7 @@ use crate::{
     },
     authority_batch::batch_tests::init_state_parameters_from_rng,
     authority_client::{LocalAuthorityClient, NetworkAuthorityClientMetrics},
-    checkpoints::causal_order_effects::TestCausalOrderNoop,
+    checkpoints::causal_order_effects::TestEffectsStore,
     safe_client::SafeClientMetrics,
 };
 use rand::prelude::StdRng;
@@ -37,7 +37,7 @@ use parking_lot::Mutex;
 use sui_macros::sim_test;
 use sui_simulator::nondeterministic;
 
-fn random_ckpoint_store() -> (
+pub(crate) fn random_ckpoint_store() -> (
     Committee,
     Vec<AuthorityKeyPair>,
     Vec<(PathBuf, CheckpointStore)>,
@@ -469,7 +469,13 @@ fn latest_proposal() {
 
     // Fail to set if transactions not processed.
     assert!(cps1
-        .sign_new_checkpoint(epoch, 0, ckp_items.iter(), TestCausalOrderNoop, None)
+        .sign_new_checkpoint(
+            epoch,
+            0,
+            ckp_items.iter(),
+            TestEffectsStore::default(),
+            None
+        )
         .is_err());
 
     // Set the transactions as executed.
@@ -484,14 +490,38 @@ fn latest_proposal() {
     cps4.handle_internal_batch(0, &batch).unwrap();
 
     // Try to get checkpoint
-    cps1.sign_new_checkpoint(epoch, 0, ckp_items.iter(), TestCausalOrderNoop, None)
-        .unwrap();
-    cps2.sign_new_checkpoint(epoch, 0, ckp_items.iter(), TestCausalOrderNoop, None)
-        .unwrap();
-    cps3.sign_new_checkpoint(epoch, 0, ckp_items.iter(), TestCausalOrderNoop, None)
-        .unwrap();
-    cps4.sign_new_checkpoint(epoch, 0, ckp_items.iter(), TestCausalOrderNoop, None)
-        .unwrap();
+    cps1.sign_new_checkpoint(
+        epoch,
+        0,
+        ckp_items.iter(),
+        TestEffectsStore::default(),
+        None,
+    )
+    .unwrap();
+    cps2.sign_new_checkpoint(
+        epoch,
+        0,
+        ckp_items.iter(),
+        TestEffectsStore::default(),
+        None,
+    )
+    .unwrap();
+    cps3.sign_new_checkpoint(
+        epoch,
+        0,
+        ckp_items.iter(),
+        TestEffectsStore::default(),
+        None,
+    )
+    .unwrap();
+    cps4.sign_new_checkpoint(
+        epoch,
+        0,
+        ckp_items.iter(),
+        TestEffectsStore::default(),
+        None,
+    )
+    .unwrap();
 
     // --- TEST3 ---
 
@@ -632,7 +662,13 @@ fn set_get_checkpoint() {
 
     // Need to load the transactions as processed, before getting a checkpoint.
     assert!(cps1
-        .sign_new_checkpoint(epoch, 0, ckp_items.iter(), TestCausalOrderNoop, None)
+        .sign_new_checkpoint(
+            epoch,
+            0,
+            ckp_items.iter(),
+            TestEffectsStore::default(),
+            None
+        )
         .is_err());
     let batch: Vec<_> = ckp_items
         .iter()
@@ -643,12 +679,30 @@ fn set_get_checkpoint() {
     cps2.handle_internal_batch(0, &batch).unwrap();
     cps3.handle_internal_batch(0, &batch).unwrap();
 
-    cps1.sign_new_checkpoint(epoch, 0, ckp_items.iter(), TestCausalOrderNoop, None)
-        .unwrap();
-    cps2.sign_new_checkpoint(epoch, 0, ckp_items.iter(), TestCausalOrderNoop, None)
-        .unwrap();
-    cps3.sign_new_checkpoint(epoch, 0, ckp_items.iter(), TestCausalOrderNoop, None)
-        .unwrap();
+    cps1.sign_new_checkpoint(
+        epoch,
+        0,
+        ckp_items.iter(),
+        TestEffectsStore::default(),
+        None,
+    )
+    .unwrap();
+    cps2.sign_new_checkpoint(
+        epoch,
+        0,
+        ckp_items.iter(),
+        TestEffectsStore::default(),
+        None,
+    )
+    .unwrap();
+    cps3.sign_new_checkpoint(
+        epoch,
+        0,
+        ckp_items.iter(),
+        TestEffectsStore::default(),
+        None,
+    )
+    .unwrap();
     // cps4.handle_internal_set_checkpoint(summary, &transactions)
     //     .unwrap();
 
@@ -791,7 +845,7 @@ fn checkpoint_integration() {
                     committee.epoch,
                     old_checkpoint,
                     transactions.iter(),
-                    TestCausalOrderNoop,
+                    TestEffectsStore::default(),
                     None,
                 )
                 .is_ok());
@@ -838,7 +892,7 @@ fn checkpoint_integration() {
                 committee.epoch,
                 next_checkpoint,
                 transactions.iter(),
-                TestCausalOrderNoop,
+                TestEffectsStore::default(),
                 None
             )
             .is_err());
@@ -1385,7 +1439,7 @@ fn test_fragment_full_flow() {
         seq.next_transaction_index += 1;
     }
     let transactions = cps0.attempt_to_construct_checkpoint().unwrap();
-    cps0.sign_new_checkpoint(0, 0, transactions.iter(), TestCausalOrderNoop, None)
+    cps0.sign_new_checkpoint(0, 0, transactions.iter(), TestEffectsStore::default(), None)
         .unwrap();
 
     // Two fragments for 5-6, and then 0-1, 1-2, 2-3, 3-4
@@ -1746,7 +1800,7 @@ async fn checkpoint_messaging_flow() {
             .unwrap();
         auth.checkpoint
             .lock()
-            .sign_new_checkpoint(0, 0, transactions.iter(), TestCausalOrderNoop, None)
+            .sign_new_checkpoint(0, 0, transactions.iter(), TestEffectsStore::default(), None)
             .unwrap();
     }
 

@@ -410,22 +410,9 @@ fn test_digest_caching() {
     assert_ne!(initial_digest, *deserialized_tx.digest());
 
     let effects = TransactionEffects {
-        status: ExecutionStatus::Success,
-        gas_used: GasCostSummary {
-            computation_cost: 0,
-            storage_cost: 0,
-            storage_rebate: 0,
-        },
-        shared_objects: Vec::new(),
         transaction_digest: initial_digest,
-        created: Vec::new(),
-        mutated: Vec::new(),
-        unwrapped: Vec::new(),
-        deleted: Vec::new(),
-        wrapped: Vec::new(),
         gas_object: (random_object_ref(), Owner::AddressOwner(a1)),
-        events: Vec::new(),
-        dependencies: Vec::new(),
+        ..Default::default()
     };
 
     let mut signed_effects = effects.to_sign_effects(
@@ -561,23 +548,9 @@ fn test_user_signature_committed_in_checkpoints() {
     let tx_digest_b = transaction_b.digest();
 
     let effects_a = TransactionEffects {
-        status: ExecutionStatus::Success,
-        gas_used: GasCostSummary {
-            computation_cost: 0,
-            storage_cost: 0,
-            storage_rebate: 0,
-        },
-        shared_objects: Vec::new(),
         transaction_digest: *tx_digest_a,
-        created: Vec::new(),
-
-        mutated: Vec::new(),
-        unwrapped: Vec::new(),
-        deleted: Vec::new(),
-        wrapped: Vec::new(),
         gas_object: (random_object_ref(), Owner::AddressOwner(a1)),
-        events: Vec::new(),
-        dependencies: Vec::new(),
+        ..Default::default()
     };
 
     let mut effects_b = effects_a.clone();
@@ -594,6 +567,7 @@ fn test_user_signature_committed_in_checkpoints() {
             [execution_digest_a].into_iter(),
         ),
         None,
+        effects_a.gas_used,
         None,
     );
     let checkpoint_summary_b = CheckpointSummary::new(
@@ -603,6 +577,7 @@ fn test_user_signature_committed_in_checkpoints() {
             [execution_digest_b].into_iter(),
         ),
         None,
+        effects_b.gas_used,
         None,
     );
 

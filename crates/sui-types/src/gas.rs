@@ -47,7 +47,7 @@ macro_rules! ok_or_gas_error {
     };
 }
 
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[derive(Eq, PartialEq, Clone, Debug, Default, Serialize, Deserialize, JsonSchema)]
 pub struct GasCostSummary {
     pub computation_cost: u64,
     pub storage_cost: u64,

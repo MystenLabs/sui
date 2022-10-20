@@ -570,12 +570,14 @@ If the sender represents an active validator, the request will be processed at t
 This function should be called at the end of an epoch, and advances the system to the next epoch.
 It does the following things:
 1. Add storage charge to the storage fund.
-2. Distribute computation charge to validator stake and delegation stake.
-3. Create reward information records for each validator in this epoch.
-4. Update all validators.
+2. Burn the storage rebates from the storage fund. These are already refunded to transaction sender's
+gas coins.
+3. Distribute computation charge to validator stake and delegation stake.
+4. Create reward information records for each validator in this epoch.
+5. Update all validators.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="sui_system.md#0x2_sui_system_advance_epoch">advance_epoch</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, new_epoch: u64, storage_charge: u64, computation_charge: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="sui_system.md#0x2_sui_system_advance_epoch">advance_epoch</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, new_epoch: u64, storage_charge: u64, computation_charge: u64, storage_rebate: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -589,6 +591,7 @@ It does the following things:
     new_epoch: u64,
     storage_charge: u64,
     computation_charge: u64,
+    storage_rebate: u64,
     ctx: &<b>mut</b> TxContext,
 ) {
     // Validator will make a special system call <b>with</b> sender set <b>as</b> 0x0.
@@ -622,6 +625,10 @@ It does the following things:
     // the storage fund.
     <a href="balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> self.storage_fund, delegator_reward);
     <a href="balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> self.storage_fund, computation_reward);
+
+    // Burn the storage rebate.
+    <b>assert</b>!(<a href="balance.md#0x2_balance_value">balance::value</a>(&self.storage_fund) &gt;= storage_rebate, 0);
+    <a href="balance.md#0x2_balance_decrease_supply">balance::decrease_supply</a>(&<b>mut</b> self.sui_supply, <a href="balance.md#0x2_balance_split">balance::split</a>(&<b>mut</b> self.storage_fund, storage_rebate));
 }
 </code></pre>
 
