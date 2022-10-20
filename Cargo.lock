@@ -4838,7 +4838,6 @@ dependencies = [
  "serde_bytes",
  "serde_json",
  "serde_with 2.0.1",
- "signature",
  "tokio",
  "workspace-hack",
  "zeroize",

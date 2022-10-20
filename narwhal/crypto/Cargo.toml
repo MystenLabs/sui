@@ -15,7 +15,6 @@ rand = { version = "0.8.5", features = ["std"] }
 serde = { version = "1.0.144", features = ["derive"] }
 serde_bytes = "0.11.7"
 serde_with = "2.0.1"
-signature = "1.6.1"
 tokio = { version = "1.20.1", features = ["sync", "rt", "macros"] }
 zeroize = "1.5.7"
 merlin = "3.0.0"
