@@ -39,6 +39,8 @@ pub trait Timestamp {
 }
 
 impl Timestamp for TimestampMs {
+    // Returns the time elapsed between the timestamp
+    // and "now". The result is a Duration.
     fn elapsed(&self) -> Duration {
         let diff = now() - self;
         Duration::from_millis(diff)
