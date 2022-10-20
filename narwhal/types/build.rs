@@ -59,6 +59,15 @@ fn build_anemo_services(out_dir: &Path) {
                 .codec_path("anemo::rpc::codec::BincodeCodec")
                 .build(),
         )
+        .method(
+            anemo_build::manual::Method::builder()
+                .name("fetch_certificates")
+                .route_name("FetchCertificates")
+                .request_type("crate::FetchCertificatesRequest")
+                .response_type("crate::FetchCertificatesResponse")
+                .codec_path("anemo::rpc::codec::BincodeCodec")
+                .build(),
+        )
         .build();
 
     let primary_to_worker = anemo_build::manual::Service::builder()
@@ -118,6 +127,24 @@ fn build_anemo_services(out_dir: &Path) {
         )
         .method(
             anemo_build::manual::Method::builder()
+                .name("report_our_batch")
+                .route_name("ReportOurBatch")
+                .request_type("crate::WorkerOurBatchMessage")
+                .response_type("()")
+                .codec_path("anemo::rpc::codec::BincodeCodec")
+                .build(),
+        )
+        .method(
+            anemo_build::manual::Method::builder()
+                .name("report_others_batch")
+                .route_name("ReportOthersBatch")
+                .request_type("crate::WorkerOthersBatchMessage")
+                .response_type("()")
+                .codec_path("anemo::rpc::codec::BincodeCodec")
+                .build(),
+        )
+        .method(
+            anemo_build::manual::Method::builder()
                 .name("worker_info")
                 .route_name("WorkerInfo")
                 .request_type("()")
@@ -133,9 +160,9 @@ fn build_anemo_services(out_dir: &Path) {
         .attributes(automock_attribute)
         .method(
             anemo_build::manual::Method::builder()
-                .name("send_message")
-                .route_name("SendMessage")
-                .request_type("crate::WorkerMessage")
+                .name("report_batch")
+                .route_name("ReportBatch")
+                .request_type("crate::WorkerBatchMessage")
                 .response_type("()")
                 .codec_path("anemo::rpc::codec::BincodeCodec")
                 .build(),

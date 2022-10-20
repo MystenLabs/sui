@@ -10,9 +10,6 @@ use types::WorkerToWorkerServer;
 async fn synchronize() {
     telemetry_subscribers::init_for_testing();
 
-    let (tx_primary, _rx_primary) = test_utils::test_channel!(1);
-    let (tx_batch_processor, mut rx_batch_processor) = test_utils::test_channel!(1);
-
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
     let worker_cache = fixture.shared_worker_cache();
@@ -29,12 +26,10 @@ async fn synchronize() {
         id,
         committee: committee.into(),
         worker_cache,
-        store,
+        store: store.clone(),
         request_batches_timeout: Duration::from_secs(999),
         request_batches_retry_nodes: 3, // Not used in this test.
         tx_reconfigure,
-        tx_primary,
-        tx_batch_processor,
     };
 
     // Set up mock behavior for child RequestBatches RPC.
@@ -53,9 +48,9 @@ async fn synchronize() {
     }
     #[async_trait]
     impl WorkerToWorker for MockWorkerToWorker {
-        async fn send_message(
+        async fn report_batch(
             &self,
-            _request: anemo::Request<WorkerMessage>,
+            _request: anemo::Request<WorkerBatchMessage>,
         ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
             unimplemented!();
         }
@@ -93,16 +88,12 @@ async fn synchronize() {
         .insert(send_network.downgrade())
         .is_none());
     handler.synchronize(request).await.unwrap();
-    let recv_batch = rx_batch_processor.recv().await.unwrap();
-    assert_eq!(recv_batch, batch);
+    assert_eq!(store.read(batch.digest()).await.unwrap().unwrap(), batch);
 }
 
 #[tokio::test]
 async fn synchronize_when_batch_exists() {
     telemetry_subscribers::init_for_testing();
-
-    let (tx_primary, mut rx_primary) = test_utils::test_channel!(1);
-    let (tx_batch_processor, _rx_batch_processor) = test_utils::test_channel!(1);
 
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
@@ -124,8 +115,6 @@ async fn synchronize_when_batch_exists() {
         request_batches_timeout: Duration::from_secs(999),
         request_batches_retry_nodes: 3, // Not used in this test.
         tx_reconfigure,
-        tx_primary,
-        tx_batch_processor,
     };
 
     // Store the batch.
@@ -141,16 +130,6 @@ async fn synchronize_when_batch_exists() {
         digests: missing.clone(),
         target,
     };
-    let responder_handle = tokio::spawn(async move {
-        if let WorkerPrimaryMessage::OthersBatch(recv_digest, recv_id) =
-            rx_primary.recv().await.unwrap()
-        {
-            assert_eq!(recv_digest, batch_id);
-            assert_eq!(recv_id, id);
-        } else {
-            panic!("received unexpected WorkerPrimaryMessage");
-        }
-    });
 
     // Send a sync request.
     // Don't bother to inject a fake network because handler shouldn't need it.
@@ -158,15 +137,11 @@ async fn synchronize_when_batch_exists() {
         .synchronize(anemo::Request::new(message))
         .await
         .unwrap();
-    responder_handle.await.unwrap();
 }
 
 #[tokio::test]
 async fn delete_batches() {
     telemetry_subscribers::init_for_testing();
-
-    let (tx_primary, _rx_primary) = test_utils::test_channel!(1);
-    let (tx_batch_processor, _rx_batch_processor) = test_utils::test_channel!(1);
 
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
@@ -192,8 +167,6 @@ async fn delete_batches() {
         request_batches_timeout: Duration::from_secs(999),
         request_batches_retry_nodes: 3, // Not used in this test.
         tx_reconfigure,
-        tx_primary,
-        tx_batch_processor,
     };
     let message = WorkerDeleteBatchesMessage {
         digests: vec![digest],

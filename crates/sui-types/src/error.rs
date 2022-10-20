@@ -192,6 +192,8 @@ pub enum SuiError {
     ClientIoError { error: String },
     #[error("Cannot transfer immutable object.")]
     TransferImmutableError,
+    #[error("Wrong initial version given for shared object")]
+    SharedObjectStartingVersionMismatch,
 
     // Errors related to batches
     #[error("The range specified is invalid.")]

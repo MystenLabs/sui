@@ -10,7 +10,7 @@ use sui_core::{
     authority_aggregator::AuthorityAggregator, authority_client::NetworkAuthorityClient,
 };
 use sui_types::{
-    base_types::{ObjectID, ObjectRef, SuiAddress},
+    base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress},
     crypto::{get_key_pair, AccountKeyPair, EmptySignInfo},
     messages::TransactionEnvelope,
     object::Owner,
@@ -23,6 +23,7 @@ use test_utils::{
 pub struct SharedCounterTestPayload {
     package_ref: ObjectRef,
     counter_id: ObjectID,
+    counter_initial_shared_version: SequenceNumber,
     gas: Gas,
     sender: SuiAddress,
     keypair: Arc<AccountKeyPair>,
@@ -33,6 +34,7 @@ impl Payload for SharedCounterTestPayload {
         Box::new(SharedCounterTestPayload {
             package_ref: self.package_ref,
             counter_id: self.counter_id,
+            counter_initial_shared_version: self.counter_initial_shared_version,
             gas: (new_gas, self.gas.1),
             sender: self.sender,
             keypair: self.keypair.clone(),
@@ -43,6 +45,7 @@ impl Payload for SharedCounterTestPayload {
             self.gas.0,
             self.package_ref,
             self.counter_id,
+            self.counter_initial_shared_version,
             self.sender,
             &self.keypair,
         )
@@ -164,9 +167,11 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
                     &keypair,
                 );
                 if let Some(effects) = submit_transaction(transaction, agg.clone()).await {
+                    let counter_ref = effects.created[0].0;
                     Box::new(SharedCounterTestPayload {
                         package_ref: self.basics_package_ref.unwrap(),
-                        counter_id: effects.created[0].0 .0,
+                        counter_id: counter_ref.0,
+                        counter_initial_shared_version: counter_ref.1,
                         gas: effects.gas_object,
                         sender,
                         keypair: Arc::new(keypair),

@@ -46,6 +46,8 @@ members = [
 # without significantly increasing binary size
 debug = true
 strip = 'debuginfo'
+# Exit process with SIGABRT when any thread panics
+panic = 'abort'
 
 [profile.bench]
 # Do not strip any debug info.  This helps the widest set of profiling tools
@@ -92,6 +94,11 @@ move-prover = { git = "https://github.com/move-language/move", rev = "c9b5765f81
 move-prover-boogie-backend = { git = "https://github.com/move-language/move", rev = "c9b5765f816d773618cc12a70a0095f644bbc68d" }
 
 fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "7c685a4b67680ef3e5d48117f4e2e3aef5c50526" }
+
+# anemo dependencies
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "1b977fe20a615b7a7045f779f9aafa120389c2ab" }
+anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "1b977fe20a615b7a7045f779f9aafa120389c2ab" }
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "1b977fe20a615b7a7045f779f9aafa120389c2ab" }
 
 # Use the same workspace-hack across crates.
 workspace-hack = { path = "crates/workspace-hack" }

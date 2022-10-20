@@ -1,11 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anemo_tower::callback::CallbackLayer;
+use anemo_tower::trace::TraceLayer;
 use anyhow::anyhow;
 use anyhow::bail;
 use anyhow::Result;
 use futures::TryFutureExt;
 use mysten_network::server::ServerBuilder;
+use narwhal_network::metrics::MetricsMakeCallbackHandler;
+use narwhal_network::metrics::{NetworkConnectionMetrics, NetworkMetrics};
 use parking_lot::Mutex;
 use prometheus::Registry;
 use std::option::Option::None;
@@ -39,6 +43,7 @@ use sui_storage::{
 };
 use sui_types::messages::{CertifiedTransaction, CertifiedTransactionEffects};
 use tokio::sync::mpsc::channel;
+use tower::ServiceBuilder;
 use tracing::{error, info, warn};
 
 use crate::metrics::GrpcMetrics;
@@ -74,6 +79,8 @@ pub struct SuiNode {
     transaction_orchestrator: Option<Arc<TransactiondOrchestrator<NetworkAuthorityClient>>>,
     _prometheus_registry: Registry,
 
+    _p2p_network: anemo::Network,
+
     #[cfg(msim)]
     sim_node: sui_simulator::runtime::NodeHandle,
 }
@@ -92,7 +99,7 @@ impl SuiNode {
 
         let secret = Arc::pin(config.protocol_key_pair().copy());
         let committee = genesis.committee()?;
-        let store = Arc::new(AuthorityStore::open(&config.db_path().join("store"), None));
+        let store = Arc::new(AuthorityStore::open(&config.db_path().join("store"), None)?);
         let committee_store = Arc::new(CommitteeStore::new(
             config.db_path().join("epochs"),
             &committee,
@@ -294,6 +301,47 @@ impl SuiNode {
             tokio::spawn(server.serve().map_err(Into::into))
         };
 
+        let p2p_network = {
+            let inbound_network_metrics =
+                NetworkMetrics::new("sui", "inbound", &prometheus_registry);
+            let outbound_network_metrics =
+                NetworkMetrics::new("sui", "outbound", &prometheus_registry);
+            let network_connection_metrics =
+                NetworkConnectionMetrics::new("sui", &prometheus_registry);
+
+            let routes = anemo::Router::new();
+
+            let service = ServiceBuilder::new()
+                .layer(TraceLayer::new_for_server_errors())
+                .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
+                    Arc::new(inbound_network_metrics),
+                )))
+                .service(routes);
+
+            let outbound_layer = ServiceBuilder::new()
+                .layer(TraceLayer::new_for_client_and_server_errors())
+                .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
+                    Arc::new(outbound_network_metrics),
+                )))
+                .into_inner();
+
+            let network = anemo::Network::bind(config.p2p_config.listen_address)
+                .server_name("sui")
+                .private_key(config.network_key_pair.copy().private().0.to_bytes())
+                .config(config.p2p_config.anemo_config.clone().unwrap_or_default())
+                .outbound_request_layer(outbound_layer)
+                .start(service)?;
+            info!("P2p network started on {}", network.local_addr());
+
+            let _connection_monitor_handle =
+                narwhal_network::connectivity::ConnectionMonitor::spawn(
+                    network.downgrade(),
+                    network_connection_metrics,
+                );
+
+            network
+        };
+
         let (json_rpc_service, ws_subscription_service) = build_http_servers(
             state.clone(),
             &transaction_orchestrator.clone(),
@@ -315,6 +363,7 @@ impl SuiNode {
             active: active_authority,
             transaction_orchestrator,
             _prometheus_registry: prometheus_registry,
+            _p2p_network: p2p_network,
 
             #[cfg(msim)]
             sim_node: sui_simulator::runtime::NodeHandle::current(),
@@ -375,7 +424,8 @@ pub async fn build_http_servers(
         return Ok((None, None));
     }
 
-    let mut server = JsonRpcServerBuilder::new(false, prometheus_registry)?;
+    let mut server =
+        JsonRpcServerBuilder::new(env!("CARGO_PKG_VERSION"), false, prometheus_registry)?;
 
     server.register_module(ReadApi::new(state.clone()))?;
     server.register_module(FullNodeApi::new(state.clone()))?;
@@ -401,7 +451,8 @@ pub async fn build_http_servers(
 
     let ws_server_handle = match config.websocket_address {
         Some(ws_addr) => {
-            let mut server = JsonRpcServerBuilder::new(true, prometheus_registry)?;
+            let mut server =
+                JsonRpcServerBuilder::new(env!("CARGO_PKG_VERSION"), true, prometheus_registry)?;
             if let Some(tx_streamer) = state.transaction_streamer.clone() {
                 server.register_module(TransactionStreamingApiImpl::new(
                     state.clone(),

@@ -19,6 +19,7 @@
     - [Witness](./patterns/witness.md)
     - [Transferable Witness](./patterns/transferable-witness.md)
     - [Hot Potato](./patterns/hot-potato.md)
+    - [ID Pointer](./patterns/id-pointer.md)
 - [Samples](./samples/README.md)
     - [Make an NFT](./samples/nft.md)
     - [Create a Coin (ERC20)](./samples/coin.md)

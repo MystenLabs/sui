@@ -12,7 +12,7 @@ use move_vm_types::{
 };
 use smallvec::smallvec;
 use std::collections::VecDeque;
-use sui_types::object::Owner;
+use sui_types::{base_types::SequenceNumber, object::Owner};
 
 use super::object_runtime::ObjectRuntime;
 /// Implementation of Move native function
@@ -77,7 +77,16 @@ pub fn share_object(
 
     let ty = ty_args.pop().unwrap();
     let obj = args.pop_back().unwrap();
-    object_runtime_transfer(context, Owner::Shared, ty, obj)?;
+    object_runtime_transfer(
+        context,
+        // Dummy version, to be filled with the correct initial version when the transaction is
+        // finalized.
+        Owner::Shared {
+            initial_shared_version: SequenceNumber::new(),
+        },
+        ty,
+        obj,
+    )?;
     let cost = legacy_emit_cost();
     Ok(NativeResult::ok(cost, smallvec![]))
 }

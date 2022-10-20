@@ -10,6 +10,12 @@
             {
                 "ignoreAtRules": ["tailwind"]
             }
+        ],
+        "function-no-unknown": [
+            true,
+            {
+                "ignoreFunctions": ["theme"]
+            }
         ]
     }
 }

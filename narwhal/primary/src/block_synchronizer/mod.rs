@@ -9,7 +9,7 @@ use crate::{
     primary::PrimaryMessage,
     utils, PayloadToken, CHANNEL_CAPACITY,
 };
-use config::{Committee, Parameters, SharedWorkerCache, Stake, WorkerId};
+use config::{Committee, Parameters, SharedWorkerCache, WorkerId};
 use crypto::PublicKey;
 use fastcrypto::hash::Hash;
 use futures::{
@@ -20,7 +20,7 @@ use futures::{
 use network::{P2pNetwork, UnreliableNetwork};
 use rand::{rngs::SmallRng, SeedableRng};
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+    collections::{HashMap, HashSet},
     time::Duration,
 };
 use storage::CertificateStore;
@@ -36,11 +36,11 @@ use tokio::{
 };
 use tracing::{debug, error, info, instrument, trace, warn};
 use types::{
-    metered_channel, BatchDigest, Certificate, CertificateDigest, ReconfigureNotification, Round,
+    metered_channel, BatchDigest, Certificate, CertificateDigest, ReconfigureNotification,
     WorkerSynchronizeMessage,
 };
 
-use self::responses::{AvailabilityResponse, CertificateDigestsResponse};
+use self::responses::AvailabilityResponse;
 
 #[cfg(test)]
 #[path = "tests/block_synchronizer_tests.rs"]
@@ -67,18 +67,11 @@ pub struct BlockHeader {
     pub fetched_from_storage: bool,
 }
 
-type CertificateIDsByRounds = BTreeMap<Round, Vec<CertificateDigest>>;
 type ResultSender = Sender<BlockSynchronizeResult<BlockHeader>>;
 pub type BlockSynchronizeResult<T> = Result<T, SyncError>;
 
 #[derive(Debug)]
 pub enum Command {
-    /// A request to have this authority catch up with others on certificates as much as possible.
-    /// It is intended to be used when this authority has just restarted, or has detected that it is
-    /// missing a significant number of latest rounds from the dag.
-    SynchronizeRange {
-        respond_to: Sender<CertificateIDsByRounds>,
-    },
     /// A request to synchronize and output the block headers
     /// This will not perform any attempt to fetch the header's
     /// batches. This component does NOT check whether the
@@ -111,9 +104,6 @@ pub enum Command {
 // one state to the other those commands are being used.
 #[allow(clippy::large_enum_variant)]
 enum State {
-    RangeSynchronized {
-        certificate_ids: CertificateIDsByRounds,
-    },
     HeadersSynchronized {
         request_id: RequestID,
         certificates: HashMap<CertificateDigest, BlockSynchronizeResult<BlockHeader>>,
@@ -162,20 +152,6 @@ impl PendingIdentifier {
     }
 }
 
-// Tracks the responses from the inflight synchronize range request.
-#[derive(Default)]
-struct SyncRangeState {
-    // Whether there is an active range sync request.
-    // When active, both item_sender and result_sender are valid. And both are None when inactive.
-    running: bool,
-    // Keeps track of peers that have responded, to avoid processing duplicated responses.
-    responded_peers: BTreeSet<PublicKey>,
-    // Relays each range sync response to the waiter for processing.
-    item_sender: Option<Sender<(CertificateIDsByRounds, PublicKey)>>,
-    // Relays the final response to the original caller of the range sync.
-    result_sender: Option<Sender<CertificateIDsByRounds>>,
-}
-
 pub struct BlockSynchronizer {
     /// The public key of this primary.
     name: PublicKey,
@@ -198,9 +174,6 @@ pub struct BlockSynchronizer {
     /// Pending block requests either for header or payload type
     pending_requests: HashMap<PendingIdentifier, Vec<ResultSender>>,
 
-    /// Status of the inflight range sync request if there is one running.
-    sync_range_state: SyncRangeState,
-
     /// Requests managers
     map_certificate_responses_senders: HashMap<RequestID, Sender<CertificatesResponse>>,
 
@@ -216,13 +189,6 @@ pub struct BlockSynchronizer {
 
     /// The persistent storage for payload markers from workers
     payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
-
-    /// The maximum number of rounds to be included in each range request.
-    /// Set to be the same as the default GC threshold.
-    range_request_max_rounds: u64,
-
-    /// Timeout when synchronizing a range of certificate digests
-    range_synchronize_timeout: Duration,
 
     /// Timeout when synchronizing the certificates
     certificates_synchronize_timeout: Duration,
@@ -258,14 +224,11 @@ impl BlockSynchronizer {
                 rx_commands,
                 rx_availability_responses,
                 pending_requests: HashMap::new(),
-                sync_range_state: SyncRangeState::default(),
                 map_certificate_responses_senders: HashMap::new(),
                 map_payload_availability_responses_senders: HashMap::new(),
                 network,
                 payload_store,
                 certificate_store,
-                range_request_max_rounds: parameters.gc_depth,
-                range_synchronize_timeout: parameters.block_synchronizer.range_synchronize_timeout,
                 certificates_synchronize_timeout: parameters
                     .block_synchronizer
                     .certificates_synchronize_timeout,
@@ -299,12 +262,6 @@ impl BlockSynchronizer {
             tokio::select! {
                 Some(command) = self.rx_commands.recv() => {
                     match command {
-                        Command::SynchronizeRange { respond_to } => {
-                            let fut = self.handle_synchronize_range_command(respond_to).await;
-                            if fut.is_some() {
-                                waiting.push(fut.unwrap());
-                            }
-                        },
                         Command::SynchronizeBlockHeaders { block_ids, respond_to } => {
                             let fut = self.handle_synchronize_block_headers_command(block_ids, respond_to).await;
                             if fut.is_some() {
@@ -321,21 +278,12 @@ impl BlockSynchronizer {
                 },
                 Some(response) = self.rx_availability_responses.recv() => {
                     match response {
-                        AvailabilityResponse::CertificateDigest(digest_response) => self.handle_digest_response(digest_response).await,
                         AvailabilityResponse::Certificate(certificate_response) => self.handle_certificates_response(certificate_response).await,
                         AvailabilityResponse::Payload(payload_availability_response) => self.handle_payload_availability_response(payload_availability_response).await,
                     }
                 },
                 Some(state) = waiting.next() => {
                     match state {
-                        State::RangeSynchronized { certificate_ids } => {
-                            assert!(self.sync_range_state.running);
-                            if let Err(e) = self.sync_range_state.result_sender.as_ref().unwrap().send(certificate_ids).await {
-                                error!("Failed to send back range sync result {e}");
-                            }
-                            // Range sync is done. Clear the state.
-                            self.sync_range_state = SyncRangeState::default();
-                        },
                         State::HeadersSynchronized { request_id, certificates } => {
                             debug!("Result for the block headers synchronize request id {request_id}");
 
@@ -386,148 +334,6 @@ impl BlockSynchronizer {
                 }
             }
         }
-    }
-
-    #[instrument(level = "trace", skip_all)]
-    async fn handle_synchronize_range_command<'a>(
-        &mut self,
-        respond_to: Sender<CertificateIDsByRounds>,
-    ) -> Option<BoxFuture<'a, State>> {
-        // Allow only one range sync running at a time, to avoid repeated range sync on certain rounds.
-        // It is expected that if there are still missing rounds after the current sync, another
-        // range sync will be triggered.
-        if self.sync_range_state.running {
-            return None;
-        }
-
-        // Initialize range sync state.
-        let (sender, receiver) = channel(self.committee.size());
-        assert!(self.sync_range_state.responded_peers.is_empty());
-        self.sync_range_state.running = true;
-        self.sync_range_state.result_sender = Some(respond_to);
-        self.sync_range_state.item_sender = Some(sender);
-
-        // Broadcast range sync request.
-        let last_round = self.certificate_store.last_round_number();
-        // NOTE: Assuming locally missing certificates in existing rounds are negligible issues,
-        // range sync starts from the next round where there is no certificate stored locally.
-        // We can switch to a more fine grained per-certificate-author range sync if necessary.
-        // Start sync from round 0, if there is no certificate in store.
-        let range_start = if let Some(r) = last_round { r + 1 } else { 0 };
-        let message = PrimaryMessage::CertificatesRangeRequest {
-            range_start,
-            max_rounds: self.range_request_max_rounds,
-            requestor: self.name.clone(),
-        };
-        self.broadcast_batch_request(message.clone()).await;
-
-        // Responses are not await here to avoid blocking the BlockSynchronizer loop.
-        Some(
-            Self::wait_for_range_sync_responses(
-                receiver,
-                self.committee.clone(),
-                self.range_synchronize_timeout,
-            )
-            .boxed(),
-        )
-    }
-
-    #[instrument(level = "trace", skip_all)]
-    async fn handle_digest_response(&mut self, certificate_digests: CertificateDigestsResponse) {
-        let CertificateDigestsResponse {
-            certificate_ids,
-            from,
-        } = certificate_digests;
-        if !self.sync_range_state.running {
-            trace!("dropping range sync response since range sync is not active");
-            return;
-        }
-        if from == self.name {
-            trace!("dropping range sync response from own authority");
-            return;
-        }
-        if self.committee.primary(&from).is_err() {
-            warn!("dropping range sync response from an origin that is not in the committee");
-            return;
-        }
-        let state = &mut self.sync_range_state;
-        if !state.responded_peers.insert(from.clone()) {
-            trace!(
-                "dropping range sync response from a peer we already heard from: {}",
-                from.clone()
-            );
-            return;
-        }
-        if certificate_ids.len() > self.range_request_max_rounds as usize {
-            // Skip response containing too many rounds.
-            warn!(
-                "dropping range sync response from {} containing too many rounds: {} > {}",
-                from,
-                certificate_ids.len(),
-                self.range_request_max_rounds,
-            );
-            return;
-        }
-        for cert_ids in certificate_ids.values() {
-            if cert_ids.len() > self.committee.size() {
-                warn!("dropping range sync response from {} with one round containing too many digests: {} > {}", from, cert_ids.len(), self.committee.size());
-                return;
-            }
-        }
-        // Since range sync state is active, item_sender must be valid.
-        if let Err(e) = state
-            .item_sender
-            .as_ref()
-            .unwrap()
-            .send((certificate_ids, from))
-            .await
-        {
-            error!("Failed to forward range sync response {e}");
-        }
-    }
-
-    async fn wait_for_range_sync_responses(
-        mut receiver: Receiver<(CertificateIDsByRounds, PublicKey)>,
-        committee: Committee,
-        range_synchronize_timeout: Duration,
-    ) -> State {
-        let total_expected_responses = committee.size() - 1;
-        let mut num_of_responses: usize = 0;
-        let mut received_certificates_ids = BTreeMap::<(Round, CertificateDigest), Stake>::new();
-
-        let timer = sleep(range_synchronize_timeout);
-        tokio::pin!(timer);
-
-        loop {
-            tokio::select! {
-                Some((certificate_ids, from)) = receiver.recv() => {
-                    let stake = committee.stake(&from);
-                    for (round, cert_ids) in &certificate_ids {
-                        for cert_id in cert_ids {
-                            let s = received_certificates_ids.entry((*round, *cert_id)).or_default();
-                            *s += stake;
-                        }
-                    }
-
-                    num_of_responses += 1;
-                    if num_of_responses == total_expected_responses {
-                        break;
-                    }
-                },
-                () = &mut timer => {
-                    break;
-                }
-            }
-        }
-
-        let mut certificate_ids = BTreeMap::<Round, Vec<CertificateDigest>>::new();
-        for ((round, cert_id), stake) in received_certificates_ids {
-            if stake >= committee.validity_threshold() {
-                certificate_ids.entry(round).or_default().push(cert_id);
-            }
-        }
-
-        State::RangeSynchronized { certificate_ids }
     }
 
     #[instrument(level = "trace", skip_all)]
