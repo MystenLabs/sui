@@ -28,7 +28,7 @@ pub struct ConsensusMetrics {
     /// The latency between two successful commit rounds
     pub commit_rounds_latency: Histogram,
     /// The number of certificates committed per commit round
-    pub commit_depth: Histogram,
+    pub committed_certificates: Histogram,
     /// When a certificate is received on an odd round, we check
     /// about the previous (even) round leader. We do have three possible cases which
     /// are tagged as values of the label "outcome":
@@ -90,8 +90,8 @@ impl ConsensusMetrics {
                 ],
                 registry
             ).unwrap(),
-            commit_depth: register_histogram_with_registry!(
-                "consensus_commit_depth",
+            committed_certificates: register_histogram_with_registry!(
+                "committed_certificates",
                 "The number of certificates committed on a commit round",
                 // buckets in number of certificates
                 vec![

@@ -200,7 +200,9 @@ impl ConsensusProtocol for Bullshark {
 
         debug!("Total committed certificates: {}", sequence.len());
 
-        self.metrics.commit_depth.observe(sequence.len() as f64);
+        self.metrics
+            .committed_certificates
+            .observe(sequence.len() as f64);
 
         Ok(sequence)
     }
