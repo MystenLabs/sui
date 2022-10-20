@@ -11,7 +11,7 @@
 
 module test::m {
     use sui::tx_context::TxContext;
-    use sui::dynamic_object_field as dof;
+    use sui::dynamic_object_field as ofield;
 
     struct S has key, store {
         id: sui::object::UID,
@@ -25,7 +25,7 @@ module test::m {
     public entry fun share(ctx: &mut TxContext) {
         let id = sui::object::new(ctx);
         let child = S { id: sui::object::new(ctx) };
-        dof::add(&mut id, 0, child);
+        ofield::add(&mut id, 0, child);
         sui::transfer::share_object(S { id })
     }
 

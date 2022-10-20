@@ -10,7 +10,7 @@
 
 module test::m {
     use sui::tx_context::{Self, TxContext};
-    use sui::dynamic_object_field as dof;
+    use sui::dynamic_object_field as ofield;
 
     struct S has key, store {
         id: sui::object::UID,
@@ -28,7 +28,7 @@ module test::m {
 
     public entry fun add(parent: &mut S, idx: u64, ctx: &mut TxContext) {
         let child = S { id: sui::object::new(ctx) };
-        dof::add(&mut parent.id, idx, child);
+        ofield::add(&mut parent.id, idx, child);
     }
 
     public entry fun wrap(s: S, ctx: &mut TxContext) {

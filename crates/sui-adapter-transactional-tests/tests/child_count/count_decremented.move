@@ -10,7 +10,7 @@
 
 module test::m {
     use sui::tx_context::{Self, TxContext};
-    use sui::dynamic_object_field as dof;
+    use sui::dynamic_object_field as ofield;
 
     struct S has key, store {
         id: sui::object::UID,
@@ -28,32 +28,22 @@ module test::m {
 
     public entry fun add(parent: &mut S, idx: u64, ctx: &mut TxContext) {
         let child = S { id: sui::object::new(ctx) };
-        dof::add(&mut parent.id, idx, child);
+        ofield::add(&mut parent.id, idx, child);
     }
 
     public entry fun remove(parent: &mut S, idx: u64) {
-        let S { id } = dof::remove(&mut parent.id, idx);
+        let S { id } = ofield::remove(&mut parent.id, idx);
         sui::object::delete(id)
     }
 
     public entry fun remove_and_add(parent: &mut S, idx: u64) {
-        let child: S = dof::remove(&mut parent.id, idx);
-        dof::add(&mut parent.id, idx, child)
+        let child: S = ofield::remove(&mut parent.id, idx);
+        ofield::add(&mut parent.id, idx, child)
     }
 
     public entry fun remove_and_wrap(parent: &mut S, idx: u64, ctx: &mut TxContext) {
-        let child: S = dof::remove(&mut parent.id, idx);
-        dof::add(&mut parent.id, idx, R { id: sui::object::new(ctx), s: child })
-    }
-
-    public entry fun delete(s: S) {
-        let S { id } = s;
-        sui::object::delete(id)
-    }
-
-    public entry fun wrap(s: S, ctx: &mut TxContext) {
-        let r = R { id: sui::object::new(ctx), s };
-        sui::transfer::transfer(r, tx_context::sender(ctx))
+        let child: S = ofield::remove(&mut parent.id, idx);
+        ofield::add(&mut parent.id, idx, R { id: sui::object::new(ctx), s: child })
     }
 }
 

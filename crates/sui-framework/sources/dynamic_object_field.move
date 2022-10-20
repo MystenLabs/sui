@@ -9,7 +9,7 @@ module sui::dynamic_object_field {
 
 use std::option::{Self, Option};
 use sui::dynamic_field::{
-    Self as df,
+    Self as field,
     add_child_object,
     borrow_child_object,
     remove_child_object,
@@ -45,8 +45,8 @@ public fun add<Name: copy + drop + store, Value: key + store>(
 ) {
     let key = Wrapper { name };
     let id = object::id(&value);
-    df::add(object, key, id);
-    let (field_id, _) = df::field_ids<Wrapper<Name>>(object, key);
+    field::add(object, key, id);
+    let (field_id, _) = field::field_ids<Wrapper<Name>>(object, key);
     add_child_object(object::id_to_address(&field_id), value);
 }
 
@@ -59,7 +59,7 @@ public fun borrow<Name: copy + drop + store, Value: key + store>(
     name: Name,
 ): &Value {
     let key = Wrapper { name };
-    let (field_id, value_id) = df::field_ids<Wrapper<Name>>(object, key);
+    let (field_id, value_id) = field::field_ids<Wrapper<Name>>(object, key);
     borrow_child_object<Value>(object::id_to_address(&field_id), object::id_to_address(&value_id))
 }
 
@@ -72,7 +72,7 @@ public fun borrow_mut<Name: copy + drop + store, Value: key + store>(
     name: Name,
 ): &mut Value {
     let key = Wrapper { name };
-    let (field_id, value_id) = df::field_ids<Wrapper<Name>>(object, key);
+    let (field_id, value_id) = field::field_ids<Wrapper<Name>>(object, key);
     borrow_child_object<Value>(object::id_to_address(&field_id), object::id_to_address(&value_id))
 }
 
@@ -86,12 +86,12 @@ public fun remove<Name: copy + drop + store, Value: key + store>(
     name: Name,
 ): Value {
     let key = Wrapper { name };
-    let (field_id, value_id) = df::field_ids<Wrapper<Name>>(object, key);
+    let (field_id, value_id) = field::field_ids<Wrapper<Name>>(object, key);
     let value = remove_child_object<Value>(
         object::id_to_address(&field_id),
         object::id_to_address(&value_id),
     );
-    df::remove<Wrapper<Name>, ID>(object, key);
+    field::remove<Wrapper<Name>, ID>(object, key);
     value
 }
 
@@ -102,7 +102,7 @@ public fun exists_<Name: copy + drop + store>(
     name: Name,
 ): bool {
     let key = Wrapper { name };
-    df::exists_with_type<Wrapper<Name>, ID>(object, key)
+    field::exists_with_type<Wrapper<Name>, ID>(object, key)
 }
 
 /// Returns the ID of the object associated with the dynamic object field
@@ -112,8 +112,8 @@ public fun id<Name: copy + drop + store>(
     name: Name,
 ): Option<ID> {
     let key = Wrapper { name };
-    if (!df::exists_with_type<Wrapper<Name>, ID>(object, key)) return option::none();
-    let (_field_id, value_id) = df::field_ids<Wrapper<Name>>(object, key);
+    if (!field::exists_with_type<Wrapper<Name>, ID>(object, key)) return option::none();
+    let (_field_id, value_id) = field::field_ids<Wrapper<Name>>(object, key);
     option::some(value_id)
 }
 
