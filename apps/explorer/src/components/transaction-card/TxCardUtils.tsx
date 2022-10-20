@@ -180,7 +180,7 @@ export const getDataOnTxDigests = (
                                 : {}),
                         };
                     })
-                    // Remove failed transactions and sort by sequence number
+                    // Remove failed transactions
                     .filter((itm) => itm)
             );
         });
