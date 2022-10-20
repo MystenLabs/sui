@@ -4827,8 +4827,6 @@ dependencies = [
  "fastcrypto",
  "hex",
  "hex-literal",
- "hkdf",
- "k256",
  "merlin",
  "once_cell",
  "proptest",
