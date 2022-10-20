@@ -16,11 +16,6 @@ module test::m {
         id: sui::object::UID,
     }
 
-    struct R has key, store {
-        id: sui::object::UID,
-        s: S,
-    }
-
     public entry fun mint(ctx: &mut TxContext) {
         let id = sui::object::new(ctx);
         sui::transfer::transfer(S { id }, tx_context::sender(ctx))
@@ -31,29 +26,9 @@ module test::m {
         ofield::add(&mut parent.id, idx, child);
     }
 
-    public entry fun remove(parent: &mut S, idx: u64) {
-        let S { id } = ofield::remove(&mut parent.id, idx);
-        sui::object::delete(id)
-    }
-
-    public entry fun remove_and_add(parent: &mut S, idx: u64) {
-        let child: S = ofield::remove(&mut parent.id, idx);
-        ofield::add(&mut parent.id, idx, child)
-    }
-
-    public entry fun remove_and_wrap(parent: &mut S, idx: u64, ctx: &mut TxContext) {
-        let child: S = ofield::remove(&mut parent.id, idx);
-        ofield::add(&mut parent.id, idx, R { id: sui::object::new(ctx), s: child })
-    }
-
     public entry fun delete(s: S) {
         let S { id } = s;
         sui::object::delete(id)
-    }
-
-    public entry fun wrap(s: S, ctx: &mut TxContext) {
-        let r = R { id: sui::object::new(ctx), s };
-        sui::transfer::transfer(r, tx_context::sender(ctx))
     }
 }
 
