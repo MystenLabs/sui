@@ -22,6 +22,7 @@ futures = "0.3.23"
 uuid = {version = "1.1.2", features = [ "v4", "fast-rng"]}
 prometheus = "0.13.2"
 scopeguard = "1.1"
+tap = "1.0"
 
 sui = { path = "../sui" }
 sui-node = { path = "../sui-node" }

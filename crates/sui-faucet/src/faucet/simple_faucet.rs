@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::metrics::FaucetMetrics;
 use anyhow::anyhow;
 use async_trait::async_trait;
-
-use crate::metrics::FaucetMetrics;
 use prometheus::Registry;
+use tap::tap::TapFallible;
 
 #[cfg(test)]
 use std::collections::HashSet;
@@ -73,12 +73,13 @@ impl SimpleFaucet {
 
         let (producer, consumer) = mpsc::channel(coins.len());
         for coin in &coins {
-            if let Err(e) = producer.send(*coin.id()).await {
-                panic!("Failed to set up gas pools: {:?}", e);
-            }
+            producer
+                .send(*coin.id())
+                .await
+                .tap_ok(|_| info!("Adding coin {:?} to gas pool", *coin.id()))
+                .tap_err(|e| error!("Failed to add gas coin {} to pools: {:?}", coin, e))
+                .unwrap();
         }
-
-        debug!("Using coins: {:?}", coins);
 
         let metrics = FaucetMetrics::new(prometheus_registry);
 
@@ -95,6 +96,7 @@ impl SimpleFaucet {
         &self,
         number_of_coins: usize,
         transfer_amount: u64,
+        uuid: Uuid,
     ) -> anyhow::Result<Vec<ObjectID>> {
         assert!(number_of_coins > 0);
         // If the gas candidate queue is exhausted, the request will be
@@ -105,9 +107,11 @@ impl SimpleFaucet {
         let mut coins = Vec::with_capacity(number_of_coins);
         let mut coins_to_immediately_recycle = Vec::new();
         while let Some(coin) = consumer.recv().await {
+            debug!(?uuid, "Taking coin from pool {:?}", coin);
             let gas_coin = self.get_gas_coin(coin).await?;
             if let Some(gas_coin) = gas_coin {
                 if gas_coin.value() >= transfer_amount + TRANSFER_SUI_GAS {
+                    debug!(?uuid, "Planning to use coin from pool {:?}", coin);
                     coins.push(coin);
                     if coins.len() == number_of_coins {
                         break;
@@ -118,11 +122,19 @@ impl SimpleFaucet {
                 }
             } else {
                 // Invalid gas, do not put it back to the queue.
+                warn!(
+                    ?uuid,
+                    "Coin {:?} is not longer valid, removing from pool", coin
+                );
             }
         }
         if !coins_to_immediately_recycle.is_empty() {
             // Immediately release consumer lock to prevent deadlock
             drop(consumer);
+            debug!(
+                ?uuid,
+                "Putting back coins with insufficient balance: {:?}", coins_to_immediately_recycle
+            );
             // Put coins that are not selected (e.g. balance not enough) back to the queue
             let producer = self.producer.lock().await;
             for coin in coins_to_immediately_recycle {
@@ -173,7 +185,7 @@ impl SimpleFaucet {
         let number_of_coins = amounts.len();
         // We assume the amounts are the same
         let coins = self
-            .select_coins(number_of_coins, amounts[0])
+            .select_coins(number_of_coins, amounts[0], uuid)
             .await
             .map_err(|err| {
                 FaucetError::Internal(format!("Failed to select coins: {:?}", err.to_string()))
@@ -202,9 +214,17 @@ impl SimpleFaucet {
         // in that the channel is initialized with big enough capacity.
         let producer = self.producer.lock().await;
         for coin in coins {
-            if let Err(e) = producer.send(coin).await {
-                panic!("Failed to put coin {:?} back to queue: {:?}", coin, e);
-            }
+            producer
+                .send(coin)
+                .await
+                .tap_ok(|_| debug!(?uuid, "Recycling coin {:?}", coin))
+                .tap_err(|e| {
+                    error!(
+                        ?uuid,
+                        "Failed to put coin {:?} back to queue: {:?}", coin, e
+                    )
+                })
+                .unwrap();
         }
         drop(producer);
 
@@ -214,7 +234,7 @@ impl SimpleFaucet {
                 if res.is_ok() {
                     true
                 } else {
-                    error!("Encountered error in transfer sui: {:?}", res);
+                    error!(?uuid, "Encountered error in transfer sui: {:?}", res);
                     false
                 }
             })
@@ -325,7 +345,14 @@ impl SimpleFaucet {
         let signature = context.config.keystore.sign(&signer, &data.to_bytes())?;
 
         let tx = Transaction::new(data, signature);
-        info!(tx_digest = ?tx.digest(), ?recipient, ?coin_id, ?uuid, "Broadcasting transfer obj txn");
+        let tx_digest = *tx.digest();
+        info!(
+            ?tx_digest,
+            ?recipient,
+            ?coin_id,
+            ?uuid,
+            "Broadcasting transfer obj txn"
+        );
         let response = context
             .client
             .quorum_driver()
@@ -333,7 +360,17 @@ impl SimpleFaucet {
                 tx,
                 Some(ExecuteTransactionRequestType::WaitForLocalExecution),
             )
-            .await?;
+            .await
+            .tap_err(|e| {
+                error!(
+                    ?tx_digest,
+                    ?recipient,
+                    ?coin_id,
+                    ?uuid,
+                    "Transfer Transaction failed: {:?}",
+                    e
+                )
+            })?;
         let tx_cert = response
             .tx_cert
             .ok_or_else(|| anyhow!("Expect Some(tx_cert)"))?;
