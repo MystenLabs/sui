@@ -140,14 +140,20 @@ async fn request_gas(
     info!(uuid = ?id, "Got new gas request.");
     let result = match payload {
         FaucetRequest::FixedAmountRequest(requests) => {
-            state
-                .faucet
-                .send(
-                    id,
-                    requests.recipient,
-                    &vec![state.config.amount; state.config.num_coins],
-                )
-                .await
+            // We spawn a tokio task for this such that connection drop will not interrupt
+            // it and impact the reclycing of coins
+            tokio::spawn(async move {
+                state
+                    .faucet
+                    .send(
+                        id,
+                        requests.recipient,
+                        &vec![state.config.amount; state.config.num_coins],
+                    )
+                    .await
+            })
+            .await
+            .unwrap()
         }
     };
     match result {

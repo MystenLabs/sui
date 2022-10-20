@@ -88,7 +88,7 @@ where
         request: QuorumDriverRequest,
     ) -> SuiResult<QuorumDriverResponse> {
         let tx_digest = request.transaction.digest();
-        debug!(?tx_digest, "Receive tranasction execution request");
+        debug!(?tx_digest, "Received tranasction execution request");
         self.metrics.current_requests_in_flight.inc();
         let _metrics_guard = scopeguard::guard(self.metrics.clone(), |metrics| {
             metrics.current_requests_in_flight.dec();
@@ -181,10 +181,11 @@ where
         &self,
         transaction: Transaction,
     ) -> SuiResult<CertifiedTransaction> {
+        let tx_digest = *transaction.digest();
         self.validators
             .load()
             .process_transaction(transaction)
-            .instrument(tracing::debug_span!("process_tx"))
+            .instrument(tracing::debug_span!("process_tx", ?tx_digest))
             .await
     }
 
@@ -196,7 +197,7 @@ where
             .validators
             .load()
             .process_certificate(certificate.clone())
-            .instrument(tracing::debug_span!("process_cert"))
+            .instrument(tracing::debug_span!("process_cert", tx_digest = ?certificate.digest()))
             .await?;
         let response = (certificate, effects);
         // An error to send the result to subscribers should not block returning the result.
@@ -287,7 +288,7 @@ where
                         // query the status.
                         match quorum_driver.process_certificate(certificate).await {
                             Err(err) => {
-                                warn!("Certificate processing failed: {:?}", err);
+                                warn!(?tx_digest, "Certificate processing failed: {:?}", err);
                             }
                             Ok(_) => {
                                 debug!(?tx_digest, "Certificate processing succeeded");
