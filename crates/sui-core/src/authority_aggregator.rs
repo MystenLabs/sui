@@ -1616,7 +1616,7 @@ where
                             Err(err) => {
                                 // We have an error here.
                                 // Append to the list off errors
-                                debug!(tx_digest = ?tx_digest, ?name, weight, "Failed to get signed transaction from validator handle_transaction");
+                                debug!(tx_digest = ?tx_digest, ?name, weight, "Failed to get signed transaction from validator handle_transaction: {:?}", err);
                                 state.errors.push(err);
                                 state.bad_stake += weight; // This is the bad stake counter
                             }
@@ -1695,7 +1695,7 @@ where
             .await?;
 
         debug!(
-            tx_digest = ?tx_digest,
+            ?tx_digest,
             num_errors = state.errors.len(),
             good_stake = state.good_stake,
             bad_stake = state.bad_stake,
@@ -1704,7 +1704,7 @@ where
             "Received signatures response from validators handle_transaction"
         );
         if !state.errors.is_empty() {
-            trace!("Errors received: {:?}", state.errors);
+            debug!(?tx_digest, "Errors received: {:?}", state.errors);
         }
 
         // If we have some certificate return it, or return an error.
@@ -1817,6 +1817,7 @@ where
                                 }
                             }
                             Err(err) => {
+                                debug!(tx_digest = ?tx_digest, ?name, weight, "Failed to get signed effects from validator handle_certificate: {:?}", err);
                                 state.errors.push(err);
                                 state.bad_stake += weight;
                                 if state.bad_stake > validity {
