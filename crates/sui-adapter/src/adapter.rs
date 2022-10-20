@@ -42,7 +42,7 @@ use sui_types::{
     event::{Event, TransferType},
     messages::{CallArg, EntryArgumentErrorKind, InputObjectKind, ObjectArg},
     object::{self, Data, MoveObject, Object, Owner, ID_END_INDEX},
-    storage::{DeleteKind, ObjectChange, ParentSync, Storage, WriteKind},
+    storage::{ChildObjectResolver, DeleteKind, ObjectChange, ParentSync, Storage, WriteKind},
 };
 use sui_verifier::{
     entry_points_verifier::{is_tx_context, RESOLVED_ASCII_STR, RESOLVED_UTF8_STR},
@@ -71,7 +71,7 @@ pub fn new_session<
     'v,
     'r,
     E: Debug,
-    S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage,
+    S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + ChildObjectResolver,
 >(
     vm: &'v MoveVM,
     state_view: &'r S,
@@ -94,7 +94,11 @@ pub fn new_session<
 #[allow(clippy::too_many_arguments)]
 pub fn execute<
     E: Debug,
-    S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage + ParentSync,
+    S: ResourceResolver<Error = E>
+        + ModuleResolver<Error = E>
+        + Storage
+        + ParentSync
+        + ChildObjectResolver,
 >(
     vm: &MoveVM,
     state_view: &mut S,
@@ -166,7 +170,11 @@ pub fn execute<
 #[allow(clippy::too_many_arguments)]
 fn execute_internal<
     E: Debug,
-    S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage + ParentSync,
+    S: ResourceResolver<Error = E>
+        + ModuleResolver<Error = E>
+        + Storage
+        + ParentSync
+        + ChildObjectResolver,
 >(
     vm: &MoveVM,
     state_view: &mut S,
@@ -288,7 +296,11 @@ fn execute_internal<
 
 pub fn publish<
     E: Debug,
-    S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage + ParentSync,
+    S: ResourceResolver<Error = E>
+        + ModuleResolver<Error = E>
+        + Storage
+        + ParentSync
+        + ChildObjectResolver,
 >(
     state_view: &mut S,
     natives: NativeFunctionTable,
@@ -320,7 +332,11 @@ pub fn publish<
 /// Store package in state_view and call module initializers
 pub fn store_package_and_init_modules<
     E: Debug,
-    S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage + ParentSync,
+    S: ResourceResolver<Error = E>
+        + ModuleResolver<Error = E>
+        + Storage
+        + ParentSync
+        + ChildObjectResolver,
 >(
     state_view: &mut S,
     vm: &MoveVM,
@@ -358,7 +374,11 @@ pub fn store_package_and_init_modules<
 /// Modules in module_ids_to_init must have the init method defined
 fn init_modules<
     E: Debug,
-    S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage + ParentSync,
+    S: ResourceResolver<Error = E>
+        + ModuleResolver<Error = E>
+        + Storage
+        + ParentSync
+        + ChildObjectResolver,
 >(
     state_view: &mut S,
     vm: &MoveVM,
@@ -404,7 +424,7 @@ fn init_modules<
 /// and the Sui verifier.
 pub fn verify_and_link<
     E: Debug,
-    S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage,
+    S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage + ChildObjectResolver,
 >(
     state_view: &S,
     modules: &[CompiledModule],
@@ -527,20 +547,26 @@ fn process_successful_execution<S: Storage + ParentSync>(
             ObjectID::try_from(&contents[0..ID_END_INDEX])
                 .expect("object contents should start with an id")
         );
-        let old_object = by_value_objects.get(&id);
-        let loaded_child_version = loaded_child_objects.get(&id);
-        let (write_kind, version) = match (write_kind, old_object, loaded_child_version) {
-            (_, Some((_, version)), _) => {
+        let old_object_opt = by_value_objects.get(&id);
+        let loaded_child_version_opt = loaded_child_objects.get(&id);
+        assert_invariant!(
+            old_object_opt.is_none() || loaded_child_version_opt.is_none(),
+            format!("Loaded {id} as a child, but that object was an input object")
+        );
+        let old_obj_ver = old_object_opt
+            .map(|(_, version)| *version)
+            .or_else(|| loaded_child_version_opt.copied());
+        let (write_kind, version) = match (write_kind, old_obj_ver) {
+            (_, Some(version)) => {
                 debug_assert!(write_kind == WriteKind::Mutate);
-                (WriteKind::Mutate, *version)
+                (WriteKind::Mutate, version)
             }
-            (WriteKind::Mutate, _, Some(loaded_version)) => (WriteKind::Mutate, *loaded_version),
             // When an object was wrapped at version `v`, we added a record into `parent_sync`
             // with version `v+1` along with OBJECT_DIGEST_WRAPPED. Now when the object is unwrapped,
             // it will also have version `v+1`, leading to a violation of the invariant that any
             // object_id and version pair must be unique. We use the version from parent_sync and
             // increment it (below), so we will have `(v+1)+1`, thus preserving the uniqueness
-            (WriteKind::Unwrap, None, _) => match state_view.get_latest_parent_entry_ref(id) {
+            (WriteKind::Unwrap, None) => match state_view.get_latest_parent_entry_ref(id) {
                 Ok(Some((_, last_version, _))) => (WriteKind::Unwrap, last_version),
                 // if the object is not in parent sync, it was wrapped before ever being stored into
                 // storage.
@@ -555,7 +581,7 @@ fn process_successful_execution<S: Storage + ParentSync>(
                     ));
                 }
             },
-            (_, None, _) => {
+            (_, None) => {
                 debug_assert!(write_kind == WriteKind::Create);
                 (WriteKind::Create, SequenceNumber::new())
             }
@@ -566,7 +592,7 @@ fn process_successful_execution<S: Storage + ParentSync>(
 
         #[cfg(debug_assertions)]
         {
-            check_transferred_object_invariants(&move_obj, old_object)
+            check_transferred_object_invariants(&move_obj, &old_obj_ver)
         }
 
         // increment the object version. note that if the transferred object was
@@ -594,11 +620,6 @@ fn process_successful_execution<S: Storage + ParentSync>(
         //   2. Created in this transaction (in `newly_generated_ids`)
         //   3. Unwrapped in this transaction
         // The following condition checks if this object was unwrapped in this transaction.
-        let old_obj_ver = match (old_object, loaded_child_version) {
-            (Some((_old_owner, old_obj_ver)), _) => Some(*old_obj_ver),
-            (None, Some(loaded_version)) => Some(*loaded_version),
-            _ => None,
-        };
         if let Some(old_obj_ver) = old_obj_ver {
             debug_assert!(write_kind == WriteKind::Mutate);
             // Some kind of transfer since there's an old object
@@ -637,7 +658,7 @@ fn process_successful_execution<S: Storage + ParentSync>(
             ));
         }
         let obj = Object::new_move(move_obj, recipient, tx_digest);
-        if old_object.is_none() {
+        if old_obj_ver.is_none() {
             // Charge extra gas based on object size if we are creating a new object.
             // TODO: Do we charge extra gas when creating new objects (on top of storage write cost)?
         }
@@ -691,9 +712,9 @@ fn process_successful_execution<S: Storage + ParentSync>(
 #[cfg(debug_assertions)]
 fn check_transferred_object_invariants(
     new_object: &MoveObject,
-    old_object: Option<&(object::Owner, SequenceNumber)>,
+    old_object: &Option<SequenceNumber>,
 ) {
-    if let Some((_owner, old_version)) = old_object {
+    if let Some(old_version) = old_object {
         // check consistency between the transferred object `new_object` and the tx input `o`
         // specifically, the object id, type, and version should be unchanged
         // we can only check the version here

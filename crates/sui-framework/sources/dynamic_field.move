@@ -10,7 +10,7 @@
 module sui::dynamic_field {
 
 use std::option::{Self, Option};
-use sui::object::{Self, UID};
+use sui::object::{Self, ID, UID};
 
 friend sui::dynamic_object_field;
 
@@ -120,6 +120,17 @@ public fun exists_with_type<Name: copy + drop + store, Value: store>(
     if (!has_child_object_with_ty<Field<Name, Value>>(object_addr, hash)) return false;
     let field = borrow_child_object<Field<Name, Value>>(object_addr, hash);
     option::is_some(&field.value)
+}
+
+public(friend) fun field_ids<Name: copy + drop + store>(
+    object: &UID,
+    name: Name,
+): (ID, ID) {
+    let object_addr = object::uid_to_address(object);
+    let hash = hash_type_and_key(object_addr, name);
+    let field = borrow_child_object<Field<Name, ID>>(object_addr, hash);
+    assert!(option::is_some(&field.value), EFieldDoesNotExist);
+    (object::uid_to_inner(&field.id), option::destroy_some(field.value))
 }
 
 public(friend) native fun hash_type_and_key<K: copy + drop + store>(parent: address, k: K): address;

@@ -9,11 +9,10 @@ module sui::dynamic_object_field {
 
 use std::option::{Self, Option};
 use sui::dynamic_field::{
-    hash_type_and_key,
+    Self as df,
     add_child_object,
     borrow_child_object,
     remove_child_object,
-    has_child_object,
 };
 use sui::object::{Self, UID, ID};
 
@@ -30,16 +29,10 @@ const EFieldTypeMismatch: u64 = 2;
 /// Failed to serialize the field's name
 const EBCSSerializationFailure: u64 = 3;
 
-/// Internal object used for storing the field and the ID of the value
-struct Field<Name: copy + drop + store> has key {
-    /// Determined by the hash of the object ID, the field name value and it's type,
-    /// i.e. hash(parent.id || name || Name)
-    id: UID,
-    /// The value for the name of this field
+// Internal object used for storing the field and the name associated with the value
+// The separate type is necessary to prevent key collision with direct usage of dynamic_field
+struct Wrapper<Name> has copy, drop, store {
     name: Name,
-    // TODO we need lamport timestamps to make this not an option
-    /// The object bound to this field
-    value: Option<ID>,
 }
 
 /// Adds a dynamic object field to the object `object: &mut UID` at field specified by `name: Name`.
@@ -50,20 +43,11 @@ public fun add<Name: copy + drop + store, Value: key + store>(
     name: Name,
     value: Value,
 ) {
-    let object_addr = object::uid_to_address(object);
-    let hash = hash_type_and_key(object_addr, name);
-    if (!has_child_object(object_addr, hash)) {
-        let field = Field {
-            id: object::new_uid_from_hash(hash),
-            name,
-            value: option::none(),
-        };
-        add_child_object(object_addr, field)
-    };
-    let field = borrow_child_object<Field<Name>>(object_addr, hash);
-    assert!(option::is_none(&field.value), EFieldAlreadyExists);
-    option::fill(&mut field.value, object::id(&value));
-    add_child_object(object::uid_to_address(&field.id), value);
+    let key = Wrapper { name };
+    let id = object::id(&value);
+    df::add(object, key, id);
+    let (field_id, _) = df::field_ids<Wrapper<Name>>(object, key);
+    add_child_object(object::id_to_address(&field_id), value);
 }
 
 /// Immutably borrows the `object`s dynamic object field with the name specified by `name: Name`.
@@ -74,13 +58,9 @@ public fun borrow<Name: copy + drop + store, Value: key + store>(
     object: &UID,
     name: Name,
 ): &Value {
-    let object_addr = object::uid_to_address(object);
-    let hash = hash_type_and_key(object_addr, name);
-    let field = borrow_child_object<Field<Name>>(object_addr, hash);
-    assert!(option::is_some(&field.value), EFieldDoesNotExist);
-    let field_addr = object::uid_to_address(&field.id);
-    let value_addr = object::id_to_address(option::borrow(&field.value));
-    borrow_child_object<Value>(field_addr, value_addr)
+    let key = Wrapper { name };
+    let (field_id, value_id) = df::field_ids<Wrapper<Name>>(object, key);
+    borrow_child_object<Value>(object::id_to_address(&field_id), object::id_to_address(&value_id))
 }
 
 /// Mutably borrows the `object`s dynamic object field with the name specified by `name: Name`.
@@ -91,13 +71,9 @@ public fun borrow_mut<Name: copy + drop + store, Value: key + store>(
     object: &mut UID,
     name: Name,
 ): &mut Value {
-    let object_addr = object::uid_to_address(object);
-    let hash = hash_type_and_key(object_addr, name);
-    let field = borrow_child_object<Field<Name>>(object_addr, hash);
-    assert!(option::is_some(&field.value), EFieldDoesNotExist);
-    let field_addr = object::uid_to_address(&field.id);
-    let value_addr = object::id_to_address(option::borrow(&field.value));
-    borrow_child_object<Value>(field_addr, value_addr)
+    let key = Wrapper { name };
+    let (field_id, value_id) = df::field_ids<Wrapper<Name>>(object, key);
+    borrow_child_object<Value>(object::id_to_address(&field_id), object::id_to_address(&value_id))
 }
 
 /// Removes the `object`s dynamic object field with the name specified by `name: Name` and returns
@@ -109,14 +85,14 @@ public fun remove<Name: copy + drop + store, Value: key + store>(
     object: &mut UID,
     name: Name,
 ): Value {
-    let object_addr = object::uid_to_address(object);
-    let hash = hash_type_and_key(object_addr, name);
-    let field = borrow_child_object<Field<Name>>(object_addr, hash);
-    assert!(option::is_some(&field.value), EFieldDoesNotExist);
-    let field_addr = object::uid_to_address(&field.id);
-    let value_id = option::extract(&mut field.value);
-    let value_addr = object::id_to_address(&value_id);
-    remove_child_object<Value>(field_addr, value_addr)
+    let key = Wrapper { name };
+    let (field_id, value_id) = df::field_ids<Wrapper<Name>>(object, key);
+    let value = remove_child_object<Value>(
+        object::id_to_address(&field_id),
+        object::id_to_address(&value_id),
+    );
+    df::remove<Wrapper<Name>, ID>(object, key);
+    value
 }
 
 /// Returns true if and only if the `object` has a dynamic object field with the name specified by
@@ -125,11 +101,8 @@ public fun exists_<Name: copy + drop + store>(
     object: &UID,
     name: Name,
 ): bool {
-    let object_addr = object::uid_to_address(object);
-    let hash = hash_type_and_key(object_addr, name);
-    if (!has_child_object(object_addr, hash)) return false;
-    let field = borrow_child_object<Field<Name>>(object_addr, hash);
-    option::is_some(&field.value)
+    let key = Wrapper { name };
+    df::exists_with_type<Wrapper<Name>, ID>(object, key)
 }
 
 /// Returns the ID of the object associated with the dynamic object field
@@ -138,11 +111,10 @@ public fun id<Name: copy + drop + store>(
     object: &UID,
     name: Name,
 ): Option<ID> {
-    let object_addr = object::uid_to_address(object);
-    let hash = hash_type_and_key(object_addr, name);
-    if (!has_child_object(object_addr, hash)) return option::none();
-    let field = borrow_child_object<Field<Name>>(object_addr, hash);
-    field.value
+    let key = Wrapper { name };
+    if (!df::exists_with_type<Wrapper<Name>, ID>(object, key)) return option::none();
+    let (_field_id, value_id) = df::field_ids<Wrapper<Name>>(object, key);
+    option::some(value_id)
 }
 
 }

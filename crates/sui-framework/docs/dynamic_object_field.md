@@ -9,7 +9,7 @@ themselves. This allows for the objects to still exist within in storage, which 
 for external tools. The difference is otherwise not observable from within Move.
 
 
--  [Resource `Field`](#0x2_dynamic_object_field_Field)
+-  [Struct `Wrapper`](#0x2_dynamic_object_field_Wrapper)
 -  [Constants](#@Constants_0)
 -  [Function `add`](#0x2_dynamic_object_field_add)
 -  [Function `borrow`](#0x2_dynamic_object_field_borrow)
@@ -26,14 +26,13 @@ for external tools. The difference is otherwise not observable from within Move.
 
 
 
-<a name="0x2_dynamic_object_field_Field"></a>
+<a name="0x2_dynamic_object_field_Wrapper"></a>
 
-## Resource `Field`
-
-Internal object used for storing the field and the ID of the value
+## Struct `Wrapper`
 
 
-<pre><code><b>struct</b> <a href="dynamic_object_field.md#0x2_dynamic_object_field_Field">Field</a>&lt;Name: <b>copy</b>, drop, store&gt; <b>has</b> key
+
+<pre><code><b>struct</b> <a href="dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a>&lt;Name&gt; <b>has</b> <b>copy</b>, drop, store
 </code></pre>
 
 
@@ -44,23 +43,10 @@ Internal object used for storing the field and the ID of the value
 
 <dl>
 <dt>
-<code>id: <a href="object.md#0x2_object_UID">object::UID</a></code>
-</dt>
-<dd>
- Determined by the hash of the object ID, the field name value and it's type,
- i.e. hash(parent.id || name || Name)
-</dd>
-<dt>
 <code>name: Name</code>
 </dt>
 <dd>
- The value for the name of this field
-</dd>
-<dt>
-<code>value: <a href="_Option">option::Option</a>&lt;<a href="object.md#0x2_object_ID">object::ID</a>&gt;</code>
-</dt>
-<dd>
- The object bound to this field
+
 </dd>
 </dl>
 
@@ -136,20 +122,11 @@ Aborts with <code><a href="dynamic_object_field.md#0x2_dynamic_object_field_EFie
     name: Name,
     value: Value,
 ) {
-    <b>let</b> object_addr = <a href="object.md#0x2_object_uid_to_address">object::uid_to_address</a>(<a href="object.md#0x2_object">object</a>);
-    <b>let</b> hash = hash_type_and_key(object_addr, name);
-    <b>if</b> (!has_child_object(object_addr, hash)) {
-        <b>let</b> field = <a href="dynamic_object_field.md#0x2_dynamic_object_field_Field">Field</a> {
-            id: <a href="object.md#0x2_object_new_uid_from_hash">object::new_uid_from_hash</a>(hash),
-            name,
-            value: <a href="_none">option::none</a>(),
-        };
-        add_child_object(object_addr, field)
-    };
-    <b>let</b> field = borrow_child_object&lt;<a href="dynamic_object_field.md#0x2_dynamic_object_field_Field">Field</a>&lt;Name&gt;&gt;(object_addr, hash);
-    <b>assert</b>!(<a href="_is_none">option::is_none</a>(&field.value), <a href="dynamic_object_field.md#0x2_dynamic_object_field_EFieldAlreadyExists">EFieldAlreadyExists</a>);
-    <a href="_fill">option::fill</a>(&<b>mut</b> field.value, <a href="object.md#0x2_object_id">object::id</a>(&value));
-    add_child_object(<a href="object.md#0x2_object_uid_to_address">object::uid_to_address</a>(&field.id), value);
+    <b>let</b> key = <a href="dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a> { name };
+    <b>let</b> id = <a href="object.md#0x2_object_id">object::id</a>(&value);
+    df::add(<a href="object.md#0x2_object">object</a>, key, id);
+    <b>let</b> (field_id, _) = df::field_ids&lt;<a href="dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a>&lt;Name&gt;&gt;(<a href="object.md#0x2_object">object</a>, key);
+    add_child_object(<a href="object.md#0x2_object_id_to_address">object::id_to_address</a>(&field_id), value);
 }
 </code></pre>
 
@@ -180,13 +157,9 @@ specified type.
     <a href="object.md#0x2_object">object</a>: &UID,
     name: Name,
 ): &Value {
-    <b>let</b> object_addr = <a href="object.md#0x2_object_uid_to_address">object::uid_to_address</a>(<a href="object.md#0x2_object">object</a>);
-    <b>let</b> hash = hash_type_and_key(object_addr, name);
-    <b>let</b> field = borrow_child_object&lt;<a href="dynamic_object_field.md#0x2_dynamic_object_field_Field">Field</a>&lt;Name&gt;&gt;(object_addr, hash);
-    <b>assert</b>!(<a href="_is_some">option::is_some</a>(&field.value), <a href="dynamic_object_field.md#0x2_dynamic_object_field_EFieldDoesNotExist">EFieldDoesNotExist</a>);
-    <b>let</b> field_addr = <a href="object.md#0x2_object_uid_to_address">object::uid_to_address</a>(&field.id);
-    <b>let</b> value_addr = <a href="object.md#0x2_object_id_to_address">object::id_to_address</a>(<a href="_borrow">option::borrow</a>(&field.value));
-    borrow_child_object&lt;Value&gt;(field_addr, value_addr)
+    <b>let</b> key = <a href="dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a> { name };
+    <b>let</b> (field_id, value_id) = df::field_ids&lt;<a href="dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a>&lt;Name&gt;&gt;(<a href="object.md#0x2_object">object</a>, key);
+    borrow_child_object&lt;Value&gt;(<a href="object.md#0x2_object_id_to_address">object::id_to_address</a>(&field_id), <a href="object.md#0x2_object_id_to_address">object::id_to_address</a>(&value_id))
 }
 </code></pre>
 
@@ -217,13 +190,9 @@ specified type.
     <a href="object.md#0x2_object">object</a>: &<b>mut</b> UID,
     name: Name,
 ): &<b>mut</b> Value {
-    <b>let</b> object_addr = <a href="object.md#0x2_object_uid_to_address">object::uid_to_address</a>(<a href="object.md#0x2_object">object</a>);
-    <b>let</b> hash = hash_type_and_key(object_addr, name);
-    <b>let</b> field = borrow_child_object&lt;<a href="dynamic_object_field.md#0x2_dynamic_object_field_Field">Field</a>&lt;Name&gt;&gt;(object_addr, hash);
-    <b>assert</b>!(<a href="_is_some">option::is_some</a>(&field.value), <a href="dynamic_object_field.md#0x2_dynamic_object_field_EFieldDoesNotExist">EFieldDoesNotExist</a>);
-    <b>let</b> field_addr = <a href="object.md#0x2_object_uid_to_address">object::uid_to_address</a>(&field.id);
-    <b>let</b> value_addr = <a href="object.md#0x2_object_id_to_address">object::id_to_address</a>(<a href="_borrow">option::borrow</a>(&field.value));
-    borrow_child_object&lt;Value&gt;(field_addr, value_addr)
+    <b>let</b> key = <a href="dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a> { name };
+    <b>let</b> (field_id, value_id) = df::field_ids&lt;<a href="dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a>&lt;Name&gt;&gt;(<a href="object.md#0x2_object">object</a>, key);
+    borrow_child_object&lt;Value&gt;(<a href="object.md#0x2_object_id_to_address">object::id_to_address</a>(&field_id), <a href="object.md#0x2_object_id_to_address">object::id_to_address</a>(&value_id))
 }
 </code></pre>
 
@@ -255,14 +224,14 @@ specified type.
     <a href="object.md#0x2_object">object</a>: &<b>mut</b> UID,
     name: Name,
 ): Value {
-    <b>let</b> object_addr = <a href="object.md#0x2_object_uid_to_address">object::uid_to_address</a>(<a href="object.md#0x2_object">object</a>);
-    <b>let</b> hash = hash_type_and_key(object_addr, name);
-    <b>let</b> field = borrow_child_object&lt;<a href="dynamic_object_field.md#0x2_dynamic_object_field_Field">Field</a>&lt;Name&gt;&gt;(object_addr, hash);
-    <b>assert</b>!(<a href="_is_some">option::is_some</a>(&field.value), <a href="dynamic_object_field.md#0x2_dynamic_object_field_EFieldDoesNotExist">EFieldDoesNotExist</a>);
-    <b>let</b> field_addr = <a href="object.md#0x2_object_uid_to_address">object::uid_to_address</a>(&field.id);
-    <b>let</b> value_id = <a href="_extract">option::extract</a>(&<b>mut</b> field.value);
-    <b>let</b> value_addr = <a href="object.md#0x2_object_id_to_address">object::id_to_address</a>(&value_id);
-    remove_child_object&lt;Value&gt;(field_addr, value_addr)
+    <b>let</b> key = <a href="dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a> { name };
+    <b>let</b> (field_id, value_id) = df::field_ids&lt;<a href="dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a>&lt;Name&gt;&gt;(<a href="object.md#0x2_object">object</a>, key);
+    <b>let</b> value = remove_child_object&lt;Value&gt;(
+        <a href="object.md#0x2_object_id_to_address">object::id_to_address</a>(&field_id),
+        <a href="object.md#0x2_object_id_to_address">object::id_to_address</a>(&value_id),
+    );
+    df::remove&lt;<a href="dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a>&lt;Name&gt;, ID&gt;(<a href="object.md#0x2_object">object</a>, key);
+    value
 }
 </code></pre>
 
@@ -291,11 +260,8 @@ Returns true if and only if the <code><a href="object.md#0x2_object">object</a><
     <a href="object.md#0x2_object">object</a>: &UID,
     name: Name,
 ): bool {
-    <b>let</b> object_addr = <a href="object.md#0x2_object_uid_to_address">object::uid_to_address</a>(<a href="object.md#0x2_object">object</a>);
-    <b>let</b> hash = hash_type_and_key(object_addr, name);
-    <b>if</b> (!has_child_object(object_addr, hash)) <b>return</b> <b>false</b>;
-    <b>let</b> field = borrow_child_object&lt;<a href="dynamic_object_field.md#0x2_dynamic_object_field_Field">Field</a>&lt;Name&gt;&gt;(object_addr, hash);
-    <a href="_is_some">option::is_some</a>(&field.value)
+    <b>let</b> key = <a href="dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a> { name };
+    df::exists_with_type&lt;<a href="dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a>&lt;Name&gt;, ID&gt;(<a href="object.md#0x2_object">object</a>, key)
 }
 </code></pre>
 
@@ -324,11 +290,10 @@ Returns none otherwise
     <a href="object.md#0x2_object">object</a>: &UID,
     name: Name,
 ): Option&lt;ID&gt; {
-    <b>let</b> object_addr = <a href="object.md#0x2_object_uid_to_address">object::uid_to_address</a>(<a href="object.md#0x2_object">object</a>);
-    <b>let</b> hash = hash_type_and_key(object_addr, name);
-    <b>if</b> (!has_child_object(object_addr, hash)) <b>return</b> <a href="_none">option::none</a>();
-    <b>let</b> field = borrow_child_object&lt;<a href="dynamic_object_field.md#0x2_dynamic_object_field_Field">Field</a>&lt;Name&gt;&gt;(object_addr, hash);
-    field.value
+    <b>let</b> key = <a href="dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a> { name };
+    <b>if</b> (!df::exists_with_type&lt;<a href="dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a>&lt;Name&gt;, ID&gt;(<a href="object.md#0x2_object">object</a>, key)) <b>return</b> <a href="_none">option::none</a>();
+    <b>let</b> (_field_id, value_id) = df::field_ids&lt;<a href="dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a>&lt;Name&gt;&gt;(<a href="object.md#0x2_object">object</a>, key);
+    <a href="_some">option::some</a>(value_id)
 }
 </code></pre>
 

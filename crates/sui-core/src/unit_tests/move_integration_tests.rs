@@ -411,7 +411,7 @@ async fn test_object_owning_another_object() {
     // Check that the child is now owned by the new parent.
     assert_eq!(child_effect.1, new_field_id);
 
-    // Delete the child. This should fail
+    // Delete the child. This should fail as the child cannot be used as a transaction argument
     let effects = call_move(
         &authority,
         &gas,

@@ -43,7 +43,7 @@ pub trait ChildObjectResolver {
 }
 
 /// An abstraction of the (possibly distributed) store for objects, and (soon) events and transactions
-pub trait Storage: ChildObjectResolver {
+pub trait Storage {
     fn reset(&mut self);
 
     /// Record an event that happened during execution

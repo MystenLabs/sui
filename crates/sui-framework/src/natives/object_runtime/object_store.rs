@@ -33,12 +33,22 @@ pub(crate) struct ChildObjectEffect {
 }
 
 struct Inner<'a> {
+    // used for loading child objects
     resolver: Box<dyn ChildObjectResolver + 'a>,
+    // cached objects from the resolver. An object might be in this map but not in the store
+    // if it's existence was queried, but the value was not used.
     cached_objects: BTreeMap<ObjectID, Option<MoveObject>>,
 }
 
+// maintains the runtime GlobalValues for child objects and manages the fetching of objects
+// from storage, through the `ChildObjectResolver`
 pub(super) struct ObjectStore<'a> {
+    // contains object resolver and object cache
+    // kept as a separate struct to deal with lifetime issues where the `store` is accessed
+    // at the same time as the `cached_objects` is populated
     inner: Inner<'a>,
+    // Maps of populated GlobalValues, meaning the child object has been accessed in this
+    // transaction
     store: BTreeMap<ObjectID, ChildObject>,
 }
 
@@ -221,7 +231,9 @@ impl<'a> ObjectStore<'a> {
                     PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                         .with_message(
                             "Duplicate addition of a child object. \
-                            The previous value will be lost. Indicates some duplication of objects"
+                            The previous value cannot be dropped. Indicates possible duplication \
+                            of objects as an object was fetched more than once from two different \
+                            parents, yet was not removed from one first"
                                 .to_string(),
                         ),
                 );

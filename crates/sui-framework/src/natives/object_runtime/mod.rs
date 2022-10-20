@@ -60,8 +60,6 @@ pub struct RuntimeResults {
 
 #[derive(Default)]
 pub(crate) struct ObjectRuntimeState {
-    // will eventually need a reference to the state view to access child objects
-    // pub(crate) state_view: &'a mut dyn ____,
     pub(crate) input_objects: BTreeMap<ObjectID, (/* by_value */ bool, Owner)>,
     // new ids from object::new
     new_ids: Set<ObjectID>,
@@ -75,7 +73,6 @@ pub(crate) struct ObjectRuntimeState {
 
 #[derive(Tid)]
 pub struct ObjectRuntime<'a> {
-    // eventually used to load dynamic child objects
     object_store: ObjectStore<'a>,
     // inventories for test scenario
     pub(crate) test_inventories: TestInventories,
