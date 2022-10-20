@@ -62,11 +62,9 @@ You can use your Sui Wallet on multiple devices and browsers. After you create a
 
 Sui Wallet prompts you to enter your password when you open it.
 
-
 ## View Sui Wallet details
 
 To view details about your Sui Wallet, including the Account ID, current network, and installed version, click the menu (the three bars) at the top-right corner of the Sui Wallet interface.
-
 
 ## Reset your Sui Wallet password
 
@@ -76,7 +74,6 @@ If you forget the password for your Sui Wallet you can reset it using your 12-wo
 1. Enter your 12-word recovery phrase, and then click **Continue**.
 1. Enter a password, then confirm the password.
 1. Click **Reset**.
-
 
 ## Lock your Sui Wallet
 
@@ -102,7 +99,6 @@ You can change the active network for Sui Wallet. Currently, Sui Wallet supports
 1. Click the network to use. 
    A checkmark displays next to the active network.
 
-
 ## Add SUI tokens to your Sui Wallet
 
 When you first open the wallet you have no coins in it. You can add SUI tokens to your wallet through Discord. You need an active Discord account to access the Sui channels.
@@ -117,11 +113,9 @@ It's near the top of the wallet and starts with 0x.
 
 The channel bot displays a message that starts with "5 test SUI objects are heading to your wallet..."
 
-
 ## View your wallet balance
 
 To view your wallet balance, click **Coins**. The wallet shows your SUI balance and lists the other coins in your wallet, if any.
-
 
 ## Send coins
 
@@ -132,11 +126,9 @@ You can send coins from your wallet to another address.
 1. In the **Amount** field, enter the number of SUI tokens to send, and then click **Continue**.
 1. Enter the recipient's address, then click **Send Coins Now**.
 
-
 ## View recent transaction details
 
 The wallet displays the recent transactions to and from your wallet on the **Activity** tab. Click on any transaction to view transaction details.
-
 
 ## View all transactions in Sui Explorer
 
@@ -146,13 +138,11 @@ To view all of the transactions for your address, click **Apps** and then click 
 
 Sui Explorer opens with the details for your wallet address displayed.
 
-
 ## Mint an example NFT
 
 You can mint an example Sui NFT directly from Sui Wallet.
 
 Click **Apps**, then click **Mint an NFT**. In the current version you can mint only example NFTs.
-
 
 ## Create a new NFT
 
@@ -171,11 +161,9 @@ After you successfully create a new NFT, you can transfer it to another wallet a
 
 You can view details for the transactions to create the NFT and then transfer it in [Sui Explorer](https://explorer.devnet.sui.io/).
 
-
 ## View your NFTs
 
 Click the **NFTs** tab to view all of the NFTS that you mint, purchase, or receive in your wallet. This includes any NFTs that you obtain from connected apps.  Click on an NFT to view additional details about it, view a larger NFT image, or send the NFT to another address.
-
 
 ## Send an NFT
 
@@ -186,20 +174,17 @@ You can use Sui Wallet to send an NFT to another address.
 1. Enter the recipient address then click **Send NFT Now**.
 1. Click **Done** to return to the wallet.
 
-
 ## Wallet Playground
 
 You can view and try out some apps that already support Sui Wallet from the Playground on the Apps tab. The apps displayed let you connect your Sui Wallet and use SUI tokens to interact with them, perform transactions, and obtain NFTs that go directly to your connected wallet.
 
 Click on an app to open the site for the app. Follow the guidance on the site to connect your wallet. After you connect your wallet to an app you can view the app on the **Active Connections** view.
 
-
 ## View connected apps
 
 To view the apps with active connections to your wallet, click **Apps**. By default, the **Playground** view displays. Click **Active Connections** to view the connected apps.
 
 To open the site associated with the app, click on the app and then click **View**.
-
 
 ## Disconnect from an app
 
