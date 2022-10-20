@@ -3,8 +3,9 @@
 
 use clap::Parser;
 use move_cli::base::{self, build};
-use move_package::BuildConfig;
+use move_package::BuildConfig as MoveBuildConfig;
 use std::path::{Path, PathBuf};
+use sui_framework_build::compiled_package::BuildConfig;
 
 #[derive(Parser)]
 pub struct Build {
@@ -16,22 +17,30 @@ pub struct Build {
 }
 
 impl Build {
-    pub fn execute(&self, path: Option<PathBuf>, build_config: BuildConfig) -> anyhow::Result<()> {
+    pub fn execute(
+        &self,
+        path: Option<PathBuf>,
+        build_config: MoveBuildConfig,
+    ) -> anyhow::Result<()> {
         let rerooted_path = base::reroot_path(path)?;
         Self::execute_internal(&rerooted_path, build_config, self.dump_bytecode_as_base64)
     }
+
     pub fn execute_internal(
         rerooted_path: &Path,
-        build_config: BuildConfig,
+        config: MoveBuildConfig,
         dump_bytecode_as_base64: bool,
     ) -> anyhow::Result<()> {
-        // find manifest file directory from a given path or (if missing) from current dir
+        let pkg = sui_framework::build_move_package(
+            rerooted_path,
+            BuildConfig {
+                config,
+                run_bytecode_verifier: false,
+                print_diags_to_stderr: true,
+            },
+        )?;
         if dump_bytecode_as_base64 {
-            let compiled_modules =
-                sui_framework::build_move_package_to_base64(rerooted_path, build_config)?;
-            println!("{:?}", compiled_modules);
-        } else {
-            sui_framework::build_and_verify_package(rerooted_path, build_config)?;
+            println!("{:?}", pkg.get_package_base64())
         }
         Ok(())
     }

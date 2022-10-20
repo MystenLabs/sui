@@ -2031,7 +2031,7 @@ pub async fn init_state_with_ids_and_object_basics<
 >(
     objects: I,
 ) -> (AuthorityState, ObjectRef) {
-    use move_package::BuildConfig;
+    use sui_framework_build::compiled_package::BuildConfig;
 
     let state = init_state().await;
     for (address, object_id) in objects {
@@ -2040,10 +2040,15 @@ pub async fn init_state_with_ids_and_object_basics<
     }
 
     // add object_basics package object to genesis, since lots of test use it
-    let build_config = BuildConfig::default();
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("src/unit_tests/data/object_basics");
-    let modules = sui_framework::build_move_package(&path, build_config).unwrap();
+    let modules = BuildConfig::default()
+        .build(path)
+        .unwrap()
+        .get_modules()
+        .into_iter()
+        .cloned()
+        .collect();
     let pkg = Object::new_package(modules, TransactionDigest::genesis());
     let pkg_ref = pkg.compute_object_reference();
     state.insert_genesis_object(pkg).await;

@@ -6,12 +6,12 @@ use crate::{test_account_keys, test_committee, test_validator_keys};
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use move_core_types::language_storage::TypeTag;
-use move_package::BuildConfig;
 use std::path::PathBuf;
 use sui::client_commands::WalletContext;
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
 use sui_adapter::genesis;
 use sui_core::test_utils::to_sender_signed_transaction;
+use sui_framework_build::compiled_package::BuildConfig;
 use sui_json_rpc_types::SuiObjectInfo;
 use sui_keys::keystore::AccountKeystore;
 use sui_keys::keystore::Keystore;
@@ -273,16 +273,9 @@ pub fn create_publish_move_package_transaction(
     keypair: &AccountKeyPair,
 ) -> VerifiedTransaction {
     let build_config = BuildConfig::default();
-    let modules = sui_framework::build_move_package(&path, build_config).unwrap();
-
-    let all_module_bytes = modules
-        .iter()
-        .map(|m| {
-            let mut module_bytes = Vec::new();
-            m.serialize(&mut module_bytes).unwrap();
-            module_bytes
-        })
-        .collect();
+    let all_module_bytes = sui_framework::build_move_package(&path, build_config)
+        .unwrap()
+        .get_package_bytes();
     let data = TransactionData::new_module(sender, gas_object_ref, all_module_bytes, MAX_GAS);
     to_sender_signed_transaction(data, keypair)
 }
@@ -325,15 +318,9 @@ pub fn make_publish_basics_transaction(gas_object: ObjectRef) -> VerifiedTransac
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("../../sui_programmability/examples/basics");
     let build_config = BuildConfig::default();
-    let modules = sui_framework::build_move_package(&path, build_config).unwrap();
-    let all_module_bytes = modules
-        .iter()
-        .map(|m| {
-            let mut module_bytes = Vec::new();
-            m.serialize(&mut module_bytes).unwrap();
-            module_bytes
-        })
-        .collect();
+    let all_module_bytes = sui_framework::build_move_package(&path, build_config)
+        .unwrap()
+        .get_package_bytes();
     let data = TransactionData::new_module(sender, gas_object, all_module_bytes, MAX_GAS);
     to_sender_signed_transaction(data, &keypair)
 }

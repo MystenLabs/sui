@@ -23,6 +23,7 @@ bip32 = "0.4.0"
 
 sui-core = { path = "../sui-core" }
 sui-framework = { path = "../sui-framework" }
+sui-framework-build = { path = "../sui-framework-build" }
 sui-config = { path = "../sui-config" }
 sui-types = { path = "../sui-types" }
 sui-json = { path = "../sui-json" }

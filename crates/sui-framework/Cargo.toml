@@ -17,16 +17,15 @@ num_enum = "0.5.7"
 once_cell = "1.14.0"
 sha3 = "0.10.4"
 curve25519-dalek-ng = "4.1.1"
+
 fastcrypto.workspace = true
 digest = "0.10.3"
 serde = { version = "1.0.144", features = ["derive"] }
 
-sui-types = { path = "../sui-types" }
 sui-framework-build = { path = "../sui-framework-build" }
-sui-verifier = { path = "../../crates/sui-verifier" }
+sui-types = { path = "../sui-types" }
 
 move-binary-format.workspace = true
-move-bytecode-utils.workspace = true
 move-bytecode-verifier.workspace = true
 move-cli.workspace = true
 move-compiler.workspace = true
@@ -43,7 +42,9 @@ workspace-hack.workspace = true
 [build-dependencies]
 anyhow = { version = "1.0.64", features = ["backtrace"] }
 bcs = "0.1.4"
+
 sui-framework-build = { path = "../sui-framework-build" }
+
 move-binary-format.workspace = true
 move-package.workspace = true
 
