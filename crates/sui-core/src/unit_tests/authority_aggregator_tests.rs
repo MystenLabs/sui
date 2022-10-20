@@ -3,13 +3,13 @@
 
 use bcs::to_bytes;
 use move_core_types::{account_address::AccountAddress, ident_str};
-use move_package::BuildConfig;
 use multiaddr::Multiaddr;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use sui_config::genesis::Genesis;
 use sui_config::ValidatorInfo;
+use sui_framework_build::compiled_package::BuildConfig;
 use sui_network::{DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_REQUEST_TIMEOUT_SEC};
 use sui_types::crypto::{
     generate_proof_of_possession, get_authority_key_pair, get_key_pair, AccountKeyPair,
@@ -80,7 +80,12 @@ pub async fn init_local_authorities(
     let build_config = BuildConfig::default();
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("src/unit_tests/data/object_basics");
-    let modules = sui_framework::build_move_package(&path, build_config).unwrap();
+    let modules = sui_framework::build_move_package(&path, build_config)
+        .unwrap()
+        .get_modules()
+        .into_iter()
+        .cloned()
+        .collect();
     let pkg = Object::new_package(modules, TransactionDigest::genesis());
     let pkg_ref = pkg.compute_object_reference();
     genesis_objects.push(pkg);
@@ -436,7 +441,12 @@ async fn test_quorum_map_and_reduce_timeout() {
     let build_config = BuildConfig::default();
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("src/unit_tests/data/object_basics");
-    let modules = sui_framework::build_move_package(&path, build_config).unwrap();
+    let modules = sui_framework::build_move_package(&path, build_config)
+        .unwrap()
+        .get_modules()
+        .into_iter()
+        .cloned()
+        .collect();
     let pkg = Object::new_package(modules, TransactionDigest::genesis());
     let pkg_ref = pkg.compute_object_reference();
     let (addr1, key1): (_, AccountKeyPair) = get_key_pair();

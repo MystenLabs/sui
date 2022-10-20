@@ -15,7 +15,7 @@ use move_core_types::{
     language_storage::TypeTag,
     value::{MoveStruct, MoveValue},
 };
-use move_package::BuildConfig;
+use sui_framework_build::compiled_package::BuildConfig;
 use sui_types::{
     crypto::{get_key_pair, AccountKeyPair},
     event::{Event, EventType, TransferType},
@@ -1836,16 +1836,9 @@ pub async fn build_and_try_publish_test_package(
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("src/unit_tests/data/");
     path.push(test_dir);
-    let modules = sui_framework::build_move_package(&path, build_config).unwrap();
-
-    let all_module_bytes = modules
-        .iter()
-        .map(|m| {
-            let mut module_bytes = Vec::new();
-            m.serialize(&mut module_bytes).unwrap();
-            module_bytes
-        })
-        .collect();
+    let all_module_bytes = sui_framework::build_move_package(&path, build_config)
+        .unwrap()
+        .get_package_bytes();
 
     let gas_object = authority.get_object(gas_object_id).await.unwrap();
     let gas_object_ref = gas_object.unwrap().compute_object_reference();

@@ -4,12 +4,10 @@
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::{path::Path, str::FromStr};
 
-use move_package::BuildConfig;
-
 use sui_config::utils::get_available_port;
 use sui_config::SUI_KEYSTORE_FILENAME;
 use sui_core::test_utils::to_sender_signed_transaction;
-use sui_framework::build_move_package_to_bytes;
+use sui_framework_build::compiled_package::BuildConfig;
 use sui_json::SuiJsonValue;
 use sui_json_rpc::api::{
     RpcGatewayApiClient, RpcReadApiClient, RpcTransactionBuilderClient, WalletSyncApiClient,
@@ -22,7 +20,6 @@ use sui_types::base_types::TransactionDigest;
 use sui_types::gas_coin::GAS;
 use sui_types::messages::ExecuteTransactionRequestType;
 use sui_types::query::{Ordering, TransactionQuery};
-use sui_types::sui_serde::Base64;
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 use test_utils::network::TestClusterBuilder;
 
@@ -93,13 +90,9 @@ async fn test_publish() -> Result<(), anyhow::Error> {
     let objects = http_client.get_objects_owned_by_address(*address).await?;
     let gas = objects.first().unwrap();
 
-    let compiled_modules = build_move_package_to_bytes(
-        Path::new("../../sui_programmability/examples/fungible_tokens"),
-        BuildConfig::default(),
-    )?
-    .iter()
-    .map(|bytes| Base64::from_bytes(bytes))
-    .collect::<Vec<_>>();
+    let compiled_modules = BuildConfig::default()
+        .build(Path::new("../../sui_programmability/examples/fungible_tokens").to_path_buf())?
+        .get_package_base64();
 
     let transaction_bytes: TransactionBytes = http_client
         .publish(*address, compiled_modules, Some(gas.object_id), 10000)
