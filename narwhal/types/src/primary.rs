@@ -42,7 +42,7 @@ impl Timestamp for TimestampMs {
     // Returns the time elapsed between the timestamp
     // and "now". The result is a Duration.
     fn elapsed(&self) -> Duration {
-        let diff = now() - self;
+        let diff = now().saturating_sub(*self);
         Duration::from_millis(diff)
     }
 }
@@ -867,17 +867,29 @@ pub struct RoundVoteDigestPair {
 
 #[cfg(test)]
 mod tests {
-    use crate::{Batch, Timestamp};
+    use crate::{Batch, Metadata, Timestamp};
     use std::time::Duration;
     use tokio::time::sleep;
 
     #[tokio::test]
-    async fn test_timestamp() {
+    async fn test_elapsed() {
         let batch = Batch::new(vec![]);
         assert!(batch.metadata.timestamp > 0);
 
         sleep(Duration::from_secs(2)).await;
 
         assert!(batch.metadata.timestamp.elapsed().as_secs_f64() >= 2.0);
+    }
+
+    #[test]
+    fn test_elapsed_when_newer_than_now() {
+        let batch = Batch {
+            transactions: vec![],
+            metadata: Metadata {
+                timestamp: 2999309726980, // something in the future - Fri Jan 16 2065 05:35:26
+            },
+        };
+
+        assert_eq!(batch.metadata.timestamp.elapsed().as_secs_f64(), 0.0);
     }
 }
