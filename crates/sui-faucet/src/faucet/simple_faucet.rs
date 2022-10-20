@@ -106,38 +106,47 @@ impl SimpleFaucet {
         let mut consumer = self.consumer.lock().await;
         debug!(?uuid, "Got consumer lock, pulling coins.");
         let mut coins = Vec::with_capacity(number_of_coins);
-        while let Ok(Some(coin)) =
-            tokio::time::timeout(Duration::from_secs(10), consumer.recv()).await
-        {
-            debug!(?uuid, "Pulling coin from pool {:?}", coin);
-            let gas_coin = self.get_gas_coin(coin).await?;
-            if let Some(gas_coin) = gas_coin {
-                if gas_coin.value() >= transfer_amount + TRANSFER_SUI_GAS {
-                    info!(
-                        ?uuid,
-                        "Planning to use coin from pool {:?}, current balance: {}",
-                        coin,
-                        gas_coin.value()
-                    );
-                    coins.push(coin);
-                    if coins.len() == number_of_coins {
-                        break;
+        loop {
+            match tokio::time::timeout(Duration::from_secs(30), consumer.recv()).await {
+                Ok(Some(coin)) => {
+                    debug!(?uuid, "Pulling coin from pool {:?}", coin);
+                    let gas_coin = self.get_gas_coin(coin).await?;
+                    if let Some(gas_coin) = gas_coin {
+                        if gas_coin.value() >= transfer_amount + TRANSFER_SUI_GAS {
+                            info!(
+                                ?uuid,
+                                "Planning to use coin from pool {:?}, current balance: {}",
+                                coin,
+                                gas_coin.value()
+                            );
+                            coins.push(coin);
+                            if coins.len() == number_of_coins {
+                                break;
+                            }
+                        } else {
+                            // If amount is not big enough, we still put it back to the queue
+                            warn!(
+                                ?uuid,
+                                "Coin {:?} does not have enough balance ({:?}), removing from pool",
+                                coin,
+                                gas_coin.value(),
+                            );
+                        }
+                    } else {
+                        // Invalid gas, do not put it back to the queue.
+                        warn!(
+                            ?uuid,
+                            "Coin {:?} is not longer valid, removing from pool", coin
+                        );
                     }
-                } else {
-                    // If amount is not big enough, we still put it back to the queue
-                    warn!(
-                        ?uuid,
-                        "Coin {:?} does not have enough balance ({:?}), removing from pool",
-                        coin,
-                        gas_coin.value(),
-                    );
                 }
-            } else {
-                // Invalid gas, do not put it back to the queue.
-                warn!(
-                    ?uuid,
-                    "Coin {:?} is not longer valid, removing from pool", coin
-                );
+                Ok(None) => {
+                    unreachable!("channel is closed");
+                }
+                Err(_) => {
+                    error!(?uuid, "Timeout when getting coins from the queue");
+                    break;
+                }
             }
         }
 
@@ -190,6 +199,10 @@ impl SimpleFaucet {
             .map_err(|err| {
                 FaucetError::Internal(format!("Failed to select coins: {:?}", err.to_string()))
             })?;
+
+        if coins.is_empty() {
+            return Err(FaucetError::Internal("Failed to select coins".into()));
+        }
 
         let futures: Vec<_> = coins
             .iter()
@@ -443,11 +456,12 @@ impl Faucet for SimpleFaucet {
                 amounts.len(),
                 results.len()
             );
-            return Err(FaucetError::Transfer(format!(
-                "Requested {} coins but only got {}",
-                amounts.len(),
-                results.len()
-            )));
+        }
+
+        if results.is_empty() {
+            return Err(FaucetError::Transfer(
+                "Failed to transfer any coins to the requestor".into(),
+            ));
         }
 
         let elapsed = timer.stop_and_record();
