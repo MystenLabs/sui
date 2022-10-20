@@ -46,7 +46,7 @@ export type CoinDenominationInfoResponse = {
   /** number of zeros in the denomination,
    * e.g., 9 here for SUI. */
   decimalNumber: number;
-}
+};
 
 export type SuiMovePackage = {
   /** A mapping from module name to disassembled Move bytecode */
@@ -213,10 +213,6 @@ export function getObjectVersion(
 }
 
 /* -------------------------------- SuiObject ------------------------------- */
-
-export function shouldUseOldSharedObjectAPI(version: string): boolean {
-  return version === '0.11.0' || version === '0.12.0';
-}
 
 export function getObjectType(
   resp: GetObjectDataResponse

@@ -79,19 +79,13 @@ export default class ApiProvider {
     public setNewJsonRpcProvider(apiEnv: API_ENV = DEFAULT_API_ENV) {
         // We also clear the query client whenever set set a new API provider:
         queryClient.clear();
-        const apiVersion = growthbook.getFeatureValue(
-            FEATURES.RPC_API_VERSION,
-            '0.11.0'
-        );
         this._apiProvider = new JsonRpcProvider(
             getDefaultAPI(apiEnv).gateway,
-            true,
-            apiVersion
+            true
         );
         this._apiFullNodeProvider = new JsonRpcProvider(
             getDefaultAPI(apiEnv).fullNode,
-            true,
-            apiVersion
+            true
         );
         this._signer = null;
     }

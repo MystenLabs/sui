@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { JsonRpcProvider, LATEST_RPC_API_VERSION } from '@mysten/sui.js';
+import { JsonRpcProvider } from '@mysten/sui.js';
 
 import { getEndpoint, Network } from './rpcSetting';
 
@@ -12,11 +12,7 @@ export const DefaultRpcClient = (network: Network | string) => {
     const existingClient = defaultRpcMap.get(network);
     if (existingClient) return existingClient;
 
-    const provider = new JsonRpcProvider(
-        getEndpoint(network),
-        true,
-        LATEST_RPC_API_VERSION
-    );
+    const provider = new JsonRpcProvider(getEndpoint(network), true);
     defaultRpcMap.set(network, provider);
     return provider;
 };

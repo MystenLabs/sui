@@ -10,12 +10,12 @@ import {
   SUI_PACKAGE_ID,
   PAY_SPLIT_COIN_VEC_FUNC_NAME,
   ObjectId,
-  shouldUseOldSharedObjectAPI,
   SuiAddress,
   SUI_TYPE_ARG,
   Transaction,
   TransactionData,
   TypeTag,
+  RpcApiVersion,
 } from '../../types';
 import {
   MoveCallTransaction,
@@ -352,4 +352,8 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
     serialized.set(dataBytes, TYPE_TAG.length);
     return new Base64DataBuffer(serialized);
   }
+}
+
+export function shouldUseOldSharedObjectAPI(version?: RpcApiVersion): boolean {
+  return version?.major === 0 && version?.minor <= 12;
 }

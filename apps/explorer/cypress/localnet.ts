@@ -25,8 +25,7 @@ export async function createLocalnetTasks() {
             }
             const provider = new JsonRpcProvider(
                 'http://localhost:9000',
-                false,
-                LATEST_RPC_API_VERSION
+                false
             );
             const signer = new RawSigner(
                 keypair,

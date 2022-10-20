@@ -11,11 +11,11 @@ import {
   isValidSuiAddress,
   normalizeSuiObjectId,
   ObjectId,
-  shouldUseOldSharedObjectAPI,
   SuiJsonValue,
   SuiMoveNormalizedType,
 } from '../../types';
 import { bcs, CallArg, ObjectArg } from '../../types/sui-bcs';
+import { shouldUseOldSharedObjectAPI } from './local-txn-data-serializer';
 import { MoveCallTransaction } from './txn-data-serializer';
 
 const MOVE_CALL_SER_ERROR = 'Move call argument serialization error:';

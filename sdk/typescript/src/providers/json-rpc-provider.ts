@@ -50,6 +50,8 @@ import {
   TransactionQuery,
   SUI_TYPE_ARG,
   normalizeSuiAddress,
+  RpcApiVersion,
+  parseVersionFromString,
 } from '../types';
 import { SignatureScheme } from '../cryptography/publickey';
 import {
@@ -61,12 +63,10 @@ import {
 const isNumber = (val: any): val is number => typeof val === 'number';
 const isAny = (_val: any): _val is any => true;
 
-const PRE_PAGINATION_API_VERSION = '0.11.0';
-export const LATEST_RPC_API_VERSION = 'latest';
-
 export class JsonRpcProvider extends Provider {
   protected client: JsonRpcClient;
   protected wsClient: WebsocketClient;
+  private rpcApiVersion: RpcApiVersion | undefined;
   /**
    * Establish a connection to a Sui RPC endpoint
    *
@@ -80,13 +80,10 @@ export class JsonRpcProvider extends Provider {
    * the version compatibility of the SDK, as not all the schema
    * changes in the RPC response will affect the caller, but the caller needs to
    * understand that the data may not match the TypeSrcript definitions.
-   * @param rpcAPIVersion controls which type of RPC API version to use.
    */
   constructor(
     public endpoint: string,
     public skipDataValidation: boolean = true,
-    // TODO: Update the default value after we deploy 0.12.0
-    private rpcAPIVersion: string = PRE_PAGINATION_API_VERSION,
     public socketOptions: WebsocketClientOptions = DEFAULT_CLIENT_OPTIONS
   ) {
     super();
@@ -99,10 +96,23 @@ export class JsonRpcProvider extends Provider {
     );
   }
 
-  async getRpcApiVersion(): Promise<string> {
-    // TODO: we should fetch the API version from
-    // the RPC endpoint instead
-    return this.rpcAPIVersion;
+  async getRpcApiVersion(): Promise<RpcApiVersion | undefined> {
+    if (this.rpcApiVersion) {
+      return this.rpcApiVersion;
+    }
+    try {
+      const resp = await this.client.requestWithType(
+        'rpc.discover',
+        [],
+        isAny,
+        this.skipDataValidation
+      );
+      this.rpcApiVersion = parseVersionFromString(resp.info.version);
+      return this.rpcApiVersion;
+    } catch (err) {
+      console.warn('Error fetching version number of the RPC API', err);
+    }
+    return undefined;
   }
 
   // Move info
