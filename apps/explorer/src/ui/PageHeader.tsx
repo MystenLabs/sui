@@ -64,20 +64,22 @@ export function PageHeader({ title, subtitle, type, status }: PageHeaderProps) {
                 </Heading>
             </div>
             <div className="flex flex-col lg:flex-row gap-2">
-                <div className="flex items-center gap-2 min-w-0">
+                <div className="flex items-start gap-2 min-w-0">
                     <div className="break-words min-w-0">
                         <Heading as="h2" variant="heading2" weight="bold" mono>
                             {title}
                         </Heading>
                     </div>
                     <button
+                        type="button"
                         onClick={() => {
                             navigator.clipboard.writeText(title);
                             toast.success('Copied!');
                         }}
-                        className="bg-transparent border-none cursor-pointer p-0 m-0 text-sui-steel flex justify-center items-center"
+                        className="bg-transparent border-none cursor-pointer p-0 m-0 text-sui-steel flex justify-center items-center -mt-0.5"
                     >
-                        <CopyIcon />
+                        <span className="sr-only">Copy</span>
+                        <CopyIcon aria-hidden="true" />
                     </button>
                 </div>
 
