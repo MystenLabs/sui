@@ -155,7 +155,7 @@ Note the default metrics port is 9184. To change the port, edit your `fullnode.y
 
 Whenever Sui releases a new version, Devnet restarts as a new network with no data. You must update your Full node with each Sui release to ensure compatibility with the network.
 
-### With Docker Compose
+### Update with Docker Compose
 
 Follow the instructions to [reset the environment](https://github.com/MystenLabs/sui/tree/main/docker/fullnode#reset-the-environment),
 namely by running the command:
@@ -163,7 +163,7 @@ namely by running the command:
 $ docker-compose down --volumes
 ```
 
-### Build from source
+### Update from source
 
 If you followed the instructions for [Building from
 Source](#building-from-source), update your Full node as follows:
