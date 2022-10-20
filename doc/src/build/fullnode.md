@@ -19,7 +19,7 @@ Sui Full nodes sync with validators to receive new transactions on the network.
 
 A transaction requires a few round trips to 2f+1 validators to form a transaction certificate (TxCert).
 
-This synchronization process is performed by:
+This synchronization process includes:
 
 1. Following 2f+1 validators and listening for newly committed transactions.
 1. Making sure that 2f+1 validators recognize the transaction and that it reaches finality.
@@ -34,7 +34,7 @@ validator nodes, full nodes cannot sign transactions, although they can validate
 the integrity of the chain by re-executing transactions that were previously
 committed by a quorum of validators.
 
-Today, a Full node maintains the full history of the chain.
+Today, a Sui Full node maintains the full history of the chain.
 
 Validator nodes store only the latest transactions on the *frontier* of the object graph (for example, transactions with >0 unspent output objects).
 
@@ -53,9 +53,7 @@ Minimum hardware requirements for running a Sui Full node:
 ### Software requirements
 
 We recommend running Sui Full nodes on Linux. Sui supports the Ubuntu and
-Debian distributions and tests against [Ubuntu version 18.04 (Bionic Beaver)](https://releases.ubuntu.com/18.04/).
-
-Sui also supports macOS and Windows operating systems. See [Install Sui](../build/install.md) for setup instructions for each operating system.
+Debian distributions.
 
 Make sure to update [Rust](../build/install.md#rust).
 
@@ -69,8 +67,6 @@ Use the following command to install additional Linux dependencies.
     pkg-config \
     cmake
 ```
-
-On macOS or Windows Subsystem for Linux (WSL), the command is similar. Remember to install [CLang](https://clang.llvm.org/) in WSL.
 
 ## Configure a Full node
 
