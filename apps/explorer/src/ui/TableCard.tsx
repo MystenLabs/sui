@@ -53,10 +53,12 @@ function columnsContent(columns: TableColumn[]) {
     }));
 }
 
-export type TableType = {
-    data: DataType[];
-    columns: TableColumn[];
-};
+export interface TableCardProps {
+    tabledata: {
+        data: DataType[];
+        columns: TableColumn[];
+    };
+}
 
 const cellStyle = cva(['text-sui-grey-75 h-[30px] px-[4px]'], {
     variants: {
@@ -70,7 +72,7 @@ const cellStyle = cva(['text-sui-grey-75 h-[30px] px-[4px]'], {
     },
 });
 
-export function TableCard({ tabledata }: { tabledata: TableType }) {
+export function TableCard({ tabledata }: TableCardProps) {
     const data = tabledata.data;
     // Use Columns to create a table
     const columns = useMemo(
