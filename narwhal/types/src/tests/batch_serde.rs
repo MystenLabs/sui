@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{serialized_batch_digest, Batch, WorkerBatchMessage};
+use crate::{serialized_batch_digest, Batch, Metadata, WorkerBatchMessage};
 use fastcrypto::hash::Hash;
 use proptest::arbitrary::Arbitrary;
 use serde_test::{assert_tokens, Token};
@@ -12,7 +12,9 @@ fn test_serde_batch() {
 
     let batch: Batch = Batch {
         transactions: (0..2).map(|_| tx()).collect(),
-        timestamp: 1666205365890,
+        metadata: Metadata {
+            timestamp: 1666205365890,
+        },
     };
 
     assert_tokens(
@@ -39,8 +41,14 @@ fn test_serde_batch() {
             Token::U8(1),
             Token::SeqEnd,
             Token::SeqEnd,
+            Token::Str("metadata"),
+            Token::Struct {
+                name: "Metadata",
+                len: 1,
+            },
             Token::Str("timestamp"),
             Token::U64(1666205365890),
+            Token::StructEnd,
             Token::StructEnd,
         ],
     );
@@ -52,7 +60,9 @@ fn test_bincode_serde_batch() {
 
     let txes: Batch = Batch {
         transactions: (0..2).map(|_| tx()).collect(),
-        timestamp: 1666205365890,
+        metadata: Metadata {
+            timestamp: 1666205365890,
+        },
     };
 
     let txes_bytes = bincode::serialize(&txes).unwrap();
@@ -82,7 +92,9 @@ fn test_bincode_serde_batch_message() {
     let txes = WorkerBatchMessage {
         batch: Batch {
             transactions: (0..2).map(|_| tx()).collect(),
-            timestamp: 1666205365890,
+            metadata: Metadata {
+                timestamp: 1666205365890,
+            },
         },
     };
 

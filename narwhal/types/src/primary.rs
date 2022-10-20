@@ -55,18 +55,34 @@ fn now() -> TimestampMs {
     }
 }
 
+// Additional metadata information for an entity. Those data
+// should not be treated as trustworthy data and should be used
+// for NON CRITICAL purposes only.
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq, Arbitrary, MallocSizeOf)]
+pub struct Metadata {
+    // timestamp of when the entity created. This is generated
+    // by the node which creates the entity.
+    pub timestamp: TimestampMs,
+}
+
+impl Default for Metadata {
+    fn default() -> Self {
+        Metadata { timestamp: now() }
+    }
+}
+
 pub type Transaction = Vec<u8>;
 #[derive(Clone, Serialize, Deserialize, Default, Debug, PartialEq, Eq, Arbitrary)]
 pub struct Batch {
     pub transactions: Vec<Transaction>,
-    pub timestamp: TimestampMs,
+    pub metadata: Metadata,
 }
 
 impl Batch {
     pub fn new(transactions: Vec<Transaction>) -> Self {
         Batch {
             transactions,
-            timestamp: now(),
+            metadata: Metadata::default(),
         }
     }
 }
@@ -121,7 +137,7 @@ pub struct Header {
     pub parents: BTreeSet<CertificateDigest>,
     pub id: HeaderDigest,
     pub signature: Signature,
-    pub timestamp: TimestampMs,
+    pub metadata: Metadata,
 }
 
 impl HeaderBuilder {
@@ -137,7 +153,7 @@ impl HeaderBuilder {
             parents: self.parents.unwrap(),
             id: HeaderDigest::default(),
             signature: Signature::default(),
-            timestamp: 0,
+            metadata: Metadata::default(),
         };
 
         Ok(Header {
@@ -179,7 +195,7 @@ impl Header {
             parents,
             id: HeaderDigest::default(),
             signature: Signature::default(),
-            timestamp: now(),
+            metadata: Metadata::default(),
         };
         let id = header.digest();
         let signature = signature_service.request_signature(id.into()).await;
@@ -430,7 +446,7 @@ pub struct Certificate {
     aggregated_signature: AggregateSignature,
     #[serde_as(as = "NarwhalBitmap")]
     signed_authorities: roaring::RoaringBitmap,
-    timestamp: TimestampMs,
+    metadata: Metadata,
 }
 
 impl Certificate {
@@ -525,7 +541,7 @@ impl Certificate {
             header,
             aggregated_signature,
             signed_authorities,
-            timestamp: now(),
+            metadata: Metadata::default(),
         })
     }
 
@@ -858,10 +874,10 @@ mod tests {
     #[tokio::test]
     async fn test_timestamp() {
         let batch = Batch::new(vec![]);
-        assert!(batch.timestamp > 0);
+        assert!(batch.metadata.timestamp > 0);
 
         sleep(Duration::from_secs(2)).await;
 
-        assert!(batch.timestamp.elapsed().as_secs_f64() >= 2.0);
+        assert!(batch.metadata.timestamp.elapsed().as_secs_f64() >= 2.0);
     }
 }

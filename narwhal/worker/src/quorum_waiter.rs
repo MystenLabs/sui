@@ -118,7 +118,7 @@ impl QuorumWaiter {
                                 total_stake += stake;
                                 if total_stake >= threshold {
                                     let digest = batch.digest();
-                                    let timestamp = batch.timestamp;
+                                    let timestamp = batch.metadata.timestamp;
                                     self.store.write(digest, batch).await;
                                     if self.tx_our_batch.send(WorkerOurBatchMessage{
                                         digest,
