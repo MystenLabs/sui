@@ -2,25 +2,27 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, it, expect } from 'vitest';
-import { bcs } from './../src/index';
+import { BCS } from './../src/index';
 
 describe('serde', () => {
     it('should serialize primitives in both directions', () => {
+        let bcs = new BCS({});
         let u8 = 100;
         let u64 = '18446744073709551615';
         let u128 = '1844674407370955161518446744073709551';
         let str = 'beep-boop';
         let bool = true;
 
-        assert(u8.toString(10) === bcs.de(bcs.U8, bcs.ser(bcs.U8, u8).toBytes()).toString(10));
-        assert(u64 === bcs.de(bcs.U64, bcs.ser(bcs.U64, u64).toBytes()).toString(10));
-        assert(u128 === bcs.de(bcs.U128, bcs.ser(bcs.U128, u128).toBytes()).toString(10));
+        assert(u8.toString(10) === bcs.de(BCS.U8, bcs.ser(BCS.U8, u8).toBytes()).toString(10));
+        assert(u64 === bcs.de(BCS.U64, bcs.ser(BCS.U64, u64).toBytes()).toString(10));
+        assert(u128 === bcs.de(BCS.U128, bcs.ser(BCS.U128, u128).toBytes()).toString(10));
 
-        assert(str === bcs.de(bcs.STRING, bcs.ser(bcs.STRING, str).toBytes()));
-        assert(bool === bcs.de(bcs.BOOL, bcs.ser(bcs.BOOL, bool).toBytes()))
+        assert(str === bcs.de(BCS.STRING, bcs.ser(BCS.STRING, str).toBytes()));
+        assert(bool === bcs.de(BCS.BOOL, bcs.ser(BCS.BOOL, bool).toBytes()))
     });
 
     it('should serde structs', () => {
+        let bcs = new BCS({});
         bcs.registerAddressType('address', 20, 'hex');
         bcs.registerStructType('Beep', { id: 'address', value: 'u64' });
 
@@ -32,6 +34,7 @@ describe('serde', () => {
     });
 
     it('should serde enums', () => {
+        let bcs = new BCS({});
         bcs.registerAddressType('address', 20, 'hex');
         bcs.registerEnumType('Enum', {
             with_value: 'address',

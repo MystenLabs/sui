@@ -100,7 +100,6 @@ describe('Move bcs', () => {
     bcs.registerAddressType('address', 16); // Move has 16/20/32 byte addresses
 
     bcs.registerStructType('Kitty', { id: 'u8' });
-    bcs.registerVectorType('vector<Kitty>', 'Kitty');
     bcs.registerStructType('Wallet', {
       kitties: 'vector<Kitty>',
       owner: 'address',
