@@ -4,19 +4,19 @@
 import { Placeholder } from './Placeholder';
 import { TableCard } from './TableCard';
 
-type DataType = {
+export interface PlaceholderTableProps {
     rowCount: number;
     rowHeight: string;
     colHeadings: string[];
     colWidths: string[];
-};
+}
 
 export function PlaceholderTable({
     rowCount,
     rowHeight,
     colHeadings,
     colWidths,
-}: DataType) {
+}: PlaceholderTableProps) {
     const rowEntry = Object.fromEntries(
         colHeadings.map((header, index) => [
             `a${index}`,

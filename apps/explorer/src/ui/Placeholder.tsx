@@ -5,6 +5,11 @@ import { cva } from 'class-variance-authority';
 
 import styles from './utils/customStyles.module.css';
 
+export interface PlaceholderProps {
+    width: string;
+    height: string;
+}
+
 const placeholder = cva([styles.placeholder], {
     variants: {
         variant: {
@@ -16,13 +21,7 @@ const placeholder = cva([styles.placeholder], {
     },
 });
 
-export function Placeholder({
-    width,
-    height,
-}: {
-    width: string;
-    height: string;
-}) {
+export function Placeholder({ width, height }: PlaceholderProps) {
     return (
         <div
             className={placeholder()}
