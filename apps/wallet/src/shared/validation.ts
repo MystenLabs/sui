@@ -19,10 +19,10 @@ export function createTokenValidation(
     decimals: number
 ) {
     return Yup.mixed()
-        .required()
         .transform((_, original) => {
             return new BigNumber(original);
         })
+        .test('required', `\${path} is a required field`, (value) => !!value)
         .test(
             'valid',
             'The value provided is not valid.',
