@@ -1,0 +1,16 @@
+processed 4 tasks
+
+init:
+A: object(100)
+
+task 1 'publish'. lines 9-30:
+created: object(104)
+written: object(103)
+
+task 2 'run'. lines 32-32:
+created: object(106), object(107)
+written: object(105)
+
+task 3 'run'. lines 34-34:
+Error: Transaction Effects Status: Move Runtime Abort. Module: sui::dynamic_field, Status Code: 0
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(ModuleId { address: sui, name: Identifier("dynamic_field") }, 0), source: Some(VMError { major_status: ABORTED, sub_status: Some(0), message: Some("sui::dynamic_field::add at offset 34"), exec_state: Some(ExecutionState { stack_trace: [(Some(ModuleId { address: a, name: Identifier("m") }), FunctionDefinitionIndex(1), 4)] }), location: Module(ModuleId { address: sui, name: Identifier("dynamic_field") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 34)] }) } }
