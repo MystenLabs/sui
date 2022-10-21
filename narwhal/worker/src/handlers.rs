@@ -20,9 +20,9 @@ use tokio::{sync::watch, time::sleep};
 use tracing::{debug, error, info, trace, warn};
 use types::{
     metered_channel::Sender, Batch, BatchDigest, PrimaryToWorker, ReconfigureNotification,
-    RequestBatchRequest, RequestBatchResponse, WorkerBatchMessage, WorkerBatchRequest,
-    WorkerBatchResponse, WorkerDeleteBatchesMessage, WorkerOthersBatchMessage,
-    WorkerReconfigureMessage, WorkerSynchronizeMessage, WorkerToWorker, WorkerToWorkerClient,
+    RequestBatchRequest, RequestBatchResponse, WorkerBatchMessage, WorkerDeleteBatchesMessage,
+    WorkerOthersBatchMessage, WorkerReconfigureMessage, WorkerSynchronizeMessage, WorkerToWorker,
+    WorkerToWorkerClient,
 };
 
 #[cfg(test)]
@@ -56,28 +56,11 @@ impl WorkerToWorker for WorkerReceiverHandler {
             .map_err(|e| anemo::rpc::Status::internal(e.to_string()))
     }
 
-    async fn request_batches(
-        &self,
-        request: anemo::Request<WorkerBatchRequest>,
-    ) -> Result<anemo::Response<WorkerBatchResponse>, anemo::rpc::Status> {
-        let message = request.into_body();
-        // TODO [issue #7]: Do some accounting to prevent bad actors from monopolizing our resources
-        // TODO: Add a limit on number of requested batches
-        let batches: Vec<Batch> = self
-            .store
-            .read_all(message.digests)
-            .await
-            .map_err(|e| anemo::rpc::Status::from_error(Box::new(e)))?
-            .into_iter()
-            .flatten()
-            .collect();
-        Ok(anemo::Response::new(WorkerBatchResponse { batches }))
-    }
-
     async fn request_batch(
         &self,
         request: anemo::Request<RequestBatchRequest>,
     ) -> Result<anemo::Response<RequestBatchResponse>, anemo::rpc::Status> {
+        // TODO [issue #7]: Do some accounting to prevent bad actors from monopolizing our resources
         let batch = request.into_body().batch;
         let batch = self
             .store
@@ -100,10 +83,10 @@ pub struct PrimaryReceiverHandler {
     // The worker information cache.
     pub worker_cache: SharedWorkerCache,
     pub store: Store<BatchDigest, Batch>,
-    // Timeout on RequestBatches RPC.
-    pub request_batches_timeout: Duration,
+    // Timeout on RequestBatch RPC.
+    pub request_batch_timeout: Duration,
     // Number of random nodes to query when retrying batch requests.
-    pub request_batches_retry_nodes: usize,
+    pub request_batch_retry_nodes: usize,
     /// Send reconfiguration update to other tasks.
     pub tx_reconfigure: watch::Sender<ReconfigureNotification>,
 }
@@ -172,9 +155,11 @@ impl PrimaryToWorker for PrimaryReceiverHandler {
                 return Ok(anemo::Response::new(()));
             }
 
-            let batch_request = WorkerBatchRequest {
-                digests: missing.iter().cloned().collect(),
-            };
+            let batch_requests: Vec<_> = missing
+                .iter()
+                .cloned()
+                .map(|batch| RequestBatchRequest { batch })
+                .collect();
             let network = request
                 .extensions()
                 .get::<anemo::NetworkRef>()
@@ -184,16 +169,15 @@ impl PrimaryToWorker for PrimaryReceiverHandler {
                 })?;
 
             let mut handles = FuturesUnordered::new();
-            let request_batches_fn = |mut client: WorkerToWorkerClient<anemo::Peer>,
-                                      batch_request,
-                                      timeout| {
-                // Wrapper function enables us to move `client` into the future.
-                async move {
-                    client
-                        .request_batches(anemo::Request::new(batch_request).with_timeout(timeout))
-                        .await
-                }
-            };
+            let request_batch_fn =
+                |mut client: WorkerToWorkerClient<anemo::Peer>, batch_request, timeout| {
+                    // Wrapper function enables us to move `client` into the future.
+                    async move {
+                        client
+                            .request_batch(anemo::Request::new(batch_request).with_timeout(timeout))
+                            .await
+                    }
+                };
             if first_attempt {
                 // Send first sync request to a single node.
                 let worker_name = match self.worker_cache.load().worker(&message.target, &self.id) {
@@ -207,14 +191,16 @@ impl PrimaryToWorker for PrimaryReceiverHandler {
                 let peer_id = anemo::PeerId(worker_name.0.to_bytes());
                 if let Some(peer) = network.peer(peer_id) {
                     debug!(
-                        "Sending WorkerBatchRequest message to {worker_name} for missing batches {:?}",
-                        batch_request.digests
+                        "Sending BatchRequests to {worker_name}: {:?}",
+                        batch_requests
                     );
-                    handles.push(request_batches_fn(
-                        WorkerToWorkerClient::new(peer),
-                        batch_request,
-                        self.request_batches_timeout,
-                    ));
+                    handles.extend(batch_requests.into_iter().map(|request| {
+                        request_batch_fn(
+                            WorkerToWorkerClient::new(peer.clone()),
+                            request,
+                            self.request_batch_timeout,
+                        )
+                    }));
                 } else {
                     warn!("Unable to reach primary peer {worker_name} on the network");
                 }
@@ -229,19 +215,22 @@ impl PrimaryToWorker for PrimaryReceiverHandler {
                     .collect();
                 handles.extend(
                     names
-                        .choose_multiple(&mut rand::thread_rng(), self.request_batches_retry_nodes)
+                        .choose_multiple(&mut rand::thread_rng(), self.request_batch_retry_nodes)
                         .filter_map(|name| network.peer(anemo::PeerId(name.0.to_bytes())))
-                        .map(|peer| {
-                            request_batches_fn(
-                                WorkerToWorkerClient::new(peer),
-                                batch_request.clone(),
-                                self.request_batches_timeout,
-                            )
+                        .flat_map(|peer| {
+                            batch_requests.iter().cloned().map(move |request| {
+                                let peer = peer.clone();
+                                request_batch_fn(
+                                    WorkerToWorkerClient::new(peer),
+                                    request,
+                                    self.request_batch_timeout,
+                                )
+                            })
                         }),
                 );
                 debug!(
-                    "Sending WorkerBatchRequest retries to workers {names:?} for missing batches {:?}",
-                    batch_request.digests
+                    "Sending BatchRequest retries to workers {names:?}: {:?}",
+                    batch_requests
                 );
             }
 
@@ -250,7 +239,7 @@ impl PrimaryToWorker for PrimaryReceiverHandler {
             while let Some(result) = handles.next().await {
                 match result {
                     Ok(response) => {
-                        for batch in response.into_body().batches {
+                        if let Some(batch) = response.into_body().batch {
                             let digest = batch.digest();
                             if missing.remove(&digest) {
                                 self.store.write(digest, batch).await;
@@ -261,9 +250,10 @@ impl PrimaryToWorker for PrimaryReceiverHandler {
                         }
                     }
                     Err(e) => {
-                        // TODO: add info on target peer when anemo supports retrieving it from
-                        // anemo::rpc::Status.
-                        info!("WorkerBatchRequest failed: {e:?}");
+                        info!(
+                            "RequestBatchRequest to worker {:?} failed: {e:?}",
+                            e.peer_id()
+                        )
                     }
                 }
             }

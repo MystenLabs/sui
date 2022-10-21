@@ -151,15 +151,6 @@ fn build_anemo_services(out_dir: &Path) {
         )
         .method(
             anemo_build::manual::Method::builder()
-                .name("request_batches")
-                .route_name("RequestBatches")
-                .request_type("crate::WorkerBatchRequest")
-                .response_type("crate::WorkerBatchResponse")
-                .codec_path("anemo::rpc::codec::BincodeCodec")
-                .build(),
-        )
-        .method(
-            anemo_build::manual::Method::builder()
                 .name("request_batch")
                 .route_name("RequestBatch")
                 .request_type("crate::RequestBatchRequest")

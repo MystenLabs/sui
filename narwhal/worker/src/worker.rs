@@ -120,8 +120,8 @@ impl Worker {
             committee: worker.committee.clone(),
             worker_cache: worker.worker_cache.clone(),
             store: worker.store.clone(),
-            request_batches_timeout: worker.parameters.sync_retry_delay,
-            request_batches_retry_nodes: worker.parameters.sync_retry_nodes,
+            request_batch_timeout: worker.parameters.sync_retry_delay,
+            request_batch_retry_nodes: worker.parameters.sync_retry_nodes,
             tx_reconfigure,
         });
 

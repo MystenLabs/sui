@@ -4,7 +4,7 @@
 use super::*;
 use fastcrypto::hash::Hash;
 use test_utils::CommitteeFixture;
-use types::WorkerToWorkerServer;
+use types::{MockWorkerToWorker, WorkerToWorkerServer};
 
 #[tokio::test]
 async fn synchronize() {
@@ -27,8 +27,8 @@ async fn synchronize() {
         committee: committee.into(),
         worker_cache,
         store: store.clone(),
-        request_batches_timeout: Duration::from_secs(999),
-        request_batches_retry_nodes: 3, // Not used in this test.
+        request_batch_timeout: Duration::from_secs(999),
+        request_batch_retry_nodes: 3, // Not used in this test.
         tx_reconfigure,
     };
 
@@ -36,46 +36,23 @@ async fn synchronize() {
     let target_primary = fixture.authorities().nth(1).unwrap();
     let target = target_primary.public_key();
     let batch = test_utils::batch();
-    let missing = vec![batch.digest()];
+    let digest = batch.digest();
     let message = WorkerSynchronizeMessage {
-        digests: missing.clone(),
+        digests: vec![digest],
         target,
     };
 
-    struct MockWorkerToWorker {
-        expected_request: WorkerBatchRequest,
-        response: WorkerBatchResponse,
-    }
-    #[async_trait]
-    impl WorkerToWorker for MockWorkerToWorker {
-        async fn report_batch(
-            &self,
-            _request: anemo::Request<WorkerBatchMessage>,
-        ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
-            unimplemented!();
-        }
-        async fn request_batches(
-            &self,
-            request: anemo::Request<WorkerBatchRequest>,
-        ) -> Result<anemo::Response<WorkerBatchResponse>, anemo::rpc::Status> {
-            assert_eq!(*request.body(), self.expected_request);
-            Ok(anemo::Response::new(self.response.clone()))
-        }
-        async fn request_batch(
-            &self,
-            _request: anemo::Request<RequestBatchRequest>,
-        ) -> Result<anemo::Response<RequestBatchResponse>, anemo::rpc::Status> {
-            unimplemented!();
-        }
-    }
-
-    let routes =
-        anemo::Router::new().add_rpc_service(WorkerToWorkerServer::new(MockWorkerToWorker {
-            expected_request: WorkerBatchRequest { digests: missing },
-            response: WorkerBatchResponse {
-                batches: vec![batch.clone()],
-            },
-        }));
+    let mut mock_server = MockWorkerToWorker::new();
+    let mock_batch_response = batch.clone();
+    mock_server
+        .expect_request_batch()
+        .withf(move |request| request.body().batch == digest)
+        .return_once(move |_| {
+            Ok(anemo::Response::new(RequestBatchResponse {
+                batch: Some(mock_batch_response),
+            }))
+        });
+    let routes = anemo::Router::new().add_rpc_service(WorkerToWorkerServer::new(mock_server));
     let target_worker = target_primary.worker(id);
     let _recv_network = target_worker.new_network(routes);
 
@@ -94,7 +71,7 @@ async fn synchronize() {
         .insert(send_network.downgrade())
         .is_none());
     handler.synchronize(request).await.unwrap();
-    assert_eq!(store.read(batch.digest()).await.unwrap().unwrap(), batch);
+    assert_eq!(store.read(digest).await.unwrap().unwrap(), batch);
 }
 
 #[tokio::test]
@@ -118,8 +95,8 @@ async fn synchronize_when_batch_exists() {
         committee: committee.into(),
         worker_cache,
         store: store.clone(),
-        request_batches_timeout: Duration::from_secs(999),
-        request_batches_retry_nodes: 3, // Not used in this test.
+        request_batch_timeout: Duration::from_secs(999),
+        request_batch_retry_nodes: 3, // Not used in this test.
         tx_reconfigure,
     };
 
@@ -170,8 +147,8 @@ async fn delete_batches() {
         committee: committee.into(),
         worker_cache,
         store: store.clone(),
-        request_batches_timeout: Duration::from_secs(999),
-        request_batches_retry_nodes: 3, // Not used in this test.
+        request_batch_timeout: Duration::from_secs(999),
+        request_batch_retry_nodes: 3, // Not used in this test.
         tx_reconfigure,
     };
     let message = WorkerDeleteBatchesMessage {
