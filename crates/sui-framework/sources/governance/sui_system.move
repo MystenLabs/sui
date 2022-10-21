@@ -13,6 +13,8 @@ module sui::sui_system {
     use sui::validator::{Self, Validator};
     use sui::validator_set::{Self, ValidatorSet};
     use sui::stake::Stake;
+    use sui::vec_map::{Self, VecMap};
+    use sui::vec_set::{Self, VecSet};
     use std::option;
 
     friend sui::genesis;
@@ -51,7 +53,20 @@ module sui::sui_system {
         parameters: SystemParameters,
         /// The reference gas price for the current epoch.
         reference_gas_price: u64,
+        /// A map storing the records of validator reporting each other during the current epoch. 
+        /// There is an entry in the map for each validator that has been reported
+        /// at least once. The entry VecSet contains all the validators that reported
+        /// them. If a validator has never been reported they don't have an entry in this map.
+        /// This map resets every epoch.
+        validator_report_records: VecMap<address, VecSet<address>>,
     }
+
+    // Errors
+    const ENOT_VALIDATOR: u64 = 0;
+    const ELIMIT_EXCEEDED: u64 = 1;
+    const EEPOCH_NUMBER_MISMATCH: u64 = 2;
+    const ECANNOT_REPORT_ONESELF: u64 = 3;
+    const EREPORT_RECORD_NOT_FOUND: u64 = 4;
 
     // ==== functions that can only be called by Genesis ====
 
@@ -80,6 +95,7 @@ module sui::sui_system {
                 storage_gas_price
             },
             reference_gas_price,
+            validator_report_records: vec_map::empty(),
         };
         transfer::share_object(state);
     }
@@ -104,12 +120,12 @@ module sui::sui_system {
     ) {
         assert!(
             validator_set::next_epoch_validator_count(&self.validators) < self.parameters.max_validator_candidate_count,
-            0
+            ELIMIT_EXCEEDED,
         );
         let stake_amount = coin::value(&stake);
         assert!(
             stake_amount >= self.parameters.min_validator_stake,
-            0
+            ELIMIT_EXCEEDED,
         );
         let validator = validator::new(
             tx_context::sender(ctx),
@@ -257,6 +273,45 @@ module sui::sui_system {
         validator_set::request_switch_delegation(&mut self.validators, delegation, staked_sui, new_validator_address, ctx);
     }
 
+    /// Report a validator as a bad or non-performant actor in the system.
+    /// Suceeds iff both the sender and the input `validator_addr` are active validators
+    /// and they are not the same address. This function is idempotent within an epoch.
+    public entry fun report_validator(
+        self: &mut SuiSystemState,
+        validator_addr: address,
+        ctx: &mut TxContext,
+    ) {
+        let sender = tx_context::sender(ctx);
+        // Both the reporter and the reported have to be validators.
+        assert!(validator_set::is_active_validator(&self.validators, sender), ENOT_VALIDATOR);
+        assert!(validator_set::is_active_validator(&self.validators, validator_addr), ENOT_VALIDATOR);
+        assert!(sender != validator_addr, ECANNOT_REPORT_ONESELF); 
+
+        if (!vec_map::contains(&self.validator_report_records, &validator_addr)) {
+            vec_map::insert(&mut self.validator_report_records, validator_addr, vec_set::singleton(sender));
+        } else {
+            let reporters = vec_map::get_mut(&mut self.validator_report_records, &validator_addr);
+            if (!vec_set::contains(reporters, &sender)) {
+                vec_set::insert(reporters, sender);
+            }
+        }
+    }
+
+    /// Undo a `report_validator` action. Aborts if the sender has not reported the
+    /// `validator_addr` within this epoch.
+    public entry fun undo_report_validator(
+        self: &mut SuiSystemState,
+        validator_addr: address,
+        ctx: &mut TxContext,
+    ) {
+        let sender = tx_context::sender(ctx);
+
+        assert!(vec_map::contains(&self.validator_report_records, &validator_addr), EREPORT_RECORD_NOT_FOUND);
+        let reporters = vec_map::get_mut(&mut self.validator_report_records, &validator_addr);
+        assert!(vec_set::contains(reporters, &sender), EREPORT_RECORD_NOT_FOUND);
+        vec_set::remove(reporters, &sender);
+    }
+
     /// This function should be called at the end of an epoch, and advances the system to the next epoch.
     /// It does the following things:
     /// 1. Add storage charge to the storage fund.
@@ -295,6 +350,7 @@ module sui::sui_system {
             &mut self.validators,
             &mut computation_reward,
             &mut delegator_reward,
+            &self.validator_report_records,
             ctx,
         );
         // Derive the reference gas price for the new epoch
@@ -308,6 +364,10 @@ module sui::sui_system {
         // Burn the storage rebate.
         assert!(balance::value(&self.storage_fund) >= storage_rebate, 0);
         balance::decrease_supply(&mut self.sui_supply, balance::split(&mut self.storage_fund, storage_rebate));
+        
+        // Validator reports are only valid for the epoch.
+        // TODO: or do we want to make it persistent and validators have to explicitly change their scores?
+        self.validator_report_records = vec_map::empty();
     }
 
     /// Return the current epoch number. Useful for applications that need a coarse-grained concept of time,
@@ -326,6 +386,15 @@ module sui::sui_system {
     /// Aborts if `validator_addr` is not an active validator.
     public fun validator_stake_amount(self: &SuiSystemState, validator_addr: address): u64 {
         validator_set::validator_stake_amount(&self.validators, validator_addr)
+    }
+
+    /// Returns all the validators who have reported `addr` this epoch.
+    public fun get_reporters_of(self: &SuiSystemState, addr: address): VecSet<address> {
+        if (vec_map::contains(&self.validator_report_records, &addr)) {
+            *vec_map::get(&self.validator_report_records, &addr)
+        } else {
+            vec_set::empty()
+        }
     }
 
     #[test_only]

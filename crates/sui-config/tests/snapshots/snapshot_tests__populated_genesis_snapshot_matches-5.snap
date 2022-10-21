@@ -434,4 +434,6 @@ parameters:
   max_validator_candidate_count: 100
   storage_gas_price: 1
 reference_gas_price: 0
+validator_report_records:
+  contents: []
 

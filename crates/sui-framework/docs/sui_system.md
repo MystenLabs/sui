@@ -7,6 +7,7 @@
 
 -  [Struct `SystemParameters`](#0x2_sui_system_SystemParameters)
 -  [Resource `SuiSystemState`](#0x2_sui_system_SuiSystemState)
+-  [Constants](#@Constants_0)
 -  [Function `create`](#0x2_sui_system_create)
 -  [Function `request_add_validator`](#0x2_sui_system_request_add_validator)
 -  [Function `request_remove_validator`](#0x2_sui_system_request_remove_validator)
@@ -18,10 +19,13 @@
 -  [Function `request_add_delegation_with_locked_coin`](#0x2_sui_system_request_add_delegation_with_locked_coin)
 -  [Function `request_withdraw_delegation`](#0x2_sui_system_request_withdraw_delegation)
 -  [Function `request_switch_delegation`](#0x2_sui_system_request_switch_delegation)
+-  [Function `report_validator`](#0x2_sui_system_report_validator)
+-  [Function `undo_report_validator`](#0x2_sui_system_undo_report_validator)
 -  [Function `advance_epoch`](#0x2_sui_system_advance_epoch)
 -  [Function `epoch`](#0x2_sui_system_epoch)
 -  [Function `validator_delegate_amount`](#0x2_sui_system_validator_delegate_amount)
 -  [Function `validator_stake_amount`](#0x2_sui_system_validator_stake_amount)
+-  [Function `get_reporters_of`](#0x2_sui_system_get_reporters_of)
 
 
 <pre><code><b>use</b> <a href="">0x1::option</a>;
@@ -37,6 +41,8 @@
 <b>use</b> <a href="tx_context.md#0x2_tx_context">0x2::tx_context</a>;
 <b>use</b> <a href="validator.md#0x2_validator">0x2::validator</a>;
 <b>use</b> <a href="validator_set.md#0x2_validator_set">0x2::validator_set</a>;
+<b>use</b> <a href="vec_map.md#0x2_vec_map">0x2::vec_map</a>;
+<b>use</b> <a href="vec_set.md#0x2_vec_set">0x2::vec_set</a>;
 </code></pre>
 
 
@@ -141,10 +147,70 @@ The top-level object containing all information of the Sui system.
 <dd>
  The reference gas price for the current epoch.
 </dd>
+<dt>
+<code>validator_report_records: <a href="vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;<b>address</b>, <a href="vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;<b>address</b>&gt;&gt;</code>
+</dt>
+<dd>
+ A map storing the records of validator reporting each other during the current epoch.
+ There is an entry in the map for each validator that has been reported
+ at least once. The entry VecSet contains all the validators that reported
+ them. If a validator has never been reported they don't have an entry in this map.
+ This map resets every epoch.
+</dd>
 </dl>
 
 
 </details>
+
+<a name="@Constants_0"></a>
+
+## Constants
+
+
+<a name="0x2_sui_system_ECANNOT_REPORT_ONESELF"></a>
+
+
+
+<pre><code><b>const</b> <a href="sui_system.md#0x2_sui_system_ECANNOT_REPORT_ONESELF">ECANNOT_REPORT_ONESELF</a>: u64 = 3;
+</code></pre>
+
+
+
+<a name="0x2_sui_system_EEPOCH_NUMBER_MISMATCH"></a>
+
+
+
+<pre><code><b>const</b> <a href="sui_system.md#0x2_sui_system_EEPOCH_NUMBER_MISMATCH">EEPOCH_NUMBER_MISMATCH</a>: u64 = 2;
+</code></pre>
+
+
+
+<a name="0x2_sui_system_ELIMIT_EXCEEDED"></a>
+
+
+
+<pre><code><b>const</b> <a href="sui_system.md#0x2_sui_system_ELIMIT_EXCEEDED">ELIMIT_EXCEEDED</a>: u64 = 1;
+</code></pre>
+
+
+
+<a name="0x2_sui_system_ENOT_VALIDATOR"></a>
+
+
+
+<pre><code><b>const</b> <a href="sui_system.md#0x2_sui_system_ENOT_VALIDATOR">ENOT_VALIDATOR</a>: u64 = 0;
+</code></pre>
+
+
+
+<a name="0x2_sui_system_EREPORT_RECORD_NOT_FOUND"></a>
+
+
+
+<pre><code><b>const</b> <a href="sui_system.md#0x2_sui_system_EREPORT_RECORD_NOT_FOUND">EREPORT_RECORD_NOT_FOUND</a>: u64 = 4;
+</code></pre>
+
+
 
 <a name="0x2_sui_system_create"></a>
 
@@ -186,6 +252,7 @@ This function will be called only once in Genesis.
             storage_gas_price
         },
         reference_gas_price,
+        validator_report_records: <a href="vec_map.md#0x2_vec_map_empty">vec_map::empty</a>(),
     };
     <a href="transfer.md#0x2_transfer_share_object">transfer::share_object</a>(state);
 }
@@ -226,12 +293,12 @@ The amount of stake in the <code><a href="validator.md#0x2_validator">validator<
 ) {
     <b>assert</b>!(
         <a href="validator_set.md#0x2_validator_set_next_epoch_validator_count">validator_set::next_epoch_validator_count</a>(&self.validators) &lt; self.parameters.max_validator_candidate_count,
-        0
+        <a href="sui_system.md#0x2_sui_system_ELIMIT_EXCEEDED">ELIMIT_EXCEEDED</a>,
     );
     <b>let</b> stake_amount = <a href="coin.md#0x2_coin_value">coin::value</a>(&<a href="stake.md#0x2_stake">stake</a>);
     <b>assert</b>!(
         stake_amount &gt;= self.parameters.min_validator_stake,
-        0
+        <a href="sui_system.md#0x2_sui_system_ELIMIT_EXCEEDED">ELIMIT_EXCEEDED</a>,
     );
     <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="validator.md#0x2_validator_new">validator::new</a>(
         <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx),
@@ -563,6 +630,85 @@ If the sender represents an active validator, the request will be processed at t
 
 </details>
 
+<a name="0x2_sui_system_report_validator"></a>
+
+## Function `report_validator`
+
+Report a validator as a bad or non-performant actor in the system.
+Suceeds iff both the sender and the input <code>validator_addr</code> are active validators
+and they are not the same address. This function is idempotent within an epoch.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="sui_system.md#0x2_sui_system_report_validator">report_validator</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, validator_addr: <b>address</b>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_report_validator">report_validator</a>(
+    self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>,
+    validator_addr: <b>address</b>,
+    ctx: &<b>mut</b> TxContext,
+) {
+    <b>let</b> sender = <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx);
+    // Both the reporter and the reported have <b>to</b> be validators.
+    <b>assert</b>!(<a href="validator_set.md#0x2_validator_set_is_active_validator">validator_set::is_active_validator</a>(&self.validators, sender), <a href="sui_system.md#0x2_sui_system_ENOT_VALIDATOR">ENOT_VALIDATOR</a>);
+    <b>assert</b>!(<a href="validator_set.md#0x2_validator_set_is_active_validator">validator_set::is_active_validator</a>(&self.validators, validator_addr), <a href="sui_system.md#0x2_sui_system_ENOT_VALIDATOR">ENOT_VALIDATOR</a>);
+    <b>assert</b>!(sender != validator_addr, <a href="sui_system.md#0x2_sui_system_ECANNOT_REPORT_ONESELF">ECANNOT_REPORT_ONESELF</a>);
+
+    <b>if</b> (!<a href="vec_map.md#0x2_vec_map_contains">vec_map::contains</a>(&self.validator_report_records, &validator_addr)) {
+        <a href="vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(&<b>mut</b> self.validator_report_records, validator_addr, <a href="vec_set.md#0x2_vec_set_singleton">vec_set::singleton</a>(sender));
+    } <b>else</b> {
+        <b>let</b> reporters = <a href="vec_map.md#0x2_vec_map_get_mut">vec_map::get_mut</a>(&<b>mut</b> self.validator_report_records, &validator_addr);
+        <b>if</b> (!<a href="vec_set.md#0x2_vec_set_contains">vec_set::contains</a>(reporters, &sender)) {
+            <a href="vec_set.md#0x2_vec_set_insert">vec_set::insert</a>(reporters, sender);
+        }
+    }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_sui_system_undo_report_validator"></a>
+
+## Function `undo_report_validator`
+
+Undo a <code>report_validator</code> action. Aborts if the sender has not reported the
+<code>validator_addr</code> within this epoch.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="sui_system.md#0x2_sui_system_undo_report_validator">undo_report_validator</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, validator_addr: <b>address</b>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_undo_report_validator">undo_report_validator</a>(
+    self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>,
+    validator_addr: <b>address</b>,
+    ctx: &<b>mut</b> TxContext,
+) {
+    <b>let</b> sender = <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx);
+
+    <b>assert</b>!(<a href="vec_map.md#0x2_vec_map_contains">vec_map::contains</a>(&self.validator_report_records, &validator_addr), <a href="sui_system.md#0x2_sui_system_EREPORT_RECORD_NOT_FOUND">EREPORT_RECORD_NOT_FOUND</a>);
+    <b>let</b> reporters = <a href="vec_map.md#0x2_vec_map_get_mut">vec_map::get_mut</a>(&<b>mut</b> self.validator_report_records, &validator_addr);
+    <b>assert</b>!(<a href="vec_set.md#0x2_vec_set_contains">vec_set::contains</a>(reporters, &sender), <a href="sui_system.md#0x2_sui_system_EREPORT_RECORD_NOT_FOUND">EREPORT_RECORD_NOT_FOUND</a>);
+    <a href="vec_set.md#0x2_vec_set_remove">vec_set::remove</a>(reporters, &sender);
+}
+</code></pre>
+
+
+
+</details>
+
 <a name="0x2_sui_system_advance_epoch"></a>
 
 ## Function `advance_epoch`
@@ -616,6 +762,7 @@ gas coins.
         &<b>mut</b> self.validators,
         &<b>mut</b> computation_reward,
         &<b>mut</b> delegator_reward,
+        &self.validator_report_records,
         ctx,
     );
     // Derive the reference gas price for the new epoch
@@ -629,6 +776,10 @@ gas coins.
     // Burn the storage rebate.
     <b>assert</b>!(<a href="balance.md#0x2_balance_value">balance::value</a>(&self.storage_fund) &gt;= storage_rebate, 0);
     <a href="balance.md#0x2_balance_decrease_supply">balance::decrease_supply</a>(&<b>mut</b> self.sui_supply, <a href="balance.md#0x2_balance_split">balance::split</a>(&<b>mut</b> self.storage_fund, storage_rebate));
+
+    // Validator reports are only valid for the epoch.
+    // TODO: or do we want <b>to</b> make it persistent and validators have <b>to</b> explicitly change their scores?
+    self.validator_report_records = <a href="vec_map.md#0x2_vec_map_empty">vec_map::empty</a>();
 }
 </code></pre>
 
@@ -707,6 +858,35 @@ Aborts if <code>validator_addr</code> is not an active validator.
 
 <pre><code><b>public</b> <b>fun</b> <a href="sui_system.md#0x2_sui_system_validator_stake_amount">validator_stake_amount</a>(self: &<a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>, validator_addr: <b>address</b>): u64 {
     <a href="validator_set.md#0x2_validator_set_validator_stake_amount">validator_set::validator_stake_amount</a>(&self.validators, validator_addr)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_sui_system_get_reporters_of"></a>
+
+## Function `get_reporters_of`
+
+Returns all the validators who have reported <code>addr</code> this epoch.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="sui_system.md#0x2_sui_system_get_reporters_of">get_reporters_of</a>(self: &<a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, addr: <b>address</b>): <a href="vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;<b>address</b>&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="sui_system.md#0x2_sui_system_get_reporters_of">get_reporters_of</a>(self: &<a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>, addr: <b>address</b>): VecSet&lt;<b>address</b>&gt; {
+    <b>if</b> (<a href="vec_map.md#0x2_vec_map_contains">vec_map::contains</a>(&self.validator_report_records, &addr)) {
+        *<a href="vec_map.md#0x2_vec_map_get">vec_map::get</a>(&self.validator_report_records, &addr)
+    } <b>else</b> {
+        <a href="vec_set.md#0x2_vec_set_empty">vec_set::empty</a>()
+    }
 }
 </code></pre>
 
