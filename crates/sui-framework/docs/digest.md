@@ -6,24 +6,24 @@
 Sui types for message digests.
 
 
--  [Struct `Sha2256Digest`](#0x2_digest_Sha2256Digest)
+-  [Struct `Sha3256Digest`](#0x2_digest_Sha3256Digest)
 -  [Constants](#@Constants_0)
--  [Function `sha2_256_digest_from_bytes`](#0x2_digest_sha2_256_digest_from_bytes)
--  [Function `sha2_256_digest_to_bytes`](#0x2_digest_sha2_256_digest_to_bytes)
+-  [Function `sha3_256_digest_from_bytes`](#0x2_digest_sha3_256_digest_from_bytes)
+-  [Function `sha3_256_digest_to_bytes`](#0x2_digest_sha3_256_digest_to_bytes)
 
 
 <pre><code></code></pre>
 
 
 
-<a name="0x2_digest_Sha2256Digest"></a>
+<a name="0x2_digest_Sha3256Digest"></a>
 
-## Struct `Sha2256Digest`
+## Struct `Sha3256Digest`
 
-Sha2256Digest: An immutable wrapper of SHA2256_DIGEST_VECTOR_LENGTH bytes.
+Sha3256Digest: An immutable wrapper of SHA3_256_DIGEST_VECTOR_LENGTH bytes.
 
 
-<pre><code><b>struct</b> <a href="digest.md#0x2_digest_Sha2256Digest">Sha2256Digest</a> <b>has</b> <b>copy</b>, drop, store
+<pre><code><b>struct</b> <a href="digest.md#0x2_digest_Sha3256Digest">Sha3256Digest</a> <b>has</b> <b>copy</b>, drop, store
 </code></pre>
 
 
@@ -59,24 +59,24 @@ Error code when the length of the digest vector is invalid.
 
 
 
-<a name="0x2_digest_SHA2_256_DIGEST_VECTOR_LENGTH"></a>
+<a name="0x2_digest_SHA3_256_DIGEST_VECTOR_LENGTH"></a>
 
-Length of the vector<u8> representing a SHA2-256 digest.
+Length of the vector<u8> representing a SHA3-256 digest.
 
 
-<pre><code><b>const</b> <a href="digest.md#0x2_digest_SHA2_256_DIGEST_VECTOR_LENGTH">SHA2_256_DIGEST_VECTOR_LENGTH</a>: u64 = 32;
+<pre><code><b>const</b> <a href="digest.md#0x2_digest_SHA3_256_DIGEST_VECTOR_LENGTH">SHA3_256_DIGEST_VECTOR_LENGTH</a>: u64 = 32;
 </code></pre>
 
 
 
-<a name="0x2_digest_sha2_256_digest_from_bytes"></a>
+<a name="0x2_digest_sha3_256_digest_from_bytes"></a>
 
-## Function `sha2_256_digest_from_bytes`
+## Function `sha3_256_digest_from_bytes`
 
-Create a <code><a href="digest.md#0x2_digest_Sha2256Digest">Sha2256Digest</a></code> from bytes. Aborts if <code>bytes</code> is not of length 32.
+Create a <code><a href="digest.md#0x2_digest_Sha3256Digest">Sha3256Digest</a></code> from bytes. Aborts if <code>bytes</code> is not of length 32.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="digest.md#0x2_digest_sha2_256_digest_from_bytes">sha2_256_digest_from_bytes</a>(<a href="digest.md#0x2_digest">digest</a>: <a href="">vector</a>&lt;u8&gt;): <a href="digest.md#0x2_digest_Sha2256Digest">digest::Sha2256Digest</a>
+<pre><code><b>public</b> <b>fun</b> <a href="digest.md#0x2_digest_sha3_256_digest_from_bytes">sha3_256_digest_from_bytes</a>(<a href="digest.md#0x2_digest">digest</a>: <a href="">vector</a>&lt;u8&gt;): <a href="digest.md#0x2_digest_Sha3256Digest">digest::Sha3256Digest</a>
 </code></pre>
 
 
@@ -85,9 +85,9 @@ Create a <code><a href="digest.md#0x2_digest_Sha2256Digest">Sha2256Digest</a></c
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="digest.md#0x2_digest_sha2_256_digest_from_bytes">sha2_256_digest_from_bytes</a>(<a href="digest.md#0x2_digest">digest</a>: <a href="">vector</a>&lt;u8&gt;): <a href="digest.md#0x2_digest_Sha2256Digest">Sha2256Digest</a> {
-    <b>assert</b>!(<a href="_length">vector::length</a>(&<a href="digest.md#0x2_digest">digest</a>) == <a href="digest.md#0x2_digest_SHA2_256_DIGEST_VECTOR_LENGTH">SHA2_256_DIGEST_VECTOR_LENGTH</a>, <a href="digest.md#0x2_digest_EHashLengthMismatch">EHashLengthMismatch</a>);
-    <a href="digest.md#0x2_digest_Sha2256Digest">Sha2256Digest</a> { <a href="digest.md#0x2_digest">digest</a> }
+<pre><code><b>public</b> <b>fun</b> <a href="digest.md#0x2_digest_sha3_256_digest_from_bytes">sha3_256_digest_from_bytes</a>(<a href="digest.md#0x2_digest">digest</a>: <a href="">vector</a>&lt;u8&gt;): <a href="digest.md#0x2_digest_Sha3256Digest">Sha3256Digest</a> {
+    <b>assert</b>!(<a href="_length">vector::length</a>(&<a href="digest.md#0x2_digest">digest</a>) == <a href="digest.md#0x2_digest_SHA3_256_DIGEST_VECTOR_LENGTH">SHA3_256_DIGEST_VECTOR_LENGTH</a>, <a href="digest.md#0x2_digest_EHashLengthMismatch">EHashLengthMismatch</a>);
+    <a href="digest.md#0x2_digest_Sha3256Digest">Sha3256Digest</a> { <a href="digest.md#0x2_digest">digest</a> }
 }
 </code></pre>
 
@@ -95,14 +95,14 @@ Create a <code><a href="digest.md#0x2_digest_Sha2256Digest">Sha2256Digest</a></c
 
 </details>
 
-<a name="0x2_digest_sha2_256_digest_to_bytes"></a>
+<a name="0x2_digest_sha3_256_digest_to_bytes"></a>
 
-## Function `sha2_256_digest_to_bytes`
+## Function `sha3_256_digest_to_bytes`
 
 Get the digest.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="digest.md#0x2_digest_sha2_256_digest_to_bytes">sha2_256_digest_to_bytes</a>(self: &<a href="digest.md#0x2_digest_Sha2256Digest">digest::Sha2256Digest</a>): <a href="">vector</a>&lt;u8&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="digest.md#0x2_digest_sha3_256_digest_to_bytes">sha3_256_digest_to_bytes</a>(self: &<a href="digest.md#0x2_digest_Sha3256Digest">digest::Sha3256Digest</a>): <a href="">vector</a>&lt;u8&gt;
 </code></pre>
 
 
@@ -111,7 +111,7 @@ Get the digest.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="digest.md#0x2_digest_sha2_256_digest_to_bytes">sha2_256_digest_to_bytes</a>(self: &<a href="digest.md#0x2_digest_Sha2256Digest">Sha2256Digest</a>): <a href="">vector</a>&lt;u8&gt; {
+<pre><code><b>public</b> <b>fun</b> <a href="digest.md#0x2_digest_sha3_256_digest_to_bytes">sha3_256_digest_to_bytes</a>(self: &<a href="digest.md#0x2_digest_Sha3256Digest">Sha3256Digest</a>): <a href="">vector</a>&lt;u8&gt; {
     self.<a href="digest.md#0x2_digest">digest</a>
 }
 </code></pre>

@@ -34,7 +34,7 @@ Represents a resource that can move but must never change. Example use cases:
 - NFT metadata.
 
 <code><a href="url.md#0x2_url">url</a></code> MUST follow RFC-3986. Clients MUST support (at least) the following schemes: ipfs, https.
-<code><a href="digest.md#0x2_digest">digest</a></code> MUST be set to SHA256(content of resource at <code><a href="url.md#0x2_url">url</a></code>).
+<code><a href="digest.md#0x2_digest">digest</a></code> MUST be set to SHA3-256(content of resource at <code><a href="url.md#0x2_url">url</a></code>).
 
 Clients of this type MUST fetch the resource at <code><a href="url.md#0x2_url">url</a></code>, compute its digest and compare it against <code><a href="digest.md#0x2_digest">digest</a></code>. If
 the result is false, clients SHOULD indicate that to users or ignore the resource.
@@ -57,7 +57,7 @@ the result is false, clients SHOULD indicate that to users or ignore the resourc
 
 </dd>
 <dt>
-<code><a href="digest.md#0x2_digest">digest</a>: <a href="digest.md#0x2_digest_Sha2256Digest">digest::Sha2256Digest</a></code>
+<code><a href="digest.md#0x2_digest">digest</a>: <a href="digest.md#0x2_digest_Sha3256Digest">digest::Sha3256Digest</a></code>
 </dt>
 <dd>
 
@@ -74,7 +74,7 @@ the result is false, clients SHOULD indicate that to users or ignore the resourc
 Create a <code><a href="immutable_external_resource.md#0x2_immutable_external_resource_ImmutableExternalResource">ImmutableExternalResource</a></code>, and set the immutable hash.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="immutable_external_resource.md#0x2_immutable_external_resource_new">new</a>(<a href="url.md#0x2_url">url</a>: <a href="url.md#0x2_url_Url">url::Url</a>, <a href="digest.md#0x2_digest">digest</a>: <a href="digest.md#0x2_digest_Sha2256Digest">digest::Sha2256Digest</a>): <a href="immutable_external_resource.md#0x2_immutable_external_resource_ImmutableExternalResource">immutable_external_resource::ImmutableExternalResource</a>
+<pre><code><b>public</b> <b>fun</b> <a href="immutable_external_resource.md#0x2_immutable_external_resource_new">new</a>(<a href="url.md#0x2_url">url</a>: <a href="url.md#0x2_url_Url">url::Url</a>, <a href="digest.md#0x2_digest">digest</a>: <a href="digest.md#0x2_digest_Sha3256Digest">digest::Sha3256Digest</a>): <a href="immutable_external_resource.md#0x2_immutable_external_resource_ImmutableExternalResource">immutable_external_resource::ImmutableExternalResource</a>
 </code></pre>
 
 
@@ -83,7 +83,7 @@ Create a <code><a href="immutable_external_resource.md#0x2_immutable_external_re
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="immutable_external_resource.md#0x2_immutable_external_resource_new">new</a>(<a href="url.md#0x2_url">url</a>: Url, <a href="digest.md#0x2_digest">digest</a>: Sha2256Digest): <a href="immutable_external_resource.md#0x2_immutable_external_resource_ImmutableExternalResource">ImmutableExternalResource</a> {
+<pre><code><b>public</b> <b>fun</b> <a href="immutable_external_resource.md#0x2_immutable_external_resource_new">new</a>(<a href="url.md#0x2_url">url</a>: Url, <a href="digest.md#0x2_digest">digest</a>: Sha3256Digest): <a href="immutable_external_resource.md#0x2_immutable_external_resource_ImmutableExternalResource">ImmutableExternalResource</a> {
     <a href="immutable_external_resource.md#0x2_immutable_external_resource_ImmutableExternalResource">ImmutableExternalResource</a> { <a href="url.md#0x2_url">url</a>, <a href="digest.md#0x2_digest">digest</a> }
 }
 </code></pre>
@@ -99,7 +99,7 @@ Create a <code><a href="immutable_external_resource.md#0x2_immutable_external_re
 Get the hash of the resource.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="digest.md#0x2_digest">digest</a>(self: &<a href="immutable_external_resource.md#0x2_immutable_external_resource_ImmutableExternalResource">immutable_external_resource::ImmutableExternalResource</a>): <a href="digest.md#0x2_digest_Sha2256Digest">digest::Sha2256Digest</a>
+<pre><code><b>public</b> <b>fun</b> <a href="digest.md#0x2_digest">digest</a>(self: &<a href="immutable_external_resource.md#0x2_immutable_external_resource_ImmutableExternalResource">immutable_external_resource::ImmutableExternalResource</a>): <a href="digest.md#0x2_digest_Sha3256Digest">digest::Sha3256Digest</a>
 </code></pre>
 
 
@@ -108,7 +108,7 @@ Get the hash of the resource.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="digest.md#0x2_digest">digest</a>(self: &<a href="immutable_external_resource.md#0x2_immutable_external_resource_ImmutableExternalResource">ImmutableExternalResource</a>): Sha2256Digest {
+<pre><code><b>public</b> <b>fun</b> <a href="digest.md#0x2_digest">digest</a>(self: &<a href="immutable_external_resource.md#0x2_immutable_external_resource_ImmutableExternalResource">ImmutableExternalResource</a>): Sha3256Digest {
     self.<a href="digest.md#0x2_digest">digest</a>
 }
 </code></pre>
