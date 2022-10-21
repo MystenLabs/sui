@@ -21,9 +21,9 @@ use sui_json_rpc_types::{
     SuiEvent, SuiEventEnvelope, SuiEventFilter, SuiExecuteTransactionResponse, SuiExecutionStatus,
     SuiMoveStruct, SuiMoveValue, SuiTransactionFilter, SuiTransactionResponse,
 };
+use sui_keys::keystore::AccountKeystore;
 use sui_macros::*;
 use sui_node::SuiNode;
-use sui_sdk::crypto::AccountKeystore;
 use sui_types::base_types::{ObjectRef, SequenceNumber};
 use sui_types::event::TransferType;
 use sui_types::messages::{

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Result;
-use sui_sdk::crypto::{AccountKeystore, FileBasedKeystore};
+use sui_keys::keystore::{AccountKeystore, FileBasedKeystore};
 use sui_types::{
     base_types::SuiAddress,
     crypto::{AccountKeyPair, KeypairTraits, SuiKeyPair},

@@ -24,7 +24,7 @@ use sui_json_rpc_types::{
     GetObjectDataResponse, SuiData, SuiObject, SuiParsedData, SuiParsedObject,
     SuiTransactionEffects,
 };
-use sui_sdk::crypto::{AccountKeystore, FileBasedKeystore, Keystore};
+use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_sdk::ClientType;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{

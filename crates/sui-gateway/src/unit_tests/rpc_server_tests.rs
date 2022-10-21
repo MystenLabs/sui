@@ -15,9 +15,7 @@ use sui_json_rpc::api::{
     RpcGatewayApiClient, RpcReadApiClient, RpcTransactionBuilderClient, WalletSyncApiClient,
 };
 use sui_json_rpc_types::{GetObjectDataResponse, SuiTransactionResponse, TransactionBytes};
-use sui_sdk::crypto::AccountKeystore;
-use sui_sdk::crypto::FileBasedKeystore;
-use sui_sdk::crypto::Keystore;
+use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_sdk::SuiClient;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::TransactionDigest;

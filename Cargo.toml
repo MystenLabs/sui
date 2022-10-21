@@ -17,6 +17,7 @@ members = [
     "crates/sui-json",
     "crates/sui-json-rpc",
     "crates/sui-json-rpc-types",
+    "crates/sui-keys",
     "crates/sui-macros",
     "crates/sui-network",
     "crates/sui-node",

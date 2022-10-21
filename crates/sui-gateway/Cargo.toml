@@ -24,6 +24,7 @@ sui-json = { path = "../sui-json" }
 sui-json-rpc = { path = "../sui-json-rpc" }
 sui-json-rpc-types= { path = "../sui-json-rpc-types" }
 sui-node = { path = "../sui-node" }
+sui-keys = { path = "../sui-keys" }
 
 
 mysten-network.workspace = true

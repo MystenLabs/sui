@@ -14,7 +14,7 @@ use sui::client_commands::{SuiClientCommands, WalletContext};
 use sui_json_rpc_types::{
     SuiExecutionStatus, SuiObjectRead, SuiTransactionKind, SuiTransactionResponse, SuiTransferSui,
 };
-use sui_sdk::crypto::AccountKeystore;
+use sui_keys::keystore::AccountKeystore;
 use sui_types::object::Owner;
 use sui_types::{
     base_types::{ObjectID, SuiAddress, TransactionDigest},
