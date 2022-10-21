@@ -14,7 +14,7 @@ const DEFAULT_FULLNODE_URL = 'http://127.0.0.1:9000';
 
 export const DEFAULT_RECIPIENT = '0x36096be6a0314052931babed39f53c0666a6b0df';
 export const DEFAULT_RECIPIENT_2 = '0x46096be6a0314052931babed39f53c0666a6b0da';
-export const DEFAULT_GAS_BUDGET = 10000;
+export const DEFAULT_GAS_BUDGET = 20000;
 
 export class TestToolbox {
   constructor(
