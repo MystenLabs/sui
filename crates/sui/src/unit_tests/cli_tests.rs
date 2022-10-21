@@ -350,7 +350,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         package_path,
         build_config,
         gas: Some(gas_obj_id),
-        gas_budget: 10_000,
+        gas_budget: 20_000,
     }
     .execute(context)
     .await?;
@@ -402,7 +402,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         type_args: vec![],
         args,
         gas: None,
-        gas_budget: 10_000,
+        gas_budget: 20_000,
     }
     .execute(context)
     .await?;
@@ -442,7 +442,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         type_args: vec![],
         args: args.to_vec(),
         gas: Some(gas),
-        gas_budget: 10_000,
+        gas_budget: 20_000,
     }
     .execute(context)
     .await;
@@ -466,7 +466,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         type_args: vec![],
         args: args.to_vec(),
         gas: Some(gas),
-        gas_budget: 10_000,
+        gas_budget: 20_000,
     }
     .execute(context)
     .await;
@@ -491,7 +491,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         type_args: vec![],
         args: args.to_vec(),
         gas: Some(gas),
-        gas_budget: 10_000,
+        gas_budget: 20_000,
     }
     .execute(context)
     .await?;
@@ -523,7 +523,7 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
         package_path,
         build_config,
         gas: Some(gas_obj_id),
-        gas_budget: 10_000,
+        gas_budget: 20_000,
     }
     .execute(context)
     .await?;
@@ -910,7 +910,7 @@ async fn test_merge_coin() -> Result<(), anyhow::Error> {
         primary_coin,
         coin_to_merge,
         gas: Some(gas),
-        gas_budget: 10_000,
+        gas_budget: 20_000,
     }
     .execute(context)
     .await?;
@@ -1015,7 +1015,7 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
     // Test with gas specified
     let resp = SuiClientCommands::SplitCoin {
         gas: Some(gas),
-        gas_budget: 10_000,
+        gas_budget: 20_000,
         coin_id: coin,
         amounts: Some(vec![1000, 10]),
         count: None,
@@ -1071,7 +1071,7 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
     // Test split coin into equal parts
     let resp = SuiClientCommands::SplitCoin {
         gas: None,
-        gas_budget: 10_000,
+        gas_budget: 20_000,
         coin_id: coin,
         amounts: None,
         count: Some(3),
@@ -1130,7 +1130,7 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
     // Test with no gas specified
     let resp = SuiClientCommands::SplitCoin {
         gas: None,
-        gas_budget: 10_000,
+        gas_budget: 20_000,
         coin_id: coin,
         amounts: Some(vec![1000, 10]),
         count: None,
