@@ -15,6 +15,7 @@ use pprof::criterion::{Output, PProfProfiler};
 use prometheus::Registry;
 use std::{collections::BTreeSet, sync::Arc};
 use test_utils::{make_consensus_store, make_optimal_certificates, temp_dir, CommitteeFixture};
+use tokio::time::Instant;
 use types::{Certificate, Round};
 
 pub fn process_certificates(c: &mut Criterion) {
@@ -43,7 +44,7 @@ pub fn process_certificates(c: &mut Criterion) {
         let store = make_consensus_store(&store_path);
         let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
-        let mut state = ConsensusState::new(Certificate::genesis(&committee), metrics);
+        let mut state = ConsensusState::new(Certificate::genesis(&committee), metrics.clone());
 
         let data_size: usize = certificates
             .iter()
@@ -55,6 +56,10 @@ pub fn process_certificates(c: &mut Criterion) {
             committee: committee.clone(),
             store,
             gc_depth,
+            metrics,
+            last_successful_leader_election_timestamp: Instant::now(),
+            last_leader_election: Default::default(),
+            max_inserted_certificate_round: 0,
         };
         consensus_group.bench_with_input(
             BenchmarkId::new("batched", certificates.len()),
