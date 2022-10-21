@@ -6,25 +6,13 @@ ARG BUILD_MODE="release"
 #################################################################
 # Stage 0
 #################################################################
-FROM rust:1.62-slim-bullseye as chef
+FROM rust:1.64.0 AS chef
 WORKDIR "$WORKDIR/sui"
 ARG BUILD_MODE
 
 # Install basic dependencies
-RUN DEBIAN_FRONTEND=noninteractive apt-get -qq update \
-    && DEBIAN_FRONTEND=noninteractive TZ=Etc/UTC apt-get -qq install -y --no-install-recommends \
-    tzdata \
-    git \
-    ca-certificates \
-    curl \
-    build-essential \
-    libssl-dev \
-    pkg-config \
-    clang \
-    cmake > /dev/null 2>&1 \
-    && rm -rf /var/lib/apt/lists/*
-# Install the fmt
-RUN rustup component add rustfmt
+RUN apt-get update && apt-get install -y cmake clang
+
 RUN echo "Will build image with mode: ${BUILD_MODE}"
 
 #################################################################
