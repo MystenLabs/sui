@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeMap;
-use std::fmt::{Display, Formatter};
+use std::fmt::{Debug, Display, Formatter};
 use std::str::FromStr;
 
 use axum::response::{IntoResponse, Response};
@@ -137,7 +137,7 @@ impl From<u64> for SignedValue {
     fn from(value: u64) -> Self {
         Self {
             negative: false,
-            value: value.try_into().unwrap(),
+            value: value as u128,
         }
     }
 }
@@ -151,11 +151,20 @@ impl From<u128> for SignedValue {
     }
 }
 
+impl From<i128> for SignedValue {
+    fn from(value: i128) -> Self {
+        Self {
+            negative: value.is_negative(),
+            value: value.abs() as u128,
+        }
+    }
+}
+
 impl From<i64> for SignedValue {
     fn from(value: i64) -> Self {
         Self {
             negative: value.is_negative(),
-            value: value.abs().try_into().unwrap(),
+            value: value.abs() as u128,
         }
     }
 }

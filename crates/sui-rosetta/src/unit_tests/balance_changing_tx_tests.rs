@@ -14,81 +14,21 @@ use signature::rand_core::OsRng;
 use sui_config::utils::get_available_port;
 use sui_sdk::crypto::{AccountKeystore, Keystore};
 use sui_sdk::rpc_types::{
-    OwnedObjectRef, SuiData, SuiEvent, SuiExecutionStatus, SuiPastObjectRead, SuiTransactionEffects,
+    OwnedObjectRef, SuiData, SuiEvent, SuiExecutionStatus, SuiTransactionEffects,
 };
 use sui_sdk::{SuiClient, TransactionExecutionResult};
-use sui_types::base_types::{
-    ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
-};
-use sui_types::event::Event::TransferObject;
-use sui_types::event::TransferType;
-use sui_types::gas::GasCostSummary;
+use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::{
     CallArg, ExecuteTransactionRequestType, ExecutionStatus, InputObjectKind, MoveCall,
     MoveModulePublish, ObjectArg, Pay, SingleTransactionKind, Transaction, TransactionData,
-    TransactionEffects, TransactionKind, TransferSui,
+    TransactionKind, TransferSui,
 };
-use sui_types::object::Owner;
-use sui_types::SUI_FRAMEWORK_OBJECT_ID;
 use test_utils::network::TestClusterBuilder;
 
 use crate::operations::Operation;
 use crate::state::extract_balance_changes_from_ops;
 use crate::types::SignedValue;
-
-#[test]
-fn test_transfer_sui_null_amount() {
-    let sender = SuiAddress::random_for_testing_only();
-    let recipient = SuiAddress::random_for_testing_only();
-    let gas = (
-        ObjectID::random(),
-        SequenceNumber::new(),
-        ObjectDigest::random(),
-    );
-    let data = TransactionData::new_transfer_sui(recipient, sender, None, gas, 1000);
-
-    let effect = TransactionEffects {
-        status: ExecutionStatus::Success,
-        gas_used: GasCostSummary {
-            computation_cost: 100,
-            storage_cost: 100,
-            storage_rebate: 50,
-        },
-        shared_objects: vec![],
-        transaction_digest: TransactionDigest::random(),
-        created: vec![],
-        mutated: vec![],
-        unwrapped: vec![],
-        deleted: vec![],
-        wrapped: vec![],
-        gas_object: (gas, Owner::AddressOwner(sender)),
-        events: vec![TransferObject {
-            package_id: SUI_FRAMEWORK_OBJECT_ID,
-            transaction_module: Identifier::from_str("test").unwrap(),
-            sender,
-            recipient: Owner::AddressOwner(recipient),
-            object_id: ObjectID::random(),
-            version: Default::default(),
-            type_: TransferType::Coin,
-            amount: Some(10000),
-        }],
-        dependencies: vec![],
-    };
-    let ops = Operation::from_data_and_events(
-        &data,
-        &effect.status,
-        &effect.events,
-        effect.gas_used.net_gas_usage(),
-        effect.gas_object.1,
-        &[],
-    )
-    .unwrap();
-    let balances = extract_balance_changes_from_ops(ops).unwrap();
-
-    assert_eq!(SignedValue::neg(10150), balances[&sender]);
-    assert_eq!(SignedValue::from(10000u64), balances[&recipient]);
-}
 
 #[tokio::test]
 async fn test_all_transaction_type() {
@@ -102,8 +42,8 @@ async fn test_all_transaction_type() {
     let keystore = &network.wallet.config.keystore;
 
     // Test Transfer Sui
-    let sender = *network.accounts.choose(&mut OsRng::default()).unwrap();
-    let recipient = *network.accounts.choose(&mut OsRng::default()).unwrap();
+    let sender = get_random_address(&network.accounts, vec![]);
+    let recipient = get_random_address(&network.accounts, vec![sender]);
     let tx = SingleTransactionKind::TransferSui(TransferSui {
         recipient,
         amount: Some(50000),
@@ -111,8 +51,8 @@ async fn test_all_transaction_type() {
     test_transaction(&client, keystore, vec![recipient], sender, tx).await;
 
     // Test transfer sui whole coin
-    let sender = *network.accounts.choose(&mut OsRng::default()).unwrap();
-    let recipient = *network.accounts.choose(&mut OsRng::default()).unwrap();
+    let sender = get_random_address(&network.accounts, vec![]);
+    let recipient = get_random_address(&network.accounts, vec![sender]);
     let tx = SingleTransactionKind::TransferSui(TransferSui {
         recipient,
         amount: None,
@@ -120,8 +60,8 @@ async fn test_all_transaction_type() {
     test_transaction(&client, keystore, vec![recipient], sender, tx).await;
 
     // Test transfer object
-    let sender = *network.accounts.choose(&mut OsRng::default()).unwrap();
-    let recipient = *network.accounts.choose(&mut OsRng::default()).unwrap();
+    let sender = get_random_address(&network.accounts, vec![]);
+    let recipient = get_random_address(&network.accounts, vec![sender]);
     let object_ref = get_random_gas(&client, sender, vec![]).await;
     let tx = SingleTransactionKind::TransferObject(sui_types::messages::TransferObject {
         recipient,
@@ -130,7 +70,7 @@ async fn test_all_transaction_type() {
     test_transaction(&client, keystore, vec![recipient], sender, tx).await;
 
     // Test publish
-    let sender = *network.accounts.choose(&mut OsRng::default()).unwrap();
+    let sender = get_random_address(&network.accounts, vec![]);
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../sui_programmability/examples/fungible_tokens");
     let package = sui_framework::build_move_package(&path, BuildConfig::default()).unwrap();
@@ -190,14 +130,14 @@ async fn test_all_transaction_type() {
     let coin = get_random_gas(&client, sender, vec![]).await;
     let tx = client
         .transaction_builder()
-        .split_coin(sender, coin.0, vec![10000], None, 10000)
+        .split_coin(sender, coin.0, vec![100000], None, 10000)
         .await
         .unwrap();
     let tx = tx.kind.single_transactions().next().unwrap().clone();
     test_transaction(&client, keystore, vec![], sender, tx).await;
 
     // Test merge coin
-    let sender = *network.accounts.choose(&mut OsRng::default()).unwrap();
+    let sender = get_random_address(&network.accounts, vec![]);
     let coin = get_random_gas(&client, sender, vec![]).await;
     let coin2 = get_random_gas(&client, sender, vec![coin.0]).await;
     let tx = client
@@ -209,14 +149,28 @@ async fn test_all_transaction_type() {
     test_transaction(&client, keystore, vec![], sender, tx).await;
 
     // Test Pay
-    let sender = *network.accounts.choose(&mut OsRng::default()).unwrap();
+    let sender = get_random_address(&network.accounts, vec![]);
+    let recipient = get_random_address(&network.accounts, vec![sender]);
     let coin = get_random_gas(&client, sender, vec![]).await;
     let tx = SingleTransactionKind::Pay(Pay {
         coins: vec![coin],
         recipients: vec![recipient],
-        amounts: vec![10000],
+        amounts: vec![100000],
     });
     test_transaction(&client, keystore, vec![recipient], sender, tx).await;
+
+    // Test Pay multiple coin multiple recipient
+    let sender = get_random_address(&network.accounts, vec![]);
+    let recipient1 = get_random_address(&network.accounts, vec![sender]);
+    let recipient2 = get_random_address(&network.accounts, vec![sender, recipient1]);
+    let coin1 = get_random_gas(&client, sender, vec![]).await;
+    let coin2 = get_random_gas(&client, sender, vec![coin1.0]).await;
+    let tx = SingleTransactionKind::Pay(Pay {
+        coins: vec![coin1, coin2],
+        recipients: vec![recipient1, recipient2],
+        amounts: vec![100000, 200000],
+    });
+    test_transaction(&client, keystore, vec![recipient1, recipient2], sender, tx).await;
 }
 
 fn find_module_object(effects: &SuiTransactionEffects, module: &str) -> Option<OwnedObjectRef> {
@@ -300,32 +254,8 @@ async fn test_transaction(
         .map(|event| event.try_into())
         .collect::<Result<Vec<_>, _>>()
         .unwrap();
-    let net_gas_used = effect.gas_used.computation_cost + effect.gas_used.storage_cost
-        - effect.gas_used.storage_rebate;
 
-    let mut new_coins: Vec<(GasCoin, ObjectRef)> = vec![];
-    for oref in &effect.created {
-        let oref = &oref.reference;
-        if let Ok(SuiPastObjectRead::VersionFound(obj)) = client
-            .read_api()
-            .try_get_parsed_past_object(oref.object_id, oref.version)
-            .await
-        {
-            if let Ok(coin) = (&obj).try_into() {
-                new_coins.push((coin, oref.to_object_ref()))
-            }
-        }
-    }
-
-    let ops = Operation::from_data_and_events(
-        &data,
-        &ExecutionStatus::Success,
-        &events,
-        net_gas_used as i64,
-        effect.gas_object.owner,
-        &new_coins,
-    )
-    .unwrap();
+    let ops = Operation::from_data_and_events(&data, &ExecutionStatus::Success, &events).unwrap();
     let balances_from_ops = extract_balance_changes_from_ops(ops).unwrap();
 
     // get actual balance changed after transaction
@@ -361,6 +291,14 @@ async fn get_random_gas(
         .choose(&mut OsRng::default())
         .unwrap();
     (coin.object_id, coin.version, coin.digest)
+}
+
+fn get_random_address(addresses: &Vec<SuiAddress>, except: Vec<SuiAddress>) -> SuiAddress {
+    *addresses
+        .iter()
+        .filter(|addr| !except.contains(*addr))
+        .choose(&mut OsRng::default())
+        .unwrap()
 }
 
 async fn get_balance(client: &SuiClient, address: SuiAddress) -> u64 {

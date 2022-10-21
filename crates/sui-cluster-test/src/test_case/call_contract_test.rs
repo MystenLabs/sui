@@ -1,13 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::helper::ObjectChecker;
-use crate::{TestCaseImpl, TestContext};
 use async_trait::async_trait;
 use jsonrpsee::rpc_params;
 use move_core_types::language_storage::TypeTag;
 use serde::Deserialize;
 use serde_json::json;
+use tracing::info;
+
 use sui::client_commands::{EXAMPLE_NFT_DESCRIPTION, EXAMPLE_NFT_NAME, EXAMPLE_NFT_URL};
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::SuiEvent;
@@ -18,7 +18,9 @@ use sui_types::{
     object::Owner,
     SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_OBJECT_ID,
 };
-use tracing::info;
+
+use crate::helper::ObjectChecker;
+use crate::{TestCaseImpl, TestContext};
 
 pub struct CallContractTest;
 
@@ -72,8 +74,8 @@ impl TestCaseImpl for CallContractTest {
         let events = &effects.events;
         assert_eq!(
             events.len(),
-            2,
-            "Expect one event emitted, but got {}",
+            3,
+            "Expect three event emitted, but got {}",
             events.len()
         );
 
@@ -83,13 +85,14 @@ impl TestCaseImpl for CallContractTest {
                 matches!(e, SuiEvent::NewObject {
                     package_id,
                     transaction_module,
-                    sender, recipient, object_id
+                    sender, recipient, object_type, object_id
                 } if
                     package_id == &SUI_FRAMEWORK_OBJECT_ID
                     && transaction_module == &String::from("devnet_nft")
                     && sender == &signer
                     && recipient == &Owner::AddressOwner(signer)
                     && object_id == &nft_id
+                    && object_type == "0x2::devnet_nft::DevNetNFT"
                 )
             })
             .unwrap_or_else(|| panic!("Expect such a NewObject in events {:?}", events));

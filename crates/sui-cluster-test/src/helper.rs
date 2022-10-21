@@ -2,16 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::bail;
+use tracing::{debug, trace};
+
 use sui_json_rpc_types::{GetRawObjectDataResponse, SuiData, SuiEvent, SuiRawObject};
+use sui_sdk::SuiClient;
 use sui_types::gas_coin::GasCoin;
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
-    event::TransferType,
     object::Owner,
 };
-
-use sui_sdk::SuiClient;
-use tracing::{debug, trace};
 
 /// A util struct that helps verify Sui Object.
 /// Use builder style to construct the conditions.
@@ -153,18 +152,18 @@ macro_rules! assert_eq_if_present {
 }
 
 #[derive(Default, Debug)]
-pub struct TransferObjectEventChecker {
+pub struct CoinBalanceChangeEventChecker {
     package_id: Option<ObjectID>,
     transaction_module: Option<String>,
     sender: Option<SuiAddress>,
-    recipient: Option<Owner>,
-    object_id: Option<ObjectID>,
+    owner: Option<Owner>,
+    coin_type: Option<String>,
+    coin_object_id: Option<ObjectID>,
     version: Option<SequenceNumber>,
-    type_: Option<TransferType>,
-    amount: Option<u64>,
+    amount: Option<i128>,
 }
 
-impl TransferObjectEventChecker {
+impl CoinBalanceChangeEventChecker {
     pub fn new() -> Self {
         Default::default()
     }
@@ -181,37 +180,37 @@ impl TransferObjectEventChecker {
         self.sender = Some(sender);
         self
     }
-    pub fn recipient(mut self, recipient: Owner) -> Self {
-        self.recipient = Some(recipient);
+    pub fn owner(mut self, owner: Owner) -> Self {
+        self.owner = Some(owner);
         self
     }
-    pub fn object_id(mut self, object_id: ObjectID) -> Self {
-        self.object_id = Some(object_id);
+    pub fn coin_type(mut self, coin_type: &str) -> Self {
+        self.coin_type = Some(coin_type.to_string());
+        self
+    }
+    pub fn coin_object_id(mut self, coin_object_id: ObjectID) -> Self {
+        self.coin_object_id = Some(coin_object_id);
         self
     }
     pub fn version(mut self, version: SequenceNumber) -> Self {
         self.version = Some(version);
         self
     }
-    pub fn type_(mut self, type_: TransferType) -> Self {
-        self.type_ = Some(type_);
-        self
-    }
 
-    pub fn amount(mut self, amount: u64) -> Self {
+    pub fn amount(mut self, amount: i128) -> Self {
         self.amount = Some(amount);
         self
     }
 
     pub fn check(self, event: &SuiEvent) {
-        if let SuiEvent::TransferObject {
+        if let SuiEvent::CoinBalanceChange {
             package_id,
             transaction_module,
             sender,
-            recipient,
-            object_id,
+            owner,
+            coin_type,
+            coin_object_id,
             version,
-            type_,
             amount,
         } = event
         {
@@ -222,11 +221,11 @@ impl TransferObjectEventChecker {
                 "transaction_module"
             );
             assert_eq_if_present!(self.sender, sender, "sender");
-            assert_eq_if_present!(self.recipient, recipient, "recipient");
-            assert_eq_if_present!(self.object_id, object_id, "object_id");
+            assert_eq_if_present!(self.owner, owner, "owner");
+            assert_eq_if_present!(self.coin_type, coin_type, "coin_type");
+            assert_eq_if_present!(self.coin_object_id, coin_object_id, "coin_object_id");
             assert_eq_if_present!(self.version, version, "version");
-            assert_eq_if_present!(self.type_, type_, "type_");
-            assert_eq_if_present!(self.amount, amount.as_ref().unwrap(), "amount");
+            assert_eq_if_present!(self.amount, amount, "version");
         } else {
             panic!("event {:?} is not TransferObject Event", event);
         }

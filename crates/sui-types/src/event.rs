@@ -3,15 +3,6 @@
 
 use std::str::FromStr;
 
-use crate::error::SuiError;
-use crate::object::MoveObject;
-use crate::object::ObjectFormatOptions;
-use crate::object::Owner;
-use crate::{
-    base_types::{ObjectID, SequenceNumber, SuiAddress, TransactionDigest},
-    committee::EpochId,
-    messages_checkpoint::CheckpointSequenceNumber,
-};
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::identifier::IdentStr;
@@ -27,6 +18,17 @@ use serde_with::Bytes;
 use strum::VariantNames;
 use strum_macros::{EnumDiscriminants, EnumVariantNames};
 use tracing::error;
+
+use crate::error::SuiError;
+use crate::object::MoveObject;
+use crate::object::ObjectFormatOptions;
+use crate::object::Owner;
+use crate::storage::InnerTxContext;
+use crate::{
+    base_types::{ObjectID, SequenceNumber, SuiAddress, TransactionDigest},
+    committee::EpochId,
+    messages_checkpoint::CheckpointSequenceNumber,
+};
 
 /// A universal Sui event type encapsulating different types of events
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -109,6 +111,7 @@ pub enum TransferType {
 #[strum_discriminants(name(EventType), derive(Serialize, Deserialize, JsonSchema))]
 // Developer note: PLEASE only append new entries, do not modify existing entries (binary compact)
 pub enum Event {
+    /// Transaction level event
     /// Move-specific event
     MoveEvent {
         package_id: ObjectID,
@@ -124,15 +127,31 @@ pub enum Event {
         package_id: ObjectID,
     },
     /// Transfer objects to new address / wrap in another object / coin
+    CoinBalanceChange {
+        package_id: ObjectID,
+        transaction_module: Identifier,
+        sender: SuiAddress,
+        owner: Owner,
+        coin_type: String,
+        coin_object_id: ObjectID,
+        version: SequenceNumber,
+        amount: i128,
+    },
+    /// Epoch change
+    EpochChange(EpochId),
+    /// New checkpoint
+    Checkpoint(CheckpointSequenceNumber),
+
+    /// Object level event
+    /// Transfer objects to new address / wrap in another object
     TransferObject {
         package_id: ObjectID,
         transaction_module: Identifier,
         sender: SuiAddress,
         recipient: Owner,
+        object_type: String,
         object_id: ObjectID,
         version: SequenceNumber,
-        type_: TransferType,
-        amount: Option<u64>,
     },
     /// Delete object
     DeleteObject {
@@ -140,6 +159,7 @@ pub enum Event {
         transaction_module: Identifier,
         sender: SuiAddress,
         object_id: ObjectID,
+        version: SequenceNumber,
     },
     /// New object creation
     NewObject {
@@ -147,12 +167,9 @@ pub enum Event {
         transaction_module: Identifier,
         sender: SuiAddress,
         recipient: Owner,
+        object_type: String,
         object_id: ObjectID,
     },
-    /// Epoch change
-    EpochChange(EpochId),
-    /// New checkpoint
-    Checkpoint(CheckpointSequenceNumber),
 }
 
 impl Event {
@@ -172,32 +189,58 @@ impl Event {
         }
     }
 
-    pub fn delete_object(
-        package_id: &AccountAddress,
-        module: &IdentStr,
-        sender: SuiAddress,
-        object_id: ObjectID,
+    pub fn balance_change(
+        ctx: &InnerTxContext,
+        owner: Owner,
+        coin_object_id: ObjectID,
+        version: SequenceNumber,
+        object_type: &StructTag,
+        amount: i128,
     ) -> Self {
-        Event::DeleteObject {
-            package_id: ObjectID::from(*package_id),
-            transaction_module: Identifier::from(module),
-            sender,
+        // We know this is a Coin object, safe to unwrap.
+        let coin_type = object_type.type_params[0].to_string();
+        Event::CoinBalanceChange {
+            package_id: ctx.package_id,
+            transaction_module: ctx.transaction_module.clone(),
+            sender: ctx.sender,
+            owner,
+            coin_type,
+            coin_object_id,
+            version,
+            amount,
+        }
+    }
+
+    pub fn transfer_object(
+        ctx: &InnerTxContext,
+        recipient: Owner,
+        object_type: String,
+        object_id: ObjectID,
+        version: SequenceNumber,
+    ) -> Self {
+        Self::TransferObject {
+            package_id: ctx.package_id,
+            transaction_module: ctx.transaction_module.clone(),
+            sender: ctx.sender,
+            recipient,
+            object_type,
             object_id,
+            version,
         }
     }
 
     pub fn new_object(
-        package_id: &AccountAddress,
-        module: &IdentStr,
-        sender: SuiAddress,
+        ctx: &InnerTxContext,
         recipient: Owner,
+        object_type: String,
         object_id: ObjectID,
     ) -> Self {
         Event::NewObject {
-            package_id: ObjectID::from(*package_id),
-            transaction_module: Identifier::from(module),
-            sender,
+            package_id: ctx.package_id,
+            transaction_module: ctx.transaction_module.clone(),
+            sender: ctx.sender,
             recipient,
+            object_type,
             object_id,
         }
     }
@@ -216,9 +259,13 @@ impl Event {
     /// - for DeleteObject and NewObject, the Object ID
     pub fn object_id(&self) -> Option<ObjectID> {
         match self {
-            Event::TransferObject { object_id, .. } => Some(*object_id),
-            Event::DeleteObject { object_id, .. } => Some(*object_id),
-            Event::NewObject { object_id, .. } => Some(*object_id),
+            Event::TransferObject { object_id, .. }
+            | Event::DeleteObject { object_id, .. }
+            | Event::NewObject { object_id, .. }
+            | Event::CoinBalanceChange {
+                coin_object_id: object_id,
+                ..
+            } => Some(*object_id),
             _ => None,
         }
     }
@@ -230,6 +277,7 @@ impl Event {
             | Event::NewObject { package_id, .. }
             | Event::DeleteObject { package_id, .. }
             | Event::TransferObject { package_id, .. }
+            | Event::CoinBalanceChange { package_id, .. }
             | Event::Publish { package_id, .. } => Some(*package_id),
             _ => None,
         }
@@ -242,7 +290,8 @@ impl Event {
             | Event::TransferObject { sender, .. }
             | Event::NewObject { sender, .. }
             | Event::Publish { sender, .. }
-            | Event::DeleteObject { sender, .. } => Some(*sender),
+            | Event::DeleteObject { sender, .. }
+            | Event::CoinBalanceChange { sender, .. } => Some(*sender),
             _ => None,
         }
     }
@@ -262,6 +311,9 @@ impl Event {
             }
             | Event::TransferObject {
                 transaction_module, ..
+            }
+            | Event::CoinBalanceChange {
+                transaction_module, ..
             } => Some(transaction_module.as_str()),
             _ => None,
         }
@@ -270,17 +322,19 @@ impl Event {
     /// Extracts the recipient from a SuiEvent, if available
     pub fn recipient(&self) -> Option<&Owner> {
         match self {
-            Event::TransferObject { recipient, .. } | Event::NewObject { recipient, .. } => {
-                Some(recipient)
-            }
+            Event::TransferObject { recipient, .. }
+            | Event::NewObject { recipient, .. }
+            | Event::CoinBalanceChange {
+                owner: recipient, ..
+            } => Some(recipient),
             _ => None,
         }
     }
 
     /// Extracts the serialized recipient from a SuiEvent, if available
     pub fn recipient_serialized(&self) -> Result<Option<String>, SuiError> {
-        match self {
-            Event::TransferObject { recipient, .. } | Event::NewObject { recipient, .. } => {
+        match self.recipient() {
+            Some(recipient) => {
                 let res = serde_json::to_string(recipient);
                 if let Err(e) = res {
                     error!("Failed to serialize recipient field of event: {:?}", self);
@@ -291,7 +345,7 @@ impl Event {
                     Ok(res.ok())
                 }
             }
-            _ => Ok(None),
+            None => Ok(None),
         }
     }
 
@@ -315,28 +369,33 @@ impl Event {
     }
 
     /// Extracts the TransferType from a SuiEvent, if available
-    pub fn transfer_type(&self) -> Option<&TransferType> {
-        if let Event::TransferObject { type_, .. } = self {
-            Some(type_)
-        } else {
-            None
+    pub fn object_type(&self) -> Option<String> {
+        match self {
+            Event::TransferObject { object_type, .. }
+            | Event::NewObject { object_type, .. }
+            | Event::CoinBalanceChange {
+                coin_type: object_type,
+                ..
+            } => Some(object_type.clone()),
+            _ => None,
         }
     }
 
     /// Extracts the Object Version from a SuiEvent, if available
     pub fn object_version(&self) -> Option<&SequenceNumber> {
-        if let Event::TransferObject { version, .. } = self {
-            Some(version)
-        } else {
-            None
+        match self {
+            Event::TransferObject { version, .. }
+            | Event::CoinBalanceChange { version, .. }
+            | Event::DeleteObject { version, .. } => Some(version),
+            _ => None,
         }
     }
 
     /// Extracts the amount from a SuiEvent::TransferObject
     /// Note that None is returned if it is not a TransferObject, or there is no amount
-    pub fn amount(&self) -> Option<u64> {
-        if let Event::TransferObject { amount, .. } = self {
-            *amount
+    pub fn amount(&self) -> Option<i128> {
+        if let Event::CoinBalanceChange { amount, .. } = self {
+            Some(*amount)
         } else {
             None
         }

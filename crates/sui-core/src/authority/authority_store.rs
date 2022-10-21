@@ -23,6 +23,8 @@ use sui_storage::{
 };
 use sui_types::batch::{SignedBatch, TxSequenceNumber};
 use sui_types::crypto::{AuthoritySignInfo, EmptySignInfo};
+use sui_types::object::{Owner, OBJECT_START_VERSION};
+use sui_types::storage::{InnerTxContext, WriteKind};
 use sui_types::object::Owner;
 use sui_types::storage::{ChildObjectResolver, WriteKind};
 use sui_types::{base_types::SequenceNumber, storage::ParentSync};
@@ -705,17 +707,18 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         effects: TransactionEffectsEnvelope<S>,
         effects_digest: &TransactionEffectsDigest,
     ) -> SuiResult {
+        let ctx = InnerTxContext::native_transaction(certificate.sender_address());
         let transaction_digest = certificate.digest();
         let mut temporary_store =
             TemporaryStore::new(Arc::new(&self), input_objects, *transaction_digest);
         for (_, (object, kind)) in mutated_objects {
-            temporary_store.write_object(object, kind);
+            temporary_store.write_object(&ctx, object, kind);
         }
         for obj_ref in &effects.effects.deleted {
-            temporary_store.delete_object(&obj_ref.0, obj_ref.1, DeleteKind::Normal);
+            temporary_store.delete_object(&ctx, &obj_ref.0, obj_ref.1, DeleteKind::Normal);
         }
         for obj_ref in &effects.effects.wrapped {
-            temporary_store.delete_object(&obj_ref.0, obj_ref.1, DeleteKind::Wrap);
+            temporary_store.delete_object(&ctx, &obj_ref.0, obj_ref.1, DeleteKind::Wrap);
         }
         let (inner_temporary_store, _events) = temporary_store.into_inner();
 

@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::ops::Neg;
 use std::str::FromStr;
 
 use serde::Deserialize;
@@ -13,10 +12,10 @@ use serde_with::DisplayFromStr;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::coin::{PAY_JOIN_FUNC_NAME, PAY_MODULE_NAME, PAY_SPLIT_VEC_FUNC_NAME};
 use sui_types::event::Event;
-use sui_types::gas_coin::GasCoin;
+use sui_types::gas_coin::GAS;
 use sui_types::messages::{
-    CallArg, ExecutionStatus, InputObjectKind, MoveCall, ObjectArg, Pay, PayAllSui, PaySui,
-    SingleTransactionKind, TransactionData, TransactionEffects, TransferObject,
+    CallArg, ExecutionStatus, MoveCall, ObjectArg, Pay, PayAllSui, PaySui, SingleTransactionKind,
+    TransactionData, TransactionEffects, TransferObject,
 };
 use sui_types::move_package::disassemble_modules;
 use sui_types::object::Owner;
@@ -25,7 +24,6 @@ use sui_types::{parse_sui_struct_tag, SUI_FRAMEWORK_OBJECT_ID};
 use crate::types::{
     AccountIdentifier, Amount, CoinAction, CoinChange, CoinID, CoinIdentifier,
     ConstructionMetadata, IndexCounter, OperationIdentifier, OperationStatus, OperationType,
-    SignedValue,
 };
 use crate::ErrorType::UnsupportedOperation;
 use crate::{Error, ErrorType, SUI};
@@ -70,7 +68,6 @@ impl Operation {
                     &mut IndexCounter::default(),
                     None,
                     None,
-                    &[],
                 )
             })
             .flatten()
@@ -81,177 +78,79 @@ impl Operation {
         data: &TransactionData,
         status: &ExecutionStatus,
         events: &Vec<Event>,
-        net_gas_usage: i64,
-        gas_owner: Owner,
-        new_coins: &[(GasCoin, ObjectRef)],
     ) -> Result<Vec<Operation>, anyhow::Error> {
         let budget = data.gas_budget;
         let gas = data.gas();
         let sender = data.signer();
         let mut counter = IndexCounter::default();
         let status = Some((status).into());
-        let mut operations = data
+        Ok(data
             .kind
             .single_transactions()
             .flat_map(|tx| {
-                parse_operations(
-                    tx,
-                    budget,
-                    gas,
-                    sender,
-                    &mut counter,
-                    status,
-                    Some(events),
-                    new_coins,
-                )
+                parse_operations(tx, budget, gas, sender, &mut counter, status, Some(events))
             })
             .flatten()
-            .collect::<Vec<_>>();
-
-        if let Owner::AddressOwner(gas_owner) = gas_owner {
-            operations.push(Operation {
-                operation_identifier: counter.next_idx().into(),
-                related_operations: vec![],
-                type_: OperationType::GasSpent,
-                // We always charge gas
-                status: Some(OperationStatus::Success),
-                account: Some(AccountIdentifier { address: gas_owner }),
-                amount: Some(Amount {
-                    value: net_gas_usage.neg().into(),
-                    currency: SUI.clone(),
-                }),
-                coin_change: None,
-                metadata: None,
-            });
-        }
-
-        Ok(operations)
+            .collect::<Vec<_>>())
     }
 
     fn get_coin_operation_from_events(
-        input_objects: &[InputObjectKind],
-        new_coins: &[(GasCoin, ObjectRef)],
         events: &[Event],
         status: Option<OperationStatus>,
         counter: &mut IndexCounter,
     ) -> Vec<Operation> {
         events
             .iter()
-            .flat_map(|event| {
-                Self::get_coin_operation_from_event(
-                    input_objects,
-                    new_coins,
-                    event,
-                    status,
-                    counter,
-                )
-            })
+            .flat_map(|event| Self::get_coin_operation_from_event(event, status, counter))
             .collect()
     }
 
     fn get_coin_operation_from_event(
-        input_objects: &[InputObjectKind],
-        new_coins: &[(GasCoin, ObjectRef)],
         event: &Event,
         status: Option<OperationStatus>,
         counter: &mut IndexCounter,
     ) -> Vec<Operation> {
-        match event {
-            Event::TransferObject {
-                sender,
-                recipient,
-                object_id,
-                version: _,
-                type_: _,
-                amount: Some(amount),
-                ..
-            } => {
-                let input = input_objects.iter().find_map(|kind| {
-                    if let InputObjectKind::ImmOrOwnedMoveObject((id, version, _)) = kind {
-                        if id == object_id {
-                            return Some(CoinChange {
-                                coin_identifier: CoinIdentifier {
-                                    identifier: CoinID {
-                                        id: *id,
-                                        version: *version,
-                                    },
-                                },
-                                coin_action: CoinAction::CoinSpent,
-                            });
-                        }
-                    }
-                    None
-                });
-                vec![
-                    Operation {
-                        operation_identifier: counter.next_idx().into(),
-                        related_operations: vec![],
-                        type_: OperationType::SuiBalanceChange,
-                        status,
-                        account: Some(AccountIdentifier { address: *sender }),
-                        amount: Some(Amount {
-                            value: SignedValue::neg((*amount).try_into().unwrap()),
-                            currency: SUI.clone(),
-                        }),
-                        coin_change: input,
-                        metadata: None,
-                    },
-                    Operation {
-                        operation_identifier: counter.next_idx().into(),
-                        related_operations: vec![],
-                        type_: OperationType::SuiBalanceChange,
-                        status,
-                        account: recipient.get_owner_address().ok().map(|addr| addr.into()),
-                        amount: Some(Amount {
-                            value: (*amount).into(),
-                            currency: SUI.clone(),
-                        }),
-                        coin_change: None,
-                        metadata: None,
-                    },
-                ]
-            }
-            Event::NewObject {
-                package_id: _,
-                transaction_module: _,
-                sender,
-                recipient,
-                object_id,
-            } => {
-                if recipient.get_owner_address() == Ok(*sender) {
-                    return vec![];
-                }
-                if let Some((coin, (id, version, _))) =
-                    new_coins.iter().find(|(_, (id, _, _))| id == object_id)
-                {
-                    let amount = coin.value();
-                    vec![Operation {
-                        operation_identifier: counter.next_idx().into(),
-                        related_operations: vec![],
-                        type_: OperationType::SuiBalanceChange,
-                        status,
-                        account: recipient.get_owner_address().ok().map(|addr| addr.into()),
-                        amount: Some(Amount {
-                            value: amount.into(),
-                            currency: SUI.clone(),
-                        }),
-                        coin_change: Some(CoinChange {
-                            coin_identifier: CoinIdentifier {
-                                identifier: CoinID {
-                                    id: *id,
-                                    version: *version,
-                                },
-                            },
-                            coin_action: CoinAction::CoinCreated,
-                        }),
-                        metadata: None,
-                    }]
+        let mut operations = vec![];
+        if let Event::CoinBalanceChange {
+            owner: Owner::AddressOwner(owner),
+            coin_object_id,
+            version,
+            coin_type,
+            amount,
+            ..
+        } = event
+        {
+            // We only interested in SUI coins and account addresses
+            if coin_type == &GAS::type_().to_string() {
+                let coin_action = if amount.is_negative() {
+                    CoinAction::CoinSpent
                 } else {
-                    vec![]
-                }
+                    CoinAction::CoinCreated
+                };
+                operations.push(Operation {
+                    operation_identifier: counter.next_idx().into(),
+                    related_operations: vec![],
+                    type_: OperationType::SuiBalanceChange,
+                    status,
+                    account: Some(AccountIdentifier { address: *owner }),
+                    amount: Some(Amount {
+                        value: (*amount).into(),
+                        currency: SUI.clone(),
+                    }),
+                    coin_change: Some(CoinChange {
+                        coin_identifier: CoinIdentifier {
+                            identifier: CoinID {
+                                id: *coin_object_id,
+                                version: *version,
+                            },
+                        },
+                        coin_action,
+                    }),
+                    metadata: None,
+                });
             }
-            _ => vec![],
         }
+        operations
     }
 
     pub async fn parse_transaction_data(
@@ -295,7 +194,6 @@ fn parse_operations(
     counter: &mut IndexCounter,
     status: Option<OperationStatus>,
     events: Option<&Vec<Event>>,
-    new_coins: &[(GasCoin, ObjectRef)],
 ) -> Result<Vec<Operation>, anyhow::Error> {
     let mut operations = match tx {
         SingleTransactionKind::TransferSui(tx) => transfer_sui_operations(
@@ -351,13 +249,8 @@ fn parse_operations(
         }
     };
     if let Some(events) = events {
-        let coin_change_operations = Operation::get_coin_operation_from_events(
-            &tx.input_objects()?,
-            new_coins,
-            events,
-            status,
-            counter,
-        );
+        let coin_change_operations =
+            Operation::get_coin_operation_from_events(events, status, counter);
         operations.extend(coin_change_operations);
     }
     Ok(operations)
