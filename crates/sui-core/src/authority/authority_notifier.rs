@@ -13,6 +13,30 @@ use typed_store::traits::Map;
 
 use parking_lot::Mutex;
 
+pub struct TransactionNotifierMetrics {
+    low_watermark: IntGauge,
+    high_watermark: IntGauge,
+}
+
+impl TransactionNotifierMetrics {
+    pub fn new(registry: &prometheus::Registry) -> TransactionNotifierMetrics {
+        Self {
+            low_watermark: register_int_gauge_with_registry!(
+                "low_watermark",
+                "Low watermark sequence number",
+                registry,
+            )
+            .unwrap(),
+            high_watermark: register_int_gauge_with_registry!(
+                "high_watermark",
+                "High watermark sequence number",
+                registry,
+            )
+            .unwrap(),
+        }
+    }
+}
+
 pub struct TransactionNotifier {
     state: Arc<AuthorityStore>,
     low_watermark: AtomicU64,
@@ -24,6 +48,7 @@ pub struct TransactionNotifier {
     /// this.
     is_paused: AtomicBool,
     inner: Mutex<LockedNotifier>,
+    notifier_metrics: TransactionNotifierMetrics,
 }
 
 struct LockedNotifier {
@@ -33,7 +58,7 @@ struct LockedNotifier {
 
 impl TransactionNotifier {
     /// Create a new transaction notifier for the authority store
-    pub fn new(state: Arc<AuthorityStore>) -> SuiResult<TransactionNotifier> {
+    pub fn new(state: Arc<AuthorityStore>, registry: &prometheus::Registry) -> SuiResult<TransactionNotifier> {
         let seq = state.next_sequence_number()?;
         Ok(TransactionNotifier {
             state,
@@ -49,6 +74,7 @@ impl TransactionNotifier {
                 high_watermark: seq,
                 live_tickets: BTreeSet::new(),
             }),
+            notifier_metrics: TransactionNotifierMetrics::new(registry),
         })
     }
 
@@ -99,6 +125,8 @@ impl TransactionNotifier {
         let seq = inner.high_watermark;
         inner.high_watermark += 1;
         inner.live_tickets.insert(seq);
+        self.notifier_metrics.low_watermark.set(self.low_watermark().try_into().unwrap());
+        self.notifier_metrics.high_watermark.set(inner.high_watermark.try_into().unwrap());
         Ok(TransactionNotifierTicket {
             transaction_notifier: self.clone(),
             seq,
@@ -225,7 +253,10 @@ impl TransactionNotifierTicket {
     pub fn seq(&self) -> u64 {
         self.seq
     }
-    pub fn notify(self) {
+}
+
+impl Drop for TransactionNotifierTicket {
+    fn drop(&mut self) {
         let mut inner = self.transaction_notifier.inner.lock();
         inner.live_tickets.remove(&self.seq);
 
@@ -243,6 +274,7 @@ impl TransactionNotifierTicket {
         self.transaction_notifier.notify.notify_one();
     }
 }
+
 
 #[cfg(test)]
 mod tests {
@@ -263,26 +295,23 @@ mod tests {
 
         let store = Arc::new(AuthorityStore::open(&path, None).unwrap());
 
-        let notifier = Arc::new(TransactionNotifier::new(store.clone()).unwrap());
+        let notifier = Arc::new(TransactionNotifier::new(store.clone(), &prometheus::Registry::default()).unwrap());
 
         // TEST 1: Happy sequence
 
         {
             let t0 = notifier.ticket(false).expect("ok");
             store.side_sequence(t0.seq(), &ExecutionDigests::random());
-            t0.notify();
         }
 
         {
             let t0 = notifier.ticket(false).expect("ok");
             store.side_sequence(t0.seq(), &ExecutionDigests::random());
-            t0.notify();
         }
 
         {
             let t0 = notifier.ticket(false).expect("ok");
             store.side_sequence(t0.seq(), &ExecutionDigests::random());
-            t0.notify();
         }
 
         let mut iter = notifier.iter_from(0).unwrap();
@@ -306,13 +335,11 @@ mod tests {
         {
             let t0 = notifier.ticket(false).expect("ok");
             assert_eq!(t0.seq(), 3);
-            t0.notify();
         }
 
         {
             let t0 = notifier.ticket(false).expect("ok");
             store.side_sequence(t0.seq(), &ExecutionDigests::random());
-            t0.notify();
         }
 
         let x = iter.next().await;
@@ -330,15 +357,11 @@ mod tests {
         let t8 = notifier.ticket(false).expect("ok");
 
         store.side_sequence(t6.seq(), &ExecutionDigests::random());
-        t6.notify();
 
         store.side_sequence(t5.seq(), &ExecutionDigests::random());
-        t5.notify();
 
-        t7.notify();
 
         store.side_sequence(t8.seq(), &ExecutionDigests::random());
-        t8.notify();
 
         assert!(matches!(iter.next().await, Some((5, _))));
         assert!(matches!(iter.next().await, Some((6, _))));

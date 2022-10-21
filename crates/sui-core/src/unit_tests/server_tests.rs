@@ -99,7 +99,6 @@ async fn test_subscription() {
             .executed_sequence
             .insert(&ticket.seq(), &tx_zero)
             .expect("Failed to write.");
-        ticket.notify();
     }
     println!("Sent tickets.");
 
@@ -155,7 +154,6 @@ async fn test_subscription() {
                 .insert(&ticket.seq(), &tx_zero)
                 .expect("Failed to write.");
             println!("Send item {i}");
-            ticket.notify();
         }
     });
 
@@ -252,7 +250,6 @@ async fn test_subscription() {
                 }
             }
         }
-        ticket.notify();
     }
 
     assert!(num_batches >= 2);
@@ -309,7 +306,6 @@ async fn test_subscription_safe_client() {
             .insert(&ticket.seq(), &tx_zero)
             .expect("Failed to write.");
         tokio::time::sleep(Duration::from_millis(10)).await;
-        ticket.notify();
     }
     println!("Sent tickets.");
 
@@ -372,7 +368,6 @@ async fn test_subscription_safe_client() {
                 .insert(&ticket.seq(), &tx_zero)
                 .expect("Failed to write.");
             println!("Send item {i}");
-            ticket.notify();
         }
     });
 
@@ -448,7 +443,6 @@ async fn test_subscription_safe_client() {
         println!("Send item {i}");
         i += 1;
         tokio::time::sleep(Duration::from_millis(20)).await;
-        ticket.notify();
 
         // Then we wait to receive
         if let Some(data) = stream1.next().await {

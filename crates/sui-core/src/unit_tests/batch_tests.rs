@@ -210,7 +210,6 @@ async fn test_batch_manager_happy_path() {
     {
         let t0 = authority_state.batch_notifier.ticket(false).expect("ok");
         store.side_sequence(t0.seq(), &ExecutionDigests::random());
-        t0.notify();
     }
 
     // First we get a transaction update
@@ -226,7 +225,6 @@ async fn test_batch_manager_happy_path() {
     {
         let t0 = authority_state.batch_notifier.ticket(false).expect("ok");
         store.side_sequence(t0.seq(), &ExecutionDigests::random());
-        t0.notify();
     }
 
     // When we close the sending channel we also also end the service task
@@ -277,11 +275,6 @@ async fn test_batch_manager_out_of_order() {
         store.side_sequence(t3.seq(), &ExecutionDigests::random());
         store.side_sequence(t2.seq(), &ExecutionDigests::random());
         store.side_sequence(t0.seq(), &ExecutionDigests::random());
-
-        t0.notify();
-        t1.notify();
-        t2.notify();
-        t3.notify();
     }
 
     // Get transactions in order then batch.
@@ -345,11 +338,8 @@ async fn test_batch_manager_drop_out_of_order() {
     let t3 = authority_state.batch_notifier.ticket(false).expect("ok");
 
     store.side_sequence(t1.seq(), &ExecutionDigests::random());
-    t1.notify();
     store.side_sequence(t3.seq(), &ExecutionDigests::random());
-    t3.notify();
     store.side_sequence(t2.seq(), &ExecutionDigests::random());
-    t2.notify();
 
     // Give a chance to send signals
     tokio::task::yield_now().await;
@@ -357,7 +347,6 @@ async fn test_batch_manager_drop_out_of_order() {
     assert_eq!(rx.len(), 0);
 
     store.side_sequence(t0.seq(), &ExecutionDigests::random());
-    t0.notify();
 
     // Get transactions in order then batch.
     assert!(matches!(
@@ -462,14 +451,12 @@ async fn test_batch_store_retrieval() {
             .executed_sequence
             .insert(&t0.seq(), &tx_zero)
             .expect("Failed to write.");
-        t0.notify();
     }
 
     // Add a few out of order transactions that should be ignored
     // NOTE: gap between 105 and 110
     (105u64..110).into_iter().for_each(|_| {
         let t = authority_state.batch_notifier.ticket(false).expect("ok");
-        t.notify();
     });
 
     for _i in 110u64..120 {
@@ -479,7 +466,6 @@ async fn test_batch_store_retrieval() {
             .executed_sequence
             .insert(&t0.seq(), &tx_zero)
             .expect("Failed to write.");
-        t0.notify();
     }
 
     // Give a change to the channels to send.

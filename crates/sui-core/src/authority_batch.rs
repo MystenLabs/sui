@@ -155,7 +155,8 @@ impl crate::authority::AuthorityState {
             .skip_prior_to(&TxSequenceNumber::MAX)?
             .next()
             .unwrap();
-
+        let metrics = self.metrics.clone();
+        metrics.batch_svc_next_sequence_number.set(next_sequence_number.try_into().unwrap());
         // Let's ensure we can get (exclusive) access to the transaction stream.
         let mut transaction_stream = self.batch_notifier.iter_from(next_sequence_number)?;
 

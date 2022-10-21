@@ -961,11 +961,6 @@ async fn test_batch_to_checkpointing() {
         authority_state
             .database
             .side_sequence(t0.seq(), &ExecutionDigests::random());
-
-        t3.notify();
-        t2.notify();
-        t1.notify();
-        t0.notify();
     }
 
     // Get transactions in order then batch.
@@ -1064,11 +1059,6 @@ async fn test_batch_to_checkpointing_init_crash() {
             authority_state
                 .database
                 .side_sequence(t0.seq(), &ExecutionDigests::random());
-
-            t3.notify();
-            t2.notify();
-            t1.notify();
-            t0.notify();
         }
 
         // Get transactions in order then batch.
