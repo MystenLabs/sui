@@ -851,7 +851,14 @@ where
             // - If serial_authority_request_interval elapses, we begin a new request even if the
             //   previous one is not finished, and schedule another future request.
 
-            let name = authorities_shuffled.next().unwrap();
+            let name = authorities_shuffled.next().ok_or_else(|| {
+                error!(
+                    ?preferences,
+                    ?restrict_to,
+                    "Available authorities list is empty."
+                );
+                SuiError::from("Available authorities list is empty")
+            })?;
             futures.push(start_req(*name, self.authority_clients[name].clone()));
             futures.push(schedule_next());
 
