@@ -42,6 +42,10 @@ members = [
     "narwhal/config", "narwhal/consensus", "narwhal/crypto", "narwhal/dag", "narwhal/examples", "narwhal/executor", "narwhal/network", "narwhal/node", "narwhal/primary", "narwhal/storage", "narwhal/test-utils", "narwhal/types", "narwhal/worker",
 ]
 
+[workspace.package]
+# This version string will be inheritted by sui-core, sui-faucet, sui-node, sui-tools and sui crates
+version = "0.13.0"
+
 [profile.release]
 # The following two lines add minimal symbol information, which helps certain profilers like Bytehound
 # without significantly increasing binary size
