@@ -52,7 +52,8 @@ function StepTwo({
 
     const [decimals] = useCoinDecimals(coinType);
     const amountWithoutDecimals = useMemo(
-        () => new BigNumber(amount).shiftedBy(decimals).toString(),
+        () =>
+            new BigNumber(amount).shiftedBy(decimals).integerValue().toString(),
         [amount, decimals]
     );
 
