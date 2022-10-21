@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use narwhal_executor::ExecutionIndices;
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -9,6 +10,9 @@ use std::{
     time::Duration,
 };
 
+use sui_types::messages_checkpoint::{
+    AuthenticatedCheckpoint, CertifiedCheckpointSummary, CheckpointContents,
+};
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     crypto::{get_key_pair, AccountKeyPair, AuthoritySignature, SuiAuthoritySignature},
@@ -19,6 +23,8 @@ use sui_types::{
 };
 
 use crate::authority::AuthorityState;
+use crate::authority_active::execution_driver::PendCertificateForExecutionNoop;
+use crate::checkpoints::causal_order_effects::TestEffectsStore;
 use crate::checkpoints::reconstruction::SpanGraph;
 use crate::{
     authority_active::ActiveAuthority,
@@ -52,9 +58,9 @@ async fn test_start_epoch_change() {
             next_checkpoint: CHECKPOINT_COUNT_PER_EPOCH,
             proposal_next_transaction: None,
             next_transaction_sequence: 0,
-            no_more_fragments: true,
             current_proposal: None,
-            checkpoint_to_be_constructed: SpanGraph::mew(
+            in_construction_checkpoint_seq: CHECKPOINT_COUNT_PER_EPOCH,
+            in_construction_checkpoint: SpanGraph::mew(
                 &genesis_committee,
                 CHECKPOINT_COUNT_PER_EPOCH,
                 &[],
@@ -155,9 +161,9 @@ async fn test_finish_epoch_change() {
                     next_checkpoint: CHECKPOINT_COUNT_PER_EPOCH,
                     proposal_next_transaction: None,
                     next_transaction_sequence: 0,
-                    no_more_fragments: true,
                     current_proposal: None,
-                    checkpoint_to_be_constructed: SpanGraph::mew(
+                    in_construction_checkpoint_seq: CHECKPOINT_COUNT_PER_EPOCH,
+                    in_construction_checkpoint: SpanGraph::mew(
                         &genesis_committee,
                         CHECKPOINT_COUNT_PER_EPOCH,
                         &[],
@@ -209,6 +215,128 @@ async fn test_finish_epoch_change() {
         assert!(response.certified_transaction.is_some());
         assert!(response.signed_effects.is_some());
     }
+}
+
+#[tokio::test]
+async fn test_consensus_pause_after_last_fragment() {
+    // Create authority_aggregator and authority states.
+    let genesis_objects = vec![];
+    let (net, states, _) = init_local_authorities(4, genesis_objects.clone()).await;
+    enable_reconfig(&states);
+
+    let proposals: Vec<_> = states
+        .iter()
+        .map(|state| {
+            let genesis_committee = state.committee_store().get_latest_committee();
+            // Set the checkpoint number to be about to construct the last second checkpoint.
+            let locals = CheckpointLocals {
+                next_checkpoint: CHECKPOINT_COUNT_PER_EPOCH - 1,
+                proposal_next_transaction: None,
+                next_transaction_sequence: 0,
+                current_proposal: None,
+                in_construction_checkpoint_seq: CHECKPOINT_COUNT_PER_EPOCH - 1,
+                in_construction_checkpoint: SpanGraph::mew(
+                    &genesis_committee,
+                    CHECKPOINT_COUNT_PER_EPOCH - 1,
+                    &[],
+                ),
+            };
+            state
+                .checkpoints
+                .lock()
+                .set_locals_for_testing(locals)
+                .unwrap();
+            assert!(!state
+                .checkpoints
+                .lock()
+                .should_reject_consensus_transaction());
+            state.checkpoints.lock().set_proposal(0).unwrap()
+        })
+        .collect();
+    let fragment01 = proposals[0].fragment_with(&proposals[1]);
+    let fragment12 = proposals[1].fragment_with(&proposals[2]);
+    let mut index = ExecutionIndices::default();
+    states.iter().for_each(|state| {
+        // Send the first fragment to every validator, and make sure ater this, none of them
+        // have a complete span graph, nor should they start rejecting consensus transactions.
+        let mut cp = state.checkpoints.lock();
+        cp.handle_internal_fragment(
+            index.clone(),
+            fragment01.clone(),
+            PendCertificateForExecutionNoop,
+            &net.committee,
+        )
+        .unwrap();
+        index.next_transaction_index += 1;
+        assert!(!cp.get_locals().in_construction_checkpoint.is_completed());
+        assert!(!cp.should_reject_consensus_transaction());
+    });
+    // Send the second fragment only to validator 1-3, leaving validator 0 behind.
+    // Validator 1-3 will complete the span graph. At this point they should all start rejecting
+    // consensus transactions. They are each able to sign the checkpoint.
+    let signed: Vec<_> = states
+        .iter()
+        .skip(1)
+        .map(|state| {
+            let mut cp = state.checkpoints.lock();
+            cp.handle_internal_fragment(
+                index.clone(),
+                fragment12.clone(),
+                PendCertificateForExecutionNoop,
+                &net.committee,
+            )
+            .unwrap();
+            index.next_transaction_index += 1;
+            assert!(cp.get_locals().in_construction_checkpoint.is_completed());
+            assert!(cp.should_reject_consensus_transaction());
+            cp.sign_new_checkpoint(
+                0,
+                CHECKPOINT_COUNT_PER_EPOCH - 1,
+                [].into_iter(),
+                TestEffectsStore::default(),
+                None,
+            )
+            .unwrap();
+            if let AuthenticatedCheckpoint::Signed(s) = cp.latest_stored_checkpoint().unwrap() {
+                s
+            } else {
+                unreachable!();
+            }
+        })
+        .collect();
+    let cert = CertifiedCheckpointSummary::aggregate(signed, &net.committee).unwrap();
+    // Even after we processed the checkpoint cert on validator 0, it still does not have a
+    // complete span graph, and hence not yet rejecting consensus transactions.
+    let mut cp0 = states[0].checkpoints.lock();
+    cp0.process_synced_checkpoint_certificate(
+        &cert,
+        &CheckpointContents::new_with_causally_ordered_transactions([].into_iter()),
+        &net.committee,
+    )
+    .unwrap();
+    assert!(!cp0.get_locals().in_construction_checkpoint.is_completed());
+    assert!(!cp0.should_reject_consensus_transaction());
+    states.iter().skip(1).for_each(|state| {
+        let mut cp = state.checkpoints.lock();
+        cp.promote_signed_checkpoint_to_cert(&cert, &net.committee)
+            .unwrap();
+        // Validator 1-3 will continue to reject consensus transactions after storing the cert.
+        assert!(cp.should_reject_consensus_transaction());
+        // The span graph is now empty, ready to construct the next checkpoint.
+        assert!(!cp.get_locals().in_construction_checkpoint.is_completed());
+    });
+    // Now send the second fragment to validator 0. It will complete the span graph, and since it's
+    // already at a new checkpoint, it will automatically clear the graph. It will also start
+    // rejecting consensus transactions.
+    cp0.handle_internal_fragment(
+        index,
+        fragment12,
+        PendCertificateForExecutionNoop,
+        &net.committee,
+    )
+    .unwrap();
+    assert!(!cp0.get_locals().in_construction_checkpoint.is_completed());
+    assert!(cp0.should_reject_consensus_transaction());
 }
 
 fn enable_reconfig(states: &[Arc<AuthorityState>]) {
