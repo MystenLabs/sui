@@ -12,7 +12,6 @@ use crypto::{AggregateSignature, PublicKey, Signature};
 use dag::node_dag::Affiliated;
 use derive_builder::Builder;
 use fastcrypto::{
-    bls12381::BLS12381Signature,
     hash::{Digest, Hash, HashFunction},
     traits::{AggregateAuthenticator, EncodeDecodeBase64, Signer, VerifyingKey},
     SignatureService, Verifier,
@@ -471,7 +470,7 @@ impl Certificate {
         let aggregated_signature = if sigs.is_empty() {
             AggregateSignature::default()
         } else {
-            AggregateSignature::aggregate::<BLS12381Signature, Vec<&BLS12381Signature>>(
+            AggregateSignature::aggregate::<Signature, Vec<&Signature>>(
                 sigs.iter().map(|(_, sig)| sig).collect(),
             )
             .map_err(|_| signature::Error::new())
