@@ -26,6 +26,12 @@ import type { GetTransactionRequests } from '_payloads/transactions/ui/GetTransa
 import type { TransactionRequestResponse } from '_payloads/transactions/ui/TransactionRequestResponse';
 import type { AppDispatch } from '_store';
 
+/**
+ * The duration in milliseconds that the UI sends status updates (active/inactive) to the background service.
+ * Currently used to postpone auto locking keyring when the app is active.
+ */
+const APP_STATUS_UPDATE_INTERVAL = 20 * 1000;
+
 export class BackgroundClient {
     private _portStream: PortStream | null = null;
     private _dispatch: AppDispatch | null = null;
@@ -38,6 +44,8 @@ export class BackgroundClient {
         this._initialized = true;
         this._dispatch = dispatch;
         this.createPortStream();
+        this.sendAppStatus();
+        this.setupAppStatusUpdateInterval();
         return Promise.all([
             this.sendGetPermissionRequests(),
             this.sendGetTransactionRequests(),
@@ -179,6 +187,23 @@ export class BackgroundClient {
                     throw new Error('Mnemonic not found');
                 })
             )
+        );
+    }
+
+    private setupAppStatusUpdateInterval() {
+        setInterval(() => {
+            this.sendAppStatus();
+        }, APP_STATUS_UPDATE_INTERVAL);
+    }
+
+    private sendAppStatus() {
+        const active = document.visibilityState === 'visible';
+        this.sendMessage(
+            createMessage<KeyringPayload<'appStatusUpdate'>>({
+                type: 'keyring',
+                method: 'appStatusUpdate',
+                args: { active },
+            })
         );
     }
 

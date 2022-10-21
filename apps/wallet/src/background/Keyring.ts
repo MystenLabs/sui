@@ -2,9 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Ed25519Keypair } from '@mysten/sui.js';
+import { debounce } from 'lodash-es';
 import mitt from 'mitt';
 import Browser from 'webextension-polyfill';
 
+import Alarms from './Alarms';
 import { createMessage } from '_messages';
 import { isKeyringPayload } from '_payloads/keyring';
 import { encrypt, decrypt } from '_shared/cryptography/keystore';
@@ -44,6 +46,7 @@ class Keyring {
     }
 
     public lock() {
+        Alarms.clearLockAlarm();
         this.#keypair = null;
         this.#mnemonic = null;
         this.#locked = true;
@@ -51,6 +54,7 @@ class Keyring {
     }
 
     public async unlock(password: string) {
+        Alarms.setLockAlarm();
         this.#mnemonic = await this.decryptMnemonic(password);
         this.#keypair = Ed25519Keypair.deriveKeypair(this.#mnemonic);
         this.#locked = false;
@@ -168,6 +172,13 @@ class Keyring {
             } else if (isKeyringPayload<'clear'>(payload, 'clear')) {
                 await this.clearMnemonic();
                 uiConnection.send(createMessage({ type: 'done' }, id));
+            } else if (
+                isKeyringPayload<'appStatusUpdate'>(payload, 'appStatusUpdate')
+            ) {
+                const appActive = payload.args?.active;
+                if (appActive) {
+                    this.postponeLock();
+                }
             }
         } catch (e) {
             uiConnection.send(
@@ -206,6 +217,16 @@ class Keyring {
     private notifyLockedStatusUpdate(isLocked: boolean) {
         this.#events.emit('lockedStatusUpdate', isLocked);
     }
+
+    private postponeLock = debounce(
+        async () => {
+            if (!this.isLocked) {
+                await Alarms.setLockAlarm();
+            }
+        },
+        1000,
+        { maxWait: 5000 }
+    );
 }
 
 export default new Keyring();

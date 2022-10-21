@@ -36,6 +36,7 @@
     "license": "Apache-2.0",
     "devDependencies": {
         "@types/dotenv-webpack": "^7.0.3",
+        "@types/lodash-es": "^4.17.6",
         "@types/node": "^18.0.6",
         "@types/react": "^18.0.20",
         "@types/react-dom": "^18.0.6",
@@ -100,6 +101,7 @@
         "eslint-plugin-react": "^7.31.8",
         "formik": "^2.2.9",
         "framer-motion": "^7.5.1",
+        "lodash-es": "^4.17.21",
         "mitt": "^3.0.0",
         "react": "^18.2.0",
         "react-dom": "^18.2.0",
