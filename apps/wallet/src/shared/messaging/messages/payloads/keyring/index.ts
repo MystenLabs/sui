@@ -34,6 +34,10 @@ type MethodToPayloads = {
         args: never;
         return: never;
     };
+    appStatusUpdate: {
+        args: { active: boolean };
+        return: never;
+    };
 };
 
 export interface KeyringPayload<Method extends keyof MethodToPayloads>
