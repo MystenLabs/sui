@@ -1,71 +1,50 @@
 ---
-title: Run a Sui Fullnode
+title: Run a Sui Full node
 ---
 
-Sui full nodes run a service that
-stores the full blockchain state and history. They service reads, either for
-end clients or by helping other full nodes get up-to-date with the latest
-transactions that have been committed to the chain.
+Sui Full nodes validate blockchain activities, including transactions, checkpoints, and epoch changes. Each Full node stores and services the queries for the blockchain state and history.
 
-This role enables
-[validators](../learn/architecture/validators.md) (or miners in
-other networks) to focus on servicing the write path and processing
-transactions as fast as possible. Once a validator has committed a new set of
-transactions (or a block of transactions), the validator will push that block
-to a full node (potentially a number of full nodes) who will then in turn
-disseminate it to the rest of the network.
+This role enables [validators](../learn/architecture/validators.md) to focus on servicing and processing transactions. When a validator commits a new set of transactions (or a block of transactions), the validator pushes that block to all connected Full nodes that then service the queries from clients.
 
 ## Features
 
-Sui full nodes exist to:
+Sui Full nodes:
 
 * Track and verify the state of the blockchain, independently and locally.
 * Serve read requests from clients.
-* Conduct local app testing against verified data.
 
 ## State synchronization
 
-Today Sui full nodes sync with validators to be able to learn about newly
-committed transactions.
+Sui Full nodes sync with validators to receive new transactions on the network.
 
-The normal life of a transaction requires a few round trips to 2f+1 validators
-to be able to form a TxCert, at which point a transaction is guaranteed to be
-committed and executed.
+A transaction requires a few round trips to 2f+1 validators to form a transaction certificate (TxCert).
 
-Today, this synchronization process is performed by:
+This synchronization process includes:
 
 1. Following 2f+1 validators and listening for newly committed transactions.
-1. Requesting the transaction from one validator.
-1. Locally executing the transaction and updating the local DB.
+1. Making sure that 2f+1 validators recognize the transaction and that it reaches finality.
+1. Executing the transaction locally and updating the local DB.
 
-This synchronization process is far from ideal as it requires listening
-to at a minimum 2f+1 validators to ensure that a full node has properly seen all
-new transactions. Over time, we will improve this process (e.g. with the
-introduction of checkpoints, ability to synchronize with other full nodes,
-etc.) in order to have better guarantees around a full node’s ability to be
-confident it has seen all recent transactions.
+This synchronization process requires listening to at a minimum 2f+1 validators to ensure that a Full node has properly processed all new transactions. Sui will improve the synchronization process with the introduction of checkpoints and the ability to synchronize with other Full nodes.
 
 ## Architecture
 
-The Sui full node is essentially a read-only view of the network state. Unlike
+A Sui Full node is essentially a read-only view of the network state. Unlike
 validator nodes, full nodes cannot sign transactions, although they can validate
 the integrity of the chain by re-executing transactions that were previously
 committed by a quorum of validators.
 
-Today, a full node is expected to maintain the full history of the chain; in the
-future, sufficiently old history may need to be pruned and offloaded to cheaper
-storage.
+Today, a Sui Full node maintains the full history of the chain.
 
-Conversely, a validator needs to store only the latest transactions on the
-*frontier* of the object graph (e.g., txes with >0 unspent output objects).
+Validator nodes store only the latest transactions on the *frontier* of the object graph (for example, transactions with >0 unspent output objects).
 
 ## Full node setup
 
-Follow the instructions here to run your own Sui full node.
+Follow the instructions here to run your own Sui Full node.
 
 ### Hardware requirements
 
-We recommend the following minimum hardware requirements for running a full node:
+Minimum hardware requirements for running a Sui Full node:
 
 * CPUs: 2
 * RAM: 8GB
@@ -73,58 +52,34 @@ We recommend the following minimum hardware requirements for running a full node
 
 ### Software requirements
 
-We recommend running Sui full nodes on Linux. The Sui team supports the Ubuntu and
-Debian distributions and tests against
-[Ubuntu version 18.04 (Bionic Beaver)](https://releases.ubuntu.com/18.04/).
+We recommend running Sui Full nodes on Linux. Sui supports the Ubuntu and
+Debian distributions.
 
-That said, you are welcome to run a Sui full node on the operating system of your
-choosing and submit changes to accommodate that environment. See [Install Sui](../build/install.md)
-for setup instructions for each operating system.
+Make sure to update [Rust](../build/install.md#rust).
 
-Specifically, ensure the required tools are installed and updated in your environment as
-outlined in the [Prerequisites](../build/install.md#prerequisites) section. In particular,
-ensure [Rust](../build/install.md#rust) is up-to-date.
-
-Similarly, if you are using Windows Subsystem for Linux (WSL), install a fresh copy of
-[CLang/LLVM](https://releases.llvm.org/download.html), as described in [Prerequisites](../build/install.md#prerequisites).
-
-Note, you will fork the Sui repository here rather than clone it as described in
-*Prerequisites*. So you can skip that step.
-
-If you are using Linux, install these extra dependencies. For example, in Ubuntu, run:
+Use the following command to install additional Linux dependencies.
 ```shell
     $ apt-get update \
     && apt-get install -y --no-install-recommends \
     tzdata \
-    git \
     ca-certificates \
-    curl \
     build-essential \
-    libssl-dev \
     pkg-config \
-    libclang-dev \
     cmake
 ```
 
-If you are using macOS or Windows Subsystem for Linux (WSL), the command will be similar. Remember to install [CLang](https://clang.llvm.org/) in WSL.
+## Configure a Full node
 
-## Configure a full node
-
-You may run a full node either by employing Docker or by building from
+You can configure a Sui Full node either using Docker or by building from
 source.
 
 ### Using Docker Compose
 
-Follow the instructions in the
-[Full node Docker README](https://github.com/MystenLabs/sui/tree/main/docker/fullnode#readme)
-to run a Sui full node using Docker, including [resetting the environment](https://github.com/MystenLabs/sui/tree/main/docker/fullnode#reset-the-environment).
+Follow the instructions in the [Full node Docker README](https://github.com/MystenLabs/sui/tree/main/docker/fullnode#readme) to run a Sui Full node using Docker, including [resetting the environment](https://github.com/MystenLabs/sui/tree/main/docker/fullnode#reset-the-environment).
 
 ### Building from source
 
-1. Install the required tools in your environment as
-outlined in the [Prerequisites](../build/install.md#prerequisites) section if you
-haven't already. Make sure your entire toolchain stays up-to-date. If you encounter
-issues building and installing the Sui binaries, update all packages above and re-install.
+1. Install the required [Prerequisites](../build/install.md#prerequisites).
 1. Set up your fork of the Sui repository:
     1. Go to the [Sui repository](https://github.com/MystenLabs/sui) on GitHub
        and click the *Fork* button in the top right-hand corner of the screen.
@@ -149,70 +104,58 @@ issues building and installing the Sui binaries, update all packages above and r
     ```shell
     $ git checkout --track upstream/devnet
     ```
-1. Make a copy of the [full node configuration template](https://github.com/MystenLabs/sui/blob/main/crates/sui-config/data/fullnode-template.yaml):
+1. Make a copy of the [Full node YAML template](https://github.com/MystenLabs/sui/blob/main/crates/sui-config/data/fullnode-template.yaml):
    ```shell
    $ cp crates/sui-config/data/fullnode-template.yaml fullnode.yaml
    ```
-1. Download the latest
-   [`genesis`](https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob)
-   state for Devnet by clicking that link or by running the following in your
-   terminal:
+1. Download the [`genesis`](https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob) state for Devnet:
     ```shell
     $ curl -fLJO https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob
     ```
-1. Optional: You can skip this set of steps if you are willing to accept the default paths to
-    resources. If you need custom paths, edit your `fullnode.yaml` file to reflect the paths
-    you employ:
-    1. Update the `db-path` field with the path to where the full node's database
-       is located. By default this will create the database in a directory
-       `./suidb` relative to your current directory:
+1. Optional: Skip this step to accept the default paths to resources. Edit the `fullnode.yaml` file to use custom paths.
+   * Update the `db-path` field with the path to the Full node database.
        ```yaml
-       db-path: "/path/to/suidb"
+       db-path: "/db-files/sui-fullnode"
        ```
-    1. Update the `genesis-file-location` with the path to the `genesis` file.
-       By default, the config looks for the file `genesis.blob` in your
-       current directory:
+   * Update the `genesis-file-location` with the path to `genesis.blob`.
        ```yaml
        genesis:
-       genesis-file-location: "/path/to/genesis.blob"
+       genesis-file-location: "/sui-fullnode/genesis.blob"
        ```
-1. Start your Sui full node:
+1. Start your Sui Full node:
     ```shell
     $ cargo run --release --bin sui-node -- --config-path fullnode.yaml
     ```
-1. Post build, receive the success confirmation message, `SuiNode started!`
 1. Optional: [Publish / subscribe](pubsub.md) to notifications using JSON-RPC via websocket.
 
-Your full node will now be serving the read endpoints of the [Sui JSON-RPC
+Your Full node will now be serving the read endpoints of the [Sui JSON-RPC
 API](../build/json-rpc.md#sui-json-rpc-api) at:
 `http://127.0.0.1:9000`
 
-## Using Sui Explorer with your full node
+## Sui Explorer with your Full node
 
-[Sui Explorer](https://explorer.devnet.sui.io/) lets you configure where
-it should issue read requests to query the blockchain. This enables you to
-point the Explorer at your locally running full node and see the
-transactions it has synced from the network. To make this change:
+[Sui Explorer](https://explorer.devnet.sui.io/) supports connections to custom RPC URLS and local networks. You can point the Explorer to your local Full node and see the
+transactions it syncs from the network. To make this change:
 
 1. Open a browser and go to: https://explorer.devnet.sui.io/
 1. Click the **Devnet** button in the top right-hand corner of Sui Explorer and select
-   the *Local* network from the drop-down menu.
-1. Close the *Choose a Network* menu to see the latest transactions. 
+   **Local** from the drop-down menu.
+1. Close the **Choose a Network** menu to see the latest transactions. 
 
-Sui Explorer now uses your local full node to explore the state of the chain.
+Sui Explorer now uses your local Full node to explore the state of the chain.
 
 ## Monitoring
 
-Monitor your full node using the instructions at [Logging, Tracing, Metrics, and
-Observability](https://docs.sui.io/contribute/observability).
+Monitor your Full node using the instructions at [Logging, Tracing, Metrics, and
+Observability](../contribute/observability.md).
 
-Note the default metrics port is 9184 yet configurable in your `fullnode.yaml` file.
+Note the default metrics port is 9184. To change the port, edit your `fullnode.yaml` file.
 
-## Updating your full node with new releases
+## Update your Full node
 
-Whenever Sui releases a new version, Devnet restarts as a new network with no data. You must update your full node with each Sui release to ensure compatibility with the network.
+Whenever Sui releases a new version, Devnet restarts as a new network with no data. You must update your Full node with each Sui release to ensure compatibility with the network.
 
-### With Docker Compose
+### Update with Docker Compose
 
 Follow the instructions to [reset the environment](https://github.com/MystenLabs/sui/tree/main/docker/fullnode#reset-the-environment),
 namely by running the command:
@@ -220,12 +163,12 @@ namely by running the command:
 $ docker-compose down --volumes
 ```
 
-### Built from source
+### Update from source
 
 If you followed the instructions for [Building from
-Source](#building-from-source), update your full node as follows:
+Source](#building-from-source), update your Full node as follows:
 
-1. Shut down your currently running full node.
+1. Shut down your currently running Full node.
 1. `cd` into your local Sui repository:
     ```shell
     $ cd sui
@@ -242,22 +185,20 @@ Source](#building-from-source), update your full node as follows:
     ```shell
     $ git checkout -B devnet --track upstream/devnet
     ```
-1. Download the latest
-   [`genesis`](https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob)
-   state for Devnet as described above.
+1. Download the latest [`genesis`](https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob) state for Devnet as described above.
 1. Update your `fullnode.yaml` configuration file if needed.
-1. Restart your Sui full node:
+1. Restart your Sui Full node:
     ```shell
     $ cargo run --release --bin sui-node -- --config-path fullnode.yaml
     ```
-Your full node will once again be running at:
+Your Full node starts on:
 `http://127.0.0.1:9000`
 
 ## Future plans
 
-Today, a full node relies only on synchronizing with 2f+1 validators in order to
+Today, a Full node relies only on synchronizing with 2f+1 validators in order to
 ensure it has seen all committed transactions. In the future, we expect
-full nodes to fully participate in a peer-to-peer (p2p) environment where the
+Full nodes to fully participate in a peer-to-peer (p2p) environment where the
 load of disseminating new transactions can be shared with the whole network and
 not place the burden solely on the validators. We also expect future
 features, such as checkpoints, to enable improved performance of synchronizing the
