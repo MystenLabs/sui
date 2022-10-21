@@ -47,7 +47,7 @@ public fun add<Name: copy + drop + store, Value: key + store>(
     let id = object::id(&value);
     field::add(object, key, id);
     let (field_id, _) = field::field_ids<Wrapper<Name>>(object, key);
-    add_child_object(object::id_to_address(&field_id), value);
+    add_child_object(field_id, value);
 }
 
 /// Immutably borrows the `object`s dynamic object field with the name specified by `name: Name`.
@@ -60,7 +60,7 @@ public fun borrow<Name: copy + drop + store, Value: key + store>(
 ): &Value {
     let key = Wrapper { name };
     let (field_id, value_id) = field::field_ids<Wrapper<Name>>(object, key);
-    borrow_child_object<Value>(object::id_to_address(&field_id), object::id_to_address(&value_id))
+    borrow_child_object<Value>(field_id, value_id)
 }
 
 /// Mutably borrows the `object`s dynamic object field with the name specified by `name: Name`.
@@ -73,7 +73,7 @@ public fun borrow_mut<Name: copy + drop + store, Value: key + store>(
 ): &mut Value {
     let key = Wrapper { name };
     let (field_id, value_id) = field::field_ids<Wrapper<Name>>(object, key);
-    borrow_child_object<Value>(object::id_to_address(&field_id), object::id_to_address(&value_id))
+    borrow_child_object<Value>(field_id, value_id)
 }
 
 /// Removes the `object`s dynamic object field with the name specified by `name: Name` and returns
@@ -87,10 +87,7 @@ public fun remove<Name: copy + drop + store, Value: key + store>(
 ): Value {
     let key = Wrapper { name };
     let (field_id, value_id) = field::field_ids<Wrapper<Name>>(object, key);
-    let value = remove_child_object<Value>(
-        object::id_to_address(&field_id),
-        object::id_to_address(&value_id),
-    );
+    let value = remove_child_object<Value>(field_id, value_id);
     field::remove<Wrapper<Name>, ID>(object, key);
     value
 }
@@ -105,6 +102,18 @@ public fun exists_<Name: copy + drop + store>(
     field::exists_with_type<Wrapper<Name>, ID>(object, key)
 }
 
+/// Returns true if and only if the `object` has a dynamic field with the name specified by
+/// `name: Name` with an assigned value of type `Value`.
+public fun exists_with_type<Name: copy + drop + store, Value: key + store>(
+    object: &UID,
+    name: Name,
+): bool {
+    let key = Wrapper { name };
+    if (!field::exists_with_type<Wrapper<Name>, ID>(object, key)) return false;
+    let (field_id, value_id) = field::field_ids<Wrapper<Name>>(object, key);
+    field::has_child_object_with_ty<Value>(field_id, value_id)
+}
+
 /// Returns the ID of the object associated with the dynamic object field
 /// Returns none otherwise
 public fun id<Name: copy + drop + store>(
@@ -114,7 +123,7 @@ public fun id<Name: copy + drop + store>(
     let key = Wrapper { name };
     if (!field::exists_with_type<Wrapper<Name>, ID>(object, key)) return option::none();
     let (_field_id, value_id) = field::field_ids<Wrapper<Name>>(object, key);
-    option::some(value_id)
+    option::some(object::id_from_address(value_id))
 }
 
 }

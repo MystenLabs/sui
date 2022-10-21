@@ -57,6 +57,17 @@ fun add_duplicate() {
 }
 
 #[test]
+#[expected_failure(abort_code = 0)]
+fun add_duplicate_mismatched_type() {
+    let sender = @0x0;
+    let scenario = ts::begin(sender);
+    let id = ts::new_object(&mut scenario);
+    add<u64, u64>(&mut id, 0, 0u64);
+    add<u64, u8>(&mut id, 0, 1u8);
+    abort 42
+}
+
+#[test]
 #[expected_failure(abort_code = 1)]
 fun borrow_missing() {
     let sender = @0x0;
