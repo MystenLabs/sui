@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFeature } from '@growthbook/growthbook-react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import BigNumber from 'bignumber.js';
 import { useMemo } from 'react';
 import { useIntl } from 'react-intl';
@@ -11,7 +11,11 @@ import { FEATURES } from '../experimentation/features';
 import { Coin } from '../redux/slices/sui-objects/Coin';
 import { api } from '../redux/store/thunk-extras';
 
-type FormattedCoin = [formattedBalance: string, coinSymbol: string];
+type FormattedCoin = [
+    formattedBalance: string,
+    coinSymbol: string,
+    queryResult: UseQueryResult
+];
 
 /**
  * Formats a coin balance based on our standard coin display logic.
@@ -85,7 +89,8 @@ export function useFormatCoin(
         [coinType]
     );
 
-    const [decimals, { isFetched, isError }] = useCoinDecimals(coinType);
+    const [decimals, queryResult] = useCoinDecimals(coinType);
+    const { isFetched, isError } = queryResult;
 
     const formatted = useMemo(() => {
         if (typeof balance === 'undefined' || balance === null) return '';
@@ -96,11 +101,10 @@ export function useFormatCoin(
             });
         }
 
-        // TODO: Figure out more ideal loading state:
         if (!isFetched) return '...';
 
         return formatBalance(balance, decimals);
     }, [decimals, isError, isFetched, suiDenomination, intl, balance]);
 
-    return [formatted, symbol];
+    return [formatted, symbol, queryResult];
 }
