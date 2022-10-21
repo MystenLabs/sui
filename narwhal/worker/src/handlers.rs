@@ -1,7 +1,7 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use async_trait::async_trait;
 use config::{Committee, SharedCommittee, SharedWorkerCache, WorkerCache, WorkerId, WorkerIndex};
 use crypto::PublicKey;
@@ -180,17 +180,7 @@ impl PrimaryToWorker for PrimaryReceiverHandler {
                 };
             if first_attempt {
                 // Send first sync request to a single node.
-                let worker_name = match self
-                    .committee
-                    .load()
-                    .authority_by_network_key(&message.target)
-                    .ok_or_else(|| anyhow!("missing authority for network key"))
-                    .and_then(|(name, _authority)| {
-                        self.worker_cache
-                            .load()
-                            .worker(name, &self.id)
-                            .map_err(|e| e.into())
-                    }) {
+                let worker_name = match self.worker_cache.load().worker(&message.target, &self.id) {
                     Ok(worker_info) => worker_info.name,
                     Err(e) => {
                         return Err(anemo::rpc::Status::internal(format!(

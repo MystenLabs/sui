@@ -647,7 +647,17 @@ impl BlockSynchronizer {
         peers.rebalance_values();
 
         for peer in peers.peers().values() {
-            self.send_synchronize_payload_requests(peer.clone().name, peer.assigned_values())
+            let target = match self.committee.authority_by_network_key(&peer.name) {
+                Some((name, _authority)) => name,
+                None => {
+                    error!(
+                        "could not look up authority for network key {:?}",
+                        peer.name
+                    );
+                    continue;
+                }
+            };
+            self.send_synchronize_payload_requests(target.clone(), peer.assigned_values())
                 .await
         }
 
@@ -677,7 +687,7 @@ impl BlockSynchronizer {
     #[instrument(level = "trace", skip_all, fields(peer_name = ?primary_peer_name, num_certificates = certificates.len()))]
     async fn send_synchronize_payload_requests(
         &mut self,
-        primary_peer_name: NetworkPublicKey,
+        primary_peer_name: PublicKey,
         certificates: Vec<Certificate>,
     ) {
         let batches_by_worker = utils::map_certificate_batches_by_worker(certificates.as_slice());

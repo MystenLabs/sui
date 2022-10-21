@@ -8,7 +8,7 @@ use crate::{
 };
 use bytes::Bytes;
 use config::{Committee, Epoch, SharedWorkerCache, Stake, WorkerId, WorkerInfo};
-use crypto::{AggregateSignature, NetworkPublicKey, PublicKey, Signature};
+use crypto::{AggregateSignature, PublicKey, Signature};
 use dag::node_dag::Affiliated;
 use derive_builder::Builder;
 use fastcrypto::{
@@ -792,7 +792,7 @@ pub struct WorkerReconfigureMessage {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct WorkerSynchronizeMessage {
     pub digests: Vec<BatchDigest>,
-    pub target: NetworkPublicKey,
+    pub target: PublicKey,
 }
 
 /// Used by the primary to request that the worker delete the specified batches.
