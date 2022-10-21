@@ -35,16 +35,6 @@ pub type AggregateSignature = bls12381::BLS12381AggregateSignature;
 pub type PrivateKey = bls12381::BLS12381PrivateKey;
 pub type KeyPair = bls12381::BLS12381KeyPair;
 
-// Example to use BLS12-377 instead:
-// #[cfg(feature = "celo")]
-// pub type PublicKey = bls12377::BLS12377PublicKey;
-// #[cfg(feature = "celo")]
-// pub type Signature = bls12377::BLS12377Signature;
-// #[cfg(feature = "celo")]
-// pub type PrivateKey = bls12377::BLS12377PrivateKey;
-// #[cfg(feature = "celo")]
-// pub type KeyPair = bls12377::BLS12377KeyPair;
-
 pub type NetworkPublicKey = ed25519::Ed25519PublicKey;
 pub type NetworkKeyPair = ed25519::Ed25519KeyPair;
 
@@ -53,10 +43,3 @@ pub type NetworkKeyPair = ed25519::Ed25519KeyPair;
 // Type alias selecting the default hash function for the code base.
 pub type DefaultHashFunction = Blake2b256;
 pub const DIGEST_LENGTH: usize = DefaultHashFunction::OUTPUT_SIZE;
-
-#[cfg(all(test, feature = "celo"))]
-#[path = "tests/bls12377_tests.rs"]
-pub mod bls12377_tests;
-
-#[cfg(feature = "celo")]
-pub mod bls12377;

@@ -180,24 +180,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ark-crypto-primitives"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ff773c0ef8c655c98071d3026a63950798a66b2f45baef22d8334c1756f1bd18"
-dependencies = [
- "ark-ec",
- "ark-ff",
- "ark-relations",
- "ark-serialize",
- "ark-snark",
- "ark-std",
- "blake2 0.9.2",
- "derivative",
- "digest 0.9.0",
- "rayon",
-]
-
-[[package]]
 name = "ark-ec"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -208,29 +190,7 @@ dependencies = [
  "ark-std",
  "derivative",
  "num-traits 0.2.15",
- "rayon",
  "zeroize",
-]
-
-[[package]]
-name = "ark-ed-on-bw6-761"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "84bc0b435c59113643ff064a5c57a323d37e140b4908a72b071de8a6592a8ce6"
-dependencies = [
- "ark-ed-on-cp6-782",
-]
-
-[[package]]
-name = "ark-ed-on-cp6-782"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1f87b9cf6c4100b6625d0b90b9a1f029759dd35be70681abdbca57e2fd9bebe1"
-dependencies = [
- "ark-bls12-377",
- "ark-ec",
- "ark-ff",
- "ark-std",
 ]
 
 [[package]]
@@ -247,7 +207,6 @@ dependencies = [
  "num-bigint",
  "num-traits 0.2.15",
  "paste",
- "rayon",
  "rustc_version 0.3.3",
  "zeroize",
 ]
@@ -275,48 +234,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "ark-relations"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4cba4c1c99792a6834bd97f7fd76578ec2cd58d2afc5139a17e1d1bec65b38f6"
-dependencies = [
- "ark-ff",
- "ark-std",
- "tracing",
- "tracing-subscriber 0.2.25",
-]
-
-[[package]]
 name = "ark-serialize"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1d6c2b318ee6e10f8c2853e73a83adc0ccb88995aa978d8a3408d492ab2ee671"
 dependencies = [
- "ark-serialize-derive",
  "ark-std",
  "digest 0.9.0",
-]
-
-[[package]]
-name = "ark-serialize-derive"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8dd4e5f0bf8285d5ed538d27fab7411f3e297908fd93c62195de8bee3f199e82"
-dependencies = [
- "proc-macro2 1.0.46",
- "quote 1.0.21",
- "syn 1.0.102",
-]
-
-[[package]]
-name = "ark-snark"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0dc3dff1a5f67a9c0b34df32b079752d8dd17f1e9d06253da0453db6c1b7cc8a"
-dependencies = [
- "ark-ff",
- "ark-relations",
- "ark-std",
 ]
 
 [[package]]
@@ -327,7 +251,6 @@ checksum = "1df2c09229cbc5a028b1d70e00fdb2acee28b1055dfb5ca73eea49c5a25c4e7c"
 dependencies = [
  "num-traits 0.2.15",
  "rand 0.8.5",
- "rayon",
 ]
 
 [[package]]
@@ -739,33 +662,11 @@ dependencies = [
 
 [[package]]
 name = "blake2"
-version = "0.9.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0a4e37d16930f5459780f5621038b6382b9bb37c19016f39fb6b5808d831f174"
-dependencies = [
- "crypto-mac",
- "digest 0.9.0",
- "opaque-debug",
-]
-
-[[package]]
-name = "blake2"
 version = "0.10.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b9cf849ee05b2ee5fba5e36f97ff8ec2533916700fc0758d40d92136a42f3388"
 dependencies = [
  "digest 0.10.5",
-]
-
-[[package]]
-name = "blake2s_simd"
-version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "db539cc2b5f6003621f1cd9ef92d7ded8ea5232c7de0f9faa2de251cd98730d4"
-dependencies = [
- "arrayref",
- "arrayvec 0.7.2",
- "constant_time_eq",
 ]
 
 [[package]]
@@ -814,32 +715,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0a90ec2df9600c28a01c56c4784c9207a96d2451833aeceb8cc97e4c9548bb78"
 dependencies = [
  "generic-array",
-]
-
-[[package]]
-name = "bls-crypto"
-version = "0.2.0"
-source = "git+https://github.com/huitseeker/celo-bls-snark-rs?branch=updates-2#9f5a0e6f1a9c6afaa93e8112562e46e92b84a92e"
-dependencies = [
- "ark-bls12-377",
- "ark-crypto-primitives",
- "ark-ec",
- "ark-ed-on-bw6-761",
- "ark-ff",
- "ark-serialize",
- "ark-std",
- "blake2s_simd",
- "byteorder",
- "clap 3.2.22",
- "csv",
- "env_logger",
- "hex",
- "log",
- "lru",
- "once_cell",
- "rand 0.7.3",
- "rand_chacha 0.3.1",
- "thiserror",
 ]
 
 [[package]]
@@ -1318,7 +1193,7 @@ dependencies = [
  "tonic",
  "tracing",
  "tracing-core",
- "tracing-subscriber 0.3.15",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -1592,16 +1467,6 @@ dependencies = [
  "generic-array",
  "rand_core 0.6.4",
  "typenum",
-]
-
-[[package]]
-name = "crypto-mac"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b584a330336237c1eecd3e94266efb216c56ed91225d634cb2991c5f3fd1aeab"
-dependencies = [
- "generic-array",
- "subtle",
 ]
 
 [[package]]
@@ -2322,7 +2187,7 @@ dependencies = [
  "aes",
  "aes-gcm",
  "base64ct",
- "blake2 0.10.4",
+ "blake2",
  "blake3",
  "blst",
  "bulletproofs",
@@ -3757,15 +3622,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "lru"
-version = "0.7.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e999beba7b6e8345721bd280141ed958096a2e4abdf74f67ff4ce49b4b54e47a"
-dependencies = [
- "hashbrown",
-]
-
-[[package]]
 name = "match_opt"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4613,7 +4469,7 @@ dependencies = [
  "tokio-util 0.7.3",
  "toml",
  "tracing",
- "tracing-subscriber 0.3.15",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -4814,13 +4670,8 @@ name = "narwhal-crypto"
 version = "0.1.0"
 dependencies = [
  "ark-bls12-377",
- "ark-ec",
- "ark-ff",
- "ark-serialize",
- "ark-std",
  "base64ct",
  "bincode",
- "bls-crypto",
  "criterion",
  "eyre",
  "fastcrypto",
@@ -4837,7 +4688,6 @@ dependencies = [
  "serde_bytes",
  "serde_json",
  "serde_with 2.0.1",
- "signature",
  "tokio",
  "workspace-hack",
  "zeroize",
@@ -4991,7 +4841,7 @@ dependencies = [
  "tokio-util 0.7.4",
  "tracing",
  "tracing-log",
- "tracing-subscriber 0.3.15",
+ "tracing-subscriber",
  "typed-store",
  "url",
  "workspace-hack",
@@ -8027,7 +7877,7 @@ dependencies = [
  "tokio",
  "tokio-util 0.7.4",
  "tracing",
- "tracing-subscriber 0.3.15",
+ "tracing-subscriber",
  "workspace-hack",
 ]
 
@@ -8912,7 +8762,7 @@ dependencies = [
  "tracing-bunyan-formatter",
  "tracing-chrome",
  "tracing-opentelemetry 0.17.4",
- "tracing-subscriber 0.3.15",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -8933,7 +8783,7 @@ dependencies = [
  "tracing-bunyan-formatter",
  "tracing-chrome",
  "tracing-opentelemetry 0.18.0",
- "tracing-subscriber 0.3.15",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -9562,7 +9412,7 @@ checksum = "09d48f71a791638519505cefafe162606f706c25592e4bde4d97600c0195312e"
 dependencies = [
  "crossbeam-channel",
  "time 0.3.15",
- "tracing-subscriber 0.3.15",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -9590,7 +9440,7 @@ dependencies = [
  "tracing",
  "tracing-core",
  "tracing-log",
- "tracing-subscriber 0.3.15",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -9602,7 +9452,7 @@ dependencies = [
  "crossbeam",
  "json",
  "tracing",
- "tracing-subscriber 0.3.15",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -9647,7 +9497,7 @@ dependencies = [
  "tracing",
  "tracing-core",
  "tracing-log",
- "tracing-subscriber 0.3.15",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -9661,16 +9511,7 @@ dependencies = [
  "tracing",
  "tracing-core",
  "tracing-log",
- "tracing-subscriber 0.3.15",
-]
-
-[[package]]
-name = "tracing-subscriber"
-version = "0.2.25"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0e0d2eaa99c3c2e41547cfa109e910a68ea03823cccad4a0525dcbc9b01e8c71"
-dependencies = [
- "tracing-core",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -9700,7 +9541,7 @@ checksum = "9e3d272c44878d2bbc9f4a20ad463724f03e19dbc667c6e84ac433ab7ffcc70b"
 dependencies = [
  "lazy_static 1.4.0",
  "tracing-core",
- "tracing-subscriber 0.3.15",
+ "tracing-subscriber",
  "tracing-test-macro",
 ]
 
@@ -10323,17 +10164,11 @@ dependencies = [
  "anyhow",
  "arc-swap",
  "ark-bls12-377",
- "ark-crypto-primitives",
  "ark-ec",
- "ark-ed-on-bw6-761",
- "ark-ed-on-cp6-782",
  "ark-ff",
  "ark-ff-asm",
  "ark-ff-macros",
- "ark-relations",
  "ark-serialize",
- "ark-serialize-derive",
- "ark-snark",
  "ark-std",
  "arrayref",
  "arrayvec 0.5.2",
@@ -10373,15 +10208,12 @@ dependencies = [
  "bitflags",
  "bitmaps",
  "bitvec",
- "blake2 0.10.4",
- "blake2 0.9.2",
- "blake2s_simd",
+ "blake2",
  "blake3",
  "block-buffer 0.10.3",
  "block-buffer 0.9.0",
  "block-padding 0.2.1",
  "block-padding 0.3.2",
- "bls-crypto",
  "blst",
  "bs58",
  "bstr",
@@ -10451,7 +10283,6 @@ dependencies = [
  "crossterm_winapi 0.9.0",
  "crypto-bigint",
  "crypto-common",
- "crypto-mac",
  "csv",
  "csv-core",
  "ctor",
@@ -10508,7 +10339,6 @@ dependencies = [
  "encoding_rs",
  "endian-type",
  "enum_dispatch",
- "env_logger",
  "errno",
  "error-code",
  "ethnum",
@@ -10646,7 +10476,6 @@ dependencies = [
  "linux-raw-sys",
  "lock_api",
  "log",
- "lru",
  "match_opt",
  "matchers",
  "matchit",
@@ -11020,8 +10849,7 @@ dependencies = [
  "tracing-log",
  "tracing-opentelemetry 0.17.4",
  "tracing-opentelemetry 0.18.0",
- "tracing-subscriber 0.2.25",
- "tracing-subscriber 0.3.15",
+ "tracing-subscriber",
  "tracing-test",
  "tracing-test-macro",
  "try-lock",

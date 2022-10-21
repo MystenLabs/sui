@@ -56,7 +56,7 @@ RUN sed -i '/crates\/workspace-hack/b; /crates/d; /narwhal/d' Cargo.toml \
 # with all dependencies built.
 FROM chef AS builder 
 ARG BUILD_MODE
-ARG FEATURES="celo,benchmark"
+ARG FEATURES="benchmark"
 
 COPY --from=planner /sui/Cargo.toml Cargo.toml
 COPY --from=planner /sui/Cargo.lock Cargo.lock
