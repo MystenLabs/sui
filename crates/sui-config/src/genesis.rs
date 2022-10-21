@@ -509,7 +509,7 @@ fn process_package(
         &vm,
         modules,
         ctx,
-        gas_status.create_move_gas_status()
+        gas_status.create_move_gas_status(),
     )?;
 
     let (
