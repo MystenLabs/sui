@@ -172,7 +172,7 @@ fn execute_transaction<S: BackingPackageStore + ParentSync>(
                         &function,
                         type_arguments,
                         arguments,
-                        &mut gas_status.create_move_gas_status(),
+                        gas_status.create_move_gas_status(),
                         tx_ctx,
                     )
                 }
@@ -194,7 +194,7 @@ fn execute_transaction<S: BackingPackageStore + ParentSync>(
                         native_functions.clone(),
                         modules,
                         tx_ctx,
-                        &mut gas_status.create_move_gas_status(),
+                        gas_status.create_move_gas_status(),
                     )
                 }
                 SingleTransactionKind::Pay(Pay {
@@ -232,7 +232,7 @@ fn execute_transaction<S: BackingPackageStore + ParentSync>(
                             CallArg::Pure(bcs::to_bytes(&storage_charge).unwrap()),
                             CallArg::Pure(bcs::to_bytes(&computation_charge).unwrap()),
                         ],
-                        &mut gas_status.create_move_gas_status(),
+                        gas_status.create_move_gas_status(),
                         tx_ctx,
                     )
                 }
