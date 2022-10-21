@@ -225,7 +225,7 @@ that key <code>k: K</code>.
 
 ## Function `contains`
 
-Returns true iff there is an value associated with the key <code>k: K</code> in table
+Returns true iff there is a value associated with the key <code>k: K</code> in table
 <code><a href="table.md#0x2_table">table</a>: &<a href="object_table.md#0x2_object_table_ObjectTable">ObjectTable</a>&lt;K, V&gt;</code>
 
 
@@ -329,7 +329,7 @@ Aborts with <code><a href="object_table.md#0x2_object_table_ETableNotEmpty">ETab
 
 ## Function `value_id`
 
-Returns the ID of the object associated with the key
+Returns the ID of the object associated with the key if the table has an entry with key <code>k: K</code>
 Returns none otherwise
 
 
