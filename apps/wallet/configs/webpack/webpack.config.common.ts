@@ -65,7 +65,7 @@ async function generateAliasFromTs() {
                 aliasPath.startsWith('./') || aliasPath.startsWith('../')
                     ? resolve(TS_CONFIGS_ROOT, baseUrl, aliasPath)
                     : aliasPath
-            ).replace(/\/\*$/, '');
+            ).replace(/(\/\*|\\\*)$/, '');
             alias[adjAlias] = adjPath;
         });
     }
@@ -148,7 +148,7 @@ const commonConfig: () => Promise<Configuration> = async () => {
             new CopyPlugin({
                 patterns: [
                     {
-                        from: resolve(SRC_ROOT, 'manifest', 'icons', '**', '*'),
+                        from: resolve(SRC_ROOT, 'manifest', 'icons'),
                     },
                     {
                         from: resolve(SRC_ROOT, 'manifest', 'manifest.json'),
