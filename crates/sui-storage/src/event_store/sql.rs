@@ -168,7 +168,7 @@ impl SqlEventStore {
 
     /// Returns total size of table.  Should really only be used for testing.
     #[allow(unused)]
-    async fn total_event_count(&self) -> Result<usize, SuiError> {
+    pub async fn total_event_count(&self) -> Result<usize, SuiError> {
         let result = sqlx::query("SELECT COUNT(*) FROM events")
             .fetch_one(&self.pool)
             .await
@@ -184,6 +184,13 @@ impl SqlEventStore {
             .map_err(convert_sqlx_err)?;
         let num_rows: i64 = result.get(0);
         Ok(num_rows as u64)
+    }
+
+    /// Only use for testing or benchmarking. Resets the last seq number to 0
+    /// so we can insert new events without increasing TX sequence number.
+    #[allow(unused)]
+    pub fn testing_only_reset_seq_num(&self) {
+        self.seq_num.store(0, Ordering::Relaxed);
     }
 
     fn try_extract_object_id(row: &SqliteRow, col: usize) -> Result<Option<ObjectID>, SuiError> {
