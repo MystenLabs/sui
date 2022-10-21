@@ -19,14 +19,12 @@ The network that genesis creates includes four validators and five user accounts
    ```
 
 ### Run genesis after using the Client CLI
-If you used the Sui Client CLI before you create a local network, it created a client.yaml file. If you used the default values, it connects to a Sui Devnet Full node. 
+If you used the Sui Client CLI before you create a local network, it created a client.yaml file in the .sui/sui_config directory. When you run genesis to create a local network, a warning displays that the .sui/sui_config folder is not empty because of the existing client.yaml file. You can use the `--force` argument to replace the configuration files, or use `--working-dir` to specify a different directory for the network configuration files.
 
-When you run genesis to create a local network, if the .sui/sui_config folder - where the client.yaml is stored - already contains a client.yaml file, the genesis process warns you that the folder must be empty. You can use the `--force` argument to replace the configuration files, or use `--working-dir` to specify a different directory for the network configuration files.
-
-Use the following command to overwrite existing configuration files with default values.
-   ```shell
-   $ sui genesis --force
-   ```
+Use the following command to replace the configuration files in the .sui/sui_config directory.
+```shell
+$ sui genesis --force
+```
 
 Use the following command to use a different directory to store the configuration files.
 ```shell
