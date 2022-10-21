@@ -45,4 +45,103 @@ fun simple_all_functions() {
     object::delete(id);
 }
 
+#[test]
+#[expected_failure(abort_code = 0)]
+fun add_duplicate() {
+    let sender = @0x0;
+    let scenario = ts::begin(sender);
+    let id = ts::new_object(&mut scenario);
+    add<u64, u64>(&mut id, 0, 0);
+    add<u64, u64>(&mut id, 0, 1);
+    abort 42
+}
+
+#[test]
+#[expected_failure(abort_code = 1)]
+fun borrow_missing() {
+    let sender = @0x0;
+    let scenario = ts::begin(sender);
+    let id = ts::new_object(&mut scenario);
+    borrow<u64, u64>(&mut id, 0);
+    abort 42
+}
+
+#[test]
+#[expected_failure(abort_code = 2)]
+fun borrow_wrong_type() {
+    let sender = @0x0;
+    let scenario = ts::begin(sender);
+    let id = ts::new_object(&mut scenario);
+    add(&mut id, 0, 0);
+    borrow<u64, u8>(&mut id, 0);
+    abort 42
+}
+
+#[test]
+#[expected_failure(abort_code = 1)]
+fun borrow_mut_missing() {
+    let sender = @0x0;
+    let scenario = ts::begin(sender);
+    let id = ts::new_object(&mut scenario);
+    borrow_mut<u64, u64>(&mut id, 0);
+    abort 42
+}
+
+#[test]
+#[expected_failure(abort_code = 2)]
+fun borrow_mut_wrong_type() {
+    let sender = @0x0;
+    let scenario = ts::begin(sender);
+    let id = ts::new_object(&mut scenario);
+    add(&mut id, 0, 0);
+    borrow_mut<u64, u8>(&mut id, 0);
+    abort 42
+}
+
+#[test]
+#[expected_failure(abort_code = 1)]
+fun remove_missing() {
+    let sender = @0x0;
+    let scenario = ts::begin(sender);
+    let id = ts::new_object(&mut scenario);
+    remove<u64, u64>(&mut id, 0);
+    abort 42
+}
+
+#[test]
+#[expected_failure(abort_code = 2)]
+fun remove_wrong_type() {
+    let sender = @0x0;
+    let scenario = ts::begin(sender);
+    let id = ts::new_object(&mut scenario);
+    add(&mut id, 0, 0);
+    remove<u64, u8>(&mut id, 0);
+    abort 42
+}
+
+#[test]
+fun sanity_check_exists() {
+    let sender = @0x0;
+    let scenario = ts::begin(sender);
+    let id = ts::new_object(&mut scenario);
+    assert!(!exists_with_type<u64, u64>(&mut id, 0), 0);
+    add(&mut id, 0, 0);
+    assert!(exists_with_type<u64, u64>(&mut id, 0), 0);
+    assert!(!exists_with_type<u64, u8>(&mut id, 0), 0);
+    ts::end(scenario);
+    object::delete(id);
+}
+
+// should be able to do delete a UID even though it has a dynamic field
+#[test]
+fun delete_uid_with_fields() {
+    let sender = @0x0;
+    let scenario = ts::begin(sender);
+    let id = ts::new_object(&mut scenario);
+    add(&mut id, 0, 0);
+    assert!(exists_with_type<u64, u64>(&mut id, 0), 0);
+    ts::end(scenario);
+    object::delete(id);
+}
+
 }
