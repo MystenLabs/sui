@@ -13,13 +13,22 @@ import { api } from '../redux/store/thunk-extras';
 
 type FormattedCoin = [formattedBalance: string, coinSymbol: string];
 
+/**
+ * Formats a coin balance based on our standard coin display logic.
+ * If the balance is less than 1, it will be displayed in its full decimal form.
+ * For values greater than 1, it will be truncated to 3 decimal places.
+ */
 export function formatBalance(
     balance: bigint | number | string,
     decimals: number
 ) {
     const bn = new BigNumber(balance.toString()).shiftedBy(-1 * decimals);
 
-    return bn.toFormat(bn.gte(1) ? 2 : undefined);
+    // NOTE: This double-format will trim any trailing 0's.
+    return new BigNumber(
+        // @ts-expect-error: The BigNumber types are wrong.
+        bn.toFormat(bn.gte(1) ? 3 : undefined, BigNumber.ROUND_DOWN)
+    ).toFormat();
 }
 
 export function useCoinDecimals(coinType?: string | null) {
