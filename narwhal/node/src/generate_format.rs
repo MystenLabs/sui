@@ -38,6 +38,7 @@ fn get_registry() -> Result<Registry> {
 
     let kp = keys[0].copy();
     let pk = kp.public().clone();
+    let nk = network_keys[0].copy().public().clone();
 
     tracer.trace_value(&mut samples, &pk)?;
 
@@ -122,7 +123,7 @@ fn get_registry() -> Result<Registry> {
     };
     let sync = WorkerSynchronizeMessage {
         digests: vec![BatchDigest([0u8; 32])],
-        target: pk,
+        target: nk,
     };
     let epoch_change = WorkerReconfigureMessage {
         message: ReconfigureNotification::NewEpoch(committee.clone()),

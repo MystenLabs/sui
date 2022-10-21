@@ -2,6 +2,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
+use crypto::traits::KeyPair;
 use fastcrypto::hash::Hash;
 use test_utils::CommitteeFixture;
 use types::{MockWorkerToWorker, WorkerToWorkerServer};
@@ -34,12 +35,11 @@ async fn synchronize() {
 
     // Set up mock behavior for child RequestBatches RPC.
     let target_primary = fixture.authorities().nth(1).unwrap();
-    let target = target_primary.public_key();
     let batch = test_utils::batch();
     let digest = batch.digest();
     let message = WorkerSynchronizeMessage {
         digests: vec![digest],
-        target,
+        target: target_primary.network_keypair().public().clone(),
     };
 
     let mut mock_server = MockWorkerToWorker::new();
@@ -108,10 +108,9 @@ async fn synchronize_when_batch_exists() {
 
     // Set up mock behavior for child RequestBatches RPC.
     let target_primary = fixture.authorities().nth(1).unwrap();
-    let target = target_primary.public_key();
     let message = WorkerSynchronizeMessage {
         digests: missing.clone(),
-        target,
+        target: target_primary.network_keypair().public().clone(),
     };
 
     // Send a sync request.

@@ -199,6 +199,13 @@ impl HeaderWaiter {
                                     round
                                 });
                             }
+                            let target = match self.committee.network_key(&author) {
+                                Ok(key) => key,
+                                Err(e) => {
+                                    info!("Could not look up network key for primary {author:?}: {e:?}");
+                                    continue
+                                }
+                            };
                             let mut synchronize_handles = Vec::new();
                             for (worker_id, digests) in requires_sync.clone() {
                                 let worker_name = self.worker_cache
@@ -207,7 +214,7 @@ impl HeaderWaiter {
                                     .expect("Author of valid header is not in the worker cache")
                                     .name;
 
-                                let message = WorkerSynchronizeMessage{digests, target: author.clone()};
+                                let message = WorkerSynchronizeMessage{digests, target: target.clone()};
                                 synchronize_handles.push(self.network.send(worker_name, &message).await);
                             }
 

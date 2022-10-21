@@ -3,20 +3,23 @@
 use crate::{
     block_synchronizer::{
         peers::Peers,
-        responses::{CertificatesResponse, PayloadAvailabilityResponse, RequestID},
+        responses::{CertificatesResponse, RequestID},
         PendingIdentifier::{Header, Payload},
     },
     primary::PrimaryMessage,
-    utils, PayloadToken, CHANNEL_CAPACITY,
+    utils, PayloadToken,
 };
+use anyhow::anyhow;
 use config::{Committee, Parameters, SharedWorkerCache, WorkerId};
-use crypto::PublicKey;
+use crypto::traits::ToFromBytes;
+use crypto::{NetworkPublicKey, PublicKey};
 use fastcrypto::hash::Hash;
 use futures::{
     future::{join_all, BoxFuture},
     stream::FuturesUnordered,
     FutureExt, StreamExt,
 };
+use network::anemo_ext::NetworkExt;
 use network::{P2pNetwork, UnreliableNetwork};
 use rand::{rngs::SmallRng, SeedableRng};
 use std::{
@@ -36,8 +39,8 @@ use tokio::{
 };
 use tracing::{debug, error, info, instrument, trace, warn};
 use types::{
-    metered_channel, BatchDigest, Certificate, CertificateDigest, ReconfigureNotification,
-    WorkerSynchronizeMessage,
+    metered_channel, BatchDigest, Certificate, CertificateDigest, PayloadAvailabilityRequest,
+    PrimaryToPrimaryClient, ReconfigureNotification, WorkerSynchronizeMessage,
 };
 
 use self::responses::AvailabilityResponse;
@@ -177,10 +180,6 @@ pub struct BlockSynchronizer {
     /// Requests managers
     map_certificate_responses_senders: HashMap<RequestID, Sender<CertificatesResponse>>,
 
-    /// Holds the senders to match a batch_availability responses
-    map_payload_availability_responses_senders:
-        HashMap<RequestID, Sender<PayloadAvailabilityResponse>>,
-
     /// Send network requests
     network: P2pNetwork,
 
@@ -225,7 +224,6 @@ impl BlockSynchronizer {
                 rx_availability_responses,
                 pending_requests: HashMap::new(),
                 map_certificate_responses_senders: HashMap::new(),
-                map_payload_availability_responses_senders: HashMap::new(),
                 network,
                 payload_store,
                 certificate_store,
@@ -279,7 +277,6 @@ impl BlockSynchronizer {
                 Some(response) = self.rx_availability_responses.recv() => {
                     match response {
                         AvailabilityResponse::Certificate(certificate_response) => self.handle_certificates_response(certificate_response).await,
-                        AvailabilityResponse::Payload(payload_availability_response) => self.handle_payload_availability_response(payload_availability_response).await,
                     }
                 },
                 Some(state) = waiting.next() => {
@@ -414,27 +411,25 @@ impl BlockSynchronizer {
 
         let key = RequestID::from_iter(certificates_to_sync.iter());
 
-        let message = PrimaryMessage::PayloadAvailabilityRequest {
+        let request = PayloadAvailabilityRequest {
             certificate_ids: block_ids_to_sync,
-            requestor: self.name.clone(),
         };
+        let primaries: Vec<_> = self
+            .committee
+            .others_primaries(&self.name)
+            .into_iter()
+            .map(|(_name, _address, network_key)| network_key)
+            .collect();
 
-        let (sender, receiver) = channel(CHANNEL_CAPACITY);
-        // record the request key to forward the results to the dedicated sender
-        self.map_payload_availability_responses_senders
-            .insert(key, sender);
-
-        // broadcast the message to fetch  the certificates
-        let primaries = self.broadcast_batch_request(message).await;
-
-        // now create the future that will wait to gather the responses
+        // Now create the future that will send the requests.
         Some(
-            Self::wait_for_payload_availability_responses(
+            Self::send_payload_availability_requests(
                 self.payload_availability_timeout,
                 key,
                 certificates_to_sync,
+                request,
                 primaries,
-                receiver,
+                self.network.network(),
             )
             .boxed(),
         )
@@ -647,11 +642,6 @@ impl BlockSynchronizer {
         request_id: RequestID,
         mut peers: Peers<Certificate>,
     ) -> Vec<BoxFuture<'a, State>> {
-        // Important step to do that first, so we give the opportunity
-        // to other future requests (with same set of ids) making a request.
-        self.map_payload_availability_responses_senders
-            .remove(&request_id);
-
         // Rebalance the CertificateDigests to ensure that
         // those are uniquely distributed across the peers.
         peers.rebalance_values();
@@ -687,7 +677,7 @@ impl BlockSynchronizer {
     #[instrument(level = "trace", skip_all, fields(peer_name = ?primary_peer_name, num_certificates = certificates.len()))]
     async fn send_synchronize_payload_requests(
         &mut self,
-        primary_peer_name: PublicKey,
+        primary_peer_name: NetworkPublicKey,
         certificates: Vec<Certificate>,
     ) {
         let batches_by_worker = utils::map_certificate_batches_by_worker(certificates.as_slice());
@@ -753,29 +743,6 @@ impl BlockSynchronizer {
     }
 
     #[instrument(level = "trace", skip_all)]
-    async fn handle_payload_availability_response(
-        &mut self,
-        response: PayloadAvailabilityResponse,
-    ) {
-        let sender = self
-            .map_payload_availability_responses_senders
-            .get(&response.request_id());
-
-        if let Some(s) = sender {
-            debug!(
-                "Received response for request with id {}: {:?}",
-                response.request_id(),
-                response.clone()
-            );
-            if let Err(e) = s.send(response).await {
-                error!("Could not send the response to the sender {:?}", e);
-            }
-        } else {
-            warn!("Couldn't find a sender to channel the response. Will drop the message.");
-        }
-    }
-
-    #[instrument(level = "trace", skip_all)]
     async fn handle_certificates_response(&mut self, response: CertificatesResponse) {
         let sender = self
             .map_certificate_responses_senders
@@ -813,7 +780,14 @@ impl BlockSynchronizer {
                 Some(response) = receiver.recv() => {
                     trace!("Received response: {:?}", &response);
 
-                    if peers.contains_peer(&response.from) {
+                    let network_key = match committee.network_key(&response.from) {
+                        Ok(key) => key,
+                        Err(e) => {
+                            info!("Could not look up network key for primary {:?}: {e:?}", response.from);
+                            continue
+                        }
+                    };
+                    if peers.contains_peer(&network_key) {
                         // skip , we already got an answer from this peer
                         continue;
                     }
@@ -840,7 +814,7 @@ impl BlockSynchronizer {
                             }
 
                             // add them as a new peer
-                            peers.add_peer(response.from.clone(), certificates);
+                            peers.add_peer(network_key.clone(), certificates);
 
                             // We have received all possible responses
                             if (peers.unique_value_count() == total_expected_certificates &&
@@ -872,16 +846,17 @@ impl BlockSynchronizer {
         }
     }
 
-    async fn wait_for_payload_availability_responses(
+    async fn send_payload_availability_requests(
         fetch_certificates_timeout: Duration,
         request_id: RequestID,
         certificates: Vec<Certificate>,
-        primaries_sent_requests_to: Vec<PublicKey>,
-        mut receiver: Receiver<PayloadAvailabilityResponse>,
+        request: PayloadAvailabilityRequest,
+        primaries: Vec<NetworkPublicKey>,
+        network: anemo::Network,
     ) -> State {
         let total_expected_block_ids = certificates.len();
         let mut num_of_responses: u32 = 0;
-        let num_of_requests_sent: u32 = primaries_sent_requests_to.len() as u32;
+        let num_of_requests_sent: u32 = primaries.len() as u32;
         let certificates_by_id: HashMap<CertificateDigest, Certificate> = certificates
             .iter()
             .map(|c| (c.digest(), c.clone()))
@@ -891,71 +866,92 @@ impl BlockSynchronizer {
             .map(|(id, _)| id.to_owned())
             .collect();
 
-        let timer = sleep(fetch_certificates_timeout);
-        tokio::pin!(timer);
-
+        let get_payload_availability_fn =
+            move |mut client: PrimaryToPrimaryClient<network::anemo_ext::WaitingPeer>, request| {
+                // Wrapper function enables us to move `client` into the future.
+                async move { client.get_payload_availability(request).await }
+            };
+        let mut requests: FuturesUnordered<_> = primaries
+            .iter()
+            .map(|name| {
+                let id = anemo::PeerId(name.0.to_bytes());
+                let peer = network.waiting_peer(id);
+                let request =
+                    anemo::Request::new(request.clone()).with_timeout(fetch_certificates_timeout);
+                get_payload_availability_fn(PrimaryToPrimaryClient::new(peer), request)
+            })
+            .collect();
         let mut peers = Peers::<Certificate>::new(SmallRng::from_entropy());
 
-        loop {
-            tokio::select! {
-                Some(response) = receiver.recv() => {
-                    if peers.contains_peer(&response.from) {
-                        // skip , we already got an answer from this peer
-                        continue;
-                    }
+        while let Some(result) = requests.next().await {
+            let response = match result {
+                Ok(response) => response,
+                Err(e) => {
+                    info!(
+                        "GetPayloadAvailability request to peer {:?} failed: {e:?}",
+                        e.peer_id()
+                    );
+                    continue;
+                }
+            };
 
-                    // check whether the peer is amongst the one we are expecting
-                    // response from. That shouldn't really happen, since the
-                    // responses we get are filtered by the request id, but still
-                    // worth double checking
-                    if !primaries_sent_requests_to.iter().any(|p|p.eq(&response.from)) {
-                        continue;
-                    }
+            let response_peer = match response
+                .peer_id()
+                .ok_or_else(|| anyhow!("missing peer_id"))
+                .and_then(|id| NetworkPublicKey::from_bytes(&id.0).map_err(|e| e.into()))
+            {
+                Ok(peer) => peer,
+                Err(e) => {
+                    info!("Could not extract peer from GetPayloadAvailability response: {e:?}");
+                    continue;
+                }
+            };
 
-                    num_of_responses += 1;
+            if peers.contains_peer(&response_peer) {
+                // skip , we already got an answer from this peer
+                continue;
+            }
 
-                    // Ensure we got responses for the certificates we asked for.
-                    // Even if we have found one certificate that doesn't match
-                    // we reject the payload - it shouldn't happen. Also, add the
-                    // found ones in a vector.
-                    let mut available_certs_for_peer = Vec::new();
-                    for id in response.available_block_ids() {
-                        if let Some(c) = certificates_by_id.get(&id) {
-                            available_certs_for_peer.push(c.clone());
-                        } else {
-                            // We should expect to have found every
-                            // responded id to our list of certificates.
-                            continue;
-                        }
-                    }
+            num_of_responses += 1;
 
-                    // add them as a new peer
-                    peers.add_peer(response.from.clone(), available_certs_for_peer);
-
-                    // We have received all possible responses
-                    if (peers.unique_value_count() == total_expected_block_ids &&
-                    Self::reached_response_ratio(num_of_responses, num_of_requests_sent))
-                    || num_of_responses == num_of_requests_sent
-                    {
-                        let result = Self::resolve_block_synchronize_result(&peers, block_ids, false);
-
-                        return State::PayloadAvailabilityReceived {
-                            request_id,
-                            certificates: result,
-                            peers,
-                        };
-                    }
-                },
-                () = &mut timer => {
-                    let result = Self::resolve_block_synchronize_result(&peers, block_ids, true);
-
-                    return State::PayloadAvailabilityReceived {
-                        request_id,
-                        certificates: result,
-                        peers,
-                    };
+            // Ensure we got responses for the certificates we asked for.
+            // Even if we have found one certificate that doesn't match
+            // we reject the payload - it shouldn't happen. Also, add the
+            // found ones in a vector.
+            let mut available_certs_for_peer = Vec::new();
+            for id in response.body().available_block_ids() {
+                if let Some(c) = certificates_by_id.get(&id) {
+                    available_certs_for_peer.push(c.clone());
+                } else {
+                    // We should expect to have found every
+                    // responded id to our list of certificates.
+                    continue;
                 }
             }
+
+            // add them as a new peer
+            peers.add_peer(response_peer.clone(), available_certs_for_peer);
+
+            // We have received all possible responses
+            if (peers.unique_value_count() == total_expected_block_ids
+                && Self::reached_response_ratio(num_of_responses, num_of_requests_sent))
+                || num_of_responses == num_of_requests_sent
+            {
+                let result = Self::resolve_block_synchronize_result(&peers, block_ids, false);
+
+                return State::PayloadAvailabilityReceived {
+                    request_id,
+                    certificates: result,
+                    peers,
+                };
+            }
+        }
+        let result = Self::resolve_block_synchronize_result(&peers, block_ids, true);
+
+        State::PayloadAvailabilityReceived {
+            request_id,
+            certificates: result,
+            peers,
         }
     }
 

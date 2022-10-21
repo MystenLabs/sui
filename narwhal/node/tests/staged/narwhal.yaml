@@ -116,5 +116,5 @@ WorkerSynchronizeMessage:
     - digests:
         SEQ:
           TYPENAME: BatchDigest
-    - target: STR
-
+    - target:
+        TYPENAME: Ed25519PublicKey
