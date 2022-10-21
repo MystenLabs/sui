@@ -357,23 +357,23 @@ fn test_basic_args_linter_top_level() {
     assert!(!json_args.is_empty());
 
     assert_eq!(
-        json_args[3],
+        json_args[1],
         SuiJsonCallArg::Pure(bcs::to_bytes(&monster_name_raw.as_bytes().to_vec()).unwrap())
     );
     assert_eq!(
-        json_args[4],
+        json_args[2],
         SuiJsonCallArg::Pure(bcs::to_bytes(&(monster_img_id_raw as u64)).unwrap()),
     );
     assert_eq!(
-        json_args[5],
+        json_args[3],
         SuiJsonCallArg::Pure(bcs::to_bytes(&(breed_raw as u8)).unwrap())
     );
     assert_eq!(
-        json_args[6],
+        json_args[4],
         SuiJsonCallArg::Pure(bcs::to_bytes(&(monster_affinity_raw as u8)).unwrap()),
     );
     assert_eq!(
-        json_args[7],
+        json_args[5],
         SuiJsonCallArg::Pure(bcs::to_bytes(&monster_description_raw.as_bytes().to_vec()).unwrap()),
     );
 
