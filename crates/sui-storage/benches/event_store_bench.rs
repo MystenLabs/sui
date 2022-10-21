@@ -9,7 +9,10 @@ use tempfile::NamedTempFile;
 use tokio::runtime::Builder;
 
 use sui_storage::event_store::{sql::SqlEventStore, test_utils, EventStore};
-use sui_types::{base_types::SuiAddress, event::{TransferType, EventEnvelope}};
+use sui_types::{
+    base_types::SuiAddress,
+    event::{EventEnvelope, TransferType},
+};
 
 async fn repeat_batch_insert(db: &SqlEventStore, events: &[EventEnvelope], batch_size: usize) {
     // Reset sequence number so we can insert events with old sequence numbers
@@ -58,18 +61,21 @@ fn bench_sqlite_ingestion_varying_batch_size(c: &mut Criterion) {
     group.throughput(Throughput::Elements(events.len() as u64));
 
     for batch_size in [1, 5, 10, 20, 50, 100].iter() {
-
         // Clear event store: TODO
 
         // This should be increasing with each batch_size, verifies that inserts are happening
-        println!("Event store event count: {}", runtime.block_on(db.total_event_count()).unwrap());
+        println!(
+            "Event store event count: {}",
+            runtime.block_on(db.total_event_count()).unwrap()
+        );
 
         group.bench_with_input(
             BenchmarkId::new("SqlEventStore.add_events() with batch size: ", *batch_size),
             &db,
             |b, db| {
                 // Note: each one of repeat_batch_insert inserts 100 events at a time
-                b.to_async(&runtime).iter(|| repeat_batch_insert(&db, &events, *batch_size as usize))
+                b.to_async(&runtime)
+                    .iter(|| repeat_batch_insert(&db, &events, *batch_size as usize))
             },
         );
     }
