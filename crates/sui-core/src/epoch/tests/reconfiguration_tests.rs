@@ -24,7 +24,7 @@ use sui_types::{
 
 use crate::authority::AuthorityState;
 use crate::authority_active::execution_driver::PendCertificateForExecutionNoop;
-use crate::checkpoints::causal_order_effects::TestCausalOrderNoop;
+use crate::checkpoints::causal_order_effects::TestEffectsStore;
 use crate::checkpoints::reconstruction::SpanGraph;
 use crate::{
     authority_active::ActiveAuthority,
@@ -293,7 +293,7 @@ async fn test_consensus_pause_after_last_fragment() {
                 0,
                 CHECKPOINT_COUNT_PER_EPOCH - 1,
                 [].into_iter(),
-                TestCausalOrderNoop,
+                TestEffectsStore::default(),
                 None,
             )
             .unwrap();

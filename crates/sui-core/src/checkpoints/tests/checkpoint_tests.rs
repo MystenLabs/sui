@@ -1540,7 +1540,7 @@ fn test_slow_fragment() {
         .skip(1)
         .map(|(_, cp)| {
             assert!(cp.attempt_to_construct_checkpoint().is_ok());
-            cp.sign_new_checkpoint(0, 0, [].into_iter(), TestCausalOrderNoop, None)
+            cp.sign_new_checkpoint(0, 0, [].into_iter(), TestEffectsStore::default(), None)
                 .unwrap();
             // This hasn't changed yet.
             assert_eq!(cp.memory_locals.next_checkpoint, 0);
@@ -1597,7 +1597,7 @@ fn test_slow_fragment() {
         .skip(1)
         .map(|(_, cp)| {
             assert!(cp.attempt_to_construct_checkpoint().is_ok());
-            cp.sign_new_checkpoint(0, 1, [].into_iter(), TestCausalOrderNoop, None)
+            cp.sign_new_checkpoint(0, 1, [].into_iter(), TestEffectsStore::default(), None)
                 .unwrap();
             if let AuthenticatedCheckpoint::Signed(s) = cp.latest_stored_checkpoint().unwrap() {
                 s
