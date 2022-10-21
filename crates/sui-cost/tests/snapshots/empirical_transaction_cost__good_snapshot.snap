@@ -4,6 +4,7 @@ expression: common_costs_actual
 ---
 {
   "MergeCoin": {
+<<<<<<< HEAD
     "computation_cost": 2515,
     "storage_cost": 30,
     "storage_rebate": 0
@@ -31,6 +32,35 @@ expression: common_costs_actual
   "SplitCoin": {
     "computation_cost": 2525,
     "storage_cost": 75,
+=======
+    "computation_cost": 634,
+    "storage_cost": 32,
+    "storage_rebate": 0
+  },
+  "Publish": {
+    "computation_cost": 691,
+    "storage_cost": 83,
+    "storage_rebate": 0
+  },
+  "SharedCounterAssertValue": {
+    "computation_cost": 198,
+    "storage_cost": 31,
+    "storage_rebate": 15
+  },
+  "SharedCounterCreate": {
+    "computation_cost": 109,
+    "storage_cost": 31,
+    "storage_rebate": 0
+  },
+  "SharedCounterIncrement": {
+    "computation_cost": 198,
+    "storage_cost": 31,
+    "storage_rebate": 15
+  },
+  "SplitCoin": {
+    "computation_cost": 762,
+    "storage_cost": 80,
+>>>>>>> f471bed71 (revert flat vm fee (#5458))
     "storage_rebate": 0
   },
   "TransferPortionSuiCoin": {
