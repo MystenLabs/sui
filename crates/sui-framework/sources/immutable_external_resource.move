@@ -7,7 +7,7 @@
 /// RFC 2119.
 ///
 module sui::immutable_external_resource {
-    use sui::digest::Sha2256Digest;
+    use sui::digest::Sha3256Digest;
     use sui::url::{Url, inner_url};
 
     /// ImmutableExternalResource: An arbitrary, mutable URL plus an immutable digest of the resource.
@@ -17,22 +17,22 @@ module sui::immutable_external_resource {
     /// - NFT metadata.
     ///
     /// `url` MUST follow RFC-3986. Clients MUST support (at least) the following schemes: ipfs, https.
-    /// `digest` MUST be set to SHA256(content of resource at `url`).
+    /// `digest` MUST be set to SHA3-256(content of resource at `url`).
     ///
     /// Clients of this type MUST fetch the resource at `url`, compute its digest and compare it against `digest`. If
     /// the result is false, clients SHOULD indicate that to users or ignore the resource.
     struct ImmutableExternalResource has store, copy, drop {
         url: Url,
-        digest: Sha2256Digest,
+        digest: Sha3256Digest,
     }
 
     /// Create a `ImmutableExternalResource`, and set the immutable hash.
-    public fun new(url: Url, digest: Sha2256Digest): ImmutableExternalResource {
+    public fun new(url: Url, digest: Sha3256Digest): ImmutableExternalResource {
         ImmutableExternalResource { url, digest }
     }
 
     /// Get the hash of the resource.
-    public fun digest(self: &ImmutableExternalResource): Sha2256Digest {
+    public fun digest(self: &ImmutableExternalResource): Sha3256Digest {
         self.digest
     }
 
