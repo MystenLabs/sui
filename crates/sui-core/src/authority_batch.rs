@@ -12,6 +12,7 @@ use sui_types::messages::BatchInfoRequest;
 use sui_types::messages::BatchInfoResponseItem;
 
 use crate::authority::AuthorityMetrics;
+use crate::scoped_counter;
 
 use std::collections::VecDeque;
 use std::sync::Arc;
@@ -146,6 +147,9 @@ impl crate::authority::AuthorityState {
         max_delay: Duration,
     ) -> SuiResult<()> {
         debug!("Batch service started");
+
+        let _guard = scoped_counter!(self.metrics, num_batch_service_tasks);
+
         // This assumes we have initialized the database with a batch.
         let (next_sequence_number, prev_signed_batch) = self
             .db()
@@ -269,11 +273,8 @@ impl crate::authority::AuthorityState {
         let metrics = self.metrics.clone();
         metrics.follower_connections.inc();
 
-        metrics.follower_connections_concurrent.inc();
-
-        let follower_connections_concurrent_guard = scopeguard::guard(metrics.clone(), |metrics| {
-            metrics.follower_connections_concurrent.dec();
-        });
+        let follower_connections_concurrent_guard =
+            scoped_counter!(metrics, follower_connections_concurrent);
 
         metrics
             .follower_start_seq_num

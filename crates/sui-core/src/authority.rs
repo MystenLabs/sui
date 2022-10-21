@@ -81,6 +81,7 @@ use sui_types::{
 
 use crate::authority::authority_notifier::TransactionNotifierTicket;
 use crate::checkpoints::ConsensusSender;
+use crate::scoped_counter;
 
 use crate::consensus_handler::{
     SequencedConsensusTransaction, VerifiedSequencedConsensusTransaction,
@@ -177,6 +178,9 @@ pub struct AuthorityMetrics {
     post_processing_total_tx_had_event_processed: IntCounter,
     post_processing_total_tx_sent_to_post_processing: IntCounter,
     post_processing_latest_seq_seen: IntGauge,
+
+    pub num_post_processing_tasks: IntGauge,
+    pub num_batch_service_tasks: IntGauge,
 
     /// Batch service metrics
     pub(crate) batch_service_total_tx_broadcasted: IntCounter,
@@ -410,6 +414,18 @@ impl AuthorityMetrics {
             post_processing_latest_seq_seen: register_int_gauge_with_registry!(
                 "post_processing_latest_seq_seen",
                 "The latest seq number of tx that is seen in post processing",
+                registry,
+            )
+            .unwrap(),
+            num_post_processing_tasks: register_int_gauge_with_registry!(
+                "num_post_processing_tasks",
+                "Number of post processing tasks currently running.",
+                registry,
+            )
+            .unwrap(),
+            num_batch_service_tasks: register_int_gauge_with_registry!(
+                "num_batch_service_tasks",
+                "Number of batch service tasks currently running.",
                 registry,
             )
             .unwrap(),
@@ -1068,6 +1084,7 @@ impl AuthorityState {
     // starting up, look for any sequences in the store since then and process them.
     pub async fn run_tx_post_processing_process(&self) -> SuiResult {
         let mut subscriber = self.subscribe_batch();
+        let _guard = scoped_counter!(self.metrics, num_post_processing_tasks);
 
         loop {
             match subscriber.recv().await {
