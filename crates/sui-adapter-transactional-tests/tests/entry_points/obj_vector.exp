@@ -27,8 +27,8 @@ created: object(112), object(113)
 written: object(110), object(111)
 
 task 7 'run'. lines 132-136:
-Error: Transaction Effects Status: Missing Object Owner. Missing object owner, the parent object fake(113) for child object fake(112).
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MissingObjectOwner(MissingObjectOwner { child: fake(112), parent: fake(113) }), source: None } }
+Error: Transaction Effects Status: Invalid Object Owned Argument. Object fake(112) is owned by object fake(113). Objects owned by other objects cannot be used as input arguments.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidChildObjectArgument(InvalidChildObjectArgument { child: fake(112), parent: fake(113) }), source: None } }
 
 task 8 'run'. lines 138-138:
 created: object(116)

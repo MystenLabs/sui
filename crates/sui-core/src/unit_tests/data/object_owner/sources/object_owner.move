@@ -66,7 +66,6 @@ module object_owner::object_owner {
     // since all owners must be in the arguments for authentication.
     public entry fun mutate_child(_child: &mut Child) {}
 
-    // TODO should fail when child is owned by parent.
     public entry fun mutate_child_with_parent(_child: &mut Child, _parent: &mut Parent) {}
 
     public entry fun transfer_child(parent: &mut Parent, new_parent: &mut Parent) {

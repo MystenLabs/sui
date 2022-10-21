@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module sui::transfer {
-    use sui::object::{Self, UID};
 
     /// Transfer ownership of `obj` to `recipient`. `obj` must have the
     /// `key` attribute, which (in turn) ensures that `obj` has a globally
@@ -10,26 +9,6 @@ module sui::transfer {
     public fun transfer<T: key>(obj: T, recipient: address) {
         // TODO: emit event
         transfer_internal(obj, recipient, false)
-    }
-
-    /// Transfer ownership of `obj` to another object `owner`.
-    public fun transfer_to_object<T: key, R: key>(obj: T, owner: &mut R) {
-        let owner_id = object::id_address(owner);
-        transfer_internal(obj, owner_id, true);
-    }
-
-    /// Similar to transfer_to_object where we want to transfer an object to another object.
-    /// However, in the case when we haven't yet created the parent object (typically during
-    /// parent object construction), and all we have is just a parent object ID, we could
-    /// use this function to transfer an object to the parent object identified by its id.
-    /// Additionally, this API is useful for transfering to objects, outside of that object's
-    /// module. The object's module can expose a function that returns a reference to the object's
-    /// UID, `&mut UID`, which can then be used with this function. The mutable `&mut UID` reference
-    /// prevents child objects from being added to immutable objects (immutable objects cannot have
-    /// child objects).
-    /// The child object is specified in `obj`, and the parent object id is specified in `owner_id`.
-    public fun transfer_to_object_id<T: key>(obj: T, owner_id: &mut UID) {
-        transfer_internal(obj, object::uid_to_address(owner_id), true);
     }
 
     /// Freeze `obj`. After freezing `obj` becomes immutable and can no

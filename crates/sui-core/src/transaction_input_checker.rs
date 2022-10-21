@@ -141,10 +141,6 @@ async fn check_objects(
     input_objects: Vec<InputObjectKind>,
     objects: Vec<Object>,
 ) -> Result<InputObjects, SuiError> {
-    // Constructing the list of objects that could be used to authenticate other
-    // objects. Any mutable object (either shared or owned) can be used to
-    // authenticate other objects. Hence essentially we are building the list
-    // of mutable objects.
     // We require that mutable objects cannot show up more than once.
     // In [`SingleTransactionKind::input_objects`] we checked that there is no
     // duplicate objects in the same SingleTransactionKind. However for a Batch
@@ -153,11 +149,11 @@ async fn check_objects(
     // TODO: We should be able to allow the same shared object to show up
     // in more than one SingleTransactionKind. We need to ensure that their
     // version number only increases once at the end of the Batch execution.
-    let mut owned_object_authenticators: HashSet<SuiAddress> = HashSet::new();
+    let mut used_objects: HashSet<SuiAddress> = HashSet::new();
     for object in objects.iter() {
         if !object.is_immutable() {
             fp_ensure!(
-                owned_object_authenticators.insert(object.id().into()),
+                used_objects.insert(object.id().into()),
                 SuiError::InvalidBatchTransaction {
                     error: format!("Mutable object {} cannot appear in more than one single transactions in a batch", object.id()),
                 }
@@ -186,12 +182,7 @@ async fn check_objects(
         }
         // Check if the object contents match the type of lock we need for
         // this object.
-        match check_one_object(
-            &transaction.signer(),
-            object_kind,
-            &object,
-            &owned_object_authenticators,
-        ) {
+        match check_one_object(&transaction.signer(), object_kind, &object) {
             Ok(()) => all_objects.push((object_kind, object)),
             Err(e) => {
                 errors.push(e);
@@ -214,7 +205,6 @@ fn check_one_object(
     sender: &SuiAddress,
     object_kind: InputObjectKind,
     object: &Object,
-    owned_object_authenticators: &HashSet<SuiAddress>,
 ) -> SuiResult {
     match object_kind {
         InputObjectKind::MovePackage(package_id) => {
@@ -276,14 +266,10 @@ fn check_one_object(
                     );
                 }
                 Owner::ObjectOwner(owner) => {
-                    // Check that the object owner is another mutable object in the input.
-                    fp_ensure!(
-                        owned_object_authenticators.contains(&owner),
-                        SuiError::MissingObjectOwner {
-                            child_id: object.id(),
-                            parent_id: owner.into(),
-                        }
-                    );
+                    return Err(SuiError::InvalidChildObjectArgument {
+                        child_id: object.id(),
+                        parent_id: owner.into(),
+                    });
                 }
                 Owner::Shared { .. } => {
                     // This object is a mutable shared object. However the transaction
