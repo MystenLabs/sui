@@ -22,13 +22,25 @@ export function formatBalance(
     balance: bigint | number | string,
     decimals: number
 ) {
-    const bn = new BigNumber(balance.toString()).shiftedBy(-1 * decimals);
+    let postfix = '';
+    let bn = new BigNumber(balance.toString()).shiftedBy(-1 * decimals);
 
-    // NOTE: This double-format will trim any trailing 0's.
-    return new BigNumber(
-        // @ts-expect-error: The BigNumber types are wrong.
-        bn.toFormat(bn.gte(1) ? 3 : undefined, BigNumber.ROUND_DOWN)
-    ).toFormat();
+    if (bn.gte(1_000_000_000)) {
+        bn = bn.shiftedBy(-9);
+        postfix = ' B';
+    } else if (bn.gte(1_000_000)) {
+        bn = bn.shiftedBy(-6);
+        postfix = ' M';
+    } else if (bn.gte(10_000)) {
+        bn = bn.shiftedBy(-3);
+        postfix = ' K';
+    }
+
+    if (bn.gte(1)) {
+        bn = bn.decimalPlaces(3, BigNumber.ROUND_DOWN);
+    }
+
+    return bn.toFormat() + postfix;
 }
 
 export function useCoinDecimals(coinType?: string | null) {
@@ -76,7 +88,7 @@ export function useFormatCoin(
     const [decimals, { isFetched, isError }] = useCoinDecimals(coinType);
 
     const formatted = useMemo(() => {
-        if (!balance) return '';
+        if (typeof balance === 'undefined' || balance === null) return '';
 
         if (!suiDenomination || isError) {
             return intl.formatNumber(BigInt(balance), {

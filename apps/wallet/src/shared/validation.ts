@@ -4,12 +4,12 @@
 import BigNumber from 'bignumber.js';
 import * as Yup from 'yup';
 
-import { formatBalance } from '_src/ui/app/hooks/useFormatCoin';
+import { formatBalance } from '_app/hooks/useFormatCoin';
 import {
     DEFAULT_GAS_BUDGET_FOR_TRANSFER,
     GAS_SYMBOL,
     GAS_TYPE_ARG,
-} from '_src/ui/app/redux/slices/sui-objects/Coin';
+} from '_redux/slices/sui-objects/Coin';
 
 export function createTokenValidation(
     coinType: string,

@@ -16,12 +16,11 @@ import { Content } from '_app/shared/bottom-menu-layout';
 import PageTitle from '_app/shared/page-title';
 import Loading from '_components/loading';
 import ProgressBar from '_components/progress-bar';
-import { useAppSelector, useAppDispatch } from '_hooks';
+import { useAppSelector, useAppDispatch, useCoinDecimals } from '_hooks';
 import { accountAggregateBalancesSelector } from '_redux/slices/account';
 import { Coin, GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
 import { sendTokens } from '_redux/slices/transactions';
 import { trackEvent } from '_src/shared/plausible';
-import { useCoinDecimals } from '_src/ui/app/hooks/useFormatCoin';
 
 import type { SerializedError } from '@reduxjs/toolkit';
 import type { FormikHelpers } from 'formik';

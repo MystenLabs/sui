@@ -6,11 +6,10 @@ import { Formik } from 'formik';
 import { useCallback, useMemo, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 
-import { useCoinDecimals } from '../../hooks/useFormatCoin';
 import StakeForm from './StakeForm';
 import { createValidationSchema } from './validation';
 import Loading from '_components/loading';
-import { useAppSelector, useAppDispatch } from '_hooks';
+import { useAppSelector, useAppDispatch, useCoinDecimals } from '_hooks';
 import {
     accountAggregateBalancesSelector,
     accountItemizedBalancesSelector,

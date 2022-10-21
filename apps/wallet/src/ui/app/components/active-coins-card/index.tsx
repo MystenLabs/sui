@@ -5,9 +5,8 @@ import cl from 'classnames';
 import { useMemo, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 
-import { useFormatCoin } from '../../hooks/useFormatCoin';
 import Icon, { SuiIcons } from '_components/icon';
-import { useAppSelector } from '_hooks';
+import { useAppSelector, useFormatCoin } from '_hooks';
 import { accountAggregateBalancesSelector } from '_redux/slices/account';
 import { GAS_TYPE_ARG, Coin } from '_redux/slices/sui-objects/Coin';
 

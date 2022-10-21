@@ -4,10 +4,10 @@
 import { ErrorMessage, Field, Form, useFormikContext } from 'formik';
 import { useEffect, useRef, memo } from 'react';
 
-import { useFormatCoin } from '../../hooks/useFormatCoin';
 import Alert from '_components/alert';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
 import NumberInput from '_components/number-input';
+import { useFormatCoin } from '_hooks';
 import {
     DEFAULT_GAS_BUDGET_FOR_STAKE,
     GAS_SYMBOL,

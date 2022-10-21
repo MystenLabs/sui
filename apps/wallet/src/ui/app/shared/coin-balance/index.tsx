@@ -4,7 +4,7 @@
 import cl from 'classnames';
 import { memo } from 'react';
 
-import { useFormatCoin } from '../../hooks/useFormatCoin';
+import { useFormatCoin } from '_hooks';
 
 import st from './CoinBalance.module.scss';
 

@@ -3,11 +3,10 @@
 
 import cl from 'classnames';
 
-import { useFormatCoin } from '../../hooks/useFormatCoin';
 import ExplorerLink from '_components/explorer-link';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
 import { formatDate } from '_helpers';
-import { useMiddleEllipsis } from '_hooks';
+import { useMiddleEllipsis, useFormatCoin } from '_hooks';
 import { GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
 
 import type { TxResultState } from '_redux/slices/txresults';

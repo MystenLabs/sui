@@ -4,8 +4,7 @@
 import cl from 'classnames';
 import { memo } from 'react';
 
-import { useMiddleEllipsis } from '_hooks';
-import { useFormatCoin } from '_src/ui/app/hooks/useFormatCoin';
+import { useMiddleEllipsis, useFormatCoin } from '_hooks';
 
 import st from './CoinBalance.module.scss';
 
