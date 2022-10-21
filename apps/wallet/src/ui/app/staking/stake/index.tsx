@@ -48,6 +48,7 @@ function StakePage() {
     );
     const [sendError, setSendError] = useState<string | null>(null);
     const [coinDecimals] = useCoinDecimals(coinType);
+    const [gasDecimals] = useCoinDecimals(GAS_TYPE_ARG);
     const validationSchema = useMemo(
         () =>
             createValidationSchema(
@@ -56,7 +57,8 @@ function StakePage() {
                 coinSymbol,
                 gasAggregateBalance,
                 totalGasCoins,
-                coinDecimals
+                coinDecimals,
+                gasDecimals
             ),
         [
             coinType,
@@ -65,6 +67,7 @@ function StakePage() {
             gasAggregateBalance,
             totalGasCoins,
             coinDecimals,
+            gasDecimals,
         ]
     );
 

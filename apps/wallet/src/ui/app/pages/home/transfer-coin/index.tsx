@@ -62,6 +62,7 @@ function TransferCoinPage() {
     const [formData] = useState<FormValues>(initialValues);
 
     const [coinDecimals] = useCoinDecimals(coinType);
+    const [gasDecimals] = useCoinDecimals(GAS_TYPE_ARG);
 
     const validationSchemaStepOne = useMemo(
         () =>
@@ -70,9 +71,17 @@ function TransferCoinPage() {
                 coinBalance,
                 coinSymbol,
                 gasAggregateBalance,
-                coinDecimals
+                coinDecimals,
+                gasDecimals
             ),
-        [coinType, coinBalance, coinSymbol, coinDecimals, gasAggregateBalance]
+        [
+            coinType,
+            coinBalance,
+            coinSymbol,
+            coinDecimals,
+            gasDecimals,
+            gasAggregateBalance,
+        ]
     );
     const validationSchemaStepTwo = useMemo(
         () => createValidationSchemaStepTwo(),

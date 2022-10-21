@@ -16,7 +16,9 @@ export function createTokenValidation(
     coinBalance: bigint,
     coinSymbol: string,
     gasBalance: bigint,
-    decimals: number
+    decimals: number,
+    // TODO: We can move this to a constant when MIST is fully rolled out.
+    gasDecimals: number
 ) {
     return Yup.mixed()
         .transform((_, original) => {
@@ -58,7 +60,7 @@ export function createTokenValidation(
             'gas-balance-check',
             `Insufficient ${GAS_SYMBOL} balance to cover gas fee (${formatBalance(
                 DEFAULT_GAS_BUDGET_FOR_TRANSFER,
-                decimals
+                gasDecimals
             )} ${GAS_SYMBOL})`,
             (amount: BigNumber) => {
                 try {

@@ -12,7 +12,8 @@ export function createValidationSchema(
     coinSymbol: string,
     gasBalance: bigint,
     totalGasCoins: number,
-    decimals: number
+    decimals: number,
+    gasDecimals: number
 ) {
     return Yup.object({
         amount: createTokenValidation(
@@ -20,7 +21,8 @@ export function createValidationSchema(
             coinBalance,
             coinSymbol,
             gasBalance,
-            decimals
+            decimals,
+            gasDecimals
         ).test(
             'num-gas-coins-check',
             `Need at least 2 ${GAS_SYMBOL} coins to stake a ${GAS_SYMBOL} coin`,
