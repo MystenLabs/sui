@@ -65,7 +65,7 @@ public fun remove<K: copy + drop + store, V: key + store>(table: &mut ObjectTabl
     v
 }
 
-/// Returns true iff there is an value associated with the key `k: K` in table
+/// Returns true iff there is a value associated with the key `k: K` in table
 /// `table: &ObjectTable<K, V>`
 public fun contains<K: copy + drop + store, V: key + store>(table: &ObjectTable<K, V>, k: K): bool {
     ofield::exists_<K>(&table.id, k)
@@ -89,7 +89,7 @@ public fun destroy_empty<K: copy + drop + store, V: key + store>(table: ObjectTa
     object::delete(id)
 }
 
-/// Returns the ID of the object associated with the key
+/// Returns the ID of the object associated with the key if the table has an entry with key `k: K`
 /// Returns none otherwise
 public fun value_id<K: copy + drop + store, V: key + store>(
     table: &ObjectTable<K, V>,

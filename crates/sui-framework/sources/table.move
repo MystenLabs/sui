@@ -71,7 +71,7 @@ public fun remove<K: copy + drop + store, V: store>(table: &mut Table<K, V>, k: 
     v
 }
 
-/// Returns true iff there is an value associated with the key `k: K` in table `table: &Table<K, V>`
+/// Returns true iff there is a value associated with the key `k: K` in table `table: &Table<K, V>`
 public fun contains<K: copy + drop + store, V: store>(table: &Table<K, V>, k: K): bool {
     field::exists_with_type<K, V>(&table.id, k)
 }
