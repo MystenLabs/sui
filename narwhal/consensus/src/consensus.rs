@@ -59,7 +59,6 @@ impl ConsensusState {
         }
     }
 
-    #[instrument(level = "info", skip_all)]
     pub fn new_from_store(
         genesis: Vec<Certificate>,
         metrics: Arc<ConsensusMetrics>,

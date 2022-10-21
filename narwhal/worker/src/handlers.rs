@@ -16,7 +16,7 @@ use std::{
 };
 use store::Store;
 use tap::TapOptional;
-use tokio::sync::watch;
+use tokio::{sync::watch, time::sleep};
 use tracing::{debug, error, info, trace, warn};
 use types::{
     metered_channel::Sender, Batch, BatchDigest, PrimaryToWorker, ReconfigureNotification,
@@ -136,6 +136,7 @@ impl PrimaryToWorker for PrimaryReceiverHandler {
 
         Ok(anemo::Response::new(()))
     }
+
     async fn synchronize(
         &self,
         request: anemo::Request<WorkerSynchronizeMessage>,
@@ -157,7 +158,7 @@ impl PrimaryToWorker for PrimaryReceiverHandler {
                     trace!("Digest {digest} already in store, nothing to sync");
                 }
                 Err(e) => {
-                    error!("{e}");
+                    error!("Failed to read from batch store: {e}");
                     return Err(anemo::rpc::Status::from_error(Box::new(e)));
                 }
             };
@@ -215,7 +216,7 @@ impl PrimaryToWorker for PrimaryReceiverHandler {
                         self.request_batches_timeout,
                     ));
                 } else {
-                    info!("Unable to reach primary peer {worker_name} on the network");
+                    warn!("Unable to reach primary peer {worker_name} on the network");
                 }
             } else {
                 // If first request timed out or was missing batches, try broadcasting to some others.
@@ -265,9 +266,11 @@ impl PrimaryToWorker for PrimaryReceiverHandler {
                         info!("WorkerBatchRequest failed: {e:?}");
                     }
                 }
-
-                first_attempt = false;
             }
+
+            first_attempt = false;
+            // Add a delay before retrying.
+            sleep(Duration::from_secs(1)).await;
         }
     }
 
