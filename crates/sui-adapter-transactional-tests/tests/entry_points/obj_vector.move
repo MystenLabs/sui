@@ -12,7 +12,7 @@ module Test::M {
     use sui::tx_context::{Self, TxContext};
     use std::vector;
 
-    struct Obj has key {
+    struct Obj has key, store {
         id: UID,
         value: u64
     }
@@ -43,12 +43,12 @@ module Test::M {
     }
 
     public entry fun mint_child(v: u64, parent: &mut Obj, ctx: &mut TxContext) {
-        transfer::transfer_to_object(
+        sui::dynamic_object_field::add(
+            &mut parent.id, 0,
             Obj {
                 id: object::new(ctx),
                 value: v,
             },
-            parent,
         )
     }
 
@@ -137,7 +137,7 @@ module Test::M {
 
 //# run Test::M::mint_another --sender A --args 42
 
-//# run Test::M::obj_vec_destroy --sender A --args vector[object(115)]
+//# run Test::M::obj_vec_destroy --sender A --args vector[object(116)]
 
 
 // create two objects of different types and try to pass them both as elements of a vector (failure)
@@ -146,25 +146,25 @@ module Test::M {
 
 //# run Test::M::mint --sender A --args 42
 
-//# run Test::M::two_obj_vec_destroy --sender A --args vector[object(118),object(120)]
+//# run Test::M::two_obj_vec_destroy --sender A --args vector[object(119),object(121)]
 
 
 // create a shared object and try to pass it as a single element of a vector (failure)
 
 //# run Test::M::mint_shared --sender A --args 42
 
-//# run Test::M::obj_vec_destroy --sender A --args vector[object(123)]
+//# run Test::M::obj_vec_destroy --sender A --args vector[object(124)]
 
 
 // create an object and pass it both by-value and as element of a vector (failure)
 
 //# run Test::M::mint --sender A --args 42
 
-//# run Test::M::same_objects --sender A --args object(126) vector[object(126)]
+//# run Test::M::same_objects --sender A --args object(127) vector[object(127)]
 
 
 // create an object and pass it both by-reference and as element of a vector (failure)
 
 //# run Test::M::mint --sender A --args 42
 
-//# run Test::M::same_objects_ref --sender A --args object(128) vector[object(128)]
+//# run Test::M::same_objects_ref --sender A --args object(129) vector[object(129)]

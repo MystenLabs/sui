@@ -10,6 +10,7 @@
 
 module test::m {
     use sui::tx_context::{Self, TxContext};
+    use sui::dynamic_object_field as ofield;
 
     struct S has key, store {
         id: sui::object::UID,
@@ -23,7 +24,7 @@ module test::m {
     public entry fun test_wrap(ctx: &mut TxContext) {
         let id = sui::object::new(ctx);
         let child = S { id: sui::object::new(ctx) };
-        sui::transfer::transfer_to_object_id(child, &mut id);
+        ofield::add(&mut id, 0, child);
         let parent = S { id };
         let r = R { id: sui::object::new(ctx), s: parent };
         sui::transfer::transfer(r, tx_context::sender(ctx))

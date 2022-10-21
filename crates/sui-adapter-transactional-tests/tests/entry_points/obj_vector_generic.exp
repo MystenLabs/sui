@@ -3,68 +3,68 @@ processed 18 tasks
 init:
 A: object(100)
 
-task 1 'publish'. lines 8-114:
+task 1 'publish'. lines 8-115:
 created: object(104)
 written: object(103)
 
-task 2 'run'. lines 116-116:
+task 2 'run'. lines 117-117:
 created: object(106)
 written: object(105)
 
-task 3 'run'. lines 118-122:
+task 3 'run'. lines 119-123:
 written: object(107)
 deleted: object(106)
 
-task 4 'run'. lines 124-124:
+task 4 'run'. lines 125-125:
 created: object(109)
 written: object(108)
 
-task 5 'run'. lines 126-126:
-created: object(111)
+task 5 'run'. lines 127-127:
+created: object(111), object(112)
 written: object(109), object(110)
 
-task 6 'run'. lines 128-132:
-written: object(112)
-deleted: object(109), object(111)
+task 6 'run'. lines 129-133:
+Error: Transaction Effects Status: Missing Object Owner. Missing object owner, the parent object fake(112) for child object fake(111).
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MissingObjectOwner(MissingObjectOwner { child: fake(111), parent: fake(112) }), source: None } }
 
-task 7 'run'. lines 134-134:
-created: object(114)
-written: object(113)
+task 7 'run'. lines 135-135:
+created: object(115)
+written: object(114)
 
-task 8 'run'. lines 136-139:
+task 8 'run'. lines 137-140:
 Error: Transaction Effects Status: Entry Argument Type Error. Error for argument at index 0: Type mismatch.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: EntryArgumentError(EntryArgumentError { argument_idx: 0, kind: TypeMismatch }), source: Some("Expected argument of type Test::M::ObjAny<T0>, but found type Test::M::AnotherObjAny<Test::M::Any>") } }
 
-task 9 'run'. lines 141-141:
-created: object(117)
-written: object(116)
+task 9 'run'. lines 142-142:
+created: object(118)
+written: object(117)
 
-task 10 'run'. lines 143-143:
-created: object(119)
-written: object(118)
+task 10 'run'. lines 144-144:
+created: object(120)
+written: object(119)
 
-task 11 'run'. lines 145-148:
+task 11 'run'. lines 146-149:
 Error: Transaction Effects Status: Entry Argument Type Error. Error for argument at index 0: Type mismatch.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: EntryArgumentError(EntryArgumentError { argument_idx: 0, kind: TypeMismatch }), source: Some("Expected argument of type Test::M::ObjAny<T0>, but found type Test::M::AnotherObjAny<Test::M::Any>") } }
 
-task 12 'run'. lines 150-150:
-created: object(122)
-written: object(121)
+task 12 'run'. lines 151-151:
+created: object(123)
+written: object(122)
 
-task 13 'run'. lines 152-155:
+task 13 'run'. lines 153-156:
 Error: Transaction Effects Status: Entry Argument Type Error. Error for argument at index 0: Immutable and shared objects cannot be passed by-value.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: EntryArgumentError(EntryArgumentError { argument_idx: 0, kind: InvalidObjectByValue }), source: Some("Immutable and shared objects cannot be passed by-value, violation found in argument 0") } }
 
-task 14 'run'. lines 157-157:
-created: object(125)
-written: object(124)
+task 14 'run'. lines 158-158:
+created: object(126)
+written: object(125)
 
-task 15 'run'. lines 159-162:
+task 15 'run'. lines 160-163:
 Error: The transaction inputs contain duplicates ObjectRef's
 
-task 16 'run'. lines 164-164:
-created: object(128)
-written: object(127)
+task 16 'run'. lines 165-165:
+created: object(129)
+written: object(128)
 
-task 17 'run'. lines 166-166:
+task 17 'run'. lines 167-167:
 Error: The transaction inputs contain duplicates ObjectRef's

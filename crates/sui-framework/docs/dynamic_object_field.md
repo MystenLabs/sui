@@ -124,8 +124,8 @@ Aborts with <code><a href="dynamic_object_field.md#0x2_dynamic_object_field_EFie
 ) {
     <b>let</b> key = <a href="dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a> { name };
     <b>let</b> id = <a href="object.md#0x2_object_id">object::id</a>(&value);
-    df::add(<a href="object.md#0x2_object">object</a>, key, id);
-    <b>let</b> (field_id, _) = df::field_ids&lt;<a href="dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a>&lt;Name&gt;&gt;(<a href="object.md#0x2_object">object</a>, key);
+    field::add(<a href="object.md#0x2_object">object</a>, key, id);
+    <b>let</b> (field_id, _) = field::field_ids&lt;<a href="dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a>&lt;Name&gt;&gt;(<a href="object.md#0x2_object">object</a>, key);
     add_child_object(<a href="object.md#0x2_object_id_to_address">object::id_to_address</a>(&field_id), value);
 }
 </code></pre>
@@ -158,7 +158,7 @@ specified type.
     name: Name,
 ): &Value {
     <b>let</b> key = <a href="dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a> { name };
-    <b>let</b> (field_id, value_id) = df::field_ids&lt;<a href="dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a>&lt;Name&gt;&gt;(<a href="object.md#0x2_object">object</a>, key);
+    <b>let</b> (field_id, value_id) = field::field_ids&lt;<a href="dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a>&lt;Name&gt;&gt;(<a href="object.md#0x2_object">object</a>, key);
     borrow_child_object&lt;Value&gt;(<a href="object.md#0x2_object_id_to_address">object::id_to_address</a>(&field_id), <a href="object.md#0x2_object_id_to_address">object::id_to_address</a>(&value_id))
 }
 </code></pre>
@@ -191,7 +191,7 @@ specified type.
     name: Name,
 ): &<b>mut</b> Value {
     <b>let</b> key = <a href="dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a> { name };
-    <b>let</b> (field_id, value_id) = df::field_ids&lt;<a href="dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a>&lt;Name&gt;&gt;(<a href="object.md#0x2_object">object</a>, key);
+    <b>let</b> (field_id, value_id) = field::field_ids&lt;<a href="dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a>&lt;Name&gt;&gt;(<a href="object.md#0x2_object">object</a>, key);
     borrow_child_object&lt;Value&gt;(<a href="object.md#0x2_object_id_to_address">object::id_to_address</a>(&field_id), <a href="object.md#0x2_object_id_to_address">object::id_to_address</a>(&value_id))
 }
 </code></pre>
@@ -225,12 +225,12 @@ specified type.
     name: Name,
 ): Value {
     <b>let</b> key = <a href="dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a> { name };
-    <b>let</b> (field_id, value_id) = df::field_ids&lt;<a href="dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a>&lt;Name&gt;&gt;(<a href="object.md#0x2_object">object</a>, key);
+    <b>let</b> (field_id, value_id) = field::field_ids&lt;<a href="dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a>&lt;Name&gt;&gt;(<a href="object.md#0x2_object">object</a>, key);
     <b>let</b> value = remove_child_object&lt;Value&gt;(
         <a href="object.md#0x2_object_id_to_address">object::id_to_address</a>(&field_id),
         <a href="object.md#0x2_object_id_to_address">object::id_to_address</a>(&value_id),
     );
-    df::remove&lt;<a href="dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a>&lt;Name&gt;, ID&gt;(<a href="object.md#0x2_object">object</a>, key);
+    field::remove&lt;<a href="dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a>&lt;Name&gt;, ID&gt;(<a href="object.md#0x2_object">object</a>, key);
     value
 }
 </code></pre>
@@ -261,7 +261,7 @@ Returns true if and only if the <code><a href="object.md#0x2_object">object</a><
     name: Name,
 ): bool {
     <b>let</b> key = <a href="dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a> { name };
-    df::exists_with_type&lt;<a href="dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a>&lt;Name&gt;, ID&gt;(<a href="object.md#0x2_object">object</a>, key)
+    field::exists_with_type&lt;<a href="dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a>&lt;Name&gt;, ID&gt;(<a href="object.md#0x2_object">object</a>, key)
 }
 </code></pre>
 
@@ -291,8 +291,8 @@ Returns none otherwise
     name: Name,
 ): Option&lt;ID&gt; {
     <b>let</b> key = <a href="dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a> { name };
-    <b>if</b> (!df::exists_with_type&lt;<a href="dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a>&lt;Name&gt;, ID&gt;(<a href="object.md#0x2_object">object</a>, key)) <b>return</b> <a href="_none">option::none</a>();
-    <b>let</b> (_field_id, value_id) = df::field_ids&lt;<a href="dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a>&lt;Name&gt;&gt;(<a href="object.md#0x2_object">object</a>, key);
+    <b>if</b> (!field::exists_with_type&lt;<a href="dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a>&lt;Name&gt;, ID&gt;(<a href="object.md#0x2_object">object</a>, key)) <b>return</b> <a href="_none">option::none</a>();
+    <b>let</b> (_field_id, value_id) = field::field_ids&lt;<a href="dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a>&lt;Name&gt;&gt;(<a href="object.md#0x2_object">object</a>, key);
     <a href="_some">option::some</a>(value_id)
 }
 </code></pre>
