@@ -76,8 +76,11 @@ pub enum SuiError {
     SharedObjectLockNotSetError,
     #[error("Invalid Batch Transaction: {}", error)]
     InvalidBatchTransaction { error: String },
-    #[error("Object {child_id:?} is owned by object {parent_id:?}, which is not in the input")]
-    MissingObjectOwner {
+    #[error(
+        "Object {child_id:?} is owned by object {parent_id:?}. \
+        Objects owned by other objects cannot be used as input arguments."
+    )]
+    InvalidChildObjectArgument {
         child_id: ObjectID,
         parent_id: ObjectID,
     },

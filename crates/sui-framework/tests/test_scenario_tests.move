@@ -709,23 +709,6 @@ module sui::test_scenarioTests {
         abort 42
     }
 
-    /// Create object and parent. object is a child of parent.
-    /// parent is owned by sender of `scenario`.
-    fun create_parent_and_object(scenario: &mut Scenario) {
-        let parent_id = ts::new_object(scenario);
-        let object = Object {
-            id: ts::new_object(scenario),
-            value: 10,
-        };
-        let child_id = object::id(&object);
-        transfer::transfer_to_object_id(object, &mut parent_id);
-        let parent = Parent {
-            id: parent_id,
-            child: child_id,
-        };
-        transfer::transfer(parent, ts::sender(scenario));
-    }
-
     /// Create an object and transfer it to the sender of `scenario`.
     fun create_and_transfer_object(scenario: &mut Scenario, value: u64) {
         let object = Object {

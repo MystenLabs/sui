@@ -21,9 +21,9 @@ created: object(111), object(112)
 written: object(109), object(110)
 
 task 6 'run'. lines 89-89:
-Error: Transaction Effects Status: Entry Argument Type Error. Error for argument at index 0: Type mismatch.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: EntryArgumentError(EntryArgumentError { argument_idx: 0, kind: TypeMismatch }), source: Some("Expected argument of type t2::o2::Obj2, but found type sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID>") } }
+Error: Transaction Effects Status: Invalid Object Owned Argument. Object fake(111) is owned by object fake(112). Objects owned by other objects cannot be used as input arguments.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidChildObjectArgument(InvalidChildObjectArgument { child: fake(111), parent: fake(112) }), source: None } }
 
 task 7 'run'. lines 91-91:
-Error: Transaction Effects Status: Entry Argument Type Error. Error for argument at index 0: Type mismatch.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: EntryArgumentError(EntryArgumentError { argument_idx: 0, kind: TypeMismatch }), source: Some("Expected argument of type t2::o2::Obj2, but found type sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID>") } }
+Error: Transaction Effects Status: Invalid Object Owned Argument. Object fake(111) is owned by object fake(112). Objects owned by other objects cannot be used as input arguments.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidChildObjectArgument(InvalidChildObjectArgument { child: fake(111), parent: fake(112) }), source: None } }

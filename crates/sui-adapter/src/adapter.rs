@@ -50,7 +50,6 @@ use sui_verifier::{
 };
 
 use crate::bytecode_rewriter::ModuleHandleRewriter;
-use crate::object_root_ancestor_map::ObjectRootAncestorMap;
 
 macro_rules! assert_invariant {
     ($cond:expr, $msg:expr) => {
@@ -1175,6 +1174,9 @@ fn inner_param_type<'a>(
     mutable_ref_objects: &mut BTreeMap<u8, ObjectID>,
     by_value_objects: &mut BTreeSet<ObjectID>,
 ) -> Result<&'a SignatureToken, ExecutionError> {
+    if let Owner::ObjectOwner(parent) = &object.owner {
+        return Err(ExecutionErrorKind::invalid_child_object_argument(object_id, *parent).into());
+    }
     match &param_type {
         SignatureToken::Reference(inner_t) => Ok(&**inner_t),
         SignatureToken::MutableReference(inner_t) => {
@@ -1244,47 +1246,11 @@ fn inner_param_type<'a>(
 /// - For each shared object used by-value, the type of the shared object must be defined in the
 ///   same module as the entry function being called.
 fn check_shared_object_rules(
-    objects: &BTreeMap<ObjectID, impl Borrow<Object>>,
-    by_value_objects: &BTreeSet<ObjectID>,
-    object_type_map: &BTreeMap<ObjectID, ModuleId>,
-    current_module: ModuleId,
+    _objects: &BTreeMap<ObjectID, impl Borrow<Object>>,
+    _by_value_objects: &BTreeSet<ObjectID>,
+    _object_type_map: &BTreeMap<ObjectID, ModuleId>,
+    _current_module: ModuleId,
 ) -> Result<(), ExecutionError> {
-    let object_owner_map = objects
-        .iter()
-        .map(|(id, obj)| (*id, obj.borrow().owner))
-        .collect();
-    let ancestor_map = ObjectRootAncestorMap::new(&object_owner_map)?;
-    let by_value_object_owned = object_owner_map
-        .iter()
-        .filter_map(|(id, owner)| match owner {
-            Owner::ObjectOwner(owner) if by_value_objects.contains(id) => Some((*id, *owner)),
-            _ => None,
-        });
-    for (child_id, owner) in by_value_object_owned {
-        let (ancestor_id, ancestor_owner) = match ancestor_map.get_root_ancestor(&child_id) {
-            Some(ancestor) => ancestor,
-            None => return Err(ExecutionErrorKind::missing_object_owner(child_id, owner).into()),
-        };
-        if ancestor_owner.is_shared() {
-            // unwrap safe because the object ID exists in object_owner_map.
-            let child_module = object_type_map.get(&child_id).unwrap();
-            let ancestor_module = object_type_map.get(&ancestor_id).unwrap();
-            if !(child_module == &current_module || ancestor_module == &current_module) {
-                return Err(ExecutionError::new_with_source(
-                    ExecutionErrorKind::invalid_shared_child_use(child_id, ancestor_id),
-                    format!(
-        "When a child object (either direct or indirect) of a shared object is passed by-value to \
-        an entry function, either the child object's type or the shared object's type must be \
-        defined in the same module as the called function. This is violated by object {child_id} \
-        (defined in module '{child_module}'), whose ancestor {ancestor_id} is a shared \
-        object (defined in module '{ancestor_module}'), and neither are defined in this module \
-        '{current_module}'",
-                    ),
-                ));
-            }
-        }
-    }
-
     // TODO not yet supported
     // // check shared object by value rule
     // let by_value_shared_object = object_owner_map

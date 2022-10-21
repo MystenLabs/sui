@@ -169,23 +169,19 @@ ExecutionFailureStatus:
         NEWTYPE:
           TYPENAME: CircularObjectOwnership
     18:
-      MissingObjectOwner:
+      InvalidChildObjectArgument:
         NEWTYPE:
-          TYPENAME: MissingObjectOwner
+          TYPENAME: InvalidChildObjectArgument
     19:
-      InvalidSharedChildUse:
-        NEWTYPE:
-          TYPENAME: InvalidSharedChildUse
-    20:
       InvalidSharedByValue:
         NEWTYPE:
           TYPENAME: InvalidSharedByValue
-    21:
+    20:
       TooManyChildObjects:
         STRUCT:
           - object:
               TYPENAME: ObjectID
-    22:
+    21:
       InvalidParentDeletion:
         STRUCT:
           - parent:
@@ -193,29 +189,29 @@ ExecutionFailureStatus:
           - kind:
               OPTION:
                 TYPENAME: DeleteKind
-    23:
+    22:
       InvalidParentFreezing:
         STRUCT:
           - parent:
               TYPENAME: ObjectID
-    24:
+    23:
       PublishErrorEmptyPackage: UNIT
-    25:
+    24:
       PublishErrorNonZeroAddress: UNIT
-    26:
+    25:
       PublishErrorDuplicateModule: UNIT
-    27:
+    26:
       SuiMoveVerificationError: UNIT
-    28:
+    27:
       MovePrimitiveRuntimeError: UNIT
-    29:
+    28:
       MoveAbort:
         TUPLE:
           - TYPENAME: ModuleId
           - U64
-    30:
+    29:
       VMVerificationOrDeserializationError: UNIT
-    31:
+    30:
       VMInvariantViolation: UNIT
 ExecutionStatus:
   ENUM:
@@ -228,22 +224,16 @@ ExecutionStatus:
               TYPENAME: ExecutionFailureStatus
 Identifier:
   NEWTYPESTRUCT: STR
-InvalidSharedByValue:
-  STRUCT:
-    - object:
-        TYPENAME: ObjectID
-InvalidSharedChildUse:
-  STRUCT:
-    - child:
-        TYPENAME: ObjectID
-    - ancestor:
-        TYPENAME: ObjectID
-MissingObjectOwner:
+InvalidChildObjectArgument:
   STRUCT:
     - child:
         TYPENAME: ObjectID
     - parent:
         TYPENAME: SuiAddress
+InvalidSharedByValue:
+  STRUCT:
+    - object:
+        TYPENAME: ObjectID
 ModuleId:
   STRUCT:
     - address:
