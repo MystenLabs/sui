@@ -63,7 +63,6 @@ impl Executor {
         network: oneshot::Receiver<P2pNetwork>,
         worker_cache: SharedWorkerCache,
         committee: Committee,
-
         execution_state: State,
         tx_reconfigure: &watch::Sender<ReconfigureNotification>,
         rx_sequence: metered_channel::Receiver<ConsensusOutput>,
@@ -76,7 +75,7 @@ impl Executor {
         let metrics = ExecutorMetrics::new(registry);
 
         let (tx_notifier, rx_notifier) =
-            metered_channel::channel(primary::CHANNEL_CAPACITY, &metrics.tx_executor);
+            metered_channel::channel(primary::CHANNEL_CAPACITY, &metrics.tx_notifier);
 
         // We expect this will ultimately be needed in the `Core` as well as the `Subscriber`.
         let arc_metrics = Arc::new(metrics);
