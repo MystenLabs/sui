@@ -60,7 +60,8 @@ fn test_signed_values() {
     )
     .verify()
     .unwrap();
-    let bad_transaction = Transaction::from_data(
+
+    let bad_transaction = VerifiedTransaction::new_unchecked(Transaction::from_data(
         TransactionData::new_transfer(
             _a2,
             random_object_ref(),
@@ -69,9 +70,7 @@ fn test_signed_values() {
             10000,
         ),
         &sender_sec2,
-    )
-    .verify()
-    .unwrap();
+    ));
 
     let v = SignedTransaction::new(
         committee.epoch(),
@@ -502,9 +501,10 @@ fn test_user_signature_committed_in_signed_transactions() {
     let transaction_a = Transaction::from_data(tx_data.clone(), &sender_sec)
         .verify()
         .unwrap();
-    let transaction_b = Transaction::from_data(tx_data, &sender_sec2)
-        .verify()
-        .unwrap();
+    // transaction_b intentionally invalid (sender does not match signer).
+    let transaction_b =
+        VerifiedTransaction::new_unchecked(Transaction::from_data(tx_data, &sender_sec2));
+
     let signed_tx_a = SignedTransaction::new(
         0,
         transaction_a.clone(),

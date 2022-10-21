@@ -1200,6 +1200,7 @@ fn set_fragment_external() {
 
 #[test]
 fn set_fragment_reconstruct() {
+    telemetry_subscribers::init_for_testing();
     let (committee, _keys, mut test_objects) = random_ckpoint_store();
     let (_, mut cps1) = test_objects.pop().unwrap();
     let (_, mut cps2) = test_objects.pop().unwrap();
@@ -1230,13 +1231,15 @@ fn set_fragment_reconstruct() {
     let p3 = cps3.set_proposal(committee.epoch).unwrap();
     let p4 = cps4.set_proposal(committee.epoch).unwrap();
 
-    let fragment12 = p1.fragment_with(&p2).verify(&committee).unwrap();
-    let fragment34 = p3.fragment_with(&p4).verify(&committee).unwrap();
+    // We use new_unchecked because the fragments don't have the actual certs, so verification is
+    // guaranteed to fail.
+    let fragment12 = VerifiedCheckpointFragment::new_unchecked(p1.fragment_with(&p2));
+    let fragment34 = VerifiedCheckpointFragment::new_unchecked(p3.fragment_with(&p4));
 
     let span = SpanGraph::mew(&committee, 0, &[fragment12.clone(), fragment34.clone()]);
     assert!(!span.is_completed());
 
-    let fragment41 = p4.fragment_with(&p1).verify(&committee).unwrap();
+    let fragment41 = VerifiedCheckpointFragment::new_unchecked(p4.fragment_with(&p1));
     let span = SpanGraph::mew(&committee, 0, &[fragment12, fragment34, fragment41]);
     let reconstruction = span.construct_checkpoint().unwrap();
     assert_eq!(reconstruction.global.authority_waypoints.len(), 4);
@@ -1507,8 +1510,10 @@ fn test_slow_fragment() {
         .iter_mut()
         .map(|(_, cp)| cp.set_proposal(0).unwrap())
         .collect();
-    let fragment12 = proposals[1].fragment_with(&proposals[2]);
-    let fragment23 = proposals[2].fragment_with(&proposals[3]);
+    let fragment12 =
+        VerifiedCheckpointFragment::new_unchecked(proposals[1].fragment_with(&proposals[2]));
+    let fragment23 =
+        VerifiedCheckpointFragment::new_unchecked(proposals[2].fragment_with(&proposals[3]));
     let mut index = ExecutionIndices::default();
     cp_stores.iter_mut().for_each(|(_, cp)| {
         cp.handle_internal_fragment(
@@ -1570,8 +1575,10 @@ fn test_slow_fragment() {
         .iter_mut()
         .map(|(_, cp)| cp.set_proposal(0).unwrap())
         .collect();
-    let fragment12 = proposals[1].fragment_with(&proposals[2]);
-    let fragment23 = proposals[2].fragment_with(&proposals[3]);
+    let fragment12 =
+        VerifiedCheckpointFragment::new_unchecked(proposals[1].fragment_with(&proposals[2]));
+    let fragment23 =
+        VerifiedCheckpointFragment::new_unchecked(proposals[2].fragment_with(&proposals[3]));
     cp_stores.iter_mut().skip(1).for_each(|(_, cp)| {
         cp.handle_internal_fragment(
             index.clone(),

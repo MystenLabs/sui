@@ -16,7 +16,10 @@ use async_trait::async_trait;
 use fastcrypto::traits::KeyPair;
 use futures::{stream::BoxStream, TryStreamExt};
 use multiaddr::Multiaddr;
-use prometheus::{register_histogram_with_registry, Histogram, Registry};
+use prometheus::{
+    register_histogram_with_registry, register_int_counter_with_registry, Histogram, IntCounter,
+    Registry,
+};
 use std::{io, sync::Arc, time::Duration};
 use sui_config::NodeConfig;
 use sui_network::{
@@ -85,6 +88,7 @@ pub struct AuthorityServer {
     consensus_adapter: ConsensusAdapter,
     min_batch_size: u64,
     max_delay: Duration,
+    pub metrics: Arc<ValidatorServiceMetrics>,
 }
 
 impl AuthorityServer {
@@ -94,13 +98,14 @@ impl AuthorityServer {
         consensus_address: Multiaddr,
         tx_consensus_listener: Sender<ConsensusListenerMessage>,
     ) -> Self {
-        let metrics = ConsensusAdapterMetrics::new_test();
         let consensus_adapter = ConsensusAdapter::new(
             consensus_address,
             tx_consensus_listener,
             Duration::from_secs(20),
-            metrics,
+            ConsensusAdapterMetrics::new_test(),
         );
+
+        let metrics = Arc::new(ValidatorServiceMetrics::new_for_tests());
 
         Self {
             address,
@@ -108,6 +113,7 @@ impl AuthorityServer {
             consensus_adapter,
             min_batch_size: MIN_BATCH_SIZE,
             max_delay: Duration::from_millis(MAX_DELAY_MILLIS),
+            metrics,
         }
     }
 
@@ -148,7 +154,7 @@ impl AuthorityServer {
                 state: self.state,
                 consensus_adapter: Arc::new(self.consensus_adapter),
                 _checkpoint_consensus_handle: None,
-                metrics: Arc::new(ValidatorServiceMetrics::new_for_tests()),
+                metrics: self.metrics.clone(),
             }))
             .bind(&address)
             .await
@@ -165,6 +171,7 @@ impl AuthorityServer {
 }
 
 pub struct ValidatorServiceMetrics {
+    pub signature_errors: IntCounter,
     pub tx_verification_latency: Histogram,
     pub cert_verification_latency: Histogram,
     pub consensus_latency: Histogram,
@@ -181,6 +188,12 @@ const LATENCY_SEC_BUCKETS: &[f64] = &[
 impl ValidatorServiceMetrics {
     pub fn new(registry: &Registry) -> Self {
         Self {
+            signature_errors: register_int_counter_with_registry!(
+                "total_signature_errors",
+                "Number of transaction signature errors",
+                registry,
+            )
+            .unwrap(),
             tx_verification_latency: register_histogram_with_registry!(
                 "validator_service_tx_verification_latency",
                 "Latency of verifying a transaction",
@@ -348,9 +361,10 @@ impl ValidatorService {
         });
         let tx_verif_metrics_guard = start_timer(metrics.tx_verification_latency.clone());
 
-        let transaction = transaction
-            .verify()
-            .map_err(|e| tonic::Status::invalid_argument(e.to_string()))?;
+        let transaction = transaction.verify().map_err(|e| {
+            metrics.signature_errors.inc();
+            tonic::Status::invalid_argument(e.to_string())
+        })?;
         drop(tx_verif_metrics_guard);
 
         let tx_digest = transaction.digest();

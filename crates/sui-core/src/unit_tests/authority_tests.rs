@@ -2,7 +2,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::test_utils::to_sender_signed_transaction;
+use crate::{
+    authority_client::{AuthorityAPI, NetworkAuthorityClient, NetworkAuthorityClientMetrics},
+    authority_server::AuthorityServer,
+    test_utils::to_sender_signed_transaction,
+};
 
 use super::*;
 use bcs;
@@ -208,7 +212,7 @@ async fn test_handle_transfer_transaction_bad_signature() {
     let object_id = ObjectID::random();
     let gas_object_id = ObjectID::random();
     let authority_state =
-        init_state_with_ids(vec![(sender, object_id), (sender, gas_object_id)]).await;
+        Arc::new(init_state_with_ids(vec![(sender, object_id), (sender, gas_object_id)]).await);
     let object = authority_state
         .get_object(&object_id)
         .await
@@ -227,8 +231,25 @@ async fn test_handle_transfer_transaction_bad_signature() {
         gas_object.compute_object_reference(),
     );
 
-    let num_orders = authority_state.metrics.tx_orders.get();
-    let num_errors = authority_state.metrics.signature_errors.get();
+    let consensus_address = "/ip4/127.0.0.1/tcp/0/http".parse().unwrap();
+    let (tx_consensus_listener, _rx_consensus_listener) = tokio::sync::mpsc::channel(1);
+
+    let server = AuthorityServer::new_for_test(
+        "/ip4/127.0.0.1/tcp/0/http".parse().unwrap(),
+        authority_state.clone(),
+        consensus_address,
+        tx_consensus_listener,
+    );
+    let metrics = server.metrics.clone();
+
+    let server_handle = server.spawn_for_test().await.unwrap();
+
+    let client = NetworkAuthorityClient::connect(
+        server_handle.address(),
+        Arc::new(NetworkAuthorityClientMetrics::new_for_tests()),
+    )
+    .await
+    .unwrap();
 
     let (_unknown_address, unknown_key): (_, AccountKeyPair) = get_key_pair();
     let mut bad_signature_transfer_transaction = transfer_transaction.clone();
@@ -237,25 +258,12 @@ async fn test_handle_transfer_transaction_bad_signature() {
         &unknown_key,
     );
 
-    // bad_signature_transfer_transaction.signed_data.tx_signature = Signature::new_secure(
-    //     &transfer_transaction.signed_data.data,
-    //     Intent::default(),
-    //     &unknown_key,
-    // )
-    // .unwrap();
-    assert!(authority_state
-        .handle_transaction(bad_signature_transfer_transaction)
+    assert!(client
+        .handle_transaction(bad_signature_transfer_transaction.into_inner())
         .await
         .is_err());
 
-    // Check that metrics were increased
-    let num_orders = authority_state.metrics.tx_orders.get() - num_orders;
-    // For some reason this is sometimes more than 1, maybe tests running in parallel
-    assert!(num_orders > 0);
-    assert_eq!(
-        authority_state.metrics.signature_errors.get() - num_errors,
-        1
-    );
+    assert_eq!(metrics.signature_errors.get(), 1);
 
     let object = authority_state
         .get_object(&object_id)

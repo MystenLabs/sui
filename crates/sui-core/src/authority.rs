@@ -140,7 +140,6 @@ pub struct AuthorityMetrics {
     total_certs: IntCounter,
     total_cert_attempts: IntCounter,
     total_effects: IntCounter,
-    signature_errors: IntCounter,
     pub shared_obj_tx: IntCounter,
     tx_already_processed: IntCounter,
     num_input_objs: Histogram,
@@ -229,12 +228,6 @@ impl AuthorityMetrics {
             )
             .unwrap(),
 
-            signature_errors: register_int_counter_with_registry!(
-                "total_signature_errors",
-                "Number of transaction signature errors",
-                registry,
-            )
-            .unwrap(),
             shared_obj_tx: register_int_counter_with_registry!(
                 "num_shared_obj_tx",
                 "Number of transactions involving shared objects",
