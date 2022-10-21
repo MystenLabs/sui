@@ -73,10 +73,6 @@ jobs:
       - name: cargo test
         run: |
           cargo nextest run --profile ci
-      - name: narwhal celo crypto tests
-        run: |
-          cargo nextest run --features celo --profile ci -p narwhal-crypto
-          cargo test --doc --features celo -p narwhal-crypto
       - name: Doctests
         run: |
           cargo test --doc
