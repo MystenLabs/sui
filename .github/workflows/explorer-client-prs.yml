@@ -39,8 +39,6 @@ jobs:
         run: pnpm explorer build
   end_to_end_static:
     name: End-to-end tests (Static)
-    needs: diff
-    if: needs.diff.outputs.isClient == 'true'
     runs-on: [ubuntu-latest]
     steps:
       - name: Checkout
@@ -59,15 +57,15 @@ jobs:
         run: pnpm explorer exec cypress install
       - name: Run e2e tests
         uses: cypress-io/github-action@v4
+        uses: nick-fields/retry@v2
         with:
+          max_attempts: 3
           install: false
           start: pnpm dev:static
           working-directory: ./apps/explorer
           spec: cypress/e2e/static/*
   end_to_end_localnet:
     name: End-to-end tests (Localnet)
-    needs: diff
-    if: needs.diff.outputs.isClient == 'true'
     runs-on: [ubuntu-ghcloud]
     steps:
       - uses: actions/checkout@v3
@@ -86,8 +84,10 @@ jobs:
       - name: Install Cypress
         run: pnpm explorer exec cypress install
       - name: Run e2e tests
+        uses: nick-fields/retry@v2
         uses: cypress-io/github-action@v4
         with:
+          max_attempts: 3
           install: false
           start: pnpm dlx concurrently --kill-others 'cargo run --bin sui-test-validator' 'pnpm dev'
           working-directory: ./apps/explorer
