@@ -28,8 +28,8 @@ module sui::safe_tests {
         let capability = safe::create_transfer_capability(&mut safe, &cap, delegate_amount, ctx(scenario));
         id = object::id(&capability);
         transfer::transfer(capability, delegate_to);
-        ts::return_to_sender(scenario, safe);
-        ts::return_shared(cap);
+        ts::return_to_sender(scenario, cap);
+        ts::return_shared(safe);
         id
     }
 
@@ -40,8 +40,8 @@ module sui::safe_tests {
         let balance = safe::debit(&mut safe, &mut capability, withdraw_amount);
         balance::destroy_for_testing(balance);
 
-        ts::return_to_sender(scenario, safe);
-        ts::return_shared(capability);
+        ts::return_to_sender(scenario, capability);
+        ts::return_shared(safe);
     }
 
     fun revoke_capability(scenario: &mut Scenario, owner: address, capability_id: ID) {
@@ -50,8 +50,8 @@ module sui::safe_tests {
         let cap = ts::take_from_sender<OwnerCapability<SUI>>(scenario);
         safe::revoke_transfer_capability(&mut safe, &cap, capability_id);
 
-        ts::return_to_sender(scenario, safe);
-        ts::return_shared(cap);
+        ts::return_to_sender(scenario, cap);
+        ts::return_shared(safe);
     }
 
     #[test]
