@@ -23,7 +23,7 @@ pub mod bullshark_tests;
 /// then we know that we do have a "successful" leader election
 /// and consequently a commit.
 #[derive(Default)]
-struct LastRound {
+pub struct LastRound {
     /// True when the leader has actually proposed a certificate
     /// and found in our DAG
     leader_found: bool,
@@ -42,11 +42,11 @@ pub struct Bullshark {
 
     pub metrics: Arc<ConsensusMetrics>,
     /// The last time we had a successful leader election
-    last_successful_leader_election_timestamp: Instant,
+    pub last_successful_leader_election_timestamp: Instant,
     /// The last round leader election result
-    last_leader_election: LastRound,
+    pub last_leader_election: LastRound,
     /// The most recent round of inserted certificate
-    max_inserted_certificate_round: Round,
+    pub max_inserted_certificate_round: Round,
 }
 
 impl ConsensusProtocol for Bullshark {
