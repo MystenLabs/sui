@@ -141,10 +141,6 @@ async fn check_objects(
     input_objects: Vec<InputObjectKind>,
     objects: Vec<Object>,
 ) -> Result<InputObjects, SuiError> {
-    // Constructing the list of objects that could be used to authenticate other
-    // objects. Any mutable object (either shared or owned) can be used to
-    // authenticate other objects. Hence essentially we are building the list
-    // of mutable objects.
     // We require that mutable objects cannot show up more than once.
     // In [`SingleTransactionKind::input_objects`] we checked that there is no
     // duplicate objects in the same SingleTransactionKind. However for a Batch

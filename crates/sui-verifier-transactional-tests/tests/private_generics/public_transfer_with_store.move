@@ -19,16 +19,6 @@ module t1::m {
 }
 
 //# publish
-module t2::m {
-    fun t(
-        s: a::m::S,
-        owner_id: &mut sui::object::UID,
-    ) {
-        sui::transfer::transfer_to_object_id(s, owner_id)
-    }
-}
-
-//# publish
 module t3::m {
     fun t(s: a::m::S) {
         sui::transfer::freeze_object(s)
@@ -39,28 +29,5 @@ module t3::m {
 module t4::m {
     fun t(s: a::m::S) {
         sui::transfer::share_object(s)
-    }
-}
-
-//# publish
-module t5::m {
-    struct R has key { id: sui::object::UID }
-    fun t(child: a::m::S, owner: &mut R) {
-        sui::transfer::transfer_to_object(child, owner)
-    }
-}
-
-//# publish
-module t6::m {
-    struct R has key { id: sui::object::UID }
-    fun t(child: R, owner: &mut a::m::S) {
-        sui::transfer::transfer_to_object(child, owner)
-    }
-}
-
-//# publish
-module t7::m {
-    fun t(child: a::m::S, owner: &mut sui::object::UID) {
-        sui::transfer::transfer_to_object_id(child, owner)
     }
 }
