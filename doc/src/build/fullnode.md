@@ -53,7 +53,7 @@ Minimum hardware requirements for running a Sui Full node:
 ### Software requirements
 
 We recommend running Sui Full nodes on Linux. Sui supports the Ubuntu and
-Debian distributions.
+Debian distributions. You can also run a Sui Full node on macOS.
 
 Make sure to update [Rust](../build/install.md#rust).
 

@@ -192,12 +192,12 @@ Sui requires the following additional tools on computers running Windows.
 After you install Cargo, use the following command to install Sui binaries:
 
 ```shell
-$ cargo install --locked --git https://github.com/MystenLabs/sui.git --branch "devnet" sui sui-gateway
+$ cargo install --locked --git https://github.com/MystenLabs/sui.git --branch devnet sui sui-node
 ```
 
 The command installs the following Sui components in `~/.cargo/bin`:
 * [`sui`](cli-client.md) - The Sui CLI tool contains subcommands for enabling `genesis` of validators and accounts, starting the Sui network, and [building and testing Move packages](move/index.md), as well as a [client](cli-client.md) for interacting with the Sui network.
-* [`rpc-server`](json-rpc.md) - run a local Sui gateway service accessible via an RPC interface.
+* `Sui node` - installs the Sui node binary.
 
 Trouble shooting:
 If the previous command fails, make sure you have the latest version of Rust installed:

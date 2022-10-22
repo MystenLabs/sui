@@ -42,7 +42,7 @@ We launched our [Sui Devnet](../build/devnet.md) in May 2022. We'll release a Te
 
 ## How can I join the Sui network? How do I participate in the Sui project?
 
-Join our [Discord](https://discord.gg/sui) and follow our [Twitter](https://twitter.com/Mysten_Labs) for the latest updates and announcements.
+Join our [Discord](https://discord.gg/sui) and follow our [Twitter](https://twitter.com/SuiNetwork) for the latest updates and announcements.
 
 You can also join the [Move](https://discord.gg/8prNjUqyFj) and [Sui](https://discord.gg/CVcnUzKYCB) developer channels in Discord.
 
