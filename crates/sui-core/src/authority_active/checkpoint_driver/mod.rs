@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use futures::future;
 use std::ops::Deref;
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -16,7 +17,7 @@ use prometheus::{
 use sui_types::{
     base_types::{AuthorityName, ExecutionDigests},
     error::{SuiError, SuiResult},
-    messages::{CertifiedTransaction, TransactionInfoRequest},
+    messages::CertifiedTransaction,
     messages_checkpoint::{
         AuthenticatedCheckpoint, CertifiedCheckpointSummary, CheckpointContents, CheckpointDigest,
         CheckpointFragment, CheckpointProposal, CheckpointRequest, CheckpointResponse,
@@ -972,24 +973,56 @@ where
 
     // These are the transactions that the other node has, so we have to potentially
     // download them from the remote node.
-    let client = active_authority
-        .net
-        .load()
-        .clone_client(fragment.other.authority());
-    for tx_digest in &fragment.diff.first.items {
-        // TODO: It's possible that by the time we received the proposal we already have some of
-        // the certs. Should do a filter first before trying to download every of them.
-        // The downloading can probably also happen in parallel.
-        let response = client
-            .handle_transaction_info_request(TransactionInfoRequest::from(tx_digest.transaction))
-            .await?;
-        let cert = response
-            .certified_transaction
-            .ok_or(SuiError::CertificateNotfound {
-                certificate_digest: tx_digest.transaction,
-            })?;
-        diff_certs.insert(*tx_digest, cert);
-    }
+    let other_certs = active_authority
+        .state
+        .database
+        .multi_get_certified_transaction(
+            &fragment
+                .diff
+                .first
+                .items
+                .iter()
+                .map(|digests| digests.transaction)
+                .collect::<Vec<_>>(),
+        )?;
+    let (existing, missing): (Vec<_>, Vec<_>) = fragment
+        .diff
+        .first
+        .items
+        .iter()
+        .zip(other_certs)
+        .partition(|(_, cert)| cert.is_some());
+    debug!(
+        existing_size=?existing.len(),
+        missing_size=?missing.len(),
+        "Downloading certificates to augment the fragment"
+    );
+    diff_certs.extend(
+        existing
+            .into_iter()
+            .map(|(digests, cert_opt)| (*digests, cert_opt.unwrap())),
+    );
+
+    let downloads: Vec<_> = missing
+        .into_iter()
+        .map(|(digests, _)| {
+            let active = active_authority.clone();
+            async move {
+                let cert = active
+                    .net
+                    .load()
+                    .handle_cert_info_request(&digests.transaction, Some(Duration::from_secs(5)))
+                    .await?
+                    .certified_transaction
+                    .unwrap();
+                // TODO: Should we insert the cert to the db?
+                Ok((*digests, cert)) as SuiResult<_>
+            }
+        })
+        .collect();
+    let results: SuiResult<BTreeMap<_, _>> =
+        future::join_all(downloads).await.into_iter().collect();
+    diff_certs.extend(results?);
 
     if !diff_certs.is_empty() {
         let len = diff_certs.len();
