@@ -75,7 +75,7 @@ fn bench_sqlite_ingestion_varying_batch_size(c: &mut Criterion) {
             |b, db| {
                 // Note: each one of repeat_batch_insert inserts 100 events at a time
                 b.to_async(&runtime)
-                    .iter(|| repeat_batch_insert(&db, &events, *batch_size as usize))
+                    .iter(|| repeat_batch_insert(db, &events, *batch_size as usize))
             },
         );
     }
