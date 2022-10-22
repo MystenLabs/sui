@@ -3,18 +3,9 @@
 
 use std::ops::Mul;
 
+use crate::units_types::Gas;
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_binary_format::file_format_common::Opcodes::{self};
-use move_core_types::gas_algebra::{
-    AbstractMemorySize, InternalGas, InternalGasPerAbstractMemoryUnit, NumArgs, NumBytes,
-};
-use move_core_types::language_storage::ModuleId;
-use move_core_types::vm_status::StatusCode;
-use move_vm_types::gas::{GasMeter, SimpleInstruction};
-use move_vm_types::views::{TypeView, ValueView};
-use once_cell::sync::Lazy;
-
-use crate::units_types::{CostTable, Gas, GasCost};
 use move_binary_format::{
     file_format::{
         Bytecode, ConstantPoolIndex, FieldHandleIndex, FieldInstantiationIndex,
@@ -23,6 +14,15 @@ use move_binary_format::{
     },
     file_format_common::instruction_key,
 };
+use move_core_types::gas_algebra::{
+    AbstractMemorySize, InternalGas, InternalGasPerAbstractMemoryUnit, NumArgs, NumBytes,
+};
+use move_core_types::language_storage::ModuleId;
+use move_core_types::vm_status::StatusCode;
+use move_vm_test_utils::gas_schedule::{CostTable, GasCost};
+use move_vm_types::gas::{GasMeter, SimpleInstruction};
+use move_vm_types::views::{TypeView, ValueView};
+use once_cell::sync::Lazy;
 
 /// VM flat fee
 pub const VM_FLAT_FEE: Gas = Gas::new(8_000);

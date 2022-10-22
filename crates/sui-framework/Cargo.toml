@@ -24,6 +24,7 @@ serde = { version = "1.0.144", features = ["derive"] }
 sui-types = { path = "../sui-types" }
 sui-framework-build = { path = "../sui-framework-build" }
 sui-verifier = { path = "../../crates/sui-verifier" }
+sui-cost-tables = { path = "../sui-cost-tables" }
 
 move-binary-format.workspace = true
 move-bytecode-utils.workspace = true

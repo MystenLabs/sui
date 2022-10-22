@@ -1,9 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use move_vm_test_utils::gas_schedule::GasCost;
+
 use crate::{
     non_execution_tables::{MAX_NUM_EVENT_EMIT, MAX_TX_GAS},
-    units_types::GasCost,
 };
 
 //

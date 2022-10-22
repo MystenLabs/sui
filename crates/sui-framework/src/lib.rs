@@ -10,6 +10,7 @@ use move_unit_test::{extensions::set_extension_hook, UnitTestingConfig};
 use move_vm_runtime::native_extensions::NativeContextExtensions;
 use natives::object_runtime::ObjectRuntime;
 use once_cell::sync::Lazy;
+use sui_cost_tables::bytecode_tables::INITIAL_COST_SCHEDULE;
 use std::{collections::BTreeMap, path::Path};
 use sui_types::{
     base_types::TransactionDigest,
@@ -155,6 +156,8 @@ pub fn run_move_unit_tests(
             ..config
         },
         natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS),
+        None,
+//        Some(INITIAL_COST_SCHEDULE.clone()),
         compute_coverage,
         &mut std::io::stdout(),
     )
