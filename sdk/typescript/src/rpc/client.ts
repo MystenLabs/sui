@@ -52,7 +52,7 @@ export class JsonRpcClient {
           let res: Response = await fetch(url, options);
           const text = await res.text();
           const result = JSON.stringify(
-            LosslessJSON.parse(text, (key, value) => {
+            LosslessJSON.default.parse(text, (key, value) => {
               if (value == null) {
                 return value;
               }
