@@ -155,7 +155,7 @@ impl From<i128> for SignedValue {
     fn from(value: i128) -> Self {
         Self {
             negative: value.is_negative(),
-            value: value.abs() as u128,
+            value: value.unsigned_abs(),
         }
     }
 }
@@ -164,7 +164,7 @@ impl From<i64> for SignedValue {
     fn from(value: i64) -> Self {
         Self {
             negative: value.is_negative(),
-            value: value.abs() as u128,
+            value: value.abs().unsigned_abs().into(),
         }
     }
 }

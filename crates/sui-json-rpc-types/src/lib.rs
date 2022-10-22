@@ -2243,7 +2243,7 @@ impl SuiEvent {
                 owner,
                 coin_object_id: coin_id,
                 version,
-                coin_type: coin_type.to_string(),
+                coin_type,
                 amount,
             },
         })

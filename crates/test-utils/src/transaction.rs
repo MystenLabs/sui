@@ -1,12 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::authority::get_client;
-use crate::messages::{
-    create_publish_move_package_transaction, get_account_and_gas_coins,
-    get_gas_object_with_wallet_context, make_tx_certs_and_signed_effects,
-    make_tx_certs_and_signed_effects_with_committee, MAX_GAS,
-};
-use crate::{test_account_keys, test_committee};
+
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -45,9 +39,10 @@ use sui_types::SUI_FRAMEWORK_OBJECT_ID;
 use crate::authority::get_client;
 use crate::messages::{
     create_publish_move_package_transaction, get_account_and_gas_coins,
-    get_gas_object_with_wallet_context, make_tx_certs_and_signed_effects, MAX_GAS,
+    get_gas_object_with_wallet_context, make_tx_certs_and_signed_effects,
+    make_tx_certs_and_signed_effects_with_committee, MAX_GAS,
 };
-use crate::test_account_keys;
+use crate::{test_account_keys, test_committee};
 
 pub fn make_publish_package(gas_object: Object, path: PathBuf) -> VerifiedTransaction {
     let (sender, keypair) = test_account_keys().pop().unwrap();

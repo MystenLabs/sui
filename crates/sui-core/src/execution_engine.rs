@@ -13,13 +13,13 @@ use sui_types::committee::EpochId;
 use sui_types::error::{ExecutionError, ExecutionErrorKind};
 use sui_types::gas::GasCostSummary;
 use sui_types::gas_coin::GasCoin;
-use sui_types::id::UID;
 #[cfg(test)]
 use sui_types::messages::ExecutionFailureStatus;
 #[cfg(test)]
 use sui_types::messages::InputObjects;
 use sui_types::messages::{ObjectArg, Pay, PayAllSui, PaySui};
 use sui_types::object::{Data, MoveObject, Owner, OBJECT_START_VERSION};
+use sui_types::storage::InnerTxContext;
 use sui_types::storage::{ChildObjectResolver, DeleteKind, InnerTxContext, ParentSync, WriteKind};
 #[cfg(test)]
 use sui_types::temporary_store;

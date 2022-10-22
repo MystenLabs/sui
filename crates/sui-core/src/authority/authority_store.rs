@@ -23,10 +23,8 @@ use sui_storage::{
 };
 use sui_types::batch::{SignedBatch, TxSequenceNumber};
 use sui_types::crypto::{AuthoritySignInfo, EmptySignInfo};
-use sui_types::object::{Owner, OBJECT_START_VERSION};
-use sui_types::storage::{InnerTxContext, WriteKind};
 use sui_types::object::Owner;
-use sui_types::storage::{ChildObjectResolver, WriteKind};
+use sui_types::storage::{ChildObjectResolver, InnerTxContext, WriteKind};
 use sui_types::{base_types::SequenceNumber, storage::ParentSync};
 use tokio::sync::Notify;
 use tokio_retry::strategy::{jitter, ExponentialBackoff};

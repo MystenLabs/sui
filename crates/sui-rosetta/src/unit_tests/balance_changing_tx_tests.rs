@@ -12,7 +12,8 @@ use rand::seq::{IteratorRandom, SliceRandom};
 use signature::rand_core::OsRng;
 
 use sui_config::utils::get_available_port;
-use sui_sdk::crypto::{AccountKeystore, Keystore};
+use sui_keys::keystore::AccountKeystore;
+use sui_keys::keystore::Keystore;
 use sui_sdk::rpc_types::{
     OwnedObjectRef, SuiData, SuiEvent, SuiExecutionStatus, SuiTransactionEffects,
 };
@@ -293,7 +294,7 @@ async fn get_random_gas(
     (coin.object_id, coin.version, coin.digest)
 }
 
-fn get_random_address(addresses: &Vec<SuiAddress>, except: Vec<SuiAddress>) -> SuiAddress {
+fn get_random_address(addresses: &[SuiAddress], except: Vec<SuiAddress>) -> SuiAddress {
     *addresses
         .iter()
         .filter(|addr| !except.contains(*addr))
