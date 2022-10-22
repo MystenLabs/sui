@@ -17,11 +17,11 @@ use sui_types::object::Owner;
 
 use sqlx::{
     sqlite::{SqliteConnectOptions, SqliteJournalMode, SqliteRow, SqliteSynchronous},
-    Executor, Row, SqlitePool,
+    Executor, QueryBuilder, Row, SqlitePool,
 };
 use sui_types::error::SuiError;
 use sui_types::event::{Event, TransferTypeVariants};
-use tracing::{debug, info, instrument, log, warn};
+use tracing::{info, instrument, log, warn};
 
 /// Sqlite-based Event Store
 ///
@@ -76,7 +76,7 @@ enum EventsTableColumns {
 
 const SQL_INSERT_TX: &str = "INSERT INTO events (timestamp, seq_num, tx_digest, event_type, \
     package_id, module_name, object_id, fields, move_event_name, contents, sender,  \
-    recipient) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+    recipient) ";
 
 const INDEXED_COLUMNS: &[&str] = &[
     "timestamp",
@@ -368,48 +368,57 @@ const QUERY_BY_OBJECT_ID: &str = "SELECT * FROM events WHERE timestamp >= ? AND 
 impl EventStore for SqlEventStore {
     #[instrument(level = "debug", skip_all, err)]
     async fn add_events(&self, events: &[EventEnvelope]) -> Result<u64, SuiError> {
-        // TODO: submit writes in one transaction/batch so it won't just fail in the middle
         let mut cur_seq = self.seq_num.load(Ordering::Acquire);
         let initial_seq = cur_seq;
-        let mut rows_affected: u64 = 0;
+        let mut rows_affected = 0;
 
-        // TODO: benchmark
-        // TODO: use techniques in https://docs.rs/sqlx-core/0.5.13/sqlx_core/query_builder/struct.QueryBuilder.html#method.push_values
-        // to execute all inserts in a single statement?
-        // TODO: See https://kerkour.com/high-performance-rust-with-sqlite
-        for event in events {
-            // Skip events that have a lower sequence number... which must be same or increasing
-            if event.seq_num < cur_seq {
-                debug!(tx_digest =? event.tx_digest, seq_num = event.seq_num, cur_seq, "Skipping event with lower sequence number than current");
+        if events.is_empty() {
+            return Ok(0);
+        }
+
+        let mut start_index = 0;
+        let mut end_index = 0;
+        // This while loop only needed to make sure we don't write more than 1000 events at once.
+        // sqlx/SQLite has a limit of binding < 64k elements.
+        while end_index < events.len() {
+            if events[start_index].seq_num < cur_seq {
+                start_index += 1;
+                end_index += 1;
                 continue;
             }
-            cur_seq = event.seq_num;
 
-            // If batching, turn off persistent to avoid caching as we may fill up the prepared statement cache
-            let insert_tx_q = sqlx::query(SQL_INSERT_TX).persistent(true);
-            let event_type = EventType::from(&event.event);
+            end_index = (start_index + 1000).min(events.len());
 
-            let sender = event.event.sender().map(|sender| sender.to_vec());
-            let move_event_name = event.event.move_event_name();
-
-            // TODO: use batched API?
-            let res = insert_tx_q
-                .bind(event.timestamp as i64)
-                .bind(event.seq_num as i64)
-                .bind(event.tx_digest.map(|txd| txd.to_bytes()))
-                .bind(event_type as u16)
-                .bind(event.event.package_id().map(|pid| pid.to_vec()))
-                .bind(event.event.module_name())
-                .bind(event.event.object_id().map(|id| id.to_vec()))
-                .bind(Self::event_to_json(event))
-                .bind(move_event_name)
-                .bind(event.event.move_event_contents())
-                .bind(sender)
-                .bind(event.event.recipient_serialized()?)
+            let mut query_builder = QueryBuilder::new(SQL_INSERT_TX);
+            query_builder.push_values(&events[start_index..end_index], |mut b, event| {
+                let event_type = EventType::from(&event.event);
+                let sender = event.event.sender().map(|sender| sender.to_vec());
+                let move_event_name = event.event.move_event_name();
+                b.push_bind(event.timestamp as i64)
+                    .push_bind(event.seq_num as i64)
+                    .push_bind(event.tx_digest.map(|txd| txd.to_bytes()))
+                    .push_bind(event_type as u16)
+                    .push_bind(event.event.package_id().map(|pid| pid.to_vec()))
+                    .push_bind(event.event.module_name())
+                    .push_bind(event.event.object_id().map(|id| id.to_vec()))
+                    .push_bind(Self::event_to_json(event))
+                    .push_bind(move_event_name)
+                    .push_bind(event.event.move_event_contents())
+                    .push_bind(sender)
+                    .push_bind(
+                        event
+                            .event
+                            .recipient_serialized()
+                            .expect("Cannot serialize"),
+                    );
+            });
+            let res = query_builder
+                .build()
                 .execute(&self.pool)
                 .await
                 .map_err(convert_sqlx_err)?;
-            rows_affected += res.rows_affected();
+            rows_affected = res.rows_affected();
+            cur_seq = events[end_index - 1].seq_num;
         }
 
         // CAS is used to detect any concurrency glitches.  Note that we assume a single writer
