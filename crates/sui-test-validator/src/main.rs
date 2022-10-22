@@ -9,14 +9,13 @@ use axum::{
 };
 use clap::Parser;
 use http::{Method, StatusCode};
-use serde::{Deserialize, Serialize};
 use std::{net::SocketAddr, sync::Arc};
 use sui_cluster_test::{
     cluster::{Cluster, LocalNewCluster},
     config::{ClusterTestOpt, Env},
     faucet::{FaucetClient, FaucetClientFactory},
 };
-use sui_types::base_types::SuiAddress;
+use sui_faucet::{FaucetRequest, FixedAmountRequest};
 use tower::ServiceBuilder;
 use tower_http::cors::{Any, CorsLayer};
 
@@ -114,27 +113,19 @@ async fn health() -> &'static str {
     "OK"
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-struct FaucetRequest {
-    pub recipient: SuiAddress,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-struct FaucetResponse {
-    pub ok: bool,
-}
-
 async fn faucet_request(
     Json(payload): Json<FaucetRequest>,
     Extension(state): Extension<Arc<AppState>>,
 ) -> impl IntoResponse {
-    let result = state.faucet.request_sui_coins(payload.recipient).await;
+    let result = match payload {
+        FaucetRequest::FixedAmountRequest(FixedAmountRequest { recipient }) => {
+            state.faucet.request_sui_coins(recipient).await
+        }
+    };
+
     if !result.transferred_gas_objects.is_empty() {
-        (StatusCode::OK, Json(FaucetResponse { ok: true }))
+        (StatusCode::CREATED, Json(result))
     } else {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(FaucetResponse { ok: false }),
-        )
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(result))
     }
 }
