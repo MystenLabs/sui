@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-const { BCS, getSuiMoveSchema } = require('../dist');
-const bcs = new BCS(getSuiMoveSchema());
+const { BCS, getSuiMoveConfig } = require('../dist');
+const bcs = new BCS(getSuiMoveConfig());
 
 // testing all primitive Move values: u8, u64, u128, bool and address
 // Serialization approach is ser and then de and compare.

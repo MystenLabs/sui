@@ -379,22 +379,61 @@ export interface TypeInterface {
 }
 
 /**
- *
+ * Struct type definition. Used as input format in BcsConfig.types
+ * as well as an argument type for `bcs.registerStructType`.
  */
-export type TypeDefinition = {
-
-};
+export type StructTypeDefinition = { [key: string]: string };
 
 /**
+ * Enum type definition. Used as input format in BcsConfig.types
+ * as well as an argument type for `bcs.registerEnumType`.
  *
+ * Value can be either `string` when invariant has a type or `null`
+ * when invariant is empty.
+ *
+ * @example
+ * bcs.registerEnumType('Option<T>', {
+ *   some: 'T',
+ *   none: null
+ * });
  */
-export type TypeSchema = {
-  vectorType: string;
-  addressLength: number;
-  addressEncoding?: 'hex' | 'base64';
-  genericSeparators: [string, string];
+export type EnumTypeDefinition = { [key: string]: string | null };
 
-  types: TypeDefinition[];
+/**
+ * Configuration that is passed into BCS constructor.
+ */
+export type BcsConfig = {
+  /**
+   * Defines type name for the vector / array type.
+   * In Move: `vector<T>` or `vector`.
+   */
+  vectorType: string;
+  /**
+   * Address length. Varies depending on a platform and
+   * has to be specified for the `address` type.
+   */
+  addressLength: number;
+
+  /**
+   * Custom encoding for address. Supported values are
+   * either 'hex' or 'base64'.
+   */
+  addressEncoding?: 'hex' | 'base64';
+  /**
+   * Opening and closing symbol for type parameters. Can be
+   * any pair of symbols (eg `['(', ')']`); default value follows
+   * Rust and Move: `<` and `>`.
+   */
+  genericSeparators?: [string, string];
+  /**
+   * Type definitions for the BCS. This field allows spawning
+   * BCS instance from JSON or another prepared configuration.
+   * Optional.
+   */
+  types?: {
+    structs?: { [key: string]: StructTypeDefinition },
+    enums?: { [key: string]: EnumTypeDefinition }
+  }
 };
 
 /**
@@ -425,12 +464,26 @@ export class BCS {
    * @param schema A prepared schema with type definitions
    * @param withPrimitives Whether to register primitive types by default
    */
-  constructor(public schema: TypeSchema, withPrimitives: boolean = true) {
-    this.genericSeparators = schema.genericSeparators;
+  constructor(public schema: BcsConfig, withPrimitives: boolean = true) {
+    this.genericSeparators = schema.genericSeparators || ['<', '>'];
 
     // Register address type under key 'address'.
     this.registerAddressType(BCS.ADDRESS, schema.addressLength, schema.addressEncoding);
     this.registerVectorType(schema.vectorType);
+
+    // Register struct types if they were passed.
+    if (schema.types && schema.types.structs) {
+      for (let name of Object.keys(schema.types.structs)) {
+        this.registerStructType(name, schema.types.structs[name]);
+      }
+    }
+
+    // Register enum types if they were passed.
+    if (schema.types && schema.types.enums) {
+      for (let name of Object.keys(schema.types.enums)) {
+        this.registerEnumType(name, schema.types.enums[name]);
+      }
+    }
 
     if (withPrimitives) {
       registerPrimitives(this);
@@ -680,7 +733,7 @@ export class BCS {
    */
   public registerStructType(
     name: string,
-    fields: { [key: string]: string }
+    fields: StructTypeDefinition
   ): BCS {
     let struct = Object.freeze(fields); // Make sure the order doesn't get changed
 
@@ -737,10 +790,10 @@ export class BCS {
    * Safe method to register custom enum type where each invariant holds the value of another type.
    * @example
    * bcs.registerStructType('Coin', { value: 'u64' });
-   * bcs.registerVectorType('vector<Coin>', 'Coin');
    * bcs.registerEnumType('MyEnum', {
    *  single: 'Coin',
-   *  multi: 'vector<Coin>'
+   *  multi: 'vector<Coin>',
+   *  empty: null
    * });
    *
    * console.log(
@@ -757,7 +810,7 @@ export class BCS {
    */
   public registerEnumType(
     name: string,
-    variants: { [key: string]: string | null }
+    variants: EnumTypeDefinition
   ): BCS {
     let struct = Object.freeze(variants); // Make sure the order doesn't get changed
 
@@ -824,7 +877,7 @@ export class BCS {
 
         {
           let { typeName, typeParams } = this.parseTypeName(typeOrParam);
-          return this.getTypeInterface(typeName)._decodeRaw(reader, typeParams);
+          return { [invariant]: this.getTypeInterface(typeName)._decodeRaw(reader, typeParams) };
         };
       }
     );
@@ -841,11 +894,16 @@ export class BCS {
     if (typeInterface === undefined) {
       throw new Error(`Type ${type} is not registered`);
     }
+
     return typeInterface;
   }
 
   /**
    * Parse a type name and get the type's generics.
+   * @example
+   * let { typeName, typeParams } = parseTypeName('Option<Coin<SUI>>');
+   * // typeName: Option
+   * // typeParams: [ 'Coin<SUI>' ]
    *
    * @param name Name of the type to process
    * @returns Object with typeName and typeParams listed as Array
@@ -973,30 +1031,20 @@ export function registerPrimitives(bcs: BCS): void {
   );
 }
 
-export function getRustSchema(): TypeSchema {
+export function getRustConfig(): BcsConfig {
   return {
     genericSeparators: ['<', '>'],
     vectorType: 'Vec',
     addressLength: 20,
     addressEncoding: 'hex',
-    types: [
-      {
-        name: 'Option<T>',
-        type: 'enum',
-
-      }
-    ]
   };
 }
 
-export function getSuiMoveSchema(): TypeSchema {
+export function getSuiMoveConfig(): BcsConfig {
   return {
     genericSeparators: ['<', '>'],
     vectorType: 'vector',
     addressLength: 20,
     addressEncoding: 'hex',
-    types: [
-
-    ]
   }
 }
