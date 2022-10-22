@@ -44,22 +44,6 @@ docker-compose up
 
 Once the fullnode is up and running, test some of the JSON-RPC interfaces.
 
-- Get the five most recent transactions:
-
-```
-curl --location --request POST 'http://127.0.0.1:9000/' \
-    --header 'Content-Type: application/json' \
-    --data-raw '{ "jsonrpc":"2.0", "id":1, "method":"sui_getRecentTransactions", "params":[5] }'
-```
-
-- Get details about a specific transaction:
-
-```
-curl --location --request POST 'http://127.0.0.1:9000/' \
-    --header 'Content-Type: application/json' \
-    --data-raw '{ "jsonrpc":"2.0", "id":1, "method":"sui_getTransaction", "params":["$RECENT_TXN_FROM_ABOVE"] }'
-```
-
 ## Use your fullnode with Explorer 
 
 To use the Sui Explorer with your fullnode, follow these steps:
