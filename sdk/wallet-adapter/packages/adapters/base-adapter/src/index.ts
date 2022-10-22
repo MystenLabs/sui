@@ -22,21 +22,11 @@ export interface WalletAdapter {
   /**
    * Suggest a transaction for the user to sign. Supports all valid transaction types.
    */
-  signAndExecuteTransaction?(
+  signAndExecuteTransaction(
     transaction: SignableTransaction
   ): Promise<SuiTransactionResponse>;
 
   getAccounts: () => Promise<SuiAddress[]>;
-
-  /** @deprecated Prefer `signAndExecuteTransaction` when available. */
-  executeMoveCall?: (
-    transaction: MoveCallTransaction
-  ) => Promise<SuiTransactionResponse>;
-
-  /** @deprecated Prefer `signAndExecuteTransaction` when available. */
-  executeSerializedMoveCall?: (
-    transactionBytes: Uint8Array
-  ) => Promise<SuiTransactionResponse>;
 }
 
 type WalletAdapterProviderUnsubscribe = () => void;

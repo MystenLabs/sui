@@ -103,11 +103,15 @@ pub trait PrimaryToPrimaryRpc {
 
 #[async_trait]
 pub trait PrimaryToWorkerRpc {
+    async fn delete_batches(&self, peer: NetworkPublicKey, digests: Vec<BatchDigest>)
+        -> Result<()>;
+}
+
+#[async_trait]
+pub trait WorkerRpc {
     async fn request_batch(
         &self,
         peer: NetworkPublicKey,
         batch: BatchDigest,
     ) -> Result<Option<Batch>>;
-    async fn delete_batches(&self, peer: NetworkPublicKey, digests: Vec<BatchDigest>)
-        -> Result<()>;
 }

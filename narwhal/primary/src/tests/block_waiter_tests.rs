@@ -15,8 +15,8 @@ use test_utils::{
     fixture_batch_with_transactions, fixture_payload, test_network, CommitteeFixture,
 };
 use types::{
-    Batch, BatchMessage, Certificate, CertificateDigest, MockPrimaryToWorker,
-    PrimaryToWorkerServer, RequestBatchResponse,
+    Batch, BatchMessage, Certificate, CertificateDigest, MockWorkerToWorker, RequestBatchResponse,
+    WorkerToWorkerServer,
 };
 
 #[tokio::test]
@@ -46,7 +46,7 @@ async fn test_successfully_retrieve_block() {
     let network_key = worker.keypair();
     let worker_name = network_key.public().clone();
     let worker_address = &worker.info().worker_address;
-    let mut mock_server = MockPrimaryToWorker::new();
+    let mut mock_server = MockWorkerToWorker::new();
 
     // Mock the batch responses.
     let expected_block_count = header.payload.len();
@@ -60,7 +60,7 @@ async fn test_successfully_retrieve_block() {
                 }))
             });
     }
-    let routes = anemo::Router::new().add_rpc_service(PrimaryToWorkerServer::new(mock_server));
+    let routes = anemo::Router::new().add_rpc_service(WorkerToWorkerServer::new(mock_server));
     let _worker_network = worker.new_network(routes);
 
     let address = network::multiaddr_to_address(worker_address).unwrap();
@@ -114,7 +114,7 @@ async fn test_successfully_retrieve_multiple_blocks() {
     let name = primary.public_key();
 
     let mut block_ids = Vec::new();
-    let mut mock_server = MockPrimaryToWorker::new();
+    let mut mock_server = MockWorkerToWorker::new();
     let worker_id = 0;
     let mut expected_get_block_responses = Vec::new();
     let mut certificates = Vec::new();
@@ -225,7 +225,7 @@ async fn test_successfully_retrieve_multiple_blocks() {
     let network_key = worker.keypair();
     let worker_name = network_key.public().clone();
     let worker_address = &worker.info().worker_address;
-    let routes = anemo::Router::new().add_rpc_service(PrimaryToWorkerServer::new(mock_server));
+    let routes = anemo::Router::new().add_rpc_service(WorkerToWorkerServer::new(mock_server));
     let _worker_network = worker.new_network(routes);
 
     let address = network::multiaddr_to_address(worker_address).unwrap();

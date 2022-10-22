@@ -4,9 +4,11 @@
 import {
     getExecutionStatusType,
     getObjectExistsResponse,
+    getObjectId,
     getTimestampFromTransactionResponse,
     getTotalGasUsed,
     getTransactionDigest,
+    getObjectVersion,
 } from '@mysten/sui.js';
 import {
     createAsyncThunk,
@@ -16,7 +18,7 @@ import {
 
 import { SUI_SYSTEM_STATE_OBJECT_ID } from './Coin';
 import { ExampleNFT } from './NFT';
-import { FEATURES } from '_src/ui/app/experimentation/features';
+import { FEATURES } from '_app/experimentation/features';
 
 import type {
     SuiObject,
@@ -39,12 +41,31 @@ export const fetchAllOwnedAndRequiredObjects = createAsyncThunk<
     void,
     AppThunkConfig
 >('sui-objects/fetch-all', async (_, { getState, extra: { api } }) => {
-    const address = getState().account.address;
+    const state = getState();
+    const {
+        account: { address },
+    } = state;
     const allSuiObjects: SuiObject[] = [];
     if (address) {
         const allObjectRefs =
             await api.instance.fullNode.getObjectsOwnedByAddress(`${address}`);
-        const objectIDs = allObjectRefs.map((anObj) => anObj.objectId);
+        const objectIDs = allObjectRefs
+            .filter((anObj) => {
+                const fetchedVersion = getObjectVersion(anObj);
+                const storedObj = suiObjectsAdapterSelectors.selectById(
+                    state,
+                    getObjectId(anObj)
+                );
+                const storedVersion = storedObj
+                    ? getObjectVersion(storedObj.reference)
+                    : null;
+                const objOutdated = fetchedVersion !== storedVersion;
+                if (!objOutdated && storedObj) {
+                    allSuiObjects.push(storedObj);
+                }
+                return objOutdated;
+            })
+            .map((anObj) => anObj.objectId);
         objectIDs.push(SUI_SYSTEM_STATE_OBJECT_ID);
         const allObjRes = await api.instance.fullNode.getObjectBatch(objectIDs);
         for (const objRes of allObjRes) {

@@ -50,7 +50,7 @@ pub struct BlockRemover {
     worker_network: P2pNetwork,
 
     /// Outputs all the successfully deleted certificates
-    tx_removed_certificates: Sender<Certificate>,
+    tx_committed_certificates: Sender<Certificate>,
 }
 
 impl BlockRemover {
@@ -63,7 +63,7 @@ impl BlockRemover {
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
         dag: Option<Arc<Dag>>,
         worker_network: P2pNetwork,
-        tx_removed_certificates: Sender<Certificate>,
+        tx_committed_certificates: Sender<Certificate>,
     ) -> BlockRemover {
         Self {
             name,
@@ -73,7 +73,7 @@ impl BlockRemover {
             payload_store,
             dag,
             worker_network,
-            tx_removed_certificates,
+            tx_committed_certificates,
         }
     }
 
@@ -161,7 +161,7 @@ impl BlockRemover {
 
         // Now output all the removed certificates
         for certificate in certificates.clone() {
-            self.tx_removed_certificates
+            self.tx_committed_certificates
                 .send(certificate)
                 .await
                 .expect("Couldn't forward removed certificates to channel");

@@ -29,8 +29,8 @@ use types::{
     FetchCertificatesResponse, Header, HeaderBuilder, PrimaryMessage, PrimaryToPrimary,
     PrimaryToPrimaryServer, PrimaryToWorker, PrimaryToWorkerServer, RequestBatchRequest,
     RequestBatchResponse, Round, SequenceNumber, Transaction, Vote, WorkerBatchMessage,
-    WorkerBatchRequest, WorkerBatchResponse, WorkerDeleteBatchesMessage, WorkerReconfigureMessage,
-    WorkerSynchronizeMessage, WorkerToWorker, WorkerToWorkerServer,
+    WorkerDeleteBatchesMessage, WorkerReconfigureMessage, WorkerSynchronizeMessage, WorkerToWorker,
+    WorkerToWorkerServer,
 };
 
 pub mod cluster;
@@ -258,13 +258,6 @@ impl PrimaryToWorker for PrimaryToWorkerMockServer {
         Ok(anemo::Response::new(()))
     }
 
-    async fn request_batch(
-        &self,
-        _request: anemo::Request<RequestBatchRequest>,
-    ) -> Result<anemo::Response<RequestBatchResponse>, anemo::rpc::Status> {
-        tracing::error!("Not implemented PrimaryToWorkerMockServer::request_batch");
-        Err(anemo::rpc::Status::internal("Unimplemented"))
-    }
     async fn delete_batches(
         &self,
         _request: anemo::Request<WorkerDeleteBatchesMessage>,
@@ -276,25 +269,16 @@ impl PrimaryToWorker for PrimaryToWorkerMockServer {
 
 pub struct WorkerToWorkerMockServer {
     batch_sender: Sender<WorkerBatchMessage>,
-    batch_request_sender: Sender<WorkerBatchRequest>,
 }
 
 impl WorkerToWorkerMockServer {
     pub fn spawn(
         keypair: NetworkKeyPair,
         address: Multiaddr,
-    ) -> (
-        Receiver<WorkerBatchMessage>,
-        Receiver<WorkerBatchRequest>,
-        anemo::Network,
-    ) {
+    ) -> (Receiver<WorkerBatchMessage>, anemo::Network) {
         let addr = network::multiaddr_to_address(&address).unwrap();
         let (batch_sender, batch_receiver) = channel(1);
-        let (batch_request_sender, batch_request_receiver) = channel(1);
-        let service = WorkerToWorkerServer::new(Self {
-            batch_sender,
-            batch_request_sender,
-        });
+        let service = WorkerToWorkerServer::new(Self { batch_sender });
 
         let routes = anemo::Router::new().add_rpc_service(service);
         let network = anemo::Network::bind(addr)
@@ -303,7 +287,7 @@ impl WorkerToWorkerMockServer {
             .start(routes)
             .unwrap();
         info!("starting network on: {}", network.local_addr());
-        (batch_receiver, batch_request_receiver, network)
+        (batch_receiver, network)
     }
 }
 
@@ -319,18 +303,12 @@ impl WorkerToWorker for WorkerToWorkerMockServer {
 
         Ok(anemo::Response::new(()))
     }
-    async fn request_batches(
+    async fn request_batch(
         &self,
-        request: anemo::Request<WorkerBatchRequest>,
-    ) -> Result<anemo::Response<WorkerBatchResponse>, anemo::rpc::Status> {
-        let message = request.into_body();
-
-        self.batch_request_sender.send(message).await.unwrap();
-
-        // For testing stub, just always reply with no batches.
-        Ok(anemo::Response::new(WorkerBatchResponse {
-            batches: vec![],
-        }))
+        _request: anemo::Request<RequestBatchRequest>,
+    ) -> Result<anemo::Response<RequestBatchResponse>, anemo::rpc::Status> {
+        tracing::error!("Not implemented WorkerToWorkerMockServer::request_batch");
+        Err(anemo::rpc::Status::internal("Unimplemented"))
     }
 }
 

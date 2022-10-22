@@ -166,7 +166,7 @@ pub struct BlockSynchronizer {
     rx_reconfigure: watch::Receiver<ReconfigureNotification>,
 
     /// Receive the commands for the synchronizer
-    rx_commands: metered_channel::Receiver<Command>,
+    rx_block_synchronizer_commands: metered_channel::Receiver<Command>,
 
     /// Receive answers to requested assets (certificates, payloads) through this channel
     rx_availability_responses: metered_channel::Receiver<AvailabilityResponse>,
@@ -207,7 +207,7 @@ impl BlockSynchronizer {
         committee: Committee,
         worker_cache: SharedWorkerCache,
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
-        rx_commands: metered_channel::Receiver<Command>,
+        rx_block_synchronizer_commands: metered_channel::Receiver<Command>,
         rx_availability_responses: metered_channel::Receiver<AvailabilityResponse>,
         network: P2pNetwork,
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
@@ -221,7 +221,7 @@ impl BlockSynchronizer {
                 committee,
                 worker_cache,
                 rx_reconfigure,
-                rx_commands,
+                rx_block_synchronizer_commands,
                 rx_availability_responses,
                 pending_requests: HashMap::new(),
                 map_certificate_responses_senders: HashMap::new(),
@@ -260,7 +260,7 @@ impl BlockSynchronizer {
         );
         loop {
             tokio::select! {
-                Some(command) = self.rx_commands.recv() => {
+                Some(command) = self.rx_block_synchronizer_commands.recv() => {
                     match command {
                         Command::SynchronizeBlockHeaders { block_ids, respond_to } => {
                             let fut = self.handle_synchronize_block_headers_command(block_ids, respond_to).await;

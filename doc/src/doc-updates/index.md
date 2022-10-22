@@ -4,12 +4,21 @@ title: Sui Documentation Updates
 
 This topic lists the significant updates to the [Sui documentation](https://docs.sui.io) site so that you can easily identify new or updated information. 
 
-## Week ending 10/22/22
+## Week ending 10/29/22
 
 | Topic | Update | 
 | :------ | :------- |
 | [Reference](../reference) | Added a new Reference top-level node. Moved filed from the Reference section previously in the Build node. |
 
+
+## Week ending 10/22/22
+
+| Topic | Update | 
+| :------ | :------- |
+
+| [Sui Wallet](../explore/wallet-browser.md) | Updates for version 0.2. |
+| [Multiple topics](https://github.com/MystenLabs/sui/pull/5266) | Updates related to gateway deprecation. |
+| [Sui Client CLI](../build/cli-client.md) | Moved information about creating a local network to a new [Sui Local Network](../build/sui-local-network.md) topic. General copyedit and updates for changes to Sui. |
 
 ## Week ending 10/15/22
 

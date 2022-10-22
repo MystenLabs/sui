@@ -71,10 +71,6 @@ ReconfigureNotification:
       NewEpoch:
         NEWTYPE:
           TYPENAME: Committee
-    1:
-      UpdateCommittee:
-        NEWTYPE:
-          TYPENAME: Committee
     2:
       Shutdown: UNIT
 WorkerIndex:
@@ -99,12 +95,6 @@ WorkerOurBatchMessage:
     - digest:
         TYPENAME: BatchDigest
     - worker_id: U32
-WorkerPrimaryMessage:
-  ENUM:
-    0:
-      Reconfigure:
-        NEWTYPE:
-          TYPENAME: ReconfigureNotification
 WorkerReconfigureMessage:
   STRUCT:
     - message:
@@ -115,3 +105,4 @@ WorkerSynchronizeMessage:
         SEQ:
           TYPENAME: BatchDigest
     - target: STR
+

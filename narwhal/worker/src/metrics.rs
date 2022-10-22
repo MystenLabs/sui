@@ -52,6 +52,8 @@ pub fn initialise_metrics(metrics_registry: &Registry) -> Metrics {
 pub struct WorkerMetrics {
     /// Number of created batches from the batch_maker
     pub created_batch_size: HistogramVec,
+    /// Time taken to create a batch
+    pub created_batch_latency: HistogramVec,
 }
 
 impl WorkerMetrics {
@@ -78,6 +80,18 @@ impl WorkerMetrics {
                 registry
             )
             .unwrap(),
+            created_batch_latency: register_histogram_vec_with_registry!(
+                "created_batch_latency",
+                "The latency of creating (sealing) a batch",
+                &["epoch", "reason"],
+                // buckets in milliseconds
+                vec![
+                    10.0, 50.0, 100.0, 200.0, 500.0, 1_000.0, 5_000.0, 10_000.0, 20_000.0,
+                    50_000.0, 100_000.0
+                ],
+                registry
+            )
+            .unwrap(),
         }
     }
 }
@@ -98,10 +112,6 @@ pub struct WorkerChannelMetrics {
     pub tx_batch_maker: IntGauge,
     /// occupancy of the channel from the `worker::BatchMaker` to the `worker::QuorumWaiter`
     pub tx_quorum_waiter: IntGauge,
-    /// occupancy of the channel from the `worker::WorkerReceiverHandler` to the `worker::Processor`
-    pub tx_worker_processor: IntGauge,
-    /// occupancy of the channel from the `worker::QuorumWaiter` to the `worker::Processor`
-    pub tx_client_processor: IntGauge,
 
     // Record the total events received to infer progress rates
     /// total received from the channel from various handlers to the `worker::PrimaryConnector`
@@ -112,10 +122,6 @@ pub struct WorkerChannelMetrics {
     pub tx_batch_maker_total: IntCounter,
     /// total received from the channel from the `worker::BatchMaker` to the `worker::QuorumWaiter`
     pub tx_quorum_waiter_total: IntCounter,
-    /// total received from the channel from the `worker::WorkerReceiverHandler` to the `worker::Processor`
-    pub tx_worker_processor_total: IntCounter,
-    /// total received from the channel from the `worker::QuorumWaiter` to the `worker::Processor`
-    pub tx_client_processor_total: IntCounter,
 }
 
 impl WorkerChannelMetrics {
@@ -141,16 +147,6 @@ impl WorkerChannelMetrics {
                 "occupancy of the channel from the `worker::BatchMaker` to the `worker::QuorumWaiter`",
                 registry
             ).unwrap(),
-            tx_worker_processor: register_int_gauge_with_registry!(
-                "tx_worker_processor",
-                "occupancy of the channel from the `worker::WorkerReceiverHandler` to the `worker::Processor`",
-                registry
-            ).unwrap(),
-            tx_client_processor: register_int_gauge_with_registry!(
-                "tx_client_processor",
-                "occupancy of the channel from the `worker::QuorumWaiter` to the `worker::Processor`",
-                registry
-            ).unwrap(),
 
             // Totals:
 
@@ -172,16 +168,6 @@ impl WorkerChannelMetrics {
             tx_quorum_waiter_total: register_int_counter_with_registry!(
                 "tx_quorum_waiter_total",
                 "total received from the channel from the `worker::BatchMaker` to the `worker::QuorumWaiter`",
-                registry
-            ).unwrap(),
-            tx_worker_processor_total: register_int_counter_with_registry!(
-                "tx_worker_processor_total",
-                "total received from the channel from the `worker::WorkerReceiverHandler` to the `worker::Processor`",
-                registry
-            ).unwrap(),
-            tx_client_processor_total: register_int_counter_with_registry!(
-                "tx_client_processor_total",
-                "total received from the channel from the `worker::QuorumWaiter` to the `worker::Processor`",
                 registry
             ).unwrap(),
         }

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::traits::{PrimaryToPrimaryRpc, PrimaryToWorkerRpc};
+use crate::traits::{PrimaryToPrimaryRpc, PrimaryToWorkerRpc, WorkerRpc};
 use crate::{
     traits::{Lucky, ReliableNetwork, UnreliableNetwork},
     BoundedExecutor, CancelOnDropHandler, RetryConfig, MAX_TASK_CONCURRENCY,
@@ -18,9 +18,9 @@ use tokio::{runtime::Handle, task::JoinHandle};
 use types::{
     Batch, BatchDigest, FetchCertificatesRequest, FetchCertificatesResponse, PrimaryMessage,
     PrimaryToPrimaryClient, PrimaryToWorkerClient, RequestBatchRequest, WorkerBatchMessage,
-    WorkerBatchRequest, WorkerBatchResponse, WorkerDeleteBatchesMessage, WorkerOthersBatchMessage,
-    WorkerOurBatchMessage, WorkerPrimaryMessage, WorkerReconfigureMessage,
-    WorkerSynchronizeMessage, WorkerToPrimaryClient, WorkerToWorkerClient,
+    WorkerDeleteBatchesMessage, WorkerOthersBatchMessage, WorkerOurBatchMessage,
+    WorkerReconfigureMessage, WorkerSynchronizeMessage, WorkerToPrimaryClient,
+    WorkerToWorkerClient,
 };
 
 fn default_executor() -> BoundedExecutor {
@@ -298,38 +298,6 @@ impl ReliableNetwork<WorkerSynchronizeMessage> for P2pNetwork {
 // Worker-to-Primary
 //
 
-impl UnreliableNetwork<WorkerPrimaryMessage> for P2pNetwork {
-    type Response = ();
-    fn unreliable_send(
-        &mut self,
-        peer: NetworkPublicKey,
-        message: &WorkerPrimaryMessage,
-    ) -> Result<JoinHandle<Result<anemo::Response<()>>>> {
-        let message = message.to_owned();
-        let f =
-            move |peer| async move { WorkerToPrimaryClient::new(peer).send_message(message).await };
-        self.unreliable_send(peer, f)
-    }
-}
-
-#[async_trait]
-impl ReliableNetwork<WorkerPrimaryMessage> for P2pNetwork {
-    type Response = ();
-    async fn send(
-        &mut self,
-        peer: NetworkPublicKey,
-        message: &WorkerPrimaryMessage,
-    ) -> CancelOnDropHandler<Result<anemo::Response<()>>> {
-        let message = message.to_owned();
-        let f = move |peer| {
-            let message = message.clone();
-            async move { WorkerToPrimaryClient::new(peer).send_message(message).await }
-        };
-
-        self.send(peer, f).await
-    }
-}
-
 #[async_trait]
 impl ReliableNetwork<WorkerOurBatchMessage> for P2pNetwork {
     type Response = ();
@@ -410,46 +378,8 @@ impl ReliableNetwork<WorkerBatchMessage> for P2pNetwork {
     }
 }
 
-impl UnreliableNetwork<WorkerBatchRequest> for P2pNetwork {
-    type Response = WorkerBatchResponse;
-    fn unreliable_send(
-        &mut self,
-        peer: NetworkPublicKey,
-        message: &WorkerBatchRequest,
-    ) -> Result<JoinHandle<Result<anemo::Response<WorkerBatchResponse>>>> {
-        let message = message.to_owned();
-        let f = move |peer| async move {
-            WorkerToWorkerClient::new(peer)
-                .request_batches(message)
-                .await
-        };
-        self.unreliable_send(peer, f)
-    }
-}
-
 #[async_trait]
 impl PrimaryToWorkerRpc for P2pNetwork {
-    async fn request_batch(
-        &self,
-        peer: NetworkPublicKey,
-        batch: BatchDigest,
-    ) -> Result<Option<Batch>> {
-        const BATCH_REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
-
-        let peer_id = PeerId(peer.0.to_bytes());
-        let peer = self
-            .network
-            .peer(peer_id)
-            .ok_or_else(|| format_err!("Network has no connection with peer {peer_id}"))?;
-        let request =
-            anemo::Request::new(RequestBatchRequest { batch }).with_timeout(BATCH_REQUEST_TIMEOUT);
-        let response = PrimaryToWorkerClient::new(peer)
-            .request_batch(request)
-            .await
-            .map_err(|e| format_err!("Network error {:?}", e))?;
-        Ok(response.into_body().batch)
-    }
-
     async fn delete_batches(
         &self,
         peer: NetworkPublicKey,
@@ -473,23 +403,25 @@ impl PrimaryToWorkerRpc for P2pNetwork {
 }
 
 #[async_trait]
-impl ReliableNetwork<WorkerBatchRequest> for P2pNetwork {
-    type Response = WorkerBatchResponse;
-    async fn send(
-        &mut self,
+impl WorkerRpc for P2pNetwork {
+    async fn request_batch(
+        &self,
         peer: NetworkPublicKey,
-        message: &WorkerBatchRequest,
-    ) -> CancelOnDropHandler<Result<anemo::Response<WorkerBatchResponse>>> {
-        let message = message.to_owned();
-        let f = move |peer| {
-            let message = message.clone();
-            async move {
-                WorkerToWorkerClient::new(peer)
-                    .request_batches(message)
-                    .await
-            }
-        };
+        batch: BatchDigest,
+    ) -> Result<Option<Batch>> {
+        const BATCH_REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 
-        self.send(peer, f).await
+        let peer_id = PeerId(peer.0.to_bytes());
+        let peer = self
+            .network
+            .peer(peer_id)
+            .ok_or_else(|| format_err!("Network has no connection with peer {peer_id}"))?;
+        let request =
+            anemo::Request::new(RequestBatchRequest { batch }).with_timeout(BATCH_REQUEST_TIMEOUT);
+        let response = WorkerToWorkerClient::new(peer)
+            .request_batch(request)
+            .await
+            .map_err(|e| format_err!("Network error {:?}", e))?;
+        Ok(response.into_body().batch)
     }
 }

@@ -15,9 +15,8 @@ use crate::messages_checkpoint::{
 };
 use crate::object::{Object, ObjectFormatOptions, Owner, OBJECT_START_VERSION};
 use crate::storage::{DeleteKind, WriteKind};
-use crate::sui_serde::Base64;
+use crate::sui_serde::{Base64, Encoding};
 use crate::{SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION};
-use base64ct::Encoding;
 use byteorder::{BigEndian, ReadBytesExt};
 use itertools::Either;
 use move_binary_format::access::ModuleAccess;
@@ -121,6 +120,8 @@ pub struct ChangeEpoch {
     pub storage_charge: u64,
     /// The total amount of gas charged for computation during the epoch.
     pub computation_charge: u64,
+    /// The total amount of storage rebate refunded during the epoch.
+    pub storage_rebate: u64,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
@@ -348,6 +349,7 @@ impl Display for SingleTransactionKind {
                 writeln!(writer, "New epoch ID: {}", e.epoch)?;
                 writeln!(writer, "Storage gas reward: {}", e.storage_charge)?;
                 writeln!(writer, "Computation gas reward: {}", e.computation_charge)?;
+                writeln!(writer, "Storage rebate: {}", e.storage_rebate)?;
             }
         }
         write!(f, "{}", writer)
@@ -618,7 +620,7 @@ impl TransactionData {
     }
 
     pub fn to_base64(&self) -> String {
-        base64ct::Base64::encode_string(&self.to_bytes())
+        Base64::encode(&self.to_bytes())
     }
 
     pub fn gas_payment_object_ref(&self) -> &ObjectRef {
@@ -874,6 +876,7 @@ impl SignedTransaction {
         next_epoch: EpochId,
         storage_charge: u64,
         computation_charge: u64,
+        storage_rebate: u64,
         authority: AuthorityName,
         secret: &dyn signature::Signer<AuthoritySignature>,
     ) -> Self {
@@ -881,6 +884,7 @@ impl SignedTransaction {
             epoch: next_epoch,
             storage_charge,
             computation_charge,
+            storage_rebate,
         }));
         // For the ChangeEpoch transaction, we do not care about the sender and the gas.
         let data = TransactionData::new(
@@ -1181,8 +1185,7 @@ pub enum ExecutionFailureStatus {
     EntryTypeArityMismatch,
     EntryArgumentError(EntryArgumentError),
     CircularObjectOwnership(CircularObjectOwnership),
-    MissingObjectOwner(MissingObjectOwner),
-    InvalidSharedChildUse(InvalidSharedChildUse),
+    InvalidChildObjectArgument(InvalidChildObjectArgument),
     InvalidSharedByValue(InvalidSharedByValue),
     TooManyChildObjects {
         object: ObjectID,
@@ -1237,15 +1240,9 @@ pub struct CircularObjectOwnership {
 }
 
 #[derive(Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize, Hash)]
-pub struct MissingObjectOwner {
+pub struct InvalidChildObjectArgument {
     pub child: ObjectID,
     pub parent: SuiAddress,
-}
-
-#[derive(Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize, Hash)]
-pub struct InvalidSharedChildUse {
-    pub child: ObjectID,
-    pub ancestor: ObjectID,
 }
 
 #[derive(Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize, Hash)]
@@ -1262,12 +1259,8 @@ impl ExecutionFailureStatus {
         CircularObjectOwnership { object }.into()
     }
 
-    pub fn missing_object_owner(child: ObjectID, parent: SuiAddress) -> Self {
-        MissingObjectOwner { child, parent }.into()
-    }
-
-    pub fn invalid_shared_child_use(child: ObjectID, ancestor: ObjectID) -> Self {
-        InvalidSharedChildUse { child, ancestor }.into()
+    pub fn invalid_child_object_argument(child: ObjectID, parent: SuiAddress) -> Self {
+        InvalidChildObjectArgument { child, parent }.into()
     }
 
     pub fn invalid_shared_by_value(object: ObjectID) -> Self {
@@ -1331,11 +1324,8 @@ impl Display for ExecutionFailureStatus {
             ExecutionFailureStatus::CircularObjectOwnership(data) => {
                 write!(f, "Circular  Object Ownership. {data}")
             }
-            ExecutionFailureStatus::MissingObjectOwner(data) => {
-                write!(f, "Missing Object Owner. {data}")
-            }
-            ExecutionFailureStatus::InvalidSharedChildUse(data) => {
-                write!(f, "Invalid Shared Child Object Usage. {data}.")
+            ExecutionFailureStatus::InvalidChildObjectArgument(data) => {
+                write!(f, "Invalid Object Owned Argument. {data}")
             }
             ExecutionFailureStatus::InvalidSharedByValue(data) => {
                 write!(f, "Invalid Shared Object By-Value Usage. {data}.")
@@ -1454,26 +1444,13 @@ impl Display for CircularObjectOwnership {
     }
 }
 
-impl Display for MissingObjectOwner {
+impl Display for InvalidChildObjectArgument {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let MissingObjectOwner { child, parent } = self;
+        let InvalidChildObjectArgument { child, parent } = self;
         write!(
             f,
-            "Missing object owner, the parent object {parent} for child object {child}.",
-        )
-    }
-}
-
-impl Display for InvalidSharedChildUse {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let InvalidSharedChildUse { child, ancestor } = self;
-        write!(
-            f,
-            "When a child object (either direct or indirect) of a shared object is passed by-value \
-            to an entry function, either the child object's type or the shared object's type must \
-            be defined in the same module as the called function. This is violated by object \
-            {child}, whose ancestor {ancestor} is a shared object, and neither are defined in \
-            this module.",
+            "Object {child} is owned by object {parent}. \
+            Objects owned by other objects cannot be used as input arguments."
         )
     }
 }
@@ -1536,15 +1513,9 @@ impl From<CircularObjectOwnership> for ExecutionFailureStatus {
     }
 }
 
-impl From<MissingObjectOwner> for ExecutionFailureStatus {
-    fn from(error: MissingObjectOwner) -> Self {
-        Self::MissingObjectOwner(error)
-    }
-}
-
-impl From<InvalidSharedChildUse> for ExecutionFailureStatus {
-    fn from(error: InvalidSharedChildUse) -> Self {
-        Self::InvalidSharedChildUse(error)
+impl From<InvalidChildObjectArgument> for ExecutionFailureStatus {
+    fn from(error: InvalidChildObjectArgument) -> Self {
+        Self::InvalidChildObjectArgument(error)
     }
 }
 
@@ -1699,6 +1670,36 @@ impl Display for TransactionEffects {
             }
         }
         write!(f, "{}", writer)
+    }
+}
+
+impl Default for TransactionEffects {
+    fn default() -> Self {
+        TransactionEffects {
+            status: ExecutionStatus::Success,
+            gas_used: GasCostSummary {
+                computation_cost: 0,
+                storage_cost: 0,
+                storage_rebate: 0,
+            },
+            shared_objects: Vec::new(),
+            transaction_digest: TransactionDigest::random(),
+            created: Vec::new(),
+            mutated: Vec::new(),
+            unwrapped: Vec::new(),
+            deleted: Vec::new(),
+            wrapped: Vec::new(),
+            gas_object: (
+                (
+                    ObjectID::random(),
+                    SequenceNumber::new(),
+                    ObjectDigest::new([0; 32]),
+                ),
+                Owner::AddressOwner(SuiAddress::default()),
+            ),
+            events: Vec::new(),
+            dependencies: Vec::new(),
+        }
     }
 }
 

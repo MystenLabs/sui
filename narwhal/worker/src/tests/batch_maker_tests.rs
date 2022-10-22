@@ -11,7 +11,7 @@ async fn make_batch() {
     let committee = fixture.committee();
     let (_tx_reconfiguration, rx_reconfiguration) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
-    let (tx_transaction, rx_transaction) = test_utils::test_channel!(1);
+    let (tx_batch_maker, rx_batch_maker) = test_utils::test_channel!(1);
     let (tx_message, mut rx_message) = test_utils::test_channel!(1);
     let node_metrics = WorkerMetrics::new(&Registry::new());
 
@@ -22,15 +22,15 @@ async fn make_batch() {
         /* max_batch_delay */
         Duration::from_millis(1_000_000), // Ensure the timer is not triggered.
         rx_reconfiguration,
-        rx_transaction,
+        rx_batch_maker,
         tx_message,
         Arc::new(node_metrics),
     );
 
     // Send enough transactions to seal a batch.
     let tx = transaction();
-    tx_transaction.send(tx.clone()).await.unwrap();
-    tx_transaction.send(tx.clone()).await.unwrap();
+    tx_batch_maker.send(tx.clone()).await.unwrap();
+    tx_batch_maker.send(tx.clone()).await.unwrap();
 
     // Ensure the batch is as expected.
     let expected_batch = Batch(vec![tx.clone(), tx.clone()]);
@@ -44,7 +44,7 @@ async fn batch_timeout() {
     let committee = fixture.committee();
     let (_tx_reconfiguration, rx_reconfiguration) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
-    let (tx_transaction, rx_transaction) = test_utils::test_channel!(1);
+    let (tx_batch_maker, rx_batch_maker) = test_utils::test_channel!(1);
     let (tx_message, mut rx_message) = test_utils::test_channel!(1);
     let node_metrics = WorkerMetrics::new(&Registry::new());
 
@@ -55,14 +55,14 @@ async fn batch_timeout() {
         /* max_batch_delay */
         Duration::from_millis(50), // Ensure the timer is triggered.
         rx_reconfiguration,
-        rx_transaction,
+        rx_batch_maker,
         tx_message,
         Arc::new(node_metrics),
     );
 
     // Do not send enough transactions to seal a batch.
     let tx = transaction();
-    tx_transaction.send(tx.clone()).await.unwrap();
+    tx_batch_maker.send(tx.clone()).await.unwrap();
 
     // Ensure the batch is as expected.
     let expected_batch = Batch(vec![tx]);

@@ -12,8 +12,8 @@ use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
 use sui_adapter::genesis;
 use sui_core::test_utils::to_sender_signed_transaction;
 use sui_json_rpc_types::SuiObjectInfo;
-use sui_sdk::crypto::AccountKeystore;
-use sui_sdk::crypto::Keystore;
+use sui_keys::keystore::AccountKeystore;
+use sui_keys::keystore::Keystore;
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SuiAddress;
 use sui_types::base_types::{ObjectDigest, ObjectID, SequenceNumber};
@@ -33,7 +33,7 @@ use sui_types::object::Object;
 use sui_types::object::Owner;
 
 /// The maximum gas per transaction.
-pub const MAX_GAS: u64 = 50_000;
+pub const MAX_GAS: u64 = 100_000;
 
 pub fn random_object_ref() -> ObjectRef {
     (

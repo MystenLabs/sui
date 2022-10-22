@@ -13,7 +13,7 @@ use crate::{
     object::Owner,
     object::{Data, Object},
     storage::{
-        BackingPackageStore, DeleteKind, ObjectChange, ObjectResolver, ParentSync, Storage,
+        BackingPackageStore, ChildObjectResolver, DeleteKind, ObjectChange, ParentSync, Storage,
         WriteKind,
     },
 };
@@ -371,10 +371,19 @@ impl<S> TemporaryStore<S> {
         // eventually show up in the parent_sync table with an updated version.
         self.deleted.insert(*id, (version.increment(), kind));
     }
-}
 
-impl<S> ObjectResolver for TemporaryStore<S> {
-    fn read_object(&self, id: &ObjectID) -> Option<&Object> {
+    /// Resets any mutations and deletions recorded in the store.
+    pub fn reset(&mut self) {
+        self._written.clear();
+        self.deleted.clear();
+        self.events.clear();
+    }
+
+    pub fn log_event(&mut self, event: Event) {
+        self.events.push(event)
+    }
+
+    pub fn read_object(&self, id: &ObjectID) -> Option<&Object> {
         // there should be no read after delete
         debug_assert!(self.deleted.get(id).is_none());
         self._written
@@ -382,27 +391,45 @@ impl<S> ObjectResolver for TemporaryStore<S> {
             .map(|(obj, _kind)| obj)
             .or_else(|| self.input_objects.get(id))
     }
-}
 
-impl<S> Storage for TemporaryStore<S> {
-    /// Resets any mutations and deletions recorded in the store.
-    fn reset(&mut self) {
-        self._written.clear();
-        self.deleted.clear();
-        self.events.clear();
-    }
-
-    fn log_event(&mut self, event: Event) {
-        self.events.push(event)
-    }
-
-    fn apply_object_changes(&mut self, changes: BTreeMap<ObjectID, ObjectChange>) {
+    pub fn apply_object_changes(&mut self, changes: BTreeMap<ObjectID, ObjectChange>) {
         for (id, change) in changes {
             match change {
                 ObjectChange::Write(new_value, kind) => self.write_object(new_value, kind),
                 ObjectChange::Delete(version, kind) => self.delete_object(&id, version, kind),
             }
         }
+    }
+}
+
+impl<S: ChildObjectResolver> ChildObjectResolver for TemporaryStore<S> {
+    fn read_child_object(&self, parent: &ObjectID, child: &ObjectID) -> SuiResult<Option<Object>> {
+        // there should be no read after delete
+        debug_assert!(self.deleted.get(child).is_none());
+        let obj_opt = self._written.get(child).map(|(obj, _kind)| obj);
+        if obj_opt.is_some() {
+            Ok(obj_opt.cloned())
+        } else {
+            self.store.read_child_object(parent, child)
+        }
+    }
+}
+
+impl<S: ChildObjectResolver> Storage for TemporaryStore<S> {
+    fn reset(&mut self) {
+        TemporaryStore::reset(self)
+    }
+
+    fn log_event(&mut self, event: Event) {
+        TemporaryStore::log_event(self, event)
+    }
+
+    fn read_object(&self, id: &ObjectID) -> Option<&Object> {
+        TemporaryStore::read_object(self, id)
+    }
+
+    fn apply_object_changes(&mut self, changes: BTreeMap<ObjectID, ObjectChange>) {
+        TemporaryStore::apply_object_changes(self, changes)
     }
 }
 

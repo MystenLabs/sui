@@ -45,12 +45,12 @@ pub struct Proposer {
 
     /// Watch channel to reconfigure the committee.
     rx_reconfigure: watch::Receiver<ReconfigureNotification>,
-    /// Receives the parents to include in the next header (along with their round number).
-    rx_core: Receiver<(Vec<Certificate>, Round, Epoch)>,
+    /// Receives the parents to include in the next header (along with their round number) from core.
+    rx_parents: Receiver<(Vec<Certificate>, Round, Epoch)>,
     /// Receives the batches' digests from our workers.
-    rx_workers: Receiver<(BatchDigest, WorkerId)>,
+    rx_our_digests: Receiver<(BatchDigest, WorkerId)>,
     /// Sends newly created headers to the `Core`.
-    tx_core: Sender<Header>,
+    tx_headers: Sender<Header>,
 
     /// The proposer store for persisting the last header.
     proposer_store: ProposerStore,
@@ -79,9 +79,9 @@ impl Proposer {
         max_header_delay: Duration,
         network_model: NetworkModel,
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
-        rx_core: Receiver<(Vec<Certificate>, Round, Epoch)>,
-        rx_workers: Receiver<(BatchDigest, WorkerId)>,
-        tx_core: Sender<Header>,
+        rx_parents: Receiver<(Vec<Certificate>, Round, Epoch)>,
+        rx_our_digests: Receiver<(BatchDigest, WorkerId)>,
+        tx_headers: Sender<Header>,
         metrics: Arc<PrimaryMetrics>,
     ) -> JoinHandle<()> {
         let genesis = Certificate::genesis(&committee);
@@ -95,9 +95,9 @@ impl Proposer {
                 max_header_delay,
                 network_model,
                 rx_reconfigure,
-                rx_core,
-                rx_workers,
-                tx_core,
+                rx_parents,
+                rx_our_digests,
+                tx_headers,
                 proposer_store,
                 round: 0,
                 last_parents: genesis,
@@ -110,7 +110,10 @@ impl Proposer {
         })
     }
 
-    async fn make_header(&mut self) -> DagResult<()> {
+    /// make_header creates a new Header, persists it to database
+    /// and sends it to core for processing. If successful, it returns
+    /// the number of batch digests included in header.
+    async fn make_header(&mut self) -> DagResult<usize> {
         // Make a new header.
         let num_of_digests = self.digests.len().min(self.max_header_num_of_batches);
         let mut header = Header::new(
@@ -151,11 +154,15 @@ impl Proposer {
             info!("Created {} -> {:?}", header, digest);
         }
 
+        let num_of_included_digests = header.payload.len();
+
         // Send the new header to the `Core` that will broadcast and process it.
-        self.tx_core
+        self.tx_headers
             .send(header)
             .await
-            .map_err(|_| DagError::ShuttingDown)
+            .map_err(|_| DagError::ShuttingDown)?;
+
+        Ok(num_of_included_digests)
     }
 
     /// Update the committee and cleanup internal state.
@@ -289,7 +296,18 @@ impl Proposer {
                 match self.make_header().await {
                     Err(e @ DagError::ShuttingDown) => debug!("{e}"),
                     Err(e) => panic!("Unexpected error: {e}"),
-                    Ok(()) => (),
+                    Ok(digests) => {
+                        let reason = if timer_expired {
+                            "timeout"
+                        } else {
+                            "threshold_size_reached"
+                        };
+
+                        self.metrics
+                            .num_of_batch_digests_in_header
+                            .with_label_values(&[&self.committee.epoch.to_string(), reason])
+                            .observe(digests as f64);
+                    }
                 }
 
                 // Reschedule the timer.
@@ -299,7 +317,7 @@ impl Proposer {
             }
 
             tokio::select! {
-                Some((parents, round, epoch)) = self.rx_core.recv() => {
+                Some((parents, round, epoch)) = self.rx_parents.recv() => {
                     // If the core already moved to the next epoch we should pull the next
                     // committee as well.
                     match epoch.cmp(&self.committee.epoch()) {
@@ -349,10 +367,21 @@ impl Proposer {
                     // Check whether we can advance to the next round. Note that if we timeout,
                     // we ignore this check and advance anyway.
                     advance = self.ready();
+
+                    let round_type = if self.round % 2 == 0 {
+                        "even"
+                    } else {
+                        "odd"
+                    };
+
+                    self.metrics
+                    .proposer_ready_to_advance
+                    .with_label_values(&[&self.committee.epoch.to_string(), &advance.to_string(), round_type])
+                    .inc();
                 }
 
                 // Receive digests from our workers.
-                Some((digest, worker_id)) = self.rx_workers.recv() => {
+                Some((digest, worker_id)) = self.rx_our_digests.recv() => {
                     self.digests.push((digest, worker_id));
                 }
 

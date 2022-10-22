@@ -18,7 +18,7 @@ module test::m {
     public entry fun t(ctx: &mut TxContext) {
         let parent = sui::object::new(ctx);
         let child = S { id: sui::object::new(ctx) };
-        sui::transfer::transfer_to_object_id(child, &mut parent);
+        sui::dynamic_object_field::add(&mut parent, 0, child);
         sui::object::delete(parent);
     }
 }

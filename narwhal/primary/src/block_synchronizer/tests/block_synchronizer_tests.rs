@@ -47,7 +47,7 @@ async fn test_successful_headers_synchronization() {
 
     let (_tx_reconfigure, rx_reconfigure) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
-    let (tx_commands, rx_commands) = test_utils::test_channel!(10);
+    let (tx_commands, rx_block_synchronizer_commands) = test_utils::test_channel!(10);
     let (tx_availability_responses, rx_availability_responses) = test_utils::test_channel!(10);
 
     // AND some blocks (certificates)
@@ -100,7 +100,7 @@ async fn test_successful_headers_synchronization() {
         committee.clone(),
         worker_cache.clone(),
         rx_reconfigure,
-        rx_commands,
+        rx_block_synchronizer_commands,
         rx_availability_responses,
         P2pNetwork::new(network.clone()),
         payload_store.clone(),
@@ -242,7 +242,7 @@ async fn test_successful_payload_synchronization() {
 
     let (_tx_reconfigure, rx_reconfigure) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
-    let (tx_commands, rx_commands) = test_utils::test_channel!(10);
+    let (tx_commands, rx_block_synchronizer_commands) = test_utils::test_channel!(10);
     let (tx_availability_responses, rx_availability_responses) = test_utils::test_channel!(10);
 
     // AND some blocks (certificates)
@@ -282,7 +282,7 @@ async fn test_successful_payload_synchronization() {
         committee.clone(),
         worker_cache.clone(),
         rx_reconfigure,
-        rx_commands,
+        rx_block_synchronizer_commands,
         rx_availability_responses,
         P2pNetwork::new(network.clone()),
         payload_store.clone(),
@@ -450,7 +450,7 @@ async fn test_multiple_overlapping_requests() {
     let network_key = primary.network_keypair().copy().private().0.to_bytes();
 
     let (_, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
-    let (_, rx_commands) = test_utils::test_channel!(10);
+    let (_, rx_block_synchronizer_commands) = test_utils::test_channel!(10);
     let (_, rx_availability_responses) = test_utils::test_channel!(10);
 
     // AND some blocks (certificates)
@@ -484,7 +484,7 @@ async fn test_multiple_overlapping_requests() {
         committee: committee.clone(),
         worker_cache: worker_cache.clone(),
         rx_reconfigure,
-        rx_commands,
+        rx_block_synchronizer_commands,
         rx_availability_responses,
         pending_requests: HashMap::new(),
         map_certificate_responses_senders: HashMap::new(),
@@ -579,7 +579,7 @@ async fn test_timeout_while_waiting_for_certificates() {
 
     let (_tx_reconfigure, rx_reconfigure) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
-    let (tx_commands, rx_commands) = test_utils::test_channel!(10);
+    let (tx_commands, rx_block_synchronizer_commands) = test_utils::test_channel!(10);
     let (_, rx_availability_responses) = test_utils::test_channel!(10);
 
     // AND some random block ids
@@ -617,7 +617,7 @@ async fn test_timeout_while_waiting_for_certificates() {
         committee.clone(),
         worker_cache.clone(),
         rx_reconfigure,
-        rx_commands,
+        rx_block_synchronizer_commands,
         rx_availability_responses,
         P2pNetwork::new(network),
         payload_store.clone(),
@@ -689,7 +689,7 @@ async fn test_reply_with_certificates_already_in_storage() {
     let network_key = primary.network_keypair().copy().private().0.to_bytes();
 
     let (_, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
-    let (_, rx_commands) = test_utils::test_channel!(10);
+    let (_, rx_block_synchronizer_commands) = test_utils::test_channel!(10);
     let (_, rx_availability_responses) = test_utils::test_channel!(10);
 
     let own_address = network::multiaddr_to_address(&committee.primary(&name).unwrap()).unwrap();
@@ -705,7 +705,7 @@ async fn test_reply_with_certificates_already_in_storage() {
         committee: committee.clone(),
         worker_cache: worker_cache.clone(),
         rx_reconfigure,
-        rx_commands,
+        rx_block_synchronizer_commands,
         rx_availability_responses,
         pending_requests: Default::default(),
         map_certificate_responses_senders: Default::default(),
@@ -793,7 +793,7 @@ async fn test_reply_with_payload_already_in_storage() {
     let network_key = primary.network_keypair().copy().private().0.to_bytes();
 
     let (_, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
-    let (_, rx_commands) = test_utils::test_channel!(10);
+    let (_, rx_block_synchronizer_commands) = test_utils::test_channel!(10);
     let (_, rx_availability_responses) = test_utils::test_channel!(10);
 
     let own_address = network::multiaddr_to_address(&committee.primary(&name).unwrap()).unwrap();
@@ -808,7 +808,7 @@ async fn test_reply_with_payload_already_in_storage() {
         committee: committee.clone(),
         worker_cache: worker_cache.clone(),
         rx_reconfigure,
-        rx_commands,
+        rx_block_synchronizer_commands,
         rx_availability_responses,
         pending_requests: Default::default(),
         map_certificate_responses_senders: Default::default(),
@@ -901,7 +901,7 @@ async fn test_reply_with_payload_already_in_storage_for_own_certificates() {
     let name = primary.public_key();
 
     let (_, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
-    let (_, rx_commands) = test_utils::test_channel!(10);
+    let (_, rx_block_synchronizer_commands) = test_utils::test_channel!(10);
     let (_, rx_availability_responses) = test_utils::test_channel!(10);
 
     let own_address = network::multiaddr_to_address(&committee.primary(&name).unwrap()).unwrap();
@@ -916,7 +916,7 @@ async fn test_reply_with_payload_already_in_storage_for_own_certificates() {
         committee: committee.clone(),
         worker_cache: worker_cache.clone(),
         rx_reconfigure,
-        rx_commands,
+        rx_block_synchronizer_commands,
         rx_availability_responses,
         pending_requests: Default::default(),
         map_certificate_responses_senders: Default::default(),

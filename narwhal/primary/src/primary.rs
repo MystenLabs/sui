@@ -19,7 +19,11 @@ use crate::{
 };
 
 use anemo::{types::PeerInfo, PeerId};
-use anemo_tower::{callback::CallbackLayer, trace::TraceLayer};
+use anemo_tower::{
+    auth::{AllowedPeers, RequireAuthorizationLayer},
+    callback::CallbackLayer,
+    trace::TraceLayer,
+};
 use async_trait::async_trait;
 use config::{Parameters, SharedCommittee, SharedWorkerCache, WorkerId, WorkerInfo};
 use consensus::dag::Dag;
@@ -51,7 +55,7 @@ use types::{
     BatchDigest, Certificate, ConsensusStore, FetchCertificatesRequest, FetchCertificatesResponse,
     Header, HeaderDigest, PrimaryToPrimary, PrimaryToPrimaryServer, ReconfigureNotification,
     RoundVoteDigestPair, WorkerInfoResponse, WorkerOthersBatchMessage, WorkerOurBatchMessage,
-    WorkerPrimaryMessage, WorkerToPrimary, WorkerToPrimaryServer,
+    WorkerToPrimary, WorkerToPrimaryServer,
 };
 
 #[cfg(any(test))]
@@ -90,8 +94,8 @@ impl Primary {
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
         vote_digest_store: Store<PublicKey, RoundVoteDigestPair>,
         consensus_store: Arc<ConsensusStore>,
-        tx_consensus: Sender<Certificate>,
-        rx_consensus: Receiver<Certificate>,
+        tx_new_certificates: Sender<Certificate>,
+        rx_committed_certificates: Receiver<Certificate>,
         dag: Option<Arc<Dag>>,
         network_model: NetworkModel,
         tx_reconfigure: watch::Sender<ReconfigureNotification>,
@@ -127,10 +131,10 @@ impl Primary {
             &primary_channel_metrics.tx_headers,
             &primary_channel_metrics.tx_headers_total,
         );
-        let (tx_sync_headers, rx_sync_headers) = channel_with_total(
+        let (tx_header_waiter, rx_header_waiter) = channel_with_total(
             CHANNEL_CAPACITY,
-            &primary_channel_metrics.tx_sync_headers,
-            &primary_channel_metrics.tx_sync_headers_total,
+            &primary_channel_metrics.tx_header_waiter,
+            &primary_channel_metrics.tx_header_waiter_total,
         );
         let (tx_certificate_waiter, rx_certificate_waiter) = channel_with_total(
             CHANNEL_CAPACITY,
@@ -175,14 +179,13 @@ impl Primary {
 
         // we need to hack the gauge from this consensus channel into the primary registry
         // This avoids a cyclic dependency in the initialization of consensus and primary
-        // TODO: this (tx_committed_certificates, rx_consensus) channel pair name is highly counterintuitive: see initialization in node and rename(?)
         let committed_certificates_gauge = tx_committed_certificates.gauge().clone();
         primary_channel_metrics.replace_registered_committed_certificates_metric(
             registry,
             Box::new(committed_certificates_gauge),
         );
 
-        let new_certificates_gauge = tx_consensus.gauge().clone();
+        let new_certificates_gauge = tx_new_certificates.gauge().clone();
         primary_channel_metrics
             .replace_registered_new_certificates_metric(registry, Box::new(new_certificates_gauge));
 
@@ -212,16 +215,28 @@ impl Primary {
         });
         let worker_service = WorkerToPrimaryServer::new(WorkerReceiverHandler {
             tx_our_digests,
-            tx_state_handler,
             payload_store: payload_store.clone(),
             our_workers,
         });
 
         let addr = network::multiaddr_to_address(&address).unwrap();
 
+        let our_worker_peer_ids = worker_cache
+            .load()
+            .our_workers(&name)
+            .unwrap()
+            .into_iter()
+            .map(|worker_info| PeerId(worker_info.name.0.to_bytes()));
+        let worker_to_primary_router = anemo::Router::new()
+            .add_rpc_service(worker_service)
+            // Add an Authorization Layer to ensure that we only service requests from our workers
+            .route_layer(RequireAuthorizationLayer::new(AllowedPeers::new(
+                our_worker_peer_ids,
+            )));
+
         let routes = anemo::Router::new()
             .add_rpc_service(primary_service)
-            .add_rpc_service(worker_service);
+            .merge(worker_to_primary_router);
 
         let service = ServiceBuilder::new()
             .layer(TraceLayer::new_for_server_errors())
@@ -298,6 +313,7 @@ impl Primary {
                 .primary_network_admin_server_port,
             network.clone(),
             tx_reconfigure.subscribe(),
+            Some(tx_state_handler),
         );
 
         // The `Synchronizer` provides auxiliary methods helping the `Core` to sync.
@@ -306,7 +322,7 @@ impl Primary {
             &committee.load(),
             certificate_store.clone(),
             payload_store.clone(),
-            /* tx_header_waiter */ tx_sync_headers,
+            tx_header_waiter,
             tx_certificate_waiter,
             dag.clone(),
         );
@@ -337,12 +353,12 @@ impl Primary {
             rx_consensus_round_updates.clone(),
             parameters.gc_depth,
             tx_reconfigure.subscribe(),
-            /* rx_primaries */ rx_primary_messages,
-            /* rx_header_waiter */ rx_headers_loopback,
+            rx_primary_messages,
+            rx_headers_loopback,
             rx_certificates_loopback,
-            /* rx_proposer */ rx_headers,
-            tx_consensus,
-            /* tx_proposer */ tx_parents,
+            rx_headers,
+            tx_new_certificates,
+            tx_parents,
             node_metrics.clone(),
             core_primary_network,
         );
@@ -388,8 +404,8 @@ impl Primary {
             rx_consensus_round_updates.clone(),
             parameters.gc_depth,
             tx_reconfigure.subscribe(),
-            /* rx_synchronizer */ rx_sync_headers,
-            /* tx_core */ tx_headers_loopback,
+            rx_header_waiter,
+            tx_headers_loopback,
             node_metrics.clone(),
             header_waiter_primary_network,
         );
@@ -426,9 +442,9 @@ impl Primary {
             parameters.max_header_delay,
             network_model,
             tx_reconfigure.subscribe(),
-            /* rx_core */ rx_parents,
-            /* rx_workers */ rx_our_digests,
-            /* tx_core */ tx_headers,
+            rx_parents,
+            rx_our_digests,
+            tx_headers,
             node_metrics,
         );
 
@@ -450,10 +466,11 @@ impl Primary {
             name.clone(),
             committee.clone(),
             worker_cache.clone(),
-            rx_consensus,
+            rx_committed_certificates,
             tx_consensus_round_updates,
             rx_state_handler,
             tx_reconfigure,
+            P2pNetwork::new(network.clone()),
         );
 
         let consensus_api_handle = if !internal_consensus {
@@ -645,30 +662,12 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
 #[derive(Clone)]
 struct WorkerReceiverHandler {
     tx_our_digests: Sender<(BatchDigest, WorkerId)>,
-    tx_state_handler: Sender<ReconfigureNotification>,
     payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
     our_workers: BTreeMap<WorkerId, WorkerInfo>,
 }
 
 #[async_trait]
 impl WorkerToPrimary for WorkerReceiverHandler {
-    async fn send_message(
-        &self,
-        request: anemo::Request<WorkerPrimaryMessage>,
-    ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
-        let message = request.into_body();
-
-        match message {
-            WorkerPrimaryMessage::Reconfigure(notification) => self
-                .tx_state_handler
-                .send(notification)
-                .await
-                .map_err(|_| DagError::ShuttingDown),
-        }
-        .map(|_| anemo::Response::new(()))
-        .map_err(|e| anemo::rpc::Status::internal(e.to_string()))
-    }
-
     async fn report_our_batch(
         &self,
         request: anemo::Request<WorkerOurBatchMessage>,

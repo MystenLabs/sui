@@ -7,8 +7,8 @@ use prometheus::{
 
 #[derive(Clone, Debug)]
 pub struct ExecutorMetrics {
-    /// occupancy of the channel from the `Subscriber` to `Core`
-    pub tx_executor: IntGauge,
+    /// occupancy of the channel from the `Subscriber` to `Notifier`
+    pub tx_notifier: IntGauge,
     /// Time it takes to download a payload from local worker peer
     pub subscriber_local_fetch_latency: Histogram,
     /// Time it takes to download a payload from remote peer
@@ -35,9 +35,9 @@ pub struct ExecutorMetrics {
 impl ExecutorMetrics {
     pub fn new(registry: &Registry) -> Self {
         Self {
-            tx_executor: register_int_gauge_with_registry!(
-                "tx_executor",
-                "occupancy of the channel from the `Subscriber` to `Core`",
+            tx_notifier: register_int_gauge_with_registry!(
+                "tx_notifier",
+                "occupancy of the channel from the `Subscriber` to `Notifier`",
                 registry
             )
             .unwrap(),

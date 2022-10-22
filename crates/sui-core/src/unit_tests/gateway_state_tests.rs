@@ -566,14 +566,21 @@ async fn test_get_owner_object() {
         .await
         .unwrap();
     let signature = key1.sign(&data.to_bytes());
-    gateway
+    let response = gateway
         .execute_transaction(Transaction::new(data, signature))
         .await
         .unwrap();
+    let field_object = &response.effects.created.first().unwrap().reference;
 
     // Query get_objects_owned_by_object
     let objects = gateway
         .get_objects_owned_by_object(parent.object_id)
+        .await
+        .unwrap();
+    assert_eq!(1, objects.len());
+    assert_eq!(field_object.object_id, objects.first().unwrap().object_id);
+    let objects = gateway
+        .get_objects_owned_by_object(field_object.object_id)
         .await
         .unwrap();
     assert_eq!(1, objects.len());

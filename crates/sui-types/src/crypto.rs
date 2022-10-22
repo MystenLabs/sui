@@ -1,8 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use anyhow::{anyhow, Error};
-use base64ct::Encoding;
-use bip32::{ChildNumber, DerivationPath, XPrv};
 use digest::Digest;
 use fastcrypto::bls12381::{
     BLS12381AggregateSignature, BLS12381KeyPair, BLS12381PrivateKey, BLS12381PublicKey,
@@ -26,7 +24,6 @@ use serde::{Deserialize, Deserializer, Serialize};
 use serde_with::{serde_as, Bytes};
 use sha3::Sha3_256;
 use signature::Signer;
-use slip10_ed25519::derive_ed25519_private_key;
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::str::FromStr;
@@ -35,7 +32,7 @@ use crate::base_types::{AuthorityName, SuiAddress};
 use crate::committee::{Committee, EpochId};
 use crate::error::{SuiError, SuiResult};
 use crate::intent::{Intent, IntentMessage};
-use crate::sui_serde::{AggrAuthSignature, Base64, Readable, SuiBitmap};
+use crate::sui_serde::{AggrAuthSignature, Base64, Encoding, Readable, SuiBitmap};
 pub use enum_dispatch::enum_dispatch;
 
 // Authority Objects
@@ -149,12 +146,11 @@ impl EncodeDecodeBase64 for SuiKeyPair {
                 bytes.extend_from_slice(kp1.private().as_ref());
             }
         }
-        base64ct::Base64::encode_string(&bytes[..])
+        Base64::encode(&bytes[..])
     }
 
     fn decode_base64(value: &str) -> Result<Self, eyre::Report> {
-        let bytes =
-            base64ct::Base64::decode_vec(value).map_err(|e| eyre::eyre!("{}", e.to_string()))?;
+        let bytes = Base64::decode(value).map_err(|e| eyre::eyre!("{}", e.to_string()))?;
         match bytes.first() {
             Some(x) => {
                 if x == &Ed25519SuiSignature::SCHEME.flag() {
@@ -239,12 +235,11 @@ impl EncodeDecodeBase64 for PublicKey {
         let mut bytes: Vec<u8> = Vec::new();
         bytes.extend_from_slice(&[self.flag()]);
         bytes.extend_from_slice(self.as_ref());
-        base64ct::Base64::encode_string(&bytes[..])
+        Base64::encode(&bytes[..])
     }
 
     fn decode_base64(value: &str) -> Result<Self, eyre::Report> {
-        let bytes =
-            base64ct::Base64::decode_vec(value).map_err(|e| eyre::eyre!("{}", e.to_string()))?;
+        let bytes = Base64::decode(value).map_err(|e| eyre::eyre!("{}", e.to_string()))?;
         match bytes.first() {
             Some(x) => {
                 if x == &<Ed25519PublicKey as SuiPublicKey>::SIGNATURE_SCHEME.flag() {
@@ -577,106 +572,6 @@ where
     (kp.public().into(), kp)
 }
 
-/// Ed25519 follows SLIP-0010 using hardened path: m/44'/784'/0'/0'/{index}'
-/// Secp256k1 follows BIP-32 using path where the first 3 levels are hardened: m/54'/784'/0'/0/{index}
-/// Note that the purpose for Secp256k1 is registered as 54, to differentiate from Ed25519 with purpose 44.
-pub fn derive_key_pair_from_path(
-    seed: &[u8],
-    derivation_path: Option<DerivationPath>,
-    key_scheme: &SignatureScheme,
-) -> Result<(SuiAddress, SuiKeyPair), SuiError> {
-    let path = validate_path(key_scheme, derivation_path)?;
-    match key_scheme {
-        SignatureScheme::ED25519 => {
-            let indexes = path.into_iter().map(|i| i.into()).collect::<Vec<_>>();
-            let derived = derive_ed25519_private_key(seed, &indexes);
-            let sk = Ed25519PrivateKey::from_bytes(&derived)
-                .map_err(|e| SuiError::SignatureKeyGenError(e.to_string()))?;
-            let kp = Ed25519KeyPair::from(sk);
-            Ok((kp.public().into(), SuiKeyPair::Ed25519SuiKeyPair(kp)))
-        }
-        SignatureScheme::Secp256k1 => {
-            let child_xprv = XPrv::derive_from_path(seed, &path)
-                .map_err(|e| SuiError::SignatureKeyGenError(e.to_string()))?;
-            let kp = Secp256k1KeyPair::from(
-                Secp256k1PrivateKey::from_bytes(child_xprv.private_key().to_bytes().as_slice())
-                    .unwrap(),
-            );
-            Ok((kp.public().into(), SuiKeyPair::Secp256k1SuiKeyPair(kp)))
-        }
-        SignatureScheme::BLS12381 => Err(SuiError::UnsupportedFeatureError {
-            error: "BLS is not supported for user key derivation".to_string(),
-        }),
-    }
-}
-
-pub fn validate_path(
-    key_scheme: &SignatureScheme,
-    path: Option<DerivationPath>,
-) -> Result<DerivationPath, SuiError> {
-    match key_scheme {
-        SignatureScheme::ED25519 => {
-            match path {
-                Some(p) => {
-                    // The derivation path must be hardened at all levels with purpose = 44, coin_type = 784
-                    if let &[purpose, coin_type, account, change, address] = p.as_ref() {
-                        if purpose
-                            == ChildNumber::new(DERVIATION_PATH_PURPOSE_ED25519, true).unwrap()
-                            && coin_type
-                                == ChildNumber::new(DERIVATION_PATH_COIN_TYPE, true).unwrap()
-                            && account.is_hardened()
-                            && change.is_hardened()
-                            && address.is_hardened()
-                        {
-                            Ok(p)
-                        } else {
-                            Err(SuiError::SignatureKeyGenError("Invalid path".to_string()))
-                        }
-                    } else {
-                        Err(SuiError::SignatureKeyGenError("Invalid path".to_string()))
-                    }
-                }
-                None => Ok(format!(
-                    "m/{DERVIATION_PATH_PURPOSE_ED25519}'/{DERIVATION_PATH_COIN_TYPE}'/0'/0'/0'"
-                )
-                .parse()
-                .unwrap()),
-            }
-        }
-        SignatureScheme::Secp256k1 => {
-            match path {
-                Some(p) => {
-                    // The derivation path must be hardened at first 3 levels with purpose = 54, coin_type = 784
-                    if let &[purpose, coin_type, account, change, address] = p.as_ref() {
-                        if purpose
-                            == ChildNumber::new(DERVIATION_PATH_PURPOSE_SECP256K1, true).unwrap()
-                            && coin_type
-                                == ChildNumber::new(DERIVATION_PATH_COIN_TYPE, true).unwrap()
-                            && account.is_hardened()
-                            && !change.is_hardened()
-                            && !address.is_hardened()
-                        {
-                            Ok(p)
-                        } else {
-                            Err(SuiError::SignatureKeyGenError("Invalid path".to_string()))
-                        }
-                    } else {
-                        Err(SuiError::SignatureKeyGenError("Invalid path".to_string()))
-                    }
-                }
-                None => Ok(format!(
-                    "m/{DERVIATION_PATH_PURPOSE_SECP256K1}'/{DERIVATION_PATH_COIN_TYPE}'/0'/0/0"
-                )
-                .parse()
-                .unwrap()),
-            }
-        }
-        SignatureScheme::BLS12381 => Err(SuiError::UnsupportedFeatureError {
-            error: "BLS is not supported for user key derivation".to_string(),
-        }),
-    }
-}
-
 /// Wrapper function to return SuiKeypair based on key scheme string with seedable rng.
 pub fn random_key_pair_by_type_from_rng<R>(
     key_scheme: SignatureScheme,
@@ -733,7 +628,7 @@ impl Serialize for Signature {
         let bytes = self.as_ref();
 
         if serializer.is_human_readable() {
-            let s = base64ct::Base64::encode_string(bytes);
+            let s = Base64::encode(bytes);
             serializer.serialize_str(&s)
         } else {
             serializer.serialize_bytes(bytes)
@@ -750,7 +645,7 @@ impl<'de> Deserialize<'de> for Signature {
 
         let bytes = if deserializer.is_human_readable() {
             let s = String::deserialize(deserializer)?;
-            base64ct::Base64::decode_vec(&s).map_err(|e| Error::custom(e.to_string()))?
+            Base64::decode(&s).map_err(|e| Error::custom(e.to_string()))?
         } else {
             let data: Vec<u8> = Vec::deserialize(deserializer)?;
             data
@@ -820,9 +715,9 @@ impl signature::Signature for Signature {
 
 impl std::fmt::Debug for Signature {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
-        let flag = base64ct::Base64::encode_string(&[self.scheme().flag()]);
-        let s = base64ct::Base64::encode_string(self.signature_bytes());
-        let p = base64ct::Base64::encode_string(self.public_key_bytes());
+        let flag = Base64::encode(&[self.scheme().flag()]);
+        let s = Base64::encode(self.signature_bytes());
+        let p = Base64::encode(self.public_key_bytes());
         write!(f, "{flag}@{s}@{p}")?;
         Ok(())
     }

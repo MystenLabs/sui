@@ -1760,6 +1760,7 @@ async fn test_change_epoch_transaction() {
         1,
         100,
         100,
+        0,
         authority_state.name,
         &*authority_state.secret,
     );

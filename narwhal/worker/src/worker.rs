@@ -9,7 +9,11 @@ use crate::{
     quorum_waiter::QuorumWaiter,
 };
 use anemo::{types::PeerInfo, PeerId};
-use anemo_tower::{callback::CallbackLayer, trace::TraceLayer};
+use anemo_tower::{
+    auth::{AllowedPeers, RequireAuthorizationLayer},
+    callback::CallbackLayer,
+    trace::TraceLayer,
+};
 use async_trait::async_trait;
 use config::{Parameters, SharedCommittee, SharedWorkerCache, WorkerId};
 use crypto::{traits::KeyPair as _, NetworkKeyPair, PublicKey};
@@ -37,6 +41,9 @@ pub mod worker_tests;
 
 /// The default channel capacity for each channel of the worker.
 pub const CHANNEL_CAPACITY: usize = 1_000;
+
+/// The maximum allowed size of transactions into Narwhal.
+pub const MAX_ALLOWED_TRANSACTION_SIZE: usize = 6 * 1024 * 1024;
 
 use crate::metrics::{Metrics, WorkerEndpointMetrics, WorkerMetrics};
 
@@ -113,8 +120,8 @@ impl Worker {
             committee: worker.committee.clone(),
             worker_cache: worker.worker_cache.clone(),
             store: worker.store.clone(),
-            request_batches_timeout: worker.parameters.sync_retry_delay,
-            request_batches_retry_nodes: worker.parameters.sync_retry_nodes,
+            request_batch_timeout: worker.parameters.sync_retry_delay,
+            request_batch_retry_nodes: worker.parameters.sync_retry_nodes,
             tx_reconfigure,
         });
 
@@ -131,9 +138,20 @@ impl Worker {
         let addr = network::multiaddr_to_address(&address).unwrap();
 
         // Set up anemo Network.
+        let our_primary_peer_id = committee
+            .load()
+            .network_key(&primary_name)
+            .map(|public_key| PeerId(public_key.0.to_bytes()))
+            .unwrap();
+        let primary_to_worker_router = anemo::Router::new()
+            .add_rpc_service(primary_service)
+            // Add an Authorization Layer to ensure that we only service requests from our primary
+            .route_layer(RequireAuthorizationLayer::new(AllowedPeers::new([
+                our_primary_peer_id,
+            ])));
         let routes = anemo::Router::new()
             .add_rpc_service(worker_service)
-            .add_rpc_service(primary_service);
+            .merge(primary_to_worker_router);
 
         let service = ServiceBuilder::new()
             .layer(TraceLayer::new_for_server_errors())
@@ -212,6 +230,7 @@ impl Worker {
             network_admin_server_base_port,
             network.clone(),
             rx_reconfigure.clone(),
+            None,
         );
 
         // Connect worker to its corresponding primary.
@@ -309,8 +328,8 @@ impl Worker {
             self.parameters.batch_size,
             self.parameters.max_batch_delay,
             rx_reconfigure.clone(),
-            /* rx_transaction */ rx_batch_maker,
-            /* tx_message */ tx_quorum_waiter,
+            rx_batch_maker,
+            tx_quorum_waiter,
             node_metrics,
         );
 
@@ -323,8 +342,8 @@ impl Worker {
             (*(*(*self.committee).load()).clone()).clone(),
             self.worker_cache.clone(),
             rx_reconfigure,
-            /* rx_message */ rx_quorum_waiter,
-            /* tx_batch */ tx_our_batch,
+            rx_quorum_waiter,
+            tx_our_batch,
             P2pNetwork::new(network),
         );
 
@@ -385,6 +404,13 @@ impl Transactions for TxReceiverHandler {
         request: Request<TransactionProto>,
     ) -> Result<Response<Empty>, Status> {
         let message = request.into_inner().transaction;
+        if message.len() > MAX_ALLOWED_TRANSACTION_SIZE {
+            return Err(Status::resource_exhausted(format!(
+                "Transaction size is too large: {} > {}",
+                message.len(),
+                MAX_ALLOWED_TRANSACTION_SIZE
+            )));
+        }
         // Send the transaction to the batch maker.
         self.tx_batch_maker
             .send(message.to_vec())

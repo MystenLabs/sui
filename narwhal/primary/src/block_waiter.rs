@@ -9,7 +9,7 @@ use futures::{
     stream::{FuturesOrdered, StreamExt as _},
     FutureExt,
 };
-use network::{P2pNetwork, PrimaryToWorkerRpc};
+use network::{P2pNetwork, WorkerRpc};
 use std::{collections::HashSet, sync::Arc};
 
 use tracing::{debug, instrument};

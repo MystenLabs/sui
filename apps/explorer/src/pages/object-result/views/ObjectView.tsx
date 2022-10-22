@@ -5,38 +5,28 @@ import { extractName } from '../../../utils/objectUtils';
 import { type DataType } from '../ObjectResultType';
 import PkgView from './PkgView';
 import TokenView from './TokenView';
-import ObjHeader from './shared/ObjHeader';
+
+import { PageHeader } from '~/ui/PageHeader';
+
+const PACKAGE_TYPE_NAME = 'Move Package';
 
 function ObjectView({ data }: { data: DataType }) {
     const name = extractName(data.data?.contents);
 
-    if (data.objType === 'Move Package') {
-        return (
-            <>
-                <ObjHeader
-                    data={{
-                        objId: data.id,
-                        objKind: 'Package',
-                        objName: name,
-                    }}
+    const isPackage = data.objType === PACKAGE_TYPE_NAME;
+
+    return (
+        <>
+            <div className="mt-5 mb-10">
+                <PageHeader
+                    type={isPackage ? 'Package' : 'Object'}
+                    title={data.id}
+                    subtitle={name}
                 />
-                <PkgView data={data} />
-            </>
-        );
-    } else {
-        return (
-            <>
-                <ObjHeader
-                    data={{
-                        objId: data.id,
-                        objKind: 'Object',
-                        objName: name,
-                    }}
-                />
-                <TokenView data={data} />
-            </>
-        );
-    }
+            </div>
+            {isPackage ? <PkgView data={data} /> : <TokenView data={data} />}
+        </>
+    );
 }
 
 export default ObjectView;

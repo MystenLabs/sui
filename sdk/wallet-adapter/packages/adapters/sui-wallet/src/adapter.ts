@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
-  MoveCallTransaction,
   SignableTransaction,
   SuiAddress,
   SuiTransactionResponse,
@@ -17,12 +16,6 @@ interface SuiWallet {
   hasPermissions(permissions: readonly PermissionType[]): Promise<boolean>;
   requestPermissions(): Promise<boolean>;
   getAccounts(): Promise<SuiAddress[]>;
-  executeMoveCall: (
-    transaction: MoveCallTransaction
-  ) => Promise<SuiTransactionResponse>;
-  executeSerializedMoveCall: (
-    transactionBytes: Uint8Array
-  ) => Promise<SuiTransactionResponse>;
   signAndExecuteTransaction: (
     transaction: SignableTransaction
   ) => Promise<SuiTransactionResponse>;
@@ -44,16 +37,7 @@ export class SuiWalletAdapter implements WalletAdapter {
   getAccounts(): Promise<string[]> {
     return window.suiWallet.getAccounts();
   }
-  executeMoveCall(
-    transaction: MoveCallTransaction
-  ): Promise<SuiTransactionResponse> {
-    return window.suiWallet.executeMoveCall(transaction);
-  }
-  executeSerializedMoveCall(
-    transactionBytes: Uint8Array
-  ): Promise<SuiTransactionResponse> {
-    return window.suiWallet.executeSerializedMoveCall(transactionBytes);
-  }
+
   signAndExecuteTransaction(
     transaction: SignableTransaction
   ): Promise<SuiTransactionResponse> {

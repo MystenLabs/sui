@@ -116,7 +116,11 @@
         "fileName": "build/cli-client"
       },
       {
-        "label": "Smart Contracts with Move",
+        "label": "Sui Local Network",
+        "fileName": "build/sui-local-network"
+      },      
+      {
+        "label": "Create Smart Contracts with Move",
         "fileName": "build/move/index",
         "title": "Smart Contracts with Move",
         "items": [

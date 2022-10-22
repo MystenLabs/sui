@@ -13,9 +13,8 @@ use clap::Parser;
 use clap::Subcommand;
 use serde::Deserialize;
 
-use sui_sdk::crypto::{AccountKeystore, FileBasedKeystore};
+use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_sdk::{
-    crypto::Keystore,
     json::SuiJsonValue,
     rpc_types::SuiData,
     types::{

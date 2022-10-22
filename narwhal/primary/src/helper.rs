@@ -39,9 +39,9 @@ pub struct Helper {
     /// The payloads (batches) persistent storage.
     payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
     /// Watch channel to reconfigure the committee.
-    rx_committee: watch::Receiver<ReconfigureNotification>,
+    rx_reconfigure: watch::Receiver<ReconfigureNotification>,
     /// Input channel to receive requests.
-    rx_primaries: Receiver<PrimaryMessage>,
+    rx_helper_requests: Receiver<PrimaryMessage>,
     /// A network sender to reply to the sync requests.
     primary_network: P2pNetwork,
 }
@@ -53,8 +53,8 @@ impl Helper {
         committee: Committee,
         certificate_store: CertificateStore,
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
-        rx_committee: watch::Receiver<ReconfigureNotification>,
-        rx_primaries: Receiver<PrimaryMessage>,
+        rx_reconfigure: watch::Receiver<ReconfigureNotification>,
+        rx_helper_requests: Receiver<PrimaryMessage>,
         primary_network: P2pNetwork,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
@@ -63,8 +63,8 @@ impl Helper {
                 committee,
                 certificate_store,
                 payload_store,
-                rx_committee,
-                rx_primaries,
+                rx_reconfigure,
+                rx_helper_requests,
                 primary_network,
             }
             .run()
@@ -79,7 +79,7 @@ impl Helper {
         );
         loop {
             tokio::select! {
-                Some(request) = self.rx_primaries.recv() => match request {
+                Some(request) = self.rx_helper_requests.recv() => match request {
                     // The CertificatesRequest will find any certificates that exist in
                     // the data source (dictated by the digests parameter). The results
                     // will be emitted one by one to the consumer.
@@ -112,9 +112,9 @@ impl Helper {
                     }
                 },
 
-                result = self.rx_committee.changed() => {
+                result = self.rx_reconfigure.changed() => {
                     result.expect("Committee channel dropped");
-                    let message = self.rx_committee.borrow().clone();
+                    let message = self.rx_reconfigure.borrow().clone();
                     match message {
                         ReconfigureNotification::NewEpoch(new_committee) => {
                             self.committee = new_committee;

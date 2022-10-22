@@ -32,7 +32,7 @@ sui-types = { path = "../sui-types" }
 sui-core = { path = "../sui-core" }
 sui-node = { path = "../sui-node" }
 sui-config = { path = "../sui-config" }
-sui-sdk = { path = "../sui-sdk" }
+sui-keys = { path = "../sui-keys" }
 
 move-core-types.workspace = true
 

@@ -3,7 +3,7 @@
 
 import { cva, type VariantProps } from 'class-variance-authority';
 
-import ButtonOrLink, { type ButtonOrLinkProps } from './utils/ButtonOrLink';
+import { ButtonOrLink, type ButtonOrLinkProps } from './utils/ButtonOrLink';
 
 const buttonStyles = cva(
     [

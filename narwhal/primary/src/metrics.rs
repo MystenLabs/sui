@@ -66,7 +66,7 @@ pub struct PrimaryChannelMetrics {
     /// occupancy of the channel from the `primary::Proposer` to the `primary::Core`
     pub tx_headers: IntGauge,
     /// occupancy of the channel from the `primary::Synchronizer` to the `primary::HeaderWaiter`
-    pub tx_sync_headers: IntGauge,
+    pub tx_header_waiter: IntGauge,
     /// occupancy of the channel from the `primary::Synchronizer` to the `primary::CertificaterWaiter`
     pub tx_certificate_waiter: IntGauge,
     /// occupancy of the channel from the `primary::HeaderWaiter` to the `primary::Core`
@@ -100,7 +100,7 @@ pub struct PrimaryChannelMetrics {
     /// total received on channel from the `primary::Proposer` to the `primary::Core`
     pub tx_headers_total: IntCounter,
     /// total received on channel from the `primary::Synchronizer` to the `primary::HeaderWaiter`
-    pub tx_sync_headers_total: IntCounter,
+    pub tx_header_waiter_total: IntCounter,
     /// total received on channel from the `primary::Synchronizer` to the `primary::CertificaterWaiter`
     pub tx_certificate_waiter_total: IntCounter,
     /// total received on channel from the `primary::HeaderWaiter` to the `primary::Core`
@@ -170,7 +170,7 @@ impl PrimaryChannelMetrics {
                 "occupancy of the channel from the `primary::Proposer` to the `primary::Core`",
                 registry
             ).unwrap(),
-            tx_sync_headers: register_int_gauge_with_registry!(
+            tx_header_waiter: register_int_gauge_with_registry!(
                 "tx_sync_headers",
                 "occupancy of the channel from the `primary::Synchronizer` to the `primary::HeaderWaiter`",
                 registry
@@ -252,7 +252,7 @@ impl PrimaryChannelMetrics {
                 "total received on channel from the `primary::Proposer` to the `primary::Core`",
                 registry
             ).unwrap(),
-            tx_sync_headers_total: register_int_counter_with_registry!(
+            tx_header_waiter_total: register_int_counter_with_registry!(
                 "tx_sync_headers_total",
                 "total received on channel from the `primary::Synchronizer` to the `primary::HeaderWaiter`",
                 registry
@@ -395,6 +395,12 @@ pub struct PrimaryMetrics {
     pub votes_dropped_equivocation_protection: IntCounterVec,
     /// Number of pending batches in proposer
     pub num_of_pending_batches_in_proposer: IntGaugeVec,
+    /// A histogram to track the number of batches included
+    /// per header.
+    pub num_of_batch_digests_in_header: HistogramVec,
+    /// A counter that keeps the number of instances where the proposer
+    /// is ready/not ready to advance.
+    pub proposer_ready_to_advance: IntCounterVec,
 }
 
 impl PrimaryMetrics {
@@ -552,6 +558,20 @@ impl PrimaryMetrics {
                 "num_of_pending_batches_in_proposer",
                 "Number of batch digests pending in proposer for next header proposal",
                 &["epoch"],
+                registry
+            ).unwrap(),
+            num_of_batch_digests_in_header: register_histogram_vec_with_registry!(
+                "num_of_batch_digests_in_header",
+                "The number of batch digests included in a proposed header. A reason label is included.",
+                &["epoch", "reason"],
+                // buckets in number of digests
+                vec![0.0, 5.0, 10.0, 15.0, 32.0, 50.0, 100.0, 200.0, 500.0, 1000.0],
+                registry
+            ).unwrap(),
+            proposer_ready_to_advance: register_int_counter_vec_with_registry!(
+                "proposer_ready_to_advance",
+                "The number of times where the proposer is ready/not ready to advance.",
+                &["epoch", "ready", "round"],
                 registry
             ).unwrap()
         }

@@ -115,7 +115,8 @@ async function getRecentTransactions(
                 endGatewayTxSeqNumber
             )
             .then((res: GetTxnDigestsResponse) =>
-                getDataOnTxDigests(network, res)
+                // result returned by getTransactionDigestsInRange is in ascending order
+                getDataOnTxDigests(network, [...res].reverse())
             )) as TxnData[];
     } catch (error) {
         throw error;

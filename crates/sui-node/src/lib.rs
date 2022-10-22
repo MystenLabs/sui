@@ -69,7 +69,7 @@ pub struct SuiNode {
     grpc_server: tokio::task::JoinHandle<Result<()>>,
     _json_rpc_service: Option<HttpServerHandle>,
     _ws_subscription_service: Option<WsServerHandle>,
-    _batch_subsystem_handle: tokio::task::JoinHandle<Result<()>>,
+    _batch_subsystem_handle: tokio::task::JoinHandle<()>,
     _post_processing_subsystem_handle: Option<tokio::task::JoinHandle<Result<()>>>,
     _gossip_handle: Option<tokio::task::JoinHandle<()>>,
     _execute_driver_handle: tokio::task::JoinHandle<()>,
@@ -218,7 +218,6 @@ impl SuiNode {
                 batch_state
                     .run_batch_service(1000, Duration::from_secs(1))
                     .await
-                    .map_err(Into::into)
             })
         };
 

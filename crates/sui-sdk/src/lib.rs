@@ -44,9 +44,6 @@ use types::base_types::SequenceNumber;
 use types::error::TRANSACTION_NOT_FOUND_MSG_PREFIX;
 use types::messages::ExecuteTransactionRequestType;
 
-// re-export essential sui crates
-pub mod crypto;
-
 const WAIT_FOR_TX_TIMEOUT_SEC: u64 = 10;
 
 #[derive(Debug)]
