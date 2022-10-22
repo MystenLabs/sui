@@ -3,9 +3,7 @@
 
 use move_vm_test_utils::gas_schedule::GasCost;
 
-use crate::{
-    non_execution_tables::{MAX_NUM_EVENT_EMIT, MAX_TX_GAS},
-};
+use crate::non_execution_tables::{MAX_NUM_EVENT_EMIT, MAX_TX_GAS};
 
 //
 // Native function costs

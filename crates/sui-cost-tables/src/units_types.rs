@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::ops::{ Mul};
+use std::ops::Mul;
 
 use anyhow::anyhow;
 use move_core_types::gas_algebra::{
