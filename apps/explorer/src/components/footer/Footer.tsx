@@ -70,7 +70,7 @@ function Footer() {
                         </li>
                         <li>
                             <ExternalLink
-                                href="https://twitter.com/mysten_labs"
+                                href="https://twitter.com/SuiNetwork"
                                 label="Twitter"
                             />
                         </li>
