@@ -364,6 +364,9 @@ const QUERY_BY_RECIPIENT: &str = "SELECT * FROM events WHERE timestamp >= ? AND 
 const QUERY_BY_OBJECT_ID: &str = "SELECT * FROM events WHERE timestamp >= ? AND \
     timestamp < ? AND object_id = ? ORDER BY timestamp ASC LIMIT ?";
 
+/// Maximum number of rows to insert at once as a batch.  SQLite has 64k limit in binding values.
+const MAX_INSERT_BATCH: usize = 1000;
+
 #[async_trait]
 impl EventStore for SqlEventStore {
     #[instrument(level = "debug", skip_all, err)]
@@ -378,16 +381,22 @@ impl EventStore for SqlEventStore {
 
         let mut start_index = 0;
         let mut end_index = 0;
-        // This while loop only needed to make sure we don't write more than 1000 events at once.
-        // sqlx/SQLite has a limit of binding < 64k elements.
+
+        // Insert event in batches, skipping over events that have lower or decreasing sequence numbers
         while end_index < events.len() {
+            // Skip events that have a lower sequence number. They've been seen before.
             if events[start_index].seq_num < cur_seq {
                 start_index += 1;
                 end_index += 1;
                 continue;
             }
 
-            end_index = (start_index + 1000).min(events.len());
+            let final_index = (start_index + MAX_INSERT_BATCH).min(events.len());
+            // Keep going while the sequence number is not decreasing
+            while end_index < final_index && events[end_index].seq_num >= cur_seq {
+                cur_seq = events[end_index].seq_num;
+                end_index += 1;
+            }
 
             let mut query_builder = QueryBuilder::new(SQL_INSERT_TX);
             query_builder.push_values(&events[start_index..end_index], |mut b, event| {
@@ -412,13 +421,14 @@ impl EventStore for SqlEventStore {
                             .expect("Cannot serialize"),
                     );
             });
+
             let res = query_builder
                 .build()
                 .execute(&self.pool)
                 .await
                 .map_err(convert_sqlx_err)?;
-            rows_affected = res.rows_affected();
-            cur_seq = events[end_index - 1].seq_num;
+
+            rows_affected += res.rows_affected();
         }
 
         // CAS is used to detect any concurrency glitches.  Note that we assume a single writer
