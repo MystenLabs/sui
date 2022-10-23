@@ -3048,27 +3048,27 @@
               "mutateObject": {
                 "type": "object",
                 "required": [
-                  "object_id",
-                  "object_type",
-                  "package_id",
+                  "objectId",
+                  "objectType",
+                  "packageId",
                   "sender",
-                  "transaction_module",
+                  "transactionModule",
                   "version"
                 ],
                 "properties": {
-                  "object_id": {
+                  "objectId": {
                     "$ref": "#/components/schemas/ObjectID"
                   },
-                  "object_type": {
+                  "objectType": {
                     "type": "string"
                   },
-                  "package_id": {
+                  "packageId": {
                     "$ref": "#/components/schemas/ObjectID"
                   },
                   "sender": {
                     "$ref": "#/components/schemas/SuiAddress"
                   },
-                  "transaction_module": {
+                  "transactionModule": {
                     "type": "string"
                   },
                   "version": {
