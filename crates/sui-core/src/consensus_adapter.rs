@@ -35,7 +35,7 @@ use tap::prelude::*;
 use tokio::time::Instant;
 
 use sui_types::base_types::AuthorityName;
-use sui_types::messages::CertifiedTransaction;
+use sui_types::messages::{CertifiedTransaction, SignedTransaction};
 use tokio::{
     sync::{
         mpsc::{Receiver, Sender},
@@ -353,6 +353,34 @@ impl ConsensusAdapter {
         }
 
         result
+    }
+
+    pub async fn submit_signed_epoch_change_tx(
+        &self,
+        authority: &AuthorityName,
+        signed_tx: &SignedTransaction,
+    ) -> SuiResult {
+        let transaction =
+            ConsensusTransaction::new_epoch_change_message(authority, signed_tx.clone());
+        let tracking_id = transaction.get_tracking_id();
+        let tx_digest = signed_tx.digest();
+        debug!(
+            ?tracking_id,
+            ?tx_digest,
+            "Signed epoch change consensus message created"
+        );
+        let serialized = bincode::serialize(&transaction)
+            .expect("Serializing consensus transaction cannot fail");
+        let bytes = Bytes::from(serialized.clone());
+        self.consensus_client
+            .clone()
+            .submit_transaction(TransactionProto { transaction: bytes })
+            .await
+            .map_err(|e| SuiError::ConsensusConnectionBroken(format!("{:?}", e)))
+            .tap_err(|r| {
+                error!("Submit transaction failed with: {:?}", r);
+            })?;
+        Ok(())
     }
 }
 

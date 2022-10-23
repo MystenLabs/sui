@@ -64,6 +64,8 @@ pub mod metrics;
 
 mod handle;
 pub use handle::SuiNodeHandle;
+use sui_types::error::SuiError;
+use sui_types::fp_ensure;
 
 pub struct SuiNode {
     grpc_server: tokio::task::JoinHandle<Result<()>>,
@@ -74,6 +76,7 @@ pub struct SuiNode {
     _gossip_handle: Option<tokio::task::JoinHandle<()>>,
     _execute_driver_handle: tokio::task::JoinHandle<()>,
     _checkpoint_process_handle: Option<tokio::task::JoinHandle<()>>,
+    _epoch_driver: Option<tokio::task::JoinHandle<()>>,
     state: Arc<AuthorityState>,
     active: Arc<ActiveAuthority<NetworkAuthorityClient>>,
     transaction_orchestrator: Option<Arc<TransactiondOrchestrator<NetworkAuthorityClient>>>,
@@ -270,13 +273,27 @@ impl SuiNode {
         };
 
         let registry = prometheus_registry.clone();
-        let validator_service = if config.consensus_config().is_some() {
-            Some(
+        let (validator_service, epoch_driver) = if config.consensus_config().is_some() {
+            let validator_service =
                 ValidatorService::new(config, state.clone(), registry, rx_reconfigure_consensus)
-                    .await?,
-            )
+                    .await?;
+            let epoch_driver = if config.enable_epoch_change {
+                assert!(
+                    !config.enable_reconfig,
+                    "enable_epoch_change and enable_reconfig cannot be both enabled"
+                );
+                Some(
+                    active_authority
+                        .clone()
+                        .spawn_onchain_epoch_driver_process(validator_service.consensus_adapter())
+                        .await,
+                )
+            } else {
+                None
+            };
+            (Some(validator_service), epoch_driver)
         } else {
-            None
+            (None, None)
         };
 
         let grpc_server = {
@@ -356,6 +373,7 @@ impl SuiNode {
             _gossip_handle: gossip_handle,
             _execute_driver_handle: execute_driver_handle,
             _checkpoint_process_handle: checkpoint_process_handle,
+            _epoch_driver: epoch_driver,
             _batch_subsystem_handle: batch_subsystem_handle,
             _post_processing_subsystem_handle: post_processing_subsystem_handle,
             state,

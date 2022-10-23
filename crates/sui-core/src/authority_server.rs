@@ -334,6 +334,10 @@ impl ValidatorService {
         })
     }
 
+    pub fn consensus_adapter(&self) -> Arc<ConsensusAdapter> {
+        self.consensus_adapter.clone()
+    }
+
     async fn handle_transaction(
         state: Arc<AuthorityState>,
         request: tonic::Request<Transaction>,

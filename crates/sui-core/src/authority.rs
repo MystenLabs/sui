@@ -2,6 +2,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
 use std::hash::Hash;
 use std::ops::Deref;
 use std::path::PathBuf;
@@ -33,8 +34,8 @@ use tokio::sync::{
     broadcast::{self, error::RecvError},
     mpsc,
 };
-use tracing::Instrument;
 use tracing::{debug, error, instrument, warn};
+use tracing::{info, Instrument};
 use typed_store::Map;
 
 pub use authority_store::{
@@ -438,6 +439,20 @@ impl AuthorityMetrics {
 pub type StableSyncAuthoritySigner =
     Pin<Arc<dyn signature::Signer<AuthoritySignature> + Send + Sync>>;
 
+pub struct OnChainEpochTracking {
+    pub next_epoch: EpochId,
+    pub epoch_change_transactions: BTreeMap<AuthorityName, SignedTransaction>,
+}
+
+impl OnChainEpochTracking {
+    pub fn new(starting_epoch: EpochId) -> Self {
+        Self {
+            next_epoch: starting_epoch + 1,
+            epoch_change_transactions: BTreeMap::new(),
+        }
+    }
+}
+
 pub struct AuthorityState {
     // Fixed size, static, identity of the authority
     /// The name of this authority.
@@ -486,6 +501,8 @@ pub struct AuthorityState {
 
     /// A channel to tell consensus to reconfigure.
     tx_reconfigure_consensus: mpsc::Sender<ReconfigConsensusMessage>,
+
+    pub onchain_epoch: Mutex<OnChainEpochTracking>,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -847,6 +864,18 @@ impl AuthorityState {
 
         // commit_certificate finished, the tx is fully committed to the store.
         tx_guard.commit_tx();
+
+        if certificate.is_system_tx() {
+            match self.get_sui_system_state_object().await {
+                Ok(obj) => {
+                    let cur_epoch = obj.epoch;
+                    info!(?cur_epoch, "Epoch change successfully committed on-chain");
+                }
+                Err(err) => {
+                    error!("Error reading system state object: {:?}", err);
+                }
+            }
+        }
 
         // Update metrics.
         self.metrics.total_effects.inc();
@@ -1462,6 +1491,12 @@ impl AuthorityState {
             consensus_guardrail: AtomicUsize::new(0),
             metrics: Arc::new(AuthorityMetrics::new(prometheus_registry)),
             tx_reconfigure_consensus,
+            onchain_epoch: Mutex::new(OnChainEpochTracking::new(
+                store
+                    .get_sui_system_state_object()
+                    .expect("System state object must exist")
+                    .epoch,
+            )),
         };
 
         // Process tx recovery log first, so that the batch and checkpoint recovery (below)
@@ -2222,6 +2257,32 @@ impl AuthorityState {
                     );
                 })?;
             }
+            ConsensusTransactionKind::EpochChangeTransaction(tx) => {
+                let author = &transaction.consensus_output.certificate.header.author;
+                if let TransactionKind::Single(SingleTransactionKind::ChangeEpoch(data)) =
+                    &tx.signed_data.data.kind
+                {
+                    if data.computation_charge != 0
+                        || data.storage_charge != 0
+                        || data.storage_rebate != 0
+                    {
+                        warn!(
+                            "Ignoring epoch change transaction with non-zero gas info from {}",
+                            author
+                        );
+                        return Err(());
+                    }
+                } else {
+                    warn!("Ignoring non-system transaction from {}", author);
+                    return Err(());
+                }
+                tx.verify(&committee).map_err(|err| {
+                    warn!(
+                        "Ignoring malformed fragment (failed to verify) from {}: {:?}",
+                        transaction.consensus_output.certificate.header.author, err
+                    );
+                })?;
+            }
         }
         Ok(VerifiedSequencedConsensusTransaction(transaction))
     }
@@ -2307,6 +2368,21 @@ impl AuthorityState {
                 // ```
                 let _tx_reconfigure_consensus = &self.tx_reconfigure_consensus;
 
+                Ok(())
+            }
+            ConsensusTransactionKind::EpochChangeTransaction(tx) => {
+                let mut onchain_epoch = self.onchain_epoch.lock();
+                if let TransactionKind::Single(SingleTransactionKind::ChangeEpoch(data)) =
+                    &tx.signed_data.data.kind
+                {
+                    if data.epoch == onchain_epoch.next_epoch {
+                        onchain_epoch
+                            .epoch_change_transactions
+                            .insert(tx.auth_sign_info.authority, *tx);
+                    }
+                } else {
+                    unreachable!("verify_consensus_transaction should have checked this");
+                }
                 Ok(())
             }
         }

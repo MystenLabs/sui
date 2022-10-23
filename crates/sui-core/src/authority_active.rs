@@ -57,12 +57,15 @@ use gossip::{gossip_process, GossipMetrics};
 pub mod checkpoint_driver;
 use crate::authority_active::checkpoint_driver::CheckpointMetrics;
 use crate::authority_client::NetworkAuthorityClientMetrics;
+use crate::consensus_adapter::ConsensusAdapter;
 use crate::epoch::reconfiguration::Reconfigurable;
 use checkpoint_driver::{checkpoint_process, get_latest_checkpoint_from_all, sync_to_checkpoint};
 
 pub mod execution_driver;
 
 use self::{checkpoint_driver::CheckpointProcessControl, execution_driver::execution_process};
+
+pub mod onchain_epoch_driver;
 
 // TODO: Make these into a proper config
 const MAX_RETRIES_RECORDED: u32 = 10;
@@ -382,6 +385,25 @@ where
     pub async fn cancel_node_sync_process_for_tests(&self) {
         let mut lock_guard = self.node_sync_process.lock().await;
         Self::cancel_node_sync_process_impl(&mut lock_guard).await;
+    }
+
+    pub async fn spawn_onchain_epoch_driver_process(
+        self: Arc<Self>,
+        consensus_adapter: Arc<ConsensusAdapter>,
+    ) -> JoinHandle<()> {
+        tokio::task::spawn(async move {
+            onchain_epoch_driver::onchain_epoch_driver_process(
+                self.net
+                    .load()
+                    .authority_clients
+                    .get(&self.state.name)
+                    .unwrap()
+                    .clone(),
+                self.state.clone(),
+                consensus_adapter,
+            )
+            .await;
+        })
     }
 }
 

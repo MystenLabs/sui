@@ -74,6 +74,10 @@ pub struct NodeConfig {
     #[serde(default)]
     pub enable_reconfig: bool,
 
+    /// This is to only enable on-chain epoch change, without enabling reconfiguration.
+    #[serde(default)]
+    pub enable_epoch_change: bool,
+
     #[serde(default)]
     pub grpc_load_shed: Option<bool>,
 

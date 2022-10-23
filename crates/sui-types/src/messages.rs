@@ -2050,6 +2050,7 @@ pub struct ConsensusTransaction {
 pub enum ConsensusTransactionKind {
     UserTransaction(Box<CertifiedTransaction>),
     Checkpoint(Box<CheckpointFragment>),
+    EpochChangeTransaction(Box<SignedTransaction>),
 }
 
 impl ConsensusTransaction {
@@ -2083,17 +2084,25 @@ impl ConsensusTransaction {
         }
     }
 
+    pub fn new_epoch_change_message(
+        authority: &AuthorityName,
+        signed_tx: SignedTransaction,
+    ) -> Self {
+        let mut hasher = DefaultHasher::new();
+        let tx_digest = signed_tx.digest();
+        tx_digest.hash(&mut hasher);
+        authority.hash(&mut hasher);
+        let tracking_id = hasher.finish().to_be_bytes();
+        Self {
+            tracking_id,
+            kind: ConsensusTransactionKind::EpochChangeTransaction(Box::new(signed_tx)),
+        }
+    }
+
     pub fn get_tracking_id(&self) -> u64 {
         (&self.tracking_id[..])
             .read_u64::<BigEndian>()
             .unwrap_or_default()
-    }
-
-    pub fn verify(&self, committee: &Committee) -> SuiResult<()> {
-        match &self.kind {
-            ConsensusTransactionKind::UserTransaction(certificate) => certificate.verify(committee),
-            ConsensusTransactionKind::Checkpoint(fragment) => fragment.verify(committee),
-        }
     }
 }
 
