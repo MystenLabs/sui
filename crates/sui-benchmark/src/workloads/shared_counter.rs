@@ -167,8 +167,7 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
                     &keypair,
                 );
                 if let Ok((_, effects)) = proxy_ref.execute_transaction(transaction).await {
-                    let effects = effects.effects;
-                    let counter_ref = effects.created()[0].0,
+                    let counter_ref = effects.created()[0].0;
                     Box::new(SharedCounterTestPayload {
                         package_ref: self.basics_package_ref.unwrap(),
                         counter_id: counter_ref.0,

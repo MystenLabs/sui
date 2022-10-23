@@ -17,6 +17,7 @@ mod test {
         drivers::{bench_driver::BenchDriver, driver::Driver, Interval},
         util::get_ed25519_keypair_from_keystore,
         workloads::make_combination_workload,
+        LocalValidatorAggregatorProxy, ValidatorProxy,
     };
 
     use sui_macros::sim_test;
@@ -79,7 +80,9 @@ mod test {
         let (aggregator, _) = AuthorityAggregatorBuilder::from_network_config(swarm.config())
             .build()
             .unwrap();
-        let aggregator = Arc::new(aggregator);
+        let proxy: Arc<dyn ValidatorProxy + Send + Sync> = Arc::new(
+            LocalValidatorAggregatorProxy::from_auth_agg(Arc::new(aggregator)),
+        );
 
         for w in workloads.iter_mut() {
             w.workload.init(aggregator.clone()).await;

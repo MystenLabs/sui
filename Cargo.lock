@@ -7872,6 +7872,7 @@ dependencies = [
  "sui-macros",
  "sui-network",
  "sui-node",
+ "sui-sdk",
  "sui-simulator",
  "sui-types",
  "telemetry-subscribers 0.2.0",
