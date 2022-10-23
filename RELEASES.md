@@ -3,9 +3,10 @@
 DevNet releases can be found in the `devnet` branch.
 
 ## Current Release
-* 22-10-12: [0.11.0](https://github.com/MystenLabs/sui/releases/tag/devnet-0.11.0)
+* 22-10-20: [0.12.0](https://github.com/MystenLabs/sui/releases/tag/devnet-0.12.0)
 
 ## Past Releases
+* 22-10-12: [0.11.0](https://github.com/MystenLabs/sui/releases/tag/devnet-0.11.0)
 * 22-09-28: [0.10.0](https://github.com/MystenLabs/sui/releases/tag/devnet-0.10.0)
 * 22-09-06: [0.9.0](https://github.com/MystenLabs/sui/releases/tag/devnet-0.9.0)
 * 22-08-30: [0.8.0](https://github.com/MystenLabs/sui/releases/tag/devnet-0.8.0)

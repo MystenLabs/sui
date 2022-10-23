@@ -323,8 +323,6 @@ fn test_basic_args_linter_top_level() {
     let display_raw = "DisplayUrl";
 
     let player_id = json!(format!("0x{:02x}", ObjectID::random()));
-    let farm_id = json!(format!("0x{:02x}", ObjectID::random()));
-    let pet_monsters_id = json!(format!("0x{:02x}", ObjectID::random()));
     // This is okay since not starting with 0x
     let monster_name = json!(monster_name_raw);
     // Well within U64 bounds
@@ -341,8 +339,6 @@ fn test_basic_args_linter_top_level() {
     // They have to be ordered
     let args = vec![
         player_id,
-        farm_id,
-        pet_monsters_id,
         monster_name.clone(),
         monster_img_id.clone(),
         breed,
@@ -361,23 +357,23 @@ fn test_basic_args_linter_top_level() {
     assert!(!json_args.is_empty());
 
     assert_eq!(
-        json_args[3],
+        json_args[1],
         SuiJsonCallArg::Pure(bcs::to_bytes(&monster_name_raw.as_bytes().to_vec()).unwrap())
     );
     assert_eq!(
-        json_args[4],
+        json_args[2],
         SuiJsonCallArg::Pure(bcs::to_bytes(&(monster_img_id_raw as u64)).unwrap()),
     );
     assert_eq!(
-        json_args[5],
+        json_args[3],
         SuiJsonCallArg::Pure(bcs::to_bytes(&(breed_raw as u8)).unwrap())
     );
     assert_eq!(
-        json_args[6],
+        json_args[4],
         SuiJsonCallArg::Pure(bcs::to_bytes(&(monster_affinity_raw as u8)).unwrap()),
     );
     assert_eq!(
-        json_args[7],
+        json_args[5],
         SuiJsonCallArg::Pure(bcs::to_bytes(&monster_description_raw.as_bytes().to_vec()).unwrap()),
     );
 

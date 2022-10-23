@@ -8,6 +8,7 @@
 -  [Struct `VecSet`](#0x2_vec_set_VecSet)
 -  [Constants](#@Constants_0)
 -  [Function `empty`](#0x2_vec_set_empty)
+-  [Function `singleton`](#0x2_vec_set_singleton)
 -  [Function `insert`](#0x2_vec_set_insert)
 -  [Function `remove`](#0x2_vec_set_remove)
 -  [Function `contains`](#0x2_vec_set_contains)
@@ -98,6 +99,31 @@ Create an empty <code><a href="vec_set.md#0x2_vec_set_VecSet">VecSet</a></code>
 
 <pre><code><b>public</b> <b>fun</b> <a href="vec_set.md#0x2_vec_set_empty">empty</a>&lt;K: <b>copy</b> + drop&gt;(): <a href="vec_set.md#0x2_vec_set_VecSet">VecSet</a>&lt;K&gt; {
     <a href="vec_set.md#0x2_vec_set_VecSet">VecSet</a> { contents: <a href="_empty">vector::empty</a>() }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_vec_set_singleton"></a>
+
+## Function `singleton`
+
+Create a singleton <code><a href="vec_set.md#0x2_vec_set_VecSet">VecSet</a></code> that only contains one element.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="vec_set.md#0x2_vec_set_singleton">singleton</a>&lt;K: <b>copy</b>, drop&gt;(key: K): <a href="vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;K&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="vec_set.md#0x2_vec_set_singleton">singleton</a>&lt;K: <b>copy</b> + drop&gt;(key: K): <a href="vec_set.md#0x2_vec_set_VecSet">VecSet</a>&lt;K&gt; {
+    <a href="vec_set.md#0x2_vec_set_VecSet">VecSet</a> { contents: <a href="_singleton">vector::singleton</a>(key) }
 }
 </code></pre>
 

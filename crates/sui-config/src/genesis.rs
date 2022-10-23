@@ -502,14 +502,14 @@ fn process_package(
         &modules,
         package_id,
         natives,
-        &mut gas_status.create_move_gas_status(),
+        gas_status.create_move_gas_status(),
     )?;
     adapter::store_package_and_init_modules(
         &mut temporary_store,
         &vm,
         modules,
         ctx,
-        &mut gas_status.create_move_gas_status(),
+        gas_status.create_move_gas_status(),
     )?;
 
     let (
@@ -574,7 +574,7 @@ pub fn generate_genesis_system_object(
             CallArg::Pure(bcs::to_bytes(&stakes).unwrap()),
             CallArg::Pure(bcs::to_bytes(&gas_prices).unwrap()),
         ],
-        &mut SuiGasStatus::new_unmetered().create_move_gas_status(),
+        SuiGasStatus::new_unmetered().create_move_gas_status(),
         genesis_ctx,
     )?;
 

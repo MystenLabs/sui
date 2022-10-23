@@ -12,7 +12,7 @@ module Test::M {
     use sui::tx_context::{Self, TxContext};
     use std::vector;
 
-    struct ObjAny<phantom Any> has key {
+    struct ObjAny<phantom Any> has key, store {
         id: UID,
         value: u64
     }
@@ -45,12 +45,13 @@ module Test::M {
     }
 
     public entry fun mint_child_any<Any>(v: u64, parent: &mut ObjAny<Any>, ctx: &mut TxContext) {
-        transfer::transfer_to_object(
+        sui::dynamic_object_field::add(
+            &mut parent.id,
+            0,
             ObjAny<Any> {
                 id: object::new(ctx),
                 value: v,
             },
-            parent,
         )
     }
 
@@ -133,7 +134,7 @@ module Test::M {
 
 //# run Test::M::mint_another_any --type-args Test::M::Any --sender A --args 42
 
-//# run Test::M::obj_vec_destroy_any --sender A --type-args Test::M::Any --args vector[object(114)]
+//# run Test::M::obj_vec_destroy_any --sender A --type-args Test::M::Any --args vector[object(115)]
 
 
 // create two objects of different types and try to pass them both as elements of a vector (failure)
@@ -142,25 +143,25 @@ module Test::M {
 
 //# run Test::M::mint_any --sender A --type-args Test::M::Any --args 42
 
-//# run Test::M::two_obj_vec_destroy_any --sender A --type-args Test::M::Any --args vector[object(117),object(119)]
+//# run Test::M::two_obj_vec_destroy_any --sender A --type-args Test::M::Any --args vector[object(118),object(120)]
 
 
 // create a shared object and try to pass it as a single element of a vector (failure)
 
 //# run Test::M::mint_shared_any --sender A --type-args Test::M::Any --args 42
 
-//# run Test::M::obj_vec_destroy_any --sender A --type-args Test::M::Any --args vector[object(122)]
+//# run Test::M::obj_vec_destroy_any --sender A --type-args Test::M::Any --args vector[object(123)]
 
 
 // create an object and pass it both by-value and as element of a vector (failure)
 
 //# run Test::M::mint_any --sender A --type-args Test::M::Any --args 42
 
-//# run Test::M::same_objects_any --sender A --type-args Test::M::Any --args object(125) vector[object(125)]
+//# run Test::M::same_objects_any --sender A --type-args Test::M::Any --args object(126) vector[object(126)]
 
 
 // create an object and pass it both by-reference and as element of a vector (failure)
 
 //# run Test::M::mint_any --sender A --type-args Test::M::Any --args 42
 
-//# run Test::M::same_objects_ref_any --sender A --type-args Test::M::Any --args object(128) vector[object(128)]
+//# run Test::M::same_objects_ref_any --sender A --type-args Test::M::Any --args object(129) vector[object(129)]

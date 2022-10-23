@@ -68,7 +68,7 @@ async fn wait_for_quorum() {
     assert_eq!(store.read(batch.digest()).await.unwrap().unwrap(), batch);
 
     // Ensure the other listeners correctly received the batch.
-    for (mut handle, _, _network) in listener_handles {
+    for (mut handle, _network) in listener_handles {
         assert_eq!(handle.recv().await.unwrap(), message);
     }
 }

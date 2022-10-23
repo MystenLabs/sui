@@ -25,9 +25,7 @@ use sui_json_rpc::gateway_api::{
     GatewayReadApiImpl, GatewayWalletSyncApiImpl, RpcGatewayImpl, TransactionBuilderImpl,
 };
 use sui_json_rpc::{JsonRpcServerBuilder, ServerHandle};
-use sui_sdk::crypto::AccountKeystore;
-use sui_sdk::crypto::FileBasedKeystore;
-use sui_sdk::crypto::Keystore;
+use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_sdk::{ClientType, SuiClient};
 use sui_swarm::memory::{Swarm, SwarmBuilder};
 use sui_types::base_types::SuiAddress;

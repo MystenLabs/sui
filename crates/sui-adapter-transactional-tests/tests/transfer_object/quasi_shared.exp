@@ -12,13 +12,13 @@ created: object(107)
 written: object(106)
 
 task 3 'run'. lines 31-31:
-created: object(109)
+created: object(109), object(110)
 written: object(107), object(108)
 
 task 4 'view-object'. lines 33-33:
 Owner: Object ID: ( fake(107) )
 Version: 1
-Contents: test::m::Child {id: sui::object::UID {id: sui::object::ID {bytes: fake(109)}}}
+Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {id: sui::object::UID {id: sui::object::ID {bytes: fake(109)}}, name: sui::dynamic_object_field::Wrapper<u64> {name: 0u64}, value: std::option::Option<sui::object::ID> {vec: vector[sui::object::ID {bytes: fake(110)}]}}
 
 task 5 'transfer-object'. lines 35-35:
 Error: Transaction Effects Status: Invalid Transfer Object Transaction. Possibly not address-owned or possibly does not have public transfer.
@@ -27,4 +27,4 @@ Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { k
 task 6 'view-object'. lines 37-37:
 Owner: Object ID: ( fake(107) )
 Version: 2
-Contents: test::m::Child {id: sui::object::UID {id: sui::object::ID {bytes: fake(109)}}}
+Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {id: sui::object::UID {id: sui::object::ID {bytes: fake(109)}}, name: sui::dynamic_object_field::Wrapper<u64> {name: 0u64}, value: std::option::Option<sui::object::ID> {vec: vector[sui::object::ID {bytes: fake(110)}]}}

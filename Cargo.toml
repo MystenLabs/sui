@@ -17,6 +17,7 @@ members = [
     "crates/sui-json",
     "crates/sui-json-rpc",
     "crates/sui-json-rpc-types",
+    "crates/sui-keys",
     "crates/sui-macros",
     "crates/sui-network",
     "crates/sui-node",
@@ -40,6 +41,10 @@ members = [
     "crates/x",
     "narwhal/config", "narwhal/consensus", "narwhal/crypto", "narwhal/dag", "narwhal/examples", "narwhal/executor", "narwhal/network", "narwhal/node", "narwhal/primary", "narwhal/storage", "narwhal/test-utils", "narwhal/types", "narwhal/worker",
 ]
+
+[workspace.package]
+# This version string will be inheritted by sui-core, sui-faucet, sui-node, sui-tools and sui crates
+version = "0.13.0"
 
 [profile.release]
 # The following two lines add minimal symbol information, which helps certain profilers like Bytehound

@@ -1,6 +1,6 @@
 [package]
 name = "sui"
-version = "0.12.0"
+version.workspace = true
 authors = ["Mysten Labs <build@mystenlabs.com>"]
 license = "Apache-2.0"
 publish = false
@@ -29,6 +29,7 @@ sui-json = { path = "../sui-json" }
 sui-swarm = { path = "../sui-swarm" }
 sui-json-rpc-types = { path = "../sui-json-rpc-types" }
 sui-sdk = { path = "../sui-sdk" }
+sui-keys = { path = "../sui-keys" }
 
 fastcrypto.workspace = true
 

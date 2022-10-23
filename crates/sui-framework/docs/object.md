@@ -12,6 +12,8 @@ Sui object identifiers
 -  [Function `address_from_bytes`](#0x2_object_address_from_bytes)
 -  [Function `id_to_bytes`](#0x2_object_id_to_bytes)
 -  [Function `id_to_address`](#0x2_object_id_to_address)
+-  [Function `id_from_bytes`](#0x2_object_id_from_bytes)
+-  [Function `id_from_address`](#0x2_object_id_from_address)
 -  [Function `sui_system_state`](#0x2_object_sui_system_state)
 -  [Function `uid_as_inner`](#0x2_object_uid_as_inner)
 -  [Function `uid_to_inner`](#0x2_object_uid_to_inner)
@@ -24,7 +26,9 @@ Sui object identifiers
 -  [Function `id_bytes`](#0x2_object_id_bytes)
 -  [Function `id_address`](#0x2_object_id_address)
 -  [Function `borrow_uid`](#0x2_object_borrow_uid)
+-  [Function `new_uid_from_hash`](#0x2_object_new_uid_from_hash)
 -  [Function `delete_impl`](#0x2_object_delete_impl)
+-  [Function `record_new_uid`](#0x2_object_record_new_uid)
 
 
 <pre><code><b>use</b> <a href="">0x1::bcs</a>;
@@ -191,6 +195,56 @@ Get the inner bytes of <code>id</code> as an address.
 
 <pre><code><b>public</b> <b>fun</b> <a href="object.md#0x2_object_id_to_address">id_to_address</a>(id: &<a href="object.md#0x2_object_ID">ID</a>): <b>address</b> {
     id.bytes
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_object_id_from_bytes"></a>
+
+## Function `id_from_bytes`
+
+Make an <code><a href="object.md#0x2_object_ID">ID</a></code> from raw bytes.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="object.md#0x2_object_id_from_bytes">id_from_bytes</a>(bytes: <a href="">vector</a>&lt;u8&gt;): <a href="object.md#0x2_object_ID">object::ID</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="object.md#0x2_object_id_from_bytes">id_from_bytes</a>(bytes: <a href="">vector</a>&lt;u8&gt;): <a href="object.md#0x2_object_ID">ID</a> {
+    <a href="object.md#0x2_object_id_from_address">id_from_address</a>(<a href="object.md#0x2_object_address_from_bytes">address_from_bytes</a>(bytes))
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_object_id_from_address"></a>
+
+## Function `id_from_address`
+
+Make an <code><a href="object.md#0x2_object_ID">ID</a></code> from an address.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="object.md#0x2_object_id_from_address">id_from_address</a>(bytes: <b>address</b>): <a href="object.md#0x2_object_ID">object::ID</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="object.md#0x2_object_id_from_address">id_from_address</a>(bytes: <b>address</b>): <a href="object.md#0x2_object_ID">ID</a> {
+    <a href="object.md#0x2_object_ID">ID</a> { bytes }
 }
 </code></pre>
 
@@ -507,6 +561,32 @@ restrictable in the object's module.
 
 </details>
 
+<a name="0x2_object_new_uid_from_hash"></a>
+
+## Function `new_uid_from_hash`
+
+Generate a new UID specifically used for creating a UID from a hash
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="object.md#0x2_object_new_uid_from_hash">new_uid_from_hash</a>(bytes: <b>address</b>): <a href="object.md#0x2_object_UID">object::UID</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="object.md#0x2_object_new_uid_from_hash">new_uid_from_hash</a>(bytes: <b>address</b>): <a href="object.md#0x2_object_UID">UID</a> {
+    <a href="object.md#0x2_object_record_new_uid">record_new_uid</a>(bytes);
+    <a href="object.md#0x2_object_UID">UID</a> { id: <a href="object.md#0x2_object_ID">ID</a> { bytes } }
+}
+</code></pre>
+
+
+
+</details>
+
 <a name="0x2_object_delete_impl"></a>
 
 ## Function `delete_impl`
@@ -523,6 +603,28 @@ restrictable in the object's module.
 
 
 <pre><code><b>native</b> <b>fun</b> <a href="object.md#0x2_object_delete_impl">delete_impl</a>(id: <b>address</b>);
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_object_record_new_uid"></a>
+
+## Function `record_new_uid`
+
+
+
+<pre><code><b>fun</b> <a href="object.md#0x2_object_record_new_uid">record_new_uid</a>(id: <b>address</b>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>native</b> <b>fun</b> <a href="object.md#0x2_object_record_new_uid">record_new_uid</a>(id: <b>address</b>);
 </code></pre>
 
 

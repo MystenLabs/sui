@@ -2,11 +2,11 @@
 title: Connect to Sui Devnet
 ---
 
-We are hosting a public Devnet for the community to experiment with Sui and provide feedback to help to shape the future of the Sui network.
+The Sui Devnet network lets you experiment with Sui and provide feedback to help to shape the future of the Sui network.
 
 The Sui Devnet network currently consists of:
 
-* Four validator nodes operated by Mysten Labs. Clients send transactions and read requests via this endpoint: fullnode.devnet.sui.io:443 using [JSON-RPC](../build/json-rpc.md)
+* Four validator nodes operated by Mysten Labs. Clients send transactions and read requests via this endpoint: `https://fullnode.devnet.sui.io:443` using [JSON-RPC](../build/json-rpc.md).
 * A public network [Sui Explorer](https://explorer.devnet.sui.io) for browsing transaction history.
 * A [Discord channel](https://discordapp.com/channels/916379725201563759/971488439931392130) for requesting test coins that can be used to pay for gas on the test network. These coins have no financial value and will disappear each time we reset the network.
 
@@ -24,33 +24,29 @@ We provide the following tools for users to interact with Sui Devnet:
     * call and publish Move modules
 * [Sui Explorer](https://github.com/MystenLabs/sui/blob/main/apps/explorer/README.md) - view transactions and objects
 
-
 ## Environment set up
 
-You can [install Sui](../build/install.md) and then request test tokens as described in the install docs. To use the Sui Devnet, you need:
+Learn how to install Sui and then request test tokens in the [Install Sui](topic). After you install Sui, request Sui [test coins](#request-gas-tokens) through [Discord](https://discordapp.com/channels/916379725201563759/971488439931392130).
 
-1. Sui [test coins (tokens)](#request-gas-tokens) requested through [Discord](https://discordapp.com/channels/916379725201563759/971488439931392130).
-1. the [`git` command line interface](https://git-scm.com/download/).
-1. [Sui binaries](../build/install.md#binaries) in your PATH environment variable, particularly `sui`.
-
-Remember, you can confirm the existence of a command in your PATH by running `which` followed by the command, for example:
+To check whether Sui is installed, run the following command:
 
 ```shell
 $ which sui
 ```
-You should see the path to the command. Otherwise, reinstall.
 
-> **Tip:** Check the [Sui Releases](https://github.com/MystenLabs/sui/releases) page to make sure you have the latest release.
+If the command doesn't return a path to the command you need to install Sui.
 
-## Configure the Sui client
+> **Tip:** Check the [Sui Releases](https://github.com/MystenLabs/sui/releases) page to see the changes in the latest release.
 
-Now set up your Sui CLI client and connect to Devnet. Note you can manually change the Gateway URL if you have already configured a Sui CLI client.
+## Configure Sui client
 
- To connect the Sui client to the Devnet, run the following command:
+Now set up your Sui Client CLI to connect to Sui Devnet.
+
+To connect the Sui client to Sui Devnet, run the following command:
 ```shell
 $ sui client
 ```
-The Sui CLI will print the following line if the client is starting up for the first time:
+The Sui CLI prints the following line when the client starts up for the first time:
 ```shell
 Config file ["/Users/dir/.sui/sui_config/client.yaml"] doesn't exist, do you want to connect to a Sui RPC server [y/n]?
 ```

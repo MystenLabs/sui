@@ -18,6 +18,8 @@ once_cell = "1.14.0"
 sha3 = "0.10.4"
 curve25519-dalek-ng = "4.1.1"
 fastcrypto.workspace = true
+digest = "0.10.3"
+serde = { version = "1.0.144", features = ["derive"] }
 
 sui-types = { path = "../sui-types" }
 sui-framework-build = { path = "../sui-framework-build" }

@@ -1,0 +1,38 @@
+processed 11 tasks
+
+init:
+A: object(100)
+
+task 1 'publish'. lines 9-79:
+created: object(104)
+written: object(103)
+
+task 2 'run'. lines 81-81:
+created: object(106)
+written: object(105)
+
+task 3 'run'. lines 83-83:
+created: object(108), object(109), object(110)
+written: object(106), object(107)
+
+task 4 'run'. lines 85-85:
+written: object(106), object(111)
+
+task 5 'run'. lines 87-87:
+written: object(106), object(112)
+
+task 6 'run'. lines 89-89:
+written: object(106), object(108), object(109), object(110), object(113)
+
+task 7 'run'. lines 91-91:
+written: object(106), object(114)
+
+task 8 'run'. lines 93-93:
+written: object(106), object(109), object(110), object(115)
+
+task 9 'run'. lines 95-95:
+written: object(106), object(116)
+
+task 10 'run'. lines 97-97:
+written: object(117)
+deleted: object(106)

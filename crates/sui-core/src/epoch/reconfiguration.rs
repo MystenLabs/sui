@@ -6,6 +6,7 @@ use crate::authority_aggregator::AuthorityAggregator;
 use crate::authority_client::{AuthorityAPI, NetworkAuthorityClientMetrics};
 use async_trait::async_trait;
 use fastcrypto::traits::ToFromBytes;
+use itertools::MultiUnzip;
 use multiaddr::Multiaddr;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
@@ -60,7 +61,7 @@ where
         let epoch = self.state.committee.load().epoch;
         info!(?epoch, "Finishing epoch change");
         let checkpoints = &self.state.checkpoints;
-        {
+        let (storage_charge, computation_charge, storage_rebate) = {
             let mut checkpoints = checkpoints.lock();
             assert!(
                 checkpoints.is_ready_to_finish_epoch_change(),
@@ -86,7 +87,28 @@ where
             checkpoints.tables.extra_transactions.clear()?;
 
             self.state.database.remove_all_pending_certificates()?;
-        }
+
+            let (storage_charges, computation_charges, storage_rebates): (
+                Vec<u64>,
+                Vec<u64>,
+                Vec<u64>,
+            ) = checkpoints
+                .get_checkpoints_of_epoch(epoch)
+                .iter()
+                .map(|cp| {
+                    (
+                        cp.summary().gas_cost_summary.storage_cost,
+                        cp.summary().gas_cost_summary.computation_cost,
+                        cp.summary().gas_cost_summary.storage_rebate,
+                    )
+                })
+                .multiunzip();
+            (
+                storage_charges.iter().sum(),
+                computation_charges.iter().sum(),
+                storage_rebates.iter().sum(),
+            )
+        };
 
         let sui_system_state = self.state.get_sui_system_state_object().await?;
         let next_epoch = epoch + 1;
@@ -125,8 +147,9 @@ where
 
         let advance_epoch_tx = SignedTransaction::new_change_epoch(
             next_epoch,
-            0, // TODO: fill in storage_charge
-            0, // TODO: fill in computation_charge
+            storage_charge,
+            computation_charge,
+            storage_rebate,
             self.state.name,
             &*self.state.secret,
         );

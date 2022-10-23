@@ -20,7 +20,7 @@ use sui_config::{
     sui_config_dir, Config, PersistedConfig, SUI_CLIENT_CONFIG, SUI_FULLNODE_CONFIG,
     SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG,
 };
-use sui_sdk::crypto::{AccountKeystore, FileBasedKeystore, Keystore};
+use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_sdk::ClientType;
 use sui_swarm::memory::Swarm;
 use sui_types::crypto::{SignatureScheme, SuiKeyPair};

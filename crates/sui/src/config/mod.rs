@@ -5,8 +5,8 @@
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use std::fmt::{Display, Formatter, Write};
-use sui_sdk::crypto::AccountKeystore;
-use sui_sdk::crypto::Keystore;
+use sui_keys::keystore::AccountKeystore;
+use sui_keys::keystore::Keystore;
 use sui_types::base_types::*;
 
 pub use sui_config::Config;

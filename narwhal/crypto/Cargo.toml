@@ -15,28 +15,18 @@ rand = { version = "0.8.5", features = ["std"] }
 serde = { version = "1.0.144", features = ["derive"] }
 serde_bytes = "0.11.7"
 serde_with = "2.0.1"
-signature = { version = "1.6.1", optional = true }
 tokio = { version = "1.20.1", features = ["sync", "rt", "macros"] }
 zeroize = "1.5.7"
 merlin = "3.0.0"
-
-# TODO: switch to https://github.com/celo-org/celo-bls-snark-rs
-# when https://github.com/celo-org/celo-bls-snark-rs/issues/228 is solved
-celo-bls = { git = "https://github.com/huitseeker/celo-bls-snark-rs", branch = "updates-2", package = "bls-crypto", optional = true }
-fastcrypto = { workspace = true, features = ["copy_key"] }
-
-ark-ec = { version = "0.3.0", features = ["std"], optional = true }
-ark-ff = { version = "0.3.0", features = ["std"], optional = true }
-ark-serialize = { version = "0.3.0", features = ["std"], optional = true }
-ark-std = { version = "0.3.0", features = ["std"], optional = true }
 once_cell = "1.14.0"
 readonly = "0.2.2"
+
+fastcrypto = { workspace = true, features = ["copy_key"] }
+
 workspace-hack.workspace = true
 
 [features]
 default = []
-celo = ["ark-ec", "ark-ff", "ark-serialize", "ark-bls12-377", "ark-std", "celo-bls", "signature"]
-
 [dev-dependencies]
 bincode = "1.3.3"
 criterion = "0.3.6"

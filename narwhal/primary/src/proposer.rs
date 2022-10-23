@@ -110,7 +110,10 @@ impl Proposer {
         })
     }
 
-    async fn make_header(&mut self) -> DagResult<()> {
+    /// make_header creates a new Header, persists it to database
+    /// and sends it to core for processing. If successful, it returns
+    /// the number of batch digests included in header.
+    async fn make_header(&mut self) -> DagResult<usize> {
         // Make a new header.
         let num_of_digests = self.digests.len().min(self.max_header_num_of_batches);
         let mut header = Header::new(
@@ -151,11 +154,15 @@ impl Proposer {
             info!("Created {} -> {:?}", header, digest);
         }
 
+        let num_of_included_digests = header.payload.len();
+
         // Send the new header to the `Core` that will broadcast and process it.
         self.tx_headers
             .send(header)
             .await
-            .map_err(|_| DagError::ShuttingDown)
+            .map_err(|_| DagError::ShuttingDown)?;
+
+        Ok(num_of_included_digests)
     }
 
     /// Update the committee and cleanup internal state.
@@ -289,7 +296,18 @@ impl Proposer {
                 match self.make_header().await {
                     Err(e @ DagError::ShuttingDown) => debug!("{e}"),
                     Err(e) => panic!("Unexpected error: {e}"),
-                    Ok(()) => (),
+                    Ok(digests) => {
+                        let reason = if timer_expired {
+                            "timeout"
+                        } else {
+                            "threshold_size_reached"
+                        };
+
+                        self.metrics
+                            .num_of_batch_digests_in_header
+                            .with_label_values(&[&self.committee.epoch.to_string(), reason])
+                            .observe(digests as f64);
+                    }
                 }
 
                 // Reschedule the timer.
@@ -349,6 +367,17 @@ impl Proposer {
                     // Check whether we can advance to the next round. Note that if we timeout,
                     // we ignore this check and advance anyway.
                     advance = self.ready();
+
+                    let round_type = if self.round % 2 == 0 {
+                        "even"
+                    } else {
+                        "odd"
+                    };
+
+                    self.metrics
+                    .proposer_ready_to_advance
+                    .with_label_values(&[&self.committee.epoch.to_string(), &advance.to_string(), round_type])
+                    .inc();
                 }
 
                 // Receive digests from our workers.

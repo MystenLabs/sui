@@ -28,15 +28,10 @@ ansi_term = { version = "0.12", default-features = false }
 anyhow = { version = "1", features = ["backtrace", "std"] }
 arc-swap = { version = "1", default-features = false, features = ["serde"] }
 ark-bls12-377 = { version = "0.3", features = ["base_field", "curve", "scalar_field", "std"] }
-ark-crypto-primitives = { version = "0.3", features = ["parallel", "rayon", "std"] }
-ark-ec = { version = "0.3", features = ["parallel", "rayon", "std"] }
-ark-ed-on-bw6-761 = { version = "0.3" }
-ark-ed-on-cp6-782 = { version = "0.3", default-features = false }
-ark-ff = { version = "0.3", features = ["parallel", "rayon", "std"] }
-ark-relations = { version = "0.3", default-features = false, features = ["std", "tracing-subscriber"] }
-ark-serialize = { version = "0.3", features = ["ark-serialize-derive", "derive", "std"] }
-ark-snark = { version = "0.3", default-features = false }
-ark-std = { version = "0.3", features = ["parallel", "rayon", "std"] }
+ark-ec = { version = "0.3", default-features = false, features = ["std"] }
+ark-ff = { version = "0.3", default-features = false, features = ["std"] }
+ark-serialize = { version = "0.3", default-features = false, features = ["std"] }
+ark-std = { version = "0.3", default-features = false, features = ["std"] }
 arrayref = { version = "0.3", default-features = false }
 arrayvec-d8f496e17d97b5cb = { package = "arrayvec", version = "0.5", features = ["array-sizes-33-128", "std"] }
 arrayvec-ca01ad9e24f5d932 = { package = "arrayvec", version = "0.7", features = ["std"] }
@@ -66,15 +61,12 @@ bitcoin_hashes = { version = "0.11", default-features = false }
 bitflags = { version = "1" }
 bitmaps = { version = "2", features = ["std"] }
 bitvec = { version = "0.19", default-features = false, features = ["alloc", "std"] }
-blake2-93f6ce9d446188ac = { package = "blake2", version = "0.10", features = ["std"] }
-blake2-274715c4dabd11b0 = { package = "blake2", version = "0.9", default-features = false }
-blake2s_simd = { version = "1", features = ["std"] }
+blake2 = { version = "0.10", features = ["std"] }
 blake3 = { version = "1", features = ["digest", "std"] }
 block-buffer-93f6ce9d446188ac = { package = "block-buffer", version = "0.10", default-features = false }
 block-buffer-274715c4dabd11b0 = { package = "block-buffer", version = "0.9", default-features = false, features = ["block-padding"] }
 block-padding-6f8ce4dd05d13bba = { package = "block-padding", version = "0.2", default-features = false }
 block-padding-468e82937335b1c9 = { package = "block-padding", version = "0.3", default-features = false, features = ["std"] }
-bls-crypto = { git = "https://github.com/huitseeker/celo-bls-snark-rs", branch = "updates-2", features = ["compat"] }
 blst = { version = "0.3" }
 bs58 = { version = "0.4", features = ["alloc", "check", "sha2", "std"] }
 bstr = { version = "0.2", features = ["lazy_static", "regex-automata", "serde", "serde1", "serde1-nostd", "std", "unicode"] }
@@ -131,7 +123,6 @@ crossterm-3c51e837cfc5589a = { package = "crossterm", version = "0.22" }
 crossterm-2ffb4c3fe830441c = { package = "crossterm", version = "0.25", features = ["bracketed-paste"] }
 crypto-bigint = { version = "0.4", default-features = false, features = ["generic-array", "rand_core", "zeroize"] }
 crypto-common = { version = "0.1", default-features = false, features = ["getrandom", "rand_core", "std"] }
-crypto-mac = { version = "0.8", default-features = false }
 csv = { version = "1", default-features = false }
 csv-core = { version = "0.1" }
 ctr = { version = "0.9", default-features = false }
@@ -172,7 +163,6 @@ ed25519-dalek-fiat = { version = "0.1", default-features = false, features = ["f
 either = { version = "1", features = ["use_std"] }
 elliptic-curve = { version = "0.12", default-features = false, features = ["arithmetic", "digest", "ff", "group", "hazmat", "sec1"] }
 endian-type = { version = "0.1", default-features = false }
-env_logger = { version = "0.9", features = ["atty", "humantime", "regex", "termcolor"] }
 ethnum = { version = "1", default-features = false }
 event-listener = { version = "2", default-features = false }
 eyre = { version = "0.6", features = ["auto-install", "track-caller"] }
@@ -283,7 +273,6 @@ libz-sys = { version = "1", default-features = false, features = ["static"] }
 linked-hash-map = { version = "0.5", default-features = false }
 lock_api = { version = "0.4", default-features = false }
 log = { version = "0.4", default-features = false, features = ["serde", "std"] }
-lru = { version = "0.7", features = ["hashbrown"] }
 match_opt = { version = "0.1", default-features = false }
 matchers = { version = "0.1", default-features = false }
 matchit = { version = "0.5" }
@@ -420,7 +409,7 @@ radium = { version = "0.5", default-features = false }
 radix_trie = { version = "0.2", default-features = false }
 rand-ca01ad9e24f5d932 = { package = "rand", version = "0.7", features = ["alloc", "getrandom", "getrandom_package", "libc", "std"] }
 rand-c38e5c1d305a1b54 = { package = "rand", version = "0.8", features = ["alloc", "getrandom", "libc", "rand_chacha", "small_rng", "std", "std_rng"] }
-rand_chacha-468e82937335b1c9 = { package = "rand_chacha", version = "0.3", features = ["std"] }
+rand_chacha-468e82937335b1c9 = { package = "rand_chacha", version = "0.3", default-features = false, features = ["std"] }
 rand_core-d8f496e17d97b5cb = { package = "rand_core", version = "0.5", default-features = false, features = ["alloc", "getrandom", "std"] }
 rand_core-3b31131e45eafb45 = { package = "rand_core", version = "0.6", default-features = false, features = ["alloc", "getrandom", "std"] }
 rand_distr = { version = "0.4", features = ["alloc", "std"] }
@@ -567,8 +556,7 @@ tracing-futures = { version = "0.2", features = ["pin-project", "std", "std-futu
 tracing-log = { version = "0.1", features = ["log-tracer", "std", "trace-logger"] }
 tracing-opentelemetry-9067fe90e8c1f593 = { package = "tracing-opentelemetry", version = "0.17", features = ["tracing-log"] }
 tracing-opentelemetry-954333c9f9249c96 = { package = "tracing-opentelemetry", version = "0.18", features = ["metrics", "tracing-log"] }
-tracing-subscriber-6f8ce4dd05d13bba = { package = "tracing-subscriber", version = "0.2", default-features = false }
-tracing-subscriber-468e82937335b1c9 = { package = "tracing-subscriber", version = "0.3", features = ["alloc", "ansi", "ansi_term", "env-filter", "fmt", "matchers", "once_cell", "regex", "registry", "sharded-slab", "smallvec", "std", "thread_local", "time", "tracing", "tracing-log"] }
+tracing-subscriber = { version = "0.3", features = ["alloc", "ansi", "ansi_term", "env-filter", "fmt", "matchers", "once_cell", "regex", "registry", "sharded-slab", "smallvec", "std", "thread_local", "time", "tracing", "tracing-log"] }
 tracing-test = { version = "0.2", default-features = false }
 try-lock = { version = "0.2", default-features = false }
 tui = { version = "0.17", features = ["crossterm"] }
@@ -634,18 +622,12 @@ ansi_term = { version = "0.12", default-features = false }
 anyhow = { version = "1", features = ["backtrace", "std"] }
 arc-swap = { version = "1", default-features = false, features = ["serde"] }
 ark-bls12-377 = { version = "0.3", features = ["base_field", "curve", "scalar_field", "std"] }
-ark-crypto-primitives = { version = "0.3", features = ["parallel", "rayon", "std"] }
-ark-ec = { version = "0.3", features = ["parallel", "rayon", "std"] }
-ark-ed-on-bw6-761 = { version = "0.3" }
-ark-ed-on-cp6-782 = { version = "0.3", default-features = false }
-ark-ff = { version = "0.3", features = ["parallel", "rayon", "std"] }
+ark-ec = { version = "0.3", default-features = false, features = ["std"] }
+ark-ff = { version = "0.3", default-features = false, features = ["std"] }
 ark-ff-asm = { version = "0.3", default-features = false }
 ark-ff-macros = { version = "0.3", default-features = false }
-ark-relations = { version = "0.3", default-features = false, features = ["std", "tracing-subscriber"] }
-ark-serialize = { version = "0.3", features = ["ark-serialize-derive", "derive", "std"] }
-ark-serialize-derive = { version = "0.3", default-features = false }
-ark-snark = { version = "0.3", default-features = false }
-ark-std = { version = "0.3", features = ["parallel", "rayon", "std"] }
+ark-serialize = { version = "0.3", default-features = false, features = ["std"] }
+ark-std = { version = "0.3", default-features = false, features = ["std"] }
 arrayref = { version = "0.3", default-features = false }
 arrayvec-d8f496e17d97b5cb = { package = "arrayvec", version = "0.5", features = ["array-sizes-33-128", "std"] }
 arrayvec-ca01ad9e24f5d932 = { package = "arrayvec", version = "0.7", features = ["std"] }
@@ -683,15 +665,12 @@ bitcoin_hashes = { version = "0.11", default-features = false }
 bitflags = { version = "1" }
 bitmaps = { version = "2", features = ["std"] }
 bitvec = { version = "0.19", default-features = false, features = ["alloc", "std"] }
-blake2-93f6ce9d446188ac = { package = "blake2", version = "0.10", features = ["std"] }
-blake2-274715c4dabd11b0 = { package = "blake2", version = "0.9", default-features = false }
-blake2s_simd = { version = "1", features = ["std"] }
+blake2 = { version = "0.10", features = ["std"] }
 blake3 = { version = "1", features = ["digest", "std"] }
 block-buffer-93f6ce9d446188ac = { package = "block-buffer", version = "0.10", default-features = false }
 block-buffer-274715c4dabd11b0 = { package = "block-buffer", version = "0.9", default-features = false, features = ["block-padding"] }
 block-padding-6f8ce4dd05d13bba = { package = "block-padding", version = "0.2", default-features = false }
 block-padding-468e82937335b1c9 = { package = "block-padding", version = "0.3", default-features = false, features = ["std"] }
-bls-crypto = { git = "https://github.com/huitseeker/celo-bls-snark-rs", branch = "updates-2", features = ["compat"] }
 blst = { version = "0.3" }
 bs58 = { version = "0.4", features = ["alloc", "check", "sha2", "std"] }
 bstr = { version = "0.2", features = ["lazy_static", "regex-automata", "serde", "serde1", "serde1-nostd", "std", "unicode"] }
@@ -754,7 +733,6 @@ crossterm-3c51e837cfc5589a = { package = "crossterm", version = "0.22" }
 crossterm-2ffb4c3fe830441c = { package = "crossterm", version = "0.25", features = ["bracketed-paste"] }
 crypto-bigint = { version = "0.4", default-features = false, features = ["generic-array", "rand_core", "zeroize"] }
 crypto-common = { version = "0.1", default-features = false, features = ["getrandom", "rand_core", "std"] }
-crypto-mac = { version = "0.8", default-features = false }
 csv = { version = "1", default-features = false }
 csv-core = { version = "0.1" }
 ctr = { version = "0.9", default-features = false }
@@ -807,7 +785,6 @@ either = { version = "1", features = ["use_std"] }
 elliptic-curve = { version = "0.12", default-features = false, features = ["arithmetic", "digest", "ff", "group", "hazmat", "sec1"] }
 endian-type = { version = "0.1", default-features = false }
 enum_dispatch = { version = "0.3", default-features = false }
-env_logger = { version = "0.9", features = ["atty", "humantime", "regex", "termcolor"] }
 ethnum = { version = "1", default-features = false }
 event-listener = { version = "2", default-features = false }
 eyre = { version = "0.6", features = ["auto-install", "track-caller"] }
@@ -931,7 +908,6 @@ libz-sys = { version = "1", default-features = false, features = ["static"] }
 linked-hash-map = { version = "0.5", default-features = false }
 lock_api = { version = "0.4", default-features = false }
 log = { version = "0.4", default-features = false, features = ["serde", "std"] }
-lru = { version = "0.7", features = ["hashbrown"] }
 match_opt = { version = "0.1", default-features = false }
 matchers = { version = "0.1", default-features = false }
 matchit = { version = "0.5" }
@@ -1097,7 +1073,7 @@ radium = { version = "0.5", default-features = false }
 radix_trie = { version = "0.2", default-features = false }
 rand-ca01ad9e24f5d932 = { package = "rand", version = "0.7", features = ["alloc", "getrandom", "getrandom_package", "libc", "std"] }
 rand-c38e5c1d305a1b54 = { package = "rand", version = "0.8", features = ["alloc", "getrandom", "libc", "rand_chacha", "small_rng", "std", "std_rng"] }
-rand_chacha-468e82937335b1c9 = { package = "rand_chacha", version = "0.3", features = ["std"] }
+rand_chacha-468e82937335b1c9 = { package = "rand_chacha", version = "0.3", default-features = false, features = ["std"] }
 rand_core-d8f496e17d97b5cb = { package = "rand_core", version = "0.5", default-features = false, features = ["alloc", "getrandom", "std"] }
 rand_core-3b31131e45eafb45 = { package = "rand_core", version = "0.6", default-features = false, features = ["alloc", "getrandom", "std"] }
 rand_distr = { version = "0.4", features = ["alloc", "std"] }
@@ -1275,8 +1251,7 @@ tracing-futures = { version = "0.2", features = ["pin-project", "std", "std-futu
 tracing-log = { version = "0.1", features = ["log-tracer", "std", "trace-logger"] }
 tracing-opentelemetry-9067fe90e8c1f593 = { package = "tracing-opentelemetry", version = "0.17", features = ["tracing-log"] }
 tracing-opentelemetry-954333c9f9249c96 = { package = "tracing-opentelemetry", version = "0.18", features = ["metrics", "tracing-log"] }
-tracing-subscriber-6f8ce4dd05d13bba = { package = "tracing-subscriber", version = "0.2", default-features = false }
-tracing-subscriber-468e82937335b1c9 = { package = "tracing-subscriber", version = "0.3", features = ["alloc", "ansi", "ansi_term", "env-filter", "fmt", "matchers", "once_cell", "regex", "registry", "sharded-slab", "smallvec", "std", "thread_local", "time", "tracing", "tracing-log"] }
+tracing-subscriber = { version = "0.3", features = ["alloc", "ansi", "ansi_term", "env-filter", "fmt", "matchers", "once_cell", "regex", "registry", "sharded-slab", "smallvec", "std", "thread_local", "time", "tracing", "tracing-log"] }
 tracing-test = { version = "0.2", default-features = false }
 tracing-test-macro = { version = "0.2", default-features = false }
 try-lock = { version = "0.2", default-features = false }

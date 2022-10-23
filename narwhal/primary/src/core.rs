@@ -790,7 +790,11 @@ impl Core {
                     error!("{e}");
                     panic!("Storage failure: killing node.");
                 }
-                Err(e @ DagError::TooOld(..) | e @ DagError::InvalidEpoch { .. }) => debug!("{e}"),
+                Err(
+                    e @ DagError::TooOld(..)
+                    | e @ DagError::VoteTooOld(..)
+                    | e @ DagError::InvalidEpoch { .. },
+                ) => debug!("{e}"),
                 Err(e) => warn!("{e}"),
             }
 

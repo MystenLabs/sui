@@ -51,6 +51,7 @@ export const Package: StoryObj<PageHeaderProps> = {
     args: {
         title,
         type: 'Package',
+        subtitle: 'Package Name',
     },
 };
 

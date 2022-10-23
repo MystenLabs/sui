@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::str::FromStr;
+use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_sdk::{
-    crypto::{AccountKeystore, FileBasedKeystore, Keystore},
     types::{
         base_types::{ObjectID, SuiAddress},
         messages::Transaction,

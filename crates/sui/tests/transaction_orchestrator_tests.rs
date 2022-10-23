@@ -5,8 +5,8 @@ use prometheus::Registry;
 use sui::client_commands::WalletContext;
 use sui_core::authority_client::NetworkAuthorityClient;
 use sui_core::transaction_orchestrator::TransactiondOrchestrator;
+use sui_keys::keystore::AccountKeystore;
 use sui_node::SuiNode;
-use sui_sdk::crypto::AccountKeystore;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest};
 use sui_types::messages::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,

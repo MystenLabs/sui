@@ -45,6 +45,20 @@ module sui::governance_test_utils {
         )
     }
 
+    public fun set_up_sui_system_state(addrs: vector<address>, scenario: &mut Scenario) {
+        let ctx = test_scenario::ctx(scenario);
+        let validators = vector::empty();
+
+        while (!vector::is_empty(&addrs)) {
+            vector::push_back(
+                &mut validators, 
+                create_validator_for_testing(vector::pop_back(&mut addrs), 100, ctx)
+            );
+        };
+
+        create_sui_system_state_for_testing(validators, 1000, 0);
+    }
+
     public fun advance_epoch(scenario: &mut Scenario) {
         advance_epoch_with_reward_amounts(0, 0, scenario);
     }
@@ -58,7 +72,7 @@ module sui::governance_test_utils {
 
         let ctx = test_scenario::ctx(scenario);
 
-        sui_system::advance_epoch(&mut system_state, new_epoch, storage_charge, computation_charge, ctx);
+        sui_system::advance_epoch(&mut system_state, new_epoch, storage_charge, computation_charge, 0, ctx);
         test_scenario::return_shared(system_state);
     }
 

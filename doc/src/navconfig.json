@@ -117,9 +117,13 @@
         "fileName": "build/devnet"
       },
       {
-        "label": "Optional - Run Locally with CLI",
+        "label": "Sui Client CLI",
         "fileName": "build/cli-client"
       },
+      {
+        "label": "Sui Local Network",
+        "fileName": "build/sui-local-network"
+      },      
       {
         "label": "Create Smart Contracts with Move",
         "fileName": "build/move/index",
