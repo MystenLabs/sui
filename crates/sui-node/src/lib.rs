@@ -294,7 +294,13 @@ impl SuiNode {
             let server = server_builder
                 .bind(config.network_address())
                 .await
-                .map_err(|err| anyhow!(err.to_string()))?;
+                .map_err(|err| {
+                    anyhow!(
+                        "Failed to bind {}. {}",
+                        config.network_address(),
+                        err.to_string()
+                    )
+                })?;
             let local_addr = server.local_addr();
             info!("Listening to traffic on {local_addr}");
             tokio::spawn(server.serve().map_err(Into::into))

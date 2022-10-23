@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::anyhow;
 use axum::{
     extract::Extension,
     http::StatusCode,
@@ -32,6 +33,7 @@ pub fn start_admin_server(port: u16, filter_handle: FilterHandle) {
         axum::Server::bind(&socket_address)
             .serve(app.into_make_service())
             .await
+            .map_err(|err| anyhow!("Failed to bind {}. {}", &socket_address, err.to_string()))
             .unwrap();
     });
 }
