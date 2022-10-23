@@ -164,7 +164,7 @@ impl From<i64> for SignedValue {
     fn from(value: i64) -> Self {
         Self {
             negative: value.is_negative(),
-            value: value.abs().unsigned_abs().into(),
+            value: value.unsigned_abs().into(),
         }
     }
 }

@@ -24,7 +24,7 @@ use sui_storage::{
 use sui_types::batch::{SignedBatch, TxSequenceNumber};
 use sui_types::crypto::{AuthoritySignInfo, EmptySignInfo};
 use sui_types::object::Owner;
-use sui_types::storage::{ChildObjectResolver, InnerTxContext, WriteKind};
+use sui_types::storage::{ChildObjectResolver, SingleTxContext, WriteKind};
 use sui_types::{base_types::SequenceNumber, storage::ParentSync};
 use tokio::sync::Notify;
 use tokio_retry::strategy::{jitter, ExponentialBackoff};
@@ -705,7 +705,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         effects: TransactionEffectsEnvelope<S>,
         effects_digest: &TransactionEffectsDigest,
     ) -> SuiResult {
-        let ctx = InnerTxContext::native_transaction(certificate.sender_address());
+        let ctx = SingleTxContext::gateway(certificate.sender_address());
         let transaction_digest = certificate.digest();
         let mut temporary_store =
             TemporaryStore::new(Arc::new(&self), input_objects, *transaction_digest);

@@ -36,25 +36,25 @@ pub enum DeleteKind {
 }
 
 pub enum ObjectChange {
-    Write(InnerTxContext, Object, WriteKind),
-    Delete(InnerTxContext, SequenceNumber, DeleteKind),
+    Write(SingleTxContext, Object, WriteKind),
+    Delete(SingleTxContext, SequenceNumber, DeleteKind),
 }
 
 #[derive(Clone)]
-pub struct InnerTxContext {
+pub struct SingleTxContext {
     pub package_id: ObjectID,
     pub transaction_module: Identifier,
     pub sender: SuiAddress,
 }
 
-impl InnerTxContext {
+impl SingleTxContext {
     pub fn transfer_sui(sender: SuiAddress) -> Self {
         Self::sui_transaction(ident_str!("transfer_sui"), sender)
     }
     pub fn transfer_object(sender: SuiAddress) -> Self {
         Self::sui_transaction(ident_str!("transfer_object"), sender)
     }
-    pub fn native_transaction(sender: SuiAddress) -> Self {
+    pub fn gateway(sender: SuiAddress) -> Self {
         Self::sui_transaction(ident_str!("native"), sender)
     }
     pub fn pay(sender: SuiAddress) -> Self {

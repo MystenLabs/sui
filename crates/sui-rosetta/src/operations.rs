@@ -22,8 +22,8 @@ use sui_types::object::Owner;
 use sui_types::{parse_sui_struct_tag, SUI_FRAMEWORK_OBJECT_ID};
 
 use crate::types::{
-    AccountIdentifier, Amount, CoinAction, CoinChange, CoinID, CoinIdentifier,
-    ConstructionMetadata, IndexCounter, OperationIdentifier, OperationStatus, OperationType,
+    AccountIdentifier, Amount, CoinAction, CoinChange, CoinIdentifier, ConstructionMetadata,
+    IndexCounter, OperationIdentifier, OperationStatus, OperationType,
 };
 use crate::ErrorType::UnsupportedOperation;
 use crate::{Error, ErrorType, SUI};
@@ -113,8 +113,6 @@ impl Operation {
         let mut operations = vec![];
         if let Event::CoinBalanceChange {
             owner: Owner::AddressOwner(owner),
-            coin_object_id,
-            version,
             coin_type,
             amount,
             ..

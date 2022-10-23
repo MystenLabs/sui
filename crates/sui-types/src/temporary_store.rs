@@ -12,7 +12,7 @@ use tracing::trace;
 
 use crate::coin::Coin;
 use crate::event::BalanceChangeType;
-use crate::storage::InnerTxContext;
+use crate::storage::SingleTxContext;
 use crate::{
     base_types::{
         ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
@@ -87,9 +87,9 @@ pub struct TemporaryStore<S> {
     // When an object is being written, we need to ensure that a few invariants hold.
     // It's critical that we always call write_object to update `_written`, instead of writing
     // into _written directly.
-    written: BTreeMap<ObjectID, (InnerTxContext, Object, WriteKind)>, // Objects written
+    written: BTreeMap<ObjectID, (SingleTxContext, Object, WriteKind)>, // Objects written
     /// Objects actively deleted.
-    deleted: BTreeMap<ObjectID, (InnerTxContext, SequenceNumber, DeleteKind)>,
+    deleted: BTreeMap<ObjectID, (SingleTxContext, SequenceNumber, DeleteKind)>,
     /// Ordered sequence of events emitted by execution
     events: Vec<Event>,
     gas_charged: Option<(SuiAddress, ObjectID, GasCostSummary)>,
@@ -129,13 +129,14 @@ impl<S> TemporaryStore<S> {
         let mut deleted = BTreeMap::new();
         let mut events = Vec::new();
 
+        // Extract gas id and charged gas amount, this can be None for unmetered transactions.
         let (gas_id, gas_charged) =
             if let Some((sender, coin_id, ref gas_charged)) = self.gas_charged {
                 // Safe to unwrap, gas must be an input object.
                 let gas = &self.input_objects[&coin_id];
                 // Emit event for gas charges.
                 events.push(Event::balance_change(
-                    &InnerTxContext::gas(sender),
+                    &SingleTxContext::gas(sender),
                     BalanceChangeType::Gas,
                     gas.owner,
                     coin_id,
@@ -158,6 +159,7 @@ impl<S> TemporaryStore<S> {
         }
 
         for (id, (ctx, version, kind)) in self.deleted {
+            // Create events for each deleted changes
             let deleted_obj = self.input_objects.get(&id);
             let balance = deleted_obj
                 .and_then(|o| Coin::extract_balance_if_coin(o).ok())
@@ -189,6 +191,8 @@ impl<S> TemporaryStore<S> {
             events.push(event);
             deleted.insert(id, (version, kind));
         }
+
+        // Combine object events with move events.
         events.extend(self.events);
 
         let store = InnerTemporaryStore {
@@ -201,7 +205,7 @@ impl<S> TemporaryStore<S> {
     }
 
     fn create_written_events(
-        ctx: InnerTxContext,
+        ctx: SingleTxContext,
         kind: WriteKind,
         id: ObjectID,
         obj: &Object,
@@ -271,7 +275,7 @@ impl<S> TemporaryStore<S> {
     }
 
     fn create_coin_mutate_events(
-        ctx: &InnerTxContext,
+        ctx: &SingleTxContext,
         gas_id: Option<ObjectID>,
         coin: &Object,
         old_coin: &Object,
@@ -368,7 +372,7 @@ impl<S> TemporaryStore<S> {
         for object in to_be_updated {
             // The object must be mutated as it was present in the input objects
             self.write_object(
-                &InnerTxContext::unused_input(sender),
+                &SingleTxContext::unused_input(sender),
                 object,
                 WriteKind::Mutate,
             );
@@ -393,7 +397,7 @@ impl<S> TemporaryStore<S> {
             gas_object.storage_rebate.into(),
         )?;
         objects_to_update.push((
-            InnerTxContext::gas(sender),
+            SingleTxContext::gas(sender),
             gas_object.clone(),
             WriteKind::Mutate,
         ));
@@ -550,7 +554,7 @@ impl<S> TemporaryStore<S> {
     // is that an entry is not both added and deleted by the
     // caller.
 
-    pub fn write_object(&mut self, ctx: &InnerTxContext, mut object: Object, kind: WriteKind) {
+    pub fn write_object(&mut self, ctx: &SingleTxContext, mut object: Object, kind: WriteKind) {
         // there should be no write after delete
         debug_assert!(self.deleted.get(&object.id()).is_none());
         // Check it is not read-only
@@ -616,7 +620,7 @@ impl<S> TemporaryStore<S> {
         let ctx = if let Some((ctx, ..)) = self.written.get(&gas_object_id) {
             ctx.clone()
         } else {
-            InnerTxContext::gas(sender)
+            SingleTxContext::gas(sender)
         };
         self.write_object(&ctx, gas_object, WriteKind::Mutate);
         self.gas_charged = Some((sender, gas_object_id, cost_summary));
@@ -624,7 +628,7 @@ impl<S> TemporaryStore<S> {
 
     pub fn delete_object(
         &mut self,
-        ctx: &InnerTxContext,
+        ctx: &SingleTxContext,
         id: &ObjectID,
         version: SequenceNumber,
         kind: DeleteKind,

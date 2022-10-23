@@ -34,7 +34,7 @@ use move_vm_runtime::{
 use sui_cost_tables::bytecode_tables::GasStatus;
 use sui_framework::natives::object_runtime::{self, ObjectRuntime};
 use sui_json::primitive_type;
-use sui_types::storage::InnerTxContext;
+use sui_types::storage::SingleTxContext;
 use sui_types::{
     base_types::*,
     error::ExecutionError,
@@ -366,7 +366,7 @@ pub fn store_package_and_init_modules<
     let changes = BTreeMap::from([(
         id,
         ObjectChange::Write(
-            InnerTxContext::publish(ctx.sender()),
+            SingleTxContext::publish(ctx.sender()),
             package_object,
             WriteKind::Create,
         ),
@@ -529,7 +529,7 @@ fn process_successful_execution<S: Storage + ParentSync>(
     ctx: &TxContext,
 ) -> Result<(), ExecutionError> {
     let sender = ctx.sender();
-    let tx_ctx = InnerTxContext {
+    let tx_ctx = SingleTxContext {
         package_id: ObjectID::from(*module_id.address()),
         transaction_module: Identifier::from(module_id.name()),
         sender,

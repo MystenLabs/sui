@@ -19,7 +19,7 @@ use sui_types::messages::ExecutionFailureStatus;
 use sui_types::messages::InputObjects;
 use sui_types::messages::{ObjectArg, Pay, PayAllSui, PaySui};
 use sui_types::object::{Data, MoveObject, Owner, OBJECT_START_VERSION};
-use sui_types::storage::InnerTxContext;
+use sui_types::storage::SingleTxContext;
 use sui_types::storage::{ChildObjectResolver, DeleteKind, InnerTxContext, ParentSync, WriteKind};
 #[cfg(test)]
 use sui_types::temporary_store;
@@ -310,7 +310,7 @@ fn transfer_object<S>(
     object.ensure_public_transfer_eligible()?;
     object.transfer_and_increment_version(recipient);
     // This will extract the transfer amount if the object is a Coin of some kind
-    let ctx = InnerTxContext::transfer_object(sender);
+    let ctx = SingleTxContext::transfer_object(sender);
     temporary_store.write_object(&ctx, object, WriteKind::Mutate);
     Ok(())
 }
@@ -567,7 +567,7 @@ fn transfer_sui<S>(
 ) -> Result<(), ExecutionError> {
     #[cfg(debug_assertions)]
     let version = object.version();
-    let ctx = InnerTxContext::transfer_sui(tx_ctx.sender());
+    let ctx = SingleTxContext::transfer_sui(tx_ctx.sender());
     if let Some(amount) = amount {
         // Deduct the amount from the gas coin and update it.
         let mut gas_coin = GasCoin::try_from(&object)
