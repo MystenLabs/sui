@@ -115,7 +115,7 @@ module sui::bcs {
         // Read first 4 LE bytes (u32)
         while (i < 4) {
             let byte = (v::pop_back(&mut bcs.bytes) as u64);
-            l_value = l_value + (byte << ((8 * (i)) as u8));
+            l_value = l_value + (byte << ((8 * i) as u8));
             i = i + 1;
         };
 
