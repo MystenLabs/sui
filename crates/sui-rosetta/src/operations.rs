@@ -122,11 +122,6 @@ impl Operation {
         {
             // We only interested in SUI coins and account addresses
             if coin_type == &GAS::type_().to_string() {
-                let coin_action = if amount.is_negative() {
-                    CoinAction::CoinSpent
-                } else {
-                    CoinAction::CoinCreated
-                };
                 operations.push(Operation {
                     operation_identifier: counter.next_idx().into(),
                     related_operations: vec![],
@@ -137,15 +132,7 @@ impl Operation {
                         value: (*amount).into(),
                         currency: SUI.clone(),
                     }),
-                    coin_change: Some(CoinChange {
-                        coin_identifier: CoinIdentifier {
-                            identifier: CoinID {
-                                id: *coin_object_id,
-                                version: *version,
-                            },
-                        },
-                        coin_action,
-                    }),
+                    coin_change: None,
                     metadata: None,
                 });
             }

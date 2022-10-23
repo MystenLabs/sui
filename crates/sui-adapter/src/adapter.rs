@@ -529,7 +529,7 @@ fn process_successful_execution<S: Storage + ParentSync>(
     ctx: &TxContext,
 ) -> Result<(), ExecutionError> {
     let sender = ctx.sender();
-    let metadata = InnerTxContext {
+    let tx_ctx = InnerTxContext {
         package_id: ObjectID::from(*module_id.address()),
         transaction_module: Identifier::from(module_id.name()),
         sender,
@@ -548,7 +548,7 @@ fn process_successful_execution<S: Storage + ParentSync>(
 
         changes.insert(
             obj_id,
-            ObjectChange::Write(metadata.clone(), obj, WriteKind::Mutate),
+            ObjectChange::Write(tx_ctx.clone(), obj, WriteKind::Mutate),
         );
     }
     let tx_digest = ctx.digest();
@@ -633,7 +633,7 @@ fn process_successful_execution<S: Storage + ParentSync>(
             // Charge extra gas based on object size if we are creating a new object.
             // TODO: Do we charge extra gas when creating new objects (on top of storage write cost)?
         }
-        changes.insert(id, ObjectChange::Write(metadata.clone(), obj, write_kind));
+        changes.insert(id, ObjectChange::Write(tx_ctx.clone(), obj, write_kind));
     }
 
     for (id, delete_kind) in deletions {
@@ -657,7 +657,7 @@ fn process_successful_execution<S: Storage + ParentSync>(
         };
         changes.insert(
             id,
-            ObjectChange::Delete(metadata.clone(), version, delete_kind),
+            ObjectChange::Delete(tx_ctx.clone(), version, delete_kind),
         );
     }
 

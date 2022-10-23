@@ -42,6 +42,15 @@ export type TransferObjectEvent = {
     version: SequenceNumber;
 };
 
+export type MutateObjectEvent = {
+    packageId: ObjectId;
+    transactionModule: string;
+    sender: SuiAddress;
+    objectType: string,
+    objectId: ObjectId;
+    version: SequenceNumber;
+};
+
 export type DeleteObjectEvent = {
     packageId: ObjectId;
     transactionModule: string;
@@ -64,6 +73,7 @@ export type SuiEvent =
     | { publish: PublishEvent }
     | { coinBalanceChange: CoinBalanceChangeEvent }
     | { transferObject: TransferObjectEvent }
+    | { mutateObject: MutateObjectEvent }
     | { deleteObject: DeleteObjectEvent }
     | { newObject: NewObjectEvent }
     | { epochChange: bigint }

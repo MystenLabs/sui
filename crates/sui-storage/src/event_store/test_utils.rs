@@ -173,6 +173,30 @@ pub fn new_test_transfer_event(
     )
 }
 
+pub fn new_test_mutate_event(
+    timestamp: u64,
+    seq_num: u64,
+    object_version: u64,
+    object_type: &str,
+    object_id: Option<ObjectID>,
+    sender: Option<SuiAddress>,
+) -> EventEnvelope {
+    EventEnvelope::new(
+        timestamp,
+        Some(TransactionDigest::random()),
+        seq_num,
+        Event::MutateObject {
+            package_id: ObjectID::random(),
+            transaction_module: Identifier::new("module").unwrap(),
+            sender: sender.unwrap_or_else(SuiAddress::random_for_testing_only),
+            object_type: object_type.to_string(),
+            object_id: object_id.unwrap_or_else(ObjectID::random),
+            version: object_version.into(),
+        },
+        None,
+    )
+}
+
 pub fn new_test_move_event(
     timestamp: u64,
     digest: TransactionDigest,

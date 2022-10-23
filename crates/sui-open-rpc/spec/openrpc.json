@@ -2670,6 +2670,14 @@
           }
         }
       },
+      "BalanceChangeType": {
+        "type": "string",
+        "enum": [
+          "Gas",
+          "Pay",
+          "Receive"
+        ]
+      },
       "Base64": {
         "type": "string"
       },
@@ -2912,12 +2920,13 @@
                 "type": "object",
                 "required": [
                   "amount",
-                  "coin_object_id",
-                  "coin_type",
+                  "changeType",
+                  "coinObjectId",
+                  "coinType",
                   "owner",
-                  "package_id",
+                  "packageId",
                   "sender",
-                  "transaction_module",
+                  "transactionModule",
                   "version"
                 ],
                 "properties": {
@@ -2925,22 +2934,25 @@
                     "type": "integer",
                     "format": "int128"
                   },
-                  "coin_object_id": {
+                  "changeType": {
+                    "$ref": "#/components/schemas/BalanceChangeType"
+                  },
+                  "coinObjectId": {
                     "$ref": "#/components/schemas/ObjectID"
                   },
-                  "coin_type": {
+                  "coinType": {
                     "type": "string"
                   },
                   "owner": {
                     "$ref": "#/components/schemas/Owner"
                   },
-                  "package_id": {
+                  "packageId": {
                     "$ref": "#/components/schemas/ObjectID"
                   },
                   "sender": {
                     "$ref": "#/components/schemas/SuiAddress"
                   },
-                  "transaction_module": {
+                  "transactionModule": {
                     "type": "string"
                   },
                   "version": {
@@ -3016,6 +3028,47 @@
                     "$ref": "#/components/schemas/SuiAddress"
                   },
                   "transactionModule": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "$ref": "#/components/schemas/SequenceNumber"
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Object mutated.",
+            "type": "object",
+            "required": [
+              "mutateObject"
+            ],
+            "properties": {
+              "mutateObject": {
+                "type": "object",
+                "required": [
+                  "object_id",
+                  "object_type",
+                  "package_id",
+                  "sender",
+                  "transaction_module",
+                  "version"
+                ],
+                "properties": {
+                  "object_id": {
+                    "$ref": "#/components/schemas/ObjectID"
+                  },
+                  "object_type": {
+                    "type": "string"
+                  },
+                  "package_id": {
+                    "$ref": "#/components/schemas/ObjectID"
+                  },
+                  "sender": {
+                    "$ref": "#/components/schemas/SuiAddress"
+                  },
+                  "transaction_module": {
                     "type": "string"
                   },
                   "version": {
@@ -3356,6 +3409,13 @@
             "type": "string",
             "enum": [
               "TransferObject"
+            ]
+          },
+          {
+            "description": "Object level event Object mutated.",
+            "type": "string",
+            "enum": [
+              "MutateObject"
             ]
           },
           {

@@ -399,7 +399,7 @@ fn test_object_owning_another_object() {
         .await
         .unwrap();
         assert!(effects.status.is_ok());
-        assert_eq!(effects.events.len(), 4);
+        assert_eq!(effects.events.len(), 6);
         let num_transfers = effects
             .events
             .iter()
@@ -654,7 +654,7 @@ fn test_create_then_delete_parent_child_wrap_separate() {
         assert!(effects.status.is_ok());
         assert_eq!(effects.created.len(), 1);
         assert_eq!(effects.wrapped.len(), 1);
-        assert_eq!(effects.events.len(), 3);
+        assert_eq!(effects.events.len(), 4);
 
         // Delete the parent and child altogether.
         let effects = call_move(

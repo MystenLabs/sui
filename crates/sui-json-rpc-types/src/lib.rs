@@ -2037,6 +2037,15 @@ pub enum SuiEvent {
         object_id: ObjectID,
         version: SequenceNumber,
     },
+    /// Object mutated.
+    MutateObject {
+        package_id: ObjectID,
+        transaction_module: String,
+        sender: SuiAddress,
+        object_type: String,
+        object_id: ObjectID,
+        version: SequenceNumber,
+    },
     /// Delete object
     #[serde(rename_all = "camelCase")]
     DeleteObject {
@@ -2145,6 +2154,21 @@ impl TryFrom<SuiEvent> for Event {
                 version,
                 amount,
             },
+            SuiEvent::MutateObject {
+                package_id,
+                transaction_module,
+                sender,
+                object_type,
+                object_id,
+                version,
+            } => Event::MutateObject {
+                package_id,
+                transaction_module: Identifier::from_str(&transaction_module)?,
+                sender,
+                object_type,
+                object_id,
+                version,
+            },
         })
     }
 }
@@ -2251,6 +2275,21 @@ impl SuiEvent {
                 version,
                 coin_type,
                 amount,
+            },
+            Event::MutateObject {
+                package_id,
+                transaction_module,
+                sender,
+                object_type,
+                object_id,
+                version,
+            } => SuiEvent::MutateObject {
+                package_id,
+                transaction_module: transaction_module.to_string(),
+                sender,
+                object_type,
+                object_id,
+                version,
             },
         })
     }
@@ -2429,6 +2468,33 @@ impl PartialEq<SuiEvent> for Event {
                         && self_amount == amount
                         && self_sender == sender
                         && self_change_type == change_type
+                } else {
+                    false
+                }
+            }
+            Event::MutateObject {
+                package_id: self_package_id,
+                transaction_module: self_transaction_module,
+                sender: self_sender,
+                object_type: self_object_type,
+                object_id: self_object_id,
+                version: self_version,
+            } => {
+                if let SuiEvent::MutateObject {
+                    package_id,
+                    transaction_module,
+                    sender,
+                    object_type,
+                    object_id,
+                    version,
+                } = other
+                {
+                    package_id == self_package_id
+                        && &self_transaction_module.to_string() == transaction_module
+                        && self_sender == sender
+                        && self_object_type == object_type
+                        && self_object_id == object_id
+                        && self_version == version
                 } else {
                     false
                 }

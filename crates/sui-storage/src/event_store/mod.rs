@@ -141,6 +141,25 @@ impl StoredEvent {
         })
     }
 
+    pub fn into_mutate_object(self) -> Result<SuiEvent, anyhow::Error> {
+        let package_id = self.package_id()?;
+        let transaction_module = self.transaction_module()?;
+        let sender = self.sender()?;
+        let object_id = self.object_id()?;
+        let object_type = self.object_type()?;
+        let version = self.object_version()?.ok_or_else(|| {
+            anyhow::anyhow!("Can't extract object version from StoredEvent: {self:?}")
+        })?;
+        Ok(SuiEvent::MutateObject {
+            package_id,
+            transaction_module,
+            sender,
+            object_type,
+            object_id,
+            version,
+        })
+    }
+
     pub fn into_delete_object(self) -> Result<SuiEvent, anyhow::Error> {
         let package_id = self.package_id()?;
         let transaction_module = self.transaction_module()?;
@@ -303,7 +322,7 @@ impl StoredEvent {
             .extract_string_field(BALANCE_CHANGE_TYPE_KEY)?
             .map(|opt| usize::from_str(&opt))
             .transpose()?
-            .map(|value| Event::balance_change_from_ordinal(value))
+            .map(Event::balance_change_from_ordinal)
             .transpose()?)
     }
 
@@ -325,6 +344,7 @@ impl TryInto<SuiEventEnvelope> for StoredEvent {
                     EventType::MoveEvent => self.into_move_event(),
                     EventType::Publish => self.into_publish(),
                     EventType::TransferObject => self.into_transfer_object(),
+                    EventType::MutateObject => self.into_mutate_object(),
                     EventType::DeleteObject => self.into_delete_object(),
                     EventType::NewObject => self.into_new_object(),
                     EventType::CoinBalanceChange => self.into_coin_balance_change(),

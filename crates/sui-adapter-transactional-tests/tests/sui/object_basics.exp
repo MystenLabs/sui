@@ -29,7 +29,7 @@ created: object(110)
 written: object(109)
 
 task 7 'run'. lines 82-82:
-events: CoinBalanceChange { package_id: sui, transaction_module: Identifier("gas"), sender: B, owner: AddressOwner(B), coin_type: "sui::sui::SUI", coin_object_id: fake(111), version: SequenceNumber(0), amount: -83 }, MoveEvent { package_id: test, transaction_module: Identifier("object_basics"), sender: B, type_: StructTag { address: test, module: Identifier("object_basics"), name: Identifier("NewValueEvent"), type_params: [] }, contents: [20, 0, 0, 0, 0, 0, 0, 0] }
+events: CoinBalanceChange { package_id: sui, transaction_module: Identifier("gas"), sender: B, change_type: Gas, owner: AddressOwner(B), coin_type: "sui::sui::SUI", coin_object_id: fake(111), version: SequenceNumber(0), amount: -83 }, MutateObject { package_id: test, transaction_module: Identifier("object_basics"), sender: B, object_type: "test::object_basics::Object", object_id: fake(107), version: SequenceNumber(3) }, MutateObject { package_id: sui, transaction_module: Identifier("unused_input_object"), sender: B, object_type: "test::object_basics::Object", object_id: fake(110), version: SequenceNumber(2) }, MoveEvent { package_id: test, transaction_module: Identifier("object_basics"), sender: B, type_: StructTag { address: test, module: Identifier("object_basics"), name: Identifier("NewValueEvent"), type_params: [] }, contents: [20, 0, 0, 0, 0, 0, 0, 0] }
 written: object(107), object(110), object(111)
 
 task 8 'run'. lines 84-84:

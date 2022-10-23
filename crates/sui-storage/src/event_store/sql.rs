@@ -681,16 +681,18 @@ mod tests {
                 "test_module",
                 "test_foo",
             ),
+            test_utils::new_test_balance_change_event(1_006_000, 6, None, None, None),
+            test_utils::new_test_mutate_event(1_007_000, 7, 1, "0x2::test::Object", None, None),
         ];
-        assert_eq!(db.add_events(&to_insert).await?, 6);
+        assert_eq!(db.add_events(&to_insert).await?, 8);
         info!("Done inserting");
 
-        assert_eq!(db.total_event_count().await?, 6);
+        assert_eq!(db.total_event_count().await?, 8);
 
-        // Query for records in time range, end should be exclusive - should get 2
-        let queried_events = db.event_iterator(1_000_000, 1_002_000, 20).await?;
-        assert_eq!(queried_events.len(), 2);
-        for i in 0..2 {
+        // Query for records in time range, end should be exclusive - should get 8
+        let queried_events = db.event_iterator(1_000_000, 1_008_000, 20).await?;
+        assert_eq!(queried_events.len(), 8);
+        for i in 0..8 {
             // ASCENDING order
             test_queried_event_vs_test_envelope(&queried_events[i], &to_insert[i]);
         }
