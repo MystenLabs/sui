@@ -71,7 +71,7 @@ module sui::bcs {
     }
 
     /// Unpack the `BCS` struct returning the leftover bytes.
-    /// Useful for passing the data further afther partial deserialization.
+    /// Useful for passing the data further after partial deserialization.
     public fun into_remainder_bytes(bcs: BCS): vector<u8> {
         let BCS { bytes } = bcs;
         v::reverse(&mut bytes);
