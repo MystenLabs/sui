@@ -8,6 +8,7 @@ import {
     isDeleteObjectEvent,
     isPublishEvent,
     isCoinBalanceChangeEvent,
+    isMutateObjectEvent,
 } from '@mysten/sui.js';
 
 import { isBigIntOrNumber } from '../../utils/numberUtil';
@@ -25,6 +26,7 @@ import type {
     DeleteObjectEvent,
     PublishEvent,
     CoinBalanceChangeEvent,
+    MutateObjectEvent,
 } from '@mysten/sui.js';
 import type { LinkObj } from '~/ui/TableCard';
 
@@ -146,6 +148,22 @@ export function transferObjectEventDisplay(
     };
 }
 
+export function mutateObjectEventDisplay(
+    event: MutateObjectEvent
+): EventDisplayData {
+    return {
+        top: {
+            title: 'Mutate Object',
+            content: [
+                contentLine('Object Type', event.objectType, true),
+                objectContent('Object ID', event.objectId),
+                contentLine('Version', event.version.toString()),
+                addressContent('', event.sender),
+            ],
+        },
+    };
+}
+
 export function coinBalanceChangeEventDisplay(
     event: CoinBalanceChangeEvent
 ): EventDisplayData {
@@ -230,6 +248,9 @@ export function eventToDisplay(event: SuiEvent) {
         isTransferObjectEvent(event.transferObject)
     )
         return transferObjectEventDisplay(event.transferObject);
+
+    if ('mutateObject' in event && isMutateObjectEvent(event.mutateObject))
+        return mutateObjectEventDisplay(event.mutateObject);
 
     if ('deleteObject' in event && isDeleteObjectEvent(event.deleteObject))
         return deleteObjectEventDisplay(event.deleteObject);
