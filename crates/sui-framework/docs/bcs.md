@@ -15,6 +15,26 @@ Short summary (for Move-supported types):
 - vector - ULEB128 length + LEN elements
 - option - first byte bool: None (0) or Some (1), then value
 
+Usage example:
+```
+/// This function reads u8 and u64 value from the input
+/// and returns the rest of the bytes.
+fun deserialize(bytes: vector<u8>): (u8, u64, vector<u8>) {
+use sui::bcs::{Self, BCS};
+
+let prepared: BCS = bcs::new(bytes);
+let (u8_value, u64_value) = (
+bcs::peel_u8(&mut prepared),
+bcs::peel_u64(&mut prepared)
+);
+
+// unpack bcs struct
+let leftovers = bcs::into_remainder_bytes(prepared);
+
+(u8_value, u64_value, leftovers)
+}
+```
+
 
 -  [Struct `BCS`](#0x2_bcs_BCS)
 -  [Constants](#@Constants_0)
@@ -57,7 +77,7 @@ vector performance, it stores reversed bytes of the BCS and
 enables use of <code><a href="_pop_back">vector::pop_back</a></code>.
 
 
-<pre><code><b>struct</b> <a href="bcs.md#0x2_bcs_BCS">BCS</a> <b>has</b> <b>copy</b>, drop
+<pre><code><b>struct</b> <a href="bcs.md#0x2_bcs_BCS">BCS</a> <b>has</b> <b>copy</b>, drop, store
 </code></pre>
 
 
@@ -181,7 +201,7 @@ bytes for better performance.
 ## Function `into_remainder_bytes`
 
 Unpack the <code><a href="bcs.md#0x2_bcs_BCS">BCS</a></code> struct returning the leftover bytes.
-Useful for passing the data further afther partial deserialization.
+Useful for passing the data further after partial deserialization.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_into_remainder_bytes">into_remainder_bytes</a>(<a href="">bcs</a>: bcs::BCS): <a href="">vector</a>&lt;u8&gt;
@@ -311,26 +331,15 @@ Read <code>u64</code> value from bcs-serialized bytes.
 
 <pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_u64">peel_u64</a>(<a href="">bcs</a>: &<b>mut</b> <a href="bcs.md#0x2_bcs_BCS">BCS</a>): u64 {
     <b>assert</b>!(v::length(&<a href="">bcs</a>.bytes) &gt;= 8, <a href="bcs.md#0x2_bcs_EOutOfRange">EOutOfRange</a>);
-    <b>let</b> (l_value, r_value, i) = (0u64, 0u64, 0);
 
-    // Read first 4 LE bytes (u32)
-    <b>while</b> (i &lt; 4) {
+    <b>let</b> (value, i) = (0u64, 0u8);
+    <b>while</b> (i &lt; 64) {
         <b>let</b> byte = (v::pop_back(&<b>mut</b> <a href="">bcs</a>.bytes) <b>as</b> u64);
-        l_value = l_value + (byte &lt;&lt; ((8 * (i)) <b>as</b> u8));
-        i = i + 1;
+        value = value + (byte &lt;&lt; i);
+        i = i + 8;
     };
 
-    i = 0;
-
-    // Read second 4 LE bytes (u32)
-    <b>while</b> (i &lt; 4) {
-        <b>let</b> byte = (v::pop_back(&<b>mut</b> <a href="">bcs</a>.bytes) <b>as</b> u64);
-        r_value = r_value + (byte &lt;&lt; ((8 * (i)) <b>as</b> u8));
-        i = i + 1;
-    };
-
-    // Swap LHS and RHS of initial bytes
-    (r_value &lt;&lt; 32) | l_value
+    value
 }
 </code></pre>
 
@@ -357,9 +366,14 @@ Read <code>u128</code> value from bcs-serialized bytes.
 <pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_u128">peel_u128</a>(<a href="">bcs</a>: &<b>mut</b> <a href="bcs.md#0x2_bcs_BCS">BCS</a>): u128 {
     <b>assert</b>!(v::length(&<a href="">bcs</a>.bytes) &gt;= 16, <a href="bcs.md#0x2_bcs_EOutOfRange">EOutOfRange</a>);
 
-    <b>let</b> (l_value, r_value) = (<a href="bcs.md#0x2_bcs_peel_u64">peel_u64</a>(<a href="">bcs</a>), <a href="bcs.md#0x2_bcs_peel_u64">peel_u64</a>(<a href="">bcs</a>));
+    <b>let</b> (value, i) = (0u128, 0u8);
+    <b>while</b> (i &lt; 128) {
+        <b>let</b> byte = (v::pop_back(&<b>mut</b> <a href="">bcs</a>.bytes) <b>as</b> u128);
+        value = value + (byte &lt;&lt; i);
+        i = i + 8;
+    };
 
-    ((r_value <b>as</b> u128) &lt;&lt; 64) | (l_value <b>as</b> u128)
+    value
 }
 </code></pre>
 

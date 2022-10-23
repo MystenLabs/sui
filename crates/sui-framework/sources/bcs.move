@@ -110,35 +110,29 @@ module sui::bcs {
     /// Read `u64` value from bcs-serialized bytes.
     public fun peel_u64(bcs: &mut BCS): u64 {
         assert!(v::length(&bcs.bytes) >= 8, EOutOfRange);
-        let (l_value, r_value, i) = (0u64, 0u64, 0);
 
-        // Read first 4 LE bytes (u32)
-        while (i < 4) {
+        let (value, i) = (0u64, 0u8);
+        while (i < 64) {
             let byte = (v::pop_back(&mut bcs.bytes) as u64);
-            l_value = l_value + (byte << ((8 * i) as u8));
-            i = i + 1;
+            value = value + (byte << i);
+            i = i + 8;
         };
-
-        i = 0;
-
-        // Read second 4 LE bytes (u32)
-        while (i < 4) {
-            let byte = (v::pop_back(&mut bcs.bytes) as u64);
-            r_value = r_value + (byte << ((8 * (i)) as u8));
-            i = i + 1;
-        };
-
-        // Swap LHS and RHS of initial bytes
-        (r_value << 32) | l_value
+        
+        value
     }
 
     /// Read `u128` value from bcs-serialized bytes.
     public fun peel_u128(bcs: &mut BCS): u128 {
         assert!(v::length(&bcs.bytes) >= 16, EOutOfRange);
 
-        let (l_value, r_value) = (peel_u64(bcs), peel_u64(bcs));
+        let (value, i) = (0u128, 0u8);
+        while (i < 128) {
+            let byte = (v::pop_back(&mut bcs.bytes) as u128);
+            value = value + (byte << i);
+            i = i + 8;
+        };
 
-        ((r_value as u128) << 64) | (l_value as u128)
+        value
     }
 
     // === Vector<T> ===
