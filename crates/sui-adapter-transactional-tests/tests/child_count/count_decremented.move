@@ -10,138 +10,81 @@
 
 module test::m {
     use sui::tx_context::{Self, TxContext};
+    use sui::dynamic_object_field as ofield;
 
     struct S has key, store {
         id: sui::object::UID,
     }
 
-    struct R has key {
+    struct R has key, store {
         id: sui::object::UID,
         s: S,
     }
 
     public entry fun mint(ctx: &mut TxContext) {
-        let parent = sui::object::new(ctx);
+        let id = sui::object::new(ctx);
+        sui::transfer::transfer(S { id }, tx_context::sender(ctx))
+    }
+
+    public entry fun add(parent: &mut S, idx: u64, ctx: &mut TxContext) {
         let child = S { id: sui::object::new(ctx) };
-        sui::transfer::transfer_to_object_id(child, &mut parent);
-        sui::transfer::transfer(S { id: parent }, tx_context::sender(ctx))
+        ofield::add(&mut parent.id, idx, child);
     }
 
-    public entry fun share_object(_parent: &S, s: S) {
-        sui::transfer::share_object(s)
+    public entry fun remove(parent: &mut S, idx: u64) {
+        let S { id } = ofield::remove(&mut parent.id, idx);
+        sui::object::delete(id)
     }
 
-    public entry fun freeze_object(_parent: &S, s: S) {
-        sui::transfer::freeze_object(s)
+    public entry fun remove_and_add(parent: &mut S, idx: u64) {
+        let child: S = ofield::remove(&mut parent.id, idx);
+        ofield::add(&mut parent.id, idx, child)
     }
 
-    public entry fun transfer_child(_parent: &S, s: S, recipient: address) {
-        sui::transfer::transfer(s, recipient)
-    }
-
-    public entry fun transfer_to_object(_old_parent: &S, child: S, parent: &mut S) {
-        sui::transfer::transfer_to_object(child, parent)
-    }
-
-    public entry fun transfer_to_object_id(_old_parent: &S, child: S, parent: &mut S) {
-        sui::transfer::transfer_to_object_id(child, &mut parent.id)
-    }
-
-    public entry fun delete(_old_parent: &S, child: S) {
-        let S { id } = child;
-        sui::object::delete(id);
-    }
-
-    public entry fun wrap(_parent: &S, s: S, ctx: &mut TxContext) {
-        let r = R { id: sui::object::new(ctx), s };
-        sui::transfer::transfer(r, tx_context::sender(ctx))
+    public entry fun remove_and_wrap(parent: &mut S, idx: u64, ctx: &mut TxContext) {
+        let child: S = ofield::remove(&mut parent.id, idx);
+        ofield::add(&mut parent.id, idx, R { id: sui::object::new(ctx), s: child })
     }
 }
 
 //
-// Test sharing
+// Test remove
 //
 
 //# run test::m::mint --sender A
 
 //# view-object 107
 
-//# run test::m::share_object --sender A --args object(107) object(108)
+//# run test::m::add --sender A --args object(107) 1
+
+//# run test::m::remove --sender A --args object(107) 1
 
 //# view-object 107
 
 //
-// Test freezing
+// Test remove and add
 //
 
 //# run test::m::mint --sender A
 
-//# view-object 112
+//# view-object 113
 
-//# run test::m::freeze_object --sender A --args object(112) object(111)
+//# run test::m::add --sender A --args object(113) 1
 
-//# view-object 112
+//# run test::m::remove_and_add --sender A --args object(113) 1
 
-//
-// Test transfer
-//
-
-//# run test::m::mint --sender A
-
-//# view-object 115
-
-//# run test::m::transfer_child --sender A --args object(115) object(116) @B
-
-//# view-object 115
+//# view-object 113
 
 //
-// Test transfer to object
+// Test remove and wrap
 //
 
 //# run test::m::mint --sender A
 
-//# run test::m::mint --sender A
+//# view-object 119
 
-//# view-object 120
+//# run test::m::add --sender A --args object(119) 1
 
-//# run test::m::transfer_to_object --sender A --args object(120) object(119) object(123)
+//# run test::m::remove_and_wrap --sender A --args object(119) 1
 
-//# view-object 120
-
-//
-// Test transfer to id
-//
-
-//# run test::m::mint --sender A
-
-//# run test::m::mint --sender A
-
-//# view-object 127
-
-//# run test::m::transfer_to_object_id --sender A --args object(127) object(126) object(130)
-
-//# view-object 127
-
-//
-// Test delete
-//
-
-//# run test::m::mint --sender A
-
-//# view-object 134
-
-//# run test::m::delete --sender A --args object(134) object(133)
-
-//# view-object 134
-
-//
-// Test wrap
-//
-
-//# run test::m::mint --sender A
-
-//# view-object 137
-
-//# run test::m::wrap --sender A --args object(137) object(138)
-
-//# view-object 137
+//# view-object 119

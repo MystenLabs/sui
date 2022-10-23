@@ -24,9 +24,8 @@
 
 .success-icon {
     border-radius: 50%;
-    width: 48px;
-    height: 48px;
-    min-height: 48px;
+    width: 46px;
+    height: 46px;
     border: 3px dotted colors.$success;
     display: flex;
     align-items: center;
@@ -81,6 +80,7 @@
     margin-bottom: 30px;
     color: colors.$gray-90;
     text-transform: capitalize;
+    line-height: 1;
 
     @include utils.typography('Primary/Heading1-B');
 }

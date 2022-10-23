@@ -29,7 +29,7 @@ async fn process_header() {
     let (_tx_reconfigure, rx_reconfigure) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
     let (tx_sync_headers, _rx_sync_headers) = test_utils::test_channel!(1);
-    let (tx_sync_certificates, _rx_sync_certificates) = test_utils::test_channel!(1);
+    let (tx_certificate_waiter, _rx_certificate_waiter) = test_utils::test_channel!(1);
     let (tx_primary_messages, rx_primary_messages) = test_utils::test_channel!(1);
     let (_tx_headers_loopback, rx_headers_loopback) = test_utils::test_channel!(1);
     let (_tx_certificates_loopback, rx_certificates_loopback) = test_utils::test_channel!(1);
@@ -56,7 +56,7 @@ async fn process_header() {
         certificates_store.clone(),
         payload_store,
         /* tx_header_waiter */ tx_sync_headers,
-        /* tx_certificate_waiter */ tx_sync_certificates,
+        tx_certificate_waiter,
         None,
     );
 
@@ -157,7 +157,7 @@ async fn process_header_missing_parent() {
 
     let (_, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
     let (tx_sync_headers, _rx_sync_headers) = test_utils::test_channel!(1);
-    let (tx_sync_certificates, _rx_sync_certificates) = test_utils::test_channel!(1);
+    let (tx_certificate_waiter, _rx_certificate_waiter) = test_utils::test_channel!(1);
     let (tx_primary_messages, rx_primary_messages) = test_utils::test_channel!(1);
     let (_tx_headers_loopback, rx_headers_loopback) = test_utils::test_channel!(1);
     let (_tx_certificates_loopback, rx_certificates_loopback) = test_utils::test_channel!(1);
@@ -176,7 +176,7 @@ async fn process_header_missing_parent() {
         certificates_store.clone(),
         payload_store.clone(),
         /* tx_header_waiter */ tx_sync_headers,
-        /* tx_certificate_waiter */ tx_sync_certificates,
+        tx_certificate_waiter,
         None,
     );
 
@@ -245,7 +245,7 @@ async fn process_header_missing_payload() {
 
     let (_, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
     let (tx_sync_headers, _rx_sync_headers) = test_utils::test_channel!(1);
-    let (tx_sync_certificates, _rx_sync_certificates) = test_utils::test_channel!(1);
+    let (tx_certificate_waiter, _rx_certificate_waiter) = test_utils::test_channel!(1);
     let (tx_primary_messages, rx_primary_messages) = test_utils::test_channel!(1);
     let (_tx_headers_loopback, rx_headers_loopback) = test_utils::test_channel!(1);
     let (_tx_certificates_loopback, rx_certificates_loopback) = test_utils::test_channel!(1);
@@ -264,7 +264,7 @@ async fn process_header_missing_payload() {
         certificates_store.clone(),
         payload_store.clone(),
         /* tx_header_waiter */ tx_sync_headers,
-        /* tx_certificate_waiter */ tx_sync_certificates,
+        tx_certificate_waiter,
         None,
     );
 
@@ -334,7 +334,7 @@ async fn process_votes() {
     let (_tx_reconfigure, rx_reconfigure) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
     let (tx_sync_headers, _rx_sync_headers) = test_utils::test_channel!(1);
-    let (tx_sync_certificates, _rx_sync_certificates) = test_utils::test_channel!(1);
+    let (tx_certificate_waiter, _rx_certificate_waiter) = test_utils::test_channel!(1);
     let (tx_primary_messages, rx_primary_messages) = test_utils::test_channel!(1);
     let (_tx_headers_loopback, rx_headers_loopback) = test_utils::test_channel!(1);
     let (_tx_certificates_loopback, rx_certificates_loopback) = test_utils::test_channel!(1);
@@ -353,7 +353,7 @@ async fn process_votes() {
         certificates_store.clone(),
         payload_store.clone(),
         /* tx_header_waiter */ tx_sync_headers,
-        /* tx_certificate_waiter */ tx_sync_certificates,
+        tx_certificate_waiter,
         None,
     );
 
@@ -455,7 +455,7 @@ async fn process_certificates() {
     let (_tx_reconfigure, rx_reconfigure) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
     let (tx_sync_headers, _rx_sync_headers) = test_utils::test_channel!(1);
-    let (tx_sync_certificates, _rx_sync_certificates) = test_utils::test_channel!(1);
+    let (tx_certificate_waiter, _rx_certificate_waiter) = test_utils::test_channel!(1);
     let (tx_primary_messages, rx_primary_messages) = test_utils::test_channel!(3);
     let (_tx_headers_loopback, rx_headers_loopback) = test_utils::test_channel!(1);
     let (_tx_certificates_loopback, rx_certificates_loopback) = test_utils::test_channel!(1);
@@ -474,7 +474,7 @@ async fn process_certificates() {
         certificates_store.clone(),
         payload_store.clone(),
         /* tx_header_waiter */ tx_sync_headers,
-        /* tx_certificate_waiter */ tx_sync_certificates,
+        tx_certificate_waiter,
         None,
     );
 
@@ -572,7 +572,7 @@ async fn recover_core() {
     let (tx_reconfigure, rx_reconfigure) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
     let (tx_sync_headers, _rx_sync_headers) = test_utils::test_channel!(1);
-    let (tx_sync_certificates, _rx_sync_certificates) = test_utils::test_channel!(1);
+    let (tx_certificate_waiter, _rx_certificate_waiter) = test_utils::test_channel!(1);
     let (tx_primary_messages, rx_primary_messages) = test_utils::test_channel!(3);
     let (_tx_headers_loopback, rx_headers_loopback) = test_utils::test_channel!(1);
     let (_tx_certificates_loopback, rx_certificates_loopback) = test_utils::test_channel!(1);
@@ -591,7 +591,7 @@ async fn recover_core() {
         certificates_store.clone(),
         payload_store.clone(),
         /* tx_header_waiter */ tx_sync_headers.clone(),
-        /* tx_certificate_waiter */ tx_sync_certificates.clone(),
+        tx_certificate_waiter.clone(),
         None,
     );
 
@@ -654,7 +654,7 @@ async fn recover_core() {
         certificates_store.clone(),
         payload_store.clone(),
         /* tx_header_waiter */ tx_sync_headers.clone(),
-        /* tx_certificate_waiter */ tx_sync_certificates.clone(),
+        tx_certificate_waiter.clone(),
         None,
     );
     let (_tx_primary_messages, rx_primary_messages) = test_utils::test_channel!(3);
@@ -729,7 +729,7 @@ async fn recover_core_partial_certs() {
     let (tx_reconfigure, rx_reconfigure) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
     let (tx_sync_headers, _rx_sync_headers) = test_utils::test_channel!(1);
-    let (tx_sync_certificates, _rx_sync_certificates) = test_utils::test_channel!(1);
+    let (tx_certificate_waiter, _rx_certificate_waiter) = test_utils::test_channel!(1);
     let (tx_primary_messages, rx_primary_messages) = test_utils::test_channel!(3);
     let (_tx_headers_loopback, rx_headers_loopback) = test_utils::test_channel!(1);
     let (_tx_certificates_loopback, rx_certificates_loopback) = test_utils::test_channel!(1);
@@ -748,7 +748,7 @@ async fn recover_core_partial_certs() {
         certificates_store.clone(),
         payload_store.clone(),
         /* tx_header_waiter */ tx_sync_headers.clone(),
-        /* tx_certificate_waiter */ tx_sync_certificates.clone(),
+        tx_certificate_waiter.clone(),
         None,
     );
 
@@ -812,7 +812,7 @@ async fn recover_core_partial_certs() {
         certificates_store.clone(),
         payload_store.clone(),
         /* tx_header_waiter */ tx_sync_headers,
-        /* tx_certificate_waiter */ tx_sync_certificates,
+        tx_certificate_waiter,
         None,
     );
     let (tx_primary_messages_restored, rx_primary_messages_restored) = test_utils::test_channel!(2);
@@ -884,7 +884,7 @@ async fn shutdown_core() {
     let (tx_reconfigure, rx_reconfigure) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
     let (tx_sync_headers, _rx_sync_headers) = test_utils::test_channel!(1);
-    let (tx_sync_certificates, _rx_sync_certificates) = test_utils::test_channel!(1);
+    let (tx_certificate_waiter, _rx_certificate_waiter) = test_utils::test_channel!(1);
     let (_tx_primary_messages, rx_primary_messages) = test_utils::test_channel!(1);
     let (_tx_headers_loopback, rx_headers_loopback) = test_utils::test_channel!(1);
     let (_tx_certificates_loopback, rx_certificates_loopback) = test_utils::test_channel!(1);
@@ -903,7 +903,7 @@ async fn shutdown_core() {
         certificates_store.clone(),
         payload_store,
         /* tx_header_waiter */ tx_sync_headers,
-        /* tx_certificate_waiter */ tx_sync_certificates,
+        tx_certificate_waiter,
         None,
     );
 
@@ -962,7 +962,7 @@ async fn reconfigure_core() {
     let (tx_reconfigure, rx_reconfigure) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
     let (tx_sync_headers, _rx_sync_headers) = test_utils::test_channel!(1);
-    let (tx_sync_certificates, _rx_sync_certificates) = test_utils::test_channel!(1);
+    let (tx_certificate_waiter, _rx_certificate_waiter) = test_utils::test_channel!(1);
     let (tx_primary_messages, rx_primary_messages) = test_utils::test_channel!(1);
     let (_tx_headers_loopback, rx_headers_loopback) = test_utils::test_channel!(1);
     let (_tx_certificates_loopback, rx_certificates_loopback) = test_utils::test_channel!(1);
@@ -990,7 +990,7 @@ async fn reconfigure_core() {
         certificates_store.clone(),
         payload_store,
         /* tx_header_waiter */ tx_sync_headers,
-        /* tx_certificate_waiter */ tx_sync_certificates,
+        tx_certificate_waiter,
         None,
     );
 

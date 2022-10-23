@@ -44,7 +44,7 @@ pub trait ExecutionState {
     /// also return a new committee to reconfigure the system.
     async fn handle_consensus_transaction(
         &self,
-        consensus_output: &ConsensusOutput,
+        consensus_output: &Arc<ConsensusOutput>,
         execution_indices: ExecutionIndices,
         transaction: Vec<u8>,
     );
@@ -63,10 +63,9 @@ impl Executor {
         network: oneshot::Receiver<P2pNetwork>,
         worker_cache: SharedWorkerCache,
         committee: Committee,
-
         execution_state: State,
         tx_reconfigure: &watch::Sender<ReconfigureNotification>,
-        rx_consensus: metered_channel::Receiver<ConsensusOutput>,
+        rx_sequence: metered_channel::Receiver<ConsensusOutput>,
         registry: &Registry,
         restored_consensus_output: Vec<ConsensusOutput>,
     ) -> SubscriberResult<Vec<JoinHandle<()>>>
@@ -76,7 +75,7 @@ impl Executor {
         let metrics = ExecutorMetrics::new(registry);
 
         let (tx_notifier, rx_notifier) =
-            metered_channel::channel(primary::CHANNEL_CAPACITY, &metrics.tx_executor);
+            metered_channel::channel(primary::CHANNEL_CAPACITY, &metrics.tx_notifier);
 
         // We expect this will ultimately be needed in the `Core` as well as the `Subscriber`.
         let arc_metrics = Arc::new(metrics);
@@ -88,7 +87,7 @@ impl Executor {
             worker_cache,
             committee,
             tx_reconfigure.subscribe(),
-            rx_consensus,
+            rx_sequence,
             tx_notifier,
             arc_metrics.clone(),
             restored_consensus_output,
@@ -143,7 +142,7 @@ pub async fn get_restored_consensus_output<State: ExecutionState>(
 impl<T: ExecutionState + 'static + Send + Sync> ExecutionState for Arc<T> {
     async fn handle_consensus_transaction(
         &self,
-        consensus_output: &ConsensusOutput,
+        consensus_output: &Arc<ConsensusOutput>,
         execution_indices: ExecutionIndices,
         transaction: Vec<u8>,
     ) {

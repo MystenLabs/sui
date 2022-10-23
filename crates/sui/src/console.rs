@@ -89,6 +89,11 @@ pub async fn start_console(
     writeln!(out, "Welcome to the Sui interactive console.")?;
     writeln!(out)?;
 
+    if let Err(e) = context.client.check_api_version() {
+        writeln!(out, "{}", format!("[warn] {e}").yellow().bold())?;
+        writeln!(out)?;
+    };
+
     let mut shell = Shell::new(
         "sui>-$ ",
         context,

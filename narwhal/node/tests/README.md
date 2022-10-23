@@ -76,7 +76,6 @@ running 1 test
    Compiling ark-crypto-primitives v0.3.0
    Compiling ark-ed-on-cp6-782 v0.3.0
    Compiling ark-ed-on-bw6-761 v0.3.0
-   Compiling bls-crypto v0.2.0 (https://github.com/huitseeker/celo-bls-snark-rs?branch=updates-2#9f5a0e6f)
    Compiling crypto v0.1.0 (narwhal/crypto)
    Compiling config v0.1.0 (narwhal/config)
    Compiling primary v0.1.0 (narwhal/primary)

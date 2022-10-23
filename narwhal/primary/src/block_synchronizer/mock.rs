@@ -51,9 +51,6 @@ impl MockBlockSynchronizerCore {
             tokio::select! {
                 Some(command) = self.rx_commands.recv() => {
                     match command {
-                        Command::SynchronizeRange { .. } => {
-                            todo!("MockBlockSynchronizerCore for Command::SynchronizeRange is unimplemented!")
-                        }
                         Command::SynchronizeBlockHeaders { block_ids, respond_to } => {
                             let (times, results) = self
                                 .block_headers_expected_requests

@@ -7,7 +7,6 @@ import {
   isGetObjectDataResponse,
   isGetOwnedObjectsResponse,
   isGetTxnDigestsResponse,
-  isGetTxnDigestsResponse__DEPRECATED,
   isPaginatedTransactionDigests,
   isSuiEvents,
   isSuiExecuteTransactionResponse,
@@ -24,6 +23,7 @@ import {
   DEFAULT_START_TIME,
   EVENT_QUERY_MAX_LIMIT,
   ExecuteTransactionRequestType,
+  CoinDenominationInfoResponse,
   GatewayTxSeqNumber,
   GetObjectDataResponse,
   getObjectReference,
@@ -49,6 +49,7 @@ import {
   TransactionDigest,
   TransactionQuery,
   SUI_TYPE_ARG,
+  normalizeSuiAddress,
 } from '../types';
 import { SignatureScheme } from '../cryptography/publickey';
 import {
@@ -96,6 +97,12 @@ export class JsonRpcProvider extends Provider {
       skipDataValidation,
       socketOptions
     );
+  }
+
+  async getRpcApiVersion(): Promise<string> {
+    // TODO: we should fetch the API version from
+    // the RPC endpoint instead
+    return this.rpcAPIVersion;
   }
 
   // Move info
@@ -215,6 +222,25 @@ export class JsonRpcProvider extends Provider {
     return objects.filter((obj: SuiObjectInfo) => Coin.isSUI(obj));
   }
 
+  getCoinDenominationInfo(coinType: string): CoinDenominationInfoResponse {
+    const [packageId, module, symbol] = coinType.split('::');
+    if (
+      normalizeSuiAddress(packageId) !== normalizeSuiAddress('0x2') ||
+      module != 'sui' ||
+      symbol !== 'SUI'
+    ) {
+      throw new Error(
+        'only SUI coin is supported in getCoinDenominationInfo for now.'
+      );
+    }
+
+    return {
+      coinType: coinType,
+      basicUnit: 'MIST',
+      decimalNumber: 9,
+    };
+  }
+
   async getCoinBalancesOwnedByAddress(
     address: string,
     typeArg?: string
@@ -330,42 +356,17 @@ export class JsonRpcProvider extends Provider {
   }
 
   async getTransactionsForObject(
-    objectID: string
+    objectID: string,
+    ordering: Ordering = 'Descending'
   ): Promise<GetTxnDigestsResponse> {
-    // TODO: remove after we deploy 0.12.0 DevNet
-    if (this.rpcAPIVersion === PRE_PAGINATION_API_VERSION) {
-      const requests = [
-        {
-          method: 'sui_getTransactionsByInputObject',
-          args: [objectID],
-        },
-        {
-          method: 'sui_getTransactionsByMutatedObject',
-          args: [objectID],
-        },
-      ];
-
-      try {
-        const results = await this.client.batchRequestWithType(
-          requests,
-          isGetTxnDigestsResponse__DEPRECATED,
-          this.skipDataValidation
-        );
-        return [...results[0], ...results[1]].map((tx) => tx[1]);
-      } catch (err) {
-        throw new Error(
-          `Error getting transactions for object: ${err} for id ${objectID}`
-        );
-      }
-    }
     const requests = [
       {
         method: 'sui_getTransactions',
-        args: [{ InputObject: objectID }, null, null, 'Ascending'],
+        args: [{ InputObject: objectID }, null, null, ordering],
       },
       {
         method: 'sui_getTransactions',
-        args: [{ MutatedObject: objectID }, null, null, 'Ascending'],
+        args: [{ MutatedObject: objectID }, null, null, ordering],
       },
     ];
 
@@ -384,41 +385,17 @@ export class JsonRpcProvider extends Provider {
   }
 
   async getTransactionsForAddress(
-    addressID: string
+    addressID: string,
+    ordering: Ordering = 'Descending'
   ): Promise<GetTxnDigestsResponse> {
-    // TODO: remove after we deploy 0.12.0 DevNet
-    if (this.rpcAPIVersion === PRE_PAGINATION_API_VERSION) {
-      const requests = [
-        {
-          method: 'sui_getTransactionsToAddress',
-          args: [addressID],
-        },
-        {
-          method: 'sui_getTransactionsFromAddress',
-          args: [addressID],
-        },
-      ];
-      try {
-        const results = await this.client.batchRequestWithType(
-          requests,
-          isGetTxnDigestsResponse__DEPRECATED,
-          this.skipDataValidation
-        );
-        return [...results[0], ...results[1]].map((r) => r[1]);
-      } catch (err) {
-        throw new Error(
-          `Error getting transactions for address: ${err} for id ${addressID}`
-        );
-      }
-    }
     const requests = [
       {
         method: 'sui_getTransactions',
-        args: [{ ToAddress: addressID }, null, null, 'Ascending'],
+        args: [{ ToAddress: addressID }, null, null, ordering],
       },
       {
         method: 'sui_getTransactions',
-        args: [{ FromAddress: addressID }, null, null, 'Ascending'],
+        args: [{ FromAddress: addressID }, null, null, ordering],
       },
     ];
     try {

@@ -1,21 +1,24 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::fs::File;
+use std::io::Write;
+
 use clap::ArgEnum;
 use clap::Parser;
 use pretty_assertions::assert_str_eq;
-use std::fs::File;
-use std::io::Write;
-use sui_json_rpc::api::EventReadApiOpenRpc;
-use sui_json_rpc::transaction_builder_api::FullNodeTransactionBuilderApi;
-use sui_json_rpc::transaction_execution_api::FullNodeTransactionExecutionApi;
+use sui_core::SUI_CORE_VERSION;
 
-use crate::examples::RpcExampleProvider;
+use sui_json_rpc::api::EventReadApiOpenRpc;
 use sui_json_rpc::api::EventStreamingApiOpenRpc;
 use sui_json_rpc::bcs_api::BcsApiImpl;
 use sui_json_rpc::read_api::{FullNodeApi, ReadApi};
 use sui_json_rpc::sui_rpc_doc;
+use sui_json_rpc::transaction_builder_api::FullNodeTransactionBuilderApi;
+use sui_json_rpc::transaction_execution_api::FullNodeTransactionExecutionApi;
 use sui_json_rpc::SuiRpcModule;
+
+use crate::examples::RpcExampleProvider;
 
 mod examples;
 
@@ -42,7 +45,7 @@ const FILE_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/spec/openrpc.json"
 async fn main() {
     let options = Options::parse();
 
-    let mut open_rpc = sui_rpc_doc();
+    let mut open_rpc = sui_rpc_doc(SUI_CORE_VERSION);
     open_rpc.add_module(ReadApi::rpc_doc_module());
     open_rpc.add_module(FullNodeApi::rpc_doc_module());
     open_rpc.add_module(BcsApiImpl::rpc_doc_module());

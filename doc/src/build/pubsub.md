@@ -2,12 +2,9 @@
 title: Subscribe to JSON-RPC Real-Time Events
 ---
 
-Sui [fullnode](fullnode.md) supports publish / subscribe using [JSON-RPC](json-rpc.md) notifications via the WebSocket API.
-This service allows clients to filter and subscribe to a real-time event stream generated from Move or from the Sui
-network.
+Sui [Full nodes](fullnode.md) supports publish / subscribe using [JSON-RPC](json-rpc.md) notifications via the WebSocket API. This service allows clients to filter and subscribe to a real-time event stream generated from Move or from the Sui network.
 
-The client can provide an [event filter](#event-filters) to narrow the scope of events. For each event that matches
-the filter, a notification with the event data and subscription ID is returned to the client.
+The client can provide an [event filter](#event-filters) to narrow the scope of events. For each event that matches the filter, a notification with the event data and subscription ID is returned to the client.
 
 ## Events
 

@@ -36,6 +36,18 @@ export type SuiMoveObject = {
   has_public_transfer?: boolean;
 };
 
+export const MIST_PER_SUI: BigInt = BigInt(1000000000);
+
+export type CoinDenominationInfoResponse = {
+  /** Coin type like "0x2::sui::SUI" */
+  coinType: string;
+  /** min unit, like MIST */
+  basicUnit?: string;
+  /** number of zeros in the denomination,
+   * e.g., 9 here for SUI. */
+  decimalNumber: number;
+}
+
 export type SuiMovePackage = {
   /** A mapping from module name to disassembled Move bytecode */
   disassembled: MovePackageContent;
@@ -202,6 +214,10 @@ export function getObjectVersion(
 
 /* -------------------------------- SuiObject ------------------------------- */
 
+export function shouldUseOldSharedObjectAPI(version: string): boolean {
+  return version === '0.11.0' || version === '0.12.0';
+}
+
 export function getObjectType(
   resp: GetObjectDataResponse
 ): ObjectType | undefined {
@@ -220,9 +236,20 @@ export function getObjectOwner(
   return getObjectExistsResponse(resp)?.owner;
 }
 
+export function getSharedObjectInitialVersion(
+  resp: GetObjectDataResponse
+): number | undefined {
+  const owner = getObjectOwner(resp);
+  if (typeof owner === 'object' && 'Shared' in owner) {
+    return owner.Shared.initial_shared_version;
+  } else {
+    return undefined;
+  }
+}
+
 export function isSharedObject(resp: GetObjectDataResponse): boolean {
   const owner = getObjectOwner(resp);
-  return owner === 'Shared';
+  return owner === 'Shared' || (typeof owner === 'object' && 'Shared' in owner);
 }
 
 export function isImmutableObject(resp: GetObjectDataResponse): boolean {

@@ -33,7 +33,7 @@ async fn create_gateway_state_with_object_basics_ref(
         .collect();
     let (authorities, _, pkg_ref) = init_local_authorities(4, genesis_objects).await;
     let path = tempfile::tempdir().unwrap().into_path();
-    let gateway_store = Arc::new(GatewayStore::open(&path, None));
+    let gateway_store = Arc::new(GatewayStore::open(&path, None).unwrap());
     let gateway = GatewayState::new_with_authorities(
         gateway_store,
         authorities,
@@ -245,7 +245,10 @@ async fn test_coin_split_insufficient_gas() {
     // Tx should fail due to out of gas, and no transactions should remain pending.
     // Objects are not locked either.
     assert!(response.is_err());
-    assert_eq!(gateway.store().pending_transactions().iter().count(), 0);
+    assert_eq!(
+        gateway.store().epoch_tables().transactions.iter().count(),
+        0
+    );
     assert_eq!(
         gateway
             .store()
@@ -342,8 +345,14 @@ async fn test_equivocation_resilient() {
             .count(),
         1
     );
-    println!("{:?}", gateway.store().pending_transactions().iter().next());
-    assert_eq!(gateway.store().pending_transactions().iter().count(), 0);
+    println!(
+        "{:?}",
+        gateway.store().epoch_tables().transactions.iter().next()
+    );
+    assert_eq!(
+        gateway.store().epoch_tables().transactions.iter().count(),
+        0
+    );
 }
 
 #[tokio::test]
@@ -380,10 +389,14 @@ async fn test_public_transfer_object_with_retry() {
     // transactions table.
     // However objects in the transaction should no longer be locked since we reset
     // them at the last failed retry.
-    assert_eq!(gateway.store().pending_transactions().iter().count(), 1);
+    assert_eq!(
+        gateway.store().epoch_tables().transactions.iter().count(),
+        1
+    );
     let (tx_digest, tx) = gateway
         .store()
-        .pending_transactions()
+        .epoch_tables()
+        .transactions
         .iter()
         .next()
         .unwrap();
@@ -408,7 +421,10 @@ async fn test_public_transfer_object_with_retry() {
     let new_owner = &oref.owner;
     assert_eq!(new_owner, &Owner::AddressOwner(addr2));
 
-    assert_eq!(gateway.store().pending_transactions().iter().count(), 0);
+    assert_eq!(
+        gateway.store().epoch_tables().transactions.iter().count(),
+        0
+    );
     assert!(gateway
         .store()
         .get_object_locking_transaction(&coin_object.compute_object_reference())
@@ -550,14 +566,21 @@ async fn test_get_owner_object() {
         .await
         .unwrap();
     let signature = key1.sign(&data.to_bytes());
-    gateway
+    let response = gateway
         .execute_transaction(Transaction::new(data, signature))
         .await
         .unwrap();
+    let field_object = &response.effects.created.first().unwrap().reference;
 
     // Query get_objects_owned_by_object
     let objects = gateway
         .get_objects_owned_by_object(parent.object_id)
+        .await
+        .unwrap();
+    assert_eq!(1, objects.len());
+    assert_eq!(field_object.object_id, objects.first().unwrap().object_id);
+    let objects = gateway
+        .get_objects_owned_by_object(field_object.object_id)
         .await
         .unwrap();
     assert_eq!(1, objects.len());
@@ -591,7 +614,7 @@ async fn test_multiple_gateways() {
     let path = tempfile::tempdir().unwrap().into_path();
     // gateway2 shares the same set of authorities as gateway1.
     let gateway2 = GatewayState::new_with_authorities(
-        Arc::new(GatewayStore::open(&path, None)),
+        Arc::new(GatewayStore::open(&path, None).unwrap()),
         gateway1.authorities.clone(),
         GatewayMetrics::new_for_tests(),
     )

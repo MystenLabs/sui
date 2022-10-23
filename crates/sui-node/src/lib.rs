@@ -69,7 +69,7 @@ pub struct SuiNode {
     grpc_server: tokio::task::JoinHandle<Result<()>>,
     _json_rpc_service: Option<HttpServerHandle>,
     _ws_subscription_service: Option<WsServerHandle>,
-    _batch_subsystem_handle: tokio::task::JoinHandle<Result<()>>,
+    _batch_subsystem_handle: tokio::task::JoinHandle<()>,
     _post_processing_subsystem_handle: Option<tokio::task::JoinHandle<Result<()>>>,
     _gossip_handle: Option<tokio::task::JoinHandle<()>>,
     _execute_driver_handle: tokio::task::JoinHandle<()>,
@@ -99,7 +99,7 @@ impl SuiNode {
 
         let secret = Arc::pin(config.protocol_key_pair().copy());
         let committee = genesis.committee()?;
-        let store = Arc::new(AuthorityStore::open(&config.db_path().join("store"), None));
+        let store = Arc::new(AuthorityStore::open(&config.db_path().join("store"), None)?);
         let committee_store = Arc::new(CommitteeStore::new(
             config.db_path().join("epochs"),
             &committee,
@@ -218,7 +218,6 @@ impl SuiNode {
                 batch_state
                     .run_batch_service(1000, Duration::from_secs(1))
                     .await
-                    .map_err(Into::into)
             })
         };
 
@@ -424,7 +423,8 @@ pub async fn build_http_servers(
         return Ok((None, None));
     }
 
-    let mut server = JsonRpcServerBuilder::new(false, prometheus_registry)?;
+    let mut server =
+        JsonRpcServerBuilder::new(env!("CARGO_PKG_VERSION"), false, prometheus_registry)?;
 
     server.register_module(ReadApi::new(state.clone()))?;
     server.register_module(FullNodeApi::new(state.clone()))?;
@@ -450,7 +450,8 @@ pub async fn build_http_servers(
 
     let ws_server_handle = match config.websocket_address {
         Some(ws_addr) => {
-            let mut server = JsonRpcServerBuilder::new(true, prometheus_registry)?;
+            let mut server =
+                JsonRpcServerBuilder::new(env!("CARGO_PKG_VERSION"), true, prometheus_registry)?;
             if let Some(tx_streamer) = state.transaction_streamer.clone() {
                 server.register_module(TransactionStreamingApiImpl::new(
                     state.clone(),

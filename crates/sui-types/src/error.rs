@@ -2,7 +2,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{base_types::*, committee::EpochId, messages::ExecutionFailureStatus};
+use crate::{base_types::*, committee::EpochId, messages::ExecutionFailureStatus, object::Owner};
 use move_binary_format::errors::{Location, PartialVMError, VMError};
 use move_core_types::vm_status::{StatusCode, StatusType};
 use narwhal_executor::SubscriberError;
@@ -76,8 +76,11 @@ pub enum SuiError {
     SharedObjectLockNotSetError,
     #[error("Invalid Batch Transaction: {}", error)]
     InvalidBatchTransaction { error: String },
-    #[error("Object {child_id:?} is owned by object {parent_id:?}, which is not in the input")]
-    MissingObjectOwner {
+    #[error(
+        "Object {child_id:?} is owned by object {parent_id:?}. \
+        Objects owned by other objects cannot be used as input arguments."
+    )]
+    InvalidChildObjectArgument {
         child_id: ObjectID,
         parent_id: ObjectID,
     },
@@ -192,6 +195,8 @@ pub enum SuiError {
     ClientIoError { error: String },
     #[error("Cannot transfer immutable object.")]
     TransferImmutableError,
+    #[error("Wrong initial version given for shared object")]
+    SharedObjectStartingVersionMismatch,
 
     // Errors related to batches
     #[error("The range specified is invalid.")]
@@ -341,6 +346,15 @@ pub enum SuiError {
     StorageError(#[from] TypedStoreError),
     #[error("Non-RocksDB Storage error: {0}")]
     GenericStorageError(String),
+    #[error(
+        "Attempted to access {object} through parent {given_parent}, \
+        but it's actual parent is {actual_owner}"
+    )]
+    InvalidChildObjectAccess {
+        object: ObjectID,
+        given_parent: ObjectID,
+        actual_owner: Owner,
+    },
 
     #[error("Missing fields/data in storage error: {0}")]
     StorageMissingFieldError(String),

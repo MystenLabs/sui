@@ -1,6 +1,6 @@
 [package]
 name = "sui"
-version = "0.12.0"
+version.workspace = true
 authors = ["Mysten Labs <build@mystenlabs.com>"]
 license = "Apache-2.0"
 publish = false
@@ -12,7 +12,6 @@ serde = { version = "1.0.144", features = ["derive"] }
 serde_json = "1.0.83"
 signature = "1.6.0"
 camino = "1.1.1"
-base64ct = "1.5.2"
 tokio = { version = "1.20.1", features = ["full"] }
 async-trait = "0.1.57"
 serde_with = { version = "1.14.0", features = ["hex"] }
@@ -30,6 +29,7 @@ sui-json = { path = "../sui-json" }
 sui-swarm = { path = "../sui-swarm" }
 sui-json-rpc-types = { path = "../sui-json-rpc-types" }
 sui-sdk = { path = "../sui-sdk" }
+sui-keys = { path = "../sui-keys" }
 
 fastcrypto.workspace = true
 

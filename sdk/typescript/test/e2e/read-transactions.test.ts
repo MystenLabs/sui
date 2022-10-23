@@ -30,7 +30,8 @@ describe('Transaction Reading API', () => {
 
   it('Get Transactions', async () => {
     const resp = await toolbox.provider.getTransactionsForAddress(
-      toolbox.address()
+      toolbox.address(),
+      'Ascending'
     );
     expect(resp.length).to.greaterThan(0);
 

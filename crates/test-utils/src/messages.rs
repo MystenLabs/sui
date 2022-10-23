@@ -12,11 +12,12 @@ use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
 use sui_adapter::genesis;
 use sui_core::test_utils::to_sender_signed_transaction;
 use sui_json_rpc_types::SuiObjectInfo;
-use sui_sdk::crypto::AccountKeystore;
-use sui_sdk::crypto::Keystore;
+use sui_keys::keystore::AccountKeystore;
+use sui_keys::keystore::Keystore;
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SuiAddress;
 use sui_types::base_types::{ObjectDigest, ObjectID, SequenceNumber};
+use sui_types::committee::Committee;
 use sui_types::crypto::{
     get_key_pair, AccountKeyPair, AuthorityKeyPair, AuthorityPublicKeyBytes, KeypairTraits,
 };
@@ -32,7 +33,7 @@ use sui_types::object::Object;
 use sui_types::object::Owner;
 
 /// The maximum gas per transaction.
-pub const MAX_GAS: u64 = 50_000;
+pub const MAX_GAS: u64 = 100_000;
 
 pub fn random_object_ref() -> ObjectRef {
     (
@@ -159,10 +160,11 @@ pub async fn make_counter_increment_transaction_with_wallet_context(
     context: &WalletContext,
     sender: SuiAddress,
     counter_id: ObjectID,
+    counter_initial_shared_version: SequenceNumber,
     gas_object_ref: Option<ObjectRef>,
 ) -> Transaction {
     let package_object_ref = genesis::get_framework_object_ref();
-    let gas_objeect_ref = match gas_object_ref {
+    let gas_object_ref = match gas_object_ref {
         Some(obj_ref) => obj_ref,
         None => get_gas_object_with_wallet_context(context, &sender)
             .await
@@ -174,8 +176,11 @@ pub async fn make_counter_increment_transaction_with_wallet_context(
         "counter".parse().unwrap(),
         "increment".parse().unwrap(),
         Vec::new(),
-        gas_objeect_ref,
-        vec![CallArg::Object(ObjectArg::SharedObject(counter_id))],
+        gas_object_ref,
+        vec![CallArg::Object(ObjectArg::SharedObject {
+            id: counter_id,
+            initial_shared_version: counter_initial_shared_version,
+        })],
         MAX_GAS,
     );
     to_sender_signed_transaction(data, context.config.keystore.get_key(&sender).unwrap())
@@ -227,7 +232,9 @@ pub fn test_shared_object_transactions() -> Vec<Transaction> {
 
     // Make one transaction per gas object (all containing the same shared object).
     let mut transactions = Vec::new();
-    let shared_object_id = test_shared_object().id();
+    let shared_object = test_shared_object();
+    let shared_object_id = shared_object.id();
+    let initial_shared_version = shared_object.version();
     let module = "object_basics";
     let function = "create";
     let package_object_ref = genesis::get_framework_object_ref();
@@ -242,7 +249,10 @@ pub fn test_shared_object_transactions() -> Vec<Transaction> {
             gas_object.compute_object_reference(),
             /* args */
             vec![
-                CallArg::Object(ObjectArg::SharedObject(shared_object_id)),
+                CallArg::Object(ObjectArg::SharedObject {
+                    id: shared_object_id,
+                    initial_shared_version,
+                }),
                 CallArg::Pure(16u64.to_le_bytes().to_vec()),
                 CallArg::Pure(bcs::to_bytes(&AccountAddress::from(sender)).unwrap()),
             ],
@@ -364,6 +374,7 @@ pub fn make_counter_increment_transaction(
     gas_object: ObjectRef,
     package_ref: ObjectRef,
     counter_id: ObjectID,
+    counter_initial_shared_version: SequenceNumber,
     sender: SuiAddress,
     keypair: &AccountKeyPair,
 ) -> Transaction {
@@ -374,7 +385,10 @@ pub fn make_counter_increment_transaction(
         "increment".parse().unwrap(),
         Vec::new(),
         gas_object,
-        vec![CallArg::Object(ObjectArg::SharedObject(counter_id))],
+        vec![CallArg::Object(ObjectArg::SharedObject {
+            id: counter_id,
+            initial_shared_version: counter_initial_shared_version,
+        })],
         MAX_GAS,
     );
     to_sender_signed_transaction(data, keypair)
@@ -421,14 +435,21 @@ pub fn make_tx_certs_and_signed_effects(
     transactions: Vec<Transaction>,
 ) -> (Vec<CertifiedTransaction>, Vec<SignedTransactionEffects>) {
     let committee = test_committee();
+    make_tx_certs_and_signed_effects_with_committee(transactions, &committee)
+}
+
+/// Make a test certificates for each input transaction.
+pub fn make_tx_certs_and_signed_effects_with_committee(
+    transactions: Vec<Transaction>,
+    committee: &Committee,
+) -> (Vec<CertifiedTransaction>, Vec<SignedTransactionEffects>) {
     let mut tx_certs = Vec::new();
     let mut effect_sigs = Vec::new();
     for tx in transactions {
-        let mut signed_tx_aggregator =
-            SignatureAggregator::try_new(tx.clone(), &committee).unwrap();
+        let mut signed_tx_aggregator = SignatureAggregator::try_new(tx.clone(), committee).unwrap();
         for (key, _, _, _) in test_validator_keys() {
             let vote =
-                SignedTransaction::new(/* epoch */ 0, tx.clone(), key.public().into(), &key);
+                SignedTransaction::new(committee.epoch, tx.clone(), key.public().into(), &key);
 
             if let Some(tx_cert) = signed_tx_aggregator
                 .append(vote.auth_sign_info.authority, vote.auth_sign_info.signature)

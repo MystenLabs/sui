@@ -29,6 +29,7 @@ It will be useful to also document here the source of each icon.
 -   [copy.svg](./svgs/copy.svg) - figma
 -   [check-fill.svg](./svgs/check-fill.svg) - figma
 -   [lock.svg](./svgs/lock.svg) - figma
+-   [unlocked.svg](./svgs/unlocked.svg) - figma
 
 # Troubleshooting
 

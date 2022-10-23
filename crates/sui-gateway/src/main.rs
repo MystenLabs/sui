@@ -61,7 +61,8 @@ async fn main() -> anyhow::Result<()> {
     let client = GatewayState::create_client(&gateway_config, Some(&prometheus_registry))?;
 
     let address = SocketAddr::new(IpAddr::V4(options.host), options.port);
-    let mut server = JsonRpcServerBuilder::new(false, &prometheus_registry)?;
+    let mut server =
+        JsonRpcServerBuilder::new(env!("CARGO_PKG_VERSION"), false, &prometheus_registry)?;
     server.register_module(RpcGatewayImpl::new(client.clone()))?;
     server.register_module(GatewayReadApiImpl::new(client.clone()))?;
     server.register_module(TransactionBuilderImpl::new(client.clone()))?;

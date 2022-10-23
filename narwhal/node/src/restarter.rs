@@ -7,11 +7,10 @@ use crypto::{KeyPair, NetworkKeyPair};
 use executor::ExecutionState;
 use fastcrypto::traits::KeyPair as _;
 use futures::future::join_all;
-use network::{P2pNetwork, ReliableNetwork};
 use prometheus::Registry;
 use std::{path::PathBuf, sync::Arc};
 use tokio::sync::mpsc::Receiver;
-use types::{ReconfigureNotification, WorkerPrimaryMessage, WorkerReconfigureMessage};
+use types::ReconfigureNotification;
 
 // Module to start a node (primary, workers and default consensus), keep it running, and restarting it
 /// every time the committee changes.
@@ -44,20 +43,7 @@ impl NodeRestarter {
         let mut worker_ids_and_keypairs = worker_ids_and_keypairs;
         let mut committee = committee.clone();
 
-        // construct a p2p network that we can use to send reconfigure messages to our primary and
-        // workers. We generate a random key simply to construct the network. Also, ideally this
-        // would be done via a different interface.
         let mut handles = Vec::new();
-        let network = anemo::Network::bind("127.0.0.1:0")
-            .server_name("narwhal")
-            .private_key(
-                NetworkKeyPair::generate(&mut rand::rngs::OsRng)
-                    .private()
-                    .0
-                    .to_bytes(),
-            )
-            .start(anemo::Router::new())
-            .unwrap();
 
         // Listen for new committees.
         loop {
@@ -110,49 +96,20 @@ impl NodeRestarter {
             tracing::info!("Starting reconfiguration with committee {committee}");
 
             // Shutdown all relevant components.
-            // TODO: shutdown message should probably be sent in a better way than by injecting
-            // it through the networking stack.
-            let address = network::multiaddr_to_address(
-                &committee
-                    .primary(&name)
-                    .expect("Our key is not in the committee"),
-            )
-            .unwrap();
-            let network_key = committee
-                .network_key(&name)
-                .expect("Our key is not in the committee");
-            let mut primary_network =
-                P2pNetwork::new_for_single_address(network_key.to_owned(), address).await;
-            let message = WorkerPrimaryMessage::Reconfigure(ReconfigureNotification::Shutdown);
-            let primary_cancel_handle =
-                primary_network.send(network_key.to_owned(), &message).await;
-
-            let message = WorkerReconfigureMessage {
-                message: ReconfigureNotification::Shutdown,
-            };
-            let mut worker_names = Vec::new();
-            for worker in worker_cache
-                .load()
-                .our_workers(&name)
-                .expect("Our key is not in the worker cache")
-            {
-                let address = network::multiaddr_to_address(&worker.worker_address).unwrap();
-                let peer_id = anemo::PeerId(worker.name.0.to_bytes());
-                network
-                    .connect_with_peer_id(address, peer_id)
-                    .await
-                    .unwrap();
-                worker_names.push(worker.name);
-            }
-            let worker_cancel_handles = P2pNetwork::new(network.clone())
-                .broadcast(worker_names, &message)
-                .await;
-
-            // Ensure the message has been received.
-            primary_cancel_handle
+            // Send shutdown message to the primary, who will forward it to its workers
+            let client = reqwest::Client::new();
+            client
+                .post(format!(
+                    "http://127.0.0.1:{}/reconfigure",
+                    parameters
+                        .network_admin_server
+                        .primary_network_admin_server_port
+                ))
+                .json(&ReconfigureNotification::Shutdown)
+                .send()
                 .await
-                .expect("Failed to notify primary");
-            join_all(worker_cancel_handles).await;
+                .unwrap();
+
             tracing::debug!("Committee reconfiguration message successfully sent");
 
             // Wait for the components to shut down.

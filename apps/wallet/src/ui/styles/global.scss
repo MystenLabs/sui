@@ -1,6 +1,15 @@
 @use './themes';
 @use '_variables' as v;
 
+/*
+ * NOTE: The Tailwind CSS reset doesn't mix well with the existing styles.
+ * We currently disable the CSS reset and expect components to adapt accordingly.
+ * When we fix this, we should use the following as a CSS reset: @tailwind base;
+ */
+
+@tailwind components;
+@tailwind utilities;
+
 @font-face {
     font-family: Inter;
     font-style: normal;
@@ -15,6 +24,8 @@ body {
     min-height: 0;
     margin: 0;
     padding: 0;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 
     /* to allow gradient color to work and show at least solid color when over-scroll */
     background: v.use(v.$colors-background);
@@ -64,4 +75,8 @@ body {
 input:focus,
 textarea {
     outline: none !important;
+}
+
+textarea {
+    font-family: Inter, sans-serif;
 }

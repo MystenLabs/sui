@@ -20,7 +20,10 @@ const DEFAULT_FULLNODE_URL = 'http://127.0.0.1:9000';
 
 export const DEFAULT_RECIPIENT = '0x36096be6a0314052931babed39f53c0666a6b0df';
 export const DEFAULT_RECIPIENT_2 = '0x46096be6a0314052931babed39f53c0666a6b0da';
-export const DEFAULT_GAS_BUDGET = 10000;
+export const DEFAULT_GAS_BUDGET = 20000;
+
+export const SUI_SYSTEM_STATE_OBJECT_ID =
+  '0x0000000000000000000000000000000000000005';
 
 export class TestToolbox {
   constructor(
@@ -30,6 +33,15 @@ export class TestToolbox {
 
   address() {
     return this.keypair.getPublicKey().toSuiAddress();
+  }
+
+  public async getActiveValidators(): Promise<Array<SuiMoveObject>> {
+    const contents = await this.provider.getObject(SUI_SYSTEM_STATE_OBJECT_ID);
+    const data = (contents.details as SuiObject).data;
+    const validators = (data as SuiMoveObject).fields.validators;
+    const active_validators = (validators as SuiMoveObject).fields
+      .active_validators;
+    return active_validators as Array<SuiMoveObject>;
   }
 }
 

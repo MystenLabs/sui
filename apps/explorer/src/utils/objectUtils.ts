@@ -48,6 +48,7 @@ export function getOwnerStr(owner: ObjectOwner | string): string {
         if ('AddressOwner' in owner) return owner.AddressOwner;
         if ('ObjectOwner' in owner) return owner.ObjectOwner;
         if ('SingleOwner' in owner) return owner.SingleOwner;
+        if ('Shared' in owner) return 'Shared';
     }
     return owner;
 }

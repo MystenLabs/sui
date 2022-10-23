@@ -22,22 +22,6 @@ module t1::m {
 }
 
 //# publish
-module t2::m {
-    fun t(
-        s: a::m::S<u64>,
-        owner_id: &mut sui::object::UID,
-    ) {
-        sui::transfer::transfer_to_object_id(s, owner_id)
-    }
-    fun t_gen<T: key + store>(
-        s: T,
-        owner_id: &mut sui::object::UID,
-    ) {
-        sui::transfer::transfer_to_object_id(s, owner_id)
-    }
-}
-
-//# publish
 module t3::m {
     fun t(s: a::m::S<u64>) {
         sui::transfer::freeze_object(s)
@@ -54,37 +38,5 @@ module t4::m {
     }
     fun t_gen<T: key + store>(s: T) {
         sui::transfer::share_object(s)
-    }
-}
-
-//# publish
-module t5::m {
-    struct R has key { id: sui::object::UID }
-    fun t(child: a::m::S<u64>, owner: &mut R) {
-        sui::transfer::transfer_to_object(child, owner)
-    }
-    fun t_gen<T: key + store>(child: T, owner: &mut R) {
-        sui::transfer::transfer_to_object(child, owner)
-    }
-}
-
-//# publish
-module t6::m {
-    struct R has key { id: sui::object::UID }
-    fun t(child: R, owner: &mut a::m::S<u64>) {
-        sui::transfer::transfer_to_object(child, owner)
-    }
-    fun t_gen<T: key + store>(child: R, owner: &mut T) {
-        sui::transfer::transfer_to_object(child, owner)
-    }
-}
-
-//# publish
-module t7::m {
-    fun t(child: a::m::S<u64>, owner: &mut sui::object::UID) {
-        sui::transfer::transfer_to_object_id(child, owner)
-    }
-    fun t_gen<T: key + store>(child: T, owner: &mut sui::object::UID) {
-        sui::transfer::transfer_to_object_id(child, owner)
     }
 }

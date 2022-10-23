@@ -851,7 +851,14 @@ where
             // - If serial_authority_request_interval elapses, we begin a new request even if the
             //   previous one is not finished, and schedule another future request.
 
-            let name = authorities_shuffled.next().unwrap();
+            let name = authorities_shuffled.next().ok_or_else(|| {
+                error!(
+                    ?preferences,
+                    ?restrict_to,
+                    "Available authorities list is empty."
+                );
+                SuiError::from("Available authorities list is empty")
+            })?;
             futures.push(start_req(*name, self.authority_clients[name].clone()));
             futures.push(schedule_next());
 
@@ -1616,7 +1623,7 @@ where
                             Err(err) => {
                                 // We have an error here.
                                 // Append to the list off errors
-                                debug!(tx_digest = ?tx_digest, ?name, weight, "Failed to get signed transaction from validator handle_transaction");
+                                debug!(tx_digest = ?tx_digest, ?name, weight, "Failed to get signed transaction from validator handle_transaction: {:?}", err);
                                 state.errors.push(err);
                                 state.bad_stake += weight; // This is the bad stake counter
                             }
@@ -1695,7 +1702,7 @@ where
             .await?;
 
         debug!(
-            tx_digest = ?tx_digest,
+            ?tx_digest,
             num_errors = state.errors.len(),
             good_stake = state.good_stake,
             bad_stake = state.bad_stake,
@@ -1704,7 +1711,7 @@ where
             "Received signatures response from validators handle_transaction"
         );
         if !state.errors.is_empty() {
-            trace!("Errors received: {:?}", state.errors);
+            debug!(?tx_digest, "Errors received: {:?}", state.errors);
         }
 
         // If we have some certificate return it, or return an error.
@@ -1817,6 +1824,7 @@ where
                                 }
                             }
                             Err(err) => {
+                                debug!(tx_digest = ?tx_digest, ?name, weight, "Failed to get signed effects from validator handle_certificate: {:?}", err);
                                 state.errors.push(err);
                                 state.bad_stake += weight;
                                 if state.bad_stake > validity {

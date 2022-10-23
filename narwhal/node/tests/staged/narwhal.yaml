@@ -71,10 +71,6 @@ ReconfigureNotification:
       NewEpoch:
         NEWTYPE:
           TYPENAME: Committee
-    1:
-      UpdateCommittee:
-        NEWTYPE:
-          TYPENAME: Committee
     2:
       Shutdown: UNIT
 WorkerIndex:
@@ -89,22 +85,16 @@ WorkerInfo:
         TYPENAME: Ed25519PublicKey
     - transactions: BYTES
     - worker_address: BYTES
-WorkerPrimaryMessage:
-  ENUM:
-    0:
-      OurBatch:
-        TUPLE:
-          - TYPENAME: BatchDigest
-          - U32
-    1:
-      OthersBatch:
-        TUPLE:
-          - TYPENAME: BatchDigest
-          - U32
-    2:
-      Reconfigure:
-        NEWTYPE:
-          TYPENAME: ReconfigureNotification
+WorkerOthersBatchMessage:
+  STRUCT:
+    - digest:
+        TYPENAME: BatchDigest
+    - worker_id: U32
+WorkerOurBatchMessage:
+  STRUCT:
+    - digest:
+        TYPENAME: BatchDigest
+    - worker_id: U32
 WorkerReconfigureMessage:
   STRUCT:
     - message:
@@ -115,3 +105,4 @@ WorkerSynchronizeMessage:
         SEQ:
           TYPENAME: BatchDigest
     - target: STR
+

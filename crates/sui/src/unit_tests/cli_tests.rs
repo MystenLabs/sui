@@ -24,7 +24,7 @@ use sui_json_rpc_types::{
     GetObjectDataResponse, SuiData, SuiObject, SuiParsedData, SuiParsedObject,
     SuiTransactionEffects,
 };
-use sui_sdk::crypto::{AccountKeystore, FileBasedKeystore, Keystore};
+use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_sdk::ClientType;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{
@@ -33,6 +33,7 @@ use sui_types::crypto::{
 };
 use sui_types::{base_types::ObjectID, crypto::get_key_pair, gas_coin::GasCoin};
 use sui_types::{sui_framework_address_concat_string, SUI_FRAMEWORK_ADDRESS};
+use test_utils::messages::make_transactions_with_wallet_context;
 use test_utils::network::init_cluster_builder_env_aware;
 
 use sui_macros::sim_test;
@@ -349,7 +350,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         package_path,
         build_config,
         gas: Some(gas_obj_id),
-        gas_budget: 10_000,
+        gas_budget: 20_000,
     }
     .execute(context)
     .await?;
@@ -401,7 +402,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         type_args: vec![],
         args,
         gas: None,
-        gas_budget: 10_000,
+        gas_budget: 20_000,
     }
     .execute(context)
     .await?;
@@ -441,7 +442,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         type_args: vec![],
         args: args.to_vec(),
         gas: Some(gas),
-        gas_budget: 10_000,
+        gas_budget: 20_000,
     }
     .execute(context)
     .await;
@@ -465,7 +466,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         type_args: vec![],
         args: args.to_vec(),
         gas: Some(gas),
-        gas_budget: 10_000,
+        gas_budget: 20_000,
     }
     .execute(context)
     .await;
@@ -490,7 +491,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         type_args: vec![],
         args: args.to_vec(),
         gas: Some(gas),
-        gas_budget: 10_000,
+        gas_budget: 20_000,
     }
     .execute(context)
     .await?;
@@ -522,7 +523,7 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
         package_path,
         build_config,
         gas: Some(gas_obj_id),
-        gas_budget: 10_000,
+        gas_budget: 20_000,
     }
     .execute(context)
     .await?;
@@ -909,7 +910,7 @@ async fn test_merge_coin() -> Result<(), anyhow::Error> {
         primary_coin,
         coin_to_merge,
         gas: Some(gas),
-        gas_budget: 10_000,
+        gas_budget: 20_000,
     }
     .execute(context)
     .await?;
@@ -1014,7 +1015,7 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
     // Test with gas specified
     let resp = SuiClientCommands::SplitCoin {
         gas: Some(gas),
-        gas_budget: 10_000,
+        gas_budget: 20_000,
         coin_id: coin,
         amounts: Some(vec![1000, 10]),
         count: None,
@@ -1070,7 +1071,7 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
     // Test split coin into equal parts
     let resp = SuiClientCommands::SplitCoin {
         gas: None,
-        gas_budget: 10_000,
+        gas_budget: 20_000,
         coin_id: coin,
         amounts: None,
         count: Some(3),
@@ -1129,7 +1130,7 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
     // Test with no gas specified
     let resp = SuiClientCommands::SplitCoin {
         gas: None,
-        gas_budget: 10_000,
+        gas_budget: 20_000,
         coin_id: coin,
         amounts: Some(vec![1000, 10]),
         count: None,
@@ -1185,5 +1186,49 @@ async fn test_signature_flag() -> Result<(), anyhow::Error> {
 
     let res = SignatureScheme::from_flag("something");
     assert!(res.is_err());
+    Ok(())
+}
+
+#[sim_test]
+async fn test_execute_signed_tx() -> Result<(), anyhow::Error> {
+    let mut test_cluster = init_cluster_builder_env_aware().build().await?;
+    let context = &mut test_cluster.wallet;
+    let mut txns = make_transactions_with_wallet_context(context, 1).await;
+    let txn = txns.swap_remove(0);
+
+    let (tx_data, scheme, signature, pubkey) = txn.to_network_data_for_execution();
+    SuiClientCommands::ExecuteSignedTx {
+        tx_data: tx_data.encoded(),
+        scheme,
+        pubkey: pubkey.encoded(),
+        signature: signature.encoded(),
+    }
+    .execute(context)
+    .await?;
+    Ok(())
+}
+
+#[sim_test]
+async fn test_serialize_tx() -> Result<(), anyhow::Error> {
+    let mut test_cluster = init_cluster_builder_env_aware().build().await?;
+    let address = test_cluster.get_address_0();
+    let address1 = test_cluster.get_address_1();
+    let context = &mut test_cluster.wallet;
+
+    let object_refs = context
+        .client
+        .read_api()
+        .get_objects_owned_by_address(address)
+        .await?;
+    let coin = object_refs.get(1).unwrap().object_id;
+
+    SuiClientCommands::SerializeTransferSui {
+        to: address1,
+        sui_coin_object_id: coin,
+        gas_budget: 1000,
+        amount: Some(1),
+    }
+    .execute(context)
+    .await?;
     Ok(())
 }

@@ -25,10 +25,15 @@ import st from './DappStatus.module.scss';
 function DappStatus() {
     const dispatch = useAppDispatch();
     const activeOriginUrl = useAppSelector(({ app }) => app.activeOrigin);
-    const activeOrigin = useMemo(
-        () => (activeOriginUrl && new URL(activeOriginUrl).hostname) || null,
-        [activeOriginUrl]
-    );
+    const activeOrigin = useMemo(() => {
+        try {
+            return (
+                (activeOriginUrl && new URL(activeOriginUrl).hostname) || null
+            );
+        } catch (e) {
+            return null;
+        }
+    }, [activeOriginUrl]);
     const activeOriginFavIcon = useAppSelector(
         ({ app }) => app.activeOriginFavIcon
     );
