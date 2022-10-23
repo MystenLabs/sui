@@ -6,6 +6,7 @@ use tracing::{debug, trace};
 
 use sui_json_rpc_types::{GetRawObjectDataResponse, SuiData, SuiEvent, SuiRawObject};
 use sui_sdk::SuiClient;
+use sui_types::event::BalanceChangeType;
 use sui_types::gas_coin::GasCoin;
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
@@ -157,6 +158,7 @@ pub struct CoinBalanceChangeEventChecker {
     transaction_module: Option<String>,
     sender: Option<SuiAddress>,
     owner: Option<Owner>,
+    change_type: Option<BalanceChangeType>,
     coin_type: Option<String>,
     coin_object_id: Option<ObjectID>,
     version: Option<SequenceNumber>,
@@ -207,6 +209,7 @@ impl CoinBalanceChangeEventChecker {
             package_id,
             transaction_module,
             sender,
+            change_type,
             owner,
             coin_type,
             coin_object_id,
@@ -222,6 +225,7 @@ impl CoinBalanceChangeEventChecker {
             );
             assert_eq_if_present!(self.sender, sender, "sender");
             assert_eq_if_present!(self.owner, owner, "owner");
+            assert_eq_if_present!(self.change_type, change_type, "change_type");
             assert_eq_if_present!(self.coin_type, coin_type, "coin_type");
             assert_eq_if_present!(self.coin_object_id, coin_object_id, "coin_object_id");
             assert_eq_if_present!(self.version, version, "version");

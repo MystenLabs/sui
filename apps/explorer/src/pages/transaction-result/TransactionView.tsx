@@ -250,13 +250,14 @@ function TransactionView({ txdata }: { txdata: DataType }) {
 
     const txEventData = txdata.events?.map(eventToDisplay);
 
-    let eventTitles: string[] = [];
-    const txEventDisplay = txEventData?.map((ed) => {
+    let eventTitles: [string, string][] = [];
+    const txEventDisplay = txEventData?.map((ed, index) => {
         if (!ed) return <div></div>;
 
-        eventTitles.push(ed.top.title);
+        let key = ed.top.title + index;
+        eventTitles.push([ed.top.title, key]);
         return (
-            <div className={styles.txgridcomponent} key={ed.top.title}>
+            <div className={styles.txgridcomponent} key={key}>
                 <ItemView data={ed.top as TxItemView} />
                 {ed.fields && <ItemView data={ed.fields as TxItemView} />}
             </div>
@@ -264,8 +265,8 @@ function TransactionView({ txdata }: { txdata: DataType }) {
     });
 
     let eventTitlesDisplay = eventTitles.map((et) => (
-        <div key={et} className={styles.eventtitle}>
-            <Longtext text={et} category={'unknown'} isLink={false} />
+        <div key={et[1]} className={styles.eventtitle}>
+            <Longtext text={et[0]} category={'unknown'} isLink={false} />
         </div>
     ));
 

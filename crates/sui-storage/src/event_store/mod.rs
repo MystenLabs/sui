@@ -11,35 +11,38 @@
 //! Events are also archived into checkpoints so this API should support that as well.
 //!
 
+use std::collections::BTreeMap;
+use std::str::FromStr;
+use std::usize;
+
 use anyhow::anyhow;
 use async_trait::async_trait;
 use enum_dispatch::enum_dispatch;
+use flexstr::SharedStr;
 use futures::prelude::stream::BoxStream;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::ModuleId;
 use move_core_types::value::MoveValue;
 use serde_json::Value;
-use std::collections::BTreeMap;
-use std::str::FromStr;
+use tokio_stream::StreamExt;
+
+pub use sql::SqlEventStore;
 use sui_json_rpc_types::{SuiEvent, SuiEventEnvelope};
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress, TransactionDigest};
 use sui_types::error::SuiError;
 use sui_types::error::SuiError::{StorageCorruptedFieldError, StorageMissingFieldError};
-use sui_types::event::{EventEnvelope, EventType};
+use sui_types::event::{BalanceChangeType, Event, EventEnvelope, EventType};
 use sui_types::object::Owner;
-use tokio_stream::StreamExt;
 
 pub mod sql;
 pub mod test_utils;
-pub use sql::SqlEventStore;
-
-use flexstr::SharedStr;
 
 /// Maximum number of events one can ask for right now
 pub const EVENT_STORE_QUERY_MAX_LIMIT: usize = 1000;
 
 pub const OBJECT_VERSION_KEY: &str = "obj_ver";
 pub const AMOUNT_KEY: &str = "amount";
+pub const BALANCE_CHANGE_TYPE_KEY: &str = "change_type";
 
 /// One event pulled out from the EventStore
 #[allow(unused)]
@@ -179,6 +182,9 @@ impl StoredEvent {
         let owner = self.recipient()?;
         let coin_type = self.object_type()?;
         let coin_object_id = self.object_id()?;
+        let change_type = self.change_type()?.ok_or_else(|| {
+            anyhow::anyhow!("Can't extract balance change type from StoredEvent: {self:?}")
+        })?;
         let version = self.object_version()?.ok_or_else(|| {
             anyhow::anyhow!("Can't extract object version from StoredEvent: {self:?}")
         })?;
@@ -190,6 +196,7 @@ impl StoredEvent {
             package_id,
             transaction_module,
             sender,
+            change_type,
             owner,
             coin_type,
             coin_object_id,
@@ -289,6 +296,15 @@ impl StoredEvent {
             opt.and_then(|s| u64::from_str(&s).ok())
                 .map(SequenceNumber::from_u64)
         })
+    }
+
+    fn change_type(&self) -> Result<Option<BalanceChangeType>, anyhow::Error> {
+        Ok(self
+            .extract_string_field(BALANCE_CHANGE_TYPE_KEY)?
+            .map(|opt| usize::from_str(&opt))
+            .transpose()?
+            .map(|value| Event::balance_change_from_ordinal(value))
+            .transpose()?)
     }
 
     fn amount(&self) -> Result<Option<i128>, anyhow::Error> {

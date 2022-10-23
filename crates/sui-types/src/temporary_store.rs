@@ -11,6 +11,7 @@ use move_core_types::resolver::{ModuleResolver, ResourceResolver};
 use tracing::trace;
 
 use crate::coin::Coin;
+use crate::event::BalanceChangeType;
 use crate::storage::InnerTxContext;
 use crate::{
     base_types::{
@@ -135,6 +136,7 @@ impl<S> TemporaryStore<S> {
                 // Emit event for gas charges.
                 events.push(Event::balance_change(
                     &InnerTxContext::gas(sender),
+                    BalanceChangeType::Gas,
                     gas.owner,
                     coin_id,
                     gas.version(),
@@ -167,6 +169,7 @@ impl<S> TemporaryStore<S> {
                     let balance = balance as i128;
                     Event::balance_change(
                         &ctx,
+                        BalanceChangeType::Pay,
                         deleted_obj.owner,
                         id,
                         deleted_obj.version(),
@@ -216,6 +219,7 @@ impl<S> TemporaryStore<S> {
             (Ok(Some(balance)), _, _) => {
                 vec![Event::balance_change(
                     &ctx,
+                    BalanceChangeType::Receive,
                     obj.owner,
                     obj.id(),
                     obj.version(),
@@ -282,6 +286,7 @@ impl<S> TemporaryStore<S> {
                 // For the spend event, we are spending from the old coin so the event will use the old coin version and owner info.
                 (true, Ordering::Greater) => events.push(Event::balance_change(
                     ctx,
+                    BalanceChangeType::Pay,
                     old_coin.owner,
                     old_coin.id(),
                     old_coin.version(),
@@ -291,6 +296,7 @@ impl<S> TemporaryStore<S> {
                 // Same owner, balance increased.
                 (true, Ordering::Less) => events.push(Event::balance_change(
                     ctx,
+                    BalanceChangeType::Receive,
                     coin.owner,
                     coin.id(),
                     coin.version(),
@@ -301,6 +307,7 @@ impl<S> TemporaryStore<S> {
                 (false, _) => {
                     events.push(Event::balance_change(
                         ctx,
+                        BalanceChangeType::Pay,
                         old_coin.owner,
                         coin.id(),
                         old_coin.version(),
@@ -310,6 +317,7 @@ impl<S> TemporaryStore<S> {
                     ));
                     events.push(Event::balance_change(
                         ctx,
+                        BalanceChangeType::Receive,
                         coin.owner,
                         coin.id(),
                         coin.version(),

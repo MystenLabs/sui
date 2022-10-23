@@ -236,6 +236,9 @@ impl SqlEventStore {
             if let Some(amount) = event.event.amount() {
                 fields.insert(AMOUNT_KEY, amount.to_string());
             }
+            if let Some(change_type) = event.event.balance_change_type() {
+                fields.insert(BALANCE_CHANGE_TYPE_KEY, (*change_type as usize).to_string());
+            }
             json!(fields).to_string()
         }
     }
@@ -848,6 +851,7 @@ mod tests {
                 "test_module",
                 "test_foo",
             ),
+            test_utils::new_test_balance_change_event(1_006_000, 6, None, None, None),
         ];
         db.add_events(&to_insert).await?;
         info!("Done inserting");
@@ -907,6 +911,13 @@ mod tests {
         test_queried_event_vs_test_envelope(&queried_events[0], &to_insert[5]);
         assert_ne!(queried_events[0].fields.len(), 0);
 
+        // Query Balance Change Event
+        let queried_events = db
+            .events_by_type(1_005_000, 1_007_000, EventType::CoinBalanceChange, 1)
+            .await?;
+        assert_eq!(queried_events.len(), 1);
+        test_queried_event_vs_test_envelope(&queried_events[0], &to_insert[6]);
+        assert_eq!(queried_events[0].fields.len(), 3); // amount, version, balance change type.
         Ok(())
     }
 

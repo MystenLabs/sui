@@ -131,6 +131,7 @@ pub enum Event {
         package_id: ObjectID,
         transaction_module: Identifier,
         sender: SuiAddress,
+        change_type: BalanceChangeType,
         owner: Owner,
         coin_type: String,
         coin_object_id: ObjectID,
@@ -172,6 +173,28 @@ pub enum Event {
     },
 }
 
+#[derive(
+    EnumVariantNames,
+    Eq,
+    Debug,
+    strum_macros::Display,
+    Copy,
+    Clone,
+    strum_macros::EnumString,
+    PartialEq,
+    Deserialize,
+    Serialize,
+    Hash,
+    JsonSchema,
+    EnumDiscriminants,
+)]
+#[strum_discriminants(name(BalanceChangeTypeVariants))]
+pub enum BalanceChangeType {
+    Gas,
+    Pay,
+    Receive,
+}
+
 impl Event {
     pub fn move_event(
         package_id: &AccountAddress,
@@ -191,6 +214,7 @@ impl Event {
 
     pub fn balance_change(
         ctx: &InnerTxContext,
+        change_type: BalanceChangeType,
         owner: Owner,
         coin_object_id: ObjectID,
         version: SequenceNumber,
@@ -203,6 +227,7 @@ impl Event {
             package_id: ctx.package_id,
             transaction_module: ctx.transaction_module.clone(),
             sender: ctx.sender,
+            change_type,
             owner,
             coin_type,
             coin_object_id,
@@ -391,8 +416,7 @@ impl Event {
         }
     }
 
-    /// Extracts the amount from a SuiEvent::TransferObject
-    /// Note that None is returned if it is not a TransferObject, or there is no amount
+    /// Extracts the amount from a SuiEvent::CoinBalanceChange event
     pub fn amount(&self) -> Option<i128> {
         if let Event::CoinBalanceChange { amount, .. } = self {
             Some(*amount)
@@ -401,11 +425,20 @@ impl Event {
         }
     }
 
-    pub fn transfer_type_from_ordinal(ordinal: usize) -> Result<TransferType, SuiError> {
-        TransferType::from_str(TransferType::VARIANTS[ordinal]).map_err(|e| {
+    /// Extracts the balance change type from a SuiEvent::CoinBalanceChange event
+    pub fn balance_change_type(&self) -> Option<&BalanceChangeType> {
+        if let Event::CoinBalanceChange { change_type, .. } = self {
+            Some(change_type)
+        } else {
+            None
+        }
+    }
+
+    pub fn balance_change_from_ordinal(ordinal: usize) -> Result<BalanceChangeType, SuiError> {
+        BalanceChangeType::from_str(BalanceChangeType::VARIANTS[ordinal]).map_err(|e| {
             SuiError::BadObjectType {
                 error: format!(
-                    "Could not parse tranfer type from ordinal: {ordinal} into TransferType: {e:?}"
+                    "Could not parse balance change type from ordinal: {ordinal} into BalanceChangeType: {e:?}"
                 ),
             }
         })

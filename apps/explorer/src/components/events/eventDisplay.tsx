@@ -7,6 +7,7 @@ import {
     isTransferObjectEvent,
     isDeleteObjectEvent,
     isPublishEvent,
+    isCoinBalanceChangeEvent,
 } from '@mysten/sui.js';
 
 import { isBigIntOrNumber } from '../../utils/numberUtil';
@@ -23,6 +24,7 @@ import type {
     TransferObjectEvent,
     DeleteObjectEvent,
     PublishEvent,
+    CoinBalanceChangeEvent,
 } from '@mysten/sui.js';
 import type { LinkObj } from '~/ui/TableCard';
 
@@ -132,13 +134,32 @@ export function transferObjectEventDisplay(
         top: {
             title: 'Transfer Object',
             content: [
-                contentLine('Type', event.type, true),
+                contentLine('Object Type', event.objectType, true),
                 objectContent('Object ID', event.objectId),
                 contentLine('Version', event.version.toString()),
                 [
                     addressContent('', event.sender),
                     addressContent('', getOwnerStr(event.recipient)),
                 ],
+            ],
+        },
+    };
+}
+
+export function coinBalanceChangeEventDisplay(
+    event: CoinBalanceChangeEvent
+): EventDisplayData {
+    return {
+        top: {
+            title: 'Coin Balance Change',
+            content: [
+                addressContent('Sender', event.sender),
+                contentLine('Balance Change Type', event.changeType, true),
+                contentLine('Coin Type', event.coinType),
+                objectContent('Coin Object ID', event.coinObjectId),
+                contentLine('Version', event.version.toString()),
+                addressContent('Owner', getOwnerStr(event.owner)),
+                contentLine('Amount', event.amount.toString()),
             ],
         },
     };
@@ -212,6 +233,12 @@ export function eventToDisplay(event: SuiEvent) {
 
     if ('deleteObject' in event && isDeleteObjectEvent(event.deleteObject))
         return deleteObjectEventDisplay(event.deleteObject);
+
+    if (
+        'coinBalanceChange' in event &&
+        isCoinBalanceChangeEvent(event.coinBalanceChange)
+    )
+        return coinBalanceChangeEventDisplay(event.coinBalanceChange);
 
     if ('publish' in event && isPublishEvent(event.publish))
         return publishEventDisplay(event.publish);
