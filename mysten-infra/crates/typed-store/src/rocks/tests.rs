@@ -9,14 +9,14 @@ fn temp_dir() -> std::path::PathBuf {
         .into_path()
 }
 
-#[test]
-fn test_open() {
+#[tokio::test]
+async fn test_open() {
     let _db = DBMap::<u32, String>::open(temp_dir(), None, None, &Registry::new())
         .expect("Failed to open storage");
 }
 
-#[test]
-fn test_reopen() {
+#[tokio::test]
+async fn test_reopen() {
     let arc = {
         let db = DBMap::<u32, String>::open(temp_dir(), None, None, &Registry::new())
             .expect("Failed to open storage");
@@ -31,8 +31,8 @@ fn test_reopen() {
         .expect("Failed to retrieve item in storage"));
 }
 
-#[test]
-fn test_reopen_macro() {
+#[tokio::test]
+async fn test_reopen_macro() {
     const FIRST_CF: &str = "First_CF";
     const SECOND_CF: &str = "Second_CF";
 
@@ -50,8 +50,8 @@ fn test_reopen_macro() {
     assert!(db_map_2.multi_insert(keys_vals_cf2).is_ok());
 }
 
-#[test]
-fn test_wrong_reopen() {
+#[tokio::test]
+async fn test_wrong_reopen() {
     let rocks = open_cf(temp_dir(), None, &["foo", "bar", "baz"]).unwrap();
     let db = DBMap::<u8, u8>::reopen(
         &rocks,
@@ -61,8 +61,8 @@ fn test_wrong_reopen() {
     assert!(db.is_err());
 }
 
-#[test]
-fn test_contains_key() {
+#[tokio::test]
+async fn test_contains_key() {
     let db = DBMap::open(temp_dir(), None, None, &Registry::new()).expect("Failed to open storage");
 
     db.insert(&123456789, &"123456789".to_string())
@@ -75,8 +75,8 @@ fn test_contains_key() {
         .expect("Failed to call contains key"));
 }
 
-#[test]
-fn test_get() {
+#[tokio::test]
+async fn test_get() {
     let db = DBMap::open(temp_dir(), None, None, &Registry::new()).expect("Failed to open storage");
 
     db.insert(&123456789, &"123456789".to_string())
@@ -88,8 +88,8 @@ fn test_get() {
     assert_eq!(None, db.get(&000000000).expect("Failed to get"));
 }
 
-#[test]
-fn test_get_raw() {
+#[tokio::test]
+async fn test_get_raw() {
     let db = DBMap::open(temp_dir(), None, None, &Registry::new()).expect("Failed to open storage");
 
     db.insert(&123456789, &"123456789".to_string())
@@ -111,8 +111,8 @@ fn test_get_raw() {
     );
 }
 
-#[test]
-fn test_multi_get() {
+#[tokio::test]
+async fn test_multi_get() {
     let db = DBMap::open(temp_dir(), None, None, &Registry::new()).expect("Failed to open storage");
 
     db.insert(&123, &"123".to_string())
@@ -128,8 +128,8 @@ fn test_multi_get() {
     assert_eq!(result[2], None);
 }
 
-#[test]
-fn test_skip() {
+#[tokio::test]
+async fn test_skip() {
     let db = DBMap::open(temp_dir(), None, None, &Registry::new()).expect("Failed to open storage");
 
     db.insert(&123, &"123".to_string())
@@ -169,8 +169,8 @@ fn test_skip() {
     assert_eq!(db.keys().skip_to(&000).expect("Skip failed").count(), 3);
 }
 
-#[test]
-fn test_skip_to_previous_simple() {
+#[tokio::test]
+async fn test_skip_to_previous_simple() {
     let db = DBMap::open(temp_dir(), None, None, &Registry::new()).expect("Failed to open storage");
 
     db.insert(&123, &"123".to_string())
@@ -210,8 +210,8 @@ fn test_skip_to_previous_simple() {
     );
 }
 
-#[test]
-fn test_iter_skip_to_previous_gap() {
+#[tokio::test]
+async fn test_iter_skip_to_previous_gap() {
     let db = DBMap::open(temp_dir(), None, None, &Registry::new()).expect("Failed to open storage");
     for i in 1..100 {
         if i != 50 {
@@ -238,8 +238,8 @@ fn test_iter_skip_to_previous_gap() {
     );
 }
 
-#[test]
-fn test_remove() {
+#[tokio::test]
+async fn test_remove() {
     let db = DBMap::open(temp_dir(), None, None, &Registry::new()).expect("Failed to open storage");
 
     db.insert(&123456789, &"123456789".to_string())
@@ -250,8 +250,8 @@ fn test_remove() {
     assert!(db.get(&123456789).expect("Failed to get").is_none());
 }
 
-#[test]
-fn test_iter() {
+#[tokio::test]
+async fn test_iter() {
     let db = DBMap::open(temp_dir(), None, None, &Registry::new()).expect("Failed to open storage");
 
     db.insert(&123456789, &"123456789".to_string())
@@ -262,8 +262,8 @@ fn test_iter() {
     assert_eq!(None, iter.next());
 }
 
-#[test]
-fn test_iter_reverse() {
+#[tokio::test]
+async fn test_iter_reverse() {
     let db = DBMap::open(temp_dir(), None, None, &Registry::new()).expect("Failed to open storage");
 
     db.insert(&1, &"1".to_string()).expect("Failed to insert");
@@ -282,8 +282,8 @@ fn test_iter_reverse() {
     assert_eq!(None, iter.next());
 }
 
-#[test]
-fn test_keys() {
+#[tokio::test]
+async fn test_keys() {
     let db = DBMap::open(temp_dir(), None, None, &Registry::new()).expect("Failed to open storage");
 
     db.insert(&123456789, &"123456789".to_string())
@@ -294,8 +294,8 @@ fn test_keys() {
     assert_eq!(None, keys.next());
 }
 
-#[test]
-fn test_values() {
+#[tokio::test]
+async fn test_values() {
     let db = DBMap::open(temp_dir(), None, None, &Registry::new()).expect("Failed to open storage");
 
     db.insert(&123456789, &"123456789".to_string())
@@ -306,8 +306,8 @@ fn test_values() {
     assert_eq!(None, values.next());
 }
 
-#[test]
-fn test_try_extend() {
+#[tokio::test]
+async fn test_try_extend() {
     let mut db =
         DBMap::open(temp_dir(), None, None, &Registry::new()).expect("Failed to open storage");
     let mut keys_vals = (1..100).map(|i| (i, i.to_string()));
@@ -320,8 +320,8 @@ fn test_try_extend() {
     }
 }
 
-#[test]
-fn test_try_extend_from_slice() {
+#[tokio::test]
+async fn test_try_extend_from_slice() {
     let mut db =
         DBMap::open(temp_dir(), None, None, &Registry::new()).expect("Failed to open storage");
     let keys_vals = (1..100).map(|i| (i, i.to_string()));
@@ -334,8 +334,8 @@ fn test_try_extend_from_slice() {
     }
 }
 
-#[test]
-fn test_insert_batch() {
+#[tokio::test]
+async fn test_insert_batch() {
     let db = DBMap::open(temp_dir(), None, None, &Registry::new()).expect("Failed to open storage");
     let keys_vals = (1..100).map(|i| (i, i.to_string()));
     let insert_batch = db
@@ -349,8 +349,8 @@ fn test_insert_batch() {
     }
 }
 
-#[test]
-fn test_insert_batch_across_cf() {
+#[tokio::test]
+async fn test_insert_batch_across_cf() {
     let rocks = open_cf(temp_dir(), None, &["First_CF", "Second_CF"]).unwrap();
 
     let db_cf_1 = DBMap::reopen(
@@ -388,8 +388,8 @@ fn test_insert_batch_across_cf() {
     }
 }
 
-#[test]
-fn test_insert_batch_across_different_db() {
+#[tokio::test]
+async fn test_insert_batch_across_different_db() {
     let rocks = open_cf(temp_dir(), None, &["First_CF", "Second_CF"]).unwrap();
     let rocks2 = open_cf(temp_dir(), None, &["First_CF", "Second_CF"]).unwrap();
 
@@ -417,8 +417,8 @@ fn test_insert_batch_across_different_db() {
         .is_err());
 }
 
-#[test]
-fn test_delete_batch() {
+#[tokio::test]
+async fn test_delete_batch() {
     let db = DBMap::<i32, String>::open(temp_dir(), None, None, &Registry::new())
         .expect("Failed to open storage");
 
@@ -441,8 +441,8 @@ fn test_delete_batch() {
     }
 }
 
-#[test]
-fn test_delete_range() {
+#[tokio::test]
+async fn test_delete_range() {
     let db: DBMap<i32, String> =
         DBMap::open(temp_dir(), None, None, &Registry::new()).expect("Failed to open storage");
 
@@ -470,8 +470,8 @@ fn test_delete_range() {
     assert!(db.contains_key(&100).expect("Failed to query legel key"));
 }
 
-#[test]
-fn test_clear() {
+#[tokio::test]
+async fn test_clear() {
     let db = DBMap::<i32, String>::open(temp_dir(), None, Some("table"), &Registry::new())
         .expect("Failed to open storage");
     // Test clear of empty map
@@ -499,8 +499,8 @@ fn test_clear() {
     assert_eq!(db.iter().count(), 0);
 }
 
-#[test]
-fn test_is_empty() {
+#[tokio::test]
+async fn test_is_empty() {
     let db = DBMap::<i32, String>::open(temp_dir(), None, Some("table"), &Registry::new())
         .expect("Failed to open storage");
 
@@ -527,8 +527,8 @@ fn test_is_empty() {
     assert!(db.is_empty());
 }
 
-#[test]
-fn test_multi_insert() {
+#[tokio::test]
+async fn test_multi_insert() {
     // Init a DB
     let db = DBMap::<i32, String>::open(temp_dir(), None, Some("table"), &Registry::new())
         .expect("Failed to open storage");
@@ -544,8 +544,8 @@ fn test_multi_insert() {
     }
 }
 
-#[test]
-fn test_multi_remove() {
+#[tokio::test]
+async fn test_multi_remove() {
     // Init a DB
     let db = DBMap::<i32, String>::open(temp_dir(), None, Some("table"), &Registry::new())
         .expect("Failed to open storage");

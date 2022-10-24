@@ -5,7 +5,7 @@ use std::{marker::PhantomData, sync::Arc};
 use bincode::Options;
 use rocksdb::Direction;
 
-use crate::metrics::DBMetrics;
+use crate::metrics::{DBMetrics, SamplingInterval};
 
 use super::{be_fix_int_ser, errors::TypedStoreError};
 use serde::{de::DeserializeOwned, Serialize};
@@ -19,6 +19,7 @@ pub struct Iter<'a, K, V> {
     direction: Direction,
     cf: String,
     db_metrics: Arc<DBMetrics>,
+    read_sample_interval: SamplingInterval,
 }
 
 impl<'a, K: DeserializeOwned, V: DeserializeOwned> Iter<'a, K, V> {
@@ -26,6 +27,7 @@ impl<'a, K: DeserializeOwned, V: DeserializeOwned> Iter<'a, K, V> {
         db_iter: DBRawIteratorMultiThreaded<'a>,
         cf: String,
         db_metrics: &Arc<DBMetrics>,
+        read_sample_interval: &SamplingInterval,
     ) -> Self {
         Self {
             db_iter,
@@ -33,6 +35,7 @@ impl<'a, K: DeserializeOwned, V: DeserializeOwned> Iter<'a, K, V> {
             direction: Direction::Forward,
             cf,
             db_metrics: db_metrics.clone(),
+            read_sample_interval: read_sample_interval.clone(),
         }
     }
 }
@@ -42,11 +45,16 @@ impl<'a, K: DeserializeOwned, V: DeserializeOwned> Iterator for Iter<'a, K, V> {
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.db_iter.valid() {
-            let _timer = self
-                .db_metrics
-                .rocksdb_iter_latency_seconds
-                .with_label_values(&[&self.cf])
-                .start_timer();
+            let report_metrics = if self.read_sample_interval.sample() {
+                let timer = self
+                    .db_metrics
+                    .rocksdb_iter_latency_seconds
+                    .with_label_values(&[&self.cf])
+                    .start_timer();
+                Some(timer)
+            } else {
+                None
+            };
             let config = bincode::DefaultOptions::new()
                 .with_big_endian()
                 .with_fixint_encoding();
@@ -58,12 +66,14 @@ impl<'a, K: DeserializeOwned, V: DeserializeOwned> Iterator for Iter<'a, K, V> {
                 .db_iter
                 .value()
                 .expect("Valid iterator failed to get value");
-            self.db_metrics
-                .rocksdb_iter_bytes
-                .with_label_values(&[&self.cf])
-                .observe((raw_key.len() + raw_value.len()) as f64);
             let key = config.deserialize(raw_key).ok();
             let value = bincode::deserialize(raw_value).ok();
+            if report_metrics.is_some() {
+                self.db_metrics
+                    .rocksdb_iter_bytes
+                    .with_label_values(&[&self.cf])
+                    .observe((raw_key.len() + raw_value.len()) as f64);
+            }
             match self.direction {
                 Direction::Forward => self.db_iter.next(),
                 Direction::Reverse => self.db_iter.prev(),
