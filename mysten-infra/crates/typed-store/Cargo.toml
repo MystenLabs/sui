@@ -20,7 +20,7 @@ prometheus = "0.13.2"
 rocksdb = { version = "0.19.0", features = ["snappy", "lz4", "zstd", "zlib", "multi-threaded-cf"], default-features = false }
 serde = { version = "1.0.140", features = ["derive"] }
 thiserror = "1.0.37"
-tokio = { version = "1.21.2", features = ["sync", "macros", "rt"] }
+tokio = { version = "1.21.2", features = ["full", "test-util"] }
 tracing = "0.1.37"
 
 [dev-dependencies]

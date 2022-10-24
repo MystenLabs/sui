@@ -172,6 +172,7 @@ fn extract_generics_names(generics: &Generics) -> Vec<Ident> {
 /// use typed_store::Store;
 /// use typed_store_derive::DBMapUtils;
 /// use typed_store::traits::TypedStoreDebug;
+/// use core::fmt::Error;
 /// /// Define a struct with all members having type DBMap<K, V>
 ///
 /// fn custom_fn_name1() -> DBOptions {DBOptions::default()}
@@ -197,6 +198,8 @@ fn extract_generics_names(generics: &Generics) -> Vec<Ident> {
 /// // For finer control, we also allow the opener of the DB to specify their own options which override the defaults set by the definer
 /// // This is done via a configurator which gives one a struct with field similarly named as that of the DB, but of type Options
 ///
+/// #[tokio::main]
+/// async fn main() -> Result<(), Error> {
 /// // Get a configurator for this table
 /// let mut config = Tables::configurator();
 /// // Config table 1
@@ -208,6 +211,8 @@ fn extract_generics_names(generics: &Generics) -> Vec<Ident> {
 ///
 /// // We can then open the DB with the configs
 /// let _ = Tables::open_tables_read_write(primary_path, None, Some(config.build()));
+/// Ok(())
+/// }
 ///
 ///```
 ///
@@ -224,6 +229,7 @@ fn extract_generics_names(generics: &Generics) -> Vec<Ident> {
 /// use typed_store::Store;
 /// use typed_store_derive::DBMapUtils;
 /// use typed_store::traits::TypedStoreDebug;
+/// use core::fmt::Error;
 /// /// Define a struct with all members having type DBMap<K, V>
 ///
 /// fn custom_fn_name1() -> DBOptions {DBOptions::default()}
@@ -244,6 +250,8 @@ fn extract_generics_names(generics: &Generics) -> Vec<Ident> {
 ///     #[default_options_override_fn = "custom_fn_name1"]
 ///     table4: DBMap<i32, String>,
 /// }
+/// #[tokio::main]
+/// async fn main() -> Result<(), Error> {
 ///
 /// let primary_path = tempfile::tempdir().expect("Failed to open temporary directory").into_path();
 /// let _ = Tables::open_tables_read_write(primary_path.clone(), None, None);
@@ -253,6 +261,8 @@ fn extract_generics_names(generics: &Generics) -> Vec<Ident> {
 /// // Use this handle for dumping
 /// let ret = read_only_handle.dump("table2", 100, 0).unwrap();
 /// let key_count = read_only_handle.count_keys("table1").unwrap();
+/// Ok(())
+/// }
 /// ```
 /// 4. Auto-generated memory stats method
 /// `self.get_memory_usage` is derived to provide memory and cache usage
