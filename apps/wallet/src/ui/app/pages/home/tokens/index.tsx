@@ -5,6 +5,8 @@ import { useMemo } from 'react';
 
 import CoinBalance from './coin-balance';
 import IconLink from './icon-link';
+import FaucetMessageInfo from '_app/shared/faucet/message-info';
+import FaucetRequestButton from '_app/shared/faucet/request-button';
 import AccountAddress from '_components/account-address';
 import Alert from '_components/alert';
 import Loading from '_components/loading';
@@ -93,6 +95,7 @@ function TokensPage() {
                             ))}
                             {suiBalance <= 0 ? (
                                 <div className={st.emptyWallet}>
+                                    <FaucetRequestButton />
                                     {emptyWalletDescription}
                                 </div>
                             ) : null}
@@ -105,8 +108,10 @@ function TokensPage() {
                             Your wallet contains no SUI.
                         </div>
                         {emptyWalletDescription}
+                        <FaucetRequestButton />
                     </div>
                 )}
+                <FaucetMessageInfo className={st.gasRequestInfo} />
             </Loading>
         </div>
     );

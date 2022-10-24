@@ -62,7 +62,7 @@
         border-radius: 15px;
     }
 
-    margin-bottom: 25px;
+    margin-bottom: 20px;
 }
 
 .empty-wallet {
@@ -72,7 +72,9 @@
     align-content: center;
     gap: 8px;
     text-align: center;
-    margin-top: 20px;
+    margin-top: 10px;
+    padding-left: 10px;
+    padding-right: 10px;
 }
 
 .empty-wallet-icon {
@@ -93,4 +95,11 @@
     color: colors.$gray-80;
 
     @include utils.typography('ParagraphPrimary/P2-R');
+}
+
+.gas-request-info {
+    margin-top: 5px;
+    align-self: stretch;
+    position: sticky;
+    bottom: 0;
 }

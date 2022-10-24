@@ -27,6 +27,7 @@ type EnvInfo = {
 type ApiEndpoints = {
     gateway: string;
     fullNode: string;
+    faucet: string;
 };
 export const API_ENV_TO_INFO: Record<API_ENV, EnvInfo> = {
     [API_ENV.local]: { name: 'Local', color: '#9064ff' },
@@ -38,14 +39,17 @@ export const ENV_TO_API: Record<API_ENV, ApiEndpoints> = {
     [API_ENV.local]: {
         gateway: process.env.API_ENDPOINT_LOCAL || '',
         fullNode: process.env.API_ENDPOINT_LOCAL_FULLNODE || '',
+        faucet: process.env.API_ENDPOINT_LOCAL_FAUCET || '',
     },
     [API_ENV.devNet]: {
         gateway: process.env.API_ENDPOINT_DEV_NET || '',
         fullNode: process.env.API_ENDPOINT_DEV_NET_FULLNODE || '',
+        faucet: process.env.API_ENDPOINT_DEV_NET_FAUCET || '',
     },
     [API_ENV.staging]: {
         gateway: process.env.API_ENDPOINT_STAGING || '',
         fullNode: process.env.API_ENDPOINT_STAGING_FULLNODE || '',
+        faucet: process.env.API_ENDPOINT_STAGING_FAUCET || '',
     },
 };
 
@@ -62,7 +66,8 @@ function getDefaultAPI(env: API_ENV) {
     if (
         !apiEndpoint ||
         apiEndpoint.gateway === '' ||
-        apiEndpoint.fullNode === ''
+        apiEndpoint.fullNode === '' ||
+        apiEndpoint.faucet === ''
     ) {
         throw new Error(`API endpoint not found for API_ENV ${env}`);
     }
