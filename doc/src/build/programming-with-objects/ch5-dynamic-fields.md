@@ -4,17 +4,14 @@ title: Chapter 5 - Dynamic Fields
 
 In previous chapters, we walked through various ways to use object fields to store primitive data and other objects (wrapping), but there are a few limitations to this approach:
 
-1. Object's have a finite set of fields keyed by identifiers that are fixed when its module is published.
+1. Object's have a finite set of fields keyed by identifiers that are fixed when its module is published (i.e. limited to the fields in the `struct` declaration).
 2. An object can become very large if it wraps several other objects. Larger objects can lead to higher gas fees in transactions. In addition, there is an upper bound on object size.
-3. As we will see in future chapters, there will be use cases where we need to store a collection of objects of heterogeneous types. Since the Move `vector` type must be templated on one single type `T`, it is not suitable for this.
+3. As we will see in future chapters, there will be use cases where we need to store a collection of objects of heterogeneous types. Since the Move `vector` type must be instantiated with one single type `T`, it is not suitable for this.
 
 Fortunately, Sui provides *dynamic fields* with arbitrary names (not just identifiers), added and removed on-the-fly (not fixed at publish), which only affect gas when they are accessed, and can store heterogeneous values. This chapter introduces the libraries for interacting with this kind of field.
 
 ### Current Limitations
-
-There are some aspects of dynamic fields that are not yet behaving as designed in this early release. We are actively working on these areas, but watch out for:
-
-- `remove` for dynamic fields not giving a full storage refund.
+There are some aspects of dynamic fields that are not yet behaving as designed in this early release. We are actively working on these areas, but watch out for: - `remove` for dynamic fields not giving a full storage refund.
 - The lack of an `exists_` API to check whether a field with a particular name is already defined on an object.
 - Potential durability/consistency issues with dynamic field objects:  When a validator goes down and comes back up while processing a transaction with dynamic fields, it might be unable to process further transactions involving those objects.
 
@@ -22,10 +19,10 @@ There are some aspects of dynamic fields that are not yet behaving as designed i
 
 There are two flavors of dynamic field -- "fields" and "object fields" -- which differ based on how their values are stored:
 
-- **Object field** values *must* be objects themselves (have the `key` ability, and `id: UID` as the first field) and will still appear under their ID to external tools (explorers, wallets, etc) accessing storage even when stored in a dynamic object field.
-- **Field** values do not need to be objects. An object stored in a (non-object) field will not be accessible via its ID while it is stored in a dynamic field.
+- **Fields** can store any value that has `store`, however an object stored in this kind of field will be considered wrapped and will not be accessible via its ID by external tools (explorers, wallets, etc) accessing storage.
+- **Object field** values *must* be objects (have the `key` ability, and `id: UID` as the first field), but will still be accessible at their ID to external tools.
 
-The interfaces for interacting with these fields can be found in the [`dynamic_object_field`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/dynamic_object_field.move) and [`dynamic_field`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/dynamic_field.move) libraries respectively.
+The modules for interacting with these fields can be found at [`dynamic_field`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/dynamic_field.move) and [`dynamic_object_field`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/dynamic_object_field.move) respectively.
 
 ### Field Names
 
@@ -36,20 +33,27 @@ Unlike an object's regular fields whose names must be Move identifiers, dynamic 
 Dynamic fields are added with the following APIs:
 
 ```rust
-use sui::dynamic_field as field;
-use sui::dynamic_object_field as ofield;
+module sui::dynamic_field {
 
-public fun field::add<Name: copy + drop + store, Value: store>(
-  object: &mut UID,
-  name: Name,
-  value: Value,
-)
-
-public fun ofield::add<Name: copy + drop + store, Value: key + store>(
+public fun sui::dynamic_field::add<Name: copy + drop + store, Value: store>(
   object: &mut UID,
   name: Name,
   value: Value,
 );
+
+}
+```
+
+```rust
+module sui::dynamic_object_field {
+
+public fun sui::dynamic_object_field::add<Name: copy + drop + store, Value: key + store>(
+  object: &mut UID,
+  name: Name,
+  value: Value,
+);
+
+}
 ```
 
 These functions add a field with name `name` and value `value` to `object`. To see it in action, consider these code snippets:
@@ -63,18 +67,21 @@ struct Parent has key {
 
 struct Child has key, store {
     id: UID,
+    count: u64,
 }
 ```
 
 Now, we can define an API to add a `Child` object as a dynamic field of a `Parent` object:
 
 ```rust
+use sui::dynamic_object_field as ofield;
+
 public entry fun add_child(parent: &mut Parent, child: Child) {
     ofield::add(&mut parent.id, b"child", child);
 }
 ```
 
-This function takes the `Child` object by value, and makes it a dynamic field of `parent` with name `b"child"` (a byte string). At the end of the `add_child` call, we have the following ownership relationship:
+This function takes the `Child` object by value, and makes it a dynamic field of `parent` with name `b"child"` (a byte string of type `vector<u8>`). At the end of the `add_child` call, we have the following ownership relationship:
 
 1. Sender address (still) owns the `Parent` object.
 2. The `Parent` object owns the `Child` object, and can refer to it by the name `b"child"`.
@@ -86,27 +93,33 @@ This function takes the `Child` object by value, and makes it a dynamic field of
 Dynamic fields can be accessed by reference using the following APIs:
 
 ```rust
-use sui::dynamic_field as field;
+module sui::dynamic_field {
 
 public fun borrow<Name: copy + drop + store, Value: store>(
     object: &UID,
     name: Name,
-): &Value
+): &Value;
 
 public fun borrow_mut<Name: copy + drop + store, Value: store>(
     object: &mut UID,
     name: Name,
-): &mut Value
+): &mut Value;
+
+}
 ```
 
 Where `object` is the UID of the object the field is defined on and `name` is the field's name.
 
-> :bulb: `sui::dynamic_object_field` has equivalent functions for object fields.
+> :bulb: `sui::dynamic_object_field` has equivalent functions for object fields, but with the added constraint `Value: key + store`.
 
 Let's look at how to use these APIs with the `Parent` and `Child` types defined earlier:
 
 ```rust
-public entry fun mutate_child(_child: &mut Child) {}
+use sui::dynamic_object_field as ofield;
+
+public entry fun mutate_child(child: &mut Child) {
+    child.count = child.count + 1;
+}
 
 public entry fun mutate_child_via_parent(parent: &mut Parent) {
     mutate_child(ofield::borrow_mut<vector<u8>, Child>(
@@ -124,19 +137,21 @@ The second functions accepts a mutable reference to the `Parent` object and acce
 
 > :warning: The `Value` type passed to `borrow` and `borrow_mut` must match the type of the stored field, or the transaction will abort.
 
-> :warning: A transaction that attempts to use a dynamic object field value as an input (by value or by reference), will fail to verify and therefore to run.
+> :warning: Dynamic object field values *must* be accessed through these APIs.  A transaction that attempts to use those objects as inputs (by value or by reference), will be rejected for having invalid inputs.
 
 ### Removing a Dynamic Field
 
 Similar to "unwrapping" an object held in a regular field, a dynamic field can be removed, exposing its value:
 
-```
-use sui::dynamic_field as field;
+```rust
+module sui::dynamic_field {
 
 public fun remove<Name: copy + drop + store, Value: store>(
     object: &mut UID,
     name: Name,
-): Value
+): Value;
+
+}
 ```
 
 This function takes a mutable reference to the ID of the `object` the field is defined on, and the field's `name`.  If a field with a `value: Value` is defined on `object` at `name`, it will be removed and `value` returned, otherwise it will abort.  Future attempts to access this field on `object` will fail.
@@ -145,7 +160,11 @@ This function takes a mutable reference to the ID of the `object` the field is d
 
 The value that is returned can be interacted with just like any other value (because it is any other value).  For example, removed dynamic object field values can then be `delete`-d or `transfer`-ed to an address (e.g. back to the sender):
 
-```
+```rust
+use sui::dynamic_object_field as ofield;
+use sui::{object, transfer, tx_context};
+use sui::tx_context::TxContext;
+
 public entry fun delete_child(parent: &mut Parent) {
     let Child { id } = ofield::remove<vector<u8>, Child>(
         &mut parent.id,

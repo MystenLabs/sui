@@ -156,7 +156,7 @@ public fun destroy_empty<K: copy + drop + store, V: store>(
 
 This function takes the collection by value. If it contains no entries, it will be deleted, othewise the call will abort. `sui::table::Table` also has a convenience function,
 
-```
+```rust
 module sui::table {
 
 public fun drop<K: copy + drop + store, V: drop + store>(
