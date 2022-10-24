@@ -1075,6 +1075,7 @@ impl AuthorityState {
             dbg!(">>>>>>>>>>>>>>>>>>>>>>>>>>");
             return Ok(());
         }
+        panic!();
 
         dbg!("a");
         // Load cert and effects.
