@@ -1266,6 +1266,7 @@ where
             .map(|(obj_ref, _)| obj_ref)
             .ok_or(SuiError::ObjectNotFound {
                 object_id: *object_id,
+                version: None,
             })
     }
 }

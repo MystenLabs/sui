@@ -121,10 +121,7 @@ async fn test_start_epoch_change() {
     }
     let certificate = cert.unwrap();
     assert_eq!(
-        state
-            .handle_certificate(certificate.clone())
-            .await
-            .unwrap_err(),
+        state.handle_certificate(&certificate).await.unwrap_err(),
         SuiError::ValidatorHaltedAtEpochEnd
     );
 

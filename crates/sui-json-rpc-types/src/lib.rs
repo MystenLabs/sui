@@ -962,7 +962,10 @@ impl<T: SuiData> SuiObjectRead<T> {
             Self::Deleted(oref) => Err(SuiError::ObjectDeleted {
                 object_ref: oref.to_object_ref(),
             }),
-            Self::NotExists(id) => Err(SuiError::ObjectNotFound { object_id: *id }),
+            Self::NotExists(id) => Err(SuiError::ObjectNotFound {
+                object_id: *id,
+                version: None,
+            }),
             Self::Exists(o) => Ok(o),
         }
     }
@@ -974,7 +977,10 @@ impl<T: SuiData> SuiObjectRead<T> {
             Self::Deleted(oref) => Err(SuiError::ObjectDeleted {
                 object_ref: oref.to_object_ref(),
             }),
-            Self::NotExists(id) => Err(SuiError::ObjectNotFound { object_id: id }),
+            Self::NotExists(id) => Err(SuiError::ObjectNotFound {
+                object_id: id,
+                version: None,
+            }),
             Self::Exists(o) => Ok(o),
         }
     }
@@ -1022,11 +1028,14 @@ impl<T: SuiData> SuiPastObjectRead<T> {
             Self::ObjectDeleted(oref) => Err(SuiError::ObjectDeleted {
                 object_ref: oref.to_object_ref(),
             }),
-            Self::ObjectNotExists(id) => Err(SuiError::ObjectNotFound { object_id: *id }),
-            Self::VersionFound(o) => Ok(o),
-            Self::VersionNotFound(id, seq_num) => Err(SuiError::ObjectVersionNotFound {
+            Self::ObjectNotExists(id) => Err(SuiError::ObjectNotFound {
                 object_id: *id,
-                version: *seq_num,
+                version: None,
+            }),
+            Self::VersionFound(o) => Ok(o),
+            Self::VersionNotFound(id, seq_num) => Err(SuiError::ObjectNotFound {
+                object_id: *id,
+                version: Some(*seq_num),
             }),
             Self::VersionTooHigh {
                 object_id,
@@ -1046,11 +1055,15 @@ impl<T: SuiData> SuiPastObjectRead<T> {
             Self::ObjectDeleted(oref) => Err(SuiError::ObjectDeleted {
                 object_ref: oref.to_object_ref(),
             }),
-            Self::ObjectNotExists(id) => Err(SuiError::ObjectNotFound { object_id: id }),
+            Self::ObjectNotExists(id) => Err(SuiError::ObjectNotFound {
+                object_id: id,
+                version: None,
+            }),
             Self::VersionFound(o) => Ok(o),
-            Self::VersionNotFound(object_id, version) => {
-                Err(SuiError::ObjectVersionNotFound { object_id, version })
-            }
+            Self::VersionNotFound(object_id, version) => Err(SuiError::ObjectNotFound {
+                object_id,
+                version: Some(version),
+            }),
             Self::VersionTooHigh {
                 object_id,
                 asked_version,

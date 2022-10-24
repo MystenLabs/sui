@@ -577,17 +577,18 @@ where
 
         let result = if bypass_validator_halt {
             self.state()
-                .handle_certificate_bypass_validator_halt(cert.clone())
+                .handle_certificate_bypass_validator_halt(&cert)
                 .await
         } else {
-            self.state().handle_certificate(cert.clone()).await
+            self.state().handle_certificate(&cert).await
         };
         match result {
             Ok(_) => Ok(SyncStatus::CertExecuted),
-            Err(SuiError::ObjectNotFound { .. })
-            | Err(SuiError::ObjectErrors { .. })
-            | Err(SuiError::SharedObjectLockNotSetError) => {
-                debug!(?digest, "cert execution failed due to missing parents");
+            e @ Err(SuiError::TransactionInputObjectsErrors { .. }) => {
+                debug!(
+                    ?digest,
+                    "cert execution failed due to missing parents {:?}", e
+                );
 
                 let effects = self.get_true_effects(epoch_id, &cert).await?;
 
@@ -602,10 +603,10 @@ where
                 debug!(?digest, "parents executed, re-attempting cert");
                 if bypass_validator_halt {
                     self.state()
-                        .handle_certificate_bypass_validator_halt(cert.clone())
+                        .handle_certificate_bypass_validator_halt(&cert)
                         .await
                 } else {
-                    self.state().handle_certificate(cert.clone()).await
+                    self.state().handle_certificate(&cert).await
                 }?;
                 Ok(SyncStatus::CertExecuted)
             }
