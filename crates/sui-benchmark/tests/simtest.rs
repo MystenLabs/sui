@@ -85,7 +85,7 @@ mod test {
         );
 
         for w in workloads.iter_mut() {
-            w.workload.init(aggregator.clone()).await;
+            w.workload.init(proxy.clone()).await;
         }
 
         let driver = BenchDriver::new(5);
@@ -102,7 +102,7 @@ mod test {
 
         let show_progress = interval.is_unbounded();
         let stats = driver
-            .run(workloads, aggregator, &registry, show_progress, interval)
+            .run(workloads, proxy, &registry, show_progress, interval)
             .await
             .unwrap();
 
