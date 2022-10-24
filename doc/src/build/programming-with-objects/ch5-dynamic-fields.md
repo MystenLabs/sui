@@ -35,7 +35,7 @@ Dynamic fields are added with the following APIs:
 ```rust
 module sui::dynamic_field {
 
-public fun sui::dynamic_field::add<Name: copy + drop + store, Value: store>(
+public fun add<Name: copy + drop + store, Value: store>(
   object: &mut UID,
   name: Name,
   value: Value,
@@ -47,7 +47,7 @@ public fun sui::dynamic_field::add<Name: copy + drop + store, Value: store>(
 ```rust
 module sui::dynamic_object_field {
 
-public fun sui::dynamic_object_field::add<Name: copy + drop + store, Value: key + store>(
+public fun add<Name: copy + drop + store, Value: key + store>(
   object: &mut UID,
   name: Name,
   value: Value,
@@ -188,6 +188,6 @@ public entry fun reclaim_child(parent: &mut Parent, ctx: &mut TxContext) {
 
 ### Deleting an Object with Dynamic Fields
 
-It is possible to delete an object that has dynamic fields still defined on it. Because field values can only be accessed via the dynamic field's associated object and field name, deleting an object that has dynamic fields still defined on it renders them all inaccessible to future transactions. This is true regardless of whether the field's key or value has the `drop` ability.
+It is possible to delete an object that has dynamic fields still defined on it. Because field values can only be accessed via the dynamic field's associated object and field name, deleting an object that has dynamic fields still defined on it renders them all inaccessible to future transactions. This is true regardless of whether the field's value has the `drop` ability.
 
 > :warning: Deleting an object that has dynamic fields still defined on it is permitted, but it will render all its fields inaccessible.
