@@ -8603,6 +8603,7 @@ dependencies = [
  "futures",
  "move-core-types",
  "num_cpus",
+ "once_cell",
  "pretty_assertions",
  "rocksdb",
  "serde 1.0.147",
