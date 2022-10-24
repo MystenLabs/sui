@@ -49,6 +49,7 @@ impl EventHandler {
         timestamp_ms: u64,
         seq_num: u64,
     ) -> SuiResult {
+        dbg!("a");
         let res: Result<Vec<_>, _> = effects
             .events
             .iter()
@@ -57,7 +58,9 @@ impl EventHandler {
         let envelopes = res?;
 
         // Ingest all envelopes together at once (for efficiency) into Event Store
+        dbg!("a");
         self.event_store.add_tx_events(&envelopes).await?;
+        dbg!("a");
         trace!(
             num_events = envelopes.len(),
             tx_digest =? effects.transaction_digest,
@@ -65,7 +68,9 @@ impl EventHandler {
         );
 
         // serially dispatch event processing to honor events' orders.
+        dbg!("a");
         for envelope in envelopes {
+            dbg!("a");
             if let Err(e) = self.event_streamer.send(envelope).await {
                 error!(error =? e, "Failed to send EventEnvelope to dispatch");
             }

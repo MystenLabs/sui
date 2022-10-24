@@ -595,23 +595,31 @@ pub async fn send_and_confirm_transaction_with_shared(
     with_shared: bool, // transaction includes shared objects
 ) -> Result<TransactionInfoResponse, SuiError> {
     // Make the initial request
+    dbg!("b");
     let response = authority.handle_transaction(transaction.clone()).await?;
+    dbg!("b");
     let vote = response.signed_transaction.unwrap();
+    dbg!("b");
 
     // Collect signatures from a quorum of authorities
     let committee = authority.committee.load();
+    dbg!("b");
     let mut builder = SignatureAggregator::try_new(transaction, &committee).unwrap();
+    dbg!("b");
     let certificate = builder
         .append(vote.auth_sign_info.authority, vote.auth_sign_info.signature)
         .unwrap()
         .unwrap();
 
+    dbg!("b");
     if with_shared {
+        dbg!("b");
         send_consensus(authority, &certificate).await;
     }
 
     // Submit the confirmation. *Now* execution actually happens, and it should fail when we try to look up our dummy module.
     // we unfortunately don't get a very descriptive error message, but we can at least see that something went wrong inside the VM
+    dbg!("b");
     authority.handle_certificate(&certificate).await
 }
 
@@ -2177,7 +2185,9 @@ pub async fn call_move_with_shared(
     test_args: Vec<TestCallArg>,
     with_shared: bool, // Move call includes shared objects
 ) -> SuiResult<TransactionEffects> {
+    dbg!("b");
     let gas_object = authority.get_object(gas_object_id).await.unwrap();
+    dbg!("b");
     let gas_object_ref = gas_object.unwrap().compute_object_reference();
     let mut args = vec![];
     for arg in test_args.into_iter() {
@@ -2194,9 +2204,12 @@ pub async fn call_move_with_shared(
         MAX_GAS,
     );
 
+    dbg!("b");
     let transaction = to_sender_signed_transaction(data, sender_key);
+    dbg!("b");
     let response =
         send_and_confirm_transaction_with_shared(authority, transaction, with_shared).await?;
+    dbg!("b");
     Ok(response.signed_effects.unwrap().effects)
 }
 

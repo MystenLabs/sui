@@ -164,8 +164,11 @@ pub fn build_move_package(
     path: &Path,
     build_config: BuildConfig,
 ) -> SuiResult<Vec<CompiledModule>> {
+    dbg!("__");
     let pkg = build_move_package_with_deps(path, build_config)?;
+    dbg!("__");
     verify_framework_version(&pkg)?;
+    dbg!("__");
     filter_package_modules(&pkg)
 }
 

@@ -210,6 +210,7 @@ async fn test_object_wrapping_unwrapping() {
 
 #[tokio::test]
 async fn test_object_owning_another_object() {
+    dbg!("---");
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas = ObjectID::random();
     let authority = init_state_with_ids(vec![(sender, gas)]).await;
@@ -217,6 +218,8 @@ async fn test_object_owning_another_object() {
     let package =
         build_and_publish_test_package(&authority, &sender, &sender_key, &gas, "object_owner")
             .await;
+
+    dbg!("---");
 
     // Create a parent.
     let effects = call_move(
@@ -232,6 +235,7 @@ async fn test_object_owning_another_object() {
     )
     .await
     .unwrap();
+    dbg!("---");
     assert!(effects.status.is_ok());
     assert_eq!(effects.events.len(), 1);
     assert_eq!(effects.events[0].event_type(), EventType::NewObject);
@@ -239,6 +243,7 @@ async fn test_object_owning_another_object() {
     assert_eq!(effects.events[0].object_id(), Some(parent.0));
 
     // Create a child.
+    dbg!("---");
     let effects = call_move(
         &authority,
         &gas,
@@ -258,6 +263,7 @@ async fn test_object_owning_another_object() {
     let child = effects.created[0].0;
 
     // Mutate the child directly should work fine.
+    dbg!("---");
     let effects = call_move(
         &authority,
         &gas,
@@ -273,6 +279,7 @@ async fn test_object_owning_another_object() {
     .unwrap();
     assert!(effects.status.is_ok());
 
+    dbg!("---");
     // Add the child to the parent.
     let effects = call_move(
         &authority,
@@ -301,6 +308,7 @@ async fn test_object_owning_another_object() {
     let field_object = authority.get_object(&field_id).await.unwrap().unwrap();
     assert_eq!(field_object.owner, parent.0);
 
+    dbg!("---");
     // Mutate the child directly will now fail because we need the parent to authenticate.
     let result = call_move(
         &authority,
@@ -316,6 +324,7 @@ async fn test_object_owning_another_object() {
     .await;
     assert!(result.is_err());
 
+    dbg!("---");
     // Mutate the child with the parent will not succeed.
     let effects = call_move(
         &authority,
@@ -332,6 +341,7 @@ async fn test_object_owning_another_object() {
     assert!(effects.is_err());
     assert!(format!("{effects:?}").contains("ObjectErrors { errors: [InvalidChildObjectArgument"));
 
+    dbg!("---");
     // Create another parent.
     let effects = call_move(
         &authority,
@@ -351,6 +361,7 @@ async fn test_object_owning_another_object() {
     assert_eq!(effects.events[0].event_type(), EventType::NewObject);
     let new_parent = effects.created[0].0;
 
+    dbg!("---");
     // Transfer the child to the new_parent.
     let effects = call_move(
         &authority,
@@ -404,6 +415,7 @@ async fn test_object_owning_another_object() {
         Owner::ObjectOwner(new_parent.0.into())
     );
 
+    dbg!("---");
     let child_effect = effects
         .mutated
         .iter()
@@ -412,6 +424,7 @@ async fn test_object_owning_another_object() {
     // Check that the child is now owned by the new parent.
     assert_eq!(child_effect.1, new_field_id);
 
+    dbg!("---");
     // Delete the child. This should fail as the child cannot be used as a transaction argument
     let effects = call_move(
         &authority,
@@ -1762,12 +1775,19 @@ pub async fn build_and_try_publish_test_package(
     test_dir: &str,
     gas_budget: u64,
 ) -> TransactionInfoResponse {
+    dbg!("__");
     let build_config = BuildConfig::default();
+    dbg!("__");
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    dbg!("__");
     path.push("src/unit_tests/data/");
+    dbg!("__");
     path.push(test_dir);
+    dbg!("__");
     let modules = sui_framework::build_move_package(&path, build_config).unwrap();
+    dbg!("__");
 
+    dbg!("__");
     let all_module_bytes = modules
         .iter()
         .map(|m| {
@@ -1776,13 +1796,17 @@ pub async fn build_and_try_publish_test_package(
             module_bytes
         })
         .collect();
+    dbg!("__");
 
     let gas_object = authority.get_object(gas_object_id).await.unwrap();
     let gas_object_ref = gas_object.unwrap().compute_object_reference();
 
+    dbg!("__");
     let data = TransactionData::new_module(*sender, gas_object_ref, all_module_bytes, gas_budget);
+    dbg!("__");
     let transaction = to_sender_signed_transaction(data, sender_key);
 
+    dbg!("__");
     send_and_confirm_transaction(authority, transaction)
         .await
         .unwrap()

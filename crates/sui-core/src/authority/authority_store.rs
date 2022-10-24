@@ -177,6 +177,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
 
     /// Returns true if we have an effects structure for this transaction digest
     pub fn effects_exists(&self, transaction_digest: &TransactionDigest) -> SuiResult<bool> {
+        dbg!("b");
         self.perpetual_tables
             .effects
             .contains_key(transaction_digest)

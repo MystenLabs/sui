@@ -538,9 +538,11 @@ impl AuthorityState {
         &self,
         transaction: Transaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
+        dbg!("b");
         let transaction_digest = *transaction.digest();
         // Ensure an idempotent answer.
         // If a transaction was signed in a previous epoch, we should no longer reuse it.
+        dbg!("b");
         if self
             .database
             .transaction_exists(self.epoch(), &transaction_digest)?
@@ -549,6 +551,7 @@ impl AuthorityState {
             let transaction_info = self.make_transaction_info(&transaction_digest).await?;
             return Ok(transaction_info);
         }
+        dbg!("b");
 
         // Validators should never sign an external system transaction.
         fp_ensure!(
@@ -556,17 +559,21 @@ impl AuthorityState {
             SuiError::InvalidSystemTransaction
         );
 
+        dbg!("b");
         if self.is_halted() {
             // TODO: Do we want to include the new validator set?
             return Err(SuiError::ValidatorHaltedAtEpochEnd);
         }
+        dbg!("b");
 
         let (_gas_status, input_objects) =
             transaction_input_checker::check_transaction_input(&self.database, &transaction)
                 .await?;
+        dbg!("b");
 
         let owned_objects = input_objects.filter_owned_objects();
 
+        dbg!("b");
         let signed_transaction =
             SignedTransaction::new(self.epoch(), transaction, self.name, &*self.secret);
 
@@ -574,10 +581,12 @@ impl AuthorityState {
         // The call to self.set_transaction_lock checks the lock is not conflicting,
         // and returns ConflictingTransaction error in case there is a lock on a different
         // existing transaction.
+        dbg!("b");
         self.set_transaction_lock(&owned_objects, signed_transaction)
             .await?;
 
         // Return the signed Transaction or maybe a cert.
+        dbg!("b");
         self.make_transaction_info(&transaction_digest).await
     }
 
@@ -586,24 +595,33 @@ impl AuthorityState {
         &self,
         transaction: Transaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
+        dbg!("b");
         let transaction_digest = *transaction.digest();
+        dbg!("b");
         debug!(tx_digest=?transaction_digest, "handle_transaction. Tx data: {:?}", transaction.signed_data.data);
+        dbg!("b");
         let _metrics_guard = start_timer(self.metrics.handle_transaction_latency.clone());
 
+        dbg!("b");
         self.metrics.tx_orders.inc();
         // Check the sender's signature.
+        dbg!("b");
         transaction.verify().map_err(|e| {
             self.metrics.signature_errors.inc();
             e
         })?;
 
+        dbg!("b");
         let response = self.handle_transaction_impl(transaction).await;
+        dbg!("b");
         match response {
             Ok(r) => Ok(r),
             // If we see an error, it is possible that a certificate has already been processed.
             // In that case, we could still return Ok to avoid showing confusing errors.
             Err(err) => {
+                dbg!("b");
                 if self.database.effects_exists(&transaction_digest)? {
+                    dbg!("b");
                     self.metrics.tx_already_processed.inc();
                     Ok(self.make_transaction_info(&transaction_digest).await?)
                 } else {
@@ -875,11 +893,10 @@ impl AuthorityState {
         // commit_certificate finished, the tx is fully committed to the store.
         tx_guard.commit_tx();
 
+        dbg!("b");
         // index certificate
-        let _ = self
-            .post_process_one_tx(seq, &digest)
-            .await
-            .tap_err(|e| error!(tx_digest = ?digest, "tx post processing failed: {e}"));
+        let _ = self.post_process_one_tx(seq, &digest).await;
+        //.tap_err(|e| error!(tx_digest = ?digest, "tx post processing failed: {e}"));
 
         // Update metrics.
         self.metrics.total_effects.inc();
@@ -1042,19 +1059,23 @@ impl AuthorityState {
         )
     }
 
-    #[instrument(level = "debug", skip_all, fields(seq=?seq, tx_digest=?digest), err)]
+    //#[instrument(level = "debug", skip_all, fields(seq=?seq, tx_digest=?digest), err)]
     async fn post_process_one_tx(
         &self,
         seq: TxSequenceNumber,
         digest: &TransactionDigest,
     ) -> SuiResult {
-        if self.indexes.is_none()
-            && self.transaction_streamer.is_none()
-            && self.event_handler.is_none()
-        {
+        let a = dbg!(self.indexes.is_none());
+        let b = dbg!(self.transaction_streamer.is_none());
+        let c = dbg!(self.event_handler.is_none());
+
+        dbg!("a");
+        if a && b && c {
+            dbg!(">>>>>>>>>>>>>>>>>>>>>>>>>>");
             return Ok(());
         }
 
+        dbg!("a");
         // Load cert and effects.
         let info = self.make_transaction_info(digest).await?;
         let (cert, effects) = match info {
@@ -1070,8 +1091,10 @@ impl AuthorityState {
             }
         };
 
+        dbg!("a");
         let timestamp_ms = Self::unixtime_now_ms();
 
+        dbg!("a");
         // Index tx
         if let Some(indexes) = &self.indexes {
             let _ = self
@@ -1079,6 +1102,7 @@ impl AuthorityState {
                 .tap_ok(|_| self.metrics.post_processing_total_tx_indexed.inc())
                 .tap_err(|e| warn!(tx_digest=?digest, "Post processing - Couldn't index tx: {e}"));
         }
+        dbg!("a");
 
         // Stream transaction
         if let Some(transaction_streamer) = &self.transaction_streamer {
@@ -1088,6 +1112,7 @@ impl AuthorityState {
                 .inc();
         }
 
+        dbg!("a");
         // Emit events
         if let Some(event_handler) = &self.event_handler {
             event_handler
@@ -1100,6 +1125,7 @@ impl AuthorityState {
                 .post_processing_total_events_emitted
                 .inc_by(effects.effects.events.len() as u64);
         }
+        dbg!("a");
 
         Ok(())
     }
