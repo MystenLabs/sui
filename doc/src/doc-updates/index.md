@@ -8,7 +8,7 @@ This topic lists the significant updates to the [Sui documentation](https://docs
 
 | Topic | Update |
 | :------ | :------- |
-| [Dynamic Fields](../build/programming-with-objects/ch5-dynamic-fields.md) | Docs for a new, more flexible, replacement for Child Objects. |
+| [Dynamic Fields](../build/programming-with-objects/ch5-dynamic-fields.md) | Docs for a new, more flexible, replacement for Child Objects.  **Note** this is an early release, with [known limitations](../build/programming-with-objects/ch5-dynamic-fields.md#current-limitations). |
 
 ## Week ending 10/22/22
 
