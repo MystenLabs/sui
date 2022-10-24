@@ -33,7 +33,9 @@ describe('Objects', () => {
                     }
 
                     const address = tx.EffectsCert.certificate.data.sender;
+                    console.log(address);
                     const [nft] = tx.EffectsCert.effects.effects.created!;
+                    console.log(nft);
                     cy.visit(`/addresses/${address}`);
 
                     // Find a reference to the NFT:
