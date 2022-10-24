@@ -29,5 +29,5 @@ Install:
   - Freezing an object, using immutable objects.
 - [Chapter 4: Object Wrapping](../../build/programming-with-objects/ch4-object-wrapping.md)
   - Wrapping objects in another object.
-- [Chapter 5: Child Objects](../../build/programming-with-objects/ch5-child-objects.md)
-  - Enabling objects to own other objects, transferring objects to objects, adding child objects, removing child objects.
+- [Chapter 5: Dynamic Fields](../../build/programming-with-objects/ch5-dynamic-fields.md)
+  - Extending objects with fields keyed on other object that can be dynamically added, accessed, and removed.

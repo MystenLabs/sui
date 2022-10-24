@@ -4,6 +4,13 @@ title: Sui Documentation Updates
 
 This topic lists the significant updates to the [Sui documentation](https://docs.sui.io) site so that you can easily identify new or updated information. 
 
+## Week ending 10/29/22
+
+| Topic | Update |
+| :------ | :------- |
+| [Dynamic Fields](../build/programming-with-objects/ch5-dynamic-fields.md) | Docs for a new, more flexible, replacement for Child Objects.  **Note** this is an early release, with [known limitations](../build/programming-with-objects/ch5-dynamic-fields.md#current-limitations). |
+| [Collections](../build/programming-with-objects/ch6-collections.md) | New docs to accompany the addition of map-like collections to the Sui Framework's Move library, built on top of Dynamic Fields. **Note** this is an early release, with [known limitations](../build/programming-with-objects/ch6-collections.md#current-limitations). |
+
 ## Week ending 10/22/22
 
 | Topic | Update | 

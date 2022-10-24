@@ -169,8 +169,12 @@
             "fileName": "build/programming-with-objects/ch4-object-wrapping"
           },
           {
-            "label": "Child Objects",
-            "fileName": "build/programming-with-objects/ch5-child-objects"
+            "label": "Dynamic Fields",
+            "fileName": "build/programming-with-objects/ch5-dynamic-fields"
+          },
+          {
+            "label": "Collections",
+            "fileName": "build/programming-with-objects/ch6-collections"
           }
         ]
       },
