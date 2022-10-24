@@ -1411,6 +1411,7 @@ dependencies = [
  "clap 2.34.0",
  "criterion-plot",
  "csv",
+ "futures",
  "itertools",
  "lazy_static 1.4.0",
  "num-traits 0.2.15",
@@ -1423,6 +1424,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "tinytemplate",
+ "tokio",
  "walkdir",
 ]
 
@@ -7906,7 +7908,7 @@ checksum = "734676eb262c623cec13c3155096e08d1f8f29adce39ba17948b18dad1e54142"
 
 [[package]]
 name = "sui"
-version = "0.12.2"
+version = "0.12.3"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -8110,7 +8112,7 @@ dependencies = [
 
 [[package]]
 name = "sui-core"
-version = "0.12.2"
+version = "0.12.3"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -8214,7 +8216,7 @@ dependencies = [
 
 [[package]]
 name = "sui-faucet"
-version = "0.12.2"
+version = "0.12.3"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -8417,7 +8419,7 @@ dependencies = [
 
 [[package]]
 name = "sui-node"
-version = "0.12.2"
+version = "0.12.3"
 dependencies = [
  "anemo",
  "anemo-tower",
@@ -8582,6 +8584,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bcs",
+ "criterion",
  "enum_dispatch",
  "eyre",
  "fdlimit",
@@ -8666,7 +8669,7 @@ dependencies = [
 
 [[package]]
 name = "sui-tool"
-version = "0.12.2"
+version = "0.12.3"
 dependencies = [
  "anyhow",
  "clap 3.2.22",
@@ -9751,7 +9754,7 @@ version = "1.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
- "cfg-if 1.0.0",
+ "cfg-if 0.1.10",
  "static_assertions",
 ]
 
