@@ -181,6 +181,7 @@ pub struct AuthorityMetrics {
     /// Batch service metrics
     pub(crate) batch_service_total_tx_broadcasted: IntCounter,
     pub(crate) batch_service_latest_seq_broadcasted: IntGauge,
+    pub(crate) batch_svc_is_running: IntCounter,
 }
 
 // Override default Prom buckets for positive numbers in 0-50k range
@@ -425,6 +426,11 @@ impl AuthorityMetrics {
                 registry,
             )
             .unwrap(),
+            batch_svc_is_running: register_int_counter_with_registry!(
+                "batch_svc_is_running",
+                "Sanity check to ensure batch service is running",
+                registry,
+            ).unwrap(),
         }
     }
 }
@@ -819,6 +825,7 @@ impl AuthorityState {
         // If commit_certificate returns an error, tx_guard will be dropped and the certificate
         // will be persisted in the log for later recovery.
         let notifier_ticket = self.batch_notifier.ticket(bypass_validator_halt)?;
+        let seq = notifier_ticket.seq();
         if let Err(err) = self
             .commit_certificate(
                 inner_temporary_store,
@@ -837,6 +844,7 @@ impl AuthorityState {
             } else {
                 error!(?digest, "commit_certificate failed: {}", err);
             }
+            debug!("Failed to notify ticket with sequence number: {}", seq);
             return Err(err);
         }
 
@@ -1451,7 +1459,7 @@ impl AuthorityState {
             committee_store,
             batch_channels: tx,
             batch_notifier: Arc::new(
-                authority_notifier::TransactionNotifier::new(store.clone())
+                authority_notifier::TransactionNotifier::new(store.clone(), prometheus_registry)
                     .expect("Notifier cannot start."),
             ),
             consensus_guardrail: AtomicUsize::new(0),
