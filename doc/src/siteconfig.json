@@ -17,7 +17,7 @@
       "link": "https://sui.io/terms/"
     },
   "menu": [
-    {
+      {
       "title": "Community",
       "listItems": [
         {
@@ -41,8 +41,31 @@
           "external": true
         }
       ]
-    },
-    {
+      },
+      {
+      "title": "Ecosystem",
+      "listItems": [
+        {
+          "title": "Sui.io",
+          "link": "https://sui.io/",
+          "external": true,
+          "arrow": true
+        },
+        {
+          "title": "Sui Resources",
+          "link": "https://sui.io/resources/",
+          "external": true,
+          "arrow": true
+        },
+        {
+          "title": "Sui Blog (Medium)",
+          "link": "https://medium.com/mysten-labs",
+          "external": true,
+          "arrow": true
+        }
+        ]
+      },
+      {
       "title": "Send Feedback",
       "listItems": [
         {
@@ -64,31 +87,7 @@
           "arrow": true
         }
         ]
-      },
-      {
-        "title": "Ecosystem",
-        "listItems": [
-          {
-            "title": "Sui.io",
-            "link": "https://sui.io/",
-            "external": true,
-            "arrow": true
-          },
-          {
-            "title": "Sui Resources",
-            "link": "https://sui.io/resources/",
-            "external": true,
-            "arrow": true
-          },
-          {
-            "title": "Sui Blog (Medium)",
-            "link": "https://medium.com/mysten-labs",
-            "external": true,
-            "arrow": true
-          }
-          ]
-        }
-  
+      }  
     ]
   },
   "headerData": {
