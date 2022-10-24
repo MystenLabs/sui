@@ -19,6 +19,7 @@ use sui_types::object::Owner;
 use sui_types::{
     base_types::{ObjectID, SuiAddress, TransactionDigest},
     gas_coin::GasCoin,
+    intent::Intent,
     messages::{ExecuteTransactionRequestType, Transaction, TransactionData},
 };
 use tokio::sync::{
@@ -349,9 +350,12 @@ impl SimpleFaucet {
             .construct_transfer_sui_txn_with_retry(coin_id, signer, recipient, budget, amount, uuid)
             .await?;
 
-        let signature = context.config.keystore.sign(&signer, &data.to_bytes())?;
+        let signature = context
+            .config
+            .keystore
+            .sign_secure(&signer, &data, Intent::default())?;
 
-        let tx = Transaction::new(data, signature);
+        let tx = Transaction::new(data, Intent::default(), signature);
         let tx_digest = *tx.digest();
         info!(
             ?tx_digest,

@@ -24,6 +24,7 @@ use sui_sdk::{
     },
     SuiClient,
 };
+use sui_types::intent::Intent;
 use sui_types::messages::ExecuteTransactionRequestType;
 
 #[tokio::main]
@@ -89,9 +90,9 @@ impl TicTacToe {
             .await?;
 
         // Sign transaction.
-        let signature = self
-            .keystore
-            .sign(&player_x, &create_game_call.to_bytes())?;
+        let signature =
+            self.keystore
+                .sign_secure(&player_x, &create_game_call, Intent::default())?;
 
         // Execute the transaction.
 
@@ -99,7 +100,7 @@ impl TicTacToe {
             .client
             .quorum_driver()
             .execute_transaction(
-                Transaction::new(create_game_call, signature),
+                Transaction::new(create_game_call, Intent::default(), signature),
                 Some(ExecuteTransactionRequestType::WaitForLocalExecution),
             )
             .await?;
@@ -186,16 +187,16 @@ impl TicTacToe {
                 .await?;
 
             // Sign transaction.
-            let signature = self
-                .keystore
-                .sign(&my_identity, &place_mark_call.to_bytes())?;
+            let signature =
+                self.keystore
+                    .sign_secure(&my_identity, &place_mark_call, Intent::default())?;
 
             // Execute the transaction.
             let response = self
                 .client
                 .quorum_driver()
                 .execute_transaction(
-                    Transaction::new(place_mark_call, signature),
+                    Transaction::new(place_mark_call, Intent::default(), signature),
                     Some(ExecuteTransactionRequestType::WaitForLocalExecution),
                 )
                 .await?;

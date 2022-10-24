@@ -66,6 +66,7 @@ pub fn generate_proof_of_possession<K: KeypairTraits>(
     domain_with_pk.extend_from_slice(PROOF_OF_POSSESSION_DOMAIN);
     domain_with_pk.extend_from_slice(keypair.public().as_bytes());
     domain_with_pk.extend_from_slice(address.as_ref());
+    // TODO (joyqvq): Use Signature::new_secure
     keypair.sign(&domain_with_pk[..])
 }
 
@@ -677,9 +678,6 @@ impl Signature {
             &bcs::to_bytes(&IntentMessage::new(intent, value))
                 .expect("Message serialization should not fail"),
         )
-    }
-    pub fn new_temp(value: &[u8], secret: &dyn signature::Signer<Signature>) -> Signature {
-        secret.sign(value)
     }
 }
 

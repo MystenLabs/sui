@@ -112,7 +112,7 @@
           "result": {
             "name": "Result",
             "value": {
-              "txBytes": "VHJhbnNhY3Rpb25EYXRhOjoBAgIAAAAAAAAAAAAAAAAAAAAAAAAAAgEAAAAAAAAAIJ0HWVK1gDbyp7VhRGWSQDxnLw2+Ep8eORE/n2Fk6ihnCmRldm5ldF9uZnQEbWludAADAAtFeGFtcGxlIE5GVAArQW4gTkZUIGNyZWF0ZWQgYnkgdGhlIFN1aSBDb21tYW5kIExpbmUgVG9vbABCaXBmczovL2JhZmtyZWlibmdxaGwzZ2FhN2Rhb2I0aTJ2Y2N6aWF5MmpqbHA0MzVjZjY2dmhvbm83bnJ2d3c1M3R5AMYZFUxCocYb6ZAnF7JLjsFo/kiW7++Sy/RLWB8jIiwQkWsXo2m02gMBAAAAAAAAACD43szzw8UY8UbelVTwPyeoPVsRhfOece81fivZ4TliUZsHgV8ESX4uBdIsrDqgYUELIIaM9bcMyxDxpwXgYdD9+hiWGNKLDUQBAAAAAAAAACBrCkFAMnZDeyXw/76JfPR2wHd+nSRv85dKxfGzUKoWxAEAAAAAAAAA6AMAAAAAAAA=",
+              "txBytes": "AAAAAQICAAAAAAAAAAAAAAAAAAAAAAAAAAIBAAAAAAAAACCdB1lStYA28qe1YURlkkA8Zy8NvhKfHjkRP59hZOooZwpkZXZuZXRfbmZ0BG1pbnQAAwALRXhhbXBsZSBORlQAK0FuIE5GVCBjcmVhdGVkIGJ5IHRoZSBTdWkgQ29tbWFuZCBMaW5lIFRvb2wAQmlwZnM6Ly9iYWZrcmVpYm5ncWhsM2dhYTdkYW9iNGkydmNjemlheTJqamxwNDM1Y2Y2NnZob25vN25ydnd3NTN0eQDGGRVMQqHGG+mQJxeyS47BaP5Ilu/vksv0S1gfIyIsEJFrF6NptNoDAQAAAAAAAAAg+N7M88PFGPFG3pVU8D8nqD1bEYXznnHvNX4r2eE5YlGbB4FfBEl+LgXSLKw6oGFBCyCGjPW3DMsQ8acF4GHQ/foYlhjSiw1EAQAAAAAAAAAgawpBQDJ2Q3sl8P++iXz0dsB3fp0kb/OXSsXxs1CqFsQBAAAAAAAAAOgDAAAAAAAA",
               "gas": {
                 "objectId": "0xf5b70ccb10f1a705e061d0fdfa189618d28b0d44",
                 "version": 1,
@@ -198,7 +198,7 @@
       "params": [
         {
           "name": "tx_bytes",
-          "description": "transaction data bytes, as base-64 encoded string",
+          "description": "intent message containing transaction data bytes, as base-64 encoded string",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/Base64"
@@ -250,7 +250,7 @@
           "params": [
             {
               "name": "tx_bytes",
-              "value": "VHJhbnNhY3Rpb25EYXRhOjoAAENs56klSzDSU+RWfMr6XzbOhMgKqLyb5k4NWueWiEJ0rvMAWuZzOAkCAAAAAAAAACAyE4rjTSLmOXrzqaceTvofutFssM+v3lsohIWOg/pBRqB5d3G4/iYvpOg6GofMBk8jRD6NyOwdW4TdYonhk7n4jeSplDWMn4UCAAAAAAAAACBhNSNsPnWpJeHHesNBJ8i6776gk58VJHErTTegILKM3QEAAAAAAAAA6AMAAAAAAAA="
+              "value": "AAAAAABDbOepJUsw0lPkVnzK+l82zoTICqi8m+ZODVrnlohCdK7zAFrmczgJAgAAAAAAAAAgMhOK400i5jl686mnHk76H7rRbLDPr95bKISFjoP6QUageXdxuP4mL6ToOhqHzAZPI0Q+jcjsHVuE3WKJ4ZO5+I3kqZQ1jJ+FAgAAAAAAAAAgYTUjbD51qSXhx3rDQSfIuu++oJOfFSRxK003oCCyjN0BAAAAAAAAAOgDAAAAAAAA"
             },
             {
               "name": "sig_scheme",
@@ -258,7 +258,7 @@
             },
             {
               "name": "signature",
-              "value": "0Pu2s/M1xPeMArRmsLnIosKcqi9BWDFUJp6IVUHEtJlz7vp2wAv227n5gNn059Vm7FUfYs36P5eHrQ6IaW57BQ=="
+              "value": "IKsVFCGOvfVLszUH9ZHSnDxzSDlcV871alhLCjDo/8rAUKeMn8kFjj1Py+6wcKEN+S0p0+nvXDI7Fsib23vfDA=="
             },
             {
               "name": "pub_key",
@@ -273,7 +273,7 @@
             "name": "Result",
             "value": {
               "certificate": {
-                "transactionDigest": "3ZYtbN7kBODGlHCjuPQVVjwkGlt5Jwb7q1qYEPuF2to=",
+                "transactionDigest": "cQh1W8tzzWM8sEjI9DxisCBwA/1wykXp8ScNHIuNWfM=",
                 "data": {
                   "transactions": [
                     {
@@ -295,7 +295,7 @@
                   },
                   "gasBudget": 1000
                 },
-                "txSignature": "AND7trPzNcT3jAK0ZrC5yKLCnKovQVgxVCaeiFVBxLSZc+76dsAL9tu5+YDZ9OfVZuxVH2LN+j+Xh60OiGluewWLhW8+xQtCFKb75H6GmzNpzkQ4ucluHTY0AxJw//j4vQ==",
+                "txSignature": "ACCrFRQhjr31S7M1B/WR0pw8c0g5XFfO9WpYSwow6P/KwFCnjJ/JBY49T8vusHChDfktKdPp71wyOxbIm9t73wyLhW8+xQtCFKb75H6GmzNpzkQ4ucluHTY0AxJw//j4vQ==",
                 "authSignInfo": {
                   "epoch": 0,
                   "signature": "",
@@ -500,7 +500,7 @@
             "value": [
               {
                 "timestamp": 0,
-                "txDigest": "GoMyiLnqV1c1MhJGwS9EkxttHEOO7T3JRHoA8ljFNyo=",
+                "txDigest": "NHoixA1CmtIECGv1FCHKBvHDOAAtx5hF8Ji//M6uuE0=",
                 "event": {
                   "transferObject": {
                     "packageId": "0x0000000000000000000000000000000000000002",
@@ -605,7 +605,7 @@
             "value": [
               {
                 "timestamp": 0,
-                "txDigest": "Qp8yq31APG+JGGF++uG5kzKW9bGyGdGE1/49WxDMsXY=",
+                "txDigest": "JmDc/30D+ioj0VvNS8PJ/UOF2x1mk3oSFj1UDC+FYYo=",
                 "event": {
                   "moveEvent": {
                     "packageId": "0x0000000000000000000000000000000000000002",
@@ -705,7 +705,7 @@
             "value": [
               {
                 "timestamp": 0,
-                "txDigest": "Hnzx5pqSWf6SSK4iYkU0ID0UN6/6LVAMVDOv7Tpy9Nc=",
+                "txDigest": "PDAKGVYl6IqrkV1Nx+Kmk82Z517z0qHFbCrAdqBN0X0=",
                 "event": {
                   "transferObject": {
                     "packageId": "0x0000000000000000000000000000000000000002",
@@ -812,7 +812,7 @@
             "value": [
               {
                 "timestamp": 0,
-                "txDigest": "wUUUMKe4LH83LUD79mCF/BXIPwVp2iPHKgRBmv+aIs0=",
+                "txDigest": "OlL9i55vi77sXFBpxz5A2XOB+X/F2fTgnC4FpBLTUvM=",
                 "event": {
                   "transferObject": {
                     "packageId": "0x0000000000000000000000000000000000000002",
@@ -917,7 +917,7 @@
             "value": [
               {
                 "timestamp": 0,
-                "txDigest": "ag3RA2mE7vqHXAJ9hiitgpf1DLGgMmNwShD64Ng0IWE=",
+                "txDigest": "JUfLioNOuZZMjc8Pm6TXD+CGSgUBY/8rb89TETv2GhI=",
                 "event": {
                   "transferObject": {
                     "packageId": "0x0000000000000000000000000000000000000002",
@@ -1010,7 +1010,7 @@
             "value": [
               {
                 "timestamp": 0,
-                "txDigest": "F0wkDp/8VWs3RGkz+ly2X30lhxEwW2Y+JPGhkiKKevI=",
+                "txDigest": "sY49SOQs3J2/0u1dk1uqlLi2bucXayekW1FJqcafYg4=",
                 "event": {
                   "transferObject": {
                     "packageId": "0x0000000000000000000000000000000000000002",
@@ -1075,7 +1075,7 @@
           "params": [
             {
               "name": "digest",
-              "value": "gA8fELgirLI/JDKVpMfsOtvDRO4FvjFTQhnc2CGIHXw="
+              "value": "Iy5SaeI6GcxfsfvpAzQaXaB5oG0rwnD8UELKkIoHB0M="
             },
             {
               "name": "count",
@@ -1087,7 +1087,7 @@
             "value": [
               {
                 "timestamp": 0,
-                "txDigest": "gA8fELgirLI/JDKVpMfsOtvDRO4FvjFTQhnc2CGIHXw=",
+                "txDigest": "Iy5SaeI6GcxfsfvpAzQaXaB5oG0rwnD8UELKkIoHB0M=",
                 "event": {
                   "transferObject": {
                     "packageId": "0x0000000000000000000000000000000000000002",
@@ -1646,14 +1646,14 @@
           "params": [
             {
               "name": "digest",
-              "value": "uxOHcuhV6U5kCALu9QneZ9vrtpz7H3I+4N5Ul6FhssA="
+              "value": "CurSWpFPHnOI0Edq4t+LCsTj1bDHfOzpZdZonBwYZPg="
             }
           ],
           "result": {
             "name": "Result",
             "value": {
               "certificate": {
-                "transactionDigest": "uxOHcuhV6U5kCALu9QneZ9vrtpz7H3I+4N5Ul6FhssA=",
+                "transactionDigest": "CurSWpFPHnOI0Edq4t+LCsTj1bDHfOzpZdZonBwYZPg=",
                 "data": {
                   "transactions": [
                     {
@@ -1675,7 +1675,7 @@
                   },
                   "gasBudget": 1000
                 },
-                "txSignature": "ADqIpkgJvv+wPwl+sKQsKR7l8tlOPSbGfjV893tYgLv4F29x0akCOKgjeO+EIHOhyGsdYmRcCWocIjZL/uYJewT1qXbcqEN2KhcrL9bJkWIQLsraKhFVaRudjBWPU1WhRQ==",
+                "txSignature": "AEDX9OyKk590To0PqTEmegEJ7fQTPPE3eZrz8fGZa0hVpjJaRlpDX++7+oVc6IXUJG1SRNtApLmBmFDgvql9qg71qXbcqEN2KhcrL9bJkWIQLsraKhFVaRudjBWPU1WhRQ==",
                 "authSignInfo": {
                   "epoch": 0,
                   "signature": "",
@@ -2578,7 +2578,7 @@
             "$ref": "#/components/schemas/TransactionDigest"
           },
           "txSignature": {
-            "description": "tx_signature is signed by the transaction sender, applied on `data`.",
+            "description": "tx_signature is signed by the transaction sender, committing to the intent message containing the transaction data and intent.",
             "allOf": [
               {
                 "$ref": "#/components/schemas/Signature"
@@ -4455,7 +4455,7 @@
             }
           },
           "txBytes": {
-            "description": "transaction data bytes, as base-64 encoded string",
+            "description": "intent message bytes, as base-64 encoded string",
             "allOf": [
               {
                 "$ref": "#/components/schemas/Base64"
