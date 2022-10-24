@@ -785,7 +785,7 @@ impl AuthorityState {
             lock_errors.is_empty(),
             // NOTE: the error message here will say 'Error acquiring lock' but what it means is
             // 'error checking lock'.
-            SuiError::ObjectErrors {
+            SuiError::TransactionInputObjectsErrors {
                 errors: lock_errors
             }
         );
@@ -1725,6 +1725,7 @@ impl AuthorityState {
                             error!("Object with in parent_entry is missing from object store, datastore is inconsistent");
                             Err(SuiError::ObjectNotFound {
                                 object_id: *object_id,
+                                version: Some(obj_ref.1),
                             })
                         }
                         Some(object) => {
@@ -1784,6 +1785,7 @@ impl AuthorityState {
                             error!("Object with in parent_entry is missing from object store, datastore is inconsistent");
                             Err(SuiError::ObjectNotFound {
                                 object_id: *object_id,
+                                version: Some(obj_ref.1),
                             })
                         }
                         Some(object) => {

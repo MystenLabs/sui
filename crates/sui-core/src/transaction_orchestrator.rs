@@ -100,6 +100,7 @@ where
             ExecuteTransactionRequestType::WaitForLocalExecution
         );
         let transaction = request.transaction;
+        let tx_digest = *transaction.digest();
         let request_type = match request.request_type {
             ExecuteTransactionRequestType::ImmediateReturn => {
                 QuorumDriverRequestType::ImmediateReturn
@@ -117,7 +118,12 @@ where
                 request_type,
             })
             .await
-            .tap_err(|err| debug!("Failed to execute transction via Quorum Driver: {:?}", err))?;
+            .tap_err(|err| {
+                debug!(
+                    ?tx_digest,
+                    "Failed to execute transction via Quorum Driver: {:?}", err
+                )
+            })?;
 
         good_response_metrics.inc();
         match execution_result {
@@ -285,8 +291,8 @@ where
                 metrics.tx_directly_executed.inc();
                 Ok(())
             }
-            Err(SuiError::ObjectNotFound { .. }) | Err(SuiError::ObjectErrors { .. }) => {
-                debug!(?tx_digest, "Orchestrator failed to executue transaction optimistically due to missing parents");
+            e @ Err(SuiError::TransactionInputObjectsErrors { .. }) => {
+                debug!(?tx_digest, "Orchestrator failed to executue transaction optimistically due to missing parents: {:?}", e);
 
                 match node_sync_handle
                     .handle_parents_request(
