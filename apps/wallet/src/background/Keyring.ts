@@ -11,6 +11,11 @@ import { createMessage } from '_messages';
 import { isKeyringPayload } from '_payloads/keyring';
 import { encrypt, decrypt } from '_shared/cryptography/keystore';
 import { generateMnemonic } from '_shared/utils/bip39';
+import {
+    AUTO_LOCK_TIMER_MAX_MINUTES,
+    AUTO_LOCK_TIMER_MIN_MINUTES,
+    AUTO_LOCK_TIMER_STORAGE_KEY,
+} from '_src/shared/constants';
 
 import type { Keypair } from '@mysten/sui.js';
 import type { Message } from '_messages';
@@ -179,6 +184,13 @@ class Keyring {
                 if (appActive) {
                     this.postponeLock();
                 }
+            } else if (
+                isKeyringPayload<'setLockTimeout'>(payload, 'setLockTimeout')
+            ) {
+                if (payload.args) {
+                    await this.setLockTimeout(payload.args.timeout);
+                }
+                uiConnection.send(createMessage({ type: 'done' }, id));
             }
         } catch (e) {
             uiConnection.send(
@@ -227,6 +239,21 @@ class Keyring {
         1000,
         { maxWait: 5000 }
     );
+
+    private async setLockTimeout(timeout: number) {
+        if (
+            timeout > AUTO_LOCK_TIMER_MAX_MINUTES ||
+            timeout < AUTO_LOCK_TIMER_MIN_MINUTES
+        ) {
+            return;
+        }
+        await Browser.storage.local.set({
+            [AUTO_LOCK_TIMER_STORAGE_KEY]: timeout,
+        });
+        if (!this.isLocked) {
+            await Alarms.setLockAlarm();
+        }
+    }
 }
 
 export default new Keyring();
