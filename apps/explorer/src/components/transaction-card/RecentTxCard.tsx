@@ -1,6 +1,5 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
 import {
     type GetTxnDigestsResponse,
     type ExecutionStatusType,
@@ -12,10 +11,8 @@ import { useEffect, useState, useContext, useCallback } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 
 import { ReactComponent as ArrowRight } from '../../assets/SVGIcons/12px/ArrowRight.svg';
-import TableCard from '../../components/table/TableCard';
 import TabFooter from '../../components/tabs/TabFooter';
 import { NetworkContext } from '../../context';
-import theme from '../../styles/theme.module.css';
 import {
     DefaultRpcClient as rpc,
     type Network,
@@ -32,6 +29,8 @@ import {
 
 import styles from './RecentTxCard.module.css';
 
+import { PlaceholderTable } from '~/ui/PlaceholderTable';
+import { TableCard, type TableCardProps } from '~/ui/TableCard';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 
 const TRUNCATE_LENGTH = 10;
@@ -123,6 +122,10 @@ async function getRecentTransactions(
     }
 }
 
+async function getTransactionCount(network: Network | string): Promise<number> {
+    return rpc(network).getTotalTransactionNumber();
+}
+
 type RecentTx = {
     count?: number;
     paginationtype?: PaginationType;
@@ -132,7 +135,6 @@ type RecentTx = {
 
 function LatestTxCard({ ...data }: RecentTx) {
     const {
-        count = 0,
         truncateLength = TRUNCATE_LENGTH,
         paginationtype = DEFAULT_PAGI_TYPE,
     } = data;
@@ -141,8 +143,10 @@ function LatestTxCard({ ...data }: RecentTx) {
         data.txPerPage || NUMBER_OF_TX_PER_PAGE
     );
 
-    const [isLoaded, setIsLoaded] = useState(false);
     const [results, setResults] = useState(initState);
+    const [recentTx, setRecentTx] = useState<null | TableCardProps>(null);
+    const [txCount, setTxCount] = useState({ loadState: 'pending', data: 0 });
+
     const [network] = useContext(NetworkContext);
     const [searchParams, setSearchParams] = useSearchParams();
 
@@ -158,73 +162,16 @@ function LatestTxCard({ ...data }: RecentTx) {
         [setSearchParams]
     );
 
-    // update the page index when the user clicks on the pagination buttons
-    useEffect(() => {
-        let isMounted = true;
-        // If pageIndex is greater than maxTxPage, set to maxTxPage
-        const maxTxPage = Math.ceil(count / txPerPage);
-        const pg = pageIndex > maxTxPage ? maxTxPage : pageIndex;
-
-        getRecentTransactions(network, count, txPerPage, pg)
-            .then(async (resp: any) => {
-                if (isMounted) {
-                    setIsLoaded(true);
-                }
-                setResults({
-                    loadState: 'loaded',
-                    latestTx: resp,
-                    totalTxcount: count,
-                });
-            })
-            .catch((err) => {
-                setResults({
-                    ...initState,
-                    loadState: 'fail',
-                });
-                setIsLoaded(false);
-                console.error(
-                    'Encountered error when fetching recent transactions',
-                    err
-                );
-                Sentry.captureException(err);
-            });
-        return () => {
-            isMounted = false;
-        };
-    }, [count, network, pageIndex, setSearchParams, txPerPage]);
-
-    if (results.loadState === 'pending') {
-        return (
-            <div className={theme.textresults}>
-                <div className={styles.content}>Loading...</div>
-            </div>
-        );
-    }
-
-    if (!isLoaded && results.loadState === 'fail') {
-        return (
-            <ErrorResult
-                id=""
-                errorMsg="There was an issue getting the latest transactions"
-            />
-        );
-    }
-
-    if (results.loadState === 'loaded' && !results.latestTx.length) {
-        return <ErrorResult id="" errorMsg="No Transactions Found" />;
-    }
-
-    const recentTx = genTableDataFromTxData(results.latestTx, truncateLength);
-
     const stats = {
-        count,
+        count: txCount.data,
         stats_text: 'Total transactions',
+        loadState: txCount.loadState,
     };
 
     const PaginationWithStatsOrStatsWithLink =
         paginationtype === 'pagination' ? (
             <Pagination
-                totalItems={count}
+                totalItems={txCount.data}
                 itemsPerPage={txPerPage}
                 updateItemsPerPage={setTxPerPage}
                 onPagiChangeFn={handlePageChange}
@@ -238,6 +185,80 @@ function LatestTxCard({ ...data }: RecentTx) {
                 </Link>
             </TabFooter>
         );
+    // update the page index when the user clicks on the pagination buttons
+    useEffect(() => {
+        getTransactionCount(network)
+            .then((resp: number) => {
+                setTxCount({
+                    loadState: 'loaded',
+                    data: resp,
+                });
+
+                return resp;
+            })
+            .catch((err) => {
+                setTxCount({
+                    loadState: 'fail',
+                    data: 0,
+                });
+                setResults({
+                    ...initState,
+                    loadState: 'fail',
+                });
+
+                console.error(
+                    'Encountered error when fetching transaction count',
+                    err
+                );
+                return null;
+            })
+            .then((count: number | null) => {
+                if (count) {
+                    // If pageIndex is greater than maxTxPage, set to maxTxPage
+                    const maxTxPage = Math.ceil(count / txPerPage);
+                    const pg = pageIndex > maxTxPage ? maxTxPage : pageIndex;
+
+                    getRecentTransactions(network, count, txPerPage, pg)
+                        .then(async (resp: any) => {
+                            setResults({
+                                loadState: 'loaded',
+                                latestTx: resp,
+                                totalTxcount: count,
+                            });
+
+                            if (resp.length > 0) {
+                                setRecentTx(
+                                    genTableDataFromTxData(resp, truncateLength)
+                                );
+                            }
+                        })
+                        .catch((err) => {
+                            setResults({
+                                ...initState,
+                                loadState: 'fail',
+                            });
+                            console.error(
+                                'Encountered error when fetching recent transactions',
+                                err
+                            );
+                            Sentry.captureException(err);
+                        });
+                }
+            });
+    }, [network, pageIndex, setSearchParams, txPerPage, truncateLength]);
+
+    if (results.loadState === 'fail') {
+        return (
+            <ErrorResult
+                id=""
+                errorMsg="There was an issue getting the latest transactions"
+            />
+        );
+    }
+
+    if (results.loadState === 'loaded' && !results.latestTx.length) {
+        return <ErrorResult id="" errorMsg="No Transactions Found" />;
+    }
 
     return (
         <div className={cl(styles.txlatestresults, styles[paginationtype])}>
@@ -247,7 +268,33 @@ function LatestTxCard({ ...data }: RecentTx) {
                 </TabList>
                 <TabPanels>
                     <TabPanel>
-                        <TableCard tabledata={recentTx} />
+                        {recentTx ? (
+                            <TableCard
+                                data={recentTx.data}
+                                columns={recentTx.columns}
+                            />
+                        ) : (
+                            <PlaceholderTable
+                                rowCount={15}
+                                rowHeight="16px"
+                                colHeadings={[
+                                    'Time',
+                                    'Type',
+                                    'Transaction ID',
+                                    'Addresses',
+                                    'Amount',
+                                    'Gas',
+                                ]}
+                                colWidths={[
+                                    '85px',
+                                    '100px',
+                                    '120px',
+                                    '204px',
+                                    '90px',
+                                    '38px',
+                                ]}
+                            />
+                        )}
                         {paginationtype !== 'none' &&
                             PaginationWithStatsOrStatsWithLink}
                     </TabPanel>

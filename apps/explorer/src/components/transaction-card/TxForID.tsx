@@ -11,12 +11,13 @@ import { deduplicate } from '../../utils/searchUtil';
 import { findTxfromID, findTxDatafromID } from '../../utils/static/searchUtil';
 import ErrorResult from '../error-result/ErrorResult';
 import PaginationLogic from '../pagination/PaginationLogic';
-import TableCard from '../table/TableCard';
 import {
     type TxnData,
     genTableDataFromTxData,
     getDataOnTxDigests,
 } from './TxCardUtils';
+
+import { TableCard } from '~/ui/TableCard';
 
 const TRUNCATE_LENGTH = 14;
 const ITEMS_PER_PAGE = 20;
@@ -45,7 +46,7 @@ function TxForIDView({ showData }: { showData: TxnData[] | undefined }) {
 
     return (
         <div data-testid="tx">
-            <TableCard tabledata={tableData} />
+            <TableCard data={tableData.data} columns={tableData.columns} />
         </div>
     );
 }

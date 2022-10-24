@@ -12,7 +12,6 @@ import { useLocation } from 'react-router-dom';
 
 import ErrorResult from '../../components/error-result/ErrorResult';
 import Longtext from '../../components/longtext/Longtext';
-import TableCard from '../../components/table/TableCard';
 import TabFooter from '../../components/tabs/TabFooter';
 import { STATE_DEFAULT } from '../../components/top-validators-card/TopValidatorsCard';
 import { NetworkContext } from '../../context';
@@ -23,6 +22,7 @@ import { truncate } from '../../utils/stringUtils';
 import { mockState } from './mockData';
 
 import { Heading } from '~/ui/Heading';
+import { TableCard } from '~/ui/TableCard';
 
 const textDecoder = new TextDecoder();
 
@@ -215,7 +215,7 @@ function ValidatorsPage({ state }: { state: ValidatorState }): JSX.Element {
                 Validators
             </Heading>
             <div className="mt-8">
-                <TableCard tabledata={tableData} />
+                <TableCard data={tableData.data} columns={tableData.columns} />
                 <TabFooter stats={getTabFooter(validatorsData.length).stats}>
                     <Longtext
                         text=""
