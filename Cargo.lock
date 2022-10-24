@@ -8364,6 +8364,7 @@ dependencies = [
  "sui-open-rpc-macros",
  "sui-transaction-builder",
  "sui-types",
+ "tap",
  "tokio",
  "tracing",
  "workspace-hack",

@@ -441,7 +441,7 @@ impl ValidatorService {
 
         // 5) Execute the certificate.
         // Often we cannot execute a cert due to dependenties haven't been executed, and we will
-        // observe ObjectErrors. In such case, we can wait and retry. It should eventually
+        // observe TransactionInputObjectsErrors. In such case, we can wait and retry. It should eventually
         // succeed.
         // TODO: This is a quick hack. We should properly fix this through dependency-based
         // scheduling.
@@ -457,7 +457,7 @@ impl ValidatorService {
                 .instrument(span)
                 .await
             {
-                err @ Err(SuiError::ObjectErrors { .. }) => {
+                err @ Err(SuiError::TransactionInputObjectsErrors { .. }) => {
                     if retry_cnt >= 30 {
                         return Err(tonic::Status::internal(err.unwrap_err().to_string()));
                     }

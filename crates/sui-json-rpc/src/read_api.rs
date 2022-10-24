@@ -1,9 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
-use std::sync::Arc;
-
 use anyhow::anyhow;
 use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
@@ -11,6 +8,9 @@ use jsonrpsee_core::server::rpc_module::RpcModule;
 use move_binary_format::normalized::{Module as NormalizedModule, Type};
 use move_core_types::identifier::Identifier;
 use signature::Signature;
+use std::collections::BTreeMap;
+use std::sync::Arc;
+use tap::TapFallible;
 
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{
@@ -31,6 +31,8 @@ use sui_types::move_package::normalize_modules;
 use sui_types::object::{Data, ObjectRead, Owner};
 use sui_types::query::{Ordering, TransactionQuery};
 use sui_types::sui_serde::Base64;
+
+use tracing::debug;
 
 use crate::api::RpcReadApiServer;
 use crate::api::{RpcFullNodeReadApiServer, MAX_RESULT_SIZE};
@@ -91,7 +93,10 @@ impl RpcReadApiServer for ReadApi {
             .state
             .get_object_read(&object_id)
             .await
-            .map_err(|e| anyhow!("{e}"))?
+            .map_err(|e| {
+                debug!(?object_id, "Failed to get object: {:?}", e);
+                anyhow!("{e}")
+            })?
             .try_into()?)
     }
 
@@ -116,7 +121,11 @@ impl RpcReadApiServer for ReadApi {
         &self,
         digest: TransactionDigest,
     ) -> RpcResult<SuiTransactionResponse> {
-        let (cert, effects) = self.state.get_transaction(digest).await?;
+        let (cert, effects) = self
+            .state
+            .get_transaction(digest)
+            .await
+            .tap_err(|err| debug!(tx_digest=?digest, "Failed to get transaction: {:?}", err))?;
         Ok(SuiTransactionResponse {
             certificate: cert.try_into()?,
             effects: SuiTransactionEffects::try_from(effects, self.state.module_cache.as_ref())?,

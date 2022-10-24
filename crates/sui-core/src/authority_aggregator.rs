@@ -396,7 +396,7 @@ where
                     processed_certificates.insert(cert_digest);
                     continue;
                 }
-                Err(SuiError::ObjectErrors { .. }) => {}
+                Err(SuiError::TransactionInputObjectsErrors { .. }) => {}
                 Err(e) => return Err(e),
             }
 

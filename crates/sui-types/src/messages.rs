@@ -1795,8 +1795,14 @@ impl InputObjectKind {
     pub fn object_not_found_error(&self) -> SuiError {
         match *self {
             Self::MovePackage(package_id) => SuiError::DependentPackageNotFound { package_id },
-            Self::ImmOrOwnedMoveObject((object_id, _, _)) => SuiError::ObjectNotFound { object_id },
-            Self::SharedMoveObject { id, .. } => SuiError::ObjectNotFound { object_id: id },
+            Self::ImmOrOwnedMoveObject((object_id, version, _)) => SuiError::ObjectNotFound {
+                object_id,
+                version: Some(version),
+            },
+            Self::SharedMoveObject { id, .. } => SuiError::ObjectNotFound {
+                object_id: id,
+                version: None,
+            },
         }
     }
 }

@@ -7,6 +7,7 @@ use super::{
 };
 use crate::authority::authority_store_tables::ExecutionIndicesWithHash;
 use arc_swap::ArcSwap;
+use once_cell::sync::OnceCell;
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -310,7 +311,6 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         Ok(result)
     }
 
-    /// Get many objects by their (id, version number) key.
     pub fn get_input_objects(&self, objects: &[InputObjectKind]) -> Result<Vec<Object>, SuiError> {
         let mut result = Vec::new();
         let mut errors = Vec::new();
@@ -329,43 +329,62 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             }
         }
         if !errors.is_empty() {
-            Err(SuiError::ObjectErrors { errors })
+            Err(SuiError::TransactionInputObjectsErrors { errors })
         } else {
             Ok(result)
         }
     }
 
-    /// Get many objects by their (id, version number) key.
     pub fn get_sequenced_input_objects(
         &self,
         digest: &TransactionDigest,
         objects: &[InputObjectKind],
     ) -> Result<Vec<Object>, SuiError> {
-        let shared_locks: HashMap<_, _> = self.all_shared_locks(digest)?.into_iter().collect();
+        let shared_locks_cell: OnceCell<HashMap<_, _>> = OnceCell::new();
 
         let mut result = Vec::new();
         let mut errors = Vec::new();
         for kind in objects {
             let obj = match kind {
-                InputObjectKind::MovePackage(id) => self.get_object(id)?,
-                InputObjectKind::SharedMoveObject { id, .. } => match shared_locks.get(id) {
-                    Some(version) => self.get_object_by_key(id, *version)?,
-                    None => {
-                        errors.push(SuiError::SharedObjectLockNotSetError);
-                        continue;
+                InputObjectKind::SharedMoveObject { id, .. } => {
+                    let shared_locks = shared_locks_cell.get_or_try_init(|| {
+                        Ok::<HashMap<ObjectID, SequenceNumber>, SuiError>(
+                            self.all_shared_locks(digest)?.into_iter().collect(),
+                        )
+                    })?;
+                    match shared_locks.get(id) {
+                        Some(version) => {
+                            if let Some(obj) = self.get_object_by_key(id, *version)? {
+                                result.push(obj);
+                            } else {
+                                // When this happens, other transactions that use smaller versions of
+                                // this shared object haven't finished execution.
+                                errors.push(SuiError::SharedObjectPriorVersionsPendingExecution {
+                                    object_id: *id,
+                                    version_not_ready: *version,
+                                });
+                            }
+                            continue;
+                        }
+                        None => {
+                            errors.push(SuiError::SharedObjectLockNotSetError);
+                            continue;
+                        }
                     }
-                },
+                }
+                InputObjectKind::MovePackage(id) => self.get_object(id)?,
                 InputObjectKind::ImmOrOwnedMoveObject(objref) => {
                     self.get_object_by_key(&objref.0, objref.1)?
                 }
             };
+            // SharedMoveObject should not reach here
             match obj {
                 Some(obj) => result.push(obj),
                 None => errors.push(kind.object_not_found_error()),
             }
         }
         if !errors.is_empty() {
-            Err(SuiError::ObjectErrors { errors })
+            Err(SuiError::TransactionInputObjectsErrors { errors })
         } else {
             Ok(result)
         }
