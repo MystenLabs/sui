@@ -885,6 +885,7 @@ impl AuthorityState {
                 } else {
                     error!(?digest, "commit_certificate failed: {}", err);
                 }
+                debug!("Failed to notify ticket with sequence number: {}", seq);
                 return Err(err);
             }
             Ok(seq) => seq,
