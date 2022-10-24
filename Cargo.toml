@@ -43,7 +43,7 @@ members = [
 ]
 
 [workspace.package]
-# This version string will be inheritted by sui-core, sui-faucet, sui-node, sui-tools and sui crates
+# This version string will be inheritted by sui-core, sui-faucet, sui-node, sui-tools, sui-sdk, and sui crates
 version = "0.13.0"
 
 [profile.release]
