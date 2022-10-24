@@ -30,6 +30,7 @@ use sui_types::{
     base_types::dbg_addr,
     crypto::{get_key_pair, Signature},
     crypto::{AccountKeyPair, AuthorityKeyPair, KeypairTraits},
+    intent::Intent,
     messages::Transaction,
     object::{Owner, GAS_VALUE_FOR_TESTING, OBJECT_START_VERSION},
     sui_system_state::SuiSystemState,
@@ -229,17 +230,12 @@ async fn test_handle_transfer_transaction_bad_signature() {
 
     let (_unknown_address, unknown_key): (_, AccountKeyPair) = get_key_pair();
     let mut bad_signature_transfer_transaction = transfer_transaction.clone();
-    bad_signature_transfer_transaction.signed_data.tx_signature = Signature::new_temp(
-        &transfer_transaction.signed_data.data.to_bytes(),
+
+    bad_signature_transfer_transaction.signed_data.tx_signature = Signature::new_secure(
+        &transfer_transaction.signed_data.data,
+        Intent::default(),
         &unknown_key,
     );
-
-    // bad_signature_transfer_transaction.signed_data.tx_signature = Signature::new_secure(
-    //     &transfer_transaction.signed_data.data,
-    //     Intent::default(),
-    //     &unknown_key,
-    // )
-    // .unwrap();
     assert!(authority_state
         .handle_transaction(bad_signature_transfer_transaction)
         .await

@@ -8473,6 +8473,7 @@ name = "sui-open-rpc"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "bcs",
  "clap 3.2.22",
  "move-core-types",
  "pretty_assertions",

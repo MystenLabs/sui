@@ -11,7 +11,7 @@ use sui_core::authority::AuthorityState;
 use sui_cost::estimator::estimate_transaction_computation_cost;
 use sui_json_rpc_types::SuiGasCostSummary;
 use sui_open_rpc::Module;
-use sui_types::crypto::SignableBytes;
+use sui_types::intent::IntentMessage;
 use sui_types::messages::TransactionData;
 
 use sui_types::sui_serde::Base64;
@@ -36,11 +36,10 @@ impl EstimatorApiServer for EstimatorApi {
         mutated_object_sizes_after: Option<usize>,
         storage_rebate: Option<u64>,
     ) -> RpcResult<SuiGasCostSummary> {
-        let data = TransactionData::from_signable_bytes(&tx_bytes.to_vec()?)?;
-
+        let intent_msg = IntentMessage::<TransactionData>::from_bytes(&tx_bytes.to_vec()?)?;
         Ok(SuiGasCostSummary::from(
             estimate_transaction_computation_cost(
-                data,
+                intent_msg.value,
                 self.state.clone(),
                 computation_gas_unit_price,
                 storage_gas_unit_price,

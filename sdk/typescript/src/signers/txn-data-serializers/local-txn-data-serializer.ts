@@ -16,6 +16,7 @@ import {
   Transaction,
   TransactionData,
   TypeTag,
+  shouldUseIntentSigning,
 } from '../../types';
 import {
   MoveCallTransaction,
@@ -34,6 +35,9 @@ import { CallArgSerializer } from './call-arg-serializer';
 import { TypeTagSerializer } from './type-tag-serializer';
 
 const TYPE_TAG = Array.from('TransactionData::').map((e) => e.charCodeAt(0));
+// TODO (joyqvq): Fetch chain_id and version from RPC.
+// Represents [IntentVersion::V0 = 0, chain_id::Testing = 0, scope::TransactionData = 0]
+const INTENT_BYTES = [0, 0, 0];
 
 export class LocalTxnDataSerializer implements TxnDataSerializer {
   /**
@@ -332,24 +336,43 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
       gasBudget: originalTx.data.gasBudget,
       sender: signerAddress,
     };
-
-    return await this.serializeTransactionData(txData);
+    const version = await this.provider.getRpcApiVersion();
+    const format = shouldUseOldSharedObjectAPI(version)
+    ? 'TransactionData_Deprecated'
+    : 'TransactionData';
+    
+    if (shouldUseIntentSigning(version)) {
+      return await this.serializeIntentTransactionData(txData, format);
+    } else {
+      return await this.serializeTransactionData(txData, format);
+    }
   }
 
   private async serializeTransactionData(
     tx: TransactionData,
+    format: string,
     // TODO: derive the buffer size automatically
-    size: number = 8192
+    size: number = 8192,
   ): Promise<Base64DataBuffer> {
-    const version = await this.provider.getRpcApiVersion();
-    const format = shouldUseOldSharedObjectAPI(version)
-      ? 'TransactionData_Deprecated'
-      : 'TransactionData';
-
     const dataBytes = bcs.ser(format, tx, size).toBytes();
     const serialized = new Uint8Array(TYPE_TAG.length + dataBytes.length);
     serialized.set(TYPE_TAG);
     serialized.set(dataBytes, TYPE_TAG.length);
+    return new Base64DataBuffer(serialized);
+  }
+
+  async serializeIntentTransactionData(
+    tx: TransactionData,
+    format: string,
+    size: number = 8192,
+  ): Promise<Base64DataBuffer> {
+    const dataBytes = bcs.ser(format, tx, size).toBytes();
+    const serialized = new Uint8Array(INTENT_BYTES.length + dataBytes.length);
+    
+    // First three bytes represent the intent bytes
+    serialized.set(INTENT_BYTES);
+    // Then appending the serialized transaction data
+    serialized.set(dataBytes, INTENT_BYTES.length);
     return new Base64DataBuffer(serialized);
   }
 }

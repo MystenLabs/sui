@@ -218,6 +218,12 @@ export function shouldUseOldSharedObjectAPI(version: string): boolean {
   return version === '0.11.0' || version === '0.12.0';
 }
 
+export function shouldUseIntentSigning(version: string): boolean {
+  if (version === 'latest') return true;
+  let minor = parseInt(version.split('.')[1]);
+  return minor >= 13;
+}
+
 export function getObjectType(
   resp: GetObjectDataResponse
 ): ObjectType | undefined {

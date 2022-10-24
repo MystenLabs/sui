@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::messages::TransactionData;
 use serde::{Deserialize, Serialize};
 use serde_repr::Deserialize_repr;
 use serde_repr::Serialize_repr;
@@ -9,21 +10,26 @@ use serde_repr::Serialize_repr;
 #[path = "unit_tests/intent_tests.rs"]
 mod intent_tests;
 
-#[derive(Serialize_repr, Deserialize_repr, Copy, Clone, PartialEq, Eq, Debug)]
+#[derive(Serialize_repr, Deserialize_repr, Copy, Clone, PartialEq, Eq, Debug, Hash)]
 #[repr(u8)]
 pub enum IntentVersion {
     V0 = 0,
 }
 
-#[derive(Serialize_repr, Deserialize_repr, Copy, Clone, PartialEq, Eq, Debug)]
+#[derive(Serialize_repr, Deserialize_repr, Copy, Clone, PartialEq, Eq, Debug, Hash)]
 #[repr(u8)]
 pub enum ChainId {
     Testing = 0,
 }
 
+impl Default for ChainId {
+    fn default() -> Self {
+        Self::Testing
+    }
+}
 pub trait SecureIntent: Serialize + private::SealedIntent {}
 
-#[derive(Serialize_repr, Deserialize_repr, Copy, Clone, PartialEq, Eq, Debug)]
+#[derive(Serialize_repr, Deserialize_repr, Copy, Clone, PartialEq, Eq, Debug, Hash)]
 #[repr(u8)]
 pub enum IntentScope {
     TransactionData = 0,
@@ -33,7 +39,7 @@ pub enum IntentScope {
     PersonalMessage = 4,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Clone, Hash)]
 pub struct Intent {
     version: IntentVersion,
     chain_id: ChainId,
@@ -49,26 +55,54 @@ impl Intent {
         }
     }
 
-    pub fn default_with_scope(scope: IntentScope) -> Self {
+    pub fn with_chain_id(mut self, chain_id: ChainId) -> Self {
+        self.chain_id = chain_id;
+        self
+    }
+
+    pub fn with_scope(mut self, scope: IntentScope) -> Self {
+        self.scope = scope;
+        self
+    }
+}
+
+impl Default for Intent {
+    fn default() -> Self {
         Self {
             version: IntentVersion::V0,
             chain_id: ChainId::Testing,
-            scope,
+            scope: IntentScope::TransactionData,
         }
     }
 }
 
 #[derive(Debug, PartialEq, Eq, Serialize)]
-pub struct IntentMessage<'a, T> {
-    intent: Intent,
-    value: &'a T,
+pub struct IntentMessage<T> {
+    pub intent: Intent,
+    pub value: T,
 }
 
-impl<'a, T> IntentMessage<'a, T> {
-    pub fn new(intent: Intent, value: &'a T) -> Self {
+impl<T> IntentMessage<T> {
+    pub fn new(intent: Intent, value: T) -> Self {
         Self { intent, value }
     }
+
+    pub fn from_bytes(bytes: &[u8]) -> Result<IntentMessage<TransactionData>, anyhow::Error> {
+        let intent: Intent = match bcs::from_bytes(&bytes[..3]) {
+            Ok(intent) => intent,
+            Err(e) => return Err(anyhow::anyhow!("Failed to parse Intent: {:?}", e)),
+        };
+        fp_ensure!(
+            intent.scope == IntentScope::TransactionData,
+            anyhow::anyhow!("Unsupported Intent version: {:?}", intent.scope)
+        );
+        match bcs::from_bytes(&bytes[3..]) {
+            Ok(tx_data) => Ok(IntentMessage::new(intent, tx_data)),
+            Err(e) => Err(anyhow::anyhow!("Failed to parse IntentMessage: {:?}", e)),
+        }
+    }
 }
+
 // --- PersonalMessage intent ---
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct PersonalMessage {
@@ -79,5 +113,5 @@ pub(crate) mod private {
     use super::IntentMessage;
 
     pub trait SealedIntent {}
-    impl<'a, T> SealedIntent for IntentMessage<'a, T> {}
+    impl<T> SealedIntent for IntentMessage<T> {}
 }

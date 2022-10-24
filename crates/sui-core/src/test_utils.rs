@@ -11,6 +11,7 @@ use sui_types::{
     base_types::{dbg_addr, ObjectID, TransactionDigest},
     batch::UpdateItem,
     crypto::{get_key_pair, AccountKeyPair, Signature},
+    intent::Intent,
     messages::{BatchInfoRequest, BatchInfoResponseItem, Transaction, TransactionData},
     object::Object,
 };
@@ -106,7 +107,6 @@ pub fn to_sender_signed_transaction(
     data: TransactionData,
     signer: &dyn Signer<Signature>,
 ) -> Transaction {
-    let signature = Signature::new_temp(&data.to_bytes(), signer);
-    // let signature = Signature::new_secure(&data, Intent::default(), signer).unwrap();
-    Transaction::new(data, signature)
+    let signature = Signature::new_secure(&data, Intent::default(), signer);
+    Transaction::new(data, Intent::default(), signature)
 }

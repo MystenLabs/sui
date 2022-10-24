@@ -20,6 +20,7 @@ use sui_types::crypto::Signature;
 use sui_types::crypto::SignatureScheme;
 use sui_types::crypto::SuiKeyPair;
 use sui_types::crypto::SuiSignatureInner;
+use sui_types::intent::Intent;
 use tempfile::TempDir;
 
 const TEST_MNEMONIC: &str = "result crisp session latin must fruit genuine question prevent start coconut brave speak student dismiss";
@@ -48,7 +49,7 @@ fn test_flag_in_signature_and_keypair() -> Result<(), anyhow::Error> {
 
     for pk in keystore.keys() {
         let pk1 = pk.clone();
-        let sig = keystore.sign(&(&pk).into(), b"hello")?;
+        let sig = keystore.sign_secure(&(&pk).into(), b"hello", Intent::default())?;
         match sig {
             Signature::Ed25519SuiSignature(_) => {
                 // signature contains corresponding flag
