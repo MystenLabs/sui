@@ -105,7 +105,8 @@ First of all, we begin the test with a hardcoded test address, which will also g
 ```rust
 let owner = @0x1;
 // Create a ColorObject and transfer it to @owner.
-let scenario = &mut test_scenario::begin(&owner);
+let scenario_val = test_scenario::begin(owner);
+let scenario = &mut scenario_val;
 {
     let ctx = test_scenario::ctx(scenario);
     color_object::create(255, 0, 255, ctx);
@@ -116,30 +117,30 @@ let scenario = &mut test_scenario::begin(&owner);
 Now, after the first transaction completes (**and only after the first transaction completes**), address `@0x1` should own the object. Let's first make sure it's not owned by anyone else:
 ```rust
 let not_owner = @0x2;
-// Check that not_owner does not own the just-created ColorObject.
-test_scenario::next_tx(scenario, &not_owner);
+// Check that @not_owner does not own the just-created ColorObject.
+test_scenario::next_tx(scenario, not_owner);
 {
-    assert!(!test_scenario::can_take_owned<ColorObject>(scenario), 0);
+    assert!(!test_scenario::has_most_recent_for_sender<ColorObject>(scenario), 0);
 };
 ```
 
 `test_scenario::next_tx` switches the transaction sender to `@0x2`, which is a new address different from the previous one.
-`test_scenario::can_take_owned` checks whether an object with the given type actually exists in the global storage owned by the current sender of the transaction. In this code, we assert that we should not be able to remove such an object, because `@0x2` does not own any object.
-> :bulb: The second parameter of `assert!` is the error code. In non-test code, we usually define a list of dedicated error code constants for each type of error that could happen in production. For unit tests though, it's usually unnecessary because there will be way too many assetions and the stacktrace upon error is sufficient to tell where the error happened. Hence we recommend just putting `0` there in unit tests for assertions.
+`test_scenario::has_most_recent_for_sender` checks whether an object with the given type actually exists in the global storage owned by the current sender of the transaction. In this code, we assert that we should not be able to remove such an object, because `@0x2` does not own any object.
+> :bulb: The second parameter of `assert!` is the error code. In non-test code, we usually define a list of dedicated error code constants for each type of error that could happen in production. For unit tests though, it's usually unnecessary because there will be way too many assertions and the stacktrace upon error is sufficient to tell where the error happened. Hence we recommend just putting `0` there in unit tests for assertions.
 
 Finally we check that `@0x1` owns the object and the object value is consistent:
 ```rust
-test_scenario::next_tx(scenario, &owner);
+test_scenario::next_tx(scenario, owner);
 {
-    let object = test_scenario::take_owned<ColorObject>(scenario);
+    let object = test_scenario::take_from_sender<ColorObject>(scenario);
     let (red, green, blue) = color_object::get_color(&object);
     assert!(red == 255 && green == 0 && blue == 255, 0);
-    test_scenario::return_owned(scenario, object);
+    test_scenario::return_to_sender(scenario, object);
 };
 ```
 
-`test_scenario::take_owned` removes the object of given type from global storage that's owned by the current transaction sender (it also implicitly checks `can_take_owned`). If this line of code succeeds, it means that `owner` indeed owns an object of type `ColorObject`.
-We also check that the field values of the object match with what we set in creation. At the end, we must return the object back to the global storage by calling `test_scenario::return_owned` so that it's back to the global storage. This also ensures that if any mutations happened to the object during the test, the global storage is aware of the changes.
+`test_scenario::take_from_sender` removes the object of given type from global storage that's owned by the current transaction sender (it also implicitly checks `has_most_recent_for_sender`). If this line of code succeeds, it means that `owner` indeed owns an object of type `ColorObject`.
+We also check that the field values of the object match with what we set in creation. At the end, we must return the object back to the global storage by calling `test_scenario::return_to_sender` so that it's back to the global storage. This also ensures that if any mutations happened to the object during the test, the global storage is aware of the changes.
 
 Again, you can find the full code in [color_object.move](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/objects_tutorial/sources/color_object.move).
 
@@ -163,22 +164,24 @@ $ sui client publish --path $ROOT/sui_programmability/examples/objects_tutorial 
 ```
 You can find the published package object ID in the **Publish Results** output:
 ```
------ Publish Results ----
-The newly published package object: (0x57258f32746fd1443f2a077c0c6ec03282087c19, SequenceNumber(1), o#b3a8e284dea7482891768e166e4cd16f9749e0fa90eeb0834189016c42327401)
+----- Transaction Effects ----
+Status : Success
+Created Objects:
+  - ID: 0x57258f32746fd1443f2a077c0c6ec03282087c19, Owner: Immutable
 ```
-Note that the exact data you see will be different. The first hex string in that triple is the package object ID (`0x57258f32746fd1443f2a077c0c6ec03282087c19` in this case). For convenience, let's save it to an environment variable:
+Note that the exact data you see will be different. The hex string is the package object ID (`0x57258f32746fd1443f2a077c0c6ec03282087c19` in this case). For convenience, let's save it to an environment variable:
 ```
 $ export PACKAGE=0x57258f32746fd1443f2a077c0c6ec03282087c19
 ```
 Next we can call the function to create a color object:
 ```
-$ sui client call --gas-budget 1000 --package $PACKAGE --module "color_object" --function "create" --args 0 255 0
+$ sui client call --gas-budget 10000 --package $PACKAGE --module "color_object" --function "create" --args 0 255 0
 ```
 In the **Transaction Effects** portion of the output, you will see an object showing up in the list of **Created Objects**, like this:
 
 ```
 Created Objects:
-0x5eb2c3e55693282faa7f5b07ce1c4803e6fdc1bb SequenceNumber(1) o#691b417670979c6c192bdfd643630a125961c71c841a6c7d973cf9429c792efa
+  - ID: 0x5eb2c3e55693282faa7f5b07ce1c4803e6fdc1bb, Owner: Account Address ( 0xf359b7e95a75795d32ab290eeddf0461922bf9f2 )
 ```
 Again, for convenience, let's save the object ID:
 ```
@@ -190,11 +193,17 @@ $ sui client object --id $OBJECT
 ```
 This will show you the metadata of the object with its type:
 ```
-Owner: AddressOwner(k#5db53ebb05fd3ea5f1d163d9d487ee8cd7b591ee)
+----- Move Object (0x5eb2c3e55693282faa7f5b07ce1c4803e6fdc1bb[1]) -----
+Owner: Account Address ( 0xf359b7e95a75795d32ab290eeddf0461922bf9f2 )
 Version: 1
-ID: 0x5eb2c3e55693282faa7f5b07ce1c4803e6fdc1bb
-Readonly: false
-Type: 0x57258f32746fd1443f2a077c0c6ec03282087c19::color_object::ColorObject
+Storage Rebate: 13
+Previous Transaction: mT/pFfwhIvIn7p/fxUK8s3EJ1cpQJNPcPt6y1SnYAUw=
+----- Data -----
+type: 0x57258f32746fd1443f2a077c0c6ec03282087c19::color_object::ColorObject
+blue: 0
+green: 255
+id: 0x5eb2c3e55693282faa7f5b07ce1c4803e6fdc1bb
+red: 0
 ```
 As we can see, it's owned by the current default client address that we saw earlier. And the type of this object is `ColorObject`!
 
