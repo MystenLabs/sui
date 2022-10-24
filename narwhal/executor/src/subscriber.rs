@@ -177,7 +177,7 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
             deliver
                 .certificate
                 .metadata
-                .timestamp
+                .created_at
                 .elapsed()
                 .as_secs_f64(),
         );

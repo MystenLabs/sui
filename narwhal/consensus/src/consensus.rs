@@ -171,7 +171,7 @@ impl ConsensusState {
 
         self.metrics
             .certificate_commit_latency
-            .observe(certificate.metadata.timestamp.elapsed().as_secs_f64());
+            .observe(certificate.metadata.created_at.elapsed().as_secs_f64());
 
         // We purge all certificates past the gc depth
         self.dag.retain(|r, _| r + gc_depth >= last_committed_round);

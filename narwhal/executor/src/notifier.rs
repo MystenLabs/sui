@@ -58,7 +58,7 @@ impl<State: ExecutionState + Send + Sync + 'static> Notifier<State> {
             }
             self.metrics
                 .batch_execution_latency
-                .observe(batch.metadata.timestamp.elapsed().as_secs_f64());
+                .observe(batch.metadata.created_at.elapsed().as_secs_f64());
             self.metrics.notifier_processed_bytes.inc_by(bytes as u64);
         }
     }

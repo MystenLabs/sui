@@ -674,7 +674,11 @@ impl WorkerToPrimary for WorkerReceiverHandler {
     ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
         let message = request.into_body();
         self.tx_our_digests
-            .send((message.digest, message.worker_id, message.timestamp))
+            .send((
+                message.digest,
+                message.worker_id,
+                message.metadata.created_at,
+            ))
             .await
             .map(|_| anemo::Response::new(()))
             .map_err(|e| anemo::rpc::Status::internal(e.to_string()))

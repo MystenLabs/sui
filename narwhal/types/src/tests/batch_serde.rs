@@ -10,10 +10,10 @@ use serde_test::{assert_tokens, Token};
 fn test_serde_batch() {
     let tx = || vec![1; 5];
 
-    let batch: Batch = Batch {
+    let batch = Batch {
         transactions: (0..2).map(|_| tx()).collect(),
         metadata: Metadata {
-            timestamp: 1666205365890,
+            created_at: 1666205365890,
         },
     };
 
@@ -58,10 +58,10 @@ fn test_serde_batch() {
 fn test_bincode_serde_batch() {
     let tx = || vec![1; 5];
 
-    let txes: Batch = Batch {
+    let txes = Batch {
         transactions: (0..2).map(|_| tx()).collect(),
         metadata: Metadata {
-            timestamp: 1666205365890,
+            created_at: 1666205365890,
         },
     };
 
@@ -93,7 +93,7 @@ fn test_bincode_serde_batch_message() {
         batch: Batch {
             transactions: (0..2).map(|_| tx()).collect(),
             metadata: Metadata {
-                timestamp: 1666205365890,
+                created_at: 1666205365890,
             },
         },
     };

@@ -432,7 +432,7 @@ impl Core {
                     certificate
                         .header
                         .metadata
-                        .timestamp
+                        .created_at
                         .elapsed()
                         .as_secs_f64(),
                 );

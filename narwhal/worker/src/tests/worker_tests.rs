@@ -64,7 +64,7 @@ async fn handle_clients_transactions() {
 
             message.digest == batch_digest
                 && message.worker_id == worker_id
-                && message.timestamp > 0
+                && message.metadata.created_at > 0
         })
         .times(1)
         .returning(move |_| {

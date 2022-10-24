@@ -35,12 +35,12 @@ pub type Round = u64;
 pub type TimestampMs = u64;
 
 pub trait Timestamp {
+    // Returns the time elapsed between the timestamp
+    // and "now". The result is a Duration.
     fn elapsed(&self) -> Duration;
 }
 
 impl Timestamp for TimestampMs {
-    // Returns the time elapsed between the timestamp
-    // and "now". The result is a Duration.
     fn elapsed(&self) -> Duration {
         let diff = now().saturating_sub(*self);
         Duration::from_millis(diff)
@@ -57,17 +57,19 @@ fn now() -> TimestampMs {
 
 // Additional metadata information for an entity. Those data
 // should not be treated as trustworthy data and should be used
-// for NON CRITICAL purposes only.
+// for NON CRITICAL purposes only. For example should not be used
+// for any processes that are part of our protocol that can affect
+// safety or liveness.
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq, Arbitrary, MallocSizeOf)]
 pub struct Metadata {
     // timestamp of when the entity created. This is generated
     // by the node which creates the entity.
-    pub timestamp: TimestampMs,
+    pub created_at: TimestampMs,
 }
 
 impl Default for Metadata {
     fn default() -> Self {
-        Metadata { timestamp: now() }
+        Metadata { created_at: now() }
     }
 }
 
@@ -840,8 +842,7 @@ impl fmt::Display for BlockErrorKind {
 pub struct WorkerOurBatchMessage {
     pub digest: BatchDigest,
     pub worker_id: WorkerId,
-    /// The time when the batch was created
-    pub timestamp: TimestampMs,
+    pub metadata: Metadata,
 }
 
 /// Used by worker to inform primary it received a batch from another authority.
@@ -874,11 +875,11 @@ mod tests {
     #[tokio::test]
     async fn test_elapsed() {
         let batch = Batch::new(vec![]);
-        assert!(batch.metadata.timestamp > 0);
+        assert!(batch.metadata.created_at > 0);
 
         sleep(Duration::from_secs(2)).await;
 
-        assert!(batch.metadata.timestamp.elapsed().as_secs_f64() >= 2.0);
+        assert!(batch.metadata.created_at.elapsed().as_secs_f64() >= 2.0);
     }
 
     #[test]
@@ -886,10 +887,10 @@ mod tests {
         let batch = Batch {
             transactions: vec![],
             metadata: Metadata {
-                timestamp: 2999309726980, // something in the future - Fri Jan 16 2065 05:35:26
+                created_at: 2999309726980, // something in the future - Fri Jan 16 2065 05:35:26
             },
         };
 
-        assert_eq!(batch.metadata.timestamp.elapsed().as_secs_f64(), 0.0);
+        assert_eq!(batch.metadata.created_at.elapsed().as_secs_f64(), 0.0);
     }
 }
