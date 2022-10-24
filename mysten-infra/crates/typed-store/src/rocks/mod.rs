@@ -5,7 +5,10 @@ mod iter;
 mod keys;
 mod values;
 
-use crate::{metrics::DBMetrics, traits::Map};
+use crate::{
+    metrics::{DBMetrics, SamplingInterval},
+    traits::Map,
+};
 use bincode::Options;
 use collectable::TryExtend;
 use prometheus::Registry;
@@ -49,16 +52,19 @@ type DBRawIteratorMultiThreaded<'a> =
 ///
 /// We successfully open two different column families.
 /// ```
-/// # use typed_store::reopen;
-/// # use typed_store::rocks::*;
-/// # use tempfile::tempdir;
-/// # use prometheus::Registry;
-/// # use std::sync::Arc;
-/// # use typed_store::metrics::DBMetrics;
+/// use typed_store::reopen;
+/// use typed_store::rocks::*;
+/// use tempfile::tempdir;
+/// use prometheus::Registry;
+/// use std::sync::Arc;
+/// use typed_store::metrics::DBMetrics;
+/// use core::fmt::Error;
 ///
-/// # fn main() {
+/// #[tokio::main]
+/// async fn main() -> Result<(), Error> {
 /// const FIRST_CF: &str = "First_CF";
 /// const SECOND_CF: &str = "Second_CF";
+///
 ///
 /// /// Create the rocks database reference for the desired column families
 /// let rocks = open_cf(tempdir().unwrap(), None, &[FIRST_CF, SECOND_CF]).unwrap();
@@ -68,8 +74,10 @@ type DBRawIteratorMultiThreaded<'a> =
 ///
 /// /// Now simply open all the column families for their expected Key-Value types
 /// let (db_map_1, db_map_2) = reopen!(&rocks, &db_metrics, FIRST_CF;<i32, String>, SECOND_CF;<i32, String>);
-/// # }
+/// Ok(())
+/// }
 /// ```
+///
 #[macro_export]
 macro_rules! reopen {
     ( $db:expr, $db_metrics:expr, $($cf:expr;<$K:ty, $V:ty>),*) => {
@@ -89,6 +97,8 @@ pub struct DBMap<K, V> {
     // the rocksDB ColumnFamily under which the map is stored
     cf: String,
     db_metrics: Arc<DBMetrics>,
+    read_sample_interval: SamplingInterval,
+    write_sample_interval: SamplingInterval,
 }
 
 unsafe impl<K: Send, V: Send> Send for DBMap<K, V> {}
@@ -114,6 +124,8 @@ impl<K, V> DBMap<K, V> {
             _phantom: PhantomData,
             cf: cf_key.to_string(),
             db_metrics: Arc::new(DBMetrics::new(registry)),
+            read_sample_interval: SamplingInterval::default(),
+            write_sample_interval: SamplingInterval::default(),
         })
     }
 
@@ -126,12 +138,17 @@ impl<K, V> DBMap<K, V> {
     ///    use tempfile::tempdir;
     ///    use prometheus::Registry;
     ///    use std::sync::Arc;
+    ///    use core::fmt::Error;
+    ///    #[tokio::main]
+    ///    async fn main() -> Result<(), Error> {
     ///    /// Open the DB with all needed column families first.
     ///    let rocks = open_cf(tempdir().unwrap(), None, &["First_CF", "Second_CF"]).unwrap();
     ///    let db_metrics = Arc::new(DBMetrics::make_db_metrics(&Registry::default()));
     ///    /// Attach the column families to specific maps.
     ///    let db_cf_1 = DBMap::<u32,u32>::reopen(&rocks, Some("First_CF"), &db_metrics).expect("Failed to open storage");
     ///    let db_cf_2 = DBMap::<u32,u32>::reopen(&rocks, Some("Second_CF"), &db_metrics).expect("Failed to open storage");
+    ///    Ok(())
+    ///    }
     /// ```
     #[instrument(level = "debug", skip(db), err)]
     pub fn reopen(
@@ -151,11 +168,13 @@ impl<K, V> DBMap<K, V> {
             _phantom: PhantomData,
             cf: cf_key,
             db_metrics: db_metrics.clone(),
+            read_sample_interval: SamplingInterval::default(),
+            write_sample_interval: SamplingInterval::default(),
         })
     }
 
     pub fn batch(&self) -> DBBatch {
-        DBBatch::new(&self.rocksdb, &self.db_metrics)
+        DBBatch::new(&self.rocksdb, &self.db_metrics, &self.write_sample_interval)
     }
 
     fn cf(&self) -> Arc<rocksdb::BoundColumnFamily<'_>> {
@@ -180,7 +199,11 @@ impl<K, V> DBMap<K, V> {
 /// use typed_store::Map;
 /// use typed_store::metrics::DBMetrics;
 /// use prometheus::Registry;
+/// use core::fmt::Error;
 /// use std::sync::Arc;
+///
+/// #[tokio::main]
+/// async fn main() -> Result<(), Error> {
 /// let rocks = open_cf(tempfile::tempdir().unwrap(), None, &["First_CF", "Second_CF"]).unwrap();
 ///
 /// let db_metrics = Arc::new(DBMetrics::make_db_metrics(&Registry::default()));
@@ -209,12 +232,15 @@ impl<K, V> DBMap<K, V> {
 ///     let val = db_cf_2.get(&k).expect("Failed to get inserted key");
 ///     assert_eq!(Some(v), val);
 /// }
+/// Ok(())
+/// }
 /// ```
 ///
 pub struct DBBatch {
     rocksdb: Arc<rocksdb::DBWithThreadMode<MultiThreaded>>,
     batch: WriteBatch,
     db_metrics: Arc<DBMetrics>,
+    write_sample_interval: SamplingInterval,
 }
 
 impl DBBatch {
@@ -224,34 +250,43 @@ impl DBBatch {
     pub fn new(
         dbref: &Arc<rocksdb::DBWithThreadMode<MultiThreaded>>,
         db_metrics: &Arc<DBMetrics>,
+        write_sample_interval: &SamplingInterval,
     ) -> Self {
         DBBatch {
             rocksdb: dbref.clone(),
             batch: WriteBatch::default(),
             db_metrics: db_metrics.clone(),
+            write_sample_interval: write_sample_interval.clone(),
         }
     }
 
     /// Consume the batch and write its operations to the database
     #[instrument(level = "trace", skip_all, err)]
     pub fn write(self) -> Result<(), TypedStoreError> {
-        let db_name = self
-            .rocksdb
-            .path()
-            .file_name()
-            .and_then(|f| f.to_str())
-            .unwrap_or("unknown");
-        let _timer = self
-            .db_metrics
-            .rocksdb_batch_commit_latency_seconds
-            .with_label_values(&[db_name])
-            .start_timer();
-        let size = self.batch.size_in_bytes();
+        let report_metrics = if self.write_sample_interval.sample() {
+            let db_name = self
+                .rocksdb
+                .path()
+                .file_name()
+                .and_then(|f| f.to_str())
+                .unwrap_or("unknown");
+            let timer = self
+                .db_metrics
+                .rocksdb_batch_commit_latency_seconds
+                .with_label_values(&[db_name])
+                .start_timer();
+            let size = self.batch.size_in_bytes();
+            Some((db_name, size, timer))
+        } else {
+            None
+        };
         self.rocksdb.write(self.batch)?;
-        self.db_metrics
-            .rocksdb_batch_commit_bytes
-            .with_label_values(&[db_name])
-            .observe(size as f64);
+        if let Some((db_name, batch_size, _timer)) = report_metrics {
+            self.db_metrics
+                .rocksdb_batch_commit_bytes
+                .with_label_values(&[db_name])
+                .observe(batch_size as f64);
+        }
         Ok(())
     }
 }
@@ -339,17 +374,24 @@ where
 
     #[instrument(level = "trace", skip_all, err)]
     fn get(&self, key: &K) -> Result<Option<V>, TypedStoreError> {
-        let _timer = self
-            .db_metrics
-            .rocksdb_get_latency_seconds
-            .with_label_values(&[&self.cf])
-            .start_timer();
+        let report_metrics = if self.read_sample_interval.sample() {
+            let timer = self
+                .db_metrics
+                .rocksdb_get_latency_seconds
+                .with_label_values(&[&self.cf])
+                .start_timer();
+            Some(timer)
+        } else {
+            None
+        };
         let key_buf = be_fix_int_ser(key)?;
         let res = self.rocksdb.get_pinned_cf(&self.cf(), &key_buf)?;
-        self.db_metrics
-            .rocksdb_get_bytes
-            .with_label_values(&[&self.cf])
-            .observe(res.as_ref().map_or(0.0, |v| v.len() as f64));
+        if report_metrics.is_some() {
+            self.db_metrics
+                .rocksdb_get_bytes
+                .with_label_values(&[&self.cf])
+                .observe(res.as_ref().map_or(0.0, |v| v.len() as f64));
+        }
         match res {
             Some(data) => Ok(Some(bincode::deserialize(&data)?)),
             None => Ok(None),
@@ -358,17 +400,24 @@ where
 
     #[instrument(level = "trace", skip_all, err)]
     fn get_raw_bytes(&self, key: &K) -> Result<Option<Vec<u8>>, TypedStoreError> {
-        let _timer = self
-            .db_metrics
-            .rocksdb_get_latency_seconds
-            .with_label_values(&[&self.cf])
-            .start_timer();
+        let report_metrics = if self.read_sample_interval.sample() {
+            let timer = self
+                .db_metrics
+                .rocksdb_get_latency_seconds
+                .with_label_values(&[&self.cf])
+                .start_timer();
+            Some(timer)
+        } else {
+            None
+        };
         let key_buf = be_fix_int_ser(key)?;
         let res = self.rocksdb.get_pinned_cf(&self.cf(), &key_buf)?;
-        self.db_metrics
-            .rocksdb_get_bytes
-            .with_label_values(&[&self.cf])
-            .observe(res.as_ref().map_or(0.0, |v| v.len() as f64));
+        if report_metrics.is_some() {
+            self.db_metrics
+                .rocksdb_get_bytes
+                .with_label_values(&[&self.cf])
+                .observe(res.as_ref().map_or(0.0, |v| v.len() as f64));
+        }
         match res {
             Some(data) => Ok(Some(data.to_vec())),
             None => Ok(None),
@@ -377,34 +426,48 @@ where
 
     #[instrument(level = "trace", skip_all, err)]
     fn insert(&self, key: &K, value: &V) -> Result<(), TypedStoreError> {
-        let _timer = self
-            .db_metrics
-            .rocksdb_put_latency_seconds
-            .with_label_values(&[&self.cf])
-            .start_timer();
+        let report_metrics = if self.write_sample_interval.sample() {
+            let timer = self
+                .db_metrics
+                .rocksdb_put_latency_seconds
+                .with_label_values(&[&self.cf])
+                .start_timer();
+            Some(timer)
+        } else {
+            None
+        };
         let key_buf = be_fix_int_ser(key)?;
         let value_buf = bincode::serialize(value)?;
-        self.db_metrics
-            .rocksdb_put_bytes
-            .with_label_values(&[&self.cf])
-            .observe((key_buf.len() + value_buf.len()) as f64);
+        if report_metrics.is_some() {
+            self.db_metrics
+                .rocksdb_put_bytes
+                .with_label_values(&[&self.cf])
+                .observe((key_buf.len() + value_buf.len()) as f64);
+        }
         self.rocksdb.put_cf(&self.cf(), &key_buf, &value_buf)?;
         Ok(())
     }
 
     #[instrument(level = "trace", skip_all, err)]
     fn remove(&self, key: &K) -> Result<(), TypedStoreError> {
-        let _timer = self
-            .db_metrics
-            .rocksdb_delete_latency_seconds
-            .with_label_values(&[&self.cf])
-            .start_timer();
+        let report_metrics = if self.write_sample_interval.sample() {
+            let timer = self
+                .db_metrics
+                .rocksdb_delete_latency_seconds
+                .with_label_values(&[&self.cf])
+                .start_timer();
+            Some(timer)
+        } else {
+            None
+        };
         let key_buf = be_fix_int_ser(key)?;
-        self.db_metrics
-            .rocksdb_deletes
-            .with_label_values(&[&self.cf])
-            .inc();
         self.rocksdb.delete_cf(&self.cf(), &key_buf)?;
+        if report_metrics.is_some() {
+            self.db_metrics
+                .rocksdb_deletes
+                .with_label_values(&[&self.cf])
+                .inc();
+        }
         Ok(())
     }
 
@@ -424,7 +487,12 @@ where
         let mut db_iter = self.rocksdb.raw_iterator_cf(&self.cf());
         db_iter.seek_to_first();
 
-        Iter::new(db_iter, self.cf.clone(), &self.db_metrics)
+        Iter::new(
+            db_iter,
+            self.cf.clone(),
+            &self.db_metrics,
+            &self.read_sample_interval,
+        )
     }
 
     fn keys(&'a self) -> Self::Keys {
@@ -450,11 +518,16 @@ where
     where
         J: Borrow<K>,
     {
-        let _timer = self
-            .db_metrics
-            .rocksdb_multiget_latency_seconds
-            .with_label_values(&[&self.cf])
-            .start_timer();
+        let report_metrics = if self.read_sample_interval.sample() {
+            let timer = self
+                .db_metrics
+                .rocksdb_multiget_latency_seconds
+                .with_label_values(&[&self.cf])
+                .start_timer();
+            Some(timer)
+        } else {
+            None
+        };
         let cf = self.cf();
 
         let keys_bytes: Result<Vec<_>, TypedStoreError> = keys
@@ -468,10 +541,12 @@ where
                 .as_ref()
                 .map_or(0.0, |e| e.as_ref().map_or(0.0, |v| v.len() as f64))
         };
-        self.db_metrics
-            .rocksdb_multiget_bytes
-            .with_label_values(&[&self.cf])
-            .observe(results.iter().map(entry_size).sum());
+        if report_metrics.is_some() {
+            self.db_metrics
+                .rocksdb_multiget_bytes
+                .with_label_values(&[&self.cf])
+                .observe(results.iter().map(entry_size).sum());
+        }
         let values_parsed: Result<Vec<_>, TypedStoreError> = results
             .into_iter()
             .map(|value_byte| match value_byte? {

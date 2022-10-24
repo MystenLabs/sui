@@ -8,6 +8,8 @@ use serde::Serialize;
 use std::collections::HashSet;
 use std::fmt::Debug;
 use std::sync::Mutex;
+use std::time::Duration;
+use typed_store::metrics::SamplingInterval;
 use typed_store::rocks::list_tables;
 use typed_store::rocks::DBMap;
 use typed_store::traits::Map;
@@ -258,4 +260,36 @@ async fn store_iter_and_filter_successfully() {
         }
     }
     assert_eq!(output.len(), key_values.len());
+}
+
+#[tokio::test]
+async fn test_sampling() {
+    let sampling_interval = SamplingInterval::new(Duration::ZERO, 10);
+    for _i in 0..10 {
+        assert!(!sampling_interval.sample());
+    }
+    assert!(sampling_interval.sample());
+    for _i in 0..10 {
+        assert!(!sampling_interval.sample());
+    }
+    assert!(sampling_interval.sample());
+}
+
+#[tokio::test(flavor = "current_thread", start_paused = true)]
+async fn test_sampling_time() {
+    let sampling_interval = SamplingInterval::new(Duration::from_secs(1), 10);
+    for _i in 0..10 {
+        assert!(!sampling_interval.sample());
+    }
+    assert!(!sampling_interval.sample());
+    tokio::time::advance(Duration::from_secs(1)).await;
+    tokio::task::yield_now().await;
+    assert!(sampling_interval.sample());
+    for _i in 0..10 {
+        assert!(!sampling_interval.sample());
+    }
+    assert!(!sampling_interval.sample());
+    tokio::time::advance(Duration::from_secs(1)).await;
+    tokio::task::yield_now().await;
+    assert!(sampling_interval.sample());
 }
