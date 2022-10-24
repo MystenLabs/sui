@@ -118,7 +118,7 @@ use the following command to install `libssl-dev`:
 use the following command to install `libclang-dev`:
 `sudo apt-get install libclang-dev`
 
-Proceed to [Install Sui binaries](#binaries) to continue installing Sui.
+Proceed to [Install Sui binaries](#install-sui-binaries) to continue installing Sui.
 
 
 ## macOS prerequisites
