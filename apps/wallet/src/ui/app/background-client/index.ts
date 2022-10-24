@@ -190,6 +190,18 @@ export class BackgroundClient {
         );
     }
 
+    public async setKeyringLockTimeout(timeout: number) {
+        return await lastValueFrom(
+            this.sendMessage(
+                createMessage<KeyringPayload<'setLockTimeout'>>({
+                    type: 'keyring',
+                    method: 'setLockTimeout',
+                    args: { timeout },
+                })
+            ).pipe(take(1))
+        );
+    }
+
     private setupAppStatusUpdateInterval() {
         setInterval(() => {
             this.sendAppStatus();
