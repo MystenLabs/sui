@@ -624,7 +624,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         proposed_seq: TxSequenceNumber,
         effects: &TransactionEffectsEnvelope<S>,
         effects_digest: &TransactionEffectsDigest,
-    ) -> SuiResult {
+    ) -> SuiResult<TxSequenceNumber> {
         // Extract the new state from the execution
         // TODO: events are already stored in the TxDigest -> TransactionEffects store. Is that enough?
         let mut write_batch = self.perpetual_tables.certificates.batch();
@@ -636,20 +636,23 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             iter::once((transaction_digest, certificate)),
         )?;
 
-        self.sequence_tx(
-            write_batch,
-            inner_temporary_store,
-            transaction_digest,
-            proposed_seq,
-            effects,
-            effects_digest,
-        )
-        .await?;
+        let seq = self
+            .sequence_tx(
+                write_batch,
+                inner_temporary_store,
+                transaction_digest,
+                proposed_seq,
+                effects,
+                effects_digest,
+            )
+            .await?;
 
         // Cleanup the lock of the shared objects. This must be done after we write effects, as
         // effects_exists is used as the guard to avoid re-locking objects for a previously
         // executed tx. remove_shared_objects_locks.
-        self.remove_shared_objects_locks(transaction_digest, certificate)
+        self.remove_shared_objects_locks(transaction_digest, certificate)?;
+
+        Ok(seq)
     }
 
     /// Persist temporary storage to DB for genesis modules
@@ -710,7 +713,8 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             &effects,
             effects_digest,
         )
-        .await
+        .await?;
+        Ok(())
     }
 
     async fn sequence_tx(
@@ -721,7 +725,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         proposed_seq: TxSequenceNumber,
         effects: &TransactionEffectsEnvelope<S>,
         effects_digest: &TransactionEffectsDigest,
-    ) -> SuiResult {
+    ) -> SuiResult<TxSequenceNumber> {
         // Safe to unwrap since UpdateType::Transaction ensures we get a sequence number back.
         let assigned_seq = self
             .batch_update_objects(
@@ -771,7 +775,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
 
         batch.write()?;
 
-        Ok(())
+        Ok(assigned_seq)
     }
 
     /// Helper function for updating the objects in the state
