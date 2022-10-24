@@ -6,7 +6,7 @@ mod keys;
 mod values;
 
 use crate::{
-    metrics::{DBMetrics, SamplingInterval},
+    metrics::{DBMetrics, RocksDBPerfContext, SamplingInterval},
     traits::Map,
 };
 use bincode::Options;
@@ -109,6 +109,8 @@ pub struct DBMap<K, V> {
     db_metrics: Arc<DBMetrics>,
     read_sample_interval: SamplingInterval,
     write_sample_interval: SamplingInterval,
+    iter_latency_sample_interval: SamplingInterval,
+    iter_bytes_sample_interval: SamplingInterval,
     _metrics_task_cancel_handle: Arc<oneshot::Sender<()>>,
 }
 
@@ -149,9 +151,11 @@ impl<K, V> DBMap<K, V> {
             _phantom: PhantomData,
             cf: opt_cf.to_string(),
             db_metrics: db_metrics_cloned,
+            _metrics_task_cancel_handle: Arc::new(sender),
             read_sample_interval: SamplingInterval::default(),
             write_sample_interval: SamplingInterval::default(),
-            _metrics_task_cancel_handle: Arc::new(sender),
+            iter_bytes_sample_interval: SamplingInterval::default(),
+            iter_latency_sample_interval: SamplingInterval::default(),
         }
     }
 
@@ -374,6 +378,40 @@ impl<K, V> DBMap<K, V> {
                 Self::get_int_property(rocksdb, &cf, properties::BACKGROUND_ERRORS)
                     .unwrap_or(METRICS_ERROR),
             );
+        let db_name = rocksdb
+            .path()
+            .file_name()
+            .and_then(|f| f.to_str())
+            .unwrap_or("unknown")
+            .to_string();
+        let mem_usage_stats = rocksdb::perf::get_memory_usage_stats(Some(&[rocksdb]), None);
+        db_metrics
+            .rocksdb_mem_table_usage
+            .with_label_values(&[&db_name])
+            .set(
+                mem_usage_stats
+                    .as_ref()
+                    .map(|x| x.mem_table_total as i64)
+                    .unwrap_or(METRICS_ERROR),
+            );
+        db_metrics
+            .rocksdb_unflushed_mem_table_usage
+            .with_label_values(&[&db_name])
+            .set(
+                mem_usage_stats
+                    .as_ref()
+                    .map(|x| x.mem_table_unflushed as i64)
+                    .unwrap_or(METRICS_ERROR),
+            );
+        db_metrics
+            .rocksdb_table_readers_usage
+            .with_label_values(&[&db_name])
+            .set(
+                mem_usage_stats
+                    .as_ref()
+                    .map(|x| x.mem_table_readers_total as i64)
+                    .unwrap_or(METRICS_ERROR),
+            );
     }
 }
 
@@ -462,25 +500,29 @@ impl DBBatch {
                 .path()
                 .file_name()
                 .and_then(|f| f.to_str())
-                .unwrap_or("unknown");
+                .unwrap_or("unknown")
+                .to_string();
             let timer = self
                 .db_metrics
                 .op_metrics
                 .rocksdb_batch_commit_latency_seconds
-                .with_label_values(&[db_name])
+                .with_label_values(&[&db_name])
                 .start_timer();
             let size = self.batch.size_in_bytes();
-            Some((db_name, size, timer))
+            Some((db_name, size, timer, RocksDBPerfContext::default()))
         } else {
             None
         };
         self.rocksdb.write(self.batch)?;
-        if let Some((db_name, batch_size, _timer)) = report_metrics {
+        if let Some((db_name, batch_size, _timer, _perf_ctx)) = report_metrics {
             self.db_metrics
                 .op_metrics
                 .rocksdb_batch_commit_bytes
-                .with_label_values(&[db_name])
+                .with_label_values(&[&db_name])
                 .observe(batch_size as f64);
+            self.db_metrics
+                .write_perf_ctx_metrics
+                .report_metrics(&db_name);
         }
         Ok(())
     }
@@ -576,7 +618,7 @@ where
                 .rocksdb_get_latency_seconds
                 .with_label_values(&[&self.cf])
                 .start_timer();
-            Some(timer)
+            Some((timer, RocksDBPerfContext::default()))
         } else {
             None
         };
@@ -588,6 +630,9 @@ where
                 .rocksdb_get_bytes
                 .with_label_values(&[&self.cf])
                 .observe(res.as_ref().map_or(0.0, |v| v.len() as f64));
+            self.db_metrics
+                .read_perf_ctx_metrics
+                .report_metrics(&self.cf);
         }
         match res {
             Some(data) => Ok(Some(bincode::deserialize(&data)?)),
@@ -604,7 +649,7 @@ where
                 .rocksdb_get_latency_seconds
                 .with_label_values(&[&self.cf])
                 .start_timer();
-            Some(timer)
+            Some((timer, RocksDBPerfContext::default()))
         } else {
             None
         };
@@ -616,6 +661,9 @@ where
                 .rocksdb_get_bytes
                 .with_label_values(&[&self.cf])
                 .observe(res.as_ref().map_or(0.0, |v| v.len() as f64));
+            self.db_metrics
+                .read_perf_ctx_metrics
+                .report_metrics(&self.cf);
         }
         match res {
             Some(data) => Ok(Some(data.to_vec())),
@@ -632,7 +680,7 @@ where
                 .rocksdb_put_latency_seconds
                 .with_label_values(&[&self.cf])
                 .start_timer();
-            Some(timer)
+            Some((timer, RocksDBPerfContext::default()))
         } else {
             None
         };
@@ -644,6 +692,9 @@ where
                 .rocksdb_put_bytes
                 .with_label_values(&[&self.cf])
                 .observe((key_buf.len() + value_buf.len()) as f64);
+            self.db_metrics
+                .write_perf_ctx_metrics
+                .report_metrics(&self.cf);
         }
         self.rocksdb.put_cf(&self.cf(), &key_buf, &value_buf)?;
         Ok(())
@@ -658,7 +709,7 @@ where
                 .rocksdb_delete_latency_seconds
                 .with_label_values(&[&self.cf])
                 .start_timer();
-            Some(timer)
+            Some((timer, RocksDBPerfContext::default()))
         } else {
             None
         };
@@ -670,6 +721,9 @@ where
                 .rocksdb_deletes
                 .with_label_values(&[&self.cf])
                 .inc();
+            self.db_metrics
+                .write_perf_ctx_metrics
+                .report_metrics(&self.cf);
         }
         Ok(())
     }
@@ -687,14 +741,30 @@ where
     }
 
     fn iter(&'a self) -> Self::Iterator {
+        let report_metrics = if self.iter_latency_sample_interval.sample() {
+            let timer = self
+                .db_metrics
+                .op_metrics
+                .rocksdb_iter_latency_seconds
+                .with_label_values(&[&self.cf])
+                .start_timer();
+            Some((timer, RocksDBPerfContext::default()))
+        } else {
+            None
+        };
         let mut db_iter = self.rocksdb.raw_iterator_cf(&self.cf());
         db_iter.seek_to_first();
-
+        if let Some((timer, _perf_ctx)) = report_metrics {
+            timer.stop_and_record();
+            self.db_metrics
+                .read_perf_ctx_metrics
+                .report_metrics(&self.cf);
+        }
         Iter::new(
             db_iter,
             self.cf.clone(),
             &self.db_metrics,
-            &self.read_sample_interval,
+            &self.iter_bytes_sample_interval,
         )
     }
 
@@ -728,7 +798,7 @@ where
                 .rocksdb_multiget_latency_seconds
                 .with_label_values(&[&self.cf])
                 .start_timer();
-            Some(timer)
+            Some((timer, RocksDBPerfContext::default()))
         } else {
             None
         };
@@ -751,6 +821,9 @@ where
                 .rocksdb_multiget_bytes
                 .with_label_values(&[&self.cf])
                 .observe(results.iter().map(entry_size).sum());
+            self.db_metrics
+                .read_perf_ctx_metrics
+                .report_metrics(&self.cf);
         }
         let values_parsed: Result<Vec<_>, TypedStoreError> = results
             .into_iter()
