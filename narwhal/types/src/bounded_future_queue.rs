@@ -35,9 +35,6 @@ impl<T: Future> std::fmt::Debug for BoundedFuturesUnordered<T> {
     }
 }
 
-unsafe impl<T: Future> Sync for BoundedFuturesUnordered<T> {}
-unsafe impl<T: Future> Send for BoundedFuturesUnordered<T> {}
-
 // We expect to grow this facade over time
 impl<T: Future> BoundedFuturesUnordered<T> {
     pub fn with_capacity(capacity: usize) -> Self {
@@ -138,9 +135,6 @@ impl<T: Future> std::fmt::Debug for BoundedFuturesOrdered<T> {
         )
     }
 }
-
-unsafe impl<T: Future> Sync for BoundedFuturesOrdered<T> {}
-unsafe impl<T: Future> Send for BoundedFuturesOrdered<T> {}
 
 // We expect to grow this facade over time
 impl<T: Future> BoundedFuturesOrdered<T> {

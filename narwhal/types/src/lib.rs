@@ -1,5 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
+#![forbid(unsafe_code)]
+
 // Error types
 #[macro_use]
 pub mod error;
