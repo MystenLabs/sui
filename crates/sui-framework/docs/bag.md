@@ -3,8 +3,8 @@
 
 # Module `0x2::bag`
 
-A bag is a heterogenous map-like collection. The collection is similar to <code>sui::table</code> in that
-it's keys and values are not stored within the <code><a href="bag.md#0x2_bag_Bag">Bag</a></code> value, but instead are stored using Sui's
+A bag is a heterogeneous map-like collection. The collection is similar to <code>sui::table</code> in that
+its keys and values are not stored within the <code><a href="bag.md#0x2_bag_Bag">Bag</a></code> value, but instead are stored using Sui's
 object system. The <code><a href="bag.md#0x2_bag_Bag">Bag</a></code> struct acts only as a handle into the object system to retrieve those
 keys and values.
 Note that this means that <code><a href="bag.md#0x2_bag_Bag">Bag</a></code> values with exactly the same key-value mapping will not be
@@ -21,7 +21,7 @@ assert!(&bag1 != &bag2, 0);
 ```
 At it's core, <code>sui::bag</code> is a wrapper around <code>UID</code> that allows for access to
 <code>sui::dynamic_field</code> while preventing accidentally stranding field values. A <code>UID</code> can be
-deleted, even if it has dynamic fields associated with it, buta bag, on the other hand, must be
+deleted, even if it has dynamic fields associated with it, but a bag, on the other hand, must be
 empty to be destroyed.
 
 

@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-/// Similar to `sui::bag`, an `ObjectBag` is a heterogenous map-like collection. But unlike
+/// Similar to `sui::bag`, an `ObjectBag` is a heterogeneous map-like collection. But unlike
 /// `sui::bag`, the values bound to these dynamic fields _must_ be objects themselves. This allows
-/// for the objects to still exist within in storage, which may be important for external tools.
+/// for the objects to still exist in storage, which may be important for external tools.
 /// The difference is otherwise not observable from within Move.
 module sui::object_bag {
 
@@ -38,7 +38,7 @@ public fun add<K: copy + drop + store, V: key + store>(bag: &mut ObjectBag, k: K
     bag.size = bag.size + 1;
 }
 
-/// Immutable borrows the value associated with the key in the bag `bag: &ObjectBag`.
+/// Immutably borrows the value associated with the key in the bag `bag: &ObjectBag`.
 /// Aborts with `sui::dynamic_field::EFieldDoesNotExist` if the bag does not have an entry with
 /// that key `k: K`.
 /// Aborts with `sui::dynamic_field::EFieldTypeMismatch` if the bag has an entry for the key, but
