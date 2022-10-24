@@ -37,7 +37,7 @@ pub struct EventEnvelope {
     /// Transaction digest of associated transaction, if any
     pub tx_digest: Option<TransactionDigest>,
     /// Transaction sequence number, must be nondecreasing for event ingestion idempotency
-    pub tx_seq_num: u64,
+    pub seq_num: u64,
     /// Consecutive per-tx counter assigned to this event.
     pub event_num: u64,
     /// Specific event type

@@ -80,7 +80,7 @@ pub fn new_test_newobj_event(
     EventEnvelope {
         timestamp,
         tx_digest: Some(digest),
-        tx_seq_num: seq_num,
+        seq_num,
         event_num,
         event: Event::NewObject {
             package_id: ObjectID::random(),
@@ -135,7 +135,7 @@ pub fn new_test_deleteobj_event(
     EventEnvelope {
         timestamp,
         tx_digest: Some(digest),
-        tx_seq_num: seq_num,
+        seq_num,
         event_num,
         event: Event::DeleteObject {
             package_id: ObjectID::random(),
@@ -162,7 +162,7 @@ pub fn new_test_transfer_event(
     EventEnvelope {
         timestamp,
         tx_digest: Some(digest),
-        tx_seq_num: seq_num,
+        seq_num,
         event_num,
         event: Event::TransferObject {
             package_id: ObjectID::random(),
@@ -233,7 +233,7 @@ pub fn new_test_move_event(
     EventEnvelope {
         timestamp,
         tx_digest: Some(digest),
-        tx_seq_num: seq_num,
+        seq_num,
         event_num,
         event: move_event,
         move_struct_json_value: Some(json),

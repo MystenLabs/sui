@@ -31,7 +31,7 @@ fn test_move_event_filter() {
     let envelope = EventEnvelope {
         timestamp: 0,
         tx_digest: Some(TransactionDigest::random()),
-        tx_seq_num: 0,
+        seq_num: 0,
         event_num: 0,
         event: move_event,
         move_struct_json_value: Some(json!(BTreeMap::from([("balance", 10000)]))),
@@ -87,7 +87,7 @@ fn test_transfer_filter() {
     let envelope = EventEnvelope {
         timestamp: 0,
         tx_digest: Some(TransactionDigest::random()),
-        tx_seq_num: 1,
+        seq_num: 1,
         event_num: 0,
         event: move_event,
         move_struct_json_value: None,
@@ -122,7 +122,7 @@ fn test_publish_filter() {
     let envelope = EventEnvelope {
         timestamp: 0,
         tx_digest: Some(TransactionDigest::random()),
-        tx_seq_num: 0,
+        seq_num: 0,
         event_num: 0,
         event: move_event,
         move_struct_json_value: None,
@@ -205,7 +205,7 @@ fn test_new_object_filter() {
     let envelope = EventEnvelope {
         timestamp: 0,
         tx_digest: Some(TransactionDigest::random()),
-        tx_seq_num: 0,
+        seq_num: 0,
         event_num: 0,
         event: move_event,
         move_struct_json_value: None,
@@ -238,7 +238,7 @@ fn test_epoch_change_filter() {
     let envelope = EventEnvelope {
         timestamp: 0,
         tx_digest: Some(TransactionDigest::random()),
-        tx_seq_num: 1,
+        seq_num: 1,
         event_num: 0,
         event: move_event,
         move_struct_json_value: None,
@@ -254,7 +254,7 @@ fn test_checkpoint_filter() {
     let envelope = EventEnvelope {
         timestamp: 0,
         tx_digest: Some(TransactionDigest::random()),
-        tx_seq_num: 1,
+        seq_num: 1,
         event_num: 0,
         event: move_event,
         move_struct_json_value: None,

@@ -18,7 +18,7 @@ use sqlx::{
     Executor, QueryBuilder, Row, SqlitePool,
 };
 use strum::{EnumMessage, IntoEnumIterator};
-use tracing::{debug, info, instrument, log, warn};
+use tracing::{info, instrument, log, warn};
 
 use sui_types::base_types::SuiAddress;
 use strum::{EnumMessage, IntoEnumIterator};
@@ -339,7 +339,7 @@ impl EventStore for SqlEventStore {
                 let sender = event.event.sender().map(|sender| sender.to_vec());
                 let move_event_name = event.event.move_event_name();
                 b.push_bind(event.timestamp as i64)
-                    .push_bind(event.tx_seq_num as i64)
+                    .push_bind(event.seq_num as i64)
                     .push_bind(event.event_num as i64)
                     .push_bind(event.tx_digest.map(|txd| txd.to_bytes()))
                     .push_bind(event_type as u16)
