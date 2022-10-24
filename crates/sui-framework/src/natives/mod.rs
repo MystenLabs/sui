@@ -122,7 +122,11 @@ pub fn all_natives(
             "ed25519_verify",
             make_native!(crypto::ed25519_verify),
         ),
-        ("hash", "hmac_sha2_256", make_native!(crypto::hmac_sha2_256)),
+        (
+            "hash",
+            "native_hmac_sha3_256",
+            make_native!(crypto::hmac_sha3_256),
+        ),
         (
             "test_scenario",
             "take_from_address_by_id",

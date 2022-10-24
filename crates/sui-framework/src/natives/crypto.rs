@@ -6,7 +6,7 @@ use fastcrypto::{
     bls12381::{BLS12381PublicKey, BLS12381Signature},
     bulletproofs::{BulletproofsRangeProof, PedersenCommitment},
     ed25519::{Ed25519PublicKey, Ed25519Signature},
-    hmac::{hmac, HmacKey},
+    hmac,
     secp256k1::{Secp256k1PublicKey, Secp256k1Signature},
     traits::ToFromBytes,
     Verifier,
@@ -410,8 +410,8 @@ pub fn ed25519_verify(
     }
 }
 
-/// Native implementation of hmac-sha2-256 in public Move API, see hash.move for specifications.
-pub fn hmac_sha2_256(
+/// Native implementation of hmac-sha3-256 in public Move API, see hash.move for specifications.
+pub fn hmac_sha3_256(
     _context: &mut NativeContext,
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
@@ -421,7 +421,7 @@ pub fn hmac_sha2_256(
 
     let message = pop_arg!(args, VectorRef);
     let key = pop_arg!(args, VectorRef);
-    let hmac_key = HmacKey::from_bytes(&key.as_bytes_ref()).unwrap();
+    let hmac_key = hmac::HmacKey::from_bytes(&key.as_bytes_ref()).unwrap();
 
     // TODO: implement native gas cost estimation https://github.com/MystenLabs/sui/issues/3593
     let cost = legacy_empty_cost();
@@ -429,7 +429,7 @@ pub fn hmac_sha2_256(
     Ok(NativeResult::ok(
         cost,
         smallvec![Value::vector_u8(
-            hmac(&hmac_key, &message.as_bytes_ref()).to_vec()
+            hmac::hmac_sha3_256(&hmac_key, &message.as_bytes_ref()).to_vec()
         )],
     ))
 }

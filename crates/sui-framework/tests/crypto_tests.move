@@ -6,6 +6,7 @@ module sui::crypto_tests {
     use sui::ecdsa;
     use sui::bls12381;
     use sui::bulletproofs;
+    use sui::digest;
     use sui::elliptic_curve as ec;
     use sui::hash;
     use std::vector;
@@ -75,12 +76,15 @@ module sui::crypto_tests {
     }
 
     #[test]
-    fun test_hmac_sha2_256() {
+    fun test_hmac_sha3_256() {
         let key = b"my key!";
         let msg = b"hello world!";
-        let expected_output_bytes = vector[21, 66, 216, 31, 230, 220, 110, 128, 255, 233, 16, 227, 234, 40, 171, 113, 158, 243, 142, 148, 119, 236, 171, 170, 19, 128, 187, 203, 31, 201, 113, 139];
-        let output = hash::hmac_sha2_256(&key, &msg);
-        assert!(output == expected_output_bytes, 0);
+        // The next was calculated using python
+        // hmac.new(key, msg, digestmod=hashlib.sha3_256).digest()
+        let expected_output_bytes = vector[246, 214, 174, 2, 244, 38, 235, 150, 100, 232, 158, 60, 109, 134, 198, 14, 97, 3, 206, 34, 185, 22, 129, 146, 25, 194, 110, 52, 232, 210, 54, 220];
+        let output = hash::hmac_sha3_256(&key, &msg);
+        let outout_bytes = digest::sha3_256_digest_to_bytes(&output);
+        assert!(outout_bytes == expected_output_bytes, 0);
     }
 
     #[test]
