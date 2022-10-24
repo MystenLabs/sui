@@ -29,7 +29,7 @@ public fun new<K: copy + drop + store, V: store>(
 }
 ```
 
-`Table<K, V>` is a *homogeneous* map, meaning that all its keys have the same type as each other (`K`), and all its values have the same type as each other as well (`V`). It is created with `sui::table::new`, which requires access to a `&mut TxContext` because `Table`s are objects themselves, which can be transfered, shared, wrapped, or unwrapped, just like any other object.
+`Table<K, V>` is a *homogeneous* map, meaning that all its keys have the same type as each other (`K`), and all its values have the same type as each other as well (`V`). It is created with `sui::table::new`, which requires access to a `&mut TxContext` because `Table`s are objects themselves, which can be transferred, shared, wrapped, or unwrapped, just like any other object.
 
 > :bulb: See `sui::bag::ObjectTable` for the object-preserving version of `Table`.
 
@@ -154,7 +154,7 @@ public fun destroy_empty<K: copy + drop + store, V: store>(
 }
 ```
 
-This function takes the collection by value. If it contains no entries, it will be deleted, othewise the call will abort. `sui::table::Table` also has a convenience function,
+This function takes the collection by value. If it contains no entries, it will be deleted, otherwise the call will abort. `sui::table::Table` also has a convenience function,
 
 ```rust
 module sui::table {
