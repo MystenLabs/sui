@@ -1286,6 +1286,7 @@ dependencies = [
  "clap 2.34.0",
  "criterion-plot",
  "csv",
+ "futures",
  "itertools",
  "lazy_static 1.4.0",
  "num-traits 0.2.15",
@@ -1298,6 +1299,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "tinytemplate",
+ "tokio",
  "walkdir",
 ]
 
@@ -8441,6 +8443,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bcs",
+ "criterion",
  "enum_dispatch",
  "eyre",
  "fdlimit",
@@ -9600,7 +9603,7 @@ version = "1.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
- "cfg-if 1.0.0",
+ "cfg-if 0.1.10",
  "static_assertions",
 ]
 

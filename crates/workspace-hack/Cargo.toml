@@ -110,7 +110,7 @@ core2 = { version = "0.4", default-features = false, features = ["alloc"] }
 crc = { version = "3", default-features = false }
 crc-catalog = { version = "2", default-features = false }
 crc32fast = { version = "1", features = ["std"] }
-criterion = { version = "0.3", features = ["cargo_bench_support"] }
+criterion = { version = "0.3", features = ["async", "async_tokio", "cargo_bench_support", "futures", "tokio"] }
 criterion-plot = { version = "0.4", default-features = false }
 crossbeam = { version = "0.8", features = ["alloc", "crossbeam-channel", "crossbeam-deque", "crossbeam-epoch", "crossbeam-queue", "std"] }
 crossbeam-channel = { version = "0.5", features = ["crossbeam-utils", "std"] }
@@ -720,7 +720,7 @@ core2 = { version = "0.4", default-features = false, features = ["alloc"] }
 crc = { version = "3", default-features = false }
 crc-catalog = { version = "2", default-features = false }
 crc32fast = { version = "1", features = ["std"] }
-criterion = { version = "0.3", features = ["cargo_bench_support"] }
+criterion = { version = "0.3", features = ["async", "async_tokio", "cargo_bench_support", "futures", "tokio"] }
 criterion-plot = { version = "0.4", default-features = false }
 crossbeam = { version = "0.8", features = ["alloc", "crossbeam-channel", "crossbeam-deque", "crossbeam-epoch", "crossbeam-queue", "std"] }
 crossbeam-channel = { version = "0.5", features = ["crossbeam-utils", "std"] }
