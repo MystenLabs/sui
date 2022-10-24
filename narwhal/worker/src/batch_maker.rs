@@ -46,7 +46,7 @@ pub struct BatchMaker {
     /// Receive reconfiguration updates.
     rx_reconfigure: watch::Receiver<ReconfigureNotification>,
     /// Channel to receive transactions from the network.
-    rx_transaction: Receiver<(Transaction, TxResponse)>,
+    rx_batch_maker: Receiver<(Transaction, TxResponse)>,
     /// Output channel to deliver sealed batches to the `QuorumWaiter`.
     tx_message: Sender<(Batch, Option<tokio::sync::oneshot::Sender<()>>)>,
     /// Metrics handler
@@ -68,7 +68,7 @@ impl BatchMaker {
         batch_size: usize,
         max_batch_delay: Duration,
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
-        rx_transaction: Receiver<(Transaction, TxResponse)>,
+        rx_batch_maker: Receiver<(Transaction, TxResponse)>,
         tx_message: Sender<(Batch, Option<tokio::sync::oneshot::Sender<()>>)>,
         node_metrics: Arc<WorkerMetrics>,
         store: Store<BatchDigest, Batch>,
@@ -81,7 +81,7 @@ impl BatchMaker {
                 batch_size,
                 max_batch_delay,
                 rx_reconfigure,
-                rx_transaction,
+                rx_batch_maker,
                 tx_message,
                 batch_start_timestamp: Instant::now(),
                 node_metrics,
@@ -112,7 +112,7 @@ impl BatchMaker {
                 // Note that transactions are only consumed when the number of batches
                 // 'in-flight' are below a certain number (MAX_PARALLEL_BATCH). This
                 // condition will be met eventually if the store and network are functioning.
-                Some((transaction, response_sender)) = self.rx_transaction.recv(), if batch_pipeline.len() < MAX_PARALLEL_BATCH => {
+                Some((transaction, response_sender)) = self.rx_batch_maker.recv(), if batch_pipeline.len() < MAX_PARALLEL_BATCH => {
 
                     if current_batch.transactions.is_empty() {
                         // We are interested to measure the time to seal a batch
@@ -172,7 +172,9 @@ impl BatchMaker {
                 // Process the pipeline of batches, this consumes items in the `batch_pipeline`
                 // list, and ensures the main loop in run will always be able to make progress
                 // by lowering it until condition batch_pipeline.len() < MAX_PARALLEL_BATCH is met.
-                _ = batch_pipeline.next(), if !batch_pipeline.is_empty() => {}
+                _ = batch_pipeline.next(), if !batch_pipeline.is_empty() => {
+                    self.node_metrics.parallel_worker_batches.set(batch_pipeline.len() as i64);
+                }
 
             }
 
@@ -247,11 +249,6 @@ impl BatchMaker {
             .created_batch_size
             .with_label_values(&[self.committee.epoch.to_string().as_str(), reason])
             .observe(size as f64);
-
-        // Note: the code below waits on the WAN to send messages to all others, the store
-        // to write and confirm the write, and then the primary to respond to being notified
-        // of a batch. While all this is going on the other batches are not being created and
-        // processed leading to an under utilization of resources.
 
         // Send the batch through the deliver channel for further processing.
         let mut closing = false; // flag if we are closing the core.
