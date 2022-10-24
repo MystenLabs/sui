@@ -2055,8 +2055,29 @@ impl AuthorityState {
         &self,
         transaction_digest: &TransactionDigest,
     ) -> Result<TransactionInfoResponse, SuiError> {
-        self.database
-            .get_signed_transaction_info(transaction_digest)
+        let mut info = self
+            .database
+            .get_signed_transaction_info(transaction_digest)?;
+        // If the transaction was executed in previous epochs, the validator will
+        // re-sign the effects with new current epoch so that a client is always able to
+        // obtain an effects certificate at the current epoch.
+        if let Some(effects) = info.signed_effects.take() {
+            let cur_epoch = self.epoch();
+            let new_effects = if effects.auth_signature.epoch < cur_epoch {
+                debug!(
+                    effects_epoch=?effects.auth_signature.epoch,
+                    ?cur_epoch,
+                    "Re-signing the effects with the current epoch"
+                );
+                effects
+                    .effects
+                    .to_sign_effects(cur_epoch, &self.name, &*self.secret)
+            } else {
+                effects
+            };
+            info.signed_effects = Some(new_effects);
+        }
+        Ok(info)
     }
 
     fn make_account_info(&self, account: SuiAddress) -> Result<AccountInfoResponse, SuiError> {

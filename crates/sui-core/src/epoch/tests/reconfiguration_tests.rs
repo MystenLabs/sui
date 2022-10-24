@@ -342,6 +342,31 @@ async fn test_consensus_pause_after_last_fragment() {
     assert!(cp0.should_reject_consensus_transaction());
 }
 
+#[tokio::test]
+async fn test_cross_epoch_effects_cert() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let genesis_objects = vec![Object::with_owner_for_testing(sender)];
+    let (mut net, states, _) = init_local_authorities(4, genesis_objects.clone()).await;
+
+    let object_ref = genesis_objects[0].compute_object_reference();
+    let tx_data =
+        TransactionData::new_transfer_sui(SuiAddress::default(), sender, None, object_ref, 1000);
+    let transaction = to_sender_signed_transaction(tx_data, &sender_key);
+    net.execute_transaction(&transaction).await.unwrap();
+    for state in states {
+        // Manually update each validator's epoch to the next one for testing purpose.
+        let mut new_committee = (**state.committee.load()).clone();
+        new_committee.epoch += 1;
+        state.committee.store(Arc::new(new_committee));
+    }
+    // Also need to update the authority aggregator's committee.
+    net.committee.epoch += 1;
+    // Call to execute_transaction can still succeed.
+    let (tx_cert, effects_cert) = net.execute_transaction(&transaction).await.unwrap();
+    assert_eq!(tx_cert.auth_sign_info.epoch, 0);
+    assert_eq!(effects_cert.auth_signature.epoch, 1);
+}
+
 fn enable_reconfig(states: &[Arc<AuthorityState>]) {
     for state in states {
         state.checkpoints.lock().enable_reconfig = true;
