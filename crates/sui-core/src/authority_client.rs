@@ -540,14 +540,22 @@ impl LocalAuthorityClient {
                 error: "Mock error before handle_confirmation_transaction".to_owned(),
             });
         }
-        let certificate = certificate.verify(&state.committee.load())?;
-        let result = state.handle_certificate(&certificate).await;
+        // Check existing effects before verifying the cert to allow querying certs finalized
+        // from previous epochs.
+        let tx_digest = *certificate.digest();
+        let response = match state.get_tx_info_already_executed(&tx_digest).await {
+            Ok(Some(response)) => response,
+            _ => {
+                let certificate = certificate.verify(&state.committee.load())?;
+                state.handle_certificate(&certificate).await?
+            }
+        };
         if fault_config.fail_after_handle_confirmation {
             return Err(SuiError::GenericAuthorityError {
                 error: "Mock error after handle_confirmation_transaction".to_owned(),
             });
         }
-        result.map(|r| r.into())
+        Ok(response.into())
     }
 }
 
