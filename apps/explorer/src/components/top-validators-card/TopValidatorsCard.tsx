@@ -4,7 +4,6 @@
 import { useContext, useEffect, useState } from 'react';
 
 import Longtext from '../../components/longtext/Longtext';
-import TableCard from '../../components/table/TableCard';
 import { NetworkContext } from '../../context';
 import {
     getValidatorState,
@@ -13,9 +12,10 @@ import {
     type ValidatorState,
 } from '../../pages/validators/Validators';
 import { mockState } from '../../pages/validators/mockData';
-import theme from '../../styles/theme.module.css';
 import { truncate } from '../../utils/stringUtils';
 
+import { PlaceholderTable } from '~/ui/PlaceholderTable';
+import { TableCard } from '~/ui/TableCard';
 import { TabGroup, TabList, Tab, TabPanels, TabPanel } from '~/ui/Tabs';
 
 export const STATE_DEFAULT: ValidatorState = {
@@ -72,7 +72,37 @@ export const TopValidatorsCardAPI = (): JSX.Element => {
         return <TopValidatorsCard state={showObjectState as ValidatorState} />;
     }
     if (loadState === 'pending') {
-        return <div className={theme.pending}>loading validator info...</div>;
+        return (
+            <div data-testid="validators-table">
+                <TabGroup>
+                    <TabList>
+                        <Tab>Top Validators</Tab>
+                    </TabList>
+                    <TabPanels>
+                        <TabPanel>
+                            <div title="Top Validators">
+                                <PlaceholderTable
+                                    rowCount={4}
+                                    rowHeight="13px"
+                                    colHeadings={[
+                                        '#',
+                                        'Name',
+                                        'Address',
+                                        'Pubkey Bytes',
+                                    ]}
+                                    colWidths={[
+                                        '25px',
+                                        '135px',
+                                        '220px',
+                                        '220px',
+                                    ]}
+                                />
+                            </div>
+                        </TabPanel>
+                    </TabPanels>
+                </TabGroup>
+            </div>
+        );
     }
     if (loadState === 'fail') {
         return <ValidatorLoadFail />;
@@ -138,7 +168,10 @@ function TopValidatorsCard({ state }: { state: ValidatorState }): JSX.Element {
                 </TabList>
                 <TabPanels>
                     <TabPanel>
-                        <TableCard tabledata={tableData} />
+                        <TableCard
+                            data={tableData.data}
+                            columns={tableData.columns}
+                        />
                     </TabPanel>
                 </TabPanels>
             </TabGroup>

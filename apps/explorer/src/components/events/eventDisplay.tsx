@@ -14,7 +14,6 @@ import { getOwnerStr } from '../../utils/objectUtils';
 import { truncate } from '../../utils/stringUtils';
 
 import type { Category } from '../../pages/transaction-result/TransactionResultType';
-import type { LinkObj } from '../table/TableCard';
 import type {
     MoveEvent,
     NewObjectEvent,
@@ -25,6 +24,7 @@ import type {
     DeleteObjectEvent,
     PublishEvent,
 } from '@mysten/sui.js';
+import type { LinkObj } from '~/ui/TableCard';
 
 export type ContentItem = {
     label: string;

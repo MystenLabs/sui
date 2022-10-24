@@ -48,7 +48,10 @@ pub struct NodeDag<T: Affiliated> {
     // Not that we should need to ever serialize this (we'd rather rebuild the Dag from a persistent store)
     // but the way to serialize this in key order is using serde_with and an annotation of:
     // as = "FromInto<std::collections::BTreeMap<T::TypedDigest, Either<WeakNodeRef<T>, NodeRef<T>>>"
-    node_table: DashMap<T::TypedDigest, Either<WeakNodeRef<T>, NodeRef<T>>>,
+    node_table: DashMap<
+        <T as fastcrypto::hash::Hash<{ crypto::DIGEST_LENGTH }>>::TypedDigest,
+        Either<WeakNodeRef<T>, NodeRef<T>>,
+    >,
 }
 
 #[derive(Debug, Error, Eq, PartialEq)]

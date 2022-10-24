@@ -330,7 +330,8 @@ async fn test_object_owning_another_object() {
     )
     .await;
     assert!(effects.is_err());
-    assert!(format!("{effects:?}").contains("ObjectErrors { errors: [InvalidChildObjectArgument"));
+    assert!(format!("{effects:?}")
+        .contains("TransactionInputObjectsErrors { errors: [InvalidChildObjectArgument"));
 
     // Create another parent.
     let effects = call_move(
@@ -845,7 +846,8 @@ async fn test_entry_point_vector() {
     )
     .await;
     assert!(effects.is_err());
-    assert!(format!("{effects:?}").contains("ObjectErrors { errors: [InvalidChildObjectArgument"));
+    assert!(format!("{effects:?}")
+        .contains("TransactionInputObjectsErrors { errors: [InvalidChildObjectArgument"));
 }
 
 #[tokio::test]
@@ -1220,7 +1222,8 @@ async fn test_entry_point_vector_any() {
     )
     .await;
     assert!(effects.is_err());
-    assert!(format!("{effects:?}").contains("ObjectErrors { errors: [InvalidChildObjectArgument"));
+    assert!(format!("{effects:?}")
+        .contains("TransactionInputObjectsErrors { errors: [InvalidChildObjectArgument"));
 }
 
 #[tokio::test]

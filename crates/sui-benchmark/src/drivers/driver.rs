@@ -4,10 +4,9 @@
 use std::sync::Arc;
 
 use crate::drivers::Interval;
+use crate::ValidatorProxy;
 use async_trait::async_trait;
 use prometheus::Registry;
-use sui_core::authority_aggregator::AuthorityAggregator;
-use sui_core::authority_client::NetworkAuthorityClient;
 
 use crate::workloads::workload::WorkloadInfo;
 
@@ -16,7 +15,7 @@ pub trait Driver<T> {
     async fn run(
         &self,
         workload: Vec<WorkloadInfo>,
-        aggregator: Arc<AuthorityAggregator<NetworkAuthorityClient>>,
+        proxy: Arc<dyn ValidatorProxy + Sync + Send>,
         registry: &Registry,
         show_progress: bool,
         run_duration: Interval,

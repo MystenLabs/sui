@@ -8,12 +8,12 @@ Before you install Sui, you need to install some prerequisite tools and then con
 
 The steps to install Sui include:
 
-1. Install [prerequisites](#prerequisites).
-1. Install Sui [binaries](#binaries).
-1. Configure an [Integrated Development Environment (IDE)](#integrated-development-environment).
+1. Install [prerequisites](#prerequisites)
+1. [Install Sui binaries](#install-sui-binaries)
+1. Configure an [Integrated Development Environment (IDE)](#integrated-development-environment)
 1. Request [SUI tokens](#sui-tokens) to evaluate Devnet and Sui Wallet
 1. Optionally, download the [source code](#source-code) to have local
-   access to examples and modify Sui itself.
+   access to examples and contribute to Sui.
 
 ## Branches of the Sui repo
 

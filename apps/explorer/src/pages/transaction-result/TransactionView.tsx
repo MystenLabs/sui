@@ -22,7 +22,10 @@ import {
 } from '../../components/events/eventDisplay';
 import Longtext from '../../components/longtext/Longtext';
 import ModulesWrapper from '../../components/module/ModulesWrapper';
-import { type LinkObj, TxAddresses } from '../../components/table/TableCard';
+import {
+    type LinkObj,
+    TxAddresses,
+} from '../../components/transaction-card/TxCardUtils';
 import { presentBN } from '../../utils/stringUtils';
 import SendReceiveView from './SendReceiveView';
 import TxLinks from './TxLinks';

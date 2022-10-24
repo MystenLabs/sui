@@ -41,6 +41,7 @@ pub trait DataReader {
     ) -> Result<GetRawObjectDataResponse, anyhow::Error>;
 }
 
+#[derive(Clone)]
 pub struct TransactionBuilder(pub Arc<dyn DataReader + Sync + Send>);
 
 impl TransactionBuilder {
