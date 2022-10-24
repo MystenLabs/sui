@@ -48,6 +48,7 @@ impl<'a, K: DeserializeOwned, V: DeserializeOwned> Iterator for Iter<'a, K, V> {
             let report_metrics = if self.read_sample_interval.sample() {
                 let timer = self
                     .db_metrics
+                    .op_metrics
                     .rocksdb_iter_latency_seconds
                     .with_label_values(&[&self.cf])
                     .start_timer();
@@ -70,6 +71,7 @@ impl<'a, K: DeserializeOwned, V: DeserializeOwned> Iterator for Iter<'a, K, V> {
             let value = bincode::deserialize(raw_value).ok();
             if report_metrics.is_some() {
                 self.db_metrics
+                    .op_metrics
                     .rocksdb_iter_bytes
                     .with_label_values(&[&self.cf])
                     .observe((raw_key.len() + raw_value.len()) as f64);

@@ -19,6 +19,8 @@ pub enum TypedStoreError {
     UnregisteredColumn(String),
     #[error("a batch operation can't operate across databases")]
     CrossDBBatch,
+    #[error("Metric reporting thread failed with error")]
+    MetricsReporting,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash, Debug, Error)]

@@ -22,10 +22,14 @@ async fn test_reopen() {
             .expect("Failed to open storage");
         db.insert(&123456789, &"123456789".to_string())
             .expect("Failed to insert");
-        db.rocksdb
+        db
     };
-    let db = DBMap::<u32, String>::reopen(&arc, None, &Arc::new(DBMetrics::new(&Registry::new())))
-        .expect("Failed to re-open storage");
+    let db = DBMap::<u32, String>::reopen(
+        &arc.rocksdb,
+        None,
+        &Arc::new(DBMetrics::new(&Registry::new())),
+    )
+    .expect("Failed to re-open storage");
     assert!(db
         .contains_key(&123456789)
         .expect("Failed to retrieve item in storage"));
