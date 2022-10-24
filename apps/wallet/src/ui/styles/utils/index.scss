@@ -209,6 +209,11 @@ $main-extra-space: sizing.$main-bottom-space;
         font-weight: 600;
         letter-spacing: 0;
         text-align: center;
+    } @else if $type == 'Primary/Heading3-M' {
+        font-size: 20px;
+        font-weight: 500;
+        letter-spacing: 0;
+        text-align: center;
     } @else if $type == 'ParagraphPrimary/P1-M' {
         font-size: 14px;
         font-weight: 500;
