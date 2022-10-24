@@ -4,6 +4,12 @@ title: Sui Documentation Updates
 
 This topic lists the significant updates to the [Sui documentation](https://docs.sui.io) site so that you can easily identify new or updated information. 
 
+## Week ending 10/29/22
+
+| Topic | Update |
+| :------ | :------- |
+| [Dynamic Fields](../build/programming-with-objects/ch5-dynamic-fields.md) | Docs for a new, more flexible, replacement for Child Objects. |
+
 ## Week ending 10/22/22
 
 | Topic | Update | 
