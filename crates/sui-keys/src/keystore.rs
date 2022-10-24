@@ -14,6 +14,7 @@ use std::fs;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
+use sui_types::intent::{ChainId, Intent};
 
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{
@@ -31,10 +32,23 @@ pub enum Keystore {
 }
 #[enum_dispatch]
 pub trait AccountKeystore: Send + Sync {
+    #[warn(deprecated)]
     fn sign(&self, address: &SuiAddress, msg: &[u8]) -> Result<Signature, signature::Error>;
     fn add_key(&mut self, keypair: SuiKeyPair) -> Result<(), anyhow::Error>;
     fn keys(&self) -> Vec<PublicKey>;
     fn get_key(&self, address: &SuiAddress) -> Result<&SuiKeyPair, anyhow::Error>;
+
+    fn sign_secure<T>(
+        &self,
+        address: &SuiAddress,
+        msg: &T,
+        intent: Intent,
+    ) -> Result<Signature, signature::Error>
+    where
+        T: Serialize;
+    fn with_chain_id(&mut self, chain_id: ChainId) -> Result<(), anyhow::Error>;
+    fn chain_id(&self) -> ChainId;
+
     fn addresses(&self) -> Vec<SuiAddress> {
         self.keys().iter().map(|k| k.into()).collect()
     }
@@ -98,6 +112,7 @@ impl Display for Keystore {
 pub struct FileBasedKeystore {
     keys: BTreeMap<SuiAddress, SuiKeyPair>,
     path: Option<PathBuf>,
+    chain_id: Option<ChainId>,
 }
 
 impl Serialize for FileBasedKeystore {
@@ -127,6 +142,7 @@ impl<'de> Deserialize<'de> for FileBasedKeystore {
 }
 
 impl AccountKeystore for FileBasedKeystore {
+    #[warn(deprecated)]
     fn sign(&self, address: &SuiAddress, msg: &[u8]) -> Result<Signature, signature::Error> {
         self.keys
             .get(address)
@@ -134,6 +150,25 @@ impl AccountKeystore for FileBasedKeystore {
                 signature::Error::from_source(format!("Cannot find key for address: [{address}]"))
             })?
             .try_sign(msg)
+    }
+
+    fn sign_secure<T>(
+        &self,
+        address: &SuiAddress,
+        msg: &T,
+        intent: Intent,
+    ) -> Result<Signature, signature::Error>
+    where
+        T: Serialize,
+    {
+        let intent = intent.with_chain_id(self.chain_id());
+        Ok(Signature::new_secure(
+            msg,
+            intent,
+            self.keys.get(address).ok_or_else(|| {
+                signature::Error::from_source(format!("Cannot find key for address: [{address}]"))
+            })?,
+        ))
     }
 
     fn add_key(&mut self, keypair: SuiKeyPair) -> Result<(), anyhow::Error> {
@@ -152,6 +187,15 @@ impl AccountKeystore for FileBasedKeystore {
             Some(key) => Ok(key),
             None => Err(anyhow!("Cannot find key for address: [{address}]")),
         }
+    }
+
+    fn with_chain_id(&mut self, chain_id: ChainId) -> Result<(), anyhow::Error> {
+        self.chain_id = Some(chain_id);
+        Ok(())
+    }
+
+    fn chain_id(&self) -> ChainId {
+        self.chain_id.unwrap_or_default()
     }
 }
 
@@ -175,6 +219,7 @@ impl FileBasedKeystore {
         Ok(Self {
             keys,
             path: Some(path.to_path_buf()),
+            chain_id: None,
         })
     }
 
@@ -205,9 +250,11 @@ impl FileBasedKeystore {
 #[derive(Default, Serialize, Deserialize)]
 pub struct InMemKeystore {
     keys: BTreeMap<SuiAddress, SuiKeyPair>,
+    chain_id: Option<ChainId>,
 }
 
 impl AccountKeystore for InMemKeystore {
+    #[warn(deprecated)]
     fn sign(&self, address: &SuiAddress, msg: &[u8]) -> Result<Signature, signature::Error> {
         self.keys
             .get(address)
@@ -215,6 +262,24 @@ impl AccountKeystore for InMemKeystore {
                 signature::Error::from_source(format!("Cannot find key for address: [{address}]"))
             })?
             .try_sign(msg)
+    }
+
+    fn sign_secure<T>(
+        &self,
+        address: &SuiAddress,
+        msg: &T,
+        intent: Intent,
+    ) -> Result<Signature, signature::Error>
+    where
+        T: Serialize,
+    {
+        Ok(Signature::new_secure(
+            msg,
+            intent,
+            self.keys.get(address).ok_or_else(|| {
+                signature::Error::from_source(format!("Cannot find key for address: [{address}]"))
+            })?,
+        ))
     }
 
     fn add_key(&mut self, keypair: SuiKeyPair) -> Result<(), anyhow::Error> {
@@ -233,6 +298,15 @@ impl AccountKeystore for InMemKeystore {
             None => Err(anyhow!("Cannot find key for address: [{address}]")),
         }
     }
+
+    fn with_chain_id(&mut self, chain_id: ChainId) -> Result<(), anyhow::Error> {
+        self.chain_id = Some(chain_id);
+        Ok(())
+    }
+
+    fn chain_id(&self) -> ChainId {
+        self.chain_id.unwrap_or_default()
+    }
 }
 
 impl InMemKeystore {
@@ -243,6 +317,9 @@ impl InMemKeystore {
             .map(|(ad, k)| (ad, SuiKeyPair::Ed25519SuiKeyPair(k)))
             .collect::<BTreeMap<SuiAddress, SuiKeyPair>>();
 
-        Self { keys }
+        Self {
+            keys,
+            chain_id: None,
+        }
     }
 }

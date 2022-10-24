@@ -237,7 +237,7 @@ pub fn run(cmd: Ceremony) -> Result<()> {
                     })?;
 
                 let pk: AuthorityPublicKey = validator.protocol_key().try_into()?;
-
+                // TODO (joyqvq): use AuthoritySignature::verify_secure
                 pk.verify(&genesis_bytes, &signature).with_context(|| {
                     format!(
                         "failed to validate signature for validator {}",

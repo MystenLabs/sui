@@ -11,7 +11,6 @@ use jsonrpsee_core::server::rpc_module::RpcModule;
 use move_binary_format::normalized::{Module as NormalizedModule, Type};
 use move_core_types::identifier::Identifier;
 use signature::Signature;
-
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{
     GetObjectDataResponse, GetPastObjectDataResponse, MoveFunctionArgType, ObjectValueKind, Page,
@@ -23,7 +22,8 @@ use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::batch::TxSequenceNumber;
 use sui_types::committee::EpochId;
-use sui_types::crypto::{SignableBytes, SignatureScheme};
+use sui_types::crypto::SignatureScheme;
+use sui_types::intent::IntentMessage;
 use sui_types::messages::{
     CommitteeInfoRequest, CommitteeInfoResponse, Transaction, TransactionData,
 };
@@ -145,12 +145,13 @@ impl RpcFullNodeReadApiServer for FullNodeApi {
         signature: Base64,
         pub_key: Base64,
     ) -> RpcResult<SuiTransactionEffects> {
-        let data = TransactionData::from_signable_bytes(&tx_bytes.to_vec()?)?;
+        let intent_msg = IntentMessage::<TransactionData>::from_bytes(&tx_bytes.to_vec()?)?;
+
         let flag = vec![sig_scheme.flag()];
         let signature =
             Signature::from_bytes(&[&*flag, &*signature.to_vec()?, &pub_key.to_vec()?].concat())
                 .map_err(|e| anyhow!(e))?;
-        let txn = Transaction::new(data, signature);
+        let txn = Transaction::new(intent_msg.value, intent_msg.intent, signature);
         let txn_digest = *txn.digest();
 
         Ok(self.state.dry_run_transaction(&txn, txn_digest).await?)

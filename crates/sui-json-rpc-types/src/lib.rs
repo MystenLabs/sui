@@ -26,6 +26,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
 use serde_with::serde_as;
+use sui_types::intent::{Intent, IntentMessage};
 use tracing::warn;
 
 use sui_json::SuiJsonValue;
@@ -34,7 +35,7 @@ use sui_types::base_types::{
     TransactionEffectsDigest,
 };
 use sui_types::committee::EpochId;
-use sui_types::crypto::{AuthorityStrongQuorumSignInfo, SignableBytes, Signature};
+use sui_types::crypto::{AuthorityStrongQuorumSignInfo, Signature};
 use sui_types::error::SuiError;
 use sui_types::event::{Event, TransferType};
 use sui_types::event::{EventEnvelope, EventType};
@@ -1584,7 +1585,7 @@ pub struct SuiChangeEpoch {
 pub struct SuiCertifiedTransaction {
     pub transaction_digest: TransactionDigest,
     pub data: SuiTransactionData,
-    /// tx_signature is signed by the transaction sender, applied on `data`.
+    /// tx_signature is signed by the transaction sender, committing to the intent message containing the transaction data and intent.
     pub tx_signature: Signature,
     /// authority signature information, if available, is signed by an authority, applied on `data`.
     pub auth_sign_info: AuthorityStrongQuorumSignInfo,
@@ -2352,7 +2353,7 @@ impl TryInto<EventFilter> for SuiEventFilter {
 #[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TransactionBytes {
-    /// transaction data bytes, as base-64 encoded string
+    /// intent message bytes, as base-64 encoded string
     pub tx_bytes: Base64,
     /// the gas object to be used
     pub gas: SuiObjectRef,
@@ -2362,10 +2363,12 @@ pub struct TransactionBytes {
 
 impl TransactionBytes {
     pub fn from_data(data: TransactionData) -> Result<Self, anyhow::Error> {
+        let data1 = data.clone();
+        let bytes = bcs::to_bytes(&IntentMessage::new(Intent::default(), data))?;
         Ok(Self {
-            tx_bytes: Base64::from_bytes(&data.to_bytes()),
-            gas: data.gas().into(),
-            input_objects: data
+            tx_bytes: Base64::from_bytes(&bytes),
+            gas: data1.gas().into(),
+            input_objects: data1
                 .input_objects()?
                 .into_iter()
                 .map(SuiInputObjectKind::from)
@@ -2374,7 +2377,8 @@ impl TransactionBytes {
     }
 
     pub fn to_data(self) -> Result<TransactionData, anyhow::Error> {
-        TransactionData::from_signable_bytes(&self.tx_bytes.to_vec()?)
+        bcs::from_bytes(&self.tx_bytes.to_vec()?[3..])
+            .map_err(|e| anyhow::anyhow!("Failed to serialize transaction bytes: {}", e))
     }
 }
 

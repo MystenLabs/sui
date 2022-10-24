@@ -10,6 +10,7 @@ use crate::crypto::{
     VerificationObligation,
 };
 use crate::gas::GasCostSummary;
+use crate::intent::{Intent, IntentMessage};
 use crate::messages_checkpoint::{
     AuthenticatedCheckpoint, CheckpointFragment, CheckpointSequenceNumber,
 };
@@ -677,8 +678,9 @@ pub struct TransactionEnvelope<S> {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct SenderSignedData {
+    pub intent: Intent,
     pub data: TransactionData,
-    /// tx_signature is signed by the transaction sender, applied on `data`.
+    /// tx_signature is signed by the transaction sender, committing to the intent message containing the transaction data and intent.
     pub tx_signature: Signature,
 }
 
@@ -706,9 +708,13 @@ impl<S> TransactionEnvelope<S> {
         if self.is_verified || self.signed_data.data.kind.is_system_tx() {
             return Ok(());
         }
-        self.signed_data
-            .tx_signature
-            .verify(&self.signed_data.data, self.signed_data.data.sender)
+        debug!("Received intent {:?}", &self.signed_data.intent);
+        // TODO (joyqvq): Check if the expected intent matches the submitted intent.
+        self.signed_data.tx_signature.verify_secure(
+            &self.signed_data.data,
+            self.signed_data.intent.clone(),
+            self.signed_data.data.sender,
+        )
     }
 
     pub fn sender_address(&self) -> SuiAddress {
@@ -805,15 +811,16 @@ pub type Transaction = TransactionEnvelope<EmptySignInfo>;
 impl Transaction {
     #[cfg(test)]
     pub fn from_data(data: TransactionData, signer: &dyn signature::Signer<Signature>) -> Self {
-        let signature = Signature::new(&data, signer);
-        Self::new(data, signature)
+        let signature = Signature::new_secure(&data, Intent::default(), signer);
+        Self::new(data, Intent::default(), signature)
     }
 
-    pub fn new(data: TransactionData, signature: Signature) -> Self {
+    pub fn new(data: TransactionData, intent: Intent, signature: Signature) -> Self {
         Self {
             transaction_digest: OnceCell::new(),
             is_verified: false,
             signed_data: SenderSignedData {
+                intent,
                 data,
                 tx_signature: signature,
             },
@@ -826,8 +833,10 @@ impl Transaction {
     }
 
     pub fn to_network_data_for_execution(&self) -> (Base64, SignatureScheme, Base64, Base64) {
+        let intent_msg =
+            IntentMessage::new(self.signed_data.intent.clone(), &self.signed_data.data);
         (
-            Base64::from_bytes(&self.signed_data.data.to_bytes()),
+            Base64::from_bytes(bcs::to_bytes(&intent_msg).unwrap().as_slice()),
             self.signed_data.tx_signature.scheme(),
             Base64::from_bytes(self.signed_data.tx_signature.signature_bytes()),
             Base64::from_bytes(self.signed_data.tx_signature.public_key_bytes()),
@@ -895,6 +904,7 @@ impl SignedTransaction {
         );
         let signed_data = SenderSignedData {
             data,
+            intent: Intent::default(),
             // Arbitrary keypair
             tx_signature: Ed25519SuiSignature::from_bytes(&[0; Ed25519SuiSignature::LENGTH])
                 .unwrap()
@@ -930,7 +940,11 @@ impl SignedTransaction {
     // forming a CertifiedTransaction, where each transaction's authority signature
     // is taking out to form an aggregated signature.
     pub fn to_transaction(self) -> Transaction {
-        Transaction::new(self.signed_data.data, self.signed_data.tx_signature)
+        Transaction::new(
+            self.signed_data.data,
+            self.signed_data.intent,
+            self.signed_data.tx_signature,
+        )
     }
 }
 
@@ -1929,7 +1943,6 @@ impl<'a> SignatureAggregator<'a> {
         signature: AuthoritySignature,
     ) -> Result<Option<CertifiedTransaction>, SuiError> {
         signature.verify(&self.partial.signed_data, authority)?;
-
         // Check that each authority only appears once.
         fp_ensure!(
             !self.used_authorities.contains(&authority),
@@ -1982,7 +1995,11 @@ impl CertifiedTransaction {
     }
 
     pub fn to_transaction(self) -> Transaction {
-        Transaction::new(self.signed_data.data, self.signed_data.tx_signature)
+        Transaction::new(
+            self.signed_data.data,
+            self.signed_data.intent,
+            self.signed_data.tx_signature,
+        )
     }
 
     /// Verify the certificate.

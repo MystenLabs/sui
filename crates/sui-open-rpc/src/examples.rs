@@ -1,14 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
-use std::ops::Range;
-use std::str::FromStr;
-
 use move_core_types::identifier::Identifier;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use serde_json::json;
+use std::collections::BTreeMap;
+use std::ops::Range;
+use std::str::FromStr;
+use sui_types::intent::{Intent, IntentMessage};
 
 use sui::client_commands::EXAMPLE_NFT_DESCRIPTION;
 use sui::client_commands::EXAMPLE_NFT_NAME;
@@ -37,7 +37,7 @@ use sui_types::messages::{
 use sui_types::object::Owner;
 use sui_types::query::Ordering;
 use sui_types::query::TransactionQuery;
-use sui_types::sui_serde::Base64;
+use sui_types::sui_serde::{Base64, Encoding};
 use sui_types::SUI_FRAMEWORK_OBJECT_ID;
 
 struct Examples {
@@ -168,15 +168,18 @@ impl RpcExampleProvider {
     }
 
     fn execute_transaction_example(&mut self) -> Examples {
-        let (data, signature, _, _, result, _) = self.get_transfer_data_response();
-        let tx_bytes = TransactionBytes::from_data(data).unwrap();
+        let (data, intent, signature, _, _, result, _) = self.get_transfer_data_response();
+        let intent_msg = IntentMessage::new(intent, data);
 
         Examples::new(
             "sui_executeTransaction",
             vec![ExamplePairing::new(
                 "Execute an object transfer transaction",
                 vec![
-                    ("tx_bytes", json!(tx_bytes.tx_bytes)),
+                    (
+                        "tx_bytes",
+                        json!(Base64::encode(bcs::to_bytes(&intent_msg).unwrap())),
+                    ),
                     ("sig_scheme", json!(signature.scheme())),
                     (
                         "signature",
@@ -359,7 +362,7 @@ impl RpcExampleProvider {
     }
 
     fn get_transaction(&mut self) -> Examples {
-        let (_, _, _, _, result, _) = self.get_transfer_data_response();
+        let (_, _, _, _, _, result, _) = self.get_transfer_data_response();
         Examples::new(
             "sui_getTransaction",
             vec![ExamplePairing::new(
@@ -407,6 +410,7 @@ impl RpcExampleProvider {
         &mut self,
     ) -> (
         TransactionData,
+        Intent,
         Signature,
         SuiAddress,
         ObjectID,
@@ -496,11 +500,19 @@ impl RpcExampleProvider {
             parsed_data: None,
         };
 
-        (data2, signature, recipient, obj_id, result, events)
+        (
+            data2,
+            tx.signed_data.intent,
+            signature,
+            recipient,
+            obj_id,
+            result,
+            events,
+        )
     }
 
     fn get_events_by_transaction(&mut self) -> Examples {
-        let (_, _, _, _, result, events) = self.get_transfer_data_response();
+        let (_, _, _, _, _, result, events) = self.get_transfer_data_response();
         Examples::new(
             "sui_getEventsByTransaction",
             vec![ExamplePairing::new(
@@ -519,7 +531,7 @@ impl RpcExampleProvider {
 
     fn get_events_by_sender(&mut self) -> Examples {
         let ts = std::time::Instant::now().elapsed().as_secs();
-        let (tx_data, _, _, _, _, events) = self.get_transfer_data_response();
+        let (tx_data, _, _, _, _, _, events) = self.get_transfer_data_response();
         Examples::new(
             "sui_getEventsBySender",
             vec![ExamplePairing::new(
@@ -537,7 +549,7 @@ impl RpcExampleProvider {
 
     fn get_events_by_recipient(&mut self) -> Examples {
         let ts = std::time::Instant::now().elapsed().as_secs();
-        let (_, _, recipient, _, _, events) = self.get_transfer_data_response();
+        let (_, _, _, recipient, _, _, events) = self.get_transfer_data_response();
         Examples::new(
             "sui_getEventsByRecipient",
             vec![ExamplePairing::new(
@@ -555,7 +567,7 @@ impl RpcExampleProvider {
 
     fn get_events_by_object(&mut self) -> Examples {
         let ts = std::time::Instant::now().elapsed().as_secs();
-        let (_, _, _, obj_id, _, events) = self.get_transfer_data_response();
+        let (_, _, _, _, obj_id, _, events) = self.get_transfer_data_response();
         Examples::new(
             "sui_getEventsByObject",
             vec![ExamplePairing::new(
@@ -573,7 +585,7 @@ impl RpcExampleProvider {
 
     fn get_events_by_timerange(&mut self) -> Examples {
         let ts = std::time::Instant::now().elapsed().as_secs();
-        let (_, _, _, _, _, events) = self.get_transfer_data_response();
+        let (_, _, _, _, _, _, events) = self.get_transfer_data_response();
         Examples::new(
             "sui_getEventsByTimeRange",
             vec![ExamplePairing::new(
@@ -590,8 +602,8 @@ impl RpcExampleProvider {
 
     fn get_events_by_move_event_struct_name(&mut self) -> Examples {
         let ts = std::time::Instant::now().elapsed().as_secs();
-        let (data, signature, _, _, _, _) = self.get_transfer_data_response();
-        let tx = Transaction::new(data, signature);
+        let (data, intent, signature, _, _, _, _) = self.get_transfer_data_response();
+        let tx = Transaction::new(data, intent, signature);
 
         let event = SuiEventEnvelope {
             timestamp: ts,
@@ -625,7 +637,7 @@ impl RpcExampleProvider {
 
     fn get_events_by_transaction_module(&mut self) -> Examples {
         let ts = std::time::Instant::now().elapsed().as_secs();
-        let (_, _, _, _, _, events) = self.get_transfer_data_response();
+        let (_, _, _, _, _, _, events) = self.get_transfer_data_response();
         Examples::new(
             "sui_getEventsByModule",
             vec![ExamplePairing::new(

@@ -22,7 +22,9 @@ fn test_personal_message_intent() {
     let p_message = PersonalMessage { message };
     let p_message_bcs = bcs::to_bytes(&p_message).unwrap();
 
-    let intent = Intent::default_with_scope(IntentScope::PersonalMessage);
+    let intent = Intent::default().with_scope(IntentScope::PersonalMessage);
+    let intent1 = intent.clone();
+    let intent2 = intent.clone();
     let intent_bcs = bcs::to_bytes(&IntentMessage::new(intent, &p_message)).unwrap();
     assert_eq!(intent_bcs.len(), p_message_bcs.len() + 3);
 
@@ -40,8 +42,8 @@ fn test_personal_message_intent() {
     assert_eq!(&intent_bcs[3..], &p_message_bcs);
 
     // Let's ensure we can sign and verify intents.
-    let s = Signature::new_secure(&p_message, intent, &sec1);
-    let verification = s.verify_secure(&p_message, intent, addr1);
+    let s = Signature::new_secure(&p_message, intent1, &sec1);
+    let verification = s.verify_secure(&p_message, intent2, addr1);
     assert!(verification.is_ok())
 }
 
@@ -63,10 +65,10 @@ fn test_authority_signature_intent() {
         10000,
     );
     let signature = Signature::new(&data, &sender_key);
-    let tx = Transaction::new(data, signature);
+    let tx = Transaction::new(data, Intent::default(), signature);
 
     // Create an intent with signed data.
-    let intent = Intent::default_with_scope(IntentScope::TransactionData);
+    let intent = Intent::default();
     let intent_bcs = bcs::to_bytes(&IntentMessage::new(intent, &tx.signed_data)).unwrap();
 
     // Check that the first 3 bytes are the domain separation information.
@@ -84,7 +86,36 @@ fn test_authority_signature_intent() {
     assert_eq!(&intent_bcs[3..], signed_data_bcs);
 
     // Let's ensure we can sign and verify intents.
-    let s = AuthoritySignature::new_secure(&tx.signed_data, intent, &kp);
-    let verification = s.verify_secure(&tx.signed_data, intent, kp.public().into());
+    let s = AuthoritySignature::new_secure(&tx.signed_data, Intent::default(), &kp);
+    let verification = s.verify_secure(&tx.signed_data, Intent::default(), kp.public().into());
     assert!(verification.is_ok())
+}
+
+#[test]
+fn test_intent_message_to_from_bytes() {
+    use crate::crypto::get_key_pair;
+
+    // Create a signed user transaction.
+    let (sender, _): (_, AccountKeyPair) = get_key_pair();
+    let recipient = dbg_addr(2);
+    let object_id = ObjectID::random();
+    let object = Object::immutable_with_id_for_testing(object_id);
+    let data = TransactionData::new_transfer_sui(
+        recipient,
+        sender,
+        None,
+        object.compute_object_reference(),
+        10000,
+    );
+    let data1 = data.clone();
+
+    // Serialize the intent message.
+    let bytes = &bcs::to_bytes(&IntentMessage::new(Intent::default(), data)).unwrap();
+
+    // Derialize the intent message back.
+    let intent_message = IntentMessage::<TransactionData>::from_bytes(bytes).unwrap();
+
+    // Intent and its value are expected.
+    assert_eq!(intent_message.intent, Intent::default());
+    assert_eq!(intent_message.value, data1);
 }

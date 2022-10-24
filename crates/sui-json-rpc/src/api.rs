@@ -508,7 +508,7 @@ pub trait TransactionExecutionApi {
     #[method(name = "executeTransaction")]
     async fn execute_transaction(
         &self,
-        /// transaction data bytes, as base-64 encoded string
+        /// intent message containing transaction data bytes, as base-64 encoded string
         tx_bytes: Base64,
         /// Flag of the signature scheme that is used.
         sig_scheme: SignatureScheme,
