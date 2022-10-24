@@ -55,7 +55,7 @@ pub async fn publish_package(
     configs: &[ValidatorInfo],
 ) -> ObjectRef {
     let effects = publish_package_for_effects(gas_object, path, configs).await;
-    parse_package_ref(&effects).unwrap()
+    parse_package_ref(&effects.created).unwrap()
 }
 
 pub async fn publish_package_for_effects(
@@ -473,9 +473,8 @@ pub fn get_unique_effects(replies: Vec<TransactionInfoResponse>) -> TransactionE
 
 /// Extract the package reference from a transaction effect. This is useful to deduce the
 /// authority-created package reference after attempting to publish a new Move package.
-pub fn parse_package_ref(effects: &TransactionEffects) -> Option<ObjectRef> {
-    effects
-        .created
+pub fn parse_package_ref(created_objs: &[(ObjectRef, Owner)]) -> Option<ObjectRef> {
+    created_objs
         .iter()
         .find(|(_, owner)| matches!(owner, Owner::Immutable))
         .map(|(reference, _)| *reference)

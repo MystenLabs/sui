@@ -448,6 +448,9 @@ pub enum SuiError {
     #[error("{1} - {0}")]
     RpcError(String, &'static str),
 
+    #[error("Error when calling executeTransaction rpc endpoint: {:?}", error)]
+    RpcExecuteTransactionError { error: String },
+
     #[error("Use of disabled feature: {:?}", error)]
     UnsupportedFeatureError { error: String },
 

@@ -2265,6 +2265,7 @@ where
 
 /// Given an AuthorityAggregator on genesis (epoch 0), catch up to the latest epoch and fill in
 /// all past epoches' committee information.
+/// Note: this function assumes >= 2/3 validators on genesis are still serving the network.
 pub async fn reconfig_from_genesis(
     mut aggregator: AuthorityAggregator<NetworkAuthorityClient>,
 ) -> SuiResult<AuthorityAggregator<NetworkAuthorityClient>> {
