@@ -320,12 +320,14 @@ pub enum EventValue {
 #[async_trait]
 #[enum_dispatch]
 pub trait EventStore {
-    /// Adds events to the EventStore.
-    /// Semantics: events are appended.  The sequence number must be nondecreasing - EventEnvelopes
-    /// which have sequence numbers below the current one will be skipped.  This feature
-    /// is intended for deduplication.
+    /// Adds a batch of transaction-related events to the EventStore.
+    /// Semantics:
+    /// - The batch is appended to the store.
+    /// - The batch may contain events from multiple transactions.
+    /// - However, events pertaining to a single tx must not arrive in different batches.
+    ///
     /// Returns Ok(rows_affected).
-    async fn add_events(&self, events: &[EventEnvelope]) -> Result<u64, SuiError>;
+    async fn add_tx_events(&self, events: &[EventEnvelope]) -> Result<u64, SuiError>;
 
     /// Returns at most `limit` events emitted by a given
     /// transaction, sorted in order emitted.

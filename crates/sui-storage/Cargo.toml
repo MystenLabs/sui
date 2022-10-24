@@ -41,6 +41,7 @@ tempfile = "3.3.0"
 num_cpus = "1.13.1"
 pretty_assertions = "1.2.0"
 telemetry-subscribers.workspace = true
+lazy_static = "1"
 
 [[bench]]
 name = "write_ahead_log"

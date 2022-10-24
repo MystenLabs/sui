@@ -57,7 +57,7 @@ impl EventHandler {
         let envelopes = res?;
 
         // Ingest all envelopes together at once (for efficiency) into Event Store
-        self.event_store.add_events(&envelopes).await?;
+        self.event_store.add_tx_events(&envelopes).await?;
         trace!(
             num_events = envelopes.len(),
             tx_digest =? effects.transaction_digest,

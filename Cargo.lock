@@ -8600,6 +8600,7 @@ dependencies = [
  "fdlimit",
  "flexstr",
  "futures",
+ "lazy_static 1.4.0",
  "move-core-types",
  "num_cpus",
  "pretty_assertions",

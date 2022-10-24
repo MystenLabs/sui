@@ -47,12 +47,13 @@ impl TestEvent {
 
 pub fn new_test_publish_event(
     timestamp: u64,
+    digest: TransactionDigest,
     seq_num: u64,
     sender: Option<SuiAddress>,
 ) -> EventEnvelope {
     EventEnvelope::new(
         timestamp,
-        None,
+        Some(digest),
         seq_num,
         Event::Publish {
             sender: sender.unwrap_or_else(SuiAddress::random_for_testing_only),
@@ -64,6 +65,7 @@ pub fn new_test_publish_event(
 
 pub fn new_test_newobj_event(
     timestamp: u64,
+    digest: TransactionDigest,
     seq_num: u64,
     object_id: Option<ObjectID>,
     sender: Option<SuiAddress>,
@@ -71,7 +73,7 @@ pub fn new_test_newobj_event(
 ) -> EventEnvelope {
     EventEnvelope::new(
         timestamp,
-        Some(TransactionDigest::random()),
+        Some(digest),
         seq_num,
         Event::NewObject {
             package_id: ObjectID::random(),
@@ -87,13 +89,14 @@ pub fn new_test_newobj_event(
 
 pub fn new_test_deleteobj_event(
     timestamp: u64,
+    digest: TransactionDigest,
     seq_num: u64,
     object_id: Option<ObjectID>,
     sender: Option<SuiAddress>,
 ) -> EventEnvelope {
     EventEnvelope::new(
         timestamp,
-        Some(TransactionDigest::random()),
+        Some(digest),
         seq_num,
         Event::DeleteObject {
             package_id: ObjectID::random(),
@@ -107,6 +110,7 @@ pub fn new_test_deleteobj_event(
 
 pub fn new_test_transfer_event(
     timestamp: u64,
+    digest: TransactionDigest,
     seq_num: u64,
     object_version: u64,
     type_: TransferType,
@@ -116,7 +120,7 @@ pub fn new_test_transfer_event(
 ) -> EventEnvelope {
     EventEnvelope::new(
         timestamp,
-        Some(TransactionDigest::random()),
+        Some(digest),
         seq_num,
         Event::TransferObject {
             package_id: ObjectID::random(),
@@ -135,6 +139,7 @@ pub fn new_test_transfer_event(
 
 pub fn new_test_move_event(
     timestamp: u64,
+    digest: TransactionDigest,
     seq_num: u64,
     package_id: ObjectID,
     module_name: &str,
@@ -157,11 +162,5 @@ pub fn new_test_move_event(
     );
 
     let json = serde_json::to_value(&move_struct).expect("Cannot serialize move struct to JSON");
-    EventEnvelope::new(
-        timestamp,
-        Some(TransactionDigest::random()),
-        seq_num,
-        move_event,
-        Some(json),
-    )
+    EventEnvelope::new(timestamp, Some(digest), seq_num, move_event, Some(json))
 }

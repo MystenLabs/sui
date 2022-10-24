@@ -10,7 +10,6 @@ use serde_json::{json, Value};
 use sqlx::ConnectOptions;
 use std::collections::BTreeMap;
 use std::path::Path;
-use std::sync::atomic::{AtomicU64, Ordering};
 use strum::{EnumMessage, IntoEnumIterator};
 use sui_types::base_types::SuiAddress;
 use sui_types::object::Owner;
@@ -32,9 +31,6 @@ use tracing::{info, instrument, log, warn};
 /// - fields is JSON for now (for easy JSON filtering) and contains all fields not in main columns
 pub struct SqlEventStore {
     pool: SqlitePool,
-    // Sequence number is used to prevent previously ingested events from being ingested again
-    // It acts as a cache, as the seq_num field is also written to the DB.
-    seq_num: AtomicU64,
 }
 
 /// Important for updating Columns:
@@ -50,6 +46,8 @@ enum EventsTableColumns {
     Timestamp = 0,
     /// seq_num INTEGER
     SeqNum,
+    /// event_num INTEGER
+    EventNum,
     /// tx_digest BLOB
     TxDigest,
     /// event_type INTEGER
@@ -74,7 +72,8 @@ enum EventsTableColumns {
     Recipient,
 }
 
-const SQL_INSERT_TX: &str = "INSERT INTO events (timestamp, seq_num, tx_digest, event_type, \
+const SQL_INSERT_TX: &str =
+    "INSERT OR IGNORE INTO events (timestamp, seq_num, event_num, tx_digest, event_type, \
     package_id, module_name, object_id, fields, move_event_name, contents, sender,  \
     recipient) ";
 
@@ -97,10 +96,7 @@ impl SqlEventStore {
             .await
             .map_err(convert_sqlx_err)?;
         info!("Created new in-memory SQLite EventStore for testing");
-        Ok(Self {
-            pool,
-            seq_num: AtomicU64::new(0),
-        })
+        Ok(Self { pool })
     }
 
     /// Creates or opens a new SQLite database at a specific path
@@ -118,10 +114,7 @@ impl SqlEventStore {
             .await
             .map_err(convert_sqlx_err)?;
         info!(?db_path, "Created/opened SQLite EventStore on disk");
-        Ok(Self {
-            pool,
-            seq_num: AtomicU64::new(0),
-        })
+        Ok(Self { pool })
     }
 
     /// Initializes the database, creating tables and indexes as needed
@@ -159,13 +152,12 @@ impl SqlEventStore {
             info!(column, "Index is ready");
         }
 
-        // Setting last sequence number
-        let last_seq_num = self.last_seq_num().await?;
-        self.seq_num.store(last_seq_num, Ordering::Relaxed);
-        info!(
-            last_seq_num,
-            "Recovered last sequence number from event store"
-        );
+        self.pool
+            .execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS event_unique_id_idx on events (seq_num, event_num)",
+            )
+            .await
+            .map_err(convert_sqlx_err)?;
 
         Ok(())
     }
@@ -179,22 +171,6 @@ impl SqlEventStore {
             .map_err(convert_sqlx_err)?;
         let num_rows: i64 = result.get(0);
         Ok(num_rows as usize)
-    }
-
-    async fn last_seq_num(&self) -> Result<u64, SuiError> {
-        let result = sqlx::query("SELECT MAX(seq_num) FROM events")
-            .fetch_one(&self.pool)
-            .await
-            .map_err(convert_sqlx_err)?;
-        let num_rows: i64 = result.get(0);
-        Ok(num_rows as u64)
-    }
-
-    /// Only use for testing or benchmarking. Resets the last seq number to 0
-    /// so we can insert new events without increasing TX sequence number.
-    #[allow(unused)]
-    pub fn testing_only_reset_seq_num(&self) {
-        self.seq_num.store(0, Ordering::Relaxed);
     }
 
     fn try_extract_object_id(row: &SqliteRow, col: usize) -> Result<Option<ObjectID>, SuiError> {
@@ -370,74 +346,69 @@ const MAX_INSERT_BATCH: usize = 1000;
 #[async_trait]
 impl EventStore for SqlEventStore {
     #[instrument(level = "debug", skip_all, err)]
-    async fn add_events(&self, events: &[EventEnvelope]) -> Result<u64, SuiError> {
-        let mut cur_seq = self.seq_num.load(Ordering::Acquire);
-        let initial_seq = cur_seq;
+    async fn add_tx_events(&self, events: &[EventEnvelope]) -> Result<u64, SuiError> {
         let mut rows_affected = 0;
 
         if events.is_empty() {
             return Ok(0);
         }
 
-        let mut start_index = 0;
-        let mut end_index = 0;
-
-        // Insert event in batches, skipping over events that have lower or decreasing sequence numbers
-        while end_index < events.len() {
-            // Skip events that have a lower sequence number. They've been seen before.
-            if events[start_index].seq_num < cur_seq {
-                start_index += 1;
-                end_index += 1;
-                continue;
-            }
-
-            let final_index = (start_index + MAX_INSERT_BATCH).min(events.len());
-            // Keep going while the sequence number is not decreasing
-            while end_index < final_index && events[end_index].seq_num >= cur_seq {
-                cur_seq = events[end_index].seq_num;
-                end_index += 1;
-            }
-
-            let mut query_builder = QueryBuilder::new(SQL_INSERT_TX);
-            query_builder.push_values(&events[start_index..end_index], |mut b, event| {
-                let event_type = EventType::from(&event.event);
-                let sender = event.event.sender().map(|sender| sender.to_vec());
-                let move_event_name = event.event.move_event_name();
-                b.push_bind(event.timestamp as i64)
-                    .push_bind(event.seq_num as i64)
-                    .push_bind(event.tx_digest.map(|txd| txd.to_bytes()))
-                    .push_bind(event_type as u16)
-                    .push_bind(event.event.package_id().map(|pid| pid.to_vec()))
-                    .push_bind(event.event.module_name())
-                    .push_bind(event.event.object_id().map(|id| id.to_vec()))
-                    .push_bind(Self::event_to_json(event))
-                    .push_bind(move_event_name)
-                    .push_bind(event.event.move_event_contents())
-                    .push_bind(sender)
-                    .push_bind(
-                        event
-                            .event
-                            .recipient_serialized()
-                            .expect("Cannot serialize"),
-                    );
-            });
-
-            let res = query_builder
-                .build()
-                .execute(&self.pool)
-                .await
-                .map_err(convert_sqlx_err)?;
-
-            rows_affected += res.rows_affected();
+        let mut events_by_tx: BTreeMap<TransactionDigest, Vec<EventEnvelope>> = BTreeMap::new();
+        for e in events {
+            let digest = e
+                .tx_digest
+                .ok_or_else(|| SuiError::GenericStorageError("tx digest is required".into()))?;
+            events_by_tx.entry(digest).or_default().push(e.clone());
         }
 
-        // CAS is used to detect any concurrency glitches.  Note that we assume a single writer
-        // append model, which is currently true.  In single writer the CAS should never fail.
-        // We also do this after writing all events, for efficiency.
-        if cur_seq > initial_seq {
-            self.seq_num
-                .compare_exchange(initial_seq, cur_seq, Ordering::Acquire, Ordering::Relaxed)
-                .expect("CAS Failure - event writes are not single threaded");
+        for (tx_digest, events) in events_by_tx.iter() {
+            let mut event_num = 0;
+            let start_index = 0;
+            let mut end_index = 0;
+
+            // Insert event in batches, skipping over events that have lower or decreasing sequence numbers
+            while end_index < events.len() {
+                let final_index = (start_index + MAX_INSERT_BATCH).min(events.len());
+                // Keep going while the sequence number is not decreasing
+                while end_index < final_index {
+                    end_index += 1;
+                }
+
+                let mut query_builder = QueryBuilder::new(SQL_INSERT_TX);
+                query_builder.push_values(&events[start_index..end_index], |mut b, event| {
+                    tracing::debug!(?event, "push event");
+                    let event_type = EventType::from(&event.event);
+                    let sender = event.event.sender().map(|sender| sender.to_vec());
+                    let move_event_name = event.event.move_event_name();
+                    b.push_bind(event.timestamp as i64)
+                        .push_bind(event.seq_num as i64)
+                        .push_bind(event_num as i64)
+                        .push_bind(tx_digest.to_bytes())
+                        .push_bind(event_type as u16)
+                        .push_bind(event.event.package_id().map(|pid| pid.to_vec()))
+                        .push_bind(event.event.module_name())
+                        .push_bind(event.event.object_id().map(|id| id.to_vec()))
+                        .push_bind(Self::event_to_json(event))
+                        .push_bind(move_event_name)
+                        .push_bind(event.event.move_event_contents())
+                        .push_bind(sender)
+                        .push_bind(
+                            event
+                                .event
+                                .recipient_serialized()
+                                .expect("Cannot serialize"),
+                        );
+                    event_num += 1;
+                });
+
+                let res = query_builder
+                    .build()
+                    .execute(&self.pool)
+                    .await
+                    .map_err(convert_sqlx_err)?;
+
+                rows_affected += res.rows_affected();
+            }
         }
 
         Ok(rows_affected)
@@ -674,11 +645,20 @@ mod tests {
 
         // Insert some records
         info!("Inserting records!");
+        let txfr_digest = TransactionDigest::random();
         let to_insert = vec![
-            test_utils::new_test_newobj_event(1_000_000, 1, None, None, None),
-            test_utils::new_test_publish_event(1_001_000, 2, None),
+            test_utils::new_test_newobj_event(
+                1_000_000,
+                TransactionDigest::random(),
+                1,
+                None,
+                None,
+                None,
+            ),
+            test_utils::new_test_publish_event(1_001_000, TransactionDigest::random(), 2, None),
             test_utils::new_test_transfer_event(
                 1_002_000,
+                txfr_digest,
                 3,
                 1,
                 TransferType::Coin,
@@ -686,9 +666,10 @@ mod tests {
                 None,
                 None,
             ),
-            test_utils::new_test_deleteobj_event(1_003_000, 3, None, None),
+            test_utils::new_test_deleteobj_event(1_003_000, txfr_digest, 3, None, None),
             test_utils::new_test_transfer_event(
                 1_004_000,
+                TransactionDigest::random(),
                 4,
                 1,
                 TransferType::ToAddress,
@@ -698,13 +679,14 @@ mod tests {
             ),
             test_utils::new_test_move_event(
                 1_005_000,
+                TransactionDigest::random(),
                 5,
                 ObjectID::from_hex_literal("0x3").unwrap(),
                 "test_module",
                 "test_foo",
             ),
         ];
-        assert_eq!(db.add_events(&to_insert).await?, 6);
+        assert_eq!(db.add_tx_events(&to_insert).await?, 6);
         info!("Done inserting");
 
         assert_eq!(db.total_event_count().await?, 6);
@@ -731,10 +713,18 @@ mod tests {
         // Insert some records
         info!("Inserting records!");
         let to_insert = vec![
-            test_utils::new_test_newobj_event(1_000_000, 1, None, None, None),
-            test_utils::new_test_publish_event(1_001_000, 2, None),
+            test_utils::new_test_newobj_event(
+                1_000_000,
+                TransactionDigest::random(),
+                1,
+                None,
+                None,
+                None,
+            ),
+            test_utils::new_test_publish_event(1_001_000, TransactionDigest::random(), 2, None),
             test_utils::new_test_transfer_event(
-                1_002_000,
+                1_003_000,
+                TransactionDigest::random(),
                 3,
                 1,
                 TransferType::Coin,
@@ -742,10 +732,17 @@ mod tests {
                 None,
                 None,
             ),
-            test_utils::new_test_deleteobj_event(1_003_000, 3, None, None),
+            test_utils::new_test_deleteobj_event(
+                1_003_000,
+                TransactionDigest::random(),
+                4,
+                None,
+                None,
+            ),
             test_utils::new_test_transfer_event(
                 1_004_000,
-                4,
+                TransactionDigest::random(),
+                5,
                 1,
                 TransferType::ToAddress,
                 None,
@@ -754,13 +751,14 @@ mod tests {
             ),
             test_utils::new_test_move_event(
                 1_005_000,
-                5,
+                TransactionDigest::random(),
+                6,
                 ObjectID::from_hex_literal("0x3").unwrap(),
                 "test_module",
                 "test_foo",
             ),
         ];
-        db.add_events(&to_insert).await?;
+        db.add_tx_events(&to_insert).await?;
         let target_event = &to_insert[2];
         info!("Done inserting");
 
@@ -789,11 +787,20 @@ mod tests {
 
         // Insert some records
         info!("Inserting records!");
+        let txfr_digest = TransactionDigest::random();
         let to_insert = vec![
-            test_utils::new_test_newobj_event(1_000_000, 1, None, None, None),
-            test_utils::new_test_publish_event(1_001_000, 2, None),
+            test_utils::new_test_newobj_event(
+                1_000_000,
+                TransactionDigest::random(),
+                1,
+                None,
+                None,
+                None,
+            ),
+            test_utils::new_test_publish_event(1_001_000, TransactionDigest::random(), 2, None),
             test_utils::new_test_transfer_event(
-                1_002_000,
+                1_003_000,
+                txfr_digest,
                 3,
                 1,
                 TransferType::Coin,
@@ -801,9 +808,10 @@ mod tests {
                 None,
                 None,
             ),
-            test_utils::new_test_deleteobj_event(1_003_000, 3, None, None),
+            test_utils::new_test_deleteobj_event(1_003_000, txfr_digest, 3, None, None),
             test_utils::new_test_transfer_event(
                 1_004_000,
+                TransactionDigest::random(),
                 4,
                 1,
                 TransferType::ToAddress,
@@ -813,13 +821,14 @@ mod tests {
             ),
             test_utils::new_test_move_event(
                 1_005_000,
+                TransactionDigest::random(),
                 5,
                 ObjectID::from_hex_literal("0x3").unwrap(),
                 "test_module",
                 "test_foo",
             ),
         ];
-        db.add_events(&to_insert).await?;
+        db.add_tx_events(&to_insert).await?;
         info!("Done inserting");
 
         let queried_events = db
@@ -892,10 +901,18 @@ mod tests {
         // Insert some records
         info!("Inserting records!");
         let to_insert = vec![
-            test_utils::new_test_newobj_event(1_000_000, 1, None, None, None),
-            test_utils::new_test_publish_event(1_001_000, 2, None),
+            test_utils::new_test_newobj_event(
+                1_000_000,
+                TransactionDigest::random(),
+                1,
+                None,
+                None,
+                None,
+            ),
+            test_utils::new_test_publish_event(1_001_000, TransactionDigest::random(), 2, None),
             test_utils::new_test_transfer_event(
                 1_002_000,
+                TransactionDigest::random(),
                 3,
                 1,
                 TransferType::Coin,
@@ -903,9 +920,16 @@ mod tests {
                 None,
                 None,
             ),
-            test_utils::new_test_deleteobj_event(1_003_000, 3, None, None),
+            test_utils::new_test_deleteobj_event(
+                1_003_000,
+                TransactionDigest::random(),
+                3,
+                None,
+                None,
+            ),
             test_utils::new_test_transfer_event(
                 1_004_000,
+                TransactionDigest::random(),
                 4,
                 1,
                 TransferType::ToAddress,
@@ -915,6 +939,7 @@ mod tests {
             ),
             test_utils::new_test_move_event(
                 1_005_000,
+                TransactionDigest::random(),
                 5,
                 ObjectID::from_hex_literal("0x3").unwrap(),
                 "test_module",
@@ -922,13 +947,14 @@ mod tests {
             ),
             test_utils::new_test_move_event(
                 1_006_000,
+                TransactionDigest::random(),
                 6,
                 ObjectID::from_hex_literal("0x3").unwrap(),
                 "test_module",
                 "test_foo",
             ),
         ];
-        db.add_events(&to_insert).await?;
+        db.add_tx_events(&to_insert).await?;
         info!("Done inserting");
 
         // Query for the Move event and validate basic fields
@@ -973,6 +999,7 @@ mod tests {
         let to_insert = vec![
             test_utils::new_test_move_event(
                 1_000_000,
+                TransactionDigest::random(),
                 1,
                 ObjectID::from_hex_literal("0x42").unwrap(),
                 "query_by_move_event_struct_name",
@@ -980,6 +1007,7 @@ mod tests {
             ),
             test_utils::new_test_move_event(
                 1_001_000,
+                TransactionDigest::random(),
                 2,
                 ObjectID::from_hex_literal("0x42").unwrap(),
                 "query_by_move_event_struct_name",
@@ -987,6 +1015,7 @@ mod tests {
             ),
             test_utils::new_test_move_event(
                 1_002_000,
+                TransactionDigest::random(),
                 3,
                 ObjectID::from_hex_literal("0x42").unwrap(),
                 "query_by_move_event_struct_name",
@@ -994,7 +1023,7 @@ mod tests {
             ),
         ];
 
-        assert_eq!(db.add_events(&to_insert).await?, 3);
+        assert_eq!(db.add_tx_events(&to_insert).await?, 3);
         info!("Done inserting");
 
         let events = db
@@ -1032,6 +1061,7 @@ mod tests {
             test_utils::new_test_transfer_event(
                 // 0, object, sender, recipient
                 1_000_000,
+                TransactionDigest::random(),
                 1,
                 1,
                 TransferType::Coin,
@@ -1042,6 +1072,7 @@ mod tests {
             test_utils::new_test_newobj_event(
                 // 1, object, sender
                 1_001_000,
+                TransactionDigest::random(),
                 2,
                 Some(object_id),
                 Some(sender),
@@ -1050,6 +1081,7 @@ mod tests {
             test_utils::new_test_transfer_event(
                 // 2, recipient
                 1_002_000,
+                TransactionDigest::random(),
                 3,
                 1,
                 TransferType::Coin,
@@ -1060,6 +1092,7 @@ mod tests {
             test_utils::new_test_newobj_event(
                 // 3, object, recipient
                 1_003_000,
+                TransactionDigest::random(),
                 4,
                 Some(object_id),
                 None,
@@ -1068,6 +1101,7 @@ mod tests {
             test_utils::new_test_deleteobj_event(
                 // 4, object, sender
                 1_004_000,
+                TransactionDigest::random(),
                 5,
                 Some(object_id),
                 Some(sender),
@@ -1075,23 +1109,28 @@ mod tests {
             test_utils::new_test_deleteobj_event(
                 // 5, sender
                 1_005_000,
+                TransactionDigest::random(),
                 6,
                 None,
                 Some(sender),
             ),
             test_utils::new_test_publish_event(
                 // 6, None
-                1_006_000, 7, None,
+                1_006_000,
+                TransactionDigest::random(),
+                7,
+                None,
             ),
             test_utils::new_test_publish_event(
                 // 7, sender
                 1_007_000,
+                TransactionDigest::random(),
                 8,
                 Some(sender),
             ),
         ];
 
-        assert_eq!(db.add_events(&to_insert).await?, 8);
+        assert_eq!(db.add_tx_events(&to_insert).await?, 8);
         info!("Done inserting");
 
         // Query by sender
@@ -1141,6 +1180,7 @@ mod tests {
 
         let to_insert = vec![test_utils::new_test_transfer_event(
             1_000_000,
+            TransactionDigest::random(),
             1,
             u64::MAX,
             TransferType::Coin,
@@ -1148,7 +1188,7 @@ mod tests {
             None,
             None,
         )];
-        db.add_events(&to_insert).await?;
+        db.add_tx_events(&to_insert).await?;
 
         let events = db
             .events_by_transaction(to_insert[0].tx_digest.unwrap(), 10)
@@ -1170,16 +1210,25 @@ mod tests {
         // Initialize store
         let dir = tempfile::TempDir::new().unwrap(); // NOTE this must be its own line so dir isn't dropped
         let db_file = dir.path().join("events.db");
-        let db = SqlEventStore::new_from_file(&db_file).await?;
-        db.initialize().await?;
+        let db = SqlEventStore::new_from_file(&db_file).await.unwrap();
+        db.initialize().await.unwrap();
 
+        let txfr_digest = TransactionDigest::random();
         // TODO: these 30 lines are quite duplicated in this file (4 times).
         // Write in some events, all should succeed
         let to_insert = vec![
-            test_utils::new_test_newobj_event(1_000_000, 1, None, None, None),
-            test_utils::new_test_publish_event(1_001_000, 2, None),
+            test_utils::new_test_newobj_event(
+                1_000_000,
+                TransactionDigest::random(),
+                1,
+                None,
+                None,
+                None,
+            ),
+            test_utils::new_test_publish_event(1_001_000, TransactionDigest::random(), 2, None),
             test_utils::new_test_transfer_event(
                 1_002_000,
+                txfr_digest,
                 3,
                 1,
                 TransferType::Coin,
@@ -1187,9 +1236,10 @@ mod tests {
                 None,
                 None,
             ),
-            test_utils::new_test_deleteobj_event(1_003_000, 3, None, None),
+            test_utils::new_test_deleteobj_event(1_003_000, txfr_digest, 3, None, None),
             test_utils::new_test_transfer_event(
                 1_004_000,
+                TransactionDigest::random(),
                 4,
                 1,
                 TransferType::ToAddress,
@@ -1199,33 +1249,33 @@ mod tests {
             ),
             test_utils::new_test_move_event(
                 1_005_000,
+                TransactionDigest::random(),
                 5,
                 ObjectID::from_hex_literal("0x3").unwrap(),
                 "test_module",
                 "test_foo",
             ),
         ];
-        assert_eq!(db.add_events(&to_insert[..4]).await?, 4);
-        assert_eq!(db.total_event_count().await?, 4);
+        assert_eq!(db.add_tx_events(&to_insert[..4]).await.unwrap(), 4);
+        assert_eq!(db.total_event_count().await.unwrap(), 4);
 
-        // Write in an older event with older sequence number, should be skipped
-        assert_eq!(db.add_events(&to_insert[1..2]).await?, 0);
-        assert_eq!(db.total_event_count().await?, 4);
+        // Previously inserted event is ignored
+        assert_eq!(db.add_tx_events(&to_insert[1..2]).await.unwrap(), 0);
+        assert_eq!(db.total_event_count().await.unwrap(), 4);
 
-        // Drop and reload DB from the same file, test that sequence number was recovered
+        // Drop and reload DB from the same file.
         drop(db);
-        let db = SqlEventStore::new_from_file(&db_file).await?;
-        db.initialize().await?;
-        assert_eq!(db.last_seq_num().await?, 3);
-        assert_eq!(db.total_event_count().await?, 4);
+        let db = SqlEventStore::new_from_file(&db_file).await.unwrap();
+        db.initialize().await.unwrap();
+        assert_eq!(db.total_event_count().await.unwrap(), 4);
 
-        // Try ingesting older event, check still skipped
-        assert_eq!(db.add_events(&to_insert[1..2]).await?, 0);
-        assert_eq!(db.total_event_count().await?, 4);
+        // Try inserting previously ingested events, should be skipped
+        assert_eq!(db.add_tx_events(&to_insert[1..2]).await.unwrap(), 0);
+        assert_eq!(db.total_event_count().await.unwrap(), 4);
 
         // Check writing new events still succeeds
-        assert_eq!(db.add_events(&to_insert[4..]).await?, 2);
-        assert_eq!(db.total_event_count().await?, 6);
+        assert_eq!(db.add_tx_events(&to_insert[4..]).await.unwrap(), 2);
+        assert_eq!(db.total_event_count().await.unwrap(), 6);
 
         Ok(())
     }
