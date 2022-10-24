@@ -36,7 +36,7 @@ async fn make_batch() {
         rx_batch_maker,
         tx_message,
         Arc::new(node_metrics),
-        store,
+        store.clone(),
         tx_digest,
     );
 
@@ -44,8 +44,8 @@ async fn make_batch() {
     let tx = transaction();
     let (s0, r0) = tokio::sync::oneshot::channel();
     let (s1, r1) = tokio::sync::oneshot::channel();
-    tx_transaction.send((tx.clone(), s0)).await.unwrap();
-    tx_transaction.send((tx.clone(), s1)).await.unwrap();
+    tx_batch_maker.send((tx.clone(), s0)).await.unwrap();
+    tx_batch_maker.send((tx.clone(), s1)).await.unwrap();
 
     // Ensure the batch is as expected.
     let expected_batch = Batch::new(vec![tx.clone(), tx.clone()]);
@@ -63,6 +63,10 @@ async fn make_batch() {
 
     assert!(r0.await.is_ok());
     assert!(r1.await.is_ok());
+
+    // Ensure the batch is stored
+    assert!(store.notify_read(expected_batch.digest()).await.unwrap().is_some());
+
 }
 
 #[tokio::test]
@@ -89,14 +93,14 @@ async fn batch_timeout() {
         rx_batch_maker,
         tx_message,
         Arc::new(node_metrics),
-        store,
+        store.clone(),
         tx_digest,
     );
 
     // Do not send enough transactions to seal a batch.
     let tx = transaction();
     let (s0, r0) = tokio::sync::oneshot::channel();
-    tx_transaction.send((tx.clone(), s0)).await.unwrap();
+    tx_batch_maker.send((tx.clone(), s0)).await.unwrap();
 
     // Ensure the batch is as expected.
     let batch = rx_message.recv().await.unwrap();
@@ -112,4 +116,8 @@ async fn batch_timeout() {
     assert!(respond.unwrap().send(()).is_ok());
 
     assert!(r0.await.is_ok());
+
+    // Ensure the batch is stored
+    assert!(store.notify_read(expected_batch.digest()).await.unwrap().is_some());
+
 }

@@ -31,7 +31,6 @@ pub struct RequestBatchResponse {
 pub type TxResponse = tokio::sync::oneshot::Sender<BatchDigest>;
 pub type PrimaryResponse = Option<tokio::sync::oneshot::Sender<()>>;
 
-
 /// Hashes a serialized batch message without deserializing it into a batch.
 ///
 /// See the test `test_batch_and_serialized`, which guarantees that the output of this

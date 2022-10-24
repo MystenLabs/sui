@@ -21,11 +21,8 @@ use tokio::{
 use types::{
     error::DagError,
     metered_channel::{Receiver, Sender},
-
-    Batch, BatchDigest, ReconfigureNotification, Transaction, WorkerOurBatchMessage,
-
-    PrimaryResponse, TxResponse,
-
+    Batch, BatchDigest, PrimaryResponse, ReconfigureNotification, Transaction, TxResponse,
+    WorkerOurBatchMessage,
 };
 
 #[cfg(test)]
@@ -258,7 +255,11 @@ impl BatchMaker {
 
         // Finally send to primary
         let (primary_response, batch_done) = tokio::sync::oneshot::channel();
-        let message = WorkerOurBatchMessage { digest, worker_id: self.id, metadata };
+        let message = WorkerOurBatchMessage {
+            digest,
+            worker_id: self.id,
+            metadata,
+        };
         if self
             .tx_digest
             .send((message, Some(primary_response)))

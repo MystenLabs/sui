@@ -4,12 +4,11 @@
 
 use crypto::NetworkPublicKey;
 use futures::{stream::FuturesUnordered, StreamExt};
-use network::{P2pNetwork, ReliableNetwork, CancelOnDropHandler};
+use network::{CancelOnDropHandler, P2pNetwork, ReliableNetwork};
 use tokio::{sync::watch, task::JoinHandle};
 use types::{
-    metered_channel::Receiver, ReconfigureNotification, WorkerOthersBatchMessage,
+    metered_channel::Receiver, PrimaryResponse, ReconfigureNotification, WorkerOthersBatchMessage,
     WorkerOurBatchMessage,
-   PrimaryResponse, 
 };
 
 /// The maximum number of digests kept in memory waiting to be sent to the primary.
@@ -90,8 +89,11 @@ impl PrimaryConnector {
     }
 }
 
-async fn handle_future(handle: CancelOnDropHandler<Result<anemo::Response<()>, anemo::Error>> , _response: PrimaryResponse) {
-    if handle.await.is_ok(){
+async fn handle_future(
+    handle: CancelOnDropHandler<Result<anemo::Response<()>, anemo::Error>>,
+    _response: PrimaryResponse,
+) {
+    if handle.await.is_ok() {
         if let Some(response_channel) = _response {
             let _ = response_channel.send(());
         }

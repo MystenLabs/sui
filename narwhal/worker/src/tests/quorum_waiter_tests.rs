@@ -56,11 +56,7 @@ async fn wait_for_quorum() {
     tx_message.send((batch.clone(), Some(s))).await.unwrap();
 
     // Wait for the `QuorumWaiter` to gather enough acknowledgements and output the batch.
-
-    assert_eq!(store.read(batch.digest()).await.unwrap().unwrap(), batch);
-
     r.await.unwrap();
-
 
     // Ensure the other listeners correctly received the batch.
     for (mut handle, _network) in listener_handles {

@@ -31,9 +31,8 @@ use types::{
     error::DagError,
     metered_channel::{channel_with_total, Sender},
     Batch, BatchDigest, Empty, PrimaryToWorkerServer, ReconfigureNotification, Transaction,
-    TransactionProto, Transactions, TransactionsServer, WorkerOurBatchMessage,
+    TransactionProto, Transactions, TransactionsServer, TxResponse, WorkerOurBatchMessage,
     WorkerToWorkerServer,
-   TxResponse,
 };
 
 #[cfg(test)]
@@ -288,7 +287,10 @@ impl Worker {
     fn handle_clients_transactions(
         &self,
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
-        tx_our_batch: Sender<(WorkerOurBatchMessage, Option<tokio::sync::oneshot::Sender<()>>)>,
+        tx_our_batch: Sender<(
+            WorkerOurBatchMessage,
+            Option<tokio::sync::oneshot::Sender<()>>,
+        )>,
         node_metrics: Arc<WorkerMetrics>,
         channel_metrics: Arc<WorkerChannelMetrics>,
         endpoint_metrics: WorkerEndpointMetrics,
@@ -345,11 +347,8 @@ impl Worker {
             self.store.clone(),
             (*(*(*self.committee).load()).clone()).clone(),
             self.worker_cache.clone(),
-
             rx_reconfigure,
-
             /* rx_message */ rx_quorum_waiter,
-
             P2pNetwork::new(network),
         );
 
@@ -358,14 +357,8 @@ impl Worker {
             self.id, address
         );
 
-
-        vec![
-            batch_maker_handle,
-            quorum_waiter_handle,
-            tx_receiver_handle,
-        ]
+        vec![batch_maker_handle, quorum_waiter_handle, tx_receiver_handle]
     }
-
 }
 
 /// Defines how the network receiver handles incoming transactions.
