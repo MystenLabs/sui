@@ -55,7 +55,7 @@ export abstract class SignerWithProvider implements Signer {
     let skipDataValidation = false;
     if (this.provider instanceof JsonRpcProvider) {
       endpoint = this.provider.endpoint;
-      skipDataValidation = this.provider.skipDataValidation;
+      skipDataValidation = this.provider.options.skipDataValidation!;
     }
     this.serializer =
       serializer || new RpcTxnDataSerializer(endpoint, skipDataValidation);

@@ -36,9 +36,12 @@ import {
 export abstract class Provider {
   // API Version
   /**
+   * Fetch and cache the RPC API version number
+   *
    * @return the current version of the RPC API that the provider is
    * connected to, or undefined if any error occurred
    */
+
   abstract getRpcApiVersion(): Promise<RpcApiVersion | undefined>;
 
   // Objects

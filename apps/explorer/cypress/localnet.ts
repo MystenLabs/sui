@@ -11,7 +11,6 @@ import {
     RawSigner,
     LocalTxnDataSerializer,
     type Keypair,
-    LATEST_RPC_API_VERSION,
 } from '../../../sdk/typescript/src';
 
 export async function createLocalnetTasks() {
@@ -23,10 +22,9 @@ export async function createLocalnetTasks() {
             if (!keypair) {
                 throw new Error('missing keypair');
             }
-            const provider = new JsonRpcProvider(
-                'http://localhost:9000',
-                false
-            );
+            const provider = new JsonRpcProvider('http://localhost:9000', {
+                skipDataValidation: false,
+            });
             const signer = new RawSigner(
                 keypair,
                 provider,

@@ -79,13 +79,9 @@ export default class ApiProvider {
     public setNewJsonRpcProvider(apiEnv: API_ENV = DEFAULT_API_ENV) {
         // We also clear the query client whenever set set a new API provider:
         queryClient.clear();
-        this._apiProvider = new JsonRpcProvider(
-            getDefaultAPI(apiEnv).gateway,
-            true
-        );
+        this._apiProvider = new JsonRpcProvider(getDefaultAPI(apiEnv).gateway);
         this._apiFullNodeProvider = new JsonRpcProvider(
-            getDefaultAPI(apiEnv).fullNode,
-            true
+            getDefaultAPI(apiEnv).fullNode
         );
         this._signer = null;
     }

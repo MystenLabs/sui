@@ -12,7 +12,7 @@ export const DefaultRpcClient = (network: Network | string) => {
     const existingClient = defaultRpcMap.get(network);
     if (existingClient) return existingClient;
 
-    const provider = new JsonRpcProvider(getEndpoint(network), true);
+    const provider = new JsonRpcProvider(getEndpoint(network));
     defaultRpcMap.set(network, provider);
     return provider;
 };
