@@ -6,12 +6,16 @@ use crate::metrics::WorkerMetrics;
 use byteorder::{BigEndian, ReadBytesExt};
 use config::Committee;
 use fastcrypto::hash::Hash;
+use futures::stream::FuturesOrdered;
 use store::Store;
 
 use config::WorkerId;
 
 #[cfg(feature = "benchmark")]
 use std::convert::TryInto;
+
+use futures::{Future, StreamExt};
+
 use std::sync::Arc;
 use tokio::{
     sync::watch,
@@ -98,11 +102,17 @@ impl BatchMaker {
         let mut current_responses = Vec::new();
         let mut current_batch_size = 0;
 
+        let mut batch_pipeline = FuturesOrdered::new();
+        // The number of batches to store / transmit in parallel.
+        const MAX_PARALLEL_BATCH: usize = 25;
+
         loop {
             tokio::select! {
                 // Assemble client transactions into batches of preset size.
-
-                Some((transaction, response_sender)) = self.rx_transaction.recv() => {
+                // Note that transactions are only consumed when the number of batches
+                // 'in-flight' are below a certain number (MAX_PARALLEL_BATCH). This
+                // condition will be met eventually if the store and network are functioning.
+                Some((transaction, response_sender)) = self.rx_transaction.recv(), if batch_pipeline.len() < MAX_PARALLEL_BATCH => {
 
                     if current_batch.transactions.is_empty() {
                         // We are interested to measure the time to seal a batch
@@ -116,7 +126,10 @@ impl BatchMaker {
                     current_batch.transactions.push(transaction);
                     current_responses.push(response_sender);
                     if current_batch_size >= self.batch_size {
-                        self.seal(false, current_batch, current_batch_size, current_responses).await;
+                        let seal = self.seal(false, current_batch, current_batch_size, current_responses).await;
+                        batch_pipeline.push_back(seal);
+                        self.node_metrics.parallel_worker_batches.set(batch_pipeline.len() as i64);
+
                         timer.as_mut().reset(Instant::now() + self.max_batch_delay);
                         current_batch = Batch::default();
                         current_responses = Vec::new();
@@ -127,7 +140,10 @@ impl BatchMaker {
                 // If the timer triggers, seal the batch even if it contains few transactions.
                 () = &mut timer => {
                     if !current_batch.transactions.is_empty() {
-                        self.seal(true, current_batch, current_batch_size, current_responses).await;
+                        let seal = self.seal(true, current_batch, current_batch_size, current_responses).await;
+                        batch_pipeline.push_back(seal);
+                        self.node_metrics.parallel_worker_batches.set(batch_pipeline.len() as i64);
+
                         current_batch = Batch::default();
                         current_responses = Vec::new();
                         current_batch_size = 0;
@@ -151,7 +167,13 @@ impl BatchMaker {
                         ReconfigureNotification::Shutdown => return
                     }
                     tracing::debug!("Committee updated to {}", self.committee);
-                }
+                },
+
+                // Process the pipeline of batches, this consumes items in the `batch_pipeline`
+                // list, and ensures the main loop in run will always be able to make progress
+                // by lowering it until condition batch_pipeline.len() < MAX_PARALLEL_BATCH is met.
+                _ = batch_pipeline.next(), if !batch_pipeline.is_empty() => {}
+
             }
 
             // Give the change to schedule other tasks.
@@ -160,8 +182,15 @@ impl BatchMaker {
     }
 
     /// Seal and broadcast the current batch.
-    async fn seal(&self, timeout: bool, batch: Batch, size: usize, responses: Vec<TxResponse>) {
-        let metadata = batch.metadata.clone();
+    async fn seal(
+        &self,
+        timeout: bool,
+        batch: Batch,
+        size: usize,
+        responses: Vec<TxResponse>,
+    ) -> impl Future<Output = ()> {
+        
+
         #[cfg(feature = "benchmark")]
         {
             use fastcrypto::hash::Hash;
@@ -243,7 +272,10 @@ impl BatchMaker {
             .with_label_values(&[self.committee.epoch.to_string().as_str(), reason])
             .observe(self.batch_start_timestamp.elapsed().as_secs_f64());
 
-        // Now save it to disk
+
+        /*
+
+// Now save it to disk
         let digest = batch.digest();
         self.store.sync_write(digest, batch).await;
         // Wait until the batch was written
@@ -278,10 +310,49 @@ impl BatchMaker {
             return;
         }
 
-        // We now signal back to the transaction sender that the transaction is in a
-        // batch and also the digest of the batch.
-        for response in responses {
-            let _ = response.send(digest);
+        */
+
+        // Clone things to not capture self
+        let store = self.store.clone();
+        let worker_id = self.id;
+        let tx_digest = self.tx_digest.clone();
+        let metadata = batch.metadata.clone();
+
+        async move {
+            // Now save it to disk
+            let digest = batch.digest();
+
+            store.sync_write(digest, batch).await;
+            
+            // Also wait for sending to be done here
+            // (TODO: sending to others is an optimization, no need to wait.)
+            let _ = done_sending.await;
+
+            // Finally send to primary
+            let (primary_response, batch_done) = tokio::sync::oneshot::channel();
+            let message = WorkerOurBatchMessage { digest, worker_id, metadata };
+            if tx_digest
+                .send((message, Some(primary_response)))
+                .await
+                .is_err()
+            {
+                tracing::debug!("{}", DagError::ShuttingDown);
+            };
+
+            // Wait for a primary response
+            if batch_done.await.is_err() {
+                // If there is an error it means the channel closed,
+                // and therefore we drop all response handers since we
+                // cannot ensure the primary has actually signaled the
+                // batch will eventually be sent.
+                return;
+            }
+
+            // We now signal back to the transaction sender that the transaction is in a
+            // batch and also the digest of the batch.
+            for response in responses {
+                let _ = response.send(digest);
+            }
         }
     }
 }
