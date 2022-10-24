@@ -183,6 +183,9 @@ impl crate::authority::AuthorityState {
                 error!("batch service exited!");
                 break;
             }
+            // Update the running counter
+            self.metrics.batch_svc_is_running.inc();
+
             // Reset the flags.
             make_batch = false;
 

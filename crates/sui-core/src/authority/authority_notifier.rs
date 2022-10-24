@@ -13,6 +13,30 @@ use typed_store::traits::Map;
 
 use parking_lot::Mutex;
 
+pub struct TransactionNotifierMetrics {
+    low_watermark: IntGauge,
+    high_watermark: IntGauge,
+}
+
+impl TransactionNotifierMetrics {
+    pub fn new(registry: &prometheus::Registry) -> TransactionNotifierMetrics {
+        Self {
+            low_watermark: register_int_gauge_with_registry!(
+                "low_watermark",
+                "Low watermark sequence number",
+                registry,
+            )
+            .unwrap(),
+            high_watermark: register_int_gauge_with_registry!(
+                "high_watermark",
+                "High watermark sequence number",
+                registry,
+            )
+            .unwrap(),
+        }
+    }
+}
+
 pub struct TransactionNotifier {
     state: Arc<AuthorityStore>,
     low_watermark: AtomicU64,
@@ -24,6 +48,7 @@ pub struct TransactionNotifier {
     /// this.
     is_paused: AtomicBool,
     inner: Mutex<LockedNotifier>,
+    notifier_metrics: TransactionNotifierMetrics,
 }
 
 struct LockedNotifier {
@@ -33,7 +58,10 @@ struct LockedNotifier {
 
 impl TransactionNotifier {
     /// Create a new transaction notifier for the authority store
-    pub fn new(state: Arc<AuthorityStore>) -> SuiResult<TransactionNotifier> {
+    pub fn new(
+        state: Arc<AuthorityStore>,
+        registry: &prometheus::Registry,
+    ) -> SuiResult<TransactionNotifier> {
         let seq = state.next_sequence_number()?;
         Ok(TransactionNotifier {
             state,
@@ -49,6 +77,7 @@ impl TransactionNotifier {
                 high_watermark: seq,
                 live_tickets: BTreeSet::new(),
             }),
+            notifier_metrics: TransactionNotifierMetrics::new(registry),
         })
     }
 
@@ -99,6 +128,12 @@ impl TransactionNotifier {
         let seq = inner.high_watermark;
         inner.high_watermark += 1;
         inner.live_tickets.insert(seq);
+        self.notifier_metrics
+            .low_watermark
+            .set(self.low_watermark().try_into().unwrap());
+        self.notifier_metrics
+            .high_watermark
+            .set(inner.high_watermark.try_into().unwrap());
         Ok(TransactionNotifierTicket {
             transaction_notifier: self.clone(),
             seq,
@@ -263,7 +298,9 @@ mod tests {
 
         let store = Arc::new(AuthorityStore::open(&path, None).unwrap());
 
-        let notifier = Arc::new(TransactionNotifier::new(store.clone()).unwrap());
+        let notifier = Arc::new(
+            TransactionNotifier::new(store.clone(), &prometheus::Registry::default()).unwrap(),
+        );
 
         // TEST 1: Happy sequence
 
