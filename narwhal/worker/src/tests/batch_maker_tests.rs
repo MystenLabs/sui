@@ -36,7 +36,7 @@ async fn make_batch() {
         rx_batch_maker,
         tx_message,
         Arc::new(node_metrics),
-        store,
+        store.clone(),
         tx_digest,
     );
 
@@ -64,6 +64,10 @@ async fn make_batch() {
 
     assert!(r0.await.is_ok());
     assert!(r1.await.is_ok());
+
+    // Ensure the batch is stored
+    assert!(store.notify_read(expected_batch.digest()).await.unwrap().is_some());
+
 }
 
 #[tokio::test]
@@ -90,7 +94,7 @@ async fn batch_timeout() {
         rx_batch_maker,
         tx_message,
         Arc::new(node_metrics),
-        store,
+        store.clone(),
         tx_digest,
     );
 
@@ -114,4 +118,8 @@ async fn batch_timeout() {
     assert!(respond.unwrap().send(()).is_ok());
 
     assert!(r0.await.is_ok());
+
+    // Ensure the batch is stored
+    assert!(store.notify_read(expected_batch.digest()).await.unwrap().is_some());
+
 }

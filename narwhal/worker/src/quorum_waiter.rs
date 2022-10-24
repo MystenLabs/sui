@@ -3,16 +3,12 @@
 // SPDX-License-Identifier: Apache-2.0
 use config::{Committee, SharedWorkerCache, Stake, WorkerId};
 use crypto::PublicKey;
-use fastcrypto::hash::Hash;
 use futures::stream::{futures_unordered::FuturesUnordered, StreamExt as _};
 use network::{CancelOnDropHandler, P2pNetwork, ReliableNetwork};
 use store::Store;
 use tokio::{sync::watch, task::JoinHandle};
 use types::{
-
-
-    metered_channel::{Receiver, },
-    Batch, BatchDigest, ReconfigureNotification, WorkerBatchMessage, WorkerOurBatchMessage,
+    metered_channel::Receiver, Batch, BatchDigest, ReconfigureNotification, WorkerBatchMessage,
 };
 
 #[cfg(test)]
@@ -25,8 +21,6 @@ pub struct QuorumWaiter {
     name: PublicKey,
     /// The id of this worker.
     id: WorkerId,
-    // The persistent storage.
-    store: Store<BatchDigest, Batch>,
     /// The committee information.
     committee: Committee,
     /// The worker information cache.
@@ -45,7 +39,7 @@ impl QuorumWaiter {
     pub fn spawn(
         name: PublicKey,
         id: WorkerId,
-        store: Store<BatchDigest, Batch>,
+        _store: Store<BatchDigest, Batch>,
         committee: Committee,
         worker_cache: SharedWorkerCache,
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
@@ -56,7 +50,6 @@ impl QuorumWaiter {
             Self {
                 name,
                 id,
-                store,
                 committee,
                 worker_cache,
                 rx_reconfigure,
