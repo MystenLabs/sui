@@ -1,8 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use crypto::PublicKey;
 use dashmap::DashMap;
 use fastcrypto::hash::Hash;
-use std::{collections::VecDeque, iter, sync::Arc};
+use std::{cmp::Ordering, collections::VecDeque, iter, sync::Arc};
 use store::{
     rocks::{DBMap, TypedStoreError::RocksDBError},
     Map,
@@ -10,12 +11,6 @@ use store::{
 use tokio::sync::{oneshot, oneshot::Sender};
 use tracing::warn;
 use types::{Certificate, CertificateDigest, Round, StoreResult};
-
-/// A type alias used as the value part on the secondary index. Since on the
-/// index we don't really need to store any value, as all the necessary info
-/// are part of the key, we just used the minimum possible value we can
-/// store.
-pub type CertificateToken = u8;
 
 /// The main storage when we have to deal with certificates. It maintains
 /// two storages, one main which saves the certificates by their ids, and a
@@ -29,11 +24,15 @@ pub struct CertificateStore {
     /// Holds the certificates by their digest id
     certificates_by_id: DBMap<CertificateDigest, Certificate>,
     /// A secondary index that keeps the certificate digest ids
-    /// by the certificate rounds. That helps us to perform
-    /// range requests based on rounds. We avoid storing again the
-    /// certificate here to not waste space. To dereference we use
-    /// the certificates_by_id storage.
-    certificate_ids_by_round: DBMap<(Round, CertificateDigest), CertificateToken>,
+    /// by the certificate rounds. Certificate origin is used to produce unique keys.
+    /// This helps us to perform range requests based on rounds. We avoid storing again the
+    /// certificate here to not waste space. To dereference we use the certificates_by_id storage.
+    certificate_id_by_round: DBMap<(Round, PublicKey), CertificateDigest>,
+    /// A secondary index that keeps the certificate digest ids
+    /// by the certificate origins. Certificate rounds are used to produce unique keys.
+    /// This helps us to perform range requests based on rounds. We avoid storing again the
+    /// certificate here to not waste space. To dereference we use the certificates_by_id storage.
+    certificate_id_by_origin: DBMap<(PublicKey, Round), CertificateDigest>,
     /// Senders to notify for a write that happened for
     /// the specified certificate digest id
     notify_on_write_subscribers: Arc<DashMap<CertificateDigest, VecDeque<Sender<Certificate>>>>,
@@ -42,11 +41,13 @@ pub struct CertificateStore {
 impl CertificateStore {
     pub fn new(
         certificates_by_id: DBMap<CertificateDigest, Certificate>,
-        certificate_ids_by_round: DBMap<(Round, CertificateDigest), CertificateToken>,
+        certificate_id_by_round: DBMap<(Round, PublicKey), CertificateDigest>,
+        certificate_id_by_origin: DBMap<(PublicKey, Round), CertificateDigest>,
     ) -> CertificateStore {
         Self {
             certificates_by_id,
-            certificate_ids_by_round,
+            certificate_id_by_round,
+            certificate_id_by_origin,
             notify_on_write_subscribers: Arc::new(DashMap::new()),
         }
     }
@@ -56,7 +57,6 @@ impl CertificateStore {
         let mut batch = self.certificates_by_id.batch();
 
         let id = certificate.digest();
-        let round = certificate.round();
 
         // write the certificate by its id
         batch = batch.insert_batch(
@@ -64,11 +64,15 @@ impl CertificateStore {
             iter::once((id, certificate.clone())),
         )?;
 
-        // write the certificate id by its round
-        let key = (round, id);
-        let value = 0;
-
-        batch = batch.insert_batch(&self.certificate_ids_by_round, iter::once((key, value)))?;
+        // Index the certificate id by its round and origin.
+        batch = batch.insert_batch(
+            &self.certificate_id_by_round,
+            iter::once(((certificate.round(), certificate.origin()), id)),
+        )?;
+        batch = batch.insert_batch(
+            &self.certificate_id_by_origin,
+            iter::once(((certificate.origin(), certificate.round()), id)),
+        )?;
 
         // execute the batch (atomically) and return the result
         let result = batch.write();
@@ -99,13 +103,19 @@ impl CertificateStore {
 
         // write the certificates id by their rounds
         let values = certificates.iter().map(|(digest, c)| {
-            let key = (c.round(), *digest);
-            let value = 0;
-
+            let key = (c.round(), c.origin());
+            let value = digest;
             (key, value)
         });
+        batch = batch.insert_batch(&self.certificate_id_by_round, values)?;
 
-        batch = batch.insert_batch(&self.certificate_ids_by_round, values)?;
+        // write the certificates id by their origins
+        let values = certificates.iter().map(|(digest, c)| {
+            let key = (c.origin(), c.round());
+            let value = digest;
+            (key, value)
+        });
+        batch = batch.insert_batch(&self.certificate_id_by_origin, values)?;
 
         // execute the batch (atomically) and return the result
         let result = batch.write();
@@ -123,6 +133,19 @@ impl CertificateStore {
     /// then None is returned as result.
     pub fn read(&self, id: CertificateDigest) -> StoreResult<Option<Certificate>> {
         self.certificates_by_id.get(&id)
+    }
+
+    /// Retrieves a certificate from the store by round and authority.
+    /// If not found, None is returned as result.
+    pub fn read_by_index(
+        &self,
+        origin: PublicKey,
+        round: Round,
+    ) -> StoreResult<Option<Certificate>> {
+        match self.certificate_id_by_origin.get(&(origin, round))? {
+            Some(d) => self.certificates_by_id.get(&d),
+            None => Ok(None),
+        }
     }
 
     /// Retrieves multiple certificates by their provided ids. The results
@@ -169,17 +192,16 @@ impl CertificateStore {
             Some(cert) => cert,
             None => return Ok(()),
         };
-        let round = cert.round();
 
         let mut batch = self.certificates_by_id.batch();
 
         // write the certificate by its id
         batch = batch.delete_batch(&self.certificates_by_id, iter::once(id))?;
 
-        // write the certificate id by its round
-        let key = (round, id);
+        // write the certificate index by its round
+        let key = (cert.round(), cert.origin());
 
-        batch = batch.delete_batch(&self.certificate_ids_by_round, iter::once(key))?;
+        batch = batch.delete_batch(&self.certificate_id_by_round, iter::once(key))?;
 
         // execute the batch (atomically) and return the result
         batch.write()
@@ -189,10 +211,11 @@ impl CertificateStore {
     pub fn delete_all(&self, ids: impl IntoIterator<Item = CertificateDigest>) -> StoreResult<()> {
         // first read the certificates to get their rounds - we'll need in order
         // to delete the secondary index
-        let certs = self.read_all(ids)?;
+        let ids: Vec<CertificateDigest> = ids.into_iter().collect();
+        let certs = self.read_all(ids.clone())?;
         let keys_by_round = certs
             .into_iter()
-            .filter_map(|c| c.map(|cert| (cert.round(), cert.digest())))
+            .filter_map(|c| c.map(|cert| (cert.round(), cert.origin())))
             .collect::<Vec<_>>();
         if keys_by_round.is_empty() {
             return Ok(());
@@ -201,10 +224,9 @@ impl CertificateStore {
         let mut batch = self.certificates_by_id.batch();
 
         // delete the certificates from the secondary index
-        batch = batch.delete_batch(&self.certificate_ids_by_round, keys_by_round.clone())?;
+        batch = batch.delete_batch(&self.certificate_id_by_round, keys_by_round)?;
 
         // delete the certificates by its ids
-        let ids = keys_by_round.into_iter().map(|(_round, digest)| digest);
         batch = batch.delete_batch(&self.certificates_by_id, ids)?;
 
         // execute the batch (atomically) and return the result
@@ -214,26 +236,34 @@ impl CertificateStore {
     /// Retrieves all the certificates with round >= the provided round.
     /// The result is returned with certificates sorted in round asc order
     pub fn after_round(&self, round: Round) -> StoreResult<Vec<Certificate>> {
-        // The key is basically a composite of the dictated round and
-        // the possible smallest value of the certificate digest (all byte values
-        // should be zero).
-        let key = (round, CertificateDigest::default());
+        // Skip to a row at or before the requested round.
+        // TODO: Add a more efficient seek method to typed store.
+        let mut iter = self.certificate_id_by_round.iter();
+        if round > 0 {
+            iter = iter.skip_to(&(round - 1, PublicKey::default()))?;
+        }
 
-        let digests = self
-            .certificate_ids_by_round
-            .keys()
-            .skip_to(&key)?
-            .map(|(_round, digest)| digest);
+        let mut digests = Vec::new();
+        for ((r, _), d) in iter {
+            match r.cmp(&round) {
+                Ordering::Equal | Ordering::Greater => {
+                    digests.push(d);
+                }
+                Ordering::Less => {
+                    continue;
+                }
+            }
+        }
 
         // Fetch all those certificates from main storage, return an error if any one is missing.
         self.certificates_by_id
-            .multi_get(digests)?
+            .multi_get(digests.clone())?
             .into_iter()
             .map(|opt_cert| {
                 opt_cert.ok_or_else(|| {
                     RocksDBError(format!(
-                        "Certificate with id {} not found, CertificateStore invariant violation",
-                        key.1
+                        "Certificate with some digests not found, CertificateStore invariant violation: {:?}",
+                        digests
                     ))
                 })
             })
@@ -244,17 +274,13 @@ impl CertificateStore {
     pub fn last_round(&self) -> StoreResult<Vec<Certificate>> {
         // starting from the last element - hence the last round - move backwards until
         // we find certificates of different round.
-        let certificates_reverse = self
-            .certificate_ids_by_round
-            .iter()
-            .skip_to_last()
-            .reverse();
+        let certificates_reverse = self.certificate_id_by_round.iter().skip_to_last().reverse();
 
         let mut round = 0;
         let mut certificates = Vec::new();
 
-        for (key, _value) in certificates_reverse {
-            let (certificate_round, certificate_id) = key;
+        for (key, digest) in certificates_reverse {
+            let (certificate_round, _certificate_origin) = key;
 
             // We treat zero as special value (round unset) in order to
             // capture the last certificate's round.
@@ -268,15 +294,12 @@ impl CertificateStore {
                 break;
             }
 
-            let certificate = self
-                .certificates_by_id
-                .get(&certificate_id)?
-                .ok_or_else(|| {
-                    RocksDBError(format!(
-                        "Certificate with id {} not found in main storage although it should",
-                        certificate_id
-                    ))
-                })?;
+            let certificate = self.certificates_by_id.get(&digest)?.ok_or_else(|| {
+                RocksDBError(format!(
+                    "Certificate with id {} not found in main storage although it should",
+                    digest
+                ))
+            })?;
 
             certificates.push(certificate);
         }
@@ -284,25 +307,45 @@ impl CertificateStore {
         Ok(certificates)
     }
 
-    /// Retrieves the latest round number of certificates in store.
-    /// Returns None if there is no certificate.
-    pub fn last_round_number(&self) -> Option<Round> {
-        if let Some(((last_round_num, _), _)) = self
-            .certificate_ids_by_round
+    /// Retrieves the last round number of the given origin.
+    /// Returns None if there is no certificate for the origin.
+    pub fn last_round_number(&self, origin: &PublicKey) -> StoreResult<Option<Round>> {
+        let key = (origin.clone(), Round::MAX);
+        if let Some(((name, round), _)) = self
+            .certificate_id_by_origin
             .iter()
-            .skip_to_last()
-            .reverse()
+            .skip_prior_to(&key)?
             .next()
         {
-            return Some(last_round_num);
+            if &name == origin {
+                return Ok(Some(round));
+            }
         }
-        None
+        Ok(None)
+    }
+
+    /// Retrieves the next round number bigger than the given round for the origin.
+    /// Returns None if there is no more local certificate from the origin with bigger round.
+    pub fn next_round_number(
+        &self,
+        origin: &PublicKey,
+        round: Round,
+    ) -> StoreResult<Option<Round>> {
+        let key = (origin.clone(), round + 1);
+        if let Some(((name, round), _)) = self.certificate_id_by_origin.iter().skip_to(&key)?.next()
+        {
+            if &name == origin {
+                return Ok(Some(round));
+            }
+        }
+        Ok(None)
     }
 
     /// Clears both the main storage of the certificates and the secondary index
     pub fn clear(&self) -> StoreResult<()> {
         self.certificates_by_id.clear()?;
-        self.certificate_ids_by_round.clear()
+        self.certificate_id_by_round.clear()?;
+        self.certificate_id_by_origin.clear()
     }
 
     /// Checks whether the storage is empty. The main storage is
@@ -329,7 +372,8 @@ impl CertificateStore {
 
 #[cfg(test)]
 mod test {
-    use crate::certificate_store::{CertificateStore, CertificateToken};
+    use crate::certificate_store::CertificateStore;
+    use crypto::PublicKey;
     use fastcrypto::hash::Hash;
     use futures::future::join_all;
     use std::{
@@ -345,17 +389,31 @@ mod test {
 
     fn new_store(path: std::path::PathBuf) -> CertificateStore {
         const CERTIFICATES_CF: &str = "certificates";
-        const CERTIFICATE_IDS_BY_ROUND_CF: &str = "certificate_ids_by_round";
+        const CERTIFICATE_ID_BY_ROUND_CF: &str = "certificate_id_by_round";
+        const CERTIFICATE_ID_BY_ORIGIN_CF: &str = "certificate_id_by_origin";
 
-        let rocksdb = open_cf(path, None, &[CERTIFICATES_CF, CERTIFICATE_IDS_BY_ROUND_CF])
-            .expect("Cannot open database");
+        let rocksdb = open_cf(
+            path,
+            None,
+            &[
+                CERTIFICATES_CF,
+                CERTIFICATE_ID_BY_ROUND_CF,
+                CERTIFICATE_ID_BY_ORIGIN_CF,
+            ],
+        )
+        .expect("Cannot open database");
 
-        let (certificate_map, certificate_ids_by_round_map) = reopen!(&rocksdb,
+        let (certificate_map, certificate_id_by_round_map, certificate_id_by_origin_map) = reopen!(&rocksdb,
             CERTIFICATES_CF;<CertificateDigest, Certificate>,
-            CERTIFICATE_IDS_BY_ROUND_CF;<(Round,CertificateDigest), CertificateToken>
+            CERTIFICATE_ID_BY_ROUND_CF;<(Round, PublicKey), CertificateDigest>,
+            CERTIFICATE_ID_BY_ORIGIN_CF;<(PublicKey, Round), CertificateDigest>
         );
 
-        CertificateStore::new(certificate_map, certificate_ids_by_round_map)
+        CertificateStore::new(
+            certificate_map,
+            certificate_id_by_round_map,
+            certificate_id_by_origin_map,
+        )
     }
 
     // helper method that creates certificates for the provided
@@ -416,26 +474,57 @@ mod test {
     }
 
     #[tokio::test]
+    async fn test_next_round_number() {
+        // GIVEN
+        let store = new_store(temp_dir());
+
+        // Create certificates for round 1, 2, 4, 6, 9, 10.
+        let cert = certificates(1).first().unwrap().clone();
+        let origin = cert.origin();
+        let rounds = vec![1, 2, 4, 6, 9, 10];
+        let mut certs = Vec::new();
+        for r in &rounds {
+            let mut c = cert.clone();
+            c.header.round = *r as u64;
+            certs.push(c);
+        }
+
+        store.write_all(certs).unwrap();
+
+        // THEN
+        let mut i = 0;
+        let mut current_round = 0;
+        while let Some(r) = store.next_round_number(&origin, current_round).unwrap() {
+            assert_eq!(rounds[i], r);
+            i += 1;
+            current_round = r;
+        }
+    }
+
+    #[tokio::test]
     async fn test_last_round() {
         // GIVEN
         let store = new_store(temp_dir());
 
         // create certificates for 50 rounds
         let certs = certificates(50);
+        let origin = certs[0].origin();
 
         // store them in both main and secondary index
         store.write_all(certs).unwrap();
 
         // WHEN
         let result = store.last_round().unwrap();
-        let last_round = store.last_round_number().unwrap();
+        let last_round_number = store.last_round_number(&origin).unwrap().unwrap();
+        let last_round_number_not_exist = store.last_round_number(&PublicKey::default()).unwrap();
 
         // THEN
         assert_eq!(result.len(), 4);
-        assert_eq!(last_round, 50);
+        assert_eq!(last_round_number, 50);
         for certificate in result {
-            assert_eq!(certificate.round(), last_round);
+            assert_eq!(certificate.round(), last_round_number);
         }
+        assert!(last_round_number_not_exist.is_none());
     }
 
     #[tokio::test]
@@ -445,11 +534,11 @@ mod test {
 
         // WHEN
         let result = store.last_round().unwrap();
-        let last_round = store.last_round_number();
+        let last_round_number = store.last_round_number(&PublicKey::default()).unwrap();
 
         // THEN
         assert!(result.is_empty());
-        assert!(last_round.is_none());
+        assert!(last_round_number.is_none());
     }
 
     #[tokio::test]
@@ -495,7 +584,7 @@ mod test {
             .collect::<HashSet<_>>();
 
         // WHEN
-        println!("Access after round");
+        println!("Access after round {round_cutoff}, before {total_rounds}");
         let now = Instant::now();
         let result = store
             .after_round(round_cutoff)

@@ -95,7 +95,10 @@ export const getTransactionsByAddress = createAsyncThunk<
         }
         // Get all transactions txId for address
         const transactions: GetTxnDigestsResponse =
-            await api.instance.fullNode.getTransactionsForAddress(address);
+            await api.instance.fullNode.getTransactionsForAddress(
+                address,
+                'Descending'
+            );
 
         if (!transactions || !transactions.length) {
             return [];

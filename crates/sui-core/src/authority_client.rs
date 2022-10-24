@@ -338,14 +338,14 @@ pub fn make_network_authority_client_sets_from_genesis(
 
 pub fn make_authority_clients(
     validator_set: &[ValidatorInfo],
-    send_timeout: Duration,
-    recv_timeout: Duration,
+    connect_timeout: Duration,
+    request_timeout: Duration,
     net_metrics: Arc<NetworkAuthorityClientMetrics>,
 ) -> BTreeMap<AuthorityName, NetworkAuthorityClient> {
     let mut authority_clients = BTreeMap::new();
     let mut network_config = mysten_network::config::Config::new();
-    network_config.connect_timeout = Some(send_timeout);
-    network_config.request_timeout = Some(recv_timeout);
+    network_config.connect_timeout = Some(connect_timeout);
+    network_config.request_timeout = Some(request_timeout);
     for authority in validator_set {
         let channel = network_config
             .connect_lazy(authority.network_address())
@@ -410,11 +410,12 @@ impl AuthorityAPI for LocalAuthorityClient {
         certificate: CertifiedTransaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
         let state = self.state.clone();
-        let cert = certificate.clone();
         let fault_config = self.fault_config;
-        tokio::spawn(async move { Self::handle_certificate(state, cert, fault_config).await })
-            .await
-            .unwrap()
+        tokio::spawn(
+            async move { Self::handle_certificate(state, &certificate, fault_config).await },
+        )
+        .await
+        .unwrap()
     }
 
     async fn handle_account_info_request(
@@ -524,7 +525,7 @@ impl LocalAuthorityClient {
 
     async fn handle_certificate(
         state: Arc<AuthorityState>,
-        certificate: CertifiedTransaction,
+        certificate: &CertifiedTransaction,
         fault_config: LocalAuthorityClientFaultConfig,
     ) -> Result<TransactionInfoResponse, SuiError> {
         if fault_config.fail_before_handle_confirmation {

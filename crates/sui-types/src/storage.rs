@@ -38,16 +38,18 @@ pub enum ObjectChange {
 
 /// An abstraction of the (possibly distributed) store for objects. This
 /// API only allows for the retrieval of objects, not any state changes
-pub trait ObjectResolver {
-    fn read_object(&self, id: &ObjectID) -> Option<&Object>;
+pub trait ChildObjectResolver {
+    fn read_child_object(&self, parent: &ObjectID, child: &ObjectID) -> SuiResult<Option<Object>>;
 }
 
 /// An abstraction of the (possibly distributed) store for objects, and (soon) events and transactions
-pub trait Storage: ObjectResolver {
+pub trait Storage {
     fn reset(&mut self);
 
     /// Record an event that happened during execution
     fn log_event(&mut self, event: Event);
+
+    fn read_object(&self, id: &ObjectID) -> Option<&Object>;
 
     fn apply_object_changes(&mut self, changes: BTreeMap<ObjectID, ObjectChange>);
 }
@@ -96,8 +98,14 @@ impl<S: ParentSync> ParentSync for &mut S {
     }
 }
 
-impl<S: ObjectResolver> ObjectResolver for &S {
-    fn read_object(&self, id: &ObjectID) -> Option<&Object> {
-        ObjectResolver::read_object(*self, id)
+impl<S: ChildObjectResolver> ChildObjectResolver for std::sync::Arc<S> {
+    fn read_child_object(&self, parent: &ObjectID, child: &ObjectID) -> SuiResult<Option<Object>> {
+        ChildObjectResolver::read_child_object(self.as_ref(), parent, child)
+    }
+}
+
+impl<S: ChildObjectResolver> ChildObjectResolver for &S {
+    fn read_child_object(&self, parent: &ObjectID, child: &ObjectID) -> SuiResult<Option<Object>> {
+        ChildObjectResolver::read_child_object(*self, parent, child)
     }
 }

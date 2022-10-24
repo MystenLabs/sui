@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use itertools::Itertools;
 use std::{
     collections::{hash_map::Entry, BTreeMap, BTreeSet, HashMap, HashSet},
     sync::Arc,
@@ -9,6 +10,7 @@ use std::{
 use sui_types::{
     base_types::{ExecutionDigests, TransactionDigest},
     error::{SuiError, SuiResult},
+    gas::GasCostSummary,
     messages::TransactionEffects,
 };
 use typed_store::Map;
@@ -29,7 +31,7 @@ use super::CheckpointStore;
 pub trait CausalOrder {
     fn get_complete_causal_order<'a>(
         &self,
-        transactions: impl Iterator<Item = &'a ExecutionDigests>,
+        transactions: impl Iterator<Item = &'a ExecutionDigests> + Clone,
         ckpt_store: &mut CheckpointStore,
     ) -> SuiResult<Vec<ExecutionDigests>>;
 }
@@ -37,14 +39,14 @@ pub trait CausalOrder {
 pub trait EffectsStore {
     fn get_effects<'a>(
         &self,
-        transactions: impl Iterator<Item = &'a ExecutionDigests>,
+        transactions: impl Iterator<Item = &'a ExecutionDigests> + Clone,
     ) -> SuiResult<Vec<Option<TransactionEffects>>>;
 
-    fn causal_order_from_effects<'a>(
+    fn get_causal_order_and_gas_summary_from_effects<'a>(
         &self,
-        transactions: impl Iterator<Item = &'a ExecutionDigests>,
+        transactions: impl Iterator<Item = &'a ExecutionDigests> + Clone,
         ckpt_store: &mut CheckpointStore,
-    ) -> SuiResult<Vec<ExecutionDigests>> {
+    ) -> SuiResult<(Vec<ExecutionDigests>, GasCostSummary)> {
         let effects = self.get_effects(transactions)?;
 
         // Ensure all transactions included are executed (static property). This should be true since we should not
@@ -169,18 +171,25 @@ pub trait EffectsStore {
         // eventually include a transactions in a proposal, which means that at least 1 honest will
         // include it in a proposal and honest nodes include full causal sequences in proposals.
 
+        // Calculate total gas costs of all transactions that still remain.
+        let gas_summary = get_total_gas_costs_from_txn_effects(
+            final_sequence.iter().map(|d| *effect_map.get(*d).unwrap()),
+        );
+
         // Map transaction digest back to correct execution digest.
-        Ok(final_sequence
+        let execution_digests = final_sequence
             .iter()
             .map(|d| **digest_map.get(*d).unwrap())
-            .collect())
+            .collect();
+
+        Ok((execution_digests, gas_summary))
     }
 }
 
 impl EffectsStore for Arc<AuthorityStore> {
     fn get_effects<'a>(
         &self,
-        transactions: impl Iterator<Item = &'a ExecutionDigests>,
+        transactions: impl Iterator<Item = &'a ExecutionDigests> + Clone,
     ) -> SuiResult<Vec<Option<TransactionEffects>>> {
         Ok(self
             .perpetual_tables
@@ -192,34 +201,51 @@ impl EffectsStore for Arc<AuthorityStore> {
     }
 }
 
-/// An identity causal order that returns just the same order. For testing.
-pub struct TestCausalOrderNoop;
+/// A transaction effects store that returns an identity causal order. For testing.
+#[derive(Default)]
+pub struct TestEffectsStore(pub BTreeMap<TransactionDigest, TransactionEffects>);
 
-impl CausalOrder for TestCausalOrderNoop {
+impl CausalOrder for TestEffectsStore {
     fn get_complete_causal_order<'a>(
         &self,
-        transactions: impl Iterator<Item = &'a ExecutionDigests>,
+        transactions: impl Iterator<Item = &'a ExecutionDigests> + Clone,
         _ckpt_store: &mut CheckpointStore,
     ) -> SuiResult<Vec<ExecutionDigests>> {
         Ok(transactions.cloned().collect())
     }
 }
 
-/// Now this is a real causal orderer based on having an Arc<AuthorityStore> handy.
-impl CausalOrder for Arc<AuthorityStore> {
-    fn get_complete_causal_order<'a>(
+impl EffectsStore for TestEffectsStore {
+    fn get_effects<'a>(
         &self,
-        transactions: impl Iterator<Item = &'a ExecutionDigests>,
+        transactions: impl Iterator<Item = &'a ExecutionDigests> + Clone,
+    ) -> SuiResult<Vec<Option<TransactionEffects>>> {
+        Ok(transactions
+            .map(|item| self.0.get(&item.transaction).cloned())
+            .collect())
+    }
+
+    fn get_causal_order_and_gas_summary_from_effects<'a>(
+        &self,
+        transactions: impl Iterator<Item = &'a ExecutionDigests> + Clone,
         _ckpt_store: &mut CheckpointStore,
-    ) -> SuiResult<Vec<ExecutionDigests>> {
-        self.causal_order_from_effects(transactions, _ckpt_store)
+    ) -> SuiResult<(Vec<ExecutionDigests>, GasCostSummary)> {
+        let gas_costs = get_total_gas_costs_from_txn_effects(
+            self.get_effects(transactions.clone())?
+                .iter()
+                .filter_map(|e| e.as_ref()),
+        );
+        Ok((
+            self.get_complete_causal_order(transactions, _ckpt_store)?,
+            gas_costs,
+        ))
     }
 }
 
 impl EffectsStore for BTreeMap<TransactionDigest, TransactionEffects> {
     fn get_effects<'a>(
         &self,
-        transactions: impl Iterator<Item = &'a ExecutionDigests>,
+        transactions: impl Iterator<Item = &'a ExecutionDigests> + Clone,
     ) -> SuiResult<Vec<Option<TransactionEffects>>> {
         Ok(transactions
             .map(|item| self.get(&item.transaction).cloned())
@@ -227,11 +253,46 @@ impl EffectsStore for BTreeMap<TransactionDigest, TransactionEffects> {
     }
 }
 
+/// Now this is a real causal orderer based on having an Arc<AuthorityStore> handy.
+impl CausalOrder for Arc<AuthorityStore> {
+    fn get_complete_causal_order<'a>(
+        &self,
+        transactions: impl Iterator<Item = &'a ExecutionDigests> + Clone,
+        ckpt_store: &mut CheckpointStore,
+    ) -> SuiResult<Vec<ExecutionDigests>> {
+        Ok(self
+            .get_causal_order_and_gas_summary_from_effects(transactions, ckpt_store)?
+            .0)
+    }
+}
+
+fn get_total_gas_costs_from_txn_effects<'a>(
+    transactions: impl Iterator<Item = &'a TransactionEffects>,
+) -> GasCostSummary {
+    let (storage_costs, computation_costs, storage_rebates): (Vec<u64>, Vec<u64>, Vec<u64>) =
+        transactions
+            .map(|e| {
+                (
+                    e.gas_used.storage_cost,
+                    e.gas_used.computation_cost,
+                    e.gas_used.storage_rebate,
+                )
+            })
+            .multiunzip();
+
+    GasCostSummary {
+        storage_cost: storage_costs.iter().sum(),
+        computation_cost: computation_costs.iter().sum(),
+        storage_rebate: storage_rebates.iter().sum(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::{collections::BTreeMap, env, fs, sync::Arc};
 
-    use crate::checkpoints::causal_order_effects::EffectsStore;
+    use crate::checkpoints::causal_order_effects::{EffectsStore, TestEffectsStore};
+    use crate::checkpoints::checkpoint_tests::random_ckpoint_store;
     use crate::checkpoints::CheckpointStore;
     use fastcrypto::traits::KeyPair;
     use rand::{prelude::StdRng, SeedableRng};
@@ -319,8 +380,8 @@ mod tests {
         let e2 = effects_from(t2, vec![t1]);
         let e3 = effects_from(t3, vec![t2]);
 
-        let mut effect_map = BTreeMap::new();
-        effect_map.extend([
+        let mut effects_store = BTreeMap::new();
+        effects_store.extend([
             (t0, e0),
             (t1, e1.clone()),
             (t2, e2.clone()),
@@ -334,8 +395,10 @@ mod tests {
 
         // TEST 1
         // None are recorded as new transactions in the checkpoint DB so the end sequence is empty
-        let x = effect_map.causal_order_from_effects(input.iter(), &mut cps);
-        assert_eq!(x.unwrap().len(), 0);
+        let (x, _) = effects_store
+            .get_causal_order_and_gas_summary_from_effects(input.iter(), &mut cps)
+            .unwrap();
+        assert_eq!(x.len(), 0);
 
         cps.tables.extra_transactions.insert(&input[0], &0).unwrap();
         cps.tables.extra_transactions.insert(&input[1], &1).unwrap();
@@ -343,10 +406,12 @@ mod tests {
 
         // TEST 2
         // The two transactions are recorded as new so they are re-ordered and sequenced
-        let x = effect_map.causal_order_from_effects(input[..2].iter(), &mut cps);
-        assert_eq!(x.clone().unwrap().len(), 2);
+        let (x, _) = effects_store
+            .get_causal_order_and_gas_summary_from_effects(input[..2].iter(), &mut cps)
+            .unwrap();
+        assert_eq!(x.clone().len(), 2);
         // Its in the correct order
-        assert_eq!(x.unwrap(), vec![input[1], input[0]]);
+        assert_eq!(x, vec![input[1], input[0]]);
 
         // TEST3
         // Skip t2. and order [t3, t1]
@@ -355,11 +420,13 @@ mod tests {
             .map(|item| ExecutionDigests::new(item.transaction_digest, item.digest()))
             .collect();
 
-        let x = effect_map.causal_order_from_effects(input[..2].iter(), &mut cps);
+        let (x, _) = effects_store
+            .get_causal_order_and_gas_summary_from_effects(input[..2].iter(), &mut cps)
+            .unwrap();
 
-        assert_eq!(x.clone().unwrap().len(), 1);
+        assert_eq!(x.clone().len(), 1);
         // Its in the correct order
-        assert_eq!(x.unwrap(), vec![input[1]]);
+        assert_eq!(x, vec![input[1]]);
 
         // Test4
         // Many dependencies
@@ -371,7 +438,7 @@ mod tests {
         let ex = effects_from(tx, vec![t0, t1]);
         let ey = effects_from(ty, vec![tx, t2]);
 
-        effect_map.extend([(tx, ex.clone()), (ty, ey.clone())]);
+        effects_store.extend([(tx, ex.clone()), (ty, ey.clone())]);
 
         let input: Vec<_> = vec![e2.clone(), ex.clone(), ey.clone(), e1.clone()]
             .iter()
@@ -382,18 +449,90 @@ mod tests {
         cps.tables.extra_transactions.insert(&input[2], &4).unwrap();
 
         assert_eq!(input[1..].len(), 3);
-        let x = effect_map.causal_order_from_effects(input[1..].iter(), &mut cps);
+        let (x, _) = effects_store
+            .get_causal_order_and_gas_summary_from_effects(input[1..].iter(), &mut cps)
+            .unwrap();
 
         println!("result: {:?}", x);
-        assert_eq!(x.clone().unwrap().len(), 2);
+        assert_eq!(x.clone().len(), 2);
         // Its in the correct order
-        assert_eq!(x.unwrap(), vec![input[3], input[1]]);
+        assert_eq!(x, vec![input[3], input[1]]);
 
         // TESt 5 all
 
-        let x = effect_map.causal_order_from_effects(input.iter(), &mut cps);
+        let (x, _) = effects_store
+            .get_causal_order_and_gas_summary_from_effects(input.iter(), &mut cps)
+            .unwrap();
 
         println!("result: {:?}", x);
-        assert_eq!(x.clone().unwrap().len(), 4);
+        assert_eq!(x.len(), 4);
+    }
+
+    #[test]
+    // Check that we are summing up the gas costs of txns correctly.
+    fn test_gas_costs() {
+        let (_committee, _keys, mut stores) = random_ckpoint_store();
+        let (_, mut cps) = stores.pop().unwrap();
+        let txn_digest_0 = TransactionDigest::random();
+        let txn_digest_1 = TransactionDigest::random();
+        let txn_digest_2 = TransactionDigest::random();
+        let txn_effects_0 = TransactionEffects {
+            gas_used: GasCostSummary {
+                storage_cost: 42,
+                computation_cost: 500,
+                storage_rebate: 53,
+            },
+            transaction_digest: txn_digest_0,
+            ..Default::default()
+        };
+        let txn_effects_1 = TransactionEffects {
+            gas_used: GasCostSummary {
+                storage_cost: 113,
+                computation_cost: 738,
+                storage_rebate: 124,
+            },
+            transaction_digest: txn_digest_1,
+            ..Default::default()
+        };
+        let txn_effects_2 = TransactionEffects {
+            gas_used: GasCostSummary {
+                storage_cost: 248,
+                computation_cost: 6201,
+                storage_rebate: 61,
+            },
+            transaction_digest: txn_digest_2,
+            ..Default::default()
+        };
+
+        let execution_digests_0 = ExecutionDigests::new(txn_digest_0, txn_effects_0.digest());
+        let execution_digests_1 = ExecutionDigests::new(txn_digest_1, txn_effects_1.digest());
+        let execution_digests_2 = ExecutionDigests::new(txn_digest_2, txn_effects_2.digest());
+
+        let mut effects_map = BTreeMap::new();
+        effects_map.extend([
+            (txn_digest_0, txn_effects_0),
+            (txn_digest_1, txn_effects_1),
+            (txn_digest_2, txn_effects_2),
+        ]);
+        let (_, gas_cost_summary) = TestEffectsStore(effects_map)
+            .get_causal_order_and_gas_summary_from_effects(
+                vec![
+                    execution_digests_0,
+                    execution_digests_1,
+                    execution_digests_2,
+                ]
+                .iter(),
+                &mut cps,
+            )
+            .unwrap();
+
+        assert_eq!(
+            gas_cost_summary,
+            GasCostSummary {
+                storage_cost: 403,
+                computation_cost: 7439,
+                storage_rebate: 238
+            }
+        );
     }
 }

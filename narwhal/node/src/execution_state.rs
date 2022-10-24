@@ -1,3 +1,4 @@
+use std::sync::Arc;
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use async_trait::async_trait;
@@ -23,7 +24,7 @@ impl SimpleExecutionState {
 impl ExecutionState for SimpleExecutionState {
     async fn handle_consensus_transaction(
         &self,
-        _consensus_output: &ConsensusOutput,
+        _consensus_output: &Arc<ConsensusOutput>,
         _execution_indices: ExecutionIndices,
         transaction: Vec<u8>,
     ) {

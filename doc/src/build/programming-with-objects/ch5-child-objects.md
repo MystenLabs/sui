@@ -86,7 +86,7 @@ Both functions will compile successfully, because object ownership relationships
 
 Let's try to interact with these two entry functions on-chain and see what happens. First we publish the sample code:
 ```
-$ sui client publish --path $ROOT/sui-core/src/unit_tests/data/object_owner --gas-budget 5000
+$ sui client publish --path $ROOT/crates/sui-core/src/unit_tests/data/object_owner --gas-budget 5000
 ```
 ```
 ----- Publish Results ----

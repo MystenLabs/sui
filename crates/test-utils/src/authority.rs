@@ -3,22 +3,19 @@
 use crate::TEST_COMMITTEE_SIZE;
 use prometheus::Registry;
 use rand::{prelude::StdRng, SeedableRng};
-use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_config::{NetworkConfig, NodeConfig, ValidatorInfo};
 use sui_core::authority_client::{AuthorityAPI, NetworkAuthorityClientMetrics};
-use sui_core::epoch::committee_store::CommitteeStore;
 use sui_core::{
     authority_active::{
         checkpoint_driver::{CheckpointMetrics, CheckpointProcessControl},
         ActiveAuthority,
     },
-    authority_aggregator::{AuthAggMetrics, AuthorityAggregator},
+    authority_aggregator::AuthorityAggregatorBuilder,
     authority_client::NetworkAuthorityClient,
-    safe_client::SafeClientMetrics,
 };
-use sui_types::{committee::Committee, object::Object};
+use sui_types::object::Object;
 
 pub use sui_node::{SuiNode, SuiNodeHandle};
 use sui_types::base_types::ObjectID;
@@ -126,8 +123,10 @@ pub async fn spawn_checkpoint_processes(configs: &NetworkConfig, handles: &[SuiN
             .with_async(|authority| async move {
                 let state = authority.state();
 
-                let aggregator =
-                    test_authority_aggregator(configs, authority.state().committee_store().clone());
+                let (aggregator, _) = AuthorityAggregatorBuilder::from_network_config(configs)
+                    .with_committee_store(authority.state().committee_store().clone())
+                    .build()
+                    .unwrap();
 
                 let inner_agg = aggregator.clone();
                 let active_state = Arc::new(
@@ -146,39 +145,6 @@ pub async fn spawn_checkpoint_processes(configs: &NetworkConfig, handles: &[SuiN
             })
             .await;
     }
-}
-
-/// Create a test authority aggregator.
-pub fn test_authority_aggregator(
-    config: &NetworkConfig,
-    committee_store: Arc<CommitteeStore>,
-) -> AuthorityAggregator<NetworkAuthorityClient> {
-    let validators_info = config.validator_set();
-    let committee = Committee::new(0, ValidatorInfo::voting_rights(validators_info)).unwrap();
-    // TODO: duplicated at test_utils.rs
-    let registry = prometheus::Registry::new();
-    let network_metrics = Arc::new(NetworkAuthorityClientMetrics::new(&registry));
-    let clients: BTreeMap<_, _> = validators_info
-        .iter()
-        .map(|config| {
-            (
-                config.protocol_key(),
-                NetworkAuthorityClient::connect_lazy(
-                    config.network_address(),
-                    network_metrics.clone(),
-                )
-                .unwrap(),
-            )
-        })
-        .collect();
-    AuthorityAggregator::new(
-        committee,
-        committee_store,
-        clients,
-        AuthAggMetrics::new(&registry),
-        Arc::new(SafeClientMetrics::new(&registry)),
-        network_metrics,
-    )
 }
 
 /// Get a network client to communicate with the consensus.

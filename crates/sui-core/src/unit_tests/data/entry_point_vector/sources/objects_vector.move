@@ -7,7 +7,7 @@ module entry_point_vector::entry_point_vector {
     use sui::tx_context::{Self, TxContext};
     use std::vector;
 
-    struct Obj has key {
+    struct Obj has key, store {
         id: UID,
         value: u64
     }
@@ -17,7 +17,7 @@ module entry_point_vector::entry_point_vector {
         value: u64
     }
 
-    struct ObjAny<phantom Any> has key {
+    struct ObjAny<phantom Any> has key, store {
         id: UID,
         value: u64
     }
@@ -50,12 +50,12 @@ module entry_point_vector::entry_point_vector {
     }
 
     public entry fun mint_child(v: u64, parent: &mut Obj, ctx: &mut TxContext) {
-        transfer::transfer_to_object(
+        sui::dynamic_object_field::add(
+            &mut parent.id, 0,
             Obj {
                 id: object::new(ctx),
                 value: v,
             },
-            parent,
         )
     }
 
@@ -144,12 +144,13 @@ module entry_point_vector::entry_point_vector {
     }
 
     public entry fun mint_child_any<Any>(v: u64, parent: &mut ObjAny<Any>, ctx: &mut TxContext) {
-        transfer::transfer_to_object(
+        sui::dynamic_object_field::add(
+            &mut parent.id,
+            0,
             ObjAny<Any> {
                 id: object::new(ctx),
                 value: v,
             },
-            parent,
         )
     }
 

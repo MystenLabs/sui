@@ -1,0 +1,40 @@
+processed 11 tasks
+
+init:
+A: object(100)
+
+task 1 'publish'. lines 10-67:
+created: object(104)
+written: object(103)
+
+task 2 'run'. lines 69-69:
+created: object(106)
+written: object(105)
+
+task 3 'run'. lines 71-71:
+created: object(108)
+written: object(107)
+
+task 4 'run'. lines 73-73:
+created: object(110), object(111)
+written: object(106), object(109)
+
+task 5 'run'. lines 75-75:
+written: object(106), object(110), object(112)
+
+task 6 'run'. lines 77-77:
+written: object(106), object(113)
+
+task 7 'run'. lines 79-79:
+created: object(115)
+written: object(106), object(108), object(110), object(111), object(114)
+
+task 8 'run'. lines 81-81:
+written: object(108), object(110), object(116)
+
+task 9 'run'. lines 83-83:
+written: object(108), object(117)
+
+task 10 'run'. lines 85-85:
+Error: Transaction Effects Status: Move Runtime Abort. Module: sui::dynamic_field, Status Code: 1
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(ModuleId { address: sui, name: Identifier("dynamic_field") }, 1), source: Some(VMError { major_status: ABORTED, sub_status: Some(1), message: Some("sui::dynamic_field::field_ids at offset 18"), exec_state: Some(ExecutionState { stack_trace: [(Some(ModuleId { address: sui, name: Identifier("dynamic_object_field") }), FunctionDefinitionIndex(2), 10), (Some(ModuleId { address: a, name: Identifier("m") }), FunctionDefinitionIndex(7), 3)] }), location: Module(ModuleId { address: sui, name: Identifier("dynamic_field") }), indices: [], offsets: [(FunctionDefinitionIndex(6), 18)] }) } }

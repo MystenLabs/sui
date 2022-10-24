@@ -153,11 +153,6 @@ export type SuiExecuteTransactionResponse =
 export type GatewayTxSeqNumber = number;
 
 export type GetTxnDigestsResponse = TransactionDigest[];
-// TODO: remove after we deploy 0.12.0 DevNet
-export type GetTxnDigestsResponse__DEPRECATED = [
-  GatewayTxSeqNumber,
-  TransactionDigest
-][];
 
 export type PaginatedTransactionDigests = {
   data: TransactionDigest[];
@@ -397,6 +392,20 @@ export function getTransactionEffects(
     return data.effects;
   }
   return 'EffectsCert' in data ? data.EffectsCert.effects.effects : undefined;
+}
+
+/* ---------------------------- Transaction Effects --------------------------- */
+
+export function getEvents(
+  data: SuiExecuteTransactionResponse | SuiTransactionResponse
+): any {
+  return getTransactionEffects(data)?.events;
+}
+
+export function getCreatedObjects(
+  data: SuiExecuteTransactionResponse | SuiTransactionResponse
+): OwnedObjectRef[] | undefined {
+  return getTransactionEffects(data)?.created;
 }
 
 /* --------------------------- TransactionResponse -------------------------- */

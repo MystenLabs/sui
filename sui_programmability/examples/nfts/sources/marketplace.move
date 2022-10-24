@@ -2,10 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module nfts::marketplace {
-    use nfts::bag::{Self, Bag};
+    use sui::dynamic_field;
     use sui::tx_context::{Self, TxContext};
     use sui::object::{Self, ID, UID};
-    use sui::typed_id::{Self, TypedID};
     use sui::transfer;
     use sui::coin::{Self, Coin};
 
@@ -17,7 +16,6 @@ module nfts::marketplace {
 
     struct Marketplace has key {
         id: UID,
-        bag_id: TypedID<Bag>,
     }
 
     /// A single listing which contains the listed item and its price in [`Coin<C>`].
@@ -30,41 +28,34 @@ module nfts::marketplace {
     /// Create a new shared Marketplace.
     public entry fun create(ctx: &mut TxContext) {
         let id = object::new(ctx);
-        let bag = bag::new(ctx);
-        let bag_id = typed_id::new(&bag);
-        bag::transfer_to_object_id(bag, &mut id);
-        let market_place = Marketplace {
-            id,
-            bag_id,
-        };
-        transfer::share_object(market_place);
+        let marketplace = Marketplace { id };
+        transfer::share_object(marketplace);
     }
 
     /// List an item at the Marketplace.
     public entry fun list<T: key + store, C>(
-        _marketplace: &Marketplace,
-        objects: &mut Bag,
+        marketplace: &mut Marketplace,
         item: T,
         ask: u64,
         ctx: &mut TxContext
     ) {
+        let item_id = object::id(&item);
         let listing = Listing<T, C> {
             item,
             ask,
             owner: tx_context::sender(ctx),
         };
-        bag::add(objects, listing, ctx);
+        dynamic_field::add(&mut marketplace.id, item_id, listing);
     }
 
     /// Remove listing and get an item back. Only owner can do that.
     public fun delist<T: key + store, C>(
-        _marketplace: &Marketplace,
-        objects: &mut Bag,
-        listing: bag::Item<Listing<T, C>>,
+        marketplace: &mut Marketplace,
+        item_id: ID,
         ctx: &mut TxContext
     ): T {
-        let listing = bag::remove(objects, listing);
-        let Listing { item, ask: _, owner } = listing;
+        let Listing<T, C> { item, ask: _, owner } =
+            dynamic_field::remove(&mut marketplace.id, item_id);
 
         assert!(tx_context::sender(ctx) == owner, ENotOwner);
 
@@ -73,12 +64,11 @@ module nfts::marketplace {
 
     /// Call [`delist`] and transfer item to the sender.
     public entry fun delist_and_take<T: key + store, C>(
-        _marketplace: &Marketplace,
-        objects: &mut Bag,
-        listing: bag::Item<Listing<T, C>>,
+        marketplace: &mut Marketplace,
+        item_id: ID,
         ctx: &mut TxContext
     ) {
-        let item = delist(_marketplace, objects, listing, ctx);
+        let item = delist<T, C>(marketplace, item_id, ctx);
         transfer::transfer(item, tx_context::sender(ctx));
     }
 
@@ -86,12 +76,12 @@ module nfts::marketplace {
     /// Amount paid must match the requested amount. If conditions are met,
     /// owner of the item gets the payment and buyer receives their item.
     public fun buy<T: key + store, C>(
-        objects: &mut Bag,
-        listing: bag::Item<Listing<T, C>>,
+        marketplace: &mut Marketplace,
+        item_id: ID,
         paid: Coin<C>,
     ): T {
-        let listing = bag::remove(objects, listing);
-        let Listing { item, ask, owner } = listing;
+        let Listing<T, C> { item, ask, owner } =
+            dynamic_field::remove(&mut marketplace.id, item_id);
 
         assert!(ask == coin::value(&paid), EAmountIncorrect);
 
@@ -101,23 +91,12 @@ module nfts::marketplace {
 
     /// Call [`buy`] and transfer item to the sender.
     public entry fun buy_and_take<T: key + store, C>(
-        _marketplace: &Marketplace,
-        listing: bag::Item<Listing<T, C>>,
-        objects: &mut Bag,
+        marketplace: &mut Marketplace,
+        item_id: ID,
         paid: Coin<C>,
         ctx: &mut TxContext
     ) {
-        transfer::transfer(buy(objects, listing, paid), tx_context::sender(ctx))
-    }
-
-    /// Check whether an object was listed on a Marketplace.
-    public fun contains(objects: &Bag, id: &ID): bool {
-        bag::contains(objects, id)
-    }
-
-    /// Returns the size of the Marketplace.
-    public fun size(objects: &Bag): u64 {
-        bag::size(objects)
+        transfer::transfer(buy<T, C>(marketplace, item_id, paid), tx_context::sender(ctx))
     }
 }
 

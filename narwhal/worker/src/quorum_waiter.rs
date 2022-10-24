@@ -3,13 +3,15 @@
 // SPDX-License-Identifier: Apache-2.0
 use config::{Committee, SharedWorkerCache, Stake, WorkerId};
 use crypto::PublicKey;
+use fastcrypto::hash::Hash;
 use futures::stream::{futures_unordered::FuturesUnordered, StreamExt as _};
 use network::{CancelOnDropHandler, P2pNetwork, ReliableNetwork};
+use store::Store;
 use tokio::{sync::watch, task::JoinHandle};
 use types::{
     error::DagError,
     metered_channel::{Receiver, Sender},
-    Batch, ReconfigureNotification, WorkerMessage,
+    Batch, BatchDigest, ReconfigureNotification, WorkerBatchMessage, WorkerOurBatchMessage,
 };
 
 #[cfg(test)]
@@ -22,6 +24,8 @@ pub struct QuorumWaiter {
     name: PublicKey,
     /// The id of this worker.
     id: WorkerId,
+    // The persistent storage.
+    store: Store<BatchDigest, Batch>,
     /// The committee information.
     committee: Committee,
     /// The worker information cache.
@@ -29,9 +33,9 @@ pub struct QuorumWaiter {
     /// Receive reconfiguration updates.
     rx_reconfigure: watch::Receiver<ReconfigureNotification>,
     /// Input Channel to receive commands.
-    rx_message: Receiver<Batch>,
+    rx_quorum_waiter: Receiver<Batch>,
     /// Channel to deliver batches for which we have enough acknowledgments.
-    tx_batch: Sender<Batch>,
+    tx_our_batch: Sender<WorkerOurBatchMessage>,
     /// A network sender to broadcast the batches to the other workers.
     network: P2pNetwork,
 }
@@ -42,22 +46,24 @@ impl QuorumWaiter {
     pub fn spawn(
         name: PublicKey,
         id: WorkerId,
+        store: Store<BatchDigest, Batch>,
         committee: Committee,
         worker_cache: SharedWorkerCache,
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
-        rx_message: Receiver<Batch>,
-        tx_batch: Sender<Batch>,
+        rx_quorum_waiter: Receiver<Batch>,
+        tx_our_batch: Sender<WorkerOurBatchMessage>,
         network: P2pNetwork,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
             Self {
                 name,
                 id,
+                store,
                 committee,
                 worker_cache,
                 rx_reconfigure,
-                rx_message,
-                tx_batch,
+                rx_quorum_waiter,
+                tx_our_batch,
                 network,
             }
             .run()
@@ -78,7 +84,7 @@ impl QuorumWaiter {
     async fn run(&mut self) {
         loop {
             tokio::select! {
-                Some(batch) = self.rx_message.recv() => {
+                Some(batch) = self.rx_quorum_waiter.recv() => {
                     // Broadcast the batch to the other workers.
                     let workers: Vec<_> = self
                         .worker_cache
@@ -88,7 +94,7 @@ impl QuorumWaiter {
                         .map(|(name, info)| (name, info.name))
                         .collect();
                     let (primary_names, worker_names): (Vec<_>, _) = workers.into_iter().unzip();
-                    let message = WorkerMessage::Batch(batch.clone());
+                    let message = WorkerBatchMessage{batch: batch.clone()};
                     let handlers = self.network.broadcast(worker_names, &message).await;
 
                     // Collect all the handlers to receive acknowledgements.
@@ -111,7 +117,11 @@ impl QuorumWaiter {
                             Some(stake) = wait_for_quorum.next() => {
                                 total_stake += stake;
                                 if total_stake >= threshold {
-                                    if self.tx_batch.send(batch).await.is_err() {
+                                    let digest = batch.digest();
+                                    self.store.write(digest, batch).await;
+                                    if self.tx_our_batch.send(WorkerOurBatchMessage{
+                                        digest,
+                                        worker_id: self.id}).await.is_err() {
                                         tracing::debug!("{}", DagError::ShuttingDown);
                                     }
                                     break;

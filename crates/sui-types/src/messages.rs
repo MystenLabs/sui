@@ -15,9 +15,8 @@ use crate::messages_checkpoint::{
 };
 use crate::object::{Object, ObjectFormatOptions, Owner, OBJECT_START_VERSION};
 use crate::storage::{DeleteKind, WriteKind};
-use crate::sui_serde::Base64;
-use crate::SUI_SYSTEM_STATE_OBJECT_ID;
-use base64ct::Encoding;
+use crate::sui_serde::{Base64, Encoding};
+use crate::{SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION};
 use byteorder::{BigEndian, ReadBytesExt};
 use itertools::Either;
 use move_binary_format::access::ModuleAccess;
@@ -57,12 +56,15 @@ pub enum CallArg {
     ObjVec(Vec<ObjectArg>),
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize)]
 pub enum ObjectArg {
     // A Move object, either immutable, or owned mutable.
     ImmOrOwnedObject(ObjectRef),
     // A Move object that's shared and mutable.
-    SharedObject(ObjectID),
+    SharedObject {
+        id: ObjectID,
+        initial_shared_version: SequenceNumber,
+    },
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
@@ -118,6 +120,8 @@ pub struct ChangeEpoch {
     pub storage_charge: u64,
     /// The total amount of gas charged for computation during the epoch.
     pub computation_charge: u64,
+    /// The total amount of storage rebate refunded during the epoch.
+    pub storage_rebate: u64,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
@@ -149,19 +153,28 @@ impl SingleTransactionKind {
         self.shared_input_objects().next().is_some()
     }
 
-    pub fn shared_input_objects(&self) -> impl Iterator<Item = &ObjectID> {
+    pub fn shared_input_objects(
+        &self,
+    ) -> impl Iterator<Item = (&ObjectID, /* shared at version */ &SequenceNumber)> {
         match &self {
             Self::Call(MoveCall { arguments, .. }) => Either::Left(
                 arguments
                     .iter()
                     .filter_map(|arg| match arg {
                         CallArg::Pure(_) | CallArg::Object(ObjectArg::ImmOrOwnedObject(_)) => None,
-                        CallArg::Object(ObjectArg::SharedObject(id)) => Some(vec![id]),
+                        CallArg::Object(ObjectArg::SharedObject {
+                            id,
+                            initial_shared_version,
+                        }) => Some(vec![(id, initial_shared_version)]),
                         CallArg::ObjVec(vec) => Some(
                             vec.iter()
                                 .filter_map(|obj_arg| {
-                                    if let ObjectArg::SharedObject(id) = obj_arg {
-                                        Some(id)
+                                    if let ObjectArg::SharedObject {
+                                        id,
+                                        initial_shared_version,
+                                    } = obj_arg
+                                    {
+                                        Some((id, initial_shared_version))
                                     } else {
                                         None
                                     }
@@ -200,8 +213,16 @@ impl SingleTransactionKind {
                     CallArg::Object(ObjectArg::ImmOrOwnedObject(object_ref)) => {
                         Some(vec![InputObjectKind::ImmOrOwnedMoveObject(*object_ref)])
                     }
-                    CallArg::Object(ObjectArg::SharedObject(id)) => {
-                        Some(vec![InputObjectKind::SharedMoveObject(*id)])
+                    CallArg::Object(ObjectArg::SharedObject {
+                        id,
+                        initial_shared_version,
+                    }) => {
+                        let id = *id;
+                        let initial_shared_version = *initial_shared_version;
+                        Some(vec![InputObjectKind::SharedMoveObject {
+                            id,
+                            initial_shared_version,
+                        }])
                     }
                     CallArg::ObjVec(vec) => Some(
                         vec.iter()
@@ -209,8 +230,16 @@ impl SingleTransactionKind {
                                 ObjectArg::ImmOrOwnedObject(object_ref) => {
                                     InputObjectKind::ImmOrOwnedMoveObject(*object_ref)
                                 }
-                                ObjectArg::SharedObject(id) => {
-                                    InputObjectKind::SharedMoveObject(*id)
+                                ObjectArg::SharedObject {
+                                    id,
+                                    initial_shared_version,
+                                } => {
+                                    let id = *id;
+                                    let initial_shared_version = *initial_shared_version;
+                                    InputObjectKind::SharedMoveObject {
+                                        id,
+                                        initial_shared_version,
+                                    }
                                 }
                             })
                             .collect(),
@@ -245,9 +274,10 @@ impl SingleTransactionKind {
                 .map(|o| InputObjectKind::ImmOrOwnedMoveObject(*o))
                 .collect(),
             Self::ChangeEpoch(_) => {
-                vec![InputObjectKind::SharedMoveObject(
-                    SUI_SYSTEM_STATE_OBJECT_ID,
-                )]
+                vec![InputObjectKind::SharedMoveObject {
+                    id: SUI_SYSTEM_STATE_OBJECT_ID,
+                    initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+                }]
             }
         };
         // Ensure that there are no duplicate inputs. This cannot be removed because:
@@ -319,6 +349,7 @@ impl Display for SingleTransactionKind {
                 writeln!(writer, "New epoch ID: {}", e.epoch)?;
                 writeln!(writer, "Storage gas reward: {}", e.storage_charge)?;
                 writeln!(writer, "Computation gas reward: {}", e.computation_charge)?;
+                writeln!(writer, "Storage rebate: {}", e.storage_rebate)?;
             }
         }
         write!(f, "{}", writer)
@@ -362,7 +393,9 @@ impl TransactionKind {
         Ok(inputs)
     }
 
-    pub fn shared_input_objects(&self) -> impl Iterator<Item = &ObjectID> {
+    pub fn shared_input_objects(
+        &self,
+    ) -> impl Iterator<Item = (&ObjectID, /* shared at version */ &SequenceNumber)> {
         match &self {
             TransactionKind::Single(s) => Either::Left(s.shared_input_objects()),
             TransactionKind::Batch(b) => {
@@ -587,7 +620,7 @@ impl TransactionData {
     }
 
     pub fn to_base64(&self) -> String {
-        base64ct::Base64::encode_string(&self.to_bytes())
+        Base64::encode(&self.to_bytes())
     }
 
     pub fn gas_payment_object_ref(&self) -> &ObjectRef {
@@ -690,7 +723,9 @@ impl<S> TransactionEnvelope<S> {
         self.shared_input_objects().next().is_some()
     }
 
-    pub fn shared_input_objects(&self) -> impl Iterator<Item = &ObjectID> {
+    pub fn shared_input_objects(
+        &self,
+    ) -> impl Iterator<Item = (&ObjectID, /* shared at version */ &SequenceNumber)> {
         self.signed_data.data.kind.shared_input_objects()
     }
 
@@ -720,6 +755,10 @@ impl<S> TransactionEnvelope<S> {
             .into_iter()
             .map(InputObjectKind::MovePackage)
             .collect::<Vec<_>>()
+    }
+
+    pub fn is_system_tx(&self) -> bool {
+        self.signed_data.data.kind.is_system_tx()
     }
 }
 
@@ -837,6 +876,7 @@ impl SignedTransaction {
         next_epoch: EpochId,
         storage_charge: u64,
         computation_charge: u64,
+        storage_rebate: u64,
         authority: AuthorityName,
         secret: &dyn signature::Signer<AuthoritySignature>,
     ) -> Self {
@@ -844,6 +884,7 @@ impl SignedTransaction {
             epoch: next_epoch,
             storage_charge,
             computation_charge,
+            storage_rebate,
         }));
         // For the ChangeEpoch transaction, we do not care about the sender and the gas.
         let data = TransactionData::new(
@@ -1144,8 +1185,7 @@ pub enum ExecutionFailureStatus {
     EntryTypeArityMismatch,
     EntryArgumentError(EntryArgumentError),
     CircularObjectOwnership(CircularObjectOwnership),
-    MissingObjectOwner(MissingObjectOwner),
-    InvalidSharedChildUse(InvalidSharedChildUse),
+    InvalidChildObjectArgument(InvalidChildObjectArgument),
     InvalidSharedByValue(InvalidSharedByValue),
     TooManyChildObjects {
         object: ObjectID,
@@ -1200,15 +1240,9 @@ pub struct CircularObjectOwnership {
 }
 
 #[derive(Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize, Hash)]
-pub struct MissingObjectOwner {
+pub struct InvalidChildObjectArgument {
     pub child: ObjectID,
     pub parent: SuiAddress,
-}
-
-#[derive(Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize, Hash)]
-pub struct InvalidSharedChildUse {
-    pub child: ObjectID,
-    pub ancestor: ObjectID,
 }
 
 #[derive(Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize, Hash)]
@@ -1225,12 +1259,8 @@ impl ExecutionFailureStatus {
         CircularObjectOwnership { object }.into()
     }
 
-    pub fn missing_object_owner(child: ObjectID, parent: SuiAddress) -> Self {
-        MissingObjectOwner { child, parent }.into()
-    }
-
-    pub fn invalid_shared_child_use(child: ObjectID, ancestor: ObjectID) -> Self {
-        InvalidSharedChildUse { child, ancestor }.into()
+    pub fn invalid_child_object_argument(child: ObjectID, parent: SuiAddress) -> Self {
+        InvalidChildObjectArgument { child, parent }.into()
     }
 
     pub fn invalid_shared_by_value(object: ObjectID) -> Self {
@@ -1294,11 +1324,8 @@ impl Display for ExecutionFailureStatus {
             ExecutionFailureStatus::CircularObjectOwnership(data) => {
                 write!(f, "Circular  Object Ownership. {data}")
             }
-            ExecutionFailureStatus::MissingObjectOwner(data) => {
-                write!(f, "Missing Object Owner. {data}")
-            }
-            ExecutionFailureStatus::InvalidSharedChildUse(data) => {
-                write!(f, "Invalid Shared Child Object Usage. {data}.")
+            ExecutionFailureStatus::InvalidChildObjectArgument(data) => {
+                write!(f, "Invalid Object Owned Argument. {data}")
             }
             ExecutionFailureStatus::InvalidSharedByValue(data) => {
                 write!(f, "Invalid Shared Object By-Value Usage. {data}.")
@@ -1417,26 +1444,13 @@ impl Display for CircularObjectOwnership {
     }
 }
 
-impl Display for MissingObjectOwner {
+impl Display for InvalidChildObjectArgument {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let MissingObjectOwner { child, parent } = self;
+        let InvalidChildObjectArgument { child, parent } = self;
         write!(
             f,
-            "Missing object owner, the parent object {parent} for child object {child}.",
-        )
-    }
-}
-
-impl Display for InvalidSharedChildUse {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let InvalidSharedChildUse { child, ancestor } = self;
-        write!(
-            f,
-            "When a child object (either direct or indirect) of a shared object is passed by-value \
-            to an entry function, either the child object's type or the shared object's type must \
-            be defined in the same module as the called function. This is violated by object \
-            {child}, whose ancestor {ancestor} is a shared object, and neither are defined in \
-            this module.",
+            "Object {child} is owned by object {parent}. \
+            Objects owned by other objects cannot be used as input arguments."
         )
     }
 }
@@ -1499,15 +1513,9 @@ impl From<CircularObjectOwnership> for ExecutionFailureStatus {
     }
 }
 
-impl From<MissingObjectOwner> for ExecutionFailureStatus {
-    fn from(error: MissingObjectOwner) -> Self {
-        Self::MissingObjectOwner(error)
-    }
-}
-
-impl From<InvalidSharedChildUse> for ExecutionFailureStatus {
-    fn from(error: InvalidSharedChildUse) -> Self {
-        Self::InvalidSharedChildUse(error)
+impl From<InvalidChildObjectArgument> for ExecutionFailureStatus {
+    fn from(error: InvalidChildObjectArgument) -> Self {
+        Self::InvalidChildObjectArgument(error)
     }
 }
 
@@ -1665,6 +1673,36 @@ impl Display for TransactionEffects {
     }
 }
 
+impl Default for TransactionEffects {
+    fn default() -> Self {
+        TransactionEffects {
+            status: ExecutionStatus::Success,
+            gas_used: GasCostSummary {
+                computation_cost: 0,
+                storage_cost: 0,
+                storage_rebate: 0,
+            },
+            shared_objects: Vec::new(),
+            transaction_digest: TransactionDigest::random(),
+            created: Vec::new(),
+            mutated: Vec::new(),
+            unwrapped: Vec::new(),
+            deleted: Vec::new(),
+            wrapped: Vec::new(),
+            gas_object: (
+                (
+                    ObjectID::random(),
+                    SequenceNumber::new(),
+                    ObjectDigest::new([0; 32]),
+                ),
+                Owner::AddressOwner(SuiAddress::default()),
+            ),
+            events: Vec::new(),
+            dependencies: Vec::new(),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TransactionEffectsEnvelope<S> {
     // This is a cache of an otherwise expensive to compute value.
@@ -1731,7 +1769,10 @@ pub enum InputObjectKind {
     // A Move object, either immutable, or owned mutable.
     ImmOrOwnedMoveObject(ObjectRef),
     // A Move object that's shared and mutable.
-    SharedMoveObject(ObjectID),
+    SharedMoveObject {
+        id: ObjectID,
+        initial_shared_version: SequenceNumber,
+    },
 }
 
 impl InputObjectKind {
@@ -1739,15 +1780,15 @@ impl InputObjectKind {
         match self {
             Self::MovePackage(id) => *id,
             Self::ImmOrOwnedMoveObject((id, _, _)) => *id,
-            Self::SharedMoveObject(id) => *id,
+            Self::SharedMoveObject { id, .. } => *id,
         }
     }
 
-    pub fn version(&self) -> SequenceNumber {
+    pub fn version(&self) -> Option<SequenceNumber> {
         match self {
-            Self::MovePackage(..) => OBJECT_START_VERSION,
-            Self::ImmOrOwnedMoveObject((_, version, _)) => *version,
-            Self::SharedMoveObject(..) => OBJECT_START_VERSION,
+            Self::MovePackage(..) => Some(OBJECT_START_VERSION),
+            Self::ImmOrOwnedMoveObject((_, version, _)) => Some(*version),
+            Self::SharedMoveObject { .. } => None,
         }
     }
 
@@ -1755,7 +1796,7 @@ impl InputObjectKind {
         match *self {
             Self::MovePackage(package_id) => SuiError::DependentPackageNotFound { package_id },
             Self::ImmOrOwnedMoveObject((object_id, _, _)) => SuiError::ObjectNotFound { object_id },
-            Self::SharedMoveObject(object_id) => SuiError::ObjectNotFound { object_id },
+            Self::SharedMoveObject { id, .. } => SuiError::ObjectNotFound { object_id: id },
         }
     }
 }
@@ -1790,7 +1831,7 @@ impl InputObjects {
                         Some(*object_ref)
                     }
                 }
-                InputObjectKind::SharedMoveObject(_) => None,
+                InputObjectKind::SharedMoveObject { .. } => None,
             })
             .collect();
 
@@ -1805,7 +1846,7 @@ impl InputObjects {
     pub fn filter_shared_objects(&self) -> Vec<ObjectRef> {
         self.objects
             .iter()
-            .filter(|(kind, _)| matches!(kind, InputObjectKind::SharedMoveObject(_)))
+            .filter(|(kind, _)| matches!(kind, InputObjectKind::SharedMoveObject { .. }))
             .map(|(_, obj)| obj.compute_object_reference())
             .collect()
     }
@@ -1829,7 +1870,7 @@ impl InputObjects {
                         Some(*object_ref)
                     }
                 }
-                InputObjectKind::SharedMoveObject(_) => Some(object.compute_object_reference()),
+                InputObjectKind::SharedMoveObject { .. } => Some(object.compute_object_reference()),
             })
             .collect()
     }
@@ -2116,7 +2157,7 @@ pub struct CommitteeInfoRequest {
     pub epoch: Option<EpochId>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, schemars::JsonSchema, Debug)]
 pub struct CommitteeInfoResponse {
     pub epoch: EpochId,
     pub committee_info: Option<Vec<(AuthorityName, StakeUnit)>>,

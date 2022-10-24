@@ -44,9 +44,6 @@ use types::base_types::SequenceNumber;
 use types::error::TRANSACTION_NOT_FOUND_MSG_PREFIX;
 use types::messages::ExecuteTransactionRequestType;
 
-// re-export essential sui crates
-pub mod crypto;
-
 const WAIT_FOR_TX_TIMEOUT_SEC: u64 = 10;
 
 #[derive(Debug)]
@@ -220,11 +217,20 @@ impl SuiClient {
         }
     }
 
-    pub fn api_version(&self) -> String {
+    pub fn api_version(&self) -> &str {
         match &*self.api {
-            SuiClientApi::Rpc(c) => c.info.version.clone(),
-            SuiClientApi::Embedded(_) => env!("CARGO_PKG_VERSION").to_owned(),
+            SuiClientApi::Rpc(c) => &c.info.version,
+            SuiClientApi::Embedded(_) => env!("CARGO_PKG_VERSION"),
         }
+    }
+
+    pub fn check_api_version(&self) -> Result<(), anyhow::Error> {
+        let server_version = self.api_version();
+        let client_version = env!("CARGO_PKG_VERSION");
+        if server_version != client_version {
+            return Err(anyhow!("Client/Server api version mismatch, client api version : {client_version}, server api version : {server_version}"));
+        };
+        Ok(())
     }
 }
 

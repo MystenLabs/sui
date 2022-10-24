@@ -269,7 +269,10 @@ pub enum Owner {
     /// The object ID is converted to SuiAddress as SuiAddress is universal.
     ObjectOwner(SuiAddress),
     /// Object is shared, can be used by any address, and is mutable.
-    Shared,
+    Shared {
+        /// The version at which the object became shared
+        initial_shared_version: SequenceNumber,
+    },
     /// Object is immutable, and hence ownership doesn't matter.
     Immutable,
 }
@@ -278,7 +281,7 @@ impl Owner {
     pub fn get_owner_address(&self) -> SuiResult<SuiAddress> {
         match self {
             Self::AddressOwner(address) | Self::ObjectOwner(address) => Ok(*address),
-            Self::Shared | Self::Immutable => Err(SuiError::UnexpectedOwnerType),
+            Self::Shared { .. } | Self::Immutable => Err(SuiError::UnexpectedOwnerType),
         }
     }
 
@@ -296,7 +299,7 @@ impl Owner {
     }
 
     pub fn is_shared(&self) -> bool {
-        matches!(self, Owner::Shared)
+        matches!(self, Owner::Shared { .. })
     }
 }
 
@@ -304,7 +307,7 @@ impl PartialEq<SuiAddress> for Owner {
     fn eq(&self, other: &SuiAddress) -> bool {
         match self {
             Self::AddressOwner(address) => address == other,
-            Self::ObjectOwner(_) | Self::Shared | Self::Immutable => false,
+            Self::ObjectOwner(_) | Self::Shared { .. } | Self::Immutable => false,
         }
     }
 }
@@ -314,7 +317,7 @@ impl PartialEq<ObjectID> for Owner {
         let other_id: SuiAddress = (*other).into();
         match self {
             Self::ObjectOwner(id) => id == &other_id,
-            Self::AddressOwner(_) | Self::Shared | Self::Immutable => false,
+            Self::AddressOwner(_) | Self::Shared { .. } | Self::Immutable => false,
         }
     }
 }
@@ -331,7 +334,7 @@ impl Display for Owner {
             Self::Immutable => {
                 write!(f, "Immutable")
             }
-            Self::Shared => {
+            Self::Shared { .. } => {
                 write!(f, "Shared")
             }
         }
@@ -435,7 +438,13 @@ impl Object {
 
     pub fn input_object_kind(&self) -> InputObjectKind {
         match &self.owner {
-            Owner::Shared => InputObjectKind::SharedMoveObject(self.id()),
+            Owner::Shared {
+                initial_shared_version,
+                ..
+            } => InputObjectKind::SharedMoveObject {
+                id: self.id(),
+                initial_shared_version: *initial_shared_version,
+            },
             Owner::ObjectOwner(_) | Owner::AddressOwner(_) | Owner::Immutable => {
                 InputObjectKind::ImmOrOwnedMoveObject(self.compute_object_reference())
             }
@@ -546,7 +555,7 @@ impl Object {
         Self::with_id_owner_for_testing(ObjectID::random(), owner)
     }
 
-    /// Generate a new gas coin worth `value` wiht a random object ID and owner
+    /// Generate a new gas coin worth `value` with a random object ID and owner
     /// For testing purposes only
     pub fn new_gas_coin_for_testing(value: u64, owner: SuiAddress) -> Self {
         let content = GasCoin::new(ObjectID::random(), value);

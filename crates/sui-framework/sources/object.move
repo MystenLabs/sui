@@ -6,6 +6,8 @@ module sui::object {
     use std::bcs;
     use sui::tx_context::{Self, TxContext};
 
+    friend sui::dynamic_field;
+    friend sui::dynamic_object_field;
     friend sui::sui_system;
     friend sui::transfer;
 
@@ -58,6 +60,16 @@ module sui::object {
     /// Get the inner bytes of `id` as an address.
     public fun id_to_address(id: &ID): address {
         id.bytes
+    }
+
+    /// Make an `ID` from raw bytes.
+    public fun id_from_bytes(bytes: vector<u8>): ID {
+        id_from_address(address_from_bytes(bytes))
+    }
+
+    /// Make an `ID` from an address.
+    public fun id_from_address(bytes: address): ID {
+        ID { bytes }
     }
 
     // === uid ===
@@ -137,19 +149,19 @@ module sui::object {
     /// restrictable in the object's module.
     native fun borrow_uid<T: key>(obj: &T): &UID;
 
-    // === test functions ===
-
-    #[test_only]
-    /// Test only helper to create a specific ID.
-    /// This is limited to tests to ensure that IDs are generated from objects
-    public fun id_from_address(bytes: address): ID {
-        ID { bytes }
+    /// Generate a new UID specifically used for creating a UID from a hash
+    public(friend) fun new_uid_from_hash(bytes: address): UID {
+        record_new_uid(bytes);
+        UID { id: ID { bytes } }
     }
 
     // === internal functions ===
 
     // helper for delete
     native fun delete_impl(id: address);
+
+    // marks newly created UIDs from hash
+    native fun record_new_uid(id: address);
 
     // Cost calibration functions
     #[test_only]

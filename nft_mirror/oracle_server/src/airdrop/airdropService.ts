@@ -8,7 +8,7 @@ import { NFTFetcher, NFTInfo } from '../common/nftFetcher';
 import { ValidateError } from 'tsoa';
 import { Connection } from '../sdk/gateway';
 
-const DEFAULT_GAS_BUDGET = 10000;
+const DEFAULT_GAS_BUDGET = 20000;
 
 interface AirdropClaimInfo {
     /**

@@ -2,29 +2,30 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import * as Yup from 'yup';
+import zxcvbn from 'zxcvbn';
 
-function containsUpperCaseLetters(str: string) {
-    for (const letter of str) {
-        if (
-            letter.toLowerCase() !== letter.toUpperCase() &&
-            letter === letter.toUpperCase()
-        ) {
-            return true;
-        }
+function addDot(str: string | undefined) {
+    if (str && !str.endsWith('.')) {
+        return `${str}.`;
     }
-    return false;
+    return str;
 }
 
 export const passwordValidation = Yup.string()
     .ensure()
-    .required()
-    .min(8)
+    .required('Required')
     .test({
         name: 'password-strength',
         test: (password: string) => {
-            const oneDigit = /\d/.test(password);
-            const oneUpperCase = containsUpperCaseLetters(password);
-            return oneDigit && oneUpperCase;
+            return zxcvbn(password).score > 2;
+        },
+        message: ({ value }) => {
+            const {
+                feedback: { warning, suggestions },
+            } = zxcvbn(value);
+            return `${addDot(warning) || 'Password is not strong enough.'}${
+                suggestions ? ` ${suggestions.join(' ')}` : ''
+            }`;
         },
     });
 

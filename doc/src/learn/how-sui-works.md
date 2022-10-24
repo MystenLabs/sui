@@ -2,15 +2,15 @@
 title: How Sui Works
 ---
 
-This document has two main goals: It first provides a high-level overview of Sui, presenting its main functionalities and design choices. It then compares Sui with existing blockchains allowing potential adopters to decide whether Sui fits their use cases.
-
-This document is written for engineers, developers, and technical readers knowledgeable about the crypto space. It does not assume deep programming language or distributed systems expertise. See the [Sui white paper](https://github.com/MystenLabs/sui/blob/main/doc/paper/sui.pdf) for a much deeper explanation of how Sui works. See [How Sui Differs from Other Blockchains](sui-compared.md) for a high-level overview of the differences in approach between Sui and other blockchain systems.
+This document is written for engineers, developers, and technical readers knowledgeable about the blockchain. It does not assume deep programming language or distributed systems expertise. See the [Sui white paper](https://github.com/MystenLabs/sui/blob/main/doc/paper/sui.pdf) for a much deeper explanation of how Sui works. See [How Sui Differs from Other Blockchains](sui-compared.md) for a high-level overview of the differences between Sui and other blockchain systems.
 
 ## tl;dr
 
-The Sui blockchain operates at a speed and scale previously thought unimaginable. Sui assumes the typical blockchain transaction is a simple transfer and optimizes for that use. Sui does this by making each request idempotent, holding network connections open longer, and ensuring transactions complete immediately. Sui optimizes for single-writer objects, allowing a design that forgoes consensus for simple transactions.
+The Sui blockchain operates at a speed and scale previously thought unattainable. Sui assumes most blockchain transactions touch non-overlapping states, meaning that transactions can run in parallel. Sui optimizes for single-writer objects, allowing a design that forgoes consensus for simple transactions.
 
-Instead of the traditional blockchain’s fire-and-forget broadcast, Sui ensures a two-way handshake between the requestor and approving validators, with simple transactions having near instant finality. With this low latency, transactions can easily be incorporated into games and other settings that need completion in real time. Furthermore, Sui supports smart contracts written in Move, a language designed for blockchains with strong inherent security and a more understandable programming model.
+Instead of the traditional blockchain’s fire-and-forget broadcast, Sui's design enables a requestor or a proxy to proactively talk to validators to bring a transaction to finality. This results in near instant finality for simple transactions.
+
+With this low latency, Sui makes it easy to incorporate transactions into games and other settings that need completion in real time. Sui also supports smart contracts written in Move, a language designed for blockchains with strong inherent security and a more understandable programming model.
 
 In a world where the cost of bandwidth is diminishing steadily, we are creating an ecosystem of services that will find it easy, fun, and perhaps profitable to ensure transaction voting on behalf of users.
 
@@ -62,7 +62,7 @@ Because Sui focuses on managing specific objects rather than a single aggregatio
 
 As a consequence, a Sui validator – or any other entity with a copy of the state – can exhibit a causal history of an object, showing its history since genesis. Sui explicitly makes the bet that in many cases, the ordering of that causal history with the causal history of another object is irrelevant; and in the few cases where this information is relevant, Sui makes this relationship explicit in the data.
 
-Sui guarantees transaction processing obeys *[eventual consistency](https://en.wikipedia.org/wiki/Eventual_consistency)* in the [classical sense](https://hal.inria.fr/inria-00609399/document). This breaks down in two parts:
+Sui guarantees transaction processing obeys [eventual consistency](https://en.wikipedia.org/wiki/Eventual_consistency) in the [classical sense](https://hal.inria.fr/inria-00609399/document). This breaks down in two parts:
 
 * Eventual delivery - if one honest validator processes a transaction, all other honest validators will eventually do the same.
 * Convergence - two validators that have seen the same set of transactions share the same view of the system (reach the same state).
@@ -107,16 +107,6 @@ Transactions involving shared objects also contain at least one owned object to 
 As mentioned, Sui does not impose a total order on the transactions containing only owned objects. Instead, transactions are [causally ordered](sui-compared.md#causal-order-vs-total-order). If a transaction `T1` produces an output object `O1` used as input objects in a transaction `T2`, a validator must execute `T1` before it executes `T2`. Note that `T2` does not need to use these objects directly for a causal relationship to exist, e.g., `T1` might produce output objects which are then used by `T3`, and `T2` might use `T3`'s output objects. However, transactions with no causal relationship can be processed by Sui validators in any order. This insight allows Sui to massively parallelize execution, and shard it across multiple machines.
 
 Sui employs the [state-of-the-art Narwhal consensus protocol](https://arxiv.org/abs/2105.11827) to totally order transactions involving shared objects. The consensus sub-system also scales in the sense that it can sequence more transactions by adding more machines per validator.
-
-## Sui Gateway services
-
-The Sui model encourages third parties to assist with transaction submissions. For example, if an app developer (e.g., a game developer) has many users, they can manage votes aggregation and certificate submission on behalf of their users. The app developer may use their own servers (e.g., where they store the state of the game) to run a _Sui Gateway service_. We provide a reference implementation of such a service.
-
-Instead of the app users attempting to send transactions to multiple validators from their mobile device, which may degrade user experience, users may submit their transactions to the app, which forwards it to the Sui Gateway service run by the app developer. The Sui Gateway service conducts the entire transaction session and returns the results to the users. Security is assured since the app doesn’t need to know the users’ private keys; the app owner merely provides the bandwidth.
-
-More specifically, this service plays the role of an accumulator and makes sure the transaction is received by a quorum of validators, collects a quorum of votes, submits the certificate to the validators, and replies to the client. The Sui Gateway is trusted for availability only and not safety.
-
-In a world where the cost of bandwidth is diminishing steadily, Sui fosters an ecosystem of services that will find it easy, fun, and perhaps profitable to ensure transaction voting and certificates broadcast on behalf of end-users.
 
 ## Smart contract programming
 

@@ -12,6 +12,7 @@ import {
 import {
   DEFAULT_RECIPIENT,
   DEFAULT_GAS_BUDGET,
+  SUI_SYSTEM_STATE_OBJECT_ID,
   setup,
   TestToolbox,
   DEFAULT_RECIPIENT_2,
@@ -75,6 +76,33 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
         gasBudget: DEFAULT_GAS_BUDGET,
         gasPayment: coins[0].objectId,
       });
+      expect(getExecutionStatusType(txn)).toEqual('success');
+    });
+
+    it('Move Shared Object Call', async () => {
+      const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
+        toolbox.address()
+      );
+
+      const validators = await toolbox.getActiveValidators();
+      const validator_metadata = (validators[0] as SuiMoveObject).fields.metadata;
+      const validator_address = (validator_metadata as SuiMoveObject).fields
+        .sui_address;
+
+      const txn = await signer.executeMoveCallWithRequestType({
+        packageObjectId: '0x2',
+        module: 'sui_system',
+        function: 'request_add_delegation',
+        typeArguments: [],
+        arguments: [
+          SUI_SYSTEM_STATE_OBJECT_ID,
+          coins[2].objectId,
+          validator_address,
+        ],
+        gasBudget: DEFAULT_GAS_BUDGET,
+        gasPayment: coins[3].objectId,
+      });
+
       expect(getExecutionStatusType(txn)).toEqual('success');
     });
 

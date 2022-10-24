@@ -52,7 +52,7 @@ impl TestCaseImpl for CallContractTest {
             type_args,
             args,
             Some(*gas_obj.id()),
-            5000
+            20000
         ];
 
         let data = ctx

@@ -170,7 +170,7 @@ fn read_prefunded_account(path: &Path) -> Result<Vec<PrefundedAccount>, anyhow::
 
 #[test]
 fn test_read_keystore() {
-    use sui_sdk::crypto::{AccountKeystore, FileBasedKeystore, Keystore};
+    use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
     use sui_types::crypto::SignatureScheme;
 
     let temp_dir = tempfile::tempdir().unwrap();

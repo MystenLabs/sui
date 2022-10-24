@@ -6,7 +6,10 @@ use crypto::NetworkPublicKey;
 use futures::{stream::FuturesUnordered, StreamExt};
 use network::{P2pNetwork, ReliableNetwork};
 use tokio::{sync::watch, task::JoinHandle};
-use types::{metered_channel::Receiver, ReconfigureNotification, WorkerPrimaryMessage};
+use types::{
+    metered_channel::Receiver, ReconfigureNotification, WorkerOthersBatchMessage,
+    WorkerOurBatchMessage,
+};
 
 /// The maximum number of digests kept in memory waiting to be sent to the primary.
 pub const MAX_PENDING_DIGESTS: usize = 10_000;
@@ -17,8 +20,9 @@ pub struct PrimaryConnector {
     primary_name: NetworkPublicKey,
     /// Receive reconfiguration updates.
     rx_reconfigure: watch::Receiver<ReconfigureNotification>,
-    /// Input channel to receive the messages to send to the primary.
-    rx_digest: Receiver<WorkerPrimaryMessage>,
+    /// Input channels to receive the messages to send to the primary.
+    rx_our_batch: Receiver<WorkerOurBatchMessage>,
+    rx_others_batch: Receiver<WorkerOthersBatchMessage>,
     /// A network sender to send the batches' digests to the primary.
     primary_client: P2pNetwork,
 }
@@ -28,14 +32,16 @@ impl PrimaryConnector {
     pub fn spawn(
         primary_name: NetworkPublicKey,
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
-        rx_digest: Receiver<WorkerPrimaryMessage>,
+        rx_our_batch: Receiver<WorkerOurBatchMessage>,
+        rx_others_batch: Receiver<WorkerOthersBatchMessage>,
         primary_client: P2pNetwork,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
             Self {
                 primary_name,
                 rx_reconfigure,
-                rx_digest,
+                rx_our_batch,
+                rx_others_batch,
                 primary_client,
             }
             .run()
@@ -47,14 +53,23 @@ impl PrimaryConnector {
         let mut futures = FuturesUnordered::new();
         loop {
             tokio::select! {
-                // Send the digest through the network.
-                Some(digest) = self.rx_digest.recv() => {
+                // Send the batches through the network.
+                Some(batch) = self.rx_our_batch.recv() => {
                     if futures.len() >= MAX_PENDING_DIGESTS {
-                        tracing::warn!("Primary unreachable: dropping {digest:?}");
+                        tracing::warn!("Primary unreachable: dropping {batch:?}");
                         continue;
                     }
 
-                    let handle = self.primary_client.send(self.primary_name.to_owned(), &digest).await;
+                    let handle = self.primary_client.send(self.primary_name.to_owned(), &batch).await;
+                    futures.push(handle);
+                },
+                Some(batch) = self.rx_others_batch.recv() => {
+                    if futures.len() >= MAX_PENDING_DIGESTS {
+                        tracing::warn!("Primary unreachable: dropping {batch:?}");
+                        continue;
+                    }
+
+                    let handle = self.primary_client.send(self.primary_name.to_owned(), &batch).await;
                     futures.push(handle);
                 },
 

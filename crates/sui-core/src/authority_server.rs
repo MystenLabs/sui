@@ -34,7 +34,7 @@ use tokio::{
 use sui_types::messages_checkpoint::CheckpointRequest;
 use sui_types::messages_checkpoint::CheckpointResponse;
 
-use crate::authority::ConsensusHandler;
+use crate::consensus_handler::ConsensusHandler;
 use tracing::{error, info, Instrument};
 
 #[cfg(test)]
@@ -117,15 +117,15 @@ impl AuthorityServer {
         &self,
         min_batch_size: u64,
         max_delay: Duration,
-    ) -> SuiResult<JoinHandle<SuiResult<()>>> {
+    ) -> SuiResult<JoinHandle<()>> {
         // Start the batching subsystem, and register the handles with the authority.
         let state = self.state.clone();
-        let _batch_join_handle =
+        let batch_join_handle =
             tokio::task::spawn(
                 async move { state.run_batch_service(min_batch_size, max_delay).await },
             );
 
-        Ok(_batch_join_handle)
+        Ok(batch_join_handle)
     }
 
     pub async fn spawn_for_test(self) -> Result<AuthorityServerHandle, io::Error> {
@@ -446,7 +446,7 @@ impl ValidatorService {
         );
 
         match state
-            .handle_certificate(certificate.clone())
+            .handle_certificate(&certificate)
             .instrument(span)
             .await
             .map_err(|e| tonic::Status::internal(e.to_string()))

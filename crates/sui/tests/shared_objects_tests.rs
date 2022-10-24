@@ -3,13 +3,14 @@
 
 use std::sync::Arc;
 use sui_core::authority::GatewayStore;
+use sui_core::authority_aggregator::AuthorityAggregatorBuilder;
 use sui_core::authority_client::AuthorityAPI;
 use sui_core::gateway_state::{GatewayAPI, GatewayMetrics, GatewayState};
 use sui_types::messages::{
     CallArg, ExecutionStatus, ObjectArg, ObjectInfoRequest, ObjectInfoRequestKind,
 };
 use sui_types::object::OBJECT_START_VERSION;
-use test_utils::authority::{get_client, test_authority_aggregator};
+use test_utils::authority::get_client;
 use test_utils::transaction::{
     publish_counter_package, submit_shared_object_transaction, submit_single_owner_transaction,
 };
@@ -88,7 +89,11 @@ async fn call_shared_object_contract() {
     );
     let effects = submit_single_owner_transaction(transaction, configs.validator_set()).await;
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
-    let ((counter_id, _, _), _) = effects.created[0];
+    let ((counter_id, counter_initial_shared_version, _), _) = effects.created[0];
+    let counter_object_arg = ObjectArg::SharedObject {
+        id: counter_id,
+        initial_shared_version: counter_initial_shared_version,
+    };
 
     // Ensure the value of the counter is `0`.
     let transaction = move_transaction(
@@ -97,7 +102,7 @@ async fn call_shared_object_contract() {
         "assert_value",
         package_ref,
         vec![
-            CallArg::Object(ObjectArg::SharedObject(counter_id)),
+            CallArg::Object(counter_object_arg),
             CallArg::Pure(0u64.to_le_bytes().to_vec()),
         ],
     );
@@ -112,7 +117,7 @@ async fn call_shared_object_contract() {
         "counter",
         "increment",
         package_ref,
-        vec![CallArg::Object(ObjectArg::SharedObject(counter_id))],
+        vec![CallArg::Object(counter_object_arg)],
     );
     let effects = submit_shared_object_transaction(transaction, &configs.validator_set()[0..1])
         .await
@@ -126,7 +131,7 @@ async fn call_shared_object_contract() {
         "assert_value",
         package_ref,
         vec![
-            CallArg::Object(ObjectArg::SharedObject(counter_id)),
+            CallArg::Object(counter_object_arg),
             CallArg::Pure(1u64.to_le_bytes().to_vec()),
         ],
     );
@@ -162,7 +167,11 @@ async fn shared_object_flood() {
     );
     let effects = submit_single_owner_transaction(transaction, configs.validator_set()).await;
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
-    let ((counter_id, _, _), _) = effects.created[0];
+    let ((counter_id, counter_initial_shared_version, _), _) = effects.created[0];
+    let counter_object_arg = ObjectArg::SharedObject {
+        id: counter_id,
+        initial_shared_version: counter_initial_shared_version,
+    };
 
     // Ensure the value of the counter is `0`.
     let transaction = move_transaction(
@@ -171,7 +180,7 @@ async fn shared_object_flood() {
         "assert_value",
         package_ref,
         vec![
-            CallArg::Object(ObjectArg::SharedObject(counter_id)),
+            CallArg::Object(counter_object_arg),
             CallArg::Pure(0u64.to_le_bytes().to_vec()),
         ],
     );
@@ -186,7 +195,7 @@ async fn shared_object_flood() {
         "counter",
         "increment",
         package_ref,
-        vec![CallArg::Object(ObjectArg::SharedObject(counter_id))],
+        vec![CallArg::Object(counter_object_arg)],
     );
     let effects = submit_shared_object_transaction(transaction, configs.validator_set())
         .await
@@ -200,7 +209,7 @@ async fn shared_object_flood() {
         "assert_value",
         package_ref,
         vec![
-            CallArg::Object(ObjectArg::SharedObject(counter_id)),
+            CallArg::Object(counter_object_arg),
             CallArg::Pure(1u64.to_le_bytes().to_vec()),
         ],
     );
@@ -237,7 +246,11 @@ async fn shared_object_sync() {
     )
     .await;
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
-    let ((counter_id, _, _), _) = effects.created[0];
+    let ((counter_id, counter_initial_shared_version, _), _) = effects.created[0];
+    let counter_object_arg = ObjectArg::SharedObject {
+        id: counter_id,
+        initial_shared_version: counter_initial_shared_version,
+    };
 
     // Check that the counter object only exist in the first validator, but not the rest.
     get_client(&configs.validator_set()[0])
@@ -267,7 +280,7 @@ async fn shared_object_sync() {
         "counter",
         "increment",
         package_ref,
-        vec![CallArg::Object(ObjectArg::SharedObject(counter_id))],
+        vec![CallArg::Object(counter_object_arg)],
     );
 
     // Let's submit the transaction to the first authority (the only one up-to-date).
@@ -351,12 +364,19 @@ async fn shared_object_on_gateway() {
     let configs = test_authority_configs();
     let handles = spawn_test_authorities(gas_objects.clone(), &configs).await;
     let committee_store = handles[0].with(|h| h.state().committee_store().clone());
-    let clients = test_authority_aggregator(&configs, committee_store);
+    let (aggregator, _) = AuthorityAggregatorBuilder::from_network_config(&configs)
+        .with_committee_store(committee_store)
+        .build()
+        .unwrap();
     let path = tempfile::tempdir().unwrap().into_path();
-    let gateway_store = Arc::new(GatewayStore::open(&path.join("store"), None));
+    let gateway_store = Arc::new(GatewayStore::open(&path.join("store"), None).unwrap());
     let gateway = Arc::new(
-        GatewayState::new_with_authorities(gateway_store, clients, GatewayMetrics::new_for_tests())
-            .unwrap(),
+        GatewayState::new_with_authorities(
+            gateway_store,
+            aggregator,
+            GatewayMetrics::new_for_tests(),
+        )
+        .unwrap(),
     );
 
     // Publish the move package to all authorities and get the new package ref.
@@ -376,7 +396,11 @@ async fn shared_object_on_gateway() {
         .await
         .unwrap();
     let effects = resp.effects;
-    let shared_object_id = effects.created[0].reference.object_id;
+    let shared_object_ref = &effects.created[0].reference;
+    let shared_object_arg = ObjectArg::SharedObject {
+        id: shared_object_ref.object_id,
+        initial_shared_version: shared_object_ref.version,
+    };
     // We need to have one gas object left for the final value check.
     let last_gas_object = gas_objects.pop().unwrap();
     let increment_amount = gas_objects.len();
@@ -399,7 +423,7 @@ async fn shared_object_on_gateway() {
                     "increment",
                     package_ref,
                     /* arguments */
-                    vec![CallArg::Object(ObjectArg::SharedObject(shared_object_id))],
+                    vec![CallArg::Object(shared_object_arg)],
                 );
                 async move { g.execute_transaction(increment_counter_transaction).await }
             })
@@ -425,7 +449,7 @@ async fn shared_object_on_gateway() {
         "assert_value",
         package_ref,
         vec![
-            CallArg::Object(ObjectArg::SharedObject(shared_object_id)),
+            CallArg::Object(shared_object_arg),
             CallArg::Pure((increment_amount as u64).to_le_bytes().to_vec()),
         ],
     );

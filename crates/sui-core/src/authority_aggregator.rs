@@ -3,18 +3,23 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority_client::{
-    make_network_authority_client_sets_from_committee, AuthorityAPI, NetworkAuthorityClient,
-    NetworkAuthorityClientMetrics,
+    make_authority_clients, make_network_authority_client_sets_from_committee, AuthorityAPI,
+    NetworkAuthorityClient, NetworkAuthorityClientMetrics,
 };
 use crate::safe_client::{SafeClient, SafeClientMetrics};
+use crate::validator_info::make_committee;
 use async_trait::async_trait;
 
 use futures::{future, future::BoxFuture, stream::FuturesUnordered, StreamExt};
 use itertools::Itertools;
 use move_core_types::value::MoveStructLayout;
 use mysten_network::config::Config;
-use sui_network::default_mysten_network_config;
-use sui_types::crypto::AuthoritySignature;
+use sui_config::genesis::Genesis;
+use sui_config::NetworkConfig;
+use sui_network::{
+    default_mysten_network_config, DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_REQUEST_TIMEOUT_SEC,
+};
+use sui_types::crypto::{AuthorityPublicKeyBytes, AuthoritySignature};
 use sui_types::object::{Object, ObjectFormatOptions, ObjectRead};
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::{
@@ -32,6 +37,7 @@ use tracing::{debug, error, info, instrument, trace, warn, Instrument};
 
 use prometheus::{
     register_histogram_with_registry, register_int_counter_with_registry, Histogram, IntCounter,
+    Registry,
 };
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::string::ToString;
@@ -845,7 +851,14 @@ where
             // - If serial_authority_request_interval elapses, we begin a new request even if the
             //   previous one is not finished, and schedule another future request.
 
-            let name = authorities_shuffled.next().unwrap();
+            let name = authorities_shuffled.next().ok_or_else(|| {
+                error!(
+                    ?preferences,
+                    ?restrict_to,
+                    "Available authorities list is empty."
+                );
+                SuiError::from("Available authorities list is empty")
+            })?;
             futures.push(start_req(*name, self.authority_clients[name].clone()));
             futures.push(schedule_next());
 
@@ -1610,7 +1623,7 @@ where
                             Err(err) => {
                                 // We have an error here.
                                 // Append to the list off errors
-                                debug!(tx_digest = ?tx_digest, ?name, weight, "Failed to get signed transaction from validator handle_transaction");
+                                debug!(tx_digest = ?tx_digest, ?name, weight, "Failed to get signed transaction from validator handle_transaction: {:?}", err);
                                 state.errors.push(err);
                                 state.bad_stake += weight; // This is the bad stake counter
                             }
@@ -1689,7 +1702,7 @@ where
             .await?;
 
         debug!(
-            tx_digest = ?tx_digest,
+            ?tx_digest,
             num_errors = state.errors.len(),
             good_stake = state.good_stake,
             bad_stake = state.bad_stake,
@@ -1698,7 +1711,7 @@ where
             "Received signatures response from validators handle_transaction"
         );
         if !state.errors.is_empty() {
-            trace!("Errors received: {:?}", state.errors);
+            debug!(?tx_digest, "Errors received: {:?}", state.errors);
         }
 
         // If we have some certificate return it, or return an error.
@@ -1811,6 +1824,7 @@ where
                                 }
                             }
                             Err(err) => {
+                                debug!(tx_digest = ?tx_digest, ?name, weight, "Failed to get signed effects from validator handle_certificate: {:?}", err);
                                 state.errors.push(err);
                                 state.bad_stake += weight;
                                 if state.bad_stake > validity {
@@ -2281,4 +2295,84 @@ pub async fn reconfig_from_genesis(
     }
     // Now transit from latest_epoch - 1 to latest_epoch
     aggregator.recreate_with_net_addresses(latest_committee, &network_config)
+}
+
+pub struct AuthorityAggregatorBuilder<'a> {
+    network_config: Option<&'a NetworkConfig>,
+    genesis: Option<&'a Genesis>,
+    committee_store: Option<Arc<CommitteeStore>>,
+    registry: Option<Arc<Registry>>,
+}
+
+impl<'a> AuthorityAggregatorBuilder<'a> {
+    pub fn from_network_config(config: &'a NetworkConfig) -> Self {
+        Self {
+            network_config: Some(config),
+            genesis: None,
+            committee_store: None,
+            registry: None,
+        }
+    }
+
+    pub fn from_genesis(genesis: &'a Genesis) -> Self {
+        Self {
+            network_config: None,
+            genesis: Some(genesis),
+            committee_store: None,
+            registry: None,
+        }
+    }
+
+    pub fn with_committee_store(mut self, committee_store: Arc<CommitteeStore>) -> Self {
+        self.committee_store = Some(committee_store);
+        self
+    }
+
+    pub fn with_registry(mut self, registry: Arc<Registry>) -> Self {
+        self.registry = Some(registry);
+        self
+    }
+
+    pub fn build(
+        self,
+    ) -> anyhow::Result<(
+        AuthorityAggregator<NetworkAuthorityClient>,
+        BTreeMap<AuthorityPublicKeyBytes, NetworkAuthorityClient>,
+    )> {
+        let validator_info = if let Some(network_config) = self.network_config {
+            network_config.validator_set()
+        } else if let Some(genesis) = self.genesis {
+            genesis.validator_set()
+        } else {
+            anyhow::bail!("need either NetworkConfig or Genesis.");
+        };
+        let committee = make_committee(0, validator_info)?;
+        let registry = self
+            .registry
+            .unwrap_or_else(|| Arc::new(prometheus::Registry::new()));
+        let network_metrics = Arc::new(NetworkAuthorityClientMetrics::new(&registry));
+
+        let auth_clients = make_authority_clients(
+            validator_info,
+            DEFAULT_CONNECT_TIMEOUT_SEC,
+            DEFAULT_REQUEST_TIMEOUT_SEC,
+            network_metrics.clone(),
+        );
+        let committee_store = if let Some(committee_store) = self.committee_store {
+            committee_store
+        } else {
+            Arc::new(CommitteeStore::new_for_testing(&committee))
+        };
+        Ok((
+            AuthorityAggregator::new(
+                committee,
+                committee_store,
+                auth_clients.clone(),
+                AuthAggMetrics::new(&registry),
+                Arc::new(SafeClientMetrics::new(&registry)),
+                network_metrics,
+            ),
+            auth_clients,
+        ))
+    }
 }
