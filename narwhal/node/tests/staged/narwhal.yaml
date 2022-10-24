@@ -74,7 +74,7 @@ HeaderDigest:
       SIZE: 32
 Metadata:
   STRUCT:
-    - timestamp: U64
+    - created_at: U64
 ReconfigureNotification:
   ENUM:
     0:
@@ -105,7 +105,8 @@ WorkerOurBatchMessage:
     - digest:
         TYPENAME: BatchDigest
     - worker_id: U32
-    - timestamp: U64
+    - metadata:
+        TYPENAME: Metadata
 WorkerReconfigureMessage:
   STRUCT:
     - message:
