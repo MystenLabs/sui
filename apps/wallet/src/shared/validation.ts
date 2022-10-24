@@ -24,12 +24,14 @@ export function createTokenValidation(
         .transform((_, original) => {
             return new BigNumber(original);
         })
-        .test('required', `\${path} is a required field`, (value) => !!value)
+        .test('required', `\${path} is a required field`, (value) => {
+            return !!value;
+        })
         .test(
             'valid',
             'The value provided is not valid.',
-            (value: BigNumber) => {
-                if (value.isNaN() || !value.isFinite()) {
+            (value?: BigNumber) => {
+                if (!value || value.isNaN() || !value.isFinite()) {
                     return false;
                 }
                 return true;
@@ -38,7 +40,7 @@ export function createTokenValidation(
         .test(
             'min',
             `\${path} must be greater than 0 ${coinSymbol}`,
-            (amount: BigNumber) => amount.gt(0)
+            (amount?: BigNumber) => (amount ? amount.gt(0) : false)
         )
         .test(
             'max',
@@ -46,14 +48,16 @@ export function createTokenValidation(
                 coinBalance,
                 decimals
             )} ${coinSymbol}`,
-            (amount: BigNumber) =>
-                amount.shiftedBy(decimals).lte(coinBalance.toString())
+            (amount?: BigNumber) =>
+                amount
+                    ? amount.shiftedBy(decimals).lte(coinBalance.toString())
+                    : false
         )
         .test(
             'max-decimals',
             `The value exeeds the maximum decimals (${decimals}).`,
-            (value: BigNumber) => {
-                return value.shiftedBy(decimals).isInteger();
+            (amount?: BigNumber) => {
+                return amount ? amount.shiftedBy(decimals).isInteger() : false;
             }
         )
         .test(
@@ -62,7 +66,11 @@ export function createTokenValidation(
                 DEFAULT_GAS_BUDGET_FOR_TRANSFER,
                 gasDecimals
             )} ${GAS_SYMBOL})`,
-            (amount: BigNumber) => {
+            (amount?: BigNumber) => {
+                if (!amount) {
+                    return false;
+                }
+
                 try {
                     let availableGas = gasBalance;
                     if (coinType === GAS_TYPE_ARG) {

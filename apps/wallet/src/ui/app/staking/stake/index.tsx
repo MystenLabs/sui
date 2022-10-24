@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { getTransactionDigest } from '@mysten/sui.js';
+import BigNumber from 'bignumber.js';
 import { Formik } from 'formik';
 import { useCallback, useMemo, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
@@ -83,9 +84,16 @@ function StakePage() {
             }
             setSendError(null);
             try {
+                const bigIntAmount = BigInt(
+                    new BigNumber(amount)
+                        .shiftedBy(coinDecimals)
+                        .integerValue()
+                        .toString()
+                );
+
                 const response = await dispatch(
                     StakeTokens({
-                        amount: BigInt(amount),
+                        amount: bigIntAmount,
                         tokenTypeArg: coinType,
                     })
                 ).unwrap();
@@ -96,7 +104,7 @@ function StakePage() {
                 setSendError((e as SerializedError).message || null);
             }
         },
-        [dispatch, navigate, coinType]
+        [dispatch, navigate, coinType, coinDecimals]
     );
     const handleOnClearSubmitError = useCallback(() => {
         setSendError(null);

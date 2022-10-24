@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { getTransactionDigest } from '@mysten/sui.js';
+import BigNumber from 'bignumber.js';
 import { Formik } from 'formik';
 import { useCallback, useMemo, useState } from 'react';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
@@ -103,9 +104,15 @@ function TransferCoinPage() {
                 props: { coinType },
             });
             try {
+                const bigIntAmount = BigInt(
+                    new BigNumber(amount)
+                        .shiftedBy(coinDecimals)
+                        .integerValue()
+                        .toString()
+                );
                 const response = await dispatch(
                     sendTokens({
-                        amount: BigInt(amount),
+                        amount: bigIntAmount,
                         recipientAddress: to,
                         tokenTypeArg: coinType,
                     })
@@ -122,7 +129,7 @@ function TransferCoinPage() {
                 setSendError((e as SerializedError).message || null);
             }
         },
-        [dispatch, navigate, coinType]
+        [dispatch, navigate, coinType, coinDecimals]
     );
 
     const handleNextStep = useCallback(

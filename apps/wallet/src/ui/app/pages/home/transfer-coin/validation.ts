@@ -18,7 +18,7 @@ export function createValidationSchemaStepOne(
     coinSymbol: string,
     gasBalance: bigint,
     decimals: number,
-    gasDecimals: number,
+    gasDecimals: number
 ) {
     return Yup.object({
         amount: createTokenValidation(
