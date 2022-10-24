@@ -31,7 +31,7 @@ public fun new<K: copy + drop + store, V: store>(
 
 `Table<K, V>` is a *homogeneous* map, meaning that all its keys have the same type as each other (`K`), and all its values have the same type as each other as well (`V`). It is created with `sui::table::new`, which requires access to a `&mut TxContext` because `Table`s are objects themselves, which can be transfered, shared, wrapped, or unwrapped, just like any other object.
 
-> :bulb: As usual, there is an equivalent `sui::object_table::ObjectTable` with an additional `V: key + store` constraint.
+> :bulb: See `sui::bag::ObjectTable` for the object-preserving version of `Table`.
 
 ### Bags
 
@@ -166,7 +166,7 @@ public fun drop<K: copy + drop + store, V: drop + store>(
 }
 ```
 
-that can only be called for tables where the both the key *and* value type have `drop` which allows it to delete tables whether they are empty or not.
+that can only be called for tables where the value type also has `drop`, which allows it to delete tables whether they are empty or not.
 
 > :bulb: Note that `drop` will not be called implicitly on eligible tables, before they go out of scope.  It must be called explicitly, but it is guaranteed to succeed at runtime.
 

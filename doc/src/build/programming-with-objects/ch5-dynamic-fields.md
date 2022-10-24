@@ -12,7 +12,7 @@ Fortunately, Sui provides *dynamic fields* with arbitrary names (not just identi
 
 ### Current Limitations
 There are some aspects of dynamic fields that are not yet behaving as designed in this early release. We are actively working on these areas, but watch out for: - `remove` for dynamic fields not giving a full storage refund.
-- The lack of an `exists_` API to check whether a field with a particular name is already defined on an object.
+- The lack of an `exists_` API for `dynamic_field` to check whether a field with a particular name is already defined on an object.
 - Potential durability/consistency issues with dynamic field objects:  When a validator goes down and comes back up while processing a transaction with dynamic fields, it might be unable to process further transactions involving those objects.
 
 ### Fields vs Object Fields
