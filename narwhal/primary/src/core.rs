@@ -33,9 +33,8 @@ use types::{
 #[path = "tests/core_tests.rs"]
 pub mod core_tests;
 
-// TODO: enable below.
 // Rejects a header if it requires catching up the following number of rounds.
-// const MAX_HEADER_ROUND_CATCHUP_THRESHOLD: u64 = 20;
+const MAX_HEADER_ROUND_CATCHUP_THRESHOLD: u64 = 20;
 
 pub struct Core {
     /// The public key of this primary.
@@ -580,13 +579,12 @@ impl Core {
             self.gc_round < header.round,
             DagError::TooOld(header.id.into(), header.round, self.gc_round)
         );
-        // TODO: enable below.
         // The header round is too high for this node, which is unlikely to acquire all
-        // parent certificates in time.
-        // ensure!(
-        //     self.highest_processed_round + MAX_HEADER_ROUND_CATCHUP_THRESHOLD > header.round,
-        //     DagError::TooNew(header.id.into(), header.round, self.gc_round)
-        // );
+        // parent certificates in time for voting.
+        ensure!(
+            self.highest_processed_round + MAX_HEADER_ROUND_CATCHUP_THRESHOLD > header.round,
+            DagError::TooNew(header.id.into(), header.round, self.gc_round)
+        );
 
         // Verify the header's signature.
         header.verify(&self.committee, self.worker_cache.clone())?;
