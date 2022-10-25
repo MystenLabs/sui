@@ -149,7 +149,7 @@ impl BatchMaker {
 
             // Look for sample txs (they all start with 0) and gather their txs id (the next 8 bytes).
             let tx_ids: Vec<_> = batch
-                .0
+                .transactions
                 .iter()
                 .filter(|tx| tx[0] == 0u8 && tx.len() > 8)
                 .filter_map(|tx| tx[1..9].try_into().ok())
@@ -170,7 +170,7 @@ impl BatchMaker {
                 // that's useful for debugging and tracking the lifetime of messages between
                 // Narwhal and clients.
                 let tracking_ids: Vec<_> = batch
-                    .0
+                    .transactions
                     .iter()
                     .map(|tx| {
                         let len = tx.len();
