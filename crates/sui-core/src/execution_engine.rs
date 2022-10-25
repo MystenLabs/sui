@@ -13,6 +13,7 @@ use sui_types::committee::EpochId;
 use sui_types::error::{ExecutionError, ExecutionErrorKind};
 use sui_types::gas::GasCostSummary;
 use sui_types::gas_coin::GasCoin;
+use sui_types::id::UID;
 #[cfg(test)]
 use sui_types::messages::ExecutionFailureStatus;
 #[cfg(test)]
@@ -20,7 +21,7 @@ use sui_types::messages::InputObjects;
 use sui_types::messages::{ObjectArg, Pay, PayAllSui, PaySui};
 use sui_types::object::{Data, MoveObject, Owner, OBJECT_START_VERSION};
 use sui_types::storage::SingleTxContext;
-use sui_types::storage::{ChildObjectResolver, DeleteKind, InnerTxContext, ParentSync, WriteKind};
+use sui_types::storage::{ChildObjectResolver, DeleteKind, ParentSync, WriteKind};
 #[cfg(test)]
 use sui_types::temporary_store;
 use sui_types::temporary_store::InnerTemporaryStore;
@@ -185,7 +186,12 @@ fn execute_transaction<S: BackingPackageStore + ParentSync + ChildObjectResolver
                         .unwrap()
                         .clone()
                     ).collect();
-                    pay_all_sui(temporary_store, &mut coin_objects, recipient)
+                    pay_all_sui(
+                        tx_ctx.sender(),
+                        temporary_store,
+                        &mut coin_objects,
+                        recipient,
+                    )
                 }
                 SingleTransactionKind::Call(MoveCall {
                     package,
@@ -395,6 +401,7 @@ fn check_total_coins(coins: &[Coin], amounts: &[u64]) -> Result<(u64, u64), Exec
 }
 
 fn debit_coins_and_transfer<S>(
+    ctx: &SingleTxContext,
     temporary_store: &mut TemporaryStore<S>,
     coins: &mut [Coin],
     recipients: &[SuiAddress],
@@ -429,7 +436,7 @@ fn debit_coins_and_transfer<S>(
                     Owner::AddressOwner(*recipient),
                     tx_ctx.digest(),
                 );
-                temporary_store.write_object(&ctx, new_coin, WriteKind::Create);
+                temporary_store.write_object(ctx, new_coin, WriteKind::Create);
                 break; // done paying this recipieint, on to the next one
             } else {
                 // need to take all of this coin and some from a subsequent coin
@@ -453,7 +460,10 @@ fn pay<S>(
     check_recipients(&recipients, &amounts)?;
     let (mut coins, coin_type) = check_coins(&coin_objects, None)?;
     let (total_coins, total_amount) = check_total_coins(&coins, &amounts)?;
+    let ctx = SingleTxContext::pay(tx_ctx.sender());
+
     debit_coins_and_transfer(
+        &ctx,
         temporary_store,
         &mut coins,
         &recipients,
@@ -469,7 +479,6 @@ fn pay<S>(
         assert_eq!(total_coins - new_total_coins, total_amount)
     }
 
-    let ctx = InnerTxContext::pay(tx_ctx.sender());
     // update the input coins to reflect the decrease in value.
     // if the input coin has value 0, delete it
     for (coin_idx, mut coin_object) in coin_objects.into_iter().enumerate() {
@@ -510,20 +519,23 @@ fn pay_sui<S>(
     let mut merged_coin = coins.swap_remove(0);
     merged_coin.merge_coins(&mut coins);
 
+    let ctx = SingleTxContext::pay_sui(tx_ctx.sender());
+
     for (recipient, amount) in recipients.iter().zip(amounts) {
         // unwrap is safe b/c merged_coin value is total_coins, which is greater than total_amount
         let new_coin = merged_coin
             .split_coin(amount, UID::new(tx_ctx.fresh_id()))
             .unwrap();
         transfer_coin(
+            &ctx,
             temporary_store,
             &new_coin,
             *recipient,
             coin_type.clone(),
-            tx_ctx,
+            tx_ctx.digest(),
         );
     }
-    update_input_coins(temporary_store, coin_objects, &merged_coin, None);
+    update_input_coins(&ctx, temporary_store, coin_objects, &merged_coin, None);
 
     #[cfg(debug_assertions)]
     {
@@ -533,6 +545,7 @@ fn pay_sui<S>(
 }
 
 fn pay_all_sui<S>(
+    sender: SuiAddress,
     temporary_store: &mut TemporaryStore<S>,
     coin_objects: &mut Vec<Object>,
     recipient: SuiAddress,
@@ -542,7 +555,14 @@ fn pay_all_sui<S>(
 
     let mut merged_coin = coins.swap_remove(0);
     merged_coin.merge_coins(&mut coins);
-    update_input_coins(temporary_store, coin_objects, &merged_coin, Some(recipient));
+    let ctx = SingleTxContext::pay_all_sui(sender);
+    update_input_coins(
+        &ctx,
+        temporary_store,
+        coin_objects,
+        &merged_coin,
+        Some(recipient),
+    );
 
     #[cfg(debug_assertions)]
     {
@@ -910,7 +930,7 @@ fn test_pay_all_sui_success_multiple_input_coins() {
 
     let mut store: TemporaryStore<()> =
         temporary_store::with_input_objects_for_testing(InputObjects::from(coin_objects.clone()));
-    assert!(pay_all_sui(&mut store, &mut coin_objects, recipient).is_ok());
+    assert!(pay_all_sui(sender, &mut store, &mut coin_objects, recipient).is_ok());
     let (store, _events) = store.into_inner();
 
     assert_eq!(store.deleted.len(), 2);

@@ -22,8 +22,8 @@ use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::{
     CallArg, ExecuteTransactionRequestType, ExecutionStatus, InputObjectKind, MoveCall,
-    MoveModulePublish, ObjectArg, Pay, SingleTransactionKind, Transaction, TransactionData,
-    TransactionKind, TransferSui,
+    MoveModulePublish, ObjectArg, Pay, PayAllSui, PaySui, SingleTransactionKind, Transaction,
+    TransactionData, TransactionKind, TransferSui,
 };
 use test_utils::network::TestClusterBuilder;
 
@@ -49,7 +49,7 @@ async fn test_all_transaction_type() {
         recipient,
         amount: Some(50000),
     });
-    test_transaction(&client, keystore, vec![recipient], sender, tx).await;
+    test_transaction(&client, keystore, vec![recipient], sender, tx, None).await;
 
     // Test transfer sui whole coin
     let sender = get_random_address(&network.accounts, vec![]);
@@ -58,17 +58,17 @@ async fn test_all_transaction_type() {
         recipient,
         amount: None,
     });
-    test_transaction(&client, keystore, vec![recipient], sender, tx).await;
+    test_transaction(&client, keystore, vec![recipient], sender, tx, None).await;
 
     // Test transfer object
     let sender = get_random_address(&network.accounts, vec![]);
     let recipient = get_random_address(&network.accounts, vec![sender]);
-    let object_ref = get_random_gas(&client, sender, vec![]).await;
+    let object_ref = get_random_sui(&client, sender, vec![]).await;
     let tx = SingleTransactionKind::TransferObject(sui_types::messages::TransferObject {
         recipient,
         object_ref,
     });
-    test_transaction(&client, keystore, vec![recipient], sender, tx).await;
+    test_transaction(&client, keystore, vec![recipient], sender, tx, None).await;
 
     // Test publish
     let sender = get_random_address(&network.accounts, vec![]);
@@ -87,7 +87,7 @@ async fn test_all_transaction_type() {
     let tx = SingleTransactionKind::Publish(MoveModulePublish {
         modules: compiled_module,
     });
-    let response = test_transaction(&client, keystore, vec![], sender, tx).await;
+    let response = test_transaction(&client, keystore, vec![], sender, tx, None).await;
 
     // Test move call (reuse published module from above test)
     let effect = response.effects.clone().unwrap();
@@ -124,54 +124,94 @@ async fn test_all_transaction_type() {
             CallArg::Pure(bcs::to_bytes(&recipient).unwrap()),
         ],
     });
-    test_transaction(&client, keystore, vec![], sender, tx).await;
+    test_transaction(&client, keystore, vec![], sender, tx, None).await;
 
     // Test spilt coin
     let sender = recipient;
-    let coin = get_random_gas(&client, sender, vec![]).await;
+    let coin = get_random_sui(&client, sender, vec![]).await;
     let tx = client
         .transaction_builder()
         .split_coin(sender, coin.0, vec![100000], None, 10000)
         .await
         .unwrap();
     let tx = tx.kind.single_transactions().next().unwrap().clone();
-    test_transaction(&client, keystore, vec![], sender, tx).await;
+    test_transaction(&client, keystore, vec![], sender, tx, None).await;
 
     // Test merge coin
     let sender = get_random_address(&network.accounts, vec![]);
-    let coin = get_random_gas(&client, sender, vec![]).await;
-    let coin2 = get_random_gas(&client, sender, vec![coin.0]).await;
+    let coin = get_random_sui(&client, sender, vec![]).await;
+    let coin2 = get_random_sui(&client, sender, vec![coin.0]).await;
     let tx = client
         .transaction_builder()
         .merge_coins(sender, coin.0, coin2.0, None, 10000)
         .await
         .unwrap();
     let tx = tx.kind.single_transactions().next().unwrap().clone();
-    test_transaction(&client, keystore, vec![], sender, tx).await;
+    test_transaction(&client, keystore, vec![], sender, tx, None).await;
 
     // Test Pay
     let sender = get_random_address(&network.accounts, vec![]);
     let recipient = get_random_address(&network.accounts, vec![sender]);
-    let coin = get_random_gas(&client, sender, vec![]).await;
+    let coin = get_random_sui(&client, sender, vec![]).await;
     let tx = SingleTransactionKind::Pay(Pay {
         coins: vec![coin],
         recipients: vec![recipient],
         amounts: vec![100000],
     });
-    test_transaction(&client, keystore, vec![recipient], sender, tx).await;
+    test_transaction(&client, keystore, vec![recipient], sender, tx, None).await;
 
     // Test Pay multiple coin multiple recipient
     let sender = get_random_address(&network.accounts, vec![]);
     let recipient1 = get_random_address(&network.accounts, vec![sender]);
     let recipient2 = get_random_address(&network.accounts, vec![sender, recipient1]);
-    let coin1 = get_random_gas(&client, sender, vec![]).await;
-    let coin2 = get_random_gas(&client, sender, vec![coin1.0]).await;
+    let coin1 = get_random_sui(&client, sender, vec![]).await;
+    let coin2 = get_random_sui(&client, sender, vec![coin1.0]).await;
     let tx = SingleTransactionKind::Pay(Pay {
         coins: vec![coin1, coin2],
         recipients: vec![recipient1, recipient2],
         amounts: vec![100000, 200000],
     });
-    test_transaction(&client, keystore, vec![recipient1, recipient2], sender, tx).await;
+    test_transaction(
+        &client,
+        keystore,
+        vec![recipient1, recipient2],
+        sender,
+        tx,
+        None,
+    )
+    .await;
+
+    // Test Pay Sui
+    let sender = get_random_address(&network.accounts, vec![]);
+    let recipient1 = get_random_address(&network.accounts, vec![sender]);
+    let recipient2 = get_random_address(&network.accounts, vec![sender, recipient1]);
+    let coin1 = get_random_sui(&client, sender, vec![]).await;
+    let coin2 = get_random_sui(&client, sender, vec![coin1.0]).await;
+    let tx = SingleTransactionKind::PaySui(PaySui {
+        coins: vec![coin1, coin2],
+        recipients: vec![recipient1, recipient2],
+        amounts: vec![1000000, 2000000],
+    });
+    test_transaction(
+        &client,
+        keystore,
+        vec![recipient1, recipient2],
+        sender,
+        tx,
+        Some(coin1),
+    )
+    .await;
+
+    // Test Pay All Sui
+    let sender = get_random_address(&network.accounts, vec![]);
+    let recipient = get_random_address(&network.accounts, vec![sender]);
+    let coin1 = get_random_sui(&client, sender, vec![]).await;
+    let coin2 = get_random_sui(&client, sender, vec![coin1.0]).await;
+    let tx = SingleTransactionKind::PayAllSui(PayAllSui {
+        coins: vec![coin1, coin2],
+        recipient,
+    });
+    test_transaction(&client, keystore, vec![recipient], sender, tx, Some(coin1)).await;
 }
 
 fn find_module_object(effects: &SuiTransactionEffects, module: &str) -> Option<OwnedObjectRef> {
@@ -197,26 +237,34 @@ fn find_module_object(effects: &SuiTransactionEffects, module: &str) -> Option<O
         .cloned()
 }
 
+// Record current Sui balance of an address then execute the transaction,
+// and compare the balance change reported by the event against the actual balance change.
 async fn test_transaction(
     client: &SuiClient,
     keystore: &Keystore,
     addr_to_check: Vec<SuiAddress>,
     sender: SuiAddress,
     tx: SingleTransactionKind,
+    gas: Option<ObjectRef>,
 ) -> TransactionExecutionResult {
-    let input_objects = tx
-        .input_objects()
-        .unwrap_or_default()
-        .iter()
-        .flat_map(|obj| {
-            if let InputObjectKind::ImmOrOwnedMoveObject((id, ..)) = obj {
-                Some(*id)
-            } else {
-                None
-            }
-        })
-        .collect::<Vec<_>>();
-    let gas = get_random_gas(client, sender, input_objects).await;
+    let gas = if let Some(gas) = gas {
+        gas
+    } else {
+        let input_objects = tx
+            .input_objects()
+            .unwrap_or_default()
+            .iter()
+            .flat_map(|obj| {
+                if let InputObjectKind::ImmOrOwnedMoveObject((id, ..)) = obj {
+                    Some(*id)
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        get_random_sui(client, sender, input_objects).await
+    };
+
     let data = TransactionData::new(TransactionKind::Single(tx.clone()), sender, gas, 10000);
 
     let signature = keystore.sign(&data.signer(), &data.to_bytes()).unwrap();
@@ -236,8 +284,10 @@ async fn test_transaction(
             Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await
-        .map_err(|e| anyhow!("TX execution failed for {tx:#?}, error : {e}"))
+        .map_err(|e| anyhow!("TX execution failed for {data:#?}, error : {e}"))
         .unwrap();
+
+    println!("{:#?}", response.effects);
 
     let effect = response.effects.clone().unwrap();
 
@@ -245,7 +295,7 @@ async fn test_transaction(
         SuiExecutionStatus::Success,
         effect.status,
         "TX execution failed for {:#?}",
-        tx
+        data
     );
 
     let events = effect
@@ -274,7 +324,7 @@ async fn test_transaction(
     response
 }
 
-async fn get_random_gas(
+async fn get_random_sui(
     client: &SuiClient,
     sender: SuiAddress,
     except: Vec<ObjectID>,

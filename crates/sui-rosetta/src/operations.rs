@@ -15,7 +15,7 @@ use sui_types::event::Event;
 use sui_types::gas_coin::GAS;
 use sui_types::messages::{
     CallArg, ExecutionStatus, MoveCall, ObjectArg, Pay, PayAllSui, PaySui, SingleTransactionKind,
-    TransactionData, TransactionEffects, TransferObject,
+    TransactionData, TransferObject,
 };
 use sui_types::move_package::disassemble_modules;
 use sui_types::object::Owner;

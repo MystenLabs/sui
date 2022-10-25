@@ -60,6 +60,12 @@ impl SingleTxContext {
     pub fn pay(sender: SuiAddress) -> Self {
         Self::sui_transaction(ident_str!("pay"), sender)
     }
+    pub fn pay_sui(sender: SuiAddress) -> Self {
+        Self::sui_transaction(ident_str!("pay_sui"), sender)
+    }
+    pub fn pay_all_sui(sender: SuiAddress) -> Self {
+        Self::sui_transaction(ident_str!("pay_all_sui"), sender)
+    }
     pub fn unused_input(sender: SuiAddress) -> Self {
         Self::sui_transaction(ident_str!("unused_input_object"), sender)
     }
