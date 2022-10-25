@@ -6,9 +6,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useIntl } from 'react-intl';
 
 import Alert from '_components/alert';
-import { useAppSelector } from '_hooks';
-import { GAS_SYMBOL } from '_redux/slices/sui-objects/Coin';
-import { balanceFormatOptions } from '_shared/formatting';
+import { useAppSelector, useFormatCoin } from '_hooks';
+import { GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
 
 import type { AlertProps } from '_components/alert';
 import type { IntlShape } from 'react-intl';
@@ -62,6 +61,10 @@ function FaucetMessageInfo({ className }: FaucetMessageInfoProps) {
         ? 'warning'
         : 'success';
     const intl = useIntl();
+    const [coinsReceivedFormatted, coinsReceivedSymbol] = useFormatCoin(
+        lastRequest?.totalGasReceived,
+        GAS_TYPE_ARG
+    );
     return (
         <AnimatePresence>
             {visible ? (
@@ -90,12 +93,9 @@ function FaucetMessageInfo({ className }: FaucetMessageInfoProps) {
                         {lastRequest?.error === false
                             ? `${
                                   lastRequest.totalGasReceived
-                                      ? `${intl.formatNumber(
-                                            lastRequest.totalGasReceived,
-                                            balanceFormatOptions
-                                        )} `
+                                      ? `${coinsReceivedFormatted} `
                                       : ''
-                              }${GAS_SYMBOL} received`
+                              }${coinsReceivedSymbol} received`
                             : null}
                     </Alert>
                 </motion.div>
