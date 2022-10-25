@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import cl from 'classnames';
+
 import { API_ENV_TO_INFO } from '_app/ApiProvider';
 import Button from '_app/shared/button';
 import { requestGas } from '_app/shared/faucet/actions';
@@ -28,7 +30,7 @@ function FaucetRequestButton({ mode = 'primary' }: FaucetRequestButtonProps) {
             }}
             disabled={loading}
         >
-            <Icon icon={SuiIcons.Download} className={st.icon} />
+            <Icon icon={SuiIcons.Download} className={cl(st.icon, st[mode])} />
             Request {networkName} SUI Tokens
         </Button>
     );

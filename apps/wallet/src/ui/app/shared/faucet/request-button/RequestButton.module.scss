@@ -2,5 +2,8 @@
 
 .icon {
     font-size: 11px;
-    color: colors.$sui-blue-light;
+
+    &.primary {
+        color: colors.$sui-blue-light;
+    }
 }
