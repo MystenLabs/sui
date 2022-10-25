@@ -13,8 +13,7 @@ use sui_types::{
     base_types::{ObjectID, TransactionDigest},
     gas_coin::GasCoin,
     messages::{
-        CallArg, CertifiedTransaction, ConsensusTransactionKind, ObjectArg, SignatureAggregator,
-        TransactionData,
+        CallArg, CertifiedTransaction, ConsensusTransactionKind, ObjectArg, TransactionData,
     },
     object::{MoveObject, Object, Owner, OBJECT_START_VERSION},
 };
@@ -85,11 +84,12 @@ pub async fn test_certificates(authority: &AuthorityState) -> Vec<CertifiedTrans
             .await
             .unwrap();
         let vote = response.signed_transaction.unwrap();
-        let certificate = SignatureAggregator::try_new(transaction, &authority.committee.load())
-            .unwrap()
-            .append(vote.auth_sign_info.authority, vote.auth_sign_info.signature)
-            .unwrap()
-            .unwrap();
+        let certificate = CertifiedTransaction::new_with_auth_sign_infos(
+            transaction,
+            vec![vote.auth_sign_info],
+            &authority.committee.load(),
+        )
+        .unwrap();
         certificates.push(certificate);
     }
     certificates
