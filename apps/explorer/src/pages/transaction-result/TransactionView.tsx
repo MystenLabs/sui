@@ -325,11 +325,6 @@ function TransactionView({ txdata }: { txdata: DataType }) {
 
     const sendreceive = {
         sender: sender,
-        ...(txdata.timestamp_ms
-            ? {
-                  timestamp_ms: txdata.timestamp_ms,
-              }
-            : {}),
         recipient: recipients,
     };
     const GasStorageFees = {
@@ -444,6 +439,15 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                                     styles.txsender,
                                 ])}
                             >
+                                {txdata.timestamp_ms && (
+                                    <h3>
+                                        <span>
+                                            {new Date(
+                                                txdata.timestamp_ms
+                                            ).toUTCString()}
+                                        </span>
+                                    </h3>
+                                )}
                                 {amounts !== null && (
                                     <div className={styles.amountbox}>
                                         <div>Amount</div>

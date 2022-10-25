@@ -7,7 +7,6 @@ import Longtext from '../../components/longtext/Longtext';
 import styles from './SendReceiveView.module.css';
 
 type TxAddress = {
-    timestamp_ms?: number;
     sender: string;
     recipient?: string[];
 };
@@ -18,9 +17,6 @@ function SendRecieveView({ data }: { data: TxAddress }) {
             <div className={styles.txaddressheader}>
                 <h3 className={styles.label}>
                     Sender {data.recipient?.length ? '& Recipients' : ''}{' '}
-                    {data.timestamp_ms && (
-                        <span>{new Date(data.timestamp_ms).toUTCString()}</span>
-                    )}
                 </h3>
             </div>
             <div
