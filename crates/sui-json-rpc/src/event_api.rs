@@ -104,12 +104,12 @@ impl EventReadApiServer for EventReadApiImpl {
         limit: Option<usize>,
         order: Ordering,
     ) -> RpcResult<EventPage> {
-        let reverse = order == Ordering::Descending;
+        let descending = order == Ordering::Descending;
         let limit = cap_page_limit(limit)?;
         // Retrieve 1 extra item for next cursor
         let mut data = self
             .state
-            .get_events(query, cursor, limit + 1, reverse)
+            .get_events(query, cursor, limit + 1, descending)
             .await?;
         let next_cursor = data.get(limit).map(|event| event.id);
         data.truncate(limit);

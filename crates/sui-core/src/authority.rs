@@ -1943,15 +1943,19 @@ impl AuthorityState {
         query: EventQuery,
         cursor: Option<EventID>,
         limit: usize,
-        reverse: bool,
+        descending: bool,
     ) -> Result<Vec<SuiEventEnvelope>, anyhow::Error> {
         let es = self.get_event_store().ok_or(SuiError::NoEventStore)?;
-        let cursor = cursor.unwrap_or(if reverse { i64::MAX as u64 } else { u64::MIN });
+        let cursor = cursor.unwrap_or(if descending {
+            i64::MAX as u64
+        } else {
+            u64::MIN
+        });
 
         let stored_events = match query {
-            EventQuery::All => es.all_events(cursor, limit, reverse).await?,
+            EventQuery::All => es.all_events(cursor, limit, descending).await?,
             EventQuery::Transaction(digest) => {
-                es.events_by_transaction(cursor, digest, limit, reverse)
+                es.events_by_transaction(cursor, digest, limit, descending)
                     .await?
             }
             EventQuery::MoveModule { package, module } => {
@@ -1959,32 +1963,34 @@ impl AuthorityState {
                     AccountAddress::from(package),
                     Identifier::from_str(&module)?,
                 );
-                es.events_by_module_id(cursor, &module_id, limit, reverse)
+                es.events_by_module_id(cursor, &module_id, limit, descending)
                     .await?
             }
             EventQuery::MoveEvent(struct_name) => {
-                es.events_by_move_event_struct_name(cursor, &struct_name, limit, reverse)
+                es.events_by_move_event_struct_name(cursor, &struct_name, limit, descending)
                     .await?
             }
             EventQuery::Sender(sender) => {
-                es.events_by_sender(cursor, &sender, limit, reverse).await?
+                es.events_by_sender(cursor, &sender, limit, descending)
+                    .await?
             }
             EventQuery::Recipient(recipient) => {
-                es.events_by_recipient(cursor, &recipient, limit, reverse)
+                es.events_by_recipient(cursor, &recipient, limit, descending)
                     .await?
             }
             EventQuery::Object(object) => {
-                es.events_by_object(cursor, &object, limit, reverse).await?
+                es.events_by_object(cursor, &object, limit, descending)
+                    .await?
             }
             EventQuery::TimeRange {
                 start_time,
                 end_time,
             } => {
-                es.event_iterator(cursor, start_time, end_time, limit, reverse)
+                es.event_iterator(cursor, start_time, end_time, limit, descending)
                     .await?
             }
             EventQuery::EventType(event_type) => {
-                es.events_by_type(cursor, event_type, limit, reverse)
+                es.events_by_type(cursor, event_type, limit, descending)
                     .await?
             }
         };
