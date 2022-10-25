@@ -1,6 +1,6 @@
 [package]
 name = "typed-store"
-version = "0.3.0"
+version = "0.3.1"
 license = "Apache-2.0"
 authors = ["Francois Garillot <francois@mystenlabs.com>"]
 description = "a typed database interface"
