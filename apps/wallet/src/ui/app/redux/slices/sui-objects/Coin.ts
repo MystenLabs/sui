@@ -7,7 +7,6 @@ import type {
     ObjectId,
     SuiObject,
     SuiMoveObject,
-    SuiTransactionResponse,
     RawSigner,
     SuiAddress,
     JsonRpcProvider,
@@ -64,7 +63,7 @@ export class Coin {
     /**
      * Transfer `amount` of Coin<T> to `recipient`.
      *
-     * @param signer A signer with connection to the gateway or fullnode
+     * @param signer A signer with connection to fullnode
      * @param coins A list of Coins owned by the signer with the same generic type(e.g., 0x2::Sui::Sui)
      * @param amount The amount to be transfer
      * @param recipient The sui address of the recipient
@@ -73,12 +72,8 @@ export class Coin {
         signer: RawSigner,
         coins: SuiMoveObject[],
         amount: bigint,
-        recipient: SuiAddress,
-        useFullnode: boolean
-    ): Promise<SuiTransactionResponse | SuiExecuteTransactionResponse> {
-        if (!useFullnode) {
-            await signer.syncAccountState();
-        }
+        recipient: SuiAddress
+    ): Promise<SuiExecuteTransactionResponse> {
         const inputCoins =
             await CoinAPI.selectCoinSetWithCombinedBalanceGreaterThanOrEqual(
                 coins,
@@ -99,18 +94,13 @@ export class Coin {
             recipients: [recipient],
             amounts: [Number(amount)],
             gasBudget,
-        };
-
-        if (useFullnode) {
-            payTxn.gasPayment = await Coin.selectGasPayment(
+            gasPayment: await Coin.selectGasPayment(
                 coins,
                 inputCoinIDs,
                 BigInt(gasBudget)
-            );
-            return await signer.payWithRequestType(payTxn);
-        }
-
-        return await signer.pay(payTxn);
+            ),
+        };
+        return await signer.payWithRequestType(payTxn);
     }
 
     private static computeGasCostForPay(numInputCoins: number): number {
@@ -143,7 +133,7 @@ export class Coin {
     /**
      * Transfer `amount` of Coin<Sui> to `recipient`.
      *
-     * @param signer A signer with connection to the gateway or fullnode
+     * @param signer A signer with connection to fullnode
      * @param coins A list of Sui Coins owned by the signer
      * @param amount The amount to be transferred
      * @param recipient The sui address of the recipient
@@ -152,12 +142,8 @@ export class Coin {
         signer: RawSigner,
         coins: SuiMoveObject[],
         amount: bigint,
-        recipient: SuiAddress,
-        useFullnode: boolean
-    ): Promise<SuiTransactionResponse | SuiExecuteTransactionResponse> {
-        if (!useFullnode) {
-            await signer.syncAccountState();
-        }
+        recipient: SuiAddress
+    ): Promise<SuiExecuteTransactionResponse> {
         const targetAmount =
             amount + BigInt(DEFAULT_GAS_BUDGET_FOR_TRANSFER_SUI);
         const coinsWithSufficientAmount =
@@ -172,9 +158,7 @@ export class Coin {
                 recipient: recipient,
                 amount: Number(amount),
             };
-            return useFullnode
-                ? await signer.transferSuiWithRequestType(txn)
-                : await signer.transferSui(txn);
+            return await signer.transferSuiWithRequestType(txn);
         }
 
         // TODO: use PaySui Transaction when it is ready
@@ -218,11 +202,7 @@ export class Coin {
                 recipient: await signer.getAddress(),
                 amount: gasCostForPay,
             };
-            if (useFullnode) {
-                await signer.transferSuiWithRequestType(txn);
-            } else {
-                await signer.transferSui(txn);
-            }
+            await signer.transferSuiWithRequestType(txn);
 
             inputCoins =
                 await signer.provider.selectCoinSetWithCombinedBalanceGreaterThanOrEqual(
@@ -238,10 +218,7 @@ export class Coin {
             amounts: [Number(amount)],
             gasBudget: gasCostForPay,
         };
-        if (useFullnode) {
-            return await signer.payWithRequestType(txn);
-        }
-        return await signer.pay(txn);
+        return await signer.payWithRequestType(txn);
     }
 
     private static async assertAndGetCoinsWithBalanceGte(
@@ -271,7 +248,7 @@ export class Coin {
      * Stake `amount` of Coin<T> to `validator`. Technically it means user delegates `amount` of Coin<T> to `validator`,
      * such that `validator` will stake the `amount` of Coin<T> for the user.
      *
-     * @param signer A signer with connection to the gateway or fullnode
+     * @param signer A signer with connection to fullnode
      * @param coins A list of Coins owned by the signer with the same generic type(e.g., 0x2::Sui::Sui)
      * @param amount The amount to be staked
      * @param validator The sui address of the chosen validator
@@ -280,15 +257,12 @@ export class Coin {
         signer: RawSigner,
         coins: SuiMoveObject[],
         amount: bigint,
-        validator: SuiAddress,
-        useFullnode: boolean
-    ): Promise<SuiTransactionResponse | SuiExecuteTransactionResponse> {
-        await signer.syncAccountState();
+        validator: SuiAddress
+    ): Promise<SuiExecuteTransactionResponse> {
         const coin = await Coin.requestSuiCoinWithExactAmount(
             signer,
             coins,
-            amount,
-            useFullnode
+            amount
         );
         const txn = {
             packageObjectId: '0x2',
@@ -298,17 +272,13 @@ export class Coin {
             arguments: [SUI_SYSTEM_STATE_OBJECT_ID, coin, validator],
             gasBudget: DEFAULT_GAS_BUDGET_FOR_STAKE,
         };
-        if (useFullnode) {
-            return await signer.executeMoveCallWithRequestType(txn);
-        }
-        return await signer.executeMoveCall(txn);
+        return await signer.executeMoveCallWithRequestType(txn);
     }
 
     private static async requestSuiCoinWithExactAmount(
         signer: RawSigner,
         coins: SuiMoveObject[],
-        amount: bigint,
-        useFullnode: boolean
+        amount: bigint
     ): Promise<ObjectId> {
         const coinWithExactAmount = await Coin.selectSuiCoinWithExactAmount(
             signer,
@@ -323,8 +293,7 @@ export class Coin {
             signer,
             coins,
             amount,
-            await signer.getAddress(),
-            useFullnode
+            await signer.getAddress()
         );
 
         const coinWithExactAmount2 = await Coin.selectSuiCoinWithExactAmount(

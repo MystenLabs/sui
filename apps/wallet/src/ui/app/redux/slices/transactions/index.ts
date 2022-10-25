@@ -13,13 +13,11 @@ import {
     suiObjectsAdapterSelectors,
 } from '_redux/slices/sui-objects';
 import { Coin } from '_redux/slices/sui-objects/Coin';
-import { FEATURES } from '_src/ui/app/experimentation/features';
 
 import type {
     SuiAddress,
     SuiMoveObject,
     SuiExecuteTransactionResponse,
-    SuiTransactionResponse,
 } from '@mysten/sui.js';
 import type { RootState } from '_redux/RootReducer';
 import type { AppThunkConfig } from '_store/thunk-extras';
@@ -29,7 +27,7 @@ type SendTokensTXArgs = {
     amount: bigint;
     recipientAddress: SuiAddress;
 };
-type TransactionResult = SuiTransactionResponse | SuiExecuteTransactionResponse;
+type TransactionResult = SuiExecuteTransactionResponse;
 
 export const sendTokens = createAsyncThunk<
     TransactionResult,
@@ -39,7 +37,7 @@ export const sendTokens = createAsyncThunk<
     'sui-objects/send-tokens',
     async (
         { tokenTypeArg, amount, recipientAddress },
-        { getState, extra: { api, keypairVault, growthbook }, dispatch }
+        { getState, extra: { api, keypairVault }, dispatch }
     ) => {
         const state = getState();
         const coinType = Coin.getCoinTypeFromArg(tokenTypeArg);
@@ -59,15 +57,13 @@ export const sendTokens = createAsyncThunk<
                       signer,
                       coins,
                       amount,
-                      recipientAddress,
-                      growthbook.isOn(FEATURES.DEPRECATE_GATEWAY)
+                      recipientAddress
                   )
                 : await Coin.transferCoin(
                       signer,
                       coins,
                       amount,
-                      recipientAddress,
-                      growthbook.isOn(FEATURES.DEPRECATE_GATEWAY)
+                      recipientAddress
                   );
 
         // TODO: better way to sync latest objects
@@ -90,7 +86,7 @@ export const StakeTokens = createAsyncThunk<
     'sui-objects/stake',
     async (
         { tokenTypeArg, amount },
-        { getState, extra: { api, keypairVault, growthbook }, dispatch }
+        { getState, extra: { api, keypairVault }, dispatch }
     ) => {
         const state = getState();
         const coinType = Coin.getCoinTypeFromArg(tokenTypeArg);
@@ -115,8 +111,7 @@ export const StakeTokens = createAsyncThunk<
             api.getSignerInstance(keypairVault.getKeyPair()),
             coins,
             amount,
-            validatorAddress,
-            growthbook.isOn(FEATURES.DEPRECATE_GATEWAY)
+            validatorAddress
         );
         dispatch(fetchAllOwnedAndRequiredObjects());
         return response;
