@@ -11,7 +11,7 @@ arc-swap = { version = "1.5.1", features = ["serde"] }
 bincode = "1.3.3"
 bytes = "1.2.1"
 match_opt = "0.1.2"
-mysten-util-mem = { git = "https://github.com/MystenLabs/mysten-infra/", rev = "59defcc8fc2850459f8b955599dcae7072fcb365" }
+mysten-util-mem = { git = "https://github.com/MystenLabs/mysten-infra/", rev = "2d031b1ba014b63a2680a1980d79fd808af3c3a0" }
 rand = { version = "0.8.5", optional = true }
 serde = { version = "1.0.144", features = ["derive"] }
 store.workspace = true
