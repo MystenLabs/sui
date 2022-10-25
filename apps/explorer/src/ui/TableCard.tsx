@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
 import {
     flexRender,
     getCoreRowModel,
     useReactTable,
 } from '@tanstack/react-table';
-import { cva } from 'class-variance-authority';
 import { useMemo } from 'react';
 
 import type { ExecutionStatusType, TransactionKindName } from '@mysten/sui.js';
@@ -58,18 +58,6 @@ export interface TableCardProps {
     columns: TableColumn[];
 }
 
-const cellStyle = cva(['text-sui-grey-75 h-[30px] px-[4px]'], {
-    variants: {
-        variant: {
-            th: 'text-left font-semibold uppercase text-subtitle',
-            td: 'group-hover:text-sui-grey-90 group-hover:bg-sui-grey-40 text-body group-hover:first:rounded-l-[4px] group-hover:last:rounded-r-[4px]',
-        },
-    },
-    defaultVariants: {
-        variant: 'td',
-    },
-});
-
 export function TableCard({ data, columns }: TableCardProps) {
     // Use Columns to create a table
     const processedcol = useMemo(() => columnsContent(columns), [columns]);
@@ -80,12 +68,8 @@ export function TableCard({ data, columns }: TableCardProps) {
     });
 
     return (
-        <div className={'w-full overflow-x-auto'}>
-            <table
-                className={
-                    'text-left min-w-max border-collapse w-full  border-solid border-[#f0f1f2] border-b-[1px] border-0'
-                }
-            >
+        <div className="w-full overflow-x-auto">
+            <table className="text-left min-w-max border-collapse w-full border-solid border-sui-grey-45 border-0 border-b">
                 <thead>
                     {table.getHeaderGroups().map((headerGroup: any) => (
                         <tr key={headerGroup.id}>
@@ -94,7 +78,7 @@ export function TableCard({ data, columns }: TableCardProps) {
                                     key={header.id}
                                     colSpan={header.colSpan}
                                     scope="col"
-                                    className={cellStyle({ variant: 'th' })}
+                                    className="text-left font-semibold uppercase text-subtitle"
                                 >
                                     {header.isPlaceholder
                                         ? null
@@ -109,11 +93,11 @@ export function TableCard({ data, columns }: TableCardProps) {
                 </thead>
                 <tbody>
                     {table.getRowModel().rows.map((row: any) => (
-                        <tr key={row.id} className={'group'}>
+                        <tr key={row.id} className="group">
                             {row.getVisibleCells().map((cell: any) => (
                                 <td
                                     key={cell.id}
-                                    className={cellStyle({ variant: 'td' })}
+                                    className="group-hover:text-sui-grey-90 group-hover:bg-sui-grey-40 text-body group-hover:first:rounded-l group-hover:last:rounded-r"
                                 >
                                     {flexRender(
                                         cell.column.columnDef.cell,

@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useMemo } from 'react';
+
 import { Placeholder } from './Placeholder';
 import { TableCard } from './TableCard';
 
@@ -17,24 +19,31 @@ export function PlaceholderTable({
     colHeadings,
     colWidths,
 }: PlaceholderTableProps) {
-    const rowEntry = Object.fromEntries(
-        colHeadings.map((header, index) => [
-            `a${index}`,
-            <Placeholder
-                key={index}
-                width={colWidths[index]}
-                height={rowHeight}
-            />,
-        ])
+    const rowEntry = useMemo(
+        () =>
+            Object.fromEntries(
+                colHeadings.map((header, index) => [
+                    `a${index}`,
+                    <Placeholder
+                        key={index}
+                        width={colWidths[index]}
+                        height={rowHeight}
+                    />,
+                ])
+            ),
+        [colHeadings, colWidths, rowHeight]
     );
 
-    const loadingTable = {
-        data: new Array(rowCount).fill(rowEntry),
-        columns: colHeadings.map((header, index) => ({
-            headerLabel: header,
-            accessorKey: `a${index}`,
-        })),
-    };
+    const loadingTable = useMemo(
+        () => ({
+            data: new Array(rowCount).fill(rowEntry),
+            columns: colHeadings.map((header, index) => ({
+                headerLabel: header,
+                accessorKey: `a${index}`,
+            })),
+        }),
+        [rowCount, rowEntry, colHeadings]
+    );
 
     return (
         <TableCard data={loadingTable.data} columns={loadingTable.columns} />
