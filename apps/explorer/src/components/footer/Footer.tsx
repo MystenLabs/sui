@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { ReactComponent as SuiLogoIcon } from '../../assets/Sui Logo.svg';
-import { CookiesConsent } from '../cookies-consent/CookiesConsent';
 import ExternalLink from '../external-link/ExternalLink';
 
 import styles from './Footer.module.css';
@@ -89,8 +88,6 @@ function Footer() {
                     <div>&copy;2022 Sui. All rights reserved.</div>
                 </div>
             </div>
-
-            <CookiesConsent />
         </footer>
     );
 }
