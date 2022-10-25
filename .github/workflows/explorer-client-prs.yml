@@ -96,13 +96,3 @@ jobs:
           wait-on: "http://localhost:3000, http://localhost:9123"
           # wait for 2 minutes for the server to respond
           wait-on-timeout: 120
-      - uses: actions/upload-artifact@v2
-        if: always()
-        with:
-          name: cypress-screenshots
-          path: apps/explorer/cypress/screenshots
-      - uses: actions/upload-artifact@v2
-        if: always()
-        with:
-          name: cypress-videos
-          path: apps/explorer/cypress/videos
