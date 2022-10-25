@@ -47,9 +47,11 @@ pub(crate) struct TestInventories {
     // global inventories.Most recent objects are at the back of the set
     pub(crate) shared_inventory: BTreeMap<Type, Set<ObjectID>>,
     pub(crate) immutable_inventory: BTreeMap<Type, Set<ObjectID>>,
+    pub(crate) taken_immutable_values: BTreeMap<Type, BTreeMap<ObjectID, Value>>,
     // object has been taken from the inventory
     pub(crate) taken: BTreeMap<ObjectID, Owner>,
 }
+
 pub struct RuntimeResults {
     pub writes: LinkedHashMap<ObjectID, (WriteKind, Owner, Type, StructTag, Value)>,
     pub deletions: LinkedHashMap<ObjectID, DeleteKind>,
