@@ -74,7 +74,6 @@ importers:
       prismjs: ^1.28.0
       react: ^18.2.0
       react-dom: ^18.2.0
-      react-ga4: ^1.4.1
       react-hot-toast: ^2.4.0
       react-router-dom: ^6.2.1
       start-server-and-test: ^1.14.0
@@ -86,7 +85,6 @@ importers:
       tailwindcss: ^3.0.23
       topojson-client: ^3.1.0
       typescript: ^4.8.3
-      vanilla-cookieconsent: ^2.8.0
       vite: ^3.0.8
       vite-plugin-svgr: ^2.2.1
       vitest: ^0.22.1
@@ -112,11 +110,9 @@ importers:
       prismjs: 1.28.0
       react: 18.2.0
       react-dom: 18.2.0_react@18.2.0
-      react-ga4: 1.4.1
       react-hot-toast: 2.4.0_biqbaboplfbrettd7655fr4n2y
       react-router-dom: 6.3.0_biqbaboplfbrettd7655fr4n2y
       topojson-client: 3.1.0
-      vanilla-cookieconsent: 2.8.5
     devDependencies:
       '@babel/core': 7.19.3
       '@storybook/addon-a11y': 7.0.0-alpha.38_biqbaboplfbrettd7655fr4n2y
@@ -6954,7 +6950,7 @@ packages:
   /axios/0.21.4_debug@4.3.2:
     resolution: {integrity: sha512-ut5vewkiu8jjGBdqpM44XxjuCjq9LAKeHVmoVfHVzy8eHgxxq8SbAVQNovDA8mVi05kP0Ea/n/UzcSHcTJQfNg==}
     dependencies:
-      follow-redirects: 1.15.1
+      follow-redirects: 1.15.1_debug@4.3.2
     transitivePeerDependencies:
       - debug
     dev: true
@@ -6962,7 +6958,7 @@ packages:
   /axios/0.25.0:
     resolution: {integrity: sha512-cD8FOb0tRH3uuEe6+evtAbgJtfxr7ly3fQjYcMcuPlgkwVS9xboaVIpcDV+cYQe+yGykgwZCs1pzjntcGa6l5g==}
     dependencies:
-      follow-redirects: 1.15.1
+      follow-redirects: 1.15.1_debug@4.3.2
     transitivePeerDependencies:
       - debug
     dev: true
@@ -6970,7 +6966,7 @@ packages:
   /axios/0.27.2:
     resolution: {integrity: sha512-t+yRIyySRTp/wua5xEr+z1q60QmLq8ABsS5O9Me1AsE5dfKqgnCFzwiCZZ/cGNd1lq4/7akDWMxdhVlucjmnOQ==}
     dependencies:
-      follow-redirects: 1.15.1
+      follow-redirects: 1.15.1_debug@4.3.2
       form-data: 4.0.0
     transitivePeerDependencies:
       - debug
@@ -10879,7 +10875,7 @@ packages:
     engines: {node: '>=8.9.0'}
     dev: true
 
-  /follow-redirects/1.15.1:
+  /follow-redirects/1.15.1_debug@4.3.2:
     resolution: {integrity: sha512-yLAMQs+k0b2m7cVxpS1VKJVvoz7SS9Td1zss3XRwXj+ZDH00RJgnuLx7E44wx02kQLrdM3aOOy+FpzS7+8OizA==}
     engines: {node: '>=4.0'}
     peerDependencies:
@@ -10887,6 +10883,8 @@ packages:
     peerDependenciesMeta:
       debug:
         optional: true
+    dependencies:
+      debug: 4.3.2
     dev: true
 
   /for-each/0.3.3:
@@ -16145,10 +16143,6 @@ packages:
     resolution: {integrity: sha512-suNP+J1VU1MWFKcyt7RtjiSWUjvidmQSlqu+eHslq+342xCbGTYmC0mEhPCOHxlW0CywylOC1u2DFAT+bv4dBw==}
     dev: false
 
-  /react-ga4/1.4.1:
-    resolution: {integrity: sha512-ioBMEIxd4ePw4YtaloTUgqhQGqz5ebDdC4slEpLgy2sLx1LuZBC9iYCwDymTXzcntw6K1dHX183ulP32nNdG7w==}
-    dev: false
-
   /react-hot-toast/2.4.0_biqbaboplfbrettd7655fr4n2y:
     resolution: {integrity: sha512-qnnVbXropKuwUpriVVosgo8QrB+IaPJCpL8oBI6Ov84uvHZ5QQcTp2qg6ku2wNfgJl6rlQXJIQU5q+5lmPOutA==}
     engines: {node: '>=10'}
@@ -19476,10 +19470,6 @@ packages:
     resolution: {integrity: sha512-9r0wQsWD8z/BxPOvnwbPf05ZvFngXyouE9EKB+5GbYix+BYnAwrIChCUyFIinfbf2FL/U71z+CPpbnmTdxrwBg==}
     engines: {node: '>=12'}
     dev: true
-
-  /vanilla-cookieconsent/2.8.5:
-    resolution: {integrity: sha512-GZeAjOnvpQXTXQ99F/4lmB+DZkwSQU7aSRazcwlVPx8GZHG/ieKc+hh8nbBoWQYq+SCz5LkbXdB3IUWKgHZBqA==}
-    dev: false
 
   /vary/1.1.2:
     resolution: {integrity: sha512-BNGbWLfd0eUPabhkXUVm0j8uuvREyTh5ovRa/dyow/BqAbZJyC+5fU+IzQOzmAKzYqYRAISoRhdQr3eIZ/PXqg==}
