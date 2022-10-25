@@ -265,10 +265,10 @@ $ git clone https://github.com/MystenLabs/sui.git --branch devnet
 You can start exploring Sui's source code by looking into the following primary directories:
 * [sui](https://github.com/MystenLabs/sui/tree/main/crates/sui) - the Sui CLI binary
 * [sui_programmability](https://github.com/MystenLabs/sui/tree/main/sui_programmability) - Sui's Move language integration also including games and other Move code examples for testing and reuse
-* [sui_core](https://github.com/MystenLabs/sui/tree/main/crates/sui-core) - authority server and Sui Gateway
-* [sui-types](https://github.com/MystenLabs/sui/tree/main/crates/sui-types) - coins, gas, and other object types
-* [explorer](https://github.com/MystenLabs/sui/tree/main/apps/explorer) - object explorer for the Sui network
-* [sui-network](https://github.com/MystenLabs/sui/tree/main/crates/sui-network) - networking interfaces
+* [crates/sui-core](https://github.com/MystenLabs/sui/tree/main/crates/sui-core) - authority server and Sui Gateway
+* [crates/sui-types](https://github.com/MystenLabs/sui/tree/main/crates/sui-types) - coins, gas, and other object types
+* [crates/sui-network](https://github.com/MystenLabs/sui/tree/main/crates/sui-network) - networking interfaces
+* [apps/explorer](https://github.com/MystenLabs/sui/tree/main/apps/explorer) - object explorer for the Sui network
 
 ## Rustdoc
 
