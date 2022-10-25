@@ -50,6 +50,8 @@ import {
   TransactionQuery,
   SUI_TYPE_ARG,
   normalizeSuiAddress,
+  RpcApiVersion,
+  parseVersionFromString,
 } from '../types';
 import { SignatureScheme } from '../cryptography/publickey';
 import {
@@ -61,17 +63,13 @@ import {
 const isNumber = (val: any): val is number => typeof val === 'number';
 const isAny = (_val: any): _val is any => true;
 
-const PRE_PAGINATION_API_VERSION = '0.11.0';
-export const LATEST_RPC_API_VERSION = 'latest';
-
-export class JsonRpcProvider extends Provider {
-  protected client: JsonRpcClient;
-  protected wsClient: WebsocketClient;
+/**
+ * Configuration options for the JsonRpcProvider. If the value of a field is not provided,
+ * value in `DEFAULT_OPTIONS` for that field will be used
+ */
+export type RpcProviderOptions = {
   /**
-   * Establish a connection to a Sui RPC endpoint
-   *
-   * @param endpoint URL to the Sui RPC endpoint
-   * @param skipDataValidation default to `true`. If set to `false`, the rpc
+   * Default to `true`. If set to `false`, the rpc
    * client will throw an error if the responses from the RPC server do not
    * conform to the schema defined in the TypeScript SDK. If set to `true`, the
    * rpc client will log the mismatch as a warning message instead of throwing an
@@ -80,29 +78,74 @@ export class JsonRpcProvider extends Provider {
    * the version compatibility of the SDK, as not all the schema
    * changes in the RPC response will affect the caller, but the caller needs to
    * understand that the data may not match the TypeSrcript definitions.
-   * @param rpcAPIVersion controls which type of RPC API version to use.
+   */
+  skipDataValidation?: boolean;
+  /**
+   * Configuration options for the websocket connection
+   */
+  socketOptions?: WebsocketClientOptions;
+  /**
+   * Cache timeout in seconds for the RPC API Version
+   */
+  versionCacheTimoutInSeconds?: number;
+};
+
+const DEFAULT_OPTIONS: RpcProviderOptions = {
+  skipDataValidation: true,
+  socketOptions: DEFAULT_CLIENT_OPTIONS,
+  versionCacheTimoutInSeconds: 600,
+};
+
+export class JsonRpcProvider extends Provider {
+  protected client: JsonRpcClient;
+  protected wsClient: WebsocketClient;
+  private rpcApiVersion: RpcApiVersion | undefined;
+  private cacheExpiry: number | undefined;
+  /**
+   * Establish a connection to a Sui RPC endpoint
+   *
+   * @param endpoint URL to the Sui RPC endpoint
+   * @param options configuration options for the provider
    */
   constructor(
     public endpoint: string,
-    public skipDataValidation: boolean = true,
-    // TODO: Update the default value after we deploy 0.12.0
-    private rpcAPIVersion: string = PRE_PAGINATION_API_VERSION,
-    public socketOptions: WebsocketClientOptions = DEFAULT_CLIENT_OPTIONS
+    public options: RpcProviderOptions = DEFAULT_OPTIONS
   ) {
     super();
+
+    const opts = { ...DEFAULT_OPTIONS, ...options };
 
     this.client = new JsonRpcClient(endpoint);
     this.wsClient = new WebsocketClient(
       endpoint,
-      skipDataValidation,
-      socketOptions
+      opts.skipDataValidation!,
+      opts.socketOptions
     );
   }
 
-  async getRpcApiVersion(): Promise<string> {
-    // TODO: we should fetch the API version from
-    // the RPC endpoint instead
-    return this.rpcAPIVersion;
+  async getRpcApiVersion(): Promise<RpcApiVersion | undefined> {
+    if (
+      this.rpcApiVersion &&
+      this.cacheExpiry &&
+      this.cacheExpiry <= Date.now()
+    ) {
+      return this.rpcApiVersion;
+    }
+    try {
+      const resp = await this.client.requestWithType(
+        'rpc.discover',
+        [],
+        isAny,
+        this.options.skipDataValidation
+      );
+      this.rpcApiVersion = parseVersionFromString(resp.info.version);
+      this.cacheExpiry =
+        Date.now() + (this.options.versionCacheTimoutInSeconds ?? 0);
+      return this.rpcApiVersion;
+    } catch (err) {
+      console.warn('Error fetching version number of the RPC API', err);
+    }
+    return undefined;
   }
 
   // Move info
@@ -116,7 +159,7 @@ export class JsonRpcProvider extends Provider {
         'sui_getMoveFunctionArgTypes',
         [packageId, moduleName, functionName],
         isSuiMoveFunctionArgTypes,
-        this.skipDataValidation
+        this.options.skipDataValidation
       );
     } catch (err) {
       throw new Error(
@@ -134,7 +177,7 @@ export class JsonRpcProvider extends Provider {
         'sui_getNormalizedMoveModulesByPackage',
         [packageId],
         isSuiMoveNormalizedModules,
-        this.skipDataValidation
+        this.options.skipDataValidation
       );
     } catch (err) {
       throw new Error(
@@ -153,7 +196,7 @@ export class JsonRpcProvider extends Provider {
         'sui_getNormalizedMoveModule',
         [packageId, moduleName],
         isSuiMoveNormalizedModule,
-        this.skipDataValidation
+        this.options.skipDataValidation
       );
     } catch (err) {
       throw new Error(
@@ -173,7 +216,7 @@ export class JsonRpcProvider extends Provider {
         'sui_getNormalizedMoveFunction',
         [packageId, moduleName, functionName],
         isSuiMoveNormalizedFunction,
-        this.skipDataValidation
+        this.options.skipDataValidation
       );
     } catch (err) {
       throw new Error(
@@ -192,7 +235,7 @@ export class JsonRpcProvider extends Provider {
         'sui_getNormalizedMoveStruct',
         [packageId, moduleName, structName],
         isSuiMoveNormalizedStruct,
-        this.skipDataValidation
+        this.options.skipDataValidation
       );
     } catch (err) {
       throw new Error(
@@ -208,7 +251,7 @@ export class JsonRpcProvider extends Provider {
         'sui_getObjectsOwnedByAddress',
         [address],
         isGetOwnedObjectsResponse,
-        this.skipDataValidation
+        this.options.skipDataValidation
       );
     } catch (err) {
       throw new Error(
@@ -291,7 +334,7 @@ export class JsonRpcProvider extends Provider {
         'sui_getObjectsOwnedByObject',
         [objectId],
         isGetOwnedObjectsResponse,
-        this.skipDataValidation
+        this.options.skipDataValidation
       );
     } catch (err) {
       throw new Error(
@@ -306,7 +349,7 @@ export class JsonRpcProvider extends Provider {
         'sui_getObject',
         [objectId],
         isGetObjectDataResponse,
-        this.skipDataValidation
+        this.options.skipDataValidation
       );
     } catch (err) {
       throw new Error(`Error fetching object info: ${err} for id ${objectId}`);
@@ -327,7 +370,7 @@ export class JsonRpcProvider extends Provider {
       return await this.client.batchRequestWithType(
         requests,
         isGetObjectDataResponse,
-        this.skipDataValidation
+        this.options.skipDataValidation
       );
     } catch (err) {
       throw new Error(`Error fetching object info: ${err} for id ${objectIds}`);
@@ -346,7 +389,7 @@ export class JsonRpcProvider extends Provider {
         'sui_getTransactions',
         [query, cursor, limit, order],
         isPaginatedTransactionDigests,
-        this.skipDataValidation
+        this.options.skipDataValidation
       );
     } catch (err) {
       throw new Error(
@@ -374,7 +417,7 @@ export class JsonRpcProvider extends Provider {
       const results = await this.client.batchRequestWithType(
         requests,
         isPaginatedTransactionDigests,
-        this.skipDataValidation
+        this.options.skipDataValidation
       );
       return [...results[0].data, ...results[1].data];
     } catch (err) {
@@ -402,7 +445,7 @@ export class JsonRpcProvider extends Provider {
       const results = await this.client.batchRequestWithType(
         requests,
         isPaginatedTransactionDigests,
-        this.skipDataValidation
+        this.options.skipDataValidation
       );
       return [...results[0].data, ...results[1].data];
     } catch (err) {
@@ -420,7 +463,7 @@ export class JsonRpcProvider extends Provider {
         'sui_getTransaction',
         [digest],
         isSuiTransactionResponse,
-        this.skipDataValidation
+        this.options.skipDataValidation
       );
       return resp;
     } catch (err) {
@@ -441,7 +484,7 @@ export class JsonRpcProvider extends Provider {
       return await this.client.batchRequestWithType(
         requests,
         isSuiTransactionResponse,
-        this.skipDataValidation
+        this.options.skipDataValidation
       );
     } catch (err) {
       const list = digests.join(', ').substring(0, -2);
@@ -462,7 +505,7 @@ export class JsonRpcProvider extends Provider {
         'sui_executeTransaction',
         [txnBytes, signatureScheme, signature, pubkey],
         isSuiTransactionResponse,
-        this.skipDataValidation
+        this.options.skipDataValidation
       );
       return resp;
     } catch (err) {
@@ -482,7 +525,7 @@ export class JsonRpcProvider extends Provider {
         'sui_executeTransaction',
         [txnBytes, signatureScheme, signature, pubkey, requestType],
         isSuiExecuteTransactionResponse,
-        this.skipDataValidation
+        this.options.skipDataValidation
       );
       return resp;
     } catch (err) {
@@ -496,7 +539,7 @@ export class JsonRpcProvider extends Provider {
         'sui_getTotalTransactionNumber',
         [],
         isNumber,
-        this.skipDataValidation
+        this.options.skipDataValidation
       );
       return resp;
     } catch (err) {
@@ -513,7 +556,7 @@ export class JsonRpcProvider extends Provider {
         'sui_getTransactionsInRange',
         [start, end],
         isGetTxnDigestsResponse,
-        this.skipDataValidation
+        this.options.skipDataValidation
       );
     } catch (err) {
       throw new Error(
@@ -528,7 +571,7 @@ export class JsonRpcProvider extends Provider {
         'sui_getRecentTransactions',
         [count],
         isGetTxnDigestsResponse,
-        this.skipDataValidation
+        this.options.skipDataValidation
       );
     } catch (err) {
       throw new Error(
@@ -543,7 +586,7 @@ export class JsonRpcProvider extends Provider {
         'sui_syncAccountState',
         [address],
         isAny,
-        this.skipDataValidation
+        this.options.skipDataValidation
       );
     } catch (err) {
       throw new Error(
@@ -563,7 +606,7 @@ export class JsonRpcProvider extends Provider {
         'sui_getEventsByTransaction',
         [digest, count],
         isSuiEvents,
-        this.skipDataValidation
+        this.options.skipDataValidation
       );
     } catch (err) {
       throw new Error(
@@ -584,7 +627,7 @@ export class JsonRpcProvider extends Provider {
         'sui_getEventsByModule',
         [package_, module, count, startTime, endTime],
         isSuiEvents,
-        this.skipDataValidation
+        this.options.skipDataValidation
       );
     } catch (err) {
       throw new Error(
@@ -604,7 +647,7 @@ export class JsonRpcProvider extends Provider {
         'sui_getEventsByMoveEventStructName',
         [moveEventStructName, count, startTime, endTime],
         isSuiEvents,
-        this.skipDataValidation
+        this.options.skipDataValidation
       );
     } catch (err) {
       throw new Error(
@@ -624,7 +667,7 @@ export class JsonRpcProvider extends Provider {
         'sui_getEventsBySender',
         [sender, count, startTime, endTime],
         isSuiEvents,
-        this.skipDataValidation
+        this.options.skipDataValidation
       );
     } catch (err) {
       throw new Error(
@@ -644,7 +687,7 @@ export class JsonRpcProvider extends Provider {
         'sui_getEventsByRecipient',
         [recipient, count, startTime, endTime],
         isSuiEvents,
-        this.skipDataValidation
+        this.options.skipDataValidation
       );
     } catch (err) {
       throw new Error(
@@ -664,7 +707,7 @@ export class JsonRpcProvider extends Provider {
         'sui_getEventsByObject',
         [object, count, startTime, endTime],
         isSuiEvents,
-        this.skipDataValidation
+        this.options.skipDataValidation
       );
     } catch (err) {
       throw new Error(
@@ -683,7 +726,7 @@ export class JsonRpcProvider extends Provider {
         'sui_getEventsByTimeRange',
         [count, startTime, endTime],
         isSuiEvents,
-        this.skipDataValidation
+        this.options.skipDataValidation
       );
     } catch (err) {
       throw new Error(

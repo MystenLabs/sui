@@ -7,6 +7,5 @@
  */
 export enum FEATURES {
     DEPRECATE_GATEWAY = 'deprecate-gateway',
-    RPC_API_VERSION = 'rpc-api-version',
     SUI_DENOMINATION = 'sui-denomination',
 }

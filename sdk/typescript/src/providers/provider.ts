@@ -28,6 +28,7 @@ import {
   PaginatedTransactionDigests,
   TransactionQuery,
   Ordering,
+  RpcApiVersion,
 } from '../types';
 
 ///////////////////////////////
@@ -35,10 +36,13 @@ import {
 export abstract class Provider {
   // API Version
   /**
-   * Returns the current version of the RPC API that the provider is
-   * connected to
+   * Fetch and cache the RPC API version number
+   *
+   * @return the current version of the RPC API that the provider is
+   * connected to, or undefined if any error occurred
    */
-  abstract getRpcApiVersion(): Promise<string>;
+
+  abstract getRpcApiVersion(): Promise<RpcApiVersion | undefined>;
 
   // Objects
   /**
@@ -100,7 +104,7 @@ export abstract class Provider {
    * Method to look up denomination of a specific type of coin.
    * TODO: now only SUI coins are supported, will scale to other types
    * based on their definitions in Move.
-   * 
+   *
    * @param coin_type coin type, e.g., '0x2::sui::SUI'
    * @return denomination info of the coin including,
    * coin type, the same as input coin type
@@ -112,7 +116,7 @@ export abstract class Provider {
    * e.g., 9 here for SUI coin.
    */
   abstract getCoinDenominationInfo(
-    coin_type: string,
+    coin_type: string
   ): CoinDenominationInfoResponse;
 
   /**
