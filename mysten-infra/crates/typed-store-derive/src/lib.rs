@@ -407,7 +407,7 @@ pub fn derive_dbmap_utils_general(input: TokenStream) -> TokenStream {
                 tables_db_options_override: Option<typed_store::rocks::DBMapTableConfigMap>
             ) -> Self {
                 let path = &path;
-                let (db, db_metrics) = {
+                let db = {
                     let opt_cfs = match tables_db_options_override {
                         None => [
                             #(
@@ -421,21 +421,19 @@ pub fn derive_dbmap_utils_general(input: TokenStream) -> TokenStream {
                         ]
                     };
                     // Safe to call unwrap because we will have atleast one field_name entry in the struct
-                    let registry = opt_cfs.iter().map(|q| &q.1.registry).next().unwrap();
                     let opt_cfs: Vec<_> = opt_cfs.iter().map(|q| (q.0.as_str(), &q.1.options)).collect();
                     let db = match as_secondary_with_path {
                         Some(p) => typed_store::rocks::open_cf_opts_secondary(path, Some(&p), global_db_options_override, &opt_cfs),
                         None    => typed_store::rocks::open_cf_opts(path, global_db_options_override, &opt_cfs)
                     };
-                    let db_metrics = typed_store::metrics::DBMetrics::make_db_metrics(registry);
-                    db.map(|db| (db, db_metrics))
+                    db
                 }.expect("Cannot open DB.");
                 let (
                         #(
                             #field_names
                         ),*
                 ) = (#(
-                        DBMap::#inner_types::reopen(&db, Some(stringify!(#field_names)), db_metrics).expect(&format!("Cannot open {} CF.", stringify!(#field_names))[..])
+                        DBMap::#inner_types::reopen(&db, Some(stringify!(#field_names))).expect(&format!("Cannot open {} CF.", stringify!(#field_names))[..])
                     ),*);
 
                 Self {
