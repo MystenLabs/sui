@@ -85,7 +85,8 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
       );
 
       const validators = await toolbox.getActiveValidators();
-      const validator_metadata = (validators[0] as SuiMoveObject).fields.metadata;
+      const validator_metadata = (validators[0] as SuiMoveObject).fields
+        .metadata;
       const validator_address = (validator_metadata as SuiMoveObject).fields
         .sui_address;
 
