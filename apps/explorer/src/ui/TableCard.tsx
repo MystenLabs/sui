@@ -78,7 +78,7 @@ export function TableCard({ data, columns }: TableCardProps) {
                                     key={header.id}
                                     colSpan={header.colSpan}
                                     scope="col"
-                                    className="text-left font-semibold uppercase text-subtitle"
+                                    className="text-sui-grey-75 h-[30px] px-1 text-left font-semibold uppercase text-subtitle"
                                 >
                                     {header.isPlaceholder
                                         ? null
@@ -97,7 +97,7 @@ export function TableCard({ data, columns }: TableCardProps) {
                             {row.getVisibleCells().map((cell: any) => (
                                 <td
                                     key={cell.id}
-                                    className="group-hover:text-sui-grey-90 group-hover:bg-sui-grey-40 text-body group-hover:first:rounded-l group-hover:last:rounded-r"
+                                    className="text-sui-grey-75 h-[30px] px-1 group-hover:text-sui-grey-90 group-hover:bg-sui-grey-40 text-body group-hover:first:rounded-l group-hover:last:rounded-r"
                                 >
                                     {flexRender(
                                         cell.column.columnDef.cell,
