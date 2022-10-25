@@ -511,9 +511,11 @@ impl Core {
                 .await?;
         }
 
-        // Ensure we have all the ancestors of this certificate yet (if we didn't already garbage collect them).
-        // If we don't, the synchronizer will gather them and trigger re-processing of this certificate.
-        if !self.synchronizer.deliver_certificate(&certificate).await? {
+        // Ensure either we have all the ancestors of this certificate, or the parents have been garbage collected.
+        // If we don't, the synchronizer will start fetching missing certificates.
+        if certificate.round() > self.gc_round + 1
+            && !self.synchronizer.check_parents(&certificate).await?
+        {
             debug!(
                 "Processing of {:?} suspended: missing ancestors",
                 certificate

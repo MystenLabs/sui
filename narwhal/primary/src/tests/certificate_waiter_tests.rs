@@ -6,7 +6,7 @@ use crate::{
 };
 use anemo::async_trait;
 use anyhow::Result;
-use config::{Committee, Epoch, WorkerId};
+use config::{Epoch, WorkerId};
 use crypto::{PublicKey, Signature};
 use fastcrypto::{hash::Hash, traits::KeyPair, SignatureService};
 use indexmap::IndexMap;
@@ -15,11 +15,7 @@ use network::P2pNetwork;
 use node::NodeStorage;
 use once_cell::sync::OnceCell;
 use prometheus::Registry;
-use std::{
-    collections::{BTreeSet, HashMap},
-    sync::Arc,
-    time::Duration,
-};
+use std::{collections::BTreeSet, sync::Arc, time::Duration};
 use storage::CertificateStore;
 use test_utils::{temp_dir, CommitteeFixture};
 use tokio::{
@@ -30,7 +26,7 @@ use tokio::{
     time::sleep,
 };
 use types::{
-    BatchDigest, Certificate, CertificateDigest, ConsensusStore, FetchCertificatesRequest,
+    BatchDigest, Certificate, CertificateDigest, FetchCertificatesRequest,
     FetchCertificatesResponse, GetCertificatesRequest, GetCertificatesResponse, Header,
     HeaderDigest, Metadata, PayloadAvailabilityRequest, PayloadAvailabilityResponse,
     PrimaryMessage, PrimaryToPrimary, PrimaryToPrimaryServer, ReconfigureNotification, Round,
@@ -76,31 +72,6 @@ impl PrimaryToPrimary for FetchCertificateProxy {
     ) -> Result<anemo::Response<PayloadAvailabilityResponse>, anemo::rpc::Status> {
         unimplemented!()
     }
-}
-
-// Simulate consensus committing all certificates written to store, by updating last committed
-// rounds to the last written rounds.
-#[allow(clippy::mutable_key_type)]
-fn write_last_committed(
-    committee: &Committee,
-    certificate_store: &CertificateStore,
-    consensus_sotre: &Arc<ConsensusStore>,
-) {
-    let committed_rounds: HashMap<PublicKey, Round> = committee
-        .authorities()
-        .map(|(name, _)| {
-            (
-                name.clone(),
-                certificate_store
-                    .last_round_number(name)
-                    .unwrap()
-                    .unwrap_or(0),
-            )
-        })
-        .collect();
-    consensus_sotre
-        .write_consensus_state(&committed_rounds, &0, &CertificateDigest::default())
-        .expect("Write to consensus store failed!");
 }
 
 async fn verify_certificates_in_store(
@@ -195,7 +166,6 @@ async fn fetch_certificates_basic() {
     let store = NodeStorage::reopen(temp_dir());
     let certificate_store = store.certificate_store.clone();
     let payload_store = store.payload_store.clone();
-    let consensus_store = store.consensus_store.clone();
 
     // Signal consensus round
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
@@ -254,7 +224,6 @@ async fn fetch_certificates_basic() {
         committee.clone(),
         P2pNetwork::new(client_network.clone()),
         certificate_store.clone(),
-        Some(consensus_store.clone()),
         rx_consensus_round_updates.clone(),
         gc_depth,
         rx_reconfigure.clone(),
@@ -326,7 +295,6 @@ async fn fetch_certificates_basic() {
             .expect("Writing certificate to store failed");
     }
     let mut num_written = 4;
-    write_last_committed(&committee, &certificate_store, &consensus_store);
 
     // Send a primary message for a certificate with parents that do not exist locally, to trigger fetching.
     let target_index = 123;
@@ -339,12 +307,11 @@ async fn fetch_certificates_basic() {
 
     // Verify the fetch request.
     let mut req = rx_fetch_req.recv().await.unwrap();
-    assert_eq!(
-        req.exclusive_lower_bounds.len(),
-        fixture.authorities().count()
-    );
-    for (_, round) in &req.exclusive_lower_bounds {
-        assert_eq!(round, &1);
+    let (lower_bound, skip_rounds) = req.get_bounds();
+    assert_eq!(lower_bound, 0);
+    assert_eq!(skip_rounds.len(), fixture.authorities().count());
+    for rounds in skip_rounds.values() {
+        assert_eq!(rounds, &(1..2).collect());
     }
 
     // Send back another 62 certificates.
@@ -366,14 +333,14 @@ async fn fetch_certificates_basic() {
     )
     .await;
     num_written += first_batch_len;
-    write_last_committed(&committee, &certificate_store, &consensus_store);
 
     // The certificate waiter should send out another fetch request, because it has not received certificate 123.
     loop {
         match rx_fetch_req.recv().await {
             Some(r) => {
-                if r.exclusive_lower_bounds[0].1 == 1 {
-                    // Drain the fetch requests sent out before the last reply.
+                let (_, skip_rounds) = r.get_bounds();
+                if skip_rounds.values().next().unwrap().len() == 1 {
+                    // Drain the fetch requests sent out before the last reply, when only 1 round in skip_rounds.
                     tx_fetch_resp.try_send(first_batch_resp.clone()).unwrap();
                     continue;
                 }
@@ -383,19 +350,12 @@ async fn fetch_certificates_basic() {
             None => panic!("Unexpected channel closing!"),
         }
     }
-    assert_eq!(
-        req.exclusive_lower_bounds.len(),
-        fixture.authorities().count()
-    );
-    let mut rounds = req
-        .exclusive_lower_bounds
-        .iter()
-        .map(|(_, round)| round)
-        .cloned()
-        .collect_vec();
-    rounds.sort();
-    // Expected rounds are calculated from current num_written index.
-    assert_eq!(rounds, vec![16, 16, 17, 17]);
+    let (_, skip_rounds) = req.get_bounds();
+    assert_eq!(skip_rounds.len(), fixture.authorities().count());
+    for (_, rounds) in skip_rounds {
+        let rounds = rounds.into_iter().collect_vec();
+        assert!(rounds == (1..=16).collect_vec() || rounds == (1..=17).collect_vec());
+    }
 
     // Send back another 123 + 1 - 66 = 58 certificates.
     let second_batch_len = target_index + 1 - num_written;
@@ -416,14 +376,15 @@ async fn fetch_certificates_basic() {
     )
     .await;
     num_written += second_batch_len;
-    write_last_committed(&committee, &certificate_store, &consensus_store);
 
     // No new fetch request is expected.
     sleep(Duration::from_secs(5)).await;
     loop {
         match rx_fetch_req.try_recv() {
             Ok(r) => {
-                if r.exclusive_lower_bounds[0].1 == 16 || r.exclusive_lower_bounds[0].1 == 17 {
+                let (_, skip_rounds) = r.get_bounds();
+                let first_num_skip_rounds = skip_rounds.values().next().unwrap().len();
+                if first_num_skip_rounds == 16 || first_num_skip_rounds == 17 {
                     // Drain the fetch requests sent out before the last reply.
                     tx_fetch_resp.try_send(second_batch_resp.clone()).unwrap();
                     continue;

@@ -35,7 +35,7 @@ use network::P2pNetwork;
 use prometheus::Registry;
 use std::{
     cmp::Reverse,
-    collections::{BTreeMap, BinaryHeap},
+    collections::{BTreeMap, BTreeSet, BinaryHeap},
     net::Ipv4Addr,
     sync::Arc,
 };
@@ -48,11 +48,12 @@ use tracing::{error, info};
 pub use types::PrimaryMessage;
 use types::{
     metered_channel::{channel_with_total, Receiver, Sender},
-    BatchDigest, Certificate, CertificateDigest, ConsensusStore, FetchCertificatesRequest,
+    BatchDigest, Certificate, CertificateDigest, FetchCertificatesRequest,
     FetchCertificatesResponse, GetCertificatesRequest, GetCertificatesResponse, Header,
     HeaderDigest, PayloadAvailabilityRequest, PayloadAvailabilityResponse, PrimaryToPrimary,
-    PrimaryToPrimaryServer, ReconfigureNotification, RoundVoteDigestPair, WorkerInfoResponse,
-    WorkerOthersBatchMessage, WorkerOurBatchMessage, WorkerToPrimary, WorkerToPrimaryServer,
+    PrimaryToPrimaryServer, ReconfigureNotification, Round, RoundVoteDigestPair,
+    WorkerInfoResponse, WorkerOthersBatchMessage, WorkerOurBatchMessage, WorkerToPrimary,
+    WorkerToPrimaryServer,
 };
 
 #[cfg(any(test))]
@@ -90,7 +91,6 @@ impl Primary {
         proposer_store: ProposerStore,
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
         vote_digest_store: Store<PublicKey, RoundVoteDigestPair>,
-        consensus_store: Arc<ConsensusStore>,
         tx_new_certificates: Sender<Certificate>,
         rx_committed_certificates: Receiver<Certificate>,
         dag: Option<Arc<Dag>>,
@@ -403,11 +403,6 @@ impl Primary {
             (**committee.load()).clone(),
             P2pNetwork::new(network.clone()),
             certificate_store.clone(),
-            if internal_consensus {
-                Some(consensus_store)
-            } else {
-                None
-            },
             rx_consensus_round_updates,
             parameters.gc_depth,
             tx_reconfigure.subscribe(),
@@ -523,6 +518,29 @@ struct PrimaryReceiverHandler {
     payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
 }
 
+#[allow(clippy::result_large_err)]
+impl PrimaryReceiverHandler {
+    fn find_next_round(
+        &self,
+        origin: &PublicKey,
+        current_round: Round,
+        skip_rounds: &BTreeSet<Round>,
+    ) -> Result<Option<Round>, anemo::rpc::Status> {
+        let mut current_round = current_round;
+        while let Some(round) = self
+            .certificate_store
+            .next_round_number(origin, current_round)
+            .map_err(|e| anemo::rpc::Status::from_error(Box::new(e)))?
+        {
+            if !skip_rounds.contains(&round) {
+                return Ok(Some(round));
+            }
+            current_round = round;
+        }
+        Ok(None)
+    }
+}
+
 #[async_trait]
 impl PrimaryToPrimary for PrimaryReceiverHandler {
     async fn send_message(
@@ -564,47 +582,38 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
         let mut response = FetchCertificatesResponse {
             certificates: Vec::new(),
         };
-        if request.exclusive_lower_bounds.is_empty() || request.max_items == 0 {
+        if request.max_items == 0 {
             return Ok(anemo::Response::new(response));
         }
 
         // Use a min-queue for (round, authority) to keep track of the next certificate to fetch.
-        // If the requestor is providing its current round on all authorities, it should be able to
-        // process certificates returned in this order without any missing parents.
         //
         // Compared to fetching certificates iteratatively round by round, using a heap is simpler,
         // and avoids the pathological case of iterating through many missing rounds of a downed authority.
+        let (lower_bound, skip_rounds) = request.get_bounds();
         let mut fetch_queue = BinaryHeap::new();
-
-        // Initialize the min-heap for each authority the next higher round from the requested
-        // lower bound.
-        for (authority, round) in request.exclusive_lower_bounds.into_iter() {
-            let next_round = self
-                .certificate_store
-                .next_round_number(&authority, round)
-                .map_err(|e| anemo::rpc::Status::from_error(Box::new(e)))?;
+        for (origin, rounds) in &skip_rounds {
+            let next_round = self.find_next_round(origin, lower_bound, rounds)?;
             if let Some(r) = next_round {
-                fetch_queue.push(Reverse((r, authority)));
+                fetch_queue.push(Reverse((r, origin.clone())));
             }
         }
 
-        // Iteratively pop one of the (Round, Authority) pairs with the smallest round,
-        // and push to min-heap the next higher round of the same authority.
+        // Iteratively pop the next smallest (Round, Authority) pair, and push to min-heap the next
+        // higher round of the same authority that should not be skipped.
         // The process ends when there are no more pairs in the min-heap.
-        while let Some(Reverse((round, authority))) = fetch_queue.pop() {
+        while let Some(Reverse((round, origin))) = fetch_queue.pop() {
             match self
                 .certificate_store
-                .read_by_index(authority.clone(), round)
+                .read_by_index(origin.clone(), round)
                 .map_err(|e| anemo::rpc::Status::from_error(Box::new(e)))?
             {
                 Some(cert) => {
                     response.certificates.push(cert);
-                    let next_round = self
-                        .certificate_store
-                        .next_round_number(&authority, round)
-                        .map_err(|e| anemo::rpc::Status::from_error(Box::new(e)))?;
+                    let next_round =
+                        self.find_next_round(&origin, round, skip_rounds.get(&origin).unwrap())?;
                     if let Some(r) = next_round {
-                        fetch_queue.push(Reverse((r, authority)));
+                        fetch_queue.push(Reverse((r, origin.clone())));
                     }
                 }
                 None => continue,
@@ -615,6 +624,8 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
             assert!(response.certificates.len() < request.max_items);
         }
 
+        // The requestor should be able to process certificates returned in this order without
+        // any missing parents.
         Ok(anemo::Response::new(response))
     }
 
