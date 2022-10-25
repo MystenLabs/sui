@@ -11,7 +11,6 @@ use crate::{
 };
 use bincode::Options;
 use collectable::TryExtend;
-use prometheus::Registry;
 use rocksdb::{
     properties, AsColumnFamilyRef, ColumnFamilyDescriptor, DBWithThreadMode, MultiThreaded,
     WriteBatch,
@@ -76,21 +75,18 @@ type DBRawIteratorMultiThreaded<'a> =
 /// /// Create the rocks database reference for the desired column families
 /// let rocks = open_cf(tempdir().unwrap(), None, &[FIRST_CF, SECOND_CF]).unwrap();
 ///
-/// /// Create db_metrics to log stats into prometheus
-/// let db_metrics = Arc::new(DBMetrics::make_db_metrics(&Registry::default()));
-///
 /// /// Now simply open all the column families for their expected Key-Value types
-/// let (db_map_1, db_map_2) = reopen!(&rocks, &db_metrics, FIRST_CF;<i32, String>, SECOND_CF;<i32, String>);
+/// let (db_map_1, db_map_2) = reopen!(&rocks, FIRST_CF;<i32, String>, SECOND_CF;<i32, String>);
 /// Ok(())
 /// }
 /// ```
 ///
 #[macro_export]
 macro_rules! reopen {
-    ( $db:expr, $db_metrics:expr, $($cf:expr;<$K:ty, $V:ty>),*) => {
+    ( $db:expr, $($cf:expr;<$K:ty, $V:ty>),*) => {
         (
             $(
-                DBMap::<$K, $V>::reopen($db, Some($cf), $db_metrics).expect(&format!("Cannot open {} CF.", $cf)[..])
+                DBMap::<$K, $V>::reopen($db, Some($cf)).expect(&format!("Cannot open {} CF.", $cf)[..])
             ),*
         )
     };
@@ -117,12 +113,9 @@ pub struct DBMap<K, V> {
 unsafe impl<K: Send, V: Send> Send for DBMap<K, V> {}
 
 impl<K, V> DBMap<K, V> {
-    pub(crate) fn new(
-        db: Arc<rocksdb::DBWithThreadMode<MultiThreaded>>,
-        opt_cf: &str,
-        db_metrics: Arc<DBMetrics>,
-    ) -> Self {
+    pub(crate) fn new(db: Arc<rocksdb::DBWithThreadMode<MultiThreaded>>, opt_cf: &str) -> Self {
         let db_cloned = db.clone();
+        let db_metrics = DBMetrics::get();
         let db_metrics_cloned = db_metrics.clone();
         let cf = opt_cf.to_string();
         let (sender, mut recv) = tokio::sync::oneshot::channel();
@@ -168,13 +161,11 @@ impl<K, V> DBMap<K, V> {
         path: P,
         db_options: Option<rocksdb::Options>,
         opt_cf: Option<&str>,
-        registry: &Registry,
     ) -> Result<Self, TypedStoreError> {
         let cf_key = opt_cf.unwrap_or(rocksdb::DEFAULT_COLUMN_FAMILY_NAME);
         let cfs = vec![cf_key];
         let rocksdb = open_cf(path, db_options, &cfs)?;
-        let db_metrics = Arc::new(DBMetrics::new(registry));
-        Ok(DBMap::new(rocksdb, cf_key, db_metrics))
+        Ok(DBMap::new(rocksdb, cf_key))
     }
 
     /// Reopens an open database as a typed map operating under a specific column family.
@@ -191,10 +182,9 @@ impl<K, V> DBMap<K, V> {
     ///    async fn main() -> Result<(), Error> {
     ///    /// Open the DB with all needed column families first.
     ///    let rocks = open_cf(tempdir().unwrap(), None, &["First_CF", "Second_CF"]).unwrap();
-    ///    let db_metrics = Arc::new(DBMetrics::make_db_metrics(&Registry::default()));
     ///    /// Attach the column families to specific maps.
-    ///    let db_cf_1 = DBMap::<u32,u32>::reopen(&rocks, Some("First_CF"), &db_metrics).expect("Failed to open storage");
-    ///    let db_cf_2 = DBMap::<u32,u32>::reopen(&rocks, Some("Second_CF"), &db_metrics).expect("Failed to open storage");
+    ///    let db_cf_1 = DBMap::<u32,u32>::reopen(&rocks, Some("First_CF")).expect("Failed to open storage");
+    ///    let db_cf_2 = DBMap::<u32,u32>::reopen(&rocks, Some("Second_CF")).expect("Failed to open storage");
     ///    Ok(())
     ///    }
     /// ```
@@ -202,7 +192,6 @@ impl<K, V> DBMap<K, V> {
     pub fn reopen(
         db: &Arc<rocksdb::DBWithThreadMode<MultiThreaded>>,
         opt_cf: Option<&str>,
-        db_metrics: &Arc<DBMetrics>,
     ) -> Result<Self, TypedStoreError> {
         let cf_key = opt_cf
             .unwrap_or(rocksdb::DEFAULT_COLUMN_FAMILY_NAME)
@@ -211,7 +200,7 @@ impl<K, V> DBMap<K, V> {
         db.cf_handle(&cf_key)
             .ok_or_else(|| TypedStoreError::UnregisteredColumn(cf_key.clone()))?;
 
-        Ok(DBMap::new(db.clone(), &cf_key, db_metrics.clone()))
+        Ok(DBMap::new(db.clone(), &cf_key))
     }
 
     pub fn batch(&self) -> DBBatch {
@@ -437,12 +426,11 @@ impl<K, V> DBMap<K, V> {
 /// async fn main() -> Result<(), Error> {
 /// let rocks = open_cf(tempfile::tempdir().unwrap(), None, &["First_CF", "Second_CF"]).unwrap();
 ///
-/// let db_metrics = Arc::new(DBMetrics::make_db_metrics(&Registry::default()));
-/// let db_cf_1 = DBMap::reopen(&rocks, Some("First_CF"), &db_metrics)
+/// let db_cf_1 = DBMap::reopen(&rocks, Some("First_CF"))
 ///     .expect("Failed to open storage");
 /// let keys_vals_1 = (1..100).map(|i| (i, i.to_string()));
 ///
-/// let db_cf_2 = DBMap::reopen(&rocks, Some("Second_CF"), &db_metrics)
+/// let db_cf_2 = DBMap::reopen(&rocks, Some("Second_CF"))
 ///     .expect("Failed to open storage");
 /// let keys_vals_2 = (1000..1100).map(|i| (i, i.to_string()));
 ///
@@ -906,7 +894,6 @@ fn read_size_from_env(var_name: &str) -> Option<usize> {
 #[derive(Default, Clone)]
 pub struct DBOptions {
     pub options: rocksdb::Options,
-    pub registry: prometheus::Registry,
 }
 
 /// Creates a default RocksDB option, to be used when RocksDB option is not specified..
@@ -930,11 +917,7 @@ pub fn default_db_options() -> DBOptions {
     opt.set_max_total_wal_size(
         read_size_from_env(ENV_VAR_DB_WAL_SIZE).unwrap_or(DEFAULT_DB_WAL_SIZE) as u64 * 1024 * 1024,
     );
-    let registry = Registry::default();
-    DBOptions {
-        options: opt,
-        registry,
-    }
+    DBOptions { options: opt }
 }
 
 /// Opens a database with options, and a number of column families that are created if they do not exist.

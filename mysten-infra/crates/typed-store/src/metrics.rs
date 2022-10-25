@@ -806,8 +806,10 @@ pub struct DBMetrics {
     pub rocksdb_table_readers_usage: IntGaugeVec,
 }
 
+static ONCE: OnceCell<Arc<DBMetrics>> = OnceCell::new();
+
 impl DBMetrics {
-    pub(crate) fn new(registry: &Registry) -> Self {
+    fn new(registry: &Registry) -> Self {
         DBMetrics {
             op_metrics: OperationMetrics::new(registry),
             cf_metrics: ColumnFamilyMetrics::new(registry),
@@ -836,15 +838,18 @@ impl DBMetrics {
             .unwrap(),
         }
     }
-    pub fn make_db_metrics(registry: &Registry) -> &'static Arc<DBMetrics> {
-        // TODO: Remove static because this basically means we can
+    pub fn init(registry: &Registry) -> &'static Arc<DBMetrics> {
+        // Initialize this before creating any instance of DBMap
+        // TODO: Remove static initialization because this basically means we can
         // only ever initialize db metrics once with a registry whereas
-        // in the code we might be trying to initialize it with different
+        // in the code we might want to initialize it with different
         // registries. The problem is underlying metrics cannot be re-initialized
-        // or prometheus complains. We essentially need metrics per column family
-        // but that might cause an explosion of metrics and hence a better way
-        // to do this is desired
-        static ONCE: OnceCell<Arc<DBMetrics>> = OnceCell::new();
+        // or prometheus complains. We essentially need to pass in DBMetrics
+        // everywhere we create DBMap as the right fix
         ONCE.get_or_init(|| Arc::new(DBMetrics::new(registry)))
+    }
+    pub fn get() -> &'static Arc<DBMetrics> {
+        ONCE.get()
+            .unwrap_or_else(|| DBMetrics::init(prometheus::default_registry()))
     }
 }
