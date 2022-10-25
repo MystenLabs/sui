@@ -1,72 +1,9 @@
-.txaddress ul {
-    @apply list-none p-0;
-}
-
-.txaddresssender a,
-.txaddresssender,
-.txaddress ul li a {
+.txaddress a {
     @apply break-all font-mono text-sm text-sui-dark;
 }
 
-.label span {
-    @apply block sm:inline text-sui-grey-80 font-[500] text-[13px] mb-2;
-}
-
-.recipient.txaddresssender a,
-.recipient.txaddresssender span {
-    @apply pl-0 pr-0 mx-0;
-}
-
-.txaddress ul li div {
-    @apply ml-2;
-}
-
-.recipient.txaddresssender > div {
-    @apply ml-2;
-}
-
-.txaddress ul li {
-    @apply p-1.5 pl-5 md:pl-4 pr-0  ml-2;
-
-    display: flex;
-    align-items: center;
-}
-
-.txaddresssender {
-    @apply relative mt-1;
-}
-
-.recipient.txaddresssender {
-    @apply pl-1.5;
-}
-
-.recipient.txaddresssender::before {
-    content: '';
-    background-image: url('../../assets/SVGIcons/Start.svg');
-    background-size: 16px 16px;
-    height: 16px;
-    width: 16px;
-    position: absolute;
-    margin-left: -13px;
-    z-index: 2;
-    display: flex;
-    align-items: center;
-}
-
-.recipient.txaddresssender::after {
-    @apply ml-[-0.5rem];
-
-    top: 10px;
-    content: '';
-    position: absolute;
-    margin-left: -5px;
-    height: 15%;
-
-    /* Sui Steel Blue */
-
-    border: 1px dashed #a0b6c3;
-    border-right: none;
-    border-bottom: none;
+.txaddress h4 {
+    @apply m-0 font-semibold text-heading4;
 }
 
 .label {
@@ -74,48 +11,18 @@
     @apply text-sui-grey-100 font-[500] text-lg  mt-0 mb-2 border-b-[1px] border-[#f0f1f2] md:border-0;
 }
 
-.txaddressheader {
-    display: inline-block;
+.oneaddress {
+    @apply flex gap-[6px] items-center;
 }
 
-.txrecipents {
-    @apply break-all relative mt-0 !important;
+.recipientbox {
+    @apply flex flex-col gap-[20px];
 }
 
-.txrecipents li::before {
-    content: '';
-    @apply text-white;
-
-    background-image: url('../../assets/SVGIcons/Done.svg');
-    background-size: 16px 16px;
-    height: 16px;
-    width: 16px;
-    position: absolute;
-    left: 8px;
-    z-index: 2;
-    display: flex;
-    align-items: center;
+.senderbox {
+    @apply flex flex-col gap-[10px];
 }
 
-.txrecipents li::after {
-    @apply ml-[-0.5rem];
-
-    content: '';
-    position: absolute;
-    width: 40px;
-    height: 20px;
-    left: -7px;
-    margin-top: -40px;
-
-    /* Sui Steel Blue */
-
-    border: 1px dashed #a0b6c3;
-    border-right: none;
-    border-bottom: none;
-    border-radius: 4px;
-    transform: rotate(270deg);
-}
-
-.txrecipents li :first-child::after {
-    height: 20px;
+.recipientbox h4 {
+    @apply mt-[30px];
 }
