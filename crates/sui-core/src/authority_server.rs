@@ -445,7 +445,7 @@ impl ValidatorService {
         // succeed.
         // TODO: This is a quick hack. We should properly fix this through dependency-based
         // scheduling.
-        let mut retry_cnt = 0;
+        let mut retry_delay_ms = 200;
         loop {
             let span = tracing::debug_span!(
                 "validator_state_process_cert",
@@ -457,24 +457,21 @@ impl ValidatorService {
                 .instrument(span)
                 .await
             {
-                err @ Err(SuiError::TransactionInputObjectsErrors { .. }) => {
-                    if retry_cnt >= 30 {
-                        return Err(tonic::Status::internal(err.unwrap_err().to_string()));
-                    }
-                    if !is_consensus_tx {
-                        error!(
-                            ?tx_digest,
-                            "Owned object transaction cert execution should not have object error"
-                        );
+                // For owned object certificates, we could also be getting this error
+                // if this validator hasn't executed some of the causal dependencies.
+                // And that's ok because there must exist 2f+1 that has. So we can
+                // afford this validator returning error.
+                err @ Err(SuiError::TransactionInputObjectsErrors { .. }) if is_consensus_tx => {
+                    if retry_delay_ms >= 12800 {
                         return Err(tonic::Status::internal(err.unwrap_err().to_string()));
                     }
                     debug!(
                         ?tx_digest,
-                        ?retry_cnt,
+                        ?retry_delay_ms,
                         "Certificate failed due to missing dependencies, wait and retry",
                     );
-                    sleep(Duration::from_millis(150)).await;
-                    retry_cnt += 1;
+                    sleep(Duration::from_millis(retry_delay_ms)).await;
+                    retry_delay_ms *= 2;
                 }
                 Err(e) => {
                     // Record the cert for later execution, including causal completion if necessary.
