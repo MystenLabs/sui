@@ -44,8 +44,8 @@ jobs:
     strategy:
       matrix:
         os:
-          - ubuntu-latest
-          - windows-latest
+          - ubuntu-ghcloud
+          - windows-ghcloud
       fail-fast: false
     env:
       RUSTFLAGS: -D warnings
