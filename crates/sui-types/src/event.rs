@@ -45,9 +45,9 @@ pub struct EventEnvelope {
     /// json value for MoveStruct (for MoveEvent only)
     pub move_struct_json_value: Option<Value>,
 }
-/// Unique ID of a Sui Event, the ID is generated during transaction post processing,
+/// Unique ID of a Sui Event, the ID is a combination of tx seq number and event seq number,
 /// the ID is local to this particular fullnode and will be different from other fullnode.
-pub type EventID = u64;
+pub type EventID = String;
 
 impl EventEnvelope {
     pub fn new(

@@ -659,8 +659,8 @@ async fn test_full_node_sub_and_query_move_event_ok() -> Result<(), anyhow::Erro
         .get_events(EventQuery::MoveEvent(struct_tag_str), None, 10, false)
         .await?;
     assert_eq!(events_by_sender.len(), 1);
-    assert_eq!(events_by_sender[0].event, expected_event);
-    assert_eq!(events_by_sender[0].tx_digest.unwrap(), digest);
+    assert_eq!(events_by_sender[0].1.event, expected_event);
+    assert_eq!(events_by_sender[0].1.tx_digest.unwrap(), digest);
 
     // No more
     match timeout(Duration::from_secs(5), sub.next()).await {

@@ -55,7 +55,7 @@ pub fn new_test_publish_event(
     event_num: u64,
     sender: Option<SuiAddress>,
 ) -> EventEnvelope {
-    EventEnvelope {
+    EventEnvelope::new(
         timestamp,
         Some(digest),
         seq_num,
@@ -64,8 +64,8 @@ pub fn new_test_publish_event(
             sender: sender.unwrap_or_else(SuiAddress::random_for_testing_only),
             package_id: ObjectID::random(),
         },
-        move_struct_json_value: None,
-    }
+        None,
+    )
 }
 
 pub fn new_test_newobj_event(

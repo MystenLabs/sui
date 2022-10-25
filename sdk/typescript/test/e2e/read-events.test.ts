@@ -24,9 +24,12 @@ describe('Event Reading API', () => {
     expect(page2.nextCursor).toEqual(null);
   });
 
-  it('Get events', async () => {
+  it('Get events by sender paginated', async () => {
     const query1 = await toolbox.provider.getEvents({Sender: toolbox.address()}, null, 2, "Descending");
     expect(query1.data.length).toEqual(0);
+  });
+
+  it('Get events by recipient paginated', async () => {
     const query2 = await toolbox.provider.getEvents({Recipient: {AddressOwner: toolbox.address()}}, null, 2, "Descending");
     expect(query2.data.length).toEqual(2);
   });

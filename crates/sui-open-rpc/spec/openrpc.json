@@ -425,9 +425,7 @@
           "name": "cursor",
           "description": "optional paging cursor",
           "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
+            "type": "string"
           }
         },
         {
@@ -452,7 +450,7 @@
         "name": "EventPage",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/Page_for_EventEnvelope_and_uint64"
+          "$ref": "#/components/schemas/Page_for_EventEnvelope_and_String"
         }
       },
       "examples": [
@@ -501,7 +499,7 @@
                   }
                 }
               ],
-              "nextCursor": 11
+              "nextCursor": "1000:5"
             }
           }
         }
@@ -3445,7 +3443,7 @@
           }
         ]
       },
-      "Page_for_EventEnvelope_and_uint64": {
+      "Page_for_EventEnvelope_and_String": {
         "type": "object",
         "required": [
           "data"
@@ -3459,11 +3457,9 @@
           },
           "nextCursor": {
             "type": [
-              "integer",
+              "string",
               "null"
-            ],
-            "format": "uint64",
-            "minimum": 0.0
+            ]
           }
         }
       },

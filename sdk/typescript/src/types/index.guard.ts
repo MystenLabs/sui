@@ -611,7 +611,7 @@ export function isEventQuery(obj: any, _argumentName?: string): obj is EventQuer
 
 export function isEventId(obj: any, _argumentName?: string): obj is EventId {
     return (
-        typeof obj === "number"
+        typeof obj === "string"
     )
 }
 
@@ -622,7 +622,7 @@ export function isPaginatedEvents(obj: any, _argumentName?: string): obj is Pagi
             typeof obj === "function") &&
         isSuiEvents(obj.data) as boolean &&
         (obj.nextCursor === null ||
-            isSuiMoveTypeParameterIndex(obj.nextCursor) as boolean)
+            isTransactionDigest(obj.nextCursor) as boolean)
     )
 }
 

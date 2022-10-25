@@ -15,9 +15,8 @@ use std::{
     },
 };
 
-use anyhow::anyhow;
+use anyhow::{anyhow, ensure};
 use arc_swap::ArcSwap;
-
 use chrono::prelude::*;
 use fastcrypto::traits::KeyPair;
 use futures::stream::{self, Stream};
@@ -48,7 +47,6 @@ use narwhal_config::{
     Committee as ConsensusCommittee, WorkerCache as ConsensusWorkerCache,
     WorkerId as ConsensusWorkerId,
 };
-
 use sui_adapter::adapter;
 use sui_config::genesis::Genesis;
 use sui_json_rpc_types::{
@@ -88,13 +86,12 @@ use sui_types::{
 
 use crate::authority::authority_notifier::TransactionNotifierTicket;
 use crate::checkpoints::ConsensusSender;
-use crate::scoped_counter;
-
 use crate::consensus_handler::{
     SequencedConsensusTransaction, VerifiedSequencedConsensusTransaction,
 };
 use crate::epoch::committee_store::CommitteeStore;
 use crate::metrics::TaskUtilizationExt;
+use crate::scoped_counter;
 use crate::{
     authority_batch::{BroadcastReceiver, BroadcastSender},
     checkpoints::CheckpointStore,
@@ -1944,18 +1941,20 @@ impl AuthorityState {
         cursor: Option<EventID>,
         limit: usize,
         descending: bool,
-    ) -> Result<Vec<SuiEventEnvelope>, anyhow::Error> {
+    ) -> Result<Vec<(EventID, SuiEventEnvelope)>, anyhow::Error> {
         let es = self.get_event_store().ok_or(SuiError::NoEventStore)?;
+        let cursor = cursor.map(Self::parse_event_id).transpose()?;
         let cursor = cursor.unwrap_or(if descending {
-            i64::MAX as u64
+            // Database only support up to i64::MAX
+            (i64::MAX as u64, i64::MAX as u64)
         } else {
-            u64::MIN
+            (0, 0)
         });
 
         let stored_events = match query {
             EventQuery::All => es.all_events(cursor, limit, descending).await?,
             EventQuery::Transaction(digest) => {
-                es.events_by_transaction(cursor, digest, limit, descending)
+                es.events_by_transaction(digest, cursor, limit, descending)
                     .await?
             }
             EventQuery::MoveModule { package, module } => {
@@ -1963,34 +1962,34 @@ impl AuthorityState {
                     AccountAddress::from(package),
                     Identifier::from_str(&module)?,
                 );
-                es.events_by_module_id(cursor, &module_id, limit, descending)
+                es.events_by_module_id(&module_id, cursor, limit, descending)
                     .await?
             }
             EventQuery::MoveEvent(struct_name) => {
-                es.events_by_move_event_struct_name(cursor, &struct_name, limit, descending)
+                es.events_by_move_event_struct_name(&struct_name, cursor, limit, descending)
                     .await?
             }
             EventQuery::Sender(sender) => {
-                es.events_by_sender(cursor, &sender, limit, descending)
+                es.events_by_sender(&sender, cursor, limit, descending)
                     .await?
             }
             EventQuery::Recipient(recipient) => {
-                es.events_by_recipient(cursor, &recipient, limit, descending)
+                es.events_by_recipient(&recipient, cursor, limit, descending)
                     .await?
             }
             EventQuery::Object(object) => {
-                es.events_by_object(cursor, &object, limit, descending)
+                es.events_by_object(&object, cursor, limit, descending)
                     .await?
             }
             EventQuery::TimeRange {
                 start_time,
                 end_time,
             } => {
-                es.event_iterator(cursor, start_time, end_time, limit, descending)
+                es.event_iterator(start_time, end_time, cursor, limit, descending)
                     .await?
             }
             EventQuery::EventType(event_type) => {
-                es.events_by_type(cursor, event_type, limit, descending)
+                es.events_by_type(event_type, cursor, limit, descending)
                     .await?
             }
         };
@@ -1999,7 +1998,7 @@ impl AuthorityState {
         for event in &mut events {
             if let SuiEvent::MoveEvent {
                 type_, fields, bcs, ..
-            } = &mut event.event
+            } = &mut event.1.event
             {
                 let struct_tag = parse_struct_tag(type_)?;
                 let event =
@@ -2009,6 +2008,12 @@ impl AuthorityState {
             }
         }
         Ok(events)
+    }
+
+    fn parse_event_id(id: EventID) -> Result<(u64, u64), anyhow::Error> {
+        let values = id.split(':').collect::<Vec<_>>();
+        ensure!(values.len() == 2, "Malformed EventID : {id}");
+        Ok((u64::from_str(values[0])?, u64::from_str(values[1])?))
     }
 
     pub async fn insert_genesis_object(&self, object: Object) {

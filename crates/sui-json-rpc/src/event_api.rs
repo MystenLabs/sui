@@ -57,8 +57,6 @@ impl EventStreamingApiServer for EventStreamingApiImpl {
         let stream = stream.map(move |e: EventEnvelope| {
             let event = SuiEvent::try_from(e.event, state.module_cache.as_ref());
             event.map(|event| SuiEventEnvelope {
-                // The id will not be serialised
-                id: 0,
                 timestamp: e.timestamp,
                 tx_digest: e.tx_digest,
                 event,
@@ -111,8 +109,9 @@ impl EventReadApiServer for EventReadApiImpl {
             .state
             .get_events(query, cursor, limit + 1, descending)
             .await?;
-        let next_cursor = data.get(limit).map(|event| event.id);
+        let next_cursor = data.get(limit).map(|(id, _)| id.clone());
         data.truncate(limit);
+        let data = data.into_iter().map(|(_, event)| event).collect();
         Ok(EventPage { data, next_cursor })
     }
 }
