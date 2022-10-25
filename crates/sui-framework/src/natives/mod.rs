@@ -123,7 +123,7 @@ pub fn all_natives(
             make_native!(crypto::ed25519_verify),
         ),
         (
-            "hash",
+            "hmac",
             "native_hmac_sha3_256",
             make_native!(crypto::hmac_sha3_256),
         ),
