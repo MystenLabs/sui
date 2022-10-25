@@ -134,6 +134,12 @@ exceptions = [
     #{ path = "LICENSE", hash = 0xbd0eed23 }
 #]
 [[licenses.clarify]]
+name = "bls-crypto"
+version = "*"
+expression = "MIT AND Apache-2.0"
+license-files = [
+]
+[[licenses.clarify]]
 name = "ring"
 expression = "LicenseRef-ring"
 license-files = [
