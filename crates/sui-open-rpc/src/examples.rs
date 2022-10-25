@@ -74,7 +74,6 @@ impl RpcExampleProvider {
             self.get_objects_owned_by_address(),
             self.get_objects_owned_by_object(),
             self.get_raw_object(),
-            self.get_recent_transactions(),
             self.get_total_transaction_number(),
             self.get_transaction(),
             self.get_transactions(),
@@ -330,18 +329,6 @@ impl RpcExampleProvider {
             vec![ExamplePairing::new(
                 "Get Raw Object data",
                 vec![("object_id", json!(object_id))],
-                json!(result),
-            )],
-        )
-    }
-
-    fn get_recent_transactions(&mut self) -> Examples {
-        let result = self.get_transaction_digests(5..10);
-        Examples::new(
-            "sui_getRecentTransactions",
-            vec![ExamplePairing::new(
-                "Get recent transactions",
-                vec![("count", json!(5))],
                 json!(result),
             )],
         )
