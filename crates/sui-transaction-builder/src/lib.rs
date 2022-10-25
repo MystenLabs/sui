@@ -148,6 +148,57 @@ impl TransactionBuilder {
         Ok(data)
     }
 
+    pub async fn pay_sui(
+        &self,
+        signer: SuiAddress,
+        input_coins: Vec<ObjectID>,
+        recipients: Vec<SuiAddress>,
+        amounts: Vec<u64>,
+        gas_budget: u64,
+    ) -> anyhow::Result<TransactionData> {
+        fp_ensure!(!input_coins.is_empty(), SuiError::EmptyInputCoins.into());
+
+        let handles: Vec<_> = input_coins
+            .into_iter()
+            .map(|id| self.get_object_ref(id))
+            .collect();
+        let coins: Vec<ObjectRef> = join_all(handles)
+            .await
+            .into_iter()
+            .map(|c| c.unwrap())
+            .collect();
+        // [0] is safe because input_coins is non-empty and coins are of same length as input_coins.
+        let gas_object = *coins.get(0).unwrap();
+        Ok(TransactionData::new_pay_sui(
+            signer, coins, recipients, amounts, gas_object, gas_budget,
+        ))
+    }
+
+    pub async fn pay_all_sui(
+        &self,
+        signer: SuiAddress,
+        input_coins: Vec<ObjectID>,
+        recipient: SuiAddress,
+        gas_budget: u64,
+    ) -> anyhow::Result<TransactionData> {
+        fp_ensure!(!input_coins.is_empty(), SuiError::EmptyInputCoins.into());
+
+        let handles: Vec<_> = input_coins
+            .into_iter()
+            .map(|id| self.get_object_ref(id))
+            .collect();
+        let coins: Vec<ObjectRef> = join_all(handles)
+            .await
+            .into_iter()
+            .map(|c| c.unwrap())
+            .collect();
+        // [0] is safe because input_coins is non-empty and coins are of same length as input_coins.
+        let gas_object = coins[0];
+        Ok(TransactionData::new_pay_all_sui(
+            signer, coins, recipient, gas_object, gas_budget,
+        ))
+    }
+
     pub async fn move_call(
         &self,
         signer: SuiAddress,

@@ -307,6 +307,34 @@ async fn test_coin_merge() {
 }
 
 #[tokio::test]
+async fn test_pay_sui_empty_input_coins() -> Result<(), anyhow::Error> {
+    let (addr1, _): (_, AccountKeyPair) = get_key_pair();
+    let (recipient, _): (_, AccountKeyPair) = get_key_pair();
+    let coin_object = Object::with_owner_for_testing(addr1);
+    let genesis_objects = vec![coin_object.clone()];
+    let gateway = create_gateway_state(genesis_objects).await;
+
+    let res = gateway
+        .pay_sui(addr1, vec![], vec![recipient], vec![100], 1000)
+        .await;
+    assert!(res.is_err());
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_pay_all_sui_empty_input_coins() -> Result<(), anyhow::Error> {
+    let (addr1, _): (_, AccountKeyPair) = get_key_pair();
+    let (recipient, _): (_, AccountKeyPair) = get_key_pair();
+    let coin_object = Object::with_owner_for_testing(addr1);
+    let genesis_objects = vec![coin_object.clone()];
+    let gateway = create_gateway_state(genesis_objects).await;
+
+    let res = gateway.pay_all_sui(addr1, vec![], recipient, 1000).await;
+    assert!(res.is_err());
+    Ok(())
+}
+
+#[tokio::test]
 async fn test_equivocation_resilient() {
     telemetry_subscribers::init_for_testing();
     let (addr1, key1): (_, AccountKeyPair) = get_key_pair();

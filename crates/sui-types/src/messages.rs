@@ -94,10 +94,48 @@ pub struct MoveModulePublish {
     pub modules: Vec<Vec<u8>>,
 }
 
+// TODO: we can deprecate TransferSui when its callsites on RPC & SDK are
+// fully replaced by PaySui and PayAllSui.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct TransferSui {
     pub recipient: SuiAddress,
     pub amount: Option<u64>,
+}
+
+/// Send all SUI coins to one recipient.
+/// only for SUI coin and does not require a separate gas coin object either.
+/// Specifically, what pay_all_sui does are:
+/// 1. accumulate all SUI from input coins and deposit all SUI to the first input coin
+/// 2. transfer the updated first coin to the recipient and also use this first coin as
+/// gas coin object.
+/// 3. the balance of the first input coin after tx is sum(input_coins) - actual_gas_cost.
+/// 4. all other input coins other than the first are deleted.
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub struct PayAllSui {
+    /// The coins to be used for payment.
+    pub coins: Vec<ObjectRef>,
+    /// The address that will receive payment
+    pub recipient: SuiAddress,
+}
+
+/// Send SUI coins to a list of addresses, following a list of amounts.
+/// only for SUI coin and does not require a separate gas coin object.
+/// Specifically, what pay_sui does are:
+/// 1. debit each input_coin to create new coin following the order of
+/// amounts and assign it to the corresponding recipient.
+/// 2. accumulate all residual SUI from input coins left and deposit all SUI to the first
+/// input coin, then use the first input coin as the gas coin object.
+/// 3. the balance of the first input coin after tx is sum(input_coins) - sum(amounts) - actual_gas_cost
+/// 4. all other input coints other than the first one are deleted.
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub struct PaySui {
+    /// The coins to be used for payment.
+    pub coins: Vec<ObjectRef>,
+    /// The addresses that will receive payment
+    pub recipients: Vec<SuiAddress>,
+    /// The amounts each recipient will receive.
+    /// Must be the same length as recipients
+    pub amounts: Vec<u64>,
 }
 
 /// Pay each recipient the corresponding amount using the input coins
@@ -136,6 +174,12 @@ pub enum SingleTransactionKind {
     TransferSui(TransferSui),
     /// Pay multiple recipients using multiple input coins
     Pay(Pay),
+    /// Pay multiple recipients using multiple SUI coins,
+    /// no extra gas payment SUI coin is required.
+    PaySui(PaySui),
+    /// After paying the gas of the transaction itself, pay
+    /// pay all remaining coins to the recipient.
+    PayAllSui(PayAllSui),
     /// A system transaction that will update epoch information on-chain.
     /// It will only ever be executed once in an epoch.
     /// The argument is the next epoch number, which is critical
@@ -273,6 +317,14 @@ impl SingleTransactionKind {
                 .iter()
                 .map(|o| InputObjectKind::ImmOrOwnedMoveObject(*o))
                 .collect(),
+            Self::PaySui(PaySui { coins, .. }) => coins
+                .iter()
+                .map(|o| InputObjectKind::ImmOrOwnedMoveObject(*o))
+                .collect(),
+            Self::PayAllSui(PayAllSui { coins, .. }) => coins
+                .iter()
+                .map(|o| InputObjectKind::ImmOrOwnedMoveObject(*o))
+                .collect(),
             Self::ChangeEpoch(_) => {
                 vec![InputObjectKind::SharedMoveObject {
                     id: SUI_SYSTEM_STATE_OBJECT_ID,
@@ -332,6 +384,34 @@ impl Display for SingleTransactionKind {
                 for amount in &p.amounts {
                     writeln!(writer, "{}", amount)?
                 }
+            }
+            Self::PaySui(p) => {
+                writeln!(writer, "Transaction Kind : Pay SUI")?;
+                writeln!(writer, "Coins:")?;
+                for (object_id, seq, digest) in &p.coins {
+                    writeln!(writer, "Object ID : {}", &object_id)?;
+                    writeln!(writer, "Sequence Number : {:?}", seq)?;
+                    writeln!(writer, "Object Digest : {}", encode_bytes_hex(digest.0))?;
+                }
+                writeln!(writer, "Recipients:")?;
+                for recipient in &p.recipients {
+                    writeln!(writer, "{}", recipient)?;
+                }
+                writeln!(writer, "Amounts:")?;
+                for amount in &p.amounts {
+                    writeln!(writer, "{}", amount)?
+                }
+            }
+            Self::PayAllSui(p) => {
+                writeln!(writer, "Transaction Kind : Pay all SUI")?;
+                writeln!(writer, "Coins:")?;
+                for (object_id, seq, digest) in &p.coins {
+                    writeln!(writer, "Object ID : {}", &object_id)?;
+                    writeln!(writer, "Sequence Number : {:?}", seq)?;
+                    writeln!(writer, "Object Digest : {}", encode_bytes_hex(digest.0))?;
+                }
+                writeln!(writer, "Recipient:")?;
+                writeln!(writer, "{}", &p.recipient)?;
             }
             Self::Publish(_p) => {
                 writeln!(writer, "Transaction Kind : Publish")?;
@@ -411,6 +491,14 @@ impl TransactionKind {
         }
     }
 
+    pub fn is_pay_sui_tx(&self) -> bool {
+        matches!(
+            self,
+            TransactionKind::Single(SingleTransactionKind::PaySui(_))
+                | TransactionKind::Single(SingleTransactionKind::PayAllSui(_))
+        )
+    }
+
     pub fn is_system_tx(&self) -> bool {
         matches!(
             self,
@@ -440,6 +528,8 @@ impl TransactionKind {
                     | SingleTransactionKind::TransferObject(_)
                     | SingleTransactionKind::Pay(_) => true,
                     SingleTransactionKind::TransferSui(_)
+                    | SingleTransactionKind::PaySui(_)
+                    | SingleTransactionKind::PayAllSui(_)
                     | SingleTransactionKind::ChangeEpoch(_)
                     | SingleTransactionKind::Publish(_) => false,
                 });
@@ -452,6 +542,8 @@ impl TransactionKind {
             }
             Self::Single(s) => match s {
                 SingleTransactionKind::Pay(_)
+                | SingleTransactionKind::PaySui(_)
+                | SingleTransactionKind::PayAllSui(_)
                 | SingleTransactionKind::Call(_)
                 | SingleTransactionKind::Publish(_)
                 | SingleTransactionKind::TransferObject(_)
@@ -588,6 +680,36 @@ impl TransactionData {
         Self::new(kind, sender, gas_payment, gas_budget)
     }
 
+    pub fn new_pay_sui(
+        sender: SuiAddress,
+        coins: Vec<ObjectRef>,
+        recipients: Vec<SuiAddress>,
+        amounts: Vec<u64>,
+        gas_payment: ObjectRef,
+        gas_budget: u64,
+    ) -> Self {
+        let kind = TransactionKind::Single(SingleTransactionKind::PaySui(PaySui {
+            coins,
+            recipients,
+            amounts,
+        }));
+        Self::new(kind, sender, gas_payment, gas_budget)
+    }
+
+    pub fn new_pay_all_sui(
+        sender: SuiAddress,
+        coins: Vec<ObjectRef>,
+        recipient: SuiAddress,
+        gas_payment: ObjectRef,
+        gas_budget: u64,
+    ) -> Self {
+        let kind = TransactionKind::Single(SingleTransactionKind::PayAllSui(PayAllSui {
+            coins,
+            recipient,
+        }));
+        Self::new(kind, sender, gas_payment, gas_budget)
+    }
+
     pub fn new_module(
         sender: SuiAddress,
         gas_payment: ObjectRef,
@@ -637,7 +759,7 @@ impl TransactionData {
     pub fn input_objects(&self) -> SuiResult<Vec<InputObjectKind>> {
         let mut inputs = self.kind.input_objects()?;
 
-        if !self.kind.is_system_tx() {
+        if !self.kind.is_system_tx() && !self.kind.is_pay_sui_tx() {
             inputs.push(InputObjectKind::ImmOrOwnedMoveObject(
                 *self.gas_payment_object_ref(),
             ));
@@ -1177,6 +1299,10 @@ pub enum ExecutionFailureStatus {
     RecipientsAmountsArityMismatch,
     /// Not enough funds to perform the requested payment
     InsufficientBalance,
+    /// Coin type check failed in pay/pay_sui/pay_all_sui transaction.
+    /// In pay transaction, it means the input coins' types are not the same;
+    /// In PaySui/PayAllSui, it means some input coins are not SUI coins.
+    CoinTypeMismatch,
 
     //
     // MoveCall errors
@@ -1271,6 +1397,12 @@ impl ExecutionFailureStatus {
 impl Display for ExecutionFailureStatus {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
+            ExecutionFailureStatus::CoinTypeMismatch => {
+                write!(
+                    f,
+                    "Coin type check failed in pay/pay_sui/pay_all_sui transaction"
+                )
+            }
             ExecutionFailureStatus::EmptyInputCoins => {
                 write!(f, "Expected a non-empty list of input Coin objects")
             }
