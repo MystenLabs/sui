@@ -52,7 +52,16 @@ impl EventHandler {
         let res: Result<Vec<_>, _> = effects
             .events
             .iter()
-            .map(|e| self.create_envelope(e, effects.transaction_digest, seq_num, timestamp_ms))
+            .enumerate()
+            .map(|(event_num, e)| {
+                self.create_envelope(
+                    e,
+                    effects.transaction_digest,
+                    event_num.try_into().unwrap(),
+                    seq_num,
+                    timestamp_ms,
+                )
+            })
             .collect();
         let envelopes = res?;
 
@@ -78,6 +87,7 @@ impl EventHandler {
         &self,
         event: &Event,
         digest: TransactionDigest,
+        event_num: u64,
         seq_num: u64,
         timestamp_ms: u64,
     ) -> Result<EventEnvelope, SuiError> {
@@ -103,6 +113,7 @@ impl EventHandler {
             timestamp_ms,
             Some(digest),
             seq_num,
+            event_num,
             event.clone(),
             json_value,
         ))

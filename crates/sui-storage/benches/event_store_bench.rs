@@ -4,20 +4,38 @@
 #[macro_use]
 extern crate criterion;
 
+use std::sync::Mutex;
+
 use criterion::{BenchmarkId, Criterion, Throughput};
+use once_cell::sync::OnceCell;
 use tempfile::NamedTempFile;
 use tokio::runtime::Builder;
 
 use sui_storage::event_store::{sql::SqlEventStore, test_utils, EventStore};
 use sui_types::{
-    base_types::SuiAddress,
+    base_types::{SuiAddress, TransactionDigest},
     event::{EventEnvelope, TransferType},
 };
 
 async fn repeat_batch_insert(db: &SqlEventStore, events: &[EventEnvelope], batch_size: usize) {
-    // Reset sequence number so we can insert events with old sequence numbers
-    db.testing_only_reset_seq_num();
-    for chunk in events.chunks(batch_size) {
+    static NEXT_SEQ: OnceCell<Mutex<u64>> = OnceCell::new();
+
+    let mut events: Vec<EventEnvelope> = events.to_vec();
+
+    let mut seq: u64 = {
+        let mutex = NEXT_SEQ.get_or_init(Default::default);
+        let mut seq = mutex.lock().unwrap();
+        let ret: u64 = *seq;
+        let len: u64 = events.len().try_into().unwrap();
+        *seq += len;
+        ret
+    };
+
+    for chunk in events.chunks_mut(batch_size) {
+        for e in chunk.iter_mut() {
+            e.seq_num = seq;
+            seq += 1;
+        }
         db.add_events(chunk).await.expect("Inserts should not fail");
     }
 }
@@ -48,7 +66,9 @@ fn bench_sqlite_ingestion_varying_batch_size(c: &mut Criterion) {
     for n in 0..100 {
         let transfer_obj = test_utils::new_test_transfer_event(
             1_666_003 + n * 100,
-            4 + n,
+            TransactionDigest::random(),
+            0,
+            0,
             n,
             TransferType::ToAddress,
             None,
