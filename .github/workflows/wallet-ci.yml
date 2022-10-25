@@ -1,4 +1,4 @@
-name: Wallet Extension PR Comment
+name: Wallet Extension CI Build
 
 on:
   push:
