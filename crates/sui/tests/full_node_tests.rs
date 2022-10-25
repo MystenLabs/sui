@@ -82,6 +82,8 @@ async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
     let ts = node.state().get_timestamp_ms(&digest).await?;
     assert!(ts.is_some());
 
+    assert_eq!(node.state().metrics.num_post_processing_tasks.get(), 1);
+
     Ok(())
 }
 
