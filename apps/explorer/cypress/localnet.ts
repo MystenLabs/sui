@@ -56,12 +56,15 @@ export async function createLocalnetTasks() {
             const keypair = Ed25519Keypair.generate();
             const address = keypair.getPublicKey().toSuiAddress();
             addressToKeypair.set(address, keypair);
-            const res = await axios.post<{ ok: boolean }>(
+            const res = await axios.post<{ error: any }>(
                 'http://127.0.0.1:9123/faucet',
-                { recipient: address }
+                { FixedAmountRequest: { recipient: address } }
             );
-            if (!res.data.ok) {
-                throw new Error('Unable to invoke local faucet.');
+            if (res.data.error) {
+                throw new Error(
+                    'Unable to invoke local faucet.',
+                    res.data.error
+                );
             }
             return address;
         },

@@ -58,11 +58,18 @@ pnpm run prepare:e2e
 pnpm run test:e2e
 ```
 
+To run E2E tests against DevNet
+
+```
+cd sdk/typescript
+VITE_FAUCET_URL='https://faucet.devnet.sui.io:443/gas' VITE_FULLNODE_URL='https://fullnode.devnet.sui.io' pnpm test:e2e
+```
+
 ## Usage
 
 The `JsonRpcProvider` class provides a connection to the JSON-RPC Server and should be used for all read-only operations. The default URLs to connect with the RPC server are:
 
-- local: http://127.0.0.1:5001
+- local: http://127.0.0.1:9000
 - DevNet: https://fullnode.devnet.sui.io:443
 
 Examples:
