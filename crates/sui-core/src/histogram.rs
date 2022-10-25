@@ -40,6 +40,7 @@ pub struct HistogramVec {
 struct HistogramCollector {
     reporter: Arc<Mutex<HistogramReporter>>,
     channel: mpsc::Receiver<HistogramMessage>,
+    _name: String,
 }
 
 struct HistogramReporter {
@@ -109,7 +110,7 @@ impl HistogramVec {
             register_int_counter_vec_with_registry!(count_name, desc, labels, registry).unwrap();
         let labels: Vec<_> = labels.iter().cloned().chain(["pct"].into_iter()).collect();
         let gauge = register_int_gauge_vec_with_registry!(name, desc, &labels, registry).unwrap();
-        Self::new(gauge, sum, count, percentiles)
+        Self::new(gauge, sum, count, percentiles, name)
     }
 
     // Do not expose it to public interface because we need labels to have a specific format (e.g. add last label is "pct")
@@ -118,6 +119,7 @@ impl HistogramVec {
         sum: IntCounterVec,
         count: IntCounterVec,
         percentiles: Vec<usize>,
+        name: &str,
     ) -> Self {
         let (sender, receiver) = mpsc::channel(1000);
         let reporter = HistogramReporter {
@@ -131,6 +133,7 @@ impl HistogramVec {
         let collector = HistogramCollector {
             reporter,
             channel: receiver,
+            _name: name.to_string(),
         };
         Handle::current().spawn(collector.run());
         Self { channel: sender }
@@ -233,7 +236,8 @@ impl HistogramCollector {
             );
         }
         if Arc::strong_count(&self.reporter) != 1 {
-            error!("Histogram data overflow - we receive histogram data faster then can process. Some histogram data is dropped");
+            #[cfg(not(debug_assertions))]
+            error!("Histogram data overflow - we receive histogram data for {} faster then can process. Some histogram data is dropped", self._name);
         } else {
             let reporter = self.reporter.clone();
             Handle::current().spawn_blocking(move || reporter.lock().report(labeled_data));
