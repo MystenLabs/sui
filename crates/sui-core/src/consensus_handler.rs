@@ -16,29 +16,35 @@ use tracing::{debug, instrument, warn};
 pub struct ConsensusHandler {
     state: Arc<AuthorityState>,
     sender: mpsc::Sender<ConsensusListenerMessage>,
-    hash: Mutex<u64>,
+    last_seen: Mutex<ExecutionIndicesWithHash>,
 }
 
 impl ConsensusHandler {
     pub fn new(state: Arc<AuthorityState>, sender: mpsc::Sender<ConsensusListenerMessage>) -> Self {
-        let hash = Mutex::new(0);
+        let last_seen = Mutex::new(Default::default());
         Self {
             state,
             sender,
-            hash,
+            last_seen,
         }
     }
 
-    fn update_hash(&self, index: ExecutionIndices, v: &[u8]) -> ExecutionIndicesWithHash {
-        let mut hash_guard = self
-            .hash
+    fn update_hash(
+        last_seen: &Mutex<ExecutionIndicesWithHash>,
+        index: ExecutionIndices,
+        v: &[u8],
+    ) -> Option<ExecutionIndicesWithHash> {
+        let mut last_seen_guard = last_seen
             .try_lock()
             .expect("Should not have contention on ExecutionState::update_hash");
+        if last_seen_guard.index >= index {
+            return None;
+        }
+        let previous_hash = last_seen_guard.hash;
         let mut hasher = DefaultHasher::new();
-        (*hash_guard).hash(&mut hasher);
+        previous_hash.hash(&mut hasher);
         v.hash(&mut hasher);
         let hash = hasher.finish();
-        *hash_guard = hash;
         // Log hash for every certificate
         if index.next_transaction_index == 1 && index.next_batch_index == 1 {
             debug!(
@@ -46,7 +52,9 @@ impl ConsensusHandler {
                 index.next_certificate_index, hash
             );
         }
-        ExecutionIndicesWithHash { index, hash }
+        let last_seen = ExecutionIndicesWithHash { index, hash };
+        *last_seen_guard = last_seen.clone();
+        Some(last_seen)
     }
 }
 
@@ -61,7 +69,17 @@ impl ExecutionState for ConsensusHandler {
         consensus_index: ExecutionIndices,
         serialized_transaction: Vec<u8>,
     ) {
-        let consensus_index = self.update_hash(consensus_index, &serialized_transaction);
+        let consensus_index =
+            Self::update_hash(&self.last_seen, consensus_index, &serialized_transaction);
+        let consensus_index = if let Some(consensus_index) = consensus_index {
+            consensus_index
+        } else {
+            debug!(
+                "Ignore consensus transaction at index {:?} as it appear to be already processed",
+                consensus_index
+            );
+            return;
+        };
         let transaction =
             match bincode::deserialize::<ConsensusTransaction>(&serialized_transaction) {
                 Ok(transaction) => transaction,
@@ -106,10 +124,10 @@ impl ExecutionState for ConsensusHandler {
             .last_consensus_index()
             .expect("Failed to load consensus indices");
         *self
-            .hash
+            .last_seen
             .try_lock()
             .expect("Should not have contention on ExecutionState::load_execution_indices") =
-            index_with_hash.hash;
+            index_with_hash.clone();
         index_with_hash.index
     }
 }
@@ -138,4 +156,32 @@ impl SequencedConsensusTransaction {
             consensus_index: Default::default(),
         }
     }
+}
+
+#[test]
+pub fn test_update_hash() {
+    let index0 = ExecutionIndices {
+        next_certificate_index: 0,
+        next_batch_index: 0,
+        next_transaction_index: 0,
+    };
+    let index1 = ExecutionIndices {
+        next_certificate_index: 0,
+        next_batch_index: 1,
+        next_transaction_index: 0,
+    };
+    let index2 = ExecutionIndices {
+        next_certificate_index: 0,
+        next_batch_index: 2,
+        next_transaction_index: 0,
+    };
+
+    let last_seen = ExecutionIndicesWithHash {
+        index: index1.clone(),
+        hash: 1000,
+    };
+    let last_seen = Mutex::new(last_seen);
+    assert!(ConsensusHandler::update_hash(&last_seen, index0, &[0]).is_none());
+    assert!(ConsensusHandler::update_hash(&last_seen, index1, &[0]).is_none());
+    assert!(ConsensusHandler::update_hash(&last_seen, index2, &[0]).is_some());
 }
