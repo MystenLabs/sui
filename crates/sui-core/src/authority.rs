@@ -705,6 +705,11 @@ impl AuthorityState {
         let tx_digest = certificate.digest();
         debug!(?tx_digest, "handle_confirmation_transaction");
 
+        if !certificate.is_system_tx() && self.is_cert_awaiting_sequencing(certificate)? {
+            debug!("shared object cert has not been sequenced by narwhal");
+            return Err(SuiError::SharedObjectLockNotSetError);
+        }
+
         // This acquires a lock on the tx digest to prevent multiple concurrent executions of the
         // same tx. While we don't need this for safety (tx sequencing is ultimately atomic), it is
         // very common to receive the same tx multiple times simultaneously due to gossip, so we
@@ -725,11 +730,6 @@ impl AuthorityState {
             .acquire_tx_guard(certificate)
             .instrument(span)
             .await?;
-
-        if !certificate.is_system_tx() && self.is_cert_awaiting_sequencing(certificate)? {
-            debug!("shared object cert has not been sequenced by narwhal");
-            return Err(SuiError::SharedObjectLockNotSetError);
-        }
 
         self.process_certificate(tx_guard, certificate, bypass_validator_halt)
             .await
