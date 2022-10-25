@@ -24,10 +24,10 @@ async fn repeat_batch_insert(db: &SqlEventStore, events: &[EventEnvelope], batch
 
     let mut seq: u64 = {
         let mutex = NEXT_SEQ.get_or_init(Default::default);
-        let mut seq = mutex.lock().unwrap();
-        let ret: u64 = *seq;
+        let mut inner_seq = mutex.lock().unwrap();
+        let ret: u64 = *inner_seq;
         let len: u64 = events.len().try_into().unwrap();
-        *seq += len;
+        *inner_seq += len;
         ret
     };
 

@@ -324,6 +324,8 @@ pub trait EventStore {
     /// Semantics:
     /// - The batch is appended to the store.
     /// - The batch may contain events from multiple transactions.
+    /// - Each event must have a unique (seq_num, event_num) tuple - events that duplicate this key
+    /// will be ignored.
     ///
     /// Returns Ok(rows_affected).
     async fn add_events(&self, events: &[EventEnvelope]) -> Result<u64, SuiError>;
