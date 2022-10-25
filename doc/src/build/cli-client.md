@@ -631,3 +631,12 @@ sui_framework_lib_path: ~
 move_framework_lib_path: ~
 
 ```
+
+## Generate Encrypted Keypair
+```shell
+$ sui keypair generate --path ~ --derivation-path
+```
+
+## Sign with Encrypted Keypair
+
+## Execute Signed Data 

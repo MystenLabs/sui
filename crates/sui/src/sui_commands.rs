@@ -436,7 +436,7 @@ async fn prompt_if_no_config(wallet_conf_path: &Path) -> Result<(), anyhow::Erro
     Ok(())
 }
 
-fn read_line() -> Result<String, anyhow::Error> {
+pub fn read_line() -> Result<String, anyhow::Error> {
     let mut s = String::new();
     let _ = stdout().flush();
     io::stdin().read_line(&mut s)?;

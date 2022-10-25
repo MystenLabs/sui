@@ -8,6 +8,7 @@ use anyhow::anyhow;
 use bip32::{DerivationPath, Mnemonic};
 use clap::*;
 use fastcrypto::traits::{ToFromBytes, VerifyingKey};
+use signature::SignerMut;
 use signature::rand_core::OsRng;
 use sui_keys::key_derive::derive_key_pair_from_path;
 use tracing::info;
@@ -18,9 +19,11 @@ use sui_types::base_types::SuiAddress;
 use sui_types::base_types::{decode_bytes_hex, encode_bytes_hex};
 use sui_types::crypto::{
     get_key_pair, AuthorityKeyPair, Ed25519SuiSignature, EncodeDecodeBase64, NetworkKeyPair,
-    SignatureScheme, SuiKeyPair, SuiSignatureInner,
+    SignatureScheme, SuiKeyPair, SuiSignatureInner, Signature,
 };
 use sui_types::sui_serde::{Base64, Encoding};
+
+use crate::sui_commands::read_line;
 
 #[cfg(test)]
 #[path = "unit_tests/keytool_tests.rs"]
@@ -53,6 +56,13 @@ pub enum KeyToolCommand {
         #[clap(long)]
         data: String,
     },
+    /// Create signature using the key from path that can be encrypted.
+    SignWithKeyFilePath {
+        #[clap(long)]
+        file: PathBuf,
+        #[clap(long)]
+        data: String,
+    },
     /// Import mnemonic phrase and generate keypair based on key scheme flag {ed25519 | secp256k1}
     /// with optional derivation path, default to m/44'/784'/0'/0'/0' for ed25519 or m/54'/784'/0'/0/0 for secp256k1.
     Import {
@@ -81,7 +91,7 @@ impl KeyToolCommand {
                     write_authority_keypair_to_file(&keypair, &file_name)?;
                 } else {
                     let mnemonic = Mnemonic::random(OsRng, Default::default());
-                    let seed = mnemonic.to_seed("");
+                    let seed = mnemonic.to_seed("");                  
                     match derive_key_pair_from_path(seed.as_bytes(), derivation_path, &key_scheme) {
                         Ok((address, kp)) => {
                             let file_name = format!("{address}.key");
@@ -128,21 +138,18 @@ impl KeyToolCommand {
                 info!("Address : {}", address);
                 let message = Base64::decode(&data).map_err(|e| anyhow!(e))?;
                 let signature = keystore.sign(&address, &message)?;
-                // Separate pub key and signature string, signature and pub key are concatenated with an '@' symbol.
-                let signature_string = format!("{:?}", signature);
-                let sig_split = signature_string.split('@').collect::<Vec<_>>();
-                let flag = sig_split
-                    .first()
-                    .ok_or_else(|| anyhow!("Error creating signature."))?;
-                let signature = sig_split
-                    .get(1)
-                    .ok_or_else(|| anyhow!("Error creating signature."))?;
-                let pub_key = sig_split
-                    .last()
-                    .ok_or_else(|| anyhow!("Error creating signature."))?;
-                info!("Flag Base64: {}", flag);
-                info!("Public Key Base64: {}", pub_key);
-                info!("Signature : {}", signature);
+                format_and_print(signature)?;
+            }
+            KeyToolCommand::SignWithKeyFilePath { file, data , should_decrypt} => {
+                info!("Data to sign : {}", data);
+                let message = Base64::decode(&data).map_err(|e| anyhow!(e))?;
+                let keypair = if should_decrypt {
+                    read_keypair_from_file(file)
+                } else {
+                    read_authority_keypair_from_file(file)
+                }?;
+                let signature = keypair.try_sign(data)?;
+                format_and_print(signature)?;
             }
             KeyToolCommand::Import {
                 mnemonic_phrase,
@@ -180,6 +187,25 @@ impl KeyToolCommand {
 
         Ok(())
     }
+}
+
+/// Separate pub key and signature string, signature and pub key are concatenated with an '@' symbol.
+fn format_and_print(signature: Signature) -> Result<(), anyhow::Error> {
+    let signature_string = format!("{:?}", signature);
+    let sig_split = signature_string.split('@').collect::<Vec<_>>();
+    let flag = sig_split
+        .first()
+        .ok_or_else(|| anyhow!("Error creating signature."))?;
+    let signature = sig_split
+        .get(1)
+        .ok_or_else(|| anyhow!("Error creating signature."))?;
+    let pub_key = sig_split
+        .last()
+        .ok_or_else(|| anyhow!("Error creating signature."))?;
+    info!("Flag Base64: {}", flag);
+    info!("Public Key Base64: {}", pub_key);
+    info!("Signature : {}", signature);
+    Ok(())
 }
 
 fn store_and_print_keypair(address: SuiAddress, keypair: SuiKeyPair) {
@@ -225,6 +251,7 @@ pub fn read_keypair_from_file<P: AsRef<std::path::Path>>(path: P) -> anyhow::Res
     let contents = std::fs::read_to_string(path)?;
     SuiKeyPair::decode_base64(contents.as_str().trim()).map_err(|e| anyhow!(e))
 }
+
 
 pub fn read_network_keypair_from_file<P: AsRef<std::path::Path>>(
     path: P,
