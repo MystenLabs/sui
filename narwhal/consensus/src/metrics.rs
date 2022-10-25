@@ -7,6 +7,10 @@ use prometheus::{
     Registry,
 };
 
+const LATENCY_SEC_BUCKETS: &[f64] = &[
+    0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 3.0, 4.0, 5.0, 8.0, 10.0, 15.0, 20.0, 30.0, 50.0, 100.0, 200.0,
+];
+
 #[derive(Clone, Debug)]
 pub struct ConsensusMetrics {
     /// The number of rounds for which the Dag holds certificates (for Tusk or Bullshark)
@@ -36,6 +40,9 @@ pub struct ConsensusMetrics {
     /// * not_enough_support: when the leader certificate has been found but there was not enough support
     /// * elected: when the leader certificate has been found and had enough support
     pub leader_election: IntCounterVec,
+    /// The time it takes for a certificate from the moment it gets created
+    /// up to the moment it gets committed.
+    pub certificate_commit_latency: Histogram,
 }
 
 impl ConsensusMetrics {
@@ -83,11 +90,8 @@ impl ConsensusMetrics {
             commit_rounds_latency: register_histogram_with_registry!(
                 "consensus_commit_rounds_latency",
                 "The latency between two successful commit rounds (when we have successful leader election)",
-                // buckets in milliseconds
-                vec![
-                    100.0, 200.0, 500.0, 1_000.0, 2_000.0, 3_000.0, 4_000.0, 5_000.0, 8_000.0,
-                    10_000.0, 15_000.0, 20_000.0, 30_000.0, 50_000.0, 100_000.0, 200_000.0
-                ],
+                // buckets in seconds
+                LATENCY_SEC_BUCKETS.to_vec(),
                 registry
             ).unwrap(),
             committed_certificates: register_histogram_with_registry!(
@@ -106,6 +110,12 @@ impl ConsensusMetrics {
                 &["outcome"],
                 registry
             ).unwrap(),
+            certificate_commit_latency: register_histogram_with_registry!(
+                "certificate_commit_latency",
+                "The time it takes for a certificate from the moment it gets created up to the moment it gets committed.",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry
+            ).unwrap()
         }
     }
 }

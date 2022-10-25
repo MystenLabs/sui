@@ -26,7 +26,8 @@ use types::{
     ensure,
     error::{DagError, DagError::StoreError, DagResult},
     metered_channel::{Receiver, Sender},
-    Certificate, Header, HeaderDigest, ReconfigureNotification, Round, RoundVoteDigestPair, Vote,
+    Certificate, Header, HeaderDigest, ReconfigureNotification, Round, RoundVoteDigestPair,
+    Timestamp, Vote,
 };
 
 #[cfg(test)]
@@ -423,6 +424,18 @@ impl Core {
                 .certificates_created
                 .with_label_values(&[&certificate.epoch().to_string()])
                 .inc();
+
+            self.metrics
+                .header_to_certificate_latency
+                .with_label_values(&[&certificate.epoch().to_string()])
+                .observe(
+                    certificate
+                        .header
+                        .metadata
+                        .created_at
+                        .elapsed()
+                        .as_secs_f64(),
+                );
 
             // Process the new certificate.
             match self.process_certificate(certificate).await {

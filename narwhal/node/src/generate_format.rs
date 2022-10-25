@@ -12,7 +12,7 @@ use serde_reflection::{Registry, Result, Samples, Tracer, TracerConfig};
 use std::{fs::File, io::Write};
 use structopt::{clap::arg_enum, StructOpt};
 use types::{
-    Batch, BatchDigest, Certificate, CertificateDigest, Header, HeaderDigest,
+    Batch, BatchDigest, Certificate, CertificateDigest, Header, HeaderDigest, Metadata,
     ReconfigureNotification, WorkerOthersBatchMessage, WorkerOurBatchMessage,
     WorkerReconfigureMessage, WorkerSynchronizeMessage,
 };
@@ -114,6 +114,7 @@ fn get_registry() -> Result<Registry> {
     let our_batch = WorkerOurBatchMessage {
         digest: BatchDigest([0u8; 32]),
         worker_id: 0,
+        metadata: Metadata { created_at: 0 },
     };
     let others_batch = WorkerOthersBatchMessage {
         digest: BatchDigest([0u8; 32]),

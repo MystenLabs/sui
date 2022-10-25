@@ -60,11 +60,11 @@ async fn handle_clients_transactions() {
     mock_primary_server
         .expect_report_our_batch()
         .withf(move |request| {
-            request.body()
-                == &WorkerOurBatchMessage {
-                    digest: batch_digest,
-                    worker_id,
-                }
+            let message = request.body();
+
+            message.digest == batch_digest
+                && message.worker_id == worker_id
+                && message.metadata.created_at > 0
         })
         .times(1)
         .returning(move |_| {
@@ -96,7 +96,7 @@ async fn handle_clients_transactions() {
     let config = mysten_network::config::Config::new();
     let channel = config.connect_lazy(&address).unwrap();
     let mut client = TransactionsClient::new(channel);
-    for tx in batch.0 {
+    for tx in batch.transactions {
         let txn = TransactionProto {
             transaction: Bytes::from(tx.clone()),
         };

@@ -118,10 +118,13 @@ impl QuorumWaiter {
                                 total_stake += stake;
                                 if total_stake >= threshold {
                                     let digest = batch.digest();
+                                    let metadata = batch.metadata.clone();
                                     self.store.write(digest, batch).await;
                                     if self.tx_our_batch.send(WorkerOurBatchMessage{
                                         digest,
-                                        worker_id: self.id}).await.is_err() {
+                                        worker_id: self.id,
+                                        metadata
+                                    }).await.is_err() {
                                         tracing::debug!("{}", DagError::ShuttingDown);
                                     }
                                     break;

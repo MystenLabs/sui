@@ -33,7 +33,7 @@ async fn make_batch() {
     tx_batch_maker.send(tx.clone()).await.unwrap();
 
     // Ensure the batch is as expected.
-    let expected_batch = Batch(vec![tx.clone(), tx.clone()]);
+    let expected_batch = Batch::new(vec![tx.clone(), tx.clone()]);
     let batch = rx_message.recv().await.unwrap();
     assert_eq!(batch, expected_batch);
 }
@@ -65,7 +65,6 @@ async fn batch_timeout() {
     tx_batch_maker.send(tx.clone()).await.unwrap();
 
     // Ensure the batch is as expected.
-    let expected_batch = Batch(vec![tx]);
     let batch = rx_message.recv().await.unwrap();
-    assert_eq!(batch, expected_batch);
+    assert_eq!(batch.transactions, vec![tx]);
 }

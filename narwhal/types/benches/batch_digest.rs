@@ -20,7 +20,7 @@ pub fn batch_digest(c: &mut Criterion) {
                 .map(|_| rand::thread_rng().gen())
                 .collect::<Vec<u8>>()
         };
-        let batch = Batch((0..size).map(|_| tx_gen()).collect::<Vec<_>>());
+        let batch = Batch::new((0..size).map(|_| tx_gen()).collect::<Vec<_>>());
         let message = WorkerBatchMessage {
             batch: batch.clone(),
         };

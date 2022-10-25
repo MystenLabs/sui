@@ -661,7 +661,7 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
 /// Defines how the network receiver handles incoming workers messages.
 #[derive(Clone)]
 struct WorkerReceiverHandler {
-    tx_our_digests: Sender<(BatchDigest, WorkerId)>,
+    tx_our_digests: Sender<(BatchDigest, WorkerId, u64)>,
     payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
     our_workers: BTreeMap<WorkerId, WorkerInfo>,
 }
@@ -674,7 +674,11 @@ impl WorkerToPrimary for WorkerReceiverHandler {
     ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
         let message = request.into_body();
         self.tx_our_digests
-            .send((message.digest, message.worker_id))
+            .send((
+                message.digest,
+                message.worker_id,
+                message.metadata.created_at,
+            ))
             .await
             .map(|_| anemo::Response::new(()))
             .map_err(|e| anemo::rpc::Status::internal(e.to_string()))

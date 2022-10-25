@@ -67,7 +67,7 @@ impl BatchMaker {
                 rx_reconfigure,
                 rx_batch_maker,
                 tx_quorum_waiter,
-                current_batch: Batch(Vec::with_capacity(batch_size * 2)),
+                current_batch: Batch::new(Vec::with_capacity(batch_size * 2)),
                 current_batch_size: 0,
                 batch_start_timestamp: Instant::now(),
                 node_metrics,
@@ -86,7 +86,7 @@ impl BatchMaker {
             tokio::select! {
                 // Assemble client transactions into batches of preset size.
                 Some(transaction) = self.rx_batch_maker.recv() => {
-                    if self.current_batch.0.is_empty() {
+                    if self.current_batch.transactions.is_empty() {
                         // We are interested to measure the time to seal a batch
                         // only when we do have transactions to include. Thus we reset
                         // the timer on the first transaction we receive to include on
@@ -95,7 +95,7 @@ impl BatchMaker {
                     }
 
                     self.current_batch_size += transaction.len();
-                    self.current_batch.0.push(transaction);
+                    self.current_batch.transactions.push(transaction);
                     if self.current_batch_size >= self.batch_size {
                         self.seal(false).await;
                         timer.as_mut().reset(Instant::now() + self.max_batch_delay);
@@ -104,7 +104,7 @@ impl BatchMaker {
 
                 // If the timer triggers, seal the batch even if it contains few transactions.
                 () = &mut timer => {
-                    if !self.current_batch.0.is_empty() {
+                    if !self.current_batch.transactions.is_empty() {
                         self.seal(true).await;
                     }
                     timer.as_mut().reset(Instant::now() + self.max_batch_delay);
@@ -140,7 +140,7 @@ impl BatchMaker {
 
         // Serialize the batch.
         self.current_batch_size = 0;
-        let batch: Batch = Batch(self.current_batch.0.drain(..).collect());
+        let batch: Batch = Batch::new(self.current_batch.transactions.drain(..).collect());
 
         #[cfg(feature = "benchmark")]
         {

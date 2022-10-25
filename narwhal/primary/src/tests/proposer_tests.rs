@@ -91,7 +91,7 @@ async fn propose_payload() {
 
     let digest = BatchDigest(name_bytes);
     let worker_id = 0;
-    tx_our_digests.send((digest, worker_id)).await.unwrap();
+    tx_our_digests.send((digest, worker_id, 0)).await.unwrap();
 
     // Ensure the proposer makes a correct header from the provided payload.
     let header = rx_headers.recv().await.unwrap();
@@ -103,7 +103,7 @@ async fn propose_payload() {
     let batches: IndexMap<BatchDigest, WorkerId> = fixture_payload((max_num_of_batches * 2) as u8);
 
     for (batch_id, worker_id) in batches {
-        tx_our_digests.send((batch_id, worker_id)).await.unwrap();
+        tx_our_digests.send((batch_id, worker_id, 0)).await.unwrap();
     }
 
     // AND send some parents to advance the round
@@ -165,7 +165,7 @@ async fn equivocation_protection() {
 
     let digest = BatchDigest(name_bytes);
     let worker_id = 0;
-    tx_our_digests.send((digest, worker_id)).await.unwrap();
+    tx_our_digests.send((digest, worker_id, 0)).await.unwrap();
 
     // Create and send parents
     let parents: Vec<_> = fixture
@@ -220,7 +220,7 @@ async fn equivocation_protection() {
 
     let digest = BatchDigest(name_bytes);
     let worker_id = 0;
-    tx_our_digests.send((digest, worker_id)).await.unwrap();
+    tx_our_digests.send((digest, worker_id, 0)).await.unwrap();
 
     // Create and send a superset parents, same round but different set from before
     let parents: Vec<_> = fixture

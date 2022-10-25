@@ -56,7 +56,7 @@ async fn test_successfully_retrieve_block() {
             .withf(move |request| request.body().batch == batch_id)
             .returning(|_| {
                 Ok(anemo::Response::new(RequestBatchResponse {
-                    batch: Some(Batch(vec![vec![10u8, 5u8, 2u8], vec![8u8, 2u8, 3u8]])),
+                    batch: Some(Batch::new(vec![vec![10u8, 5u8, 2u8], vec![8u8, 2u8, 3u8]])),
                 }))
             });
     }
@@ -99,7 +99,7 @@ async fn test_successfully_retrieve_block() {
     assert_eq!(block.batches.len(), expected_block_count);
     assert_eq!(block.digest, block_id.clone());
     for batch in block.batches {
-        assert_eq!(batch.batch.0.len(), 2);
+        assert_eq!(batch.batch.transactions.len(), 2);
     }
 }
 
