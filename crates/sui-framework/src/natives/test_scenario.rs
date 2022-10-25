@@ -193,6 +193,7 @@ pub fn end_transaction(
             E_INVALID_SHARED_OR_IMMUTABLE_USAGE,
         ));
     }
+
     // mark all wrapped as deleted
     for wrapped in all_wrapped {
         deleted.push(wrapped)
@@ -209,8 +210,22 @@ pub fn end_transaction(
         })
         .collect::<BTreeMap<_, _>>();
     // update inventories
-    for (id, (_, value)) in new_object_values {
+    // check for bad updates to immutable values
+    for (id, (ty, value)) in new_object_values {
         debug_assert!(!all_active_child_objects.contains(&id));
+        if let Some(prev_value) = object_runtime_ref
+            .test_inventories
+            .taken_immutable_values
+            .get(&ty)
+            .and_then(|values| values.get(&id))
+        {
+            if !value.equals(prev_value)? {
+                return Ok(NativeResult::err(
+                    legacy_test_cost(),
+                    E_INVALID_SHARED_OR_IMMUTABLE_USAGE,
+                ));
+            }
+        }
         object_runtime_ref
             .test_inventories
             .objects
@@ -248,7 +263,7 @@ pub fn take_from_address_by_id(
     assert!(args.is_empty());
     let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
     let inventories = &mut object_runtime.test_inventories;
-    Ok(take_from_inventory(
+    let res = take_from_inventory(
         |x| {
             inventories
                 .address_inventories
@@ -262,7 +277,11 @@ pub fn take_from_address_by_id(
         &mut object_runtime.state.input_objects,
         id,
         Owner::AddressOwner(account),
-    ))
+    );
+    Ok(match res {
+        Ok(value) => NativeResult::ok(legacy_test_cost(), smallvec![value]),
+        Err(native_err) => native_err,
+    })
 }
 
 // native fun ids_for_address<T: key>(account: address): vector<ID>;
@@ -347,7 +366,7 @@ pub fn take_immutable_by_id(
     assert!(args.is_empty());
     let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
     let inventories = &mut object_runtime.test_inventories;
-    Ok(take_from_inventory(
+    let res = take_from_inventory(
         |x| {
             inventories
                 .immutable_inventory
@@ -360,7 +379,18 @@ pub fn take_immutable_by_id(
         &mut object_runtime.state.input_objects,
         id,
         Owner::Immutable,
-    ))
+    );
+    Ok(match res {
+        Ok(value) => {
+            inventories
+                .taken_immutable_values
+                .entry(specified_ty)
+                .or_default()
+                .insert(id, value.copy_value().unwrap());
+            NativeResult::ok(legacy_test_cost(), smallvec![value])
+        }
+        Err(native_err) => native_err,
+    })
 }
 
 // native fun most_recent_immutable_id<T: key>(): Option<ID>;
@@ -418,7 +448,7 @@ pub fn take_shared_by_id(
     assert!(args.is_empty());
     let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
     let inventories = &mut object_runtime.test_inventories;
-    Ok(take_from_inventory(
+    let res = take_from_inventory(
         |x| {
             inventories
                 .shared_inventory
@@ -431,7 +461,11 @@ pub fn take_shared_by_id(
         &mut object_runtime.state.input_objects,
         id,
         Owner::Shared { initial_shared_version: /* dummy */ SequenceNumber::new() },
-    ))
+    );
+    Ok(match res {
+        Ok(value) => NativeResult::ok(legacy_test_cost(), smallvec![value]),
+        Err(native_err) => native_err,
+    })
 }
 
 // native fun most_recent_id_shared<T: key>(): Option<ID>;
@@ -486,17 +520,20 @@ fn take_from_inventory(
     input_objects: &mut BTreeMap<ObjectID, (/* by_value */ bool, Owner)>,
     id: ObjectID,
     owner: Owner,
-) -> NativeResult {
+) -> Result<Value, NativeResult> {
     let obj_opt = objects.get(&id);
     let is_taken = taken.contains_key(&id);
     if is_taken || !is_in_inventory(&id) || obj_opt.is_none() {
-        return NativeResult::err(legacy_test_cost(), E_OBJECT_NOT_FOUND_CODE);
+        return Err(NativeResult::err(
+            legacy_test_cost(),
+            E_OBJECT_NOT_FOUND_CODE,
+        ));
     }
     taken.insert(id, owner);
     // by_value will be set to true later, if wrapped
     input_objects.insert(id, (false, owner));
     let obj = obj_opt.unwrap();
-    NativeResult::ok(legacy_test_cost(), smallvec![obj.copy_value().unwrap()])
+    Ok(obj.copy_value().unwrap())
 }
 
 fn most_recent_at_ty(

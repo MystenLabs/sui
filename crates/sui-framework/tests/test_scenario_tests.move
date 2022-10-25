@@ -464,6 +464,26 @@ module sui::test_scenarioTests {
     }
 
     #[test]
+    #[expected_failure(abort_code = 1 /* EInvalidSharedOrImmutableUsage */)]
+    fun test_modify_immutable() {
+        let sender = @0x0;
+        let scenario = ts::begin(sender);
+        {
+            let id = ts::new_object(&mut scenario);
+            let obj1 = Object { id, value: 10 };
+            transfer::freeze_object(obj1);
+        };
+        ts::next_tx(&mut scenario, sender);
+        let obj1 = ts::take_immutable<Object>(&mut scenario);
+        ts::next_tx(&mut scenario, sender);
+        obj1.value = 100;
+        ts::next_tx(&mut scenario, sender);
+        ts::return_immutable(obj1);
+        ts::next_tx(&mut scenario, sender);
+        abort 42
+    }
+
+    #[test]
     #[expected_failure(abort_code = 2 /* ECantReturnObject */)]
     fun test_invalid_address_return() {
         let sender = @0x0;
