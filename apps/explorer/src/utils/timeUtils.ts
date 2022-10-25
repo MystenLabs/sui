@@ -26,9 +26,10 @@ export const convertNumberToDate = (epochMilliSecs: number | null): string => {
         'Dec',
     ];
 
-    return `${stdToN(date.getUTCDate(), 2)} ${
-        MONTHS[date.getUTCMonth()]
-    } ${date.getUTCFullYear()} ${stdToN(date.getUTCHours(), 2)}:${stdToN(
+    return `${MONTHS[date.getUTCMonth()]} ${stdToN(
+        date.getUTCDate(),
+        2
+    )}, ${date.getUTCFullYear()}, ${stdToN(date.getUTCHours(), 2)}:${stdToN(
         date.getUTCMinutes(),
         2
     )}:${stdToN(date.getUTCSeconds(), 2)} UTC`;
