@@ -511,12 +511,11 @@ fn pay<S>(
         tx_ctx,
     );
 
-    #[cfg(debug_assertions)]
-    {
-        // double check that we didn't create or destroy money
-        let new_total_coins = coins.iter().fold(0, |acc, c| acc + c.value());
-        assert_eq!(total_coins - new_total_coins, total_amount)
-    }
+    // double check that we didn't create or destroy money
+    debug_assert_eq!(
+        total_coins - coins.iter().fold(0, |acc, c| acc + c.value()),
+        total_amount
+    );
 
     // update the input coins to reflect the decrease in value.
     // if the input coin has value 0, delete it
@@ -572,10 +571,7 @@ fn pay_sui<S>(
     }
     update_input_coins(temporary_store, coin_objects, &merged_coin, None);
 
-    #[cfg(debug_assertions)]
-    {
-        assert_eq!(total_coins - merged_coin.value(), total_amount)
-    }
+    debug_assert_eq!(total_coins - merged_coin.value(), total_amount);
     Ok(())
 }
 
@@ -591,10 +587,7 @@ fn pay_all_sui<S>(
     merged_coin.merge_coins(&mut coins);
     update_input_coins(temporary_store, coin_objects, &merged_coin, Some(recipient));
 
-    #[cfg(debug_assertions)]
-    {
-        assert_eq!(total_coins, merged_coin.value());
-    }
+    debug_assert_eq!(total_coins, merged_coin.value());
     Ok(())
 }
 
