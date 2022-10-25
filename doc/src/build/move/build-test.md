@@ -262,39 +262,41 @@ have only one test defined. Let us change that by adding another test
 function.
 
 ``` rust
-    #[test]
-    fun test_sword_transactions() {
-        use sui::test_scenario;
+#[test]
+fun test_sword_transactions() {
+    use sui::test_scenario;
 
-        let admin = @0xABBA;
-        let initial_owner = @0xCAFE;
-        let final_owner = @0xFACE;
+    let admin = @0xABBA;
+    let initial_owner = @0xCAFE;
+    let final_owner = @0xFACE;
 
-        // first transaction executed by admin
-        let scenario = &mut test_scenario::begin(&admin);
-        {
-            // create the sword and transfer it to the initial owner
-            sword_create(42, 7, initial_owner, test_scenario::ctx(scenario));
-        };
-        // second transaction executed by the initial sword owner
-        test_scenario::next_tx(scenario, &initial_owner);
-        {
-            // extract the sword owned by the initial owner
-            let sword = test_scenario::take_owned<Sword>(scenario);
-            // transfer the sword to the final owner
-            sword_transfer(sword, final_owner, test_scenario::ctx(scenario));
-        };
-        // third transaction executed by the final sword owner
-        test_scenario::next_tx(scenario, &final_owner);
-        {
-            // extract the sword owned by the final owner
-            let sword = test_scenario::take_owned<Sword>(scenario);
-            // verify that the sword has expected properties
-            assert!(magic(&sword) == 42 && strength(&sword) == 7, 1);
-            // return the sword to the object pool (it cannot be simply "dropped")
-            test_scenario::return_owned(scenario, sword)
-        }
-    }
+    // first transaction executed by admin
+    let scenario = test_scenario::begin(admin);
+    {
+        // create the sword and transfer it to the initial owner
+        sword_create(42, 7, initial_owner, test_scenario::ctx(&mut scenario));
+    };
+    // second transaction executed by the initial sword owner
+    test_scenario::next_tx(&mut scenario, initial_owner);
+    {
+        // extract the sword owned by the initial owner
+        let sword = test_scenario::take_from_sender<Sword>(&mut scenario);
+        // transfer the sword to the final owner
+        sword_transfer(sword, final_owner, test_scenario::ctx(&mut scenario));
+    };
+    // third transaction executed by the final sword owner
+    test_scenario::next_tx(&mut scenario, final_owner);
+    {
+        // extract the sword owned by the final owner
+        let sword = test_scenario::take_from_sender<Sword>(&mut scenario);
+        // verify that the sword has expected properties
+        assert!(magic(&sword) == 42 && strength(&sword) == 7, 1);
+        // return the sword to the object pool (it cannot be simply "dropped")
+        test_scenario::return_to_sender(&mut scenario, sword);
+            
+    };
+    test_scenario::end(scenario);
+}
 ```
 
 Let us now dive into some details of the new testing function. The
@@ -311,7 +313,7 @@ the sword it now owns to its final owner. Please note that in *pure
 Move* we do not have the notion of Sui storage and, consequently, no
 easy way for the emulated Sui transaction to retrieve it from
 storage. This is where the `test_scenario` module comes to help - its
-`take_owned` function makes an object of a given type (in this case
+`take_from_sender` function makes an object of a given type (in this case
 of type `Sword`) owned by an address executing the current transaction
 available for manipulation by the Move code. (For now, we assume that
 there is only one such object.) In this case, the object retrieved
@@ -320,7 +322,7 @@ from storage is transferred to another address.
 > **Important:** Transaction effects, such as object creation/transfer become visible only after a
 > given transaction completes. For example, if the second transaction in our running example created
 > a sword and transferred it to the admin's address, it would become available for retrieval
-> from the admin's address (via `test_scenario`s `take_owned` or `take_last_created_owned`
+> from the admin's address (via `test_scenario`s `take_from_sender` or `take_last_created_owned`
 > functions) only in the third transaction.
 
 The final transaction is executed by the final owner - it retrieves
@@ -336,7 +338,7 @@ by transferring the sword object to the fake address. But the
 `test_scenario` package gives us a more elegant solution, which is
 closer to what happens when Move code is actually executed in the
 context of Sui - we can simply return the sword to the object pool
-using the `test_scenario::return_owned` function.
+using the `test_scenario::return_to_sender` function.
 
 We can now run the test command again and see that we now have two
 successful tests for our module:
