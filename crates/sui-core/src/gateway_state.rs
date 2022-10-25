@@ -1629,6 +1629,7 @@ where
         Ok(data)
     }
 
+    // TODO: consolidate this with Pay transactions
     async fn split_coin(
         &self,
         signer: SuiAddress,
@@ -1660,6 +1661,7 @@ where
         Ok(data)
     }
 
+    // TODO: consolidate this with Pay transactions
     async fn split_coin_equal(
         &self,
         signer: SuiAddress,
@@ -1691,6 +1693,7 @@ where
         Ok(data)
     }
 
+    // TODO: consolidate this with Pay transactions
     async fn merge_coins(
         &self,
         signer: SuiAddress,
