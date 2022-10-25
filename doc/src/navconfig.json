@@ -7,13 +7,13 @@
         "link": "doc-updates"
       },
       {
+        "label": "Sui Framework Reference",
+        "link": "reference/framework"
+      },
+      {
         "label": "Sui by Example",
         "link": "https://examples.sui.io/",
         "external": true
-      },
-      {
-        "label": "Connect to Sui Devnet",
-        "link": "build/devnet"
       }
     ]
   },
@@ -37,13 +37,8 @@
             "fileName": "learn/sui-move-diffs"
           },
           {
-            "label": "Understand Sui Security",
+            "label": "Sui Security",
             "fileName": "learn/sui-security"
-          },
-          {
-            "label": "Sui White Paper",
-            "link": "https://github.com/MystenLabs/sui/blob/main/doc/paper/sui.pdf",
-            "external": true
           }
         ]
       },
@@ -127,7 +122,7 @@
       {
         "label": "Create Smart Contracts with Move",
         "fileName": "build/move/index",
-        "title": "Create Smart Contracts with Move",
+        "title": "Smart Contracts with Move",
         "items": [
           {
             "label": "Write Move Packages",
@@ -142,7 +137,7 @@
             "fileName": "build/move/debug-publish"
           },
           {
-            "label": "Use Sui Move Library",
+            "label": "Sui Move Library",
             "fileName": "build/move/sui-move-library"
           }
         ]
@@ -179,25 +174,25 @@
         ]
       },
       {
-        "label": "Talk with Sui",
+        "label": "Connect to Sui",
         "fileName": "build/comms",
-        "title": "Talk with Sui",
+        "title": "Connect to Sui",
         "items": [
           {
-            "label": "Connect with Sui RPC Server",
+            "label": "JSON-RPC API",
             "fileName": "build/json-rpc"
           },
           {
-            "label": "Use Rust SDK",
+            "label": "Rust SDK",
             "fileName": "build/rust-sdk"
           },
           {
-            "label": "Use TypeScript/JavaScript SDK",
+            "label": "TypeScript/JavaScript SDK",
             "link": "https://github.com/MystenLabs/sui/tree/main/sdk/typescript",
             "external": true
           },
           {
-            "label": "Run a Fullnode",
+            "label": "Sui Full node",
             "fileName": "build/fullnode"
           },
           {
@@ -205,23 +200,22 @@
             "fileName": "build/pubsub"
           }
         ]
-      },
-      {
-        "label": "Reference",
-        "fileName": "build/reference",
-        "title": "Reference",
-        "items": [
-          {
-            "label": "JSON-RPC API Reference",
-            "link": "https://docs.sui.io/sui-jsonrpc",
-            "external": true
-          },
-          {
-            "label": "SuiJSON Format",
-            "fileName": "build/sui-json"
-          }
-        ]
       }
+    ],
+    "reference": [
+      {
+          "label": "TypeScript/JavaScript SDK",
+          "link": "https://github.com/MystenLabs/sui/tree/main/sdk/typescript",
+          "external": true
+        },
+      {
+          "label": "SuiJSON Format",
+          "fileName": "reference/sui-json"
+        },
+      {
+          "label": "Sui Framework Reference",
+          "fileName": "reference/framework"
+        }
     ],
     "explore": [
       {
@@ -229,11 +223,11 @@
         "fileName": "explore/sui-explorer"
       },
       {
-        "label": "Wallet in Browser",
+        "label": "Sui Wallet",
         "fileName": "explore/wallet-browser"
       },
       {
-        "label": "Tutorial",
+        "label": "Tutorials",
         "fileName": "explore/tutorials"
       },
       {
@@ -269,11 +263,6 @@
       {
         "label": "Code of Conduct",
         "fileName": "contribute/code-of-conduct"
-      },
-      {
-        "label": "About Mysten Labs",
-        "link": "https://mystenlabs.com/",
-        "external": true
       }
     ]
   }

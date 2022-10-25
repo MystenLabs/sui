@@ -1,6 +1,6 @@
 {
-  "title": "Sui Developer Portal",
-  "tagline": "Welcome to Sui, a next-generation smart contract platform with high throughput, low latency, and an asset-oriented programming model powered by Move",
+  "title": "Sui Documentation",
+  "tagline": "Documentation for Sui, a next-generation smart contract platform with high throughput, low latency, and an asset-oriented programming model powered by Move.",
   "URL": "https://docs.sui.io/",
   "baseUrl": "/",
   "favIcon": "/favicon2.png",
@@ -16,67 +16,78 @@
       "label": "Terms of Service",
       "link": "https://sui.io/terms/"
     },
-    "menu": [
+  "menu": [
       {
-        "title": "Docs",
-        "listItems": [
-          {
-            "title": "Getting Started",
-            "link": "/build/move"
-          },
-          {
-            "title": "API Reference",
-            "link": "https://docs.sui.io/sui-jsonrpc",
-            "external": true
-          },
-          {
-            "title": "Examples",
-            "link": "https://examples.sui.io/",
-            "external": true
-          }
+      "title": "Community",
+      "listItems": [
+        {
+          "title": "Discord",
+          "link": "https://discord.gg/sui",
+          "external": true
+        },
+        {
+          "title": "Twitter",
+          "link": "https://twitter.com/SuiNetwork/",
+          "external": true
+        },
+        {
+          "title": "Medium",
+          "link": "https://medium.com/mysten-labs/",
+          "external": true
+        },
+        {
+          "title": "GitHub",
+          "link": "https://github.com/MystenLabs",
+          "external": true
+        }
+      ]
+      },
+      {
+      "title": "Ecosystem",
+      "listItems": [
+        {
+          "title": "Sui.io",
+          "link": "https://sui.io/",
+          "external": true,
+          "arrow": true
+        },
+        {
+          "title": "Sui Resources",
+          "link": "https://sui.io/resources/",
+          "external": true,
+          "arrow": true
+        },
+        {
+          "title": "Sui Blog (Medium)",
+          "link": "https://medium.com/mysten-labs",
+          "external": true,
+          "arrow": true
+        }
         ]
       },
       {
-        "title": "Community",
-        "listItems": [
-          {
-            "title": "Discord",
-            "link": "https://discord.gg/sui",
-            "external": true
-          },
-          {
-            "title": "Twitter",
-            "link": "https://twitter.com/SuiNetwork/",
-            "external": true
-          },
-          {
-            "title": "Medium",
-            "link": "https://medium.com/mysten-labs/",
-            "external": true
-          }
+      "title": "Send Feedback",
+      "listItems": [
+        {
+          "title": "Contact us (Email)",
+          "link": "mailto:doc@mystenlabs.com",
+          "external": true,
+          "arrow": true
+        },
+        {
+          "title": "Create an Issue (GitHub)",
+          "link": "https://github.com/MystenLabs/sui/issues/new/choose",
+          "external": true,
+          "arrow": true
+        },
+        {
+          "title": "Chat about Docs (Discord)",
+          "link": "https://discord.com/channels/916379725201563759/1001562806862233701",
+          "external": true,
+          "arrow": true
+        }
         ]
-      },
-      {
-        "title": "Team",
-        "listItems": [
-          {
-            "title": "GitHub",
-            "link": "https://github.com/MystenLabs",
-            "external": true
-          },
-          {
-            "title": "Sui.io",
-            "link": "https://sui.io/",
-            "external": true,
-            "arrow": true
-          },
-          {
-            "title": "White Paper",
-            "link": "https://github.com/MystenLabs/sui/blob/main/doc/paper/sui.pdf",
-            "external": true
-          }
-        ]
-      }
+      }  
     ]
   },
   "headerData": {
@@ -90,161 +101,85 @@
         "link": "/build"
       },
       {
+        "title": "Reference",
+        "link": "/reference"
+      },
+      {
         "title": "Explore",
         "link": "/explore"
       },
       {
         "title": "Contribute",
         "link": "/contribute"
-      },
-      {
-        "title": "Discord",
-        "link": "https://discord.gg/sui",
-        "external": true
-      },
-      {
-        "title": "GitHub",
-        "link": "https://github.com/MystenLabs",
-        "external": true
       }
     ]
   },
   "HomePage": {
-    "title": "Sui Developer Hub",
-    "subTitle": "Welcome to Sui, a next-generation smart contract platform with high throughput, low latency, and an asset-oriented programming model powered by Move",
-    "partner": {
-      "title": "Partnerships Highlight",
-      "copy": "Explore examples and 3rd party projects built on Sui.",
-      "cta": {
-        "label": "Go",
-        "link": "/explore",
-        "external": false
-      }
-    },
+    "title": "Sui Documentation",
+    "subTitle": "Documentation for Sui, a next-generation smart contract platform with high throughput, low latency, and an asset-oriented programming model powered by Move.",
     "cta": [
       {
-        "name": "See what's New",
+        "name": "What's New",
         "sublist": [
           {
-            "name": "Use Sui Explorer",
-            "url": "/explore/sui-explorer"
+            "name": "Doc Updates",
+            "url": "/doc-updates"
           },
           {
-            "name": "Make Rust SDK Calls",
-            "url": "/build/rust-sdk"
-          },
-          {
-            "name": "Run Windows, Linux, macOS",
-            "url": "/build/install#supported-oses"
-          },
-          {
-            "name": "Try Sui Wallet Browser Extension",
-            "url": "/explore/wallet-browser"
-          },
-          {
-            "name": "Learn Sui Move",
-            "url": "https://sui.io/resources-move/why-we-created-sui-move/",
+            "name": "Sui Releases",
+            "url": "https://github.com/MystenLabs/sui/releases",
             "external": true
           },
           {
-            "name": "Use Move VS Code Plugin",
-            "url": "https://sui.io/resources-move/announcing-enhanced-move-vs-code-plugin/",
+            "name": "Sui Announcements (Discord)",
+            "url": "https://discord.com/channels/916379725201563759/925109817834631189",
+            "external": true            
+          },
+          {
+            "name": "Sui Developer Experience Roadmap",
+            "url": "https://github.com/MystenLabs/sui/blob/main/DEVX_ROADMAP.md",
             "external": true
           }
         ]
       },
       {
-        "name": "Get Started",
+        "name": "Read the Docs",
         "sublist": [
           {
-            "name": "Create Smart Contracts",
-            "url": "/build/move"
+            "name": "Learn About Sui",
+            "url": "/learn"
           },
           {
-            "name": "Connect to Devnet",
-            "url": "/build/devnet"
+            "name": "Start Building on Sui",
+            "url": "/build"
           },
           {
-            "name": "Program Sui Objects",
-            "url": "/build/programming-with-objects/index"
+            "name": "Explore Sui",
+            "url": "/explore"
           }
         ]
       },
       {
-        "name": "Learn about Sui",
+        "name": "More About Sui",
         "sublist": [
           {
-            "name": "How Sui Works",
-            "url": "/learn/how-sui-works"
-          },
-          {
-            "name": "Sui Compared to other Blockchains",
-            "url": "/learn/sui-compared"
-          },
-          {
-            "name": "Why Move?",
-            "url": "/learn/why-move"
-          },
-          {
-            "name": "How Sui Move and Core Move differ",
-            "url": "/learn/sui-move-diffs"
-          }
-        ]
-      },
-      {
-        "name": "See Sui in Action",
-        "sublist": [
-          {
-            "name": "Create and play Tic-Tac-Toe on Sui",
-            "url": "/explore/tutorials"
-          },
-          {
-            "name": "See two games with mutable, expressive NFTs",
-            "url": "/explore/prototypes"
-          }
-        ]
-      },
-      {
-        "name": "Build with Examples",
-        "sublist": [
-          {
-            "name": "Create an escrow",
-            "url": "https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/defi/sources/escrow.move",
+            "name": "Sui Resources",
+            "url": "https://sui.io/resources/",
             "external": true
           },
           {
-            "name": "Try A flash loan",
-            "url": "https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/defi/sources/flash_lender.move",
-            "external": true
+            "name": "Sui Partners",
+            "url": "https://sui.io/ecosystem/",
+            "external": true            
           },
           {
-            "name": "See all examples",
-            "url": "/explore/examples"
-          }
-        ]
-      },
-      {
-        "name": "Join the Community",
-        "sublist": [
-          {
-            "name": "GitHub",
-            "url": "https://github.com/MystenLabs",
-            "external": true
+            "name": "Sui by Example",
+            "url": "https://examples.sui.io/"
           },
           {
-            "name": "Discord",
-            "url": "https://discord.gg/sui",
-            "external": true
-          },
-          {
-            "name": "Twitter",
-            "url": "https://twitter.com/SuiNetwork/",
-            "external": true
-          },
-          {
-            "name": "Medium",
-            "url": "https://medium.com/mysten-labs/",
-            "external": true
+            "name": "Why We Created Sui Move",
+            "url": "https://medium.com/mysten-labs/why-we-created-sui-move-6a234656c36b",
+            "external": true            
           }
         ]
       }

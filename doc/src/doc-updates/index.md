@@ -6,19 +6,21 @@ This topic lists the significant updates to the [Sui documentation](https://docs
 
 ## Week ending 10/29/22
 
-| Topic | Update |
+| Topic | Update | 
 | :------ | :------- |
+| [Reference](../reference) | Added a new Reference top-level node. Moved filed from the Reference section previously in the Build node. |
 | [Dynamic Fields](../build/programming-with-objects/ch5-dynamic-fields.md) | Docs for a new, more flexible, replacement for Child Objects.  **Note** this is an early release, with [known limitations](../build/programming-with-objects/ch5-dynamic-fields.md#current-limitations). |
 | [Collections](../build/programming-with-objects/ch6-collections.md) | New docs to accompany the addition of map-like collections to the Sui Framework's Move library, built on top of Dynamic Fields. **Note** this is an early release, with [known limitations](../build/programming-with-objects/ch6-collections.md#current-limitations). |
+
 
 ## Week ending 10/22/22
 
 | Topic | Update | 
 | :------ | :------- |
+
 | [Sui Wallet](../explore/wallet-browser.md) | Updates for version 0.2. |
 | [Multiple topics](https://github.com/MystenLabs/sui/pull/5266) | Updates related to gateway deprecation. |
 | [Sui Client CLI](../build/cli-client.md) | Moved information about creating a local network to a new [Sui Local Network](../build/sui-local-network.md) topic. General copyedit and updates for changes to Sui. |
-
 
 ## Week ending 10/15/22
 
