@@ -19,18 +19,20 @@ export function PlaceholderTable({
     colHeadings,
     colWidths,
 }: PlaceholderTableProps) {
-    const rowEntry = useMemo(() => {
-        Object.fromEntries(
-            colHeadings.map((header, index) => [
-                `a${index}`,
-                <Placeholder
-                    key={index}
-                    width={colWidths[index]}
-                    height={rowHeight}
-                />,
-            ])
-        );
-    }, [colHeadings, colWidths, rowHeight]);
+    const rowEntry = useMemo(
+        () =>
+            Object.fromEntries(
+                colHeadings.map((header, index) => [
+                    `a${index}`,
+                    <Placeholder
+                        key={index}
+                        width={colWidths[index]}
+                        height={rowHeight}
+                    />,
+                ])
+            ),
+        [colHeadings, colWidths, rowHeight]
+    );
 
     const loadingTable = useMemo(
         () => ({
