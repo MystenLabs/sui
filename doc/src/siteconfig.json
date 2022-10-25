@@ -183,6 +183,7 @@
           {
             "name": "Sui by Example",
             "url": "https://examples.sui.io/"
+            "external": true
           },
           {
             "name": "Why We Created Sui Move",
