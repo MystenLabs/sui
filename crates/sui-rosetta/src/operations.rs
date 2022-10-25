@@ -15,8 +15,8 @@ use sui_types::coin::{PAY_JOIN_FUNC_NAME, PAY_MODULE_NAME, PAY_SPLIT_VEC_FUNC_NA
 use sui_types::event::Event;
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::{
-    CallArg, InputObjectKind, MoveCall, ObjectArg, Pay, SingleTransactionKind, TransactionData,
-    TransactionEffects, TransferObject,
+    CallArg, InputObjectKind, MoveCall, ObjectArg, Pay, PayAllSui, PaySui, SingleTransactionKind,
+    TransactionData, TransactionEffects, TransferObject,
 };
 use sui_types::move_package::disassemble_modules;
 use sui_types::{parse_sui_struct_tag, SUI_FRAMEWORK_OBJECT_ID};
@@ -334,6 +334,12 @@ fn parse_operations(
             metadata: Some(json!(change)),
         }],
         SingleTransactionKind::Pay(pay) => parse_pay(sender, gas, budget, pay, counter, status),
+        SingleTransactionKind::PaySui(pay_sui) => {
+            parse_pay_sui(sender, gas, budget, pay_sui, counter, status)
+        }
+        SingleTransactionKind::PayAllSui(pay_all_sui) => {
+            parse_pay_all_sui(sender, gas, budget, pay_all_sui, counter, status)
+        }
     };
     if let Some(effects) = effects {
         let coin_change_operations = Operation::get_coin_operation_from_events(
@@ -455,6 +461,52 @@ fn parse_pay(
             amount: None,
             coin_change: None,
             metadata: Some(json!(pay)),
+        },
+        Operation::gas_budget(counter, status, gas, budget, sender),
+    ]
+}
+
+fn parse_pay_sui(
+    sender: SuiAddress,
+    gas: ObjectRef,
+    budget: u64,
+    pay_sui: &PaySui,
+    counter: &mut IndexCounter,
+    status: Option<OperationStatus>,
+) -> Vec<Operation> {
+    vec![
+        Operation {
+            operation_identifier: counter.next_idx().into(),
+            related_operations: vec![],
+            type_: OperationType::PaySui,
+            status,
+            account: Some(AccountIdentifier { address: sender }),
+            amount: None,
+            coin_change: None,
+            metadata: Some(json!(pay_sui)),
+        },
+        Operation::gas_budget(counter, status, gas, budget, sender),
+    ]
+}
+
+fn parse_pay_all_sui(
+    sender: SuiAddress,
+    gas: ObjectRef,
+    budget: u64,
+    pay_all_sui: &PayAllSui,
+    counter: &mut IndexCounter,
+    status: Option<OperationStatus>,
+) -> Vec<Operation> {
+    vec![
+        Operation {
+            operation_identifier: counter.next_idx().into(),
+            related_operations: vec![],
+            type_: OperationType::PayAllSui,
+            status,
+            account: Some(AccountIdentifier { address: sender }),
+            amount: None,
+            coin_change: None,
+            metadata: Some(json!(pay_all_sui)),
         },
         Operation::gas_budget(counter, status, gas, budget, sender),
     ]
@@ -654,6 +706,8 @@ impl TryInto<SuiAction> for Vec<Operation> {
                 OperationType::TransferObject
                 | OperationType::SuiBalanceChange
                 | OperationType::Pay
+                | OperationType::PaySui
+                | OperationType::PayAllSui
                 | OperationType::GasSpent
                 | OperationType::Genesis
                 | OperationType::MoveCall

@@ -26,6 +26,7 @@ use sui_network::{
 
 use sui_types::{error::*, messages::*};
 use tap::TapFallible;
+use tokio::time::sleep;
 use tokio::{
     sync::mpsc::{channel, Receiver, Sender},
     task::JoinHandle,
@@ -35,7 +36,7 @@ use sui_types::messages_checkpoint::CheckpointRequest;
 use sui_types::messages_checkpoint::CheckpointResponse;
 
 use crate::consensus_handler::ConsensusHandler;
-use tracing::{error, info, Instrument};
+use tracing::{debug, error, info, Instrument};
 
 #[cfg(test)]
 #[path = "unit_tests/server_tests.rs"]
@@ -389,7 +390,17 @@ impl ValidatorService {
             metrics.handle_certificate_non_consensus_latency.clone()
         });
 
-        // 1) Verify certificate
+        // 1) Check if cert already executed
+        let tx_digest = *certificate.digest();
+        if let Some(response) = state
+            .get_tx_info_already_executed(&tx_digest)
+            .await
+            .map_err(|e| tonic::Status::internal(e.to_string()))?
+        {
+            return Ok(tonic::Response::new(response));
+        }
+
+        // 2) Verify cert signatures
         let cert_verif_metrics_guard = start_timer(metrics.cert_verification_latency.clone());
 
         certificate
@@ -398,16 +409,6 @@ impl ValidatorService {
         drop(cert_verif_metrics_guard);
         // TODO This is really really bad, we should have different types for signature verified transactions
         certificate.is_verified = true;
-
-        // 2) Check idempotency
-        let tx_digest = certificate.digest();
-        if let Some(response) = state
-            .get_tx_info_already_executed(tx_digest)
-            .await
-            .map_err(|e| tonic::Status::internal(e.to_string()))?
-        {
-            return Ok(tonic::Response::new(response));
-        }
 
         // 3) If the validator is already halted, we stop here, to avoid
         // sending the transaction to consensus.
@@ -439,27 +440,53 @@ impl ValidatorService {
         }
 
         // 5) Execute the certificate.
-        let span = tracing::debug_span!(
-            "validator_state_process_cert",
-            ?tx_digest,
-            tx_kind = certificate.signed_data.data.kind_as_str()
-        );
-
-        match state
-            .handle_certificate(&certificate)
-            .instrument(span)
-            .await
-            .map_err(|e| tonic::Status::internal(e.to_string()))
-        {
-            Err(e) => {
-                // Record the cert for later execution, including causal completion if necessary.
-                let tx_digest = *tx_digest;
-                let _ = state
-                    .add_pending_certificates(vec![(tx_digest, Some(certificate))])
-                    .tap_err(|e| error!(?tx_digest, "add_pending_certificates failed: {}", e));
-                Err(e)
+        // Often we cannot execute a cert due to dependenties haven't been executed, and we will
+        // observe TransactionInputObjectsErrors. In such case, we can wait and retry. It should eventually
+        // succeed.
+        // TODO: This is a quick hack. We should properly fix this through dependency-based
+        // scheduling.
+        let mut retry_cnt = 0;
+        loop {
+            let span = tracing::debug_span!(
+                "validator_state_process_cert",
+                ?tx_digest,
+                tx_kind = certificate.signed_data.data.kind_as_str()
+            );
+            match state
+                .handle_certificate(&certificate)
+                .instrument(span)
+                .await
+            {
+                err @ Err(SuiError::TransactionInputObjectsErrors { .. }) => {
+                    if retry_cnt >= 30 {
+                        return Err(tonic::Status::internal(err.unwrap_err().to_string()));
+                    }
+                    if !is_consensus_tx {
+                        error!(
+                            ?tx_digest,
+                            "Owned object transaction cert execution should not have object error"
+                        );
+                        return Err(tonic::Status::internal(err.unwrap_err().to_string()));
+                    }
+                    debug!(
+                        ?tx_digest,
+                        ?retry_cnt,
+                        "Certificate failed due to missing dependencies, wait and retry",
+                    );
+                    sleep(Duration::from_millis(150)).await;
+                    retry_cnt += 1;
+                }
+                Err(e) => {
+                    // Record the cert for later execution, including causal completion if necessary.
+                    let _ = state
+                        .add_pending_certificates(vec![(tx_digest, Some(certificate))])
+                        .tap_err(|e| error!(?tx_digest, "add_pending_certificates failed: {}", e));
+                    return Err(tonic::Status::internal(e.to_string()));
+                }
+                Ok(response) => {
+                    return Ok(tonic::Response::new(response));
+                }
             }
-            Ok(response) => Ok(tonic::Response::new(response)),
         }
     }
 }

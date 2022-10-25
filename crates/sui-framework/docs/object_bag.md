@@ -3,9 +3,9 @@
 
 # Module `0x2::object_bag`
 
-Similar to <code>sui::bag</code>, an <code><a href="object_bag.md#0x2_object_bag_ObjectBag">ObjectBag</a></code> is a heterogenous map-like collection. But unlike
+Similar to <code>sui::bag</code>, an <code><a href="object_bag.md#0x2_object_bag_ObjectBag">ObjectBag</a></code> is a heterogeneous map-like collection. But unlike
 <code>sui::bag</code>, the values bound to these dynamic fields _must_ be objects themselves. This allows
-for the objects to still exist within in storage, which may be important for external tools.
+for the objects to still exist in storage, which may be important for external tools.
 The difference is otherwise not observable from within Move.
 
 
@@ -139,7 +139,7 @@ that key <code>k: K</code>.
 
 ## Function `borrow`
 
-Immutable borrows the value associated with the key in the bag <code><a href="bag.md#0x2_bag">bag</a>: &<a href="object_bag.md#0x2_object_bag_ObjectBag">ObjectBag</a></code>.
+Immutably borrows the value associated with the key in the bag <code><a href="bag.md#0x2_bag">bag</a>: &<a href="object_bag.md#0x2_object_bag_ObjectBag">ObjectBag</a></code>.
 Aborts with <code>sui::dynamic_field::EFieldDoesNotExist</code> if the bag does not have an entry with
 that key <code>k: K</code>.
 Aborts with <code>sui::dynamic_field::EFieldTypeMismatch</code> if the bag has an entry for the key, but

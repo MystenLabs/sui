@@ -53,7 +53,7 @@ const MISSING_COMMITTEE_ERROR_MSG: &str = "Missing committee information for epo
 pub enum SuiError {
     // Object misuse issues
     #[error("Error checking transaction input objects: {:?}", errors)]
-    ObjectErrors { errors: Vec<SuiError> },
+    TransactionInputObjectsErrors { errors: Vec<SuiError> },
     #[error("Attempt to transfer an object that's not owned.")]
     TransferUnownedError,
     #[error("Attempt to transfer an object that does not have public transfer. Object transfer must be done instead using a distinct Move function call.")]
@@ -297,16 +297,23 @@ pub enum SuiError {
     },
     #[error("{TRANSACTION_NOT_FOUND_MSG_PREFIX} [{:?}].", digest)]
     TransactionNotFound { digest: TransactionDigest },
-    #[error("Could not find the referenced object {:?}.", object_id)]
-    ObjectNotFound { object_id: ObjectID },
     #[error(
-        "Could not find the referenced object {:?} at version {:?}",
+        "Could not find the referenced object {:?} at version {:?}.",
         object_id,
         version
     )]
-    ObjectVersionNotFound {
+    ObjectNotFound {
         object_id: ObjectID,
-        version: SequenceNumber,
+        version: Option<SequenceNumber>,
+    },
+    #[error(
+        "Transaction involving Shared Object {:?} at version {:?} is not ready for execution because prior transactions have yet to execute.",
+        object_id,
+        version_not_ready
+    )]
+    SharedObjectPriorVersionsPendingExecution {
+        object_id: ObjectID,
+        version_not_ready: SequenceNumber,
     },
     #[error("Could not find the referenced object {:?} as the asked version {:?} is higher than the latest {:?}", object_id, asked_version, latest_version)]
     ObjectSequenceNumberTooHigh {
@@ -448,6 +455,9 @@ pub enum SuiError {
     #[error("{1} - {0}")]
     RpcError(String, &'static str),
 
+    #[error("Error when calling executeTransaction rpc endpoint: {:?}", error)]
+    RpcExecuteTransactionError { error: String },
+
     #[error("Use of disabled feature: {:?}", error)]
     UnsupportedFeatureError { error: String },
 
@@ -468,6 +478,9 @@ pub enum SuiError {
 
     #[error("Failed to get supermajority's consensus on committee information for minimal epoch: {minimal_epoch}")]
     FailedToGetAgreedCommitteeFromMajority { minimal_epoch: EpochId },
+
+    #[error("Empty input coins for Pay related transaction")]
+    EmptyInputCoins,
 }
 
 pub type SuiResult<T = ()> = Result<T, SuiError>;

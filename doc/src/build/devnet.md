@@ -26,7 +26,7 @@ We provide the following tools for users to interact with Sui Devnet:
 
 ## Environment set up
 
-Learn how to install Sui and then request test tokens in the [Install Sui](topic). After you install Sui, request Sui [test coins](#request-gas-tokens) through [Discord](https://discordapp.com/channels/916379725201563759/971488439931392130).
+Learn how to install Sui and then request test tokens in the [Install Sui](../build/install.md#sui-tokens). After you install Sui, request Sui [test coins](#request-gas-tokens) through [Discord](https://discordapp.com/channels/916379725201563759/971488439931392130).
 
 To check whether Sui is installed, run the following command:
 

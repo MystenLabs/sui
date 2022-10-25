@@ -9,12 +9,19 @@ use move_core_types::{
 };
 use serde::{Deserialize, Serialize};
 
+use crate::object::{MoveObject, Owner, OBJECT_START_VERSION};
+use crate::storage::{DeleteKind, WriteKind};
+use crate::temporary_store::TemporaryStore;
 use crate::{
     balance::{Balance, Supply},
     error::{ExecutionError, ExecutionErrorKind},
     object::{Data, Object},
 };
-use crate::{base_types::ObjectID, id::UID, SUI_FRAMEWORK_ADDRESS};
+use crate::{
+    base_types::{ObjectID, SuiAddress, TxContext},
+    id::UID,
+    SUI_FRAMEWORK_ADDRESS,
+};
 use schemars::JsonSchema;
 
 pub const COIN_MODULE_NAME: &IdentStr = ident_str!("coin");
@@ -109,6 +116,26 @@ impl Coin {
             ],
         }
     }
+
+    // Shift balance of coins_to_merge to this coin.
+    // Related coin objects need to be updated in temporary_store to presist the changes,
+    // including deleting the coin objects that have been merged.
+    pub fn merge_coins(&mut self, coins_to_merge: &mut [Coin]) {
+        let total_coins = coins_to_merge.iter().fold(0, |acc, c| acc + c.value());
+        for coin in coins_to_merge.iter_mut() {
+            // unwrap() is safe because balance value is the same as coin value
+            coin.balance.withdraw(coin.value()).unwrap();
+        }
+        self.balance = Balance::new(self.value() + total_coins);
+    }
+
+    // Split amount out of this coin to a new coin.
+    // Related coin objects need to be updated in temporary_store to presist the changes,
+    // including creating the coin object related to the newly created coin.
+    pub fn split_coin(&mut self, amount: u64, new_coin_id: UID) -> Result<Coin, ExecutionError> {
+        self.balance.withdraw(amount)?;
+        Ok(Coin::new(new_coin_id, amount))
+    }
 }
 
 // Rust version of the Move sui::coin::TreasuryCap type
@@ -116,4 +143,53 @@ impl Coin {
 pub struct TreasuryCap {
     pub id: UID,
     pub total_supply: Supply,
+}
+
+pub fn transfer_coin<S>(
+    temporary_store: &mut TemporaryStore<S>,
+    coin: &Coin,
+    recipient: SuiAddress,
+    coin_type: StructTag,
+    tx_ctx: &TxContext,
+) {
+    let new_coin = Object::new_move(
+        MoveObject::new_coin(
+            coin_type,
+            OBJECT_START_VERSION,
+            bcs::to_bytes(coin).expect("Serializing coin value cannot fail"),
+        ),
+        Owner::AddressOwner(recipient),
+        tx_ctx.digest(),
+    );
+    temporary_store.write_object(new_coin, WriteKind::Create);
+}
+
+// A helper function for pay_sui and pay_all_sui.
+// It updates the gas_coin_obj based on the updated gas_coin, transfers gas_coin_obj to
+// recipient when needed, and then deletes all other input coins other than gas_coin_obj.
+pub fn update_input_coins<S>(
+    temporary_store: &mut TemporaryStore<S>,
+    coin_objects: &mut Vec<Object>,
+    gas_coin: &Coin,
+    recipient: Option<SuiAddress>,
+) {
+    let mut gas_coin_obj = coin_objects.remove(0);
+    // unwrap is safe because we checked that it was a coin object above.
+    // update_contents_without_version_change b/c this is the gas coin,
+    // whose version will be bumped upon gas payment.
+    gas_coin_obj
+        .data
+        .try_as_move_mut()
+        .unwrap()
+        .update_contents_without_version_change(
+            bcs::to_bytes(gas_coin).expect("Coin serialization should not fail"),
+        );
+    if let Some(recipient) = recipient {
+        gas_coin_obj.transfer_without_version_change(recipient);
+    }
+    temporary_store.write_object(gas_coin_obj, WriteKind::Mutate);
+
+    for coin_object in coin_objects.iter() {
+        temporary_store.delete_object(&coin_object.id(), coin_object.version(), DeleteKind::Normal)
+    }
 }

@@ -3815,6 +3815,40 @@
           }
         }
       },
+      "PaySui": {
+        "description": "Send SUI coins to a list of addresses, following a list of amounts. only for SUI coin and does not require a separate gas coin object. Specifically, what pay_sui does are: 1. debit each input_coin to create new coin following the order of amounts and assign it to the corresponding recipient. 2. accumulate all residual SUI from input coins left and deposit all SUI to the first input coin, then use the first input coin as the gas coin object. 3. the balance of the first input coin after tx is sum(input_coins) - sum(amounts) - actual_gas_cost 4. all other input coints other than the first one are deleted.",
+        "type": "object",
+        "required": [
+          "amounts",
+          "coins",
+          "recipients"
+        ],
+        "properties": {
+          "amounts": {
+            "description": "The amounts each recipient will receive. Must be the same length as amounts",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0.0
+            }
+          },
+          "coins": {
+            "description": "The coins to be used for payment",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ObjectRef"
+            }
+          },
+          "recipients": {
+            "description": "The addresses that will receive payment",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SuiAddress"
+            }
+          }
+        }
+      },
       "RPCTransactionRequestParams": {
         "oneOf": [
           {
@@ -4601,6 +4635,32 @@
             "properties": {
               "Pay": {
                 "$ref": "#/components/schemas/Pay"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Pay one or more recipients from a set of Sui coins, the input coins are also used to for gas payments.",
+            "type": "object",
+            "required": [
+              "PaySui"
+            ],
+            "properties": {
+              "PaySui": {
+                "$ref": "#/components/schemas/PaySui"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Pay one or more recipients from a set of Sui coins, the input coins are also used to for gas payments.",
+            "type": "object",
+            "required": [
+              "PayAllSui"
+            ],
+            "properties": {
+              "PayAllSui": {
+                "$ref": "#/components/schemas/PaySui"
               }
             },
             "additionalProperties": false

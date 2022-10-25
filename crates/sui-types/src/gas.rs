@@ -359,12 +359,16 @@ impl<'a> SuiGasStatus<'a> {
 /// 1. If the gas object has an address owner.
 /// 2. If it's enough to pay the flat minimum transaction fee
 /// 3. If it's less than the max gas budget allowed
-/// 4. If the gas_object actually has enough balance to pay for the budget.
+/// 4. If the gas_object actually has enough balance to pay for the budget
+/// 5. If total balance in gas object and extra input objects is sufficient
+/// to pay total amount of gas budget and extra amount to pay, extra input objects
+/// and extra amount to pay are only relevant in SUI payment transactions.
 pub fn check_gas_balance(
     gas_object: &Object,
     gas_budget: u64,
     gas_price: u64,
     extra_amount: u64,
+    extra_objs: Vec<Object>,
 ) -> SuiResult {
     ok_or_gas_error!(
         matches!(gas_object.owner, Owner::AddressOwner(_)),
@@ -382,11 +386,27 @@ pub fn check_gas_balance(
         )
     )?;
 
-    let balance = get_gas_balance(gas_object)?;
-    let total_amount = (gas_budget as u128) * (gas_price as u128) + extra_amount as u128;
+    // TODO: remove this check if gas payment with multiple coins is supported.
+    // This check is necessary now because, when transactions failed due to execution error,
+    // balance of gas budget will be reverted to pre-transaction state.
+    // Meanwhile we need to make sure that the pre-transaction balance is sufficient
+    // to pay for gas cost before execution error occurs.
+    let gas_balance = get_gas_balance(gas_object)?;
+    let gas_budget_amount = (gas_budget as u128) * (gas_price as u128);
     ok_or_gas_error!(
-        (balance as u128) >= total_amount,
-        format!("Gas balance is {balance}, not enough to pay {total_amount} with gas price of {gas_price}")
+        (gas_balance as u128) >= gas_budget_amount,
+        format!("Gas balance is {gas_balance}, not enough to pay {gas_budget_amount} with gas price of {gas_price}")
+    )?;
+
+    let mut total_balance = gas_balance as u128;
+    for extra_obj in extra_objs {
+        total_balance += get_gas_balance(&extra_obj)? as u128;
+    }
+
+    let total_amount = gas_budget_amount + extra_amount as u128;
+    ok_or_gas_error!(
+        total_balance >= total_amount,
+        format!("Total balance is {total_balance}, not enough to pay {total_amount} with gas price of {gas_price}")
     )
 }
 

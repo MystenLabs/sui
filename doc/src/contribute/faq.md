@@ -3,30 +3,13 @@ title: Sui Frequently Asked Questions
 ---
 
 This page contains answers to frequently asked questions (FAQs) about Sui and Mysten Labs. 
-Ask more in [Discord](https://discord.gg/sui), see where we are headed in our
-[roadmap](https://github.com/MystenLabs/sui/blob/main/ROADMAP.md#roadmap), and
-find full details in our
-[white paper](https://github.com/MystenLabs/sui/blob/main/doc/paper/sui.pdf).
+Ask more in the [Sui Discord](https://discord.gg/sui) server.
 
-
-## Why Sui?
-
-
-### Where can I find out about Sui?
-
-Use these online resources:
-
-* Sui Website: [https://sui.io/](https://sui.io/)
-* Sui Developer Portal: [https://docs.sui.io/](https://docs.sui.io/)
-* Sui Smart Contract White Paper: [https://sui.io/whitepaper](https://sui.io/whitepaper) 
-* Sui API Reference: [Sui JSON-RPC](https://docs.sui.io/sui-jsonrpc)  
-
-
-### What does Sui offer over other blockchains?
+## What does Sui offer over other blockchains?
 
 Sui offers ease of development, a developer interface, fast transaction speeds, a sane object model, and better security. Sui calls the [consensus protocol](../learn/architecture/consensus.md) only for transactions affecting objects owned by multiple addresses. This means simple transactions complete almost immediately.
 
-See these resources on the [Sui Developer Portal](https://docs.sui.io/) for the complete story on why we built Sui:
+Additional resources:
 
 * [Why Move?](../learn/why-move)
 * [How Sui Move differs from Core Move](../learn/sui-move-diffs.md)
@@ -35,126 +18,61 @@ See these resources on the [Sui Developer Portal](https://docs.sui.io/) for the 
 * [Narwhal and Bullshark, Sui's Consensus Engine](../learn/architecture/consensus.md)
 
 
-### Is Sui based on Diem?
+## Is Sui based on Diem?
 
 There is no technical relationship between Diem and Sui except that both use Move.
 
 All five co-founders (as well as several Mysten employees) worked on the Diem system and are very familiar with both its good qualities and its limitations. Diem was designed to handle light payments traffic between a small number (10s-100s) of custodial wallets. There were eventual visions of evolving it into a more scalable system that is capable of handling more general-purpose smart contracts; however, the original architecture was not designed to support this and has not evolved significantly.
 
-When we started Mysten, we had the option to build on top of Diem but chose not to because of these limitations. We believe blockchain tech has evolved a lot since Diem came out in 2019, and we have many ideas about how to design a system that is more scalable and programmer-friendly from the ground up. That is why we built Sui.
+When we started Mysten, we had the option to build on top of Diem but chose not to because of these limitations. We believe blockchain technology has evolved a lot since Diem came out in 2019, and we have many ideas about how to design a system that is more scalable and programmer-friendly from the ground up. That is why we built Sui.
 
 
-### What is the relationship between Sui/Mysten and Aptos?
+## What is the relationship between Sui/Mysten and Aptos?
 
 There is no relationship between Sui/Mysten and Aptos. The similarity is that they both use Move; but Sui has a different object model. The research behind the [block STM paper](https://arxiv.org/abs/2203.06871) was all done at Facebook. Subsequently, some of the authors joined Mysten and some joined Aptos. The paper carries the current affiliations of the authors.
 
+## Can I buy Sui tokens?
 
-## Roadmap
-
-
-### Can I buy the Sui token?
-
-We will have a public token for the Sui Mainnet. But it is not available right now and there is no timeline as of yet. Anyone who claims otherwise (offering tokens, whitelists, pre-sale, etc.) is running a scam.
-
-### Will the token name be SUI?
-
-Yes, the token name will be SUI.
+We will have a public token, called SUI, for the Sui Mainnet. But it is not available right now and there is no timeline as of yet. Anyone who claims otherwise (offering tokens, whitelists, pre-sale, etc.) is running a scam.
 
 
 ### When is the Sui Devnet/Testnet/Mainnet launching?
 
-We launched our [Sui Devnet](../build/devnet.md) in May 2022. A Testnet is coming soon.
+We launched our [Sui Devnet](../build/devnet.md) in May 2022. We'll release a Testnet when it's ready.
 
-See our roadmap: \
-[https://github.com/MystenLabs/sui/blob/main/ROADMAP.md#roadmap](https://github.com/MystenLabs/sui/blob/main/ROADMAP.md#roadmap) 
-
-
-### Is there some kind of waitlist for the Testnet?
-
-We accepted applications for validators to participate in Wave 1 of the Incentivized Testnet and are now evaluating them.
-
-
-## Getting involved
-
-
-### How can I join the Sui network? How do I participate in the Sui project?
+## How can I join the Sui network? How do I participate in the Sui project?
 
 Join our [Discord](https://discord.gg/sui) and follow our [Twitter](https://twitter.com/SuiNetwork) for the latest updates and announcements.
 
-For developers:
+You can also join the [Move](https://discord.gg/8prNjUqyFj) and [Sui](https://discord.gg/CVcnUzKYCB) developer channels in Discord.
 
-1. [Install Sui](https://docs.sui.io/build/install).
-2. Spin up a [Sui Fullnode](../build/fullnode.md).
-3. Experiment with the [Sui CLI client](../build/cli-client.md).
-4. Join the [Move](https://discord.gg/8prNjUqyFj) and [Sui](https://discord.gg/CVcnUzKYCB) developer channels in Discord.
-5. [Start building](https://docs.sui.io/build)!
-
-### Are there things we can already try if we are not a developer?
-
-We have a number of examples and demos available for viewing at:
-https://docs.sui.io/explore
-
-### Are you looking for partners?
+## Are you looking for partners?
 
 We are seeking partners that can contribute to the ecosystem primarily in development by building apps with the SDK now so they can be ready to launch when the network goes live. If interested, please apply using the [Sui Partnerships Form](https://bit.ly/suiform).
 
+## Do you need moderators in Discord? Can I be the mod for my country?
 
-### With whom can I talk about a partnership or strategic investment? How can I discuss Sui in person?
-Start in [Discord](https://discord.gg/sui).
+The Sui Community Mod Program is officially accepting applications. [Apply here](https://bit.ly/suimods)
 
-
-### Where can I see the investors of the project?
-
-See the [mystenlabs.com](https://mystenlabs.com/) website for company details.
-
-
-### Do you need moderators in Discord? Can I be the mod for my country?
-
-Sui Community Mod Program is officially accepting applications. [Apply here](https://bit.ly/suimods)
-
-
-### I'm looking for someone from the Mysten Crew to speak at an event - is there someone I can DM/email?
+## How do I request a Mysten Labs speaker for an event?
 
 Ask in Discord.
 
+## After I publish a Move package, how do I update it?
 
-## Development
+Packages are immutable objects, and this property is relied upon in several places. To update the package you need to publish an updated package.
 
-### Once a Move package is published to the Sui network, is there any way for devs to update the code?
+## Is there any information on node architecture and running validators on Sui?
 
-Not currently. Packages are immutable objects, and this property is relied upon in several places.
-
-
-### Is there any information on node architecture and running validators on Sui?
-
-Yes! See the [Sui Incentivized Testnet as a validator](https://sui.io/resources-sui/validator-registration-open/) announcement.
-
-Section four in the [Sui Smart Contract Platform](https://github.com/MystenLabs/sui/blob/main/doc/paper/sui.pdf) white paper is the best reference for node architecture.
+See the [Sui Smart Contract Platform](https://github.com/MystenLabs/sui/blob/main/doc/paper/sui.pdf) for node architecture information.
 
 See the instructions to [run a Sui Fullnode](../build/fullnode.md).
 
+## Can I run a Sui validator node?
 
-### Can I run a Sui validator node?
+The public [Sui Devnet](../build/devnet.md) includes nodes operated by Mysten Labs. You can set up and run a [Sui Fullnode](../build/fullnode.md). We will publish a Validator Guide when appropriate.
 
-We accepted applications for validators to participate in Wave 1 of the Incentivized Testnet and are now evaluating them.
-
-We have a public [Sui Devnet](../build/devnet.md) with nodes operated by Mysten Labs. And you can now run a networked [Sui Fullnode](../build/fullnode.md).
-
-You may also run a local, non-networked Sui node for development using the [Sui CLI client](../build/cli-client.md). You can interact with the nodes with either the [Sui Wallet CLI](../build/cli-client.md#command-line-mode) or over the [Sui RPC API](../build/json-rpc.md).
-
-We have a Testnet that will soon allow others to operate Sui nodes; see our [roadmap](https://github.com/MystenLabs/sui/blob/main/ROADMAP.md#roadmap).
-
-### What does a local node do and what are the hardware requirements to run it? How is it different from a Testnet node?
-
-A local node allows you to immediately start building software using Move for Sui, and can be run on commodity hardware. See the [Sui Fullnode](../build/fullnode.md) documentation for system requirements.
-
-A Testnet node will be part of a live network of validators.
-
-
-## Technology
-
-
-### Is Sui compatible with Ethereum Virtual Machine (EVM)?
+## Is Sui compatible with Ethereum Virtual Machine (EVM)?
 
 No. Sui heavily leverages the Move's asset-centric data model for its novel parallel execution and commitment scheme. This is simply not possible with the EVM data model. Because assets are represented as entries in dynamically indexable maps, it is not possible to statically determine which assets a transaction will touch.
 
@@ -164,11 +82,11 @@ See [Why move?](../learn/why-move.md) for more details on this. In addition, see
 
 Finally, the EVM developer community is very small--approximately 4,000 programmers according to [this study](https://medium.com/electric-capital/electric-capital-developer-report-2021-f37874efea6d). Compare this to (e.g.) the [>20M registered iOS developers](https://techcrunch.com/2018/06/04/app-store-hits-20m-registered-developers-at-100b-in-revenues-500m-visitors-per-week/#:~:text=Today%20at%20WWDC%2C%20Apple's%20CEO,500%20million%20visitors%20per%20week.). Thus, the practical path to scaling the smart contract dev community is to bring folks in from the broader population, not to pull them from the tiny pool of existing Solidity developers. We think Move is much safer and much more approachable for mainstream programmers than the EVM.
 
-### Is Sui an L2, or are there plans to support L2s?
+## Is Sui an L2, or are there plans to support L2s?
 
 Sui tackles scaling at the base layer rather than via L2s. We think this approach leads to a more user and developer-friendly system than adding additional complexity on top of an already-complex base layer that doesn't scale.
 
 
-### Does Mysten maintain a fork of Move?
+## Does Mysten maintain a fork of Move?
 
 No. Move is designed to be a cross-platform language that can be used anywhere you need safe smart contracts. There are some more details on how this works + the chains Move runs in the [Awesome Move](https://github.com/MystenLabs/awesome-move) documentation.

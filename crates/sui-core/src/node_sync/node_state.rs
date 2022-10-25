@@ -585,8 +585,11 @@ where
         };
         match result {
             Ok(_) => Ok(SyncStatus::CertExecuted),
-            Err(SuiError::ObjectNotFound { .. }) | Err(SuiError::ObjectErrors { .. }) => {
-                debug!(?digest, "cert execution failed due to missing parents");
+            e @ Err(SuiError::TransactionInputObjectsErrors { .. }) => {
+                debug!(
+                    ?digest,
+                    "cert execution failed due to missing parents {:?}", e
+                );
 
                 let effects = self.get_true_effects(epoch_id, &cert).await?;
 

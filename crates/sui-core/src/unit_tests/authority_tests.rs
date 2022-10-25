@@ -306,7 +306,7 @@ async fn test_handle_transfer_transaction_with_max_sequence_number() {
     assert!(res.is_err());
     assert_eq!(
         res.err(),
-        Some(SuiError::ObjectErrors {
+        Some(SuiError::TransactionInputObjectsErrors {
             errors: vec![SuiError::InvalidSequenceNumber],
         })
     );
@@ -321,7 +321,7 @@ async fn test_handle_shared_object_with_max_sequence_number() {
     assert!(response.is_err());
     assert_eq!(
         response.err(),
-        Some(SuiError::ObjectErrors {
+        Some(SuiError::TransactionInputObjectsErrors {
             errors: vec![SuiError::InvalidSequenceNumber],
         })
     );

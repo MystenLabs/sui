@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-/// A bag is a heterogenous map-like collection. The collection is similar to `sui::table` in that
-/// it's keys and values are not stored within the `Bag` value, but instead are stored using Sui's
+/// A bag is a heterogeneous map-like collection. The collection is similar to `sui::table` in that
+/// its keys and values are not stored within the `Bag` value, but instead are stored using Sui's
 /// object system. The `Bag` struct acts only as a handle into the object system to retrieve those
 /// keys and values.
 /// Note that this means that `Bag` values with exactly the same key-value mapping will not be
@@ -19,7 +19,7 @@
 /// ```
 /// At it's core, `sui::bag` is a wrapper around `UID` that allows for access to
 /// `sui::dynamic_field` while preventing accidentally stranding field values. A `UID` can be
-/// deleted, even if it has dynamic fields associated with it, buta bag, on the other hand, must be
+/// deleted, even if it has dynamic fields associated with it, but a bag, on the other hand, must be
 /// empty to be destroyed.
 module sui::bag {
 
