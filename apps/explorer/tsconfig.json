@@ -17,9 +17,24 @@
         "jsx": "react-jsx",
         "baseUrl": ".",
         "paths": {
+            "~/*": ["./src/*"],
             "@mysten/sui.js": ["../../sdk/typescript/src/"],
             "@mysten/bcs": ["../../sdk/bcs/src/"],
-            "~/*": ["./src/*"]
+            "@mysten/wallet-adapter-base": [
+                "../../sdk/wallet-adapter/packages/adapters/base-adapter/src/"
+            ],
+            "@mysten/wallet-standard": [
+                "../../sdk/wallet-adapter/packages/wallet-standard/src/"
+            ],
+            "@mysten/wallet-adapter-wallet-standard": [
+                "../../sdk/wallet-adapter/packages/adapters/wallet-standard-adapter/src/"
+            ],
+            "@mysten/wallet-adapter-react": [
+                "../../sdk/wallet-adapter/packages/react-providers/src/"
+            ],
+            "@mysten/wallet-adapter-react-ui": [
+                "../../sdk/wallet-adapter/packages/ui/src/"
+            ]
         }
     },
     "include": ["src"]
