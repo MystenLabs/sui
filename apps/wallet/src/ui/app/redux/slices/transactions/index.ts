@@ -39,7 +39,7 @@ export const sendTokens = createAsyncThunk<
     'sui-objects/send-tokens',
     async (
         { tokenTypeArg, amount, recipientAddress },
-        { getState, extra: { api, keypairVault, featureGating }, dispatch }
+        { getState, extra: { api, keypairVault, growthbook }, dispatch }
     ) => {
         const state = getState();
         const coinType = Coin.getCoinTypeFromArg(tokenTypeArg);
@@ -60,14 +60,14 @@ export const sendTokens = createAsyncThunk<
                       coins,
                       amount,
                       recipientAddress,
-                      featureGating.isOn(FEATURES.DEPRECATE_GATEWAY)
+                      growthbook.isOn(FEATURES.DEPRECATE_GATEWAY)
                   )
                 : await Coin.transferCoin(
                       signer,
                       coins,
                       amount,
                       recipientAddress,
-                      featureGating.isOn(FEATURES.DEPRECATE_GATEWAY)
+                      growthbook.isOn(FEATURES.DEPRECATE_GATEWAY)
                   );
 
         // TODO: better way to sync latest objects
@@ -90,7 +90,7 @@ export const StakeTokens = createAsyncThunk<
     'sui-objects/stake',
     async (
         { tokenTypeArg, amount },
-        { getState, extra: { api, keypairVault, featureGating }, dispatch }
+        { getState, extra: { api, keypairVault, growthbook }, dispatch }
     ) => {
         const state = getState();
         const coinType = Coin.getCoinTypeFromArg(tokenTypeArg);
@@ -116,7 +116,7 @@ export const StakeTokens = createAsyncThunk<
             coins,
             amount,
             validatorAddress,
-            featureGating.isOn(FEATURES.DEPRECATE_GATEWAY)
+            growthbook.isOn(FEATURES.DEPRECATE_GATEWAY)
         );
         dispatch(fetchAllOwnedAndRequiredObjects());
         return response;

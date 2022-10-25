@@ -7,9 +7,10 @@ import {
     LocalTxnDataSerializer,
 } from '@mysten/sui.js';
 
+import { growthbook } from './experimentation/feature-gating';
 import { FEATURES } from './experimentation/features';
+import { queryClient } from './helpers/queryClient';
 
-import type FeatureGating from './experimentation/feature-gating';
 import type { Keypair } from '@mysten/sui.js';
 
 export enum API_ENV {
@@ -75,10 +76,10 @@ export default class ApiProvider {
     private _apiFullNodeProvider?: JsonRpcProvider;
     private _signer: RawSigner | null = null;
 
-    constructor(private _featureGating: FeatureGating) {}
-
     public setNewJsonRpcProvider(apiEnv: API_ENV = DEFAULT_API_ENV) {
-        const apiVersion = this._featureGating.getFeatureValue(
+        // We also clear the query client whenever set set a new API provider:
+        queryClient.clear();
+        const apiVersion = growthbook.getFeatureValue(
             FEATURES.RPC_API_VERSION,
             '0.11.0'
         );
@@ -112,7 +113,7 @@ export default class ApiProvider {
             this.setNewJsonRpcProvider();
         }
         if (!this._signer) {
-            this._signer = this._featureGating.isOn(FEATURES.DEPRECATE_GATEWAY)
+            this._signer = growthbook.isOn(FEATURES.DEPRECATE_GATEWAY)
                 ? new RawSigner(
                       keypair,
                       this._apiFullNodeProvider,

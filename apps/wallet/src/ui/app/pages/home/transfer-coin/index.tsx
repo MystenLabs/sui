@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { getTransactionDigest } from '@mysten/sui.js';
+import BigNumber from 'bignumber.js';
 import { Formik } from 'formik';
 import { useCallback, useMemo, useState } from 'react';
-import { useIntl } from 'react-intl';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 
 import StepOne from './TransferCoinForm/StepOne';
@@ -17,14 +17,10 @@ import { Content } from '_app/shared/bottom-menu-layout';
 import PageTitle from '_app/shared/page-title';
 import Loading from '_components/loading';
 import ProgressBar from '_components/progress-bar';
-import { useAppSelector, useAppDispatch } from '_hooks';
-import {
-    accountAggregateBalancesSelector,
-    accountItemizedBalancesSelector,
-} from '_redux/slices/account';
+import { useAppSelector, useAppDispatch, useCoinDecimals } from '_hooks';
+import { accountAggregateBalancesSelector } from '_redux/slices/account';
 import { Coin, GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
 import { sendTokens } from '_redux/slices/transactions';
-import { balanceFormatOptions } from '_shared/formatting';
 import { trackEvent } from '_src/shared/plausible';
 
 import type { SerializedError } from '@reduxjs/toolkit';
@@ -46,15 +42,10 @@ function TransferCoinPage() {
     const [searchParams] = useSearchParams();
     const coinType = searchParams.get('type');
 
-    const balances = useAppSelector(accountItemizedBalancesSelector);
     const aggregateBalances = useAppSelector(accountAggregateBalancesSelector);
     const coinBalance = useMemo(
         () => (coinType && aggregateBalances[coinType]) || BigInt(0),
         [coinType, aggregateBalances]
-    );
-    const totalGasCoins = useMemo(
-        () => balances[GAS_TYPE_ARG]?.length || 0,
-        [balances]
     );
 
     const gasAggregateBalance = useMemo(
@@ -71,7 +62,9 @@ function TransferCoinPage() {
     const [currentStep, setCurrentStep] = useState<number>(DEFAULT_FORM_STEP);
     const [formData] = useState<FormValues>(initialValues);
 
-    const intl = useIntl();
+    const [coinDecimals] = useCoinDecimals(coinType);
+    const [gasDecimals] = useCoinDecimals(GAS_TYPE_ARG);
+
     const validationSchemaStepOne = useMemo(
         () =>
             createValidationSchemaStepOne(
@@ -79,17 +72,16 @@ function TransferCoinPage() {
                 coinBalance,
                 coinSymbol,
                 gasAggregateBalance,
-                totalGasCoins,
-                intl,
-                balanceFormatOptions
+                coinDecimals,
+                gasDecimals
             ),
         [
             coinType,
             coinBalance,
             coinSymbol,
+            coinDecimals,
+            gasDecimals,
             gasAggregateBalance,
-            totalGasCoins,
-            intl,
         ]
     );
     const validationSchemaStepTwo = useMemo(
@@ -112,9 +104,15 @@ function TransferCoinPage() {
                 props: { coinType },
             });
             try {
+                const bigIntAmount = BigInt(
+                    new BigNumber(amount)
+                        .shiftedBy(coinDecimals)
+                        .integerValue()
+                        .toString()
+                );
                 const response = await dispatch(
                     sendTokens({
-                        amount: BigInt(amount),
+                        amount: bigIntAmount,
                         recipientAddress: to,
                         tokenTypeArg: coinType,
                     })
@@ -131,14 +129,11 @@ function TransferCoinPage() {
                 setSendError((e as SerializedError).message || null);
             }
         },
-        [dispatch, navigate, coinType]
+        [dispatch, navigate, coinType, coinDecimals]
     );
 
     const handleNextStep = useCallback(
-        (
-            { amount }: FormValues,
-            { setSubmitting, setFieldValue }: FormikHelpers<FormValues>
-        ) => {
+        (_: FormValues, { setSubmitting }: FormikHelpers<FormValues>) => {
             setCurrentStep((prev) => prev + 1);
             setSubmitting(false);
         },
