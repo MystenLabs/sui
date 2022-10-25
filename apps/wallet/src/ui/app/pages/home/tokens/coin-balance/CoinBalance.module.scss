@@ -26,6 +26,7 @@
     border-radius: 50%;
     color: colors.$white;
     background-color: colors.$gray-75;
+    flex-shrink: 0;
 
     &.sui {
         background-color: colors.$sui-blue;
@@ -36,27 +37,31 @@
     display: flex;
     flex-flow: column nowrap;
     gap: 6px;
+    flex: 1;
+    overflow: hidden;
 }
 
 .coin-name {
     color: colors.$gray-90;
     text-transform: capitalize;
-    line-height: 1;
 
     @include utils.typography('Primary/Body-SB');
+    @include utils.overflow-ellipsis;
 }
 
 .coin-symbol {
     color: colors.$gray-65;
     text-transform: uppercase;
-    line-height: 1;
 
     @include utils.typography('Primary/BodySmall-M');
+    @include utils.overflow-ellipsis;
 }
 
 .value-container {
     display: flex;
     flex-flow: row nowrap;
+    flex: 1;
+    overflow: hidden;
 
     &.row-item {
         flex: 1;
@@ -74,6 +79,12 @@
 
         @include utils.typography('Primary/Heading1-B');
     }
+
+    &.row-item {
+        flex-shrink: 0;
+
+        @include utils.overflow-ellipsis;
+    }
 }
 
 .symbol {
@@ -82,6 +93,12 @@
         color: colors.$gray-65;
 
         @include utils.typography('Primary/Heading3-M');
+    }
+
+    &.row-item {
+        flex-shrink: 1;
+
+        @include utils.overflow-ellipsis;
     }
 }
 
