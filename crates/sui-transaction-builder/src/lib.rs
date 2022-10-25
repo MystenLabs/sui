@@ -364,6 +364,7 @@ impl TransactionBuilder {
         ))
     }
 
+    // TODO: consolidate this with Pay transactions
     pub async fn split_coin(
         &self,
         signer: SuiAddress,
@@ -395,6 +396,7 @@ impl TransactionBuilder {
         ))
     }
 
+    // TODO: consolidate this with Pay transactions
     pub async fn split_coin_equal(
         &self,
         signer: SuiAddress,
@@ -426,6 +428,7 @@ impl TransactionBuilder {
         ))
     }
 
+    // TODO: consolidate this with Pay transactions
     pub async fn merge_coins(
         &self,
         signer: SuiAddress,
