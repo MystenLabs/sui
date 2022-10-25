@@ -116,7 +116,16 @@
   },
   "HomePage": {
     "title": "Sui Documentation",
-    "subTitle": "Documentation for Sui, a next-generation smart contract platform with high throughput, low latency, and an asset-oriented programming model powered by Move.",
+    "subTitle": "Docs for Sui, a next-generation smart contract platform with high throughput, low latency, and an asset-oriented programming model powered by Move",
+    "partner": {
+      "title": "Partnerships Highlight",
+      "copy": "Explore examples and 3rd-party projects built on Sui.",
+      "cta": {
+        "label": "Go",
+        "link": "https://sui.io/ecosystem/",
+        "external": true
+      }
+    },
     "cta": [
       {
         "name": "What's New",
@@ -154,6 +163,10 @@
             "url": "/build"
           },
           {
+            "name": "Sui Reference Docs",
+            "url": "/reference"
+          },          
+          {
             "name": "Explore Sui",
             "url": "/explore"
           }
@@ -168,13 +181,9 @@
             "external": true
           },
           {
-            "name": "Sui Partners",
-            "url": "https://sui.io/ecosystem/",
-            "external": true            
-          },
-          {
             "name": "Sui by Example",
             "url": "https://examples.sui.io/"
+            "external": true
           },
           {
             "name": "Why We Created Sui Move",
