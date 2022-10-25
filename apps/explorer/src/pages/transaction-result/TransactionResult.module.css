@@ -126,8 +126,12 @@
     border-bottom: none;
 }
 
+.amountbox {
+    @apply mt-[10px];
+}
+
 .amountbox > :first-child {
-    @apply font-semibold text-sui-grey-100 text-[18px] h-[18px] leading-[100%] mb-[15px];
+    @apply font-semibold text-sui-grey-100 text-heading4 mb-[10px];
 }
 
 .amountbox > :nth-child(2) {
@@ -140,4 +144,8 @@
 
 .customhreflink {
     @apply no-underline;
+}
+
+.datetime {
+    @apply block sm:inline text-sui-grey-75 font-semibold text-bodySmall;
 }

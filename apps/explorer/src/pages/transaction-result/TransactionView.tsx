@@ -438,12 +438,10 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                                 ])}
                             >
                                 {txdata.timestamp_ms && (
-                                    <h3>
-                                        <span>
-                                            {convertNumberToDate(
-                                                txdata.timestamp_ms
-                                            )}
-                                        </span>
+                                    <h3 className={styles.datetime}>
+                                        {convertNumberToDate(
+                                            txdata.timestamp_ms
+                                        )}
                                     </h3>
                                 )}
                                 {amounts !== null && (
