@@ -17,6 +17,8 @@ import {
   MoveCallTransaction,
   MergeCoinTransaction,
   PayTransaction,
+  PaySuiTransaction,
+  PayAllSuiTransaction,
   SplitCoinTransaction,
   TransferObjectTransaction,
   TransferSuiTransaction,
@@ -158,6 +160,10 @@ export abstract class SignerWithProvider implements Signer {
         return this.splitCoinWithRequestType(transaction.data, requestType);
       case 'pay':
         return this.payWithRequestType(transaction.data, requestType);
+      case 'paySui':
+        return this.paySuiWithRequestType(transaction.data, requestType);
+      case 'payAllSui':
+        return this.payAllSuiWithRequestType(transaction.data, requestType);
       case 'publish':
         return this.publishWithRequestType(transaction.data, requestType);
       default:
@@ -342,6 +348,39 @@ export abstract class SignerWithProvider implements Signer {
   ): Promise<SuiExecuteTransactionResponse> {
     const signerAddress = await this.getAddress();
     const txBytes = await this.serializer.newPay(signerAddress, transaction);
+    return await this.signAndExecuteTransactionWithRequestType(
+      txBytes,
+      requestType
+    );
+  }
+
+  /**
+   * Serialize and Sign a `PaySui` transaction and submit to the fullnode for execution
+   */
+  async paySuiWithRequestType(
+    transaction: PaySuiTransaction,
+    requestType: ExecuteTransactionRequestType = 'WaitForLocalExecution'
+  ): Promise<SuiExecuteTransactionResponse> {
+    const signerAddress = await this.getAddress();
+    const txBytes = await this.serializer.newPaySui(signerAddress, transaction);
+    return await this.signAndExecuteTransactionWithRequestType(
+      txBytes,
+      requestType
+    );
+  }
+
+  /**
+   * Serialize and Sign a `PayAllSui` transaction and submit to the fullnode for execution
+   */
+  async payAllSuiWithRequestType(
+    transaction: PayAllSuiTransaction,
+    requestType: ExecuteTransactionRequestType = 'WaitForLocalExecution'
+  ): Promise<SuiExecuteTransactionResponse> {
+    const signerAddress = await this.getAddress();
+    const txBytes = await this.serializer.newPayAllSui(
+      signerAddress,
+      transaction
+    );
     return await this.signAndExecuteTransactionWithRequestType(
       txBytes,
       requestType
