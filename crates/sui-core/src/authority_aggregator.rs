@@ -19,7 +19,7 @@ use sui_config::NetworkConfig;
 use sui_network::{
     default_mysten_network_config, DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_REQUEST_TIMEOUT_SEC,
 };
-use sui_types::crypto::{AuthorityPublicKeyBytes, AuthoritySignature};
+use sui_types::crypto::{AuthorityPublicKeyBytes, AuthoritySignInfo};
 use sui_types::object::{Object, ObjectFormatOptions, ObjectRead};
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::{
@@ -1542,7 +1542,7 @@ where
 
         struct ProcessTransactionState {
             // The list of signatures gathered at any point
-            signatures: Vec<(AuthorityName, AuthoritySignature)>,
+            signatures: Vec<AuthoritySignInfo>,
             // A certificate if we manage to make or find one
             certificate: Option<CertifiedTransaction>,
             // The list of errors gathered at any point
@@ -1572,6 +1572,9 @@ where
                 |mut state, name, weight, result| {
                     Box::pin(async move {
                         match result {
+                            // TODO: Support the case of returning transaction result that
+                            // were executed in previous epochs.
+                            //
                             // If we are given back a certificate, then we do not need
                             // to re-submit this transaction, we just returned the ready made
                             // certificate.
@@ -1596,10 +1599,7 @@ where
                             }) if inner_signed_transaction.auth_sign_info.epoch == self.committee.epoch => {
                                 let tx_digest = inner_signed_transaction.digest();
                                 debug!(tx_digest = ?tx_digest, ?name, weight, "Received signed transaction from validator handle_transaction");
-                                state.signatures.push((
-                                    name,
-                                    inner_signed_transaction.auth_sign_info.signature,
-                                ));
+                                state.signatures.push(inner_signed_transaction.auth_sign_info);
                                 state.good_stake += weight;
                                 if state.good_stake >= threshold {
                                     self.metrics
@@ -1608,7 +1608,7 @@ where
                                     self.metrics.num_good_stake.observe(state.good_stake as f64);
                                     self.metrics.num_bad_stake.observe(state.bad_stake as f64);
                                     state.certificate =
-                                        Some(CertifiedTransaction::new_with_signatures(
+                                        Some(CertifiedTransaction::new_with_auth_sign_infos(
                                             transaction_ref.clone(),
                                             state.signatures.clone(),
                                             &self.committee,
@@ -1735,7 +1735,7 @@ where
         struct EffectsStakeInfo {
             stake: StakeUnit,
             effects: TransactionEffects,
-            signatures: Vec<(AuthorityName, AuthoritySignature)>,
+            signatures: Vec<AuthoritySignInfo>,
         }
         struct ProcessCertificateState {
             // Different authorities could return different effects.  We want at least one effect to come
@@ -1796,6 +1796,8 @@ where
                 },
                 |mut state, name, weight, result| {
                     Box::pin(async move {
+                        // TODO: We need to deal with signed effects from different epochs correctly.
+                        //
                         // We aggregate the effects response, until we have more than 2f
                         // and return.
                         match result {
@@ -1813,7 +1815,7 @@ where
                                         signatures: vec![],
                                     });
                                 entry.stake += weight;
-                                entry.signatures.push((name, inner_effects.auth_signature.signature));
+                                entry.signatures.push(inner_effects.auth_signature);
 
                                 if entry.stake >= threshold {
                                     debug!(
