@@ -60,7 +60,7 @@ Use this example to conduct a transaction in Sui using the Sui Devnet Full node:
 ```rust
 use std::str::FromStr;
 use sui_sdk::{
-    crypto::SuiKeystore,
+    crypto::{FileBasedKeystore, Keystore},
     types::{
         base_types::{ObjectID, SuiAddress},
         crypto::Signature,
