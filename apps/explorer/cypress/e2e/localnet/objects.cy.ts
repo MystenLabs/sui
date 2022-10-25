@@ -42,7 +42,7 @@ describe('Objects', () => {
 
                     // Find a reference to the owning address:
                     cy.contains(address).click();
-                    cy.get('[data-testid=pageheader]').contains(address);
+                    cy.url().should('include', `/addresses/${address}`);
                 });
         });
     });

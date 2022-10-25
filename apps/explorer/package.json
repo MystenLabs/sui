@@ -24,10 +24,10 @@
         "preview-storybook": "pnpm dlx serve ./storybook-static -l 6007"
     },
     "dependencies": {
-        "@mysten/core": "workspace:*",
         "@growthbook/growthbook": "^0.18.1",
         "@growthbook/growthbook-react": "^0.9.1",
         "@headlessui/react": "^1.7.2",
+        "@mysten/core": "workspace:*",
         "@mysten/sui.js": "workspace:*",
         "@sentry/react": "^7.6.0",
         "@sentry/tracing": "^7.6.0",
@@ -72,7 +72,7 @@
         "@vitest/ui": "^0.22.1",
         "autoprefixer": "^10.4.2",
         "axios": "^0.27.2",
-        "cypress": "^10.4.0",
+        "cypress": "^10.10.0",
         "eslint": "^8.22.0",
         "eslint-config-prettier": "^8.3.0",
         "eslint-config-react-app": "^7.0.1",
