@@ -214,7 +214,7 @@ To view the JSON representation of the object, include `--json` in the command.
 
 ## Transfer objects
 
-You can transfer objects you own to another address using the command below
+You can transfer mutable objects you own to another address using the command below
 
 ```shell
     sui client transfer [OPTIONS] --to <TO> --object-id <OBJECT_ID> --gas-budget <GAS_BUDGET>
