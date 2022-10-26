@@ -443,7 +443,11 @@ impl<C> SafeClient<C> {
                 &reconstructed_batch == signed_batch.data(),
                 SuiError::ByzantineAuthoritySuspicion {
                     authority: self.address,
-                    reason: "Inconsistent batch".to_string()
+                    reason: format!(
+                        "Inconsistent batch. signed: {:?}, reconstructed: {:?}",
+                        signed_batch.data(),
+                        reconstructed_batch
+                    )
                 }
             );
         }
