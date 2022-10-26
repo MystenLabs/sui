@@ -213,9 +213,9 @@ impl SpanGraph {
             let mut extra_transactions = BTreeMap::new();
             let mut active_links = span.active_links.clone();
             while let Some(link) = active_links.pop_front() {
-                match global.insert(link.diff.clone()) {
+                match global.insert(link.data.diff.clone()) {
                     Ok(_) | Err(WaypointError::NothingToDo) => {
-                        extra_transactions.extend(link.certs.clone());
+                        extra_transactions.extend(link.data.certs.clone());
                     }
                     Err(WaypointError::CannotConnect) => {
                         // Reinsert the fragment at the end

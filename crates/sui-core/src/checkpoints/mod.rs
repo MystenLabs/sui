@@ -784,9 +784,9 @@ impl CheckpointStore {
 
             // Extract the diff
             let diff = if fragment.proposer.authority() == &self.name {
-                fragment.diff
+                fragment.data.diff
             } else {
-                fragment.diff.swap()
+                fragment.data.diff.swap()
             };
 
             if let Ok(contents) = reconstructed.global.checkpoint_items(

@@ -345,18 +345,18 @@ async fn make_diffs() {
     let diff23 = p2.fragment_with(&p3);
 
     let mut global = GlobalCheckpoint::<AuthorityName, ExecutionDigests>::new();
-    global.insert(diff12.diff.clone()).unwrap();
-    global.insert(diff23.diff).unwrap();
+    global.insert(diff12.data.diff.clone()).unwrap();
+    global.insert(diff23.data.diff).unwrap();
 
     // P4 proposal not selected
     let diff41 = p4.fragment_with(&p1);
     let all_items4 = global
-        .checkpoint_items(&diff41.diff, p4.transactions().cloned().collect())
+        .checkpoint_items(&diff41.data.diff, p4.transactions().cloned().collect())
         .unwrap();
 
     // P1 proposal selected
     let all_items1 = global
-        .checkpoint_items(&diff12.diff, p1.transactions().cloned().collect())
+        .checkpoint_items(&diff12.data.diff, p1.transactions().cloned().collect())
         .unwrap();
 
     // All get the same set for the proposal
@@ -1188,7 +1188,7 @@ async fn set_fragment_external() {
         let mut certificate =
             CertifiedTransaction::new_with_auth_sign_infos(tx, sigs, &committee).unwrap();
         certificate.auth_sign_info.epoch = committee.epoch();
-        fragment12.certs.insert(digest, certificate);
+        fragment12.data.certs.insert(digest, certificate);
     }
     // let fragment13 = p1.diff_with(&p3);
 

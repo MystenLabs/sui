@@ -607,10 +607,18 @@ impl CheckpointProposal {
         CheckpointFragment {
             proposer: self.signed_summary.clone(),
             other: other_proposal.signed_summary.clone(),
-            diff,
-            certs: BTreeMap::new(),
+            data: CheckpointFragmentData {
+                diff,
+                certs: BTreeMap::new(),
+            },
         }
     }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CheckpointFragmentData {
+    pub diff: WaypointDiff<AuthorityName, ExecutionDigests>,
+    pub certs: BTreeMap<ExecutionDigests, CertifiedTransaction>,
 }
 
 // The construction of checkpoints is based on the aggregation of fragments.
@@ -618,8 +626,7 @@ impl CheckpointProposal {
 pub struct CheckpointFragment {
     pub proposer: SignedCheckpointProposalSummary,
     pub other: SignedCheckpointProposalSummary,
-    pub diff: WaypointDiff<AuthorityName, ExecutionDigests>,
-    pub certs: BTreeMap<ExecutionDigests, CertifiedTransaction>,
+    pub data: CheckpointFragmentData,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -664,28 +671,29 @@ impl CheckpointFragment {
 
         // Check consistency between checkpoint summary and waypoints.
         fp_ensure!(
-            self.diff.first.waypoint == *self.proposer.summary.waypoint
-                && self.diff.second.waypoint == *self.other.summary.waypoint
-                && &self.diff.first.key == self.proposer.authority()
-                && &self.diff.second.key == self.other.authority(),
+            self.data.diff.first.waypoint == *self.proposer.summary.waypoint
+                && self.data.diff.second.waypoint == *self.other.summary.waypoint
+                && &self.data.diff.first.key == self.proposer.authority()
+                && &self.data.diff.second.key == self.other.authority(),
             SuiError::from("Waypoint diff and checkpoint summary inconsistent")
         );
 
         // Check consistency of waypoint diff
         fp_ensure!(
-            self.diff.check(),
+            self.data.diff.check(),
             SuiError::from("Waypoint diff is not valid")
         );
 
         // Check that the fragment contains all missing certs indicated in diff.
         let digests = self
+            .data
             .diff
             .first
             .items
             .iter()
-            .chain(self.diff.second.items.iter());
+            .chain(self.data.diff.second.items.iter());
         for digest in digests {
-            let cert = self.certs.get(digest).ok_or_else(|| {
+            let cert = self.data.certs.get(digest).ok_or_else(|| {
                 SuiError::from(format!("Missing cert with digest {digest:?}").as_str())
             })?;
             cert.verify_signatures(committee)?;
