@@ -26,3 +26,7 @@
 .recipientbox h4 {
     @apply mt-[30px];
 }
+
+h4.oneheading {
+  @apply mb-[25px];
+}
