@@ -12,7 +12,7 @@ import styles from './SendReceiveView.module.css';
 type TxAddress = {
     sender: string;
     recipient?: string[];
-    amount?: string[];
+    amount?: bigint[];
 };
 //TODO: Add date format function
 function SendReceiveView({ sender, recipient, amount }: TxAddress) {
@@ -92,7 +92,7 @@ function SendReceiveView({ sender, recipient, amount }: TxAddress) {
                                 </div>
                                 <div className={styles.sui}>
                                     <span className={styles.suiamount}>
-                                        {amount?.[idx]}
+                                        {amount?.[idx].toString()}
                                     </span>
                                     <span className={styles.suilabel}>SUI</span>
                                 </div>

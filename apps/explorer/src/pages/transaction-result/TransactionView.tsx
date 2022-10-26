@@ -33,6 +33,7 @@ import type {
     CertifiedTransaction,
     TransactionKindName,
     ExecutionStatusType,
+    Pay,
     SuiTransactionKind,
     SuiObjectRef,
     SuiEvent,
@@ -237,7 +238,7 @@ function ItemView({ data }: { data: TxItemView }) {
     );
 }
 
-function SingleAmount ({amount} : {amount : number}) {
+function SingleAmount ({amount} : {amount : bigint}) {
  const formattedAmount = useFormatCoin(
         amount,
         SUI_TYPE_ARG,
@@ -247,18 +248,37 @@ function SingleAmount ({amount} : {amount : number}) {
   return <>{formattedAmount}</>;
 }
 
+const isPayType = (
+    txdetails: SuiTransactionKind
+): txdetails is { Pay: Pay } => {
+    return 'Pay' in txdetails;
+};
+
+const convertAmounts = (
+    amounts: (number | bigint | null)[]
+): bigint[] | undefined =>
+    amounts.every((amount) => amount)
+        ? amounts.map((amount) => BigInt(amount!))
+        : undefined;
+
 function TransactionView({ txdata }: { txdata: DataType }) {
     const txdetails = getTransactions(txdata)[0];
-        const amounts = txdetails.Pay
-        ? txdetails?.Pay.amounts
-        : [getTransferSuiAmount(txdetails)];
-
+    const amounts = isPayType(txdetails)
+        ? convertAmounts(txdetails.Pay.amounts)
+        : convertAmounts([getTransferSuiAmount(txdetails)]);
     const txKindName = getTransactionKindName(txdetails);
     const sender = getTransactionSender(txdata);
-    const recipients = txdetails?.Pay?.recipients || [
+
+    const recipient =
         getTransferObjectTransaction(txdetails)?.recipient ||
-            getTransferSuiTransaction(txdetails)?.recipient,
-    ];
+        getTransferSuiTransaction(txdetails)?.recipient;
+
+    const recipients = isPayType(txdetails)
+        ? txdetails.Pay.recipients
+        : recipient
+        ? [recipient]
+        : undefined;
+
     const txKindData = formatByTransactionKind(txKindName, txdetails, sender);
 
     const txEventData = txdata.events?.map(eventToDisplay);
@@ -445,16 +465,15 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                                         )}
                                     </h3>
                                 )}
-                                {amounts !== null && (
+                                { amounts && amounts !== null && (
                                     <div className={styles.amountbox}>
                                         <div>Amount</div>
                                         <div>
-                                            {(amounts.length === 1) && <SingleAmount amount={amounts[0]}/>}
-                                            { (amounts.length > 1) && 
-                                                amounts.reduce(
-                                                    (x: number, y: number) =>
+                                            {(amounts.length === 1) ? <SingleAmount amount={amounts[0]}/>
+                                                                              : <>{amounts.reduce(
+                                                    (x, y) =>
                                                         x + y
-                                                )
+                                                )}</>
                                             }
                                             <sup>SUI</sup>
                                         </div>
