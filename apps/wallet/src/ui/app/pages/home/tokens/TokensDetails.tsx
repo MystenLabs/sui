@@ -135,14 +135,18 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
                     text="Swap"
                 />
             </div>
-            <div className={st.staking}>
-                <IconLink
-                    icon={SuiIcons.Union}
-                    to="/stake"
-                    disabled={true}
-                    text="Stake & Earn SUI"
-                />
-            </div>
+
+            {coinType === GAS_TYPE_ARG || !coinType ? (
+                <div className={st.staking}>
+                    <IconLink
+                        icon={SuiIcons.Union}
+                        to="/stake"
+                        disabled={true}
+                        text="Stake & Earn SUI"
+                    />
+                </div>
+            ) : null}
+
             {!coinType ? (
                 <MyTokens
                     allCoinTypes={allCoinTypes}

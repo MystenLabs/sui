@@ -23,7 +23,7 @@ function TokenDetailsPage() {
     return (
         <div className={st.detailsPage}>
             <PageTitle title={symbol} backLink="/tokens" hideBackLabel={true} />
-            <TokenDetails coinType={GAS_TYPE_ARG} />
+            <TokenDetails coinType={coinType} />
         </div>
     );
 }
