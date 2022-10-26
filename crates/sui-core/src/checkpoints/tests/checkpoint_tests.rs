@@ -75,8 +75,8 @@ fn random_ckpoint_store_num(
     (committee, keys, stores)
 }
 
-#[test]
-fn crash_recovery() {
+#[tokio::test]
+async fn crash_recovery() {
     let mut rng = StdRng::from_seed(RNG_SEED);
     let (keys, committee) = make_committee_key(&mut rng);
     let k = keys[0].copy();
@@ -135,6 +135,10 @@ fn crash_recovery() {
     // Delete and re-open DB
     drop(cps);
 
+    // TODO: The right fix is to invoke some function on DBMap and release the rocksdb arc references
+    // being held in the background thread but this will suffice for now
+    tokio::time::sleep(Duration::from_secs(1)).await;
+
     let mut cps_new = CheckpointStore::open(
         &path,
         None,
@@ -163,8 +167,8 @@ fn crash_recovery() {
     );
 }
 
-#[test]
-fn make_checkpoint_db() {
+#[tokio::test]
+async fn make_checkpoint_db() {
     let (_committee, _keys, mut stores) = random_ckpoint_store();
     let (_, mut cps) = stores.pop().unwrap();
 
@@ -217,8 +221,8 @@ fn make_checkpoint_db() {
     assert_eq!(cp_seq, 0);
 }
 
-#[test]
-fn make_proposals() {
+#[tokio::test]
+async fn make_proposals() {
     let (committee, _keys, mut stores) = random_ckpoint_store();
     let (_, mut cps1) = stores.pop().unwrap();
     let (_, mut cps2) = stores.pop().unwrap();
@@ -305,8 +309,8 @@ fn make_proposals() {
     );
 }
 
-#[test]
-fn make_diffs() {
+#[tokio::test]
+async fn make_diffs() {
     let (committee, _keys, mut stores) = random_ckpoint_store();
     let (_, mut cps1) = stores.pop().unwrap();
     let (_, mut cps2) = stores.pop().unwrap();
@@ -359,8 +363,8 @@ fn make_diffs() {
     assert_eq!(all_items1, all_items4);
 }
 
-#[test]
-fn latest_proposal() {
+#[tokio::test]
+async fn latest_proposal() {
     let (committee, _keys, mut stores) = random_ckpoint_store();
     let (_, mut cps1) = stores.pop().unwrap();
     let (_, mut cps2) = stores.pop().unwrap();
@@ -580,8 +584,8 @@ fn latest_proposal() {
     }
 }
 
-#[test]
-fn update_processed_transactions_already_in_checkpoint() {
+#[tokio::test]
+async fn update_processed_transactions_already_in_checkpoint() {
     let (_committee, _keys, mut stores) = random_ckpoint_store_num(1);
     let (_, mut cps) = stores.pop().unwrap();
 
@@ -602,8 +606,8 @@ fn update_processed_transactions_already_in_checkpoint() {
     );
 }
 
-#[test]
-fn set_get_checkpoint() {
+#[tokio::test]
+async fn set_get_checkpoint() {
     let (committee, _keys, mut stores) = random_ckpoint_store();
     let (_, mut cps1) = stores.pop().unwrap();
     let (_, mut cps2) = stores.pop().unwrap();
@@ -783,8 +787,8 @@ fn set_get_checkpoint() {
     ));
 }
 
-#[test]
-fn checkpoint_integration() {
+#[tokio::test]
+async fn checkpoint_integration() {
     telemetry_subscribers::init_for_testing();
 
     let mut rng = StdRng::from_seed(RNG_SEED);
@@ -1095,6 +1099,10 @@ async fn test_batch_to_checkpointing_init_crash() {
         _join.await.expect("No errors in task").expect("ok");
     }
 
+    // TODO: The right fix is to invoke some function on DBMap and release the rocksdb arc references
+    // being held in the background thread but this will suffice for now
+    tokio::time::sleep(Duration::from_secs(1)).await;
+
     // Scope to ensure all variables are dropped
     {
         let (tx_reconfigure_consensus, _rx_reconfigure_consensus) = tokio::sync::mpsc::channel(10);
@@ -1124,8 +1132,8 @@ async fn test_batch_to_checkpointing_init_crash() {
     }
 }
 
-#[test]
-fn set_fragment_external() {
+#[tokio::test]
+async fn set_fragment_external() {
     let (committee, keys, mut test_objects) = random_ckpoint_store();
     let (test_tx, _rx) = TestConsensus::new();
 
@@ -1198,8 +1206,8 @@ fn set_fragment_external() {
         .is_err());
 }
 
-#[test]
-fn set_fragment_reconstruct() {
+#[tokio::test]
+async fn set_fragment_reconstruct() {
     telemetry_subscribers::init_for_testing();
     let (committee, _keys, mut test_objects) = random_ckpoint_store();
     let (_, mut cps1) = test_objects.pop().unwrap();
@@ -1245,8 +1253,8 @@ fn set_fragment_reconstruct() {
     assert_eq!(reconstruction.global.authority_waypoints.len(), 4);
 }
 
-#[test]
-fn set_fragment_reconstruct_two_components() {
+#[tokio::test]
+async fn set_fragment_reconstruct_two_components() {
     let (committee, _keys, mut test_objects) = random_ckpoint_store_num(2 * 3 + 1);
 
     let t2 = ExecutionDigests::random();
@@ -1299,8 +1307,8 @@ fn set_fragment_reconstruct_two_components() {
     assert_eq!(reconstruction.global.authority_waypoints.len(), 5);
 }
 
-#[test]
-fn set_fragment_reconstruct_two_mutual() {
+#[tokio::test]
+async fn set_fragment_reconstruct_two_mutual() {
     let (committee, _, mut test_objects) = random_ckpoint_store_num(4);
 
     let t2 = ExecutionDigests::random();
@@ -1355,8 +1363,8 @@ impl TestConsensus {
     }
 }
 
-#[test]
-fn test_fragment_full_flow() {
+#[tokio::test]
+async fn test_fragment_full_flow() {
     let (committee, _keys, mut test_objects) = random_ckpoint_store_num(2 * 3 + 1);
 
     let (test_tx, rx) = TestConsensus::new();
@@ -1503,8 +1511,8 @@ fn test_fragment_full_flow() {
     // But recording of fragments is closed
 }
 
-#[test]
-fn test_slow_fragment() {
+#[tokio::test]
+async fn test_slow_fragment() {
     let (committee, _keys, mut cp_stores) = random_ckpoint_store();
     let proposals: Vec<_> = cp_stores
         .iter_mut()

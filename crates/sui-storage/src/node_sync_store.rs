@@ -269,8 +269,8 @@ mod test {
     use super::*;
     use sui_types::crypto::{get_authority_key_pair, KeypairTraits};
 
-    #[test]
-    fn test_stake_votes() {
+    #[tokio::test]
+    async fn test_stake_votes() {
         let db = NodeSyncStore::new_for_test();
 
         let epoch_id: EpochId = 1;

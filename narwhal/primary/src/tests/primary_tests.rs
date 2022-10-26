@@ -400,7 +400,7 @@ async fn test_process_payload_availability_success() {
             certificate_store.write(certificate.clone()).unwrap();
 
             for payload in certificate.header.payload {
-                payload_store.write(payload, 1).await;
+                payload_store.async_write(payload, 1).await;
             }
         } else {
             missing_certificates.insert(id);

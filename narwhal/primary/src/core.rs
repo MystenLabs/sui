@@ -297,7 +297,9 @@ impl Core {
         }
 
         // Store the header.
-        self.header_store.write(header.id, header.clone()).await;
+        self.header_store
+            .async_write(header.id, header.clone())
+            .await;
 
         self.metrics
             .headers_processed
@@ -382,14 +384,14 @@ impl Core {
         // that are stored in the header store. This strategy can be used to re-deliver votes to
         // ensure progress / liveness.
         self.vote_digest_store
-            .write(
+            .sync_write(
                 header.author.clone(),
                 RoundVoteDigestPair {
                     round: header.round,
                     vote_digest,
                 },
             )
-            .await;
+            .await?;
 
         Ok(())
     }

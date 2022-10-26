@@ -538,6 +538,8 @@ TypedStoreError:
         NEWTYPE: STR
     3:
       CrossDBBatch: UNIT
+    4:
+      MetricsReporting: UNIT
 UpdateItem:
   ENUM:
     0:

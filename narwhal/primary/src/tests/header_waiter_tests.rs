@@ -104,7 +104,7 @@ async fn successfully_synchronize_batches() {
 
         // now simulate the write of the batch to the payload store
         payload_store
-            .write_all(missing_digests.into_iter().map(|e| ((e, worker_id), 1)))
+            .sync_write_all(missing_digests.into_iter().map(|e| ((e, worker_id), 1)))
             .await
             .unwrap();
 

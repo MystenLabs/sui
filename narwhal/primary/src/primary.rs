@@ -722,7 +722,7 @@ impl WorkerToPrimary for WorkerReceiverHandler {
     ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
         let message = request.into_body();
         self.payload_store
-            .write((message.digest, message.worker_id), 0u8)
+            .async_write((message.digest, message.worker_id), 0u8)
             .await;
         Ok(anemo::Response::new(()))
     }

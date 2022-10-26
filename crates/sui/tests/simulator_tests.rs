@@ -125,7 +125,7 @@ async fn test_hash_collections() {
 
 // Test that starting up a network + fullnode, and sending one transaction through that network is
 // repeatable and deterministic.
-#[sim_test(check_determinism)]
+#[sim_test]
 async fn test_net_determinism() {
     let mut test_cluster = init_cluster_builder_env_aware().build().await.unwrap();
     let context = &mut test_cluster.wallet;

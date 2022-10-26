@@ -340,9 +340,9 @@ mod tests {
         }
     }
 
-    #[test]
+    #[tokio::test]
     #[allow(clippy::redundant_clone)]
-    fn causal_just_reorder() {
+    async fn causal_just_reorder() {
         let mut rng = StdRng::from_seed([1; 32]);
         let (keys, committee) = make_committee_key(&mut rng);
         let k = keys[0].copy();
@@ -468,9 +468,9 @@ mod tests {
         assert_eq!(x.len(), 4);
     }
 
-    #[test]
+    #[tokio::test]
     // Check that we are summing up the gas costs of txns correctly.
-    fn test_gas_costs() {
+    async fn test_gas_costs() {
         let (_committee, _keys, mut stores) = random_ckpoint_store();
         let (_, mut cps) = stores.pop().unwrap();
         let txn_digest_0 = TransactionDigest::random();
