@@ -110,8 +110,6 @@ combine = { version = "4", features = ["alloc", "bytes", "std"] }
 comfy-table = { version = "6", features = ["crossterm", "tty"] }
 config = { version = "0.11", features = ["hjson", "ini", "json", "rust-ini", "serde-hjson", "serde_json", "toml", "yaml", "yaml-rust"] }
 console = { version = "0.15", default-features = false, features = ["ansi-parsing", "unicode-width"] }
-console-api = { version = "0.4", default-features = false, features = ["transport"] }
-console-subscriber = { version = "0.1", features = ["env-filter"] }
 const-oid = { version = "0.9", default-features = false }
 constant_time_eq = { version = "0.1", default-features = false }
 core2 = { version = "0.4", default-features = false, features = ["alloc"] }
@@ -407,7 +405,6 @@ prometheus = { version = "0.13", features = ["protobuf"] }
 proptest = { version = "1", features = ["bit-set", "break-dead-code", "fork", "lazy_static", "quick-error", "regex-syntax", "rusty-fork", "std", "tempfile", "timeout"] }
 prost-93f6ce9d446188ac = { package = "prost", version = "0.10", features = ["prost-derive", "std"] }
 prost-a6292c17cd707f01 = { package = "prost", version = "0.11", features = ["prost-derive", "std"] }
-prost-types = { version = "0.11", features = ["std"] }
 protobuf = { version = "2", default-features = false }
 ptree = { version = "0.4", features = ["ansi", "ansi_term", "atty", "conf", "config", "directories", "petgraph", "serde-value", "tint", "value"] }
 quick-error-dff4ba8e3ae991db = { package = "quick-error", version = "1", default-features = false }
@@ -520,7 +517,7 @@ tap = { version = "1", default-features = false }
 target-lexicon = { version = "0.12", features = ["std"] }
 target-spec = { version = "1", default-features = false, features = ["serde", "summaries"] }
 telemetry-subscribers-c65f7effa3be6d31 = { package = "telemetry-subscribers", version = "0.1", features = ["chrome", "jaeger", "opentelemetry", "opentelemetry-jaeger", "tracing-chrome", "tracing-opentelemetry"] }
-telemetry-subscribers-6f8ce4dd05d13bba = { package = "telemetry-subscribers", version = "0.2", features = ["chrome", "console-subscriber", "jaeger", "opentelemetry", "opentelemetry-jaeger", "tokio-console", "tracing-chrome", "tracing-opentelemetry"] }
+telemetry-subscribers-6f8ce4dd05d13bba = { package = "telemetry-subscribers", version = "0.2", features = ["chrome", "jaeger", "opentelemetry", "opentelemetry-jaeger", "tracing-chrome", "tracing-opentelemetry"] }
 tempfile = { version = "3", default-features = false }
 tera = { version = "1", features = ["builtins", "chrono", "chrono-tz", "humansize", "percent-encoding", "rand", "slug", "urlencode"] }
 termcolor = { version = "1", default-features = false }
@@ -733,8 +730,6 @@ combine = { version = "4", features = ["alloc", "bytes", "std"] }
 comfy-table = { version = "6", features = ["crossterm", "tty"] }
 config = { version = "0.11", features = ["hjson", "ini", "json", "rust-ini", "serde-hjson", "serde_json", "toml", "yaml", "yaml-rust"] }
 console = { version = "0.15", default-features = false, features = ["ansi-parsing", "unicode-width"] }
-console-api = { version = "0.4", default-features = false, features = ["transport"] }
-console-subscriber = { version = "0.1", features = ["env-filter"] }
 const-oid = { version = "0.9", default-features = false }
 constant_time_eq = { version = "0.1", default-features = false }
 core2 = { version = "0.4", default-features = false, features = ["alloc"] }
@@ -1083,7 +1078,7 @@ prost-a6292c17cd707f01 = { package = "prost", version = "0.11", features = ["pro
 prost-build = { version = "0.11" }
 prost-derive-93f6ce9d446188ac = { package = "prost-derive", version = "0.10", default-features = false }
 prost-derive-a6292c17cd707f01 = { package = "prost-derive", version = "0.11", default-features = false }
-prost-types = { version = "0.11", features = ["std"] }
+prost-types = { version = "0.11", default-features = false }
 protobuf = { version = "2", default-features = false }
 ptree = { version = "0.4", features = ["ansi", "ansi_term", "atty", "conf", "config", "directories", "petgraph", "serde-value", "tint", "value"] }
 quick-error-dff4ba8e3ae991db = { package = "quick-error", version = "1", default-features = false }
@@ -1221,7 +1216,7 @@ tap = { version = "1", default-features = false }
 target-lexicon = { version = "0.12", features = ["std"] }
 target-spec = { version = "1", default-features = false, features = ["serde", "summaries"] }
 telemetry-subscribers-c65f7effa3be6d31 = { package = "telemetry-subscribers", version = "0.1", features = ["chrome", "jaeger", "opentelemetry", "opentelemetry-jaeger", "tracing-chrome", "tracing-opentelemetry"] }
-telemetry-subscribers-6f8ce4dd05d13bba = { package = "telemetry-subscribers", version = "0.2", features = ["chrome", "console-subscriber", "jaeger", "opentelemetry", "opentelemetry-jaeger", "tokio-console", "tracing-chrome", "tracing-opentelemetry"] }
+telemetry-subscribers-6f8ce4dd05d13bba = { package = "telemetry-subscribers", version = "0.2", features = ["chrome", "jaeger", "opentelemetry", "opentelemetry-jaeger", "tracing-chrome", "tracing-opentelemetry"] }
 tempfile = { version = "3", default-features = false }
 tera = { version = "1", features = ["builtins", "chrono", "chrono-tz", "humansize", "percent-encoding", "rand", "slug", "urlencode"] }
 termcolor = { version = "1", default-features = false }

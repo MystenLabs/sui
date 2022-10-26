@@ -1286,42 +1286,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "console-api"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e57ff02e8ad8e06ab9731d5dc72dc23bef9200778eae1a89d555d8c42e5d4a86"
-dependencies = [
- "prost 0.11.0",
- "prost-types",
- "tonic",
- "tracing-core",
-]
-
-[[package]]
-name = "console-subscriber"
-version = "0.1.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "22a3a81dfaf6b66bce5d159eddae701e3a002f194d378cbf7be5f053c281d9be"
-dependencies = [
- "console-api",
- "crossbeam-channel",
- "crossbeam-utils",
- "futures",
- "hdrhistogram",
- "humantime",
- "prost-types",
- "serde 1.0.147",
- "serde_json",
- "thread_local",
- "tokio",
- "tokio-stream",
- "tonic",
- "tracing",
- "tracing-core",
- "tracing-subscriber 0.3.15",
-]
-
-[[package]]
 name = "const-oid"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8945,7 +8909,6 @@ version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e2a01f8161eb6d52700ec8f82a9432b425db5d1729ac747b52d34dfc9f4f0902"
 dependencies = [
- "console-subscriber",
  "crossterm 0.25.0",
  "once_cell",
  "opentelemetry 0.18.0",
@@ -10449,8 +10412,6 @@ dependencies = [
  "comfy-table",
  "config",
  "console",
- "console-api",
- "console-subscriber",
  "const-oid",
  "constant_time_eq",
  "core-foundation",
