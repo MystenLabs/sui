@@ -104,7 +104,7 @@ class YourWallet implements Wallet {
           chains: [SUI_DEVNET_CHAIN],
           // The features that this account supports. This can be a subset of the wallet's supported features.
           // These features must exist on the wallet as well.
-          features: ["sui:signAndExecuteTransaction", "standard:signMessage"],
+          features: ["sui:signAndExecuteTransaction"],
         })
     );
   }
