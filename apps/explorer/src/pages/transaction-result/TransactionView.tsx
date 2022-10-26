@@ -42,7 +42,7 @@ import type {
 
 import styles from './TransactionResult.module.css';
 
-import { useFormatCoin } from '~/hooks/useFormatCoin';
+import { CoinFormat, useFormatCoin } from '~/hooks/useFormatCoin';
 import { Banner } from '~/ui/Banner';
 import { PageHeader } from '~/ui/PageHeader';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
@@ -242,7 +242,11 @@ function ItemView({ data }: { data: TxItemView }) {
 function TransactionView({ txdata }: { txdata: DataType }) {
     const txdetails = getTransactions(txdata)[0];
     const amount = getTransferSuiAmount(txdetails);
-    const [formattedAmount] = useFormatCoin(amount, SUI_TYPE_ARG);
+    const [formattedAmount] = useFormatCoin(
+        amount,
+        SUI_TYPE_ARG,
+        CoinFormat.FULL
+    );
     const txKindName = getTransactionKindName(txdetails);
     const sender = getTransactionSender(txdata);
     const recipient =

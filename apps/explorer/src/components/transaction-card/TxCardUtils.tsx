@@ -24,7 +24,6 @@ import { ReactComponent as ContentArrowRight } from '../../assets/SVGIcons/16px/
 import Longtext from '../../components/longtext/Longtext';
 import { DefaultRpcClient } from '../../utils/api/DefaultRpcClient';
 import { type Network } from '../../utils/api/rpcSetting';
-import { numberSuffix } from '../../utils/numberUtil';
 import { deduplicate } from '../../utils/searchUtil';
 import { truncate } from '../../utils/stringUtils';
 import { timeAgo } from '../../utils/timeUtils';
@@ -64,7 +63,7 @@ type TxStatus = {
     status: ExecutionStatusType;
 };
 
-export function SuiAmount({ amount }: { amount: bigint | string | undefined }) {
+export function SuiAmount({ amount }: { amount: bigint | number | string | undefined }) {
     const [formattedAmount] = useFormatCoin(amount, SUI_TYPE_ARG);
 
     if (amount) {
@@ -187,9 +186,8 @@ export const genTableDataFromTxData = (
                     }}
                 />
             ),
-            // TODO: Remove numberSuffix
             amounts: <SuiAmount amount={txn.suiAmount} />,
-            gas: <SuiAmount amount={numberSuffix(txn.txGas)} />,
+            gas: <SuiAmount amount={txn.txGas} />,
         })),
         columns: [
             {

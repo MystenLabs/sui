@@ -101,7 +101,8 @@ const numberFormatter = new Intl.NumberFormat('en', {
 // today, but it really shouldn't in a perfect world.
 export function useFormatCoin(
     balance?: bigint | number | string | null,
-    coinType?: string | null
+    coinType?: string | null,
+    format: CoinFormat = CoinFormat.ROUNDED
 ): FormattedCoin {
     const suiDenomination = useFeature(SUI_DENOMINATION_FEATURE).on;
     const symbol = useMemo(
@@ -121,8 +122,8 @@ export function useFormatCoin(
 
         if (!isFetched) return '...';
 
-        return formatBalance(balance, decimals);
-    }, [decimals, isError, isFetched, suiDenomination, balance]);
+        return formatBalance(balance, decimals, format);
+    }, [decimals, isError, isFetched, suiDenomination, balance, format]);
 
     return [formatted, symbol, queryResult];
 }
