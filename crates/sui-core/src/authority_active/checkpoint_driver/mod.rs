@@ -1000,7 +1000,7 @@ where
     diff_certs.extend(
         existing
             .into_iter()
-            .map(|(digests, cert_opt)| (*digests, cert_opt.unwrap())),
+            .map(|(digests, cert_opt)| (*digests, cert_opt.unwrap().into())),
     );
 
     let downloads: Vec<_> = missing
@@ -1014,7 +1014,8 @@ where
                     .handle_cert_info_request(&digests.transaction, Some(Duration::from_secs(5)))
                     .await?
                     .certified_transaction
-                    .unwrap();
+                    .unwrap()
+                    .into_inner();
                 // TODO: Should we insert the cert to the db?
                 Ok((*digests, cert)) as SuiResult<_>
             }
