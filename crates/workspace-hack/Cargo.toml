@@ -277,7 +277,7 @@ lexical-core = { version = "0.7", features = ["arrayvec", "correct", "ryu", "sta
 libc = { version = "0.2", features = ["std"] }
 libm = { version = "0.2" }
 librocksdb-sys = { version = "0.8", features = ["bzip2", "bzip2-sys", "libz-sys", "lz4", "snappy", "static", "zlib", "zstd", "zstd-sys"] }
-libsqlite3-sys = { version = "0.24", default-features = false, features = ["bundled", "bundled_bindings", "cc", "pkg-config", "unlock_notify", "vcpkg"] }
+libsqlite3-sys = { version = "0.25", default-features = false, features = ["bundled", "bundled_bindings", "cc", "pkg-config", "unlock_notify", "vcpkg"] }
 libtest-mimic = { version = "0.5", default-features = false }
 libz-sys = { version = "1", default-features = false, features = ["static"] }
 linked-hash-map = { version = "0.5", default-features = false }
@@ -501,9 +501,9 @@ soketto = { version = "0.7" }
 spin-274715c4dabd11b0 = { package = "spin", version = "0.9", features = ["barrier", "lazy", "lock_api", "lock_api_crate", "mutex", "once", "rwlock", "spin_mutex"] }
 spki = { version = "0.6", default-features = false, features = ["alloc", "base64ct", "std"] }
 sqlformat = { version = "0.2", default-features = false }
-sqlx = { version = "0.6", features = ["_rt-tokio", "macros", "migrate", "runtime-tokio-rustls", "sqlite", "sqlx-macros"] }
-sqlx-core = { version = "0.6", default-features = false, features = ["_rt-tokio", "_tls-rustls", "any", "crc", "flume", "futures-executor", "libsqlite3-sys", "migrate", "runtime-tokio-rustls", "rustls", "rustls-pemfile", "sha2", "sqlite", "tokio-stream", "webpki-roots"] }
-sqlx-rt = { version = "0.6", default-features = false, features = ["_rt-tokio", "_tls-rustls", "once_cell", "runtime-tokio-rustls", "tokio", "tokio-rustls"] }
+sqlx = { git = "https://github.com/huitseeker/sqlx", branch = "update_libsqlite3", features = ["_rt-tokio", "macros", "migrate", "runtime-tokio-rustls", "sqlite", "sqlx-macros"] }
+sqlx-core = { git = "https://github.com/huitseeker/sqlx", branch = "update_libsqlite3", default-features = false, features = ["_rt-tokio", "_tls-rustls", "any", "crc", "flume", "futures-executor", "libsqlite3-sys", "migrate", "runtime-tokio-rustls", "rustls", "rustls-pemfile", "sha2", "sqlite", "tokio-stream", "webpki-roots"] }
+sqlx-rt = { git = "https://github.com/huitseeker/sqlx", branch = "update_libsqlite3", default-features = false, features = ["_rt-tokio", "_tls-rustls", "once_cell", "runtime-tokio-rustls", "tokio", "tokio-rustls"] }
 stable_deref_trait = { version = "1", features = ["alloc", "std"] }
 static_assertions = { version = "1", default-features = false }
 stringprep = { version = "0.1", default-features = false }
@@ -925,7 +925,7 @@ libc = { version = "0.2", features = ["std"] }
 libloading = { version = "0.7", default-features = false }
 libm = { version = "0.2" }
 librocksdb-sys = { version = "0.8", features = ["bzip2", "bzip2-sys", "libz-sys", "lz4", "snappy", "static", "zlib", "zstd", "zstd-sys"] }
-libsqlite3-sys = { version = "0.24", default-features = false, features = ["bundled", "bundled_bindings", "cc", "pkg-config", "unlock_notify", "vcpkg"] }
+libsqlite3-sys = { version = "0.25", default-features = false, features = ["bundled", "bundled_bindings", "cc", "pkg-config", "unlock_notify", "vcpkg"] }
 libtest-mimic = { version = "0.5", default-features = false }
 libz-sys = { version = "1", default-features = false, features = ["static"] }
 linked-hash-map = { version = "0.5", default-features = false }
@@ -1195,10 +1195,10 @@ soketto = { version = "0.7" }
 spin-274715c4dabd11b0 = { package = "spin", version = "0.9", features = ["barrier", "lazy", "lock_api", "lock_api_crate", "mutex", "once", "rwlock", "spin_mutex"] }
 spki = { version = "0.6", default-features = false, features = ["alloc", "base64ct", "std"] }
 sqlformat = { version = "0.2", default-features = false }
-sqlx = { version = "0.6", features = ["_rt-tokio", "macros", "migrate", "runtime-tokio-rustls", "sqlite", "sqlx-macros"] }
-sqlx-core = { version = "0.6", default-features = false, features = ["_rt-tokio", "_tls-rustls", "any", "crc", "flume", "futures-executor", "libsqlite3-sys", "migrate", "runtime-tokio-rustls", "rustls", "rustls-pemfile", "sha2", "sqlite", "tokio-stream", "webpki-roots"] }
-sqlx-macros = { version = "0.6", default-features = false, features = ["_rt-tokio", "migrate", "runtime-tokio-rustls", "sha2", "sqlite"] }
-sqlx-rt = { version = "0.6", default-features = false, features = ["_rt-tokio", "_tls-rustls", "once_cell", "runtime-tokio-rustls", "tokio", "tokio-rustls"] }
+sqlx = { git = "https://github.com/huitseeker/sqlx", branch = "update_libsqlite3", features = ["_rt-tokio", "macros", "migrate", "runtime-tokio-rustls", "sqlite", "sqlx-macros"] }
+sqlx-core = { git = "https://github.com/huitseeker/sqlx", branch = "update_libsqlite3", default-features = false, features = ["_rt-tokio", "_tls-rustls", "any", "crc", "flume", "futures-executor", "libsqlite3-sys", "migrate", "runtime-tokio-rustls", "rustls", "rustls-pemfile", "sha2", "sqlite", "tokio-stream", "webpki-roots"] }
+sqlx-macros = { git = "https://github.com/huitseeker/sqlx", branch = "update_libsqlite3", default-features = false, features = ["_rt-tokio", "migrate", "runtime-tokio-rustls", "sha2", "sqlite"] }
+sqlx-rt = { git = "https://github.com/huitseeker/sqlx", branch = "update_libsqlite3", default-features = false, features = ["_rt-tokio", "_tls-rustls", "once_cell", "runtime-tokio-rustls", "tokio", "tokio-rustls"] }
 stable_deref_trait = { version = "1", features = ["alloc", "std"] }
 static_assertions = { version = "1", default-features = false }
 stringprep = { version = "0.1", default-features = false }
