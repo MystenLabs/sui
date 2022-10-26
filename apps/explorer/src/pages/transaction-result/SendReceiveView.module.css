@@ -12,7 +12,7 @@
 }
 
 .oneaddress {
-    @apply flex gap-[6px] items-center;
+    @apply flex gap-[6px] items-center mt-[20px];
 }
 
 .recipientbox {
@@ -28,5 +28,5 @@
 }
 
 h4.oneheading {
-  @apply mb-[25px];
+    @apply mb-[25px];
 }

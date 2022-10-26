@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import cl from 'clsx';
 
-import { ReactComponent as LShapeIcon} from '../../assets/LShape.svg';
+import { ReactComponent as LShapeIcon } from '../../assets/LShape.svg';
 import { ReactComponent as DoneIcon } from '../../assets/SVGIcons/Done.svg';
 import { ReactComponent as StartIcon } from '../../assets/SVGIcons/Start.svg';
 import Longtext from '../../components/longtext/Longtext';
@@ -20,7 +20,9 @@ function SendRecieveView({ data }: { data: TxAddress }) {
             <div className={styles.txaddress} data-testid="transaction-sender">
                 <h4 className={styles.oneheading}>Sender &#x26; Recipient</h4>
                 <div className={styles.oneaddress}>
-                    <StartIcon />
+                    <div className="z-0">
+                        <StartIcon />
+                    </div>
                     <Longtext
                         text={data.sender}
                         category="addresses"
@@ -29,14 +31,17 @@ function SendRecieveView({ data }: { data: TxAddress }) {
                 </div>
                 <div>
                     {data.recipient.map((add: string, idx: number) => (
-                        <div className={styles.oneaddress} key={idx}>
-                            <DoneIcon />
-                            <Longtext
-                                text={add}
-                                category="addresses"
-                                isLink={true}
-                                alttext={add}
-                            />
+                        <div key={idx} className="flex ml-[7px] mt-[-7px] z-10">
+                            <LShapeIcon />
+                            <div className={styles.oneaddress}>
+                                <DoneIcon />
+                                <Longtext
+                                    text={add}
+                                    category="addresses"
+                                    isLink={true}
+                                    alttext={add}
+                                />
+                            </div>
                         </div>
                     ))}
                 </div>
