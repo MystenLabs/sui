@@ -24,9 +24,12 @@ function CoinBalance({ type, balance, mode = 'row-item' }: CoinProps) {
 
     const navigate = useNavigate();
 
+    // TODO: use a different logic to differentiate between view types
     const coinDetail = useCallback(() => {
+        if (mode !== 'row-item') return;
+
         navigate(`/tokens/details?type=${encodeURIComponent(type)}`);
-    }, [navigate, type]);
+    }, [mode, navigate, type]);
 
     return (
         <div
