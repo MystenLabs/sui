@@ -15,7 +15,7 @@ use std::{
     },
 };
 
-use anyhow::{anyhow, ensure};
+use anyhow::anyhow;
 use arc_swap::ArcSwap;
 use chrono::prelude::*;
 use fastcrypto::traits::KeyPair;
@@ -1943,12 +1943,11 @@ impl AuthorityState {
         descending: bool,
     ) -> Result<Vec<(EventID, SuiEventEnvelope)>, anyhow::Error> {
         let es = self.get_event_store().ok_or(SuiError::NoEventStore)?;
-        let cursor = cursor.map(Self::parse_event_id).transpose()?;
         let cursor = cursor.unwrap_or(if descending {
             // Database only support up to i64::MAX
-            (i64::MAX as u64, i64::MAX as u64)
+            (i64::MAX, i64::MAX).into()
         } else {
-            (0, 0)
+            (0, 0).into()
         });
 
         let stored_events = match query {
@@ -2008,12 +2007,6 @@ impl AuthorityState {
             }
         }
         Ok(events)
-    }
-
-    fn parse_event_id(id: EventID) -> Result<(u64, u64), anyhow::Error> {
-        let values = id.split(':').collect::<Vec<_>>();
-        ensure!(values.len() == 2, "Malformed EventID : {id}");
-        Ok((u64::from_str(values[0])?, u64::from_str(values[1])?))
     }
 
     pub async fn insert_genesis_object(&self, object: Object) {

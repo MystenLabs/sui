@@ -448,19 +448,19 @@ async fn test_get_fullnode_events() -> Result<(), anyhow::Error> {
         .event_api()
         .get_events(
             EventQuery::All,
-            Some("2:0".into()),
+            Some((2, 0).into()),
             Some(3),
             Ordering::Ascending,
         )
         .await
         .unwrap();
     assert_eq!(3, page1.data.len());
-    assert_eq!(Some("5:0".into()), page1.next_cursor);
+    assert_eq!(Some((5, 0).into()), page1.next_cursor);
     let page2 = client
         .event_api()
         .get_events(
             EventQuery::All,
-            Some("5:0".into()),
+            Some((5, 0).into()),
             Some(20),
             Ordering::Ascending,
         )
@@ -476,12 +476,12 @@ async fn test_get_fullnode_events() -> Result<(), anyhow::Error> {
         .await
         .unwrap();
     assert_eq!(3, page1.data.len());
-    assert_eq!(Some("16:0".into()), page1.next_cursor);
+    assert_eq!(Some((16, 0).into()), page1.next_cursor);
     let page2 = client
         .event_api()
         .get_events(
             EventQuery::All,
-            Some("16:0".into()),
+            Some((16, 0).into()),
             None,
             Ordering::Descending,
         )

@@ -425,7 +425,7 @@
           "name": "cursor",
           "description": "optional paging cursor",
           "schema": {
-            "type": "string"
+            "$ref": "#/components/schemas/EventID"
           }
         },
         {
@@ -450,7 +450,7 @@
         "name": "EventPage",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/Page_for_EventEnvelope_and_String"
+          "$ref": "#/components/schemas/Page_for_EventEnvelope_and_EventID"
         }
       },
       "examples": [
@@ -465,7 +465,7 @@
             },
             {
               "name": "cursor",
-              "value": 10
+              "value": "10:0"
             },
             {
               "name": "limit",
@@ -1215,7 +1215,7 @@
             },
             {
               "name": "cursor",
-              "value": 10
+              "value": "8n7y9+zMf7DVqvLCAi+Xd1qrSBa7vjWoF5keAEUxCbo="
             },
             {
               "name": "limit",
@@ -2668,6 +2668,9 @@
           }
         ]
       },
+      "EventID": {
+        "type": "string"
+      },
       "EventQuery": {
         "oneOf": [
           {
@@ -3443,7 +3446,7 @@
           }
         ]
       },
-      "Page_for_EventEnvelope_and_String": {
+      "Page_for_EventEnvelope_and_EventID": {
         "type": "object",
         "required": [
           "data"
@@ -3456,9 +3459,13 @@
             }
           },
           "nextCursor": {
-            "type": [
-              "string",
-              "null"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EventID"
+              },
+              {
+                "type": "null"
+              }
             ]
           }
         }

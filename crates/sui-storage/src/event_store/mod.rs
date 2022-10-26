@@ -403,7 +403,7 @@ pub trait EventStore {
     /// Returns at most `limit` events emitted by all transaction, ordered .
     async fn all_events(
         &self,
-        cursor: (u64, u64),
+        cursor: EventID,
         limit: usize,
         descending: bool,
     ) -> Result<Vec<StoredEvent>, SuiError>;
@@ -412,7 +412,7 @@ pub trait EventStore {
     async fn events_by_transaction(
         &self,
         digest: TransactionDigest,
-        cursor: (u64, u64),
+        cursor: EventID,
         limit: usize,
         descending: bool,
     ) -> Result<Vec<StoredEvent>, SuiError>;
@@ -423,7 +423,7 @@ pub trait EventStore {
     async fn events_by_type(
         &self,
         event_type: EventType,
-        cursor: (u64, u64),
+        cursor: EventID,
         limit: usize,
         descending: bool,
     ) -> Result<Vec<StoredEvent>, SuiError>;
@@ -433,7 +433,7 @@ pub trait EventStore {
     async fn events_by_module_id(
         &self,
         module: &ModuleId,
-        cursor: (u64, u64),
+        cursor: EventID,
         limit: usize,
         descending: bool,
     ) -> Result<Vec<StoredEvent>, SuiError>;
@@ -444,7 +444,7 @@ pub trait EventStore {
     async fn events_by_move_event_struct_name(
         &self,
         move_event_struct_name: &str,
-        cursor: (u64, u64),
+        cursor: EventID,
         limit: usize,
         descending: bool,
     ) -> Result<Vec<StoredEvent>, SuiError>;
@@ -454,7 +454,7 @@ pub trait EventStore {
     async fn events_by_sender(
         &self,
         sender: &SuiAddress,
-        cursor: (u64, u64),
+        cursor: EventID,
         limit: usize,
         descending: bool,
     ) -> Result<Vec<StoredEvent>, SuiError>;
@@ -464,7 +464,7 @@ pub trait EventStore {
     async fn events_by_recipient(
         &self,
         recipient: &Owner,
-        cursor: (u64, u64),
+        cursor: EventID,
         limit: usize,
         descending: bool,
     ) -> Result<Vec<StoredEvent>, SuiError>;
@@ -474,7 +474,7 @@ pub trait EventStore {
     async fn events_by_object(
         &self,
         object: &ObjectID,
-        cursor: (u64, u64),
+        cursor: EventID,
         limit: usize,
         descending: bool,
     ) -> Result<Vec<StoredEvent>, SuiError>;
@@ -485,7 +485,7 @@ pub trait EventStore {
         &self,
         start_time: u64,
         end_time: u64,
-        cursor: (u64, u64),
+        cursor: EventID,
         limit: usize,
         descending: bool,
     ) -> Result<Vec<StoredEvent>, SuiError>;
