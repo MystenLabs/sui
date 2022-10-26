@@ -66,6 +66,7 @@ export type NewObjectEvent = {
   recipient: ObjectOwner;
   objectType: string,
   objectId: ObjectId;
+  version: SequenceNumber;
 };
 
 export type SuiEvent =

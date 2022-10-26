@@ -280,7 +280,7 @@ async fn test_transaction(
     let response = client
         .quorum_driver()
         .execute_transaction(
-            Transaction::new(data.clone(), signature),
+            Transaction::new(data.clone(), signature).verify().unwrap(),
             Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await

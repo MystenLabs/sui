@@ -184,6 +184,9 @@ impl StoredEvent {
         let object_id = self.object_id()?;
         let recipient = self.recipient()?;
         let object_type = self.object_type()?;
+        let version = self.object_version()?.ok_or_else(|| {
+            anyhow::anyhow!("Can't extract object version from StoredEvent: {self:?}")
+        })?;
         Ok(SuiEvent::NewObject {
             package_id,
             transaction_module,
@@ -191,6 +194,7 @@ impl StoredEvent {
             recipient,
             object_type,
             object_id,
+            version,
         })
     }
 

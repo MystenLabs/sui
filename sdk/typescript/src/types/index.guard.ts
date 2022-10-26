@@ -511,7 +511,8 @@ export function isNewObjectEvent(obj: any, _argumentName?: string): obj is NewOb
         isTransactionDigest(obj.sender) as boolean &&
         isObjectOwner(obj.recipient) as boolean &&
         isTransactionDigest(obj.objectType) as boolean &&
-        isTransactionDigest(obj.objectId) as boolean
+        isTransactionDigest(obj.objectId) as boolean &&
+        isSuiMoveTypeParameterIndex(obj.version) as boolean
     )
 }
 
@@ -780,7 +781,6 @@ export function isTransactionKindName(obj: any, _argumentName?: string): obj is 
             obj === "Call" ||
             obj === "TransferSui" ||
             obj === "ChangeEpoch" ||
-            obj === "Pay" ||
             obj === "PaySui" ||
             obj === "PayAllSui")
     )

@@ -3746,9 +3746,9 @@ dependencies = [
 
 [[package]]
 name = "libsqlite3-sys"
-version = "0.24.2"
+version = "0.25.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "898745e570c7d0453cc1fbc4a701eb6c662ed54e8fec8b7d14be137ebeeb9d14"
+checksum = "9f0455f2c1bc9a7caa792907026e469c1d91761fb0ea37cbb16427c77280cf35"
 dependencies = [
  "cc",
  "pkg-config",
@@ -7801,8 +7801,7 @@ dependencies = [
 [[package]]
 name = "sqlx"
 version = "0.6.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9249290c05928352f71c077cc44a464d880c63f26f7534728cca008e135c0428"
+source = "git+https://github.com/huitseeker/sqlx?branch=update_libsqlite3#fa4613e770a82a606b2cbaa4d36e3ca628c67dad"
 dependencies = [
  "sqlx-core",
  "sqlx-macros",
@@ -7811,8 +7810,7 @@ dependencies = [
 [[package]]
 name = "sqlx-core"
 version = "0.6.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dcbc16ddba161afc99e14d1713a453747a2b07fc097d2009f4c300ec99286105"
+source = "git+https://github.com/huitseeker/sqlx?branch=update_libsqlite3#fa4613e770a82a606b2cbaa4d36e3ca628c67dad"
 dependencies = [
  "ahash",
  "atoi",
@@ -7857,8 +7855,7 @@ dependencies = [
 [[package]]
 name = "sqlx-macros"
 version = "0.6.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b850fa514dc11f2ee85be9d055c512aa866746adfacd1cb42d867d68e6a5b0d9"
+source = "git+https://github.com/huitseeker/sqlx?branch=update_libsqlite3#fa4613e770a82a606b2cbaa4d36e3ca628c67dad"
 dependencies = [
  "dotenvy",
  "either",
@@ -7876,8 +7873,7 @@ dependencies = [
 [[package]]
 name = "sqlx-rt"
 version = "0.6.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "24c5b2d25fa654cc5f841750b8e1cdedbe21189bf9a9382ee90bfa9dd3562396"
+source = "git+https://github.com/huitseeker/sqlx?branch=update_libsqlite3#fa4613e770a82a606b2cbaa4d36e3ca628c67dad"
 dependencies = [
  "once_cell",
  "tokio",
@@ -8009,7 +8005,7 @@ checksum = "734676eb262c623cec13c3155096e08d1f8f29adce39ba17948b18dad1e54142"
 
 [[package]]
 name = "sui"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -8217,7 +8213,7 @@ dependencies = [
 
 [[package]]
 name = "sui-core"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -8321,7 +8317,7 @@ dependencies = [
 
 [[package]]
 name = "sui-faucet"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -8544,7 +8540,7 @@ dependencies = [
 
 [[package]]
 name = "sui-node"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "anemo",
  "anemo-tower",
@@ -8654,7 +8650,7 @@ dependencies = [
 
 [[package]]
 name = "sui-sdk"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -8792,7 +8788,7 @@ dependencies = [
 
 [[package]]
 name = "sui-tool"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "anyhow",
  "clap 3.2.22",

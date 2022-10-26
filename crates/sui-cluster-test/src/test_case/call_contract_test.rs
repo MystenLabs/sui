@@ -85,7 +85,7 @@ impl TestCaseImpl for CallContractTest {
                 matches!(e, SuiEvent::NewObject {
                     package_id,
                     transaction_module,
-                    sender, recipient, object_type, object_id
+                    sender, recipient, object_type, object_id, version
                 } if
                     package_id == &SUI_FRAMEWORK_OBJECT_ID
                     && transaction_module == &String::from("devnet_nft")
@@ -93,6 +93,7 @@ impl TestCaseImpl for CallContractTest {
                     && recipient == &Owner::AddressOwner(signer)
                     && object_id == &nft_id
                     && object_type == "0x2::devnet_nft::DevNetNFT"
+                    && version == &SequenceNumber::from_u64(1)
                 )
             })
             .unwrap_or_else(|| panic!("Expect such a NewObject in events {:?}", events));

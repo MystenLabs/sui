@@ -894,7 +894,7 @@ mod tests {
             .await?;
         assert_eq!(queried_events.len(), 1);
         test_queried_event_vs_test_envelope(&queried_events[0], &to_insert[0]);
-        assert_eq!(queried_events[0].fields.len(), 0);
+        assert_eq!(queried_events[0].fields.len(), 1); // version field
 
         // Query DeleteObject Event
         let queried_events = db

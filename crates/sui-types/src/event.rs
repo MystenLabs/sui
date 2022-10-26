@@ -126,7 +126,7 @@ pub enum Event {
         sender: SuiAddress,
         package_id: ObjectID,
     },
-    /// Transfer objects to new address / wrap in another object / coin
+    /// Coin balance changing event
     CoinBalanceChange {
         package_id: ObjectID,
         transaction_module: Identifier,
@@ -136,6 +136,8 @@ pub enum Event {
         coin_type: String,
         coin_object_id: ObjectID,
         version: SequenceNumber,
+        /// The amount indicate the coin value changes for this event,
+        /// negative amount means spending coin value and positive means receiving coin value.
         amount: i128,
     },
     /// Epoch change
@@ -181,6 +183,7 @@ pub enum Event {
         recipient: Owner,
         object_type: String,
         object_id: ObjectID,
+        version: SequenceNumber,
     },
 }
 
@@ -270,6 +273,7 @@ impl Event {
         recipient: Owner,
         object_type: String,
         object_id: ObjectID,
+        version: SequenceNumber,
     ) -> Self {
         Event::NewObject {
             package_id: ctx.package_id,
@@ -278,6 +282,7 @@ impl Event {
             recipient,
             object_type,
             object_id,
+            version,
         }
     }
 
@@ -430,6 +435,7 @@ impl Event {
             Event::TransferObject { version, .. }
             | Event::MutateObject { version, .. }
             | Event::CoinBalanceChange { version, .. }
+            | Event::NewObject { version, .. }
             | Event::DeleteObject { version, .. } => Some(version),
             _ => None,
         }

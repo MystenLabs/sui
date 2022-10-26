@@ -47,7 +47,7 @@ pub async fn transaction(
     let hash = *cert.digest();
     let data = &cert.signed_data.data;
 
-    let operations = Operation::from_data_and_events(&data, &effects.status, &effects.events)?;
+    let operations = Operation::from_data_and_events(data, &effects.status, &effects.events)?;
 
     let transaction = Transaction {
         transaction_identifier: TransactionIdentifier { hash },

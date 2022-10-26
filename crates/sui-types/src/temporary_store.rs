@@ -85,8 +85,8 @@ pub struct TemporaryStore<S> {
     input_objects: BTreeMap<ObjectID, Object>,
     mutable_input_refs: Vec<ObjectRef>, // Inputs that are mutable
     // When an object is being written, we need to ensure that a few invariants hold.
-    // It's critical that we always call write_object to update `_written`, instead of writing
-    // into _written directly.
+    // It's critical that we always call write_object to update `written`, instead of writing
+    // into written directly.
     written: BTreeMap<ObjectID, (SingleTxContext, Object, WriteKind)>, // Objects written
     /// Objects actively deleted.
     deleted: BTreeMap<ObjectID, (SingleTxContext, SequenceNumber, DeleteKind)>,
@@ -179,7 +179,7 @@ impl<S> TemporaryStore<S> {
                         balance.neg(),
                     )
                 }
-                // If deleted object is not owned coin coin, emit a delete event.
+                // If deleted object is not owned coin, emit a delete event.
                 _ => Event::DeleteObject {
                     package_id: ctx.package_id,
                     transaction_module: ctx.transaction_module.clone(),
@@ -219,7 +219,7 @@ impl<S> TemporaryStore<S> {
             (WriteKind::Mutate, Ok(Some(_)), Some(old_obj)) => {
                 Self::create_coin_mutate_events(&ctx, gas_id, obj, old_obj, gas_charged)
             }
-            // For all other coin change (wrap/unwrap/create), we emit full balance transfer event to the new owner.
+            // For all other coin change (unwrap/create), we emit full balance transfer event to the new owner.
             (_, Ok(Some(balance)), _) => {
                 vec![Event::balance_change(
                     &ctx,
@@ -267,7 +267,13 @@ impl<S> TemporaryStore<S> {
                         package_id: id,
                     }
                 } else {
-                    Event::new_object(&ctx, obj.owner, obj.type_().unwrap().to_string(), id)
+                    Event::new_object(
+                        &ctx,
+                        obj.owner,
+                        obj.type_().unwrap().to_string(),
+                        id,
+                        obj.version(),
+                    )
                 }]
             }
             _ => vec![],

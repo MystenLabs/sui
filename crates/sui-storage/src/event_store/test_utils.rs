@@ -88,6 +88,7 @@ pub fn new_test_newobj_event(
                 .unwrap_or_else(|| Owner::AddressOwner(SuiAddress::random_for_testing_only())),
             object_type: "0x2::test:NewObject".to_string(),
             object_id: object_id.unwrap_or_else(ObjectID::random),
+            version: Default::default(),
         },
         None,
     )
