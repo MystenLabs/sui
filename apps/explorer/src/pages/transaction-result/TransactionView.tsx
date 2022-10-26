@@ -459,7 +459,10 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                                 ])}
                             >
                                 {txdata.timestamp_ms && (
-                                    <h3 className={styles.datetime}>
+                                    <h3
+                                        data-testid="transaction-timestamp"
+                                        className={styles.datetime}
+                                    >
                                         {convertNumberToDate(
                                             txdata.timestamp_ms
                                         )}

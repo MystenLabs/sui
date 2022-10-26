@@ -18,7 +18,7 @@ type TxAddress = {
 function SendReceiveView({ sender, recipient, amount }: TxAddress) {
     if (recipient && recipient.length === 1) {
         return (
-            <div className={styles.txaddress} data-testid="transaction-sender">
+            <div className={styles.txaddress}>
                 <h4 className={styles.oneheading}>Sender &#x26; Recipient</h4>
                 <div className={styles.oneaddress}>
                     <div className="z-0">
