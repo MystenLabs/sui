@@ -1,18 +1,18 @@
-use std::time::Duration;
-
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
+use crate::batch_maker::MAX_PARALLEL_BATCH;
 use config::{Committee, SharedWorkerCache, Stake, WorkerId};
 use crypto::PublicKey;
 use futures::stream::{futures_unordered::FuturesUnordered, FuturesOrdered, StreamExt as _};
 use network::{CancelOnDropHandler, P2pNetwork, ReliableNetwork};
+use std::time::Duration;
 use store::Store;
 use tokio::{sync::watch, task::JoinHandle, time::timeout};
 use types::{
     metered_channel::Receiver, Batch, BatchDigest, ReconfigureNotification, WorkerBatchMessage,
 };
-use crate::batch_maker::MAX_PARALLEL_BATCH;
 
 #[cfg(test)]
 #[path = "tests/quorum_waiter_tests.rs"]
@@ -118,7 +118,7 @@ impl QuorumWaiter {
                     pipeline.push_back(async move {
                         // A future that sends to 2/3 stake then returns. Also prints an error
                         // if we terminate before we have managed to get to the full 2/3 stake.
-                        let _ = &wait_for_quorum;
+
                         loop{
                             if let Some(stake) = wait_for_quorum.next().await {
                                 total_stake += stake;
@@ -131,6 +131,9 @@ impl QuorumWaiter {
                                     break
                                 }
                             } else {
+                                // TODO: maybe we should be stopping the system if that happens,
+                                //       since it seems serious. However, it may happen at the
+                                //       start of the epoch when not everyone is ready?
                                 tracing::error!("Batch dissemination ended without a quorum.");
                                 break;
                             }
@@ -173,9 +176,9 @@ impl QuorumWaiter {
                             self.committee = new_committee;
 
                             // Upon reconfiguration we drop all current batches.
-                            //
-                            // TODO: ensure that if the batch has not been distributed to the right
-                            //       commitee we do not propose it?
+                            // TODO: maybe re-send to new committee?
+                            tracing::error!("Batch dissemination dropped {} batches before quorum.", pipeline.len() );
+
                             pipeline = FuturesOrdered::new();
                             best_effort_with_timeout = FuturesUnordered::new()
 
