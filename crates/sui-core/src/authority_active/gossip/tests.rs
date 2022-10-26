@@ -148,6 +148,7 @@ async fn start_gossip_process(
                 ActiveAuthority::new_with_ephemeral_storage_for_test(state, inner_net).unwrap(),
             );
             active_state.clone().spawn_gossip_process(3).await;
+            active_state.clone().spawn_transaction_manager_scanner();
             active_state.spawn_execute_process().await;
         });
         active_authorities.push(handle);

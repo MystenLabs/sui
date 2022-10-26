@@ -29,5 +29,6 @@ mod consensus_handler;
 mod histogram;
 mod node_sync;
 mod query_helpers;
+mod transaction_manager;
 
 pub const SUI_CORE_VERSION: &str = env!("CARGO_PKG_VERSION");
