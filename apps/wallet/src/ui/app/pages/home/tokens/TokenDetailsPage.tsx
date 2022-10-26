@@ -21,7 +21,7 @@ function TokenDetailsPage() {
         return <Navigate to="/tokens" replace={true} />;
     }
     return (
-        <div className={st.details}>
+        <div className={st.detailsPage}>
             <PageTitle title={symbol} backLink="/tokens" hideBackLabel={true} />
             <TokenDetails coinType={GAS_TYPE_ARG} />
         </div>
