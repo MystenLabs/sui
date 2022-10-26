@@ -37,6 +37,8 @@ pub struct EventEnvelope {
     pub tx_digest: Option<TransactionDigest>,
     /// Sequence number, must be nondecreasing for event ingestion idempotency
     pub seq_num: u64,
+    /// Consecutive per-tx counter assigned to this event.
+    pub event_num: u64,
     /// Specific event type
     pub event: Event,
     /// json value for MoveStruct (for MoveEvent only)
@@ -48,6 +50,7 @@ impl EventEnvelope {
         timestamp: u64,
         tx_digest: Option<TransactionDigest>,
         seq_num: u64,
+        event_num: u64,
         event: Event,
         move_struct_json_value: Option<Value>,
     ) -> Self {
@@ -55,6 +58,7 @@ impl EventEnvelope {
             timestamp,
             tx_digest,
             seq_num,
+            event_num,
             event,
             move_struct_json_value,
         }

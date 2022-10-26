@@ -847,30 +847,40 @@ impl AuthorityState {
         // will be persisted in the log for later recovery.
         let notifier_ticket = self.batch_notifier.ticket(bypass_validator_halt)?;
         let seq = notifier_ticket.seq();
-        if let Err(err) = self
+        let res = self
             .commit_certificate(
                 inner_temporary_store,
                 certificate,
                 &signed_effects,
                 notifier_ticket,
             )
-            .await
-        {
-            if matches!(err, SuiError::ValidatorHaltedAtEpochEnd) {
-                debug!(
-                    ?digest,
-                    "validator halted and this cert will never be committed"
-                );
-                tx_guard.release();
-            } else {
-                error!(?digest, "commit_certificate failed: {}", err);
+            .await;
+
+        let seq = match res {
+            Err(err) => {
+                if matches!(err, SuiError::ValidatorHaltedAtEpochEnd) {
+                    debug!(
+                        ?digest,
+                        "validator halted and this cert will never be committed"
+                    );
+                    tx_guard.release();
+                } else {
+                    error!(?digest, "commit_certificate failed: {}", err);
+                }
+                debug!("Failed to notify ticket with sequence number: {}", seq);
+                return Err(err);
             }
-            debug!("Failed to notify ticket with sequence number: {}", seq);
-            return Err(err);
-        }
+            Ok(seq) => seq,
+        };
 
         // commit_certificate finished, the tx is fully committed to the store.
         tx_guard.commit_tx();
+
+        // index certificate
+        let _ = self
+            .post_process_one_tx(seq, &digest)
+            .await
+            .tap_err(|e| error!(tx_digest = ?digest, "tx post processing failed: {e}"));
 
         // Update metrics.
         self.metrics.total_effects.inc();
@@ -1039,6 +1049,13 @@ impl AuthorityState {
         seq: TxSequenceNumber,
         digest: &TransactionDigest,
     ) -> SuiResult {
+        if self.indexes.is_none()
+            && self.transaction_streamer.is_none()
+            && self.event_handler.is_none()
+        {
+            return Ok(());
+        }
+
         // Load cert and effects.
         let info = self.make_transaction_info(digest).await?;
         let (cert, effects) = match info {
@@ -1090,30 +1107,36 @@ impl AuthorityState {
 
     // TODO: This should persist the last successfully-processed sequence to disk, and upon
     // starting up, look for any sequences in the store since then and process them.
+    #[instrument(level = "debug", skip_all)]
     pub async fn run_tx_post_processing_process(&self) -> SuiResult {
         let mut subscriber = self.subscribe_batch();
         let _guard = scoped_counter!(self.metrics, num_post_processing_tasks);
+        debug!("subscribed to batch service");
 
         loop {
             match subscriber.recv().await {
-                Ok(item) => {
-                    if let UpdateItem::Transaction((
-                        seq,
-                        ExecutionDigests {
-                            transaction: digest,
-                            ..
-                        },
-                    )) = item
-                    {
+                Ok(item) => match item {
+                    UpdateItem::Batch(batch) => {
+                        debug!(
+                            batch_seq = ?batch.data().next_sequence_number,
+                            "post process received batch"
+                        );
+                    }
+                    UpdateItem::Transaction((seq, ExecutionDigests { .. })) => {
                         self.metrics.post_processing_latest_seq_seen.set(seq as i64);
                         self.metrics
                             .post_processing_total_tx_sent_to_post_processing
                             .inc();
+                        /*
+                         * TODO: we are temporarily not processing txes here because the batch
+                         * system is flaky somehow. The metrics above are left alone so that we can
+                         * continue debugging.
                         if let Err(e) = self.post_process_one_tx(seq, &digest).await {
                             warn!(?digest, "Couldn't process tx: {e}");
                         }
+                        */
                     }
-                }
+                },
                 Err(RecvError::Closed) => {
                     // This shall not happen because the sender of batch notifier should not be closed.
                     error!("run_tx_post_processing_process receiver channel closed. If this happens there is a bug");
@@ -2091,14 +2114,15 @@ impl AuthorityState {
         certificate: &CertifiedTransaction,
         signed_effects: &SignedTransactionEffects,
         notifier_ticket: TransactionNotifierTicket,
-    ) -> SuiResult {
+    ) -> SuiResult<TxSequenceNumber> {
         let _metrics_guard = start_timer(self.metrics.commit_certificate_latency.clone());
 
         let seq = notifier_ticket.seq();
 
         let digest = certificate.digest();
         let effects_digest = &signed_effects.digest();
-        self.database
+        let seq = self
+            .database
             .update_state(
                 inner_temporary_store,
                 certificate,
@@ -2112,7 +2136,7 @@ impl AuthorityState {
             })?;
         // We only notify i.e. update low watermark once database changes are committed
         notifier_ticket.notify();
-        Ok(())
+        Ok(seq)
     }
 
     /// Returns true if certificate is a shared-object cert but has not been sequenced.
