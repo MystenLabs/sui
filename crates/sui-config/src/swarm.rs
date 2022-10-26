@@ -127,6 +127,7 @@ impl NetworkConfig {
             grpc_load_shed: None,
             grpc_concurrency_limit: None,
             p2p_config,
+            node_sync_download_concurrency_limit: None,
         }
     }
 }

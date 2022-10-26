@@ -84,6 +84,10 @@ pub struct NodeConfig {
     pub p2p_config: P2pConfig,
 
     pub genesis: Genesis,
+
+    /// The concurrent cert download limit
+    #[serde(default)]
+    pub node_sync_download_concurrency_limit: Option<usize>,
 }
 
 fn default_key_pair() -> Arc<AuthorityKeyPair> {

@@ -288,6 +288,7 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                     grpc_load_shed: initial_accounts_config.grpc_load_shed,
                     grpc_concurrency_limit: initial_accounts_config.grpc_concurrency_limit,
                     p2p_config,
+                    node_sync_download_concurrency_limit: None,
                 }
             })
             .collect();

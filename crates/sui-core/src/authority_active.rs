@@ -134,6 +134,11 @@ pub struct ActiveAuthority<A> {
     // This is only meaningful if A is of type NetworkAuthorityClient,
     // and stored here for reconfiguration purposes.
     pub network_metrics: Arc<NetworkAuthorityClientMetrics>,
+
+    // The concurrent cert download limit in node sync process. Note this is further capped
+    // in node sync to avoid misconfiguration from crashing validators.
+    // If None, use default.
+    pub(crate) node_sync_download_concurrency_limit: Option<usize>,
 }
 
 impl<A> ActiveAuthority<A> {
@@ -142,6 +147,7 @@ impl<A> ActiveAuthority<A> {
         net: AuthorityAggregator<A>,
         gossip_metrics: GossipMetrics,
         network_metrics: Arc<NetworkAuthorityClientMetrics>,
+        node_sync_download_concurrency_limit: Option<usize>,
     ) -> SuiResult<Self> {
         let committee = authority.clone_committee();
 
@@ -160,6 +166,7 @@ impl<A> ActiveAuthority<A> {
             net: ArcSwap::from(net),
             gossip_metrics,
             network_metrics,
+            node_sync_download_concurrency_limit,
         })
     }
 
@@ -176,6 +183,7 @@ impl<A> ActiveAuthority<A> {
             net,
             GossipMetrics::new_for_tests(),
             Arc::new(NetworkAuthorityClientMetrics::new_for_tests()),
+            None,
         )
     }
 
@@ -242,6 +250,7 @@ impl<A> Clone for ActiveAuthority<A> {
             health: self.health.clone(),
             gossip_metrics: self.gossip_metrics.clone(),
             network_metrics: self.network_metrics.clone(),
+            node_sync_download_concurrency_limit: self.node_sync_download_concurrency_limit,
         }
     }
 }

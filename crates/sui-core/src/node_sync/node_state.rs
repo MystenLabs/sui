@@ -38,8 +38,9 @@ use tracing::{debug, error, instrument, trace, warn};
 
 const NODE_SYNC_QUEUE_LEN: usize = 500;
 
-// Process up to 20 digests concurrently.
-const MAX_NODE_SYNC_CONCURRENCY: usize = 20;
+// Process up to X digests concurrently.
+const DEFAULT_NODE_SYNC_CONCURRENCY: usize = 20;
+const MAX_NODE_SYNC_CONCURRENCY: usize = 120;
 
 // All tasks die after 60 seconds if they haven't finished.
 const MAX_NODE_TASK_LIFETIME: Duration = Duration::from_secs(60);
@@ -329,9 +330,14 @@ where
             }
             Ok(r) => r,
         };
-
+        let node_sync_download_concurrency_limit =
+            state.active_authority.node_sync_download_concurrency_limit;
         (
-            tokio::spawn(async move { state.handle_messages(&mut receiver).await }),
+            tokio::spawn(async move {
+                state
+                    .handle_messages(&mut receiver, node_sync_download_concurrency_limit)
+                    .await
+            }),
             sender,
         )
     }
@@ -375,10 +381,22 @@ where
         Ok(votes >= quorum_threshold)
     }
 
-    async fn handle_messages(self: Arc<Self>, receiver: &mut mpsc::Receiver<DigestsMessage>) {
+    async fn handle_messages(
+        self: Arc<Self>,
+        receiver: &mut mpsc::Receiver<DigestsMessage>,
+        node_sync_download_concurrency_limit: Option<usize>,
+    ) {
+        let concurrency = std::cmp::min(
+            MAX_NODE_SYNC_CONCURRENCY,
+            std::cmp::max(
+                1, // cannot < 1
+                node_sync_download_concurrency_limit.unwrap_or(DEFAULT_NODE_SYNC_CONCURRENCY),
+            ),
+        );
+        debug!("Setting node sync cert download concurrency to {concurrency}");
         // this pattern for limiting concurrency is from
         // https://github.com/tokio-rs/tokio/discussions/2648
-        let limit = Arc::new(Semaphore::new(MAX_NODE_SYNC_CONCURRENCY));
+        let limit = Arc::new(Semaphore::new(concurrency));
 
         while let Some(DigestsMessage {
             epoch_id,

@@ -200,6 +200,7 @@ impl SuiNode {
             net.clone(),
             GossipMetrics::new(&prometheus_registry),
             network_metrics.clone(),
+            config.node_sync_download_concurrency_limit,
         )?);
 
         let arc_net = active_authority.agg_aggregator();
