@@ -107,3 +107,8 @@ anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "7da7c9a1
 
 # Use the same workspace-hack across crates.
 workspace-hack = { path = "crates/workspace-hack" }
+
+# patch sqlx to a version using libsqlite3-sys v0.25.1 or later, see
+# https://github.com/launchbadge/sqlx/pull/2176
+[patch.crates-io]
+sqlx = { git="https://github.com/huitseeker/sqlx", branch="update_libsqlite3" }
