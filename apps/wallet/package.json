@@ -1,7 +1,7 @@
 {
     "name": "sui-wallet",
     "private": true,
-    "version": "0.2.0",
+    "version": "0.2.1",
     "description": "A wallet for Sui",
     "main": "./dist/ui.js",
     "scripts": {
