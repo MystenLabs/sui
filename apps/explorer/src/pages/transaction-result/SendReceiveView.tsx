@@ -76,7 +76,9 @@ function SendRecieveView({ data }: { data: TxAddress }) {
                         </div>
                         {data.recipient.map((add: string, idx: number) => (
                             <div className={styles.oneaddress} key={idx}>
-                                <DoneIcon />
+                                <div className={styles.doneicon}>
+                                    <DoneIcon />
+                                </div>
                                 <Longtext
                                     text={add}
                                     category="addresses"
