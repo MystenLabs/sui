@@ -380,9 +380,9 @@ export class JsonRpcProvider extends Provider {
   // Transactions
   async getTransactions(
     query: TransactionQuery,
-    cursor: TransactionDigest | null,
-    limit: number | null,
-    order: Ordering
+    cursor: TransactionDigest | null = null,
+    limit: number | null = null,
+    order: Ordering = 'Descending'
   ): Promise<PaginatedTransactionDigests> {
     try {
       return await this.client.requestWithType(
@@ -494,25 +494,6 @@ export class JsonRpcProvider extends Provider {
     }
   }
 
-  async executeTransaction(
-    txnBytes: string,
-    signatureScheme: SignatureScheme,
-    signature: string,
-    pubkey: string
-  ): Promise<SuiTransactionResponse> {
-    try {
-      const resp = await this.client.requestWithType(
-        'sui_executeTransaction',
-        [txnBytes, signatureScheme, signature, pubkey],
-        isSuiTransactionResponse,
-        this.options.skipDataValidation
-      );
-      return resp;
-    } catch (err) {
-      throw new Error(`Error executing transaction: ${err}}`);
-    }
-  }
-
   async executeTransactionWithRequestType(
     txnBytes: string,
     signatureScheme: SignatureScheme,
@@ -561,36 +542,6 @@ export class JsonRpcProvider extends Provider {
     } catch (err) {
       throw new Error(
         `Error fetching transaction digests in range: ${err} for range ${start}-${end}`
-      );
-    }
-  }
-
-  async getRecentTransactions(count: number): Promise<GetTxnDigestsResponse> {
-    try {
-      return await this.client.requestWithType(
-        'sui_getRecentTransactions',
-        [count],
-        isGetTxnDigestsResponse,
-        this.options.skipDataValidation
-      );
-    } catch (err) {
-      throw new Error(
-        `Error fetching recent transactions: ${err} for count ${count}`
-      );
-    }
-  }
-
-  async syncAccountState(address: string): Promise<any> {
-    try {
-      return await this.client.requestWithType(
-        'sui_syncAccountState',
-        [address],
-        isAny,
-        this.options.skipDataValidation
-      );
-    } catch (err) {
-      throw new Error(
-        `Error sync account address for address: ${address} with error: ${err}`
       );
     }
   }
