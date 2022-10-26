@@ -1095,11 +1095,20 @@ impl Eq for SignedTransaction {}
 pub type CertifiedTransaction = TransactionEnvelope<AuthorityStrongQuorumSignInfo>;
 pub type TxCertAndSignedEffects = (CertifiedTransaction, SignedTransactionEffects);
 
-// An empty marker struct that can't be serialized.
-#[derive(Clone)]
-struct NoSer;
-static_assertions::assert_not_impl_any!(NoSer: Serialize, DeserializeOwned);
-
+/// TrustedTransactionEnvelope is a serializable wrapper around TransactionEnvelope which is
+/// Into<VerifiedTransactionEnvelope> - in other words it models a verified object which has been
+/// written to the db (or some other trusted store), and may be read back from the db without
+/// futher signature verification.
+///
+/// TrustedTransactionEnvelope should *only* appear in database interfaces.
+///
+/// DO NOT USE in networked APIs.
+///
+/// Because it is used very sparingly, it can be audited easily: Use rust-analyzer, or run:
+///
+///      $ git grep -E 'TrustedTransactionEnvelope|TrustedCertificate'
+///
+/// And verify that none of the uses appear in any network APIs.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct TrustedTransactionEnvelope<T>(TransactionEnvelope<T>);
 
@@ -1118,8 +1127,24 @@ where
     }
 }
 
+// An empty marker struct that can't be serialized.
+#[derive(Clone)]
+struct NoSer;
+
+/// VerifiedTransactionEnvelope models a TransactionEnvelope that no longer requires signature
+/// verification. It can only be constructed in 3 ways:
+///
+/// - TransactionEnvelope::verify() - verify the signatures of a signed transaction, to convert a
+///   TransactionEnvelope<T> into a VerifiedTransactionEnvelope<T>
+/// - From<TrustedTransactionEnvelope<T>> - used when reading pre-verified messages from the
+///   database.
+/// - VerifiedTransactionEnvelope::new_unchecked() - use very carefully, and very sparingly, so
+///   that all uses can be audited easily.
 #[derive(Clone)]
 pub struct VerifiedTransactionEnvelope<T>(TrustedTransactionEnvelope<T>, NoSer);
+
+// Never remove this assert!
+static_assertions::assert_not_impl_any!(VerifiedTransactionEnvelope: Serialize, DeserializeOwned);
 
 impl<T> Debug for VerifiedTransactionEnvelope<T>
 where
@@ -1129,8 +1154,6 @@ where
         write!(f, "{:?}", self.0 .0)
     }
 }
-
-// The only acceptible way to construct this type is via explicitly verifying it
 
 impl<T> VerifiedTransactionEnvelope<T> {
     fn new_from_verified(inner: TransactionEnvelope<T>) -> Self {
