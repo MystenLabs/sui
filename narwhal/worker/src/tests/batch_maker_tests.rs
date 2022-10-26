@@ -123,9 +123,5 @@ async fn batch_timeout() {
     assert!(r0.await.is_ok());
 
     // Ensure the batch is stored
-    assert!(store
-        .notify_read(expected_batch.digest())
-        .await
-        .unwrap()
-        .is_some());
+    assert!(store.notify_read(batch.digest()).await.unwrap().is_some());
 }
