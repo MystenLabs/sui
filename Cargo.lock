@@ -2319,7 +2319,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto"
 version = "0.1.3"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=ab44e914084bd2fa65e7caf64ab32d61910a5d30#ab44e914084bd2fa65e7caf64ab32d61910a5d30"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=7766b1ef23f6bed6da9ff9e50dc2a0d1957d344d#7766b1ef23f6bed6da9ff9e50dc2a0d1957d344d"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -2364,7 +2364,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-derive"
 version = "0.1.2"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=ab44e914084bd2fa65e7caf64ab32d61910a5d30#ab44e914084bd2fa65e7caf64ab32d61910a5d30"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=7766b1ef23f6bed6da9ff9e50dc2a0d1957d344d#7766b1ef23f6bed6da9ff9e50dc2a0d1957d344d"
 dependencies = [
  "proc-macro2 1.0.47",
  "quote 1.0.21",
@@ -4709,7 +4709,7 @@ dependencies = [
 [[package]]
 name = "mysten-util-mem"
 version = "0.11.0"
-source = "git+https://github.com/MystenLabs/mysten-infra/?rev=59defcc8fc2850459f8b955599dcae7072fcb365#59defcc8fc2850459f8b955599dcae7072fcb365"
+source = "git+https://github.com/MystenLabs/mysten-infra/?rev=2d031b1ba014b63a2680a1980d79fd808af3c3a0#2d031b1ba014b63a2680a1980d79fd808af3c3a0"
 dependencies = [
  "cfg-if 1.0.0",
  "ed25519-consensus",
@@ -4726,7 +4726,7 @@ dependencies = [
 [[package]]
 name = "mysten-util-mem-derive"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysten-infra/?rev=59defcc8fc2850459f8b955599dcae7072fcb365#59defcc8fc2850459f8b955599dcae7072fcb365"
+source = "git+https://github.com/MystenLabs/mysten-infra/?rev=2d031b1ba014b63a2680a1980d79fd808af3c3a0#2d031b1ba014b63a2680a1980d79fd808af3c3a0"
 dependencies = [
  "proc-macro2 1.0.47",
  "syn 1.0.103",
