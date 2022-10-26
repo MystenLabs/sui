@@ -111,5 +111,5 @@ pub fn to_sender_signed_transaction(
     let signature = Signature::new_temp(&data.to_bytes(), signer);
     // let signature = Signature::new_secure(&data, Intent::default(), signer).unwrap();
     let tx = Transaction::new(data, signature);
-    VerifiedTransaction::new_unchecked(tx)
+    tx.verify().unwrap()
 }

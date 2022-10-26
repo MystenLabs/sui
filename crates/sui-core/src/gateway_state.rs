@@ -5,9 +5,7 @@
 use futures::future::join_all;
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
-use std::future::Future;
 use std::path::Path;
-use std::pin::Pin;
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use std::time::Duration;
@@ -184,8 +182,6 @@ pub struct GatewayState<A> {
     metrics: GatewayMetrics,
     module_cache: SyncModuleCache<ResolverWrapper<GatewayStore>>,
 }
-
-type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 impl<A> GatewayState<A> {
     /// Create a new manager which stores its managed addresses at `path`
@@ -1315,7 +1311,7 @@ where
     fn execute_verified_transaction(
         &self,
         tx: VerifiedTransaction,
-    ) -> BoxFuture<'_, Result<SuiTransactionResponse, anyhow::Error>> {
+    ) -> future::BoxFuture<'_, Result<SuiTransactionResponse, anyhow::Error>> {
         async fn inner<A>(
             _self: &GatewayState<A>,
             tx: VerifiedTransaction,
