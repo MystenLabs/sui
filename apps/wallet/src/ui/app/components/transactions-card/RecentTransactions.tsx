@@ -12,11 +12,11 @@ import type { TxResultState } from '_redux/slices/txresults';
 
 import st from './TransactionsCard.module.scss';
 
-type TokensDetailsProps = {
+type Props = {
     coinType?: string;
 };
 
-function RecentTransactions({ coinType }: TokensDetailsProps) {
+function RecentTransactions({ coinType }: Props) {
     const dispatch = useAppDispatch();
     const txByAddress: TxResultState[] = useAppSelector(({ txresults }) =>
         coinType

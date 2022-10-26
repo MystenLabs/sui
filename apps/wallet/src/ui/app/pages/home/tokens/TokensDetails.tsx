@@ -85,12 +85,13 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
     const tokenBalance = balances[activeCoinType] || BigInt(0);
     const allCoinTypes = useMemo(() => Object.keys(balances), [balances]);
     const coinTypeWithBalance =
-        tokenBalance > 0 ? activeCoinType : allCoinTypes[0];
+        !coinType && tokenBalance > 0 ? activeCoinType : allCoinTypes[0];
 
     const coinSymbol = useMemo(
         () => (coinType ? Coin.getCoinSymbol(coinType) : ''),
         [coinType]
     );
+
     return (
         <div className={st.container}>
             {showError && error ? (
