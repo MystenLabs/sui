@@ -29,6 +29,9 @@ use types::{
     WorkerOurBatchMessage,
 };
 
+// The number of batches to store / transmit in parallel.
+pub const MAX_PARALLEL_BATCH: usize = 25;
+
 #[cfg(test)]
 #[path = "tests/batch_maker_tests.rs"]
 pub mod batch_maker_tests;
@@ -103,8 +106,6 @@ impl BatchMaker {
         let mut current_batch_size = 0;
 
         let mut batch_pipeline = FuturesOrdered::new();
-        // The number of batches to store / transmit in parallel.
-        const MAX_PARALLEL_BATCH: usize = 25;
 
         loop {
             tokio::select! {

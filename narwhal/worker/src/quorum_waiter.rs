@@ -12,6 +12,7 @@ use tokio::{sync::watch, task::JoinHandle, time::timeout};
 use types::{
     metered_channel::Receiver, Batch, BatchDigest, ReconfigureNotification, WorkerBatchMessage,
 };
+use crate::batch_maker::MAX_PARALLEL_BATCH;
 
 #[cfg(test)]
 #[path = "tests/quorum_waiter_tests.rs"]
@@ -82,10 +83,10 @@ impl QuorumWaiter {
             tokio::select! {
 
                 // When a new batch is available, and the pipeline is not full, add a new
-                // task to the pipeline to send this batch to workers. 
+                // task to the pipeline to send this batch to workers.
                 //
                 // TODO: make the constant a config parameter.
-                Some((batch, opt_channel)) = self.rx_message.recv(), if pipeline.len() < 20 => {
+                Some((batch, opt_channel)) = self.rx_message.recv(), if pipeline.len() < MAX_PARALLEL_BATCH => {
                     // Broadcast the batch to the other workers.
                     let workers: Vec<_> = self
                         .worker_cache
