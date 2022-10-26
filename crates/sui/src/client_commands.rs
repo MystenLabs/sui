@@ -566,7 +566,7 @@ impl SuiClientCommands {
                     .await?;
                 let signature = context.config.keystore.sign(&signer, &data.to_bytes())?;
                 let response = context
-                    .execute_transaction(Transaction::new(data, signature))
+                    .execute_transaction(Transaction::new(data, signature).verify()?)
                     .await?;
 
                 let cert = response.certificate;
@@ -598,7 +598,7 @@ impl SuiClientCommands {
 
                 let signature = context.config.keystore.sign(&signer, &data.to_bytes())?;
                 let response = context
-                    .execute_transaction(Transaction::new(data, signature))
+                    .execute_transaction(Transaction::new(data, signature).verify()?)
                     .await?;
 
                 let cert = response.certificate;
