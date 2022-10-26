@@ -30,14 +30,6 @@ pub enum TransactionQuery {
     ToAddress(SuiAddress),
 }
 
-#[derive(Clone, Debug, JsonSchema, Serialize, Deserialize, Eq, PartialEq)]
-pub enum Ordering {
-    /// Ascending order (oldest transaction first), transactions are causal ordered.
-    Ascending,
-    /// Descending order (latest transaction first), transactions are causal ordered.
-    Descending,
-}
-
 #[derive(Clone, Debug, JsonSchema, Serialize, Deserialize)]
 pub enum EventQuery {
     /// Return all events.

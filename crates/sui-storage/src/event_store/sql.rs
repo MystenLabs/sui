@@ -6,9 +6,6 @@
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use std::path::Path;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::collections::BTreeMap;
-use std::path::Path;
 
 use async_trait::async_trait;
 use serde_json::{json, Value};
@@ -17,10 +14,6 @@ use sqlx::{
     sqlite::{SqliteConnectOptions, SqliteJournalMode, SqliteRow, SqliteSynchronous},
     Executor, QueryBuilder, Row, SqlitePool,
 };
-use strum::{EnumMessage, IntoEnumIterator};
-use tracing::{info, instrument, log, warn};
-
-use sui_types::base_types::SuiAddress;
 use strum::{EnumMessage, IntoEnumIterator};
 use tracing::{info, instrument, log, warn};
 
@@ -648,9 +641,6 @@ mod tests {
     use super::test_utils;
     use super::*;
 
-    use super::test_utils;
-    use super::*;
-
     fn test_queried_event_vs_test_envelope(queried: &StoredEvent, orig: &EventEnvelope) {
         assert_eq!(queried.timestamp, orig.timestamp);
         assert_eq!(queried.tx_digest, orig.tx_digest);
@@ -980,7 +970,7 @@ mod tests {
 
         // Query Balance Change Event
         let queried_events = db
-            .events_by_type(1_005_000, 1_007_000, EventType::CoinBalanceChange, 1)
+            .events_by_type(EventType::CoinBalanceChange, (6, 0).into(), 1, false)
             .await?;
         assert_eq!(queried_events.len(), 1);
         test_queried_event_vs_test_envelope(&queried_events[0], &to_insert[6]);

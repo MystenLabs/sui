@@ -22,11 +22,11 @@ import {
   SuiExecuteTransactionResponse,
   TransactionDigest,
   ObjectId,
+  SuiAddress,
   EventQuery,
   EventId,
   PaginatedTransactionDigests,
   TransactionQuery,
-  Ordering,
   PaginatedEvents,
   RpcApiVersion,
   FaucetResponse,
@@ -159,7 +159,7 @@ export abstract class Provider {
     query: TransactionQuery,
     cursor: TransactionDigest | null,
     limit: number | null,
-    order: Ordering
+    descendingOrder: boolean | null
   ): Promise<PaginatedTransactionDigests>;
 
   /**
@@ -230,13 +230,13 @@ export abstract class Provider {
    * @param query - the transaction query criteria.
    * @param cursor - optional paging cursor
    * @param limit - maximum number of items per page
-   * @param order - transaction query ordering
+   * @param descendingOrder - transaction query ordering
    */
   abstract getEvents(
       query: EventQuery,
       cursor: EventId | null,
       limit: number | null,
-      order: Ordering
+      descendingOrder: boolean | null,
   ): Promise<PaginatedEvents>;
 
   /**

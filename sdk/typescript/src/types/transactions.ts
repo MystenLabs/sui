@@ -188,8 +188,6 @@ export type TransactionQuery =
   | { FromAddress: SuiAddress }
   | { ToAddress: SuiAddress };
 
-export type Ordering = 'Ascending' | 'Descending';
-
 export type MoveCall = {
   package: SuiObjectRef;
   module: string;

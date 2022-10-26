@@ -159,12 +159,12 @@ pub fn new_test_transfer_event(
     sender: Option<SuiAddress>,
     recipient: Option<Owner>,
 ) -> EventEnvelope {
-    EventEnvelope {
+    EventEnvelope::new(
         timestamp,
-        tx_digest: Some(digest),
+        Some(digest),
         seq_num,
         event_num,
-        event: Event::TransferObject {
+        Event::TransferObject {
             package_id: ObjectID::random(),
             transaction_module: Identifier::new("module").unwrap(),
             sender: sender.unwrap_or_else(SuiAddress::random_for_testing_only),
@@ -200,8 +200,8 @@ pub fn new_test_mutate_event(
             object_id: object_id.unwrap_or_else(ObjectID::random),
             version: object_version.into(),
         },
-        move_struct_json_value: None,
-    }
+        None,
+    )
 }
 
 pub fn new_test_move_event(

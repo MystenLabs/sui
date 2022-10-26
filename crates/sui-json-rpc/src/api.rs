@@ -24,7 +24,7 @@ use sui_types::crypto::SignatureScheme;
 use sui_types::event::EventID;
 use sui_types::messages::CommitteeInfoResponse;
 use sui_types::messages::ExecuteTransactionRequestType;
-use sui_types::query::{EventQuery, Ordering, TransactionQuery};
+use sui_types::query::{EventQuery, TransactionQuery};
 
 /// Maximum number of events returned in an event query.
 /// This is equivalent to EVENT_QUERY_MAX_LIMIT in `sui-storage` crate.
@@ -177,8 +177,8 @@ pub trait RpcFullNodeReadApi {
         cursor: Option<TransactionDigest>,
         /// Maximum item returned per page
         limit: Option<usize>,
-        /// Transaction query ordering
-        order: Ordering,
+        /// query result ordering, default to false (ascending order), oldest record first.  
+        descending_order: Option<bool>,
     ) -> RpcResult<TransactionsPage>;
 
     /// Note there is no software-level guarantee/SLA that objects with past versions
@@ -452,8 +452,8 @@ pub trait EventReadApi {
         cursor: Option<EventID>,
         /// maximum number of items per page
         limit: Option<usize>,
-        /// transaction query ordering
-        order: Ordering,
+        /// query result ordering, default to false (ascending order), oldest record first.  
+        descending_order: Option<bool>,
     ) -> RpcResult<EventPage>;
 }
 

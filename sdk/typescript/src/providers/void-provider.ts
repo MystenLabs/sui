@@ -27,7 +27,6 @@ import {
   ObjectId,
   SuiEvents,
   TransactionQuery,
-  Ordering,
   PaginatedTransactionDigests,
   EventQuery,
   PaginatedEvents,
@@ -248,7 +247,7 @@ export class VoidProvider extends Provider {
       _query: TransactionQuery,
       _cursor: TransactionDigest | null,
       _limit: number | null,
-      _order: Ordering
+      _descendingOrder: boolean | null
   ): Promise<PaginatedTransactionDigests> {
     throw this.newError('getTransactions');
   }
@@ -257,7 +256,7 @@ export class VoidProvider extends Provider {
       _query: EventQuery,
       _cursor: EventId | null,
       _limit: number | null,
-      _order: Ordering
+      _descendingOrder: boolean | null
   ): Promise<PaginatedEvents> {
     throw this.newError('getEvents');
   }

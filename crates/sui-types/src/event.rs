@@ -26,6 +26,7 @@ use crate::error::SuiError;
 use crate::object::MoveObject;
 use crate::object::ObjectFormatOptions;
 use crate::object::Owner;
+use crate::storage::SingleTxContext;
 use crate::{
     base_types::{ObjectID, SequenceNumber, SuiAddress, TransactionDigest},
     committee::EpochId,

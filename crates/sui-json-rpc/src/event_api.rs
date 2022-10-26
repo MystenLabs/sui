@@ -15,7 +15,7 @@ use sui_core::event_handler::EventHandler;
 use sui_json_rpc_types::{EventPage, SuiEvent, SuiEventEnvelope, SuiEventFilter};
 use sui_open_rpc::Module;
 use sui_types::event::{EventEnvelope, EventID};
-use sui_types::query::{EventQuery, Ordering};
+use sui_types::query::EventQuery;
 
 use crate::api::EventReadApiServer;
 use crate::api::{cap_page_limit, EventStreamingApiServer};
@@ -100,9 +100,9 @@ impl EventReadApiServer for EventReadApiImpl {
         query: EventQuery,
         cursor: Option<EventID>,
         limit: Option<usize>,
-        order: Ordering,
+        descending_order: Option<bool>,
     ) -> RpcResult<EventPage> {
-        let descending = order == Ordering::Descending;
+        let descending = descending_order.unwrap_or_default();
         let limit = cap_page_limit(limit)?;
         // Retrieve 1 extra item for next cursor
         let mut data = self

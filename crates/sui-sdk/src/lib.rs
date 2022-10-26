@@ -40,7 +40,7 @@ pub use sui_types as types;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::event::EventID;
 use sui_types::messages::VerifiedTransaction;
-use sui_types::query::{EventQuery, Ordering, TransactionQuery};
+use sui_types::query::{EventQuery, TransactionQuery};
 use types::base_types::SequenceNumber;
 use types::committee::EpochId;
 use types::error::TRANSACTION_NOT_FOUND_MSG_PREFIX;
@@ -267,12 +267,12 @@ impl ReadApi {
         query: TransactionQuery,
         cursor: Option<TransactionDigest>,
         limit: Option<usize>,
-        order: Ordering,
+        descending_order: Option<bool>,
     ) -> anyhow::Result<TransactionsPage> {
         Ok(self
             .api
             .http
-            .get_transactions(query, cursor, limit, order)
+            .get_transactions(query, cursor, limit, descending_order)
             .await?)
     }
 }
@@ -300,11 +300,12 @@ impl EventApi {
         query: EventQuery,
         cursor: Option<EventID>,
         limit: Option<usize>,
-        order: Ordering,
+        descending_order: Option<bool>,
     ) -> anyhow::Result<EventPage> {
         Ok(match &*self.0 {
             SuiClientApi::Rpc(RpcClient { http, .. }) => {
-                http.get_events(query, cursor, limit, order).await?
+                http.get_events(query, cursor, limit, descending_order)
+                    .await?
             }
             SuiClientApi::Embedded(_) => {
                 return Err(anyhow!("Method not supported by embedded gateway client."))

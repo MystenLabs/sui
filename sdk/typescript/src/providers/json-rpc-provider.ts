@@ -31,7 +31,6 @@ import {
   GetTxnDigestsResponse,
   ObjectId,
   ObjectOwner,
-  Ordering,
   PaginatedTransactionDigests,
   SubscriptionId,
   SuiAddress,
@@ -415,12 +414,12 @@ export class JsonRpcProvider extends Provider {
     query: TransactionQuery,
     cursor: TransactionDigest | null = null,
     limit: number | null = null,
-    order: Ordering = 'Descending'
+    descendingOrder: boolean | null = true
   ): Promise<PaginatedTransactionDigests> {
     try {
       return await this.client.requestWithType(
         'sui_getTransactions',
-        [query, cursor, limit, order],
+        [query, cursor, limit, descendingOrder],
         isPaginatedTransactionDigests,
         this.options.skipDataValidation
       );
@@ -433,16 +432,16 @@ export class JsonRpcProvider extends Provider {
 
   async getTransactionsForObject(
     objectID: string,
-    ordering: Ordering = 'Descending'
+    descendingOrder: boolean = true
   ): Promise<GetTxnDigestsResponse> {
     const requests = [
       {
         method: 'sui_getTransactions',
-        args: [{ InputObject: objectID }, null, null, ordering],
+        args: [{ InputObject: objectID }, null, null, descendingOrder],
       },
       {
         method: 'sui_getTransactions',
-        args: [{ MutatedObject: objectID }, null, null, ordering],
+        args: [{ MutatedObject: objectID }, null, null, descendingOrder],
       },
     ];
 
@@ -462,16 +461,16 @@ export class JsonRpcProvider extends Provider {
 
   async getTransactionsForAddress(
     addressID: string,
-    ordering: Ordering = 'Descending'
+    descendingOrder: boolean = true
   ): Promise<GetTxnDigestsResponse> {
     const requests = [
       {
         method: 'sui_getTransactions',
-        args: [{ ToAddress: addressID }, null, null, ordering],
+        args: [{ ToAddress: addressID }, null, null, descendingOrder],
       },
       {
         method: 'sui_getTransactions',
-        args: [{ FromAddress: addressID }, null, null, ordering],
+        args: [{ FromAddress: addressID }, null, null, descendingOrder],
       },
     ];
     try {
@@ -584,12 +583,12 @@ export class JsonRpcProvider extends Provider {
       query: EventQuery,
       cursor: EventId| null,
       limit: number|null,
-      order: Ordering
+      descendingOrder: boolean| null
   ): Promise<PaginatedEvents> {
     try {
       return await this.client.requestWithType(
           'sui_getEvents',
-          [query, cursor, limit, order],
+          [query, cursor, limit, descendingOrder],
           isPaginatedEvents,
           this.options.skipDataValidation
       );

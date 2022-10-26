@@ -34,8 +34,8 @@ const getTx = async (
     category: categoryType
 ): Promise<GetTxnDigestsResponse> =>
     category === 'address'
-        ? rpc(network).getTransactionsForAddress(id, 'Descending')
-        : rpc(network).getTransactionsForObject(id, 'Descending');
+        ? rpc(network).getTransactionsForAddress(id, true)
+        : rpc(network).getTransactionsForObject(id, true);
 
 const viewFn = (results: any) => <TxForIDView showData={results} />;
 
