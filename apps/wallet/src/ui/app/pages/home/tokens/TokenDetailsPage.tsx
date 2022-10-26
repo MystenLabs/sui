@@ -5,7 +5,7 @@ import { Navigate, useSearchParams } from 'react-router-dom';
 
 import TokenDetails from './TokensDetails';
 import PageTitle from '_app/shared/page-title';
-import { GAS_TYPE_ARG, Coin } from '_redux/slices/sui-objects/Coin';
+import { Coin } from '_redux/slices/sui-objects/Coin';
 
 import st from './TokensPage.module.scss';
 

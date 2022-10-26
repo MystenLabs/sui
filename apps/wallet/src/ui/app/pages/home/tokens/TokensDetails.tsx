@@ -31,14 +31,14 @@ const emptyWalletDescription = (
 
 type TokensProps = {
     allCoinTypes: string[];
-    suiBalance: bigint;
+    coinBalance: bigint;
     balances: Record<string, bigint>;
     loading: boolean;
 };
 
 function MyTokens({
     allCoinTypes,
-    suiBalance,
+    coinBalance,
     balances,
     loading,
 }: TokensProps) {
@@ -55,7 +55,7 @@ function MyTokens({
                                 key={aCoinType}
                             />
                         ))}
-                        {suiBalance <= 0 ? (
+                        {coinBalance <= 0 ? (
                             <div className={st.emptyWallet}>
                                 <FaucetRequestButton />
                                 {emptyWalletDescription}
@@ -82,10 +82,10 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
     const { loading, error, showError } = useObjectsState();
     const activeCoinType = coinType || GAS_TYPE_ARG;
     const balances = useAppSelector(accountAggregateBalancesSelector);
-    const suiBalance = balances[activeCoinType] || BigInt(0);
+    const tokenBalance = balances[activeCoinType] || BigInt(0);
     const allCoinTypes = useMemo(() => Object.keys(balances), [balances]);
     const coinTypeWithBalance =
-        suiBalance > 0 ? activeCoinType : allCoinTypes[0];
+        tokenBalance > 0 ? activeCoinType : allCoinTypes[0];
 
     const coinSymbol = useMemo(
         () => (coinType ? Coin.getCoinSymbol(coinType) : ''),
@@ -103,7 +103,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
             <div className={st.balanceContainer}>
                 <Loading loading={loading}>
                     <CoinBalance
-                        balance={suiBalance}
+                        balance={tokenBalance}
                         type={activeCoinType}
                         mode="standalone"
                     />
@@ -150,7 +150,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
             {!coinType ? (
                 <MyTokens
                     allCoinTypes={allCoinTypes}
-                    suiBalance={suiBalance}
+                    coinBalance={tokenBalance}
                     balances={balances}
                     loading={loading}
                 />
