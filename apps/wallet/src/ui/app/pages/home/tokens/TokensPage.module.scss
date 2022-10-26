@@ -104,19 +104,14 @@
     bottom: 0;
 }
 
-.activity {
-    margin-top: 10px;
-}
-
 .details-page {
     overflow-y: hidden;
 }
 
 .tx-content {
-    height: 210px;
+    flex: 1;
     overflow-y: auto;
-    width: 105%;
-    padding: 0 10px;
+    width: 100%;
 }
 
 .token-activities {

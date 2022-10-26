@@ -35,13 +35,9 @@ function RecentTransactions({ coinType }: Props) {
     return (
         <>
             <Loading loading={loading} className={st.centerLoading}>
-                {txByAddress && txByAddress.length ? (
-                    <section className={st.txContent}>
-                        {txByAddress.map((txn) => (
-                            <TransactionCard txn={txn} key={txn.txId} />
-                        ))}
-                    </section>
-                ) : null}
+                {txByAddress.map((txn) => (
+                    <TransactionCard txn={txn} key={txn.txId} />
+                ))}
             </Loading>
         </>
     );

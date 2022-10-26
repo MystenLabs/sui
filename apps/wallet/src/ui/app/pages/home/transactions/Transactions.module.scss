@@ -1,3 +1,5 @@
+@use '_utils';
+
 .container {
     display: flex;
     flex-flow: column nowrap;
@@ -13,7 +15,6 @@
         margin-right: -25px;
         max-height: 420px;
         overflow-y: auto;
-        padding-bottom: 30px;
     }
 }
 

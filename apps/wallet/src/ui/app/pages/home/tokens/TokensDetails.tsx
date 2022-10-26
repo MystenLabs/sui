@@ -122,7 +122,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
                     to={`/send${
                         coinTypeWithBalance
                             ? `?${new URLSearchParams({
-                                  type: coinTypeWithBalance,
+                                  type: activeCoinType,
                               }).toString()}`
                             : ''
                     }`}
@@ -161,9 +161,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
                         {coinSymbol} activity
                     </div>
                     <div className={st.txContent}>
-                        <section className={st.activity}>
-                            <RecentTransactions coinType={activeCoinType} />
-                        </section>
+                        <RecentTransactions coinType={activeCoinType} />
                     </div>
                 </>
             )}
