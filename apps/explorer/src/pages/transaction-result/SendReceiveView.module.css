@@ -34,3 +34,15 @@ h4.oneheading {
 .doneicon svg {
     @apply fill-success;
 }
+
+.sui {
+    @apply mt-[9.5px] flex flex-row items-start gap-[4px];
+}
+
+.suiamount {
+    @apply text-heading6 font-semibold ml-[24px] text-sui-grey-100;
+}
+
+.suilabel {
+    @apply text-bodySmall pt-[2px] text-sui-grey-80;
+}

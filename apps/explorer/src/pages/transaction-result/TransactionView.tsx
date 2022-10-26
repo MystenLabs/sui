@@ -324,6 +324,7 @@ function TransactionView({ txdata }: { txdata: DataType }) {
     const sendreceive = {
         sender: sender,
         recipient: recipients,
+        amount: amounts,
     };
     const GasStorageFees = {
         title: 'Gas & Storage Fees',
@@ -459,7 +460,11 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                                         </div>
                                     </div>
                                 )}
-                                <SendReceiveView data={sendreceive} />
+                                <SendReceiveView
+                                    sender={sendreceive.sender}
+                                    recipient={sendreceive.recipient}
+                                    amount={sendreceive.amount}
+                                />
                             </section>
 
                             <section

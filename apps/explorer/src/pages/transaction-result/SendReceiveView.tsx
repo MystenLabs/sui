@@ -12,10 +12,11 @@ import styles from './SendReceiveView.module.css';
 type TxAddress = {
     sender: string;
     recipient?: string[];
+    amount?: string[];
 };
 //TODO: Add date format function
-function SendReceiveView({ data }: { data: TxAddress }) {
-    if (data?.recipient && data.recipient.length === 1) {
+function SendReceiveView({ sender, recipient, amount }: TxAddress) {
+    if (recipient && recipient.length === 1) {
         return (
             <div className={styles.txaddress} data-testid="transaction-sender">
                 <h4 className={styles.oneheading}>Sender &#x26; Recipient</h4>
@@ -24,13 +25,13 @@ function SendReceiveView({ data }: { data: TxAddress }) {
                         <StartIcon />
                     </div>
                     <Longtext
-                        text={data.sender}
+                        text={sender}
                         category="addresses"
                         isLink={true}
                     />
                 </div>
                 <div>
-                    {data.recipient.map((add: string, idx: number) => (
+                    {recipient.map((add: string, idx: number) => (
                         <div key={idx} className="flex ml-[7px] mt-[-7px] z-10">
                             <LShapeIcon />
                             <div className={styles.oneaddress}>
@@ -57,7 +58,7 @@ function SendReceiveView({ data }: { data: TxAddress }) {
                 <div className={styles.oneaddress}>
                     <StartIcon />
                     <Longtext
-                        text={data.sender}
+                        text={sender}
                         category="addresses"
                         isLink={true}
                     />
@@ -66,25 +67,33 @@ function SendReceiveView({ data }: { data: TxAddress }) {
             <div
                 className={cl([
                     styles.txaddresssender,
-                    data.recipient?.length ? styles.recipient : '',
+                    recipient?.length ? styles.recipient : '',
                 ])}
             >
-                {data.recipient && (
+                {recipient && (
                     <div className={styles.recipientbox}>
                         <div>
                             <h4>Recipients</h4>
                         </div>
-                        {data.recipient.map((add: string, idx: number) => (
-                            <div className={styles.oneaddress} key={idx}>
-                                <div className={styles.doneicon}>
-                                    <DoneIcon />
+                        {recipient.map((add: string, idx: number) => (
+                            <div key={idx}>
+                                <div className={styles.oneaddress}>
+                                    <div className={styles.doneicon}>
+                                        <DoneIcon />
+                                    </div>
+                                    <Longtext
+                                        text={add}
+                                        category="addresses"
+                                        isLink={true}
+                                        alttext={add}
+                                    />
                                 </div>
-                                <Longtext
-                                    text={add}
-                                    category="addresses"
-                                    isLink={true}
-                                    alttext={add}
-                                />
+                                <div className={styles.sui}>
+                                    <span className={styles.suiamount}>
+                                        {amount?.[idx]}
+                                    </span>
+                                    <span className={styles.suilabel}>SUI</span>
+                                </div>
                             </div>
                         ))}
                     </div>
