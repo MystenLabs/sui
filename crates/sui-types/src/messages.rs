@@ -1104,9 +1104,8 @@ pub type TxCertAndSignedEffects = (CertifiedTransaction, SignedTransactionEffect
 ///
 /// DO NOT USE in networked APIs.
 ///
-/// Because it is used very sparingly, it can be audited easily: Use rust-analyzer, or run:
-///
-///      $ git grep -E 'TrustedTransactionEnvelope|TrustedCertificate'
+/// Because it is used very sparingly, it can be audited easily: Use rust-analyzer,
+/// or run: git grep -E 'TrustedTransactionEnvelope|TrustedCertificate'
 ///
 /// And verify that none of the uses appear in any network APIs.
 #[derive(Clone, Serialize, Deserialize)]
