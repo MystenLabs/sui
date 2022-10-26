@@ -104,13 +104,14 @@ async fn batch_timeout() {
     let tx = transaction();
     let (s0, r0) = tokio::sync::oneshot::channel();
     tx_batch_maker.send((tx.clone(), s0)).await.unwrap();
+    let expected_batch = vec![tx];
 
     // Ensure the batch is as expected.
-    let batch = rx_message.recv().await.unwrap();
+    let (batch, batch_resp_channel) = rx_message.recv().await.unwrap();
     assert_eq!(batch.transactions, expected_batch);
 
     // Eventually deliver message
-    if let Some(resp) = batch.1 {
+    if let Some(resp) = batch_resp_channel {
         assert!(resp.send(()).is_ok());
     }
 
@@ -121,9 +122,5 @@ async fn batch_timeout() {
     assert!(r0.await.is_ok());
 
     // Ensure the batch is stored
-    assert!(store
-        .notify_read(expected_batch.digest())
-        .await
-        .unwrap()
-        .is_some());
+    assert!(store.notify_read(batch.digest()).await.unwrap().is_some());
 }

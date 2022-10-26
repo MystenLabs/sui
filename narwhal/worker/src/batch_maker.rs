@@ -191,8 +191,6 @@ impl BatchMaker {
         size: usize,
         responses: Vec<TxResponse>,
     ) -> impl Future<Output = ()> {
-        
-
         #[cfg(feature = "benchmark")]
         {
             use fastcrypto::hash::Hash;
@@ -296,7 +294,11 @@ impl BatchMaker {
 
             // Finally send to primary
             let (primary_response, batch_done) = tokio::sync::oneshot::channel();
-            let message = WorkerOurBatchMessage { digest, worker_id, metadata };
+            let message = WorkerOurBatchMessage {
+                digest,
+                worker_id,
+                metadata,
+            };
             if tx_digest
                 .send((message, Some(primary_response)))
                 .await
