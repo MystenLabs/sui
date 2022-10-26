@@ -28,6 +28,14 @@ export class CallArgSerializer {
   async extractObjectIds(txn: MoveCallTransaction): Promise<ObjectId[]> {
     const args = await this.serializeMoveCallArguments(txn);
     return args
+      .map((arg) =>
+        'ObjVec' in arg
+          ? Array.from(arg.ObjVec).map((a) => ({
+              Object: a,
+            }))
+          : arg
+      )
+      .flat()
       .map((arg) => {
         if ('Object' in arg) {
           const objectArg = arg.Object;
@@ -127,7 +135,11 @@ export class CallArgSerializer {
     if (structVal != null) {
       if (typeof argVal !== 'string') {
         throw new Error(
-          `${MOVE_CALL_SER_ERROR} expect the argument to be an object id string, got ${argVal}`
+          `${MOVE_CALL_SER_ERROR} expect the argument to be an object id string, got ${JSON.stringify(
+            argVal,
+            null,
+            2
+          )}`
         );
       }
       return { Object: await this.newObjectArg(argVal) };
@@ -213,7 +225,11 @@ export class CallArgSerializer {
       return normalizedType.toLowerCase();
     } else if (typeof normalizedType === 'string') {
       throw new Error(
-        `${MOVE_CALL_SER_ERROR} unknown pure normalized type ${normalizedType}`
+        `${MOVE_CALL_SER_ERROR} unknown pure normalized type ${JSON.stringify(
+          normalizedType,
+          null,
+          2
+        )}`
       );
     }
 
