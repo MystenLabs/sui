@@ -42,19 +42,12 @@
     overflow-y: auto;
     flex-grow: 1;
     align-self: stretch;
+
     @include utils.override-main-padding;
 }
 
 .others-loader {
     font-size: 28px;
-}
-
-.empty {
-    @include utils.typography('empty');
-}
-
-.others-loader,
-.empty {
     margin-top: 47px;
     align-self: center;
 }
@@ -69,37 +62,44 @@
         border-radius: 15px;
     }
 
-    margin-bottom: 25px;
+    margin-bottom: 20px;
 }
 
 .empty-wallet {
-    min-height: 40px;
     display: flex;
     flex-flow: column nowrap;
     justify-content: center;
     align-content: center;
     gap: 8px;
-    max-width: 280px;
     text-align: center;
+    margin-top: 10px;
+    padding-left: 10px;
+    padding-right: 10px;
+}
 
-    .empty-wallet-icon {
-        background: url('_assets/images/No-Coins.svg') no-repeat center;
-        height: 50px;
-        display: flex;
-        justify-content: center;
-    }
+.empty-wallet-icon {
+    background: url('_assets/images/No-Coins.svg') no-repeat center;
+    height: 50px;
+    display: flex;
+    justify-content: center;
+}
 
-    .empty-wallet-title {
-        font-weight: 500;
-        font-size: 14px;
-        line-height: 100%;
-        color: colors.$gray-85;
-    }
+.empty-wallet-title {
+    font-weight: 500;
+    font-size: 14px;
+    line-height: 100%;
+    color: colors.$gray-85;
+}
 
-    .empty-wallet-description {
-        font-weight: 400;
-        font-size: 13px;
-        line-height: 130%;
-        color: colors.$gray-80;
-    }
+.empty-wallet-description {
+    color: colors.$gray-80;
+
+    @include utils.typography('ParagraphPrimary/P2-R');
+}
+
+.gas-request-info {
+    margin-top: 5px;
+    align-self: stretch;
+    position: sticky;
+    bottom: 0;
 }

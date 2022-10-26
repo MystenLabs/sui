@@ -3,24 +3,70 @@
 
 .container {
     display: flex;
-    flex-flow: column nowrap;
+    flex-flow: row nowrap;
+    align-items: center;
+    gap: 10px;
 
     &.row-item {
-        padding: 14px 0;
+        padding: 15px 0;
 
         & + & {
             border-top: 1px solid colors.$gray-45;
         }
     }
+}
 
-    &.standalone {
-        align-items: center;
+.coin-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    color: colors.$white;
+    background-color: colors.$gray-75;
+    flex-shrink: 0;
+
+    &.sui {
+        background-color: colors.$sui-blue;
     }
 }
 
-.values-container {
+.coin-name-container {
+    display: flex;
+    flex-flow: column nowrap;
+    gap: 6px;
+    flex: 1;
+    overflow: hidden;
+}
+
+.coin-name {
+    color: colors.$gray-90;
+    text-transform: capitalize;
+
+    @include utils.typography('Primary/Body-SB');
+    @include utils.overflow-ellipsis;
+}
+
+.coin-symbol {
+    color: colors.$gray-65;
+    text-transform: uppercase;
+
+    @include utils.typography('Primary/BodySmall-M');
+    @include utils.overflow-ellipsis;
+}
+
+.value-container {
     display: flex;
     flex-flow: row nowrap;
+    flex: 1;
+    overflow: hidden;
+
+    &.row-item {
+        flex: 1;
+        justify-content: flex-end;
+    }
 
     &.standalone {
         align-items: baseline;
@@ -28,67 +74,42 @@
 }
 
 .value {
-    font-weight: 600;
-    font-size: 14px;
-    color: colors.$gray-100;
+    &.standalone {
+        color: colors.$gray-100;
 
-    &.row-item {
-        order: 2;
-        margin-left: 4px;
+        @include utils.typography('Primary/Heading1-B');
     }
 
-    &.standalone {
-        font-size: 28px;
+    &.row-item {
+        flex-shrink: 0;
+
+        @include utils.overflow-ellipsis;
     }
 }
 
 .symbol {
-    font-weight: 600;
-    font-size: 14px;
-    color: colors.$gray-100;
-    @include utils.overflow-ellipsis;
-
-    &.row-item {
-        order: 1;
-        flex-grow: 1;
-    }
-
     &.standalone {
         margin-left: 6px;
-        font-size: 22px;
-        font-weight: 400;
         color: colors.$gray-65;
+
+        @include utils.typography('Primary/Heading3-M');
+    }
+
+    &.row-item {
+        flex-shrink: 1;
+
+        @include utils.overflow-ellipsis;
     }
 }
 
 .value,
 .symbol {
     white-space: nowrap;
-}
 
-.type-actions-container {
-    display: flex;
-    flex-flow: row nowrap;
-    align-items: center;
-    margin-top: 4px;
-}
+    &.row-item {
+        color: colors.$gray-90;
+        margin-right: 4px;
 
-.type {
-    font-weight: 400;
-    font-size: 11px;
-    color: colors.$gray-75;
-    flex-grow: 1;
-    @include utils.overflow-ellipsis;
-
-    margin-right: 4px;
-}
-
-:global(.btn).action {
-    font-size: 11px;
-    font-weight: 300;
-    padding: 4px;
-
-    & + & {
-        margin-left: 4px;
+        @include utils.typography('Primary/Body-M');
     }
 }
