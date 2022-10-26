@@ -96,6 +96,7 @@ pub fn new_test_newobj_event(
 pub fn new_test_balance_change_event(
     timestamp: u64,
     seq_num: u64,
+    event_num: u64,
     coin_object_id: Option<ObjectID>,
     sender: Option<SuiAddress>,
     owner: Option<Owner>,
@@ -104,6 +105,7 @@ pub fn new_test_balance_change_event(
         timestamp,
         Some(TransactionDigest::random()),
         seq_num,
+        event_num,
         Event::CoinBalanceChange {
             package_id: ObjectID::random(),
             transaction_module: Identifier::new("module").unwrap(),
@@ -176,6 +178,7 @@ pub fn new_test_transfer_event(
 pub fn new_test_mutate_event(
     timestamp: u64,
     seq_num: u64,
+    event_num: u64,
     object_version: u64,
     object_type: &str,
     object_id: Option<ObjectID>,
@@ -185,6 +188,7 @@ pub fn new_test_mutate_event(
         timestamp,
         Some(TransactionDigest::random()),
         seq_num,
+        event_num,
         Event::MutateObject {
             package_id: ObjectID::random(),
             transaction_module: Identifier::new("module").unwrap(),
