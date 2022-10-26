@@ -85,8 +85,11 @@ where
 
             // Delete any extra certificates now unprocessed.
             checkpoints.tables.extra_transactions.clear()?;
-
-            self.state.database.remove_all_pending_certificates()?;
+            // This is either unnecessary if the whole epoch database will be dropped, or
+            // in correct if the table can contain certificates from multiple epochs.
+            // TODO: fix this during reconfiguration work.
+            self.state.database.cleanup_pending_certificates()?;
+            // TODO: also clean up self.node_sync_store for epoch - 1.
 
             let (storage_charges, computation_charges, storage_rebates): (
                 Vec<u64>,

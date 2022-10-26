@@ -332,7 +332,8 @@ impl GossipDigestHandler {
             }
             let digest = *certificate.digest();
             state
-                .add_pending_certificates(vec![(digest, Some(certificate))])
+                .add_pending_certificates(vec![certificate])
+                .await
                 .tap_err(|e| error!(?digest, "add_pending_certificates failed: {}", e))?;
 
             state.metrics.gossip_sync_count.inc();

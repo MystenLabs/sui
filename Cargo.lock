@@ -8331,6 +8331,7 @@ dependencies = [
  "narwhal-executor",
  "narwhal-node",
  "narwhal-types",
+ "num_cpus",
  "once_cell",
  "parking_lot 0.12.1",
  "pretty_assertions",
