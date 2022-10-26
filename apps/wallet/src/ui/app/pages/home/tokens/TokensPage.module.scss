@@ -4,9 +4,13 @@
 .container {
     display: flex;
     flex-flow: column nowrap;
-    max-width: 100%;
-    align-items: center;
     height: 100%;
+    flex-grow: 1;
+    align-items: center;
+    overflow-y: scroll;
+    margin-top: 20px;
+
+    @include utils.override-main-padding;
 }
 
 .balance-container {
@@ -35,11 +39,10 @@
     margin-bottom: 16px;
 }
 
-.other-coins {
+.other-coins,
+.tx-content {
     display: flex;
     flex-flow: column nowrap;
-    max-height: 100%;
-    overflow-y: auto;
     flex-grow: 1;
     align-self: stretch;
 
@@ -106,12 +109,6 @@
 
 .details-page {
     overflow-y: hidden;
-}
-
-.tx-content {
-    flex: 1;
-    overflow-y: auto;
-    width: 100%;
 }
 
 .token-activities {

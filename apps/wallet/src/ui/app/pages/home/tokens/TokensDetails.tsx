@@ -8,6 +8,7 @@ import CoinBalance from './coin-balance';
 import IconLink from './icon-link';
 import FaucetMessageInfo from '_app/shared/faucet/message-info';
 import FaucetRequestButton from '_app/shared/faucet/request-button';
+import PageTitle from '_app/shared/page-title';
 import AccountAddress from '_components/account-address';
 import Alert from '_components/alert';
 import Loading from '_components/loading';
@@ -93,79 +94,89 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
     );
 
     return (
-        <div className={st.container}>
-            {showError && error ? (
-                <Alert className={st.alert}>
-                    <strong>Sync error (data might be outdated).</strong>{' '}
-                    <small>{error.message}</small>
-                </Alert>
-            ) : null}
-            {!coinType && <AccountAddress showLink={false} mode="faded" />}
-            <div className={st.balanceContainer}>
-                <Loading loading={loading}>
-                    <CoinBalance
-                        balance={tokenBalance}
-                        type={activeCoinType}
-                        mode="standalone"
-                    />
-                </Loading>
-            </div>
-            <div className={st.actions}>
-                <IconLink
-                    icon={SuiIcons.Buy}
-                    to="/"
-                    disabled={true}
-                    text="Buy"
+        <>
+            {coinType && (
+                <PageTitle
+                    title={coinSymbol}
+                    backLink="/tokens"
+                    hideBackLabel={true}
                 />
-                <IconLink
-                    icon={SuiIcons.ArrowLeft}
-                    to={`/send${
-                        coinTypeWithBalance
-                            ? `?${new URLSearchParams({
-                                  type: activeCoinType,
-                              }).toString()}`
-                            : ''
-                    }`}
-                    disabled={!coinTypeWithBalance}
-                    text="Send"
-                />
-                <IconLink
-                    icon={SuiIcons.Swap}
-                    to="/"
-                    disabled={true}
-                    text="Swap"
-                />
-            </div>
+            )}
 
-            {activeCoinType === GAS_TYPE_ARG ? (
-                <div className={st.staking}>
+            <div className={st.container}>
+                {showError && error ? (
+                    <Alert className={st.alert}>
+                        <strong>Sync error (data might be outdated).</strong>{' '}
+                        <small>{error.message}</small>
+                    </Alert>
+                ) : null}
+                {!coinType && <AccountAddress showLink={false} mode="faded" />}
+                <div className={st.balanceContainer}>
+                    <Loading loading={loading}>
+                        <CoinBalance
+                            balance={tokenBalance}
+                            type={activeCoinType}
+                            mode="standalone"
+                        />
+                    </Loading>
+                </div>
+                <div className={st.actions}>
                     <IconLink
-                        icon={SuiIcons.Union}
-                        to="/stake"
+                        icon={SuiIcons.Buy}
+                        to="/"
                         disabled={true}
-                        text="Stake & Earn SUI"
+                        text="Buy"
+                    />
+                    <IconLink
+                        icon={SuiIcons.ArrowLeft}
+                        to={`/send${
+                            coinTypeWithBalance
+                                ? `?${new URLSearchParams({
+                                      type: activeCoinType,
+                                  }).toString()}`
+                                : ''
+                        }`}
+                        disabled={!coinTypeWithBalance}
+                        text="Send"
+                    />
+                    <IconLink
+                        icon={SuiIcons.Swap}
+                        to="/"
+                        disabled={true}
+                        text="Swap"
                     />
                 </div>
-            ) : null}
 
-            {!coinType ? (
-                <MyTokens
-                    allCoinTypes={allCoinTypes}
-                    coinBalance={tokenBalance}
-                    balances={balances}
-                    loading={loading}
-                />
-            ) : (
-                <>
-                    <div className={cl([st.title, st.tokenActivities])}>
-                        {coinSymbol} activity
+                {activeCoinType === GAS_TYPE_ARG ? (
+                    <div className={st.staking}>
+                        <IconLink
+                            icon={SuiIcons.Union}
+                            to="/stake"
+                            disabled={true}
+                            text="Stake & Earn SUI"
+                        />
                     </div>
-                    <div className={st.txContent}>
-                        <RecentTransactions coinType={activeCoinType} />
-                    </div>
-                </>
-            )}
-        </div>
+                ) : null}
+
+                {!coinType ? (
+                    <MyTokens
+                        allCoinTypes={allCoinTypes}
+                        coinBalance={tokenBalance}
+                        balances={balances}
+                        loading={loading}
+                    />
+                ) : (
+                    <>
+                        <div className={cl([st.title, st.tokenActivities])}>
+                            {coinSymbol} activity
+                        </div>
+                        <div className={st.txContent}>
+                            <RecentTransactions coinType={activeCoinType} />
+                        </div>
+                    </>
+                )}
+            </div>
+        </>
     );
 }
 
