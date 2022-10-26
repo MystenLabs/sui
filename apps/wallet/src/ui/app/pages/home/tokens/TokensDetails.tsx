@@ -136,7 +136,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
                 />
             </div>
 
-            {coinType === GAS_TYPE_ARG || !coinType ? (
+            {activeCoinType === GAS_TYPE_ARG ? (
                 <div className={st.staking}>
                     <IconLink
                         icon={SuiIcons.Union}
