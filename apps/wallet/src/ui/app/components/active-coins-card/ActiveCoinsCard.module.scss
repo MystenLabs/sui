@@ -76,7 +76,6 @@
             .coin-amount {
                 @include utils.typography('table/text-lg');
 
-                line-height: 17px;
                 text-align: right;
                 line-height: 20px;
             }
