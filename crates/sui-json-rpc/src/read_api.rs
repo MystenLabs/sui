@@ -88,16 +88,17 @@ impl RpcReadApiServer for ReadApi {
             .collect())
     }
 
-    async fn get_object(&self, object_id: ObjectID) -> RpcResult<GetObjectDataResponse> {
-        Ok(self
-            .state
-            .get_object_read(&object_id)
-            .await
-            .map_err(|e| {
-                debug!(?object_id, "Failed to get object: {:?}", e);
-                anyhow!("{e}")
-            })?
-            .try_into()?)
+    async fn get_object(&self, _object_id: ObjectID) -> RpcResult<GetObjectDataResponse> {
+        Err(anyhow!("don't do any object reads for testing").into())
+        // Ok(self
+        //     .state
+        //     .get_object_read(&object_id)
+        //     .await
+        //     .map_err(|e| {
+        //         debug!(?object_id, "Failed to get object: {:?}", e);
+        //         anyhow!("{e}")
+        //     })?
+        //     .try_into()?)
     }
 
     async fn get_total_transaction_number(&self) -> RpcResult<u64> {
