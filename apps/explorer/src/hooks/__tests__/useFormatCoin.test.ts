@@ -4,7 +4,7 @@
 import BigNumber from 'bignumber.js';
 import { describe, it, expect } from 'vitest';
 
-import { formatBalance } from '../useFormatCoin';
+import { formatBalance, CoinFormat } from '../useFormatCoin';
 
 const SUI_DECIMALS = 9;
 
@@ -46,5 +46,29 @@ describe('formatBalance', () => {
         expect(formatBalance(toMist('1234000000'), SUI_DECIMALS)).toEqual(
             '1.234 B'
         );
+    });
+
+    it('formats integer amounts with full CoinFormat', () => {
+        expect(
+            formatBalance(toMist('1'), SUI_DECIMALS, CoinFormat.FULL)
+        ).toEqual('1');
+        expect(
+            formatBalance(toMist('1.123456789'), SUI_DECIMALS, CoinFormat.FULL)
+        ).toEqual('1.123456789');
+        expect(
+            formatBalance(toMist('9999.9999'), SUI_DECIMALS, CoinFormat.FULL)
+        ).toEqual('9,999.9999');
+        expect(
+            formatBalance(toMist('10000'), SUI_DECIMALS, CoinFormat.FULL)
+        ).toEqual('10,000');
+        expect(
+            formatBalance(toMist('12345'), SUI_DECIMALS, CoinFormat.FULL)
+        ).toEqual('12,345');
+        expect(
+            formatBalance(toMist('1234000'), SUI_DECIMALS, CoinFormat.FULL)
+        ).toEqual('1,234,000');
+        expect(
+            formatBalance(toMist('1234000000'), SUI_DECIMALS, CoinFormat.FULL)
+        ).toEqual('1,234,000,000');
     });
 });

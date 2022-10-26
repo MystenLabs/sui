@@ -18,6 +18,11 @@ type FormattedCoin = [
 
 const SUI_DENOMINATION_FEATURE = 'sui-denomination';
 
+export enum CoinFormat {
+    ROUNDED = 'ROUNDED',
+    FULL = 'FULL',
+}
+
 /**
  * Formats a coin balance based on our standard coin display logic.
  * If the balance is less than 1, it will be displayed in its full decimal form.
@@ -25,10 +30,15 @@ const SUI_DENOMINATION_FEATURE = 'sui-denomination';
  */
 export function formatBalance(
     balance: bigint | number | string,
-    decimals: number
+    decimals: number,
+    format: CoinFormat = CoinFormat.ROUNDED
 ) {
     let postfix = '';
     let bn = new BigNumber(balance.toString()).shiftedBy(-1 * decimals);
+
+    if (format === CoinFormat.FULL) {
+        return bn.toFormat();
+    }
 
     if (bn.gte(1_000_000_000)) {
         bn = bn.shiftedBy(-9);

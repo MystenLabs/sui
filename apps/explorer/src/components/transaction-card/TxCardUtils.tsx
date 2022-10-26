@@ -187,6 +187,7 @@ export const genTableDataFromTxData = (
                     }}
                 />
             ),
+            // TODO: Remove numberSuffix
             amounts: <SuiAmount amount={txn.suiAmount} />,
             gas: <SuiAmount amount={numberSuffix(txn.txGas)} />,
         })),
