@@ -1,6 +1,6 @@
 {
   "name": "@mysten/wallet-standard",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "A suite of standard utilities for implementing wallets based on the Wallet Standard.",
   "license": "Apache-2.0",
   "author": "Mysten Labs <build@mystenlabs.com>",
