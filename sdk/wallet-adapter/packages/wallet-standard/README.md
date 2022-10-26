@@ -72,13 +72,13 @@ class YourWallet implements Wallet {
     // Your wallet's events on implementation.
   };
 
-	#connect: ConnectMethod = () => {
-		// Your wallet's connect implementation
-	};
+  #connect: ConnectMethod = () => {
+    // Your wallet's connect implementation
+  };
 
-	#signAndExecuteTransaction: SuiSignAndExecuteTransactionMethod = () => {
-		// Your wallet's signAndExecuteTransaction implementation
-	};
+  #signAndExecuteTransaction: SuiSignAndExecuteTransactionMethod = () => {
+    // Your wallet's signAndExecuteTransaction implementation
+  };
 }
 ```
 
@@ -113,15 +113,12 @@ class YourWallet implements Wallet {
 
 ### Registering in the window
 
-Once you have a compatible interface for your wallet, you can register it in the window under the `window.navigator.wallets` interface. Wallets self-register by pushing their standard wallet interface to this array-like interface.
+Once you have a compatible interface for your wallet, you can register it using the `registerWallet` function.
 
 ```typescript
-// This makes TypeScript aware of the `window.navigator.wallets` interface.
-declare const window: import("@mysten/wallet-standard").WalletsWindow;
+import { registerWallet } from '@mysten/wallet-standard';
 
-(window.navigator.wallets || []).push(({ register }) => {
-  register(new YourWallet());
-});
+registerWallet(new YourWallet());
 ```
 
-> Note that while this interface is array-like, it is not always an array, and the only method that should be called on it is `push`.
+> If you're interested in the internal implementation of the `registerWallet` method, you can [see how it works here](https://github.com/wallet-standard/wallet-standard/blob/b4794e761de688906827829d5380b24cb8ed5fd5/packages/core/wallet/src/register.ts#L9).
