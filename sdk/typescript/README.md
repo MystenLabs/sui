@@ -58,11 +58,18 @@ pnpm run prepare:e2e
 pnpm run test:e2e
 ```
 
+To run E2E tests against DevNet
+
+```
+cd sdk/typescript
+VITE_FAUCET_URL='https://faucet.devnet.sui.io:443/gas' VITE_FULLNODE_URL='https://fullnode.devnet.sui.io' pnpm test:e2e
+```
+
 ## Usage
 
 The `JsonRpcProvider` class provides a connection to the JSON-RPC Server and should be used for all read-only operations. The default URLs to connect with the RPC server are:
 
-- local: http://127.0.0.1:5001
+- local: http://127.0.0.1:9000
 - DevNet: https://fullnode.devnet.sui.io:443
 
 Examples:
@@ -217,6 +224,44 @@ const moveCallTxn = await signer.executeMoveCallWithRequestType({
   gasBudget: 10000,
 });
 console.log('moveCallTxn', moveCallTxn);
+```
+
+Subscribe to all events created by transactions sent by account `0xbff6ccc8707aa517b4f1b95750a2a8c666012df3`
+
+```typescript
+import { JsonRpcProvider } from '@mysten/sui.js';
+const provider = new JsonRpcProvider('https://fullnode.devnet.sui.io:443');
+
+// calls RPC method 'sui_subscribeEvent' with params:
+// [ { SenderAddress: '0xbff6ccc8707aa517b4f1b95750a2a8c666012df3' } ]
+const subscriptionId = await provider.subscribeEvent(
+  { SenderAddress: '0xbff6ccc8707aa517b4f1b95750a2a8c666012df3' },
+  (event: SuiEventEnvelope) => {
+    // handle subscription notification message here. This function is called once per subscription message.
+  }
+);
+
+// later, to unsubscribe
+// calls RPC method 'sui_unsubscribeEvent' with params: [ subscriptionId ]
+const subFoundAndRemoved = await provider.unsubscribeEvent(subscriptionId);
+```
+
+Subscribe to all events created by the `devnet_nft` module
+
+```typescript
+import { JsonRpcProvider } from '@mysten/sui.js';
+const provider = new JsonRpcProvider('https://fullnode.devnet.sui.io:443');
+
+const devnetNftFilter = {
+  All: [
+    {EventType:  "MoveEvent"},
+    {Package: "0x2"},
+    {Module: "devnet_nft"}
+  ]
+};
+const devNftSub = await provider.subscribeEvent(devnetNftFilter, (event: SuiEventEnvelope) => {
+    // handle subscription notification message here
+});
 ```
 
 To publish a package:

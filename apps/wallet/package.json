@@ -55,6 +55,7 @@
         "eslint-config-prettier": "^8.5.0",
         "eslint-config-react-app": "^7.0.1",
         "eslint-webpack-plugin": "^3.2.0",
+        "happy-dom": "^7.6.0",
         "html-webpack-plugin": "^5.5.0",
         "mini-css-extract-plugin": "^2.6.1",
         "onchange": "^7.1.0",
@@ -83,6 +84,7 @@
     "dependencies": {
         "@floating-ui/react-dom-interactions": "^0.10.1",
         "@growthbook/growthbook": "^0.18.1",
+        "@growthbook/growthbook-react": "^0.9.1",
         "@metamask/browser-passworder": "^3.0.0",
         "@mysten/core": "workspace:*",
         "@mysten/sui.js": "workspace:*",
@@ -90,6 +92,8 @@
         "@reduxjs/toolkit": "^1.8.3",
         "@scure/bip32": "^1.1.0",
         "@scure/bip39": "^1.1.0",
+        "@tanstack/react-query": "^4.0.10",
+        "bignumber.js": "^9.1.0",
         "bootstrap-icons": "^1.9.1",
         "buffer": "^6.0.3",
         "classnames": "^2.3.1",
@@ -110,6 +114,7 @@
         "tailwindcss": "^3.0.23",
         "tweetnacl": "^1.0.3",
         "uuid": "^8.3.2",
+        "vite-tsconfig-paths": "^3.5.0",
         "webextension-polyfill": "^0.9.0",
         "yup": "^0.32.11",
         "zxcvbn": "^4.4.2"

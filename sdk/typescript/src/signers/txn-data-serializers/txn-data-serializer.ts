@@ -51,11 +51,6 @@ export interface MoveCallTransaction {
   packageObjectId: ObjectId;
   module: string;
   function: string;
-  /**
-   * Usage: pass in string[] if you use RpcTxnDataSerializer,
-   * Otherwise you need to pass in TypeTag[]. We will remove
-   * RpcTxnDataSerializer soon.
-   */
   typeArguments: string[] | TypeTag[];
   arguments: SuiJsonValue[];
   gasPayment?: ObjectId;

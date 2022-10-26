@@ -1,5 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
 use crate::objects::{test_gas_objects, test_gas_objects_with_owners, test_shared_object};
 use crate::{test_account_keys, test_committee, test_validator_keys};
 use move_core_types::account_address::AccountAddress;
@@ -19,15 +20,15 @@ use sui_types::base_types::SuiAddress;
 use sui_types::base_types::{ObjectDigest, ObjectID, SequenceNumber};
 use sui_types::committee::Committee;
 use sui_types::crypto::{
-    get_key_pair, AccountKeyPair, AuthorityKeyPair, AuthorityPublicKeyBytes, KeypairTraits,
+    get_key_pair, AccountKeyPair, AuthorityKeyPair, AuthorityPublicKeyBytes, AuthoritySignInfo,
+    KeypairTraits,
 };
 use sui_types::gas::GasCostSummary;
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::SignedTransactionEffects;
 use sui_types::messages::{CallArg, ExecutionStatus, TransactionEffects};
 use sui_types::messages::{
-    CertifiedTransaction, ObjectArg, SignatureAggregator, SignedTransaction, Transaction,
-    TransactionData,
+    CertifiedTransaction, ObjectArg, SignedTransaction, Transaction, TransactionData,
 };
 use sui_types::object::Object;
 use sui_types::object::Owner;
@@ -446,15 +447,16 @@ pub fn make_tx_certs_and_signed_effects_with_committee(
     let mut tx_certs = Vec::new();
     let mut effect_sigs = Vec::new();
     for tx in transactions {
-        let mut signed_tx_aggregator = SignatureAggregator::try_new(tx.clone(), committee).unwrap();
+        let mut sigs: Vec<AuthoritySignInfo> = Vec::new();
         for (key, _, _, _) in test_validator_keys() {
             let vote =
                 SignedTransaction::new(committee.epoch, tx.clone(), key.public().into(), &key);
-
-            if let Some(tx_cert) = signed_tx_aggregator
-                .append(vote.auth_sign_info.authority, vote.auth_sign_info.signature)
-                .unwrap()
-            {
+            sigs.push(vote.auth_sign_info.clone());
+            if let Ok(tx_cert) = CertifiedTransaction::new_with_auth_sign_infos(
+                vote.clone().to_transaction(),
+                sigs.clone(),
+                committee,
+            ) {
                 tx_certs.push(tx_cert);
                 let effects = dummy_transaction_effects(&tx);
                 let signed_effects = effects.to_sign_effects(

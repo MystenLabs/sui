@@ -10,13 +10,14 @@ import {
   getExecutionStatusType,
   JsonRpcProvider,
   JsonRpcProviderWithCache,
-  LATEST_RPC_API_VERSION,
   ObjectId,
   RawSigner,
 } from '../../../src';
 
-const DEFAULT_FAUCET_URL = 'http://127.0.0.1:9123/faucet';
-const DEFAULT_FULLNODE_URL = 'http://127.0.0.1:9000';
+const DEFAULT_FAUCET_URL =
+  import.meta.env.VITE_FAUCET_URL ?? 'http://127.0.0.1:9123/faucet';
+const DEFAULT_FULLNODE_URL =
+  import.meta.env.VITE_FULLNODE_URL ?? 'http://127.0.0.1:9000';
 
 export const DEFAULT_RECIPIENT = '0x36096be6a0314052931babed39f53c0666a6b0df';
 export const DEFAULT_RECIPIENT_2 = '0x46096be6a0314052931babed39f53c0666a6b0da';
@@ -46,11 +47,13 @@ export class TestToolbox {
 }
 
 export async function requestToken(recipient: string): Promise<void> {
-  const res = await axios.post<{ ok: boolean }>(DEFAULT_FAUCET_URL, {
-    recipient,
+  const res = await axios.post<{ error: any }>(DEFAULT_FAUCET_URL, {
+    FixedAmountRequest: {
+      recipient,
+    },
   });
-  if (!res.data.ok) {
-    throw new Error('Unable to invoke local faucet.');
+  if (res.data.error) {
+    throw new Error('Unable to invoke local faucet:', res.data.error);
   }
 }
 
@@ -58,12 +61,10 @@ type ProviderType = 'rpc' | 'rpc-with-cache';
 
 export function getProvider(providerType: ProviderType): JsonRpcProvider {
   return providerType === 'rpc'
-    ? new JsonRpcProvider(DEFAULT_FULLNODE_URL, false, LATEST_RPC_API_VERSION)
-    : new JsonRpcProviderWithCache(
-        DEFAULT_FULLNODE_URL,
-        false,
-        LATEST_RPC_API_VERSION
-      );
+    ? new JsonRpcProvider(DEFAULT_FULLNODE_URL, { skipDataValidation: false })
+    : new JsonRpcProviderWithCache(DEFAULT_FULLNODE_URL, {
+        skipDataValidation: false,
+      });
 }
 
 export async function setup(providerType: ProviderType = 'rpc') {

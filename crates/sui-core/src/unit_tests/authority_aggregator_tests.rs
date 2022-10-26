@@ -329,10 +329,7 @@ where
             .handle_transaction_info_request(TransactionInfoRequest::from(*transaction_digest))
             .await
         {
-            votes.push((
-                signed.auth_sign_info.authority,
-                signed.auth_sign_info.signature.clone(),
-            ));
+            votes.push(signed.auth_sign_info.clone());
             if let Some(inner_transaction) = transaction {
                 assert!(inner_transaction.signed_data.data == signed.signed_data.data);
             }
@@ -340,11 +337,7 @@ where
         }
     }
 
-    let stake: StakeUnit = votes.iter().map(|(name, _)| committee.weight(name)).sum();
-    let quorum_threshold = committee.quorum_threshold();
-    assert!(stake >= quorum_threshold);
-
-    CertifiedTransaction::new_with_signatures(
+    CertifiedTransaction::new_with_auth_sign_infos(
         transaction.unwrap().to_transaction(),
         votes,
         committee,

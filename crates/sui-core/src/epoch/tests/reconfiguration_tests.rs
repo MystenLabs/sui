@@ -10,14 +10,16 @@ use std::{
     time::Duration,
 };
 
+use sui_types::crypto::AuthoritySignInfo;
+use sui_types::messages::CertifiedTransaction;
 use sui_types::messages_checkpoint::{
     AuthenticatedCheckpoint, CertifiedCheckpointSummary, CheckpointContents,
 };
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
-    crypto::{get_key_pair, AccountKeyPair, AuthoritySignature, SuiAuthoritySignature},
+    crypto::{get_key_pair, AccountKeyPair},
     error::SuiError,
-    messages::{SignatureAggregator, TransactionData},
+    messages::TransactionData,
     object::Object,
     SUI_SYSTEM_STATE_OBJECT_ID,
 };
@@ -115,17 +117,18 @@ async fn test_start_epoch_change() {
     );
 
     // Test that when validator is halted, we cannot send any certificate.
-    let mut sigs = SignatureAggregator::try_new(transaction.clone(), &net.committee).unwrap();
-    let mut cert = None;
-    for state in &states {
-        cert = sigs
-            .append(
-                state.name,
-                AuthoritySignature::new(&transaction.signed_data, &*state.secret),
-            )
-            .unwrap();
-    }
-    let certificate = cert.unwrap();
+    let sigs = states
+        .iter()
+        .map(|state| {
+            AuthoritySignInfo::new(0, &transaction.signed_data, state.name, &*state.secret)
+        })
+        .collect();
+    let certificate = CertifiedTransaction::new_with_auth_sign_infos(
+        transaction.clone(),
+        sigs,
+        &genesis_committee,
+    )
+    .unwrap();
     assert_eq!(
         state.handle_certificate(&certificate).await.unwrap_err(),
         SuiError::ValidatorHaltedAtEpochEnd

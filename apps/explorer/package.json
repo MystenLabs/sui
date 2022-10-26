@@ -29,6 +29,9 @@
         "@headlessui/react": "^1.7.2",
         "@mysten/core": "workspace:*",
         "@mysten/sui.js": "workspace:*",
+        "@mysten/wallet-adapter-wallet-standard": "workspace:*",
+        "@mysten/wallet-adapter-react": "workspace:*",
+        "@mysten/wallet-adapter-react-ui": "workspace:*",
         "@sentry/react": "^7.6.0",
         "@sentry/tracing": "^7.6.0",
         "@tanstack/react-query": "^4.0.10",
@@ -45,11 +48,9 @@
         "prismjs": "^1.28.0",
         "react": "^18.2.0",
         "react-dom": "^18.2.0",
-        "react-ga4": "^1.4.1",
         "react-hot-toast": "^2.4.0",
         "react-router-dom": "^6.2.1",
-        "topojson-client": "^3.1.0",
-        "vanilla-cookieconsent": "^2.8.0"
+        "topojson-client": "^3.1.0"
     },
     "devDependencies": {
         "@babel/core": "^7.19.3",

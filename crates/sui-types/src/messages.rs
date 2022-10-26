@@ -6,8 +6,7 @@ use crate::committee::{EpochId, StakeUnit};
 use crate::crypto::{
     sha3_hash, AuthoritySignInfo, AuthoritySignInfoTrait, AuthoritySignature,
     AuthorityStrongQuorumSignInfo, Ed25519SuiSignature, EmptySignInfo, Signable, Signature,
-    SignatureScheme, SuiAuthoritySignature, SuiSignature, SuiSignatureInner, ToFromBytes,
-    VerificationObligation,
+    SignatureScheme, SuiSignature, SuiSignatureInner, ToFromBytes, VerificationObligation,
 };
 use crate::gas::GasCostSummary;
 use crate::messages_checkpoint::{
@@ -981,16 +980,13 @@ impl SignedTransaction {
         authority: AuthorityName,
         secret: &dyn signature::Signer<AuthoritySignature>,
     ) -> Self {
-        let signature = AuthoritySignature::new(&transaction.signed_data, secret);
+        let auth_sign_info =
+            AuthoritySignInfo::new(epoch, &transaction.signed_data, authority, secret);
         Self {
             transaction_digest: OnceCell::new(),
             is_verified: transaction.is_verified,
             signed_data: transaction.signed_data,
-            auth_sign_info: AuthoritySignInfo {
-                epoch,
-                authority,
-                signature,
-            },
+            auth_sign_info,
         }
     }
 
@@ -1022,16 +1018,12 @@ impl SignedTransaction {
                 .unwrap()
                 .into(),
         };
-        let signature = AuthoritySignature::new(&signed_data, secret);
+        let auth_sign_info = AuthoritySignInfo::new(next_epoch, &signed_data, authority, secret);
         Self {
             transaction_digest: OnceCell::new(),
             is_verified: false,
             signed_data,
-            auth_sign_info: AuthoritySignInfo {
-                epoch: next_epoch,
-                authority,
-                signature,
-            },
+            auth_sign_info,
         }
     }
 
@@ -1748,17 +1740,12 @@ impl TransactionEffects {
         authority_name: &AuthorityName,
         secret: &dyn signature::Signer<AuthoritySignature>,
     ) -> SignedTransactionEffects {
-        let signature = AuthoritySignature::new(&self, secret);
         let transaction_effects_digest = OnceCell::from(self.digest());
-
+        let auth_signature = AuthoritySignInfo::new(epoch, &self, *authority_name, secret);
         SignedTransactionEffects {
             transaction_effects_digest,
             effects: self,
-            auth_signature: AuthoritySignInfo {
-                epoch,
-                authority: *authority_name,
-                signature,
-            },
+            auth_signature,
         }
     }
 
@@ -1873,13 +1860,13 @@ pub type CertifiedTransactionEffects = TransactionEffectsEnvelope<AuthorityStron
 impl CertifiedTransactionEffects {
     pub fn new(
         effects: TransactionEffects,
-        signatures: Vec<(AuthorityName, AuthoritySignature)>,
+        signatures: Vec<AuthoritySignInfo>,
         committee: &Committee,
     ) -> SuiResult<Self> {
         Ok(Self {
             transaction_effects_digest: OnceCell::from(effects.digest()),
             effects,
-            auth_signature: AuthorityStrongQuorumSignInfo::new_with_signatures(
+            auth_signature: AuthorityStrongQuorumSignInfo::new_from_auth_sign_infos(
                 signatures, committee,
             )?,
         })
@@ -2032,88 +2019,17 @@ impl From<Vec<Object>> for InputObjects {
     }
 }
 
-pub struct SignatureAggregator<'a> {
-    committee: &'a Committee,
-    weight: StakeUnit,
-    used_authorities: HashSet<AuthorityName>,
-    partial: CertifiedTransaction,
-    signature_stash: Vec<(AuthorityName, AuthoritySignature)>,
-}
-
-impl<'a> SignatureAggregator<'a> {
-    /// Start aggregating signatures for the given value into a certificate.
-    pub fn try_new(transaction: Transaction, committee: &'a Committee) -> Result<Self, SuiError> {
-        transaction.verify()?;
-        Ok(Self::new_unsafe(transaction, committee))
-    }
-
-    /// Same as try_new but we don't check the transaction.
-    pub fn new_unsafe(transaction: Transaction, committee: &'a Committee) -> Self {
-        Self {
-            committee,
-            weight: 0,
-            used_authorities: HashSet::new(),
-            partial: CertifiedTransaction::new(committee.epoch, transaction),
-            signature_stash: Vec::new(),
-        }
-    }
-
-    /// Try to append a signature to a (partial) certificate. Returns Some(certificate) if a quorum was reached.
-    /// The resulting final certificate is guaranteed to be valid in the sense of `check` below.
-    /// Returns an error if the signed value cannot be aggregated.
-    pub fn append(
-        &mut self,
-        authority: AuthorityName,
-        signature: AuthoritySignature,
-    ) -> Result<Option<CertifiedTransaction>, SuiError> {
-        signature.verify(&self.partial.signed_data, authority)?;
-
-        // Check that each authority only appears once.
-        fp_ensure!(
-            !self.used_authorities.contains(&authority),
-            SuiError::CertificateAuthorityReuse
-        );
-        self.used_authorities.insert(authority);
-        // Update weight.
-        let voting_rights = self.committee.weight(&authority);
-        fp_ensure!(voting_rights > 0, SuiError::UnknownSigner);
-        self.weight += voting_rights;
-        // Update certificate.
-
-        self.signature_stash.push((authority, signature));
-
-        if self.weight >= self.committee.quorum_threshold() {
-            self.partial.auth_sign_info = AuthorityStrongQuorumSignInfo::new_with_signatures(
-                self.signature_stash.clone(),
-                self.committee,
-            )?;
-            Ok(Some(self.partial.clone()))
-        } else {
-            Ok(None)
-        }
-    }
-}
-
 impl CertifiedTransaction {
-    pub fn new(epoch: EpochId, transaction: Transaction) -> CertifiedTransaction {
-        CertifiedTransaction {
-            transaction_digest: transaction.transaction_digest,
-            is_verified: false,
-            signed_data: transaction.signed_data,
-            auth_sign_info: AuthorityStrongQuorumSignInfo::new(epoch),
-        }
-    }
-
-    pub fn new_with_signatures(
+    pub fn new_with_auth_sign_infos(
         transaction: Transaction,
-        signatures: Vec<(AuthorityName, AuthoritySignature)>,
+        signatures: Vec<AuthoritySignInfo>,
         committee: &Committee,
     ) -> SuiResult<CertifiedTransaction> {
         Ok(CertifiedTransaction {
             transaction_digest: transaction.transaction_digest,
             is_verified: false,
             signed_data: transaction.signed_data,
-            auth_sign_info: AuthorityStrongQuorumSignInfo::new_with_signatures(
+            auth_sign_info: AuthorityStrongQuorumSignInfo::new_from_auth_sign_infos(
                 signatures, committee,
             )?,
         })

@@ -322,7 +322,7 @@ from storage is transferred to another address.
 > **Important:** Transaction effects, such as object creation/transfer become visible only after a
 > given transaction completes. For example, if the second transaction in our running example created
 > a sword and transferred it to the admin's address, it would become available for retrieval
-> from the admin's address (via `test_scenario`s `take_from_sender` or `take_last_created_owned`
+> from the admin's address (via `test_scenario`s `take_from_sender` or `take_from_address`
 > functions) only in the third transaction.
 
 The final transaction is executed by the final owner - it retrieves

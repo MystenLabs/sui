@@ -15,7 +15,7 @@ use crate::waypoint::{Waypoint, WaypointDiff};
 use crate::{
     base_types::AuthorityName,
     committee::Committee,
-    crypto::{sha3_hash, AuthoritySignature, SuiAuthoritySignature, VerificationObligation},
+    crypto::{sha3_hash, AuthoritySignature, VerificationObligation},
     error::SuiError,
 };
 use serde::{Deserialize, Serialize};
@@ -232,7 +232,7 @@ impl Display for CheckpointSummary {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "CheckpointSummary {{ epoch: {:?}, seq: {:?}, content_digest: {}, 
+            "CheckpointSummary {{ epoch: {:?}, seq: {:?}, content_digest: {},
             gas_cost_summary: {:?}}}",
             self.epoch,
             self.sequence_number,
@@ -286,16 +286,11 @@ impl SignedCheckpointSummary {
         authority: AuthorityName,
         signer: &dyn signature::Signer<AuthoritySignature>,
     ) -> SignedCheckpointSummary {
-        let signature = AuthoritySignature::new(&checkpoint, signer);
-
         let epoch = checkpoint.epoch;
+        let auth_signature = AuthoritySignInfo::new(epoch, &checkpoint, authority, signer);
         SignedCheckpointSummary {
             summary: checkpoint,
-            auth_signature: AuthoritySignInfo {
-                epoch,
-                authority,
-                signature,
-            },
+            auth_signature,
         }
     }
 
@@ -358,10 +353,10 @@ impl CertifiedCheckpointSummary {
 
         let certified_checkpoint = CertifiedCheckpointSummary {
             summary: signed_checkpoints[0].summary.clone(),
-            auth_signature: AuthorityWeakQuorumSignInfo::new_with_signatures(
+            auth_signature: AuthorityWeakQuorumSignInfo::new_from_auth_sign_infos(
                 signed_checkpoints
                     .into_iter()
-                    .map(|v| (v.auth_signature.authority, v.auth_signature.signature))
+                    .map(|v| v.auth_signature)
                     .collect(),
                 committee,
             )?,
@@ -556,15 +551,11 @@ impl CheckpointProposal {
         transactions: CheckpointProposalContents,
     ) -> Self {
         let proposal_summary = CheckpointProposalSummary::new(sequence_number, &transactions);
-        let signature = AuthoritySignature::new(&proposal_summary, signer);
+        let auth_signature = AuthoritySignInfo::new(epoch, &proposal_summary, authority, signer);
         Self {
             signed_summary: SignedCheckpointProposalSummary {
                 summary: proposal_summary,
-                auth_signature: AuthoritySignInfo {
-                    epoch,
-                    authority,
-                    signature,
-                },
+                auth_signature,
             },
             transactions,
         }

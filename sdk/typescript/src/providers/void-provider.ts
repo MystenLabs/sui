@@ -29,12 +29,13 @@ import {
   TransactionQuery,
   Ordering,
   PaginatedTransactionDigests,
+  RpcApiVersion,
 } from '../types';
 import { Provider } from './provider';
 
 export class VoidProvider extends Provider {
   // API Version
-  async getRpcApiVersion(): Promise<string> {
+  async getRpcApiVersion(): Promise<RpcApiVersion | undefined> {
     throw this.newError('getRpcApiVersion');
   }
 
@@ -49,9 +50,7 @@ export class VoidProvider extends Provider {
     throw this.newError('getGasObjectsOwnedByAddress');
   }
 
-  getCoinDenominationInfo(
-    _coin_type: string,
-  ): CoinDenominationInfoResponse {
+  getCoinDenominationInfo(_coin_type: string): CoinDenominationInfoResponse {
     throw this.newError('getCoinDenominationInfo');
   }
 

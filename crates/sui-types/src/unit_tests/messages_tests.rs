@@ -12,7 +12,9 @@ use roaring::RoaringBitmap;
 use crate::crypto::bcs_signable_test::{get_obligation_input, Foo};
 use crate::crypto::Secp256k1SuiSignature;
 use crate::crypto::SuiKeyPair;
-use crate::crypto::{get_key_pair, AccountKeyPair, AuthorityKeyPair, AuthorityPublicKeyBytes};
+use crate::crypto::{
+    get_key_pair, AccountKeyPair, AuthorityKeyPair, AuthorityPublicKeyBytes, SuiAuthoritySignature,
+};
 use crate::messages_checkpoint::CheckpointContents;
 use crate::messages_checkpoint::CheckpointSummary;
 use crate::object::Owner;
@@ -106,7 +108,6 @@ fn test_certificates() {
     let (a2, sec2): (_, AuthorityKeyPair) = get_key_pair();
     let (_a3, sec3): (_, AuthorityKeyPair) = get_key_pair();
     let (a_sender, sender_sec): (_, AccountKeyPair) = get_key_pair();
-    let (_a_sender2, sender_sec2): (_, AccountKeyPair) = get_key_pair();
 
     let mut authorities: BTreeMap<AuthorityPublicKeyBytes, u64> = BTreeMap::new();
     authorities.insert(
@@ -129,16 +130,6 @@ fn test_certificates() {
         ),
         &sender_sec,
     );
-    let bad_transaction = Transaction::from_data(
-        TransactionData::new_transfer(
-            a2,
-            random_object_ref(),
-            a_sender,
-            random_object_ref(),
-            10000,
-        ),
-        &sender_sec2,
-    );
 
     let v1 = SignedTransaction::new(
         committee.epoch(),
@@ -159,56 +150,47 @@ fn test_certificates() {
         &sec3,
     );
 
-    let mut builder = SignatureAggregator::try_new(transaction.clone(), &committee).unwrap();
-    assert!(builder
-        .append(
-            v1.auth_sign_info.authority,
-            v1.auth_sign_info.signature.clone()
-        )
-        .unwrap()
-        .is_none());
-    let c = builder
-        .append(v2.auth_sign_info.authority, v2.auth_sign_info.signature)
-        .unwrap()
+    let mut sigs = vec![v1.auth_sign_info.clone()];
+    assert!(CertifiedTransaction::new_with_auth_sign_infos(
+        transaction.clone(),
+        sigs.clone(),
+        &committee
+    )
+    .is_err());
+    sigs.push(v2.auth_sign_info);
+    let c = CertifiedTransaction::new_with_auth_sign_infos(transaction.clone(), sigs, &committee)
         .unwrap();
-
     assert!(c.verify(&committee).is_ok());
 
-    let mut builder = SignatureAggregator::try_new(transaction, &committee).unwrap();
-    assert!(builder
-        .append(v1.auth_sign_info.authority, v1.auth_sign_info.signature)
-        .unwrap()
-        .is_none());
-    assert!(builder
-        .append(v3.auth_sign_info.authority, v3.auth_sign_info.signature)
-        .is_err());
+    let sigs = vec![v1.auth_sign_info, v3.auth_sign_info];
 
-    assert!(SignatureAggregator::try_new(bad_transaction, &committee).is_err());
+    assert!(CertifiedTransaction::new_with_auth_sign_infos(transaction, sigs, &committee).is_err());
 }
 
 #[test]
 fn test_new_with_signatures() {
     let message: Foo = Foo("some data".to_string());
-    let mut signatures: Vec<(AuthorityName, AuthoritySignature)> = Vec::new();
+    let mut signatures: Vec<AuthoritySignInfo> = Vec::new();
     let mut authorities: BTreeMap<AuthorityPublicKeyBytes, u64> = BTreeMap::new();
 
     for _ in 0..5 {
         let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
-        let sig = AuthoritySignature::new(&message, &sec);
-        signatures.push((AuthorityPublicKeyBytes::from(sec.public()), sig));
-        authorities.insert(AuthorityPublicKeyBytes::from(sec.public()), 1);
+        let name = AuthorityPublicKeyBytes::from(sec.public());
+        signatures.push(AuthoritySignInfo::new(0, &message, name, &sec));
+        authorities.insert(name, 1);
     }
     let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
     authorities.insert(AuthorityPublicKeyBytes::from(sec.public()), 1);
 
     let committee = Committee::new(0, authorities.clone()).unwrap();
     let quorum =
-        AuthorityStrongQuorumSignInfo::new_with_signatures(signatures.clone(), &committee).unwrap();
+        AuthorityStrongQuorumSignInfo::new_from_auth_sign_infos(signatures.clone(), &committee)
+            .unwrap();
 
     let sig_clone = signatures.clone();
     let mut alphabetical_authorities = sig_clone
         .iter()
-        .map(|(pubx, _)| pubx)
+        .map(|a| &a.authority)
         .collect::<Vec<&AuthorityName>>();
     alphabetical_authorities.sort();
     assert_eq!(
@@ -229,21 +211,26 @@ fn test_new_with_signatures() {
 #[test]
 fn test_handle_reject_malicious_signature() {
     let message: Foo = Foo("some data".to_string());
-    let mut signatures: Vec<(AuthorityName, AuthoritySignature)> = Vec::new();
+    let mut signatures: Vec<AuthoritySignInfo> = Vec::new();
     let mut authorities: BTreeMap<AuthorityPublicKeyBytes, u64> = BTreeMap::new();
 
     for i in 0..5 {
         let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
-        let sig = AuthoritySignature::new(&Foo("some data".to_string()), &sec);
-        authorities.insert(AuthorityPublicKeyBytes::from(sec.public()), 1);
+        let name = AuthorityPublicKeyBytes::from(sec.public());
+        authorities.insert(name, 1);
         if i < 4 {
-            signatures.push((AuthorityPublicKeyBytes::from(sec.public()), sig))
+            signatures.push(AuthoritySignInfo::new(
+                0,
+                &Foo("some data".to_string()),
+                name,
+                &sec,
+            ))
         };
     }
 
     let committee = Committee::new(0, authorities.clone()).unwrap();
     let mut quorum =
-        AuthorityStrongQuorumSignInfo::new_with_signatures(signatures, &committee).unwrap();
+        AuthorityStrongQuorumSignInfo::new_from_auth_sign_infos(signatures, &committee).unwrap();
     {
         let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
         let sig = AuthoritySignature::new(&message, &sec);
@@ -259,18 +246,23 @@ fn test_handle_reject_malicious_signature() {
 #[test]
 fn test_bitmap_out_of_range() {
     let message: Foo = Foo("some data".to_string());
-    let mut signatures: Vec<(AuthorityName, AuthoritySignature)> = Vec::new();
+    let mut signatures: Vec<AuthoritySignInfo> = Vec::new();
     let mut authorities: BTreeMap<AuthorityPublicKeyBytes, u64> = BTreeMap::new();
     for _ in 0..5 {
         let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
-        let sig = AuthoritySignature::new(&Foo("some data".to_string()), &sec);
-        authorities.insert(AuthorityPublicKeyBytes::from(sec.public()), 1);
-        signatures.push((AuthorityPublicKeyBytes::from(sec.public()), sig));
+        let name = AuthorityPublicKeyBytes::from(sec.public());
+        authorities.insert(name, 1);
+        signatures.push(AuthoritySignInfo::new(
+            0,
+            &Foo("some data".to_string()),
+            name,
+            &sec,
+        ));
     }
 
     let committee = Committee::new(0, authorities.clone()).unwrap();
     let mut quorum =
-        AuthorityStrongQuorumSignInfo::new_with_signatures(signatures, &committee).unwrap();
+        AuthorityStrongQuorumSignInfo::new_from_auth_sign_infos(signatures, &committee).unwrap();
 
     // Insert outside of range
     quorum.signers_map.insert(10);
@@ -284,19 +276,24 @@ fn test_bitmap_out_of_range() {
 #[test]
 fn test_reject_extra_public_key() {
     let message: Foo = Foo("some data".to_string());
-    let mut signatures: Vec<(AuthorityName, AuthoritySignature)> = Vec::new();
+    let mut signatures: Vec<AuthoritySignInfo> = Vec::new();
     let mut authorities: BTreeMap<AuthorityPublicKeyBytes, u64> = BTreeMap::new();
     // TODO: quite duplicated code in this file (4 times).
     for _ in 0..5 {
         let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
-        let sig = AuthoritySignature::new(&Foo("some data".to_string()), &sec);
-        authorities.insert(AuthorityPublicKeyBytes::from(sec.public()), 1);
-        signatures.push((AuthorityPublicKeyBytes::from(sec.public()), sig));
+        let name = AuthorityPublicKeyBytes::from(sec.public());
+        authorities.insert(name, 1);
+        signatures.push(AuthoritySignInfo::new(
+            0,
+            &Foo("some data".to_string()),
+            name,
+            &sec,
+        ));
     }
 
-    signatures.sort_by_key(|k| k.0);
+    signatures.sort_by_key(|k| k.authority);
 
-    let used_signatures: Vec<(AuthorityName, AuthoritySignature)> = vec![
+    let used_signatures: Vec<AuthoritySignInfo> = vec![
         signatures[0].clone(),
         signatures[1].clone(),
         signatures[2].clone(),
@@ -305,7 +302,8 @@ fn test_reject_extra_public_key() {
 
     let committee = Committee::new(0, authorities.clone()).unwrap();
     let mut quorum =
-        AuthorityStrongQuorumSignInfo::new_with_signatures(used_signatures, &committee).unwrap();
+        AuthorityStrongQuorumSignInfo::new_from_auth_sign_infos(used_signatures, &committee)
+            .unwrap();
 
     quorum.signers_map.insert(3);
 
@@ -318,16 +316,21 @@ fn test_reject_extra_public_key() {
 #[test]
 fn test_reject_reuse_signatures() {
     let message: Foo = Foo("some data".to_string());
-    let mut signatures: Vec<(AuthorityName, AuthoritySignature)> = Vec::new();
+    let mut signatures: Vec<AuthoritySignInfo> = Vec::new();
     let mut authorities: BTreeMap<AuthorityPublicKeyBytes, u64> = BTreeMap::new();
     for _ in 0..5 {
         let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
-        let sig = AuthoritySignature::new(&Foo("some data".to_string()), &sec);
-        authorities.insert(AuthorityPublicKeyBytes::from(sec.public()), 1);
-        signatures.push((AuthorityPublicKeyBytes::from(sec.public()), sig));
+        let name = AuthorityPublicKeyBytes::from(sec.public());
+        authorities.insert(name, 1);
+        signatures.push(AuthoritySignInfo::new(
+            0,
+            &Foo("some data".to_string()),
+            name,
+            &sec,
+        ));
     }
 
-    let used_signatures: Vec<(AuthorityName, AuthoritySignature)> = vec![
+    let used_signatures: Vec<AuthoritySignInfo> = vec![
         signatures[0].clone(),
         signatures[1].clone(),
         signatures[2].clone(),
@@ -336,7 +339,8 @@ fn test_reject_reuse_signatures() {
 
     let committee = Committee::new(0, authorities.clone()).unwrap();
     let quorum =
-        AuthorityStrongQuorumSignInfo::new_with_signatures(used_signatures, &committee).unwrap();
+        AuthorityStrongQuorumSignInfo::new_from_auth_sign_infos(used_signatures, &committee)
+            .unwrap();
 
     let (mut obligation, idx) = get_obligation_input(&message);
     assert!(quorum
@@ -347,18 +351,23 @@ fn test_reject_reuse_signatures() {
 #[test]
 fn test_empty_bitmap() {
     let message: Foo = Foo("some data".to_string());
-    let mut signatures: Vec<(AuthorityName, AuthoritySignature)> = Vec::new();
+    let mut signatures: Vec<AuthoritySignInfo> = Vec::new();
     let mut authorities: BTreeMap<AuthorityPublicKeyBytes, u64> = BTreeMap::new();
     for _ in 0..5 {
         let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
-        let sig = AuthoritySignature::new(&Foo("some data".to_string()), &sec);
-        authorities.insert(AuthorityPublicKeyBytes::from(sec.public()), 1);
-        signatures.push((AuthorityPublicKeyBytes::from(sec.public()), sig));
+        let name = AuthorityPublicKeyBytes::from(sec.public());
+        authorities.insert(name, 1);
+        signatures.push(AuthoritySignInfo::new(
+            0,
+            &Foo("some data".to_string()),
+            name,
+            &sec,
+        ));
     }
 
     let committee = Committee::new(0, authorities.clone()).unwrap();
     let mut quorum =
-        AuthorityStrongQuorumSignInfo::new_with_signatures(signatures, &committee).unwrap();
+        AuthorityStrongQuorumSignInfo::new_from_auth_sign_infos(signatures, &committee).unwrap();
     quorum.signers_map = RoaringBitmap::new();
 
     let (mut obligation, idx) = get_obligation_input(&message);

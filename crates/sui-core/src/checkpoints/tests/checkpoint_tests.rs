@@ -19,10 +19,7 @@ use std::{collections::HashSet, env, fs, path::PathBuf, sync::Arc, time::Duratio
 use sui_types::{
     base_types::{AuthorityName, ObjectID},
     batch::UpdateItem,
-    crypto::{
-        get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair, AuthoritySignature, KeypairTraits,
-        SuiAuthoritySignature,
-    },
+    crypto::{get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair, KeypairTraits},
     messages::{CertifiedTransaction, ExecutionStatus},
     messages_checkpoint::CheckpointRequest,
     object::Object,
@@ -36,6 +33,7 @@ use parking_lot::Mutex;
 
 use sui_macros::sim_test;
 use sui_simulator::nondeterministic;
+use sui_types::crypto::AuthoritySignInfo;
 
 pub(crate) fn random_ckpoint_store() -> (
     Committee,
@@ -1170,15 +1168,17 @@ fn set_fragment_external() {
     let mut fragment12 = p1.fragment_with(&p2);
     for digest in [t1, t2, t3, t4, t5].into_iter() {
         let tx = crate::test_utils::create_fake_transaction();
-        let mut sigs: Vec<(AuthorityName, AuthoritySignature)> = Vec::new();
+        let mut sigs: Vec<AuthoritySignInfo> = Vec::new();
         for key_pair in keys.iter() {
-            sigs.push((
+            sigs.push(AuthoritySignInfo::new(
+                0,
+                &tx.signed_data,
                 key_pair.public().into(),
-                AuthoritySignature::new(&tx.signed_data, key_pair),
+                key_pair,
             ));
         }
         let mut certificate =
-            CertifiedTransaction::new_with_signatures(tx, sigs, &committee).unwrap();
+            CertifiedTransaction::new_with_auth_sign_infos(tx, sigs, &committee).unwrap();
         certificate.auth_sign_info.epoch = committee.epoch();
         fragment12.certs.insert(digest, certificate);
     }

@@ -2,22 +2,21 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { getTransactionDigest } from '@mysten/sui.js';
+import BigNumber from 'bignumber.js';
 import { Formik } from 'formik';
 import { useCallback, useMemo, useState } from 'react';
-import { useIntl } from 'react-intl';
 import { Navigate, useNavigate } from 'react-router-dom';
 
 import StakeForm from './StakeForm';
 import { createValidationSchema } from './validation';
 import Loading from '_components/loading';
-import { useAppSelector, useAppDispatch } from '_hooks';
+import { useAppSelector, useAppDispatch, useCoinDecimals } from '_hooks';
 import {
     accountAggregateBalancesSelector,
     accountItemizedBalancesSelector,
 } from '_redux/slices/account';
 import { Coin, GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
 import { StakeTokens } from '_redux/slices/transactions';
-import { balanceFormatOptions } from '_shared/formatting';
 
 import type { SerializedError } from '@reduxjs/toolkit';
 import type { FormikHelpers } from 'formik';
@@ -49,7 +48,8 @@ function StakePage() {
         [coinType]
     );
     const [sendError, setSendError] = useState<string | null>(null);
-    const intl = useIntl();
+    const [coinDecimals] = useCoinDecimals(coinType);
+    const [gasDecimals] = useCoinDecimals(GAS_TYPE_ARG);
     const validationSchema = useMemo(
         () =>
             createValidationSchema(
@@ -58,8 +58,8 @@ function StakePage() {
                 coinSymbol,
                 gasAggregateBalance,
                 totalGasCoins,
-                intl,
-                balanceFormatOptions
+                coinDecimals,
+                gasDecimals
             ),
         [
             coinType,
@@ -67,7 +67,8 @@ function StakePage() {
             coinSymbol,
             gasAggregateBalance,
             totalGasCoins,
-            intl,
+            coinDecimals,
+            gasDecimals,
         ]
     );
 
@@ -83,9 +84,16 @@ function StakePage() {
             }
             setSendError(null);
             try {
+                const bigIntAmount = BigInt(
+                    new BigNumber(amount)
+                        .shiftedBy(coinDecimals)
+                        .integerValue()
+                        .toString()
+                );
+
                 const response = await dispatch(
                     StakeTokens({
-                        amount: BigInt(amount),
+                        amount: bigIntAmount,
                         tokenTypeArg: coinType,
                     })
                 ).unwrap();
@@ -96,7 +104,7 @@ function StakePage() {
                 setSendError((e as SerializedError).message || null);
             }
         },
-        [dispatch, navigate, coinType]
+        [dispatch, navigate, coinType, coinDecimals]
     );
     const handleOnClearSubmitError = useCallback(() => {
         setSendError(null);
@@ -122,7 +130,7 @@ function StakePage() {
                     <StakeForm
                         submitError={sendError}
                         coinBalance={coinBalance.toString()}
-                        coinSymbol={coinSymbol}
+                        coinType={coinType}
                         onClearSubmitError={handleOnClearSubmitError}
                     />
                 </Formik>

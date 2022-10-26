@@ -5,7 +5,7 @@ use crate::base_types::AuthorityName;
 use crate::committee::{Committee, EpochId};
 use crate::crypto::{
     AuthorityQuorumSignInfo, AuthoritySignInfo, AuthoritySignInfoTrait, AuthoritySignature,
-    Signable, SuiAuthoritySignature, VerificationObligation,
+    Signable, VerificationObligation,
 };
 use crate::error::SuiResult;
 use once_cell::sync::OnceCell;
@@ -98,15 +98,11 @@ where
         secret: &dyn signature::Signer<AuthoritySignature>,
         authority: AuthorityName,
     ) -> Self {
-        let signature = AuthoritySignature::new(&data, secret);
+        let auth_signature = AuthoritySignInfo::new(epoch, &data, authority, secret);
         Self {
             digest: OnceCell::new(),
             data,
-            auth_signature: AuthoritySignInfo {
-                epoch,
-                authority,
-                signature,
-            },
+            auth_signature,
         }
     }
 }
@@ -123,12 +119,8 @@ where
         let cert = Self {
             digest: OnceCell::new(),
             data,
-            auth_signature: AuthorityQuorumSignInfo::<S>::new_with_signatures(
-                signatures
-                    .into_iter()
-                    .map(|v| (v.authority, v.signature))
-                    .collect(),
-                committee,
+            auth_signature: AuthorityQuorumSignInfo::<S>::new_from_auth_sign_infos(
+                signatures, committee,
             )?,
         };
 
