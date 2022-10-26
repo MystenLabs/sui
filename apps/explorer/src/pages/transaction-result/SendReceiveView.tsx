@@ -3,7 +3,7 @@
 import cl from 'clsx';
 
 import { ReactComponent as LShapeIcon } from '../../assets/LShape.svg';
-import { ReactComponent as DoneIcon } from '../../assets/SVGIcons/Done.svg';
+import { ReactComponent as DoneIcon } from '../../assets/SVGIcons/16px/CheckFill.svg';
 import { ReactComponent as StartIcon } from '../../assets/SVGIcons/Start.svg';
 import Longtext from '../../components/longtext/Longtext';
 
@@ -34,7 +34,9 @@ function SendRecieveView({ data }: { data: TxAddress }) {
                         <div key={idx} className="flex ml-[7px] mt-[-7px] z-10">
                             <LShapeIcon />
                             <div className={styles.oneaddress}>
-                                <DoneIcon />
+                                <div className={styles.doneicon}>
+                                    <DoneIcon />
+                                </div>
                                 <Longtext
                                     text={add}
                                     category="addresses"

@@ -30,3 +30,7 @@
 h4.oneheading {
     @apply mb-[25px];
 }
+
+.doneicon svg {
+    @apply fill-success;
+}
