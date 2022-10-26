@@ -7,18 +7,11 @@ use std::{collections::HashMap, fmt};
 
 use sui_types::{
     base_types::{ObjectID, ObjectRef},
-    messages::TransactionEffects,
-    object::{Object, ObjectRead, Owner},
+    object::Owner,
 };
 
 use futures::FutureExt;
-use sui_types::{
-    base_types::SuiAddress,
-    crypto::AccountKeyPair,
-    messages::{
-        QuorumDriverRequest, QuorumDriverRequestType, QuorumDriverResponse, VerifiedTransaction,
-    },
-};
+use sui_types::{base_types::SuiAddress, crypto::AccountKeyPair, messages::VerifiedTransaction};
 use test_utils::messages::make_transfer_sui_transaction;
 use tracing::error;
 
@@ -50,7 +43,7 @@ pub async fn transfer_sui_for_testing(
         keypair,
     );
     proxy
-        .execute_transaction(tx)
+        .execute_transaction(tx.into())
         .map(move |res| match res {
             Ok((_, effects)) => {
                 let minted = effects.created().get(0).unwrap().0;

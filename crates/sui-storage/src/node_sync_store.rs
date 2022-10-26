@@ -10,7 +10,7 @@ use sui_types::{
     batch::TxSequenceNumber,
     committee::StakeUnit,
     error::SuiResult,
-    messages::{SignedTransactionEffects, VerifiedCertificate},
+    messages::{SignedTransactionEffects, TrustedCertificate, VerifiedCertificate},
 };
 
 use typed_store::rocks::DBMap;
@@ -30,7 +30,7 @@ use std::sync::Arc;
 pub struct NodeSyncStore {
     /// Certificates that have been fetched from remote validators, but not sequenced.
     /// Entries are cleared after execution.
-    pending_certs: DBMap<(EpochId, TransactionDigest), VerifiedCertificate>,
+    pending_certs: DBMap<(EpochId, TransactionDigest), TrustedCertificate>,
 
     /// Verified true effects.
     /// Entries are cleared after execution.
@@ -65,13 +65,13 @@ impl NodeSyncStore {
     pub fn store_cert(&self, epoch_id: EpochId, cert: &VerifiedCertificate) -> SuiResult {
         Ok(self
             .pending_certs
-            .insert(&(epoch_id, *cert.digest()), cert)?)
+            .insert(&(epoch_id, *cert.digest()), cert.serializable_ref())?)
     }
 
     pub fn batch_store_certs(&self, certs: impl Iterator<Item = VerifiedCertificate>) -> SuiResult {
         let batch = self.pending_certs.batch().insert_batch(
             &self.pending_certs,
-            certs.map(|cert| ((cert.epoch(), *cert.digest()), cert)),
+            certs.map(|cert| ((cert.epoch(), *cert.digest()), cert.serializable())),
         )?;
         batch.write()?;
         Ok(())
@@ -95,7 +95,7 @@ impl NodeSyncStore {
         Option<SignedTransactionEffects>,
     )> {
         Ok((
-            self.pending_certs.get(&(epoch_id, *tx))?,
+            self.pending_certs.get(&(epoch_id, *tx))?.map(|c| c.into()),
             self.pending_effects.get(&(epoch_id, *tx))?,
         ))
     }
@@ -105,7 +105,7 @@ impl NodeSyncStore {
         epoch_id: EpochId,
         tx: &TransactionDigest,
     ) -> SuiResult<Option<VerifiedCertificate>> {
-        Ok(self.pending_certs.get(&(epoch_id, *tx))?)
+        Ok(self.pending_certs.get(&(epoch_id, *tx))?.map(|c| c.into()))
     }
 
     pub fn get_effects(

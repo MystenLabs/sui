@@ -99,7 +99,7 @@ where
             request.request_type,
             ExecuteTransactionRequestType::WaitForLocalExecution
         );
-        let transaction = request.transaction;
+        let transaction = request.transaction.verify()?;
         let tx_digest = *transaction.digest();
         let request_type = match request.request_type {
             ExecuteTransactionRequestType::ImmediateReturn => {

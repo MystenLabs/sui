@@ -143,7 +143,7 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
         match self
             .qd
             .execute_transaction(QuorumDriverRequest {
-                transaction: tx,
+                transaction: tx.verify()?,
                 request_type: QuorumDriverRequestType::WaitForEffectsCert,
             })
             .await?
@@ -261,7 +261,7 @@ impl ValidatorProxy for FullNodeProxy {
             .quorum_driver()
             // We need to use WaitForLocalExecution to make sure objects are updated on FN
             .execute_transaction(
-                tx,
+                tx.verify()?,
                 Some(ExecuteTransactionRequestType::WaitForLocalExecution),
             )
             .await

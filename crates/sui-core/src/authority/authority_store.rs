@@ -55,7 +55,7 @@ const LAST_CONSENSUS_INDEX_ADDR: u64 = 0;
 pub struct SuiDataStore<S> {
     /// A write-ahead/recovery log used to ensure we finish fully processing certs after errors or
     /// crashes.
-    pub wal: Arc<DBWriteAheadLog<VerifiedCertificate>>,
+    pub wal: Arc<DBWriteAheadLog<TrustedCertificate>>,
 
     /// The LockService this store depends on for locking functionality
     lock_service: LockService,
@@ -137,7 +137,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
 
     pub async fn acquire_tx_guard(&self, cert: &VerifiedCertificate) -> SuiResult<CertTxGuard> {
         let digest = cert.digest();
-        let guard = self.wal.begin_tx(digest, cert).await?;
+        let guard = self.wal.begin_tx(digest, cert.serializable_ref()).await?;
 
         if guard.retry_num() > MAX_TX_RECOVERY_RETRY {
             // If the tx has been retried too many times, it could be a poison pill, and we should
@@ -424,7 +424,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
                     }
                     tx_option = self.epoch_tables().transactions.get(tx_digest)?;
                 }
-                Ok(tx_option)
+                Ok(tx_option.map(|t| t.into()))
             }
             None => Ok(None),
         }
@@ -438,6 +438,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         self.perpetual_tables
             .certificates
             .get(digest)
+            .map(|r| r.map(|c| c.into()))
             .map_err(|e| e.into())
     }
 
@@ -617,7 +618,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         // https://github.com/MystenLabs/sui/issues/1990
         self.epoch_tables()
             .transactions
-            .insert(&tx_digest, &transaction)?;
+            .insert(&tx_digest, transaction.serializable_ref())?;
 
         Ok(())
     }
@@ -652,7 +653,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         let transaction_digest: &TransactionDigest = certificate.digest();
         write_batch = write_batch.insert_batch(
             &self.perpetual_tables.certificates,
-            iter::once((transaction_digest, certificate)),
+            iter::once((transaction_digest, certificate.serializable_ref())),
         )?;
 
         let seq = self
@@ -722,7 +723,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         // Store the certificate indexed by transaction digest
         write_batch = write_batch.insert_batch(
             &self.perpetual_tables.certificates,
-            iter::once((transaction_digest, &certificate)),
+            iter::once((transaction_digest, certificate.serializable_ref())),
         )?;
         self.sequence_tx(
             write_batch,
@@ -1356,7 +1357,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         transaction_digest: &TransactionDigest,
     ) -> SuiResult<Option<VerifiedTransactionEnvelope<S>>> {
         let transaction = self.epoch_tables().transactions.get(transaction_digest)?;
-        Ok(transaction)
+        Ok(transaction.map(|t| t.into()))
     }
 
     pub fn get_certified_transaction(
@@ -1364,7 +1365,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         transaction_digest: &TransactionDigest,
     ) -> SuiResult<Option<VerifiedCertificate>> {
         let transaction = self.perpetual_tables.certificates.get(transaction_digest)?;
-        Ok(transaction)
+        Ok(transaction.map(|t| t.into()))
     }
 
     pub fn multi_get_certified_transaction(
@@ -1374,7 +1375,10 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         Ok(self
             .perpetual_tables
             .certificates
-            .multi_get(transaction_digests)?)
+            .multi_get(transaction_digests)?
+            .into_iter()
+            .map(|o| o.map(|c| c.into()))
+            .collect())
     }
 
     pub fn get_sui_system_state_object(&self) -> SuiResult<SuiSystemState>
@@ -1392,7 +1396,11 @@ impl SuiDataStore<AuthoritySignInfo> {
         cur_epoch: EpochId,
         transaction_digest: &TransactionDigest,
     ) -> SuiResult<bool> {
-        let tx = self.epoch_tables().transactions.get(transaction_digest)?;
+        let tx: Option<VerifiedTransactionEnvelope<AuthoritySignInfo>> = self
+            .epoch_tables()
+            .transactions
+            .get(transaction_digest)?
+            .map(|t| t.into());
         Ok(if let Some(signed_tx) = tx {
             signed_tx.auth_sign_info.epoch == cur_epoch
         } else {
@@ -1405,8 +1413,16 @@ impl SuiDataStore<AuthoritySignInfo> {
         transaction_digest: &TransactionDigest,
     ) -> Result<VerifiedTransactionInfoResponse, SuiError> {
         Ok(VerifiedTransactionInfoResponse {
-            signed_transaction: self.epoch_tables().transactions.get(transaction_digest)?,
-            certified_transaction: self.perpetual_tables.certificates.get(transaction_digest)?,
+            signed_transaction: self
+                .epoch_tables()
+                .transactions
+                .get(transaction_digest)?
+                .map(|t| t.into()),
+            certified_transaction: self
+                .perpetual_tables
+                .certificates
+                .get(transaction_digest)?
+                .map(|c| c.into()),
             signed_effects: self.perpetual_tables.effects.get(transaction_digest)?,
         })
     }

@@ -28,7 +28,8 @@ use sui_types::gas_coin::GasCoin;
 use sui_types::messages::SignedTransactionEffects;
 use sui_types::messages::{CallArg, ExecutionStatus, TransactionEffects};
 use sui_types::messages::{
-    CertifiedTransaction, ObjectArg, SignedTransaction, TransactionData, VerifiedTransaction,
+    CertifiedTransaction, ObjectArg, TransactionData, VerifiedCertificate,
+    VerifiedSignedTransaction, VerifiedTransaction,
 };
 use sui_types::object::Object;
 use sui_types::object::Owner;
@@ -345,7 +346,7 @@ pub fn random_object_digest() -> ObjectRef {
     )
 }
 
-pub fn make_random_certified_transaction() -> CertifiedTransaction {
+pub fn make_random_certified_transaction() -> VerifiedCertificate {
     let gas_ref = random_object_digest();
     let txn = make_publish_basics_transaction(gas_ref);
     let (mut certs, _) = make_tx_certs_and_signed_effects(vec![txn]);
@@ -434,7 +435,7 @@ pub fn move_transaction_with_type_tags(
 /// Make a test certificates for each input transaction.
 pub fn make_tx_certs_and_signed_effects(
     transactions: Vec<VerifiedTransaction>,
-) -> (Vec<CertifiedTransaction>, Vec<SignedTransactionEffects>) {
+) -> (Vec<VerifiedCertificate>, Vec<SignedTransactionEffects>) {
     let committee = test_committee();
     make_tx_certs_and_signed_effects_with_committee(transactions, &committee)
 }
@@ -443,21 +444,25 @@ pub fn make_tx_certs_and_signed_effects(
 pub fn make_tx_certs_and_signed_effects_with_committee(
     transactions: Vec<VerifiedTransaction>,
     committee: &Committee,
-) -> (Vec<CertifiedTransaction>, Vec<SignedTransactionEffects>) {
+) -> (Vec<VerifiedCertificate>, Vec<SignedTransactionEffects>) {
     let mut tx_certs = Vec::new();
     let mut effect_sigs = Vec::new();
     for tx in transactions {
         let mut sigs: Vec<AuthoritySignInfo> = Vec::new();
         for (key, _, _, _) in test_validator_keys() {
-            let vote =
-                SignedTransaction::new(committee.epoch, tx.clone(), key.public().into(), &key);
+            let vote = VerifiedSignedTransaction::new(
+                committee.epoch,
+                tx.clone(),
+                key.public().into(),
+                &key,
+            );
             sigs.push(vote.auth_sign_info.clone());
             if let Ok(tx_cert) = CertifiedTransaction::new_with_auth_sign_infos(
                 vote.clone().to_transaction(),
                 sigs.clone(),
                 committee,
             ) {
-                tx_certs.push(tx_cert);
+                tx_certs.push(tx_cert.verify(committee).unwrap());
                 let effects = dummy_transaction_effects(&tx);
                 let signed_effects = effects.to_sign_effects(
                     committee.epoch(),

@@ -450,8 +450,10 @@ async fn execute_pay_sui(
     let data = TransactionData::new_with_gas_price(kind, sender, gas_object_ref, gas_budget, 1);
 
     let signature = Signature::new(&data, &sender_key);
-    let tx = Transaction::new(data, signature);
-    let txn_result = send_and_confirm_transaction(&authority_state, tx).await;
+    let tx = Transaction::new(data, signature).verify().unwrap();
+    let txn_result = send_and_confirm_transaction(&authority_state, tx)
+        .await
+        .map(|t| t.into());
 
     PaySuiTransactionExecutionResult {
         authority_state,
@@ -483,9 +485,12 @@ async fn execute_pay_all_sui(
     }));
     let data = TransactionData::new_with_gas_price(kind, sender, gas_object_ref, gas_budget, 1);
     let signature = Signature::new(&data, &sender_key);
-    let tx = Transaction::new(data, signature);
+    let tx = Transaction::new(data, signature).verify().unwrap();
 
-    let txn_result = send_and_confirm_transaction(&authority_state, tx).await;
+    let txn_result = send_and_confirm_transaction(&authority_state, tx)
+        .await
+        .map(|t| t.into());
+
     PaySuiTransactionExecutionResult {
         authority_state,
         txn_result,

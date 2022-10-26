@@ -399,7 +399,7 @@ pub async fn submit_single_owner_transaction(
     for config in configs {
         let client = get_client(config);
         let reply = client
-            .handle_certificate(certificate.clone())
+            .handle_certificate(certificate.clone().into())
             .await
             .unwrap();
         responses.push(reply);
@@ -437,7 +437,7 @@ pub async fn submit_shared_object_transaction_with_committee(
             .map(|config| {
                 let client = get_client(config);
                 let cert = certificate.clone();
-                async move { client.handle_certificate(cert).await }
+                async move { client.handle_certificate(cert.into()).await }
             })
             .collect();
 

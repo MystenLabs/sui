@@ -2136,7 +2136,7 @@ fn init_certified_transaction(
     let committee = authority_state.committee.load();
     CertifiedTransaction::new_with_auth_sign_infos(
         transaction,
-        vec![vote.auth_sign_info],
+        vec![vote.auth_sign_info.clone()],
         &committee,
     )
     .unwrap()

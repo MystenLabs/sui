@@ -28,13 +28,13 @@ use move_core_types::{
 };
 use name_variant::NamedVariant;
 use once_cell::sync::OnceCell;
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_name::{DeserializeNameAdapter, SerializeNameAdapter};
 use serde_with::serde_as;
 use serde_with::Bytes;
 use std::collections::hash_map::DefaultHasher;
 use std::fmt::Write;
-use std::fmt::{Display, Formatter};
+use std::fmt::{Debug, Display, Formatter};
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     hash::{Hash, Hasher},
@@ -921,7 +921,7 @@ impl Transaction {
 
     pub fn verify(self) -> SuiResult<VerifiedTransaction> {
         self.verify_sender_signature()?;
-        Ok(VerifiedTransactionEnvelope::<EmptySignInfo>(self))
+        Ok(VerifiedTransactionEnvelope::<EmptySignInfo>::new_from_verified(self))
     }
 
     pub fn to_network_data_for_execution(&self) -> (Base64, SignatureScheme, Base64, Base64) {
@@ -947,12 +947,6 @@ impl PartialEq for Transaction {
 }
 impl Eq for Transaction {}
 
-impl VerifiedTransaction {
-    pub fn new_unchecked(tx: Transaction) -> Self {
-        Self(tx)
-    }
-}
-
 /// A transaction that is signed by a sender and also by an authority.
 pub type SignedTransaction = TransactionEnvelope<AuthoritySignInfo>;
 
@@ -966,7 +960,7 @@ impl VerifiedSignedTransaction {
         authority: AuthorityName,
         secret: &dyn signature::Signer<AuthoritySignature>,
     ) -> Self {
-        Self(SignedTransaction::new(
+        Self::new_from_verified(SignedTransaction::new(
             epoch,
             transaction,
             authority,
@@ -982,7 +976,7 @@ impl VerifiedSignedTransaction {
         authority: AuthorityName,
         secret: &dyn signature::Signer<AuthoritySignature>,
     ) -> Self {
-        Self(SignedTransaction::new_change_epoch(
+        Self::new_from_verified(SignedTransaction::new_change_epoch(
             next_epoch,
             storage_charge,
             computation_charge,
@@ -1059,7 +1053,7 @@ impl SignedTransaction {
     /// Verify the signature and return the non-zero voting right of the authority.
     pub fn verify(self, committee: &Committee) -> SuiResult<VerifiedSignedTransaction> {
         self.verify_signatures(committee)?;
-        Ok(VerifiedTransactionEnvelope::<AuthoritySignInfo>(self))
+        Ok(VerifiedTransactionEnvelope::<AuthoritySignInfo>::new_from_verified(self))
     }
 
     pub fn verify_signatures(&self, committee: &Committee) -> SuiResult {
@@ -1101,34 +1095,98 @@ impl Eq for SignedTransaction {}
 pub type CertifiedTransaction = TransactionEnvelope<AuthorityStrongQuorumSignInfo>;
 pub type TxCertAndSignedEffects = (CertifiedTransaction, SignedTransactionEffects);
 
-// We do allow serialization/deserialization of this type so that we can write verified data to the
-// db and not re-verify it after loading it. However, be careful not to deserialize this type from
-// an untrusted source such as the network!
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct VerifiedTransactionEnvelope<T>(TransactionEnvelope<T>);
+// An empty marker struct that can't be serialized.
+#[derive(Clone)]
+struct NoSer;
+static_assertions::assert_not_impl_any!(NoSer: Serialize, DeserializeOwned);
 
-impl<T> VerifiedTransactionEnvelope<T> {
+#[derive(Clone, Serialize, Deserialize)]
+pub struct TrustedTransactionEnvelope<T>(TransactionEnvelope<T>);
+
+impl<T> TrustedTransactionEnvelope<T> {
     pub fn into_inner(self) -> TransactionEnvelope<T> {
         self.0
+    }
+}
+
+impl<T> Debug for TrustedTransactionEnvelope<T>
+where
+    T: Debug,
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self.0)
+    }
+}
+
+#[derive(Clone)]
+pub struct VerifiedTransactionEnvelope<T>(TrustedTransactionEnvelope<T>, NoSer);
+
+impl<T> Debug for VerifiedTransactionEnvelope<T>
+where
+    T: Debug,
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self.0 .0)
+    }
+}
+
+// The only acceptible way to construct this type is via explicitly verifying it
+
+impl<T> VerifiedTransactionEnvelope<T> {
+    fn new_from_verified(inner: TransactionEnvelope<T>) -> Self {
+        Self(TrustedTransactionEnvelope(inner), NoSer)
+    }
+
+    /// There are some situations (e.g. fragment verification) where its very awkward and/or
+    /// inefficient to obtain verified certificates from calling CertifiedTransaction::verify()
+    /// Use this carefully.
+    pub fn new_unchecked(inner: TransactionEnvelope<T>) -> Self {
+        Self(TrustedTransactionEnvelope(inner), NoSer)
+    }
+
+    pub fn into_inner(self) -> TransactionEnvelope<T> {
+        self.0 .0
+    }
+
+    /// Use this when you need to serialize a verified envelope.
+    /// This should generally only be used for database writes.
+    /// ***never use over the network!***
+    pub fn serializable_ref(&self) -> &TrustedTransactionEnvelope<T> {
+        &self.0
+    }
+
+    /// Use this when you need to serialize a verified envelope.
+    /// This should generally only be used for database writes.
+    /// ***never use over the network!***
+    pub fn serializable(self) -> TrustedTransactionEnvelope<T> {
+        self.0
+    }
+}
+
+/// After deserialization, a TrustedTransactionEnvelope can be turned back into a
+/// VerifiedTransactionEnvelope.
+impl<T> From<TrustedTransactionEnvelope<T>> for VerifiedTransactionEnvelope<T> {
+    fn from(e: TrustedTransactionEnvelope<T>) -> Self {
+        Self::new_unchecked(e.0)
     }
 }
 
 impl<T> Deref for VerifiedTransactionEnvelope<T> {
     type Target = TransactionEnvelope<T>;
     fn deref(&self) -> &Self::Target {
-        &self.0
+        &self.0 .0
     }
 }
 
 impl<T> DerefMut for VerifiedTransactionEnvelope<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
+        &mut self.0 .0
     }
 }
 
 impl<T> From<VerifiedTransactionEnvelope<T>> for TransactionEnvelope<T> {
     fn from(v: VerifiedTransactionEnvelope<T>) -> Self {
-        v.0
+        v.0 .0
     }
 }
 
@@ -1137,26 +1195,18 @@ where
     TransactionEnvelope<T>: PartialEq,
 {
     fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
+        self.0 .0 == other.0 .0
     }
 }
 
 impl<T> Eq for VerifiedTransactionEnvelope<T> where TransactionEnvelope<T>: Eq {}
 
 pub type VerifiedCertificate = VerifiedTransactionEnvelope<AuthorityStrongQuorumSignInfo>;
-
-impl VerifiedCertificate {
-    /// There are some situations (e.g. fragment verification) where its very awkward and/or
-    /// inefficient to obtain verified certificates from calling CertifiedTransaction::verify()
-    /// Use this carefully.
-    pub fn new_unchecked(cert: CertifiedTransaction) -> Self {
-        Self(cert)
-    }
-}
+pub type TrustedCertificate = TrustedTransactionEnvelope<AuthorityStrongQuorumSignInfo>;
 
 impl Display for VerifiedCertificate {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
+        write!(f, "{}", self.0 .0)
     }
 }
 
@@ -2208,7 +2258,7 @@ impl CertifiedTransaction {
 
     pub fn verify(self, committee: &Committee) -> SuiResult<VerifiedCertificate> {
         self.verify_signatures(committee)?;
-        Ok(VerifiedTransactionEnvelope::<AuthorityStrongQuorumSignInfo>(self))
+        Ok(VerifiedTransactionEnvelope::<AuthorityStrongQuorumSignInfo>::new_from_verified(self))
     }
 
     pub fn epoch(&self) -> EpochId {
@@ -2313,7 +2363,7 @@ pub enum ExecuteTransactionRequestType {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ExecuteTransactionRequest {
-    pub transaction: VerifiedTransaction,
+    pub transaction: Transaction,
     pub request_type: ExecuteTransactionRequestType,
 }
 
@@ -2344,7 +2394,7 @@ pub enum QuorumDriverRequestType {
     WaitForEffectsCert,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct QuorumDriverRequest {
     pub transaction: VerifiedTransaction,
     pub request_type: QuorumDriverRequestType,

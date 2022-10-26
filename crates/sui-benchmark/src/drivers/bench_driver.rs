@@ -29,11 +29,7 @@ use crate::ValidatorProxy;
 use std::collections::{BTreeMap, VecDeque};
 use std::sync::Arc;
 use std::time::Duration;
-use sui_core::authority_client::NetworkAuthorityClient;
-use sui_core::quorum_driver::{QuorumDriverHandler, QuorumDriverMetrics};
-use sui_types::messages::{
-    QuorumDriverRequest, QuorumDriverRequestType, QuorumDriverResponse, VerifiedTransaction,
-};
+use sui_types::messages::VerifiedTransaction;
 use tokio::sync::Barrier;
 use tokio::time;
 use tokio::time::Instant;
@@ -334,7 +330,7 @@ impl Driver<BenchmarkStats> for BenchDriver {
                                 let proxy_clone = proxy.clone();
                                 let start = Arc::new(Instant::now());
                                 let res = proxy
-                                    .execute_transaction(b.0.clone())
+                                    .execute_transaction(b.0.clone().into())
                                     .then(|res| async move  {
                                         match res {
                                             Ok((cert, effects)) => {
@@ -390,7 +386,7 @@ impl Driver<BenchmarkStats> for BenchDriver {
                                 // TODO: clone committee for each request is not ideal.
                                 let committee_cloned = Arc::new(proxy.clone_committee());
                                 let res = proxy
-                                    .execute_transaction(tx.clone())
+                                    .execute_transaction(tx.clone().into())
                                 .then(|res| async move {
                                     match res {
                                         Ok((cert, effects)) => {

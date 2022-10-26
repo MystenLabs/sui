@@ -90,7 +90,7 @@ pub async fn publish_basics_package(
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("../../sui_programmability/examples/basics");
     let transaction = create_publish_move_package_transaction(gas, path, sender, keypair);
-    let (_, effects) = proxy.execute_transaction(transaction).await.unwrap();
+    let (_, effects) = proxy.execute_transaction(transaction.into()).await.unwrap();
     parse_package_ref(&effects.created()).unwrap()
 }
 
@@ -166,7 +166,7 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
                     sender,
                     &keypair,
                 );
-                if let Ok((_, effects)) = proxy_ref.execute_transaction(transaction).await {
+                if let Ok((_, effects)) = proxy_ref.execute_transaction(transaction.into()).await {
                     let counter_ref = effects.created()[0].0;
                     Box::new(SharedCounterTestPayload {
                         package_ref: self.basics_package_ref.unwrap(),

@@ -291,7 +291,7 @@ async fn execute_with_orchestrator(
     let digest = *txn.digest();
     orchestrator
         .execute_transaction(ExecuteTransactionRequest {
-            transaction: txn,
+            transaction: txn.into(),
             request_type,
         })
         .await

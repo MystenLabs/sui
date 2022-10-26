@@ -1416,7 +1416,7 @@ pub fn make_response_from_sui_system_state(
     );
     let obj_digest = object.compute_object_reference();
     Ok(ObjectInfoResponse {
-        parent_certificate: Some(tx_cert),
+        parent_certificate: Some(tx_cert.into()),
         requested_object_reference: Some(obj_digest),
         object_and_lock: Some(ObjectResponse {
             object,

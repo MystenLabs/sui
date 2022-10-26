@@ -129,6 +129,8 @@ async fn test_start_epoch_change() {
         sigs,
         &genesis_committee,
     )
+    .unwrap()
+    .verify(&genesis_committee)
     .unwrap();
     assert_eq!(
         state.handle_certificate(&certificate).await.unwrap_err(),

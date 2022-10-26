@@ -124,7 +124,7 @@ pub const MAX_ITEMS_LIMIT: u64 = 1_000;
 const BROADCAST_CAPACITY: usize = 10_000;
 
 pub(crate) const MAX_TX_RECOVERY_RETRY: u32 = 3;
-type CertTxGuard<'a> = DBTxGuard<'a, VerifiedCertificate>;
+type CertTxGuard<'a> = DBTxGuard<'a, TrustedCertificate>;
 
 pub type ReconfigConsensusMessage = (
     AuthorityKeyPair,
@@ -1654,7 +1654,10 @@ impl AuthorityState {
                     continue;
                 }
 
-                if let Err(e) = self.process_certificate(tx_guard, &cert, false).await {
+                if let Err(e) = self
+                    .process_certificate(tx_guard, &cert.into(), false)
+                    .await
+                {
                     warn!(?digest, "Failed to process in-progress certificate: {e}");
                 }
             } else {
