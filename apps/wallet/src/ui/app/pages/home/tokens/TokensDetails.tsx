@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import cl from 'classnames';
 import { useMemo } from 'react';
 
 import CoinBalance from './coin-balance';
@@ -151,7 +152,9 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
                 />
             ) : (
                 <>
-                    <div className={st.title}>{coinSymbol} activity</div>
+                    <div className={cl([st.title, st.tokenActivities])}>
+                        {coinSymbol} activity
+                    </div>
                     <div className={st.txContent}>
                         <section className={st.activity}>
                             <RecentTransactions coinType={activeCoinType} />
