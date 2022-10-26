@@ -27,6 +27,8 @@ import {
   PublishTransaction,
   TxnDataSerializer,
   PayTransaction,
+  PaySuiTransaction,
+  PayAllSuiTransaction,
   SignableTransaction,
   UnserializedSignableTransaction,
 } from './txn-data-serializer';
@@ -122,6 +124,71 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
     } catch (err) {
       throw new Error(
         `Error constructing a Pay transaction: ${err} args ${JSON.stringify(t)}`
+      );
+    }
+  }
+
+  async newPaySui(
+    signerAddress: SuiAddress,
+    t: PaySuiTransaction
+  ): Promise<Base64DataBuffer> {
+    try {
+      const inputCoinRefs = (
+        await Promise.all(
+          t.inputCoins.map((coin) => this.provider.getObjectRef(coin))
+        )
+      ).map((ref) => ref!);
+      const tx = {
+        PaySui: {
+          coins: inputCoinRefs,
+          recipients: t.recipients,
+          amounts: t.amounts,
+        },
+      };
+      const gas_coin_obj = t.inputCoins[0];
+      return await this.constructTransactionData(
+        tx,
+        { kind: 'paySui', data: t },
+        gas_coin_obj,
+        signerAddress
+      );
+    } catch (err) {
+      throw new Error(
+        `Error constructing a PaySui transaction: ${err} args ${JSON.stringify(
+          t
+        )}`
+      );
+    }
+  }
+
+  async newPayAllSui(
+    signerAddress: SuiAddress,
+    t: PayAllSuiTransaction
+  ): Promise<Base64DataBuffer> {
+    try {
+      const inputCoinRefs = (
+        await Promise.all(
+          t.inputCoins.map((coin) => this.provider.getObjectRef(coin))
+        )
+      ).map((ref) => ref!);
+      const tx = {
+        PayAllSui: {
+          coins: inputCoinRefs,
+          recipient: t.recipient,
+        },
+      };
+      const gas_coin_obj = t.inputCoins[0];
+      return await this.constructTransactionData(
+        tx,
+        { kind: 'payAllSui', data: t },
+        gas_coin_obj,
+        signerAddress
+      );
+    } catch (err) {
+      throw new Error(
+        `Error constructing a PayAllSui transaction: ${err} args ${JSON.stringify(
+          t
+        )}`
       );
     }
   }

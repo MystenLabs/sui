@@ -26,6 +26,17 @@ export type Pay = {
   amounts: number[];
 };
 
+export type PaySui = {
+  coins: SuiObjectRef[];
+  recipients: SuiAddress[];
+  amounts: number[];
+};
+
+export type PayAllSui = {
+  coins: SuiObjectRef[];
+  recipient: SuiAddress;
+};
+
 export type ExecuteTransactionRequestType =
   | 'ImmediateReturn'
   | 'WaitForTxCert'
@@ -38,7 +49,9 @@ export type TransactionKindName =
   | 'Call'
   | 'TransferSui'
   | 'ChangeEpoch'
-  | 'Pay';
+  | 'Pay'
+  | 'PaySui'
+  | 'PayAllSui';
 
 export type SuiTransactionKind =
   | { TransferObject: TransferObject }
@@ -46,7 +59,9 @@ export type SuiTransactionKind =
   | { Call: MoveCall }
   | { TransferSui: SuiTransferSui }
   | { ChangeEpoch: SuiChangeEpoch }
-  | { Pay: Pay };
+  | { Pay: Pay }
+  | { PaySui: PaySui }
+  | { PayAllSui: PayAllSui };
 export type SuiTransactionData = {
   transactions: SuiTransactionKind[];
   sender: SuiAddress;

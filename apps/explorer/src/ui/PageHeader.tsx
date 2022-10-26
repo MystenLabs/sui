@@ -33,6 +33,9 @@ const TYPE_TO_ICON: Record<PageHeaderType, typeof CallIcon> = {
     Call: CallIcon,
     ChangeEpoch: ChangeEpochIcon,
     Pay: PayIcon,
+    // TODO: replace with SUI specific icon if needed
+    PaySui: PayIcon,
+    PayAllSui: PayIcon,
     Publish: PublishIcon,
     TransferObject: TransferObjectIcon,
     TransferSui: TransferSuiIcon,
