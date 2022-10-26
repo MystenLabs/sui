@@ -9,6 +9,7 @@ mod test {
     use std::time::Duration;
     use sui_config::SUI_KEYSTORE_FILENAME;
     use sui_core::authority_aggregator::AuthorityAggregatorBuilder;
+    use test_utils::network::{start_a_fullnode, start_a_fullnode_with_handle};
     use test_utils::{
         messages::get_gas_object_with_wallet_context, network::init_cluster_builder_env_aware,
     };
@@ -52,6 +53,7 @@ mod test {
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load() {
         let test_cluster = init_cluster_builder_env_aware().build().await.unwrap();
+        let _sui_node = start_a_fullnode(&test_cluster.swarm, false).await.unwrap();
         let swarm = &test_cluster.swarm;
         let context = &test_cluster.wallet;
         let sender = test_cluster.get_address_0();

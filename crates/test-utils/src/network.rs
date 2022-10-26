@@ -147,8 +147,8 @@ impl TestClusterBuilder {
         self
     }
 
-    pub fn do_not_build_fullnode(mut self) -> Self {
-        self.do_not_build_fullnode = true;
+    pub fn do_not_build_fullnode(mut self, value: bool) -> Self {
+        self.do_not_build_fullnode = value;
         self
     }
 
@@ -401,7 +401,7 @@ pub async fn start_a_fullnode_with_handle(
 pub fn init_cluster_builder_env_aware() -> TestClusterBuilder {
     let mut builder = TestClusterBuilder::new();
     if cfg!(msim) {
-        builder = builder.use_embedded_gateway().do_not_build_fullnode();
+        builder = builder.use_embedded_gateway().do_not_build_fullnode(true);
     }
     builder
 }
