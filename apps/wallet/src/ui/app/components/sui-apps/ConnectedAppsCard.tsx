@@ -54,37 +54,34 @@ function ConnectedDapps() {
         [];
 
     return (
-        <>
-            <div className={cl(st.container)}>
-                <div className={st.desc}>
-                    <div className={st.title}>
-                        {filteredApps.length
-                            ? `Connected apps (${filteredApps.length})`
-                            : 'No APPS connected'}
-                    </div>
-                    Apps you connect to through the SUI wallet in this browser
-                    will show up here.
+        <div className={cl(st.container)}>
+            <div className={st.desc}>
+                <div className={st.title}>
+                    {filteredApps.length
+                        ? `Connected apps (${filteredApps.length})`
+                        : 'No APPS connected'}
                 </div>
-
-                <div className={cl(st.apps, st.appCards)}>
-                    {filteredApps.length ? (
-                        filteredApps.map((app, index) => (
-                            <SuiApp
-                                key={index}
-                                {...app}
-                                displaytype="card"
-                                disconnect={true}
-                            />
-                        ))
-                    ) : (
-                        <>
-                            <SuiAppEmpty displaytype="card" />
-                            <SuiAppEmpty displaytype="card" />
-                        </>
-                    )}
-                </div>
+                Apps you connect to through the SUI wallet in this browser will
+                show up here.
             </div>
-        </>
+            <div className={st.appCards}>
+                {filteredApps.length ? (
+                    filteredApps.map((app, index) => (
+                        <SuiApp
+                            key={index}
+                            {...app}
+                            displaytype="card"
+                            disconnect={true}
+                        />
+                    ))
+                ) : (
+                    <>
+                        <SuiAppEmpty displaytype="card" />
+                        <SuiAppEmpty displaytype="card" />
+                    </>
+                )}
+            </div>
+        </div>
     );
 }
 

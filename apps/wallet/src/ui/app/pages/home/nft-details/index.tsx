@@ -95,14 +95,12 @@ function NFTdetailsContent({
             />
             <BottomMenuLayout>
                 <Content>
-                    <section className={st.nftDetail}>
-                        <NFTDisplayCard
-                            nftobj={nft}
-                            size="large"
-                            expandable={true}
-                        />
-                        {NFTDetails}
-                    </section>
+                    <NFTDisplayCard
+                        nftobj={nft}
+                        size="large"
+                        expandable={true}
+                    />
+                    {NFTDetails}
                 </Content>
                 <Menu stuckClass={st.shadow} className={st.shadow}>
                     <button

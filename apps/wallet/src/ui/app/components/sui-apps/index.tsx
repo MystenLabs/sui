@@ -87,7 +87,7 @@ function AppsPlayGround() {
         mintStatus !== null ? (mintStatus ? 'check2' : 'x-lg') : null;
 
     return (
-        <div className={cl(st.container)}>
+        <>
             <h4 className={st.activeSectionTitle}>Playground</h4>
             <div className={st.groupButtons}>
                 <Button
@@ -147,12 +147,9 @@ function AppsPlayGround() {
                         endorsement or relationship with Sui Wallet. Please
                         DYOR.
                     </div>
-
-                    <div className={st.apps}>
-                        {curatedDapps.map((app, index) => (
-                            <SuiApp key={index} {...app} displaytype="full" />
-                        ))}
-                    </div>
+                    {curatedDapps.map((app, index) => (
+                        <SuiApp key={index} {...app} displaytype="full" />
+                    ))}
                 </>
             ) : (
                 <>
@@ -166,7 +163,7 @@ function AppsPlayGround() {
                     <SuiAppEmpty displaytype="full" />
                 </>
             )}
-        </div>
+        </>
     );
 }
 

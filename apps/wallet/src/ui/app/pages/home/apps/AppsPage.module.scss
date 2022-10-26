@@ -11,5 +11,5 @@
     display: flex;
     flex-flow: column nowrap;
     overflow-x: visible;
-    height: 100%;
+    margin-bottom: 25px; // account for the extra height of the bottom nav, because of the filters
 }

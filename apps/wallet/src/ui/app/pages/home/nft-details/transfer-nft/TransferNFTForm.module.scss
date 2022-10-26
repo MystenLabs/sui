@@ -4,12 +4,14 @@
 .container {
     display: flex;
     flex-flow: column nowrap;
-    overflow-x: visible;
-    height: 100%;
+    flex: 1;
 }
 
 .content {
     margin-top: 20px;
+    display: flex;
+    flex-flow: column nowrap;
+    flex: 1;
 }
 
 .shadow {
@@ -32,9 +34,8 @@
 
 .label-info {
     text-align: center;
-    width: 90%;
+    padding: 0 16px;
     color: colors.$gray-80;
-    margin: auto;
     margin-bottom: 10px;
 }
 
@@ -63,14 +64,11 @@
 .formcta {
     display: flex;
     flex-flow: row nowrap;
-    height: 76px;
-    position: absolute;
-    bottom: 0;
-    width: 100%;
-    align-items: center;
-    justify-content: stretch;
     padding: 5px 25px;
-    left: 0;
+    flex: 1;
+    align-items: flex-end;
+    margin-top: 10px;
+    margin-bottom: 10px;
 
     .action,
     .done {

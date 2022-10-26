@@ -6,7 +6,8 @@
     display: flex;
     flex-flow: column nowrap;
     overflow-x: visible;
-    height: 100%;
+    flex: 1;
+    min-height: 0;
 
     .send-nft-btn {
         @include utils.typography('table/title-sm');
@@ -35,7 +36,7 @@
 }
 
 .page-title {
-    margin-bottom: 8px;
+    margin-bottom: 28px;
     text-transform: capitalize;
 }
 
@@ -96,23 +97,17 @@
     box-shadow: 0 0 44px rgb(0 0 0 / 15%);
 }
 
-.nft-detail {
-    margin-top: 20px;
-}
-
 /* TODO use either css or svg so the div can */
 .nft-details {
     margin-top: 20px;
     padding: 20px;
     background-image: url('_assets/images/nft-detail-bg.png');
-    height: 104px;
     background-size: cover;
     background-position: bottom;
     background-repeat: no-repeat;
     width: 100%;
 
     .nft-details-inner {
-        height: 64px;
         overflow: auto;
     }
 
