@@ -34,7 +34,9 @@ function SendReceiveView({ sender, recipient, amount }: TxAddress) {
                     {recipient.map((add: string, idx: number) => (
                         <div key={idx} className="flex ml-[7px] mt-[-7px] z-10">
                             <LShapeIcon />
-                            <div className={styles.oneaddress}>
+                            <div
+                                className={cl([styles.oneaddress, 'mt-[20px]'])}
+                            >
                                 <div className={styles.doneicon}>
                                     <DoneIcon />
                                 </div>

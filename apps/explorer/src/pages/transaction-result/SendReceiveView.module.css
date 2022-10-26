@@ -12,11 +12,11 @@
 }
 
 .oneaddress {
-    @apply flex gap-[8px] items-center mt-[20px] text-[14px] leading-[90%];
+    @apply flex gap-[8px] items-center text-[14px] leading-[90%];
 }
 
 .recipientbox {
-    @apply flex flex-col gap-[20px];
+    @apply flex flex-col items-start gap-[20px];
 }
 
 .senderbox {
