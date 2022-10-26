@@ -75,9 +75,9 @@ impl From<(i64, i64)> for EventID {
     }
 }
 
-impl Into<String> for EventID {
-    fn into(self) -> String {
-        format!("{}:{}", self.tx_seq_num, self.event_seq_number)
+impl From<EventID> for String {
+    fn from(id: EventID) -> Self {
+        format!("{}:{}", id.tx_seq_num, id.event_seq_number)
     }
 }
 
