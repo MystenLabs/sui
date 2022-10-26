@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import cl from 'classnames';
-import { memo } from 'react';
+import { memo, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 import Icon, { SuiIcons } from '_components/icon';
 import { useFormatCoin } from '_hooks';
@@ -20,8 +21,23 @@ export type CoinProps = {
 function CoinBalance({ type, balance, mode = 'row-item' }: CoinProps) {
     const [formatted, symbol] = useFormatCoin(balance, type);
     const icon = type === GAS_TYPE_ARG ? SuiIcons.SuiLogoIcon : SuiIcons.Tokens;
+
+    const navigate = useNavigate();
+
+    const coinDetail = useCallback(() => {
+        navigate(`/tokens/details?type=${encodeURIComponent(type)}`);
+    }, [navigate, type]);
+
     return (
-        <div className={cl(st.container, st[mode])}>
+        <div
+            className={cl(
+                st.container,
+                st[mode],
+                mode === 'row-item' && st.coinBalanceBtn
+            )}
+            onClick={coinDetail}
+            role="button"
+        >
             {mode === 'row-item' ? (
                 <>
                     <Icon

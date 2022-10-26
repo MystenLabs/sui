@@ -16,6 +16,20 @@
     }
 }
 
+.coin-balance-btn {
+    cursor: pointer;
+
+    &:hover {
+        &::after {
+            background-color: #6fbcf01a;
+            position: absolute;
+            content: '';
+            left: 10px;
+            width: calc(100% - 20px);
+        }
+    }
+}
+
 .coin-icon {
     display: flex;
     align-items: center;
