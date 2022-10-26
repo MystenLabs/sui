@@ -10,7 +10,6 @@ import {
   GatewayTxSeqNumber,
   SuiObjectInfo,
   GetObjectDataResponse,
-  SuiTransactionResponse,
   SuiObjectRef,
   SuiMoveFunctionArgTypes,
   SuiMoveNormalizedFunction,
@@ -94,15 +93,6 @@ export class VoidProvider extends Provider {
     throw this.newError('getTransaction');
   }
 
-  async executeTransaction(
-    _txnBytes: string,
-    _signatureScheme: SignatureScheme,
-    _signature: string,
-    _pubkey: string
-  ): Promise<SuiTransactionResponse> {
-    throw this.newError('executeTransaction');
-  }
-
   async executeTransactionWithRequestType(
     _txnBytes: string,
     _signatureScheme: SignatureScheme,
@@ -122,10 +112,6 @@ export class VoidProvider extends Provider {
     _end: GatewayTxSeqNumber
   ): Promise<GetTxnDigestsResponse> {
     throw this.newError('getTransactionDigestsInRange');
-  }
-
-  async getRecentTransactions(_count: number): Promise<GetTxnDigestsResponse> {
-    throw this.newError('getRecentTransactions');
   }
 
   async getMoveFunctionArgTypes(

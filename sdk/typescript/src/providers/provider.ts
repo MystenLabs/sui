@@ -8,7 +8,6 @@ import {
   SuiObjectInfo,
   GatewayTxSeqNumber,
   GetTxnDigestsResponse,
-  SuiTransactionResponse,
   SuiObjectRef,
   SuiMoveFunctionArgTypes,
   SuiMoveNormalizedFunction,
@@ -157,13 +156,6 @@ export abstract class Provider {
    */
   abstract getTotalTransactionNumber(): Promise<number>;
 
-  abstract executeTransaction(
-    txnBytes: string,
-    signatureScheme: SignatureScheme,
-    signature: string,
-    pubkey: string
-  ): Promise<SuiTransactionResponse>;
-
   /**
    * This is under development endpoint on Fullnode that will eventually
    * replace the other `executeTransaction` that's only available on the
@@ -220,8 +212,6 @@ export abstract class Provider {
     moduleName: string,
     structName: string
   ): Promise<SuiMoveNormalizedStruct>;
-
-  abstract syncAccountState(address: string): Promise<any>;
 
   /**
    * Get events for one transaction
