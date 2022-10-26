@@ -29,7 +29,6 @@
     "@mysten/sui.js": "workspace:*",
     "@mysten/wallet-adapter-base": "workspace:*",
     "@mysten/wallet-standard": "workspace:*",
-    "@wallet-standard/app": "0.1.0-alpha.6",
     "mitt": "^3.0.0"
   },
   "devDependencies": {
