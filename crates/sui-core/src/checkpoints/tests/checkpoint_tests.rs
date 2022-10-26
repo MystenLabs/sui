@@ -1200,6 +1200,7 @@ fn set_fragment_external() {
 
 #[test]
 fn set_fragment_reconstruct() {
+    telemetry_subscribers::init_for_testing();
     let (committee, _keys, mut test_objects) = random_ckpoint_store();
     let (_, mut cps1) = test_objects.pop().unwrap();
     let (_, mut cps2) = test_objects.pop().unwrap();
@@ -1230,13 +1231,15 @@ fn set_fragment_reconstruct() {
     let p3 = cps3.set_proposal(committee.epoch).unwrap();
     let p4 = cps4.set_proposal(committee.epoch).unwrap();
 
-    let fragment12 = p1.fragment_with(&p2);
-    let fragment34 = p3.fragment_with(&p4);
+    // We use new_unchecked because the fragments don't have the actual certs, so verification is
+    // guaranteed to fail.
+    let fragment12 = VerifiedCheckpointFragment::new_unchecked(p1.fragment_with(&p2));
+    let fragment34 = VerifiedCheckpointFragment::new_unchecked(p3.fragment_with(&p4));
 
     let span = SpanGraph::mew(&committee, 0, &[fragment12.clone(), fragment34.clone()]);
     assert!(!span.is_completed());
 
-    let fragment41 = p4.fragment_with(&p1);
+    let fragment41 = VerifiedCheckpointFragment::new_unchecked(p4.fragment_with(&p1));
     let span = SpanGraph::mew(&committee, 0, &[fragment12, fragment34, fragment41]);
     let reconstruction = span.construct_checkpoint().unwrap();
     assert_eq!(reconstruction.global.authority_waypoints.len(), 4);
@@ -1264,7 +1267,7 @@ fn set_fragment_reconstruct_two_components() {
     let p_x = proposals.pop().unwrap();
     let p_y = proposals.pop().unwrap();
 
-    let fragment_xy = p_x.fragment_with(&p_y);
+    let fragment_xy = p_x.fragment_with(&p_y).verify(&committee).unwrap();
 
     let span = SpanGraph::mew(&committee, 0, &[fragment_xy.clone()]);
     assert!(!span.is_completed());
@@ -1274,7 +1277,10 @@ fn set_fragment_reconstruct_two_components() {
 
     while let Some(proposal) = proposals.pop() {
         if !proposals.is_empty() {
-            let fragment_xy = proposal.fragment_with(&proposals[0]);
+            let fragment_xy = proposal
+                .fragment_with(&proposals[0])
+                .verify(&committee)
+                .unwrap();
             fragments.push(fragment_xy);
         }
 
@@ -1314,8 +1320,8 @@ fn set_fragment_reconstruct_two_mutual() {
     let p_x = proposals.pop().unwrap();
     let p_y = proposals.pop().unwrap();
 
-    let fragment_xy = p_x.fragment_with(&p_y);
-    let fragment_yx = p_y.fragment_with(&p_x);
+    let fragment_xy = p_x.fragment_with(&p_y).verify(&committee).unwrap();
+    let fragment_yx = p_y.fragment_with(&p_x).verify(&committee).unwrap();
 
     let span = SpanGraph::mew(&committee, 0, &[fragment_xy, fragment_yx]);
     assert!(!span.is_completed());
@@ -1425,6 +1431,7 @@ fn test_fragment_full_flow() {
     let cps0 = &mut test_objects[0].1;
     let mut all_fragments = Vec::new();
     while let Ok(fragment) = rx.try_recv() {
+        let fragment = fragment.verify(&committee).unwrap();
         all_fragments.push(fragment.clone());
         assert!(cps0
             .handle_internal_fragment(
@@ -1503,8 +1510,10 @@ fn test_slow_fragment() {
         .iter_mut()
         .map(|(_, cp)| cp.set_proposal(0).unwrap())
         .collect();
-    let fragment12 = proposals[1].fragment_with(&proposals[2]);
-    let fragment23 = proposals[2].fragment_with(&proposals[3]);
+    let fragment12 =
+        VerifiedCheckpointFragment::new_unchecked(proposals[1].fragment_with(&proposals[2]));
+    let fragment23 =
+        VerifiedCheckpointFragment::new_unchecked(proposals[2].fragment_with(&proposals[3]));
     let mut index = ExecutionIndices::default();
     cp_stores.iter_mut().for_each(|(_, cp)| {
         cp.handle_internal_fragment(
@@ -1566,8 +1575,10 @@ fn test_slow_fragment() {
         .iter_mut()
         .map(|(_, cp)| cp.set_proposal(0).unwrap())
         .collect();
-    let fragment12 = proposals[1].fragment_with(&proposals[2]);
-    let fragment23 = proposals[2].fragment_with(&proposals[3]);
+    let fragment12 =
+        VerifiedCheckpointFragment::new_unchecked(proposals[1].fragment_with(&proposals[2]));
+    let fragment23 =
+        VerifiedCheckpointFragment::new_unchecked(proposals[2].fragment_with(&proposals[3]));
     cp_stores.iter_mut().skip(1).for_each(|(_, cp)| {
         cp.handle_internal_fragment(
             index.clone(),
@@ -1716,7 +1727,7 @@ pub struct TestAuthority {
 pub struct TestSetup {
     pub committee: Committee,
     pub authorities: Vec<TestAuthority>,
-    pub transactions: Vec<sui_types::messages::Transaction>,
+    pub transactions: Vec<sui_types::messages::VerifiedTransaction>,
     pub aggregator: AuthorityAggregator<LocalAuthorityClient>,
 }
 
@@ -1817,6 +1828,7 @@ pub async fn checkpoint_tests_setup(
     let _join = tokio::task::spawn(async move {
         let mut seq = ExecutionIndices::default();
         while let Some(msg) = _rx.recv().await {
+            let msg = msg.verify(&c).unwrap();
             for (authority, cps) in &checkpoint_stores {
                 if notify_noop {
                     if let Err(err) = cps.lock().handle_internal_fragment(

@@ -14,6 +14,7 @@ use sui_types::crypto::AuthoritySignInfo;
 use sui_types::messages::CertifiedTransaction;
 use sui_types::messages_checkpoint::{
     AuthenticatedCheckpoint, CertifiedCheckpointSummary, CheckpointContents,
+    VerifiedCheckpointFragment,
 };
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
@@ -128,6 +129,8 @@ async fn test_start_epoch_change() {
         sigs,
         &genesis_committee,
     )
+    .unwrap()
+    .verify(&genesis_committee)
     .unwrap();
     assert_eq!(
         state.handle_certificate(&certificate).await.unwrap_err(),
@@ -256,8 +259,10 @@ async fn test_consensus_pause_after_last_fragment() {
             state.checkpoints.lock().set_proposal(0).unwrap()
         })
         .collect();
-    let fragment01 = proposals[0].fragment_with(&proposals[1]);
-    let fragment12 = proposals[1].fragment_with(&proposals[2]);
+    let fragment01 =
+        VerifiedCheckpointFragment::new_unchecked(proposals[0].fragment_with(&proposals[1]));
+    let fragment12 =
+        VerifiedCheckpointFragment::new_unchecked(proposals[1].fragment_with(&proposals[2]));
     let mut index = ExecutionIndices::default();
     states.iter().for_each(|state| {
         // Send the first fragment to every validator, and make sure ater this, none of them

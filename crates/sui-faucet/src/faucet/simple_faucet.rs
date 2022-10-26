@@ -351,7 +351,7 @@ impl SimpleFaucet {
 
         let signature = context.config.keystore.sign(&signer, &data.to_bytes())?;
 
-        let tx = Transaction::new(data, signature);
+        let tx = Transaction::new(data, signature).verify()?;
         let tx_digest = *tx.digest();
         info!(
             ?tx_digest,

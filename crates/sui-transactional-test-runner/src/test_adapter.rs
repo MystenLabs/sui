@@ -49,7 +49,9 @@ use sui_types::{
     crypto::{get_key_pair_from_rng, AccountKeyPair},
     event::Event,
     gas,
-    messages::{ExecutionStatus, InputObjects, Transaction, TransactionData, TransactionEffects},
+    messages::{
+        ExecutionStatus, InputObjects, TransactionData, TransactionEffects, VerifiedTransaction,
+    },
     object::{self, Object, ObjectFormatOptions, GAS_VALUE_FOR_TESTING},
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
@@ -427,7 +429,7 @@ impl<'a> SuiTestAdapter<'a> {
         &mut self,
         sender: Option<String>,
         txn_data: impl FnOnce(/* sender */ SuiAddress, /* gas */ ObjectRef) -> TransactionData,
-    ) -> Transaction {
+    ) -> VerifiedTransaction {
         let gas_object_id = ObjectID::new(self.rng.gen());
         assert!(!self.object_enumeration.contains_left(&gas_object_id));
         self.enumerate_fake(gas_object_id);
@@ -453,7 +455,7 @@ impl<'a> SuiTestAdapter<'a> {
 
     fn execute_txn(
         &mut self,
-        transaction: Transaction,
+        transaction: VerifiedTransaction,
         gas_budget: u64,
     ) -> anyhow::Result<TxnSummary> {
         let gas_status = gas::start_gas_metering(gas_budget, 1, 1).unwrap();
@@ -494,7 +496,7 @@ impl<'a> SuiTestAdapter<'a> {
         ) = execution_engine::execute_transaction_to_effects(
             shared_object_refs,
             temporary_store,
-            transaction.signed_data.data,
+            transaction.into_inner().signed_data.data,
             transaction_digest,
             transaction_dependencies,
             &self.vm,

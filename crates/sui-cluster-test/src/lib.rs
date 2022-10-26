@@ -24,7 +24,7 @@ use sui_sdk::SuiClient;
 use sui_types::gas_coin::GasCoin;
 use sui_types::{
     base_types::SuiAddress,
-    messages::{Transaction, TransactionData},
+    messages::{Transaction, TransactionData, VerifiedTransaction},
 };
 use test_case::{
     call_contract_test::CallContractTest, coin_merge_split_test::CoinMergeSplitTest,
@@ -108,7 +108,7 @@ impl TestContext {
 
     /// See `make_transactions_with_wallet_context` for potential caveats
     /// of this helper function.
-    pub async fn make_transactions(&mut self, max_txn_num: usize) -> Vec<Transaction> {
+    pub async fn make_transactions(&mut self, max_txn_num: usize) -> Vec<VerifiedTransaction> {
         make_transactions_with_wallet_context(self.get_wallet_mut(), max_txn_num).await
     }
 
@@ -134,7 +134,7 @@ impl TestContext {
             .get_fullnode_client()
             .quorum_driver()
             .execute_transaction(
-                Transaction::new(txn_data, signature),
+                Transaction::new(txn_data, signature).verify().unwrap(),
                 Some(ExecuteTransactionRequestType::WaitForLocalExecution),
             )
             .await

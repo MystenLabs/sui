@@ -116,7 +116,7 @@ pub async fn submit(
 ) -> Result<TransactionIdentifierResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
     let signed_tx: Transaction = bcs::from_bytes(&request.signed_transaction.to_vec()?)?;
-    signed_tx.verify_sender_signature()?;
+    let signed_tx = signed_tx.verify()?;
     let hash = *signed_tx.digest();
 
     let response = context

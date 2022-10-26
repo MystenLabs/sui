@@ -768,7 +768,7 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
     let digest = *txn.digest();
     let res = transaction_orchestrator
         .execute_transaction(ExecuteTransactionRequest {
-            transaction: txn,
+            transaction: txn.into(),
             request_type: ExecuteTransactionRequestType::WaitForLocalExecution,
         })
         .await
@@ -799,7 +799,7 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
     let digest = *txn.digest();
     let res = transaction_orchestrator
         .execute_transaction(ExecuteTransactionRequest {
-            transaction: txn,
+            transaction: txn.into(),
             request_type: ExecuteTransactionRequestType::WaitForEffectsCert,
         })
         .await
@@ -830,7 +830,7 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
     let digest = *txn.digest();
     let res = transaction_orchestrator
         .execute_transaction(ExecuteTransactionRequest {
-            transaction: txn,
+            transaction: txn.into(),
             request_type: ExecuteTransactionRequestType::WaitForTxCert,
         })
         .await
@@ -856,7 +856,7 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
     let digest = *txn.digest();
     let res = transaction_orchestrator
         .execute_transaction(ExecuteTransactionRequest {
-            transaction: txn,
+            transaction: txn.into(),
             request_type: ExecuteTransactionRequestType::ImmediateReturn,
         })
         .await

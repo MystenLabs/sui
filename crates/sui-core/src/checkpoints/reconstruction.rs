@@ -13,7 +13,7 @@ use sui_types::{
     base_types::AuthorityName,
     committee::Committee,
     messages::CertifiedTransaction,
-    messages_checkpoint::CheckpointFragment,
+    messages_checkpoint::VerifiedCheckpointFragment,
     waypoint::{GlobalCheckpoint, WaypointError},
 };
 
@@ -50,7 +50,7 @@ pub struct InProgressSpanGraph {
     next_checkpoint: CheckpointSequenceNumber,
 
     /// Fragments that have been used so far.
-    fragments_used: Vec<CheckpointFragment>,
+    fragments_used: Vec<VerifiedCheckpointFragment>,
 
     /// Proposals from each validator seen so far. This is needed to detect potential conflicting
     /// fragments.
@@ -99,14 +99,14 @@ impl InProgressSpanGraph {
 
 #[derive(Clone, Debug)]
 pub struct CompletedSpanGraph {
-    active_links: VecDeque<CheckpointFragment>,
+    active_links: VecDeque<VerifiedCheckpointFragment>,
 }
 
 impl SpanGraph {
     pub fn mew(
         committee: &Committee,
         next_checkpoint: CheckpointSequenceNumber,
-        fragments: &[CheckpointFragment],
+        fragments: &[VerifiedCheckpointFragment],
     ) -> Self {
         let mut span = Self::default();
         for frag in fragments {
@@ -135,7 +135,7 @@ impl SpanGraph {
         &mut self,
         committee: &Committee,
         next_checkpoint: CheckpointSequenceNumber,
-        frag: &CheckpointFragment,
+        frag: &VerifiedCheckpointFragment,
     ) {
         if matches!(&self, Self::Uninitialized) {
             self.initialize(committee, next_checkpoint);

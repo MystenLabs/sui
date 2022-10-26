@@ -145,7 +145,7 @@ pub async fn estimate_transaction_computation_cost(
         TemporaryStore::new(state.db(), input_objects, TransactionDigest::random());
 
     estimate_transaction_inner(
-        tx.signed_data.data.kind,
+        tx.into_inner().signed_data.data.kind,
         computation_gas_unit_price,
         storage_gas_unit_price,
         mutated_object_sizes_after,

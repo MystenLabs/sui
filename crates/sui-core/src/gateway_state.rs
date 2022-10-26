@@ -608,7 +608,7 @@ where
     async fn set_transaction_lock(
         &self,
         mutable_input_objects: &[ObjectRef],
-        transaction: Transaction,
+        transaction: VerifiedTransaction,
     ) -> Result<(), SuiError> {
         debug!(
             ?mutable_input_objects,
@@ -647,8 +647,8 @@ where
     async fn execute_transaction_impl_inner(
         &self,
         input_objects: InputObjects,
-        transaction: Transaction,
-    ) -> Result<(CertifiedTransaction, CertifiedTransactionEffects), anyhow::Error> {
+        transaction: VerifiedTransaction,
+    ) -> Result<(VerifiedCertificate, CertifiedTransactionEffects), anyhow::Error> {
         // If execute_transaction ever fails due to panic, we should fix the panic and make sure it doesn't.
         // If execute_transaction fails, we should retry the same transaction, and it will
         // properly unlock the objects used in this transaction. In the short term, we will ask the wallet to retry failed transactions.
@@ -721,10 +721,8 @@ where
     /// If success, returns the input objects and owned objects in the input.
     async fn prepare_transaction(
         &self,
-        transaction: &Transaction,
+        transaction: &VerifiedTransaction,
     ) -> SuiResult<(InputObjects, Vec<ObjectRef>)> {
-        transaction.verify()?;
-
         self.sync_input_objects_with_authorities(transaction)
             .await?;
 
@@ -776,9 +774,9 @@ where
     /// Update local object states using newly created certificate and ObjectInfoResponse from the Confirmation step.
     async fn execute_transaction_impl(
         &self,
-        transaction: Transaction,
+        transaction: VerifiedTransaction,
         is_last_retry: bool,
-    ) -> Result<(CertifiedTransaction, CertifiedTransactionEffects), anyhow::Error> {
+    ) -> Result<(VerifiedCertificate, CertifiedTransactionEffects), anyhow::Error> {
         let (input_objects, owned_objects) =
             self.prepare_transaction(&transaction)
                 .await
@@ -808,7 +806,7 @@ where
         let tx = self.store.get_transaction(&digest)?;
         match tx {
             Some(tx) => {
-                self.execute_transaction(tx).await?;
+                self.execute_verified_transaction(tx).await?;
                 Ok(())
             }
             None => {
@@ -1309,6 +1307,97 @@ where
                 version: None,
             })
     }
+
+    fn execute_verified_transaction(
+        &self,
+        tx: VerifiedTransaction,
+    ) -> future::BoxFuture<'_, Result<SuiTransactionResponse, anyhow::Error>> {
+        async fn inner<A>(
+            _self: &GatewayState<A>,
+            tx: VerifiedTransaction,
+        ) -> Result<SuiTransactionResponse, anyhow::Error>
+        where
+            A: AuthorityAPI + Send + Sync + 'static + Clone,
+        {
+            let tx_kind = tx.signed_data.data.kind.clone();
+            let tx_digest = tx.digest();
+
+            debug!(tx_digest = ?tx_digest, "Received execute_transaction request");
+
+            // Ensure idempotency.
+            let (certificate, effects) =
+                match QueryHelpers::get_transaction(&_self.store, tx_digest) {
+                    Ok((cert, effects)) => (cert, effects),
+                    _ => {
+                        let span = tracing::debug_span!(
+                            "gateway_execute_transaction",
+                            ?tx_digest,
+                            tx_kind = tx.signed_data.data.kind_as_str()
+                        );
+
+                        // Use start_coarse_time() if the below turns out to have a perf impact
+                        let timer = _self.metrics.transaction_latency.start_timer();
+                        let mut res = _self
+                            .execute_transaction_impl(tx.clone(), false)
+                            .instrument(span.clone())
+                            .await;
+                        // NOTE: below only records latency if this completes.
+                        timer.stop_and_record();
+
+                        let mut remaining_retries = MAX_NUM_TX_RETRIES;
+                        while res.is_err() {
+                            if remaining_retries == 0 {
+                                error!(
+                                    num_retries = MAX_NUM_TX_RETRIES,
+                                    ?tx_digest,
+                                    "All transaction retries failed"
+                                );
+                                // Okay to unwrap since we checked that this is an error
+                                return Err(res.unwrap_err());
+                            }
+                            remaining_retries -= 1;
+                            _self.metrics.total_tx_retries.inc();
+
+                            debug!(
+                                remaining_retries,
+                                ?tx_digest,
+                                ?res,
+                                "Retrying failed transaction"
+                            );
+
+                            res = _self
+                                .execute_transaction_impl(tx.clone(), remaining_retries == 0)
+                                .instrument(span.clone())
+                                .await;
+                        }
+
+                        // Okay to unwrap() since we checked that this is Ok
+                        let (certificate, effects) = res.unwrap();
+                        let effects = effects.effects;
+
+                        debug!(?tx_digest, "Transaction succeeded");
+                        (certificate, effects)
+                    }
+                };
+
+            // Create custom response base on the request type
+            let parsed_data = _self
+                .create_parsed_transaction_response(
+                    tx_kind,
+                    certificate.clone().into(),
+                    effects.clone(),
+                )
+                .await?;
+
+            Ok(SuiTransactionResponse {
+                certificate: certificate.try_into()?,
+                effects: SuiTransactionEffects::try_from(effects, &_self.module_cache)?,
+                timestamp_ms: None,
+                parsed_data,
+            })
+        }
+        Box::pin(inner(self, tx))
+    }
 }
 
 #[async_trait]
@@ -1320,77 +1409,8 @@ where
         &self,
         tx: Transaction,
     ) -> Result<SuiTransactionResponse, anyhow::Error> {
-        let tx_kind = tx.signed_data.data.kind.clone();
-        let tx_digest = tx.digest();
-
-        debug!(tx_digest = ?tx_digest, "Received execute_transaction request");
-
-        // Ensure idempotency.
-        let (certificate, effects) = match QueryHelpers::get_transaction(&self.store, tx_digest) {
-            Ok((cert, effects)) => (cert, effects),
-            _ => {
-                let span = tracing::debug_span!(
-                    "gateway_execute_transaction",
-                    ?tx_digest,
-                    tx_kind = tx.signed_data.data.kind_as_str()
-                );
-
-                // Use start_coarse_time() if the below turns out to have a perf impact
-                let timer = self.metrics.transaction_latency.start_timer();
-                let mut res = self
-                    .execute_transaction_impl(tx.clone(), false)
-                    .instrument(span.clone())
-                    .await;
-                // NOTE: below only records latency if this completes.
-                timer.stop_and_record();
-
-                let mut remaining_retries = MAX_NUM_TX_RETRIES;
-                while res.is_err() {
-                    if remaining_retries == 0 {
-                        error!(
-                            num_retries = MAX_NUM_TX_RETRIES,
-                            ?tx_digest,
-                            "All transaction retries failed"
-                        );
-                        // Okay to unwrap since we checked that this is an error
-                        return Err(res.unwrap_err());
-                    }
-                    remaining_retries -= 1;
-                    self.metrics.total_tx_retries.inc();
-
-                    debug!(
-                        remaining_retries,
-                        ?tx_digest,
-                        ?res,
-                        "Retrying failed transaction"
-                    );
-
-                    res = self
-                        .execute_transaction_impl(tx.clone(), remaining_retries == 0)
-                        .instrument(span.clone())
-                        .await;
-                }
-
-                // Okay to unwrap() since we checked that this is Ok
-                let (certificate, effects) = res.unwrap();
-                let effects = effects.effects;
-
-                debug!(?tx_digest, "Transaction succeeded");
-                (certificate, effects)
-            }
-        };
-
-        // Create custom response base on the request type
-        let parsed_data = self
-            .create_parsed_transaction_response(tx_kind, certificate.clone(), effects.clone())
-            .await?;
-
-        return Ok(SuiTransactionResponse {
-            certificate: certificate.try_into()?,
-            effects: SuiTransactionEffects::try_from(effects, &self.module_cache)?,
-            timestamp_ms: None,
-            parsed_data,
-        });
+        let tx = tx.verify()?;
+        self.execute_verified_transaction(tx).await
     }
 
     async fn public_transfer_object(

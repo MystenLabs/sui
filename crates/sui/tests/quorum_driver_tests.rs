@@ -9,7 +9,7 @@ use sui_core::quorum_driver::{QuorumDriverHandler, QuorumDriverMetrics};
 use sui_node::SuiNodeHandle;
 use sui_types::base_types::SuiAddress;
 use sui_types::messages::{
-    QuorumDriverRequest, QuorumDriverRequestType, QuorumDriverResponse, Transaction,
+    QuorumDriverRequest, QuorumDriverRequestType, QuorumDriverResponse, VerifiedTransaction,
 };
 use test_utils::authority::{spawn_test_authorities, test_authority_configs};
 use test_utils::messages::make_transfer_sui_transaction;
@@ -19,7 +19,7 @@ use test_utils::test_account_keys;
 async fn setup() -> (
     Vec<SuiNodeHandle>,
     AuthorityAggregator<NetworkAuthorityClient>,
-    Transaction,
+    VerifiedTransaction,
 ) {
     let mut gas_objects = test_gas_objects();
     let configs = test_authority_configs();

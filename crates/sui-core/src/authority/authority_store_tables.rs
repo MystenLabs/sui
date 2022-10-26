@@ -12,6 +12,7 @@ use std::path::Path;
 use sui_storage::default_db_options;
 use sui_types::base_types::{ExecutionDigests, SequenceNumber};
 use sui_types::batch::{SignedBatch, TxSequenceNumber};
+use sui_types::messages::{TrustedCertificate, TrustedTransactionEnvelope};
 use typed_store::rocks::DBMap;
 use typed_store::traits::TypedStoreDebug;
 
@@ -22,7 +23,7 @@ use typed_store_derive::DBMapUtils;
 pub struct AuthorityEpochTables<S> {
     /// This is map between the transaction digest and transactions found in the `transaction_lock`.
     #[default_options_override_fn = "transactions_table_default_config"]
-    pub(crate) transactions: DBMap<TransactionDigest, TransactionEnvelope<S>>,
+    pub(crate) transactions: DBMap<TransactionDigest, TrustedTransactionEnvelope<S>>,
 
     /// The pending execution table holds a sequence of transactions that are present
     /// in the certificates table, but may not have yet been executed, and should be executed.
@@ -102,7 +103,7 @@ pub struct AuthorityPerpetualTables<S> {
     /// along with the genesis allows the reconstruction of all other state, and a full sync to this
     /// authority.
     #[default_options_override_fn = "certificates_table_default_config"]
-    pub(crate) certificates: DBMap<TransactionDigest, CertifiedTransaction>,
+    pub(crate) certificates: DBMap<TransactionDigest, TrustedCertificate>,
 
     /// The map between the object ref of objects processed at all versions and the transaction
     /// digest of the certificate that lead to the creation of this version of the object.

@@ -45,6 +45,7 @@ use sui_types::messages::{
     CallArg, CertifiedTransaction, CertifiedTransactionEffects, ExecuteTransactionResponse,
     ExecutionStatus, InputObjectKind, MoveModulePublish, ObjectArg, Pay, PayAllSui, PaySui,
     SingleTransactionKind, TransactionData, TransactionEffects, TransactionKind,
+    VerifiedCertificate,
 };
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::move_package::{disassemble_modules, MovePackage};
@@ -1719,6 +1720,14 @@ impl TryFrom<CertifiedTransaction> for SuiCertifiedTransaction {
             tx_signature: cert.signed_data.tx_signature,
             auth_sign_info: cert.auth_sign_info,
         })
+    }
+}
+
+impl TryFrom<VerifiedCertificate> for SuiCertifiedTransaction {
+    type Error = anyhow::Error;
+    fn try_from(cert: VerifiedCertificate) -> Result<Self, Self::Error> {
+        let cert: CertifiedTransaction = cert.into();
+        cert.try_into()
     }
 }
 

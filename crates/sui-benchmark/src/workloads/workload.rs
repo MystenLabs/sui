@@ -7,13 +7,11 @@ use std::{collections::HashMap, fmt};
 
 use sui_types::{
     base_types::{ObjectID, ObjectRef},
-    crypto::EmptySignInfo,
-    messages::TransactionEnvelope,
     object::Owner,
 };
 
 use futures::FutureExt;
-use sui_types::{base_types::SuiAddress, crypto::AccountKeyPair};
+use sui_types::{base_types::SuiAddress, crypto::AccountKeyPair, messages::VerifiedTransaction};
 use test_utils::messages::make_transfer_sui_transaction;
 use tracing::error;
 
@@ -45,7 +43,7 @@ pub async fn transfer_sui_for_testing(
         keypair,
     );
     proxy
-        .execute_transaction(tx)
+        .execute_transaction(tx.into())
         .map(move |res| match res {
             Ok((_, effects)) => {
                 let minted = effects.created().get(0).unwrap().0;
@@ -71,7 +69,7 @@ pub trait Payload: Send + Sync {
         new_object: ObjectRef,
         new_gas: ObjectRef,
     ) -> Box<dyn Payload>;
-    fn make_transaction(&self) -> TransactionEnvelope<EmptySignInfo>;
+    fn make_transaction(&self) -> VerifiedTransaction;
     fn get_object_id(&self) -> ObjectID;
     fn get_workload_type(&self) -> WorkloadType;
 }
@@ -107,7 +105,7 @@ impl Payload for CombinationPayload {
             rng: self.rng,
         })
     }
-    fn make_transaction(&self) -> TransactionEnvelope<EmptySignInfo> {
+    fn make_transaction(&self) -> VerifiedTransaction {
         let curr = self.payloads.get(self.curr_index).unwrap();
         curr.make_transaction()
     }

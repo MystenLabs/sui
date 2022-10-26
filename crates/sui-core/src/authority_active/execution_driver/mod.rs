@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{collections::HashSet, sync::Arc};
-use sui_types::{base_types::TransactionDigest, error::SuiResult, messages::CertifiedTransaction};
+use sui_types::{base_types::TransactionDigest, error::SuiResult, messages::VerifiedCertificate};
 use tracing::{debug, info};
 
 use crate::authority::AuthorityState;
@@ -20,14 +20,14 @@ pub(crate) mod tests;
 pub trait PendCertificateForExecution {
     fn add_pending_certificates(
         &self,
-        certs: Vec<(TransactionDigest, Option<CertifiedTransaction>)>,
+        certs: Vec<(TransactionDigest, Option<VerifiedCertificate>)>,
     ) -> SuiResult<()>;
 }
 
 impl PendCertificateForExecution for &AuthorityState {
     fn add_pending_certificates(
         &self,
-        certs: Vec<(TransactionDigest, Option<CertifiedTransaction>)>,
+        certs: Vec<(TransactionDigest, Option<VerifiedCertificate>)>,
     ) -> SuiResult<()> {
         AuthorityState::add_pending_certificates(self, certs)
     }
@@ -39,7 +39,7 @@ pub struct PendCertificateForExecutionNoop;
 impl PendCertificateForExecution for PendCertificateForExecutionNoop {
     fn add_pending_certificates(
         &self,
-        _certs: Vec<(TransactionDigest, Option<CertifiedTransaction>)>,
+        _certs: Vec<(TransactionDigest, Option<VerifiedCertificate>)>,
     ) -> SuiResult<()> {
         Ok(())
     }
