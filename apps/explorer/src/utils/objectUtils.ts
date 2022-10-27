@@ -67,7 +67,7 @@ export const extractName = (
     }
 
     // Dynamic fields
-    if (typeof name === 'object' && name?.fields?.name) {
+    if (typeof name === 'object' && typeof name?.fields?.name === 'string') {
         return name?.fields?.name;
     }
 };
