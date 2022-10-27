@@ -58,7 +58,6 @@ multiaddr = "0.14.0"
 hex = "0.4.3"
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
-jemallocator = { version = "^0.5", features = ["profiling"] }
 jemalloc-ctl = "^0.5"
 
 [dev-dependencies]
@@ -79,4 +78,4 @@ sui-macros = { path = "../sui-macros" }
 sui-simulator = { path = "../sui-simulator" }
 
 [package.metadata.cargo-udeps.ignore]
-normal = ["jemallocator", "jemalloc-ctl"]
+normal = ["jemalloc-ctl"]

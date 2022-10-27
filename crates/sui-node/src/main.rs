@@ -24,17 +24,12 @@ struct Args {
 }
 
 // Memory profiling is now done automatically based on increases in total memory usage.
-// Set JE_MALLOC_CONF or _RJEM_MALLOC_CONF to:  prof:true
+// Set MALLOC_CONF (when loading jemalloc dynamically) or _RJEM_MALLOC_CONF (when jemalloc is
+// linked statically) to:  prof:true
 // See [doc/src/contribute/observability.md] for more info.
 // For more memory profiling info see https://github.com/jemalloc/jemalloc/wiki/Use-Case%3A-Heap-Profiling
 #[cfg(not(target_env = "msvc"))]
 use jemalloc_ctl::{epoch, stats};
-#[cfg(not(target_env = "msvc"))]
-use jemallocator::Jemalloc;
-
-#[cfg(not(target_env = "msvc"))]
-#[global_allocator]
-static GLOBAL: Jemalloc = Jemalloc;
 
 // Ratio of memory used compared to before that triggers a new profiling dump
 const MEMORY_INCREASE_PROFILING_RATIO: f64 = 1.2;
@@ -113,7 +108,7 @@ async fn main() -> Result<()> {
                     let dump_name_cstr = CString::new(dump_name).expect("Cannot create dump name");
                     unsafe {
                         if jemalloc_ctl::raw::write(PROF_DUMP, dump_name_cstr.as_ptr()).is_err() {
-                            warn!("Cannot dump memory profile, is _RJEM_MALLOC_CONF set to prof:true?");
+                            info!("Cannot dump memory profile, is jemalloc loaded dynamically with MALLOC_CONF set to prof:true?");
                         }
                     }
                 }
