@@ -40,7 +40,7 @@ impl Build {
             },
         )?;
         if dump_bytecode_as_base64 {
-            println!("{:?}", pkg.get_package_base64())
+            println!("{}", json!(pkg.get_package_base64()))
         }
         Ok(())
     }
