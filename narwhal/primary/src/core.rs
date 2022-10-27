@@ -162,21 +162,53 @@ impl Core {
     pub async fn recover(mut self) -> Self {
         info!("Starting certificate recovery. Message processing will begin after completion.");
 
-        let last_round_certificates = self
+        // In case of a failure of f+1 nodes, it is possible to end up in a situation where
+        // our node might have received certificates of the latest round from <= 2f nodes, but
+        // not managed to also make a proposal for that round. In this case when the node recovers
+        // we'll basically need to recover not only the last certificates (which won't allow us
+        // to make a proposal since they are less than 2f+1) but also the ones of the previous
+        // round for which we guarantee that we do have at least 2f+1 certificates.
+        let last_round_number = self
             .certificate_store
-            .last_round()
-            .expect("Failed recovering certificates in primary core");
-        let last_round_number = last_round_certificates
-            .first()
-            .map(|c| c.round())
-            .unwrap_or(0);
-        for certificate in last_round_certificates {
-            self.append_certificate_in_aggregator(certificate)
-                .await
-                .expect("Failed appending recovered certificates to aggregator in primary core");
+            .last_round_number(&self.name)
+            .expect("Failed retrieving last round number");
+
+        if let Some(last_round_number) = last_round_number {
+            let last_round_number = last_round_number.saturating_sub(1);
+
+            let certificates = self
+                .certificate_store
+                .after_round(last_round_number)
+                .expect("Failed to retrieve certificates after penultimate round");
+
+            info!(
+                "Recovered {} certificates from round {}",
+                certificates.len(),
+                last_round_number
+            );
+
+            // we start recovering from the latest round and backwards
+            for certificate in certificates.into_iter().rev() {
+                info!("Recovering now certificate: {:?}", certificate);
+
+                // A quorum has been formed so no reason to continue from that point on. A small
+                // edge case here is that we don't give the opportunity for more certificates
+                // to be added to the aggregator apart from the quorum, but in any case those
+                // will be enough in order to form a proposal.
+                if self
+                    .append_certificate_in_aggregator(certificate)
+                    .await
+                    .expect("Failed appending recovered certificates to aggregator in primary core")
+                {
+                    info!("Formed a quorum of certificates, no reason to continue further");
+                    break;
+                }
+            }
+
+            self.highest_received_round = last_round_number;
+            self.highest_processed_round = last_round_number;
         }
-        self.highest_received_round = last_round_number;
-        self.highest_processed_round = last_round_number;
+
         self
     }
 
@@ -548,7 +580,7 @@ impl Core {
     async fn append_certificate_in_aggregator(
         &mut self,
         certificate: Certificate,
-    ) -> DagResult<()> {
+    ) -> DagResult<bool> {
         // Check if we have enough certificates to enter a new dag round and propose a header.
         if let Some(parents) = self
             .certificates_aggregators
@@ -571,9 +603,11 @@ impl Core {
                 "Pruned {} messages from obsolete rounds.",
                 before.saturating_sub(self.cancel_handlers.len())
             );
+
+            return Ok(true);
         }
 
-        Ok(())
+        Ok(false)
     }
 
     async fn sanitize_header(&mut self, header: &Header) -> DagResult<()> {
