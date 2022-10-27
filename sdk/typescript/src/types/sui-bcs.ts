@@ -7,8 +7,11 @@ import { SuiObjectRef } from './objects';
 
 bcs
   .registerVectorType('vector<u8>', 'u8')
+  .registerVectorType('vector<u16>', 'u16')
+  .registerVectorType('vector<u32>', 'u32')
   .registerVectorType('vector<u64>', 'u64')
   .registerVectorType('vector<u128>', 'u128')
+  .registerVectorType('vector<u256>', 'u256')
   .registerVectorType('vector<vector<u8>>', 'vector<u8>')
   .registerAddressType('ObjectID', 20)
   .registerAddressType('SuiAddress', 20)
@@ -233,8 +236,11 @@ export type StructTag = {
 export type TypeTag =
   | { bool: null }
   | { u8: null }
+  | { u16: null }
+  | { u32: null }
   | { u64: null }
   | { u128: null }
+  | { u256: null }
   | { address: null }
   | { signer: null }
   | { vector: TypeTag }
@@ -244,8 +250,11 @@ bcs
   .registerEnumType('TypeTag', {
     bool: null,
     u8: null,
+    u16: null,
+    u32: null,
     u64: null,
     u128: null,
+    u256: null,
     address: null,
     signer: null,
     vector: 'TypeTag',
