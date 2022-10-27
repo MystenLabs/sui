@@ -29,6 +29,7 @@ serde = { version = "1.0.144", features = ["derive"] }
 eyre = "0.6.8"
 
 sui-core = { path = "../sui-core" }
+sui-sdk = { path = "../sui-sdk" }
 sui-config = { path = "../sui-config" }
 sui-types = { path = "../sui-types" }
 sui-network = { path = "../sui-network" }

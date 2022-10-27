@@ -8694,6 +8694,7 @@ dependencies = [
  "sui-config",
  "sui-core",
  "sui-network",
+ "sui-sdk",
  "sui-storage",
  "sui-types",
  "telemetry-subscribers 0.2.0",

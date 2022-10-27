@@ -5,6 +5,8 @@ use anyhow::Result;
 use futures::future::join_all;
 use std::cmp::min;
 use std::collections::BTreeMap;
+use std::fs::File;
+use std::io::{self, BufRead};
 use std::path::PathBuf;
 use std::sync::Arc;
 use sui_config::genesis::Genesis;
@@ -14,6 +16,7 @@ use sui_tool::db_tool::{execute_db_tool_command, print_db_all_tables, DbToolComm
 use sui_core::authority_client::{
     AuthorityAPI, NetworkAuthorityClient, NetworkAuthorityClientMetrics,
 };
+use sui_sdk::SuiClient;
 use sui_types::{base_types::*, batch::*, messages::*, object::Owner};
 
 use anyhow::anyhow;
@@ -25,6 +28,12 @@ use sui_types::messages_checkpoint::{
     CheckpointRequest, CheckpointResponse, CheckpointSequenceNumber,
 };
 use sui_types::object::ObjectFormatOptions;
+
+#[derive(Parser, Clone, ArgEnum, Copy)]
+pub enum TargetApi {
+    GetObject,
+    GetObjectsOwnedByAddress,
+}
 
 #[derive(Parser)]
 #[clap(
@@ -136,6 +145,18 @@ pub enum ToolCommand {
             help = "Fetch authenticated checkpoint at a specific sequence number"
         )]
         sequence_number: Option<CheckpointSequenceNumber>,
+    },
+
+    #[clap(name = "spam-fullnode-rpc")]
+    SpamFullNodeRpc {
+        #[clap(long = "input-list")]
+        input_list: PathBuf,
+
+        #[clap(long = "url")]
+        url: String,
+
+        #[clap(long = "target-api", arg_enum)]
+        target_api: TargetApi,
     },
 }
 
@@ -402,6 +423,47 @@ async fn handle_batch(client: &dyn AuthorityAPI, req: &BatchInfoRequest) {
     }
 }
 
+async fn spam_fullnode_rpc(
+    input_file_path: PathBuf,
+    url: &str,
+    target_api: TargetApi,
+) -> Result<()> {
+    let sui = Arc::new(SuiClient::new_rpc_client(url, None).await.unwrap());
+    let file = File::open(input_file_path).unwrap();
+    let mut inputs: Vec<ObjectID> = vec![];
+    for line in io::BufReader::new(file).lines().flatten() {
+        inputs.push(ObjectID::from_hex(&line).unwrap());
+    }
+    let num_of_inputs = inputs.len();
+    println!("Done loading {num_of_inputs} inputs.");
+    let inputs = Box::new(inputs);
+    let mut idx = 0;
+    loop {
+        let sui_clone = sui.clone();
+        let inputs = inputs.clone();
+        tokio::spawn(async move {
+            let api = sui_clone.read_api();
+            let id = *inputs.get(idx).unwrap();
+            match target_api {
+                TargetApi::GetObject => {
+                    if let Err(e) = api.get_parsed_object(id).await {
+                        println!("Error: {:?}", e);
+                    }
+                }
+                TargetApi::GetObjectsOwnedByAddress => {
+                    if let Err(e) = api.get_objects_owned_by_address(SuiAddress::from(id)).await {
+                        println!("Error: {:?}", e);
+                    }
+                }
+            }
+        });
+        idx += 1;
+        if idx == num_of_inputs {
+            idx = 0;
+        }
+    }
+}
+
 impl ToolCommand {
     pub async fn execute(self) -> Result<(), anyhow::Error> {
         match self {
@@ -519,6 +581,13 @@ impl ToolCommand {
             ToolCommand::DumpGenesis { genesis } => {
                 let genesis = Genesis::load(genesis)?;
                 println!("{:#?}", genesis);
+            }
+            ToolCommand::SpamFullNodeRpc {
+                input_list,
+                url,
+                target_api,
+            } => {
+                let _ = spam_fullnode_rpc(input_list, &url, target_api).await;
             }
             ToolCommand::FetchAuthenticatedCheckpoint {
                 genesis,
