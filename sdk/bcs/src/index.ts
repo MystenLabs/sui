@@ -118,6 +118,17 @@ export class BcsReader {
     return new BN.BN(result, 16);
   }
   /**
+   * Read U128 value from the buffer and shift cursor by 32.
+   * @returns
+   */
+  read256(): BN {
+    let value1 = this.read128();
+    let value2 = this.read128();
+    let result = value2.toString(16) + value1.toString(16).padStart(16, '0');
+
+    return new BN.BN(result, 16);
+  }
+  /**
    * Read `num` number of bytes from the buffer and shift cursor by `num`.
    * @param num Number of bytes to read.
    * @returns Selected Buffer.
@@ -258,6 +269,20 @@ export class BcsWriter {
   write128(value: bigint | BN): this {
     BcsWriter.toBN(value)
       .toArray('le', 16)
+      .forEach(el => this.write8(el));
+
+    return this;
+  }
+  /**
+   * Write a U256 value into a buffer and shift cursor position by 16.
+   *
+   * @unimplemented
+   * @param {bigint} value Value to write.
+   * @returns {this}
+   */
+  write256(value: bigint | BN): this {
+    BcsWriter.toBN(value)
+      .toArray('le', 32)
       .forEach(el => this.write8(el));
 
     return this;
@@ -442,9 +467,11 @@ export type BcsConfig = {
 export class BCS {
   // Prefefined types constants
   static readonly U8: string = 'u8';
+  static readonly U16: string = 'u16';
   static readonly U32: string = 'u32';
   static readonly U64: string = 'u64';
   static readonly U128: string = 'u128';
+  static readonly U256: string = 'u256';
   static readonly BOOL: string = 'bool';
   static readonly VECTOR: string = 'vector';
   static readonly ADDRESS: string = 'address';
@@ -458,6 +485,11 @@ export class BCS {
    */
   public genericSeparators: [string, string];
 
+  // Set of values for forking BCS implementation.
+  protected vectorType: string;
+  protected addressLength: number;
+  protected addressEncoding: 'hex' | 'base64';
+
   /**
    * Construct a BCS instance with a prepared schema.
    *
@@ -466,6 +498,9 @@ export class BCS {
    */
   constructor(public schema: BcsConfig, withPrimitives: boolean = true) {
     this.genericSeparators = schema.genericSeparators || ['<', '>'];
+    this.vectorType = schema.vectorType;
+    this.addressLength = schema.addressLength;
+    this.addressEncoding = schema.addressEncoding || 'hex';
 
     // Register address type under key 'address'.
     this.registerAddressType(BCS.ADDRESS, schema.addressLength, schema.addressEncoding);
@@ -540,6 +575,29 @@ export class BCS {
 
     let { typeName, typeParams } = this.parseTypeName(type);
     return this.getTypeInterface(typeName).decode(data, typeParams);
+  }
+
+  /**
+   * Forks a BCS instance and deeply copies add definitions.
+   *
+   * @example
+   * let bcs_v1 = new BCS(getSuiMoveConfig());
+   * bcs_v1.registerStructType('User', { name: 'string' });
+   *
+   * let bcs_v2 = bcs_v1.fork();
+   * bcs_v2.registerStructType('Worker', { user: 'User', experience: 'u64' });
+   */
+  public fork(): BCS {
+    let clone = new BCS({
+      vectorType: this.vectorType,
+      addressLength: this.addressLength,
+      addressEncoding: this.addressEncoding,
+      genericSeparators: this.genericSeparators
+    });
+
+    clone.types = new Map(this.types);
+
+    return clone;
   }
 
   /**
@@ -644,7 +702,7 @@ export class BCS {
    * Register custom vector type inside the bcs.
    *
    * @example
-   * bcs.registerVectorType('vector<u8>', 'u8');
+   * bcs.registerVectorType('vector<T>'); // generic registration
    * let array = bcs.de('vector<u8>', '06010203040506', 'hex'); // [1,2,3,4,5,6];
    * let again = bcs.ser('vector<u8>', [1,2,3,4,5,6]).toString('hex');
    *
@@ -988,10 +1046,17 @@ export function registerPrimitives(bcs: BCS): void {
   );
 
   bcs.registerType(
+    BCS.U16,
+    (writer: BcsWriter, data) => writer.write16(data),
+    (reader: BcsReader) => reader.read16(),
+    u16 => u16 < 65536
+  );
+
+  bcs.registerType(
     BCS.U32,
     (writer: BcsWriter, data) => writer.write32(data),
     (reader: BcsReader) => reader.read32(),
-    u32 => u32 < 4294967296
+    u32 => u32 <= 4294967296
   );
 
   bcs.registerType(
@@ -1006,6 +1071,13 @@ export function registerPrimitives(bcs: BCS): void {
     (writer: BcsWriter, data: BN | bigint) => writer.write128(data),
     (reader: BcsReader) => reader.read128(),
     _u128 => true
+  );
+
+  bcs.registerType(
+    BCS.U256,
+    (writer: BcsWriter, data) => writer.write256(data),
+    (reader: BcsReader) => reader.read256(),
+    _u256 => true
   );
 
   bcs.registerType(

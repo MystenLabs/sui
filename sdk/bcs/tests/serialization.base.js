@@ -11,8 +11,17 @@ const bcs = new BCS(getSuiMoveConfig());
     assert(serde(bcs, 'u8', '200').toString(10) === '200', 'u8');
     assert(serde(bcs, 'u8', '255').toString(10) === '255', 'u8');
 
+    assert(serde(bcs, 'u16', '10000').toString(10) === '10000', 'u16');
+    assert(serde(bcs, 'u32', '10000').toString(10) === '10000', 'u32');
+    assert(serde(bcs, 'u256', '10000').toString(10) === '10000', 'u256');
+
+    assert(bcs.de('u256', 'a086010000000000000000000000000000000000000000000000000000000000', 'hex').toString(10));
+    assert(bcs.ser('u256', '100000').toString('hex') === 'a086010000000000000000000000000000000000000000000000000000000000', 'u256');
+
+
     assert(serde(bcs, 'u64', '1000').toString(10) === '1000', 'u64');
     assert(serde(bcs, 'u128', '1000').toString(10) === '1000', 'u128');
+    assert(serde(bcs, 'u256', '1000').toString(10) === '1000', 'u256');
 
     assert(serde(bcs, 'bool', true) === true, 'bool');
     assert(serde(bcs, 'bool', false) === false, 'bool');

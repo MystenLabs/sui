@@ -62,6 +62,18 @@ const { BCS, getRustConfig, getSuiMoveConfig } = require('../dist');
     };
 };
 
+// forking
+{
+   let bcs_v1 = new BCS(getSuiMoveConfig());
+   bcs_v1.registerStructType('User', { name: 'string' });
+
+   let bcs_v2 = bcs_v1.fork();
+   bcs_v2.registerStructType('Worker', { user: 'User', experience: 'u64' });
+
+   assert(!bcs_v1.hasType('Worker'), 'fork');
+   assert(bcs_v2.hasType('Worker'), 'fork');
+}
+
 function serde(bcs, type, data) {
     let ser = bcs.ser(type, data).toString('hex');
     let de = bcs.de(type, ser, 'hex');
