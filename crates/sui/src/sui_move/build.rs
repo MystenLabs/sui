@@ -40,7 +40,12 @@ impl Build {
             },
         )?;
         if dump_bytecode_as_base64 {
-            println!("{:?}", pkg.get_package_base64())
+            let pkg_string: Vec<String> = pkg
+                .get_package_base64()
+                .into_iter()
+                .map(|m| m.encoded())
+                .collect();
+            println!("{:?}", pkg_string)
         }
         Ok(())
     }
