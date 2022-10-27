@@ -11,7 +11,7 @@ use sui_node::metrics;
 use sui_telemetry::send_telemetry_event;
 use tokio::task;
 use tokio::time::sleep;
-use tracing::{info, warn};
+use tracing::info;
 
 #[derive(Parser)]
 #[clap(rename_all = "kebab-case", version)]
