@@ -101,7 +101,7 @@ struct ServerInfo {
 
 impl RpcClient {
     pub async fn new(http: &str, ws: Option<&str>) -> Result<Self, anyhow::Error> {
-        let http = HttpClientBuilder::default().build(http)?;
+        let http = HttpClientBuilder::default().max_concurrent_requests(20000).build(http)?;
         let ws = if let Some(url) = ws {
             Some(WsClientBuilder::default().build(url).await?)
         } else {
