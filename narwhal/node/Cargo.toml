@@ -18,7 +18,7 @@ futures = "0.3.24"
 multiaddr = "0.14.0"
 mysten-network.workspace = true
 rand = "0.8.5"
-store = { version = "0.1.0", package = "typed-store"}
+store = { version = "0.4.0", package = "typed-store"}
 telemetry-subscribers.workspace = true
 thiserror = "1.0.35"
 tokio = { version = "1.20.1", features = ["full"] }

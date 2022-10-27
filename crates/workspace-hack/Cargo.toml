@@ -92,8 +92,7 @@ cassowary = { version = "0.3", default-features = false }
 cast = { version = "0.3", default-features = false }
 cbc = { version = "0.1", features = ["alloc", "block-padding", "std"] }
 cfg-expr = { version = "0.11", features = ["target-lexicon", "targets"] }
-cfg-if-c65f7effa3be6d31 = { package = "cfg-if", version = "0.1", default-features = false }
-cfg-if-dff4ba8e3ae991db = { package = "cfg-if", version = "1", default-features = false }
+cfg-if = { version = "1", default-features = false }
 chrono = { version = "0.4", features = ["clock", "iana-time-zone", "js-sys", "oldtime", "std", "time", "wasm-bindgen", "wasmbind", "winapi"] }
 chrono-tz = { version = "0.6", features = ["std"] }
 cipher = { version = "0.4", default-features = false, features = ["alloc", "block-padding", "std"] }
@@ -396,7 +395,6 @@ plotters-backend = { version = "0.3", default-features = false }
 plotters-svg = { version = "0.3", default-features = false }
 polyval = { version = "0.6", default-features = false }
 ppv-lite86 = { version = "0.2", default-features = false, features = ["simd", "std"] }
-pre = { version = "0.2", features = ["alloc", "core", "std"] }
 predicates = { version = "2", features = ["diff", "difflib", "float-cmp", "normalize-line-endings", "regex"] }
 predicates-core = { version = "1", default-features = false }
 predicates-tree = { version = "1", default-features = false }
@@ -544,7 +542,7 @@ tiny-bip39 = { version = "1", features = ["chinese-simplified", "chinese-traditi
 tinytemplate = { version = "1", default-features = false }
 tinyvec = { version = "1", features = ["alloc", "tinyvec_macros"] }
 tinyvec_macros = { version = "0.1", default-features = false }
-tokio = { version = "1", features = ["bytes", "fs", "full", "io-std", "io-util", "libc", "macros", "memchr", "mio", "net", "num_cpus", "once_cell", "parking_lot", "process", "rt", "rt-multi-thread", "signal", "signal-hook-registry", "socket2", "sync", "test-util", "time", "tokio-macros", "tracing"] }
+tokio = { version = "1", features = ["bytes", "fs", "full", "io-std", "io-util", "libc", "macros", "memchr", "mio", "net", "num_cpus", "parking_lot", "process", "rt", "rt-multi-thread", "signal", "signal-hook-registry", "socket2", "sync", "test-util", "time", "tokio-macros", "tracing"] }
 tokio-io-timeout = { version = "1", default-features = false }
 tokio-retry = { version = "0.3", default-features = false }
 tokio-rustls = { version = "0.23", features = ["logging", "tls12"] }
@@ -574,7 +572,7 @@ try-lock = { version = "0.2", default-features = false }
 tui = { version = "0.17", features = ["crossterm"] }
 twox-hash = { version = "1", default-features = false }
 typed-arena = { version = "2", features = ["std"] }
-typed-store = { version = "0.1", default-features = false }
+typed-store = { version = "0.4", default-features = false }
 typenum = { version = "1", default-features = false }
 ucd-trie = { version = "0.1", default-features = false, features = ["std"] }
 uncased = { version = "0.9", default-features = false }
@@ -712,8 +710,7 @@ cbc = { version = "0.1", features = ["alloc", "block-padding", "std"] }
 cc = { version = "1", default-features = false, features = ["jobserver", "parallel"] }
 cexpr = { version = "0.6", default-features = false }
 cfg-expr = { version = "0.11", features = ["target-lexicon", "targets"] }
-cfg-if-c65f7effa3be6d31 = { package = "cfg-if", version = "0.1", default-features = false }
-cfg-if-dff4ba8e3ae991db = { package = "cfg-if", version = "1", default-features = false }
+cfg-if = { version = "1", default-features = false }
 chrono = { version = "0.4", features = ["clock", "iana-time-zone", "js-sys", "oldtime", "std", "time", "wasm-bindgen", "wasmbind", "winapi"] }
 chrono-tz = { version = "0.6", features = ["std"] }
 chrono-tz-build = { version = "0.0.3", default-features = false }
@@ -1061,16 +1058,13 @@ plotters-backend = { version = "0.3", default-features = false }
 plotters-svg = { version = "0.3", default-features = false }
 polyval = { version = "0.6", default-features = false }
 ppv-lite86 = { version = "0.2", default-features = false, features = ["simd", "std"] }
-pre = { version = "0.2", features = ["alloc", "core", "std"] }
-pre-proc-macro = { version = "0.2", default-features = false }
 predicates = { version = "2", features = ["diff", "difflib", "float-cmp", "normalize-line-endings", "regex"] }
 predicates-core = { version = "1", default-features = false }
 predicates-tree = { version = "1", default-features = false }
 pretty = { version = "0.10", default-features = false }
 pretty_assertions = { version = "1", features = ["std"] }
 prettyplease = { version = "0.1", default-features = false }
-proc-macro-crate-c65f7effa3be6d31 = { package = "proc-macro-crate", version = "0.1", default-features = false }
-proc-macro-crate-dff4ba8e3ae991db = { package = "proc-macro-crate", version = "1", default-features = false }
+proc-macro-crate = { version = "1", default-features = false }
 proc-macro-error = { version = "1", features = ["syn", "syn-error"] }
 proc-macro-error-attr = { version = "1", default-features = false }
 proc-macro2-9fbad63c4bcf4a8f = { package = "proc-macro2", version = "0.4", features = ["proc-macro"] }
@@ -1126,8 +1120,7 @@ rust-ini = { version = "0.13", default-features = false }
 rust_decimal = { version = "1", default-features = false }
 rustc-demangle = { version = "0.1", default-features = false }
 rustc-hash = { version = "1", features = ["std"] }
-rustc_version-6f8ce4dd05d13bba = { package = "rustc_version", version = "0.2", default-features = false }
-rustc_version-468e82937335b1c9 = { package = "rustc_version", version = "0.3", default-features = false }
+rustc_version = { version = "0.3", default-features = false }
 rusticata-macros = { version = "4", default-features = false }
 rustls = { version = "0.20", features = ["dangerous_configuration", "log", "logging", "quic", "tls12"] }
 rustls-native-certs = { version = "0.6", default-features = false }
@@ -1147,10 +1140,8 @@ sec1 = { version = "0.3", features = ["base16ct", "der", "generic-array", "point
 secp256k1 = { version = "0.24", features = ["alloc", "bitcoin_hashes", "global-context", "rand", "rand-std", "recovery", "std"] }
 secp256k1-sys = { version = "0.6", default-features = false, features = ["alloc", "recovery", "std"] }
 semver-a6292c17cd707f01 = { package = "semver", version = "0.11" }
-semver-274715c4dabd11b0 = { package = "semver", version = "0.9" }
 semver-dff4ba8e3ae991db = { package = "semver", version = "1", features = ["serde", "std"] }
-semver-parser-93f6ce9d446188ac = { package = "semver-parser", version = "0.10", default-features = false }
-semver-parser-ca01ad9e24f5d932 = { package = "semver-parser", version = "0.7", default-features = false }
+semver-parser = { version = "0.10", default-features = false }
 send_wrapper = { version = "0.4", default-features = false }
 serde-c38e5c1d305a1b54 = { package = "serde", version = "0.8", features = ["std"] }
 serde-dff4ba8e3ae991db = { package = "serde", version = "1", features = ["alloc", "derive", "rc", "serde_derive", "std"] }
@@ -1248,7 +1239,7 @@ tiny-bip39 = { version = "1", features = ["chinese-simplified", "chinese-traditi
 tinytemplate = { version = "1", default-features = false }
 tinyvec = { version = "1", features = ["alloc", "tinyvec_macros"] }
 tinyvec_macros = { version = "0.1", default-features = false }
-tokio = { version = "1", features = ["bytes", "fs", "full", "io-std", "io-util", "libc", "macros", "memchr", "mio", "net", "num_cpus", "once_cell", "parking_lot", "process", "rt", "rt-multi-thread", "signal", "signal-hook-registry", "socket2", "sync", "test-util", "time", "tokio-macros", "tracing"] }
+tokio = { version = "1", features = ["bytes", "fs", "full", "io-std", "io-util", "libc", "macros", "memchr", "mio", "net", "num_cpus", "parking_lot", "process", "rt", "rt-multi-thread", "signal", "signal-hook-registry", "socket2", "sync", "test-util", "time", "tokio-macros", "tracing"] }
 tokio-io-timeout = { version = "1", default-features = false }
 tokio-macros = { version = "1", default-features = false }
 tokio-retry = { version = "0.3", default-features = false }
@@ -1283,8 +1274,8 @@ try-lock = { version = "0.2", default-features = false }
 tui = { version = "0.17", features = ["crossterm"] }
 twox-hash = { version = "1", default-features = false }
 typed-arena = { version = "2", features = ["std"] }
-typed-store = { version = "0.1", default-features = false }
-typed-store-derive = { version = "0.1", default-features = false }
+typed-store = { version = "0.4", default-features = false }
+typed-store-derive = { version = "0.3", default-features = false }
 typenum = { version = "1", default-features = false }
 ucd-trie = { version = "0.1", default-features = false, features = ["std"] }
 uncased = { version = "0.9", default-features = false }

@@ -142,7 +142,7 @@ impl HeaderWaiter {
                 result.map_err(|e| DagError::NetworkError(format!("{e:?}")))?;
                 for (worker_id, worker_digests) in digests {
                     for digest in worker_digests {
-                        store.write((digest, worker_id), 0u8).await;
+                        store.async_write((digest, worker_id), 0u8).await;
                     }
                 }
                 Ok(Some(deliver))

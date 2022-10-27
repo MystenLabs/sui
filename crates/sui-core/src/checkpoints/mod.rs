@@ -31,6 +31,7 @@ use sui_types::{
 use tap::TapFallible;
 use tokio::sync::broadcast;
 use tracing::{debug, error, info};
+use typed_store::rocks::DBOptions;
 use typed_store::traits::TypedStoreDebug;
 
 use typed_store::{
@@ -149,21 +150,21 @@ pub struct CheckpointStoreTables {
 }
 
 // These functions are used to initialize the DB tables
-fn transactions_to_checkpoint_table_default_config() -> Options {
+fn transactions_to_checkpoint_table_default_config() -> DBOptions {
     default_db_options(None, None).1
 }
-fn extra_transactions_table_default_config() -> Options {
-    default_db_options(None, None).1
-}
-
-fn checkpoints_table_default_config() -> Options {
-    default_db_options(None, None).1
-}
-fn local_fragments_table_default_config() -> Options {
+fn extra_transactions_table_default_config() -> DBOptions {
     default_db_options(None, None).1
 }
 
-fn locals_table_default_config() -> Options {
+fn checkpoints_table_default_config() -> DBOptions {
+    default_db_options(None, None).1
+}
+fn local_fragments_table_default_config() -> DBOptions {
+    default_db_options(None, None).1
+}
+
+fn locals_table_default_config() -> DBOptions {
     default_db_options(None, None).1
 }
 

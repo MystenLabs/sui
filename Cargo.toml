@@ -71,12 +71,12 @@ opt-level = 1
 [workspace.dependencies]
 
 # github.com/MystenLabs/mysten-infra dependencies
-typed-store = "0.1.0"
-typed-store-derive = "0.1.0"
+typed-store = "0.4.0"
+typed-store-derive = "0.3.0"
 telemetry-subscribers = { version = "0.2.0", features = ["jaeger", "tokio-console"] }
 mysten-network = "0.2.0"
 name-variant = "0.1.0"
-store = { version = "0.1.0", package = "typed-store" }
+store = { version = "0.4.0", package = "typed-store" }
 
 # Move dependencies
 move-binary-format = { git = "https://github.com/move-language/move", rev = "1ffd0a3e7bdc4bba7dafb8c814279e750113d030" }
