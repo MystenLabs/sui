@@ -104,7 +104,7 @@ async fn synchronize_when_batch_exists() {
     let batch = test_utils::batch();
     let batch_id = batch.digest();
     let missing = vec![batch_id];
-    store.write(batch_id, batch).await;
+    store.async_write(batch_id, batch).await;
 
     // Set up mock behavior for child RequestBatches RPC.
     let target_primary = fixture.authorities().nth(1).unwrap();
@@ -137,7 +137,7 @@ async fn delete_batches() {
     let store = test_utils::open_batch_store();
     let batch = test_utils::batch();
     let digest = batch.digest();
-    store.write(digest, batch.clone()).await;
+    store.async_write(digest, batch.clone()).await;
 
     // Send a delete request.
     let handler = PrimaryReceiverHandler {

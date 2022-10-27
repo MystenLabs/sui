@@ -7,7 +7,7 @@ use sui_storage::default_db_options;
 use sui_types::base_types::ObjectID;
 use sui_types::committee::{Committee, EpochId};
 use sui_types::error::{SuiError, SuiResult};
-use typed_store::rocks::DBMap;
+use typed_store::rocks::{DBMap, DBOptions};
 use typed_store::traits::TypedStoreDebug;
 
 use sui_types::fp_ensure;
@@ -26,7 +26,7 @@ pub struct CommitteeStore {
 }
 
 // These functions are used to initialize the DB tables
-fn committee_table_default_config() -> Options {
+fn committee_table_default_config() -> DBOptions {
     default_db_options(None, None).1
 }
 

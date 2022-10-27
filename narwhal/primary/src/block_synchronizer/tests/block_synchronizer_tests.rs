@@ -371,7 +371,7 @@ async fn test_successful_payload_synchronization() {
                 // Assume that the request is the correct one and just immediately
                 // store the batch to the payload store.
                 for batch_id in m.digests {
-                    payload_store.write((batch_id, worker), 1).await;
+                    payload_store.async_write((batch_id, worker), 1).await;
                 }
             }
         }
@@ -816,7 +816,7 @@ async fn test_reply_with_payload_already_in_storage() {
             certificate_store.write(certificate.clone()).unwrap();
 
             for entry in certificate.header.payload {
-                payload_store.write(entry, 1).await;
+                payload_store.async_write(entry, 1).await;
             }
         }
     }

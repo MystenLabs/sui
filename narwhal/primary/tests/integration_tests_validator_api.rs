@@ -77,7 +77,7 @@ async fn test_get_collections() {
         // Write the header
         store
             .header_store
-            .write(header.clone().id, header.clone())
+            .async_write(header.clone().id, header.clone())
             .await;
 
         header_ids.push(header.clone().id);
@@ -85,12 +85,15 @@ async fn test_get_collections() {
         // Write the batches to payload store
         store
             .payload_store
-            .write_all(vec![((batch.clone().digest(), worker_id), 0)])
+            .sync_write_all(vec![((batch.clone().digest(), worker_id), 0)])
             .await
             .expect("couldn't store batches");
         if n != 4 {
             // Add batches to the workers store
-            store.batch_store.write(batch.digest(), batch.clone()).await;
+            store
+                .batch_store
+                .async_write(batch.digest(), batch.clone())
+                .await;
         } else {
             missing_block = block_id;
         }
@@ -274,7 +277,7 @@ async fn test_remove_collections() {
         // Write the header
         store
             .header_store
-            .write(header.clone().id, header.clone())
+            .async_write(header.clone().id, header.clone())
             .await;
 
         header_ids.push(header.clone().id);
@@ -282,12 +285,15 @@ async fn test_remove_collections() {
         // Write the batches to payload store
         store
             .payload_store
-            .write_all(vec![((batch.clone().digest(), worker_id), 0)])
+            .sync_write_all(vec![((batch.clone().digest(), worker_id), 0)])
             .await
             .expect("couldn't store batches");
         if n != 4 {
             // Add batches to the workers store
-            store.batch_store.write(batch.digest(), batch.clone()).await;
+            store
+                .batch_store
+                .async_write(batch.digest(), batch.clone())
+                .await;
         }
     }
 
@@ -1098,16 +1104,18 @@ async fn fixture_certificate(
     certificate_store.write(certificate.clone()).unwrap();
 
     // Write the header
-    header_store.write(header.clone().id, header.clone()).await;
+    header_store
+        .async_write(header.clone().id, header.clone())
+        .await;
 
     // Write the batches to payload store
     payload_store
-        .write_all(vec![((batch_digest, worker_id), 0)])
+        .sync_write_all(vec![((batch_digest, worker_id), 0)])
         .await
         .expect("couldn't store batches");
 
     // Add a batch to the workers store
-    batch_store.write(batch_digest, batch.clone()).await;
+    batch_store.async_write(batch_digest, batch.clone()).await;
 
     (certificate, batch)
 }

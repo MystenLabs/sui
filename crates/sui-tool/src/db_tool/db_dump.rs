@@ -36,20 +36,23 @@ impl std::fmt::Display for StoreName {
 }
 
 pub fn list_tables(path: PathBuf) -> anyhow::Result<Vec<String>> {
-    rocksdb::DBWithThreadMode::<MultiThreaded>::list_cf(&default_db_options(None, None).0, &path)
-        .map_err(|e| e.into())
-        .map(|q| {
-            q.iter()
-                .filter_map(|s| {
-                    // The `default` table is not used
-                    if s != "default" {
-                        Some(s.clone())
-                    } else {
-                        None
-                    }
-                })
-                .collect()
-        })
+    rocksdb::DBWithThreadMode::<MultiThreaded>::list_cf(
+        &default_db_options(None, None).0.options,
+        &path,
+    )
+    .map_err(|e| e.into())
+    .map(|q| {
+        q.iter()
+            .filter_map(|s| {
+                // The `default` table is not used
+                if s != "default" {
+                    Some(s.clone())
+                } else {
+                    None
+                }
+            })
+            .collect()
+    })
 }
 
 // TODO: condense this using macro or trait dyn skills
@@ -133,8 +136,8 @@ mod test {
 
     use crate::db_tool::db_dump::{dump_table, list_tables, StoreName};
 
-    #[test]
-    fn db_dump_population() -> Result<(), anyhow::Error> {
+    #[tokio::test]
+    async fn db_dump_population() -> Result<(), anyhow::Error> {
         let primary_path = tempfile::tempdir()?.into_path();
 
         // Open the DB for writing

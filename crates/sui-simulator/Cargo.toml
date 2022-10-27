@@ -16,4 +16,4 @@ anemo.workspace = true
 fastcrypto = { workspace = true, features = ["copy_key"] }
 
 [target.'cfg(msim)'.dependencies]
-msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "982cf1a544ebd1e2818330f9b1247a4c3dd26c13", package = "msim" }
+msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "b28d77f88434535b166cc60bd3e5018aa75cd705", package = "msim" }
