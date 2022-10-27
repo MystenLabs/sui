@@ -5,8 +5,9 @@ use sui_json_rpc_types::SuiEventEnvelope;
 use sui_storage::event_store::{sql::SqlEventStore, test_utils, EventStore};
 use sui_types::{
     base_types::{ObjectID, TransactionDigest},
-    event::{EventEnvelope, EventType, TransferType},
+    event::{EventEnvelope, EventType},
 };
+
 #[tokio::test]
 async fn test_stored_event_to_sui_event() -> Result<(), anyhow::Error> {
     telemetry_subscribers::init_for_testing();
@@ -52,7 +53,7 @@ async fn test_stored_event_to_sui_event() -> Result<(), anyhow::Error> {
         4,
         0, // event_num
         1,
-        TransferType::ToAddress,
+        "0x2::test:Object",
         None,
         None,
         None,

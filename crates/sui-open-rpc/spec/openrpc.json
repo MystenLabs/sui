@@ -362,10 +362,9 @@
                       "recipient": {
                         "AddressOwner": "0x436ce7a9254b30d253e4567ccafa5f36ce84c80a"
                       },
+                      "objectType": "0x2::example::Object",
                       "objectId": "0xa8bc9be64e0d5ae796884274aef3005ae6733809",
-                      "version": 2,
-                      "type": "ToAddress",
-                      "amount": 100
+                      "version": 2
                     }
                   }
                 ]
@@ -509,10 +508,9 @@
                     "recipient": {
                       "AddressOwner": "0x5a97d0d8dfe64f09f709f06c320889949230e672"
                     },
+                    "objectType": "0x2::example::Object",
                     "objectId": "0x044bb2b0954ae5935392c72fa08e0e5dfd566e97",
-                    "version": 2,
-                    "type": "ToAddress",
-                    "amount": 100
+                    "version": 2
                   }
                 }
               }
@@ -714,10 +712,9 @@
                     "recipient": {
                       "AddressOwner": "0x955697fe2b704c9540a3846e9298b75db725c1ee"
                     },
+                    "objectType": "0x2::example::Object",
                     "objectId": "0x3027b783ea689e1a38eb476c6efc44edb5cd3dfe",
-                    "version": 2,
-                    "type": "ToAddress",
-                    "amount": 100
+                    "version": 2
                   }
                 }
               }
@@ -821,10 +818,9 @@
                     "recipient": {
                       "AddressOwner": "0x5579352c128b4d1a2f42fdfbc9c5a73a441193e9"
                     },
+                    "objectType": "0x2::example::Object",
                     "objectId": "0x9ab6cc2a92f7d37948898292d70420418b84502e",
-                    "version": 2,
-                    "type": "ToAddress",
-                    "amount": 100
+                    "version": 2
                   }
                 }
               }
@@ -926,10 +922,9 @@
                     "recipient": {
                       "AddressOwner": "0x0c65a5b12c43805d0d6f5402a7ad0da5bdec549c"
                     },
+                    "objectType": "0x2::example::Object",
                     "objectId": "0x7cdea06bc4a1d339a22521eea933b8899efb2073",
-                    "version": 2,
-                    "type": "ToAddress",
-                    "amount": 100
+                    "version": 2
                   }
                 }
               }
@@ -1019,10 +1014,9 @@
                     "recipient": {
                       "AddressOwner": "0xa6db5c1bd60446af9ce59a85cd194e4715701e55"
                     },
+                    "objectType": "0x2::example::Object",
                     "objectId": "0xe66b092d67b54aea5028bed04c46a29bd0ebfd98",
-                    "version": 2,
-                    "type": "ToAddress",
-                    "amount": 100
+                    "version": 2
                   }
                 }
               }
@@ -1096,10 +1090,9 @@
                     "recipient": {
                       "AddressOwner": "0x98d2d7d17ba91ddc7e717cf708c937060f040487"
                     },
+                    "objectType": "0x2::example::Object",
                     "objectId": "0x36ec33fb1746d999a5e58cd5c677ed804f82f1c8",
-                    "version": 2,
-                    "type": "ToAddress",
-                    "amount": 100
+                    "version": 2
                   }
                 }
               }
@@ -1742,10 +1735,9 @@
                       "recipient": {
                         "AddressOwner": "0x7a91f631760853934d383634bcf7c32655009a61"
                       },
+                      "objectType": "0x2::example::Object",
                       "objectId": "0xf1de0eae420a2e4ae1bb772ab2dd5d5a7dfa949c",
-                      "version": 2,
-                      "type": "ToAddress",
-                      "amount": 100
+                      "version": 2
                     }
                   }
                 ]
@@ -2678,6 +2670,14 @@
           }
         }
       },
+      "BalanceChangeType": {
+        "type": "string",
+        "enum": [
+          "Gas",
+          "Pay",
+          "Receive"
+        ]
+      },
       "Base64": {
         "type": "string"
       },
@@ -2910,122 +2910,53 @@
             "additionalProperties": false
           },
           {
-            "description": "Transfer objects to new address / wrap in another object / coin",
+            "description": "Coin balance changing event",
             "type": "object",
             "required": [
-              "transferObject"
+              "coinBalanceChange"
             ],
             "properties": {
-              "transferObject": {
+              "coinBalanceChange": {
                 "type": "object",
                 "required": [
-                  "objectId",
+                  "amount",
+                  "changeType",
+                  "coinObjectId",
+                  "coinType",
+                  "owner",
                   "packageId",
-                  "recipient",
                   "sender",
                   "transactionModule",
-                  "type",
                   "version"
                 ],
                 "properties": {
                   "amount": {
-                    "type": [
-                      "integer",
-                      "null"
-                    ],
-                    "format": "uint64",
-                    "minimum": 0.0
+                    "type": "integer",
+                    "format": "int128"
                   },
-                  "objectId": {
+                  "changeType": {
+                    "$ref": "#/components/schemas/BalanceChangeType"
+                  },
+                  "coinObjectId": {
                     "$ref": "#/components/schemas/ObjectID"
+                  },
+                  "coinType": {
+                    "type": "string"
+                  },
+                  "owner": {
+                    "$ref": "#/components/schemas/Owner"
                   },
                   "packageId": {
                     "$ref": "#/components/schemas/ObjectID"
-                  },
-                  "recipient": {
-                    "$ref": "#/components/schemas/Owner"
                   },
                   "sender": {
                     "$ref": "#/components/schemas/SuiAddress"
                   },
                   "transactionModule": {
                     "type": "string"
-                  },
-                  "type": {
-                    "$ref": "#/components/schemas/TransferType"
                   },
                   "version": {
                     "$ref": "#/components/schemas/SequenceNumber"
-                  }
-                }
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "description": "Delete object",
-            "type": "object",
-            "required": [
-              "deleteObject"
-            ],
-            "properties": {
-              "deleteObject": {
-                "type": "object",
-                "required": [
-                  "objectId",
-                  "packageId",
-                  "sender",
-                  "transactionModule"
-                ],
-                "properties": {
-                  "objectId": {
-                    "$ref": "#/components/schemas/ObjectID"
-                  },
-                  "packageId": {
-                    "$ref": "#/components/schemas/ObjectID"
-                  },
-                  "sender": {
-                    "$ref": "#/components/schemas/SuiAddress"
-                  },
-                  "transactionModule": {
-                    "type": "string"
-                  }
-                }
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "description": "New object creation",
-            "type": "object",
-            "required": [
-              "newObject"
-            ],
-            "properties": {
-              "newObject": {
-                "type": "object",
-                "required": [
-                  "objectId",
-                  "packageId",
-                  "recipient",
-                  "sender",
-                  "transactionModule"
-                ],
-                "properties": {
-                  "objectId": {
-                    "$ref": "#/components/schemas/ObjectID"
-                  },
-                  "packageId": {
-                    "$ref": "#/components/schemas/ObjectID"
-                  },
-                  "recipient": {
-                    "$ref": "#/components/schemas/Owner"
-                  },
-                  "sender": {
-                    "$ref": "#/components/schemas/SuiAddress"
-                  },
-                  "transactionModule": {
-                    "type": "string"
                   }
                 }
               }
@@ -3058,6 +2989,174 @@
                 "type": "integer",
                 "format": "uint64",
                 "minimum": 0.0
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Transfer objects to new address / wrap in another object / coin",
+            "type": "object",
+            "required": [
+              "transferObject"
+            ],
+            "properties": {
+              "transferObject": {
+                "type": "object",
+                "required": [
+                  "objectId",
+                  "objectType",
+                  "packageId",
+                  "recipient",
+                  "sender",
+                  "transactionModule",
+                  "version"
+                ],
+                "properties": {
+                  "objectId": {
+                    "$ref": "#/components/schemas/ObjectID"
+                  },
+                  "objectType": {
+                    "type": "string"
+                  },
+                  "packageId": {
+                    "$ref": "#/components/schemas/ObjectID"
+                  },
+                  "recipient": {
+                    "$ref": "#/components/schemas/Owner"
+                  },
+                  "sender": {
+                    "$ref": "#/components/schemas/SuiAddress"
+                  },
+                  "transactionModule": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "$ref": "#/components/schemas/SequenceNumber"
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Object mutated.",
+            "type": "object",
+            "required": [
+              "mutateObject"
+            ],
+            "properties": {
+              "mutateObject": {
+                "type": "object",
+                "required": [
+                  "objectId",
+                  "objectType",
+                  "packageId",
+                  "sender",
+                  "transactionModule",
+                  "version"
+                ],
+                "properties": {
+                  "objectId": {
+                    "$ref": "#/components/schemas/ObjectID"
+                  },
+                  "objectType": {
+                    "type": "string"
+                  },
+                  "packageId": {
+                    "$ref": "#/components/schemas/ObjectID"
+                  },
+                  "sender": {
+                    "$ref": "#/components/schemas/SuiAddress"
+                  },
+                  "transactionModule": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "$ref": "#/components/schemas/SequenceNumber"
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Delete object",
+            "type": "object",
+            "required": [
+              "deleteObject"
+            ],
+            "properties": {
+              "deleteObject": {
+                "type": "object",
+                "required": [
+                  "objectId",
+                  "packageId",
+                  "sender",
+                  "transactionModule",
+                  "version"
+                ],
+                "properties": {
+                  "objectId": {
+                    "$ref": "#/components/schemas/ObjectID"
+                  },
+                  "packageId": {
+                    "$ref": "#/components/schemas/ObjectID"
+                  },
+                  "sender": {
+                    "$ref": "#/components/schemas/SuiAddress"
+                  },
+                  "transactionModule": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "$ref": "#/components/schemas/SequenceNumber"
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "New object creation",
+            "type": "object",
+            "required": [
+              "newObject"
+            ],
+            "properties": {
+              "newObject": {
+                "type": "object",
+                "required": [
+                  "objectId",
+                  "objectType",
+                  "packageId",
+                  "recipient",
+                  "sender",
+                  "transactionModule",
+                  "version"
+                ],
+                "properties": {
+                  "objectId": {
+                    "$ref": "#/components/schemas/ObjectID"
+                  },
+                  "objectType": {
+                    "type": "string"
+                  },
+                  "packageId": {
+                    "$ref": "#/components/schemas/ObjectID"
+                  },
+                  "recipient": {
+                    "$ref": "#/components/schemas/Owner"
+                  },
+                  "sender": {
+                    "$ref": "#/components/schemas/SuiAddress"
+                  },
+                  "transactionModule": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "$ref": "#/components/schemas/SequenceNumber"
+                  }
+                }
               }
             },
             "additionalProperties": false
@@ -3275,7 +3374,7 @@
         "description": "Auto-generated discriminant enum variants",
         "oneOf": [
           {
-            "description": "Move-specific event",
+            "description": "Transaction level event Move-specific event",
             "type": "string",
             "enum": [
               "MoveEvent"
@@ -3289,24 +3388,10 @@
             ]
           },
           {
-            "description": "Transfer objects to new address / wrap in another object / coin",
+            "description": "Coin balance changing event",
             "type": "string",
             "enum": [
-              "TransferObject"
-            ]
-          },
-          {
-            "description": "Delete object",
-            "type": "string",
-            "enum": [
-              "DeleteObject"
-            ]
-          },
-          {
-            "description": "New object creation",
-            "type": "string",
-            "enum": [
-              "NewObject"
+              "CoinBalanceChange"
             ]
           },
           {
@@ -3321,6 +3406,34 @@
             "type": "string",
             "enum": [
               "Checkpoint"
+            ]
+          },
+          {
+            "description": "Object level event Transfer objects to new address / wrap in another object",
+            "type": "string",
+            "enum": [
+              "TransferObject"
+            ]
+          },
+          {
+            "description": "Object level event Object mutated.",
+            "type": "string",
+            "enum": [
+              "MutateObject"
+            ]
+          },
+          {
+            "description": "Delete object",
+            "type": "string",
+            "enum": [
+              "DeleteObject"
+            ]
+          },
+          {
+            "description": "New object creation",
+            "type": "string",
+            "enum": [
+              "NewObject"
             ]
           }
         ]
@@ -4987,14 +5100,6 @@
             "$ref": "#/components/schemas/SuiAddress"
           }
         }
-      },
-      "TransferType": {
-        "type": "string",
-        "enum": [
-          "Coin",
-          "ToAddress",
-          "ToObject"
-        ]
       },
       "TypeTag": {
         "type": "string"

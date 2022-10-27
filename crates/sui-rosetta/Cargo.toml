@@ -44,4 +44,8 @@ workspace-hack = { path = "../workspace-hack" }
 
 [dev-dependencies]
 sui-sdk = { path = "../sui-sdk" }
+sui-framework = { path = "../sui-framework" }
+sui-framework-build = { path = "../sui-framework-build" }
+test-utils = { path = "../test-utils" }
 tempfile = "3.3.0"
+rand = "0.8.5"

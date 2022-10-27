@@ -130,7 +130,7 @@ async fn test_net_determinism() {
     let mut test_cluster = init_cluster_builder_env_aware().build().await.unwrap();
     let context = &mut test_cluster.wallet;
 
-    let (_transferred_object, _, _, digest) = transfer_coin(context).await.unwrap();
+    let (_transferred_object, _, _, digest, _, _) = transfer_coin(context).await.unwrap();
 
     sleep(Duration::from_millis(1000)).await;
 
