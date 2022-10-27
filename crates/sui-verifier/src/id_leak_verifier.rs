@@ -251,8 +251,11 @@ fn execute_inner(
         | Bytecode::ReadRef
         // Following are unary operators that don't apply to ID.
         | Bytecode::CastU8
+        | Bytecode::CastU16
+        | Bytecode::CastU32
         | Bytecode::CastU64
         | Bytecode::CastU128
+        | Bytecode::CastU256
         | Bytecode::Not
         | Bytecode::VecLen(_)
         | Bytecode::VecPopBack(_) => {
@@ -345,7 +348,7 @@ fn execute_inner(
         }
 
         // These bytecodes produce constants, and hence cannot be ID.
-        Bytecode::LdTrue | Bytecode::LdFalse | Bytecode::LdU8(_) | Bytecode::LdU64(_) | Bytecode::LdU128(_) | Bytecode::LdConst(_) => {
+        Bytecode::LdTrue | Bytecode::LdFalse | Bytecode::LdU8(_) | Bytecode::LdU16(_)| Bytecode::LdU32(_)  | Bytecode::LdU64(_) | Bytecode::LdU128(_)| Bytecode::LdU256(_)  | Bytecode::LdConst(_) => {
             verifier.stack.push(AbstractValue::NonID);
         }
 

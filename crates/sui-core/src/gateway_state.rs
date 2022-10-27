@@ -540,8 +540,11 @@ where
             match type_ {
                 TypeTag::Bool
                 | TypeTag::U8
+                | TypeTag::U16
+                | TypeTag::U32
                 | TypeTag::U64
                 | TypeTag::U128
+                | TypeTag::U256
                 | TypeTag::Address
                 | TypeTag::Signer => (),
                 TypeTag::Vector(inner) => used_packages(packages, inner),
