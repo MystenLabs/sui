@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import { memo } from 'react';
 
-// import { Content } from '_app/shared/bottom-menu-layout';
 import PageTitle from '_app/shared/page-title';
 import RecentTransactions from '_components/transactions-card/RecentTransactions';
 
