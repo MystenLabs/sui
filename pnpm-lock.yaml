@@ -176,11 +176,11 @@ importers:
       '@scure/bip39': ^1.1.0
       '@tanstack/react-query': ^4.0.10
       '@types/dotenv-webpack': ^7.0.3
-      '@types/lodash-es': ^4.17.6
       '@types/node': ^18.0.6
       '@types/react': ^18.0.20
       '@types/react-dom': ^18.0.6
       '@types/semver': ^7.3.12
+      '@types/throttle-debounce': ^5.0.0
       '@types/uuid': ^8.3.4
       '@types/webextension-polyfill': ^0.9.0
       '@types/webpack': ^5.28.0
@@ -205,7 +205,6 @@ importers:
       framer-motion: ^7.5.1
       happy-dom: ^7.6.0
       html-webpack-plugin: ^5.5.0
-      lodash-es: ^4.17.21
       mini-css-extract-plugin: ^2.6.1
       mitt: ^3.0.0
       onchange: ^7.1.0
@@ -232,6 +231,7 @@ importers:
       stylelint-webpack-plugin: ^3.3.0
       svgtofont: ^3.17.8
       tailwindcss: ^3.0.23
+      throttle-debounce: ^5.0.0
       ts-loader: ^9.3.1
       ts-node: ^10.9.1
       tsconfig-paths: ^4.0.0
@@ -266,7 +266,6 @@ importers:
       eslint-plugin-react: 7.31.8_eslint@8.23.0
       formik: 2.2.9_react@18.2.0
       framer-motion: 7.5.1_biqbaboplfbrettd7655fr4n2y
-      lodash-es: 4.17.21
       mitt: 3.0.0
       react: 18.2.0
       react-dom: 18.2.0_react@18.2.0
@@ -279,6 +278,7 @@ importers:
       semver: 7.3.8
       stream-browserify: 3.0.0
       tailwindcss: 3.1.8_ts-node@10.9.1
+      throttle-debounce: 5.0.0
       tweetnacl: 1.0.3
       uuid: 8.3.2
       vite-tsconfig-paths: 3.5.0
@@ -287,11 +287,11 @@ importers:
       zxcvbn: 4.4.2
     devDependencies:
       '@types/dotenv-webpack': 7.0.3_webpack-cli@4.10.0
-      '@types/lodash-es': 4.17.6
       '@types/node': 18.7.6
       '@types/react': 18.0.20
       '@types/react-dom': 18.0.6
       '@types/semver': 7.3.12
+      '@types/throttle-debounce': 5.0.0
       '@types/uuid': 8.3.4
       '@types/webextension-polyfill': 0.9.0
       '@types/webpack': 5.28.0_webpack-cli@4.10.0
@@ -5514,12 +5514,6 @@ packages:
       '@types/node': 18.7.6
     dev: true
 
-  /@types/lodash-es/4.17.6:
-    resolution: {integrity: sha512-R+zTeVUKDdfoRxpAryaQNRKk3105Rrgx2CFRClIgRGaqDTdjsm8h6IYA8ir584W3ePzkZfst5xIgDwYrlh9HLg==}
-    dependencies:
-      '@types/lodash': 4.14.183
-    dev: true
-
   /@types/lodash/4.14.183:
     resolution: {integrity: sha512-UXavyuxzXKMqJPEpFPri6Ku5F9af6ZJXUneHhvQJxavrEjuHkFp2YnDWHcxJiG7hk8ZkWqjcyNeW1s/smZv5cw==}
 
@@ -5702,6 +5696,10 @@ packages:
     resolution: {integrity: sha512-SBwbxYoyPIvxHbeHxTZX2Pe/74F/tX2/D3mMvzabdeJ25bBojfW0TyB8BHrbq/9zaaKICJZjLP+8r6AeZMFCuQ==}
     dependencies:
       '@types/jest': 28.1.7
+
+  /@types/throttle-debounce/5.0.0:
+    resolution: {integrity: sha512-Pb7k35iCGFcGPECoNE4DYp3Oyf2xcTd3FbFQxXUI9hEYKUl6YX+KLf7HrBmgVcD05nl50LIH6i+80js4iYmWbw==}
+    dev: true
 
   /@types/topojson-client/3.1.1:
     resolution: {integrity: sha512-E4/Z2Xg56kVLRzYWem/6uOKVcVNqqxEqlWM9qCG2tCV1BxuzvvXC02/ELoGJWgtKkQhfycBPlMFEuTFdA/YiTg==}
@@ -18403,6 +18401,11 @@ packages:
     resolution: {integrity: sha512-dTEWWNu6JmeVXY0ZYoPuH5cRIwc0MeGbJwah9KUNYSJwommQpCzTySTpEe8Gs1J23aeWEuAobe4Ag7EHVt/LOg==}
     engines: {node: '>=10'}
     dev: true
+
+  /throttle-debounce/5.0.0:
+    resolution: {integrity: sha512-2iQTSgkkc1Zyk0MeVrt/3BvuOXYPl/R8Z0U2xxo9rjwNciaHDG3R+Lm6dh4EeUci49DanvBnuqI6jshoQQRGEg==}
+    engines: {node: '>=12.22'}
+    dev: false
 
   /throttleit/1.0.0:
     resolution: {integrity: sha512-rkTVqu6IjfQ/6+uNuuc3sZek4CEYxTJom3IktzgdSxcZqdARuebbA/f4QmAxMQIxqq9ZLEUkSYqvuk1I6VKq4g==}

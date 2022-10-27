@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Ed25519Keypair } from '@mysten/sui.js';
-import { debounce } from 'lodash-es';
 import mitt from 'mitt';
+import { throttle } from 'throttle-debounce';
 import Browser from 'webextension-polyfill';
 
 import Alarms from './Alarms';
@@ -230,14 +230,14 @@ class Keyring {
         this.#events.emit('lockedStatusUpdate', isLocked);
     }
 
-    private postponeLock = debounce(
+    private postponeLock = throttle(
+        1000,
         async () => {
             if (!this.isLocked) {
                 await Alarms.setLockAlarm();
             }
         },
-        1000,
-        { maxWait: 5000 }
+        { noLeading: false }
     );
 
     private async setLockTimeout(timeout: number) {
