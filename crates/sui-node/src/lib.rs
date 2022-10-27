@@ -37,9 +37,7 @@ use sui_json_rpc::transaction_builder_api::FullNodeTransactionBuilderApi;
 use sui_network::api::ValidatorServer;
 use sui_network::default_mysten_network_config;
 use sui_storage::{
-    event_store::{EventStoreType, SqlEventStore},
     node_sync_store::NodeSyncStore,
-    IndexStore,
 };
 use sui_types::messages::{CertifiedTransaction, CertifiedTransactionEffects};
 use tokio::sync::mpsc::channel;
@@ -118,25 +116,25 @@ impl SuiNode {
             secret.clone(),
             config.enable_reconfig,
         )?));
-
-        let index_store = if is_validator {
-            None
-        } else {
-            Some(Arc::new(IndexStore::open_tables_read_write(
-                config.db_path().join("indexes"),
-                None,
-                None,
-            )))
-        };
-
-        let event_store = if config.enable_event_processing {
-            let path = config.db_path().join("events.db");
-            let db = SqlEventStore::new_from_file(&path).await?;
-            db.initialize().await?;
-            Some(Arc::new(EventStoreType::SqlEventStore(db)))
-        } else {
-            None
-        };
+        let index_store = None;
+        // let index_store = if is_validator {
+        //     None
+        // } else {
+        //     Some(Arc::new(IndexStore::open_tables_read_write(
+        //         config.db_path().join("indexes"),
+        //         None,
+        //         None,
+        //     )))
+        // };
+        let event_store = None;
+        // let event_store = if config.enable_event_processing {
+        //     let path = config.db_path().join("events.db");
+        //     let db = SqlEventStore::new_from_file(&path).await?;
+        //     db.initialize().await?;
+        //     Some(Arc::new(EventStoreType::SqlEventStore(db)))
+        // } else {
+        //     None
+        // };
 
         let (tx_reconfigure_consensus, rx_reconfigure_consensus) = channel(100);
 
