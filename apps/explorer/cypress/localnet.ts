@@ -1,4 +1,4 @@
-// Copyright (c) Mysten Labs, Inc.
+"// Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 import axios from 'axios';
@@ -57,7 +57,7 @@ export async function createLocalnetTasks() {
             const address = keypair.getPublicKey().toSuiAddress();
             addressToKeypair.set(address, keypair);
             const res = await axios.post<{ error: any }>(
-                'http://127.0.0.1:9123/faucet',
+                'http://127.0.0.1:9123/gas',
                 { FixedAmountRequest: { recipient: address } }
             );
             if (res.data.error) {
@@ -70,3 +70,4 @@ export async function createLocalnetTasks() {
         },
     };
 }
+"
