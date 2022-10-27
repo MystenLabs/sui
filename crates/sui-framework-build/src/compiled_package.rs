@@ -47,11 +47,12 @@ impl BuildConfig {
             self.config.compile_package_no_exit(&path, &mut Vec::new())
         };
 
-        // write build failure diagnostics to stderr
+        // write build failure diagnostics to stderr, convert `error` to `String` using `Debug`
+        // format to include anyhow's error context chain.
         let package = match res {
             Err(error) => {
                 return Err(SuiError::ModuleBuildFailure {
-                    error: error.to_string(),
+                    error: format!("{:?}", error),
                 })
             }
             Ok(package) => package,
