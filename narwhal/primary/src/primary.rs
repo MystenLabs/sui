@@ -15,7 +15,7 @@ use crate::{
     proposer::Proposer,
     state_handler::StateHandler,
     synchronizer::Synchronizer,
-    BlockRemover, CertificatesResponse, PayloadAvailabilityResponse,
+    BlockRemover, CertificatesResponse,
 };
 
 use anemo::{types::PeerInfo, PeerId};
@@ -47,13 +47,14 @@ use store::Store;
 use tokio::sync::oneshot;
 use tokio::{sync::watch, task::JoinHandle};
 use tower::ServiceBuilder;
-use tracing::info;
+use tracing::{error, info};
 pub use types::PrimaryMessage;
 use types::{
     error::DagError,
     metered_channel::{channel_with_total, Receiver, Sender},
-    BatchDigest, Certificate, ConsensusStore, FetchCertificatesRequest, FetchCertificatesResponse,
-    Header, HeaderDigest, PrimaryToPrimary, PrimaryToPrimaryServer, ReconfigureNotification,
+    BatchDigest, Certificate, CertificateDigest, ConsensusStore, FetchCertificatesRequest,
+    FetchCertificatesResponse, Header, HeaderDigest, PayloadAvailabilityRequest,
+    PayloadAvailabilityResponse, PrimaryToPrimary, PrimaryToPrimaryServer, ReconfigureNotification,
     RoundVoteDigestPair, WorkerInfoResponse, WorkerOthersBatchMessage, WorkerOurBatchMessage,
     WorkerToPrimary, WorkerToPrimaryServer,
 };
@@ -212,6 +213,7 @@ impl Primary {
             tx_helper_requests,
             tx_availability_responses,
             certificate_store: certificate_store.clone(),
+            payload_store: payload_store.clone(),
         });
         let worker_service = WorkerToPrimaryServer::new(WorkerReceiverHandler {
             tx_our_digests,
@@ -455,7 +457,6 @@ impl Primary {
             name.clone(),
             (**committee.load()).clone(),
             certificate_store.clone(),
-            payload_store.clone(),
             tx_reconfigure.subscribe(),
             rx_helper_requests,
             helper_primary_network,
@@ -550,6 +551,7 @@ struct PrimaryReceiverHandler {
     tx_helper_requests: Sender<PrimaryMessage>,
     tx_availability_responses: Sender<AvailabilityResponse>,
     certificate_store: CertificateStore,
+    payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
 }
 
 #[async_trait]
@@ -562,8 +564,7 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
 
         match message {
             PrimaryMessage::CertificatesRequest(_, _)
-            | PrimaryMessage::CertificatesBatchRequest { .. }
-            | PrimaryMessage::PayloadAvailabilityRequest { .. } => self
+            | PrimaryMessage::CertificatesBatchRequest { .. } => self
                 .tx_helper_requests
                 .try_send(message)
                 .map_err(DagError::from),
@@ -575,17 +576,6 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
                     from,
                 }))
                 .map_err(DagError::from),
-            PrimaryMessage::PayloadAvailabilityResponse {
-                payload_availability,
-                from,
-            } => self
-                .tx_availability_responses
-                .try_send(AvailabilityResponse::Payload(PayloadAvailabilityResponse {
-                    block_ids: payload_availability.to_vec(),
-                    from,
-                }))
-                .map_err(DagError::from),
-
             _ => self
                 .tx_primary_messages
                 .try_send(message)
@@ -655,6 +645,48 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
         }
 
         Ok(anemo::Response::new(response))
+    }
+
+    async fn get_payload_availability(
+        &self,
+        request: anemo::Request<PayloadAvailabilityRequest>,
+    ) -> Result<anemo::Response<PayloadAvailabilityResponse>, anemo::rpc::Status> {
+        let digests = request.into_body().certificate_ids;
+        let certificates = self
+            .certificate_store
+            .read_all(digests.to_owned())
+            .map_err(|e| {
+                anemo::rpc::Status::internal(format!("error reading certificates: {e:?}"))
+            })?;
+
+        let mut result: Vec<(CertificateDigest, bool)> = Vec::new();
+        for (id, certificate_option) in digests.into_iter().zip(certificates) {
+            // Find batches only for certificates that exist.
+            if let Some(certificate) = certificate_option {
+                let payload_available = match self
+                    .payload_store
+                    .read_all(certificate.header.payload)
+                    .await
+                {
+                    Ok(payload_result) => payload_result.into_iter().all(|x| x.is_some()),
+                    Err(err) => {
+                        // Assume that we don't have the payloads available,
+                        // otherwise an error response should be sent back.
+                        error!("Error while retrieving payloads: {err}");
+                        false
+                    }
+                };
+                result.push((id, payload_available));
+            } else {
+                // We don't have the certificate available in first place,
+                // so we can't even look up the batches.
+                result.push((id, false));
+            }
+        }
+
+        Ok(anemo::Response::new(PayloadAvailabilityResponse {
+            payload_availability: result,
+        }))
     }
 }
 

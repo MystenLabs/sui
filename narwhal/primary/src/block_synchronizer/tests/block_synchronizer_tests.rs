@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
     block_synchronizer::{
-        responses::{AvailabilityResponse, PayloadAvailabilityResponse},
-        BlockSynchronizer, CertificatesResponse, Command, PendingIdentifier, RequestID, SyncError,
+        responses::AvailabilityResponse, BlockSynchronizer, CertificatesResponse, Command,
+        PendingIdentifier, RequestID, SyncError,
     },
     common::{create_db_stores, worker_listener},
     primary::PrimaryMessage,
@@ -23,7 +23,10 @@ use tokio::{
     task::JoinHandle,
     time::{sleep, timeout},
 };
-use types::ReconfigureNotification;
+use types::{
+    MockPrimaryToPrimary, PayloadAvailabilityResponse, PrimaryToPrimaryServer,
+    ReconfigureNotification,
+};
 
 use crypto::NetworkKeyPair;
 use fastcrypto::traits::KeyPair as _;
@@ -243,7 +246,7 @@ async fn test_successful_payload_synchronization() {
     let (_tx_reconfigure, rx_reconfigure) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
     let (tx_commands, rx_block_synchronizer_commands) = test_utils::test_channel!(10);
-    let (tx_availability_responses, rx_availability_responses) = test_utils::test_channel!(10);
+    let (_tx_availability_responses, rx_availability_responses) = test_utils::test_channel!(10);
 
     // AND some blocks (certificates)
     let mut certificates: HashMap<CertificateDigest, Certificate> = HashMap::new();
@@ -295,12 +298,26 @@ async fn test_successful_payload_synchronization() {
 
     // AND let's assume that all the primaries are responding with the full set
     // of requested certificates.
-    let mut handlers_primaries = Vec::new();
+    let mut primary_networks = Vec::new();
     for primary in fixture.authorities().filter(|a| a.public_key() != name) {
         let address = committee.primary(&primary.public_key()).unwrap();
+        let certificates = certificates.clone();
+        let mut mock_server = MockPrimaryToPrimary::new();
+        mock_server
+            .expect_get_payload_availability()
+            .returning(move |request| {
+                Ok(anemo::Response::new(PayloadAvailabilityResponse {
+                    payload_availability: request
+                        .body()
+                        .certificate_ids
+                        .iter()
+                        .map(|id| (*id, certificates.contains_key(id)))
+                        .collect(),
+                }))
+            });
+        let routes = anemo::Router::new().add_rpc_service(PrimaryToPrimaryServer::new(mock_server));
+        primary_networks.push(primary.new_network(routes));
         println!("New primary added: {:?}", address);
-        let handler = primary_listener(1, primary.network_keypair().copy(), address.clone());
-        handlers_primaries.push(handler);
 
         let address = network::multiaddr_to_address(&address).unwrap();
         let peer_id = PeerId(primary.network_keypair().public().0.to_bytes());
@@ -341,48 +358,6 @@ async fn test_successful_payload_synchronization() {
         .await
         .ok()
         .unwrap();
-
-    // wait for the primaries to receive all the requests
-    if let Ok(result) = timeout(
-        Duration::from_millis(4_000),
-        try_join_all(handlers_primaries),
-    )
-    .await
-    {
-        assert!(result.is_ok(), "Error returned");
-
-        let mut primaries = committee.others_primaries(&name);
-
-        for mut primary_responses in result.unwrap() {
-            // ensure that only one request has been received
-            assert_eq!(primary_responses.len(), 1, "Expected only one request");
-
-            match primary_responses.remove(0) {
-                PrimaryMessage::PayloadAvailabilityRequest {
-                    certificate_ids,
-                    requestor,
-                } => {
-                    let response: Vec<(CertificateDigest, bool)> = certificate_ids
-                        .iter()
-                        .map(|id| (*id, certificates.contains_key(id)))
-                        .collect();
-
-                    debug!("{:?}", requestor);
-
-                    tx_availability_responses
-                        .send(AvailabilityResponse::Payload(PayloadAvailabilityResponse {
-                            block_ids: response,
-                            from: primaries.pop().unwrap().0,
-                        }))
-                        .await
-                        .unwrap();
-                }
-                _ => {
-                    panic!("Unexpected request has been received!");
-                }
-            }
-        }
-    }
 
     // now wait to receive all the requests from the workers
     if let Ok(result) = timeout(Duration::from_millis(4_000), try_join_all(handlers_workers)).await
@@ -488,7 +463,6 @@ async fn test_multiple_overlapping_requests() {
         rx_availability_responses,
         pending_requests: HashMap::new(),
         map_certificate_responses_senders: HashMap::new(),
-        map_payload_availability_responses_senders: HashMap::new(),
         network: P2pNetwork::new(network),
         payload_store,
         certificate_store,
@@ -709,7 +683,6 @@ async fn test_reply_with_certificates_already_in_storage() {
         rx_availability_responses,
         pending_requests: Default::default(),
         map_certificate_responses_senders: Default::default(),
-        map_payload_availability_responses_senders: Default::default(),
         network: P2pNetwork::new(network),
         certificate_store: certificate_store.clone(),
         payload_store,
@@ -812,7 +785,6 @@ async fn test_reply_with_payload_already_in_storage() {
         rx_availability_responses,
         pending_requests: Default::default(),
         map_certificate_responses_senders: Default::default(),
-        map_payload_availability_responses_senders: Default::default(),
         network: P2pNetwork::new(network),
         certificate_store: certificate_store.clone(),
         payload_store: payload_store.clone(),
@@ -920,7 +892,6 @@ async fn test_reply_with_payload_already_in_storage_for_own_certificates() {
         rx_availability_responses,
         pending_requests: Default::default(),
         map_certificate_responses_senders: Default::default(),
-        map_payload_availability_responses_senders: Default::default(),
         network: P2pNetwork::new(network),
         certificate_store: certificate_store.clone(),
         payload_store: payload_store.clone(),

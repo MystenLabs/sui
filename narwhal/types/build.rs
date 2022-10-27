@@ -61,6 +61,15 @@ fn build_anemo_services(out_dir: &Path) {
         )
         .method(
             anemo_build::manual::Method::builder()
+                .name("get_payload_availability")
+                .route_name("GetPayloadAvailability")
+                .request_type("crate::PayloadAvailabilityRequest")
+                .response_type("crate::PayloadAvailabilityResponse")
+                .codec_path("anemo::rpc::codec::BincodeCodec")
+                .build(),
+        )
+        .method(
+            anemo_build::manual::Method::builder()
                 .name("fetch_certificates")
                 .route_name("FetchCertificates")
                 .request_type("crate::FetchCertificatesRequest")

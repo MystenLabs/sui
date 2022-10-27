@@ -592,6 +592,15 @@ impl Committee {
         self.authorities.iter()
     }
 
+    pub fn authority_by_network_key(
+        &self,
+        network_key: &NetworkPublicKey,
+    ) -> Option<(&PublicKey, &Authority)> {
+        self.authorities
+            .iter()
+            .find(|(_, authority)| authority.network_key == *network_key)
+    }
+
     /// Returns the number of authorities.
     pub fn size(&self) -> usize {
         self.authorities.len()

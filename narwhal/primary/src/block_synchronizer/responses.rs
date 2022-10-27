@@ -53,25 +53,6 @@ impl Display for RequestID {
 }
 
 #[derive(Debug, Clone)]
-pub struct PayloadAvailabilityResponse {
-    pub block_ids: Vec<(CertificateDigest, bool)>,
-    pub from: PublicKey,
-}
-
-impl PayloadAvailabilityResponse {
-    pub fn request_id(&self) -> RequestID {
-        self.block_ids.iter().map(|entry| entry.0).collect()
-    }
-
-    pub fn available_block_ids(&self) -> Vec<CertificateDigest> {
-        self.block_ids
-            .iter()
-            .filter_map(|(id, available)| available.then_some(*id))
-            .collect()
-    }
-}
-
-#[derive(Debug, Clone)]
 pub struct CertificatesResponse {
     pub certificates: Vec<(CertificateDigest, Option<Certificate>)>,
     pub from: PublicKey,
@@ -139,7 +120,6 @@ impl CertificatesResponse {
 #[derive(Debug, Clone)]
 pub enum AvailabilityResponse {
     Certificate(CertificatesResponse),
-    Payload(PayloadAvailabilityResponse),
 }
 
 #[derive(Debug, Error, Clone, PartialEq)]

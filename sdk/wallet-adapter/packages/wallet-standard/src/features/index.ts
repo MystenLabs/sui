@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { WalletWithFeatures } from "@wallet-standard/standard";
+import type { WalletWithFeatures } from "@wallet-standard/core";
 import type { SuiSignAndExecuteTransactionFeature } from "./suiSignAndExecuteTransaction";
 
 /**
