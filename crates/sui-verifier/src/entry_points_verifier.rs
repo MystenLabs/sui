@@ -222,11 +222,8 @@ fn is_primitive(
     match s {
         SignatureToken::Bool
         | SignatureToken::U8
-        | SignatureToken::U16
-        | SignatureToken::U32
         | SignatureToken::U64
         | SignatureToken::U128
-        | SignatureToken::U256
         | SignatureToken::Address => true,
         SignatureToken::Signer => false,
         // optimistic, but no primitive has key
@@ -302,11 +299,8 @@ fn is_object_struct(
     match s {
         S::Bool
         | S::U8
-        | S::U16
-        | S::U32
         | S::U64
         | S::U128
-        | S::U256
         | S::Address
         | S::Signer
         | S::Vector(_)

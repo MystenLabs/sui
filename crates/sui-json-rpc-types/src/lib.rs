@@ -106,11 +106,8 @@ pub struct SuiMoveNormalizedStruct {
 pub enum SuiMoveNormalizedType {
     Bool,
     U8,
-    U16,
-    U32,
     U64,
     U128,
-    U256,
     Address,
     Signer,
     Struct {
@@ -249,11 +246,8 @@ impl From<NormalizedType> for SuiMoveNormalizedType {
         match type_ {
             NormalizedType::Bool => SuiMoveNormalizedType::Bool,
             NormalizedType::U8 => SuiMoveNormalizedType::U8,
-            NormalizedType::U16 => SuiMoveNormalizedType::U16,
-            NormalizedType::U32 => SuiMoveNormalizedType::U32,
             NormalizedType::U64 => SuiMoveNormalizedType::U64,
             NormalizedType::U128 => SuiMoveNormalizedType::U128,
-            NormalizedType::U256 => SuiMoveNormalizedType::U256,
             NormalizedType::Address => SuiMoveNormalizedType::Address,
             NormalizedType::Signer => SuiMoveNormalizedType::Signer,
             NormalizedType::Struct {
@@ -1161,11 +1155,8 @@ impl From<MoveValue> for SuiMoveValue {
     fn from(value: MoveValue) -> Self {
         match value {
             MoveValue::U8(value) => SuiMoveValue::Number(value.into()),
-            MoveValue::U16(value) => SuiMoveValue::Number(value.into()),
-            MoveValue::U32(value) => SuiMoveValue::Number(value.into()),
             MoveValue::U64(value) => SuiMoveValue::Number(value),
             MoveValue::U128(value) => SuiMoveValue::String(format!("{value}")),
-            MoveValue::U256(value) => SuiMoveValue::String(format!("{value}")),
             MoveValue::Bool(value) => SuiMoveValue::Bool(value),
             MoveValue::Vector(values) => {
                 if let Some(bytes) = to_bytearray(&values) {
