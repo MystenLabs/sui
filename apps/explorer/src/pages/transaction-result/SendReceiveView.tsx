@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 import cl from 'clsx';
+import { useState, useEffect } from 'react';
 
-import { ReactComponent as LShapeIcon } from '../../assets/LShape.svg';
 import { ReactComponent as DoneIcon } from '../../assets/SVGIcons/16px/CheckFill.svg';
 import { ReactComponent as StartIcon } from '../../assets/SVGIcons/Start.svg';
 import Longtext from '../../components/longtext/Longtext';
@@ -16,11 +16,19 @@ type TxAddress = {
 };
 //TODO: Add date format function
 function SendReceiveView({ sender, recipient, amount }: TxAddress) {
+    const [isShortScreen, setIsShortScreen] = useState(false);
+
+    const { innerWidth } = window;
+
+    useEffect(() => {
+        setIsShortScreen(innerWidth < 440);
+    }, [innerWidth]);
+
     if (recipient && recipient.length === 1) {
         return (
             <div className={styles.txaddress}>
                 <h4 className={styles.oneheading}>Sender &#x26; Recipient</h4>
-                <div className={styles.oneaddress}>
+                <div className={cl([styles.oneaddress, styles.senderwline])}>
                     <div className="z-0">
                         <StartIcon />
                     </div>
@@ -32,12 +40,23 @@ function SendReceiveView({ sender, recipient, amount }: TxAddress) {
                 </div>
                 <div>
                     {recipient.map((add: string, idx: number) => (
-                        <div key={idx} className="flex ml-[7px] mt-[-7px] z-10">
-                            <LShapeIcon />
+                        <div key={idx} className="flex">
                             <div
-                                className={cl([styles.oneaddress, 'mt-[20px]'])}
+                                className={cl([
+                                    styles.oneaddress,
+                                    'mt-[20px] ml-[10px] w-[90%]',
+                                ])}
                             >
-                                <div className={styles.doneicon}>
+                                <div
+                                    className={`${styles.doneicon} ${
+                                        styles.doneiconwline
+                                    }
+                                  ${
+                                      isShortScreen
+                                          ? styles.doneiconwlongline
+                                          : styles.doneiconwshortline
+                                  }`}
+                                >
                                     <DoneIcon />
                                 </div>
                                 <Longtext
