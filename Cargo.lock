@@ -7975,6 +7975,7 @@ dependencies = [
  "sui-json",
  "sui-types",
  "sui-verifier",
+ "tracing",
  "workspace-hack",
 ]
 
