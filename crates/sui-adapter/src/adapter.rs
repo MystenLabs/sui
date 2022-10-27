@@ -48,6 +48,7 @@ use sui_verifier::{
     entry_points_verifier::{is_tx_context, RESOLVED_ASCII_STR, RESOLVED_UTF8_STR},
     verifier, INIT_FN_NAME,
 };
+use tracing::instrument;
 
 use crate::bytecode_rewriter::ModuleHandleRewriter;
 
