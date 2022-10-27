@@ -1,3 +1,4 @@
+
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
@@ -224,3 +225,4 @@ function TokenView({ data }: { data: DataType }) {
 }
 
 export default TokenView;
+
