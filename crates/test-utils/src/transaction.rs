@@ -8,6 +8,7 @@ use crate::messages::{
 };
 use crate::{test_account_keys, test_committee};
 use futures::StreamExt;
+use move_package::BuildConfig;
 use serde_json::json;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -17,7 +18,6 @@ use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
 use sui_config::ValidatorInfo;
 use sui_core::authority::AuthorityState;
 use sui_core::authority_client::AuthorityAPI;
-use sui_framework_build::compiled_package::BuildConfig;
 use sui_json_rpc_types::SuiCertifiedTransaction;
 use sui_json_rpc_types::SuiObjectRead;
 use sui_json_rpc_types::SuiTransactionEffects;
@@ -79,9 +79,16 @@ pub fn compile_basics_package() -> Vec<Vec<u8>> {
     path.push("../../sui_programmability/examples/basics");
 
     let build_config = BuildConfig::default();
-    sui_framework::build_move_package(&path, build_config)
-        .unwrap()
-        .get_package_bytes()
+    let modules = sui_framework::build_move_package(&path, build_config).unwrap();
+
+    modules
+        .iter()
+        .map(|m| {
+            let mut module_bytes = Vec::new();
+            m.serialize(&mut module_bytes).unwrap();
+            module_bytes
+        })
+        .collect()
 }
 
 /// Helper function to publish basic package.

@@ -28,11 +28,12 @@ sui-keys = { path = "../sui-keys" }
 
 
 mysten-network.workspace = true
+move-package.workspace = true
 workspace-hack.workspace = true
 
 [dev-dependencies]
 test-utils = { path = "../test-utils" }
-sui-framework-build = { path = "../sui-framework-build" }
+sui-framework = { path = "../sui-framework" }
 sui-sdk = { path = "../sui-sdk" }
 
 [[bin]]
