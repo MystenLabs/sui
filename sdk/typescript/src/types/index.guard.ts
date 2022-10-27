@@ -572,6 +572,7 @@ export function isEventType(obj: any, _argumentName?: string): obj is EventType 
         (obj === "MoveEvent" ||
             obj === "Publish" ||
             obj === "TransferObject" ||
+            obj === "MutateObject" ||
             obj === "CoinBalanceChange" ||
             obj === "DeleteObject" ||
             obj === "NewObject" ||
@@ -1478,11 +1479,23 @@ export function isTypeTag(obj: any, _argumentName?: string): obj is TypeTag {
             (obj !== null &&
                 typeof obj === "object" ||
                 typeof obj === "function") &&
+            obj.u16 === null ||
+            (obj !== null &&
+                typeof obj === "object" ||
+                typeof obj === "function") &&
+            obj.u32 === null ||
+            (obj !== null &&
+                typeof obj === "object" ||
+                typeof obj === "function") &&
             obj.u64 === null ||
             (obj !== null &&
                 typeof obj === "object" ||
                 typeof obj === "function") &&
             obj.u128 === null ||
+            (obj !== null &&
+                typeof obj === "object" ||
+                typeof obj === "function") &&
+            obj.u256 === null ||
             (obj !== null &&
                 typeof obj === "object" ||
                 typeof obj === "function") &&

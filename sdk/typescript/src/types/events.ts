@@ -89,6 +89,7 @@ export type EventType =
   | 'MoveEvent'
   | 'Publish'
   | 'TransferObject'
+  | 'MutateObject'
   | 'CoinBalanceChange'
   | 'DeleteObject'
   | 'NewObject'
