@@ -91,7 +91,7 @@ pub fn new_session<
 /// otherwise we return Ok(Ok).
 /// TODO: Do we really need the two layers?
 #[allow(clippy::too_many_arguments)]
-#[instrument(name = "adapter_execute", level = "debug", skip_all)]
+#[instrument(name = "adapter_execute", level = "trace", skip_all)]
 pub fn execute<
     E: Debug,
     S: ResourceResolver<Error = E>
@@ -294,7 +294,7 @@ fn execute_internal<
     Ok(())
 }
 
-#[instrument(name = "adapter_publish", level = "debug", skip_all)]
+#[instrument(name = "adapter_publish", level = "trace", skip_all)]
 pub fn publish<
     E: Debug,
     S: ResourceResolver<Error = E>

@@ -340,7 +340,6 @@ fn execute_transaction<S: BackingPackageStore + ParentSync + ChildObjectResolver
     (cost_summary, result)
 }
 
-#[instrument(name = "exec_engine_transfer_object", level = "debug", skip_all)]
 fn transfer_object<S>(
     temporary_store: &mut TemporaryStore<S>,
     mut object: Object,
