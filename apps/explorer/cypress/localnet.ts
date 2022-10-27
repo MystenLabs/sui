@@ -70,4 +70,3 @@ export async function createLocalnetTasks() {
         },
     };
 }
-"
