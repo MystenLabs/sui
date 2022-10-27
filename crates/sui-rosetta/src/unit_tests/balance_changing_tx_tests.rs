@@ -7,11 +7,11 @@ use std::str::FromStr;
 
 use anyhow::anyhow;
 use move_core_types::identifier::Identifier;
-use move_package::BuildConfig;
 use rand::seq::{IteratorRandom, SliceRandom};
 use signature::rand_core::OsRng;
 
 use sui_config::utils::get_available_port;
+use sui_framework_build::compiled_package::BuildConfig;
 use sui_keys::keystore::AccountKeystore;
 use sui_keys::keystore::Keystore;
 use sui_sdk::rpc_types::{
@@ -76,7 +76,7 @@ async fn test_all_transaction_type() {
         .join("../../sui_programmability/examples/fungible_tokens");
     let package = sui_framework::build_move_package(&path, BuildConfig::default()).unwrap();
     let compiled_module = package
-        .iter()
+        .get_modules()
         .map(|m| {
             let mut module_bytes = Vec::new();
             m.serialize(&mut module_bytes).unwrap();
