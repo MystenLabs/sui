@@ -1332,6 +1332,10 @@ mod bcs_signable {
     impl BcsSignable for crate::messages_checkpoint::CheckpointContents {}
     impl BcsSignable for crate::messages_checkpoint::CheckpointProposalContents {}
     impl BcsSignable for crate::messages_checkpoint::CheckpointProposalSummary {}
+    impl BcsSignable for crate::messages_checkpoint::CheckpointFragmentMessageHeader {}
+    impl BcsSignable for crate::messages_checkpoint::CheckpointFragmentMessageChunk {}
+    impl BcsSignable for crate::messages_checkpoint::CheckpointFragmentMessage {}
+
     impl BcsSignable for crate::messages::CommitteeInfoResponse {}
     impl BcsSignable for crate::messages::TransactionEffects {}
     impl BcsSignable for crate::messages::TransactionData {}

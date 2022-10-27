@@ -1,13 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use bincode::{deserialize, serialize};
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::fmt::{Debug, Display, Formatter};
 use std::slice::Iter;
 
 use crate::base_types::ExecutionDigests;
 use crate::committee::{EpochId, StakeUnit};
-use crate::crypto::{AuthoritySignInfo, AuthoritySignInfoTrait, AuthorityWeakQuorumSignInfo};
+use crate::crypto::{
+    AuthoritySignInfo, AuthoritySignInfoTrait, AuthorityWeakQuorumSignInfo, SuiAuthoritySignature,
+};
 use crate::error::SuiResult;
 use crate::gas::GasCostSummary;
 use crate::messages::{CertifiedTransaction, VerifiedCertificate};
@@ -73,6 +76,9 @@ use serde::{Deserialize, Serialize};
       a proposal.
 
 */
+
+// 3 MB.
+const FRAGMENT_CHUNK_SIZE: usize = 3 * 1000 * 1000;
 
 pub type CheckpointSequenceNumber = u64;
 
@@ -704,6 +710,144 @@ impl CheckpointFragment {
 
     pub fn proposer_sequence_number(&self) -> &CheckpointSequenceNumber {
         &self.proposer.summary.sequence_number
+    }
+
+    pub fn to_message_chunks(
+        &self,
+        signer: &dyn signature::Signer<AuthoritySignature>,
+    ) -> Vec<SignedCheckpointFragmentMessage> {
+        let proposer_name = *self.proposer.authority();
+        let other_name = *self.other.authority();
+        let sequence_number = self.proposer.summary.sequence_number;
+        let bytes = serialize(&self.data).unwrap();
+        let chunks = bytes.chunks(FRAGMENT_CHUNK_SIZE);
+        let mut results = vec![SignedCheckpointFragmentMessage::new(
+            CheckpointFragmentMessage::Header(Box::new(CheckpointFragmentMessageHeader {
+                proposer: self.proposer.clone(),
+                other: self.other.clone(),
+                chunk_count: chunks.len() as u32,
+            })),
+            signer,
+        )];
+        for (idx, chunk) in chunks.enumerate() {
+            results.push(SignedCheckpointFragmentMessage::new(
+                CheckpointFragmentMessage::Chunk(Box::new(CheckpointFragmentMessageChunk {
+                    sequence_number,
+                    proposer: proposer_name,
+                    other: other_name,
+                    chunk_id: idx as u32,
+                    content: chunk.to_vec(),
+                })),
+                signer,
+            ))
+        }
+        results
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CheckpointFragmentMessageHeader {
+    pub proposer: SignedCheckpointProposalSummary,
+    pub other: SignedCheckpointProposalSummary,
+    pub chunk_count: u32,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CheckpointFragmentMessageChunk {
+    pub sequence_number: CheckpointSequenceNumber,
+    pub proposer: AuthorityName,
+    pub other: AuthorityName,
+    pub chunk_id: u32,
+    pub content: Vec<u8>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum CheckpointFragmentMessage {
+    Header(Box<CheckpointFragmentMessageHeader>),
+    Chunk(Box<CheckpointFragmentMessageChunk>),
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SignedCheckpointFragmentMessage {
+    pub message: CheckpointFragmentMessage,
+    pub signature: AuthoritySignature,
+}
+
+impl SignedCheckpointFragmentMessage {
+    pub fn new(
+        message: CheckpointFragmentMessage,
+        signer: &dyn signature::Signer<AuthoritySignature>,
+    ) -> Self {
+        let signature = AuthoritySignature::new(&message, signer);
+        Self { message, signature }
+    }
+
+    pub fn verify(&self) -> SuiResult {
+        let proposer = match &self.message {
+            CheckpointFragmentMessage::Header(header) => *header.proposer.authority(),
+            CheckpointFragmentMessage::Chunk(chunk) => chunk.proposer,
+        };
+        self.signature.verify(&self.message, proposer)
+    }
+}
+
+pub struct PartialCheckpointFragment {
+    pub proposer: SignedCheckpointProposalSummary,
+    pub other: SignedCheckpointProposalSummary,
+    pub chunk_count: u32,
+    pub chunks: BTreeMap<u32, Vec<u8>>,
+}
+
+impl PartialCheckpointFragment {
+    pub fn new(header: CheckpointFragmentMessageHeader) -> Self {
+        Self {
+            proposer: header.proposer,
+            other: header.other,
+            chunk_count: header.chunk_count,
+            chunks: Default::default(),
+        }
+    }
+
+    pub fn add_chunk(&mut self, chunk: CheckpointFragmentMessageChunk) -> SuiResult {
+        fp_ensure!(
+            chunk.chunk_id < self.chunk_count,
+            SuiError::from(
+                format!(
+                    "chunk_id ({:?}) out of bound ({:?})",
+                    chunk.chunk_id, self.chunk_count
+                )
+                .as_str()
+            )
+        );
+        self.chunks.insert(chunk.chunk_id, chunk.content);
+        Ok(())
+    }
+
+    pub fn is_complete(&self) -> bool {
+        self.chunks.len() as u32 == self.chunk_count
+    }
+
+    pub fn to_fragment(self) -> SuiResult<CheckpointFragment> {
+        fp_ensure!(
+            self.is_complete(),
+            SuiError::from("Fragment is missing chunks")
+        );
+        let Self {
+            proposer,
+            other,
+            chunk_count: _,
+            chunks,
+        } = self;
+        let content: Vec<u8> = chunks.into_values().flatten().collect();
+        let data: CheckpointFragmentData = deserialize(&content).map_err(|err| {
+            SuiError::from(format!("Failed to deserialize chunk data: {:?}", err).as_str())
+        })?;
+        let fragment = CheckpointFragment {
+            proposer,
+            other,
+            data,
+        };
+        Ok(fragment)
     }
 }
 
