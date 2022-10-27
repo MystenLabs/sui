@@ -301,14 +301,7 @@ fn is_homogeneous_rec(curr_q: &mut VecDeque<&JsonValue>) -> bool {
 
 fn is_primitive_type_tag(t: &TypeTag) -> bool {
     match t {
-        TypeTag::Bool
-        | TypeTag::U8
-        | TypeTag::U16
-        | TypeTag::U32
-        | TypeTag::U64
-        | TypeTag::U128
-        | TypeTag::U256
-        | TypeTag::Address => true,
+        TypeTag::Bool | TypeTag::U8 | TypeTag::U64 | TypeTag::U128 | TypeTag::Address => true,
         TypeTag::Vector(inner) => is_primitive_type_tag(inner),
         TypeTag::Struct(StructTag {
             address,
@@ -343,11 +336,8 @@ pub fn primitive_type(
     match param {
         SignatureToken::Bool => (true, Some(MoveTypeLayout::Bool)),
         SignatureToken::U8 => (true, Some(MoveTypeLayout::U8)),
-        SignatureToken::U16 => (true, Some(MoveTypeLayout::U16)),
-        SignatureToken::U32 => (true, Some(MoveTypeLayout::U32)),
         SignatureToken::U64 => (true, Some(MoveTypeLayout::U64)),
         SignatureToken::U128 => (true, Some(MoveTypeLayout::U128)),
-        SignatureToken::U256 => (true, Some(MoveTypeLayout::U256)),
         SignatureToken::Address => (true, Some(MoveTypeLayout::Address)),
         SignatureToken::Vector(inner) => {
             let (is_primitive, inner_layout_opt) = primitive_type(view, type_args, inner);

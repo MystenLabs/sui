@@ -312,26 +312,20 @@ MoveTypeLayout:
     1:
       u8: UNIT
     2:
-      u16: UNIT
-    3:
-      u32: UNIT
-    4:
       u64: UNIT
-    5:
+    3:
       u128: UNIT
-    6:
-      u256: UNIT
-    7:
+    4:
       address: UNIT
-    8:
+    5:
       vector:
         NEWTYPE:
           TYPENAME: MoveTypeLayout
-    9:
+    6:
       struct:
         NEWTYPE:
           TYPENAME: MoveStructLayout
-    10:
+    7:
       signer: UNIT
 ObjectArg:
   ENUM:
@@ -516,24 +510,18 @@ TypeTag:
     1:
       u8: UNIT
     2:
-      u16: UNIT
-    3:
-      u32: UNIT
-    4:
       u64: UNIT
-    5:
+    3:
       u128: UNIT
-    6:
-      u256: UNIT
-    7:
+    4:
       address: UNIT
-    8:
+    5:
       signer: UNIT
-    9:
+    6:
       vector:
         NEWTYPE:
           TYPENAME: TypeTag
-    10:
+    7:
       struct:
         NEWTYPE:
           TYPENAME: StructTag
