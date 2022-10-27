@@ -43,7 +43,7 @@ members = [
 ]
 
 [workspace.package]
-# This version string will be inheritted by sui-core, sui-faucet, sui-node, sui-tools, sui-sdk, and sui crates
+# This version string will be inherited by sui-core, sui-faucet, sui-node, sui-tools, sui-sdk, and sui crates
 version = "0.14.0"
 
 [profile.release]
@@ -101,9 +101,9 @@ move-prover-boogie-backend = { git = "https://github.com/move-language/move", re
 fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "7766b1ef23f6bed6da9ff9e50dc2a0d1957d344d" }
 
 # anemo dependencies
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "7da7c9a1913ed7fadbdd92ebc1b9f48e0c8cef0e" }
-anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "7da7c9a1913ed7fadbdd92ebc1b9f48e0c8cef0e" }
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "7da7c9a1913ed7fadbdd92ebc1b9f48e0c8cef0e" }
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "f514987fa7f731058dd5a56e409e68600d84d909" }
+anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "f514987fa7f731058dd5a56e409e68600d84d909" }
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "f514987fa7f731058dd5a56e409e68600d84d909" }
 
 # Use the same workspace-hack across crates.
 workspace-hack = { path = "crates/workspace-hack" }

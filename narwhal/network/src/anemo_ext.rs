@@ -10,7 +10,9 @@ use anemo::PeerId;
 use anemo::Request;
 use anemo::Response;
 use bytes::Bytes;
+use futures::future::OptionFuture;
 use futures::FutureExt;
+use std::time::Instant;
 
 pub trait NetworkExt {
     fn waiting_peer(&self, peer_id: PeerId) -> WaitingPeer;
@@ -33,9 +35,10 @@ impl WaitingPeer {
         Self { peer_id, network }
     }
 
-    async fn do_rpc(self, request: Request<Bytes>) -> Result<Response<Bytes>, BoxError> {
+    async fn do_rpc(self, mut request: Request<Bytes>) -> Result<Response<Bytes>, BoxError> {
         use tokio::sync::broadcast::error::RecvError;
 
+        let start = Instant::now();
         let (mut subscriber, _) = self.network.subscribe();
 
         // If we're connected with the peer immediately make the request
@@ -44,29 +47,42 @@ impl WaitingPeer {
         }
 
         // If we're not connected we'll need to check to see if the Peer is a KnownPeer
+        let timeout = request.timeout();
+        let sleep: OptionFuture<_> = timeout.map(tokio::time::sleep).into();
+        tokio::pin!(sleep);
         loop {
             if self.network.known_peers().get(&self.peer_id).is_none() {
                 return Err(format!("peer {} is not a known peer", self.peer_id).into());
             }
 
-            match subscriber.recv().await {
-                Ok(PeerEvent::NewPeer(peer_id)) if peer_id == self.peer_id => {
-                    // We're now connected with the peer, lets try to make a network request
-                    if let Some(mut peer) = self.network.peer(self.peer_id) {
-                        return peer.rpc(request).await.map_err(Into::into);
+            tokio::select! {
+                recv = subscriber.recv() => match recv {
+                    Ok(PeerEvent::NewPeer(peer_id)) if peer_id == self.peer_id => {
+                        // We're now connected with the peer, lets try to make a network request
+                        if let Some(mut peer) = self.network.peer(self.peer_id) {
+                            if let Some(duration) = timeout {
+                                // Reduce timeout to account for time already spent waiting
+                                // for the peer.
+                                request.set_timeout(duration.saturating_sub(Instant::now().duration_since(start)));
+                            }
+                            return peer.rpc(request).await.map_err(Into::into);
+                        }
                     }
-                }
-                Err(RecvError::Closed) => return Err("network is closed".into()),
-                Err(RecvError::Lagged(_)) => {
-                    subscriber = subscriber.resubscribe();
+                    Err(RecvError::Closed) => return Err("network is closed".into()),
+                    Err(RecvError::Lagged(_)) => {
+                        subscriber = subscriber.resubscribe();
 
-                    // We lagged behind so we may have missed the connection event
-                    if let Some(mut peer) = self.network.peer(self.peer_id) {
-                        return peer.rpc(request).await.map_err(Into::into);
+                        // We lagged behind so we may have missed the connection event
+                        if let Some(mut peer) = self.network.peer(self.peer_id) {
+                            return peer.rpc(request).await.map_err(Into::into);
+                        }
                     }
-                }
-                // Just do another iteration
-                _ => {}
+                    // Just do another iteration
+                    _ => {}
+                },
+                Some(_) = &mut sleep => {
+                    return Err(format!("timed out waiting for peer {}", self.peer_id).into());
+                },
             }
         }
     }
