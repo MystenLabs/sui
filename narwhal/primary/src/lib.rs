@@ -35,9 +35,7 @@ mod certificate_tests;
 pub use crate::{
     block_remover::BlockRemover,
     block_synchronizer::{
-        mock::MockBlockSynchronizer,
-        responses::{CertificatesResponse, PayloadAvailabilityResponse},
-        BlockHeader,
+        mock::MockBlockSynchronizer, responses::CertificatesResponse, BlockHeader,
     },
     block_waiter::{BlockWaiter, GetBlockResponse},
     grpc_server::metrics::EndpointMetrics,

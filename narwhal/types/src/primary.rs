@@ -730,16 +730,6 @@ pub enum PrimaryMessage {
         certificates: Vec<(CertificateDigest, Option<Certificate>)>,
         from: PublicKey,
     },
-
-    PayloadAvailabilityRequest {
-        certificate_ids: Vec<CertificateDigest>,
-        requestor: PublicKey,
-    },
-
-    PayloadAvailabilityResponse {
-        payload_availability: Vec<(CertificateDigest, bool)>,
-        from: PublicKey,
-    },
 }
 
 /// Used by the primary to fetch certificates from other primaries.
@@ -758,8 +748,27 @@ pub struct FetchCertificatesRequest {
 /// Used by the primary to reply to FetchCertificatesRequest.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct FetchCertificatesResponse {
-    /// Certifcates sorted from lower to higher rounds.
+    /// Certificates sorted from lower to higher rounds.
     pub certificates: Vec<Certificate>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
+pub struct PayloadAvailabilityRequest {
+    pub certificate_ids: Vec<CertificateDigest>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
+pub struct PayloadAvailabilityResponse {
+    pub payload_availability: Vec<(CertificateDigest, bool)>,
+}
+
+impl PayloadAvailabilityResponse {
+    pub fn available_block_ids(&self) -> Vec<CertificateDigest> {
+        self.payload_availability
+            .iter()
+            .filter_map(|(id, available)| available.then_some(*id))
+            .collect()
+    }
 }
 
 /// Message to reconfigure worker tasks. This message must be sent by a trusted source.
