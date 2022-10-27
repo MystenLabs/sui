@@ -4,6 +4,7 @@
 use clap::Parser;
 use move_cli::base::{self, build};
 use move_package::BuildConfig as MoveBuildConfig;
+use serde_json::json;
 use std::path::{Path, PathBuf};
 use sui_framework_build::compiled_package::BuildConfig;
 
@@ -40,7 +41,7 @@ impl Build {
             },
         )?;
         if dump_bytecode_as_base64 {
-            println!("{:?}", pkg.get_package_base64())
+            println!("{}", json!(pkg.get_package_base64()))
         }
         Ok(())
     }
