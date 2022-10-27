@@ -10,8 +10,12 @@ use std::path::PathBuf;
 use sui::client_commands::WalletContext;
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
 use sui_adapter::genesis;
+<<<<<<< HEAD
 use sui_core::test_utils::to_sender_signed_transaction;
 use sui_framework_build::compiled_package::BuildConfig;
+=======
+use sui_core::test_utils::{dummy_transaction_effects, to_sender_signed_transaction};
+>>>>>>> 7a9c50724 ([checkpoint] Support fragment chunks)
 use sui_json_rpc_types::SuiObjectInfo;
 use sui_keys::keystore::AccountKeystore;
 use sui_keys::keystore::Keystore;
@@ -23,27 +27,17 @@ use sui_types::crypto::{
     get_key_pair, AccountKeyPair, AuthorityKeyPair, AuthorityPublicKeyBytes, AuthoritySignInfo,
     KeypairTraits,
 };
-use sui_types::gas::GasCostSummary;
 use sui_types::gas_coin::GasCoin;
+use sui_types::messages::CallArg;
 use sui_types::messages::SignedTransactionEffects;
-use sui_types::messages::{CallArg, ExecutionStatus, TransactionEffects};
 use sui_types::messages::{
     CertifiedTransaction, ObjectArg, TransactionData, VerifiedCertificate,
     VerifiedSignedTransaction, VerifiedTransaction,
 };
 use sui_types::object::Object;
-use sui_types::object::Owner;
 
 /// The maximum gas per transaction.
 pub const MAX_GAS: u64 = 100_000;
-
-pub fn random_object_ref() -> ObjectRef {
-    (
-        ObjectID::random(),
-        SequenceNumber::new(),
-        ObjectDigest::new([0; 32]),
-    )
-}
 
 /// A helper function to get all accounts and their owned GasCoin
 /// with a WalletContext
@@ -462,28 +456,4 @@ pub fn make_tx_certs_and_signed_effects_with_committee(
         }
     }
     (tx_certs, effect_sigs)
-}
-
-fn dummy_transaction_effects(tx: &VerifiedTransaction) -> TransactionEffects {
-    TransactionEffects {
-        status: ExecutionStatus::Success,
-        gas_used: GasCostSummary {
-            computation_cost: 0,
-            storage_cost: 0,
-            storage_rebate: 0,
-        },
-        shared_objects: Vec::new(),
-        transaction_digest: *tx.digest(),
-        created: Vec::new(),
-        mutated: Vec::new(),
-        unwrapped: Vec::new(),
-        deleted: Vec::new(),
-        wrapped: Vec::new(),
-        gas_object: (
-            random_object_ref(),
-            Owner::AddressOwner(tx.signed_data.data.signer()),
-        ),
-        events: Vec::new(),
-        dependencies: Vec::new(),
-    }
 }

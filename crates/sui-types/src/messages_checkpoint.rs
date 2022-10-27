@@ -4,6 +4,7 @@
 use bincode::{deserialize, serialize};
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::fmt::{Debug, Display, Formatter};
+use std::hash::{Hash, Hasher};
 use std::slice::Iter;
 
 use crate::base_types::ExecutionDigests;
@@ -712,34 +713,39 @@ impl CheckpointFragment {
         &self.proposer.summary.sequence_number
     }
 
-    pub fn to_message_chunks(
+    pub fn to_signed_message_chunks(
         &self,
         signer: &dyn signature::Signer<AuthoritySignature>,
     ) -> Vec<SignedCheckpointFragmentMessage> {
+        self.to_message_chunks()
+            .into_iter()
+            .map(|message| SignedCheckpointFragmentMessage::new(message, signer))
+            .collect()
+    }
+
+    pub fn to_message_chunks(&self) -> Vec<CheckpointFragmentMessage> {
         let proposer_name = *self.proposer.authority();
         let other_name = *self.other.authority();
         let sequence_number = self.proposer.summary.sequence_number;
         let bytes = serialize(&self.data).unwrap();
         let chunks = bytes.chunks(FRAGMENT_CHUNK_SIZE);
-        let mut results = vec![SignedCheckpointFragmentMessage::new(
-            CheckpointFragmentMessage::Header(Box::new(CheckpointFragmentMessageHeader {
+        let mut results = vec![CheckpointFragmentMessage::Header(Box::new(
+            CheckpointFragmentMessageHeader {
                 proposer: self.proposer.clone(),
                 other: self.other.clone(),
                 chunk_count: chunks.len() as u32,
-            })),
-            signer,
-        )];
+            },
+        ))];
         for (idx, chunk) in chunks.enumerate() {
-            results.push(SignedCheckpointFragmentMessage::new(
-                CheckpointFragmentMessage::Chunk(Box::new(CheckpointFragmentMessageChunk {
+            results.push(CheckpointFragmentMessage::Chunk(Box::new(
+                CheckpointFragmentMessageChunk {
                     sequence_number,
                     proposer: proposer_name,
                     other: other_name,
                     chunk_id: idx as u32,
                     content: chunk.to_vec(),
-                })),
-                signer,
-            ))
+                },
+            )))
         }
         results
     }
@@ -752,6 +758,14 @@ pub struct CheckpointFragmentMessageHeader {
     pub chunk_count: u32,
 }
 
+impl Hash for CheckpointFragmentMessageHeader {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.proposer.authority().hash(state);
+        self.other.authority().hash(state);
+        self.proposer.summary.sequence_number.hash(state);
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CheckpointFragmentMessageChunk {
     pub sequence_number: CheckpointSequenceNumber,
@@ -761,16 +775,54 @@ pub struct CheckpointFragmentMessageChunk {
     pub content: Vec<u8>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+impl Hash for CheckpointFragmentMessageChunk {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.proposer.hash(state);
+        self.other.hash(state);
+        self.sequence_number.hash(state);
+        self.chunk_id.hash(state);
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Hash)]
 pub enum CheckpointFragmentMessage {
     Header(Box<CheckpointFragmentMessageHeader>),
     Chunk(Box<CheckpointFragmentMessageChunk>),
+}
+
+impl CheckpointFragmentMessage {
+    pub fn proposer_sequence_number(&self) -> CheckpointSequenceNumber {
+        match self {
+            CheckpointFragmentMessage::Header(header) => header.proposer.summary.sequence_number,
+            CheckpointFragmentMessage::Chunk(chunk) => chunk.sequence_number,
+        }
+    }
+
+    /// Returns the checkpoint sequence number, proposer's name an other's name.
+    pub fn message_key(&self) -> (CheckpointSequenceNumber, AuthorityName, AuthorityName) {
+        match self {
+            CheckpointFragmentMessage::Header(header) => (
+                header.proposer.summary.sequence_number,
+                *header.proposer.authority(),
+                *header.other.authority(),
+            ),
+            CheckpointFragmentMessage::Chunk(chunk) => {
+                (chunk.sequence_number, chunk.proposer, chunk.other)
+            }
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SignedCheckpointFragmentMessage {
     pub message: CheckpointFragmentMessage,
     pub signature: AuthoritySignature,
+}
+
+impl Hash for SignedCheckpointFragmentMessage {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.message.hash(state);
+    }
 }
 
 impl SignedCheckpointFragmentMessage {
@@ -791,6 +843,7 @@ impl SignedCheckpointFragmentMessage {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct PartialCheckpointFragment {
     pub proposer: SignedCheckpointProposalSummary,
     pub other: SignedCheckpointProposalSummary,

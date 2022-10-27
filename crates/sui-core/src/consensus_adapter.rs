@@ -23,8 +23,8 @@ use std::{
     collections::{hash_map::DefaultHasher, HashMap},
     hash::{Hash, Hasher},
 };
-use sui_types::messages_checkpoint::CheckpointFragment;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+use sui_types::messages_checkpoint::SignedCheckpointFragmentMessage;
 use sui_types::{
     error::{SuiError, SuiResult},
     messages::{ConsensusTransaction, VerifiedCertificate},
@@ -451,11 +451,11 @@ impl ConsensusListener {
 
 /// Send checkpoint fragments through consensus.
 pub struct CheckpointSender {
-    tx_checkpoint_consensus_adapter: Sender<CheckpointFragment>,
+    tx_checkpoint_consensus_adapter: Sender<SignedCheckpointFragmentMessage>,
 }
 
 impl CheckpointSender {
-    pub fn new(tx_checkpoint_consensus_adapter: Sender<CheckpointFragment>) -> Self {
+    pub fn new(tx_checkpoint_consensus_adapter: Sender<SignedCheckpointFragmentMessage>) -> Self {
         Self {
             tx_checkpoint_consensus_adapter,
         }
@@ -463,9 +463,9 @@ impl CheckpointSender {
 }
 
 impl ConsensusSender for CheckpointSender {
-    fn send_to_consensus(&self, fragment: CheckpointFragment) -> SuiResult {
+    fn send_to_consensus(&self, fragment_messages: SignedCheckpointFragmentMessage) -> SuiResult {
         self.tx_checkpoint_consensus_adapter
-            .try_send(fragment)
+            .try_send(fragment_messages)
             .map_err(|e| SuiError::from(&e.to_string()[..]))
     }
 }
@@ -481,7 +481,7 @@ pub struct CheckpointConsensusAdapter {
     /// Channel to request to be notified when a given consensus transaction is sequenced.
     tx_consensus_listener: Sender<ConsensusListenerMessage>,
     /// Receive new checkpoint fragments to sequence.
-    rx_checkpoint_consensus_adapter: Receiver<CheckpointFragment>,
+    rx_checkpoint_consensus_adapter: Receiver<SignedCheckpointFragmentMessage>,
     /// A pointer to the checkpoints local store.
     checkpoint_db: Arc<Mutex<CheckpointStore>>,
     /// The initial delay to wait before re-attempting a connection with consensus (in ms).
@@ -500,7 +500,7 @@ impl CheckpointConsensusAdapter {
     pub fn new(
         consensus_address: Multiaddr,
         tx_consensus_listener: Sender<ConsensusListenerMessage>,
-        rx_checkpoint_consensus_adapter: Receiver<CheckpointFragment>,
+        rx_checkpoint_consensus_adapter: Receiver<SignedCheckpointFragmentMessage>,
         checkpoint_db: Arc<Mutex<CheckpointStore>>,
         retry_delay: Duration,
         max_pending_transactions: usize,
@@ -613,7 +613,7 @@ impl CheckpointConsensusAdapter {
             tokio::select! {
                 // Listen to new checkpoint fragments.
                 Some(fragment) = self.rx_checkpoint_consensus_adapter.recv() => {
-                    let sequence_number = *fragment.proposer_sequence_number();
+                    let sequence_number = fragment.message.proposer_sequence_number();
 
                     // Cleanup the buffer.
                     if self.buffer.len() >= self.max_pending_transactions {
@@ -625,9 +625,7 @@ impl CheckpointConsensusAdapter {
                     }
 
                     // Add the fragment to the buffer.
-                    let cp_seq = *fragment.proposer_sequence_number();
-                    let proposer = fragment.proposer.auth_signature.authority;
-                    let other = fragment.other.auth_signature.authority;
+                    let (cp_seq, proposer, other) = fragment.message.message_key();
                     let transaction = ConsensusTransaction::new_checkpoint_message(fragment);
                     let tracking_id = transaction.get_tracking_id();
                     let serialized = bincode::serialize(&transaction).expect("Serialize consensus transaction cannot fail");
