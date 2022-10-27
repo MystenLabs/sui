@@ -63,7 +63,11 @@ type TxStatus = {
     status: ExecutionStatusType;
 };
 
-export function SuiAmount({ amount }: { amount: bigint | number | string | undefined }) {
+export function SuiAmount({
+    amount,
+}: {
+    amount: bigint | number | string | undefined;
+}) {
     const [formattedAmount] = useFormatCoin(amount, SUI_TYPE_ARG);
 
     if (amount) {
