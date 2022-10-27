@@ -117,7 +117,7 @@ test_scenario::next_tx(scenario, owner);
     color_object::delete(object);
 };
 // Verify that the object was indeed deleted.
-test_scenario::next_tx(scenario, &owner);
+test_scenario::next_tx(scenario, owner);
 {
     assert!(!test_scenario::has_most_recent_for_sender<ColorObject>(scenario), 0);
 };
