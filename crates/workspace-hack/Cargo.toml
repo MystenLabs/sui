@@ -863,7 +863,6 @@ hdrhistogram = { version = "7", features = ["base64", "crossbeam-channel", "flat
 heck-468e82937335b1c9 = { package = "heck", version = "0.3", default-features = false }
 heck-9fbad63c4bcf4a8f = { package = "heck", version = "0.4", features = ["unicode", "unicode-segmentation"] }
 hex = { version = "0.4", features = ["alloc", "std"] }
-hex-literal = { version = "0.3", default-features = false }
 hkdf = { version = "0.12", default-features = false, features = ["std"] }
 hmac = { version = "0.12", default-features = false, features = ["reset", "std"] }
 hmac-sha512 = { version = "0.1", features = ["sha384"] }
