@@ -3,12 +3,19 @@
 
 import { Ed25519Keypair } from '@mysten/sui.js';
 import mitt from 'mitt';
+import { throttle } from 'throttle-debounce';
 import Browser from 'webextension-polyfill';
 
+import Alarms from './Alarms';
 import { createMessage } from '_messages';
 import { isKeyringPayload } from '_payloads/keyring';
 import { encrypt, decrypt } from '_shared/cryptography/keystore';
 import { generateMnemonic } from '_shared/utils/bip39';
+import {
+    AUTO_LOCK_TIMER_MAX_MINUTES,
+    AUTO_LOCK_TIMER_MIN_MINUTES,
+    AUTO_LOCK_TIMER_STORAGE_KEY,
+} from '_src/shared/constants';
 
 import type { Keypair } from '@mysten/sui.js';
 import type { Message } from '_messages';
@@ -44,6 +51,7 @@ class Keyring {
     }
 
     public lock() {
+        Alarms.clearLockAlarm();
         this.#keypair = null;
         this.#mnemonic = null;
         this.#locked = true;
@@ -51,6 +59,7 @@ class Keyring {
     }
 
     public async unlock(password: string) {
+        Alarms.setLockAlarm();
         this.#mnemonic = await this.decryptMnemonic(password);
         this.#keypair = Ed25519Keypair.deriveKeypair(this.#mnemonic);
         this.#locked = false;
@@ -168,6 +177,20 @@ class Keyring {
             } else if (isKeyringPayload<'clear'>(payload, 'clear')) {
                 await this.clearMnemonic();
                 uiConnection.send(createMessage({ type: 'done' }, id));
+            } else if (
+                isKeyringPayload<'appStatusUpdate'>(payload, 'appStatusUpdate')
+            ) {
+                const appActive = payload.args?.active;
+                if (appActive) {
+                    this.postponeLock();
+                }
+            } else if (
+                isKeyringPayload<'setLockTimeout'>(payload, 'setLockTimeout')
+            ) {
+                if (payload.args) {
+                    await this.setLockTimeout(payload.args.timeout);
+                }
+                uiConnection.send(createMessage({ type: 'done' }, id));
             }
         } catch (e) {
             uiConnection.send(
@@ -205,6 +228,31 @@ class Keyring {
 
     private notifyLockedStatusUpdate(isLocked: boolean) {
         this.#events.emit('lockedStatusUpdate', isLocked);
+    }
+
+    private postponeLock = throttle(
+        1000,
+        async () => {
+            if (!this.isLocked) {
+                await Alarms.setLockAlarm();
+            }
+        },
+        { noLeading: false }
+    );
+
+    private async setLockTimeout(timeout: number) {
+        if (
+            timeout > AUTO_LOCK_TIMER_MAX_MINUTES ||
+            timeout < AUTO_LOCK_TIMER_MIN_MINUTES
+        ) {
+            return;
+        }
+        await Browser.storage.local.set({
+            [AUTO_LOCK_TIMER_STORAGE_KEY]: timeout,
+        });
+        if (!this.isLocked) {
+            await Alarms.setLockAlarm();
+        }
     }
 }
 

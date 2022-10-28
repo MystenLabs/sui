@@ -4,7 +4,7 @@
 import { lte } from 'semver';
 import Browser from 'webextension-polyfill';
 
-import Alarms, { LOCK_ALARM_NAME } from './Alarms';
+import { LOCK_ALARM_NAME } from './Alarms';
 import Keyring from './Keyring';
 import Permissions from './Permissions';
 import { Connections } from './connections';
@@ -35,19 +35,6 @@ Permissions.permissionReply.subscribe((permission) => {
 
 Keyring.on('lockedStatusUpdate', (isLocked: boolean) => {
     connections.notifyForLockedStatusUpdate(isLocked);
-    if (isLocked) {
-        Alarms.clearAlarm(LOCK_ALARM_NAME);
-    } else if (connections.totalUiConnections === 0) {
-        Alarms.setLockAlarm();
-    }
-});
-
-connections.on('totalUiChanged', (ui) => {
-    if (ui === 0) {
-        Alarms.setLockAlarm();
-    } else {
-        Alarms.clearAlarm(LOCK_ALARM_NAME);
-    }
 });
 
 Browser.alarms.onAlarm.addListener((alarm) => {
