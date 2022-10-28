@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { map, take } from 'rxjs';
+import { map, Subject, take } from 'rxjs';
 
 import { PortStream } from '_messaging/PortStream';
 
@@ -13,7 +13,7 @@ export abstract class Connection {
 
     constructor(port: Runtime.Port) {
         this._portStream = new PortStream(port);
-        this._portStream.onMessage.subscribe((msg) => this.handleMessage(msg));
+        this._portStream.onMessage.subscribe((msg) => this._handleMessage(msg));
     }
 
     public get onDisconnect() {
@@ -27,6 +27,13 @@ export abstract class Connection {
         if (this._portStream.connected) {
             return this._portStream.sendMessage(msg);
         }
+    }
+
+    public onMessage = new Subject<Message>();
+
+    private _handleMessage(msg: Message): void {
+        this.onMessage.next(msg);
+        this.handleMessage(msg);
     }
 
     protected abstract handleMessage(msg: Message): void;

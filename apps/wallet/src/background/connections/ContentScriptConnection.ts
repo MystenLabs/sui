@@ -40,6 +40,11 @@ export class ContentScriptConnection extends Connection {
     }
 
     protected async handleMessage(msg: Message) {
+        console.log('ContentScriptConnection ,sg', msg);
+        if (msg.id === 'ping') {
+            this.send({ id: 'pong', payload: { type: 'done' } });
+            return;
+        }
         const { payload } = msg;
         if (isGetAccount(payload)) {
             const existingPermission = await Permissions.getPermission(

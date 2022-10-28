@@ -8,6 +8,8 @@ import { WindowMessageStream } from '_messaging/WindowMessageStream';
 
 import type { Message } from '_src/shared/messaging/messages';
 
+let pingInterval: number | null = null;
+
 function createPort(
     windowMsgStream: WindowMessageStream,
     currentMsg?: Message
@@ -28,6 +30,13 @@ function createPort(
         windowMsgSub.unsubscribe();
         createPort(windowMsgStream);
     });
+    if (pingInterval) {
+        clearInterval(pingInterval);
+    }
+    pingInterval = window.setInterval(
+        () => port.sendMessage({ id: 'ping', payload: { type: 'done' } }),
+        5000
+    );
 }
 
 export function setupMessagesProxy() {
@@ -35,7 +44,7 @@ export function setupMessagesProxy() {
         'sui_content-script',
         'sui_in-page'
     );
-    windowMsgStream.messages.pipe(take(1)).subscribe((msg) => {
-        createPort(windowMsgStream, msg);
-    });
+    // windowMsgStream.messages.pipe(take(1)).subscribe((msg) => {
+    createPort(windowMsgStream);
+    // });
 }

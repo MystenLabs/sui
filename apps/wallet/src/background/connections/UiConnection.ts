@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { BehaviorSubject, filter, switchMap, takeUntil } from 'rxjs';
+import Browser from 'webextension-polyfill';
 
 import { Connection } from './Connection';
 import { createMessage } from '_messages';
 import { isBasePayload } from '_payloads';
+import { isKeyringPayload } from '_payloads/keyring';
 import {
     isGetPermissionRequests,
     isPermissionResponse,
@@ -92,6 +94,11 @@ export class UiConnection extends Connection {
                 this.send(createMessage({ type: 'done' }, id));
             } else if (isBasePayload(payload) && payload.type === 'keyring') {
                 await Keyring.handleUiMessage(msg, this);
+                if (isKeyringPayload(payload, 'walletStatusUpdate')) {
+                    await Browser.storage.local.set({
+                        'stats.lastUIStatusMsg': Date.now(),
+                    });
+                }
             }
         } catch (e) {
             // just in case

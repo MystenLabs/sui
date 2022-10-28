@@ -9,12 +9,26 @@ import { UiConnection } from './UiConnection';
 import type { Connection } from './Connection';
 import type { Permission } from '_payloads/permissions';
 
+type PortStats = {
+    name: string;
+    timestamp: number;
+    msg?: unknown;
+} | null;
+type PortStatsMap = Record<
+    'lastConnection' | 'lastDisconnection' | 'lastMessage',
+    PortStats
+>;
+
 export class Connections {
     #connections: Connection[] = [];
 
-    constructor() {
+    constructor(portStats: PortStatsMap) {
         Browser.runtime.onConnect.addListener((port) => {
             try {
+                portStats.lastConnection = {
+                    name: port.name,
+                    timestamp: Date.now(),
+                };
                 let connection: Connection;
                 switch (port.name) {
                     case ContentScriptConnection.CHANNEL:
@@ -30,12 +44,24 @@ export class Connections {
                 }
                 this.#connections.push(connection);
                 connection.onDisconnect.subscribe(() => {
+                    portStats.lastDisconnection = {
+                        name: port.name,
+                        timestamp: Date.now(),
+                    };
                     const connectionIndex =
                         this.#connections.indexOf(connection);
                     if (connectionIndex >= 0) {
                         this.#connections.splice(connectionIndex, 1);
                     }
                 });
+                connection.onMessage.subscribe(
+                    (msg) =>
+                        (portStats.lastMessage = {
+                            name: port.name,
+                            timestamp: Date.now(),
+                            msg,
+                        })
+                );
             } catch (e) {
                 port.disconnect();
             }
