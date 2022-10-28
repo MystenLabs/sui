@@ -345,6 +345,7 @@ function TransactionView({ txdata }: { txdata: DataType }) {
         sender: sender,
         recipient: recipients,
         amount: amounts,
+        objects: txdata.created,
     };
     const GasStorageFees = {
         title: 'Gas & Storage Fees',
@@ -486,6 +487,9 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                                     sender={sendreceive.sender}
                                     recipient={sendreceive.recipient}
                                     amount={sendreceive.amount}
+                                    objects={sendreceive.objects.map(
+                                        (obj) => obj.objectId
+                                    )}
                                 />
                             </section>
 
