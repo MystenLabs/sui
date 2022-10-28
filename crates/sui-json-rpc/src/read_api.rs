@@ -16,7 +16,7 @@ use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{
     GetObjectDataResponse, GetPastObjectDataResponse, MoveFunctionArgType, ObjectValueKind, Page,
     SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiObjectInfo,
-    SuiTransactionEffects, SuiTransactionResponse, TransactionsPage,
+    SuiTransactionEffects, SuiTransactionResponse, TransactionsPage, SuiObjectRead,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::SequenceNumber;
@@ -88,8 +88,9 @@ impl RpcReadApiServer for ReadApi {
             .collect())
     }
 
-    async fn get_object(&self, _object_id: ObjectID) -> RpcResult<GetObjectDataResponse> {
-        Err(anyhow!("don't do any object reads for testing").into())
+    async fn get_object(&self, object_id: ObjectID) -> RpcResult<GetObjectDataResponse> {
+        // Err(anyhow!("don't do any object reads for testing").into())
+        Ok(SuiObjectRead::NotExists(object_id))
         // Ok(self
         //     .state
         //     .get_object_read(&object_id)

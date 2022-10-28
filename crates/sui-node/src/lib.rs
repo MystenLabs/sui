@@ -12,6 +12,9 @@ use narwhal_network::metrics::MetricsMakeCallbackHandler;
 use narwhal_network::metrics::{NetworkConnectionMetrics, NetworkMetrics};
 use parking_lot::Mutex;
 use prometheus::Registry;
+use sui_storage::IndexStore;
+use sui_storage::event_store::EventStoreType;
+use sui_storage::event_store::SqlEventStore;
 use std::option::Option::None;
 use std::time::Instant;
 use std::{sync::Arc, time::Duration};
@@ -116,25 +119,23 @@ impl SuiNode {
             secret.clone(),
             config.enable_reconfig,
         )?));
-        let index_store = None;
-        // let index_store = if is_validator {
-        //     None
-        // } else {
-        //     Some(Arc::new(IndexStore::open_tables_read_write(
-        //         config.db_path().join("indexes"),
-        //         None,
-        //         None,
-        //     )))
-        // };
-        let event_store = None;
-        // let event_store = if config.enable_event_processing {
-        //     let path = config.db_path().join("events.db");
-        //     let db = SqlEventStore::new_from_file(&path).await?;
-        //     db.initialize().await?;
-        //     Some(Arc::new(EventStoreType::SqlEventStore(db)))
-        // } else {
-        //     None
-        // };
+        let index_store = if is_validator {
+            None
+        } else {
+            Some(Arc::new(IndexStore::open_tables_read_write(
+                config.db_path().join("indexes"),
+                None,
+                None,
+            )))
+        };
+        let event_store = if config.enable_event_processing {
+            let path = config.db_path().join("events.db");
+            let db = SqlEventStore::new_from_file(&path).await?;
+            db.initialize().await?;
+            Some(Arc::new(EventStoreType::SqlEventStore(db)))
+        } else {
+            None
+        };
 
         let (tx_reconfigure_consensus, rx_reconfigure_consensus) = channel(100);
 
