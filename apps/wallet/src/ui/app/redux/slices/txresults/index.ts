@@ -163,7 +163,7 @@ export const getTransactionsByAddress = createAsyncThunk<
                             ? {
                                   objectId:
                                       txTransferObject?.objectRef.objectId ??
-                                      callObjectId,
+                                      metaDataObjectId,
                               }
                             : {}),
                         error: getExecutionStatusError(txEff),
