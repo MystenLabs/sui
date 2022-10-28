@@ -13,8 +13,6 @@ import {
     createSlice,
 } from '@reduxjs/toolkit';
 
-import { reportSentryError } from '_src/shared/sentry';
-
 import type {
     SuiTransactionResponse,
     SignableTransaction,
@@ -126,7 +124,6 @@ export const respondToTransactionRequest = createAsyncThunk<
                     parsed_data: null,
                 };
             } catch (e) {
-                reportSentryError(e as Error);
                 tsResultError = (e as Error).message;
             }
         }

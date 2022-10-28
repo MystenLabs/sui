@@ -13,7 +13,6 @@ import {
     suiObjectsAdapterSelectors,
 } from '_redux/slices/sui-objects';
 import { Coin } from '_redux/slices/sui-objects/Coin';
-import { reportSentryError } from '_src/shared/sentry';
 
 import type {
     SuiAddress,
@@ -38,46 +37,39 @@ export const sendTokens = createAsyncThunk<
     'sui-objects/send-tokens',
     async (
         { tokenTypeArg, amount, recipientAddress },
-        { getState, extra: { api, keypairVault }, dispatch, rejectWithValue }
+        { getState, extra: { api, keypairVault }, dispatch }
     ) => {
-        try {
-            const state = getState();
-            const coinType = Coin.getCoinTypeFromArg(tokenTypeArg);
-            const coins: SuiMoveObject[] = suiObjectsAdapterSelectors
-                .selectAll(state)
-                .filter(
-                    (anObj) =>
-                        isSuiMoveObject(anObj.data) &&
-                        anObj.data.type === coinType
-                )
-                .map(({ data }) => data as SuiMoveObject);
+        const state = getState();
+        const coinType = Coin.getCoinTypeFromArg(tokenTypeArg);
+        const coins: SuiMoveObject[] = suiObjectsAdapterSelectors
+            .selectAll(state)
+            .filter(
+                (anObj) =>
+                    isSuiMoveObject(anObj.data) && anObj.data.type === coinType
+            )
+            .map(({ data }) => data as SuiMoveObject);
 
-            const signer = api.getSignerInstance(keypairVault.getKeyPair());
+        const signer = api.getSignerInstance(keypairVault.getKeyPair());
 
-            const response =
-                Coin.getCoinSymbol(tokenTypeArg) === 'SUI'
-                    ? await Coin.transferSui(
-                          signer,
-                          coins,
-                          amount,
-                          recipientAddress
-                      )
-                    : await Coin.transferCoin(
-                          signer,
-                          coins,
-                          amount,
-                          recipientAddress
-                      );
+        const response =
+            Coin.getCoinSymbol(tokenTypeArg) === 'SUI'
+                ? await Coin.transferSui(
+                      signer,
+                      coins,
+                      amount,
+                      recipientAddress
+                  )
+                : await Coin.transferCoin(
+                      signer,
+                      coins,
+                      amount,
+                      recipientAddress
+                  );
 
-            // TODO: better way to sync latest objects
-            dispatch(fetchAllOwnedAndRequiredObjects());
-            // TODO: is this correct? Find a better way to do it
-            return response;
-        } catch (err) {
-            const error = err as Error;
-            reportSentryError(error);
-            throw rejectWithValue(error.message);
-        }
+        // TODO: better way to sync latest objects
+        dispatch(fetchAllOwnedAndRequiredObjects());
+        // TODO: is this correct? Find a better way to do it
+        return response;
     }
 );
 

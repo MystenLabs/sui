@@ -18,7 +18,6 @@ import {
 
 import { SUI_SYSTEM_STATE_OBJECT_ID } from './Coin';
 import { ExampleNFT } from './NFT';
-import { reportSentryError } from '_src/shared/sentry';
 
 import type { SuiObject, SuiAddress, ObjectId } from '@mysten/sui.js';
 import type { RootState } from '_redux/RootReducer';
@@ -34,96 +33,66 @@ export const fetchAllOwnedAndRequiredObjects = createAsyncThunk<
     SuiObject[],
     void,
     AppThunkConfig
->(
-    'sui-objects/fetch-all',
-    async (_, { getState, extra: { api }, rejectWithValue }) => {
-        try {
-            const state = getState();
-            const {
-                account: { address },
-            } = state;
-            const allSuiObjects: SuiObject[] = [];
-            if (address) {
-                const allObjectRefs =
-                    await api.instance.fullNode.getObjectsOwnedByAddress(
-                        `${address}`
-                    );
-                const objectIDs = allObjectRefs
-                    .filter((anObj) => {
-                        const fetchedVersion = getObjectVersion(anObj);
-                        const storedObj = suiObjectsAdapterSelectors.selectById(
-                            state,
-                            getObjectId(anObj)
-                        );
-                        const storedVersion = storedObj
-                            ? getObjectVersion(storedObj.reference)
-                            : null;
-                        const objOutdated = fetchedVersion !== storedVersion;
-                        if (!objOutdated && storedObj) {
-                            allSuiObjects.push(storedObj);
-                        }
-                        return objOutdated;
-                    })
-                    .map((anObj) => anObj.objectId);
-                objectIDs.push(SUI_SYSTEM_STATE_OBJECT_ID);
-                const allObjRes = await api.instance.fullNode.getObjectBatch(
-                    objectIDs
+>('sui-objects/fetch-all', async (_, { getState, extra: { api } }) => {
+    const state = getState();
+    const {
+        account: { address },
+    } = state;
+    const allSuiObjects: SuiObject[] = [];
+    if (address) {
+        const allObjectRefs =
+            await api.instance.fullNode.getObjectsOwnedByAddress(`${address}`);
+        const objectIDs = allObjectRefs
+            .filter((anObj) => {
+                const fetchedVersion = getObjectVersion(anObj);
+                const storedObj = suiObjectsAdapterSelectors.selectById(
+                    state,
+                    getObjectId(anObj)
                 );
-                for (const objRes of allObjRes) {
-                    const suiObj = getObjectExistsResponse(objRes);
-                    if (suiObj) {
-                        allSuiObjects.push(suiObj);
-                    }
+                const storedVersion = storedObj
+                    ? getObjectVersion(storedObj.reference)
+                    : null;
+                const objOutdated = fetchedVersion !== storedVersion;
+                if (!objOutdated && storedObj) {
+                    allSuiObjects.push(storedObj);
                 }
+                return objOutdated;
+            })
+            .map((anObj) => anObj.objectId);
+        objectIDs.push(SUI_SYSTEM_STATE_OBJECT_ID);
+        const allObjRes = await api.instance.fullNode.getObjectBatch(objectIDs);
+        for (const objRes of allObjRes) {
+            const suiObj = getObjectExistsResponse(objRes);
+            if (suiObj) {
+                allSuiObjects.push(suiObj);
             }
-            return allSuiObjects;
-        } catch (err) {
-            const error = err as Error;
-            reportSentryError(error);
-            throw rejectWithValue(error.message);
         }
     }
-);
+    return allSuiObjects;
+});
 
 export const batchFetchObject = createAsyncThunk<
     SuiObject[],
     ObjectId[],
     AppThunkConfig
->(
-    'sui-objects/batch',
-    async (objectIDs, { extra: { api }, rejectWithValue }) => {
-        try {
-            const allSuiObjects: SuiObject[] = [];
-            const allObjRes = await api.instance.fullNode.getObjectBatch(
-                objectIDs
-            );
-            for (const objRes of allObjRes) {
-                const suiObj = getObjectExistsResponse(objRes);
-                if (suiObj) {
-                    allSuiObjects.push(suiObj);
-                }
-            }
-            return allSuiObjects;
-        } catch (err) {
-            const error = err as Error;
-            reportSentryError(error);
-            throw rejectWithValue(error.message);
+>('sui-objects/batch', async (objectIDs, { extra: { api } }) => {
+    const allSuiObjects: SuiObject[] = [];
+    const allObjRes = await api.instance.fullNode.getObjectBatch(objectIDs);
+    for (const objRes of allObjRes) {
+        const suiObj = getObjectExistsResponse(objRes);
+        if (suiObj) {
+            allSuiObjects.push(suiObj);
         }
     }
-);
+    return allSuiObjects;
+});
 
 export const mintDemoNFT = createAsyncThunk<void, void, AppThunkConfig>(
     'mintDemoNFT',
-    async (_, { extra: { api, keypairVault }, dispatch, rejectWithValue }) => {
-        try {
-            const signer = api.getSignerInstance(keypairVault.getKeyPair());
-            await ExampleNFT.mintExampleNFT(signer);
-            await dispatch(fetchAllOwnedAndRequiredObjects());
-        } catch (err) {
-            const error = err as Error;
-            reportSentryError(error);
-            throw rejectWithValue(error.message);
-        }
+    async (_, { extra: { api, keypairVault }, dispatch }) => {
+        const signer = api.getSignerInstance(keypairVault.getKeyPair());
+        await ExampleNFT.mintExampleNFT(signer);
+        await dispatch(fetchAllOwnedAndRequiredObjects());
     }
 );
 
@@ -140,33 +109,24 @@ export const transferSuiNFT = createAsyncThunk<
     AppThunkConfig
 >(
     'transferSuiNFT',
-    async (
-        data,
-        { extra: { api, keypairVault }, dispatch, rejectWithValue }
-    ) => {
-        try {
-            const signer = api.getSignerInstance(keypairVault.getKeyPair());
-            const txn = await ExampleNFT.TransferNFT(
-                signer,
-                data.nftId,
-                data.recipientAddress,
-                data.transferCost
-            );
+    async (data, { extra: { api, keypairVault }, dispatch }) => {
+        const signer = api.getSignerInstance(keypairVault.getKeyPair());
+        const txn = await ExampleNFT.TransferNFT(
+            signer,
+            data.nftId,
+            data.recipientAddress,
+            data.transferCost
+        );
 
-            await dispatch(fetchAllOwnedAndRequiredObjects());
-            const txnResp = {
-                timestamp_ms: getTimestampFromTransactionResponse(txn),
-                status: getExecutionStatusType(txn),
-                gasFee: txn ? getTotalGasUsed(txn) : 0,
-                txId: getTransactionDigest(txn),
-            };
+        await dispatch(fetchAllOwnedAndRequiredObjects());
+        const txnResp = {
+            timestamp_ms: getTimestampFromTransactionResponse(txn),
+            status: getExecutionStatusType(txn),
+            gasFee: txn ? getTotalGasUsed(txn) : 0,
+            txId: getTransactionDigest(txn),
+        };
 
-            return txnResp as NFTTxResponse;
-        } catch (err) {
-            const error = err as Error;
-            reportSentryError(error);
-            throw rejectWithValue(error.message);
-        }
+        return txnResp as NFTTxResponse;
     }
 );
 interface SuiObjectsManualState {

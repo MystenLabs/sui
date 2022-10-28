@@ -33,5 +33,5 @@ export function addSentryBreadcrumb(breadcrumbs: Breadcrumbs) {
 
 export function reportSentryError(error: Error) {
     if (!IS_PROD) return;
-    Sentry.captureException(error.message);
+    Sentry.captureException(error);
 }
