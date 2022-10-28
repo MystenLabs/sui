@@ -9,15 +9,14 @@ use sui_types::base_types::ExecutionDigests;
 use sui_types::committee::StakeUnit;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages_checkpoint::{
-    CheckpointFragmentMessage, CheckpointProposalSummary, CheckpointSequenceNumber,
-    PartialCheckpointFragment,
+    CheckpointFragment, CheckpointFragmentMessage, CheckpointProposalSummary,
+    CheckpointSequenceNumber, PartialCheckpointFragment,
 };
 use sui_types::{
     base_types::AuthorityName,
     committee::Committee,
     fp_ensure,
     messages::CertifiedTransaction,
-    messages_checkpoint::VerifiedCheckpointFragment,
     waypoint::{GlobalCheckpoint, WaypointError},
 };
 
@@ -54,7 +53,7 @@ pub struct InProgressSpanGraph {
     next_checkpoint: CheckpointSequenceNumber,
 
     /// Fragments that have been used so far.
-    fragments_used: Vec<VerifiedCheckpointFragment>,
+    fragments_used: Vec<CheckpointFragment>,
 
     /// Proposals from each validator seen so far. This is needed to detect potential conflicting
     /// fragments.
@@ -160,7 +159,7 @@ impl InProgressSpanGraph {
 
 #[derive(Clone, Debug)]
 pub struct CompletedSpanGraph {
-    active_links: VecDeque<VerifiedCheckpointFragment>,
+    active_links: VecDeque<CheckpointFragment>,
 }
 
 impl SpanGraph {

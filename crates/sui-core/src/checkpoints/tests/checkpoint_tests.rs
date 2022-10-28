@@ -1194,16 +1194,11 @@ async fn set_fragment_external() {
     // let fragment13 = p1.diff_with(&p3);
 
     // When the fragment concern the authority it processes it
-    assert!(cps1
-        .submit_local_fragment_to_consensus(&fragment12, &committee)
-        .is_ok());
-    assert!(cps2
-        .submit_local_fragment_to_consensus(&fragment12, &committee)
-        .is_ok());
+    assert!(cps1.submit_local_fragment_to_consensus(&fragment12).is_ok());
 
     // When the fragment does not concern the authority it does not process it.
     assert!(cps3
-        .submit_local_fragment_to_consensus(&fragment12, &committee)
+        .submit_local_fragment_to_consensus(&fragment12)
         .is_err());
 }
 
@@ -1393,33 +1388,33 @@ async fn test_fragment_full_flow() {
     // Validator 3 is not validator 5 or 6
     assert!(test_stores[3]
         .1
-        .submit_local_fragment_to_consensus(&fragment_xy, &committee)
+        .submit_local_fragment_to_consensus(&fragment_xy)
         .is_err());
     // Nothing is sent to consensus
     assert!(rx.try_recv().is_err());
 
-    // But accept it on both the 5 and 6
+    // The fragment can be submitted by 6 but not 5.
     assert!(test_stores[5]
         .1
-        .submit_local_fragment_to_consensus(&fragment_xy, &committee)
-        .is_ok());
+        .submit_local_fragment_to_consensus(&fragment_xy)
+        .is_err());
     assert!(test_stores[6]
         .1
-        .submit_local_fragment_to_consensus(&fragment_xy, &committee)
+        .submit_local_fragment_to_consensus(&fragment_xy)
         .is_ok());
 
     // Check we registered one local fragment
-    assert_eq!(test_stores[5].1.tables.local_fragments.iter().count(), 1);
+    assert_eq!(test_stores[6].1.tables.local_fragments.iter().count(), 1);
 
     // Make a daisy chain of the other proposals
     let mut fragments = vec![fragment_xy];
 
     while let Some(proposal) = proposals.pop() {
         if !proposals.is_empty() {
-            let fragment_xy = make_fragment(&proposal, &proposals[proposals.len() - 1], &txs);
+            let fragment_xy = make_fragment(&proposals[proposals.len() - 1], &proposal, &txs);
             assert!(test_stores[proposals.len() - 1]
                 .1
-                .submit_local_fragment_to_consensus(&fragment_xy, &committee)
+                .submit_local_fragment_to_consensus(&fragment_xy)
                 .is_ok());
             fragments.push(fragment_xy);
         }
@@ -1435,7 +1430,7 @@ async fn test_fragment_full_flow() {
     let cps0 = &mut test_stores[0].1;
     let mut all_fragments = Vec::new();
     while let Ok(fragment) = rx.try_recv() {
-        let fragment = fragment.verify(&committee).unwrap();
+        fragment.verify().unwrap();
         all_fragments.push(fragment.clone());
         assert!(cps0
             .handle_internal_fragment(seq.clone(), fragment.message, &committee)
@@ -1446,9 +1441,9 @@ async fn test_fragment_full_flow() {
     cps0.sign_new_checkpoint(0, 0, transactions.iter(), TestEffectsStore::default(), None)
         .unwrap();
 
-    // Two fragments for 5-6, and then 0-1, 1-2, 2-3, 3-4
+    // One fragments for 5-6, and then 0-1, 1-2, 2-3, 3-4
     // Each fragment is then split to two messages.
-    assert_eq!(seq.next_transaction_index, 6 * 2);
+    assert_eq!(seq.next_transaction_index, 5 * 2);
     // We don't update next checkpoint yet until we get a cert.
     assert_eq!(cps0.next_checkpoint(), 0);
 
@@ -1472,8 +1467,8 @@ async fn test_fragment_full_flow() {
         seq.next_transaction_index += 1;
     }
 
-    // Two fragments for 5-6, and then 0-1, 1-2, 2-3, 3-4
-    assert_eq!(cps6.tables.fragments.iter().count(), 6 * 2);
+    // One fragments for 5-6, and then 0-1, 1-2, 2-3, 3-4
+    assert_eq!(cps6.tables.fragments.iter().count(), 5 * 2);
     // Cannot advance to next checkpoint
     assert!(cps6.latest_stored_checkpoint().is_none());
     // But recording of fragments is closed
@@ -1486,8 +1481,8 @@ async fn test_fragment_full_flow() {
         seq.next_transaction_index += 1;
     }
 
-    // Two fragments for 5-6, and then 0-1, 1-2, 2-3, 3-4
-    assert_eq!(cps6.tables.fragments.iter().count(), 12 * 2);
+    // One fragments for 5-6, and then 0-1, 1-2, 2-3, 3-4
+    assert_eq!(cps6.tables.fragments.iter().count(), 10 * 2);
     // Cannot advance to next checkpoint
     assert_eq!(cps6.next_checkpoint(), 0);
     // But recording of fragments is closed
@@ -1500,10 +1495,8 @@ async fn test_slow_fragment() {
         .iter_mut()
         .map(|(_, cp)| cp.set_proposal(0).unwrap())
         .collect();
-    let fragment12 =
-        VerifiedCheckpointFragment::new_unchecked(proposals[1].fragment_with(&proposals[2]));
-    let fragment23 =
-        VerifiedCheckpointFragment::new_unchecked(proposals[2].fragment_with(&proposals[3]));
+    let fragment12 = proposals[1].fragment_with(&proposals[2]);
+    let fragment23 = proposals[2].fragment_with(&proposals[3]);
     let mut index = ExecutionIndices::default();
     cp_stores.iter_mut().for_each(|(_, cp)| {
         cp.handle_fragment_for_testing(&mut index, fragment12.clone(), &committee)
@@ -1553,10 +1546,8 @@ async fn test_slow_fragment() {
         .iter_mut()
         .map(|(_, cp)| cp.set_proposal(0).unwrap())
         .collect();
-    let fragment12 =
-        VerifiedCheckpointFragment::new_unchecked(proposals[1].fragment_with(&proposals[2]));
-    let fragment23 =
-        VerifiedCheckpointFragment::new_unchecked(proposals[2].fragment_with(&proposals[3]));
+    let fragment12 = proposals[1].fragment_with(&proposals[2]);
+    let fragment23 = proposals[2].fragment_with(&proposals[3]);
     cp_stores.iter_mut().skip(1).for_each(|(_, cp)| {
         cp.handle_fragment_for_testing(&mut index, fragment12.clone(), &committee)
             .unwrap();
@@ -1915,12 +1906,12 @@ async fn checkpoint_messaging_flow() {
         authority
             .checkpoint
             .lock()
-            .submit_local_fragment_to_consensus(&p0, &setup.committee)
+            .submit_local_fragment_to_consensus(&p0)
             .unwrap();
         authority
             .checkpoint
             .lock()
-            .submit_local_fragment_to_consensus(&p1, &setup.committee)
+            .submit_local_fragment_to_consensus(&p1)
             .unwrap();
     }
 
@@ -2036,14 +2027,14 @@ async fn test_no_more_fragments() {
 
     let f01 = p0.fragment_with(&p1);
     let f02 = p0.fragment_with(&p2);
-    let f03 = p0.fragment_with(&p3);
+    let f30 = p3.fragment_with(&p0);
 
     // put in fragment 0-1 and no checkpoint can be formed
 
     setup.authorities[0]
         .checkpoint
         .lock()
-        .submit_local_fragment_to_consensus(&f01, &setup.committee)
+        .submit_local_fragment_to_consensus(&f01)
         .unwrap();
 
     // Give time to the receiving task to process (so that consensus can sequence fragments).
@@ -2062,7 +2053,7 @@ async fn test_no_more_fragments() {
     setup.authorities[0]
         .checkpoint
         .lock()
-        .submit_local_fragment_to_consensus(&f02, &setup.committee)
+        .submit_local_fragment_to_consensus(&f02)
         .unwrap();
 
     // Give time to the receiving task to process (so that consensus can sequence fragments).
@@ -2097,11 +2088,11 @@ async fn test_no_more_fragments() {
         .in_construction_checkpoint
         .is_completed());
 
-    // Now fie node 3 a link and it can make the checkpoint
+    // Now fire node 3 a link and it can make the checkpoint
     setup.authorities[3]
         .checkpoint
         .lock()
-        .submit_local_fragment_to_consensus(&f03, &setup.committee)
+        .submit_local_fragment_to_consensus(&f30)
         .unwrap();
 
     assert!(setup.authorities[3]

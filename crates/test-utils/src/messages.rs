@@ -10,12 +10,8 @@ use std::path::PathBuf;
 use sui::client_commands::WalletContext;
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
 use sui_adapter::genesis;
-<<<<<<< HEAD
-use sui_core::test_utils::to_sender_signed_transaction;
-use sui_framework_build::compiled_package::BuildConfig;
-=======
 use sui_core::test_utils::{dummy_transaction_effects, to_sender_signed_transaction};
->>>>>>> 7a9c50724 ([checkpoint] Support fragment chunks)
+use sui_framework_build::compiled_package::BuildConfig;
 use sui_json_rpc_types::SuiObjectInfo;
 use sui_keys::keystore::AccountKeystore;
 use sui_keys::keystore::Keystore;

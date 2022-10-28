@@ -178,7 +178,7 @@ async fn sequence_fragments() {
             node.state()
                 .checkpoints()
                 .lock()
-                .submit_local_fragment_to_consensus(&fragment, &committee)
+                .submit_local_fragment_to_consensus(&fragment)
         });
     }
 

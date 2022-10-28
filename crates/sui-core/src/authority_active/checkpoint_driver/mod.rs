@@ -917,10 +917,10 @@ where
                 {
                     Ok(fragment) => {
                         // On success send the fragment to consensus
-                        if let Err(err) = checkpoint_db.lock().submit_local_fragment_to_consensus(
-                            &fragment,
-                            &active_authority.state.committee.load(),
-                        ) {
+                        if let Err(err) = checkpoint_db
+                            .lock()
+                            .submit_local_fragment_to_consensus(&fragment)
+                        {
                             warn!("Error submitting local fragment to consensus: {err:?}");
                         }
                     }

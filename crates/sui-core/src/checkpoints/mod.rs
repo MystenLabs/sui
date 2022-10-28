@@ -28,7 +28,7 @@ use sui_types::{
     messages_checkpoint::{
         AuthenticatedCheckpoint, CertifiedCheckpointSummary, CheckpointContents, CheckpointDigest,
         CheckpointFragment, CheckpointResponse, CheckpointSequenceNumber, CheckpointSummary,
-        SignedCheckpointSummary, VerifiedCheckpointFragment,
+        SignedCheckpointSummary,
     },
 };
 use tap::TapFallible;
@@ -555,10 +555,11 @@ impl CheckpointStore {
     pub fn submit_local_fragment_to_consensus(
         &mut self,
         fragment: &CheckpointFragment,
-        committee: &Committee,
     ) -> SuiResult {
-        // Check structure is correct and signatures verify
-        fragment.verify_signatures(committee)?;
+        fp_ensure!(
+            &self.name == fragment.proposer.authority(),
+            SuiError::from("Fragment can only be submitted by the proposer")
+        );
 
         // Does the fragment event suggest it is for the current round?
         let next_checkpoint_seq = self.next_checkpoint();

@@ -1098,7 +1098,7 @@ pub type TxCertAndSignedEffects = (CertifiedTransaction, SignedTransactionEffect
 /// TrustedTransactionEnvelope is a serializable wrapper around TransactionEnvelope which is
 /// Into<VerifiedTransactionEnvelope> - in other words it models a verified object which has been
 /// written to the db (or some other trusted store), and may be read back from the db without
-/// futher signature verification.
+/// further signature verification.
 ///
 /// TrustedTransactionEnvelope should *only* appear in database interfaces.
 ///
@@ -2364,7 +2364,7 @@ impl ConsensusTransaction {
             ConsensusTransactionKind::UserTransaction(certificate) => {
                 certificate.verify_signatures(committee)
             }
-            ConsensusTransactionKind::Checkpoint(fragment) => fragment.verify_signatures(committee),
+            ConsensusTransactionKind::Checkpoint(fragment) => fragment.verify(),
         }
     }
 }

@@ -2252,7 +2252,7 @@ impl AuthorityState {
                     })?;
             }
             ConsensusTransactionKind::Checkpoint(fragment) => {
-                fragment.verify_signatures(&committee).map_err(|err| {
+                fragment.verify().map_err(|err| {
                     warn!(
                         "Ignoring malformed fragment (failed to verify) from {}: {:?}",
                         transaction.consensus_output.certificate.header.author, err
