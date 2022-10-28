@@ -15,7 +15,10 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use std::{path::Path, sync::Arc};
 use sui_storage::default_db_options;
-use sui_types::messages_checkpoint::{CheckpointProposal, CheckpointProposalContents};
+use sui_types::messages_checkpoint::{
+    CheckpointFragmentMessage, CheckpointProposal, CheckpointProposalContents,
+    SignedCheckpointFragmentMessage,
+};
 use sui_types::{
     base_types::{AuthorityName, ExecutionDigests},
     batch::TxSequenceNumber,
@@ -25,7 +28,7 @@ use sui_types::{
     messages_checkpoint::{
         AuthenticatedCheckpoint, CertifiedCheckpointSummary, CheckpointContents, CheckpointDigest,
         CheckpointFragment, CheckpointResponse, CheckpointSequenceNumber, CheckpointSummary,
-        SignedCheckpointSummary, VerifiedCheckpointFragment,
+        SignedCheckpointSummary,
     },
 };
 use tap::TapFallible;
@@ -40,12 +43,9 @@ use typed_store::{
 };
 use typed_store_derive::DBMapUtils;
 
+use crate::authority::StableSyncAuthoritySigner;
 use crate::checkpoints::causal_order_effects::{CausalOrder, EffectsStore};
 use crate::checkpoints::reconstruction::SpanGraph;
-use crate::{
-    authority::StableSyncAuthoritySigner,
-    authority_active::execution_driver::PendCertificateForExecution,
-};
 
 pub type DBLabel = usize;
 const LOCALS: DBLabel = 0;
@@ -103,7 +103,7 @@ pub struct CheckpointLocals {
 /// from real consensus.
 pub trait ConsensusSender: Send + Sync + 'static {
     // Send an item to the consensus
-    fn send_to_consensus(&self, fragment: CheckpointFragment) -> Result<(), SuiError>;
+    fn send_to_consensus(&self, fragment: SignedCheckpointFragmentMessage) -> Result<(), SuiError>;
 }
 
 /// DBMap tables for checkpoints
@@ -142,7 +142,7 @@ pub struct CheckpointStoreTables {
     /// to allow us to provide a list in order they were received. We only store
     /// the fragments that are relevant to the next checkpoints. Past checkpoints
     /// already contain all relevant information from previous checkpoints.
-    pub fragments: DBMap<ExecutionIndices, VerifiedCheckpointFragment>,
+    pub fragments: DBMap<ExecutionIndices, CheckpointFragmentMessage>,
 
     /// A single entry table to store locals.
     #[default_options_override_fn = "locals_table_default_config"]
@@ -188,21 +188,19 @@ impl CheckpointStoreTables {
             let next_checkpoint_fragments: Vec<_> = self
                 .fragments
                 .values()
-                .filter(|frag| {
-                    frag.proposer.summary.sequence_number == in_construction_checkpoint + 1
-                })
+                .filter(|frag| frag.proposer_sequence_number() == in_construction_checkpoint + 1)
                 .collect();
-            locals.in_construction_checkpoint = SpanGraph::mew(
+            locals.in_construction_checkpoint = SpanGraph::new(
                 committee,
                 in_construction_checkpoint + 1,
-                &next_checkpoint_fragments,
+                next_checkpoint_fragments,
             );
             locals.in_construction_checkpoint_seq += 1;
             batch = batch.delete_batch(
                 &self.fragments,
                 self.fragments.iter().filter_map(|(k, v)| {
                     // Delete all keys for checkpoints smaller than what we are committing now.
-                    if v.proposer.summary.sequence_number <= in_construction_checkpoint {
+                    if v.proposer_sequence_number() <= in_construction_checkpoint {
                         Some(k)
                     } else {
                         None
@@ -557,10 +555,11 @@ impl CheckpointStore {
     pub fn submit_local_fragment_to_consensus(
         &mut self,
         fragment: &CheckpointFragment,
-        committee: &Committee,
     ) -> SuiResult {
-        // Check structure is correct and signatures verify
-        fragment.verify_signatures(committee)?;
+        fp_ensure!(
+            &self.name == fragment.proposer.authority(),
+            SuiError::from("Fragment can only be submitted by the proposer")
+        );
 
         // Does the fragment event suggest it is for the current round?
         let next_checkpoint_seq = self.next_checkpoint();
@@ -603,9 +602,18 @@ impl CheckpointStore {
 
         // Send to consensus for sequencing.
         if let Some(sender) = &self.sender {
+            let messages = fragment.to_signed_message_chunks(&*self.secret);
             let seq = fragment.proposer.summary.sequence_number;
-            debug!(cp_seq=?seq, "Sending fragment: {} -- {}", self.name, other_name);
-            sender.send_to_consensus(fragment.clone())?;
+            debug!(
+                cp_seq=?seq,
+                proposer=?self.name.concise(),
+                other=?other_name.concise(),
+                message_count=?messages.len(),
+                "Sending fragment to consensus"
+            );
+            for message in messages {
+                sender.send_to_consensus(message)?;
+            }
             debug!(cp_seq=?seq, "Fragment successfully sent: {} -- {}", self.name, other_name);
         } else {
             return Err(SuiError::from("No consensus sender configured"));
@@ -618,14 +626,29 @@ impl CheckpointStore {
         Ok(())
     }
 
+    /// For testing purpose only, split a fragment into chunks and call handle_internal_fragment
+    /// for each of them.
+    pub fn handle_fragment_for_testing(
+        &mut self,
+        seq: &mut ExecutionIndices,
+        fragment: CheckpointFragment,
+        committee: &Committee,
+    ) -> SuiResult {
+        let chunks = fragment.to_signed_message_chunks(&*self.secret);
+        for chunk in chunks {
+            self.handle_internal_fragment(seq.clone(), chunk.message, committee)?;
+            seq.next_transaction_index += 1;
+        }
+        Ok(())
+    }
+
     /// This function should be called by the consensus output, it is idempotent,
     /// and if called again with the same sequence number will do nothing. However,
     /// fragments should be provided in seq increasing order.
     pub fn handle_internal_fragment(
         &mut self,
         seq: ExecutionIndices,
-        fragment: VerifiedCheckpointFragment,
-        handle_pending_cert: impl PendCertificateForExecution,
+        fragment: CheckpointFragmentMessage,
         committee: &Committee,
     ) -> SuiResult {
         // Ensure we have not already processed this fragment.
@@ -636,37 +659,15 @@ impl CheckpointStore {
             }
         }
 
-        // Schedule for execution all the certificates that are included here.
-        // TODO: We should not schedule a cert if it has already been executed.
-        handle_pending_cert.add_pending_certificates(
-            fragment
-                .certs()
-                .map(|(digest, cert)| (digest.transaction, Some(cert)))
-                .collect(),
-        )?;
-
         // Save the new fragment in the DB
         self.tables.fragments.insert(&seq, &fragment)?;
-
-        // If the fragment contains us also save it in the list of local fragments
-        let fragment_seq = fragment.proposer.summary.sequence_number;
-        if fragment.proposer.authority() == &self.name {
-            self.tables
-                .local_fragments
-                .insert(&(fragment_seq, *fragment.other.authority()), &fragment)?;
-        }
-        if fragment.other.authority() == &self.name {
-            self.tables
-                .local_fragments
-                .insert(&(fragment_seq, *fragment.proposer.authority()), &fragment)?;
-        }
 
         let locals = self.get_locals();
         let mut new_locals = locals.as_ref().clone();
         new_locals.in_construction_checkpoint.add_fragment_to_span(
             committee,
             new_locals.in_construction_checkpoint_seq,
-            &fragment,
+            fragment,
         );
         self.tables
             .advance_checkpoint_construction_state(&mut new_locals, committee)?;
@@ -784,9 +785,9 @@ impl CheckpointStore {
 
             // Extract the diff
             let diff = if fragment.proposer.authority() == &self.name {
-                fragment.diff
+                fragment.data.diff
             } else {
-                fragment.diff.swap()
+                fragment.data.diff.swap()
             };
 
             if let Ok(contents) = reconstructed.global.checkpoint_items(

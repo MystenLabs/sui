@@ -58,8 +58,8 @@ use sui_storage::{
 use sui_types::committee::EpochId;
 use sui_types::crypto::{AuthorityKeyPair, NetworkKeyPair};
 use sui_types::messages_checkpoint::{
-    AuthenticatedCheckpoint, CertifiedCheckpointSummary, CheckpointRequest, CheckpointRequestType,
-    CheckpointResponse, CheckpointSequenceNumber, VerifiedCheckpointFragment,
+    AuthenticatedCheckpoint, CertifiedCheckpointSummary, CheckpointFragmentMessage,
+    CheckpointRequest, CheckpointRequestType, CheckpointResponse, CheckpointSequenceNumber,
 };
 use sui_types::object::{Owner, PastObjectRead};
 use sui_types::query::TransactionQuery;
@@ -2227,7 +2227,6 @@ impl AuthorityState {
             .metrics
             .verify_narwhal_transaction_duration_mcs
             .utilization_timer();
-        let committee = self.committee.load();
         match &transaction.transaction.kind {
             ConsensusTransactionKind::UserTransaction(certificate) => {
                 if self
@@ -2253,7 +2252,7 @@ impl AuthorityState {
                     })?;
             }
             ConsensusTransactionKind::Checkpoint(fragment) => {
-                fragment.verify_signatures(&committee).map_err(|err| {
+                fragment.verify().map_err(|err| {
                     warn!(
                         "Ignoring malformed fragment (failed to verify) from {}: {:?}",
                         transaction.consensus_output.certificate.header.author, err
@@ -2316,24 +2315,33 @@ impl AuthorityState {
                 Ok(())
             }
             ConsensusTransactionKind::Checkpoint(fragment) => {
-                // Safe because signatures are verified when VerifiedSequencedConsensusTransaction
-                // is constructed.
-                let fragment = VerifiedCheckpointFragment::new_unchecked(*fragment);
-
-                let cp_seq = fragment.proposer_sequence_number();
-                debug!(
-                    ?consensus_index,
-                    ?cp_seq,
-                    "handle_consensus_transaction Checkpoint. Proposer: {}, Other: {}",
-                    fragment.proposer.authority(),
-                    fragment.other.authority(),
-                );
+                match &fragment.message {
+                    CheckpointFragmentMessage::Header(header) => {
+                        debug!(
+                            ?consensus_index,
+                            cp_seq=?header.proposer.summary.sequence_number,
+                            proposer=?header.proposer.authority().concise(),
+                            other=?header.other.authority().concise(),
+                            chunk_count=?header.chunk_count,
+                            "handle_consensus_transaction Checkpoint header message",
+                        );
+                    }
+                    CheckpointFragmentMessage::Chunk(chunk) => {
+                        debug!(
+                            ?consensus_index,
+                            cp_seq=?chunk.sequence_number,
+                            proposer=?chunk.proposer.concise(),
+                            other=?chunk.other.concise(),
+                            chunk_id=?chunk.chunk_id,
+                            "handle_consensus_transaction Checkpoint chunk message",
+                        );
+                    }
+                }
 
                 let mut checkpoint = self.checkpoints.lock();
                 checkpoint.handle_internal_fragment(
                     consensus_index.index,
-                    fragment,
-                    self,
+                    fragment.message,
                     &self.committee.load(),
                 )?;
 

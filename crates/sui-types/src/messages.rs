@@ -10,7 +10,7 @@ use crate::crypto::{
 };
 use crate::gas::GasCostSummary;
 use crate::messages_checkpoint::{
-    AuthenticatedCheckpoint, CheckpointFragment, CheckpointSequenceNumber,
+    AuthenticatedCheckpoint, CheckpointSequenceNumber, SignedCheckpointFragmentMessage,
 };
 use crate::object::{Object, ObjectFormatOptions, Owner, OBJECT_START_VERSION};
 use crate::storage::{DeleteKind, WriteKind};
@@ -1098,7 +1098,7 @@ pub type TxCertAndSignedEffects = (CertifiedTransaction, SignedTransactionEffect
 /// TrustedTransactionEnvelope is a serializable wrapper around TransactionEnvelope which is
 /// Into<VerifiedTransactionEnvelope> - in other words it models a verified object which has been
 /// written to the db (or some other trusted store), and may be read back from the db without
-/// futher signature verification.
+/// further signature verification.
 ///
 /// TrustedTransactionEnvelope should *only* appear in database interfaces.
 ///
@@ -2324,7 +2324,7 @@ pub struct ConsensusTransaction {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum ConsensusTransactionKind {
     UserTransaction(Box<CertifiedTransaction>),
-    Checkpoint(Box<CheckpointFragment>),
+    Checkpoint(Box<SignedCheckpointFragmentMessage>),
 }
 
 impl ConsensusTransaction {
@@ -2343,14 +2343,9 @@ impl ConsensusTransaction {
         }
     }
 
-    pub fn new_checkpoint_message(fragment: CheckpointFragment) -> Self {
+    pub fn new_checkpoint_message(fragment: SignedCheckpointFragmentMessage) -> Self {
         let mut hasher = DefaultHasher::new();
-        let cp_seq = fragment.proposer_sequence_number();
-        let proposer = fragment.proposer.auth_signature.authority;
-        let other = fragment.other.auth_signature.authority;
-        cp_seq.hash(&mut hasher);
-        proposer.hash(&mut hasher);
-        other.hash(&mut hasher);
+        fragment.hash(&mut hasher);
         let tracking_id = hasher.finish().to_be_bytes();
         Self {
             tracking_id,
@@ -2369,7 +2364,7 @@ impl ConsensusTransaction {
             ConsensusTransactionKind::UserTransaction(certificate) => {
                 certificate.verify_signatures(committee)
             }
-            ConsensusTransactionKind::Checkpoint(fragment) => fragment.verify_signatures(committee),
+            ConsensusTransactionKind::Checkpoint(fragment) => fragment.verify(),
         }
     }
 }

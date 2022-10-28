@@ -79,6 +79,14 @@ pub struct ObjectID(
 
 pub type ObjectRef = (ObjectID, SequenceNumber, ObjectDigest);
 
+pub fn random_object_ref() -> ObjectRef {
+    (
+        ObjectID::random(),
+        SequenceNumber::new(),
+        ObjectDigest::new([0; 32]),
+    )
+}
+
 #[derive(Clone, Serialize, Deserialize, Ord, PartialOrd, Eq, PartialEq, Debug)]
 pub struct ObjectInfo {
     pub object_id: ObjectID,
