@@ -693,7 +693,7 @@ export class BCS {
    * @param elementType Optional name of the inner type of the vector
    * @return Returns self for chaining.
    */
-  public registerVectorType(
+  private registerVectorType(
     name: string,
     elementType?: string
   ): BCS {

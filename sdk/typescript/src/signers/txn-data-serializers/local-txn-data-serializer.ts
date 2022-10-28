@@ -267,7 +267,7 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
       });
     } catch (err) {
       throw new Error(
-        `Error constructing a SplitCoin Transaction: ${err} args ${JSON.stringify(
+        `Error constructing a SplitCoin Transaction: ${JSON.stringify(err)} args ${JSON.stringify(
           t
         )}`
       );

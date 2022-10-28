@@ -8,8 +8,6 @@ import { SuiObjectRef } from './objects';
 const bcs = new BCS(getSuiMoveConfig());
 
 bcs
-  .registerAddressType('ObjectID', 20, 'hex')
-  .registerAddressType('address', 20)
   .registerType(
     'utf8string',
     (writer, str) => {
@@ -34,7 +32,7 @@ bcs
   );
 
 bcs.registerStructType('SuiObjectRef', {
-  objectId: 'ObjectID',
+  objectId: 'address',
   version: 'u64',
   digest: 'ObjectDigest',
 });
@@ -101,13 +99,13 @@ bcs
 
 bcs.registerStructType('PaySuiTx', {
   coins: 'vector<SuiObjectRef>',
-  recipients: 'vector<SuiAddress>',
+  recipients: 'vector<address>',
   amounts: 'vector<u64>',
 });
 
 bcs.registerStructType('PayAllSuiTx', {
   coins: 'vector<SuiObjectRef>',
-  recipient: 'SuiAddress',
+  recipient: 'address',
 });
 
 bcs.registerEnumType('Option<T>', {
@@ -198,7 +196,7 @@ export type CallArg =
 
 bcs
   .registerStructType('SharedObjectRef', {
-    objectId: 'ObjectID',
+    objectId: 'address',
     initialSharedVersion: 'u64',
   })
   .registerEnumType('ObjectArg', {
@@ -227,8 +225,11 @@ export type StructTag = {
 export type TypeTag =
   | { bool: null }
   | { u8: null }
+  // | { u16: null }
+  // | { u32: null }
   | { u64: null }
   | { u128: null }
+  // | { u256: null }
   | { address: null }
   | { signer: null }
   | { vector: TypeTag }
@@ -238,8 +239,11 @@ bcs
   .registerEnumType('TypeTag', {
     bool: null,
     u8: null,
+    // u16: null,
+    // u32: null,
     u64: null,
     u128: null,
+    // u256: null,
     address: null,
     signer: null,
     vector: 'TypeTag',
@@ -344,7 +348,7 @@ bcs.registerStructType('TransactionData', {
 bcs
   .registerEnumType('ObjectArg_Deprecated', {
     ImmOrOwned: 'SuiObjectRef',
-    Shared_Deprecated: 'ObjectID',
+    Shared_Deprecated: 'address',
   })
   .registerEnumType('CallArg_Deprecated', {
     Pure: 'vector<u8>',
