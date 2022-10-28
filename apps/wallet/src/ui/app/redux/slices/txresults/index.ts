@@ -17,6 +17,7 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { notEmpty } from '_helpers';
 import { batchFetchObject } from '_redux/slices/sui-objects';
 import { Coin } from '_redux/slices/sui-objects/Coin';
+import { reportSentryError } from '_src/shared/sentry';
 
 import type {
     GetTxnDigestsResponse,
@@ -87,125 +88,133 @@ export const getTransactionsByAddress = createAsyncThunk<
     'sui-transactions/get-transactions-by-address',
     async (
         _,
-        { getState, dispatch, extra: { api } }
+        { getState, dispatch, extra: { api }, rejectWithValue }
     ): Promise<TxResultByAddress> => {
-        const address = getState().account.address;
+        try {
+            const address = getState().account.address;
 
-        if (!address) {
-            return [];
-        }
-        // Get all transactions txId for address
-        const transactions: GetTxnDigestsResponse =
-            await api.instance.fullNode.getTransactionsForAddress(
-                address,
-                'Descending'
-            );
+            if (!address) {
+                return [];
+            }
+            // Get all transactions txId for address
+            const transactions: GetTxnDigestsResponse =
+                await api.instance.fullNode.getTransactionsForAddress(
+                    address,
+                    'Descending'
+                );
 
-        if (!transactions || !transactions.length) {
-            return [];
-        }
+            if (!transactions || !transactions.length) {
+                return [];
+            }
 
-        const resp = await api.instance.fullNode
-            .getTransactionWithEffectsBatch(deduplicate(transactions))
-            .then(async (txEffs) => {
-                return txEffs
-                    .map((txEff) => {
-                        const digest = transactions.filter(
-                            (transactionId) =>
-                                transactionId ===
-                                getTransactionDigest(txEff.certificate)
-                        )[0];
-                        const res: CertifiedTransaction = txEff.certificate;
+            const resp = await api.instance.fullNode
+                .getTransactionWithEffectsBatch(deduplicate(transactions))
+                .then(async (txEffs) => {
+                    return txEffs
+                        .map((txEff) => {
+                            const digest = transactions.filter(
+                                (transactionId) =>
+                                    transactionId ===
+                                    getTransactionDigest(txEff.certificate)
+                            )[0];
+                            const res: CertifiedTransaction = txEff.certificate;
 
-                        const txns = getTransactions(res);
-                        if (txns.length > 1) {
-                            return null;
-                        }
-                        // TODO handle batch transactions
-                        const txn = txns[0];
-                        const txKind = getTransactionKindName(txn);
+                            const txns = getTransactions(res);
+                            if (txns.length > 1) {
+                                return null;
+                            }
+                            // TODO handle batch transactions
+                            const txn = txns[0];
+                            const txKind = getTransactionKindName(txn);
 
-                        const transferSui = getTransferSuiTransaction(txn);
-                        const txTransferObject =
-                            getTransferObjectTransaction(txn);
+                            const transferSui = getTransferSuiTransaction(txn);
+                            const txTransferObject =
+                                getTransferObjectTransaction(txn);
 
-                        const recipient =
-                            transferSui?.recipient ??
-                            txTransferObject?.recipient;
+                            const recipient =
+                                transferSui?.recipient ??
+                                txTransferObject?.recipient;
 
-                        const moveCallTxn = getMoveCallTransaction(txn);
+                            const moveCallTxn = getMoveCallTransaction(txn);
 
-                        const callObjectId = getCreatedObjectID(txEff.effects);
+                            const callObjectId = getCreatedObjectID(
+                                txEff.effects
+                            );
 
-                        return {
-                            txId: digest,
-                            status: getExecutionStatusType(txEff),
-                            txGas: getTotalGasUsed(txEff),
-                            kind: txKind,
-                            callFunctionName: moveCallTxnName(
-                                moveCallTxn?.function
-                            ),
-                            from: res.data.sender,
-                            ...(txTransferObject || callObjectId
-                                ? {
-                                      objectId:
-                                          txTransferObject?.objectRef
-                                              .objectId ?? callObjectId,
-                                  }
-                                : {}),
-                            error: getExecutionStatusError(txEff),
-                            timestampMs: txEff.timestamp_ms,
-                            isSender: res.data.sender === address,
-                            ...(transferSui?.amount
-                                ? { amount: transferSui.amount }
-                                : {}),
-                            ...(recipient
-                                ? {
-                                      to: recipient,
-                                  }
-                                : {}),
-                        };
-                    })
-                    .filter(notEmpty);
+                            return {
+                                txId: digest,
+                                status: getExecutionStatusType(txEff),
+                                txGas: getTotalGasUsed(txEff),
+                                kind: txKind,
+                                callFunctionName: moveCallTxnName(
+                                    moveCallTxn?.function
+                                ),
+                                from: res.data.sender,
+                                ...(txTransferObject || callObjectId
+                                    ? {
+                                          objectId:
+                                              txTransferObject?.objectRef
+                                                  .objectId ?? callObjectId,
+                                      }
+                                    : {}),
+                                error: getExecutionStatusError(txEff),
+                                timestampMs: txEff.timestamp_ms,
+                                isSender: res.data.sender === address,
+                                ...(transferSui?.amount
+                                    ? { amount: transferSui.amount }
+                                    : {}),
+                                ...(recipient
+                                    ? {
+                                          to: recipient,
+                                      }
+                                    : {}),
+                            };
+                        })
+                        .filter(notEmpty);
+                });
+
+            // Get all objectId and batch fetch objects for transactions with objectIds
+            // remove duplicates
+            const objectIDs = [
+                ...new Set(resp.map((itm) => itm.objectId).filter(notEmpty)),
+            ];
+
+            const getObjectBatch = await dispatch(batchFetchObject(objectIDs));
+            const txObjects = getObjectBatch.payload;
+
+            const txnResp = resp.map((itm) => {
+                const objectTxObj =
+                    txObjects && itm?.objectId && Array.isArray(txObjects)
+                        ? txObjects.find(
+                              (obj) => obj.reference.objectId === itm.objectId
+                          )
+                        : null;
+
+                const coinType =
+                    objectTxObj?.data?.type &&
+                    Coin.getCoinTypeArg(objectTxObj.data);
+
+                return {
+                    ...itm,
+                    ...(objectTxObj
+                        ? {
+                              description: objectTxObj.data.fields.description,
+                              name: objectTxObj.data.fields.name,
+                              url: objectTxObj.data.fields.url,
+                              balance: objectTxObj.data.fields.balance,
+                              coinType,
+                              coinSymbol:
+                                  coinType && Coin.getCoinSymbol(coinType),
+                          }
+                        : {}),
+                };
             });
 
-        // Get all objectId and batch fetch objects for transactions with objectIds
-        // remove duplicates
-        const objectIDs = [
-            ...new Set(resp.map((itm) => itm.objectId).filter(notEmpty)),
-        ];
-
-        const getObjectBatch = await dispatch(batchFetchObject(objectIDs));
-        const txObjects = getObjectBatch.payload;
-
-        const txnResp = resp.map((itm) => {
-            const objectTxObj =
-                txObjects && itm?.objectId && Array.isArray(txObjects)
-                    ? txObjects.find(
-                          (obj) => obj.reference.objectId === itm.objectId
-                      )
-                    : null;
-
-            const coinType =
-                objectTxObj?.data?.type &&
-                Coin.getCoinTypeArg(objectTxObj.data);
-
-            return {
-                ...itm,
-                ...(objectTxObj
-                    ? {
-                          description: objectTxObj.data.fields.description,
-                          name: objectTxObj.data.fields.name,
-                          url: objectTxObj.data.fields.url,
-                          balance: objectTxObj.data.fields.balance,
-                          coinType,
-                          coinSymbol: coinType && Coin.getCoinSymbol(coinType),
-                      }
-                    : {}),
-            };
-        });
-
-        return txnResp as TxResultByAddress;
+            return txnResp as TxResultByAddress;
+        } catch (err) {
+            reportSentryError(err as Error);
+            throw rejectWithValue(err);
+        }
     }
 );
 
