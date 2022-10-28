@@ -3375,16 +3375,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "jemallocator"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "16c2514137880c52b0b4822b563fadd38257c1f380858addb74a400889696ea6"
-dependencies = [
- "jemalloc-sys",
- "libc",
-]
-
-[[package]]
 name = "jobserver"
 version = "0.1.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7843,7 +7833,6 @@ dependencies = [
  "futures",
  "hex",
  "jemalloc-ctl",
- "jemallocator",
  "jsonrpsee",
  "move-cli",
  "move-core-types",
@@ -8375,7 +8364,6 @@ dependencies = [
  "clap 3.2.22",
  "futures",
  "jemalloc-ctl",
- "jemallocator",
  "multiaddr",
  "mysten-network",
  "narwhal-network",
@@ -10565,7 +10553,6 @@ dependencies = [
  "itoa 1.0.4",
  "jemalloc-ctl",
  "jemalloc-sys",
- "jemallocator",
  "jobserver",
  "js-sys",
  "json",
