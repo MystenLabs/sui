@@ -16,7 +16,6 @@ use tracing::info;
 use fastcrypto::ed25519::{Ed25519KeyPair, Ed25519PrivateKey, Ed25519PublicKey};
 use sui_keys::keystore::{AccountKeystore, Keystore};
 use sui_types::base_types::SuiAddress;
-use sui_types::base_types::{decode_bytes_hex, encode_bytes_hex};
 use sui_types::crypto::{
     get_key_pair, AuthorityKeyPair, Ed25519SuiSignature, EncodeDecodeBase64, NetworkKeyPair,
     SignatureScheme, SuiKeyPair, SuiSignatureInner,

@@ -11,7 +11,6 @@ use std::str::FromStr;
 use anyhow::anyhow;
 use curve25519_dalek::ristretto::RistrettoPoint;
 use digest::Digest;
-use hex::FromHex;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
@@ -160,8 +159,8 @@ impl SuiAddress {
         D: serde::de::Deserializer<'de>,
     {
         let s = String::deserialize(deserializer)?;
-        let value = decode_bytes_hex(&s).map_err(serde::de::Error::custom)?;
-        Ok(Some(value))
+        let value = Hex::decode(&s).map_err(serde::de::Error::custom)?;
+        Ok(Some(SuiAddress(value)))
     }
 
     pub fn to_inner(self) -> [u8; SUI_ADDRESS_LENGTH] {
@@ -467,8 +466,8 @@ pub fn context_from_digest(digest: TransactionDigest) -> Context {
     // TODO: don't create a HashMap, that wastes memory and costs an allocation!
     let mut carrier = HashMap::new();
     // TODO: figure out exactly what key to use.  I suspect it has to be the parent span ID in OpenTelemetry format.
-    carrier.insert("traceparent".to_string(), hex::encode(digest.0));
-    // carrier.insert("tx_digest".to_string(), hex::encode(digest.0));
+    carrier.insert("traceparent".to_string(), Hex::encode(digest.0));
+    // carrier.insert("tx_digest".to_string(), Hex::encode(digest.0));
 
     global::get_text_map_propagator(|propagator| propagator.extract(&carrier))
 }
@@ -526,7 +525,7 @@ where
     B: AsRef<[u8]>,
     S: serde::ser::Serializer,
 {
-    serializer.serialize_str(&encode_bytes_hex(bytes))
+    serializer.serialize_str(&Hex::encode(bytes))
 }
 
 pub fn bytes_from_hex<'de, T, D>(deserializer: D) -> Result<T, D::Error>
@@ -535,18 +534,8 @@ where
     D: serde::de::Deserializer<'de>,
 {
     let s = String::deserialize(deserializer)?;
-    let value = decode_bytes_hex(&s).map_err(serde::de::Error::custom)?;
+    let value = Hex::decode(&s).map_err(serde::de::Error::custom)?;
     Ok(value)
-}
-
-pub fn encode_bytes_hex<B: AsRef<[u8]>>(bytes: B) -> String {
-    hex::encode(bytes.as_ref())
-}
-
-pub fn decode_bytes_hex<T: for<'a> TryFrom<&'a [u8]>>(s: &str) -> Result<T, anyhow::Error> {
-    let s = s.strip_prefix("0x").unwrap_or(s);
-    let value = hex::decode(s)?;
-    T::try_from(&value[..]).map_err(|_| anyhow::anyhow!("byte deserialization failed"))
 }
 
 impl fmt::Display for SuiAddress {
@@ -590,7 +579,7 @@ pub fn dbg_object_id(name: u8) -> ObjectID {
 
 impl std::fmt::Debug for ObjectDigest {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        let s = hex::encode(self.0);
+        let s = Hex::encode(self.0);
         write!(f, "o#{}", s)?;
         Ok(())
     }
@@ -740,16 +729,21 @@ impl ObjectID {
                 hex_str.push('0');
             }
             hex_str.push_str(&literal[2..]);
-            Self::from_hex(hex_str)
+            Self::from_hex(&hex_str)
         } else {
             Self::from_hex(&literal[2..])
         }
     }
 
-    pub fn from_hex<T: AsRef<[u8]>>(hex: T) -> Result<Self, ObjectIDParseError> {
-        <[u8; Self::LENGTH]>::from_hex(hex)
-            .map_err(ObjectIDParseError::from)
-            .map(ObjectID::from)
+    pub fn from_hex(hex: &str) -> Result<Self, ObjectIDParseError> {
+        match Hex::decode(hex) {
+            Ok(bytes) => {
+                let mut array = [0u8; Self::LENGTH];
+                array.copy_from_slice(&bytes);
+                Ok(ObjectID::from(array))
+            },
+            Err(_) => Err(ObjectIDParseError::InvalidHexCharacter)
+        }
     }
 
     pub fn from_bytes<T: AsRef<[u8]>>(bytes: T) -> Result<Self, ObjectIDParseError> {
@@ -824,38 +818,19 @@ pub enum ObjectIDParseError {
     #[error("ObjectID hex literal must start with 0x")]
     HexLiteralPrefixMissing,
 
-    #[error("{err} (ObjectID hex string should only contain 0-9, A-F, a-f)")]
-    InvalidHexCharacter { err: hex::FromHexError },
+    #[error("(ObjectID hex string should only contain 0-9, A-F, a-f)")]
+    InvalidHexCharacter,
 
-    #[error("{err} (hex string must be even-numbered. Two chars maps to one byte).")]
-    OddLength { err: hex::FromHexError },
+    #[error("(hex string must be even-numbered. Two chars maps to one byte).")]
+    OddLength,
 
-    #[error("{err} (ObjectID must be {} bytes long).", ObjectID::LENGTH)]
-    InvalidLength { err: hex::FromHexError },
+    #[error("(ObjectID must be {} bytes long).", ObjectID::LENGTH)]
+    InvalidLength,
 
     #[error("Could not convert from bytes slice")]
     TryFromSliceError,
     // #[error("Internal hex parser error: {err}")]
     // HexParserError { err: hex::FromHexError },
-}
-
-/// Wraps the underlying parsing errors
-impl From<hex::FromHexError> for ObjectIDParseError {
-    fn from(err: hex::FromHexError) -> Self {
-        match err {
-            hex::FromHexError::InvalidHexCharacter { c, index } => {
-                ObjectIDParseError::InvalidHexCharacter {
-                    err: hex::FromHexError::InvalidHexCharacter { c, index },
-                }
-            }
-            hex::FromHexError::OddLength => ObjectIDParseError::OddLength {
-                err: hex::FromHexError::OddLength,
-            },
-            hex::FromHexError::InvalidStringLength => ObjectIDParseError::InvalidLength {
-                err: hex::FromHexError::InvalidStringLength,
-            },
-        }
-    }
 }
 
 impl From<[u8; ObjectID::LENGTH]> for ObjectID {
@@ -955,14 +930,14 @@ impl TryFrom<String> for ObjectID {
     type Error = ObjectIDParseError;
 
     fn try_from(s: String) -> Result<ObjectID, ObjectIDParseError> {
-        Self::from_hex(s.clone()).or_else(|_| Self::from_hex_literal(&s))
+        Self::from_hex(&s).or_else(|_| Self::from_hex_literal(&s))
     }
 }
 
 impl FromStr for SuiAddress {
     type Err = anyhow::Error;
     fn from_str(s: &str) -> Result<Self, anyhow::Error> {
-        decode_bytes_hex(s)
+        Hex::decode(s).map_err(|e| anyhow!(e))
     }
 }
 

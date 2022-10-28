@@ -245,7 +245,7 @@ fn test_address_serde_not_human_readable() {
 fn test_address_serde_human_readable() {
     let address = SuiAddress::random_for_testing_only();
     let serialized = serde_json::to_string(&address).unwrap();
-    assert_eq!(format!("\"0x{}\"", hex::encode(address)), serialized);
+    assert_eq!(format!("\"0x{}\"", Hex::encode(address)), serialized);
     let deserialized: SuiAddress = serde_json::from_str(&serialized).unwrap();
     assert_eq!(deserialized, address);
 }
@@ -363,7 +363,7 @@ fn test_address_backwards_compatibility() {
     let (address, _) = derive_sample_address();
     assert_eq!(
         address.to_vec(),
-        hex::decode(SAMPLE_ADDRESS).expect("Decoding failed"),
+        Hex::decode(SAMPLE_ADDRESS).expect("Decoding failed"),
         "If this test broke, then the algorithm for deriving addresses from public keys has \
                changed. If this was intentional, please compute a new sample address in hex format \
                from `derive_sample_address` and update the SAMPLE_ADDRESS const above with the new \

@@ -34,7 +34,7 @@ use crate::committee::{Committee, EpochId, StakeUnit};
 use crate::error::{SuiError, SuiResult};
 use crate::intent::{Intent, IntentMessage};
 use crate::sui_serde::{AggrAuthSignature, Readable, SuiBitmap};
-use fastcrypto::encoding::{Base64, Encoding};
+use fastcrypto::encoding::{Base64, Encoding, Hex};
 use std::fmt::Debug;
 
 pub use enum_dispatch::enum_dispatch;
@@ -329,7 +329,7 @@ pub struct AuthorityPublicKeyBytes(
 
 impl AuthorityPublicKeyBytes {
     fn fmt_impl(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
-        let s = hex::encode(self.0);
+        let s = Hex::encode(self.0);
         write!(f, "k#{}", s)?;
         Ok(())
     }
@@ -348,7 +348,7 @@ pub struct ConciseAuthorityPublicKeyBytes<'a>(&'a AuthorityPublicKeyBytes);
 
 impl std::fmt::Debug for ConciseAuthorityPublicKeyBytes<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
-        let s = hex::encode(&self.0 .0[0..4]);
+        let s = Hex::encode(&self.0 .0[0..4]);
         write!(f, "k#{}..", s)
     }
 }
@@ -415,8 +415,7 @@ impl FromStr for AuthorityPublicKeyBytes {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let s = s.strip_prefix("0x").unwrap_or(s);
-        let value = hex::decode(s)?;
+        let value = Hex::decode(s).map_err(|e| anyhow::anyhow!(e))?;
         Self::from_bytes(&value[..]).map_err(|_| anyhow::anyhow!("byte deserialization failed"))
     }
 }

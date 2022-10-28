@@ -16,7 +16,7 @@ use crate::object::{Object, ObjectFormatOptions, Owner, OBJECT_START_VERSION};
 use crate::storage::{DeleteKind, WriteKind};
 use crate::{SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION};
 use byteorder::{BigEndian, ReadBytesExt};
-use fastcrypto::encoding::{Base64, Encoding};
+use fastcrypto::encoding::{Base64, Encoding, encode_bytes_hex};
 use itertools::Either;
 use move_binary_format::access::ModuleAccess;
 use move_binary_format::file_format::LocalIndex;

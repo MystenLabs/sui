@@ -152,7 +152,7 @@ fn test_mnemonics_ed25519() -> Result<(), anyhow::Error> {
     .execute(&mut keystore)?;
     keystore.keys().iter().for_each(|pk| {
         assert_eq!(
-            hex::encode(pk.as_ref()),
+            Hex::encode(pk.as_ref()),
             "685b2d6f98784dd763249af21c92f588ca1be80c40a98c55bf7c91b74e5ac1e2"
         );
     });
@@ -177,7 +177,7 @@ fn test_mnemonics_secp256k1() -> Result<(), anyhow::Error> {
     .execute(&mut keystore)?;
     keystore.keys().iter().for_each(|pk| {
         assert_eq!(
-            hex::encode(pk.as_ref()),
+            Hex::encode(pk.as_ref()),
             "03e3717435582ab33d2e315d21e9bc4e19500a1fc4c8cdc73a15365891774b131f"
         );
     });

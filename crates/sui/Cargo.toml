@@ -55,7 +55,6 @@ move-package.workspace = true
 
 workspace-hack.workspace = true
 multiaddr = "0.14.0"
-hex = "0.4.3"
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemalloc-ctl = "^0.5"

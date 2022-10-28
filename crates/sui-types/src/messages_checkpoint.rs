@@ -18,6 +18,7 @@ use crate::{
     crypto::{sha3_hash, AuthoritySignature, VerificationObligation},
     error::SuiError,
 };
+use fastcrypto::encoding::{Hex, Encoding};
 use serde::{Deserialize, Serialize};
 
 /*
@@ -236,7 +237,7 @@ impl Display for CheckpointSummary {
             gas_cost_summary: {:?}}}",
             self.epoch,
             self.sequence_number,
-            hex::encode(self.content_digest),
+            Hex::encode(self.content_digest),
             self.gas_cost_summary,
         )
     }

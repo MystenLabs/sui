@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::{anyhow, bail};
+use fastcrypto::encoding::Hex, Encoding;
 use move_binary_format::{
     access::ModuleAccess, binary_views::BinaryIndexedView, file_format::SignatureToken,
 };
@@ -16,7 +17,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Number, Value as JsonValue};
 use std::collections::VecDeque;
 use std::fmt::{Debug, Formatter};
-use sui_types::base_types::{decode_bytes_hex, ObjectID, SuiAddress};
+use sui_types::base_types::{ObjectID, SuiAddress};
+
 use sui_types::move_package::MovePackage;
 use sui_verifier::entry_points_verifier::{
     is_tx_context, RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_SUI_ID, RESOLVED_UTF8_STR,
@@ -159,7 +161,7 @@ impl SuiJsonValue {
                         // Move call
                         let vec = if s.starts_with(HEX_PREFIX) {
                             // If starts with 0x, treat as hex vector
-                            hex::decode(s.trim_start_matches(HEX_PREFIX))?
+                            Hex::decode(s).map_err(|e| anyhow!(e))?
                         } else {
                             // Else raw bytes
                             s.as_bytes().to_vec()
@@ -188,8 +190,8 @@ impl SuiJsonValue {
                 if !s.starts_with(HEX_PREFIX) {
                     bail!("Address hex string must start with 0x.",);
                 }
-                let r: SuiAddress = decode_bytes_hex(&s)?;
-                MoveValue::Address(r.into())
+                let r = AccountAddress::from_bytes(Hex::decode(&s).map_err(|e| anyhow!(e))?)?;
+                MoveValue::Address(r)
             }
             _ => bail!("Unexpected arg {val} for expected type {ty}"),
         })

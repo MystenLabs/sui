@@ -42,7 +42,6 @@ workspace-hack.workspace = true
 
 [dev-dependencies]
 criterion = "0.3.6"
-hex = "0.4.3"
 serde_test = "1.0.144"
 test-utils = { path = "../test-utils", package = "narwhal-test-utils" }
 

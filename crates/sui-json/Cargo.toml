@@ -9,11 +9,10 @@ edition = "2021"
 [dependencies]
 anyhow = { version = "1.0.64", features = ["backtrace"] }
 bcs = "0.1.4"
-hex = "0.4.3"
 serde = { version = "1.0.144", features = ["derive"] }
 serde_json = "1.0.83"
 schemars = "0.8.10"
-
+fastcrypto = { workspace = true}
 sui-types = { path = "../sui-types" }
 sui-verifier = { path = "../sui-verifier" }
 
