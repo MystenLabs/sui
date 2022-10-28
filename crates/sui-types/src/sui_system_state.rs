@@ -49,6 +49,7 @@ pub struct ValidatorMetadata {
     pub next_epoch_stake: u64,
     pub next_epoch_delegation: u64,
     pub next_epoch_gas_price: u64,
+    pub next_epoch_commission_rate: u64,
 }
 
 impl ValidatorMetadata {
@@ -71,6 +72,7 @@ pub struct Validator {
     pub pending_withdraw: u64,
     pub gas_price: u64,
     pub delegation_staking_pool: StakingPool,
+    pub commission_rate: u64,
 }
 
 impl Validator {

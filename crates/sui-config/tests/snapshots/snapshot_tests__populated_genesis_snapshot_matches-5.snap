@@ -209,6 +209,7 @@ validators:
         next_epoch_stake: 1
         next_epoch_delegation: 0
         next_epoch_gas_price: 1
+        next_epoch_commission_rate: 0
       stake_amount: 1
       pending_stake: 0
       pending_withdraw: 0
@@ -224,6 +225,7 @@ validators:
         delegation_token_supply:
           value: 0
         pending_delegations: []
+      commission_rate: 0
   pending_validators: []
   pending_removals: []
   next_epoch_validators:
@@ -425,6 +427,7 @@ validators:
       next_epoch_stake: 1
       next_epoch_delegation: 0
       next_epoch_gas_price: 1
+      next_epoch_commission_rate: 0
 treasury_cap:
   value: 100000000000001
 storage_fund:

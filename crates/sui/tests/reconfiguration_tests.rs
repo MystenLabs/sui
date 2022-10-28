@@ -375,6 +375,7 @@ pub fn get_new_validator() -> (ValidatorInfo, AuthoritySignature) {
             stake: 1,
             delegation: 0,
             gas_price: 1,
+            commission_rate: 0,
             network_address: sui_config::utils::new_network_address(),
             narwhal_primary_address: sui_config::utils::new_network_address(),
             narwhal_worker_address: sui_config::utils::new_network_address(),

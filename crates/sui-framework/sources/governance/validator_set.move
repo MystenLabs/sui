@@ -50,6 +50,8 @@ module sui::validator_set {
         next_epoch_validators: vector<ValidatorMetadata>,
     }
 
+    const BASIS_POINT_DENOMINATOR: u128 = 10000;
+
     public(friend) fun new(init_active_validators: vector<Validator>): ValidatorSet {
         let (total_validator_stake, total_delegation_stake, quorum_stake_threshold) = calculate_total_stake_and_quorum_threshold(&init_active_validators);
         let validators = ValidatorSet {
@@ -163,6 +165,15 @@ module sui::validator_set {
         validator::request_set_gas_price(validator, new_gas_price);
     }
 
+    public(friend) fun request_set_commission_rate(
+        self: &mut ValidatorSet,
+        new_commission_rate: u64,
+        ctx: &mut TxContext,
+    ) {
+        let validator_address = tx_context::sender(ctx);
+        let validator = get_validator_mut(&mut self.active_validators, validator_address);
+        validator::request_set_commission_rate(validator, new_commission_rate);
+    }
     
     public(friend) fun request_withdraw_delegation(
         self: &mut ValidatorSet,
@@ -493,13 +504,18 @@ module sui::validator_set {
         let i = 0;
         while (i < length) {
             let validator = vector::borrow_mut(validators, i);
-            let reward_amount = *vector::borrow(validator_reward_amounts, i);
-            let reward = balance::split(validator_rewards, reward_amount);
-            // Because reward goes to pending stake, it's the same as calling `request_add_stake`.
-            validator::request_add_stake(validator, reward, option::none(), ctx);
-
+            let validator_reward_amount = *vector::borrow(validator_reward_amounts, i);
+            let validator_reward = balance::split(validator_rewards, validator_reward_amount);
+            
             let delegator_reward_amount = *vector::borrow(delegator_reward_amounts, i);
             let delegator_reward = balance::split(delegator_rewards, delegator_reward_amount);
+
+            // Validator takes a cut of the rewards as commission.
+            let commission_amount = (delegator_reward_amount as u128) * (validator::commission_rate(validator) as u128) / BASIS_POINT_DENOMINATOR;
+            balance::join(&mut validator_reward, balance::split(&mut delegator_reward, (commission_amount as u64)));
+
+            // Add rewards to the validator. Because reward goes to pending stake, it's the same as calling `request_add_stake`.
+            validator::request_add_stake(validator, validator_reward, option::none(), ctx);
             // Add rewards to delegation staking pool to auto compound for delegators.
             validator::distribute_rewards_and_new_delegations(validator, delegator_reward, ctx);
             i = i + 1;

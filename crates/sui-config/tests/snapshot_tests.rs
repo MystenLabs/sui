@@ -76,6 +76,7 @@ fn populated_genesis_snapshot_matches() {
         stake: 1,
         delegation: 0,
         gas_price: 1,
+        commission_rate: 0,
         network_address: Multiaddr::empty(),
         narwhal_primary_address: Multiaddr::empty(),
         narwhal_worker_address: Multiaddr::empty(),
