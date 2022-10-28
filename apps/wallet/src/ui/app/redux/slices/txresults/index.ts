@@ -212,8 +212,9 @@ export const getTransactionsByAddress = createAsyncThunk<
 
             return txnResp as TxResultByAddress;
         } catch (err) {
-            reportSentryError(err as Error);
-            throw rejectWithValue(err);
+            const error = err as Error;
+            reportSentryError(error);
+            throw rejectWithValue(error.message);
         }
     }
 );

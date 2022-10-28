@@ -73,9 +73,10 @@ export const sendTokens = createAsyncThunk<
             dispatch(fetchAllOwnedAndRequiredObjects());
             // TODO: is this correct? Find a better way to do it
             return response;
-        } catch (error) {
-            reportSentryError(error as Error);
-            throw rejectWithValue(error);
+        } catch (err) {
+            const error = err as Error;
+            reportSentryError(error);
+            throw rejectWithValue(error.message);
         }
     }
 );

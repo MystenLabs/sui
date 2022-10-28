@@ -78,8 +78,9 @@ export const fetchAllOwnedAndRequiredObjects = createAsyncThunk<
             }
             return allSuiObjects;
         } catch (err) {
-            reportSentryError(err as Error);
-            throw rejectWithValue(err);
+            const error = err as Error;
+            reportSentryError(error);
+            throw rejectWithValue(error.message);
         }
     }
 );
@@ -104,8 +105,9 @@ export const batchFetchObject = createAsyncThunk<
             }
             return allSuiObjects;
         } catch (err) {
-            reportSentryError(err as Error);
-            throw rejectWithValue(err);
+            const error = err as Error;
+            reportSentryError(error);
+            throw rejectWithValue(error.message);
         }
     }
 );
@@ -117,9 +119,10 @@ export const mintDemoNFT = createAsyncThunk<void, void, AppThunkConfig>(
             const signer = api.getSignerInstance(keypairVault.getKeyPair());
             await ExampleNFT.mintExampleNFT(signer);
             await dispatch(fetchAllOwnedAndRequiredObjects());
-        } catch (error) {
-            reportSentryError(error as Error);
-            throw rejectWithValue(error);
+        } catch (err) {
+            const error = err as Error;
+            reportSentryError(error);
+            throw rejectWithValue(error.message);
         }
     }
 );
@@ -159,9 +162,10 @@ export const transferSuiNFT = createAsyncThunk<
             };
 
             return txnResp as NFTTxResponse;
-        } catch (error) {
-            reportSentryError(error as Error);
-            throw rejectWithValue(error);
+        } catch (err) {
+            const error = err as Error;
+            reportSentryError(error);
+            throw rejectWithValue(error.message);
         }
     }
 );
