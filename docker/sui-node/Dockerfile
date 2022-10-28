@@ -54,6 +54,6 @@ ARG GIT_REVISION
 # Use jemalloc as memory allocator
 ENV LD_PRELOAD /usr/lib/x86_64-linux-gnu/libjemalloc.so
 # Enable automatic memory profiling.
-ENV MALLOC_CONF prof:true
+ENV MALLOC_CONF prof:true,prof_prefix:/data/jeprof.out,lg_prof_interval:36
 LABEL build-date=$BUILD_DATE
 LABEL git-revision=$GIT_REVISION
