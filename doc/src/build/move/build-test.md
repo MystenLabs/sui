@@ -282,7 +282,7 @@ function.
         {
             let forge = test_scenario::take_from_sender<Forge>(scenario);
             // create the sword and transfer it to the initial owner
-            sword_create(&mut forge, 42, 7, initial_owner, test_scenario::ctx(scenario));
+            sword_create(42, 7, initial_owner, test_scenario::ctx(scenario));
             test_scenario::return_to_sender(scenario, forge)
         };
         // third transaction executed by the initial sword owner
