@@ -29,6 +29,7 @@ use serde_json::Value;
 use serde_with::serde_as;
 use tracing::warn;
 
+use fastcrypto::encoding::{Base64, Encoding};
 use sui_json::SuiJsonValue;
 use sui_types::base_types::{
     ObjectDigest, ObjectID, ObjectInfo, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
@@ -53,7 +54,6 @@ use sui_types::move_package::{disassemble_modules, MovePackage};
 use sui_types::object::{
     Data, MoveObject, Object, ObjectFormatOptions, ObjectRead, Owner, PastObjectRead,
 };
-use sui_types::sui_serde::{Base64, Encoding};
 use sui_types::{parse_sui_struct_tag, parse_sui_type_tag};
 
 #[cfg(test)]
@@ -2730,7 +2730,9 @@ impl TransactionBytes {
     }
 
     pub fn to_data(self) -> Result<TransactionData, anyhow::Error> {
-        TransactionData::from_signable_bytes(&self.tx_bytes.to_vec()?)
+        TransactionData::from_signable_bytes(
+            &self.tx_bytes.to_vec().map_err(|e| anyhow::anyhow!(e))?,
+        )
     }
 }
 

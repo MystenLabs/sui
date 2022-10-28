@@ -10,6 +10,7 @@ use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use serde_json::json;
 
+use fastcrypto::encoding::Base64;
 use sui::client_commands::EXAMPLE_NFT_DESCRIPTION;
 use sui::client_commands::EXAMPLE_NFT_NAME;
 use sui::client_commands::EXAMPLE_NFT_URL;
@@ -36,7 +37,6 @@ use sui_types::messages::{
 use sui_types::object::Owner;
 use sui_types::query::Ordering;
 use sui_types::query::TransactionQuery;
-use sui_types::sui_serde::Base64;
 use sui_types::SUI_FRAMEWORK_OBJECT_ID;
 
 struct Examples {

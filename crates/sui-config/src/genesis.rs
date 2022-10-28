@@ -4,6 +4,7 @@
 use crate::ValidatorInfo;
 use anyhow::{bail, Context, Result};
 use camino::Utf8Path;
+use fastcrypto::encoding::{Base64, Encoding};
 use move_binary_format::CompiledModule;
 use move_core_types::ident_str;
 use move_core_types::language_storage::ModuleId;
@@ -25,7 +26,6 @@ use sui_types::in_memory_storage::InMemoryStorage;
 use sui_types::messages::CallArg;
 use sui_types::messages::InputObjects;
 use sui_types::messages::Transaction;
-use sui_types::sui_serde::{Base64, Encoding};
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::temporary_store::{InnerTemporaryStore, TemporaryStore};
 use sui_types::MOVE_STDLIB_ADDRESS;

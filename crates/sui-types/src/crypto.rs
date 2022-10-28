@@ -33,7 +33,10 @@ use crate::base_types::{AuthorityName, SuiAddress};
 use crate::committee::{Committee, EpochId, StakeUnit};
 use crate::error::{SuiError, SuiResult};
 use crate::intent::{Intent, IntentMessage};
-use crate::sui_serde::{AggrAuthSignature, Base64, Encoding, Readable, SuiBitmap};
+use crate::sui_serde::{AggrAuthSignature, Readable, SuiBitmap};
+use fastcrypto::encoding::{Base64, Encoding};
+use std::fmt::Debug;
+
 pub use enum_dispatch::enum_dispatch;
 
 // Authority Objects

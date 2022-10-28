@@ -15,14 +15,13 @@ use serde_with::serde_as;
 use strum_macros::EnumIter;
 use strum_macros::EnumString;
 
+use fastcrypto::encoding::{Base64, Hex};
 use sui_types::base_types::{
     ObjectID, ObjectInfo, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
     TRANSACTION_DIGEST_LENGTH,
 };
 use sui_types::crypto::SignatureScheme;
 use sui_types::messages::ExecutionStatus;
-use sui_types::sui_serde::Base64;
-use sui_types::sui_serde::Hex;
 use sui_types::sui_serde::Readable;
 
 use crate::errors::Error;
@@ -361,7 +360,7 @@ impl TryInto<SuiAddress> for PublicKey {
     type Error = Error;
 
     fn try_into(self) -> Result<SuiAddress, Self::Error> {
-        let key_bytes = self.hex_bytes.to_vec()?;
+        let key_bytes = self.hex_bytes.to_vec().map_err(|e| anyhow::anyhow!(e))?;
         let pub_key =
             sui_types::crypto::PublicKey::try_from_bytes(self.curve_type.into(), &key_bytes)
                 .map_err(|e| Error::new_with_cause(ErrorType::ParsingError, e))?;
