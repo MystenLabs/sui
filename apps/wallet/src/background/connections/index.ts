@@ -30,9 +30,26 @@ export class Connections {
                     timestamp: Date.now(),
                 };
                 let connection: Connection;
+                let timeout: number | null = null;
                 switch (port.name) {
                     case ContentScriptConnection.CHANNEL:
                         connection = new ContentScriptConnection(port);
+                        const disconnectTimeout = Math.max(
+                            30,
+                            Math.floor(180 * Math.random()) * 1000
+                        );
+                        console.log(
+                            'disconnectTimeout',
+                            disconnectTimeout,
+                            port.sender
+                        );
+                        timeout = setTimeout(() => {
+                            console.log(
+                                '**** forcefully disconnecting port ****'
+                            );
+                            timeout = null;
+                            connection.disconnect();
+                        }, disconnectTimeout) as unknown as number;
                         break;
                     case UiConnection.CHANNEL:
                         connection = new UiConnection(port);
@@ -48,6 +65,9 @@ export class Connections {
                         name: port.name,
                         timestamp: Date.now(),
                     };
+                    if (timeout) {
+                        clearTimeout(timeout);
+                    }
                     const connectionIndex =
                         this.#connections.indexOf(connection);
                     if (connectionIndex >= 0) {

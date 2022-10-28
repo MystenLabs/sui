@@ -49,6 +49,10 @@ export class PortStream {
         this._connected = true;
     }
 
+    public disconnect() {
+        this._port.disconnect();
+    }
+
     public get onMessage(): Observable<Message> {
         return this._messagesStream;
     }

@@ -16,6 +16,10 @@ export abstract class Connection {
         this._portStream.onMessage.subscribe((msg) => this._handleMessage(msg));
     }
 
+    public disconnect() {
+        this._portStream.disconnect();
+    }
+
     public get onDisconnect() {
         return this._portStream.onDisconnect.pipe(
             map((port) => ({ port, connection: this })),
