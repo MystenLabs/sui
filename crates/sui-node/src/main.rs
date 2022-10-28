@@ -11,7 +11,7 @@ use sui_node::metrics;
 use sui_telemetry::send_telemetry_event;
 use tokio::task;
 use tokio::time::sleep;
-use tracing::info;
+use tracing::{debug, info};
 
 #[derive(Parser)]
 #[clap(rename_all = "kebab-case", version)]
@@ -108,7 +108,7 @@ async fn main() -> Result<()> {
                     let dump_name_cstr = CString::new(dump_name).expect("Cannot create dump name");
                     unsafe {
                         if jemalloc_ctl::raw::write(PROF_DUMP, dump_name_cstr.as_ptr()).is_err() {
-                            info!("Cannot dump memory profile, is jemalloc loaded dynamically with MALLOC_CONF set to prof:true?");
+                            debug!("Cannot dump memory profile, is _RJEM_MALLOC_CONF set to prof:true?");
                         }
                     }
                 }
