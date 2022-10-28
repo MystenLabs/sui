@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module examples::mycoin {
+    use std::option;
     use sui::coin;
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
@@ -16,7 +17,7 @@ module examples::mycoin {
     fun init(witness: MYCOIN, ctx: &mut TxContext) {
         transfer::transfer(
             // second parameter defines decimals of the Coin: 6
-            coin::create_currency(witness, 6, ctx),
+            coin::create_currency(witness, 6, b"MYCOIN", b"", b"", option::none(), ctx),
             tx_context::sender(ctx)
         )
     }
