@@ -18,6 +18,28 @@ module sui::math_tests {
         assert!(math::min(100, 10) == 10, 2);
         assert!(math::min(0, 0) == 0, 3);
     }
+    
+    #[test]
+    fun test_pow() {
+        assert!(nft::pow(2, 10) == 1024, 0);
+    }
+
+    #[test]
+    #[expected_failure]
+    fun test_pow_overflow() {
+        nft::pow(10, 100);
+    }
+
+    #[test]
+    fun test_pow128() {
+        assert!(nft::pow128(2, 10) == 1024, 0);
+    }
+
+    #[test]
+    #[expected_failure]
+    fun test_pow128_overflow() {
+        nft::pow128(10, 100);
+    }
 
     #[test]
     fun test_perfect_sqrt() {
