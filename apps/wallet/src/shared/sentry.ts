@@ -15,6 +15,7 @@ export default function initSentry() {
     Sentry.init({
         dsn: SENTRY_DSN,
         integrations: [new BrowserTracing()],
+        release: process.env.WALLET_VERSION,
         tracesSampleRate: 1.0,
     });
 }

@@ -177,6 +177,9 @@ const commonConfig: () => Promise<Configuration> = async () => {
                 // TODO: check if this is worth investigating a fix and maybe do a separate build for UI and bg?
                 // 'typeof window': JSON.stringify(typeof {}),
                 'process.env.NODE_DEBUG': false,
+                'process.env.WALLET_VERSION': JSON.stringify(
+                    packageJson.version
+                ),
             }),
             new ProvidePlugin({
                 Buffer: ['buffer', 'Buffer'],
