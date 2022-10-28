@@ -145,7 +145,7 @@ export const getTransactionsByAddress = createAsyncThunk<
 
                     const moveCallTxn = getMoveCallTransaction(txn);
 
-                    const callObjectId = getTxnEffectsEventID(
+                    const metaDataObjectId = getTxnEffectsEventID(
                         txEff.effects,
                         address
                     )[0];
@@ -159,7 +159,7 @@ export const getTransactionsByAddress = createAsyncThunk<
                             moveCallTxn?.function
                         ),
                         from: res.data.sender,
-                        ...(txTransferObject || callObjectId
+                        ...(txTransferObject || metaDataObjectId
                             ? {
                                   objectId:
                                       txTransferObject?.objectRef.objectId ??
