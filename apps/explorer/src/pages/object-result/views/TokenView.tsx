@@ -213,7 +213,7 @@ function TokenView({ data }: { data: DataType }) {
                     }}
                 />
             )}
-            <h2 className={styles.header}>Child Objects</h2>
+            <h2 className={styles.header}>Dynamic Fields</h2>
             <div className={styles.ownedobjects}>
                 <OwnedObjects id={viewedData.id} byAddress={false} />
             </div>

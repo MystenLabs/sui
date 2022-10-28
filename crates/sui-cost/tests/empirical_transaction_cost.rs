@@ -12,7 +12,7 @@ use sui_types::coin::PAY_JOIN_FUNC_NAME;
 use sui_types::coin::PAY_MODULE_NAME;
 use sui_types::coin::PAY_SPLIT_VEC_FUNC_NAME;
 use sui_types::crypto::AccountKeyPair;
-use sui_types::messages::Transaction;
+use sui_types::messages::VerifiedTransaction;
 use sui_types::object::Object;
 use sui_types::{
     gas::GasCostSummary,
@@ -64,7 +64,7 @@ async fn split_n_tx(
     coin: &Object,
     gas: &Object,
     validator_info: &[ValidatorInfo],
-) -> Transaction {
+) -> VerifiedTransaction {
     let split_amounts = vec![10u64; n as usize];
     let type_args = vec![coin.get_move_template_type().unwrap()];
 
@@ -88,7 +88,7 @@ async fn create_txes(
     keypair: &AccountKeyPair,
     gas_objects: &[Object],
     configs: &NetworkConfig,
-) -> BTreeMap<CommonTransactionCosts, Transaction> {
+) -> BTreeMap<CommonTransactionCosts, VerifiedTransaction> {
     let mut ret = BTreeMap::new();
     let mut gas_objects = gas_objects.to_vec().clone();
     // let _handles = spawn_test_authorities(gas_objects.clone(), configs).await;
@@ -274,7 +274,7 @@ async fn run_actual_and_estimate_costs(
             .with_async(|node| async move {
                 let state = node.state();
                 estimate_transaction_computation_cost(
-                    tx.signed_data.data,
+                    tx.into_inner().signed_data.data,
                     state.clone(),
                     None,
                     None,

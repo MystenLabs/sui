@@ -1,6 +1,6 @@
 [package]
 name = "sui-faucet"
-version = "0.12.0"
+version.workspace = true
 edition = "2021"
 authors = ["Mysten Labs <build@mystenlabs.com>"]
 license = "Apache-2.0"
@@ -22,13 +22,14 @@ futures = "0.3.23"
 uuid = {version = "1.1.2", features = [ "v4", "fast-rng"]}
 prometheus = "0.13.2"
 scopeguard = "1.1"
+tap = "1.0"
 
 sui = { path = "../sui" }
 sui-node = { path = "../sui-node" }
 sui-json-rpc-types= { path = "../sui-json-rpc-types" }
 sui-types = { path = "../sui-types" }
 sui-config = { path = "../sui-config" }
-sui-sdk = { path = "../sui-sdk" }
+sui-keys = { path = "../sui-keys" }
 telemetry-subscribers.workspace = true
 workspace-hack.workspace = true
 

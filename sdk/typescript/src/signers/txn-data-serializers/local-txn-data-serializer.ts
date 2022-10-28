@@ -10,12 +10,13 @@ import {
   SUI_PACKAGE_ID,
   PAY_SPLIT_COIN_VEC_FUNC_NAME,
   ObjectId,
-  shouldUseOldSharedObjectAPI,
   SuiAddress,
   SUI_TYPE_ARG,
   Transaction,
   TransactionData,
   TypeTag,
+  RpcApiVersion,
+  SuiObjectRef,
 } from '../../types';
 import {
   MoveCallTransaction,
@@ -26,6 +27,8 @@ import {
   PublishTransaction,
   TxnDataSerializer,
   PayTransaction,
+  PaySuiTransaction,
+  PayAllSuiTransaction,
   SignableTransaction,
   UnserializedSignableTransaction,
 } from './txn-data-serializer';
@@ -121,6 +124,71 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
     } catch (err) {
       throw new Error(
         `Error constructing a Pay transaction: ${err} args ${JSON.stringify(t)}`
+      );
+    }
+  }
+
+  async newPaySui(
+    signerAddress: SuiAddress,
+    t: PaySuiTransaction
+  ): Promise<Base64DataBuffer> {
+    try {
+      const inputCoinRefs = (
+        await Promise.all(
+          t.inputCoins.map((coin) => this.provider.getObjectRef(coin))
+        )
+      ).map((ref) => ref!);
+      const tx = {
+        PaySui: {
+          coins: inputCoinRefs,
+          recipients: t.recipients,
+          amounts: t.amounts,
+        },
+      };
+      const gas_coin_obj = t.inputCoins[0];
+      return await this.constructTransactionData(
+        tx,
+        { kind: 'paySui', data: t },
+        gas_coin_obj,
+        signerAddress
+      );
+    } catch (err) {
+      throw new Error(
+        `Error constructing a PaySui transaction: ${err} args ${JSON.stringify(
+          t
+        )}`
+      );
+    }
+  }
+
+  async newPayAllSui(
+    signerAddress: SuiAddress,
+    t: PayAllSuiTransaction
+  ): Promise<Base64DataBuffer> {
+    try {
+      const inputCoinRefs = (
+        await Promise.all(
+          t.inputCoins.map((coin) => this.provider.getObjectRef(coin))
+        )
+      ).map((ref) => ref!);
+      const tx = {
+        PayAllSui: {
+          coins: inputCoinRefs,
+          recipient: t.recipient,
+        },
+      };
+      const gas_coin_obj = t.inputCoins[0];
+      return await this.constructTransactionData(
+        tx,
+        { kind: 'payAllSui', data: t },
+        gas_coin_obj,
+        signerAddress
+      );
+    } catch (err) {
+      throw new Error(
+        `Error constructing a PayAllSui transaction: ${err} args ${JSON.stringify(
+          t
+        )}`
       );
     }
   }
@@ -336,7 +404,10 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
     return await this.serializeTransactionData(txData);
   }
 
-  private async serializeTransactionData(
+  /**
+   * Serialize `TransactionData` into BCS encoded bytes
+   */
+  public async serializeTransactionData(
     tx: TransactionData,
     // TODO: derive the buffer size automatically
     size: number = 8192
@@ -352,4 +423,125 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
     serialized.set(dataBytes, TYPE_TAG.length);
     return new Base64DataBuffer(serialized);
   }
+
+  /**
+   * Deserialize BCS encoded bytes into `SignableTransaction`
+   */
+  public async deserializeTransactionBytesToSignableTransaction(
+    bytes: Base64DataBuffer
+  ): Promise<
+    UnserializedSignableTransaction | UnserializedSignableTransaction[]
+  > {
+    return this.transformTransactionDataToSignableTransaction(
+      await this.deserializeTransactionBytesToTransactionData(bytes)
+    );
+  }
+
+  /**
+   * Deserialize BCS encoded bytes into `TransactionData`
+   */
+  public async deserializeTransactionBytesToTransactionData(
+    bytes: Base64DataBuffer
+  ): Promise<TransactionData> {
+    const version = await this.provider.getRpcApiVersion();
+    const format = shouldUseOldSharedObjectAPI(version)
+      ? 'TransactionData_Deprecated'
+      : 'TransactionData';
+    return bcs.de(format, bytes.getData().slice(TYPE_TAG.length));
+  }
+
+  /**
+   * Deserialize `TransactionData` to `SignableTransaction`
+   */
+  public async transformTransactionDataToSignableTransaction(
+    tx: TransactionData
+  ): Promise<
+    UnserializedSignableTransaction | UnserializedSignableTransaction[]
+  > {
+    if ('Single' in tx.kind) {
+      return this.transformTransactionToSignableTransaction(
+        tx.kind.Single,
+        tx.gasBudget,
+        tx.gasPayment
+      );
+    }
+    return Promise.all(
+      tx.kind.Batch.map((t) =>
+        this.transformTransactionToSignableTransaction(
+          t,
+          tx.gasBudget,
+          tx.gasPayment
+        )
+      )
+    );
+  }
+
+  public async transformTransactionToSignableTransaction(
+    tx: Transaction,
+    gasBudget: number,
+    gasPayment?: SuiObjectRef
+  ): Promise<UnserializedSignableTransaction> {
+    if ('Pay' in tx) {
+      return {
+        kind: 'pay',
+        data: {
+          inputCoins: tx.Pay.coins.map((c) => c.objectId),
+          recipients: tx.Pay.recipients,
+          amounts: tx.Pay.amounts,
+          gasPayment: gasPayment?.objectId,
+          gasBudget,
+        },
+      };
+    } else if ('Call' in tx) {
+      return {
+        kind: 'moveCall',
+        data: {
+          packageObjectId: tx.Call.package.objectId,
+          module: tx.Call.module,
+          function: tx.Call.function,
+          typeArguments: tx.Call.typeArguments,
+          arguments: await new CallArgSerializer(
+            this.provider
+          ).deserializeCallArgs(tx),
+          gasPayment: gasPayment?.objectId,
+          gasBudget,
+        },
+      };
+    } else if ('TransferObject' in tx) {
+      return {
+        kind: 'transferObject',
+        data: {
+          objectId: tx.TransferObject.object_ref.objectId,
+          recipient: tx.TransferObject.recipient,
+          gasPayment: gasPayment?.objectId,
+          gasBudget,
+        },
+      };
+    } else if ('TransferSui' in tx) {
+      return {
+        kind: 'transferSui',
+        data: {
+          suiObjectId: gasPayment!.objectId,
+          recipient: tx.TransferSui.recipient,
+          amount:
+            'Some' in tx.TransferSui.amount ? tx.TransferSui.amount.Some : null,
+          gasBudget,
+        },
+      };
+    } else if ('Publish' in tx) {
+      return {
+        kind: 'publish',
+        data: {
+          compiledModules: tx.Publish.modules,
+          gasPayment: gasPayment?.objectId,
+          gasBudget,
+        },
+      };
+    }
+    throw new Error(`Unsupported transaction type ${tx}`);
+  }
+}
+
+export function shouldUseOldSharedObjectAPI(version?: RpcApiVersion): boolean {
+  return version?.major === 0 && version?.minor <= 12;
 }

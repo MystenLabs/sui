@@ -2,14 +2,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use move_package::BuildConfig;
 use serde_json::json;
 use std::{collections::HashSet, path::Path};
 
 use signature::Signer;
 use typed_store::Map;
 
-use sui_framework::build_move_package_to_bytes;
+use sui_framework_build::compiled_package::BuildConfig;
 use sui_types::crypto::{AccountKeyPair, Signature};
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::Transaction;
@@ -123,7 +122,11 @@ async fn test_move_call() {
         gas_object.compute_object_reference(),
     );
 
-    let effects = gateway.execute_transaction(tx).await.unwrap().effects;
+    let effects = gateway
+        .execute_transaction(tx.into_inner())
+        .await
+        .unwrap()
+        .effects;
     assert!(effects.status.is_ok());
     assert_eq!(effects.mutated.len(), 1);
     assert_eq!(effects.created.len(), 1);
@@ -141,8 +144,10 @@ async fn test_publish() {
     let mut path = env!("CARGO_MANIFEST_DIR").to_owned();
     path.push_str("/src/unit_tests/data/object_owner/");
 
-    let compiled_modules =
-        build_move_package_to_bytes(Path::new(&path), BuildConfig::default()).unwrap();
+    let compiled_modules = BuildConfig::default()
+        .build(Path::new(&path).to_path_buf())
+        .unwrap()
+        .get_package_bytes();
     let data = gateway
         .publish(
             addr1,
@@ -307,6 +312,34 @@ async fn test_coin_merge() {
 }
 
 #[tokio::test]
+async fn test_pay_sui_empty_input_coins() -> Result<(), anyhow::Error> {
+    let (addr1, _): (_, AccountKeyPair) = get_key_pair();
+    let (recipient, _): (_, AccountKeyPair) = get_key_pair();
+    let coin_object = Object::with_owner_for_testing(addr1);
+    let genesis_objects = vec![coin_object.clone()];
+    let gateway = create_gateway_state(genesis_objects).await;
+
+    let res = gateway
+        .pay_sui(addr1, vec![], vec![recipient], vec![100], 1000)
+        .await;
+    assert!(res.is_err());
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_pay_all_sui_empty_input_coins() -> Result<(), anyhow::Error> {
+    let (addr1, _): (_, AccountKeyPair) = get_key_pair();
+    let (recipient, _): (_, AccountKeyPair) = get_key_pair();
+    let coin_object = Object::with_owner_for_testing(addr1);
+    let genesis_objects = vec![coin_object.clone()];
+    let gateway = create_gateway_state(genesis_objects).await;
+
+    let res = gateway.pay_all_sui(addr1, vec![], recipient, 1000).await;
+    assert!(res.is_err());
+    Ok(())
+}
+
+#[tokio::test]
 async fn test_equivocation_resilient() {
     telemetry_subscribers::init_for_testing();
     let (addr1, key1): (_, AccountKeyPair) = get_key_pair();
@@ -415,7 +448,11 @@ async fn test_public_transfer_object_with_retry() {
         .fail_after_handle_confirmation = false;
 
     // Retry transaction, and this time it should succeed.
-    let effects = gateway.execute_transaction(tx).await.unwrap().effects;
+    let effects = gateway
+        .execute_transaction(tx.into_inner())
+        .await
+        .unwrap()
+        .effects;
     let oref = effects.mutated_excluding_gas().next().unwrap();
     let updated_obj_ref = &oref.reference;
     let new_owner = &oref.owner;
@@ -485,8 +522,10 @@ async fn test_get_owner_object() {
     path.push_str("/src/unit_tests/data/object_owner/");
 
     // Publish object_owner package
-    let compiled_modules =
-        build_move_package_to_bytes(Path::new(&path), BuildConfig::default()).unwrap();
+    let compiled_modules = BuildConfig::default()
+        .build(Path::new(&path).to_path_buf())
+        .unwrap()
+        .get_package_bytes();
     let data = gateway
         .publish(
             addr1,
@@ -566,14 +605,21 @@ async fn test_get_owner_object() {
         .await
         .unwrap();
     let signature = key1.sign(&data.to_bytes());
-    gateway
+    let response = gateway
         .execute_transaction(Transaction::new(data, signature))
         .await
         .unwrap();
+    let field_object = &response.effects.created.first().unwrap().reference;
 
     // Query get_objects_owned_by_object
     let objects = gateway
         .get_objects_owned_by_object(parent.object_id)
+        .await
+        .unwrap();
+    assert_eq!(1, objects.len());
+    assert_eq!(field_object.object_id, objects.first().unwrap().object_id);
+    let objects = gateway
+        .get_objects_owned_by_object(field_object.object_id)
         .await
         .unwrap();
     assert_eq!(1, objects.len());

@@ -4,8 +4,8 @@
 use crate::{
     base_types::{ObjectID, ObjectRef, SequenceNumber},
     error::{SuiError, SuiResult},
-    object::Object,
-    storage::{BackingPackageStore, DeleteKind, ParentSync, WriteKind},
+    object::{Object, Owner},
+    storage::{BackingPackageStore, ChildObjectResolver, DeleteKind, ParentSync, WriteKind},
 };
 use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 use std::collections::BTreeMap;
@@ -21,6 +21,24 @@ pub struct InMemoryStorage {
 impl BackingPackageStore for InMemoryStorage {
     fn get_package(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
         Ok(self.persistent.get(package_id).cloned())
+    }
+}
+
+impl ChildObjectResolver for InMemoryStorage {
+    fn read_child_object(&self, parent: &ObjectID, child: &ObjectID) -> SuiResult<Option<Object>> {
+        let child_object = match self.persistent.get(child).cloned() {
+            None => return Ok(None),
+            Some(obj) => obj,
+        };
+        let parent = *parent;
+        if child_object.owner != Owner::ObjectOwner(parent.into()) {
+            return Err(SuiError::InvalidChildObjectAccess {
+                object: *child,
+                given_parent: parent,
+                actual_owner: child_object.owner,
+            });
+        }
+        Ok(Some(child_object))
     }
 }
 

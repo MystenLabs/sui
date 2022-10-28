@@ -8,12 +8,12 @@ Before you install Sui, you need to install some prerequisite tools and then con
 
 The steps to install Sui include:
 
-1. Install [prerequisites](#prerequisites).
-1. Install Sui [binaries](#binaries).
-1. Configure an [Integrated Development Environment (IDE)](#integrated-development-environment).
+1. Install [prerequisites](#prerequisites)
+1. [Install Sui binaries](#install-sui-binaries)
+1. Configure an [Integrated Development Environment (IDE)](#integrated-development-environment)
 1. Request [SUI tokens](#sui-tokens) to evaluate Devnet and Sui Wallet
 1. Optionally, download the [source code](#source-code) to have local
-   access to examples and modify Sui itself.
+   access to examples and contribute to Sui.
 
 ## Branches of the Sui repo
 
@@ -58,7 +58,9 @@ Install the prerequisites and tools you need to work with Sui.
 Sui requires Rust and Cargo on all supported operating systems. 
 
 Use the following command to install Rust:
-`curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
+```shell
+$ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
 
 For additional installation options, see [Install Rust](https://www.rust-lang.org/tools/install).
 
@@ -79,44 +81,53 @@ After you install Rust, proceed to the prerequisites for your operating system.
 
 ## Linux prerequisites 
 
-Install the prerequisites listed in this section. You should make sure that your system has the latest version of `apt`. Use the following command to update it:
-`sudo apt-get update`
+Take Ubuntu as an example, install the prerequisites listed in this section. You should make sure that your system has the latest version of `apt-get`. Use the following command to update it:
+
+```shell
+$ sudo apt-get update
+```
 
 ### cURL
 
 Install cURL with the following command:
-`sudo apt install curl`
+```shell
+$ sudo apt install curl
+```
 
 Verify that cURL installed correctly with the following command:
-`curl --version`
+```shell
+$ curl --version
+```
 
 ### Git CLI
 
 Run the following command to install Git, including the Git CLI:
 
-`sudo apt-get install git-all`
+```shell
+$ sudo apt-get install git-all
+```
 
-For more information, see [Install Git on Linux](https://github.com/git-guides/install-git#install-git-on-linux)
+For more information, see [Install Git on Linux](https://github.com/git-guides/install-git#install-git-on-linux).
 
 ### CMake
 
-Install CMake with the following commands:
-
-`./bootstrap`
-`make`
-`make install`
-
-For more information, see [Install CMake](https://cmake.org/install/)
+Install CMake, see [Install CMake](https://cmake.org/install/)
 
 ### libssl-dev
 
 use the following command to install `libssl-dev`:
-`sudo apt-get install libssl-dev`
+
+```shell
+$ sudo apt-get install libssl-dev
+```
 
 ### libclang-dev
 
 use the following command to install `libclang-dev`:
-`sudo apt-get install libclang-dev`
+
+```shell
+$ sudo apt-get install libclang-dev
+```
 
 Proceed to [Install Sui binaries](#binaries) to continue installing Sui.
 
@@ -135,17 +146,23 @@ $ /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/
 ### cURL
 
 Use the following command to install [cURL](https://curl.se):
-`brew install curl`
+```shell
+$ brew install curl
+```
 
 ### CMake
 
 Use the following command to install CMake:
-`brew install cmake`
+```shell
+$ brew install cmake
+```
 
 ### Git CLI
 
 Use the following command to install Git:
-`brew install git`
+```shell
+$ brew install git
+```
 
 You can also Download and install the [Git command line interface](https://git-scm.com/download/) for your operating system.
 
@@ -192,12 +209,12 @@ Sui requires the following additional tools on computers running Windows.
 After you install Cargo, use the following command to install Sui binaries:
 
 ```shell
-$ cargo install --locked --git https://github.com/MystenLabs/sui.git --branch "devnet" sui sui-gateway
+$ cargo install --locked --git https://github.com/MystenLabs/sui.git --branch devnet sui sui-node
 ```
 
 The command installs the following Sui components in `~/.cargo/bin`:
 * [`sui`](cli-client.md) - The Sui CLI tool contains subcommands for enabling `genesis` of validators and accounts, starting the Sui network, and [building and testing Move packages](move/index.md), as well as a [client](cli-client.md) for interacting with the Sui network.
-* [`rpc-server`](json-rpc.md) - run a local Sui gateway service accessible via an RPC interface.
+* `Sui node` - installs the Sui node binary.
 
 Trouble shooting:
 If the previous command fails, make sure you have the latest version of Rust installed:

@@ -77,12 +77,38 @@ export type PayTx = {
   };
 };
 
+export type PaySuiTx = {
+  PaySui: {
+    coins: SuiObjectRef[];
+    recipients: string[];
+    amounts: number[];
+  };
+};
+
+export type PayAllSuiTx = {
+  PayAllSui: {
+    coins: SuiObjectRef[];
+    recipient: string;
+  };
+};
+
 bcs
   .registerStructType('PayTx', {
     coins: 'vector<SuiObjectRef>',
     recipients: 'vector<address>',
     amounts: 'vector<u64>',
   });
+
+bcs.registerStructType('PaySuiTx', {
+  coins: 'vector<SuiObjectRef>',
+  recipients: 'vector<SuiAddress>',
+  amounts: 'vector<u64>',
+});
+
+bcs.registerStructType('PayAllSuiTx', {
+  coins: 'vector<SuiObjectRef>',
+  recipient: 'SuiAddress',
+});
 
 bcs.registerEnumType('Option<T>', {
   None: null,
@@ -255,6 +281,8 @@ bcs
 export type Transaction =
   | MoveCallTx
   | PayTx
+  | PaySuiTx
+  | PayAllSuiTx
   | PublishTx
   | TransferObjectTx
   | TransferSuiTx;
@@ -265,6 +293,8 @@ bcs.registerEnumType('Transaction', {
   Call: 'MoveCallTx',
   TransferSui: 'TransferSuiTx',
   Pay: 'PayTx',
+  PaySui: 'PaySuiTx',
+  PayAllSui: 'PayAllSuiTx',
 });
 /**
  * Transaction kind - either Batch or Single.
@@ -334,6 +364,8 @@ bcs
     Call: 'MoveCallTx_Deprecated',
     TransferSui: 'TransferSuiTx',
     Pay: 'PayTx',
+    PaySui: 'PaySuiTx',
+    PayAllSui: 'PayAllSuiTx',
   })
   .registerEnumType('TransactionKind_Deprecated', {
     Single: 'Transaction_Deprecated',

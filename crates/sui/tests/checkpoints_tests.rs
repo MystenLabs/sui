@@ -10,14 +10,14 @@ use sui_core::{
     authority_aggregator::{AuthorityAggregator, AuthorityAggregatorBuilder},
     authority_client::NetworkAuthorityClient,
 };
+use sui_keys::keystore::{InMemKeystore, Keystore};
 use sui_macros::sim_test;
 use sui_node::SuiNodeHandle;
-use sui_sdk::crypto::{InMemKeystore, Keystore};
 use sui_types::{
     base_types::{ExecutionDigests, TransactionDigest},
     messages::{
         CallArg, CheckpointStreamRequest, CheckpointStreamResponseItem, ExecutionStatus, ObjectArg,
-        Transaction,
+        VerifiedTransaction,
     },
     messages_checkpoint::AuthenticatedCheckpoint,
 };
@@ -51,7 +51,7 @@ fn transactions_in_checkpoint(authority: &AuthorityState) -> HashSet<Transaction
 
 async fn execute_transactions(
     aggregator: &AuthorityAggregator<NetworkAuthorityClient>,
-    transactions: &[Transaction],
+    transactions: &[VerifiedTransaction],
 ) {
     for transaction in transactions {
         let (_, effects) = aggregator

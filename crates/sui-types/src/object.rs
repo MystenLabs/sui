@@ -629,7 +629,10 @@ impl ObjectRead {
     pub fn into_object(self) -> Result<Object, SuiError> {
         match self {
             Self::Deleted(oref) => Err(SuiError::ObjectDeleted { object_ref: oref }),
-            Self::NotExists(id) => Err(SuiError::ObjectNotFound { object_id: id }),
+            Self::NotExists(id) => Err(SuiError::ObjectNotFound {
+                object_id: id,
+                version: None,
+            }),
             Self::Exists(_, o, _) => Ok(o),
         }
     }
@@ -684,11 +687,15 @@ impl PastObjectRead {
     pub fn into_object(self) -> Result<Object, SuiError> {
         match self {
             Self::ObjectDeleted(oref) => Err(SuiError::ObjectDeleted { object_ref: oref }),
-            Self::ObjectNotExists(id) => Err(SuiError::ObjectNotFound { object_id: id }),
+            Self::ObjectNotExists(id) => Err(SuiError::ObjectNotFound {
+                object_id: id,
+                version: None,
+            }),
             Self::VersionFound(_, o, _) => Ok(o),
-            Self::VersionNotFound(object_id, version) => {
-                Err(SuiError::ObjectVersionNotFound { object_id, version })
-            }
+            Self::VersionNotFound(object_id, version) => Err(SuiError::ObjectNotFound {
+                object_id,
+                version: Some(version),
+            }),
             Self::VersionTooHigh {
                 object_id,
                 asked_version,

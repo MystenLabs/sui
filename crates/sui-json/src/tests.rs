@@ -8,6 +8,7 @@ use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, value::MoveTypeLayout,
 };
 use serde_json::{json, Value};
+use sui_framework_build::compiled_package::BuildConfig;
 use test_fuzz::runtime::num_traits::ToPrimitive;
 
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
@@ -290,9 +291,7 @@ fn test_basic_args_linter_pure_args() {
 fn test_basic_args_linter_top_level() {
     let path =
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../../sui_programmability/examples/nfts");
-    let compiled_modules =
-        sui_framework::build_and_verify_package(&path, move_package::BuildConfig::default())
-            .unwrap();
+    let compiled_modules = BuildConfig::default().build(path).unwrap().into_modules();
     let example_package = Object::new_package(compiled_modules, TransactionDigest::genesis());
     let example_package = example_package.data.try_as_package().unwrap();
 
@@ -323,8 +322,6 @@ fn test_basic_args_linter_top_level() {
     let display_raw = "DisplayUrl";
 
     let player_id = json!(format!("0x{:02x}", ObjectID::random()));
-    let farm_id = json!(format!("0x{:02x}", ObjectID::random()));
-    let pet_monsters_id = json!(format!("0x{:02x}", ObjectID::random()));
     // This is okay since not starting with 0x
     let monster_name = json!(monster_name_raw);
     // Well within U64 bounds
@@ -341,8 +338,6 @@ fn test_basic_args_linter_top_level() {
     // They have to be ordered
     let args = vec![
         player_id,
-        farm_id,
-        pet_monsters_id,
         monster_name.clone(),
         monster_img_id.clone(),
         breed,
@@ -361,23 +356,23 @@ fn test_basic_args_linter_top_level() {
     assert!(!json_args.is_empty());
 
     assert_eq!(
-        json_args[3],
+        json_args[1],
         SuiJsonCallArg::Pure(bcs::to_bytes(&monster_name_raw.as_bytes().to_vec()).unwrap())
     );
     assert_eq!(
-        json_args[4],
+        json_args[2],
         SuiJsonCallArg::Pure(bcs::to_bytes(&(monster_img_id_raw as u64)).unwrap()),
     );
     assert_eq!(
-        json_args[5],
+        json_args[3],
         SuiJsonCallArg::Pure(bcs::to_bytes(&(breed_raw as u8)).unwrap())
     );
     assert_eq!(
-        json_args[6],
+        json_args[4],
         SuiJsonCallArg::Pure(bcs::to_bytes(&(monster_affinity_raw as u8)).unwrap()),
     );
     assert_eq!(
-        json_args[7],
+        json_args[5],
         SuiJsonCallArg::Pure(bcs::to_bytes(&monster_description_raw.as_bytes().to_vec()).unwrap()),
     );
 
@@ -398,9 +393,7 @@ fn test_basic_args_linter_top_level() {
     // Test with vecu8 as address
     let path =
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../../sui_programmability/examples/basics");
-    let compiled_modules =
-        sui_framework::build_and_verify_package(&path, move_package::BuildConfig::default())
-            .unwrap();
+    let compiled_modules = BuildConfig::default().build(path).unwrap().into_modules();
     let example_package = Object::new_package(compiled_modules, TransactionDigest::genesis());
     let framework_pkg = example_package.data.try_as_package().unwrap();
 
@@ -479,9 +472,7 @@ fn test_basic_args_linter_top_level() {
     // Test with object vector  args
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../sui-core/src/unit_tests/data/entry_point_vector");
-    let compiled_modules =
-        sui_framework::build_and_verify_package(&path, move_package::BuildConfig::default())
-            .unwrap();
+    let compiled_modules = BuildConfig::default().build(path).unwrap().into_modules();
     let example_package = Object::new_package(compiled_modules, TransactionDigest::genesis());
     let example_package = example_package.data.try_as_package().unwrap();
 

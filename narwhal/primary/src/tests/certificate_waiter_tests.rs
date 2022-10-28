@@ -29,8 +29,8 @@ use tokio::{
 };
 use types::{
     Certificate, CertificateDigest, ConsensusStore, FetchCertificatesRequest,
-    FetchCertificatesResponse, PrimaryMessage, PrimaryToPrimary, PrimaryToPrimaryServer,
-    ReconfigureNotification, Round,
+    FetchCertificatesResponse, PayloadAvailabilityRequest, PayloadAvailabilityResponse,
+    PrimaryMessage, PrimaryToPrimary, PrimaryToPrimaryServer, ReconfigureNotification, Round,
 };
 
 struct FetchCertificateProxy {
@@ -49,7 +49,6 @@ impl PrimaryToPrimary for FetchCertificateProxy {
             request
         );
     }
-
     async fn fetch_certificates(
         &self,
         request: anemo::Request<FetchCertificatesRequest>,
@@ -61,6 +60,12 @@ impl PrimaryToPrimary for FetchCertificateProxy {
         Ok(anemo::Response::new(
             self.response.lock().await.recv().await.unwrap(),
         ))
+    }
+    async fn get_payload_availability(
+        &self,
+        _request: anemo::Request<PayloadAvailabilityRequest>,
+    ) -> Result<anemo::Response<PayloadAvailabilityResponse>, anemo::rpc::Status> {
+        unimplemented!()
     }
 }
 
@@ -279,7 +284,7 @@ async fn fetch_certificates_basic() {
 
     // Avoid any sort of missing payload by pre-populating the batch
     for (digest, worker_id) in headers.iter().flat_map(|h| h.payload.iter()) {
-        payload_store.write((*digest, *worker_id), 0u8).await;
+        payload_store.async_write((*digest, *worker_id), 0u8).await;
     }
 
     let total_certificates = fixture.authorities().count() * rounds as usize;

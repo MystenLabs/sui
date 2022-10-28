@@ -6,6 +6,8 @@ import { numberSuffix } from '../../utils/numberUtil';
 
 import styles from './TabFooter.module.css';
 
+import { Placeholder } from '~/ui/Placeholder';
+
 const NUMBER_OF_TX_PER_PAGE_OPTIONS = [20, 40, 60];
 // Update this footer now accept React.ReactElement as a child
 function TabFooter({
@@ -18,6 +20,7 @@ function TabFooter({
     stats?: {
         count: number | string;
         stats_text: string;
+        loadState?: string;
     };
     paging?: number;
     itemsPerPageChange?: Function;
@@ -42,7 +45,10 @@ function TabFooter({
             )}
             {(stats || paging) && (
                 <div className={styles.stats}>
-                    {stats && (
+                    {stats && stats.loadState === 'pending' && (
+                        <Placeholder width="120px" height="12px" />
+                    )}
+                    {stats && stats.loadState === 'loaded' && (
                         <>
                             {typeof stats.count === 'number'
                                 ? numberSuffix(stats.count)
@@ -50,6 +56,9 @@ function TabFooter({
                             {stats.stats_text}
                         </>
                     )}
+
+                    {stats && stats.loadState === 'fail' && <></>}
+
                     {paging && (
                         <div>
                             <select

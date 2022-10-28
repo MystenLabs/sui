@@ -95,6 +95,15 @@ module.exports = {
         offwhite: "#fefefe",
         offblack: "#111111",
       },
+      keyframes: {
+        shimmer: {
+          '0%': { 'background-position': '-1000px 0' },
+          '100%': { 'background-position': '1000px 0' },
+        },
+      },
+      animation: {
+        shimmer: 'shimmer 2s infinite linear',
+      },
     },
   },
   corePlugins: {

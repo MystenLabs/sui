@@ -10,6 +10,11 @@ use prometheus::{
 use std::time::Duration;
 use tonic::Code;
 
+const LATENCY_SEC_BUCKETS: &[f64] = &[
+    0.01, 0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 3.0, 4.0, 5.0, 8.0, 10.0, 15.0, 20.0, 30.0, 50.0, 100.0,
+    200.0,
+];
+
 #[derive(Clone)]
 pub struct Metrics {
     pub worker_metrics: Option<WorkerMetrics>,
@@ -52,6 +57,8 @@ pub fn initialise_metrics(metrics_registry: &Registry) -> Metrics {
 pub struct WorkerMetrics {
     /// Number of created batches from the batch_maker
     pub created_batch_size: HistogramVec,
+    /// Time taken to create a batch
+    pub created_batch_latency: HistogramVec,
 }
 
 impl WorkerMetrics {
@@ -75,6 +82,15 @@ impl WorkerMetrics {
                     500_000.0,
                     1_000_000.0
                 ],
+                registry
+            )
+            .unwrap(),
+            created_batch_latency: register_histogram_vec_with_registry!(
+                "created_batch_latency",
+                "The latency of creating (sealing) a batch",
+                &["epoch", "reason"],
+                // buckets in seconds
+                LATENCY_SEC_BUCKETS.to_vec(),
                 registry
             )
             .unwrap(),

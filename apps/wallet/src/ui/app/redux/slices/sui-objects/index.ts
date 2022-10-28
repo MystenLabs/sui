@@ -4,9 +4,11 @@
 import {
     getExecutionStatusType,
     getObjectExistsResponse,
+    getObjectId,
     getTimestampFromTransactionResponse,
     getTotalGasUsed,
     getTransactionDigest,
+    getObjectVersion,
 } from '@mysten/sui.js';
 import {
     createAsyncThunk,
@@ -16,15 +18,8 @@ import {
 
 import { SUI_SYSTEM_STATE_OBJECT_ID } from './Coin';
 import { ExampleNFT } from './NFT';
-import { FEATURES } from '_src/ui/app/experimentation/features';
 
-import type {
-    SuiObject,
-    SuiAddress,
-    ObjectId,
-    SuiExecuteTransactionResponse,
-    SuiTransactionResponse,
-} from '@mysten/sui.js';
+import type { SuiObject, SuiAddress, ObjectId } from '@mysten/sui.js';
 import type { RootState } from '_redux/RootReducer';
 import type { AppThunkConfig } from '_store/thunk-extras';
 
@@ -39,12 +34,31 @@ export const fetchAllOwnedAndRequiredObjects = createAsyncThunk<
     void,
     AppThunkConfig
 >('sui-objects/fetch-all', async (_, { getState, extra: { api } }) => {
-    const address = getState().account.address;
+    const state = getState();
+    const {
+        account: { address },
+    } = state;
     const allSuiObjects: SuiObject[] = [];
     if (address) {
         const allObjectRefs =
             await api.instance.fullNode.getObjectsOwnedByAddress(`${address}`);
-        const objectIDs = allObjectRefs.map((anObj) => anObj.objectId);
+        const objectIDs = allObjectRefs
+            .filter((anObj) => {
+                const fetchedVersion = getObjectVersion(anObj);
+                const storedObj = suiObjectsAdapterSelectors.selectById(
+                    state,
+                    getObjectId(anObj)
+                );
+                const storedVersion = storedObj
+                    ? getObjectVersion(storedObj.reference)
+                    : null;
+                const objOutdated = fetchedVersion !== storedVersion;
+                if (!objOutdated && storedObj) {
+                    allSuiObjects.push(storedObj);
+                }
+                return objOutdated;
+            })
+            .map((anObj) => anObj.objectId);
         objectIDs.push(SUI_SYSTEM_STATE_OBJECT_ID);
         const allObjRes = await api.instance.fullNode.getObjectBatch(objectIDs);
         for (const objRes of allObjRes) {
@@ -75,14 +89,9 @@ export const batchFetchObject = createAsyncThunk<
 
 export const mintDemoNFT = createAsyncThunk<void, void, AppThunkConfig>(
     'mintDemoNFT',
-    async (_, { extra: { api, keypairVault, featureGating }, dispatch }) => {
+    async (_, { extra: { api, keypairVault }, dispatch }) => {
         const signer = api.getSignerInstance(keypairVault.getKeyPair());
-        if (featureGating.isOn(FEATURES.DEPRECATE_GATEWAY)) {
-            await ExampleNFT.mintExampleNFTWithFullnode(signer);
-        } else {
-            await ExampleNFT.mintExampleNFT(signer);
-        }
-
+        await ExampleNFT.mintExampleNFT(signer);
         await dispatch(fetchAllOwnedAndRequiredObjects());
     }
 );
@@ -100,24 +109,14 @@ export const transferSuiNFT = createAsyncThunk<
     AppThunkConfig
 >(
     'transferSuiNFT',
-    async (data, { extra: { api, keypairVault, featureGating }, dispatch }) => {
-        let txn: SuiTransactionResponse | SuiExecuteTransactionResponse;
+    async (data, { extra: { api, keypairVault }, dispatch }) => {
         const signer = api.getSignerInstance(keypairVault.getKeyPair());
-        if (featureGating.isOn(FEATURES.DEPRECATE_GATEWAY)) {
-            txn = await ExampleNFT.TransferNFTWithFullnode(
-                signer,
-                data.nftId,
-                data.recipientAddress,
-                data.transferCost
-            );
-        } else {
-            txn = await ExampleNFT.TransferNFT(
-                signer,
-                data.nftId,
-                data.recipientAddress,
-                data.transferCost
-            );
-        }
+        const txn = await ExampleNFT.TransferNFT(
+            signer,
+            data.nftId,
+            data.recipientAddress,
+            data.transferCost
+        );
 
         await dispatch(fetchAllOwnedAndRequiredObjects());
         const txnResp = {

@@ -12,7 +12,6 @@ use crypto::{AggregateSignature, PublicKey, Signature};
 use dag::node_dag::Affiliated;
 use derive_builder::Builder;
 use fastcrypto::{
-    bls12381::BLS12381Signature,
     hash::{Digest, Hash, HashFunction},
     traits::{AggregateAuthenticator, EncodeDecodeBase64, Signer, VerifyingKey},
     SignatureService, Verifier,
@@ -22,6 +21,7 @@ use mysten_util_mem::MallocSizeOf;
 use proptest_derive::Arbitrary;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
+use std::time::{Duration, SystemTime};
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
     fmt,
@@ -30,9 +30,63 @@ use std::{
 /// The round number.
 pub type Round = u64;
 
+/// The epoch UNIX timestamp in milliseconds
+pub type TimestampMs = u64;
+
+pub trait Timestamp {
+    // Returns the time elapsed between the timestamp
+    // and "now". The result is a Duration.
+    fn elapsed(&self) -> Duration;
+}
+
+impl Timestamp for TimestampMs {
+    fn elapsed(&self) -> Duration {
+        let diff = now().saturating_sub(*self);
+        Duration::from_millis(diff)
+    }
+}
+// Returns the current time expressed as UNIX
+// timestamp in milliseconds
+fn now() -> TimestampMs {
+    match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
+        Ok(n) => n.as_millis() as TimestampMs,
+        Err(_) => panic!("SystemTime before UNIX EPOCH!"),
+    }
+}
+
+// Additional metadata information for an entity. Those data
+// should not be treated as trustworthy data and should be used
+// for NON CRITICAL purposes only. For example should not be used
+// for any processes that are part of our protocol that can affect
+// safety or liveness.
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq, Arbitrary, MallocSizeOf)]
+pub struct Metadata {
+    // timestamp of when the entity created. This is generated
+    // by the node which creates the entity.
+    pub created_at: TimestampMs,
+}
+
+impl Default for Metadata {
+    fn default() -> Self {
+        Metadata { created_at: now() }
+    }
+}
+
 pub type Transaction = Vec<u8>;
 #[derive(Clone, Serialize, Deserialize, Default, Debug, PartialEq, Eq, Arbitrary)]
-pub struct Batch(pub Vec<Transaction>);
+pub struct Batch {
+    pub transactions: Vec<Transaction>,
+    pub metadata: Metadata,
+}
+
+impl Batch {
+    pub fn new(transactions: Vec<Transaction>) -> Self {
+        Batch {
+            transactions,
+            metadata: Metadata::default(),
+        }
+    }
+}
 
 #[derive(
     Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq, Hash, PartialOrd, Ord, MallocSizeOf,
@@ -67,7 +121,9 @@ impl Hash<{ crypto::DIGEST_LENGTH }> for Batch {
     type TypedDigest = BatchDigest;
 
     fn digest(&self) -> Self::TypedDigest {
-        BatchDigest::new(crypto::DefaultHashFunction::digest_iterator(self.0.iter()).into())
+        BatchDigest::new(
+            crypto::DefaultHashFunction::digest_iterator(self.transactions.iter()).into(),
+        )
     }
 }
 
@@ -82,6 +138,7 @@ pub struct Header {
     pub parents: BTreeSet<CertificateDigest>,
     pub id: HeaderDigest,
     pub signature: Signature,
+    pub metadata: Metadata,
 }
 
 impl HeaderBuilder {
@@ -97,6 +154,7 @@ impl HeaderBuilder {
             parents: self.parents.unwrap(),
             id: HeaderDigest::default(),
             signature: Signature::default(),
+            metadata: Metadata::default(),
         };
 
         Ok(Header {
@@ -138,6 +196,7 @@ impl Header {
             parents,
             id: HeaderDigest::default(),
             signature: Signature::default(),
+            metadata: Metadata::default(),
         };
         let id = header.digest();
         let signature = signature_service.request_signature(id.into()).await;
@@ -388,6 +447,7 @@ pub struct Certificate {
     aggregated_signature: AggregateSignature,
     #[serde_as(as = "NarwhalBitmap")]
     signed_authorities: roaring::RoaringBitmap,
+    pub metadata: Metadata,
 }
 
 impl Certificate {
@@ -471,7 +531,7 @@ impl Certificate {
         let aggregated_signature = if sigs.is_empty() {
             AggregateSignature::default()
         } else {
-            AggregateSignature::aggregate::<BLS12381Signature, Vec<&BLS12381Signature>>(
+            AggregateSignature::aggregate::<Signature, Vec<&Signature>>(
                 sigs.iter().map(|(_, sig)| sig).collect(),
             )
             .map_err(|_| signature::Error::new())
@@ -482,6 +542,7 @@ impl Certificate {
             header,
             aggregated_signature,
             signed_authorities,
+            metadata: Metadata::default(),
         })
     }
 
@@ -669,16 +730,6 @@ pub enum PrimaryMessage {
         certificates: Vec<(CertificateDigest, Option<Certificate>)>,
         from: PublicKey,
     },
-
-    PayloadAvailabilityRequest {
-        certificate_ids: Vec<CertificateDigest>,
-        requestor: PublicKey,
-    },
-
-    PayloadAvailabilityResponse {
-        payload_availability: Vec<(CertificateDigest, bool)>,
-        from: PublicKey,
-    },
 }
 
 /// Used by the primary to fetch certificates from other primaries.
@@ -697,8 +748,27 @@ pub struct FetchCertificatesRequest {
 /// Used by the primary to reply to FetchCertificatesRequest.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct FetchCertificatesResponse {
-    /// Certifcates sorted from lower to higher rounds.
+    /// Certificates sorted from lower to higher rounds.
     pub certificates: Vec<Certificate>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
+pub struct PayloadAvailabilityRequest {
+    pub certificate_ids: Vec<CertificateDigest>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
+pub struct PayloadAvailabilityResponse {
+    pub payload_availability: Vec<(CertificateDigest, bool)>,
+}
+
+impl PayloadAvailabilityResponse {
+    pub fn available_block_ids(&self) -> Vec<CertificateDigest> {
+        self.payload_availability
+            .iter()
+            .filter_map(|(id, available)| available.then_some(*id))
+            .collect()
+    }
 }
 
 /// Message to reconfigure worker tasks. This message must be sent by a trusted source.
@@ -780,6 +850,7 @@ impl fmt::Display for BlockErrorKind {
 pub struct WorkerOurBatchMessage {
     pub digest: BatchDigest,
     pub worker_id: WorkerId,
+    pub metadata: Metadata,
 }
 
 /// Used by worker to inform primary it received a batch from another authority.
@@ -801,4 +872,33 @@ pub struct RoundVoteDigestPair {
     pub round: Round,
     /// The hash of the vote used to ensure equality
     pub vote_digest: VoteDigest,
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{Batch, Metadata, Timestamp};
+    use std::time::Duration;
+    use tokio::time::sleep;
+
+    #[tokio::test]
+    async fn test_elapsed() {
+        let batch = Batch::new(vec![]);
+        assert!(batch.metadata.created_at > 0);
+
+        sleep(Duration::from_secs(2)).await;
+
+        assert!(batch.metadata.created_at.elapsed().as_secs_f64() >= 2.0);
+    }
+
+    #[test]
+    fn test_elapsed_when_newer_than_now() {
+        let batch = Batch {
+            transactions: vec![],
+            metadata: Metadata {
+                created_at: 2999309726980, // something in the future - Fri Jan 16 2065 05:35:26
+            },
+        };
+
+        assert_eq!(batch.metadata.created_at.elapsed().as_secs_f64(), 0.0);
+    }
 }

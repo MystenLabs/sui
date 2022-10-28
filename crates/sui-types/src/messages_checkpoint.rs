@@ -9,12 +9,13 @@ use crate::base_types::ExecutionDigests;
 use crate::committee::{EpochId, StakeUnit};
 use crate::crypto::{AuthoritySignInfo, AuthoritySignInfoTrait, AuthorityWeakQuorumSignInfo};
 use crate::error::SuiResult;
-use crate::messages::CertifiedTransaction;
+use crate::gas::GasCostSummary;
+use crate::messages::{CertifiedTransaction, VerifiedCertificate};
 use crate::waypoint::{Waypoint, WaypointDiff};
 use crate::{
     base_types::AuthorityName,
     committee::Committee,
-    crypto::{sha3_hash, AuthoritySignature, SuiAuthoritySignature, VerificationObligation},
+    crypto::{sha3_hash, AuthoritySignature, VerificationObligation},
     error::SuiError,
 };
 use serde::{Deserialize, Serialize};
@@ -180,6 +181,8 @@ pub struct CheckpointSummary {
     pub sequence_number: CheckpointSequenceNumber,
     pub content_digest: CheckpointContentsDigest,
     pub previous_digest: Option<CheckpointDigest>,
+    /// The total gas costs of all transactions included in this checkpoint.
+    pub gas_cost_summary: GasCostSummary,
     /// If this checkpoint is the last checkpoint of the epoch, we also include the committee
     /// of the next epoch. This allows anyone receiving this checkpoint know that the epoch
     /// will change after this checkpoint, as well as what the new committee is.
@@ -196,6 +199,7 @@ impl CheckpointSummary {
         sequence_number: CheckpointSequenceNumber,
         transactions: &CheckpointContents,
         previous_digest: Option<CheckpointDigest>,
+        gas_cost_summary: GasCostSummary,
         next_epoch_committee: Option<Committee>,
     ) -> CheckpointSummary {
         let mut waypoint = Box::new(Waypoint::default());
@@ -210,6 +214,7 @@ impl CheckpointSummary {
             sequence_number,
             content_digest,
             previous_digest,
+            gas_cost_summary,
             next_epoch_committee: next_epoch_committee.map(|c| c.voting_rights),
         }
     }
@@ -227,10 +232,12 @@ impl Display for CheckpointSummary {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "CheckpointSummary {{ epoch: {:?}, seq: {:?}, content_digest: {} }}",
+            "CheckpointSummary {{ epoch: {:?}, seq: {:?}, content_digest: {},
+            gas_cost_summary: {:?}}}",
             self.epoch,
             self.sequence_number,
             hex::encode(self.content_digest),
+            self.gas_cost_summary,
         )
     }
 }
@@ -260,6 +267,7 @@ impl SignedCheckpointSummary {
         signer: &dyn signature::Signer<AuthoritySignature>,
         transactions: &CheckpointContents,
         previous_digest: Option<CheckpointDigest>,
+        gas_cost_summary: GasCostSummary,
         next_epoch_committee: Option<Committee>,
     ) -> SignedCheckpointSummary {
         let checkpoint = CheckpointSummary::new(
@@ -267,6 +275,7 @@ impl SignedCheckpointSummary {
             sequence_number,
             transactions,
             previous_digest,
+            gas_cost_summary,
             next_epoch_committee,
         );
         SignedCheckpointSummary::new_from_summary(checkpoint, authority, signer)
@@ -277,16 +286,11 @@ impl SignedCheckpointSummary {
         authority: AuthorityName,
         signer: &dyn signature::Signer<AuthoritySignature>,
     ) -> SignedCheckpointSummary {
-        let signature = AuthoritySignature::new(&checkpoint, signer);
-
         let epoch = checkpoint.epoch;
+        let auth_signature = AuthoritySignInfo::new(epoch, &checkpoint, authority, signer);
         SignedCheckpointSummary {
             summary: checkpoint,
-            auth_signature: AuthoritySignInfo {
-                epoch,
-                authority,
-                signature,
-            },
+            auth_signature,
         }
     }
 
@@ -349,10 +353,10 @@ impl CertifiedCheckpointSummary {
 
         let certified_checkpoint = CertifiedCheckpointSummary {
             summary: signed_checkpoints[0].summary.clone(),
-            auth_signature: AuthorityWeakQuorumSignInfo::new_with_signatures(
+            auth_signature: AuthorityWeakQuorumSignInfo::new_from_auth_sign_infos(
                 signed_checkpoints
                     .into_iter()
-                    .map(|v| (v.auth_signature.authority, v.auth_signature.signature))
+                    .map(|v| v.auth_signature)
                     .collect(),
                 committee,
             )?,
@@ -547,15 +551,11 @@ impl CheckpointProposal {
         transactions: CheckpointProposalContents,
     ) -> Self {
         let proposal_summary = CheckpointProposalSummary::new(sequence_number, &transactions);
-        let signature = AuthoritySignature::new(&proposal_summary, signer);
+        let auth_signature = AuthoritySignInfo::new(epoch, &proposal_summary, authority, signer);
         Self {
             signed_summary: SignedCheckpointProposalSummary {
                 summary: proposal_summary,
-                auth_signature: AuthoritySignInfo {
-                    epoch,
-                    authority,
-                    signature,
-                },
+                auth_signature,
             },
             transactions,
         }
@@ -622,8 +622,38 @@ pub struct CheckpointFragment {
     pub certs: BTreeMap<ExecutionDigests, CertifiedTransaction>,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct VerifiedCheckpointFragment(CheckpointFragment);
+
+impl VerifiedCheckpointFragment {
+    /// Escape hatch for when it is too awkward / inefficient to use CheckpointFragment::verify().
+    /// Use carefully!
+    pub fn new_unchecked(fragment: CheckpointFragment) -> Self {
+        Self(fragment)
+    }
+
+    pub fn certs(&self) -> impl Iterator<Item = (&ExecutionDigests, VerifiedCertificate)> {
+        self.0
+            .certs
+            .iter()
+            .map(|(digests, cert)| (digests, VerifiedCertificate::new_unchecked(cert.clone())))
+    }
+}
+
+impl std::ops::Deref for VerifiedCheckpointFragment {
+    type Target = CheckpointFragment;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 impl CheckpointFragment {
-    pub fn verify(&self, committee: &Committee) -> SuiResult {
+    pub fn verify(self, committee: &Committee) -> SuiResult<VerifiedCheckpointFragment> {
+        self.verify_signatures(committee)?;
+        Ok(VerifiedCheckpointFragment(self))
+    }
+
+    pub fn verify_signatures(&self, committee: &Committee) -> SuiResult {
         fp_ensure!(
             self.proposer.summary.sequence_number == self.other.summary.sequence_number,
             SuiError::from("Proposer and other have inconsistent sequence number")
@@ -658,7 +688,7 @@ impl CheckpointFragment {
             let cert = self.certs.get(digest).ok_or_else(|| {
                 SuiError::from(format!("Missing cert with digest {digest:?}").as_str())
             })?;
-            cert.verify(committee)?;
+            cert.verify_signatures(committee)?;
         }
 
         Ok(())
@@ -729,7 +759,16 @@ mod tests {
             .map(|k| {
                 let name = k.public().into();
 
-                SignedCheckpointSummary::new(committee.epoch, 1, name, k, &set, None, None)
+                SignedCheckpointSummary::new(
+                    committee.epoch,
+                    1,
+                    name,
+                    k,
+                    &set,
+                    None,
+                    GasCostSummary::default(),
+                    None,
+                )
             })
             .collect();
 
@@ -757,7 +796,16 @@ mod tests {
             .map(|k| {
                 let name = k.public().into();
 
-                SignedCheckpointSummary::new(committee.epoch, 1, name, k, &set, None, None)
+                SignedCheckpointSummary::new(
+                    committee.epoch,
+                    1,
+                    name,
+                    k,
+                    &set,
+                    None,
+                    GasCostSummary::default(),
+                    None,
+                )
             })
             .collect();
 
@@ -776,7 +824,16 @@ mod tests {
                     [ExecutionDigests::random()].into_iter(),
                 );
 
-                SignedCheckpointSummary::new(committee.epoch, 1, name, k, &set, None, None)
+                SignedCheckpointSummary::new(
+                    committee.epoch,
+                    1,
+                    name,
+                    k,
+                    &set,
+                    None,
+                    GasCostSummary::default(),
+                    None,
+                )
             })
             .collect();
 

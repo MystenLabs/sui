@@ -58,11 +58,18 @@ pnpm run prepare:e2e
 pnpm run test:e2e
 ```
 
+To run E2E tests against DevNet
+
+```
+cd sdk/typescript
+VITE_FAUCET_URL='https://faucet.devnet.sui.io:443/gas' VITE_FULLNODE_URL='https://fullnode.devnet.sui.io' pnpm test:e2e
+```
+
 ## Usage
 
 The `JsonRpcProvider` class provides a connection to the JSON-RPC Server and should be used for all read-only operations. The default URLs to connect with the RPC server are:
 
-- local: http://127.0.0.1:5001
+- local: http://127.0.0.1:9000
 - DevNet: https://fullnode.devnet.sui.io:443
 
 Examples:
@@ -112,20 +119,11 @@ For any operations that involves signing or submitting transactions, you should 
 To transfer a `0x2::coin::Coin<SUI>`:
 
 ```typescript
-import {
-  Ed25519Keypair,
-  JsonRpcProvider,
-  RawSigner,
-  LocalTxnDataSerializer,
-} from '@mysten/sui.js';
+import { Ed25519Keypair, JsonRpcProvider, RawSigner } from '@mysten/sui.js';
 // Generate a new Ed25519 Keypair
 const keypair = new Ed25519Keypair();
 const provider = new JsonRpcProvider('https://fullnode.devnet.sui.io:443');
-const signer = new RawSigner(
-  keypair,
-  provider,
-  new LocalTxnDataSerializer(provider)
-);
+const signer = new RawSigner(keypair, provider);
 const transferTxn = await signer.transferObjectWithRequestType({
   objectId: '0x5015b016ab570df14c87649eda918e09e5cc61e0',
   gasBudget: 1000,
@@ -137,20 +135,11 @@ console.log('transferTxn', transferTxn);
 To split a `0x2::coin::Coin<SUI>` into multiple coins
 
 ```typescript
-import {
-  Ed25519Keypair,
-  JsonRpcProvider,
-  RawSigner,
-  LocalTxnDataSerializer,
-} from '@mysten/sui.js';
+import { Ed25519Keypair, JsonRpcProvider, RawSigner } from '@mysten/sui.js';
 // Generate a new Keypair
 const keypair = new Ed25519Keypair();
 const provider = new JsonRpcProvider('https://fullnode.devnet.sui.io:443');
-const signer = new RawSigner(
-  keypair,
-  provider,
-  new LocalTxnDataSerializer(provider)
-);
+const signer = new RawSigner(keypair, provider);
 const splitTxn = await signer.splitCoinWithRequestType({
   coinObjectId: '0x5015b016ab570df14c87649eda918e09e5cc61e0',
   // Say if the original coin has a balance of 100,
@@ -165,20 +154,11 @@ console.log('SplitCoin txn', splitTxn);
 To merge two coins:
 
 ```typescript
-import {
-  Ed25519Keypair,
-  JsonRpcProvider,
-  RawSigner,
-  LocalTxnDataSerializer,
-} from '@mysten/sui.js';
+import { Ed25519Keypair, JsonRpcProvider, RawSigner } from '@mysten/sui.js';
 // Generate a new Keypair
 const keypair = new Ed25519Keypair();
 const provider = new JsonRpcProvider('https://fullnode.devnet.sui.io:443');
-const signer = new RawSigner(
-  keypair,
-  provider,
-  new LocalTxnDataSerializer(provider)
-);
+const signer = new RawSigner(keypair, provider);
 const mergeTxn = await signer.mergeCoinWithRequestType({
   primaryCoin: '0x5015b016ab570df14c87649eda918e09e5cc61e0',
   coinToMerge: '0xcc460051569bfb888dedaf5182e76f473ee351af',
@@ -190,20 +170,11 @@ console.log('MergeCoin txn', mergeTxn);
 To make a move call:
 
 ```typescript
-import {
-  Ed25519Keypair,
-  JsonRpcProvider,
-  RawSigner,
-  LocalTxnDataSerializer,
-} from '@mysten/sui.js';
+import { Ed25519Keypair, JsonRpcProvider, RawSigner } from '@mysten/sui.js';
 // Generate a new Keypair
 const keypair = new Ed25519Keypair();
 const provider = new JsonRpcProvider('https://fullnode.devnet.sui.io:443');
-const signer = new RawSigner(
-  keypair,
-  provider,
-  new LocalTxnDataSerializer(provider)
-);
+const signer = new RawSigner(keypair, provider);
 const moveCallTxn = await signer.executeMoveCallWithRequestType({
   packageObjectId: '0x2',
   module: 'devnet_nft',
@@ -219,24 +190,56 @@ const moveCallTxn = await signer.executeMoveCallWithRequestType({
 console.log('moveCallTxn', moveCallTxn);
 ```
 
+Subscribe to all events created by transactions sent by account `0xbff6ccc8707aa517b4f1b95750a2a8c666012df3`
+
+```typescript
+import { JsonRpcProvider } from '@mysten/sui.js';
+const provider = new JsonRpcProvider('https://fullnode.devnet.sui.io:443');
+
+// calls RPC method 'sui_subscribeEvent' with params:
+// [ { SenderAddress: '0xbff6ccc8707aa517b4f1b95750a2a8c666012df3' } ]
+const subscriptionId = await provider.subscribeEvent(
+  { SenderAddress: '0xbff6ccc8707aa517b4f1b95750a2a8c666012df3' },
+  (event: SuiEventEnvelope) => {
+    // handle subscription notification message here. This function is called once per subscription message.
+  }
+);
+
+// later, to unsubscribe
+// calls RPC method 'sui_unsubscribeEvent' with params: [ subscriptionId ]
+const subFoundAndRemoved = await provider.unsubscribeEvent(subscriptionId);
+```
+
+Subscribe to all events created by the `devnet_nft` module
+
+```typescript
+import { JsonRpcProvider } from '@mysten/sui.js';
+const provider = new JsonRpcProvider('https://fullnode.devnet.sui.io:443');
+
+const devnetNftFilter = {
+  All: [
+    { EventType: 'MoveEvent' },
+    { Package: '0x2' },
+    { Module: 'devnet_nft' },
+  ],
+};
+const devNftSub = await provider.subscribeEvent(
+  devnetNftFilter,
+  (event: SuiEventEnvelope) => {
+    // handle subscription notification message here
+  }
+);
+```
+
 To publish a package:
 
 ```typescript
-import {
-  Ed25519Keypair,
-  JsonRpcProvider,
-  RawSigner,
-  LocalTxnDataSerializer,
-} from '@mysten/sui.js';
+import { Ed25519Keypair, JsonRpcProvider, RawSigner } from '@mysten/sui.js';
 const { execSync } = require('child_process');
 // Generate a new Keypair
 const keypair = new Ed25519Keypair();
 const provider = new JsonRpcProvider('https://fullnode.devnet.sui.io:443');
-const signer = new RawSigner(
-  keypair,
-  provider,
-  new LocalTxnDataSerializer(provider)
-);
+const signer = new RawSigner(keypair, provider);
 const compiledModules = JSON.parse(
   execSync(
     `${cliPath} move build --dump-bytecode-as-base64 --path ${packagePath}`,
@@ -256,19 +259,10 @@ console.log('publishTxn', publishTxn);
 Alternatively, a Secp256k1 can be initiated:
 
 ```typescript
-import {
-  Secp256k1Keypair,
-  JsonRpcProvider,
-  RawSigner,
-  LocalTxnDataSerializer,
-} from '@mysten/sui.js';
+import { Secp256k1Keypair, JsonRpcProvider, RawSigner } from '@mysten/sui.js';
 // Generate a new Secp256k1 Keypair
 const keypair = new Secp256k1Keypair();
 
 const provider = new JsonRpcProvider('https://fullnode.devnet.sui.io:443');
-const signer = new RawSigner(
-  keypair,
-  provider,
-  new LocalTxnDataSerializer(provider)
-);
+const signer = new RawSigner(keypair, provider);
 ```

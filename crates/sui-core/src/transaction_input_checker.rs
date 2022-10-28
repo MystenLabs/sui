@@ -13,8 +13,8 @@ use sui_types::{
     fp_ensure,
     gas::{self, SuiGasStatus},
     messages::{
-        CertifiedTransaction, InputObjectKind, InputObjects, SingleTransactionKind,
-        TransactionData, TransactionEnvelope,
+        InputObjectKind, InputObjects, SingleTransactionKind, TransactionData, VerifiedCertificate,
+        VerifiedTransactionEnvelope,
     },
     object::{Object, Owner},
 };
@@ -22,17 +22,27 @@ use tracing::instrument;
 
 async fn get_gas_status<S, T>(
     store: &SuiDataStore<S>,
-    transaction: &TransactionEnvelope<T>,
+    transaction: &VerifiedTransactionEnvelope<T>,
 ) -> SuiResult<SuiGasStatus<'static>>
 where
     S: Eq + Debug + Serialize + for<'de> Deserialize<'de>,
 {
+    let tx_kind = &transaction.signed_data.data.kind;
+    let gas_object_ref = transaction.gas_payment_object_ref();
+    let gas_object_refs = match tx_kind {
+        TransactionKind::Single(SingleTransactionKind::PaySui(p)) => p.coins.clone(),
+        TransactionKind::Single(SingleTransactionKind::PayAllSui(p)) => p.coins.clone(),
+        _ => vec![],
+    };
+    let extra_gas_object_refs = gas_object_refs.into_iter().skip(1).collect();
+
     let mut gas_status = check_gas(
         store,
-        transaction.gas_payment_object_ref(),
+        gas_object_ref,
         transaction.signed_data.data.gas_budget,
         transaction.signed_data.data.gas_price,
         &transaction.signed_data.data.kind,
+        extra_gas_object_refs,
     )
     .await?;
 
@@ -48,7 +58,7 @@ where
 #[instrument(level = "trace", skip_all)]
 pub async fn check_transaction_input<S, T>(
     store: &SuiDataStore<S>,
-    transaction: &TransactionEnvelope<T>,
+    transaction: &VerifiedTransactionEnvelope<T>,
 ) -> SuiResult<(SuiGasStatus<'static>, InputObjects)>
 where
     S: Eq + Debug + Serialize + for<'de> Deserialize<'de>,
@@ -64,7 +74,7 @@ where
 
 pub async fn check_certificate_input<S>(
     store: &SuiDataStore<S>,
-    cert: &CertifiedTransaction,
+    cert: &VerifiedCertificate,
 ) -> SuiResult<(SuiGasStatus<'static>, InputObjects)>
 where
     S: Eq + Debug + Serialize + for<'de> Deserialize<'de>,
@@ -95,6 +105,7 @@ async fn check_gas<S>(
     gas_budget: u64,
     computation_gas_price: u64,
     tx_kind: &TransactionKind,
+    additional_objects_for_gas_payment: Vec<ObjectRef>,
 ) -> SuiResult<SuiGasStatus<'static>>
 where
     S: Eq + Debug + Serialize + for<'de> Deserialize<'de>,
@@ -103,9 +114,10 @@ where
         Ok(SuiGasStatus::new_unmetered())
     } else {
         let gas_object = store.get_object_by_key(&gas_payment.0, gas_payment.1)?;
-        let gas_object = gas_object.ok_or(SuiError::ObjectErrors {
+        let gas_object = gas_object.ok_or(SuiError::TransactionInputObjectsErrors {
             errors: vec![SuiError::ObjectNotFound {
                 object_id: gas_payment.0,
+                version: Some(gas_payment.1),
             }],
         })?;
 
@@ -117,16 +129,39 @@ where
 
         // If the transaction is TransferSui, we ensure that the gas balance is enough to cover
         // both gas budget and the transfer amount.
-        let extra_amount =
-            if let TransactionKind::Single(SingleTransactionKind::TransferSui(t)) = tx_kind {
+        let extra_amount = match tx_kind {
+            TransactionKind::Single(SingleTransactionKind::TransferSui(t)) => {
                 t.amount.unwrap_or_default()
-            } else {
-                0
-            };
+            }
+            TransactionKind::Single(SingleTransactionKind::PaySui(t)) => t.amounts.iter().sum(),
+            _ => 0,
+        };
         // TODO: We should revisit how we compute gas price and compare to gas budget.
         let gas_price = std::cmp::max(computation_gas_price, storage_gas_price);
 
-        gas::check_gas_balance(&gas_object, gas_budget, gas_price, extra_amount)?;
+        if tx_kind.is_pay_sui_tx() {
+            let mut additional_objs = vec![];
+            for obj_ref in additional_objects_for_gas_payment.iter() {
+                let obj = store.get_object_by_key(&obj_ref.0, obj_ref.1)?;
+                let obj = obj.ok_or(SuiError::TransactionInputObjectsErrors {
+                    errors: vec![SuiError::ObjectNotFound {
+                        object_id: gas_payment.0,
+                        version: None,
+                    }],
+                })?;
+                additional_objs.push(obj);
+            }
+            gas::check_gas_balance(
+                &gas_object,
+                gas_budget,
+                gas_price,
+                extra_amount,
+                additional_objs,
+            )?;
+        } else {
+            gas::check_gas_balance(&gas_object, gas_budget, gas_price, extra_amount, vec![])?;
+        }
+
         let gas_status =
             gas::start_gas_metering(gas_budget, computation_gas_price, storage_gas_price)?;
         Ok(gas_status)
@@ -141,10 +176,6 @@ async fn check_objects(
     input_objects: Vec<InputObjectKind>,
     objects: Vec<Object>,
 ) -> Result<InputObjects, SuiError> {
-    // Constructing the list of objects that could be used to authenticate other
-    // objects. Any mutable object (either shared or owned) can be used to
-    // authenticate other objects. Hence essentially we are building the list
-    // of mutable objects.
     // We require that mutable objects cannot show up more than once.
     // In [`SingleTransactionKind::input_objects`] we checked that there is no
     // duplicate objects in the same SingleTransactionKind. However for a Batch
@@ -153,11 +184,11 @@ async fn check_objects(
     // TODO: We should be able to allow the same shared object to show up
     // in more than one SingleTransactionKind. We need to ensure that their
     // version number only increases once at the end of the Batch execution.
-    let mut owned_object_authenticators: HashSet<SuiAddress> = HashSet::new();
+    let mut used_objects: HashSet<SuiAddress> = HashSet::new();
     for object in objects.iter() {
         if !object.is_immutable() {
             fp_ensure!(
-                owned_object_authenticators.insert(object.id().into()),
+                used_objects.insert(object.id().into()),
                 SuiError::InvalidBatchTransaction {
                     error: format!("Mutable object {} cannot appear in more than one single transactions in a batch", object.id()),
                 }
@@ -186,12 +217,7 @@ async fn check_objects(
         }
         // Check if the object contents match the type of lock we need for
         // this object.
-        match check_one_object(
-            &transaction.signer(),
-            object_kind,
-            &object,
-            &owned_object_authenticators,
-        ) {
+        match check_one_object(&transaction.signer(), object_kind, &object) {
             Ok(()) => all_objects.push((object_kind, object)),
             Err(e) => {
                 errors.push(e);
@@ -201,7 +227,7 @@ async fn check_objects(
     // If any errors with the locks were detected, we return all errors to give the client
     // a chance to update the authority if possible.
     if !errors.is_empty() {
-        return Err(SuiError::ObjectErrors { errors });
+        return Err(SuiError::TransactionInputObjectsErrors { errors });
     }
     fp_ensure!(!all_objects.is_empty(), SuiError::ObjectInputArityViolation);
 
@@ -214,7 +240,6 @@ fn check_one_object(
     sender: &SuiAddress,
     object_kind: InputObjectKind,
     object: &Object,
-    owned_object_authenticators: &HashSet<SuiAddress>,
 ) -> SuiResult {
     match object_kind {
         InputObjectKind::MovePackage(package_id) => {
@@ -276,14 +301,10 @@ fn check_one_object(
                     );
                 }
                 Owner::ObjectOwner(owner) => {
-                    // Check that the object owner is another mutable object in the input.
-                    fp_ensure!(
-                        owned_object_authenticators.contains(&owner),
-                        SuiError::MissingObjectOwner {
-                            child_id: object.id(),
-                            parent_id: owner.into(),
-                        }
-                    );
+                    return Err(SuiError::InvalidChildObjectArgument {
+                        child_id: object.id(),
+                        parent_id: owner.into(),
+                    });
                 }
                 Owner::Shared { .. } => {
                     // This object is a mutable shared object. However the transaction

@@ -112,6 +112,35 @@ impl RpcTransactionBuilderServer for FullNodeTransactionBuilderApi {
         Ok(TransactionBytes::from_data(data)?)
     }
 
+    async fn pay_sui(
+        &self,
+        signer: SuiAddress,
+        input_coins: Vec<ObjectID>,
+        recipients: Vec<SuiAddress>,
+        amounts: Vec<u64>,
+        gas_budget: u64,
+    ) -> RpcResult<TransactionBytes> {
+        let data = self
+            .builder
+            .pay_sui(signer, input_coins, recipients, amounts, gas_budget)
+            .await?;
+        Ok(TransactionBytes::from_data(data)?)
+    }
+
+    async fn pay_all_sui(
+        &self,
+        signer: SuiAddress,
+        input_coins: Vec<ObjectID>,
+        recipient: SuiAddress,
+        gas_budget: u64,
+    ) -> RpcResult<TransactionBytes> {
+        let data = self
+            .builder
+            .pay_all_sui(signer, input_coins, recipient, gas_budget)
+            .await?;
+        Ok(TransactionBytes::from_data(data)?)
+    }
+
     async fn publish(
         &self,
         sender: SuiAddress,

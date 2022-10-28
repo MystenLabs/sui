@@ -2,31 +2,23 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_binary_format::CompiledModule;
-use move_bytecode_utils::Modules;
 use move_cli::base::test::UnitTestResult;
 use move_core_types::gas_algebra::InternalGas;
-use move_package::{compilation::compiled_package::CompiledPackage, BuildConfig};
+use move_package::BuildConfig as MoveBuildConfig;
 use move_unit_test::{extensions::set_extension_hook, UnitTestingConfig};
 use move_vm_runtime::native_extensions::NativeContextExtensions;
 use natives::object_runtime::ObjectRuntime;
 use once_cell::sync::Lazy;
 use std::{collections::BTreeMap, path::Path};
+use sui_framework_build::compiled_package::{BuildConfig, CompiledPackage};
 use sui_types::{
-    base_types::TransactionDigest,
-    error::{SuiError, SuiResult},
-    in_memory_storage::InMemoryStorage,
-    messages::InputObjects,
-    temporary_store::TemporaryStore,
-    MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
+    base_types::TransactionDigest, error::SuiResult, in_memory_storage::InMemoryStorage,
+    messages::InputObjects, temporary_store::TemporaryStore, MOVE_STDLIB_ADDRESS,
+    SUI_FRAMEWORK_ADDRESS,
 };
 
 pub mod cost_calib;
 pub mod natives;
-
-pub use sui_framework_build::build_move_stdlib_modules as get_move_stdlib_modules;
-pub use sui_framework_build::verify_modules;
-use sui_framework_build::{build_move_package_with_deps, filter_package_modules};
-use sui_types::sui_serde::{Base64, Encoding};
 
 // Move unit tests will halt after executing this many steps. This is a protection to avoid divergence
 const MAX_UNIT_TEST_INSTRUCTIONS: u64 = 100_000;
@@ -97,47 +89,11 @@ pub fn legacy_length_cost() -> InternalGas {
     InternalGas::new(98)
 }
 
-/// Given a `path` and a `build_config`, build the package in that path and return the compiled modules as base64.
-/// This is useful for when publishing via JSON
-pub fn build_move_package_to_base64(
-    path: &Path,
-    build_config: BuildConfig,
-) -> Result<Vec<String>, SuiError> {
-    build_move_package_to_bytes(path, build_config)
-        .map(|mods| mods.iter().map(Base64::encode).collect::<Vec<_>>())
-}
-
-/// Given a `path` and a `build_config`, build the package in that path and return the compiled modules as Vec<Vec<u8>>.
-/// This is useful for when publishing
-pub fn build_move_package_to_bytes(
-    path: &Path,
-    build_config: BuildConfig,
-) -> Result<Vec<Vec<u8>>, SuiError> {
-    build_move_package(path, build_config).map(|mods| {
-        mods.iter()
-            .map(|m| {
-                let mut bytes = Vec::new();
-                m.serialize(&mut bytes).unwrap();
-                bytes
-            })
-            .collect::<Vec<_>>()
-    })
-}
-
-pub fn build_and_verify_package(
-    path: &Path,
-    build_config: BuildConfig,
-) -> SuiResult<Vec<CompiledModule>> {
-    let modules = build_move_package(path, build_config)?;
-    verify_modules(&modules)?;
-    Ok(modules)
-}
-
 /// This function returns a result of UnitTestResult. The outer result indicates whether it
 /// successfully started running the test, and the inner result indicatests whether all tests pass.
 pub fn run_move_unit_tests(
     path: &Path,
-    build_config: BuildConfig,
+    build_config: MoveBuildConfig,
     config: Option<UnitTestingConfig>,
     compute_coverage: bool,
 ) -> anyhow::Result<UnitTestResult> {
@@ -160,73 +116,12 @@ pub fn run_move_unit_tests(
     )
 }
 
-pub fn build_move_package(
-    path: &Path,
-    build_config: BuildConfig,
-) -> SuiResult<Vec<CompiledModule>> {
-    let pkg = build_move_package_with_deps(path, build_config)?;
-    verify_framework_version(&pkg)?;
-    filter_package_modules(&pkg)
-}
-
-/// Version of the framework code that the binary used for compilation expects should be the same as
-/// version of the framework code bundled as compiled package's dependency and this function
-/// verifies this.
-fn verify_framework_version(pkg: &CompiledPackage) -> SuiResult<()> {
-    // We stash compiled modules in the Modules map which is sorted so that we can compare sets of
-    // compiled modules directly.
-
-    let dep_framework_modules = pkg.all_modules_map().iter_modules_owned();
-    let dep_framework: Vec<&CompiledModule> = dep_framework_modules
-        .iter()
-        .filter(|m| *m.self_id().address() == SUI_FRAMEWORK_ADDRESS)
-        .collect();
-
-    let framework_modules = Modules::new(get_sui_framework().iter()).iter_modules_owned();
-    let framework: Vec<&CompiledModule> = framework_modules.iter().collect();
-
-    // compare framework modules pulled as dependencies (if any - a developer may choose to use only
-    // stdlib) with framework modules bundled with the distribution
-    if !dep_framework.is_empty() && dep_framework != framework {
-        // note: this advice is overfitted to the most common failure modes we see:
-        // user is trying to publish to testnet, but has a `sui` binary and Sui Framework
-        // sources that are not in sync. the first part of the advice ensures that the
-        // user's project is always pointing at the devnet copy of the `Sui` Framework.
-        // the second ensures that the `sui` binary matches the devnet framework
-        return Err(SuiError::ModuleVerificationFailure {
-            error: "Sui framework version mismatch detected.\
-		    Make sure that you are using a GitHub dep in your Move.toml:\
-		    \
-                    [dependencies]
-                    Sui = { git = \"https://github.com/MystenLabs/sui.git\", subdir = \"crates/sui-framework\", rev = \"devnet\" }
-`                   \
-                    If that does not fix the issue, your `sui` binary is likely out of date--try \
-                    cargo install --locked --git https://github.com/MystenLabs/sui.git --branch devnet sui"
-                .to_string(),
-        });
-    }
-
-    let dep_stdlib_modules = pkg.all_modules_map().iter_modules_owned();
-    let dep_stdlib: Vec<&CompiledModule> = dep_stdlib_modules
-        .iter()
-        .filter(|m| *m.self_id().address() == MOVE_STDLIB_ADDRESS)
-        .collect();
-
-    let stdlib_modules = Modules::new(get_move_stdlib().iter()).iter_modules_owned();
-    let stdlib: Vec<&CompiledModule> = stdlib_modules.iter().collect();
-
-    // compare stdlib modules pulled as dependencies (if any) with stdlib modules bundled with the
-    // distribution
-    if !dep_stdlib.is_empty() && dep_stdlib != stdlib {
-        return Err(SuiError::ModuleVerificationFailure {
-            error: "Move stdlib version mismatch detected.\
-                    Make sure that the sui command line tool and the Move standard library code\
-                    used as a dependency correspond to the same git commit"
-                .to_string(),
-        });
-    }
-
-    Ok(())
+/// Wrapper of the build command that verifies the framework version. Should eventually be removed once we can
+/// do this in the obvious way (via version checks)
+pub fn build_move_package(path: &Path, config: BuildConfig) -> SuiResult<CompiledPackage> {
+    let pkg = config.build(path.to_path_buf())?;
+    pkg.verify_framework_version(get_sui_framework(), get_move_stdlib())?;
+    Ok(pkg)
 }
 
 #[cfg(test)]
@@ -240,7 +135,7 @@ mod tests {
         get_sui_framework();
         get_move_stdlib();
         let path = PathBuf::from(DEFAULT_FRAMEWORK_PATH);
-        build_and_verify_package(&path, BuildConfig::default()).unwrap();
+        BuildConfig::default().build(path.clone()).unwrap();
         check_move_unit_tests(&path);
     }
 
@@ -260,7 +155,7 @@ mod tests {
             let path = Path::new(env!("CARGO_MANIFEST_DIR"))
                 .join("../../sui_programmability/examples")
                 .join(example);
-            build_and_verify_package(&path, BuildConfig::default()).unwrap();
+            BuildConfig::default().build(path.clone()).unwrap();
             check_move_unit_tests(&path);
         }
     }
@@ -270,13 +165,13 @@ mod tests {
     fn run_book_examples_move_unit_tests() {
         let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../doc/book/examples");
 
-        build_and_verify_package(&path, BuildConfig::default()).unwrap();
+        BuildConfig::default().build(path.clone()).unwrap();
         check_move_unit_tests(&path);
     }
 
     fn check_move_unit_tests(path: &Path) {
         assert_eq!(
-            run_move_unit_tests(path, BuildConfig::default(), None, false).unwrap(),
+            run_move_unit_tests(path, MoveBuildConfig::default(), None, false).unwrap(),
             UnitTestResult::Success
         );
     }

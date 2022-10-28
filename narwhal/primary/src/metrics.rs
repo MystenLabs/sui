@@ -5,16 +5,17 @@ use mysten_network::metrics::MetricsCallbackProvider;
 use network::metrics::{NetworkConnectionMetrics, NetworkMetrics};
 use prometheus::{
     core::{AtomicI64, GenericGauge},
-    default_registry, register_histogram_vec_with_registry, register_int_counter_vec_with_registry,
-    register_int_counter_with_registry, register_int_gauge_vec_with_registry,
-    register_int_gauge_with_registry, HistogramVec, IntCounter, IntCounterVec, IntGauge,
-    IntGaugeVec, Registry,
+    default_registry, register_histogram_vec_with_registry, register_histogram_with_registry,
+    register_int_counter_vec_with_registry, register_int_counter_with_registry,
+    register_int_gauge_vec_with_registry, register_int_gauge_with_registry, Histogram,
+    HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Registry,
 };
 use std::time::Duration;
 use tonic::Code;
 
 const LATENCY_SEC_BUCKETS: &[f64] = &[
-    0.1, 0.25, 0.5, 1., 2.5, 5., 7.5, 10., 12.5, 15., 20., 25., 30., 60., 90., 120., 180., 300.,
+    0.05, 0.1, 0.25, 0.5, 1., 2.5, 5., 7.5, 10., 12.5, 15., 20., 25., 30., 60., 90., 120., 180.,
+    300.,
 ];
 
 #[derive(Clone)]
@@ -395,6 +396,17 @@ pub struct PrimaryMetrics {
     pub votes_dropped_equivocation_protection: IntCounterVec,
     /// Number of pending batches in proposer
     pub num_of_pending_batches_in_proposer: IntGaugeVec,
+    /// A histogram to track the number of batches included
+    /// per header.
+    pub num_of_batch_digests_in_header: HistogramVec,
+    /// A counter that keeps the number of instances where the proposer
+    /// is ready/not ready to advance.
+    pub proposer_ready_to_advance: IntCounterVec,
+    /// The latency of a batch between the time it has been
+    /// created and until it has been included to a header proposal.
+    pub proposer_batch_latency: Histogram,
+    /// Time it takes for a header to be materialised to a certificate
+    pub header_to_certificate_latency: HistogramVec,
 }
 
 impl PrimaryMetrics {
@@ -552,6 +564,33 @@ impl PrimaryMetrics {
                 "num_of_pending_batches_in_proposer",
                 "Number of batch digests pending in proposer for next header proposal",
                 &["epoch"],
+                registry
+            ).unwrap(),
+            num_of_batch_digests_in_header: register_histogram_vec_with_registry!(
+                "num_of_batch_digests_in_header",
+                "The number of batch digests included in a proposed header. A reason label is included.",
+                &["epoch", "reason"],
+                // buckets in number of digests
+                vec![0.0, 5.0, 10.0, 15.0, 32.0, 50.0, 100.0, 200.0, 500.0, 1000.0],
+                registry
+            ).unwrap(),
+            proposer_ready_to_advance: register_int_counter_vec_with_registry!(
+                "proposer_ready_to_advance",
+                "The number of times where the proposer is ready/not ready to advance.",
+                &["epoch", "ready", "round"],
+                registry
+            ).unwrap(),
+            proposer_batch_latency: register_histogram_with_registry!(
+                "proposer_batch_latency",
+                "The latency of a batch between the time it has been created and until it has been included to a header proposal.",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry
+            ).unwrap(),
+            header_to_certificate_latency: register_histogram_vec_with_registry!(
+                "header_to_certificate_latency",
+                "Time it takes for a header to be materialised to a certificate",
+                &["epoch"],
+                LATENCY_SEC_BUCKETS.to_vec(),
                 registry
             ).unwrap()
         }

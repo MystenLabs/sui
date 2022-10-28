@@ -18,7 +18,7 @@ use tokio::{sync::watch, task::JoinHandle};
 use tracing::{debug, info, instrument};
 use types::{
     metered_channel, Certificate, CertificateDigest, ConsensusStore, ReconfigureNotification,
-    Round, StoreResult,
+    Round, StoreResult, Timestamp,
 };
 
 /// The representation of the DAG in memory.
@@ -59,7 +59,6 @@ impl ConsensusState {
         }
     }
 
-    #[instrument(level = "info", skip_all)]
     pub fn new_from_store(
         genesis: Vec<Certificate>,
         metrics: Arc<ConsensusMetrics>,
@@ -168,6 +167,10 @@ impl ConsensusState {
             .last_committed_round
             .with_label_values(&[])
             .set(last_committed_round as i64);
+
+        self.metrics
+            .certificate_commit_latency
+            .observe(certificate.metadata.created_at.elapsed().as_secs_f64());
 
         // We purge all certificates past the gc depth
         self.dag.retain(|r, _| r + gc_depth >= last_committed_round);

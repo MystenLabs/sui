@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use futures::future;
 use std::ops::Deref;
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -16,7 +17,7 @@ use prometheus::{
 use sui_types::{
     base_types::{AuthorityName, ExecutionDigests},
     error::{SuiError, SuiResult},
-    messages::{CertifiedTransaction, TransactionInfoRequest},
+    messages::CertifiedTransaction,
     messages_checkpoint::{
         AuthenticatedCheckpoint, CertifiedCheckpointSummary, CheckpointContents, CheckpointDigest,
         CheckpointFragment, CheckpointProposal, CheckpointRequest, CheckpointResponse,
@@ -810,23 +811,7 @@ pub async fn create_fragments<A>(
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
-    let next_cp_seq = checkpoint_db.lock().next_checkpoint();
-
-    let mut available_authorities = committee.shuffle_by_stake(None, None);
-    // Remove ourselves and all validators that we have already diffed with.
-    let already_fragmented = checkpoint_db
-        .lock()
-        .validators_already_fragmented_with(next_cp_seq);
-    // TODO: We can also use AuthorityHealth to pick healthy authorities first.
-    available_authorities
-        .retain(|name| name != &active_authority.state.name && !already_fragmented.contains(name));
-    debug!(
-        ?next_cp_seq,
-        fragmented_count=?already_fragmented.len(),
-        to_be_fragmented_count=?available_authorities.len(),
-        "Going through remaining validators to generate fragments",
-    );
-
+    let next_cp_seq = *my_proposal.sequence_number();
     let result = checkpoint_db.lock().attempt_to_construct_checkpoint();
 
     match result {
@@ -840,12 +825,27 @@ where
         }
     }
 
-    // If we failed to create a checkpoint, try to make more fragments.
-
-    if checkpoint_db.lock().get_locals().no_more_fragments {
+    // If we failed to create a checkpoint, try to make more fragments if it's still useful.
+    if !checkpoint_db.lock().should_sequence_more_fragments() {
         // Sending more fragments won't help anymore.
         return None;
     }
+
+    let mut available_authorities = committee.shuffle_by_stake(None, None);
+    // Remove ourselves and all validators that we have already diffed with.
+    let already_fragmented = checkpoint_db
+        .lock()
+        .validators_already_fragmented_with(next_cp_seq);
+
+    // TODO: We can also use AuthorityHealth to pick healthy authorities first.
+    available_authorities
+        .retain(|name| name != &active_authority.state.name && !already_fragmented.contains(name));
+    debug!(
+        ?next_cp_seq,
+        fragmented_count=?already_fragmented.len(),
+        to_be_fragmented_count=?available_authorities.len(),
+        "Going through remaining validators to generate fragments",
+    );
 
     // We have ran out of authorities?
     if available_authorities.is_empty() {
@@ -857,6 +857,7 @@ where
     // Get a client
     let client = active_authority.net.load().authority_clients[&authority].clone();
 
+    // TODO: We should make this a loop and exit until the first success.
     match client
         .handle_checkpoint(CheckpointRequest::proposal(true))
         .await
@@ -883,6 +884,10 @@ where
 
                 // For some reason the proposal is empty?
                 if proposal.is_none() || proposal_contents.is_none() {
+                    debug!(
+                        validator=?authority.concise(),
+                        "Queried validator doesn't have a proposal yet"
+                    );
                     return None;
                 }
 
@@ -891,6 +896,11 @@ where
                     != my_proposal.sequence_number()
                 {
                     // Target validator may be byzantine or behind, ignore it.
+                    debug!(
+                        validator=?authority.concise(),
+                        received_cp_seq=proposal.as_ref().unwrap().summary.sequence_number,
+                        "Queried validator is behind"
+                    );
                     return None;
                 }
 
@@ -942,6 +952,11 @@ where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
     let mut diff_certs: BTreeMap<ExecutionDigests, CertifiedTransaction> = BTreeMap::new();
+    debug!(
+        our_size = fragment.diff.second.items.len(),
+        other_size = fragment.diff.first.items.len(),
+        "Augmenting fragment with diff transactions"
+    );
 
     // These are the transactions that we have that the other validator does not
     // have, so we can read them from our local database.
@@ -953,26 +968,62 @@ where
             .ok_or(SuiError::CertificateNotfound {
                 certificate_digest: tx_digest.transaction,
             })?;
-        diff_certs.insert(*tx_digest, cert);
+        diff_certs.insert(*tx_digest, cert.into());
     }
 
     // These are the transactions that the other node has, so we have to potentially
     // download them from the remote node.
-    let client = active_authority
-        .net
-        .load()
-        .clone_client(fragment.other.authority());
-    for tx_digest in &fragment.diff.first.items {
-        let response = client
-            .handle_transaction_info_request(TransactionInfoRequest::from(tx_digest.transaction))
-            .await?;
-        let cert = response
-            .certified_transaction
-            .ok_or(SuiError::CertificateNotfound {
-                certificate_digest: tx_digest.transaction,
-            })?;
-        diff_certs.insert(*tx_digest, cert);
-    }
+    let other_certs = active_authority
+        .state
+        .database
+        .multi_get_certified_transaction(
+            &fragment
+                .diff
+                .first
+                .items
+                .iter()
+                .map(|digests| digests.transaction)
+                .collect::<Vec<_>>(),
+        )?;
+    let (existing, missing): (Vec<_>, Vec<_>) = fragment
+        .diff
+        .first
+        .items
+        .iter()
+        .zip(other_certs)
+        .partition(|(_, cert)| cert.is_some());
+    debug!(
+        existing_size=?existing.len(),
+        missing_size=?missing.len(),
+        "Downloading certificates to augment the fragment"
+    );
+    diff_certs.extend(
+        existing
+            .into_iter()
+            .map(|(digests, cert_opt)| (*digests, cert_opt.unwrap().into())),
+    );
+
+    let downloads: Vec<_> = missing
+        .into_iter()
+        .map(|(digests, _)| {
+            let active = active_authority.clone();
+            async move {
+                let cert = active
+                    .net
+                    .load()
+                    .handle_cert_info_request(&digests.transaction, Some(Duration::from_secs(5)))
+                    .await?
+                    .certified_transaction
+                    .unwrap()
+                    .into_inner();
+                // TODO: Should we insert the cert to the db?
+                Ok((*digests, cert)) as SuiResult<_>
+            }
+        })
+        .collect();
+    let results: SuiResult<BTreeMap<_, _>> =
+        future::join_all(downloads).await.into_iter().collect();
+    diff_certs.extend(results?);
 
     if !diff_certs.is_empty() {
         let len = diff_certs.len();

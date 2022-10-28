@@ -18,10 +18,13 @@ use crate::authority_client::AuthorityAPI;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{
     CertifiedTransaction, CertifiedTransactionEffects, QuorumDriverRequest,
-    QuorumDriverRequestType, QuorumDriverResponse, Transaction,
+    QuorumDriverRequestType, QuorumDriverResponse, VerifiedTransaction,
 };
+
+const TASK_QUEUE_SIZE: usize = 5000;
+
 pub enum QuorumTask {
-    ProcessTransaction(Transaction),
+    ProcessTransaction(VerifiedTransaction),
     ProcessCertificate(CertifiedTransaction),
 }
 
@@ -33,6 +36,7 @@ pub struct QuorumDriverHandler<A> {
     // TODO: Change to CertifiedTransactionEffects eventually.
     effects_subscriber:
         tokio::sync::broadcast::Receiver<(CertifiedTransaction, CertifiedTransactionEffects)>,
+    quorum_driver_metrics: Arc<QuorumDriverMetrics>,
 }
 
 /// The core data structure of the QuorumDriver.
@@ -45,7 +49,7 @@ pub struct QuorumDriver<A> {
     task_sender: Sender<QuorumTask>,
     effects_subscribe_sender:
         tokio::sync::broadcast::Sender<(CertifiedTransaction, CertifiedTransactionEffects)>,
-    metrics: QuorumDriverMetrics,
+    metrics: Arc<QuorumDriverMetrics>,
 }
 
 impl<A> QuorumDriver<A> {
@@ -56,7 +60,7 @@ impl<A> QuorumDriver<A> {
             CertifiedTransaction,
             CertifiedTransactionEffects,
         )>,
-        metrics: QuorumDriverMetrics,
+        metrics: Arc<QuorumDriverMetrics>,
     ) -> Self {
         Self {
             validators: ArcSwap::from(validators),
@@ -70,8 +74,8 @@ impl<A> QuorumDriver<A> {
         &self.validators
     }
 
-    pub fn clone_committee(&self) -> Arc<Committee> {
-        Arc::new(self.validators.load().committee.clone())
+    pub fn clone_committee(&self) -> Committee {
+        self.validators.load().committee.clone()
     }
 
     pub fn current_epoch(&self) -> EpochId {
@@ -88,7 +92,7 @@ where
         request: QuorumDriverRequest,
     ) -> SuiResult<QuorumDriverResponse> {
         let tx_digest = request.transaction.digest();
-        debug!(?tx_digest, "Receive tranasction execution request");
+        debug!(?tx_digest, "Received tranasction execution request");
         self.metrics.current_requests_in_flight.inc();
         let _metrics_guard = scopeguard::guard(self.metrics.clone(), |metrics| {
             metrics.current_requests_in_flight.dec();
@@ -134,7 +138,7 @@ where
 
     async fn execute_transaction_immediate_return(
         &self,
-        transaction: Transaction,
+        transaction: VerifiedTransaction,
     ) -> SuiResult<QuorumDriverResponse> {
         self.task_sender
             .send(QuorumTask::ProcessTransaction(transaction))
@@ -147,7 +151,7 @@ where
 
     async fn execute_transaction_wait_for_tx_cert(
         &self,
-        transaction: Transaction,
+        transaction: VerifiedTransaction,
     ) -> SuiResult<QuorumDriverResponse> {
         let certificate = self
             .process_transaction(transaction)
@@ -164,7 +168,7 @@ where
 
     async fn execute_transaction_wait_for_effects_cert(
         &self,
-        transaction: Transaction,
+        transaction: VerifiedTransaction,
     ) -> SuiResult<QuorumDriverResponse> {
         let certificate = self
             .process_transaction(transaction)
@@ -179,12 +183,13 @@ where
 
     pub async fn process_transaction(
         &self,
-        transaction: Transaction,
+        transaction: VerifiedTransaction,
     ) -> SuiResult<CertifiedTransaction> {
+        let tx_digest = *transaction.digest();
         self.validators
             .load()
             .process_transaction(transaction)
-            .instrument(tracing::debug_span!("process_tx"))
+            .instrument(tracing::debug_span!("process_tx", ?tx_digest))
             .await
     }
 
@@ -196,7 +201,7 @@ where
             .validators
             .load()
             .process_certificate(certificate.clone())
-            .instrument(tracing::debug_span!("process_cert"))
+            .instrument(tracing::debug_span!("process_cert", tx_digest = ?certificate.digest()))
             .await?;
         let response = (certificate, effects);
         // An error to send the result to subscribers should not block returning the result.
@@ -221,13 +226,14 @@ where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
     pub fn new(validators: Arc<AuthorityAggregator<A>>, metrics: QuorumDriverMetrics) -> Self {
-        let (task_tx, task_rx) = mpsc::channel::<QuorumTask>(5000);
+        let (task_tx, task_rx) = mpsc::channel::<QuorumTask>(TASK_QUEUE_SIZE);
         let (subscriber_tx, subscriber_rx) = tokio::sync::broadcast::channel::<_>(100);
+        let metrics = Arc::new(metrics);
         let quorum_driver = Arc::new(QuorumDriver::new(
             validators,
             task_tx,
             subscriber_tx,
-            metrics,
+            metrics.clone(),
         ));
         let handle = {
             let quorum_driver_copy = quorum_driver.clone();
@@ -239,6 +245,35 @@ where
             quorum_driver,
             _processor_handle: handle,
             effects_subscriber: subscriber_rx,
+            quorum_driver_metrics: metrics,
+        }
+    }
+
+    /// Create a new QuorumDriverHandler based on the same AuthorityAggregator.
+    /// Note: the new QuorumDriverHandler will have a new ArcSwap<AuthorityAggregator>
+    /// that is NOT tied to the original one. So if there are multiple QuorumDriver(Handler)
+    /// then all of them need to do reconfigs on their own.
+    pub fn clone_new(&self) -> Self {
+        let (task_sender, task_rx) = mpsc::channel::<QuorumTask>(TASK_QUEUE_SIZE);
+        let (effects_subscribe_sender, subscriber_rx) = tokio::sync::broadcast::channel::<_>(100);
+        let validators = ArcSwap::new(self.quorum_driver.authority_aggregator().load_full());
+        let quorum_driver = Arc::new(QuorumDriver {
+            validators,
+            task_sender,
+            effects_subscribe_sender,
+            metrics: self.quorum_driver_metrics.clone(),
+        });
+        let handle = {
+            let quorum_driver_copy = quorum_driver.clone();
+            tokio::task::spawn(async move {
+                Self::task_queue_processor(quorum_driver_copy, task_rx).await;
+            })
+        };
+        Self {
+            quorum_driver,
+            _processor_handle: handle,
+            effects_subscriber: subscriber_rx,
+            quorum_driver_metrics: self.quorum_driver_metrics.clone(),
         }
     }
 
@@ -287,7 +322,7 @@ where
                         // query the status.
                         match quorum_driver.process_certificate(certificate).await {
                             Err(err) => {
-                                warn!("Certificate processing failed: {:?}", err);
+                                warn!(?tx_digest, "Certificate processing failed: {:?}", err);
                             }
                             Ok(_) => {
                                 debug!(?tx_digest, "Certificate processing succeeded");

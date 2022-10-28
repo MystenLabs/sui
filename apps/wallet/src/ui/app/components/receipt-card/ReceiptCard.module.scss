@@ -157,7 +157,7 @@
 .success {
     .response-card,
     .response-card::after {
-        background-color: colors.$receipt-card-bg-success;
+        background-color: colors.$success-light;
     }
 
     .status-icon {

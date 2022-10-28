@@ -118,25 +118,26 @@ We can now create a function to test the module initialization:
         use sui::test_scenario;
 
         // create test address representing game admin
-        let admin = @0xABBA;
+        let admin = @0xBABE;
 
         // first transaction to emulate module initialization
-        let scenario = &mut test_scenario::begin(&admin);
+        let scenario_val = test_scenario::begin(admin);
+        let scenario = &mut scenario_val;
         {
             init(test_scenario::ctx(scenario));
         };
         // second transaction to check if the forge has been created
         // and has initial value of zero swords created
-        test_scenario::next_tx(scenario, &admin);
+        test_scenario::next_tx(scenario, admin);
         {
             // extract the Forge object
-            let forge = test_scenario::take_owned<Forge>(scenario);
+            let forge = test_scenario::take_from_sender<Forge>(scenario);
             // verify number of created swords
             assert!(swords_created(&forge) == 0, 1);
             // return the Forge object to the object pool
-            test_scenario::return_owned(scenario, forge)
-        }
-    }
+            test_scenario::return_to_sender(scenario, forge);
+        };
+        test_scenario::end(scenario_val);
 
 ```
 

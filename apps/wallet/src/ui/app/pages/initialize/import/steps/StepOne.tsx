@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Formik, Form } from 'formik';
+import { useNavigate } from 'react-router-dom';
 import * as Yup from 'yup';
 
 import Button from '_app/shared/button';
@@ -19,7 +20,8 @@ const validationSchema = Yup.object({
     mnemonic: mnemonicValidation,
 });
 
-export default function StepOne({ next, data }: StepProps) {
+export default function StepOne({ next, data, mode }: StepProps) {
+    const navigate = useNavigate();
     return (
         <Formik
             initialValues={data}
@@ -68,21 +70,41 @@ export default function StepOne({ next, data }: StepProps) {
                         )}
                     </FieldLabel>
                     <div className={st.fill} />
-                    <Button
-                        type="submit"
-                        disabled={isSubmitting || !isValid}
-                        mode="primary"
-                        className={st.btn}
-                        size="large"
-                    >
-                        <Loading loading={isSubmitting}>
-                            Continue
-                            <Icon
-                                icon={SuiIcons.ArrowRight}
-                                className={st.next}
-                            />
-                        </Loading>
-                    </Button>
+                    <div className={st.actionsContainer}>
+                        {mode === 'forgot' ? (
+                            <Button
+                                type="button"
+                                disabled={isSubmitting}
+                                mode="neutral"
+                                size="large"
+                                className={st.btn}
+                                onClick={() => {
+                                    navigate(-1);
+                                }}
+                            >
+                                <Icon
+                                    icon={SuiIcons.ArrowLeft}
+                                    className={st.btnIcon}
+                                />
+                                Back
+                            </Button>
+                        ) : null}
+                        <Button
+                            type="submit"
+                            disabled={isSubmitting || !isValid}
+                            mode="primary"
+                            className={st.btn}
+                            size="large"
+                        >
+                            <Loading loading={isSubmitting}>
+                                {mode === 'forgot' ? 'Next' : 'Continue'}
+                                <Icon
+                                    icon={SuiIcons.ArrowRight}
+                                    className={st.btnIcon}
+                                />
+                            </Loading>
+                        </Button>
+                    </div>
                 </Form>
             )}
         </Formik>

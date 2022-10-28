@@ -26,16 +26,14 @@ use std::{
 use sui_types::messages_checkpoint::CheckpointFragment;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::{
-    committee::Committee,
     error::{SuiError, SuiResult},
-    messages::ConsensusTransaction,
+    messages::{ConsensusTransaction, VerifiedCertificate},
 };
 
 use tap::prelude::*;
 use tokio::time::Instant;
 
 use sui_types::base_types::AuthorityName;
-use sui_types::messages::CertifiedTransaction;
 use tokio::{
     sync::{
         mpsc::{Receiver, Sender},
@@ -208,8 +206,6 @@ impl ConsensusWaiter {
 pub struct ConsensusAdapter {
     /// The network client connecting to the consensus node of this authority.
     consensus_client: TransactionsClient<sui_network::tonic::transport::Channel>,
-    /// The Sui committee information.
-    committee: Committee,
     /// A channel to notify the consensus listener to take action for a transactions.
     tx_consensus_listener: Sender<ConsensusListenerMessage>,
     /// Retries sending a transaction to consensus after this timeout.
@@ -224,7 +220,6 @@ impl ConsensusAdapter {
     /// Make a new Consensus adapter instance.
     pub fn new(
         consensus_address: Multiaddr,
-        committee: Committee,
         tx_consensus_listener: Sender<ConsensusListenerMessage>,
         timeout: Duration,
         opt_metrics: OptArcConsensusAdapterMetrics,
@@ -236,7 +231,6 @@ impl ConsensusAdapter {
         let num_inflight_transactions = Default::default();
         Self {
             consensus_client,
-            committee,
             tx_consensus_listener,
             timeout,
             num_inflight_transactions,
@@ -249,7 +243,7 @@ impl ConsensusAdapter {
     }
 
     /// Check if this authority should submit the transaction to consensus.
-    fn should_submit(_certificate: &CertifiedTransaction) -> bool {
+    fn should_submit(_certificate: &VerifiedCertificate) -> bool {
         // TODO [issue #1647]: Right now every authority submits the transaction to consensus.
         true
     }
@@ -260,15 +254,12 @@ impl ConsensusAdapter {
     pub async fn submit(
         &self,
         authority: &AuthorityName,
-        certificate: &CertifiedTransaction,
+        certificate: &VerifiedCertificate,
     ) -> SuiResult {
-        // Check the Sui certificate (submitted by the user).
-        certificate.verify(&self.committee)?;
-
         // Serialize the certificate in a way that is understandable to consensus (i.e., using
         // bincode) and it certificate to consensus.
         let transaction =
-            ConsensusTransaction::new_certificate_message(authority, certificate.clone());
+            ConsensusTransaction::new_certificate_message(authority, certificate.clone().into());
         let tracking_id = transaction.get_tracking_id();
         let tx_digest = certificate.digest();
         debug!(

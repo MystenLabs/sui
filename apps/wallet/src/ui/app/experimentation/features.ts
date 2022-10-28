@@ -6,6 +6,6 @@
  * in https://docs.growthbook.io/app/features#feature-keys
  */
 export enum FEATURES {
-    DEPRECATE_GATEWAY = 'deprecate-gateway',
-    RPC_API_VERSION = 'rpc-api-version',
+    USE_LOCAL_TXN_SERIALIZER = 'use-local-txn-serializer',
+    SUI_DENOMINATION = 'sui-denomination',
 }

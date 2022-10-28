@@ -7,12 +7,13 @@ use tracing::debug;
 
 use sui_types::base_types::ExecutionDigests;
 use sui_types::committee::StakeUnit;
+use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages_checkpoint::{CheckpointProposalSummary, CheckpointSequenceNumber};
 use sui_types::{
     base_types::AuthorityName,
     committee::Committee,
     messages::CertifiedTransaction,
-    messages_checkpoint::CheckpointFragment,
+    messages_checkpoint::VerifiedCheckpointFragment,
     waypoint::{GlobalCheckpoint, WaypointError},
 };
 
@@ -49,7 +50,7 @@ pub struct InProgressSpanGraph {
     next_checkpoint: CheckpointSequenceNumber,
 
     /// Fragments that have been used so far.
-    fragments_used: Vec<CheckpointFragment>,
+    fragments_used: Vec<VerifiedCheckpointFragment>,
 
     /// Proposals from each validator seen so far. This is needed to detect potential conflicting
     /// fragments.
@@ -98,14 +99,14 @@ impl InProgressSpanGraph {
 
 #[derive(Clone, Debug)]
 pub struct CompletedSpanGraph {
-    active_links: VecDeque<CheckpointFragment>,
+    active_links: VecDeque<VerifiedCheckpointFragment>,
 }
 
 impl SpanGraph {
     pub fn mew(
         committee: &Committee,
         next_checkpoint: CheckpointSequenceNumber,
-        fragments: &[CheckpointFragment],
+        fragments: &[VerifiedCheckpointFragment],
     ) -> Self {
         let mut span = Self::default();
         for frag in fragments {
@@ -115,11 +116,6 @@ impl SpanGraph {
             }
         }
         span
-    }
-
-    /// Reset the span graph back to Uninitialized.
-    pub fn reset(&mut self) {
-        *self = Self::Uninitialized;
     }
 
     /// Add a new fragment to the span graph and checks whether it can construct a connected
@@ -139,7 +135,7 @@ impl SpanGraph {
         &mut self,
         committee: &Committee,
         next_checkpoint: CheckpointSequenceNumber,
-        frag: &CheckpointFragment,
+        frag: &VerifiedCheckpointFragment,
     ) {
         if matches!(&self, Self::Uninitialized) {
             self.initialize(committee, next_checkpoint);
@@ -211,7 +207,7 @@ impl SpanGraph {
         matches!(self, Self::Completed(_))
     }
 
-    pub fn construct_checkpoint(&self) -> FragmentReconstruction {
+    pub fn construct_checkpoint(&self) -> SuiResult<FragmentReconstruction> {
         if let Self::Completed(span) = &self {
             let mut global = GlobalCheckpoint::new();
             let mut extra_transactions = BTreeMap::new();
@@ -235,12 +231,14 @@ impl SpanGraph {
                 }
             }
 
-            FragmentReconstruction {
+            Ok(FragmentReconstruction {
                 global,
                 extra_transactions,
-            }
+            })
         } else {
-            unreachable!("construct_checkpoint should only be called after completion check");
+            Err(SuiError::from(
+                "Not yet enough fragments to construct checkpoint",
+            ))
         }
     }
 

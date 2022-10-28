@@ -22,8 +22,7 @@ move-core-types.workspace = true
 
 [dev-dependencies]
 test-fuzz = "3.0.4"
-move-package.workspace = true
 workspace-hack.workspace = true
 
 sui-adapter = { path = "../sui-adapter" }
-sui-framework = { path = "../sui-framework" }
+sui-framework-build = { path = "../sui-framework-build" }

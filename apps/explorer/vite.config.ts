@@ -5,7 +5,14 @@ import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 import svgr from 'vite-plugin-svgr';
 
+import tsconfig from './tsconfig.json';
+
 const alias = (folder: string) => new URL(folder, import.meta.url).pathname;
+
+const tsconfigPaths = {};
+Object.entries(tsconfig.compilerOptions.paths).forEach(([key, [value]]) => {
+    tsconfigPaths[key] = alias(value);
+});
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -17,8 +24,7 @@ export default defineConfig({
     resolve: {
         alias: {
             '~': alias('./src'),
-            '@mysten/sui.js': alias('../../sdk/typescript/src/'),
-            '@mysten/bcs': alias('../../sdk/bcs/src/'),
+            ...tsconfigPaths,
         },
     },
 });

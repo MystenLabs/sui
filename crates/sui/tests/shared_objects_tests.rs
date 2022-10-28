@@ -392,7 +392,7 @@ async fn shared_object_on_gateway() {
         /* arguments */ Vec::default(),
     );
     let resp = gateway
-        .execute_transaction(create_counter_transaction)
+        .execute_transaction(create_counter_transaction.into_inner())
         .await
         .unwrap();
     let effects = resp.effects;
@@ -425,7 +425,10 @@ async fn shared_object_on_gateway() {
                     /* arguments */
                     vec![CallArg::Object(shared_object_arg)],
                 );
-                async move { g.execute_transaction(increment_counter_transaction).await }
+                async move {
+                    g.execute_transaction(increment_counter_transaction.into_inner())
+                        .await
+                }
             })
             .collect();
 
@@ -458,7 +461,7 @@ async fn shared_object_on_gateway() {
     loop {
         let result = gateway
             .clone()
-            .execute_transaction(assert_value_transaction.clone())
+            .execute_transaction(assert_value_transaction.clone().into_inner())
             .await;
         if let Ok(response) = result {
             let effects = response.effects;

@@ -7,9 +7,10 @@ import {
     LocalTxnDataSerializer,
 } from '@mysten/sui.js';
 
+import { growthbook } from './experimentation/feature-gating';
 import { FEATURES } from './experimentation/features';
+import { queryClient } from './helpers/queryClient';
 
-import type FeatureGating from './experimentation/feature-gating';
 import type { Keypair } from '@mysten/sui.js';
 
 export enum API_ENV {
@@ -24,8 +25,8 @@ type EnvInfo = {
 };
 
 type ApiEndpoints = {
-    gateway: string;
     fullNode: string;
+    faucet: string;
 };
 export const API_ENV_TO_INFO: Record<API_ENV, EnvInfo> = {
     [API_ENV.local]: { name: 'Local', color: '#9064ff' },
@@ -35,16 +36,16 @@ export const API_ENV_TO_INFO: Record<API_ENV, EnvInfo> = {
 
 export const ENV_TO_API: Record<API_ENV, ApiEndpoints> = {
     [API_ENV.local]: {
-        gateway: process.env.API_ENDPOINT_LOCAL || '',
         fullNode: process.env.API_ENDPOINT_LOCAL_FULLNODE || '',
+        faucet: process.env.API_ENDPOINT_LOCAL_FAUCET || '',
     },
     [API_ENV.devNet]: {
-        gateway: process.env.API_ENDPOINT_DEV_NET || '',
         fullNode: process.env.API_ENDPOINT_DEV_NET_FULLNODE || '',
+        faucet: process.env.API_ENDPOINT_DEV_NET_FAUCET || '',
     },
     [API_ENV.staging]: {
-        gateway: process.env.API_ENDPOINT_STAGING || '',
         fullNode: process.env.API_ENDPOINT_STAGING_FULLNODE || '',
+        faucet: process.env.API_ENDPOINT_STAGING_FAUCET || '',
     },
 };
 
@@ -60,8 +61,8 @@ function getDefaultAPI(env: API_ENV) {
     const apiEndpoint = ENV_TO_API[env];
     if (
         !apiEndpoint ||
-        apiEndpoint.gateway === '' ||
-        apiEndpoint.fullNode === ''
+        apiEndpoint.fullNode === '' ||
+        apiEndpoint.faucet === ''
     ) {
         throw new Error(`API endpoint not found for API_ENV ${env}`);
     }
@@ -71,26 +72,14 @@ function getDefaultAPI(env: API_ENV) {
 export const DEFAULT_API_ENV = getDefaultApiEnv();
 
 export default class ApiProvider {
-    private _apiProvider?: JsonRpcProvider;
     private _apiFullNodeProvider?: JsonRpcProvider;
     private _signer: RawSigner | null = null;
 
-    constructor(private _featureGating: FeatureGating) {}
-
     public setNewJsonRpcProvider(apiEnv: API_ENV = DEFAULT_API_ENV) {
-        const apiVersion = this._featureGating.getFeatureValue(
-            FEATURES.RPC_API_VERSION,
-            '0.11.0'
-        );
-        this._apiProvider = new JsonRpcProvider(
-            getDefaultAPI(apiEnv).gateway,
-            true,
-            apiVersion
-        );
+        // We also clear the query client whenever set set a new API provider:
+        queryClient.clear();
         this._apiFullNodeProvider = new JsonRpcProvider(
-            getDefaultAPI(apiEnv).fullNode,
-            true,
-            apiVersion
+            getDefaultAPI(apiEnv).fullNode
         );
         this._signer = null;
     }
@@ -101,8 +90,6 @@ export default class ApiProvider {
         }
         return {
             // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-            gateway: this._apiProvider!,
-            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
             fullNode: this._apiFullNodeProvider!,
         };
     }
@@ -112,14 +99,15 @@ export default class ApiProvider {
             this.setNewJsonRpcProvider();
         }
         if (!this._signer) {
-            this._signer = this._featureGating.isOn(FEATURES.DEPRECATE_GATEWAY)
-                ? new RawSigner(
-                      keypair,
-                      this._apiFullNodeProvider,
-                      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+            this._signer = new RawSigner(
+                keypair,
+                this._apiFullNodeProvider,
+
+                growthbook.isOn(FEATURES.USE_LOCAL_TXN_SERIALIZER)
+                    ? // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
                       new LocalTxnDataSerializer(this._apiFullNodeProvider!)
-                  )
-                : new RawSigner(keypair, this._apiProvider);
+                    : undefined
+            );
         }
         return this._signer;
     }

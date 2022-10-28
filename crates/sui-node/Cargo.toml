@@ -1,6 +1,6 @@
 [package]
 name = "sui-node"
-version = "0.12.0"
+version.workspace = true
 authors = ["Mysten Labs <build@mystenlabs.com>"]
 license = "Apache-2.0"
 publish = false
@@ -39,5 +39,4 @@ workspace-hack.workspace = true
 sui-simulator = { path = "../sui-simulator" }
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
-jemallocator = { version = "^0.5", features = ["profiling"] }
 jemalloc-ctl = "^0.5"

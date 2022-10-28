@@ -9,7 +9,8 @@ use sui_types::SUI_FRAMEWORK_ADDRESS;
 
 use move_core_types::account_address::AccountAddress;
 use sui_types::base_types::SuiAddress;
-use sui_types::event::{Event, EventEnvelope, TransferType};
+use sui_types::event::{Event, EventEnvelope};
+use sui_types::gas_coin::GAS;
 use sui_types::object::Owner;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -47,13 +48,16 @@ impl TestEvent {
 
 pub fn new_test_publish_event(
     timestamp: u64,
+    digest: TransactionDigest,
     seq_num: u64,
+    event_num: u64,
     sender: Option<SuiAddress>,
 ) -> EventEnvelope {
     EventEnvelope::new(
         timestamp,
-        None,
+        Some(digest),
         seq_num,
+        event_num,
         Event::Publish {
             sender: sender.unwrap_or_else(SuiAddress::random_for_testing_only),
             package_id: ObjectID::random(),
@@ -64,42 +68,79 @@ pub fn new_test_publish_event(
 
 pub fn new_test_newobj_event(
     timestamp: u64,
+    digest: TransactionDigest,
     seq_num: u64,
+    event_num: u64,
     object_id: Option<ObjectID>,
     sender: Option<SuiAddress>,
     recipient: Option<Owner>,
 ) -> EventEnvelope {
     EventEnvelope::new(
         timestamp,
-        Some(TransactionDigest::random()),
+        Some(digest),
         seq_num,
+        event_num,
         Event::NewObject {
             package_id: ObjectID::random(),
             transaction_module: Identifier::new("module").unwrap(),
             sender: sender.unwrap_or_else(SuiAddress::random_for_testing_only),
             recipient: recipient
                 .unwrap_or_else(|| Owner::AddressOwner(SuiAddress::random_for_testing_only())),
+            object_type: "0x2::test:NewObject".to_string(),
             object_id: object_id.unwrap_or_else(ObjectID::random),
+            version: Default::default(),
         },
         None,
     )
 }
 
-pub fn new_test_deleteobj_event(
+pub fn new_test_balance_change_event(
     timestamp: u64,
     seq_num: u64,
-    object_id: Option<ObjectID>,
+    event_num: u64,
+    coin_object_id: Option<ObjectID>,
     sender: Option<SuiAddress>,
+    owner: Option<Owner>,
 ) -> EventEnvelope {
     EventEnvelope::new(
         timestamp,
         Some(TransactionDigest::random()),
         seq_num,
+        event_num,
+        Event::CoinBalanceChange {
+            package_id: ObjectID::random(),
+            transaction_module: Identifier::new("module").unwrap(),
+            sender: sender.unwrap_or_else(SuiAddress::random_for_testing_only),
+            change_type: BalanceChangeType::Gas,
+            owner: owner
+                .unwrap_or_else(|| Owner::AddressOwner(SuiAddress::random_for_testing_only())),
+            coin_type: GAS::type_().to_string(),
+            coin_object_id: coin_object_id.unwrap_or_else(ObjectID::random),
+            version: Default::default(),
+            amount: -10000,
+        },
+        None,
+    )
+}
+pub fn new_test_deleteobj_event(
+    timestamp: u64,
+    digest: TransactionDigest,
+    seq_num: u64,
+    event_num: u64,
+    object_id: Option<ObjectID>,
+    sender: Option<SuiAddress>,
+) -> EventEnvelope {
+    EventEnvelope::new(
+        timestamp,
+        Some(digest),
+        seq_num,
+        event_num,
         Event::DeleteObject {
             package_id: ObjectID::random(),
             transaction_module: Identifier::new("module").unwrap(),
             sender: sender.unwrap_or_else(SuiAddress::random_for_testing_only),
             object_id: object_id.unwrap_or_else(ObjectID::random),
+            version: Default::default(),
         },
         None,
     )
@@ -107,27 +148,55 @@ pub fn new_test_deleteobj_event(
 
 pub fn new_test_transfer_event(
     timestamp: u64,
+    digest: TransactionDigest,
     seq_num: u64,
+    event_num: u64,
     object_version: u64,
-    type_: TransferType,
+    object_type: &str,
     object_id: Option<ObjectID>,
     sender: Option<SuiAddress>,
     recipient: Option<Owner>,
 ) -> EventEnvelope {
     EventEnvelope::new(
         timestamp,
-        Some(TransactionDigest::random()),
+        Some(digest),
         seq_num,
+        event_num,
         Event::TransferObject {
             package_id: ObjectID::random(),
             transaction_module: Identifier::new("module").unwrap(),
             sender: sender.unwrap_or_else(SuiAddress::random_for_testing_only),
             recipient: recipient
                 .unwrap_or_else(|| Owner::AddressOwner(SuiAddress::random_for_testing_only())),
+            object_type: object_type.to_string(),
             object_id: object_id.unwrap_or_else(ObjectID::random),
             version: object_version.into(),
-            type_,
-            amount: Some(10),
+        },
+        None,
+    )
+}
+
+pub fn new_test_mutate_event(
+    timestamp: u64,
+    seq_num: u64,
+    event_num: u64,
+    object_version: u64,
+    object_type: &str,
+    object_id: Option<ObjectID>,
+    sender: Option<SuiAddress>,
+) -> EventEnvelope {
+    EventEnvelope::new(
+        timestamp,
+        Some(TransactionDigest::random()),
+        seq_num,
+        event_num,
+        Event::MutateObject {
+            package_id: ObjectID::random(),
+            transaction_module: Identifier::new("module").unwrap(),
+            sender: sender.unwrap_or_else(SuiAddress::random_for_testing_only),
+            object_type: object_type.to_string(),
+            object_id: object_id.unwrap_or_else(ObjectID::random),
+            version: object_version.into(),
         },
         None,
     )
@@ -135,7 +204,9 @@ pub fn new_test_transfer_event(
 
 pub fn new_test_move_event(
     timestamp: u64,
+    digest: TransactionDigest,
     seq_num: u64,
+    event_num: u64,
     package_id: ObjectID,
     module_name: &str,
     event_struct_name: &'static str,
@@ -159,8 +230,9 @@ pub fn new_test_move_event(
     let json = serde_json::to_value(&move_struct).expect("Cannot serialize move struct to JSON");
     EventEnvelope::new(
         timestamp,
-        Some(TransactionDigest::random()),
+        Some(digest),
         seq_num,
+        event_num,
         move_event,
         Some(json),
     )

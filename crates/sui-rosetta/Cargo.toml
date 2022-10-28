@@ -32,16 +32,20 @@ sui-types = { path = "../sui-types" }
 sui-core = { path = "../sui-core" }
 sui-node = { path = "../sui-node" }
 sui-config = { path = "../sui-config" }
-sui-sdk = { path = "../sui-sdk" }
+sui-keys = { path = "../sui-keys" }
 
 move-core-types.workspace = true
 
-typed-store = "0.1.0"
-typed-store-derive = "0.1.0"
+typed-store = "0.4.0"
+typed-store-derive = "0.3.0"
 telemetry-subscribers = "0.1.0"
 
 workspace-hack = { path = "../workspace-hack" }
 
 [dev-dependencies]
 sui-sdk = { path = "../sui-sdk" }
+sui-framework = { path = "../sui-framework" }
+sui-framework-build = { path = "../sui-framework-build" }
+test-utils = { path = "../test-utils" }
 tempfile = "3.3.0"
+rand = "0.8.5"

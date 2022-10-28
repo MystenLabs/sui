@@ -16,7 +16,10 @@ use async_trait::async_trait;
 use fastcrypto::traits::KeyPair;
 use futures::{stream::BoxStream, TryStreamExt};
 use multiaddr::Multiaddr;
-use prometheus::{register_histogram_with_registry, Histogram, Registry};
+use prometheus::{
+    register_histogram_with_registry, register_int_counter_with_registry, Histogram, IntCounter,
+    Registry,
+};
 use std::{io, sync::Arc, time::Duration};
 use sui_config::NodeConfig;
 use sui_network::{
@@ -26,6 +29,7 @@ use sui_network::{
 
 use sui_types::{error::*, messages::*};
 use tap::TapFallible;
+use tokio::time::sleep;
 use tokio::{
     sync::mpsc::{channel, Receiver, Sender},
     task::JoinHandle,
@@ -35,7 +39,7 @@ use sui_types::messages_checkpoint::CheckpointRequest;
 use sui_types::messages_checkpoint::CheckpointResponse;
 
 use crate::consensus_handler::ConsensusHandler;
-use tracing::{error, info, Instrument};
+use tracing::{debug, error, info, Instrument};
 
 #[cfg(test)]
 #[path = "unit_tests/server_tests.rs"]
@@ -84,6 +88,7 @@ pub struct AuthorityServer {
     consensus_adapter: ConsensusAdapter,
     min_batch_size: u64,
     max_delay: Duration,
+    pub metrics: Arc<ValidatorServiceMetrics>,
 }
 
 impl AuthorityServer {
@@ -93,14 +98,14 @@ impl AuthorityServer {
         consensus_address: Multiaddr,
         tx_consensus_listener: Sender<ConsensusListenerMessage>,
     ) -> Self {
-        let metrics = ConsensusAdapterMetrics::new_test();
         let consensus_adapter = ConsensusAdapter::new(
             consensus_address,
-            state.clone_committee(),
             tx_consensus_listener,
             Duration::from_secs(20),
-            metrics,
+            ConsensusAdapterMetrics::new_test(),
         );
+
+        let metrics = Arc::new(ValidatorServiceMetrics::new_for_tests());
 
         Self {
             address,
@@ -108,6 +113,7 @@ impl AuthorityServer {
             consensus_adapter,
             min_batch_size: MIN_BATCH_SIZE,
             max_delay: Duration::from_millis(MAX_DELAY_MILLIS),
+            metrics,
         }
     }
 
@@ -148,7 +154,7 @@ impl AuthorityServer {
                 state: self.state,
                 consensus_adapter: Arc::new(self.consensus_adapter),
                 _checkpoint_consensus_handle: None,
-                metrics: Arc::new(ValidatorServiceMetrics::new_for_tests()),
+                metrics: self.metrics.clone(),
             }))
             .bind(&address)
             .await
@@ -165,6 +171,7 @@ impl AuthorityServer {
 }
 
 pub struct ValidatorServiceMetrics {
+    pub signature_errors: IntCounter,
     pub tx_verification_latency: Histogram,
     pub cert_verification_latency: Histogram,
     pub consensus_latency: Histogram,
@@ -181,6 +188,12 @@ const LATENCY_SEC_BUCKETS: &[f64] = &[
 impl ValidatorServiceMetrics {
     pub fn new(registry: &Registry) -> Self {
         Self {
+            signature_errors: register_int_counter_with_registry!(
+                "total_signature_errors",
+                "Number of transaction signature errors",
+                registry,
+            )
+            .unwrap(),
             tx_verification_latency: register_histogram_with_registry!(
                 "validator_service_tx_verification_latency",
                 "Latency of verifying a transaction",
@@ -299,7 +312,6 @@ impl ValidatorService {
         // The consensus adapter allows the authority to send user certificates through consensus.
         let consensus_adapter = ConsensusAdapter::new(
             consensus_config.address().to_owned(),
-            state.clone_committee(),
             tx_consensus_listener.clone(),
             timeout,
             ca_metrics.clone(),
@@ -339,7 +351,7 @@ impl ValidatorService {
         request: tonic::Request<Transaction>,
         metrics: Arc<ValidatorServiceMetrics>,
     ) -> Result<tonic::Response<TransactionInfoResponse>, tonic::Status> {
-        let mut transaction = request.into_inner();
+        let transaction = request.into_inner();
         let is_consensus_tx = transaction.contains_shared_object();
 
         let _metrics_guard = start_timer(if is_consensus_tx {
@@ -349,12 +361,11 @@ impl ValidatorService {
         });
         let tx_verif_metrics_guard = start_timer(metrics.tx_verification_latency.clone());
 
-        transaction
-            .verify()
-            .map_err(|e| tonic::Status::invalid_argument(e.to_string()))?;
+        let transaction = transaction.verify().map_err(|e| {
+            metrics.signature_errors.inc();
+            tonic::Status::invalid_argument(e.to_string())
+        })?;
         drop(tx_verif_metrics_guard);
-        // TODO This is really really bad, we should have different types for signature-verified transactions
-        transaction.is_verified = true;
 
         let tx_digest = transaction.digest();
 
@@ -371,7 +382,7 @@ impl ValidatorService {
             .await
             .map_err(|e| tonic::Status::internal(e.to_string()))?;
 
-        Ok(tonic::Response::new(info))
+        Ok(tonic::Response::new(info.into()))
     }
 
     async fn handle_certificate(
@@ -380,7 +391,7 @@ impl ValidatorService {
         request: tonic::Request<CertifiedTransaction>,
         metrics: Arc<ValidatorServiceMetrics>,
     ) -> Result<tonic::Response<TransactionInfoResponse>, tonic::Status> {
-        let mut certificate = request.into_inner();
+        let certificate = request.into_inner();
         let is_consensus_tx = certificate.contains_shared_object();
 
         let _metrics_guard = start_timer(if is_consensus_tx {
@@ -389,25 +400,22 @@ impl ValidatorService {
             metrics.handle_certificate_non_consensus_latency.clone()
         });
 
-        // 1) Verify certificate
-        let cert_verif_metrics_guard = start_timer(metrics.cert_verification_latency.clone());
-
-        certificate
-            .verify(&state.committee.load())
-            .map_err(|e| tonic::Status::invalid_argument(e.to_string()))?;
-        drop(cert_verif_metrics_guard);
-        // TODO This is really really bad, we should have different types for signature verified transactions
-        certificate.is_verified = true;
-
-        // 2) Check idempotency
-        let tx_digest = certificate.digest();
+        // 1) Check if cert already executed
+        let tx_digest = *certificate.digest();
         if let Some(response) = state
-            .get_tx_info_already_executed(tx_digest)
+            .get_tx_info_already_executed(&tx_digest)
             .await
             .map_err(|e| tonic::Status::internal(e.to_string()))?
         {
-            return Ok(tonic::Response::new(response));
+            return Ok(tonic::Response::new(response.into()));
         }
+
+        // 2) Verify cert signatures
+        let cert_verif_metrics_guard = start_timer(metrics.cert_verification_latency.clone());
+        let certificate = certificate
+            .verify(&state.committee.load())
+            .map_err(|e| tonic::Status::invalid_argument(e.to_string()))?;
+        drop(cert_verif_metrics_guard);
 
         // 3) If the validator is already halted, we stop here, to avoid
         // sending the transaction to consensus.
@@ -439,27 +447,50 @@ impl ValidatorService {
         }
 
         // 5) Execute the certificate.
-        let span = tracing::debug_span!(
-            "validator_state_process_cert",
-            ?tx_digest,
-            tx_kind = certificate.signed_data.data.kind_as_str()
-        );
-
-        match state
-            .handle_certificate(&certificate)
-            .instrument(span)
-            .await
-            .map_err(|e| tonic::Status::internal(e.to_string()))
-        {
-            Err(e) => {
-                // Record the cert for later execution, including causal completion if necessary.
-                let tx_digest = *tx_digest;
-                let _ = state
-                    .add_pending_certificates(vec![(tx_digest, Some(certificate))])
-                    .tap_err(|e| error!(?tx_digest, "add_pending_certificates failed: {}", e));
-                Err(e)
+        // Often we cannot execute a cert due to dependenties haven't been executed, and we will
+        // observe TransactionInputObjectsErrors. In such case, we can wait and retry. It should eventually
+        // succeed.
+        // TODO: This is a quick hack. We should properly fix this through dependency-based
+        // scheduling.
+        let mut retry_delay_ms = 200;
+        loop {
+            let span = tracing::debug_span!(
+                "validator_state_process_cert",
+                ?tx_digest,
+                tx_kind = certificate.signed_data.data.kind_as_str()
+            );
+            match state
+                .handle_certificate(&certificate)
+                .instrument(span)
+                .await
+            {
+                // For owned object certificates, we could also be getting this error
+                // if this validator hasn't executed some of the causal dependencies.
+                // And that's ok because there must exist 2f+1 that has. So we can
+                // afford this validator returning error.
+                err @ Err(SuiError::TransactionInputObjectsErrors { .. }) if is_consensus_tx => {
+                    if retry_delay_ms >= 12800 {
+                        return Err(tonic::Status::internal(err.unwrap_err().to_string()));
+                    }
+                    debug!(
+                        ?tx_digest,
+                        ?retry_delay_ms,
+                        "Certificate failed due to missing dependencies, wait and retry",
+                    );
+                    sleep(Duration::from_millis(retry_delay_ms)).await;
+                    retry_delay_ms *= 2;
+                }
+                Err(e) => {
+                    // Record the cert for later execution, including causal completion if necessary.
+                    let _ = state
+                        .add_pending_certificates(vec![(tx_digest, Some(certificate))])
+                        .tap_err(|e| error!(?tx_digest, "add_pending_certificates failed: {}", e));
+                    return Err(tonic::Status::internal(e.to_string()));
+                }
+                Ok(response) => {
+                    return Ok(tonic::Response::new(response.into()));
+                }
             }
-            Ok(response) => Ok(tonic::Response::new(response)),
         }
     }
 }
@@ -524,7 +555,7 @@ impl Validator for ValidatorService {
             .await
             .map_err(|e| tonic::Status::internal(e.to_string()))?;
 
-        Ok(tonic::Response::new(response))
+        Ok(tonic::Response::new(response.into()))
     }
 
     async fn transaction_info(
@@ -539,7 +570,7 @@ impl Validator for ValidatorService {
             .await
             .map_err(|e| tonic::Status::internal(e.to_string()))?;
 
-        Ok(tonic::Response::new(response))
+        Ok(tonic::Response::new(response.into()))
     }
 
     type FollowTxStreamStream = BoxStream<'static, Result<BatchInfoResponseItem, tonic::Status>>;

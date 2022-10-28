@@ -21,8 +21,8 @@
     position: relative;
     padding: 20px 25px 25px;
     background-color: v.use(v.$colors-main-content-background);
-    border-radius: 20px;
-    max-height: 100%;
+    border-radius: 20px 20px 0 0;
+    height: 100%;
     overflow-y: auto;
 }
 

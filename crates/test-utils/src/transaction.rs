@@ -1,27 +1,26 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::authority::get_client;
-use crate::messages::{
-    create_publish_move_package_transaction, get_account_and_gas_coins,
-    get_gas_object_with_wallet_context, make_tx_certs_and_signed_effects,
-    make_tx_certs_and_signed_effects_with_committee, MAX_GAS,
-};
-use crate::{test_account_keys, test_committee};
-use futures::StreamExt;
-use move_package::BuildConfig;
-use serde_json::json;
+
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
+
+use futures::StreamExt;
+use serde_json::json;
+use tokio::time::{sleep, Duration};
+use tracing::debug;
+use tracing::info;
+
 use sui::client_commands::WalletContext;
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
 use sui_config::ValidatorInfo;
 use sui_core::authority::AuthorityState;
 use sui_core::authority_client::AuthorityAPI;
+use sui_framework_build::compiled_package::BuildConfig;
 use sui_json_rpc_types::SuiCertifiedTransaction;
 use sui_json_rpc_types::SuiObjectRead;
 use sui_json_rpc_types::SuiTransactionEffects;
-use sui_sdk::crypto::AccountKeystore;
+use sui_keys::keystore::AccountKeystore;
 use sui_sdk::json::SuiJsonValue;
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
@@ -32,14 +31,20 @@ use sui_types::messages::ExecuteTransactionRequestType;
 use sui_types::messages::{
     BatchInfoRequest, BatchInfoResponseItem, CallArg, ObjectArg, ObjectInfoRequest,
     ObjectInfoResponse, Transaction, TransactionData, TransactionEffects, TransactionInfoResponse,
+    VerifiedTransaction,
 };
 use sui_types::object::{Object, Owner};
 use sui_types::SUI_FRAMEWORK_OBJECT_ID;
-use tokio::time::{sleep, Duration};
-use tracing::debug;
-use tracing::info;
 
-pub fn make_publish_package(gas_object: Object, path: PathBuf) -> Transaction {
+use crate::authority::get_client;
+use crate::messages::{
+    create_publish_move_package_transaction, get_account_and_gas_coins,
+    get_gas_object_with_wallet_context, make_tx_certs_and_signed_effects,
+    make_tx_certs_and_signed_effects_with_committee, MAX_GAS,
+};
+use crate::{test_account_keys, test_committee};
+
+pub fn make_publish_package(gas_object: Object, path: PathBuf) -> VerifiedTransaction {
     let (sender, keypair) = test_account_keys().pop().unwrap();
     create_publish_move_package_transaction(
         gas_object.compute_object_reference(),
@@ -55,7 +60,7 @@ pub async fn publish_package(
     configs: &[ValidatorInfo],
 ) -> ObjectRef {
     let effects = publish_package_for_effects(gas_object, path, configs).await;
-    parse_package_ref(&effects).unwrap()
+    parse_package_ref(&effects.created).unwrap()
 }
 
 pub async fn publish_package_for_effects(
@@ -78,16 +83,9 @@ pub fn compile_basics_package() -> Vec<Vec<u8>> {
     path.push("../../sui_programmability/examples/basics");
 
     let build_config = BuildConfig::default();
-    let modules = sui_framework::build_move_package(&path, build_config).unwrap();
-
-    modules
-        .iter()
-        .map(|m| {
-            let mut module_bytes = Vec::new();
-            m.serialize(&mut module_bytes).unwrap();
-            module_bytes
-        })
-        .collect()
+    sui_framework::build_move_package(&path, build_config)
+        .unwrap()
+        .get_package_bytes()
 }
 
 /// Helper function to publish basic package.
@@ -107,7 +105,7 @@ pub async fn publish_basics_package(context: &WalletContext, sender: SuiAddress)
             .keystore
             .sign(&sender, &data.to_bytes())
             .unwrap();
-        Transaction::new(data, signature)
+        Transaction::new(data, signature).verify().unwrap()
     };
 
     let resp = context
@@ -164,7 +162,7 @@ pub async fn submit_move_transaction(
         .keystore
         .sign(&sender, &data.to_bytes())
         .unwrap();
-    let tx = Transaction::new(data, signature);
+    let tx = Transaction::new(data, signature).verify().unwrap();
     let tx_digest = tx.digest();
     debug!(?tx_digest, "submitting move transaction");
 
@@ -296,7 +294,17 @@ pub async fn transfer_sui(
 
 pub async fn transfer_coin(
     context: &mut WalletContext,
-) -> Result<(ObjectID, SuiAddress, SuiAddress, TransactionDigest), anyhow::Error> {
+) -> Result<
+    (
+        ObjectID,
+        SuiAddress,
+        SuiAddress,
+        TransactionDigest,
+        ObjectRef,
+        u64,
+    ),
+    anyhow::Error,
+> {
     let sender = context.config.keystore.addresses().get(0).cloned().unwrap();
     let receiver = context.config.keystore.addresses().get(1).cloned().unwrap();
 
@@ -321,13 +329,25 @@ pub async fn transfer_coin(
     .execute(context)
     .await?;
 
-    let digest = if let SuiClientCommandResult::Transfer(_, cert, _) = res {
-        cert.transaction_digest
+    let (digest, gas, gas_used) = if let SuiClientCommandResult::Transfer(_, cert, effect) = res {
+        (
+            cert.transaction_digest,
+            cert.data.gas_payment,
+            effect.gas_used.computation_cost + effect.gas_used.storage_cost
+                - effect.gas_used.storage_rebate,
+        )
     } else {
         panic!("transfer command did not return WalletCommandResult::Transfer");
     };
 
-    Ok((object_to_send, sender, receiver, digest))
+    Ok((
+        object_to_send,
+        sender,
+        receiver,
+        digest,
+        gas.to_object_ref(),
+        gas_used,
+    ))
 }
 
 pub async fn split_coin_with_wallet_context(context: &mut WalletContext, coin_id: ObjectID) {
@@ -368,7 +388,7 @@ pub async fn delete_devnet_nft(
         .keystore
         .sign(sender, &data.to_bytes())
         .unwrap();
-    let tx = Transaction::new(data, signature);
+    let tx = Transaction::new(data, signature).verify().unwrap();
 
     let resp = context
         .client
@@ -386,7 +406,7 @@ pub async fn delete_devnet_nft(
 
 /// Submit a certificate containing only owned-objects to all authorities.
 pub async fn submit_single_owner_transaction(
-    transaction: Transaction,
+    transaction: VerifiedTransaction,
     configs: &[ValidatorInfo],
 ) -> TransactionEffects {
     let certificate = make_tx_certs_and_signed_effects(vec![transaction])
@@ -398,7 +418,7 @@ pub async fn submit_single_owner_transaction(
     for config in configs {
         let client = get_client(config);
         let reply = client
-            .handle_certificate(certificate.clone())
+            .handle_certificate(certificate.clone().into())
             .await
             .unwrap();
         responses.push(reply);
@@ -410,7 +430,7 @@ pub async fn submit_single_owner_transaction(
 /// at least one consensus node. We use the loop since some consensus protocols (like Tusk)
 /// may drop transactions. The certificate is submitted to every Sui authority.
 pub async fn submit_shared_object_transaction(
-    transaction: Transaction,
+    transaction: VerifiedTransaction,
     configs: &[ValidatorInfo],
 ) -> SuiResult<TransactionEffects> {
     let committee = test_committee();
@@ -421,7 +441,7 @@ pub async fn submit_shared_object_transaction(
 /// at least one consensus node. We use the loop since some consensus protocols (like Tusk)
 /// may drop transactions. The certificate is submitted to every Sui authority.
 pub async fn submit_shared_object_transaction_with_committee(
-    transaction: Transaction,
+    transaction: VerifiedTransaction,
     configs: &[ValidatorInfo],
     committee: &Committee,
 ) -> SuiResult<TransactionEffects> {
@@ -436,7 +456,7 @@ pub async fn submit_shared_object_transaction_with_committee(
             .map(|config| {
                 let client = get_client(config);
                 let cert = certificate.clone();
-                async move { client.handle_certificate(cert).await }
+                async move { client.handle_certificate(cert.into()).await }
             })
             .collect();
 
@@ -473,9 +493,8 @@ pub fn get_unique_effects(replies: Vec<TransactionInfoResponse>) -> TransactionE
 
 /// Extract the package reference from a transaction effect. This is useful to deduce the
 /// authority-created package reference after attempting to publish a new Move package.
-pub fn parse_package_ref(effects: &TransactionEffects) -> Option<ObjectRef> {
-    effects
-        .created
+pub fn parse_package_ref(created_objs: &[(ObjectRef, Owner)]) -> Option<ObjectRef> {
+    created_objs
         .iter()
         .find(|(_, owner)| matches!(owner, Owner::Immutable))
         .map(|(reference, _)| *reference)

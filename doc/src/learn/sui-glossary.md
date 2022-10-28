@@ -4,10 +4,6 @@ title: Sui Glossary
 
 Find terms used in Sui defined below. Where possible, we link to a canonical definition and focus upon Sui’s use of the term.
 
-### Accumulator
-
-An *accumulator* makes sure the transaction is received by a quorum of validators, collects a quorum of votes, submits the certificate to the validators, and replies to the client. The accumulator enables transactions to be certified. Sui offers a gateway service that can assume the role of accumulator and collect votes on transactions from validators in Sui, saving end-users bandwidth.
-
 ### Causal history
 
 Causal history is the relationship between an object in Sui and its direct predecessors and successors. This history is essential to the causal order Sui uses to process transactions. In contrast, other blockchains read the entire state of their world for each transaction,
@@ -15,19 +11,17 @@ introducing latency.
 
 ### Causal order
 
-[Causal order](https://www.scattered-thoughts.net/writing/causal-ordering/) is a representation of the relationship between transactions
-and the objects they produce, laid out as dependencies. Validators cannot execute a transaction dependent on objects created by a prior
-transaction that has not finished. Rather than total order, Sui uses causal order (a partial order).
+[Causal order](https://www.scattered-thoughts.net/writing/causal-ordering/) is a representation of the relationship between transactions and the objects they produce, laid out as dependencies. Validators cannot execute a transaction dependent on objects created by a prior transaction that has not finished. Rather than total order, Sui uses causal order (a partial order).
 
 For more information, see [Causal order vs total order](sui-compared.md#causal-order-vs-total-order). 
 
 ### Certificate
 
-A certificate is the mechanism proving a transaction has been approved, or certified. Validators vote on transactions, and an aggregator collects a Byzantine-resistant-majority of these votes into a certificate and broadcasts it to all Sui validators, thereby ensuring finality.
+A certificate is the mechanism proving a transaction was approved or certified. Validators vote on transactions, and aggregators collect a Byzantine-resistant-majority of these votes into a certificate and broadcasts it to all Sui validators, thereby ensuring finality.
 
 ### Epoch
 
-Operation of the Sui network is temporally partitioned into non-overlapping, fixed-duration *epochs*. During a particular epoch, the set of validators participating in the network is fixed.
+Operation of the Sui network is temporally partitioned into non-overlapping, fixed-duration epochs. During a particular epoch, the set of validators participating in the network is fixed.
 
 For more information, see [Epochs](architecture/validators.md#epochs).
 
@@ -48,15 +42,11 @@ certifies the transaction, all of the other honest validators will too eventuall
 
 [Gas](https://ethereum.org/en/developers/docs/gas/) refers to the computational effort required for executing operations on the Sui network. In Sui, gas is paid with the network's native currency SUI. The cost of executing a transaction in SUI units is referred to as the transaction fee.
 
-### Gateway service
-
-Sui provides a gateway service that enables third parties, such as app or game developers, to route transactions on behalf of users. Because Sui never requires exchange of private keys, users can offload the bandwidth use of transaction submission (for example when operating from a mobile device) to an untrusted server.
-
 ### Genesis
 
-Genesis is the initial act of creating accounts and gas objects. Sui provides a `genesis` command that allows users to create and inspect the genesis object setting up the network for operation.
+Genesis is the initial act of creating accounts and gas objects for a Sui network. Sui provides a `genesis` command that allows users to create and inspect the genesis object setting up the network for operation.
 
-For more information, see [Genesis](../build/cli-client.md#genesis).
+For more information, see [Genesis](../build/sui-local-network.md#genesis).
 
 ### Multi-writer objects
 

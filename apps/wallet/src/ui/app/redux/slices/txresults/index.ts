@@ -45,6 +45,7 @@ export type TxResultState = {
     balance?: number;
     callFunctionName?: string;
     coinSymbol?: string;
+    coinType?: string;
 };
 
 interface TransactionManualState {
@@ -95,7 +96,10 @@ export const getTransactionsByAddress = createAsyncThunk<
         }
         // Get all transactions txId for address
         const transactions: GetTxnDigestsResponse =
-            await api.instance.fullNode.getTransactionsForAddress(address);
+            await api.instance.fullNode.getTransactionsForAddress(
+                address,
+                'Descending'
+            );
 
         if (!transactions || !transactions.length) {
             return [];
@@ -194,6 +198,7 @@ export const getTransactionsByAddress = createAsyncThunk<
                           name: objectTxObj.data.fields.name,
                           url: objectTxObj.data.fields.url,
                           balance: objectTxObj.data.fields.balance,
+                          coinType,
                           coinSymbol: coinType && Coin.getCoinSymbol(coinType),
                       }
                     : {}),

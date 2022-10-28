@@ -17,7 +17,8 @@ use sui_types::{
     },
     error::{SuiError, SuiResult},
     messages::{
-        CertifiedTransaction, SignedTransactionEffects, TransactionEffects, TransactionInfoResponse,
+        CertifiedTransaction, SignedTransactionEffects, TransactionEffects,
+        TransactionInfoResponse, VerifiedCertificate,
     },
     messages_checkpoint::CheckpointContents,
 };
@@ -508,7 +509,7 @@ where
         &self,
         epoch_id: EpochId,
         digest: &TransactionDigest,
-    ) -> SuiResult<CertifiedTransaction> {
+    ) -> SuiResult<VerifiedCertificate> {
         if let Some(cert) = self.store().get_cert(epoch_id, digest)? {
             assert_eq!(epoch_id, cert.epoch());
             return Ok(cert);
@@ -585,8 +586,11 @@ where
         };
         match result {
             Ok(_) => Ok(SyncStatus::CertExecuted),
-            Err(SuiError::ObjectNotFound { .. }) | Err(SuiError::ObjectErrors { .. }) => {
-                debug!(?digest, "cert execution failed due to missing parents");
+            e @ Err(SuiError::TransactionInputObjectsErrors { .. }) => {
+                debug!(
+                    ?digest,
+                    "cert execution failed due to missing parents {:?}", e
+                );
 
                 let effects = self.get_true_effects(epoch_id, &cert).await?;
 
@@ -857,7 +861,7 @@ where
         epoch_id: EpochId,
         authorities_with_cert: Option<BTreeSet<AuthorityName>>,
         req: &DownloadRequest,
-    ) -> SuiResult<(CertifiedTransaction, Option<SignedTransactionEffects>)> {
+    ) -> SuiResult<(VerifiedCertificate, Option<SignedTransactionEffects>)> {
         let tx_digest = *req.transaction_digest();
 
         match (

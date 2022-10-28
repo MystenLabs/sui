@@ -12,6 +12,7 @@ import { type NodeLocation } from './types';
 import styles from './ValidatorMap.module.css';
 
 import { DateFilter, useDateFilterState } from '~/ui/DateFilter';
+import { Placeholder } from '~/ui/Placeholder';
 
 const HOST = 'https://imgmod.sui.io';
 
@@ -30,23 +31,22 @@ const DATE_FILTER_TO_WINDOW = {
 export default function ValidatorMap() {
     const [dateFilter, setDateFilter] = useDateFilterState('D');
 
-    const { data } = useQuery(['validator-map', dateFilter], async () => {
-        const res = await fetch(
-            `${HOST}/location?${new URLSearchParams({
-                version: 'v2',
-                window: DATE_FILTER_TO_WINDOW[dateFilter],
-            })}`,
-            {
-                method: 'GET',
-            }
-        );
+    const { data, isLoading, isSuccess } = useQuery(
+        ['validator-map', dateFilter],
+        async () => {
+            const res = await fetch(
+                `${HOST}/location?${new URLSearchParams({
+                    version: 'v2',
+                    window: DATE_FILTER_TO_WINDOW[dateFilter],
+                })}`,
+                {
+                    method: 'GET',
+                }
+            );
 
-        if (!res.ok) {
-            return [];
+            return res.json() as Promise<NodeLocation[]>;
         }
-
-        return res.json() as Promise<NodeLocation[]>;
-    });
+    );
 
     const { totalCount, countryCount, countryNodes } = useMemo<{
         totalCount: number | null;
@@ -112,13 +112,25 @@ export default function ValidatorMap() {
                     <div>
                         <div className={styles.title}>Nodes</div>
                         <div className={styles.stat}>
-                            {totalCount && numberFormatter.format(totalCount)}
+                            {isLoading && (
+                                <Placeholder width="59px" height="32px" />
+                            )}
+                            {
+                                // Fetch received response with no errors and the value was not null
+                                isSuccess &&
+                                    totalCount &&
+                                    numberFormatter.format(totalCount)
+                            }
                         </div>
                     </div>
                     <div>
                         <div className={styles.title}>Countries</div>
                         <div className={styles.stat}>
-                            {countryCount &&
+                            {isLoading && (
+                                <Placeholder width="59px" height="32px" />
+                            )}
+                            {isSuccess &&
+                                countryCount &&
                                 numberFormatter.format(countryCount)}
                         </div>
                     </div>

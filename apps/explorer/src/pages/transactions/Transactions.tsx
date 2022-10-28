@@ -4,7 +4,7 @@
 import { useEffect, useState, useContext } from 'react';
 
 import ErrorResult from '../../components/error-result/ErrorResult';
-import LastestTxCard from '../../components/transaction-card/RecentTxCard';
+import LatestTxCard from '../../components/transaction-card/RecentTxCard';
 import { NetworkContext } from '../../context';
 import {
     DefaultRpcClient as rpc,
@@ -26,7 +26,7 @@ function TransactionsStatic() {
     const [count] = useState(500);
     return (
         <div data-testid="home-page" id="home" className={styles.home}>
-            <LastestTxCard count={count} />
+            <LatestTxCard count={count} />
         </div>
     );
 }
@@ -78,7 +78,7 @@ function TransactionsAPI() {
             id="transaction"
             className={styles.container}
         >
-            <LastestTxCard
+            <LatestTxCard
                 count={results.count}
                 txPerPage={TXN_PER_PAGE}
                 paginationtype="pagination"

@@ -13,7 +13,7 @@
     justify-content: space-between;
     border-bottom: 1px solid colors.$gray-45;
     height: auto;
-    padding: 15px 0;
+    padding: 10px 0;
     cursor: pointer;
 
     .card-icon {
@@ -189,4 +189,11 @@
 
     color: colors.$gray-65;
     font-weight: 400;
+}
+
+.center-loading {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
 }

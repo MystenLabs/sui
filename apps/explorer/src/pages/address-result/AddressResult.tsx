@@ -3,12 +3,11 @@
 
 import { useParams } from 'react-router-dom';
 
-import { ReactComponent as AddressIcon } from '../../assets/AddressIcon.svg';
 import ErrorResult from '../../components/error-result/ErrorResult';
-import Longtext from '../../components/longtext/Longtext';
 import OwnedObjects from '../../components/ownedobjects/OwnedObjects';
 import TxForID from '../../components/transaction-card/TxForID';
-import resultheaderstyle from '../../styles/resultheader.module.css';
+
+import { PageHeader } from '~/ui/PageHeader';
 
 type DataType = {
     id: string;
@@ -30,18 +29,8 @@ function AddressResult() {
     if (addressID !== undefined) {
         return (
             <>
-                <div className={resultheaderstyle.btmborder}>
-                    <div className={resultheaderstyle.category}>
-                        <AddressIcon /> Address
-                    </div>
-                    <div className={resultheaderstyle.address} id="addressID">
-                        <Longtext
-                            text={addressID}
-                            category="addresses"
-                            isLink={false}
-                            copyButton="24"
-                        />
-                    </div>
+                <div className="mt-5 mb-10">
+                    <PageHeader type="Address" title={addressID} />
                 </div>
                 <div>
                     <h1>Owned Objects</h1>

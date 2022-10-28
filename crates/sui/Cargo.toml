@@ -1,6 +1,6 @@
 [package]
 name = "sui"
-version = "0.12.0"
+version.workspace = true
 authors = ["Mysten Labs <build@mystenlabs.com>"]
 license = "Apache-2.0"
 publish = false
@@ -23,12 +23,14 @@ bip32 = "0.4.0"
 
 sui-core = { path = "../sui-core" }
 sui-framework = { path = "../sui-framework" }
+sui-framework-build = { path = "../sui-framework-build" }
 sui-config = { path = "../sui-config" }
 sui-types = { path = "../sui-types" }
 sui-json = { path = "../sui-json" }
 sui-swarm = { path = "../sui-swarm" }
 sui-json-rpc-types = { path = "../sui-json-rpc-types" }
 sui-sdk = { path = "../sui-sdk" }
+sui-keys = { path = "../sui-keys" }
 
 fastcrypto.workspace = true
 
@@ -56,7 +58,6 @@ multiaddr = "0.14.0"
 hex = "0.4.3"
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
-jemallocator = { version = "^0.5", features = ["profiling"] }
 jemalloc-ctl = "^0.5"
 
 [dev-dependencies]
@@ -77,4 +78,4 @@ sui-macros = { path = "../sui-macros" }
 sui-simulator = { path = "../sui-simulator" }
 
 [package.metadata.cargo-udeps.ignore]
-normal = ["jemallocator", "jemalloc-ctl"]
+normal = ["jemalloc-ctl"]

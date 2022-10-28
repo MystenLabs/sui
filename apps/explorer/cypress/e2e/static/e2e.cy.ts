@@ -32,12 +32,12 @@ describe('End-to-end Tests', () => {
         it('can be searched', () => {
             cy.visit('/');
             searchText(successID);
-            cy.get('[data-testid=transaction-id]').contains(successID);
+            cy.get('[data-testid=pageheader]').contains(successID);
         });
 
         it('can be reached through URL', () => {
             cy.visit(`/transactions/${successID}`);
-            cy.get('[data-testid=transaction-id]').contains(successID);
+            cy.get('[data-testid=pageheader]').contains(successID);
         });
 
         it('includes the sender time information', () => {

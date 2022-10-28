@@ -3,10 +3,6 @@
 
 import type { FormatNumberOptions } from 'react-intl';
 
-export const balanceFormatOptions: FormatNumberOptions = {
-    maximumFractionDigits: 0,
-};
-
 export const percentageFormatOptions: FormatNumberOptions = {
     style: 'percent',
     maximumFractionDigits: 2,

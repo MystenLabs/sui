@@ -5,7 +5,7 @@ import type {
   SignableTransaction,
   SuiTransactionResponse,
 } from "@mysten/sui.js";
-import type { SignAndSendTransactionInput } from "@wallet-standard/features";
+import type { SignAndSendTransactionInput } from "@wallet-standard/core";
 
 /** The latest API version of the signAndExecuteTransaction API. */
 export type SuiSignAndExecuteTransactionVersion = "1.0.0";

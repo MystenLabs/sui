@@ -17,18 +17,6 @@ pub struct WorkerBatchMessage {
     pub batch: Batch,
 }
 
-/// Used by workers to request batches from other workers.
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-pub struct WorkerBatchRequest {
-    pub digests: Vec<BatchDigest>,
-}
-
-/// Used by workers to provide batches to other workers.
-#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
-pub struct WorkerBatchResponse {
-    pub batches: Vec<Batch>,
-}
-
 /// Used by primary to ask worker for the request.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct RequestBatchRequest {

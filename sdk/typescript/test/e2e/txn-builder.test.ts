@@ -85,7 +85,8 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
       );
 
       const validators = await toolbox.getActiveValidators();
-      const validator_metadata = (validators[0] as SuiMoveObject).fields.metadata;
+      const validator_metadata = (validators[0] as SuiMoveObject).fields
+        .metadata;
       const validator_address = (validator_metadata as SuiMoveObject).fields
         .sui_address;
 
@@ -157,6 +158,59 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
         recipients: [DEFAULT_RECIPIENT, DEFAULT_RECIPIENT_2],
         amounts: [4, 2],
         gasPayment: getObjectId(coins[2]),
+      });
+      expect(getExecutionStatusType(txn)).toEqual('success');
+    });
+
+    it('PaySui', async () => {
+      const gasBudget = 1000;
+      const coins =
+        await toolbox.provider.selectCoinsWithBalanceGreaterThanOrEqual(
+          toolbox.address(),
+          BigInt(DEFAULT_GAS_BUDGET)
+        );
+
+      const splitTxn = await signer.splitCoinWithRequestType({
+        coinObjectId: getObjectId(coins[0]),
+        splitAmounts: [2000, 2000, 2000],
+        gasBudget: gasBudget,
+        gasPayment: getObjectId(coins[1]),
+      });
+      const splitCoins = getNewlyCreatedCoinRefsAfterSplit(splitTxn)!.map((c) =>
+        getObjectId(c)
+      );
+
+      const txn = await signer.paySuiWithRequestType({
+        inputCoins: splitCoins,
+        recipients: [DEFAULT_RECIPIENT, DEFAULT_RECIPIENT_2],
+        amounts: [1000, 1000],
+        gasBudget: gasBudget,
+      });
+      expect(getExecutionStatusType(txn)).toEqual('success');
+    });
+
+    it('PayAllSui', async () => {
+      const gasBudget = 1000;
+      const coins =
+        await toolbox.provider.selectCoinsWithBalanceGreaterThanOrEqual(
+          toolbox.address(),
+          BigInt(DEFAULT_GAS_BUDGET)
+        );
+
+      const splitTxn = await signer.splitCoinWithRequestType({
+        coinObjectId: getObjectId(coins[0]),
+        splitAmounts: [2000, 2000, 2000],
+        gasBudget: gasBudget,
+        gasPayment: getObjectId(coins[1]),
+      });
+      const splitCoins = getNewlyCreatedCoinRefsAfterSplit(splitTxn)!.map((c) =>
+        getObjectId(c)
+      );
+
+      const txn = await signer.payAllSuiWithRequestType({
+        inputCoins: splitCoins,
+        recipient: DEFAULT_RECIPIENT,
+        gasBudget: gasBudget,
       });
       expect(getExecutionStatusType(txn)).toEqual('success');
     });

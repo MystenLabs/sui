@@ -6,15 +6,12 @@
 
 
 -  [Function `transfer`](#0x2_transfer_transfer)
--  [Function `transfer_to_object`](#0x2_transfer_transfer_to_object)
--  [Function `transfer_to_object_id`](#0x2_transfer_transfer_to_object_id)
 -  [Function `freeze_object`](#0x2_transfer_freeze_object)
 -  [Function `share_object`](#0x2_transfer_share_object)
 -  [Function `transfer_internal`](#0x2_transfer_transfer_internal)
 
 
-<pre><code><b>use</b> <a href="object.md#0x2_object">0x2::object</a>;
-</code></pre>
+<pre><code></code></pre>
 
 
 
@@ -39,66 +36,6 @@ unique ID.
 <pre><code><b>public</b> <b>fun</b> <a href="transfer.md#0x2_transfer">transfer</a>&lt;T: key&gt;(obj: T, recipient: <b>address</b>) {
     // TODO: emit <a href="event.md#0x2_event">event</a>
     <a href="transfer.md#0x2_transfer_transfer_internal">transfer_internal</a>(obj, recipient, <b>false</b>)
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_transfer_transfer_to_object"></a>
-
-## Function `transfer_to_object`
-
-Transfer ownership of <code>obj</code> to another object <code>owner</code>.
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="transfer.md#0x2_transfer_transfer_to_object">transfer_to_object</a>&lt;T: key, R: key&gt;(obj: T, owner: &<b>mut</b> R)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="transfer.md#0x2_transfer_transfer_to_object">transfer_to_object</a>&lt;T: key, R: key&gt;(obj: T, owner: &<b>mut</b> R) {
-    <b>let</b> owner_id = <a href="object.md#0x2_object_id_address">object::id_address</a>(owner);
-    <a href="transfer.md#0x2_transfer_transfer_internal">transfer_internal</a>(obj, owner_id, <b>true</b>);
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_transfer_transfer_to_object_id"></a>
-
-## Function `transfer_to_object_id`
-
-Similar to transfer_to_object where we want to transfer an object to another object.
-However, in the case when we haven't yet created the parent object (typically during
-parent object construction), and all we have is just a parent object ID, we could
-use this function to transfer an object to the parent object identified by its id.
-Additionally, this API is useful for transfering to objects, outside of that object's
-module. The object's module can expose a function that returns a reference to the object's
-UID, <code>&<b>mut</b> UID</code>, which can then be used with this function. The mutable <code>&<b>mut</b> UID</code> reference
-prevents child objects from being added to immutable objects (immutable objects cannot have
-child objects).
-The child object is specified in <code>obj</code>, and the parent object id is specified in <code>owner_id</code>.
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="transfer.md#0x2_transfer_transfer_to_object_id">transfer_to_object_id</a>&lt;T: key&gt;(obj: T, owner_id: &<b>mut</b> <a href="object.md#0x2_object_UID">object::UID</a>)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="transfer.md#0x2_transfer_transfer_to_object_id">transfer_to_object_id</a>&lt;T: key&gt;(obj: T, owner_id: &<b>mut</b> UID) {
-    <a href="transfer.md#0x2_transfer_transfer_internal">transfer_internal</a>(obj, <a href="object.md#0x2_object_uid_to_address">object::uid_to_address</a>(owner_id), <b>true</b>);
 }
 </code></pre>
 

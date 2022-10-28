@@ -3,11 +3,13 @@
 
 import { describe, it, expect, beforeAll } from 'vitest';
 import {
+  Coin,
   getCreatedObjects,
   getExecutionStatusType,
   LocalTxnDataSerializer,
   ObjectId,
   RawSigner,
+  SUI_PACKAGE_ID,
 } from '../../src';
 import {
   DEFAULT_GAS_BUDGET,
@@ -65,6 +67,22 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
 
     it('Test object vector', async () => {
       await destroyObjects([await mintObject(7), await mintObject(42)]);
+    });
+
+    it('Test regular arg mixed with object vector arg', async () => {
+      const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
+        toolbox.address()
+      );
+      const coinIDs = coins.map((coin) => Coin.getID(coin));
+      const txn = await signer.executeMoveCallWithRequestType({
+        packageObjectId: SUI_PACKAGE_ID,
+        module: 'pay',
+        function: 'join_vec',
+        typeArguments: ['0x2::sui::SUI'],
+        arguments: [coinIDs[0], [coinIDs[1], coinIDs[2]]],
+        gasBudget: DEFAULT_GAS_BUDGET,
+      });
+      expect(getExecutionStatusType(txn)).toEqual('success');
     });
   }
 );

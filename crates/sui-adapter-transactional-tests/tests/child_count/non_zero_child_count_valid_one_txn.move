@@ -10,59 +10,31 @@
 //# publish
 
 module test::m {
-    use sui::tx_context::{Self, TxContext};
+    use sui::tx_context::TxContext;
+    use sui::dynamic_object_field as ofield;
 
     struct S has key, store {
         id: sui::object::UID,
     }
 
-    public entry fun mint(ctx: &mut TxContext) {
-        let s = S { id: sui::object::new(ctx) };
-        sui::transfer::transfer(s, tx_context::sender(ctx))
+    struct R has key, store {
+        id: sui::object::UID,
+        s: S,
     }
 
-    public entry fun test_transfer_to_object(super_parent: &mut S, ctx: &mut TxContext) {
+    public entry fun share(ctx: &mut TxContext) {
         let id = sui::object::new(ctx);
         let child = S { id: sui::object::new(ctx) };
-        sui::transfer::transfer_to_object_id(child, &mut id);
-        let parent = S { id };
-        sui::transfer::transfer_to_object(parent, super_parent)
+        ofield::add(&mut id, 0, child);
+        sui::transfer::share_object(S { id })
     }
 
-    public entry fun test_transfer(recipient: address, ctx: &mut TxContext) {
-        let id = sui::object::new(ctx);
-        let child = S { id: sui::object::new(ctx) };
-        sui::transfer::transfer_to_object_id(child, &mut id);
-        let parent = S { id };
-        sui::transfer::transfer(parent, recipient)
-    }
-
-    public entry fun test_share(ctx: &mut TxContext) {
-        let id = sui::object::new(ctx);
-        let child = S { id: sui::object::new(ctx) };
-        sui::transfer::transfer_to_object_id(child, &mut id);
-        let parent = S { id };
-        sui::transfer::share_object(parent)
-    }
 }
-
-//
-// Test transfer_to_object allows non-zero child count
-//
-
-//# run test::m::mint --sender A
-
-//# run test::m::test_transfer_to_object --sender A --args object(107)
-
 
 //
 // Test share object allows non-zero child count
 //
 
-//# run test::m::test_share --sender A
+//# run test::m::share --sender A
 
-//
-// Test transfer allows non-zero child count
-//
-
-//# run test::m::test_transfer --sender A --args @B
+//# view-object 108

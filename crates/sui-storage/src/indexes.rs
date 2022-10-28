@@ -5,9 +5,9 @@
 //! The main user of this data is the explorer.
 
 use move_core_types::identifier::Identifier;
-use rocksdb::Options;
 use serde::{de::DeserializeOwned, Serialize};
 use typed_store::rocks::DBMap;
+use typed_store::rocks::DBOptions;
 use typed_store::traits::Map;
 use typed_store::traits::TypedStoreDebug;
 use typed_store_derive::DBMapUtils;
@@ -56,25 +56,25 @@ pub struct IndexStore {
 }
 
 // These functions are used to initialize the DB tables
-fn transactions_seq_table_default_config() -> Options {
+fn transactions_seq_table_default_config() -> DBOptions {
     default_db_options(None, Some(1_000_000)).0
 }
-fn transactions_from_addr_table_default_config() -> Options {
+fn transactions_from_addr_table_default_config() -> DBOptions {
     default_db_options(None, Some(1_000_000)).0
 }
-fn transactions_to_addr_table_default_config() -> Options {
+fn transactions_to_addr_table_default_config() -> DBOptions {
     default_db_options(None, Some(1_000_000)).0
 }
-fn transactions_by_input_object_id_table_default_config() -> Options {
+fn transactions_by_input_object_id_table_default_config() -> DBOptions {
     default_db_options(None, Some(1_000_000)).0
 }
-fn transactions_by_mutated_object_id_table_default_config() -> Options {
+fn transactions_by_mutated_object_id_table_default_config() -> DBOptions {
     default_db_options(None, Some(1_000_000)).0
 }
-fn transactions_by_move_function_table_default_config() -> Options {
+fn transactions_by_move_function_table_default_config() -> DBOptions {
     default_db_options(None, Some(1_000_000)).0
 }
-fn timestamps_table_default_config() -> Options {
+fn timestamps_table_default_config() -> DBOptions {
     default_db_options(None, Some(1_000_000)).1
 }
 

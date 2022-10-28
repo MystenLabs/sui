@@ -26,11 +26,11 @@ use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tracing::info;
 use types::{
     Batch, BatchDigest, Certificate, CertificateDigest, ConsensusStore, FetchCertificatesRequest,
-    FetchCertificatesResponse, Header, HeaderBuilder, PrimaryMessage, PrimaryToPrimary,
-    PrimaryToPrimaryServer, PrimaryToWorker, PrimaryToWorkerServer, RequestBatchRequest,
-    RequestBatchResponse, Round, SequenceNumber, Transaction, Vote, WorkerBatchMessage,
-    WorkerBatchRequest, WorkerBatchResponse, WorkerDeleteBatchesMessage, WorkerReconfigureMessage,
-    WorkerSynchronizeMessage, WorkerToWorker, WorkerToWorkerServer,
+    FetchCertificatesResponse, Header, HeaderBuilder, PayloadAvailabilityRequest,
+    PayloadAvailabilityResponse, PrimaryMessage, PrimaryToPrimary, PrimaryToPrimaryServer,
+    PrimaryToWorker, PrimaryToWorkerServer, RequestBatchRequest, RequestBatchResponse, Round,
+    SequenceNumber, Transaction, Vote, WorkerBatchMessage, WorkerDeleteBatchesMessage,
+    WorkerReconfigureMessage, WorkerSynchronizeMessage, WorkerToWorker, WorkerToWorkerServer,
 };
 
 pub mod cluster;
@@ -150,7 +150,7 @@ pub fn fixture_batch_with_transactions(number_of_transactions: u32) -> Batch {
         .map(|_v| transaction())
         .collect();
 
-    Batch(transactions)
+    Batch::new(transactions)
 }
 
 // Fixture
@@ -201,6 +201,12 @@ impl PrimaryToPrimary for PrimaryToPrimaryMockServer {
         &self,
         _request: anemo::Request<FetchCertificatesRequest>,
     ) -> Result<anemo::Response<FetchCertificatesResponse>, anemo::rpc::Status> {
+        unimplemented!()
+    }
+    async fn get_payload_availability(
+        &self,
+        _request: anemo::Request<PayloadAvailabilityRequest>,
+    ) -> Result<anemo::Response<PayloadAvailabilityResponse>, anemo::rpc::Status> {
         unimplemented!()
     }
 }
@@ -269,25 +275,16 @@ impl PrimaryToWorker for PrimaryToWorkerMockServer {
 
 pub struct WorkerToWorkerMockServer {
     batch_sender: Sender<WorkerBatchMessage>,
-    batch_request_sender: Sender<WorkerBatchRequest>,
 }
 
 impl WorkerToWorkerMockServer {
     pub fn spawn(
         keypair: NetworkKeyPair,
         address: Multiaddr,
-    ) -> (
-        Receiver<WorkerBatchMessage>,
-        Receiver<WorkerBatchRequest>,
-        anemo::Network,
-    ) {
+    ) -> (Receiver<WorkerBatchMessage>, anemo::Network) {
         let addr = network::multiaddr_to_address(&address).unwrap();
         let (batch_sender, batch_receiver) = channel(1);
-        let (batch_request_sender, batch_request_receiver) = channel(1);
-        let service = WorkerToWorkerServer::new(Self {
-            batch_sender,
-            batch_request_sender,
-        });
+        let service = WorkerToWorkerServer::new(Self { batch_sender });
 
         let routes = anemo::Router::new().add_rpc_service(service);
         let network = anemo::Network::bind(addr)
@@ -296,7 +293,7 @@ impl WorkerToWorkerMockServer {
             .start(routes)
             .unwrap();
         info!("starting network on: {}", network.local_addr());
-        (batch_receiver, batch_request_receiver, network)
+        (batch_receiver, network)
     }
 }
 
@@ -312,20 +309,6 @@ impl WorkerToWorker for WorkerToWorkerMockServer {
 
         Ok(anemo::Response::new(()))
     }
-    async fn request_batches(
-        &self,
-        request: anemo::Request<WorkerBatchRequest>,
-    ) -> Result<anemo::Response<WorkerBatchResponse>, anemo::rpc::Status> {
-        let message = request.into_body();
-
-        self.batch_request_sender.send(message).await.unwrap();
-
-        // For testing stub, just always reply with no batches.
-        Ok(anemo::Response::new(WorkerBatchResponse {
-            batches: vec![],
-        }))
-    }
-
     async fn request_batch(
         &self,
         _request: anemo::Request<RequestBatchRequest>,
@@ -341,7 +324,7 @@ impl WorkerToWorker for WorkerToWorkerMockServer {
 
 // Fixture
 pub fn batch() -> Batch {
-    Batch(vec![transaction(), transaction()])
+    Batch::new(vec![transaction(), transaction()])
 }
 
 /// generate multiple fixture batches. The number of generated batches
@@ -363,7 +346,7 @@ pub fn batch_with_transactions(num_of_transactions: usize) -> Batch {
         transactions.push(transaction());
     }
 
-    Batch(transactions)
+    Batch::new(transactions)
 }
 
 const BATCHES_CF: &str = "batches";

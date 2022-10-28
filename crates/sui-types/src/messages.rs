@@ -6,8 +6,7 @@ use crate::committee::{EpochId, StakeUnit};
 use crate::crypto::{
     sha3_hash, AuthoritySignInfo, AuthoritySignInfoTrait, AuthoritySignature,
     AuthorityStrongQuorumSignInfo, Ed25519SuiSignature, EmptySignInfo, Signable, Signature,
-    SignatureScheme, SuiAuthoritySignature, SuiSignature, SuiSignatureInner, ToFromBytes,
-    VerificationObligation,
+    SignatureScheme, SuiSignature, SuiSignatureInner, ToFromBytes, VerificationObligation,
 };
 use crate::gas::GasCostSummary;
 use crate::messages_checkpoint::{
@@ -29,16 +28,17 @@ use move_core_types::{
 };
 use name_variant::NamedVariant;
 use once_cell::sync::OnceCell;
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_name::{DeserializeNameAdapter, SerializeNameAdapter};
 use serde_with::serde_as;
 use serde_with::Bytes;
 use std::collections::hash_map::DefaultHasher;
 use std::fmt::Write;
-use std::fmt::{Display, Formatter};
+use std::fmt::{Debug, Display, Formatter};
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     hash::{Hash, Hasher},
+    ops::{Deref, DerefMut},
 };
 use tracing::debug;
 
@@ -94,10 +94,48 @@ pub struct MoveModulePublish {
     pub modules: Vec<Vec<u8>>,
 }
 
+// TODO: we can deprecate TransferSui when its callsites on RPC & SDK are
+// fully replaced by PaySui and PayAllSui.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct TransferSui {
     pub recipient: SuiAddress,
     pub amount: Option<u64>,
+}
+
+/// Send all SUI coins to one recipient.
+/// only for SUI coin and does not require a separate gas coin object either.
+/// Specifically, what pay_all_sui does are:
+/// 1. accumulate all SUI from input coins and deposit all SUI to the first input coin
+/// 2. transfer the updated first coin to the recipient and also use this first coin as
+/// gas coin object.
+/// 3. the balance of the first input coin after tx is sum(input_coins) - actual_gas_cost.
+/// 4. all other input coins other than the first are deleted.
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub struct PayAllSui {
+    /// The coins to be used for payment.
+    pub coins: Vec<ObjectRef>,
+    /// The address that will receive payment
+    pub recipient: SuiAddress,
+}
+
+/// Send SUI coins to a list of addresses, following a list of amounts.
+/// only for SUI coin and does not require a separate gas coin object.
+/// Specifically, what pay_sui does are:
+/// 1. debit each input_coin to create new coin following the order of
+/// amounts and assign it to the corresponding recipient.
+/// 2. accumulate all residual SUI from input coins left and deposit all SUI to the first
+/// input coin, then use the first input coin as the gas coin object.
+/// 3. the balance of the first input coin after tx is sum(input_coins) - sum(amounts) - actual_gas_cost
+/// 4. all other input coints other than the first one are deleted.
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub struct PaySui {
+    /// The coins to be used for payment.
+    pub coins: Vec<ObjectRef>,
+    /// The addresses that will receive payment
+    pub recipients: Vec<SuiAddress>,
+    /// The amounts each recipient will receive.
+    /// Must be the same length as recipients
+    pub amounts: Vec<u64>,
 }
 
 /// Pay each recipient the corresponding amount using the input coins
@@ -120,6 +158,8 @@ pub struct ChangeEpoch {
     pub storage_charge: u64,
     /// The total amount of gas charged for computation during the epoch.
     pub computation_charge: u64,
+    /// The total amount of storage rebate refunded during the epoch.
+    pub storage_rebate: u64,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
@@ -134,6 +174,12 @@ pub enum SingleTransactionKind {
     TransferSui(TransferSui),
     /// Pay multiple recipients using multiple input coins
     Pay(Pay),
+    /// Pay multiple recipients using multiple SUI coins,
+    /// no extra gas payment SUI coin is required.
+    PaySui(PaySui),
+    /// After paying the gas of the transaction itself, pay
+    /// pay all remaining coins to the recipient.
+    PayAllSui(PayAllSui),
     /// A system transaction that will update epoch information on-chain.
     /// It will only ever be executed once in an epoch.
     /// The argument is the next epoch number, which is critical
@@ -271,6 +317,14 @@ impl SingleTransactionKind {
                 .iter()
                 .map(|o| InputObjectKind::ImmOrOwnedMoveObject(*o))
                 .collect(),
+            Self::PaySui(PaySui { coins, .. }) => coins
+                .iter()
+                .map(|o| InputObjectKind::ImmOrOwnedMoveObject(*o))
+                .collect(),
+            Self::PayAllSui(PayAllSui { coins, .. }) => coins
+                .iter()
+                .map(|o| InputObjectKind::ImmOrOwnedMoveObject(*o))
+                .collect(),
             Self::ChangeEpoch(_) => {
                 vec![InputObjectKind::SharedMoveObject {
                     id: SUI_SYSTEM_STATE_OBJECT_ID,
@@ -331,6 +385,34 @@ impl Display for SingleTransactionKind {
                     writeln!(writer, "{}", amount)?
                 }
             }
+            Self::PaySui(p) => {
+                writeln!(writer, "Transaction Kind : Pay SUI")?;
+                writeln!(writer, "Coins:")?;
+                for (object_id, seq, digest) in &p.coins {
+                    writeln!(writer, "Object ID : {}", &object_id)?;
+                    writeln!(writer, "Sequence Number : {:?}", seq)?;
+                    writeln!(writer, "Object Digest : {}", encode_bytes_hex(digest.0))?;
+                }
+                writeln!(writer, "Recipients:")?;
+                for recipient in &p.recipients {
+                    writeln!(writer, "{}", recipient)?;
+                }
+                writeln!(writer, "Amounts:")?;
+                for amount in &p.amounts {
+                    writeln!(writer, "{}", amount)?
+                }
+            }
+            Self::PayAllSui(p) => {
+                writeln!(writer, "Transaction Kind : Pay all SUI")?;
+                writeln!(writer, "Coins:")?;
+                for (object_id, seq, digest) in &p.coins {
+                    writeln!(writer, "Object ID : {}", &object_id)?;
+                    writeln!(writer, "Sequence Number : {:?}", seq)?;
+                    writeln!(writer, "Object Digest : {}", encode_bytes_hex(digest.0))?;
+                }
+                writeln!(writer, "Recipient:")?;
+                writeln!(writer, "{}", &p.recipient)?;
+            }
             Self::Publish(_p) => {
                 writeln!(writer, "Transaction Kind : Publish")?;
             }
@@ -347,6 +429,7 @@ impl Display for SingleTransactionKind {
                 writeln!(writer, "New epoch ID: {}", e.epoch)?;
                 writeln!(writer, "Storage gas reward: {}", e.storage_charge)?;
                 writeln!(writer, "Computation gas reward: {}", e.computation_charge)?;
+                writeln!(writer, "Storage rebate: {}", e.storage_rebate)?;
             }
         }
         write!(f, "{}", writer)
@@ -408,6 +491,14 @@ impl TransactionKind {
         }
     }
 
+    pub fn is_pay_sui_tx(&self) -> bool {
+        matches!(
+            self,
+            TransactionKind::Single(SingleTransactionKind::PaySui(_))
+                | TransactionKind::Single(SingleTransactionKind::PayAllSui(_))
+        )
+    }
+
     pub fn is_system_tx(&self) -> bool {
         matches!(
             self,
@@ -437,6 +528,8 @@ impl TransactionKind {
                     | SingleTransactionKind::TransferObject(_)
                     | SingleTransactionKind::Pay(_) => true,
                     SingleTransactionKind::TransferSui(_)
+                    | SingleTransactionKind::PaySui(_)
+                    | SingleTransactionKind::PayAllSui(_)
                     | SingleTransactionKind::ChangeEpoch(_)
                     | SingleTransactionKind::Publish(_) => false,
                 });
@@ -449,6 +542,8 @@ impl TransactionKind {
             }
             Self::Single(s) => match s {
                 SingleTransactionKind::Pay(_)
+                | SingleTransactionKind::PaySui(_)
+                | SingleTransactionKind::PayAllSui(_)
                 | SingleTransactionKind::Call(_)
                 | SingleTransactionKind::Publish(_)
                 | SingleTransactionKind::TransferObject(_)
@@ -585,6 +680,36 @@ impl TransactionData {
         Self::new(kind, sender, gas_payment, gas_budget)
     }
 
+    pub fn new_pay_sui(
+        sender: SuiAddress,
+        coins: Vec<ObjectRef>,
+        recipients: Vec<SuiAddress>,
+        amounts: Vec<u64>,
+        gas_payment: ObjectRef,
+        gas_budget: u64,
+    ) -> Self {
+        let kind = TransactionKind::Single(SingleTransactionKind::PaySui(PaySui {
+            coins,
+            recipients,
+            amounts,
+        }));
+        Self::new(kind, sender, gas_payment, gas_budget)
+    }
+
+    pub fn new_pay_all_sui(
+        sender: SuiAddress,
+        coins: Vec<ObjectRef>,
+        recipient: SuiAddress,
+        gas_payment: ObjectRef,
+        gas_budget: u64,
+    ) -> Self {
+        let kind = TransactionKind::Single(SingleTransactionKind::PayAllSui(PayAllSui {
+            coins,
+            recipient,
+        }));
+        Self::new(kind, sender, gas_payment, gas_budget)
+    }
+
     pub fn new_module(
         sender: SuiAddress,
         gas_payment: ObjectRef,
@@ -634,7 +759,7 @@ impl TransactionData {
     pub fn input_objects(&self) -> SuiResult<Vec<InputObjectKind>> {
         let mut inputs = self.kind.input_objects()?;
 
-        if !self.kind.is_system_tx() {
+        if !self.kind.is_system_tx() && !self.kind.is_pay_sui_tx() {
             inputs.push(InputObjectKind::ImmOrOwnedMoveObject(
                 *self.gas_payment_object_ref(),
             ));
@@ -656,11 +781,6 @@ pub struct TransactionEnvelope<S> {
     // DO NOT serialize or deserialize from the network or disk.
     #[serde(skip)]
     transaction_digest: OnceCell<TransactionDigest>,
-    // Deserialization sets this to "false"
-    // TODO: is_verified is only set to true in some callsites after verification.
-    // Hence it's not optimal.
-    #[serde(skip)]
-    pub is_verified: bool,
 
     // The packet of data that authorities will sign on. Stores the tx data and the sender signature.
     pub signed_data: SenderSignedData,
@@ -680,27 +800,8 @@ pub struct SenderSignedData {
 }
 
 impl<S> TransactionEnvelope<S> {
-    #[allow(dead_code)]
-    fn add_sender_sig_to_verification_obligation(
-        &self,
-        obligation: &mut VerificationObligation,
-        idx: usize,
-    ) -> SuiResult<()> {
-        // We use this flag to see if someone has checked this before
-        // and therefore we can skip the check. Note that the flag has
-        // to be set to true manually, and is not set by calling this
-        // "check" function.
-        if self.is_verified || self.signed_data.data.kind.is_system_tx() {
-            return Ok(());
-        }
-
-        self.signed_data
-            .tx_signature
-            .add_to_verification_obligation_or_verify(self.signed_data.data.sender, obligation, idx)
-    }
-
     pub fn verify_sender_signature(&self) -> SuiResult<()> {
-        if self.is_verified || self.signed_data.data.kind.is_system_tx() {
+        if self.signed_data.data.kind.is_system_tx() {
             return Ok(());
         }
         self.signed_data
@@ -798,6 +899,7 @@ where
 // TODO: this should maybe be called ClientSignedTransaction + SignedTransaction -> AuthoritySignedTransaction.
 /// A transaction that is signed by a sender but not yet by an authority.
 pub type Transaction = TransactionEnvelope<EmptySignInfo>;
+pub type VerifiedTransaction = VerifiedTransactionEnvelope<EmptySignInfo>;
 
 impl Transaction {
     #[cfg(test)]
@@ -809,7 +911,6 @@ impl Transaction {
     pub fn new(data: TransactionData, signature: Signature) -> Self {
         Self {
             transaction_digest: OnceCell::new(),
-            is_verified: false,
             signed_data: SenderSignedData {
                 data,
                 tx_signature: signature,
@@ -818,8 +919,9 @@ impl Transaction {
         }
     }
 
-    pub fn verify(&self) -> Result<(), SuiError> {
-        self.verify_sender_signature()
+    pub fn verify(self) -> SuiResult<VerifiedTransaction> {
+        self.verify_sender_signature()?;
+        Ok(VerifiedTransactionEnvelope::<EmptySignInfo>::new_from_verified(self))
     }
 
     pub fn to_network_data_for_execution(&self) -> (Base64, SignatureScheme, Base64, Base64) {
@@ -848,38 +950,82 @@ impl Eq for Transaction {}
 /// A transaction that is signed by a sender and also by an authority.
 pub type SignedTransaction = TransactionEnvelope<AuthoritySignInfo>;
 
-impl SignedTransaction {
+pub type VerifiedSignedTransaction = VerifiedTransactionEnvelope<AuthoritySignInfo>;
+
+impl VerifiedSignedTransaction {
     /// Use signing key to create a signed object.
     pub fn new(
         epoch: EpochId,
-        transaction: Transaction,
+        transaction: VerifiedTransaction,
         authority: AuthorityName,
         secret: &dyn signature::Signer<AuthoritySignature>,
     ) -> Self {
-        let signature = AuthoritySignature::new(&transaction.signed_data, secret);
-        Self {
-            transaction_digest: OnceCell::new(),
-            is_verified: transaction.is_verified,
-            signed_data: transaction.signed_data,
-            auth_sign_info: AuthoritySignInfo {
-                epoch,
-                authority,
-                signature,
-            },
-        }
+        Self::new_from_verified(SignedTransaction::new(
+            epoch,
+            transaction,
+            authority,
+            secret,
+        ))
     }
 
     pub fn new_change_epoch(
         next_epoch: EpochId,
         storage_charge: u64,
         computation_charge: u64,
+        storage_rebate: u64,
         authority: AuthorityName,
         secret: &dyn signature::Signer<AuthoritySignature>,
     ) -> Self {
+        Self::new_from_verified(SignedTransaction::new_change_epoch(
+            next_epoch,
+            storage_charge,
+            computation_charge,
+            storage_rebate,
+            authority,
+            secret,
+        ))
+    }
+
+    pub fn to_transaction(self) -> VerifiedTransaction {
+        let SenderSignedData {
+            data, tx_signature, ..
+        } = self.into_inner().signed_data;
+        // safe because VerifiedSignedTransaction has already passed verification
+        VerifiedTransaction::new_unchecked(Transaction::new(data, tx_signature))
+    }
+}
+
+impl SignedTransaction {
+    /// Use signing key to create a signed object.
+    fn new(
+        epoch: EpochId,
+        transaction: VerifiedTransaction,
+        authority: AuthorityName,
+        secret: &dyn signature::Signer<AuthoritySignature>,
+    ) -> SignedTransaction {
+        let transaction = transaction.into_inner();
+        let auth_sign_info =
+            AuthoritySignInfo::new(epoch, &transaction.signed_data, authority, secret);
+        Self {
+            transaction_digest: OnceCell::new(),
+            signed_data: transaction.signed_data,
+            auth_sign_info,
+        }
+    }
+
+    fn new_change_epoch(
+        next_epoch: EpochId,
+        storage_charge: u64,
+        computation_charge: u64,
+        storage_rebate: u64,
+        authority: AuthorityName,
+        secret: &dyn signature::Signer<AuthoritySignature>,
+    ) -> SignedTransaction {
         let kind = TransactionKind::Single(SingleTransactionKind::ChangeEpoch(ChangeEpoch {
             epoch: next_epoch,
             storage_charge,
             computation_charge,
+            storage_rebate,
         }));
         // For the ChangeEpoch transaction, we do not care about the sender and the gas.
         let data = TransactionData::new(
@@ -895,21 +1041,22 @@ impl SignedTransaction {
                 .unwrap()
                 .into(),
         };
-        let signature = AuthoritySignature::new(&signed_data, secret);
+        let auth_sign_info = AuthoritySignInfo::new(next_epoch, &signed_data, authority, secret);
+
         Self {
             transaction_digest: OnceCell::new(),
-            is_verified: false,
             signed_data,
-            auth_sign_info: AuthoritySignInfo {
-                epoch: next_epoch,
-                authority,
-                signature,
-            },
+            auth_sign_info,
         }
     }
 
     /// Verify the signature and return the non-zero voting right of the authority.
-    pub fn verify(&self, committee: &Committee) -> SuiResult {
+    pub fn verify(self, committee: &Committee) -> SuiResult<VerifiedSignedTransaction> {
+        self.verify_signatures(committee)?;
+        Ok(VerifiedTransactionEnvelope::<AuthoritySignInfo>::new_from_verified(self))
+    }
+
+    pub fn verify_signatures(&self, committee: &Committee) -> SuiResult {
         self.verify_sender_signature()?;
 
         let mut obligation = VerificationObligation::default();
@@ -943,9 +1090,146 @@ impl PartialEq for SignedTransaction {
         self.signed_data == other.signed_data && self.auth_sign_info == other.auth_sign_info
     }
 }
+impl Eq for SignedTransaction {}
 
 pub type CertifiedTransaction = TransactionEnvelope<AuthorityStrongQuorumSignInfo>;
 pub type TxCertAndSignedEffects = (CertifiedTransaction, SignedTransactionEffects);
+
+/// TrustedTransactionEnvelope is a serializable wrapper around TransactionEnvelope which is
+/// Into<VerifiedTransactionEnvelope> - in other words it models a verified object which has been
+/// written to the db (or some other trusted store), and may be read back from the db without
+/// futher signature verification.
+///
+/// TrustedTransactionEnvelope should *only* appear in database interfaces.
+///
+/// DO NOT USE in networked APIs.
+///
+/// Because it is used very sparingly, it can be audited easily: Use rust-analyzer,
+/// or run: git grep -E 'TrustedTransactionEnvelope|TrustedCertificate'
+///
+/// And verify that none of the uses appear in any network APIs.
+#[derive(Clone, Serialize, Deserialize)]
+pub struct TrustedTransactionEnvelope<T>(TransactionEnvelope<T>);
+
+impl<T> TrustedTransactionEnvelope<T> {
+    pub fn into_inner(self) -> TransactionEnvelope<T> {
+        self.0
+    }
+}
+
+impl<T> Debug for TrustedTransactionEnvelope<T>
+where
+    T: Debug,
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self.0)
+    }
+}
+
+// An empty marker struct that can't be serialized.
+#[derive(Clone)]
+struct NoSer;
+// Never remove this assert!
+static_assertions::assert_not_impl_any!(NoSer: Serialize, DeserializeOwned);
+
+/// VerifiedTransactionEnvelope models a TransactionEnvelope that no longer requires signature
+/// verification. It can only be constructed in 3 ways:
+///
+/// - TransactionEnvelope::verify() - verify the signatures of a signed transaction, to convert a
+///   TransactionEnvelope<T> into a VerifiedTransactionEnvelope<T>
+/// - From<TrustedTransactionEnvelope<T>> - used when reading pre-verified messages from the
+///   database.
+/// - VerifiedTransactionEnvelope::new_unchecked() - use very carefully, and very sparingly, so
+///   that all uses can be audited easily.
+#[derive(Clone)]
+pub struct VerifiedTransactionEnvelope<T>(TrustedTransactionEnvelope<T>, NoSer);
+
+impl<T> Debug for VerifiedTransactionEnvelope<T>
+where
+    T: Debug,
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self.0 .0)
+    }
+}
+
+impl<T> VerifiedTransactionEnvelope<T> {
+    fn new_from_verified(inner: TransactionEnvelope<T>) -> Self {
+        Self(TrustedTransactionEnvelope(inner), NoSer)
+    }
+
+    /// There are some situations (e.g. fragment verification) where its very awkward and/or
+    /// inefficient to obtain verified certificates from calling CertifiedTransaction::verify()
+    /// Use this carefully.
+    pub fn new_unchecked(inner: TransactionEnvelope<T>) -> Self {
+        Self(TrustedTransactionEnvelope(inner), NoSer)
+    }
+
+    pub fn into_inner(self) -> TransactionEnvelope<T> {
+        self.0 .0
+    }
+
+    /// Use this when you need to serialize a verified envelope.
+    /// This should generally only be used for database writes.
+    /// ***never use over the network!***
+    pub fn serializable_ref(&self) -> &TrustedTransactionEnvelope<T> {
+        &self.0
+    }
+
+    /// Use this when you need to serialize a verified envelope.
+    /// This should generally only be used for database writes.
+    /// ***never use over the network!***
+    pub fn serializable(self) -> TrustedTransactionEnvelope<T> {
+        self.0
+    }
+}
+
+/// After deserialization, a TrustedTransactionEnvelope can be turned back into a
+/// VerifiedTransactionEnvelope.
+impl<T> From<TrustedTransactionEnvelope<T>> for VerifiedTransactionEnvelope<T> {
+    fn from(e: TrustedTransactionEnvelope<T>) -> Self {
+        Self::new_unchecked(e.0)
+    }
+}
+
+impl<T> Deref for VerifiedTransactionEnvelope<T> {
+    type Target = TransactionEnvelope<T>;
+    fn deref(&self) -> &Self::Target {
+        &self.0 .0
+    }
+}
+
+impl<T> DerefMut for VerifiedTransactionEnvelope<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0 .0
+    }
+}
+
+impl<T> From<VerifiedTransactionEnvelope<T>> for TransactionEnvelope<T> {
+    fn from(v: VerifiedTransactionEnvelope<T>) -> Self {
+        v.0 .0
+    }
+}
+
+impl<T> PartialEq for VerifiedTransactionEnvelope<T>
+where
+    TransactionEnvelope<T>: PartialEq,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.0 .0 == other.0 .0
+    }
+}
+
+impl<T> Eq for VerifiedTransactionEnvelope<T> where TransactionEnvelope<T>: Eq {}
+
+pub type VerifiedCertificate = VerifiedTransactionEnvelope<AuthorityStrongQuorumSignInfo>;
+pub type TrustedCertificate = TrustedTransactionEnvelope<AuthorityStrongQuorumSignInfo>;
+
+impl Display for VerifiedCertificate {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0 .0)
+    }
+}
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct AccountInfoRequest {
@@ -1052,40 +1336,74 @@ pub struct AccountInfoResponse {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ObjectResponse {
+pub struct ObjectResponse<T = SignedTransaction> {
     /// Value of the requested object in this authority
     pub object: Object,
     /// Transaction the object is locked on in this authority.
     /// None if the object is not currently locked by this authority.
-    pub lock: Option<SignedTransaction>,
+    pub lock: Option<T>,
     /// Schema of the Move value inside this object.
     /// None if the object is a Move package, or the request did not ask for the layout
     pub layout: Option<MoveStructLayout>,
 }
 
+impl From<ObjectResponse<VerifiedSignedTransaction>> for ObjectResponse {
+    fn from(o: ObjectResponse<VerifiedSignedTransaction>) -> Self {
+        let ObjectResponse {
+            object,
+            lock,
+            layout,
+        } = o;
+
+        Self {
+            object,
+            lock: lock.map(|l| l.into()),
+            layout,
+        }
+    }
+}
+
 /// This message provides information about the latest object and its lock
 /// as well as the parent certificate of the object at a specific version.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ObjectInfoResponse {
+pub struct ObjectInfoResponse<TxnT = SignedTransaction, CertT = CertifiedTransaction> {
     /// The certificate that created or mutated the object at a given version.
     /// If no parent certificate was requested the latest certificate concerning
     /// this object is sent. If the parent was requested and not found a error
     /// (ParentNotfound or CertificateNotfound) will be returned.
-    pub parent_certificate: Option<CertifiedTransaction>,
+    pub parent_certificate: Option<CertT>,
     /// The full reference created by the above certificate
     pub requested_object_reference: Option<ObjectRef>,
 
     /// The object and its current lock, returned only if we are requesting
     /// the latest state of an object.
     /// If the object does not exist this is also None.
-    pub object_and_lock: Option<ObjectResponse>,
+    pub object_and_lock: Option<ObjectResponse<TxnT>>,
 }
+
+pub type VerifiedObjectInfoResponse =
+    ObjectInfoResponse<VerifiedSignedTransaction, VerifiedCertificate>;
 
 impl ObjectInfoResponse {
     pub fn object(&self) -> Option<&Object> {
         match &self.object_and_lock {
             Some(ObjectResponse { object, .. }) => Some(object),
             _ => None,
+        }
+    }
+}
+
+impl From<VerifiedObjectInfoResponse> for ObjectInfoResponse {
+    fn from(o: VerifiedObjectInfoResponse) -> Self {
+        let ObjectInfoResponse {
+            parent_certificate,
+            requested_object_reference,
+            object_and_lock,
+        } = o;
+        Self {
+            parent_certificate: parent_certificate.map(|p| p.into()),
+            requested_object_reference,
+            object_and_lock: object_and_lock.map(|o| o.into()),
         }
     }
 }
@@ -1102,14 +1420,35 @@ impl From<TransactionDigest> for TransactionInfoRequest {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct TransactionInfoResponse {
+pub struct TransactionInfoResponse<TxnT = SignedTransaction, CertT = CertifiedTransaction> {
     // The signed transaction response to handle_transaction
-    pub signed_transaction: Option<SignedTransaction>,
+    pub signed_transaction: Option<TxnT>,
     // The certificate in case one is available
-    pub certified_transaction: Option<CertifiedTransaction>,
+    pub certified_transaction: Option<CertT>,
     // The effects resulting from a successful execution should
     // contain ObjectRef created, mutated, deleted and events.
     pub signed_effects: Option<SignedTransactionEffects>,
+}
+
+pub type VerifiedTransactionInfoResponse =
+    TransactionInfoResponse<VerifiedSignedTransaction, VerifiedCertificate>;
+
+impl From<VerifiedTransactionInfoResponse> for TransactionInfoResponse {
+    fn from(v: VerifiedTransactionInfoResponse) -> Self {
+        let VerifiedTransactionInfoResponse {
+            signed_transaction,
+            certified_transaction,
+            signed_effects,
+        } = v;
+
+        let certified_transaction = certified_transaction.map(|c| c.into_inner());
+        let signed_transaction = signed_transaction.map(|c| c.into_inner());
+        TransactionInfoResponse {
+            signed_transaction,
+            certified_transaction,
+            signed_effects,
+        }
+    }
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
@@ -1172,6 +1511,10 @@ pub enum ExecutionFailureStatus {
     RecipientsAmountsArityMismatch,
     /// Not enough funds to perform the requested payment
     InsufficientBalance,
+    /// Coin type check failed in pay/pay_sui/pay_all_sui transaction.
+    /// In pay transaction, it means the input coins' types are not the same;
+    /// In PaySui/PayAllSui, it means some input coins are not SUI coins.
+    CoinTypeMismatch,
 
     //
     // MoveCall errors
@@ -1180,8 +1523,7 @@ pub enum ExecutionFailureStatus {
     EntryTypeArityMismatch,
     EntryArgumentError(EntryArgumentError),
     CircularObjectOwnership(CircularObjectOwnership),
-    MissingObjectOwner(MissingObjectOwner),
-    InvalidSharedChildUse(InvalidSharedChildUse),
+    InvalidChildObjectArgument(InvalidChildObjectArgument),
     InvalidSharedByValue(InvalidSharedByValue),
     TooManyChildObjects {
         object: ObjectID,
@@ -1236,15 +1578,9 @@ pub struct CircularObjectOwnership {
 }
 
 #[derive(Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize, Hash)]
-pub struct MissingObjectOwner {
+pub struct InvalidChildObjectArgument {
     pub child: ObjectID,
     pub parent: SuiAddress,
-}
-
-#[derive(Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize, Hash)]
-pub struct InvalidSharedChildUse {
-    pub child: ObjectID,
-    pub ancestor: ObjectID,
 }
 
 #[derive(Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize, Hash)]
@@ -1261,12 +1597,8 @@ impl ExecutionFailureStatus {
         CircularObjectOwnership { object }.into()
     }
 
-    pub fn missing_object_owner(child: ObjectID, parent: SuiAddress) -> Self {
-        MissingObjectOwner { child, parent }.into()
-    }
-
-    pub fn invalid_shared_child_use(child: ObjectID, ancestor: ObjectID) -> Self {
-        InvalidSharedChildUse { child, ancestor }.into()
+    pub fn invalid_child_object_argument(child: ObjectID, parent: SuiAddress) -> Self {
+        InvalidChildObjectArgument { child, parent }.into()
     }
 
     pub fn invalid_shared_by_value(object: ObjectID) -> Self {
@@ -1277,6 +1609,12 @@ impl ExecutionFailureStatus {
 impl Display for ExecutionFailureStatus {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
+            ExecutionFailureStatus::CoinTypeMismatch => {
+                write!(
+                    f,
+                    "Coin type check failed in pay/pay_sui/pay_all_sui transaction"
+                )
+            }
             ExecutionFailureStatus::EmptyInputCoins => {
                 write!(f, "Expected a non-empty list of input Coin objects")
             }
@@ -1330,11 +1668,8 @@ impl Display for ExecutionFailureStatus {
             ExecutionFailureStatus::CircularObjectOwnership(data) => {
                 write!(f, "Circular  Object Ownership. {data}")
             }
-            ExecutionFailureStatus::MissingObjectOwner(data) => {
-                write!(f, "Missing Object Owner. {data}")
-            }
-            ExecutionFailureStatus::InvalidSharedChildUse(data) => {
-                write!(f, "Invalid Shared Child Object Usage. {data}.")
+            ExecutionFailureStatus::InvalidChildObjectArgument(data) => {
+                write!(f, "Invalid Object Owned Argument. {data}")
             }
             ExecutionFailureStatus::InvalidSharedByValue(data) => {
                 write!(f, "Invalid Shared Object By-Value Usage. {data}.")
@@ -1453,26 +1788,13 @@ impl Display for CircularObjectOwnership {
     }
 }
 
-impl Display for MissingObjectOwner {
+impl Display for InvalidChildObjectArgument {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let MissingObjectOwner { child, parent } = self;
+        let InvalidChildObjectArgument { child, parent } = self;
         write!(
             f,
-            "Missing object owner, the parent object {parent} for child object {child}.",
-        )
-    }
-}
-
-impl Display for InvalidSharedChildUse {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let InvalidSharedChildUse { child, ancestor } = self;
-        write!(
-            f,
-            "When a child object (either direct or indirect) of a shared object is passed by-value \
-            to an entry function, either the child object's type or the shared object's type must \
-            be defined in the same module as the called function. This is violated by object \
-            {child}, whose ancestor {ancestor} is a shared object, and neither are defined in \
-            this module.",
+            "Object {child} is owned by object {parent}. \
+            Objects owned by other objects cannot be used as input arguments."
         )
     }
 }
@@ -1535,15 +1857,9 @@ impl From<CircularObjectOwnership> for ExecutionFailureStatus {
     }
 }
 
-impl From<MissingObjectOwner> for ExecutionFailureStatus {
-    fn from(error: MissingObjectOwner) -> Self {
-        Self::MissingObjectOwner(error)
-    }
-}
-
-impl From<InvalidSharedChildUse> for ExecutionFailureStatus {
-    fn from(error: InvalidSharedChildUse) -> Self {
-        Self::InvalidSharedChildUse(error)
+impl From<InvalidChildObjectArgument> for ExecutionFailureStatus {
+    fn from(error: InvalidChildObjectArgument) -> Self {
+        Self::InvalidChildObjectArgument(error)
     }
 }
 
@@ -1644,17 +1960,12 @@ impl TransactionEffects {
         authority_name: &AuthorityName,
         secret: &dyn signature::Signer<AuthoritySignature>,
     ) -> SignedTransactionEffects {
-        let signature = AuthoritySignature::new(&self, secret);
         let transaction_effects_digest = OnceCell::from(self.digest());
-
+        let auth_signature = AuthoritySignInfo::new(epoch, &self, *authority_name, secret);
         SignedTransactionEffects {
             transaction_effects_digest,
             effects: self,
-            auth_signature: AuthoritySignInfo {
-                epoch,
-                authority: *authority_name,
-                signature,
-            },
+            auth_signature,
         }
     }
 
@@ -1701,6 +2012,36 @@ impl Display for TransactionEffects {
     }
 }
 
+impl Default for TransactionEffects {
+    fn default() -> Self {
+        TransactionEffects {
+            status: ExecutionStatus::Success,
+            gas_used: GasCostSummary {
+                computation_cost: 0,
+                storage_cost: 0,
+                storage_rebate: 0,
+            },
+            shared_objects: Vec::new(),
+            transaction_digest: TransactionDigest::random(),
+            created: Vec::new(),
+            mutated: Vec::new(),
+            unwrapped: Vec::new(),
+            deleted: Vec::new(),
+            wrapped: Vec::new(),
+            gas_object: (
+                (
+                    ObjectID::random(),
+                    SequenceNumber::new(),
+                    ObjectDigest::new([0; 32]),
+                ),
+                Owner::AddressOwner(SuiAddress::default()),
+            ),
+            events: Vec::new(),
+            dependencies: Vec::new(),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TransactionEffectsEnvelope<S> {
     // This is a cache of an otherwise expensive to compute value.
@@ -1739,13 +2080,13 @@ pub type CertifiedTransactionEffects = TransactionEffectsEnvelope<AuthorityStron
 impl CertifiedTransactionEffects {
     pub fn new(
         effects: TransactionEffects,
-        signatures: Vec<(AuthorityName, AuthoritySignature)>,
+        signatures: Vec<AuthoritySignInfo>,
         committee: &Committee,
     ) -> SuiResult<Self> {
         Ok(Self {
             transaction_effects_digest: OnceCell::from(effects.digest()),
             effects,
-            auth_signature: AuthorityStrongQuorumSignInfo::new_with_signatures(
+            auth_signature: AuthorityStrongQuorumSignInfo::new_from_auth_sign_infos(
                 signatures, committee,
             )?,
         })
@@ -1793,8 +2134,14 @@ impl InputObjectKind {
     pub fn object_not_found_error(&self) -> SuiError {
         match *self {
             Self::MovePackage(package_id) => SuiError::DependentPackageNotFound { package_id },
-            Self::ImmOrOwnedMoveObject((object_id, _, _)) => SuiError::ObjectNotFound { object_id },
-            Self::SharedMoveObject { id, .. } => SuiError::ObjectNotFound { object_id: id },
+            Self::ImmOrOwnedMoveObject((object_id, version, _)) => SuiError::ObjectNotFound {
+                object_id,
+                version: Some(version),
+            },
+            Self::SharedMoveObject { id, .. } => SuiError::ObjectNotFound {
+                object_id: id,
+                version: None,
+            },
         }
     }
 }
@@ -1892,107 +2239,32 @@ impl From<Vec<Object>> for InputObjects {
     }
 }
 
-pub struct SignatureAggregator<'a> {
-    committee: &'a Committee,
-    weight: StakeUnit,
-    used_authorities: HashSet<AuthorityName>,
-    partial: CertifiedTransaction,
-    signature_stash: Vec<(AuthorityName, AuthoritySignature)>,
-}
-
-impl<'a> SignatureAggregator<'a> {
-    /// Start aggregating signatures for the given value into a certificate.
-    pub fn try_new(transaction: Transaction, committee: &'a Committee) -> Result<Self, SuiError> {
-        transaction.verify()?;
-        Ok(Self::new_unsafe(transaction, committee))
-    }
-
-    /// Same as try_new but we don't check the transaction.
-    pub fn new_unsafe(transaction: Transaction, committee: &'a Committee) -> Self {
-        Self {
-            committee,
-            weight: 0,
-            used_authorities: HashSet::new(),
-            partial: CertifiedTransaction::new(committee.epoch, transaction),
-            signature_stash: Vec::new(),
-        }
-    }
-
-    /// Try to append a signature to a (partial) certificate. Returns Some(certificate) if a quorum was reached.
-    /// The resulting final certificate is guaranteed to be valid in the sense of `check` below.
-    /// Returns an error if the signed value cannot be aggregated.
-    pub fn append(
-        &mut self,
-        authority: AuthorityName,
-        signature: AuthoritySignature,
-    ) -> Result<Option<CertifiedTransaction>, SuiError> {
-        signature.verify(&self.partial.signed_data, authority)?;
-
-        // Check that each authority only appears once.
-        fp_ensure!(
-            !self.used_authorities.contains(&authority),
-            SuiError::CertificateAuthorityReuse
-        );
-        self.used_authorities.insert(authority);
-        // Update weight.
-        let voting_rights = self.committee.weight(&authority);
-        fp_ensure!(voting_rights > 0, SuiError::UnknownSigner);
-        self.weight += voting_rights;
-        // Update certificate.
-
-        self.signature_stash.push((authority, signature));
-
-        if self.weight >= self.committee.quorum_threshold() {
-            self.partial.auth_sign_info = AuthorityStrongQuorumSignInfo::new_with_signatures(
-                self.signature_stash.clone(),
-                self.committee,
-            )?;
-            Ok(Some(self.partial.clone()))
-        } else {
-            Ok(None)
-        }
-    }
-}
-
 impl CertifiedTransaction {
-    pub fn new(epoch: EpochId, transaction: Transaction) -> CertifiedTransaction {
-        CertifiedTransaction {
-            transaction_digest: transaction.transaction_digest,
-            is_verified: false,
-            signed_data: transaction.signed_data,
-            auth_sign_info: AuthorityStrongQuorumSignInfo::new(epoch),
-        }
-    }
-
-    pub fn new_with_signatures(
-        transaction: Transaction,
-        signatures: Vec<(AuthorityName, AuthoritySignature)>,
+    pub fn new_with_auth_sign_infos(
+        transaction: VerifiedTransaction,
+        signatures: Vec<AuthoritySignInfo>,
         committee: &Committee,
     ) -> SuiResult<CertifiedTransaction> {
+        let transaction = transaction.into_inner();
         Ok(CertifiedTransaction {
             transaction_digest: transaction.transaction_digest,
-            is_verified: false,
             signed_data: transaction.signed_data,
-            auth_sign_info: AuthorityStrongQuorumSignInfo::new_with_signatures(
+            auth_sign_info: AuthorityStrongQuorumSignInfo::new_from_auth_sign_infos(
                 signatures, committee,
             )?,
         })
     }
 
-    pub fn to_transaction(self) -> Transaction {
-        Transaction::new(self.signed_data.data, self.signed_data.tx_signature)
+    pub fn to_transaction(self) -> VerifiedTransaction {
+        // safe because CertifiedTransaction can only be constructed from a VerifiedTransaction
+        VerifiedTransaction::new_unchecked(Transaction::new(
+            self.signed_data.data,
+            self.signed_data.tx_signature,
+        ))
     }
 
     /// Verify the certificate.
-    pub fn verify(&self, committee: &Committee) -> Result<(), SuiError> {
-        // We use this flag to see if someone has checked this before
-        // and therefore we can skip the check. Note that the flag has
-        // to be set to true manually, and is not set by calling this
-        // "check" function.
-        if self.is_verified {
-            return Ok(());
-        }
-
+    pub fn verify_signatures(&self, committee: &Committee) -> SuiResult {
         // Add the obligation of the sender signature verification.
         self.verify_sender_signature()?;
 
@@ -2003,6 +2275,11 @@ impl CertifiedTransaction {
             .add_to_verification_obligation(committee, &mut obligation, idx)?;
 
         obligation.verify_all().map(|_| ())
+    }
+
+    pub fn verify(self, committee: &Committee) -> SuiResult<VerifiedCertificate> {
+        self.verify_signatures(committee)?;
+        Ok(VerifiedTransactionEnvelope::<AuthorityStrongQuorumSignInfo>::new_from_verified(self))
     }
 
     pub fn epoch(&self) -> EpochId {
@@ -2089,8 +2366,10 @@ impl ConsensusTransaction {
 
     pub fn verify(&self, committee: &Committee) -> SuiResult<()> {
         match &self.kind {
-            ConsensusTransactionKind::UserTransaction(certificate) => certificate.verify(committee),
-            ConsensusTransactionKind::Checkpoint(fragment) => fragment.verify(committee),
+            ConsensusTransactionKind::UserTransaction(certificate) => {
+                certificate.verify_signatures(committee)
+            }
+            ConsensusTransactionKind::Checkpoint(fragment) => fragment.verify_signatures(committee),
         }
     }
 }
@@ -2136,9 +2415,9 @@ pub enum QuorumDriverRequestType {
     WaitForEffectsCert,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct QuorumDriverRequest {
-    pub transaction: Transaction,
+    pub transaction: VerifiedTransaction,
     pub request_type: QuorumDriverRequestType,
 }
 
@@ -2146,7 +2425,6 @@ pub struct QuorumDriverRequest {
 pub enum QuorumDriverResponse {
     ImmediateReturn,
     TxCert(Box<CertifiedTransaction>),
-    // TODO: Change to CertifiedTransactionEffects eventually.
     EffectsCert(Box<(CertifiedTransaction, CertifiedTransactionEffects)>),
 }
 

@@ -146,7 +146,7 @@ fn get_collection_retrieval_results(
                 transactions.extend(
                     batch
                         .batch
-                        .0
+                        .transactions
                         .into_iter()
                         .map(Into::into)
                         .collect::<Vec<TransactionProto>>(),

@@ -7,16 +7,17 @@ use crypto::{PublicKey, Signature};
 use fastcrypto::{hash::Hash as _, SignatureService};
 use std::{cmp::Ordering, sync::Arc};
 use storage::ProposerStore;
+use tokio::time::Instant;
 use tokio::{
     sync::watch,
     task::JoinHandle,
-    time::{sleep, Duration, Instant},
+    time::{sleep, Duration},
 };
 use tracing::{debug, info};
 use types::{
     error::{DagError, DagResult},
     metered_channel::{Receiver, Sender},
-    BatchDigest, Certificate, Header, ReconfigureNotification, Round,
+    BatchDigest, Certificate, Header, ReconfigureNotification, Round, Timestamp, TimestampMs,
 };
 
 #[cfg(test)]
@@ -48,7 +49,7 @@ pub struct Proposer {
     /// Receives the parents to include in the next header (along with their round number) from core.
     rx_parents: Receiver<(Vec<Certificate>, Round, Epoch)>,
     /// Receives the batches' digests from our workers.
-    rx_our_digests: Receiver<(BatchDigest, WorkerId)>,
+    rx_our_digests: Receiver<(BatchDigest, WorkerId, TimestampMs)>,
     /// Sends newly created headers to the `Core`.
     tx_headers: Sender<Header>,
 
@@ -61,7 +62,7 @@ pub struct Proposer {
     /// Holds the certificate of the last leader (if any).
     last_leader: Option<Certificate>,
     /// Holds the batches' digests waiting to be included in the next header.
-    digests: Vec<(BatchDigest, WorkerId)>,
+    digests: Vec<(BatchDigest, WorkerId, TimestampMs)>,
     /// Metrics handler
     metrics: Arc<PrimaryMetrics>,
 }
@@ -80,7 +81,7 @@ impl Proposer {
         network_model: NetworkModel,
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
         rx_parents: Receiver<(Vec<Certificate>, Round, Epoch)>,
-        rx_our_digests: Receiver<(BatchDigest, WorkerId)>,
+        rx_our_digests: Receiver<(BatchDigest, WorkerId, TimestampMs)>,
         tx_headers: Sender<Header>,
         metrics: Arc<PrimaryMetrics>,
     ) -> JoinHandle<()> {
@@ -110,38 +111,13 @@ impl Proposer {
         })
     }
 
-    async fn make_header(&mut self) -> DagResult<()> {
+    /// make_header creates a new Header, persists it to database
+    /// and sends it to core for processing. If successful, it returns
+    /// the number of batch digests included in header.
+    async fn make_header(&mut self) -> DagResult<usize> {
         // Make a new header.
-        let num_of_digests = self.digests.len().min(self.max_header_num_of_batches);
-        let mut header = Header::new(
-            self.name.clone(),
-            self.round,
-            self.committee.epoch(),
-            self.digests.drain(..num_of_digests).collect(),
-            self.last_parents.drain(..).map(|x| x.digest()).collect(),
-            &mut self.signature_service,
-        )
-        .await;
-        debug!("Created {header:?}");
+        let header = self.create_new_header().await?;
 
-        // Equivocation protection using the proposer store
-        if let Some(last_header) = self.proposer_store.get_last_proposed()? {
-            if last_header.round == header.round && last_header.epoch == header.epoch {
-                // We have already produced a header for the current round, idempotent re-send
-                if last_header != header {
-                    debug!("Equivocation protection was enacted in the proposer");
-
-                    // add again the digests for proposal
-                    // keeping their original order
-                    header
-                        .payload
-                        .into_iter()
-                        .for_each(|value| self.digests.insert(0, value));
-
-                    header = last_header;
-                }
-            }
-        }
         // Store the last header.
         self.proposer_store.write_last_proposed(&header)?;
 
@@ -151,11 +127,62 @@ impl Proposer {
             info!("Created {} -> {:?}", header, digest);
         }
 
+        let num_of_included_digests = header.payload.len();
+
         // Send the new header to the `Core` that will broadcast and process it.
         self.tx_headers
             .send(header)
             .await
-            .map_err(|_| DagError::ShuttingDown)
+            .map_err(|_| DagError::ShuttingDown)?;
+
+        Ok(num_of_included_digests)
+    }
+
+    // Creates a new header. Also the method ensures we are protected against equivocation.
+    // If we detect that a different header has been already produced for the same round, then
+    // this method returns the earlier header. Otherwise the newly created header will be returned.
+    async fn create_new_header(&mut self) -> DagResult<Header> {
+        // Make a new header.
+        let num_of_digests = self.digests.len().min(self.max_header_num_of_batches);
+        let digests: Vec<_> = self.digests.drain(..num_of_digests).collect();
+
+        let header = Header::new(
+            self.name.clone(),
+            self.round,
+            self.committee.epoch(),
+            digests
+                .iter()
+                .map(|(digest, worker_id, _)| (*digest, *worker_id))
+                .collect(),
+            self.last_parents.drain(..).map(|x| x.digest()).collect(),
+            &mut self.signature_service,
+        )
+        .await;
+
+        if let Some(last_header) = self.proposer_store.get_last_proposed()? {
+            if last_header.round == header.round && last_header.epoch == header.epoch {
+                // We have already produced a header for the current round, idempotent re-send
+                if last_header != header {
+                    debug!("Equivocation protection was enacted in the proposer");
+
+                    // add again the digests for proposal
+                    // keeping their original order
+                    digests
+                        .iter()
+                        .for_each(|value| self.digests.insert(0, *value));
+
+                    return Ok(last_header);
+                }
+            }
+        }
+
+        for (_, _, created_at_timestamp) in digests {
+            self.metrics
+                .proposer_batch_latency
+                .observe(created_at_timestamp.elapsed().as_secs_f64());
+        }
+
+        Ok(header)
     }
 
     /// Update the committee and cleanup internal state.
@@ -289,7 +316,18 @@ impl Proposer {
                 match self.make_header().await {
                     Err(e @ DagError::ShuttingDown) => debug!("{e}"),
                     Err(e) => panic!("Unexpected error: {e}"),
-                    Ok(()) => (),
+                    Ok(digests) => {
+                        let reason = if timer_expired {
+                            "timeout"
+                        } else {
+                            "threshold_size_reached"
+                        };
+
+                        self.metrics
+                            .num_of_batch_digests_in_header
+                            .with_label_values(&[&self.committee.epoch.to_string(), reason])
+                            .observe(digests as f64);
+                    }
                 }
 
                 // Reschedule the timer.
@@ -349,11 +387,22 @@ impl Proposer {
                     // Check whether we can advance to the next round. Note that if we timeout,
                     // we ignore this check and advance anyway.
                     advance = self.ready();
+
+                    let round_type = if self.round % 2 == 0 {
+                        "even"
+                    } else {
+                        "odd"
+                    };
+
+                    self.metrics
+                    .proposer_ready_to_advance
+                    .with_label_values(&[&self.committee.epoch.to_string(), &advance.to_string(), round_type])
+                    .inc();
                 }
 
                 // Receive digests from our workers.
-                Some((digest, worker_id)) = self.rx_our_digests.recv() => {
-                    self.digests.push((digest, worker_id));
+                Some(digest_record) = self.rx_our_digests.recv() => {
+                    self.digests.push(digest_record);
                 }
 
                 // Check whether the timer expired.

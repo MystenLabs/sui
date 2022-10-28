@@ -26,7 +26,8 @@ use types::{
     ensure,
     error::{DagError, DagError::StoreError, DagResult},
     metered_channel::{Receiver, Sender},
-    Certificate, Header, HeaderDigest, ReconfigureNotification, Round, RoundVoteDigestPair, Vote,
+    Certificate, Header, HeaderDigest, ReconfigureNotification, Round, RoundVoteDigestPair,
+    Timestamp, Vote,
 };
 
 #[cfg(test)]
@@ -296,7 +297,9 @@ impl Core {
         }
 
         // Store the header.
-        self.header_store.write(header.id, header.clone()).await;
+        self.header_store
+            .async_write(header.id, header.clone())
+            .await;
 
         self.metrics
             .headers_processed
@@ -381,14 +384,14 @@ impl Core {
         // that are stored in the header store. This strategy can be used to re-deliver votes to
         // ensure progress / liveness.
         self.vote_digest_store
-            .write(
+            .sync_write(
                 header.author.clone(),
                 RoundVoteDigestPair {
                     round: header.round,
                     vote_digest,
                 },
             )
-            .await;
+            .await?;
 
         Ok(())
     }
@@ -423,6 +426,18 @@ impl Core {
                 .certificates_created
                 .with_label_values(&[&certificate.epoch().to_string()])
                 .inc();
+
+            self.metrics
+                .header_to_certificate_latency
+                .with_label_values(&[&certificate.epoch().to_string()])
+                .observe(
+                    certificate
+                        .header
+                        .metadata
+                        .created_at
+                        .elapsed()
+                        .as_secs_f64(),
+                );
 
             // Process the new certificate.
             match self.process_certificate(certificate).await {
@@ -790,7 +805,11 @@ impl Core {
                     error!("{e}");
                     panic!("Storage failure: killing node.");
                 }
-                Err(e @ DagError::TooOld(..) | e @ DagError::InvalidEpoch { .. }) => debug!("{e}"),
+                Err(
+                    e @ DagError::TooOld(..)
+                    | e @ DagError::VoteTooOld(..)
+                    | e @ DagError::InvalidEpoch { .. },
+                ) => debug!("{e}"),
                 Err(e) => warn!("{e}"),
             }
 
