@@ -1729,36 +1729,12 @@ dependencies = [
 
 [[package]]
 name = "darling"
-version = "0.13.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a01d95850c592940db9b8194bc39f4bc0e89dee5c4265e4b1807c34a9aba453c"
-dependencies = [
- "darling_core 0.13.4",
- "darling_macro 0.13.4",
-]
-
-[[package]]
-name = "darling"
 version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4529658bdda7fd6769b8614be250cdcfc3aeb0ee72fe66f9e41e5e5eb73eac02"
 dependencies = [
- "darling_core 0.14.1",
- "darling_macro 0.14.1",
-]
-
-[[package]]
-name = "darling_core"
-version = "0.13.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "859d65a907b6852c9361e3185c862aae7fafd2887876799fa55f5f99dc40d610"
-dependencies = [
- "fnv",
- "ident_case",
- "proc-macro2 1.0.47",
- "quote 1.0.21",
- "strsim 0.10.0",
- "syn 1.0.103",
+ "darling_core",
+ "darling_macro",
 ]
 
 [[package]]
@@ -1777,22 +1753,11 @@ dependencies = [
 
 [[package]]
 name = "darling_macro"
-version = "0.13.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9c972679f83bdf9c42bd905396b6c3588a843a17f0f16dfcfa3e2c5d57441835"
-dependencies = [
- "darling_core 0.13.4",
- "quote 1.0.21",
- "syn 1.0.103",
-]
-
-[[package]]
-name = "darling_macro"
 version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ddfc69c5bfcbd2fc09a0f38451d2daf0e372e367986a83906d1b0dbc88134fb5"
 dependencies = [
- "darling_core 0.14.1",
+ "darling_core",
  "quote 1.0.21",
  "syn 1.0.103",
 ]
@@ -1903,7 +1868,7 @@ version = "0.11.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1f91d4cfa921f1c05904dc3c57b4a32c38aed3340cce209f3a6fd1478babafc4"
 dependencies = [
- "darling 0.14.1",
+ "darling",
  "proc-macro2 1.0.47",
  "quote 1.0.21",
  "syn 1.0.103",
@@ -2313,7 +2278,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto"
 version = "0.1.3"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=7766b1ef23f6bed6da9ff9e50dc2a0d1957d344d#7766b1ef23f6bed6da9ff9e50dc2a0d1957d344d"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=223ccb31da34823f6f7d940517872b37df08736a#223ccb31da34823f6f7d940517872b37df08736a"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -2342,10 +2307,11 @@ dependencies = [
  "once_cell",
  "rand 0.8.5",
  "readonly",
+ "schemars",
  "secp256k1",
  "serde 1.0.147",
  "serde_bytes",
- "serde_with 2.0.1",
+ "serde_with",
  "sha2 0.10.6",
  "sha3 0.10.6",
  "signature",
@@ -2358,7 +2324,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-derive"
 version = "0.1.2"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=7766b1ef23f6bed6da9ff9e50dc2a0d1957d344d#7766b1ef23f6bed6da9ff9e50dc2a0d1957d344d"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=223ccb31da34823f6f7d940517872b37df08736a#223ccb31da34823f6f7d940517872b37df08736a"
 dependencies = [
  "proc-macro2 1.0.47",
  "quote 1.0.21",
@@ -2953,6 +2919,12 @@ name = "hex"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
+
+[[package]]
+name = "hex-literal"
+version = "0.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7ebdb29d2ea9ed0083cd8cece49bbd968021bd99b0849edb4a9a7ee0fdf6a4e0"
 
 [[package]]
 name = "hkdf"
@@ -4607,7 +4579,7 @@ name = "msim-macros"
 version = "0.1.0"
 source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=b28d77f88434535b166cc60bd3e5018aa75cd705#b28d77f88434535b166cc60bd3e5018aa75cd705"
 dependencies = [
- "darling 0.14.1",
+ "darling",
  "proc-macro2 1.0.47",
  "quote 1.0.21",
  "syn 1.0.103",
@@ -4687,7 +4659,7 @@ dependencies = [
 [[package]]
 name = "mysten-util-mem"
 version = "0.11.0"
-source = "git+https://github.com/MystenLabs/mysten-infra/?rev=2d031b1ba014b63a2680a1980d79fd808af3c3a0#2d031b1ba014b63a2680a1980d79fd808af3c3a0"
+source = "git+https://github.com/MystenLabs/mysten-infra/?rev=d69adb7aa133b6306aea4ddfe3df5fbb5daa9cb2#d69adb7aa133b6306aea4ddfe3df5fbb5daa9cb2"
 dependencies = [
  "cfg-if",
  "ed25519-consensus",
@@ -4704,7 +4676,7 @@ dependencies = [
 [[package]]
 name = "mysten-util-mem-derive"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysten-infra/?rev=2d031b1ba014b63a2680a1980d79fd808af3c3a0#2d031b1ba014b63a2680a1980d79fd808af3c3a0"
+source = "git+https://github.com/MystenLabs/mysten-infra/?rev=d69adb7aa133b6306aea4ddfe3df5fbb5daa9cb2#d69adb7aa133b6306aea4ddfe3df5fbb5daa9cb2"
 dependencies = [
  "proc-macro2 1.0.47",
  "syn 1.0.103",
@@ -4756,7 +4728,7 @@ dependencies = [
  "rand 0.8.5",
  "serde 1.0.147",
  "serde_json",
- "serde_with 2.0.1",
+ "serde_with",
  "tempfile",
  "thiserror",
  "tracing",
@@ -4799,8 +4771,27 @@ dependencies = [
 name = "narwhal-crypto"
 version = "0.1.0"
 dependencies = [
+ "ark-bls12-377",
+ "bincode",
+ "criterion",
+ "eyre",
  "fastcrypto",
+ "hex",
+ "hex-literal",
+ "merlin",
+ "once_cell",
+ "proptest",
+ "proptest-derive",
+ "rand 0.8.5",
+ "readonly",
+ "serde 1.0.147",
+ "serde-reflection",
+ "serde_bytes",
+ "serde_json",
+ "serde_with",
+ "tokio",
  "workspace-hack",
+ "zeroize",
 ]
 
 [[package]]
@@ -5107,7 +5098,7 @@ dependencies = [
  "rustversion",
  "serde 1.0.147",
  "serde_test",
- "serde_with 2.0.1",
+ "serde_with",
  "signature",
  "thiserror",
  "tokio",
@@ -7250,17 +7241,6 @@ dependencies = [
 
 [[package]]
 name = "serde_with"
-version = "1.14.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "678b5a069e50bf00ecd22d0cd8ddf7c236f68581b03db652061ed5eb13a312ff"
-dependencies = [
- "hex",
- "serde 1.0.147",
- "serde_with_macros 1.5.2",
-]
-
-[[package]]
-name = "serde_with"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "368f2d60d049ea019a84dcd6687b0d1e0030fe663ae105039bdf967ed5e6a9a7"
@@ -7271,20 +7251,8 @@ dependencies = [
  "indexmap",
  "serde 1.0.147",
  "serde_json",
- "serde_with_macros 2.0.1",
+ "serde_with_macros",
  "time 0.3.15",
-]
-
-[[package]]
-name = "serde_with_macros"
-version = "1.5.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e182d6ec6f05393cc0e5ed1bf81ad6db3a8feedf8ee515ecdd369809bcce8082"
-dependencies = [
- "darling 0.13.4",
- "proc-macro2 1.0.47",
- "quote 1.0.21",
- "syn 1.0.103",
 ]
 
 [[package]]
@@ -7293,7 +7261,7 @@ version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1ccadfacf6cf10faad22bbadf55986bdd0856edfb5d9210aa1dcf1f516e84e93"
 dependencies = [
- "darling 0.14.1",
+ "darling",
  "proc-macro2 1.0.47",
  "quote 1.0.21",
  "syn 1.0.103",
@@ -7823,7 +7791,7 @@ dependencies = [
  "rustyline-derive",
  "serde 1.0.147",
  "serde_json",
- "serde_with 1.14.0",
+ "serde_with",
  "shell-words",
  "signature",
  "sui-config",
@@ -7906,7 +7874,7 @@ dependencies = [
  "rocksdb",
  "serde 1.0.147",
  "serde_json",
- "serde_with 1.14.0",
+ "serde_with",
  "strum",
  "strum_macros",
  "sui-config",
@@ -7937,6 +7905,7 @@ dependencies = [
  "async-trait",
  "bcs",
  "clap 3.2.22",
+ "fastcrypto",
  "futures",
  "jsonrpsee",
  "move-core-types",
@@ -7987,7 +7956,7 @@ dependencies = [
  "once_cell",
  "rand 0.8.5",
  "serde 1.0.147",
- "serde_with 1.14.0",
+ "serde_with",
  "serde_yaml",
  "sha3 0.10.6",
  "sui-adapter",
@@ -8036,7 +8005,7 @@ dependencies = [
  "serde 1.0.147",
  "serde-reflection",
  "serde_json",
- "serde_with 1.14.0",
+ "serde_with",
  "serde_yaml",
  "signature",
  "sui-adapter",
@@ -8171,6 +8140,7 @@ name = "sui-framework-build"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "fastcrypto",
  "move-binary-format",
  "move-bytecode-utils",
  "move-bytecode-verifier",
@@ -8237,6 +8207,7 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "fastcrypto",
  "futures",
  "jsonrpsee",
  "jsonrpsee-core",
@@ -8270,6 +8241,7 @@ dependencies = [
  "bcs",
  "colored",
  "either",
+ "fastcrypto",
  "itertools",
  "move-binary-format",
  "move-bytecode-utils",
@@ -8277,7 +8249,7 @@ dependencies = [
  "schemars",
  "serde 1.0.147",
  "serde_json",
- "serde_with 1.14.0",
+ "serde_with",
  "sui-json",
  "sui-types",
  "tracing",
@@ -8365,6 +8337,7 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "clap 3.2.22",
+ "fastcrypto",
  "move-core-types",
  "pretty_assertions",
  "rand 0.8.5",
@@ -8411,7 +8384,7 @@ dependencies = [
  "rand 0.8.5",
  "serde 1.0.147",
  "serde_json",
- "serde_with 1.14.0",
+ "serde_with",
  "signature",
  "strum",
  "strum_macros",
@@ -8586,7 +8559,7 @@ dependencies = [
  "narwhal-executor",
  "rocksdb",
  "serde 1.0.147",
- "serde_with 1.14.0",
+ "serde_with",
  "strum",
  "strum_macros",
  "sui-config",
@@ -8649,7 +8622,6 @@ name = "sui-types"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "base64ct",
  "bcs",
  "bincode",
  "byteorder",
@@ -8679,7 +8651,7 @@ dependencies = [
  "serde_bytes",
  "serde_json",
  "serde_repr",
- "serde_with 1.14.0",
+ "serde_with",
  "sha2 0.9.9",
  "sha3 0.10.6",
  "signature",
@@ -8946,7 +8918,7 @@ version = "3.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "856bbca0314c328004691b9c0639fb198ca764d1ce0e20d4dd8b78f2697c2a6f"
 dependencies = [
- "darling 0.14.1",
+ "darling",
  "if_chain",
  "lazy_static 1.4.0",
  "proc-macro2 1.0.47",
@@ -10372,12 +10344,9 @@ dependencies = [
  "curve25519-dalek",
  "curve25519-dalek-fiat",
  "curve25519-dalek-ng",
- "darling 0.13.4",
- "darling 0.14.1",
- "darling_core 0.13.4",
- "darling_core 0.14.1",
- "darling_macro 0.13.4",
- "darling_macro 0.14.1",
+ "darling",
+ "darling_core",
+ "darling_macro",
  "dashmap",
  "data-encoding",
  "datatest-stable",
@@ -10486,6 +10455,7 @@ dependencies = [
  "heck 0.3.3",
  "heck 0.4.0",
  "hex",
+ "hex-literal",
  "hkdf",
  "hmac",
  "hmac-sha512",
@@ -10807,10 +10777,8 @@ dependencies = [
  "serde_repr",
  "serde_test",
  "serde_urlencoded",
- "serde_with 1.14.0",
- "serde_with 2.0.1",
- "serde_with_macros 1.5.2",
- "serde_with_macros 2.0.1",
+ "serde_with",
+ "serde_with_macros",
  "serde_yaml",
  "sha-1 0.10.0",
  "sha-1 0.9.8",

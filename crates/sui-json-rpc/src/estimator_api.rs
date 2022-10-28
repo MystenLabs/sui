@@ -14,7 +14,7 @@ use sui_open_rpc::Module;
 use sui_types::crypto::SignableBytes;
 use sui_types::messages::TransactionData;
 
-use sui_types::sui_serde::Base64;
+use fastcrypto::encoding::Base64;
 
 pub struct EstimatorApi {
     pub state: Arc<AuthorityState>,
@@ -36,7 +36,9 @@ impl EstimatorApiServer for EstimatorApi {
         mutated_object_sizes_after: Option<usize>,
         storage_rebate: Option<u64>,
     ) -> RpcResult<SuiGasCostSummary> {
-        let data = TransactionData::from_signable_bytes(&tx_bytes.to_vec()?)?;
+        let data = TransactionData::from_signable_bytes(
+            &tx_bytes.to_vec().map_err(|e| anyhow::anyhow!(e))?,
+        )?;
 
         Ok(SuiGasCostSummary::from(
             estimate_transaction_computation_cost(
