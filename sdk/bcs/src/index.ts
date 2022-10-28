@@ -458,7 +458,11 @@ export type BcsConfig = {
   types?: {
     structs?: { [key: string]: StructTypeDefinition },
     enums?: { [key: string]: EnumTypeDefinition }
-  }
+  },
+  /**
+   * Whether to auto-register primitive types on launch.
+   */
+  withPrimitives?: boolean;
 };
 
 /**
@@ -477,18 +481,16 @@ export class BCS {
   static readonly ADDRESS: string = 'address';
   static readonly STRING: string = 'string';
 
+  /**
+   * Map of kind `TypeName => TypeInterface`. Holds all
+   * callbacks for (de)serialization of every registered type.
+   */
   public types: Map<string, TypeInterface> = new Map();
 
   /**
-   * Language-specific pair of separators used for defining generics.
-   * In Move and Rust this pair would be: `['<', '>']`.
+   * Stored BcsConfig for the current instance of BCS.
    */
-  public genericSeparators: [string, string];
-
-  // Set of values for forking BCS implementation.
-  protected vectorType: string;
-  protected addressLength: number;
-  protected addressEncoding: 'hex' | 'base64';
+  protected schema: BcsConfig;
 
   /**
    * Construct a BCS instance with a prepared schema.
@@ -496,11 +498,15 @@ export class BCS {
    * @param schema A prepared schema with type definitions
    * @param withPrimitives Whether to register primitive types by default
    */
-  constructor(public schema: BcsConfig, withPrimitives: boolean = true) {
-    this.genericSeparators = schema.genericSeparators || ['<', '>'];
-    this.vectorType = schema.vectorType;
-    this.addressLength = schema.addressLength;
-    this.addressEncoding = schema.addressEncoding || 'hex';
+  constructor(schema: BcsConfig | BCS) {
+    // if BCS instance is passed -> clone its schema
+    if (schema instanceof BCS) {
+      this.schema = schema.schema;
+      this.types = schema.types;
+      return;
+    }
+
+    this.schema = schema;
 
     // Register address type under key 'address'.
     this.registerAddressType(BCS.ADDRESS, schema.addressLength, schema.addressEncoding);
@@ -520,7 +526,7 @@ export class BCS {
       }
     }
 
-    if (withPrimitives) {
+    if (schema.withPrimitives !== false) {
       registerPrimitives(this);
     }
   }
@@ -578,30 +584,7 @@ export class BCS {
   }
 
   /**
-   * Forks a BCS instance and deeply copies add definitions.
-   *
-   * @example
-   * let bcs_v1 = new BCS(getSuiMoveConfig());
-   * bcs_v1.registerStructType('User', { name: 'string' });
-   *
-   * let bcs_v2 = bcs_v1.fork();
-   * bcs_v2.registerStructType('Worker', { user: 'User', experience: 'u64' });
-   */
-  public fork(): BCS {
-    let clone = new BCS({
-      vectorType: this.vectorType,
-      addressLength: this.addressLength,
-      addressEncoding: this.addressEncoding,
-      genericSeparators: this.genericSeparators
-    });
-
-    clone.types = new Map(this.types);
-
-    return clone;
-  }
-
-  /**
-   * Check whether a TypeInterface has been loaded for the `Type`
+   * Check whether a `TypeInterface` has been loaded for a `type`.
    * @param type Name of the type to check.
    * @returns
    */
@@ -967,7 +950,7 @@ export class BCS {
    * @returns Object with typeName and typeParams listed as Array
    */
   public parseTypeName(name: string): { typeName: string, typeParams: string[] } {
-    let [left, right] = this.genericSeparators;
+    let [left, right] = this.schema.genericSeparators || ['<', '>'];
 
     let l_bound = name.indexOf(left);
     let r_bound = Array.from(name).reverse().indexOf(right);
