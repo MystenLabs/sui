@@ -10,7 +10,6 @@ const SENTRY_DSN =
 const IS_PROD = process.env.NODE_ENV === 'production';
 
 export default function initSentry() {
-    //TODO: Disable in development and Wallet version
     if (!IS_PROD) return;
 
     Sentry.init({
