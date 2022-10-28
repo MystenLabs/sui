@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Provider } from './provider';
-import { JsonRpcClient } from '../rpc/client';
+import { HttpHeaders, JsonRpcClient } from '../rpc/client';
 import {
   isGetObjectDataResponse,
   isGetOwnedObjectsResponse,
@@ -52,6 +52,7 @@ import {
   normalizeSuiAddress,
   RpcApiVersion,
   parseVersionFromString,
+  FaucetResponse,
 } from '../types';
 import { SignatureScheme } from '../cryptography/publickey';
 import {
@@ -59,6 +60,8 @@ import {
   WebsocketClient,
   WebsocketClientOptions,
 } from '../rpc/websocket-client';
+import { ApiEndpoints, Network, NETWORK_TO_API } from '../utils/api-endpoints';
+import { requestSuiFromFaucet } from '../rpc/faucet-client';
 
 const isNumber = (val: any): val is number => typeof val === 'number';
 const isAny = (_val: any): _val is any => true;
@@ -88,6 +91,12 @@ export type RpcProviderOptions = {
    * Cache timeout in seconds for the RPC API Version
    */
   versionCacheTimoutInSeconds?: number;
+  /**
+   * URL to a faucet(optional). If you initialize `JsonRpcProvider`
+   * with a known `Network` value, this will be populated with a default
+   * value
+   */
+  faucetURL?: string;
 };
 
 const DEFAULT_OPTIONS: RpcProviderOptions = {
@@ -97,6 +106,7 @@ const DEFAULT_OPTIONS: RpcProviderOptions = {
 };
 
 export class JsonRpcProvider extends Provider {
+  public endpoints: ApiEndpoints;
   protected client: JsonRpcClient;
   protected wsClient: WebsocketClient;
   private rpcApiVersion: RpcApiVersion | undefined;
@@ -104,20 +114,29 @@ export class JsonRpcProvider extends Provider {
   /**
    * Establish a connection to a Sui RPC endpoint
    *
-   * @param endpoint URL to the Sui RPC endpoint
+   * @param endpoint URL to the Sui RPC endpoint, or a `Network` enum
    * @param options configuration options for the provider
    */
   constructor(
-    public endpoint: string,
+    endpoint: string | Network = Network.DEVNET,
     public options: RpcProviderOptions = DEFAULT_OPTIONS
   ) {
     super();
 
+    if (typeof endpoint !== 'string') {
+      this.endpoints = NETWORK_TO_API[endpoint];
+    } else {
+      this.endpoints = {
+        fullNode: endpoint,
+        faucet: options.faucetURL,
+      };
+    }
+
     const opts = { ...DEFAULT_OPTIONS, ...options };
 
-    this.client = new JsonRpcClient(endpoint);
+    this.client = new JsonRpcClient(this.endpoints.fullNode);
     this.wsClient = new WebsocketClient(
-      endpoint,
+      this.endpoints.fullNode,
       opts.skipDataValidation!,
       opts.socketOptions
     );
@@ -146,6 +165,16 @@ export class JsonRpcProvider extends Provider {
       console.warn('Error fetching version number of the RPC API', err);
     }
     return undefined;
+  }
+
+  async requestSuiFromFaucet(
+    recipient: SuiAddress,
+    httpHeaders?: HttpHeaders
+  ): Promise<FaucetResponse> {
+    if (!this.endpoints.faucet) {
+      throw new Error('Faucet URL is not specified');
+    }
+    return requestSuiFromFaucet(this.endpoints.faucet, recipient, httpHeaders);
   }
 
   // Move info

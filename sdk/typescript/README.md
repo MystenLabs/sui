@@ -65,20 +65,57 @@ cd sdk/typescript
 VITE_FAUCET_URL='https://faucet.devnet.sui.io:443/gas' VITE_FULLNODE_URL='https://fullnode.devnet.sui.io' pnpm test:e2e
 ```
 
-## Usage
+## Connecting to Sui Network
 
 The `JsonRpcProvider` class provides a connection to the JSON-RPC Server and should be used for all read-only operations. The default URLs to connect with the RPC server are:
 
 - local: http://127.0.0.1:9000
-- DevNet: https://fullnode.devnet.sui.io:443
+- DevNet: https://fullnode.devnet.sui.io
 
-Examples:
+```typescript
+import { JsonRpcProvider, Network } from '@mysten/sui.js';
+// connect to local RPC server
+const provider = new JsonRpcProvider(Network.DEVNET);
+// get tokens from the local faucet server
+await provider.requestSuiFromFaucet(
+  '0xbff6ccc8707aa517b4f1b95750a2a8c666012df3'
+);
+```
+
+For local development, you can run `cargo run --bin sui-test-validator` to spin up a local network with a local validator, a fullnode, and a faucet server.
+
+```typescript
+import { JsonRpcProvider, Network } from '@mysten/sui.js';
+// connect to Devnet
+const provider = new JsonRpcProvider(Network.LOCAL);
+// get tokens from the DevNet faucet server
+await provider.requestSuiFromFaucet(
+  '0xbff6ccc8707aa517b4f1b95750a2a8c666012df3'
+);
+```
+
+You can also pass in custom URLs to your own fullnode and faucet server
+
+```typescript
+import { JsonRpcProvider } from '@mysten/sui.js';
+// connect to a custom RPC server
+const provider = new JsonRpcProvider('https://fullnode.devnet.sui.io', {
+  // you can also skip providing this field if you don't plan to interact with the faucet
+  faucetURL: 'https://faucet.devnet.sui.io',
+});
+// get tokens from a custom faucet server
+await provider.requestSuiFromFaucet(
+  '0xbff6ccc8707aa517b4f1b95750a2a8c666012df3'
+);
+```
+
+## Examples
 
 Fetch objects owned by the address `0xbff6ccc8707aa517b4f1b95750a2a8c666012df3`
 
 ```typescript
 import { JsonRpcProvider } from '@mysten/sui.js';
-const provider = new JsonRpcProvider('https://fullnode.devnet.sui.io:443');
+const provider = new JsonRpcProvider();
 const objects = await provider.getOwnedObjectRefs(
   '0xbff6ccc8707aa517b4f1b95750a2a8c666012df3'
 );
@@ -88,7 +125,7 @@ Fetch object details for the object with id `0xcff6ccc8707aa517b4f1b95750a2a8c66
 
 ```typescript
 import { JsonRpcProvider } from '@mysten/sui.js';
-const provider = new JsonRpcProvider('https://fullnode.devnet.sui.io:443');
+const provider = new JsonRpcProvider();
 const txn = await provider.getObject(
   '0xcff6ccc8707aa517b4f1b95750a2a8c666012df3'
 );
@@ -103,7 +140,7 @@ Fetch transaction details from transaction digests:
 
 ```typescript
 import { JsonRpcProvider } from '@mysten/sui.js';
-const provider = new JsonRpcProvider('https://fullnode.devnet.sui.io:443');
+const provider = new JsonRpcProvider();
 const txn = await provider.getTransactionWithEffects(
   '6mn5W1CczLwitHCO9OIUbqirNrQ0cuKdyxaNe16SAME='
 );
@@ -118,7 +155,7 @@ Fetch transaction events from a transaction digest:
 
 ```typescript
 import { JsonRpcProvider } from '@mysten/sui.js';
-const provider = new JsonRpcProvider('https://fullnode.devnet.sui.io:443');
+const provider = new JsonRpcProvider();
 const txEvents = await provider.getEventsByTransaction(
   '6mn5W1CczLwitHCO9OIUbqirNrQ0cuKdyxaNe16SAME='
 );
@@ -128,7 +165,7 @@ Fetch events by sender address:
 
 ```typescript
 import { JsonRpcProvider } from '@mysten/sui.js';
-const provider = new JsonRpcProvider('https://fullnode.devnet.sui.io:443');
+const provider = new JsonRpcProvider();
 const senderEvents = await provider.getEventsBySender(
   '0xbff6ccc8707aa517b4f1b95750a2a8c666012df3'
 );
@@ -142,7 +179,7 @@ To transfer a `0x2::coin::Coin<SUI>`:
 import { Ed25519Keypair, JsonRpcProvider, RawSigner } from '@mysten/sui.js';
 // Generate a new Ed25519 Keypair
 const keypair = new Ed25519Keypair();
-const provider = new JsonRpcProvider('https://fullnode.devnet.sui.io:443');
+const provider = new JsonRpcProvider();
 const signer = new RawSigner(keypair, provider);
 const transferTxn = await signer.transferObjectWithRequestType({
   objectId: '0x5015b016ab570df14c87649eda918e09e5cc61e0',
@@ -158,7 +195,7 @@ To split a `0x2::coin::Coin<SUI>` into multiple coins
 import { Ed25519Keypair, JsonRpcProvider, RawSigner } from '@mysten/sui.js';
 // Generate a new Keypair
 const keypair = new Ed25519Keypair();
-const provider = new JsonRpcProvider('https://fullnode.devnet.sui.io:443');
+const provider = new JsonRpcProvider();
 const signer = new RawSigner(keypair, provider);
 const splitTxn = await signer.splitCoinWithRequestType({
   coinObjectId: '0x5015b016ab570df14c87649eda918e09e5cc61e0',
@@ -177,7 +214,7 @@ To merge two coins:
 import { Ed25519Keypair, JsonRpcProvider, RawSigner } from '@mysten/sui.js';
 // Generate a new Keypair
 const keypair = new Ed25519Keypair();
-const provider = new JsonRpcProvider('https://fullnode.devnet.sui.io:443');
+const provider = new JsonRpcProvider();
 const signer = new RawSigner(keypair, provider);
 const mergeTxn = await signer.mergeCoinWithRequestType({
   primaryCoin: '0x5015b016ab570df14c87649eda918e09e5cc61e0',
@@ -193,7 +230,7 @@ To make a move call:
 import { Ed25519Keypair, JsonRpcProvider, RawSigner } from '@mysten/sui.js';
 // Generate a new Keypair
 const keypair = new Ed25519Keypair();
-const provider = new JsonRpcProvider('https://fullnode.devnet.sui.io:443');
+const provider = new JsonRpcProvider();
 const signer = new RawSigner(keypair, provider);
 const moveCallTxn = await signer.executeMoveCallWithRequestType({
   packageObjectId: '0x2',
@@ -214,7 +251,7 @@ Subscribe to all events created by transactions sent by account `0xbff6ccc8707aa
 
 ```typescript
 import { JsonRpcProvider } from '@mysten/sui.js';
-const provider = new JsonRpcProvider('https://fullnode.devnet.sui.io:443');
+const provider = new JsonRpcProvider();
 
 // calls RPC method 'sui_subscribeEvent' with params:
 // [ { SenderAddress: '0xbff6ccc8707aa517b4f1b95750a2a8c666012df3' } ]
@@ -234,7 +271,7 @@ Subscribe to all events created by the `devnet_nft` module
 
 ```typescript
 import { JsonRpcProvider } from '@mysten/sui.js';
-const provider = new JsonRpcProvider('https://fullnode.devnet.sui.io:443');
+const provider = new JsonRpcProvider();
 
 const devnetNftFilter = {
   All: [
@@ -258,7 +295,7 @@ import { Ed25519Keypair, JsonRpcProvider, RawSigner } from '@mysten/sui.js';
 const { execSync } = require('child_process');
 // Generate a new Keypair
 const keypair = new Ed25519Keypair();
-const provider = new JsonRpcProvider('https://fullnode.devnet.sui.io:443');
+const provider = new JsonRpcProvider();
 const signer = new RawSigner(keypair, provider);
 const compiledModules = JSON.parse(
   execSync(
@@ -283,6 +320,6 @@ import { Secp256k1Keypair, JsonRpcProvider, RawSigner } from '@mysten/sui.js';
 // Generate a new Secp256k1 Keypair
 const keypair = new Secp256k1Keypair();
 
-const provider = new JsonRpcProvider('https://fullnode.devnet.sui.io:443');
+const provider = new JsonRpcProvider();
 const signer = new RawSigner(keypair, provider);
 ```

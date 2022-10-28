@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import axios from 'axios';
 import { expect } from 'vitest';
 import {
   Base64DataBuffer,
@@ -10,14 +9,17 @@ import {
   getExecutionStatusType,
   JsonRpcProvider,
   JsonRpcProviderWithCache,
+  Network,
+  NETWORK_TO_API,
   ObjectId,
   RawSigner,
 } from '../../../src';
 
+const TEST_ENDPOINTS = NETWORK_TO_API[Network.LOCAL];
 const DEFAULT_FAUCET_URL =
-  import.meta.env.VITE_FAUCET_URL ?? 'http://127.0.0.1:9123/gas';
+  import.meta.env.VITE_FAUCET_URL ?? TEST_ENDPOINTS.faucet;
 const DEFAULT_FULLNODE_URL =
-  import.meta.env.VITE_FULLNODE_URL ?? 'http://127.0.0.1:9000';
+  import.meta.env.VITE_FULLNODE_URL ?? TEST_ENDPOINTS.fullNode;
 
 export const DEFAULT_RECIPIENT = '0x36096be6a0314052931babed39f53c0666a6b0df';
 export const DEFAULT_RECIPIENT_2 = '0x46096be6a0314052931babed39f53c0666a6b0da';
@@ -46,33 +48,27 @@ export class TestToolbox {
   }
 }
 
-export async function requestToken(recipient: string): Promise<void> {
-  const res = await axios.post<{ error: any }>(DEFAULT_FAUCET_URL, {
-    FixedAmountRequest: {
-      recipient,
-    },
-  });
-  if (res.data.error) {
-    throw new Error('Unable to invoke local faucet:', res.data.error);
-  }
-}
-
 type ProviderType = 'rpc' | 'rpc-with-cache';
 
 export function getProvider(providerType: ProviderType): JsonRpcProvider {
   return providerType === 'rpc'
-    ? new JsonRpcProvider(DEFAULT_FULLNODE_URL, { skipDataValidation: false })
+    ? new JsonRpcProvider(DEFAULT_FULLNODE_URL, {
+        skipDataValidation: false,
+        faucetURL: DEFAULT_FAUCET_URL,
+      })
     : new JsonRpcProviderWithCache(DEFAULT_FULLNODE_URL, {
         skipDataValidation: false,
+        faucetURL: DEFAULT_FAUCET_URL,
       });
 }
 
 export async function setup(providerType: ProviderType = 'rpc') {
   const keypair = Ed25519Keypair.generate();
   const address = keypair.getPublicKey().toSuiAddress();
-  await requestToken(address);
+  const provider = getProvider(providerType);
+  await provider.requestSuiFromFaucet(address);
 
-  return new TestToolbox(keypair, getProvider(providerType));
+  return new TestToolbox(keypair, provider);
 }
 
 export async function publishPackage(
