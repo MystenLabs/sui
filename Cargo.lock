@@ -2921,6 +2921,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
+name = "hex-literal"
+version = "0.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7ebdb29d2ea9ed0083cd8cece49bbd968021bd99b0849edb4a9a7ee0fdf6a4e0"
+
+[[package]]
 name = "hkdf"
 version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4765,7 +4771,6 @@ dependencies = [
 name = "narwhal-crypto"
 version = "0.1.0"
 dependencies = [
- "fastcrypto",
  "ark-bls12-377",
  "bincode",
  "criterion",
@@ -4785,8 +4790,8 @@ dependencies = [
  "serde_json",
  "serde_with",
  "tokio",
->>>>>>> 85b52e588 (crypto: Use Base64 and Hex from fastcrypto instead of sui)
  "workspace-hack",
+ "zeroize",
 ]
 
 [[package]]
@@ -10450,6 +10455,7 @@ dependencies = [
  "heck 0.3.3",
  "heck 0.4.0",
  "hex",
+ "hex-literal",
  "hkdf",
  "hmac",
  "hmac-sha512",

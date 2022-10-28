@@ -22,10 +22,6 @@ merlin = "3.0.0"
 once_cell = "1.14.0"
 readonly = "0.2.2"
 
-fastcrypto = { workspace = true, features = ["copy_key"] }
-
-workspace-hack.workspace = true
-
 [features]
 default = []
 [dev-dependencies]
