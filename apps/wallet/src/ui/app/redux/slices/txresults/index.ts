@@ -87,7 +87,6 @@ const getTxnEffectsEventID = (
             return data?.objectId;
         })
         .filter(notEmpty);
-    //
     return objectIDs;
 };
 
@@ -183,14 +182,8 @@ export const getTransactionsByAddress = createAsyncThunk<
 
         // Get all objectId and batch fetch objects for transactions with objectIds
         // remove duplicates
-
         const objectIDs = [
-            ...new Set(
-                resp
-                    .filter(notEmpty)
-                    .map((itm) => itm.objectId)
-                    .filter(notEmpty)
-            ),
+            ...new Set(resp.map((itm) => itm?.objectId).filter(notEmpty)),
         ];
 
         const getObjectBatch = await dispatch(batchFetchObject(objectIDs));
@@ -216,7 +209,6 @@ export const getTransactionsByAddress = createAsyncThunk<
                 coinSymbol: coinType && Coin.getCoinSymbol(coinType),
                 ...(objectTxObj
                     ? {
-                          //Temporary solution to deal unknown object type
                           description:
                               typeof fields.description === 'string' &&
                               fields.description,
