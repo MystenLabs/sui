@@ -8,7 +8,6 @@ publish = false
 
 [dependencies]
 ark-bls12-377 = { version = "0.3.0", features = ["std"], optional = true }
-base64ct = { version = "1.5.2", features = ["alloc"] }
 eyre = "0.6.8"
 hex = "0.4.3"
 rand = { version = "0.8.5", features = ["std"] }

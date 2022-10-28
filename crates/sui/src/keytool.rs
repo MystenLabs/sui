@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use anyhow::anyhow;
 use bip32::{DerivationPath, Mnemonic};
 use clap::*;
+use fastcrypto::encoding::{Base64, Encoding};
 use fastcrypto::traits::{ToFromBytes, VerifyingKey};
 use signature::rand_core::OsRng;
 use sui_keys::key_derive::derive_key_pair_from_path;
@@ -20,8 +21,6 @@ use sui_types::crypto::{
     get_key_pair, AuthorityKeyPair, Ed25519SuiSignature, EncodeDecodeBase64, NetworkKeyPair,
     SignatureScheme, SuiKeyPair, SuiSignatureInner,
 };
-use sui_types::sui_serde::{Base64, Encoding};
-
 #[cfg(test)]
 #[path = "unit_tests/keytool_tests.rs"]
 mod keytool_tests;
@@ -230,7 +229,7 @@ pub fn read_network_keypair_from_file<P: AsRef<std::path::Path>>(
     path: P,
 ) -> anyhow::Result<NetworkKeyPair> {
     let value = std::fs::read_to_string(path)?;
-    let bytes = Base64::decode(value.as_str())?;
+    let bytes = Base64::decode(value.as_str()).map_err(|e| anyhow::anyhow!(e))?;
     if let Some(flag) = bytes.first() {
         if flag == &Ed25519SuiSignature::SCHEME.flag() {
             let sk = Ed25519PrivateKey::from_bytes(&bytes[1 + Ed25519PublicKey::LENGTH..])?;
