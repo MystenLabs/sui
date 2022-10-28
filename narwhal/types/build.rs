@@ -70,6 +70,15 @@ fn build_anemo_services(out_dir: &Path) {
         )
         .method(
             anemo_build::manual::Method::builder()
+                .name("get_certificates")
+                .route_name("GetCertificates")
+                .request_type("crate::GetCertificatesRequest")
+                .response_type("crate::GetCertificatesResponse")
+                .codec_path("anemo::rpc::codec::BincodeCodec")
+                .build(),
+        )
+        .method(
+            anemo_build::manual::Method::builder()
                 .name("fetch_certificates")
                 .route_name("FetchCertificates")
                 .request_type("crate::FetchCertificatesRequest")

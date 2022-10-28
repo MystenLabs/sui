@@ -1,36 +1,30 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
-    block_synchronizer::{
-        responses::AvailabilityResponse, BlockSynchronizer, CertificatesResponse, Command,
-        PendingIdentifier, RequestID, SyncError,
-    },
+    block_synchronizer::{BlockSynchronizer, Command, SyncError},
     common::{create_db_stores, worker_listener},
-    primary::PrimaryMessage,
 };
-use anemo::{types::PeerInfo, PeerId};
+use anemo::PeerId;
 use config::{BlockSynchronizerParameters, Parameters};
 use fastcrypto::hash::Hash;
-use futures::{future::try_join_all, stream::FuturesUnordered};
+use futures::future::try_join_all;
 use network::P2pNetwork;
 use std::{
     collections::{HashMap, HashSet},
     time::Duration,
 };
-use test_utils::{fixture_batch_with_transactions, CommitteeFixture, PrimaryToPrimaryMockServer};
+use test_utils::{fixture_batch_with_transactions, CommitteeFixture};
 use tokio::{
     sync::{mpsc, watch},
-    task::JoinHandle,
     time::{sleep, timeout},
 };
 use types::{
-    MockPrimaryToPrimary, PayloadAvailabilityResponse, PrimaryToPrimaryServer,
-    ReconfigureNotification,
+    GetCertificatesResponse, MockPrimaryToPrimary, PayloadAvailabilityResponse,
+    PrimaryToPrimaryServer, ReconfigureNotification,
 };
 
-use crypto::NetworkKeyPair;
 use fastcrypto::traits::KeyPair as _;
-use tracing::debug;
+
 use types::{Certificate, CertificateDigest};
 
 #[tokio::test]
@@ -51,7 +45,6 @@ async fn test_successful_headers_synchronization() {
     let (_tx_reconfigure, rx_reconfigure) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
     let (tx_commands, rx_block_synchronizer_commands) = test_utils::test_channel!(10);
-    let (tx_availability_responses, rx_availability_responses) = test_utils::test_channel!(10);
 
     // AND some blocks (certificates)
     let mut certificates: HashMap<CertificateDigest, Certificate> = HashMap::new();
@@ -85,18 +78,6 @@ async fn test_successful_headers_synchronization() {
         .start(anemo::Router::new())
         .unwrap();
 
-    // TODO: quite duplicated in our repo (3 times).
-    for (_pubkey, address, network_pubkey) in committee.others_primaries(&name) {
-        let peer_id = PeerId(network_pubkey.0.to_bytes());
-        let address = network::multiaddr_to_address(&address).unwrap();
-        let peer_info = PeerInfo {
-            peer_id,
-            affinity: anemo::types::PeerAffinity::High,
-            address: vec![address],
-        };
-        network.known_peers().insert(peer_info);
-    }
-
     // AND create the synchronizer
     let _synchronizer_handle = BlockSynchronizer::spawn(
         name.clone(),
@@ -104,7 +85,6 @@ async fn test_successful_headers_synchronization() {
         worker_cache.clone(),
         rx_reconfigure,
         rx_block_synchronizer_commands,
-        rx_availability_responses,
         P2pNetwork::new(network.clone()),
         payload_store.clone(),
         certificate_store.clone(),
@@ -116,26 +96,34 @@ async fn test_successful_headers_synchronization() {
 
     // AND let's assume that all the primaries are responding with the full set
     // of requested certificates.
-    let handlers: FuturesUnordered<JoinHandle<Vec<PrimaryMessage>>> = fixture
-        .authorities()
-        .filter(|a| a.public_key() != name)
-        .map(|a| {
-            let address = committee.primary(&a.public_key()).unwrap();
-            println!("New primary added: {:?}", address);
-            primary_listener(1, a.network_keypair().copy(), address)
-        })
-        .collect();
+    let mut primary_networks = Vec::new();
+    for primary in fixture.authorities().filter(|a| a.public_key() != name) {
+        let address = committee.primary(&primary.public_key()).unwrap();
+        let certificates = certificates.clone();
+        let mut mock_server = MockPrimaryToPrimary::new();
+        mock_server
+            .expect_get_certificates()
+            .returning(move |request| {
+                Ok(anemo::Response::new(GetCertificatesResponse {
+                    certificates: request
+                        .body()
+                        .digests
+                        .iter()
+                        .filter_map(|digest| certificates.get(digest))
+                        .cloned()
+                        .collect(),
+                }))
+            });
+        let routes = anemo::Router::new().add_rpc_service(PrimaryToPrimaryServer::new(mock_server));
+        primary_networks.push(primary.new_network(routes));
+        println!("New primary added: {:?}", address);
 
-    // Wait for connectivity
-    let (mut events, mut peers) = network.subscribe();
-    while peers.len() != 3 {
-        let event = events.recv().await.unwrap();
-        match event {
-            anemo::types::PeerEvent::NewPeer(peer_id) => peers.push(peer_id),
-            anemo::types::PeerEvent::LostPeer(_, _) => {
-                panic!("we shouldn't see any lost peer events")
-            }
-        }
+        let address = network::multiaddr_to_address(&address).unwrap();
+        let peer_id = PeerId(primary.network_keypair().public().0.to_bytes());
+        network
+            .connect_with_peer_id(address, peer_id)
+            .await
+            .unwrap();
     }
 
     // WHEN
@@ -147,52 +135,6 @@ async fn test_successful_headers_synchronization() {
         .await
         .ok()
         .unwrap();
-
-    // wait for the primaries to receive all the requests
-    if let Ok(result) = timeout(Duration::from_millis(4_000), try_join_all(handlers)).await {
-        assert!(result.is_ok(), "Error returned");
-
-        let mut primaries = committee.others_primaries(&name);
-
-        for mut primary_responses in result.unwrap() {
-            // ensure that only one request has been received
-            assert_eq!(primary_responses.len(), 1, "Expected only one request");
-
-            match primary_responses.remove(0) {
-                PrimaryMessage::CertificatesBatchRequest {
-                    certificate_ids,
-                    requestor,
-                } => {
-                    let response_certificates: Vec<(CertificateDigest, Option<Certificate>)> =
-                        certificate_ids
-                            .iter()
-                            .map(|id| {
-                                if let Some(certificate) = certificates.get(id) {
-                                    (*id, Some(certificate.clone()))
-                                } else {
-                                    panic!(
-                                    "Received certificate with id {id} not amongst the expected"
-                                );
-                                }
-                            })
-                            .collect();
-
-                    debug!("{:?}", requestor);
-
-                    tx_availability_responses
-                        .send(AvailabilityResponse::Certificate(CertificatesResponse {
-                            certificates: response_certificates,
-                            from: primaries.pop().unwrap().0,
-                        }))
-                        .await
-                        .unwrap();
-                }
-                _ => {
-                    panic!("Unexpected request has been received!");
-                }
-            }
-        }
-    }
 
     // THEN
     let timer = sleep(Duration::from_millis(5_000));
@@ -246,7 +188,6 @@ async fn test_successful_payload_synchronization() {
     let (_tx_reconfigure, rx_reconfigure) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
     let (tx_commands, rx_block_synchronizer_commands) = test_utils::test_channel!(10);
-    let (_tx_availability_responses, rx_availability_responses) = test_utils::test_channel!(10);
 
     // AND some blocks (certificates)
     let mut certificates: HashMap<CertificateDigest, Certificate> = HashMap::new();
@@ -286,7 +227,6 @@ async fn test_successful_payload_synchronization() {
         worker_cache.clone(),
         rx_reconfigure,
         rx_block_synchronizer_commands,
-        rx_availability_responses,
         P2pNetwork::new(network.clone()),
         payload_store.clone(),
         certificate_store.clone(),
@@ -413,131 +353,6 @@ async fn test_successful_payload_synchronization() {
 }
 
 #[tokio::test]
-async fn test_multiple_overlapping_requests() {
-    // GIVEN
-    let (_, certificate_store, payload_store) = create_db_stores();
-    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
-    let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
-    let author = fixture.authorities().next().unwrap();
-    let primary = fixture.authorities().nth(1).unwrap();
-    let name = primary.public_key();
-    let network_key = primary.network_keypair().copy().private().0.to_bytes();
-
-    let (_, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
-    let (_, rx_block_synchronizer_commands) = test_utils::test_channel!(10);
-    let (_, rx_availability_responses) = test_utils::test_channel!(10);
-
-    // AND some blocks (certificates)
-    let mut certificates: HashMap<CertificateDigest, Certificate> = HashMap::new();
-
-    // AND generate headers with distributed batches between 2 workers (0 and 1)
-    for _ in 0..5 {
-        let header = author
-            .header_builder(&committee)
-            .with_payload_batch(fixture_batch_with_transactions(10), 0)
-            .build(author.keypair())
-            .unwrap();
-
-        let certificate = fixture.certificate(&header);
-
-        certificates.insert(certificate.clone().digest(), certificate.clone());
-    }
-
-    let mut block_ids: Vec<CertificateDigest> = certificates.keys().copied().collect();
-
-    let own_address = network::multiaddr_to_address(&committee.primary(&name).unwrap()).unwrap();
-    println!("New primary added: {:?}", own_address);
-    let network = anemo::Network::bind(own_address)
-        .server_name("narwhal")
-        .private_key(network_key)
-        .start(anemo::Router::new())
-        .unwrap();
-
-    let mut block_synchronizer = BlockSynchronizer {
-        name,
-        committee: committee.clone(),
-        worker_cache: worker_cache.clone(),
-        rx_reconfigure,
-        rx_block_synchronizer_commands,
-        rx_availability_responses,
-        pending_requests: HashMap::new(),
-        map_certificate_responses_senders: HashMap::new(),
-        network: P2pNetwork::new(network),
-        payload_store,
-        certificate_store,
-        certificates_synchronize_timeout: Duration::from_secs(1),
-        payload_synchronize_timeout: Duration::from_secs(1),
-        payload_availability_timeout: Duration::from_secs(1),
-    };
-
-    // ResultSender
-    let get_mock_sender = || {
-        let (tx, _) = mpsc::channel(10);
-        tx
-    };
-
-    // WHEN
-    let result = block_synchronizer
-        .handle_synchronize_block_headers_command(block_ids.clone(), get_mock_sender())
-        .await;
-    assert!(
-        result.is_some(),
-        "Should have created a future to fetch certificates"
-    );
-
-    // THEN
-
-    // ensure that pending values have been updated
-    for digest in block_ids.clone() {
-        assert!(
-            block_synchronizer
-                .pending_requests
-                .contains_key(&PendingIdentifier::Header(digest)),
-            "Expected to have certificate {} pending to retrieve",
-            digest
-        );
-    }
-
-    // AND that the request is pending for all the block_ids
-    let request_id: RequestID = block_ids.clone().into_iter().collect();
-
-    assert!(
-        block_synchronizer
-            .map_certificate_responses_senders
-            .contains_key(&request_id),
-        "Expected to have a request for request id {:?}",
-        &request_id
-    );
-
-    // AND when trying to request same block ids + extra
-    let extra_certificate_id = CertificateDigest::default();
-    block_ids.push(extra_certificate_id);
-    let result = block_synchronizer
-        .handle_synchronize_block_headers_command(block_ids, get_mock_sender())
-        .await;
-    assert!(
-        result.is_some(),
-        "Should have created a future to fetch certificates"
-    );
-
-    // THEN only the extra id will be requested
-    assert_eq!(
-        block_synchronizer.map_certificate_responses_senders.len(),
-        2
-    );
-
-    let request_id: RequestID = vec![extra_certificate_id].into_iter().collect();
-    assert!(
-        block_synchronizer
-            .map_certificate_responses_senders
-            .contains_key(&request_id),
-        "Expected to have a request for request id {}",
-        &request_id
-    );
-}
-
-#[tokio::test]
 async fn test_timeout_while_waiting_for_certificates() {
     // GIVEN
     let (_, certificate_store, payload_store) = create_db_stores();
@@ -554,7 +369,6 @@ async fn test_timeout_while_waiting_for_certificates() {
     let (_tx_reconfigure, rx_reconfigure) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
     let (tx_commands, rx_block_synchronizer_commands) = test_utils::test_channel!(10);
-    let (_, rx_availability_responses) = test_utils::test_channel!(10);
 
     // AND some random block ids
     let block_ids: Vec<CertificateDigest> = (0..10)
@@ -592,7 +406,6 @@ async fn test_timeout_while_waiting_for_certificates() {
         worker_cache.clone(),
         rx_reconfigure,
         rx_block_synchronizer_commands,
-        rx_availability_responses,
         P2pNetwork::new(network),
         payload_store.clone(),
         certificate_store.clone(),
@@ -664,7 +477,6 @@ async fn test_reply_with_certificates_already_in_storage() {
 
     let (_, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
     let (_, rx_block_synchronizer_commands) = test_utils::test_channel!(10);
-    let (_, rx_availability_responses) = test_utils::test_channel!(10);
 
     let own_address = network::multiaddr_to_address(&committee.primary(&name).unwrap()).unwrap();
 
@@ -680,9 +492,7 @@ async fn test_reply_with_certificates_already_in_storage() {
         worker_cache: worker_cache.clone(),
         rx_reconfigure,
         rx_block_synchronizer_commands,
-        rx_availability_responses,
         pending_requests: Default::default(),
-        map_certificate_responses_senders: Default::default(),
         network: P2pNetwork::new(network),
         certificate_store: certificate_store.clone(),
         payload_store,
@@ -767,7 +577,6 @@ async fn test_reply_with_payload_already_in_storage() {
 
     let (_, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
     let (_, rx_block_synchronizer_commands) = test_utils::test_channel!(10);
-    let (_, rx_availability_responses) = test_utils::test_channel!(10);
 
     let own_address = network::multiaddr_to_address(&committee.primary(&name).unwrap()).unwrap();
 
@@ -782,9 +591,7 @@ async fn test_reply_with_payload_already_in_storage() {
         worker_cache: worker_cache.clone(),
         rx_reconfigure,
         rx_block_synchronizer_commands,
-        rx_availability_responses,
         pending_requests: Default::default(),
-        map_certificate_responses_senders: Default::default(),
         network: P2pNetwork::new(network),
         certificate_store: certificate_store.clone(),
         payload_store: payload_store.clone(),
@@ -874,7 +681,6 @@ async fn test_reply_with_payload_already_in_storage_for_own_certificates() {
 
     let (_, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
     let (_, rx_block_synchronizer_commands) = test_utils::test_channel!(10);
-    let (_, rx_availability_responses) = test_utils::test_channel!(10);
 
     let own_address = network::multiaddr_to_address(&committee.primary(&name).unwrap()).unwrap();
 
@@ -889,9 +695,7 @@ async fn test_reply_with_payload_already_in_storage_for_own_certificates() {
         worker_cache: worker_cache.clone(),
         rx_reconfigure,
         rx_block_synchronizer_commands,
-        rx_availability_responses,
         pending_requests: Default::default(),
-        map_certificate_responses_senders: Default::default(),
         network: P2pNetwork::new(network),
         certificate_store: certificate_store.clone(),
         payload_store: payload_store.clone(),
@@ -952,33 +756,4 @@ async fn test_reply_with_payload_already_in_storage_for_own_certificates() {
             "Not found expected certificate"
         );
     }
-}
-
-#[must_use]
-fn primary_listener(
-    num_of_expected_responses: i32,
-    network_keypair: NetworkKeyPair,
-    address: multiaddr::Multiaddr,
-) -> JoinHandle<Vec<PrimaryMessage>> {
-    tokio::spawn(async move {
-        let (mut recv, _network) = PrimaryToPrimaryMockServer::spawn(network_keypair, address);
-        let mut responses = Vec::new();
-
-        loop {
-            let message = recv
-                .recv()
-                .await
-                .expect("Failed to receive network message");
-            responses.push(message);
-
-            // if -1 is given, then we don't count the number of messages
-            // but we just rely to receive as many as possible until timeout
-            // happens when waiting for requests.
-            if num_of_expected_responses != -1
-                && responses.len() as i32 == num_of_expected_responses
-            {
-                return responses;
-            }
-        }
-    })
 }
