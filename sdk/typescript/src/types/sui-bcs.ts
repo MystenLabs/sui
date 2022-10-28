@@ -1,17 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { bcs, decodeStr, encodeStr } from '@mysten/bcs';
+import { BCS, decodeStr, encodeStr, getSuiMoveConfig } from '@mysten/bcs';
 import { Buffer } from 'buffer';
 import { SuiObjectRef } from './objects';
 
+const bcs = new BCS(getSuiMoveConfig());
+
 bcs
-  .registerVectorType('vector<u8>', 'u8')
-  .registerVectorType('vector<u64>', 'u64')
-  .registerVectorType('vector<u128>', 'u128')
-  .registerVectorType('vector<vector<u8>>', 'vector<u8>')
-  .registerAddressType('ObjectID', 20)
-  .registerAddressType('SuiAddress', 20)
+  .registerAddressType('ObjectID', 20, 'hex')
   .registerAddressType('address', 20)
   .registerType(
     'utf8string',
@@ -55,7 +52,7 @@ export type TransferObjectTx = {
 };
 
 bcs.registerStructType('TransferObjectTx', {
-  recipient: 'SuiAddress',
+  recipient: 'address',
   object_ref: 'SuiObjectRef',
 });
 
@@ -81,21 +78,19 @@ export type PayTx = {
 };
 
 bcs
-  .registerVectorType('vector<SuiAddress>', 'SuiAddress')
-  .registerVectorType('vector<SuiObjectRef>', 'SuiObjectRef')
   .registerStructType('PayTx', {
     coins: 'vector<SuiObjectRef>',
-    recipients: 'vector<SuiAddress>',
+    recipients: 'vector<address>',
     amounts: 'vector<u64>',
   });
 
-bcs.registerEnumType('Option<u64>', {
+bcs.registerEnumType('Option<T>', {
   None: null,
-  Some: 'u64',
+  Some: 'T',
 });
 
 bcs.registerStructType('TransferSuiTx', {
-  recipient: 'SuiAddress',
+  recipient: 'address',
   amount: 'Option<u64>',
 });
 
@@ -184,7 +179,6 @@ bcs
     ImmOrOwned: 'SuiObjectRef',
     Shared: 'SharedObjectRef',
   })
-  .registerVectorType('vector<ObjectArg>', 'ObjectArg')
   .registerEnumType('CallArg', {
     Pure: 'vector<u8>',
     Object: 'ObjectArg',
@@ -225,9 +219,8 @@ bcs
     vector: 'TypeTag',
     struct: 'StructTag',
   })
-  .registerVectorType('vector<TypeTag>', 'TypeTag')
   .registerStructType('StructTag', {
-    address: 'SuiAddress',
+    address: 'address',
     module: 'string',
     name: 'string',
     typeParams: 'vector<TypeTag>',
@@ -249,7 +242,6 @@ export type MoveCallTx = {
 };
 
 bcs
-  .registerVectorType('vector<CallArg>', 'CallArg')
   .registerStructType('MoveCallTx', {
     package: 'SuiObjectRef',
     module: 'string',
@@ -285,7 +277,6 @@ export type TransactionKind =
   | { Batch: Transaction[] };
 
 bcs
-  .registerVectorType('vector<Transaction>', 'Transaction')
   .registerEnumType('TransactionKind', {
     Single: 'Transaction',
     Batch: 'vector<Transaction>',
@@ -307,7 +298,7 @@ export type TransactionData = {
 
 bcs.registerStructType('TransactionData', {
   kind: 'TransactionKind',
-  sender: 'SuiAddress',
+  sender: 'address',
   gasPayment: 'SuiObjectRef',
   gasPrice: 'u64',
   gasBudget: 'u64',
@@ -325,13 +316,11 @@ bcs
     ImmOrOwned: 'SuiObjectRef',
     Shared_Deprecated: 'ObjectID',
   })
-  .registerVectorType('vector<ObjectArg_Deprecated>', 'ObjectArg_Deprecated')
   .registerEnumType('CallArg_Deprecated', {
     Pure: 'vector<u8>',
     Object: 'ObjectArg_Deprecated',
     ObjVec: 'vector<ObjectArg_Deprecated>',
   })
-  .registerVectorType('vector<CallArg_Deprecated>', 'CallArg_Deprecated')
   .registerStructType('MoveCallTx_Deprecated', {
     package: 'SuiObjectRef',
     module: 'string',
@@ -346,17 +335,13 @@ bcs
     TransferSui: 'TransferSuiTx',
     Pay: 'PayTx',
   })
-  .registerVectorType(
-    'vector<Transaction_Deprecated>',
-    'Transaction_Deprecated'
-  )
   .registerEnumType('TransactionKind_Deprecated', {
     Single: 'Transaction_Deprecated',
     Batch: 'vector<Transaction_Deprecated>',
   })
   .registerStructType('TransactionData_Deprecated', {
     kind: 'TransactionKind_Deprecated',
-    sender: 'SuiAddress',
+    sender: 'address',
     gasPayment: 'SuiObjectRef',
     gasPrice: 'u64',
     gasBudget: 'u64',
