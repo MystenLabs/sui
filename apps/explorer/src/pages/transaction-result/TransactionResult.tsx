@@ -134,6 +134,8 @@ const TransactionResultAPI = ({ id }: { id: string }) => {
                 setTxState(transformTransactionResponse(txObj, id));
             })
             .catch((err) => {
+                console.log('dummy log to trigger CI');
+
                 console.log('Error fetching transaction data', err);
                 setTxState({
                     ...initState,
