@@ -32,8 +32,12 @@ impl<U: serde::de::DeserializeOwned> Decoder for BincodeDecoder<U> {
             return Ok(None);
         }
 
+        let chunk = buf.chunk();
+
         let item: Self::Item =
-            bincode::deserialize_from(buf.reader()).map_err(|e| Status::internal(e.to_string()))?;
+            bincode::deserialize(chunk).map_err(|e| Status::internal(e.to_string()))?;
+        buf.advance(chunk.len());
+
         Ok(Some(item))
     }
 }
