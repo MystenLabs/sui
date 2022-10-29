@@ -324,6 +324,11 @@ impl GossipDigestHandler {
         response: VerifiedTransactionInfoResponse,
     ) -> Result<(), SuiError> {
         if let Some(certificate) = response.certified_transaction {
+            // Ignore certificates containing shared object, because they will be received via
+            // consensus later.
+            if certificate.contains_shared_object() {
+                return Ok(());
+            }
             let digest = *certificate.digest();
             state
                 .add_pending_certificates(vec![(digest, Some(certificate))])
