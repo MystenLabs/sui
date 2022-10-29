@@ -480,16 +480,18 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                             <ItemView data={GasStorageFees} />
                         </div>
                     </TabPanel>
-                    <TabPanel>
-                        <div className={styles.txevents}>
-                            <div className={styles.txeventsleft}>
-                                {eventTitlesDisplay}
+                    {hasEvents && (
+                        <TabPanel>
+                            <div className={styles.txevents}>
+                                <div className={styles.txeventsleft}>
+                                    {eventTitlesDisplay}
+                                </div>
+                                <div className={styles.txeventsright}>
+                                    {txEventDisplay}
+                                </div>
                             </div>
-                            <div className={styles.txeventsright}>
-                                {txEventDisplay}
-                            </div>
-                        </div>
-                    </TabPanel>
+                        </TabPanel>
+                    )}
                     <TabPanel>
                         <div className={styles.txgridcomponent}>
                             <ItemView data={transactionSignatureData} />
