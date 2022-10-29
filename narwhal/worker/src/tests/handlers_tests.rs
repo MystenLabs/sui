@@ -2,6 +2,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
+
 use fastcrypto::hash::Hash;
 use test_utils::CommitteeFixture;
 use types::{MockWorkerToWorker, WorkerToWorkerServer};
@@ -34,12 +35,11 @@ async fn synchronize() {
 
     // Set up mock behavior for child RequestBatches RPC.
     let target_primary = fixture.authorities().nth(1).unwrap();
-    let target = target_primary.public_key();
     let batch = test_utils::batch();
     let digest = batch.digest();
     let message = WorkerSynchronizeMessage {
         digests: vec![digest],
-        target,
+        target: target_primary.public_key(),
     };
 
     let mut mock_server = MockWorkerToWorker::new();
@@ -104,14 +104,13 @@ async fn synchronize_when_batch_exists() {
     let batch = test_utils::batch();
     let batch_id = batch.digest();
     let missing = vec![batch_id];
-    store.write(batch_id, batch).await;
+    store.async_write(batch_id, batch).await;
 
     // Set up mock behavior for child RequestBatches RPC.
     let target_primary = fixture.authorities().nth(1).unwrap();
-    let target = target_primary.public_key();
     let message = WorkerSynchronizeMessage {
         digests: missing.clone(),
-        target,
+        target: target_primary.public_key(),
     };
 
     // Send a sync request.
@@ -138,7 +137,7 @@ async fn delete_batches() {
     let store = test_utils::open_batch_store();
     let batch = test_utils::batch();
     let digest = batch.digest();
-    store.write(digest, batch.clone()).await;
+    store.async_write(digest, batch.clone()).await;
 
     // Send a delete request.
     let handler = PrimaryReceiverHandler {

@@ -14,7 +14,7 @@ signature = "1.6.0"
 camino = "1.1.1"
 tokio = { version = "1.20.1", features = ["full"] }
 async-trait = "0.1.57"
-serde_with = { version = "1.14.0", features = ["hex"] }
+serde_with = { version = "2.0.1", features = ["hex"] }
 tracing = "0.1.36"
 bcs = "0.1.4"
 clap = { version = "3.2.17", features = ["derive"] }
@@ -58,7 +58,6 @@ multiaddr = "0.14.0"
 hex = "0.4.3"
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
-jemallocator = { version = "^0.5", features = ["profiling"] }
 jemalloc-ctl = "^0.5"
 
 [dev-dependencies]
@@ -79,4 +78,4 @@ sui-macros = { path = "../sui-macros" }
 sui-simulator = { path = "../sui-simulator" }
 
 [package.metadata.cargo-udeps.ignore]
-normal = ["jemallocator", "jemalloc-ctl"]
+normal = ["jemalloc-ctl"]

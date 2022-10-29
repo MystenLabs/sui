@@ -742,11 +742,8 @@ fn visit_structs_impl<FVisitTypes>(
     let next_depth = depth + 1;
     match move_value {
         MoveValue::U8(_)
-        | MoveValue::U16(_)
-        | MoveValue::U32(_)
         | MoveValue::U64(_)
         | MoveValue::U128(_)
-        | MoveValue::U256(_)
         | MoveValue::Bool(_)
         | MoveValue::Address(_)
         | MoveValue::Signer(_) => (),

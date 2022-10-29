@@ -89,7 +89,7 @@ async fn start_faucet(cluster: &LocalNewCluster, port: u16) -> Result<()> {
 
     let app = Router::new()
         .route("/", get(health))
-        .route("/faucet", post(faucet_request))
+        .route("/gas", post(faucet_request))
         .layer(
             ServiceBuilder::new()
                 .layer(cors)

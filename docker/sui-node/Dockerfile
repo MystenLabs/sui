@@ -43,6 +43,7 @@ RUN cargo build --profile $PROFILE --bin sui-node
 
 # Production Image
 FROM debian:bullseye-slim AS runtime
+RUN apt-get update && apt-get install -y libjemalloc-dev
 ARG PROFILE=release
 WORKDIR sui
 # Both bench and release profiles copy from release dir
@@ -50,7 +51,9 @@ COPY --from=builder /sui/target/release/sui-node /usr/local/bin
 
 ARG BUILD_DATE
 ARG GIT_REVISION
+# Use jemalloc as memory allocator
+ENV LD_PRELOAD /usr/lib/x86_64-linux-gnu/libjemalloc.so
 # Enable automatic memory profiling.
-ENV _RJEM_MALLOC_CONF prof:true
+ENV MALLOC_CONF prof:true,prof_prefix:/data/jeprof.out,lg_prof_interval:36
 LABEL build-date=$BUILD_DATE
 LABEL git-revision=$GIT_REVISION

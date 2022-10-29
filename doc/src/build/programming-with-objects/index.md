@@ -31,3 +31,5 @@ Install:
   - Wrapping objects in another object.
 - [Chapter 5: Dynamic Fields](../../build/programming-with-objects/ch5-dynamic-fields.md)
   - Extending objects with fields keyed on other object that can be dynamically added, accessed, and removed.
+- [Chapter 6: Collections](../../build/programming-with-objects/ch6-collections.md)
+  - Working with objects in on-chain homogeneous and heterogeneous key-value stores built on top of dynamic fields.

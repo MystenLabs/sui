@@ -3,6 +3,7 @@
 
 use std::{collections::HashSet, path::PathBuf};
 
+use fastcrypto::encoding::Base64;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::{module_cache::GetModule, Modules};
 use move_compiler::compiled_unit::CompiledUnitEnum;
@@ -13,7 +14,6 @@ use move_package::{
 };
 use sui_types::{
     error::{SuiError, SuiResult},
-    sui_serde::Base64,
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
 use sui_verifier::verifier as sui_bytecode_verifier;
@@ -47,11 +47,12 @@ impl BuildConfig {
             self.config.compile_package_no_exit(&path, &mut Vec::new())
         };
 
-        // write build failure diagnostics to stderr
+        // write build failure diagnostics to stderr, convert `error` to `String` using `Debug`
+        // format to include anyhow's error context chain.
         let package = match res {
             Err(error) => {
                 return Err(SuiError::ModuleBuildFailure {
-                    error: error.to_string(),
+                    error: format!("{:?}", error),
                 })
             }
             Ok(package) => package,

@@ -16,7 +16,7 @@
   "compression_disabled": false,
   "all_in_memory_enabled": false,
   "error_stack_trace_disabled": false,
-  "coin_supported": false,
+  "coin_supported": true,
   "construction": {
     "offline_url": "http://rosetta-offline:9003",
     "constructor_dsl_file": "sui.ros",

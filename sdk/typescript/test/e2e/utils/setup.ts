@@ -15,7 +15,7 @@ import {
 } from '../../../src';
 
 const DEFAULT_FAUCET_URL =
-  import.meta.env.VITE_FAUCET_URL ?? 'http://127.0.0.1:9123/faucet';
+  import.meta.env.VITE_FAUCET_URL ?? 'http://127.0.0.1:9123/gas';
 const DEFAULT_FULLNODE_URL =
   import.meta.env.VITE_FULLNODE_URL ?? 'http://127.0.0.1:9000';
 

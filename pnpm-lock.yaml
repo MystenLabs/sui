@@ -60,6 +60,7 @@ importers:
       '@vitest/ui': ^0.22.1
       autoprefixer: ^10.4.2
       axios: ^0.27.2
+      bignumber.js: ^9.1.0
       bn.js: ^5.2.0
       class-variance-authority: ^0.2.3
       clsx: ^1.2.1
@@ -107,6 +108,7 @@ importers:
       '@visx/geo': 2.10.0_react@18.2.0
       '@visx/responsive': 2.10.0_react@18.2.0
       '@visx/tooltip': 2.10.0_biqbaboplfbrettd7655fr4n2y
+      bignumber.js: 9.1.0
       bn.js: 5.2.1
       class-variance-authority: 0.2.3_typescript@4.8.3
       clsx: 1.2.1
@@ -178,6 +180,7 @@ importers:
       '@types/react': ^18.0.20
       '@types/react-dom': ^18.0.6
       '@types/semver': ^7.3.12
+      '@types/throttle-debounce': ^5.0.0
       '@types/uuid': ^8.3.4
       '@types/webextension-polyfill': ^0.9.0
       '@types/webpack': ^5.28.0
@@ -228,6 +231,7 @@ importers:
       stylelint-webpack-plugin: ^3.3.0
       svgtofont: ^3.17.8
       tailwindcss: ^3.0.23
+      throttle-debounce: ^5.0.0
       ts-loader: ^9.3.1
       ts-node: ^10.9.1
       tsconfig-paths: ^4.0.0
@@ -274,6 +278,7 @@ importers:
       semver: 7.3.8
       stream-browserify: 3.0.0
       tailwindcss: 3.1.8_ts-node@10.9.1
+      throttle-debounce: 5.0.0
       tweetnacl: 1.0.3
       uuid: 8.3.2
       vite-tsconfig-paths: 3.5.0
@@ -286,6 +291,7 @@ importers:
       '@types/react': 18.0.20
       '@types/react-dom': 18.0.6
       '@types/semver': 7.3.12
+      '@types/throttle-debounce': 5.0.0
       '@types/uuid': 8.3.4
       '@types/webextension-polyfill': 0.9.0
       '@types/webpack': 5.28.0_webpack-cli@4.10.0
@@ -533,7 +539,6 @@ importers:
       '@mysten/sui.js': workspace:*
       '@mysten/wallet-adapter-base': workspace:*
       '@mysten/wallet-standard': workspace:*
-      '@wallet-standard/app': 0.1.0-alpha.6
       mitt: ^3.0.0
       tsup: ^6.2.2
       typescript: ^4.8.3
@@ -541,7 +546,6 @@ importers:
       '@mysten/sui.js': link:../../../../typescript
       '@mysten/wallet-adapter-base': link:../base-adapter
       '@mysten/wallet-standard': link:../../wallet-standard
-      '@wallet-standard/app': 0.1.0-alpha.6
       mitt: 3.0.0
     devDependencies:
       tsup: 6.2.2_typescript@4.8.3
@@ -592,16 +596,12 @@ importers:
   sdk/wallet-adapter/packages/wallet-standard:
     specifiers:
       '@mysten/sui.js': workspace:*
-      '@wallet-standard/features': 0.1.0-alpha.4
-      '@wallet-standard/standard': 0.1.0-alpha.5
-      '@wallet-standard/util': 0.1.0-alpha.6
+      '@wallet-standard/core': 1.0.0-rc.5
       tsup: ^6.2.2
       typescript: ^4.8.3
     dependencies:
       '@mysten/sui.js': link:../../../typescript
-      '@wallet-standard/features': 0.1.0-alpha.4
-      '@wallet-standard/standard': 0.1.0-alpha.5
-      '@wallet-standard/util': 0.1.0-alpha.6
+      '@wallet-standard/core': 1.0.0-rc.5
     devDependencies:
       tsup: 6.2.2_typescript@4.8.3
       typescript: 4.8.3
@@ -5697,6 +5697,10 @@ packages:
     dependencies:
       '@types/jest': 28.1.7
 
+  /@types/throttle-debounce/5.0.0:
+    resolution: {integrity: sha512-Pb7k35iCGFcGPECoNE4DYp3Oyf2xcTd3FbFQxXUI9hEYKUl6YX+KLf7HrBmgVcD05nl50LIH6i+80js4iYmWbw==}
+    dev: true
+
   /@types/topojson-client/3.1.1:
     resolution: {integrity: sha512-E4/Z2Xg56kVLRzYWem/6uOKVcVNqqxEqlWM9qCG2tCV1BxuzvvXC02/ELoGJWgtKkQhfycBPlMFEuTFdA/YiTg==}
     dependencies:
@@ -6166,26 +6170,40 @@ packages:
       sirv: 2.0.2
     dev: true
 
-  /@wallet-standard/app/0.1.0-alpha.6:
-    resolution: {integrity: sha512-Z/aTiMpI2qjh/YDS8GtmHrIwpsHhHlzYffkEvuiG3RY7j0ZNsQWOx38hNN/V6lOlKrh7S+azPcFL7ESiilqvcA==}
+  /@wallet-standard/app/1.0.0-rc.5:
+    resolution: {integrity: sha512-PZDZU+H8KfomWB7QjVXByMji3zs/LGbwmjCVIbSPvDIdUHA86Mn2Az1jb0ktL4mDYr3vXqEFbtoZ+pkFB5lcEw==}
+    engines: {node: '>=16'}
     dependencies:
-      '@wallet-standard/standard': 0.1.0-alpha.5
+      '@wallet-standard/base': 1.0.0-rc.5
     dev: false
 
-  /@wallet-standard/features/0.1.0-alpha.4:
-    resolution: {integrity: sha512-HF7i//1oqadV8269Jp8rEFxSf+nCxLZ+CGKT5giuavSb/hdbiPPDbQLMhWfyLRatSnssIZN1LtsyzGe9kDFJrg==}
-    dependencies:
-      '@wallet-standard/standard': 0.1.0-alpha.5
+  /@wallet-standard/base/1.0.0-rc.5:
+    resolution: {integrity: sha512-28FCazScjZtztvH+b4Tu30yDwe6D0oze0uKKrHXAOdzQ50O3ydqWICYuaz7jiq38Mt9TGNRiSOpePdsMC+qP8Q==}
+    engines: {node: '>=16'}
     dev: false
 
-  /@wallet-standard/standard/0.1.0-alpha.5:
-    resolution: {integrity: sha512-rqs9vD+Hww8kWtF8/8wi+hhLIWN1ank/ZfK7mGALen+9XhxAcgOJwl96l30MCSL2w1AHykOEELOZK6lUbg13gQ==}
+  /@wallet-standard/core/1.0.0-rc.5:
+    resolution: {integrity: sha512-nZVGhq/SXl/+IU+zVeiDWtALnkSqchik3aWoYg6XivanS4AD8xrHwOhAgnWvX4QKreTBUmKhgmIv4vE63eRjvQ==}
+    engines: {node: '>=16'}
+    dependencies:
+      '@wallet-standard/app': 1.0.0-rc.5
+      '@wallet-standard/base': 1.0.0-rc.5
+      '@wallet-standard/features': 1.0.0-rc.5
+      '@wallet-standard/wallet': 1.0.0-rc.5
     dev: false
 
-  /@wallet-standard/util/0.1.0-alpha.6:
-    resolution: {integrity: sha512-dyfgryEo5PU3XXZ20Zs9jRtyVuP/7qsKD9yNyPy9XlcZpB6HR3OtdqiXJQsm1KOxz8VsOsfRIdmzri4O/1MR7Q==}
+  /@wallet-standard/features/1.0.0-rc.5:
+    resolution: {integrity: sha512-xO1cl8U/mc9UZVkRV5743xmKHzUdTQ3K80djycczcLD07gsHuZ12GgFg7K04PbjO3Mr4til4Mc0zsoSJg+Z5JA==}
+    engines: {node: '>=16'}
     dependencies:
-      '@wallet-standard/standard': 0.1.0-alpha.5
+      '@wallet-standard/base': 1.0.0-rc.5
+    dev: false
+
+  /@wallet-standard/wallet/1.0.0-rc.5:
+    resolution: {integrity: sha512-PIE7J4lXMY/ZOh2NgMHrao4S6ZgVWtL50GBqYvFMRDh5hCPa5BF1Grs8czNggrsjboVbxEGjY6BJTy/vZ0mdZg==}
+    engines: {node: '>=16'}
+    dependencies:
+      '@wallet-standard/base': 1.0.0-rc.5
     dev: false
 
   /@webassemblyjs/ast/1.11.1:
@@ -18383,6 +18401,11 @@ packages:
     resolution: {integrity: sha512-dTEWWNu6JmeVXY0ZYoPuH5cRIwc0MeGbJwah9KUNYSJwommQpCzTySTpEe8Gs1J23aeWEuAobe4Ag7EHVt/LOg==}
     engines: {node: '>=10'}
     dev: true
+
+  /throttle-debounce/5.0.0:
+    resolution: {integrity: sha512-2iQTSgkkc1Zyk0MeVrt/3BvuOXYPl/R8Z0U2xxo9rjwNciaHDG3R+Lm6dh4EeUci49DanvBnuqI6jshoQQRGEg==}
+    engines: {node: '>=12.22'}
+    dev: false
 
   /throttleit/1.0.0:
     resolution: {integrity: sha512-rkTVqu6IjfQ/6+uNuuc3sZek4CEYxTJom3IktzgdSxcZqdARuebbA/f4QmAxMQIxqq9ZLEUkSYqvuk1I6VKq4g==}

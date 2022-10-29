@@ -1,6 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::{
+    borrow::Borrow,
+    collections::{BTreeMap, BTreeSet},
+    convert::TryFrom,
+    fmt::Debug,
+};
+
 use anyhow::Result;
 use leb128;
 use linked_hash_map::LinkedHashMap;
@@ -18,28 +25,21 @@ use move_core_types::{
     value::{MoveStruct, MoveTypeLayout, MoveValue},
 };
 pub use move_vm_runtime::move_vm::MoveVM;
-
-use sui_cost_tables::bytecode_tables::GasStatus;
-
 use move_vm_runtime::{
     native_extensions::NativeContextExtensions,
     native_functions::NativeFunctionTable,
     session::{SerializedReturnValues, Session},
 };
-use std::{
-    borrow::Borrow,
-    collections::{BTreeMap, BTreeSet},
-    convert::TryFrom,
-    fmt::Debug,
-};
+
+use sui_cost_tables::bytecode_tables::GasStatus;
 use sui_framework::natives::object_runtime::{self, ObjectRuntime};
 use sui_json::primitive_type;
+use sui_types::storage::SingleTxContext;
 use sui_types::{
     base_types::*,
-    coin::Coin,
     error::ExecutionError,
     error::{ExecutionErrorKind, SuiError},
-    event::{Event, TransferType},
+    event::Event,
     messages::{CallArg, EntryArgumentErrorKind, InputObjectKind, ObjectArg},
     object::{self, Data, MoveObject, Object, Owner, ID_END_INDEX},
     storage::{ChildObjectResolver, DeleteKind, ObjectChange, ParentSync, Storage, WriteKind},
@@ -324,10 +324,6 @@ pub fn publish<
 
     let package_id = generate_package_id(&mut modules, ctx)?;
     let vm = verify_and_link(state_view, &modules, package_id, natives, gas_status)?;
-    state_view.log_event(Event::Publish {
-        sender: ctx.sender(),
-        package_id,
-    });
     store_package_and_init_modules(state_view, &vm, modules, ctx, gas_status)
 }
 
@@ -367,7 +363,14 @@ pub fn store_package_and_init_modules<
     // The call to unwrap() will go away once we remove address owner from Immutable objects.
     let package_object = Object::new_package(modules, ctx.digest());
     let id = package_object.id();
-    let changes = BTreeMap::from([(id, ObjectChange::Write(package_object, WriteKind::Create))]);
+    let changes = BTreeMap::from([(
+        id,
+        ObjectChange::Write(
+            SingleTxContext::publish(ctx.sender()),
+            package_object,
+            WriteKind::Create,
+        ),
+    )]);
     state_view.apply_object_changes(changes);
 
     init_modules(state_view, vm, modules_to_init, ctx, gas_status)
@@ -526,7 +529,11 @@ fn process_successful_execution<S: Storage + ParentSync>(
     ctx: &TxContext,
 ) -> Result<(), ExecutionError> {
     let sender = ctx.sender();
-
+    let tx_ctx = SingleTxContext {
+        package_id: ObjectID::from(*module_id.address()),
+        transaction_module: Identifier::from(module_id.name()),
+        sender,
+    };
     let mut changes = BTreeMap::new();
     for (obj_id, new_contents) in mutable_refs {
         // update contents and increment sequence number
@@ -538,7 +545,11 @@ fn process_successful_execution<S: Storage + ParentSync>(
             .try_as_move_mut()
             .expect("We previously checked that mutable ref inputs are Move objects")
             .update_contents_and_increment_version(new_contents);
-        changes.insert(obj_id, ObjectChange::Write(obj, WriteKind::Mutate));
+
+        changes.insert(
+            obj_id,
+            ObjectChange::Write(tx_ctx.clone(), obj, WriteKind::Mutate),
+        );
     }
     let tx_digest = ctx.digest();
 
@@ -617,54 +628,12 @@ fn process_successful_execution<S: Storage + ParentSync>(
             *initial_shared_version = move_obj.version();
         }
 
-        // A to-be-transferred object can come from 3 sources:
-        //   1. Passed in by-value (in `by_value_objects`, i.e. old_object is not none)
-        //   2. Created in this transaction (in `newly_generated_ids`)
-        //   3. Unwrapped in this transaction
-        // The following condition checks if this object was unwrapped in this transaction.
-        if let Some(old_obj_ver) = old_obj_ver {
-            debug_assert!(write_kind == WriteKind::Mutate);
-            // Some kind of transfer since there's an old object
-            // Add an event for the transfer
-            let transfer_type = match recipient {
-                Owner::AddressOwner(_) => Some(TransferType::ToAddress),
-                Owner::ObjectOwner(_) => Some(TransferType::ToObject),
-                _ => None,
-            };
-            if let Some(type_) = transfer_type {
-                // Check for the transfer amount if the object is a Coin
-                let amount = if Coin::is_coin(&move_obj.type_) {
-                    let coin = Coin::from_bcs_bytes(move_obj.contents())?;
-                    Some(coin.value())
-                } else {
-                    None
-                };
-                state_view.log_event(Event::TransferObject {
-                    package_id: ObjectID::from(*module_id.address()),
-                    transaction_module: Identifier::from(module_id.name()),
-                    sender,
-                    recipient,
-                    object_id: id,
-                    version: old_obj_ver,
-                    type_,
-                    amount,
-                })
-            }
-        } else if write_kind == WriteKind::Create {
-            state_view.log_event(Event::new_object(
-                module_id.address(),
-                module_id.name(),
-                sender,
-                recipient,
-                id,
-            ));
-        }
         let obj = Object::new_move(move_obj, recipient, tx_digest);
         if old_obj_ver.is_none() {
             // Charge extra gas based on object size if we are creating a new object.
             // TODO: Do we charge extra gas when creating new objects (on top of storage write cost)?
         }
-        changes.insert(id, ObjectChange::Write(obj, write_kind));
+        changes.insert(id, ObjectChange::Write(tx_ctx.clone(), obj, write_kind));
     }
 
     for (id, delete_kind) in deletions {
@@ -686,13 +655,10 @@ fn process_successful_execution<S: Storage + ParentSync>(
                 }
             },
         };
-        state_view.log_event(Event::delete_object(
-            module_id.address(),
-            module_id.name(),
-            ctx.sender(),
+        changes.insert(
             id,
-        ));
-        changes.insert(id, ObjectChange::Delete(version, delete_kind));
+            ObjectChange::Delete(tx_ctx.clone(), version, delete_kind),
+        );
     }
 
     for (tag, contents) in user_events {

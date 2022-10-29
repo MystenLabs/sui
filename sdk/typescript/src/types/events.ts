@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SuiAddress, ObjectOwner, TransactionDigest } from './common';
-import { ObjectId, SequenceNumber } from './objects';
-import { SuiJsonValue } from './transactions';
+import {ObjectOwner, SuiAddress, TransactionDigest} from './common';
+import {ObjectId, SequenceNumber} from './objects';
+import {SuiJsonValue} from './transactions';
 
 // event types mirror those in "sui-json-rpc-types/lib.rs"
 export type MoveEvent = {
@@ -20,15 +20,35 @@ export type PublishEvent = {
   packageId: ObjectId;
 };
 
+export type CoinBalanceChangeEvent = {
+  packageId: ObjectId,
+  transactionModule: string,
+  sender: SuiAddress,
+  owner: ObjectOwner,
+  changeType: BalanceChangeType,
+  coinType: string,
+  coinObjectId: ObjectId,
+  version: SequenceNumber,
+  amount: number,
+};
+
 export type TransferObjectEvent = {
   packageId: ObjectId;
   transactionModule: string;
   sender: SuiAddress;
   recipient: ObjectOwner;
+  objectType: string,
   objectId: ObjectId;
   version: SequenceNumber;
-  type: string; // TODO - better type
-  amount: number | null;
+};
+
+export type MutateObjectEvent = {
+  packageId: ObjectId;
+  transactionModule: string;
+  sender: SuiAddress;
+  objectType: string,
+  objectId: ObjectId;
+  version: SequenceNumber;
 };
 
 export type DeleteObjectEvent = {
@@ -36,6 +56,7 @@ export type DeleteObjectEvent = {
   transactionModule: string;
   sender: SuiAddress;
   objectId: ObjectId;
+  version: SequenceNumber;
 };
 
 export type NewObjectEvent = {
@@ -43,13 +64,17 @@ export type NewObjectEvent = {
   transactionModule: string;
   sender: SuiAddress;
   recipient: ObjectOwner;
+  objectType: string,
   objectId: ObjectId;
+  version: SequenceNumber;
 };
 
 export type SuiEvent =
   | { moveEvent: MoveEvent }
   | { publish: PublishEvent }
+  | { coinBalanceChange: CoinBalanceChangeEvent }
   | { transferObject: TransferObjectEvent }
+  | { mutateObject: MutateObjectEvent }
   | { deleteObject: DeleteObjectEvent }
   | { newObject: NewObjectEvent }
   | { epochChange: bigint }
@@ -64,10 +89,14 @@ export type EventType =
   | 'MoveEvent'
   | 'Publish'
   | 'TransferObject'
+  | 'MutateObject'
+  | 'CoinBalanceChange'
   | 'DeleteObject'
   | 'NewObject'
   | 'EpochChange'
   | 'Checkpoint';
+
+export type BalanceChangeType = "Gas" | "Pay" | "Receive"
 
 // mirrors sui_json_rpc_types::SuiEventFilter
 export type SuiEventFilter =

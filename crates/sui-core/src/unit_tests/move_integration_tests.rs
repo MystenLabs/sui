@@ -18,7 +18,7 @@ use move_core_types::{
 use sui_framework_build::compiled_package::BuildConfig;
 use sui_types::{
     crypto::{get_key_pair, AccountKeyPair},
-    event::{Event, EventType, TransferType},
+    event::{Event, EventType},
     messages::ExecutionStatus,
     object::OBJECT_START_VERSION,
 };
@@ -259,10 +259,11 @@ fn test_object_owning_another_object() {
         .await
         .unwrap();
         assert!(effects.status.is_ok());
-        assert_eq!(effects.events.len(), 1);
-        assert_eq!(effects.events[0].event_type(), EventType::NewObject);
+        assert_eq!(effects.events.len(), 2);
+        assert_eq!(effects.events[0].event_type(), EventType::CoinBalanceChange);
+        assert_eq!(effects.events[1].event_type(), EventType::NewObject);
         let parent = effects.created[0].0;
-        assert_eq!(effects.events[0].object_id(), Some(parent.0));
+        assert_eq!(effects.events[1].object_id(), Some(parent.0));
 
         // Create a child.
         let effects = call_move(
@@ -279,8 +280,9 @@ fn test_object_owning_another_object() {
         .await
         .unwrap();
         assert!(effects.status.is_ok());
-        assert_eq!(effects.events.len(), 1);
-        assert_eq!(effects.events[0].event_type(), EventType::NewObject);
+        assert_eq!(effects.events.len(), 2);
+        assert_eq!(effects.events[0].event_type(), EventType::CoinBalanceChange);
+        assert_eq!(effects.events[1].event_type(), EventType::NewObject);
         let child = effects.created[0].0;
 
         // Mutate the child directly should work fine.
@@ -374,8 +376,9 @@ fn test_object_owning_another_object() {
         .await
         .unwrap();
         assert!(effects.status.is_ok());
-        assert_eq!(effects.events.len(), 1);
-        assert_eq!(effects.events[0].event_type(), EventType::NewObject);
+        assert_eq!(effects.events.len(), 2);
+        assert_eq!(effects.events[0].event_type(), EventType::CoinBalanceChange);
+        assert_eq!(effects.events[1].event_type(), EventType::NewObject);
         let new_parent = effects.created[0].0;
 
         // Transfer the child to the new_parent.
@@ -396,7 +399,7 @@ fn test_object_owning_another_object() {
         .await
         .unwrap();
         assert!(effects.status.is_ok());
-        assert_eq!(effects.events.len(), 3);
+        assert_eq!(effects.events.len(), 6);
         let num_transfers = effects
             .events
             .iter()
@@ -414,15 +417,17 @@ fn test_object_owning_another_object() {
             .iter()
             .find(|e| e.object_id() == Some(child.0))
             .unwrap();
-        let (recipient, type_) = match *child_event {
+        let (recipient, object_type) = match child_event {
             Event::TransferObject {
-                recipient, type_, ..
-            } => (recipient, type_),
+                recipient,
+                object_type,
+                ..
+            } => (recipient, object_type),
             _ => panic!("Unexpected event type: {:?}", child_event),
         };
-        assert_eq!(type_, TransferType::ToObject);
+        assert_eq!(object_type, &format!("{}::object_owner::Child", package.0));
         let new_field_id = match recipient {
-            Owner::ObjectOwner(field_id) => field_id.into(),
+            Owner::ObjectOwner(field_id) => (*field_id).into(),
             Owner::Shared { .. } | Owner::Immutable | Owner::AddressOwner(_) => panic!(),
         };
         let new_field_object = authority.get_object(&new_field_id).await.unwrap().unwrap();
@@ -485,7 +490,8 @@ fn test_create_then_delete_parent_child() {
         assert!(effects.status.is_ok());
         // Creates 3 objects, the parent, a field, and the child
         assert_eq!(effects.created.len(), 3);
-        assert_eq!(effects.events.len(), 3);
+        // Creates 4 events, gas charge, child, parent and wrapped object
+        assert_eq!(effects.events.len(), 4);
         let parent = effects
             .created
             .iter()
@@ -511,7 +517,7 @@ fn test_create_then_delete_parent_child() {
         // Check that both objects were deleted.
         // TODO field object should be deleted too
         assert_eq!(effects.deleted.len(), 2);
-        assert_eq!(effects.events.len(), 3);
+        assert_eq!(effects.events.len(), 4);
     })
 }
 
@@ -546,7 +552,7 @@ fn test_create_then_delete_parent_child_wrap() {
         assert_eq!(effects.created.len(), 2);
         // not wrapped as it wasn't first created
         assert_eq!(effects.wrapped.len(), 0);
-        assert_eq!(effects.events.len(), 2);
+        assert_eq!(effects.events.len(), 3);
 
         let parent = effects
             .created
@@ -573,7 +579,7 @@ fn test_create_then_delete_parent_child_wrap() {
         // Check that both objects were deleted.
         // TODO field object should be deleted too
         assert_eq!(effects.deleted.len(), 2);
-        assert_eq!(effects.events.len(), 3);
+        assert_eq!(effects.events.len(), 4);
     })
 }
 
@@ -604,10 +610,11 @@ fn test_create_then_delete_parent_child_wrap_separate() {
         .await
         .unwrap();
         assert!(effects.status.is_ok());
-        assert_eq!(effects.events.len(), 1);
-        assert_eq!(effects.events[0].event_type(), EventType::NewObject);
+        assert_eq!(effects.events.len(), 2);
+        assert_eq!(effects.events[0].event_type(), EventType::CoinBalanceChange);
+        assert_eq!(effects.events[1].event_type(), EventType::NewObject);
         let parent = effects.created[0].0;
-        assert_eq!(effects.events[0].object_id(), Some(parent.0));
+        assert_eq!(effects.events[1].object_id(), Some(parent.0));
 
         // Create a child.
         let effects = call_move(
@@ -624,8 +631,9 @@ fn test_create_then_delete_parent_child_wrap_separate() {
         .await
         .unwrap();
         assert!(effects.status.is_ok());
-        assert_eq!(effects.events.len(), 1);
-        assert_eq!(effects.events[0].event_type(), EventType::NewObject);
+        assert_eq!(effects.events.len(), 2);
+        assert_eq!(effects.events[0].event_type(), EventType::CoinBalanceChange);
+        assert_eq!(effects.events[1].event_type(), EventType::NewObject);
         let child = effects.created[0].0;
 
         // Add the child to the parent.
@@ -646,7 +654,7 @@ fn test_create_then_delete_parent_child_wrap_separate() {
         assert!(effects.status.is_ok());
         assert_eq!(effects.created.len(), 1);
         assert_eq!(effects.wrapped.len(), 1);
-        assert_eq!(effects.events.len(), 2);
+        assert_eq!(effects.events.len(), 4);
 
         // Delete the parent and child altogether.
         let effects = call_move(
@@ -666,7 +674,7 @@ fn test_create_then_delete_parent_child_wrap_separate() {
         // Check that both objects were deleted.
         // TODO field object should be deleted too
         assert_eq!(effects.deleted.len(), 2);
-        assert_eq!(effects.events.len(), 3);
+        assert_eq!(effects.events.len(), 4);
     })
 }
 

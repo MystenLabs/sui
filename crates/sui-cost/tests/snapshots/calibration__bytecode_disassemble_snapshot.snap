@@ -2,7 +2,7 @@
 source: crates/sui-cost/tests/calibration.rs
 expression: bytecode_calib
 ---
-// Move bytecode v6
+// Move bytecode v5
 module 2.bytecode_calibration_tests {
 struct ObjectWithU64Field has drop, store {
 	f0: u64

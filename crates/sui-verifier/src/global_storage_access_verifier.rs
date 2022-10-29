@@ -42,17 +42,11 @@ fn verify_global_storage_access(module: &CompiledModule) -> Result<(), Execution
                 | Bytecode::BrFalse(_)
                 | Bytecode::Branch(_)
                 | Bytecode::LdU8(_)
-                | Bytecode::LdU16(_)
-                | Bytecode::LdU32(_)
                 | Bytecode::LdU64(_)
                 | Bytecode::LdU128(_)
-                | Bytecode::LdU256(_)
                 | Bytecode::CastU8
-                | Bytecode::CastU16
-                | Bytecode::CastU32
                 | Bytecode::CastU64
                 | Bytecode::CastU128
-                | Bytecode::CastU256
                 | Bytecode::LdConst(_)
                 | Bytecode::LdTrue
                 | Bytecode::LdFalse

@@ -9,7 +9,6 @@ use move_core_types::gas_algebra::{
     AbstractMemorySize, InternalGas, InternalGasPerAbstractMemoryUnit, NumArgs, NumBytes,
 };
 use move_core_types::language_storage::ModuleId;
-use move_core_types::u256::U256;
 use move_core_types::vm_status::StatusCode;
 use move_vm_types::gas::{GasMeter, SimpleInstruction};
 use move_vm_types::views::{TypeView, ValueView};
@@ -152,11 +151,8 @@ fn get_simple_instruction_opcode(instr: SimpleInstruction) -> Opcodes {
 
         Pop => POP,
         LdU8 => LD_U8,
-        LdU16 => LD_U16,
-        LdU32 => LD_U32,
         LdU64 => LD_U64,
         LdU128 => LD_U128,
-        LdU256 => LD_U256,
         LdTrue => LD_TRUE,
         LdFalse => LD_FALSE,
 
@@ -169,11 +165,8 @@ fn get_simple_instruction_opcode(instr: SimpleInstruction) -> Opcodes {
         MutBorrowFieldGeneric => MUT_BORROW_FIELD_GENERIC,
 
         CastU8 => CAST_U8,
-        CastU16 => CAST_U16,
-        CastU32 => CAST_U32,
         CastU64 => CAST_U64,
         CastU128 => CAST_U128,
-        CastU256 => CAST_U256,
 
         Add => ADD,
         Sub => SUB,
@@ -483,17 +476,11 @@ pub fn zero_cost_instruction_table() -> Vec<(Bytecode, GasCost)> {
         (Ret, GasCost::new(0, 0)),
         (Lt, GasCost::new(0, 0)),
         (LdU8(0), GasCost::new(0, 0)),
-        (LdU16(0), GasCost::new(0, 0)),
-        (LdU32(0), GasCost::new(0, 0)),
         (LdU64(0), GasCost::new(0, 0)),
         (LdU128(0), GasCost::new(0, 0)),
-        (LdU256(U256::from(0u8)), GasCost::new(0, 0)),
         (CastU8, GasCost::new(0, 0)),
-        (CastU16, GasCost::new(0, 0)),
-        (CastU32, GasCost::new(0, 0)),
         (CastU64, GasCost::new(0, 0)),
         (CastU128, GasCost::new(0, 0)),
-        (CastU256, GasCost::new(0, 0)),
         (Abort, GasCost::new(0, 0)),
         (MutBorrowLoc(0), GasCost::new(0, 0)),
         (ImmBorrowLoc(0), GasCost::new(0, 0)),
@@ -616,17 +603,11 @@ pub fn legacy_bytecode_instruction_costs() -> Vec<(Bytecode, GasCost)> {
         (Ret, GasCost::new(638, 1)),
         (Lt, GasCost::new(1, 1)),
         (LdU8(0), GasCost::new(1, 1)),
-        (LdU16(0), GasCost::new(1, 1)),
-        (LdU32(0), GasCost::new(1, 1)),
         (LdU64(0), GasCost::new(1, 1)),
         (LdU128(0), GasCost::new(1, 1)),
-        (LdU256(U256::from(0u8)), GasCost::new(2, 1)),
         (CastU8, GasCost::new(2, 1)),
-        (CastU16, GasCost::new(1, 1)),
-        (CastU32, GasCost::new(1, 1)),
         (CastU64, GasCost::new(1, 1)),
         (CastU128, GasCost::new(1, 1)),
-        (CastU256, GasCost::new(2, 1)),
         (Abort, GasCost::new(1, 1)),
         (MutBorrowLoc(0), GasCost::new(2, 1)),
         (ImmBorrowLoc(0), GasCost::new(1, 1)),

@@ -9,11 +9,11 @@ use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::{StructTag, TypeTag};
 use move_core_types::value::{MoveStruct, MoveValue};
 
+use fastcrypto::encoding::Base64;
 use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::gas_coin::GasCoin;
 use sui_types::object::MoveObject;
-use sui_types::sui_serde::Base64;
 use sui_types::{MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS};
 
 use crate::{SuiMoveStruct, SuiMoveValue};

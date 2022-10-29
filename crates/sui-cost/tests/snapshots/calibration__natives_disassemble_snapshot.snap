@@ -2,7 +2,7 @@
 source: crates/sui-cost/tests/calibration.rs
 expression: natives_calib
 ---
-// Move bytecode v6
+// Move bytecode v5
 module 2.natives_calibration_tests {
 struct ObjectSimple has copy, drop, store, key {
 	dummy_field: bool

@@ -1,18 +1,16 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{primary::PrimaryMessage, PayloadToken};
-use config::{Committee, WorkerId};
+use crate::primary::PrimaryMessage;
+use config::Committee;
 use crypto::PublicKey;
 use network::{P2pNetwork, UnreliableNetwork};
 use storage::CertificateStore;
-use store::{Store, StoreError};
+use store::StoreError;
 use thiserror::Error;
 use tokio::{sync::watch, task::JoinHandle};
 use tracing::{error, info, instrument};
-use types::{
-    metered_channel::Receiver, BatchDigest, Certificate, CertificateDigest, ReconfigureNotification,
-};
+use types::{metered_channel::Receiver, Certificate, CertificateDigest, ReconfigureNotification};
 
 #[cfg(test)]
 #[path = "tests/helper_tests.rs"]
@@ -36,8 +34,6 @@ pub struct Helper {
     committee: Committee,
     /// The certificate persistent storage.
     certificate_store: CertificateStore,
-    /// The payloads (batches) persistent storage.
-    payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
     /// Watch channel to reconfigure the committee.
     rx_reconfigure: watch::Receiver<ReconfigureNotification>,
     /// Input channel to receive requests.
@@ -52,7 +48,6 @@ impl Helper {
         name: PublicKey,
         committee: Committee,
         certificate_store: CertificateStore,
-        payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
         rx_helper_requests: Receiver<PrimaryMessage>,
         primary_network: P2pNetwork,
@@ -62,7 +57,6 @@ impl Helper {
                 name,
                 committee,
                 certificate_store,
-                payload_store,
                 rx_reconfigure,
                 rx_helper_requests,
                 primary_network,
@@ -97,16 +91,6 @@ impl Helper {
                             .process_certificates(certificate_ids, requestor, true)
                             .await;
                     }
-                    // A request that another primary sends us to ask whether we
-                    // can serve batch data for the provided certificate_ids.
-                    PrimaryMessage::PayloadAvailabilityRequest {
-                        certificate_ids,
-                        requestor,
-                    } => {
-                        let _ = self
-                            .process_payload_availability(certificate_ids, requestor)
-                            .await;
-                    }
                     _ => {
                         panic!("Received unexpected message!");
                     }
@@ -128,75 +112,6 @@ impl Helper {
                 }
             }
         }
-    }
-
-    /// Processes a payload availability request by checking we have the
-    /// certificate & batch data for each certificate digest in digests,
-    /// and reports on each fully available item in the request in a
-    /// PayloadAvailabilityResponse.
-    #[instrument(level="debug", skip_all, fields(origin = ?origin, num_certificate_ids = digests.len()), err)]
-    async fn process_payload_availability(
-        &mut self,
-        digests: Vec<CertificateDigest>,
-        origin: PublicKey,
-    ) -> Result<(), HelperError> {
-        let mut result: Vec<(CertificateDigest, bool)> = Vec::new();
-
-        let certificates = match self.certificate_store.read_all(digests.to_owned()) {
-            Ok(certificates) => certificates,
-            Err(err) => {
-                // just return at this point. Send back to the requestor
-                // that we don't have availability - ideally we would like
-                // to communicate an error (so they could potentially retry).
-                result = digests.into_iter().map(|d| (d, false)).collect();
-
-                let message = PrimaryMessage::PayloadAvailabilityResponse {
-                    payload_availability: result,
-                    from: self.name.clone(),
-                };
-                let _ = self
-                    .primary_network
-                    .unreliable_send(self.committee.network_key(&origin).unwrap(), &message);
-
-                return Err(HelperError::StoreError(err));
-            }
-        };
-
-        for (id, certificate_option) in digests.into_iter().zip(certificates) {
-            // Find the batches only for the certificates that exist
-            if let Some(certificate) = certificate_option {
-                let payload_available = match self
-                    .payload_store
-                    .read_all(certificate.header.payload)
-                    .await
-                {
-                    Ok(payload_result) => payload_result.into_iter().all(|x| x.is_some()),
-                    Err(err) => {
-                        // we'll assume that we don't have available the payloads,
-                        // otherwise and error response should be sent back.
-                        error!("Error while retrieving payloads: {err}");
-                        false
-                    }
-                };
-
-                result.push((id, payload_available));
-            } else {
-                // We don't have the certificate available in first place,
-                // so we can't even look up for the batches.
-                result.push((id, false));
-            }
-        }
-
-        // now send the result back to the requestor
-        let message = PrimaryMessage::PayloadAvailabilityResponse {
-            payload_availability: result,
-            from: self.name.clone(),
-        };
-        let _ = self
-            .primary_network
-            .unreliable_send(self.committee.network_key(&origin).unwrap(), &message);
-
-        Ok(())
     }
 
     #[instrument(level="debug", skip_all, fields(origin = ?origin, num_certificate_ids = digests.len(), mode = batch_mode), err)]

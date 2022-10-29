@@ -1,17 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::authority::get_client;
-use crate::messages::{
-    create_publish_move_package_transaction, get_account_and_gas_coins,
-    get_gas_object_with_wallet_context, make_tx_certs_and_signed_effects,
-    make_tx_certs_and_signed_effects_with_committee, MAX_GAS,
-};
-use crate::{test_account_keys, test_committee};
-use futures::StreamExt;
-use serde_json::json;
+
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
+
+use futures::StreamExt;
+use serde_json::json;
+use tokio::time::{sleep, Duration};
+use tracing::debug;
+use tracing::info;
+
 use sui::client_commands::WalletContext;
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
 use sui_config::ValidatorInfo;
@@ -36,9 +35,14 @@ use sui_types::messages::{
 };
 use sui_types::object::{Object, Owner};
 use sui_types::SUI_FRAMEWORK_OBJECT_ID;
-use tokio::time::{sleep, Duration};
-use tracing::debug;
-use tracing::info;
+
+use crate::authority::get_client;
+use crate::messages::{
+    create_publish_move_package_transaction, get_account_and_gas_coins,
+    get_gas_object_with_wallet_context, make_tx_certs_and_signed_effects,
+    make_tx_certs_and_signed_effects_with_committee, MAX_GAS,
+};
+use crate::{test_account_keys, test_committee};
 
 pub fn make_publish_package(gas_object: Object, path: PathBuf) -> VerifiedTransaction {
     let (sender, keypair) = test_account_keys().pop().unwrap();
@@ -290,7 +294,17 @@ pub async fn transfer_sui(
 
 pub async fn transfer_coin(
     context: &mut WalletContext,
-) -> Result<(ObjectID, SuiAddress, SuiAddress, TransactionDigest), anyhow::Error> {
+) -> Result<
+    (
+        ObjectID,
+        SuiAddress,
+        SuiAddress,
+        TransactionDigest,
+        ObjectRef,
+        u64,
+    ),
+    anyhow::Error,
+> {
     let sender = context.config.keystore.addresses().get(0).cloned().unwrap();
     let receiver = context.config.keystore.addresses().get(1).cloned().unwrap();
 
@@ -315,13 +329,25 @@ pub async fn transfer_coin(
     .execute(context)
     .await?;
 
-    let digest = if let SuiClientCommandResult::Transfer(_, cert, _) = res {
-        cert.transaction_digest
+    let (digest, gas, gas_used) = if let SuiClientCommandResult::Transfer(_, cert, effect) = res {
+        (
+            cert.transaction_digest,
+            cert.data.gas_payment,
+            effect.gas_used.computation_cost + effect.gas_used.storage_cost
+                - effect.gas_used.storage_rebate,
+        )
     } else {
         panic!("transfer command did not return WalletCommandResult::Transfer");
     };
 
-    Ok((object_to_send, sender, receiver, digest))
+    Ok((
+        object_to_send,
+        sender,
+        receiver,
+        digest,
+        gas.to_object_ref(),
+        gas_used,
+    ))
 }
 
 pub async fn split_coin_with_wallet_context(context: &mut WalletContext, coin_id: ObjectID) {
