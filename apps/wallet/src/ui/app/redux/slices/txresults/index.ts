@@ -40,6 +40,7 @@ export type TxResultState = {
     amount?: number;
     timestampMs?: number;
     url?: string;
+    balance?: number;
     objectId?: string;
     description?: string;
     name?: string;
@@ -215,6 +216,9 @@ export const getTransactionsByAddress = createAsyncThunk<
                         name: typeof fields.name === 'string' && fields.name,
                         url: fields.url,
                     }),
+                ...(fields && {
+                    balance: fields.balance,
+                }),
             };
         });
 
