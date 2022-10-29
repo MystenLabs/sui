@@ -138,12 +138,9 @@ export const getTransactionsByAddress = createAsyncThunk<
             const txKind = getTransactionKindName(txn);
             const transferSui = getTransferSuiTransaction(txn);
             const txTransferObject = getTransferObjectTransaction(txn);
-
             const recipient =
                 transferSui?.recipient ?? txTransferObject?.recipient;
-
             const moveCallTxn = getMoveCallTransaction(txn);
-
             const metaDataObjectId = getTxnEffectsEventID(
                 txEff.effects,
                 address
@@ -176,8 +173,7 @@ export const getTransactionsByAddress = createAsyncThunk<
         const objectIds = txResults
             .map((itm) => itm?.objectId)
             .filter(notEmpty);
-        const objectIDs = [...new Set(objectIds.flat())].filter(notEmpty);
-
+        const objectIDs = [...new Set(objectIds.flat())];
         const getObjectBatch = await api.instance.fullNode.getObjectBatch(
             objectIDs
         );
