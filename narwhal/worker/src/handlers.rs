@@ -45,7 +45,7 @@ impl WorkerToWorker for WorkerReceiverHandler {
     ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
         let message = request.into_body();
         let digest = message.batch.digest();
-        self.store.write(digest, message.batch).await;
+        self.store.async_write(digest, message.batch).await;
         self.tx_others_batch
             .send(WorkerOthersBatchMessage {
                 digest,
@@ -242,7 +242,7 @@ impl PrimaryToWorker for PrimaryReceiverHandler {
                         if let Some(batch) = response.into_body().batch {
                             let digest = batch.digest();
                             if missing.remove(&digest) {
-                                self.store.write(digest, batch).await;
+                                self.store.async_write(digest, batch).await;
                             }
                         }
                         if missing.is_empty() {

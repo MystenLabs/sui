@@ -93,7 +93,7 @@ export function PageHeader({ title, subtitle, type, status }: PageHeaderProps) {
                 )}
             </div>
             {subtitle && (
-                <div className="text-sui-grey-75 mt-2">
+                <div className="text-sui-grey-75 mt-2 break-words">
                     <Heading variant="heading4" weight="semibold">
                         {subtitle}
                     </Heading>

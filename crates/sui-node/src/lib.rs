@@ -45,6 +45,7 @@ use sui_types::messages::{CertifiedTransaction, CertifiedTransactionEffects};
 use tokio::sync::mpsc::channel;
 use tower::ServiceBuilder;
 use tracing::{error, info, warn};
+use typed_store::DBMetrics;
 
 use crate::metrics::GrpcMetrics;
 use sui_core::authority_client::NetworkAuthorityClientMetrics;
@@ -94,6 +95,9 @@ impl SuiNode {
         info!(node =? config.protocol_public_key(),
             "Initializing sui-node listening on {}", config.network_address
         );
+
+        // Initialize metrics to track db usage before creating any stores
+        DBMetrics::init(&prometheus_registry);
 
         let genesis = config.genesis()?;
 

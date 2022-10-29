@@ -13,7 +13,7 @@ use sui_storage::default_db_options;
 use sui_types::base_types::{ExecutionDigests, SequenceNumber};
 use sui_types::batch::{SignedBatch, TxSequenceNumber};
 use sui_types::messages::{TrustedCertificate, TrustedTransactionEnvelope};
-use typed_store::rocks::DBMap;
+use typed_store::rocks::{DBMap, DBOptions};
 use typed_store::traits::TypedStoreDebug;
 
 use typed_store_derive::DBMapUtils;
@@ -247,15 +247,15 @@ pub struct ExecutionIndicesWithHash {
 }
 
 // These functions are used to initialize the DB tables
-fn objects_table_default_config() -> Options {
+fn objects_table_default_config() -> DBOptions {
     default_db_options(None, None).1
 }
-fn transactions_table_default_config() -> Options {
+fn transactions_table_default_config() -> DBOptions {
     default_db_options(None, None).1
 }
-fn certificates_table_default_config() -> Options {
+fn certificates_table_default_config() -> DBOptions {
     default_db_options(None, None).1
 }
-fn effects_table_default_config() -> Options {
+fn effects_table_default_config() -> DBOptions {
     default_db_options(None, None).1
 }

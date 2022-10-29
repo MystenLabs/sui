@@ -19,7 +19,6 @@ use sui_types::base_types::{
     SequenceNumber, SuiAddress, TransactionDigest, TRANSACTION_DIGEST_LENGTH,
 };
 use sui_types::gas_coin::GasCoin;
-use sui_types::object::PastObjectRead;
 use sui_types::query::TransactionQuery;
 
 use crate::operations::Operation;
@@ -247,21 +246,11 @@ impl PseudoBlockProvider {
                 // update balance
                 let (tx, effect) = state.get_transaction(digest).await?;
 
-                // This is a temporary fix for capturing Sui transfer from wrapped object, currently event service doesn't emit transferSui event.
-                // TODO: remove this when event service emit transfer sui event for wrapped object.
-                let mut new_coins = vec![];
-                for ((id, version, _), _) in &effect.created {
-                    if let Ok(PastObjectRead::VersionFound(oref, obj, _)) =
-                        state.get_past_object_read(id, *version).await
-                    {
-                        if let Ok(coin) = GasCoin::try_from(&obj) {
-                            new_coins.push((coin, oref))
-                        }
-                    }
-                }
-
-                let ops =
-                    Operation::from_data_and_effect(&tx.signed_data.data, &effect, &new_coins)?;
+                let ops = Operation::from_data_and_events(
+                    &tx.signed_data.data,
+                    &effect.status,
+                    &effect.events,
+                )?;
 
                 self.blocks.write().await.push(new_block);
                 self.update_balance(index, ops).await.map_err(|e| {

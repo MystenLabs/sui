@@ -5,10 +5,9 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 
 use anyhow::anyhow;
-use base64ct::Encoding as _;
+use fastcrypto::encoding::{Base64, Encoding};
 use fastcrypto::traits::ToFromBytes;
 use move_core_types::account_address::AccountAddress;
-use schemars::JsonSchema;
 use serde;
 use serde::de::{Deserializer, Error};
 use serde::ser::{Error as SerError, Serializer};
@@ -16,7 +15,6 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_with::{Bytes, DeserializeAs, SerializeAs};
 
-use crate::base_types::{decode_bytes_hex, encode_bytes_hex};
 use crate::crypto::{AggregateAuthoritySignature, AuthoritySignature, KeypairTraits};
 
 #[inline]
@@ -141,50 +139,6 @@ where
     }
 }
 
-pub trait Encoding {
-    fn decode(s: &str) -> Result<Vec<u8>, anyhow::Error>;
-    fn encode<T: AsRef<[u8]>>(data: T) -> String;
-}
-
-#[derive(Serialize, Deserialize, Debug, JsonSchema, Clone)]
-pub struct Hex(String);
-
-impl Hex {
-    pub fn to_vec(&self) -> Result<Vec<u8>, anyhow::Error> {
-        Self::decode(&self.0)
-    }
-    pub fn from_bytes(bytes: &[u8]) -> Self {
-        Self(Self::encode(bytes))
-    }
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, JsonSchema)]
-#[serde(try_from = "String")]
-pub struct Base64(String);
-
-impl TryFrom<String> for Base64 {
-    type Error = anyhow::Error;
-    fn try_from(value: String) -> Result<Self, Self::Error> {
-        // Make sure the value is valid base64 string.
-        Base64::decode(&value)?;
-        Ok(Self(value))
-    }
-}
-
-impl Base64 {
-    pub fn to_vec(&self) -> Result<Vec<u8>, anyhow::Error> {
-        Self::decode(&self.0)
-    }
-
-    pub fn from_bytes(bytes: &[u8]) -> Self {
-        Self(Self::encode(bytes))
-    }
-
-    pub fn encoded(&self) -> String {
-        self.0.clone()
-    }
-}
-
 /// Serializes a bitmap according to the roaring bitmap on-disk standard.
 /// https://github.com/RoaringBitmap/RoaringFormatSpec
 pub struct SuiBitmap;
@@ -212,70 +166,6 @@ impl<'de> DeserializeAs<'de, roaring::RoaringBitmap> for SuiBitmap {
         roaring::RoaringBitmap::deserialize_from(&bytes[..]).map_err(to_custom_error::<'de, D, _>)
     }
 }
-
-impl Encoding for Hex {
-    fn decode(s: &str) -> Result<Vec<u8>, anyhow::Error> {
-        decode_bytes_hex(s)
-    }
-
-    fn encode<T: AsRef<[u8]>>(data: T) -> String {
-        format!("0x{}", encode_bytes_hex(&data).to_lowercase())
-    }
-}
-impl Encoding for Base64 {
-    fn decode(s: &str) -> Result<Vec<u8>, anyhow::Error> {
-        base64ct::Base64::decode_vec(s).map_err(|e| anyhow!(e))
-    }
-
-    fn encode<T: AsRef<[u8]>>(data: T) -> String {
-        base64ct::Base64::encode_string(data.as_ref())
-    }
-}
-
-impl<'de> DeserializeAs<'de, Vec<u8>> for Base64 {
-    fn deserialize_as<D>(deserializer: D) -> Result<Vec<u8>, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let s = String::deserialize(deserializer)?;
-        Self::decode(&s).map_err(to_custom_error::<'de, D, _>)
-    }
-}
-
-impl<T> SerializeAs<T> for Base64
-where
-    T: AsRef<[u8]>,
-{
-    fn serialize_as<S>(value: &T, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        Self::encode(value).serialize(serializer)
-    }
-}
-
-impl<'de> DeserializeAs<'de, Vec<u8>> for Hex {
-    fn deserialize_as<D>(deserializer: D) -> Result<Vec<u8>, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let s = String::deserialize(deserializer)?;
-        Self::decode(&s).map_err(to_custom_error::<'de, D, _>)
-    }
-}
-
-impl<T> SerializeAs<T> for Hex
-where
-    T: AsRef<[u8]>,
-{
-    fn serialize_as<S>(value: &T, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        Self::encode(value).serialize(serializer)
-    }
-}
-
 pub struct KeyPairBase64 {}
 
 impl<T> SerializeAs<T> for KeyPairBase64

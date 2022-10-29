@@ -13,7 +13,10 @@ use anyhow::{anyhow, ensure};
 use bip32::DerivationPath;
 use clap::*;
 use colored::Colorize;
-use fastcrypto::traits::ToFromBytes;
+use fastcrypto::{
+    encoding::{Base64, Encoding},
+    traits::ToFromBytes,
+};
 use move_core_types::language_storage::TypeTag;
 use move_package::BuildConfig as MoveBuildConfig;
 use serde::Serialize;
@@ -32,16 +35,13 @@ use sui_json_rpc_types::{SuiCertifiedTransaction, SuiExecutionStatus, SuiTransac
 use sui_keys::keystore::AccountKeystore;
 use sui_sdk::TransactionExecutionResult;
 use sui_sdk::{ClientType, SuiClient};
+use sui_types::crypto::SignableBytes;
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     gas_coin::GasCoin,
     messages::{Transaction, VerifiedTransaction},
     object::Owner,
     parse_sui_type_tag, SUI_FRAMEWORK_ADDRESS,
-};
-use sui_types::{
-    crypto::SignableBytes,
-    sui_serde::{Base64, Encoding},
 };
 use sui_types::{
     crypto::{Signature, SignatureScheme},
@@ -808,15 +808,19 @@ impl SuiClientCommands {
                 pubkey,
                 signature,
             } => {
-                let data =
-                    TransactionData::from_signable_bytes(&Base64::try_from(tx_data)?.to_vec()?)?;
+                let data = TransactionData::from_signable_bytes(
+                    &Base64::try_from(tx_data)
+                        .map_err(|e| anyhow!(e))?
+                        .to_vec()
+                        .map_err(|e| anyhow!(e))?,
+                )?;
                 let signed_tx = Transaction::new(
                     data,
                     Signature::from_bytes(
                         &[
                             vec![scheme.flag()],
-                            Base64::try_from(signature)?.to_vec()?,
-                            Base64::try_from(pubkey)?.to_vec()?,
+                            Base64::decode(signature.as_str()).map_err(|e| anyhow!(e))?,
+                            Base64::decode(pubkey.as_str()).map_err(|e| anyhow!(e))?,
                         ]
                         .concat(),
                     )?,

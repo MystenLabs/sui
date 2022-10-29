@@ -1,3 +1,5 @@
+@use '_utils';
+
 .container {
     display: flex;
     flex-flow: column nowrap;
@@ -6,14 +8,10 @@
 
     .tx-content {
         margin-top: 20px;
-        padding-bottom: 50px;
         flex-grow: 1;
-        padding-left: 25px;
-        padding-right: 25px;
-        margin-left: -25px;
-        margin-right: -25px;
-        height: 450px;
         overflow-y: auto;
+
+        @include utils.override-main-padding;
     }
 }
 

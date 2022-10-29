@@ -1699,6 +1699,10 @@ async fn test_authority_persist() {
     // Close the authority
     drop(authority);
 
+    // TODO: The right fix is to invoke some function on DBMap and release the rocksdb arc references
+    // being held in the background thread but this will suffice for now
+    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+
     // Reopen the same authority with the same path
     let seed = [1u8; 32];
     let (committee, _, authority_key) =

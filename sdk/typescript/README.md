@@ -84,14 +84,34 @@ const objects = await provider.getOwnedObjectRefs(
 );
 ```
 
-Fetch transaction details from a transaction digest:
+Fetch object details for the object with id `0xcff6ccc8707aa517b4f1b95750a2a8c666012df3`
 
 ```typescript
 import { JsonRpcProvider } from '@mysten/sui.js';
 const provider = new JsonRpcProvider('https://fullnode.devnet.sui.io:443');
-const txn = await provider.getTransaction(
+const txn = await provider.getObject(
+  '0xcff6ccc8707aa517b4f1b95750a2a8c666012df3'
+);
+// You can also fetch multiple objects in one batch request
+const txns = await provider.getObjectBatch([
+  '0xcff6ccc8707aa517b4f1b95750a2a8c666012df3',
+  '0xdff6ccc8707aa517b4f1b95750a2a8c666012df3',
+]);
+```
+
+Fetch transaction details from transaction digests:
+
+```typescript
+import { JsonRpcProvider } from '@mysten/sui.js';
+const provider = new JsonRpcProvider('https://fullnode.devnet.sui.io:443');
+const txn = await provider.getTransactionWithEffects(
   '6mn5W1CczLwitHCO9OIUbqirNrQ0cuKdyxaNe16SAME='
 );
+// You can also fetch multiple transactions in one batch request
+const txns = await provider.getTransactionWithEffectsBatch([
+  '6mn5W1CczLwitHCO9OIUbqirNrQ0cuKdyxaNe16SAME=',
+  '7mn5W1CczLwitHCO9OIUbqirNrQ0cuKdyxaNe16SAME=',
+]);
 ```
 
 Fetch transaction events from a transaction digest:

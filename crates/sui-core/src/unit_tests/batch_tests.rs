@@ -140,6 +140,11 @@ async fn test_open_manager() {
         drop(store);
         drop(authority_state);
     }
+
+    // TODO: The right fix is to invoke some function on DBMap and release the rocksdb arc references
+    // being held in the background thread but this will suffice for now
+    tokio::time::sleep(Duration::from_secs(1)).await;
+
     // drop all
     let (committee, _, authority_key) =
         init_state_parameters_from_rng(&mut StdRng::from_seed(seed));
@@ -163,6 +168,10 @@ async fn test_open_manager() {
         drop(store);
         drop(authority_state);
     }
+    // TODO: The right fix is to invoke some function on DBMap and release the rocksdb arc references
+    // being held in the background thread but this will suffice for now
+    tokio::time::sleep(Duration::from_secs(1)).await;
+
     // drop all
     let (committee, _, authority_key) =
         init_state_parameters_from_rng(&mut StdRng::from_seed(seed));
@@ -488,6 +497,7 @@ async fn test_batch_store_retrieval() {
     }
 
     // Give a change to the channels to send.
+    tokio::task::yield_now().await;
     tokio::task::yield_now().await;
 
     // TEST 1: Get batches across boundaries

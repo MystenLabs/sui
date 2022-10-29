@@ -9,8 +9,9 @@ use move_core_types::{
 };
 use serde::{Deserialize, Serialize};
 
+use crate::base_types::TransactionDigest;
 use crate::object::{MoveObject, Owner, OBJECT_START_VERSION};
-use crate::storage::{DeleteKind, WriteKind};
+use crate::storage::{DeleteKind, SingleTxContext, WriteKind};
 use crate::temporary_store::TemporaryStore;
 use crate::{
     balance::{Balance, Supply},
@@ -18,7 +19,7 @@ use crate::{
     object::{Data, Object},
 };
 use crate::{
-    base_types::{ObjectID, SuiAddress, TxContext},
+    base_types::{ObjectID, SuiAddress},
     id::UID,
     SUI_FRAMEWORK_ADDRESS,
 };
@@ -146,11 +147,12 @@ pub struct TreasuryCap {
 }
 
 pub fn transfer_coin<S>(
+    ctx: &SingleTxContext,
     temporary_store: &mut TemporaryStore<S>,
     coin: &Coin,
     recipient: SuiAddress,
     coin_type: StructTag,
-    tx_ctx: &TxContext,
+    previous_transaction: TransactionDigest,
 ) {
     let new_coin = Object::new_move(
         MoveObject::new_coin(
@@ -159,15 +161,16 @@ pub fn transfer_coin<S>(
             bcs::to_bytes(coin).expect("Serializing coin value cannot fail"),
         ),
         Owner::AddressOwner(recipient),
-        tx_ctx.digest(),
+        previous_transaction,
     );
-    temporary_store.write_object(new_coin, WriteKind::Create);
+    temporary_store.write_object(ctx, new_coin, WriteKind::Create);
 }
 
 // A helper function for pay_sui and pay_all_sui.
 // It updates the gas_coin_obj based on the updated gas_coin, transfers gas_coin_obj to
 // recipient when needed, and then deletes all other input coins other than gas_coin_obj.
 pub fn update_input_coins<S>(
+    ctx: &SingleTxContext,
     temporary_store: &mut TemporaryStore<S>,
     coin_objects: &mut Vec<Object>,
     gas_coin: &Coin,
@@ -187,9 +190,14 @@ pub fn update_input_coins<S>(
     if let Some(recipient) = recipient {
         gas_coin_obj.transfer_without_version_change(recipient);
     }
-    temporary_store.write_object(gas_coin_obj, WriteKind::Mutate);
+    temporary_store.write_object(ctx, gas_coin_obj, WriteKind::Mutate);
 
     for coin_object in coin_objects.iter() {
-        temporary_store.delete_object(&coin_object.id(), coin_object.version(), DeleteKind::Normal)
+        temporary_store.delete_object(
+            ctx,
+            &coin_object.id(),
+            coin_object.version(),
+            DeleteKind::Normal,
+        )
     }
 }

@@ -917,10 +917,10 @@ where
                 {
                     Ok(fragment) => {
                         // On success send the fragment to consensus
-                        if let Err(err) = checkpoint_db.lock().submit_local_fragment_to_consensus(
-                            &fragment,
-                            &active_authority.state.committee.load(),
-                        ) {
+                        if let Err(err) = checkpoint_db
+                            .lock()
+                            .submit_local_fragment_to_consensus(&fragment)
+                        {
                             warn!("Error submitting local fragment to consensus: {err:?}");
                         }
                     }
@@ -953,14 +953,14 @@ where
 {
     let mut diff_certs: BTreeMap<ExecutionDigests, CertifiedTransaction> = BTreeMap::new();
     debug!(
-        our_size = fragment.diff.second.items.len(),
-        other_size = fragment.diff.first.items.len(),
+        our_size = fragment.data.diff.second.items.len(),
+        other_size = fragment.data.diff.first.items.len(),
         "Augmenting fragment with diff transactions"
     );
 
     // These are the transactions that we have that the other validator does not
     // have, so we can read them from our local database.
-    for tx_digest in &fragment.diff.second.items {
+    for tx_digest in &fragment.data.diff.second.items {
         let cert = active_authority
             .state
             .read_certificate(&tx_digest.transaction)
@@ -978,6 +978,7 @@ where
         .database
         .multi_get_certified_transaction(
             &fragment
+                .data
                 .diff
                 .first
                 .items
@@ -986,6 +987,7 @@ where
                 .collect::<Vec<_>>(),
         )?;
     let (existing, missing): (Vec<_>, Vec<_>) = fragment
+        .data
         .diff
         .first
         .items
@@ -1031,7 +1033,7 @@ where
     }
 
     // Augment the fragment in place.
-    fragment.certs = diff_certs;
+    fragment.data.certs = diff_certs;
 
     Ok(fragment)
 }

@@ -76,6 +76,10 @@ impl P2pNetwork {
         Self::new(network)
     }
 
+    pub fn network(&self) -> anemo::Network {
+        self.network.clone()
+    }
+
     fn unreliable_send<F, R, Fut>(
         &mut self,
         peer: NetworkPublicKey,
@@ -201,7 +205,7 @@ impl ReliableNetwork<PrimaryMessage> for P2pNetwork {
 }
 
 #[async_trait]
-impl PrimaryToPrimaryRpc for P2pNetwork {
+impl PrimaryToPrimaryRpc for anemo::Network {
     async fn fetch_certificates(
         &self,
         peer: &NetworkPublicKey,
@@ -209,7 +213,6 @@ impl PrimaryToPrimaryRpc for P2pNetwork {
     ) -> Result<FetchCertificatesResponse> {
         let peer_id = PeerId(peer.0.to_bytes());
         let peer = self
-            .network
             .peer(peer_id)
             .ok_or_else(|| format_err!("Network has no connection with peer {peer_id}"))?;
         let response = PrimaryToPrimaryClient::new(peer)

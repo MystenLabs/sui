@@ -38,7 +38,7 @@ types = { path = "../types", package = "narwhal-types" }
 worker = { path = "../worker", package = "narwhal-worker" }
 mysten-network.workspace = true
 
-store = { version = "0.1.0", package = "typed-store"}
+store = { version = "0.4.0", package = "typed-store"}
 workspace-hack.workspace = true
 telemetry-subscribers.workspace = true
 

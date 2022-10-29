@@ -33,7 +33,10 @@ use crate::base_types::{AuthorityName, SuiAddress};
 use crate::committee::{Committee, EpochId, StakeUnit};
 use crate::error::{SuiError, SuiResult};
 use crate::intent::{Intent, IntentMessage};
-use crate::sui_serde::{AggrAuthSignature, Base64, Encoding, Readable, SuiBitmap};
+use crate::sui_serde::{AggrAuthSignature, Readable, SuiBitmap};
+use fastcrypto::encoding::{Base64, Encoding};
+use std::fmt::Debug;
+
 pub use enum_dispatch::enum_dispatch;
 
 // Authority Objects
@@ -1329,6 +1332,10 @@ mod bcs_signable {
     impl BcsSignable for crate::messages_checkpoint::CheckpointContents {}
     impl BcsSignable for crate::messages_checkpoint::CheckpointProposalContents {}
     impl BcsSignable for crate::messages_checkpoint::CheckpointProposalSummary {}
+    impl BcsSignable for crate::messages_checkpoint::CheckpointFragmentMessageHeader {}
+    impl BcsSignable for crate::messages_checkpoint::CheckpointFragmentMessageChunk {}
+    impl BcsSignable for crate::messages_checkpoint::CheckpointFragmentMessage {}
+
     impl BcsSignable for crate::messages::CommitteeInfoResponse {}
     impl BcsSignable for crate::messages::TransactionEffects {}
     impl BcsSignable for crate::messages::TransactionData {}
