@@ -2,11 +2,11 @@
   <a href="https://docs.sui.io/">
     <img src="https://github.com/MystenLabs/sui/blob/main/doc/static/Sui_Icon_Brand.png" alt="Logo" width="80" height="80">
   </a>
-
+  
   <h3 align="center">Sui</h3>
 
   <p align="center">
-    Official Sui Repository.
+    Welcome to Sui, a next-generation smart contract platform with high throughput, low latency, and an asset-oriented programming model.
     <br />
     <a href="https://docs.sui.io/"><strong>Explore more about Sui »</strong></a>
     <br />
@@ -17,9 +17,6 @@
   </p>
 </p>
 <hr>
-
-
-
 
 # Sui README
 
