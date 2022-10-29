@@ -22,8 +22,8 @@ aes = { version = "0.8", default-features = false }
 aes-gcm = { version = "0.10", features = ["aes", "alloc", "getrandom"] }
 ahash = { version = "0.7", features = ["std"] }
 aho-corasick = { version = "0.7", features = ["std"] }
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "f514987fa7f731058dd5a56e409e68600d84d909", default-features = false }
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "f514987fa7f731058dd5a56e409e68600d84d909", default-features = false }
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "87d60b249a9954775a95790e3bc9ca1a0df7969f", default-features = false }
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "87d60b249a9954775a95790e3bc9ca1a0df7969f", default-features = false }
 ansi_term = { version = "0.12", default-features = false }
 anyhow = { version = "1", features = ["backtrace", "std"] }
 arc-swap = { version = "1", default-features = false, features = ["serde"] }
@@ -51,6 +51,7 @@ axum-core = { version = "0.2", default-features = false }
 axum-server = { version = "0.4" }
 backoff = { version = "0.4", features = ["futures", "futures-core", "pin-project-lite", "tokio", "tokio_1"] }
 backtrace = { version = "0.3", features = ["std"] }
+base-x = { version = "0.2", default-features = false }
 base16ct = { version = "0.1", default-features = false }
 base64 = { version = "0.13", features = ["alloc", "std"] }
 base64ct = { version = "1", default-features = false, features = ["alloc"] }
@@ -76,7 +77,7 @@ block-padding-6f8ce4dd05d13bba = { package = "block-padding", version = "0.2", d
 block-padding-468e82937335b1c9 = { package = "block-padding", version = "0.3", default-features = false, features = ["std"] }
 bls-crypto = { git = "https://github.com/huitseeker/celo-bls-snark-rs", branch = "updates-2", features = ["compat"] }
 blst = { version = "0.3" }
-bs58 = { version = "0.4", features = ["alloc", "check", "sha2", "std"] }
+bs58 = { version = "0.4", default-features = false, features = ["check", "sha2"] }
 bstr = { version = "0.2", features = ["lazy_static", "regex-automata", "serde", "serde1", "serde1-nostd", "std", "unicode"] }
 bulletproofs = { version = "4", features = ["rand", "std", "thiserror"] }
 bytecode-interpreter-crypto = { git = "https://github.com/move-language/move", rev = "1ffd0a3e7bdc4bba7dafb8c814279e750113d030", features = ["fiat"] }
@@ -139,6 +140,7 @@ curve25519-dalek-fiat = { version = "0.1", default-features = false, features = 
 curve25519-dalek-ng = { version = "4", features = ["alloc", "serde", "std", "u64_backend"] }
 dashmap = { version = "5", default-features = false }
 data-encoding = { version = "2", features = ["alloc", "std"] }
+data-encoding-macro = { version = "0.1", default-features = false }
 datatest-stable = { version = "0.1", default-features = false }
 debug-ignore = { version = "1", default-features = false }
 der = { version = "0.6", default-features = false, features = ["alloc", "const-oid", "oid", "std", "zeroize"] }
@@ -329,9 +331,10 @@ move-unit-test = { git = "https://github.com/move-language/move", rev = "1ffd0a3
 move-vm-runtime = { git = "https://github.com/move-language/move", rev = "1ffd0a3e7bdc4bba7dafb8c814279e750113d030", features = ["debugging", "testing"] }
 move-vm-test-utils = { git = "https://github.com/move-language/move", rev = "1ffd0a3e7bdc4bba7dafb8c814279e750113d030" }
 move-vm-types = { git = "https://github.com/move-language/move", rev = "1ffd0a3e7bdc4bba7dafb8c814279e750113d030" }
-multiaddr = { version = "0.14", features = ["url"] }
+multiaddr = { version = "0.15", features = ["url"] }
+multibase = { version = "0.9", features = ["std"] }
 multihash = { version = "0.16", default-features = false, features = ["alloc", "derive", "identity", "multihash-derive", "multihash-impl", "std"] }
-mysten-network = { version = "0.2", default-features = false }
+mysten-network = { git = "https://github.com/MystenLabs/mysten-infra.git", rev = "62dd8c9c4aa0f5ed2c243546d159d9cf2816f3d9", default-features = false }
 mysten-util-mem = { git = "https://github.com/MystenLabs/mysten-infra/", rev = "d69adb7aa133b6306aea4ddfe3df5fbb5daa9cb2", features = ["estimate-heapsize", "hashbrown", "parking_lot", "smallvec", "std"] }
 named-lock = { version = "0.2", default-features = false }
 nested = { version = "0.1", default-features = false }
@@ -624,9 +627,9 @@ aes = { version = "0.8", default-features = false }
 aes-gcm = { version = "0.10", features = ["aes", "alloc", "getrandom"] }
 ahash = { version = "0.7", features = ["std"] }
 aho-corasick = { version = "0.7", features = ["std"] }
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "f514987fa7f731058dd5a56e409e68600d84d909", default-features = false }
-anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "f514987fa7f731058dd5a56e409e68600d84d909", default-features = false }
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "f514987fa7f731058dd5a56e409e68600d84d909", default-features = false }
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "87d60b249a9954775a95790e3bc9ca1a0df7969f", default-features = false }
+anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "87d60b249a9954775a95790e3bc9ca1a0df7969f", default-features = false }
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "87d60b249a9954775a95790e3bc9ca1a0df7969f", default-features = false }
 ansi_term = { version = "0.12", default-features = false }
 anyhow = { version = "1", features = ["backtrace", "std"] }
 arc-swap = { version = "1", default-features = false, features = ["serde"] }
@@ -663,6 +666,7 @@ axum-core = { version = "0.2", default-features = false }
 axum-server = { version = "0.4" }
 backoff = { version = "0.4", features = ["futures", "futures-core", "pin-project-lite", "tokio", "tokio_1"] }
 backtrace = { version = "0.3", features = ["std"] }
+base-x = { version = "0.2", default-features = false }
 base16ct = { version = "0.1", default-features = false }
 base64 = { version = "0.13", features = ["alloc", "std"] }
 base64ct = { version = "1", default-features = false, features = ["alloc"] }
@@ -690,7 +694,7 @@ block-padding-6f8ce4dd05d13bba = { package = "block-padding", version = "0.2", d
 block-padding-468e82937335b1c9 = { package = "block-padding", version = "0.3", default-features = false, features = ["std"] }
 bls-crypto = { git = "https://github.com/huitseeker/celo-bls-snark-rs", branch = "updates-2", features = ["compat"] }
 blst = { version = "0.3" }
-bs58 = { version = "0.4", features = ["alloc", "check", "sha2", "std"] }
+bs58 = { version = "0.4", default-features = false, features = ["check", "sha2"] }
 bstr = { version = "0.2", features = ["lazy_static", "regex-automata", "serde", "serde1", "serde1-nostd", "std", "unicode"] }
 bulletproofs = { version = "4", features = ["rand", "std", "thiserror"] }
 bumpalo = { version = "3" }
@@ -762,6 +766,8 @@ darling_core = { version = "0.14", default-features = false, features = ["strsim
 darling_macro = { version = "0.14", default-features = false }
 dashmap = { version = "5", default-features = false }
 data-encoding = { version = "2", features = ["alloc", "std"] }
+data-encoding-macro = { version = "0.1", default-features = false }
+data-encoding-macro-internal = { version = "0.1", default-features = false }
 datatest-stable = { version = "0.1", default-features = false }
 debug-ignore = { version = "1", default-features = false }
 der = { version = "0.6", default-features = false, features = ["alloc", "const-oid", "oid", "std", "zeroize"] }
@@ -972,11 +978,12 @@ move-unit-test = { git = "https://github.com/move-language/move", rev = "1ffd0a3
 move-vm-runtime = { git = "https://github.com/move-language/move", rev = "1ffd0a3e7bdc4bba7dafb8c814279e750113d030", features = ["debugging", "testing"] }
 move-vm-test-utils = { git = "https://github.com/move-language/move", rev = "1ffd0a3e7bdc4bba7dafb8c814279e750113d030" }
 move-vm-types = { git = "https://github.com/move-language/move", rev = "1ffd0a3e7bdc4bba7dafb8c814279e750113d030" }
-multiaddr = { version = "0.14", features = ["url"] }
+multiaddr = { version = "0.15", features = ["url"] }
+multibase = { version = "0.9", features = ["std"] }
 multihash = { version = "0.16", default-features = false, features = ["alloc", "derive", "identity", "multihash-derive", "multihash-impl", "std"] }
 multihash-derive = { version = "0.8", default-features = false, features = ["std"] }
 multimap = { version = "0.8", default-features = false }
-mysten-network = { version = "0.2", default-features = false }
+mysten-network = { git = "https://github.com/MystenLabs/mysten-infra.git", rev = "62dd8c9c4aa0f5ed2c243546d159d9cf2816f3d9", default-features = false }
 mysten-util-mem = { git = "https://github.com/MystenLabs/mysten-infra/", rev = "d69adb7aa133b6306aea4ddfe3df5fbb5daa9cb2", features = ["estimate-heapsize", "hashbrown", "parking_lot", "smallvec", "std"] }
 mysten-util-mem-derive = { git = "https://github.com/MystenLabs/mysten-infra/", rev = "d69adb7aa133b6306aea4ddfe3df5fbb5daa9cb2", default-features = false }
 name-variant = { version = "0.1", default-features = false }

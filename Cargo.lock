@@ -90,7 +90,7 @@ dependencies = [
 [[package]]
 name = "anemo"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=f514987fa7f731058dd5a56e409e68600d84d909#f514987fa7f731058dd5a56e409e68600d84d909"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=87d60b249a9954775a95790e3bc9ca1a0df7969f#87d60b249a9954775a95790e3bc9ca1a0df7969f"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -120,7 +120,7 @@ dependencies = [
 [[package]]
 name = "anemo-build"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=f514987fa7f731058dd5a56e409e68600d84d909#f514987fa7f731058dd5a56e409e68600d84d909"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=87d60b249a9954775a95790e3bc9ca1a0df7969f#87d60b249a9954775a95790e3bc9ca1a0df7969f"
 dependencies = [
  "prettyplease",
  "proc-macro2 1.0.47",
@@ -131,7 +131,7 @@ dependencies = [
 [[package]]
 name = "anemo-tower"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=f514987fa7f731058dd5a56e409e68600d84d909#f514987fa7f731058dd5a56e409e68600d84d909"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=87d60b249a9954775a95790e3bc9ca1a0df7969f#87d60b249a9954775a95790e3bc9ca1a0df7969f"
 dependencies = [
  "anemo",
  "bytes",
@@ -579,6 +579,12 @@ dependencies = [
  "object",
  "rustc-demangle",
 ]
+
+[[package]]
+name = "base-x"
+version = "0.2.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4cbbc9d0964165b47557570cce6c952866c2678457aca742aafc9fb771d30270"
 
 [[package]]
 name = "base16ct"
@@ -1780,6 +1786,26 @@ name = "data-encoding"
 version = "2.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ee2393c4a91429dffb4bedf19f4d6abf27d8a732c8ce4980305d782e5426d57"
+
+[[package]]
+name = "data-encoding-macro"
+version = "0.1.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "86927b7cd2fe88fa698b87404b287ab98d1a0063a34071d92e575b72d3029aca"
+dependencies = [
+ "data-encoding",
+ "data-encoding-macro-internal",
+]
+
+[[package]]
+name = "data-encoding-macro-internal"
+version = "0.1.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a5bbed42daaa95e780b60a50546aa345b8413a1e46f9a40a12907d3598f038db"
+dependencies = [
+ "data-encoding",
+ "syn 1.0.103",
+]
 
 [[package]]
 name = "datatest-stable"
@@ -4587,20 +4613,31 @@ dependencies = [
 
 [[package]]
 name = "multiaddr"
-version = "0.14.0"
+version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3c580bfdd8803cce319b047d239559a22f809094aaea4ac13902a1fdcfcd4261"
+checksum = "8b8d2f5ee4645ab2c09b846006f3bb0916e728a0384982544dba553be727d772"
 dependencies = [
  "arrayref",
- "bs58",
  "byteorder",
  "data-encoding",
+ "multibase",
  "multihash",
  "percent-encoding",
  "serde 1.0.147",
  "static_assertions",
  "unsigned-varint",
  "url",
+]
+
+[[package]]
+name = "multibase"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9b3539ec3c1f04ac9748a260728e855f261b4977f5c3406612c884564f329404"
+dependencies = [
+ "base-x",
+ "data-encoding",
+ "data-encoding-macro",
 ]
 
 [[package]]
@@ -4637,8 +4674,7 @@ checksum = "e5ce46fe64a9d73be07dcbe690a38ce1b293be448fd8ce1e6c1b8062c9f72c6a"
 [[package]]
 name = "mysten-network"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "51afa8dfc86c5d7bf4f3f9ec3b0a4e3235691fd15fcc4122118fb7f330f721c0"
+source = "git+https://github.com/MystenLabs/mysten-infra.git?rev=62dd8c9c4aa0f5ed2c243546d159d9cf2816f3d9#62dd8c9c4aa0f5ed2c243546d159d9cf2816f3d9"
 dependencies = [
  "bincode",
  "bytes",
@@ -10242,6 +10278,7 @@ dependencies = [
  "axum-server",
  "backoff",
  "backtrace",
+ "base-x",
  "base16ct",
  "base64",
  "base64ct",
@@ -10349,6 +10386,8 @@ dependencies = [
  "darling_macro",
  "dashmap",
  "data-encoding",
+ "data-encoding-macro",
+ "data-encoding-macro-internal",
  "datatest-stable",
  "debug-ignore",
  "debugid",
@@ -10578,6 +10617,7 @@ dependencies = [
  "move-vm-test-utils",
  "move-vm-types",
  "multiaddr",
+ "multibase",
  "multihash",
  "multihash-derive",
  "multimap",
