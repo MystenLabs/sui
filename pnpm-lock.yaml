@@ -442,7 +442,6 @@ importers:
       '@mysten/wallet-adapter-base': workspace:*
       '@mysten/wallet-adapter-react': workspace:*
       '@mysten/wallet-adapter-react-ui': workspace:*
-      '@mysten/wallet-adapter-sui-wallet': workspace:*
       '@mysten/wallet-adapter-wallet-standard': workspace:*
       '@testing-library/jest-dom': ^5.16.4
       '@testing-library/react': ^13.3.0
@@ -466,7 +465,6 @@ importers:
       '@mysten/wallet-adapter-base': link:packages/adapters/base-adapter
       '@mysten/wallet-adapter-react': link:packages/react-providers
       '@mysten/wallet-adapter-react-ui': link:packages/ui
-      '@mysten/wallet-adapter-sui-wallet': link:packages/adapters/sui-wallet
       '@mysten/wallet-adapter-wallet-standard': link:packages/adapters/wallet-standard-adapter
       '@testing-library/jest-dom': 5.16.5
       '@testing-library/react': 13.3.0_biqbaboplfbrettd7655fr4n2y
@@ -485,13 +483,11 @@ importers:
   sdk/wallet-adapter/packages/adapters/all-wallets:
     specifiers:
       '@mysten/wallet-adapter-mock-wallet': workspace:*
-      '@mysten/wallet-adapter-sui-wallet': workspace:*
       '@mysten/wallet-adapter-wallet-standard': workspace:*
       tsup: ^6.2.2
       typescript: ^4.8.3
     dependencies:
       '@mysten/wallet-adapter-mock-wallet': link:../mock-wallet
-      '@mysten/wallet-adapter-sui-wallet': link:../sui-wallet
       '@mysten/wallet-adapter-wallet-standard': link:../wallet-standard-adapter
     devDependencies:
       tsup: 6.2.2_typescript@4.8.3
@@ -509,19 +505,6 @@ importers:
       typescript: 4.8.3
 
   sdk/wallet-adapter/packages/adapters/mock-wallet:
-    specifiers:
-      '@mysten/sui.js': workspace:*
-      '@mysten/wallet-adapter-base': workspace:*
-      tsup: ^6.2.2
-      typescript: ^4.8.3
-    dependencies:
-      '@mysten/sui.js': link:../../../../typescript
-      '@mysten/wallet-adapter-base': link:../base-adapter
-    devDependencies:
-      tsup: 6.2.2_typescript@4.8.3
-      typescript: 4.8.3
-
-  sdk/wallet-adapter/packages/adapters/sui-wallet:
     specifiers:
       '@mysten/sui.js': workspace:*
       '@mysten/wallet-adapter-base': workspace:*

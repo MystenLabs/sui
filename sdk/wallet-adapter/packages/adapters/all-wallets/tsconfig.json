@@ -7,7 +7,6 @@
   },
   "references": [
     { "path": "../mock-wallet" },
-    { "path": "../sui-wallet" },
     { "path": "../wallet-standard-adapter" }
   ]
 }
