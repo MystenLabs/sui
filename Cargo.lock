@@ -118,9 +118,50 @@ dependencies = [
 ]
 
 [[package]]
+name = "anemo"
+version = "0.0.0"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=87d60b249a9954775a95790e3bc9ca1a0df7969f#87d60b249a9954775a95790e3bc9ca1a0df7969f"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bincode",
+ "bytes",
+ "ed25519",
+ "futures",
+ "http",
+ "matchit",
+ "pin-project-lite",
+ "pkcs8",
+ "quinn",
+ "rand 0.8.5",
+ "rcgen",
+ "rustls",
+ "serde 1.0.147",
+ "serde_json",
+ "tokio",
+ "tokio-stream",
+ "tokio-util 0.7.4",
+ "tower",
+ "tracing",
+ "webpki",
+ "x509-parser",
+]
+
+[[package]]
 name = "anemo-build"
 version = "0.0.0"
 source = "git+https://github.com/mystenlabs/anemo.git?rev=7da7c9a1913ed7fadbdd92ebc1b9f48e0c8cef0e#7da7c9a1913ed7fadbdd92ebc1b9f48e0c8cef0e"
+dependencies = [
+ "prettyplease",
+ "proc-macro2 1.0.47",
+ "quote 1.0.21",
+ "syn 1.0.103",
+]
+
+[[package]]
+name = "anemo-build"
+version = "0.0.0"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=87d60b249a9954775a95790e3bc9ca1a0df7969f#87d60b249a9954775a95790e3bc9ca1a0df7969f"
 dependencies = [
  "prettyplease",
  "proc-macro2 1.0.47",
@@ -133,7 +174,20 @@ name = "anemo-tower"
 version = "0.0.0"
 source = "git+https://github.com/mystenlabs/anemo.git?rev=7da7c9a1913ed7fadbdd92ebc1b9f48e0c8cef0e#7da7c9a1913ed7fadbdd92ebc1b9f48e0c8cef0e"
 dependencies = [
- "anemo",
+ "anemo 0.0.0 (git+https://github.com/mystenlabs/anemo.git?rev=7da7c9a1913ed7fadbdd92ebc1b9f48e0c8cef0e)",
+ "bytes",
+ "futures",
+ "pin-project-lite",
+ "tower",
+ "tracing",
+]
+
+[[package]]
+name = "anemo-tower"
+version = "0.0.0"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=87d60b249a9954775a95790e3bc9ca1a0df7969f#87d60b249a9954775a95790e3bc9ca1a0df7969f"
+dependencies = [
+ "anemo 0.0.0 (git+https://github.com/mystenlabs/anemo.git?rev=87d60b249a9954775a95790e3bc9ca1a0df7969f)",
  "bytes",
  "futures",
  "pin-project-lite",
@@ -579,6 +633,12 @@ dependencies = [
  "object",
  "rustc-demangle",
 ]
+
+[[package]]
+name = "base-x"
+version = "0.2.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4cbbc9d0964165b47557570cce6c952866c2678457aca742aafc9fb771d30270"
 
 [[package]]
 name = "base16ct"
@@ -1833,6 +1893,26 @@ name = "data-encoding"
 version = "2.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ee2393c4a91429dffb4bedf19f4d6abf27d8a732c8ce4980305d782e5426d57"
+
+[[package]]
+name = "data-encoding-macro"
+version = "0.1.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "86927b7cd2fe88fa698b87404b287ab98d1a0063a34071d92e575b72d3029aca"
+dependencies = [
+ "data-encoding",
+ "data-encoding-macro-internal",
+]
+
+[[package]]
+name = "data-encoding-macro-internal"
+version = "0.1.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a5bbed42daaa95e780b60a50546aa345b8413a1e46f9a40a12907d3598f038db"
+dependencies = [
+ "data-encoding",
+ "syn 1.0.103",
+]
 
 [[package]]
 name = "datatest-stable"
@@ -4611,7 +4691,7 @@ dependencies = [
 [[package]]
 name = "msim"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=982cf1a544ebd1e2818330f9b1247a4c3dd26c13#982cf1a544ebd1e2818330f9b1247a4c3dd26c13"
+source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=b28d77f88434535b166cc60bd3e5018aa75cd705#b28d77f88434535b166cc60bd3e5018aa75cd705"
 dependencies = [
  "ahash",
  "async-task",
@@ -4623,7 +4703,7 @@ dependencies = [
  "futures",
  "lazy_static 1.4.0",
  "libc",
- "msim-macros",
+ "msim-macros 0.1.0 (git+https://github.com/MystenLabs/mysten-sim.git?rev=b28d77f88434535b166cc60bd3e5018aa75cd705)",
  "naive-timer",
  "pin-project-lite",
  "rand 0.8.5",
@@ -4648,6 +4728,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "msim-macros"
+version = "0.1.0"
+source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=b28d77f88434535b166cc60bd3e5018aa75cd705#b28d77f88434535b166cc60bd3e5018aa75cd705"
+dependencies = [
+ "darling 0.14.1",
+ "proc-macro2 1.0.47",
+ "quote 1.0.21",
+ "syn 1.0.103",
+]
+
+[[package]]
 name = "multiaddr"
 version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4663,6 +4754,35 @@ dependencies = [
  "static_assertions",
  "unsigned-varint",
  "url",
+]
+
+[[package]]
+name = "multiaddr"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8b8d2f5ee4645ab2c09b846006f3bb0916e728a0384982544dba553be727d772"
+dependencies = [
+ "arrayref",
+ "byteorder",
+ "data-encoding",
+ "multibase",
+ "multihash",
+ "percent-encoding",
+ "serde 1.0.147",
+ "static_assertions",
+ "unsigned-varint",
+ "url",
+]
+
+[[package]]
+name = "multibase"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9b3539ec3c1f04ac9748a260728e855f261b4977f5c3406612c884564f329404"
+dependencies = [
+ "base-x",
+ "data-encoding",
+ "data-encoding-macro",
 ]
 
 [[package]]
@@ -4707,7 +4827,28 @@ dependencies = [
  "eyre",
  "futures",
  "http",
- "multiaddr",
+ "multiaddr 0.14.0",
+ "serde 1.0.147",
+ "tokio",
+ "tokio-stream",
+ "tonic",
+ "tonic-health",
+ "tower",
+ "tower-http",
+ "tracing",
+]
+
+[[package]]
+name = "mysten-network"
+version = "0.2.0"
+source = "git+https://github.com/MystenLabs/mysten-infra.git?rev=62dd8c9c4aa0f5ed2c243546d159d9cf2816f3d9#62dd8c9c4aa0f5ed2c243546d159d9cf2816f3d9"
+dependencies = [
+ "bincode",
+ "bytes",
+ "eyre",
+ "futures",
+ "http",
+ "multiaddr 0.15.0",
  "serde 1.0.147",
  "tokio",
  "tokio-stream",
@@ -4784,7 +4925,7 @@ dependencies = [
  "fastcrypto",
  "insta",
  "match_opt",
- "multiaddr",
+ "multiaddr 0.15.0",
  "narwhal-crypto",
  "narwhal-test-utils",
  "rand 0.8.5",
@@ -4905,8 +5046,8 @@ dependencies = [
  "indexmap",
  "itertools",
  "match_opt",
- "multiaddr",
- "mysten-network",
+ "multiaddr 0.15.0",
+ "mysten-network 0.2.0 (git+https://github.com/MystenLabs/mysten-infra.git?rev=62dd8c9c4aa0f5ed2c243546d159d9cf2816f3d9)",
  "narwhal-config",
  "narwhal-consensus",
  "narwhal-crypto",
@@ -4933,8 +5074,8 @@ dependencies = [
 name = "narwhal-network"
 version = "0.1.0"
 dependencies = [
- "anemo",
- "anemo-tower",
+ "anemo 0.0.0 (git+https://github.com/mystenlabs/anemo.git?rev=87d60b249a9954775a95790e3bc9ca1a0df7969f)",
+ "anemo-tower 0.0.0 (git+https://github.com/mystenlabs/anemo.git?rev=87d60b249a9954775a95790e3bc9ca1a0df7969f)",
  "anyhow",
  "async-trait",
  "axum",
@@ -4945,7 +5086,7 @@ dependencies = [
  "eyre",
  "fastcrypto",
  "futures",
- "multiaddr",
+ "multiaddr 0.15.0",
  "narwhal-crypto",
  "narwhal-test-utils",
  "narwhal-types",
@@ -4965,7 +5106,7 @@ dependencies = [
 name = "narwhal-node"
 version = "0.1.0"
 dependencies = [
- "anemo",
+ "anemo 0.0.0 (git+https://github.com/mystenlabs/anemo.git?rev=87d60b249a9954775a95790e3bc9ca1a0df7969f)",
  "arc-swap",
  "async-trait",
  "axum",
@@ -4979,8 +5120,8 @@ dependencies = [
  "futures",
  "hex",
  "itertools",
- "multiaddr",
- "mysten-network",
+ "multiaddr 0.15.0",
+ "mysten-network 0.2.0 (git+https://github.com/MystenLabs/mysten-infra.git?rev=62dd8c9c4aa0f5ed2c243546d159d9cf2816f3d9)",
  "narwhal-config",
  "narwhal-consensus",
  "narwhal-crypto",
@@ -5015,8 +5156,8 @@ dependencies = [
 name = "narwhal-primary"
 version = "0.1.0"
 dependencies = [
- "anemo",
- "anemo-tower",
+ "anemo 0.0.0 (git+https://github.com/mystenlabs/anemo.git?rev=87d60b249a9954775a95790e3bc9ca1a0df7969f)",
+ "anemo-tower 0.0.0 (git+https://github.com/mystenlabs/anemo.git?rev=87d60b249a9954775a95790e3bc9ca1a0df7969f)",
  "anyhow",
  "arc-swap",
  "async-recursion",
@@ -5033,8 +5174,8 @@ dependencies = [
  "indexmap",
  "itertools",
  "mockall",
- "multiaddr",
- "mysten-network",
+ "multiaddr 0.15.0",
+ "mysten-network 0.2.0 (git+https://github.com/MystenLabs/mysten-infra.git?rev=62dd8c9c4aa0f5ed2c243546d159d9cf2816f3d9)",
  "narwhal-config",
  "narwhal-consensus",
  "narwhal-crypto",
@@ -5091,7 +5232,7 @@ dependencies = [
 name = "narwhal-test-utils"
 version = "0.1.0"
 dependencies = [
- "anemo",
+ "anemo 0.0.0 (git+https://github.com/mystenlabs/anemo.git?rev=87d60b249a9954775a95790e3bc9ca1a0df7969f)",
  "arc-swap",
  "base64",
  "bincode",
@@ -5102,8 +5243,8 @@ dependencies = [
  "futures",
  "indexmap",
  "itertools",
- "multiaddr",
- "mysten-network",
+ "multiaddr 0.15.0",
+ "mysten-network 0.2.0 (git+https://github.com/MystenLabs/mysten-infra.git?rev=62dd8c9c4aa0f5ed2c243546d159d9cf2816f3d9)",
  "narwhal-config",
  "narwhal-crypto",
  "narwhal-executor",
@@ -5131,8 +5272,8 @@ dependencies = [
 name = "narwhal-types"
 version = "0.1.0"
 dependencies = [
- "anemo",
- "anemo-build",
+ "anemo 0.0.0 (git+https://github.com/mystenlabs/anemo.git?rev=87d60b249a9954775a95790e3bc9ca1a0df7969f)",
+ "anemo-build 0.0.0 (git+https://github.com/mystenlabs/anemo.git?rev=87d60b249a9954775a95790e3bc9ca1a0df7969f)",
  "async-trait",
  "base64",
  "bincode",
@@ -5177,8 +5318,8 @@ dependencies = [
 name = "narwhal-worker"
 version = "0.1.0"
 dependencies = [
- "anemo",
- "anemo-tower",
+ "anemo 0.0.0 (git+https://github.com/mystenlabs/anemo.git?rev=87d60b249a9954775a95790e3bc9ca1a0df7969f)",
+ "anemo-tower 0.0.0 (git+https://github.com/mystenlabs/anemo.git?rev=87d60b249a9954775a95790e3bc9ca1a0df7969f)",
  "anyhow",
  "arc-swap",
  "async-trait",
@@ -5188,8 +5329,8 @@ dependencies = [
  "fastcrypto",
  "futures",
  "hex",
- "multiaddr",
- "mysten-network",
+ "multiaddr 0.15.0",
+ "mysten-network 0.2.0 (git+https://github.com/MystenLabs/mysten-infra.git?rev=62dd8c9c4aa0f5ed2c243546d159d9cf2816f3d9)",
  "narwhal-config",
  "narwhal-consensus",
  "narwhal-crypto",
@@ -6679,8 +6820,8 @@ dependencies = [
 
 [[package]]
 name = "real_tokio"
-version = "1.21.1"
-source = "git+https://github.com/mystenmark/tokio-madsim-fork.git?rev=53757350d27e3743ec4b024ac18c2d6a2717efe0#53757350d27e3743ec4b024ac18c2d6a2717efe0"
+version = "1.21.2"
+source = "git+https://github.com/mystenmark/tokio-madsim-fork.git?rev=53fa543dd930cc5177783ff2b865e8ef1eab64e4#53fa543dd930cc5177783ff2b865e8ef1eab64e4"
 dependencies = [
  "autocfg",
  "bytes",
@@ -6688,12 +6829,11 @@ dependencies = [
  "memchr",
  "mio 0.8.4",
  "num_cpus",
- "once_cell",
  "parking_lot 0.12.1",
  "pin-project-lite",
  "signal-hook-registry",
  "socket2",
- "tokio-macros 1.8.0 (git+https://github.com/mystenmark/tokio-madsim-fork.git?rev=53757350d27e3743ec4b024ac18c2d6a2717efe0)",
+ "tokio-macros 1.8.0 (git+https://github.com/mystenmark/tokio-madsim-fork.git?rev=53fa543dd930cc5177783ff2b865e8ef1eab64e4)",
  "winapi",
 ]
 
@@ -7930,7 +8070,7 @@ dependencies = [
  "move-prover",
  "move-prover-boogie-backend",
  "move-unit-test",
- "multiaddr",
+ "multiaddr 0.15.0",
  "narwhal-executor",
  "prometheus",
  "rand 0.8.5",
@@ -8011,7 +8151,7 @@ dependencies = [
  "hdrhistogram",
  "indicatif",
  "move-core-types",
- "multiaddr",
+ "multiaddr 0.15.0",
  "narwhal-node",
  "num_cpus",
  "prometheus",
@@ -8083,7 +8223,7 @@ dependencies = [
 name = "sui-config"
 version = "0.0.0"
 dependencies = [
- "anemo",
+ "anemo 0.0.0 (git+https://github.com/mystenlabs/anemo.git?rev=87d60b249a9954775a95790e3bc9ca1a0df7969f)",
  "anyhow",
  "arc-swap",
  "bcs",
@@ -8096,7 +8236,7 @@ dependencies = [
  "move-core-types",
  "move-package",
  "move-vm-runtime",
- "multiaddr",
+ "multiaddr 0.15.0",
  "narwhal-config",
  "narwhal-crypto",
  "once_cell",
@@ -8135,8 +8275,8 @@ dependencies = [
  "move-core-types",
  "move-package",
  "move-vm-runtime",
- "multiaddr",
- "mysten-network",
+ "multiaddr 0.15.0",
+ "mysten-network 0.2.0 (git+https://github.com/MystenLabs/mysten-infra.git?rev=62dd8c9c4aa0f5ed2c243546d159d9cf2816f3d9)",
  "narwhal-config",
  "narwhal-consensus",
  "narwhal-executor",
@@ -8308,7 +8448,7 @@ dependencies = [
  "clap 3.2.22",
  "futures",
  "move-package",
- "mysten-network",
+ "mysten-network 0.2.0 (git+https://github.com/MystenLabs/mysten-infra.git?rev=62dd8c9c4aa0f5ed2c243546d159d9cf2816f3d9)",
  "prometheus",
  "serde 1.0.147",
  "sui-config",
@@ -8425,7 +8565,7 @@ dependencies = [
 name = "sui-macros"
 version = "0.7.0"
 dependencies = [
- "msim-macros",
+ "msim-macros 0.1.0 (git+https://github.com/MystenLabs/mysten-sim.git?rev=982cf1a544ebd1e2818330f9b1247a4c3dd26c13)",
  "proc-macro2 1.0.47",
  "quote 1.0.21",
  "syn 1.0.103",
@@ -8437,7 +8577,7 @@ name = "sui-network"
 version = "0.0.0"
 dependencies = [
  "async-trait",
- "mysten-network",
+ "mysten-network 0.2.0 (git+https://github.com/MystenLabs/mysten-infra.git?rev=62dd8c9c4aa0f5ed2c243546d159d9cf2816f3d9)",
  "sui-types",
  "tonic",
  "tonic-build",
@@ -8448,15 +8588,15 @@ dependencies = [
 name = "sui-node"
 version = "0.13.2"
 dependencies = [
- "anemo",
- "anemo-tower",
+ "anemo 0.0.0 (git+https://github.com/mystenlabs/anemo.git?rev=87d60b249a9954775a95790e3bc9ca1a0df7969f)",
+ "anemo-tower 0.0.0 (git+https://github.com/mystenlabs/anemo.git?rev=87d60b249a9954775a95790e3bc9ca1a0df7969f)",
  "anyhow",
  "axum",
  "chrono",
  "clap 3.2.22",
  "futures",
- "multiaddr",
- "mysten-network",
+ "multiaddr 0.15.0",
+ "mysten-network 0.2.0 (git+https://github.com/MystenLabs/mysten-infra.git?rev=62dd8c9c4aa0f5ed2c243546d159d9cf2816f3d9)",
  "narwhal-network",
  "parking_lot 0.12.1",
  "prometheus",
@@ -8586,7 +8726,7 @@ dependencies = [
 name = "sui-simulator"
 version = "0.7.0"
 dependencies = [
- "anemo",
+ "anemo 0.0.0 (git+https://github.com/mystenlabs/anemo.git?rev=87d60b249a9954775a95790e3bc9ca1a0df7969f)",
  "fastcrypto",
  "msim",
  "sui-framework",
@@ -8638,7 +8778,7 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "futures",
- "mysten-network",
+ "mysten-network 0.2.0 (git+https://github.com/MystenLabs/mysten-infra.git?rev=62dd8c9c4aa0f5ed2c243546d159d9cf2816f3d9)",
  "prometheus",
  "rand 0.8.5",
  "sui-config",
@@ -8696,7 +8836,7 @@ dependencies = [
  "colored",
  "eyre",
  "futures",
- "mysten-network",
+ "mysten-network 0.2.0 (git+https://github.com/MystenLabs/mysten-infra.git?rev=62dd8c9c4aa0f5ed2c243546d159d9cf2816f3d9)",
  "narwhal-executor",
  "rocksdb",
  "serde 1.0.147",
@@ -9097,8 +9237,8 @@ dependencies = [
  "jsonrpsee-http-client",
  "move-core-types",
  "move-package",
- "multiaddr",
- "mysten-network",
+ "multiaddr 0.15.0",
+ "mysten-network 0.2.0 (git+https://github.com/MystenLabs/mysten-infra.git?rev=62dd8c9c4aa0f5ed2c243546d159d9cf2816f3d9)",
  "once_cell",
  "prometheus",
  "rand 0.8.5",
@@ -9298,9 +9438,9 @@ checksum = "cda74da7e1a664f795bb1f8a87ec406fb89a02522cf6e50620d016add6dbbf5c"
 
 [[package]]
 name = "tokio"
-version = "1.21.1"
+version = "1.21.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0020c875007ad96677dcc890298f4b942882c5d4eb7cc8f439fc3bf813dc9c95"
+checksum = "a9e03c497dc955702ba729190dc4aac6f2a0ce97f913e5b1b5912fc5039d9099"
 dependencies = [
  "autocfg",
  "bytes",
@@ -9308,7 +9448,6 @@ dependencies = [
  "memchr",
  "mio 0.8.4",
  "num_cpus",
- "once_cell",
  "parking_lot 0.12.1",
  "pin-project-lite",
  "signal-hook-registry",
@@ -9342,7 +9481,7 @@ dependencies = [
 [[package]]
 name = "tokio-macros"
 version = "1.8.0"
-source = "git+https://github.com/mystenmark/tokio-madsim-fork.git?rev=53757350d27e3743ec4b024ac18c2d6a2717efe0#53757350d27e3743ec4b024ac18c2d6a2717efe0"
+source = "git+https://github.com/mystenmark/tokio-madsim-fork.git?rev=53fa543dd930cc5177783ff2b865e8ef1eab64e4#53fa543dd930cc5177783ff2b865e8ef1eab64e4"
 dependencies = [
  "proc-macro2 1.0.47",
  "quote 1.0.21",
@@ -9396,7 +9535,7 @@ dependencies = [
 [[package]]
 name = "tokio-util"
 version = "0.7.3"
-source = "git+https://github.com/mystenmark/tokio-madsim-fork.git?rev=53757350d27e3743ec4b024ac18c2d6a2717efe0#53757350d27e3743ec4b024ac18c2d6a2717efe0"
+source = "git+https://github.com/mystenmark/tokio-madsim-fork.git?rev=53fa543dd930cc5177783ff2b865e8ef1eab64e4#53fa543dd930cc5177783ff2b865e8ef1eab64e4"
 dependencies = [
  "bytes",
  "futures-core",
@@ -9773,7 +9912,7 @@ version = "1.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
- "cfg-if 0.1.10",
+ "cfg-if 1.0.0",
  "static_assertions",
 ]
 
@@ -10349,9 +10488,9 @@ dependencies = [
  "aes-gcm",
  "ahash",
  "aho-corasick",
- "anemo",
- "anemo-build",
- "anemo-tower",
+ "anemo 0.0.0 (git+https://github.com/mystenlabs/anemo.git?rev=7da7c9a1913ed7fadbdd92ebc1b9f48e0c8cef0e)",
+ "anemo-build 0.0.0 (git+https://github.com/mystenlabs/anemo.git?rev=7da7c9a1913ed7fadbdd92ebc1b9f48e0c8cef0e)",
+ "anemo-tower 0.0.0 (git+https://github.com/mystenlabs/anemo.git?rev=7da7c9a1913ed7fadbdd92ebc1b9f48e0c8cef0e)",
  "ansi_term",
  "anyhow",
  "arc-swap",
@@ -10730,11 +10869,11 @@ dependencies = [
  "move-vm-runtime",
  "move-vm-test-utils",
  "move-vm-types",
- "multiaddr",
+ "multiaddr 0.14.0",
  "multihash",
  "multihash-derive",
  "multimap",
- "mysten-network",
+ "mysten-network 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "mysten-util-mem",
  "mysten-util-mem-derive",
  "name-variant",

@@ -73,7 +73,7 @@ opt-level = 1
 typed-store = "0.1.0"
 typed-store-derive = "0.1.0"
 telemetry-subscribers = { version = "0.2.0", features = ["jaeger", "tokio-console"] }
-mysten-network = "0.2.0"
+mysten-network = { git = "https://github.com/MystenLabs/mysten-infra.git", rev = "62dd8c9c4aa0f5ed2c243546d159d9cf2816f3d9" }
 name-variant = "0.1.0"
 store = { version = "0.1.0", package = "typed-store" }
 
@@ -100,9 +100,9 @@ move-prover-boogie-backend = { git = "https://github.com/move-language/move", re
 fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "ab44e914084bd2fa65e7caf64ab32d61910a5d30" }
 
 # anemo dependencies
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "7da7c9a1913ed7fadbdd92ebc1b9f48e0c8cef0e" }
-anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "7da7c9a1913ed7fadbdd92ebc1b9f48e0c8cef0e" }
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "7da7c9a1913ed7fadbdd92ebc1b9f48e0c8cef0e" }
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "87d60b249a9954775a95790e3bc9ca1a0df7969f" }
+anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "87d60b249a9954775a95790e3bc9ca1a0df7969f" }
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "87d60b249a9954775a95790e3bc9ca1a0df7969f" }
 
 # Use the same workspace-hack across crates.
 workspace-hack = { path = "crates/workspace-hack" }
