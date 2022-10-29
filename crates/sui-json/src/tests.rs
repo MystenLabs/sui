@@ -117,8 +117,8 @@ fn test_basic_args_linter_pure_args() {
     let good_hex_val = "0x1234ABCD";
     let bad_hex_val = "0x1234AB  CD";
     let u128_val = u64::MAX as u128 + 0xff;
-    let u256_hex_val = "0x123456781234567812345678909876543234567886";
-    let u256_val = U256::from_str(u256_hex_val.trim_start_matches("0x")).unwrap();
+    let u256_hex_val = "0x1234567812345678877EDA56789098ABCDEF12";
+    let u256_val = U256::from_str_radix(u256_hex_val.trim_start_matches("0x"), 16).unwrap();
 
     let checks = vec![
         // Expected Bool match
