@@ -179,8 +179,8 @@ that can only be called for tables where the value type also has `drop`, which a
 Equality on collections is based on identity, i.e. an instance of a collection type is only considered equal to itself and not to all collections that hold the same entries:
 
 ```rust
-let t1 = sui::table::new<u64, u64>();
-let t2 = sui::table::new<u64, u64>();
+let t1 = sui::table::new<u64, u64>(ctx);
+let t2 = sui::table::new<u64, u64>(ctx);
 
 assert!(&t1 == &t1, 0);
 assert!(&t1 != &t2, 1);
