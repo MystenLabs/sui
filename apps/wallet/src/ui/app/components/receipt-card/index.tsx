@@ -119,7 +119,7 @@ function ReceiptCard({ txDigest }: TxResponseProps) {
         txDigest.status === 'success' ? st.success : st.failed;
 
     const [formatted, symbol] = useFormatCoin(
-        txDigest.amount || txDigest.balance || 0,
+        txDigest.amount || 0,
         txDigest.coinType
     );
 
@@ -150,7 +150,7 @@ function ReceiptCard({ txDigest }: TxResponseProps) {
                                     ? transferMeta[transferType].txName
                                     : transferMeta[transferType].failedMsg}
                             </div>
-                            {(txDigest.amount || txDigest.balance) && (
+                            {txDigest.amount && (
                                 <div className={st.amount}>
                                     {formatted}
                                     <span>{symbol}</span>
