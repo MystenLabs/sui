@@ -6,7 +6,7 @@
     "rootDir": "src"
   },
   "references": [
-    { "path": "../mock-wallet" },
+    { "path": "../unsafe-burner" },
     { "path": "../wallet-standard-adapter" }
   ]
 }
