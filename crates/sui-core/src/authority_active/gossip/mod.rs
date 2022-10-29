@@ -462,7 +462,7 @@ where
                         None => {
                             timer.stop_and_record();
                             timer = metrics.follower_stream_duration.start_timer();
-                            info!(peer = ?self.peer_name, "Gossip stream was closed. Restarting");
+                            debug!(peer = ?self.peer_name, "Gossip stream was closed. Restarting");
                             self.client.metrics_total_times_reconnect_follower_stream.inc();
                             tokio::time::sleep(Duration::from_secs(REFRESH_FOLLOWER_PERIOD_SECS / 12)).await;
                             let req = BatchInfoRequest {
