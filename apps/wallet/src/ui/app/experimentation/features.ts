@@ -7,5 +7,4 @@
  */
 export enum FEATURES {
     USE_LOCAL_TXN_SERIALIZER = 'use-local-txn-serializer',
-    SUI_DENOMINATION = 'sui-denomination',
 }

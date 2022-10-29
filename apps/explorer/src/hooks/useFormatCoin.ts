@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useFeature } from '@growthbook/growthbook-react';
 import { Coin } from '@mysten/sui.js';
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import BigNumber from 'bignumber.js';
@@ -15,8 +14,6 @@ type FormattedCoin = [
     coinSymbol: string,
     queryResult: UseQueryResult
 ];
-
-const SUI_DENOMINATION_FEATURE = 'sui-denomination';
 
 export enum CoinFormat {
     ROUNDED = 'ROUNDED',
@@ -60,7 +57,6 @@ export function formatBalance(
 
 export function useCoinDecimals(coinType?: string | null) {
     const [network] = useContext(NetworkContext);
-    const suiDenomination = useFeature(SUI_DENOMINATION_FEATURE).on;
 
     const queryResult = useQuery(
         ['denomination', coinType],
@@ -76,7 +72,7 @@ export function useCoinDecimals(coinType?: string | null) {
         {
             // This is currently expected to fail for non-SUI tokens, so disable retries:
             retry: false,
-            enabled: suiDenomination && !!coinType,
+            enabled: !!coinType,
             // Never consider this data to be stale:
             staleTime: Infinity,
             // Keep this data in the cache for 24 hours.
@@ -104,7 +100,6 @@ export function useFormatCoin(
     coinType?: string | null,
     format: CoinFormat = CoinFormat.ROUNDED
 ): FormattedCoin {
-    const suiDenomination = useFeature(SUI_DENOMINATION_FEATURE).on;
     const symbol = useMemo(
         () => (coinType ? Coin.getCoinSymbol(coinType) : ''),
         [coinType]
@@ -116,14 +111,14 @@ export function useFormatCoin(
     const formatted = useMemo(() => {
         if (typeof balance === 'undefined' || balance === null) return '';
 
-        if (!suiDenomination || isError) {
+        if (isError) {
             return numberFormatter.format(BigInt(balance));
         }
 
         if (!isFetched) return '...';
 
         return formatBalance(balance, decimals, format);
-    }, [decimals, isError, isFetched, suiDenomination, balance, format]);
+    }, [decimals, isError, isFetched, balance, format]);
 
     return [formatted, symbol, queryResult];
 }
