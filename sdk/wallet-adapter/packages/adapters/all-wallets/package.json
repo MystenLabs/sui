@@ -27,7 +27,6 @@
   },
   "dependencies": {
     "@mysten/wallet-adapter-mock-wallet": "workspace:*",
-    "@mysten/wallet-adapter-sui-wallet": "workspace:*",
     "@mysten/wallet-adapter-wallet-standard": "workspace:*"
   },
   "devDependencies": {
