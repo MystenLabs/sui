@@ -1,3 +1,26 @@
+<p align="center">
+  <a href="https://docs.sui.io/">
+    <img src="https://github.com/MystenLabs/sui/blob/main/doc/static/Sui_Icon_Brand.png" alt="Logo" width="80" height="80">
+  </a>
+
+  <h3 align="center">Sui</h3>
+
+  <p align="center">
+    Official Sui Repository.
+    <br />
+    <a href="https://docs.sui.io/"><strong>Explore more about Sui »</strong></a>
+    <br />
+    <br />
+    <a href="https://discord.gg/sui">Community</a>
+    ·
+    <a href="https://docs.sui.io/">Docs</a>
+  </p>
+</p>
+<hr>
+
+
+
+
 # Sui README
 
 |             |             |
