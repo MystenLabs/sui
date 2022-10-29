@@ -5,7 +5,6 @@ import type {
   SignableTransaction,
   SuiTransactionResponse,
 } from "@mysten/sui.js";
-import type { SignAndSendTransactionInput } from "@wallet-standard/core";
 
 /** The latest API version of the signAndExecuteTransaction API. */
 export type SuiSignAndExecuteTransactionVersion = "1.0.0";
@@ -29,15 +28,9 @@ export type SuiSignAndExecuteTransactionMethod = (
 ) => Promise<SuiSignAndExecuteTransactionOutput>;
 
 /** Input for signing and sending transactions. */
-export interface SuiSignAndExecuteTransactionInput
-  extends Omit<
-    SignAndSendTransactionInput,
-    // TODO: Right now, we don't have intent signing, but eventually we'll need to re-introduce
-    // the concept of chains + account during the signing here.
-    "transaction" | "chain" | "account"
-  > {
-  options?: SuiSignAndExecuteTransactionOptions;
+export interface SuiSignAndExecuteTransactionInput {
   transaction: SignableTransaction;
+  options?: SuiSignAndExecuteTransactionOptions;
 }
 
 /** Output of signing and sending transactions. */
