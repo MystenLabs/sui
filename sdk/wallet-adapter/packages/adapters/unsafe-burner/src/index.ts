@@ -7,6 +7,7 @@ import {
   getTransactionEffects,
   JsonRpcProvider,
   LocalTxnDataSerializer,
+  Network,
   RawSigner,
   SignableTransaction,
 } from "@mysten/sui.js";
@@ -22,7 +23,7 @@ export class UnsafeBurnerWalletAdapter implements WalletAdapter {
   #keypair: Ed25519Keypair;
   #signer: RawSigner;
 
-  constructor(network: string = "https://fullnode.devnet.sui.io/") {
+  constructor(network: string | Network = Network.LOCAL) {
     this.#keypair = new Ed25519Keypair();
     this.#provider = new JsonRpcProvider(network);
     this.#signer = new RawSigner(
@@ -56,7 +57,7 @@ export class UnsafeBurnerWalletAdapter implements WalletAdapter {
 
   async connect() {
     this.connecting = true;
-    await Promise.resolve();
+    await this.#signer.requestSuiFromFaucet();
     this.connecting = false;
     this.connected = true;
   }

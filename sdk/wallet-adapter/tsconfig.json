@@ -3,6 +3,7 @@
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
+      "@mysten/sui.js": ["../typescript/src"],
       "@mysten/wallet-adapter-react": ["./packages/react-providers/src"],
       "@mysten/wallet-adapter-react-ui": ["./packages/ui/src"],
       "@mysten/wallet-adapter-all-wallets": [
@@ -22,6 +23,7 @@
   },
   "include": ["src"],
   "references": [
+    { "path": "../typescript" },
     { "path": "./packages/react-providers" },
     { "path": "./packages/ui" },
     { "path": "./packages/wallet-standard" },

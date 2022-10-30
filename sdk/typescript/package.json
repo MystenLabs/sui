@@ -22,6 +22,7 @@
     }
   },
   "scripts": {
+    "clean": "rm -rf tsconfig.tsbuildinfo ./dist",
     "build": "node ./type_guards.mjs && pnpm build:types && tsup ./src/index.ts --format esm,cjs --sourcemap",
     "build:types": "tsc --build",
     "doc": "typedoc",
