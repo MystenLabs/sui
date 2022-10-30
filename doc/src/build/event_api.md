@@ -2,7 +2,7 @@
 title: Sui Events API
 ---
 
-Sui [Full nodes](fullnode.md) supports publish / subscribe using [JSON-RPC](json-rpc.md) notifications via the WebSocket
+Sui [Full nodes](fullnode.md) support publish / subscribe using [JSON-RPC](json-rpc.md) notifications via the WebSocket
 API. This service allows clients to filter and subscribe to a real-time event stream generated from Move or from the Sui
 network.
 
@@ -140,6 +140,7 @@ event
 relevant to the client.
 
 ### List of queryable criteria
+
 | Query       | Description                                                      |                               JSON-RPC Parameter Example                               |
 |-------------|------------------------------------------------------------------|:--------------------------------------------------------------------------------------:|
 | All         | All events                                                       |                                        {"All"}                                         |
@@ -153,13 +154,16 @@ relevant to the client.
 | TimeRange   | Return events emitted in [start_time, end_time] interval         | {"TimeRange":{"start":<milliseconds since epoch>, "start":<milliseconds since epoch>}} |
 
 ## Pagination
-The event query API provide cursor based pagination to make returning large result sets more efficient. 
+
+The Event Query API provide cursor based pagination to make returning large result sets more efficient. 
 User can provide a `cursor` parameter to the paginated query to indicate the starting position of the query, 
 the query will return the query result with item size up to the set `limit` and a `next_cursor` value will be 
 returned if there are more item. The maximum item size limit is 1000 per query.
 
 ## Examples
+
 ### 1. Get all event emitted by devnet_nft module in descending time order
+
 **Request**
 ```shell
 curl --location --request POST '127.0.0.1:9000' \
@@ -177,7 +181,7 @@ curl --location --request POST '127.0.0.1:9000' \
 }'
 ```
 **Response**
-```shell
+```json
 {
     "jsonrpc": "2.0",
     "result": {
@@ -273,7 +277,7 @@ curl --location --request POST '127.0.0.1:9000' \
 }'
 ```
 **Response**
-```shell
+```json
 {
     "jsonrpc": "2.0",
     "result": {
@@ -321,6 +325,7 @@ curl --location --request POST '127.0.0.1:9000' \
 }
 ```
 ### 3. Get all event 2 items per paged, in descending time order
+
 **Request**
 ```shell
 curl --location --request POST '127.0.0.1:9000' \
@@ -338,7 +343,7 @@ curl --location --request POST '127.0.0.1:9000' \
 }'
 ```
 **Response**
-```shell
+```json
 {
     "jsonrpc": "2.0",
     "result": {
@@ -396,7 +401,7 @@ the filter, a notification with the event data and subscription ID is returned t
 
 ## Event filters
 
-Sui event pubsub uses `EventFilter` to enable fine control of the event subscription stream;
+Sui event publish / subscribe uses `EventFilter` to enable fine control of the event subscription stream;
 the client can subscribe to the event stream using one or a combination of event attribute filters to get the exact
 event
 relevant to the client.
