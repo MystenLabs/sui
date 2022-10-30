@@ -1368,6 +1368,10 @@ where
         // Remove name tag before deserialization using BCS
         let name = serde_name::trace_name::<Self>().expect("Self should be a struct or an enum");
         let name_byte_len = format!("{}::", name).bytes().len();
+        let actual_bytes_len = bytes.len();
+        if name_byte_len >= actual_bytes_len {
+            anyhow::bail!("Failed to deserialize shorter than expected signable bytes (len:{actual_bytes_len}) to {name}.");
+        }
         Ok(bcs::from_bytes(&bytes[name_byte_len..])?)
     }
 }
