@@ -11,22 +11,18 @@ export async function requestSuiFromFaucet(
   recipient: SuiAddress,
   httpHeaders?: HttpHeaders
 ): Promise<FaucetResponse> {
-  const options = {
+  const res = await fetch(endpoint, {
     method: 'POST',
     body: JSON.stringify({
       FixedAmountRequest: {
         recipient,
       },
     }),
-    headers: Object.assign(
-      {
-        'Content-Type': 'application/json',
-      },
-      httpHeaders || {}
-    ),
-  };
-
-  const res = await fetch(endpoint, options);
+    headers: {
+      'Content-Type': 'application/json',
+      ...(httpHeaders || {}),
+    },
+  });
   const parsed = await res.json();
 
   if (parsed.error) {

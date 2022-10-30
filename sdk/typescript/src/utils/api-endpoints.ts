@@ -4,7 +4,6 @@
 export enum Network {
   LOCAL = 'LOCAL',
   DEVNET = 'DEVNET',
-  // append only for backward compatibility
 }
 
 export type ApiEndpoints = {
