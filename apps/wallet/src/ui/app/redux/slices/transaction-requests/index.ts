@@ -5,6 +5,7 @@ import {
     Base64DataBuffer,
     getCertifiedTransaction,
     getTransactionEffects,
+    LocalTxnDataSerializer,
     type SuiMoveNormalizedFunction,
 } from '@mysten/sui.js';
 import {
@@ -17,6 +18,7 @@ import type {
     SuiTransactionResponse,
     SignableTransaction,
     SuiExecuteTransactionResponse,
+    UnserializedSignableTransaction,
 } from '@mysten/sui.js';
 import type { PayloadAction } from '@reduxjs/toolkit';
 import type { TransactionRequest } from '_payloads/transactions';
@@ -61,6 +63,27 @@ export const loadTransactionResponseMetadata = createAsyncThunk<
         return { txRequestID, metadata };
     }
 );
+
+export const deserializeTxn = createAsyncThunk<
+    {
+        txRequestID: string;
+        unSerializedTxn: UnserializedSignableTransaction;
+    },
+    { serializedTxn: string; id: string },
+    AppThunkConfig
+>('deserialize-transaction', async (data, { extra: { api, keypairVault } }) => {
+    const signer = api.getSignerInstance(keypairVault.getKeyPair());
+    const localSerializer = new LocalTxnDataSerializer(signer.provider);
+    const deserializeTx =
+        (await localSerializer.deserializeTransactionBytesToSignableTransaction(
+            new Base64DataBuffer(data.serializedTxn)
+        )) as UnserializedSignableTransaction;
+
+    return {
+        txRequestID: data.id,
+        unSerializedTxn: deserializeTx || null,
+    };
+});
 
 export const respondToTransactionRequest = createAsyncThunk<
     {
@@ -164,6 +187,14 @@ const slice = createSlice({
                 });
             }
         );
+        build.addCase(deserializeTxn.fulfilled, (state, { payload }) => {
+            txRequestsAdapter.updateOne(state, {
+                id: payload.txRequestID,
+                changes: {
+                    unSerializedTxn: payload.unSerializedTxn,
+                },
+            });
+        });
 
         build.addCase(
             respondToTransactionRequest.fulfilled,

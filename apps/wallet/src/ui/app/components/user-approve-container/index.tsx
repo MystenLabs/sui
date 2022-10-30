@@ -95,20 +95,27 @@ function UserApproveContainer({
                         type="button"
                         className={cl(
                             st.button,
-                            isWarning ? st.cancel : st.approve
+                            isWarning ? st.cancel : st.approve,
+                            submitting && st.loading
                         )}
                         data-allow="true"
                         onClick={handleOnResponse}
                         disabled={submitting}
                     >
-                        {!isWarning &&
+                        {submitting &&
+                            !isWarning &&
                             (isConnect ? (
                                 <Icon icon="plus" />
                             ) : (
                                 <Icon icon="check" />
                             ))}
+
                         <span>
-                            {submitting ? <LoadingIndicator /> : approveTitle}
+                            {submitting ? (
+                                <LoadingIndicator className={st.loader} />
+                            ) : (
+                                approveTitle
+                            )}
                         </span>
                         {isWarning && <Icon icon="arrow-right" />}
                     </button>

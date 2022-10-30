@@ -22,10 +22,14 @@
 
     dt {
         color: colors.$gray-80;
+        width: 30%;
     }
 
     dd {
+        margin-inline-start: 1em;
         color: colors.$gray-90;
+        word-break: break-all;
+        width: 65%;
     }
 }
 

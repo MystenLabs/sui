@@ -117,6 +117,15 @@
         }
     }
 
+    &.loading {
+        background-color: colors.$sui-steel-blue;
+        color: colors.$white;
+
+        .loader {
+            border-color: colors.$white;
+        }
+    }
+
     &.reject {
         background: #fae4e4;
         color: colors.$error;

@@ -12,6 +12,7 @@ import {
     loadTransactionResponseMetadata,
     respondToTransactionRequest,
     txRequestsSelectors,
+    deserializeTxn,
 } from '_redux/slices/transaction-requests';
 
 import type { SuiMoveNormalizedType } from '@mysten/sui.js';
@@ -83,6 +84,7 @@ export function DappTxApprovalPage() {
             (txID && txRequestsSelectors.selectById(state, txID)) || null,
         [txID]
     );
+
     const txRequest = useAppSelector(txRequestSelector);
     const loading = txRequestsLoading;
     const dispatch = useAppDispatch();
@@ -108,6 +110,18 @@ export function DappTxApprovalPage() {
                     objectId: txRequest.tx.data.packageObjectId,
                     moduleName: txRequest.tx.data.module,
                     functionName: txRequest.tx.data.function,
+                })
+            );
+        }
+
+        if (
+            txRequest?.tx?.type === 'serialized-move-call' &&
+            !txRequest.metadata
+        ) {
+            dispatch(
+                deserializeTxn({
+                    serializedTxn: txRequest?.tx.data,
+                    id: txRequest.id,
                 })
             );
         }
@@ -211,7 +225,12 @@ export function DappTxApprovalPage() {
                         label: 'Transaction Type',
                         content: 'SerializedMoveCall',
                     },
-                    { label: 'Contents', content: txRequest?.tx?.data },
+                    {
+                        label: 'Contents',
+                        content: txRequest?.tx?.data,
+                        //TODO: display the full unSerializedTxn contents
+                        // txRequest?.unSerializedTxn ??
+                    },
                 ];
             default:
                 return [];
