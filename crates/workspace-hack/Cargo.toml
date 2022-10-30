@@ -101,6 +101,7 @@ clap-f595c2ba2a3f28df = { package = "clap", version = "2", features = ["ansi_ter
 clap-7b89eefb6aaa9bf3 = { package = "clap", version = "3", features = ["atty", "clap_derive", "color", "derive", "once_cell", "std", "strsim", "suggestions", "termcolor"] }
 clap_lex = { version = "0.2", default-features = false }
 clear_on_drop = { version = "0.2", default-features = false }
+coarsetime = { version = "0.1", default-features = false }
 codespan = { version = "0.11", default-features = false, features = ["serde", "serialization"] }
 codespan-reporting = { version = "0.11", default-features = false, features = ["serde", "serialization"] }
 collectable = { version = "0.0.2", default-features = false }
@@ -610,11 +611,13 @@ web-sys = { version = "0.3", default-features = false, features = ["BinaryType",
 webpki = { version = "0.22", default-features = false, features = ["alloc", "std"] }
 webpki-roots = { version = "0.22", default-features = false }
 whoami = { version = "1" }
+wyhash = { version = "0.5", default-features = false }
 wyz = { version = "0.2", default-features = false, features = ["alloc"] }
 x509-parser = { version = "0.14" }
 yaml-rust = { version = "0.4", default-features = false }
 yansi = { version = "0.5", default-features = false }
 yasna = { version = "0.5", features = ["std", "time"] }
+ying-profiler = { git = "https://github.com/velvia/ying-profiler", default-features = false, features = ["profile-spans", "tracing"] }
 zeroize = { version = "1", features = ["alloc", "zeroize_derive"] }
 zstd-sys = { version = "2", features = ["legacy", "zdict_builder"] }
 
@@ -724,6 +727,7 @@ clap-7b89eefb6aaa9bf3 = { package = "clap", version = "3", features = ["atty", "
 clap_derive = { version = "3" }
 clap_lex = { version = "0.2", default-features = false }
 clear_on_drop = { version = "0.2", default-features = false }
+coarsetime = { version = "0.1", default-features = false }
 codespan = { version = "0.11", default-features = false, features = ["serde", "serialization"] }
 codespan-reporting = { version = "0.11", default-features = false, features = ["serde", "serialization"] }
 collectable = { version = "0.0.2", default-features = false }
@@ -1324,11 +1328,13 @@ webpki = { version = "0.22", default-features = false, features = ["alloc", "std
 webpki-roots = { version = "0.22", default-features = false }
 which = { version = "4", default-features = false }
 whoami = { version = "1" }
+wyhash = { version = "0.5", default-features = false }
 wyz = { version = "0.2", default-features = false, features = ["alloc"] }
 x509-parser = { version = "0.14" }
 yaml-rust = { version = "0.4", default-features = false }
 yansi = { version = "0.5", default-features = false }
 yasna = { version = "0.5", features = ["std", "time"] }
+ying-profiler = { git = "https://github.com/velvia/ying-profiler", default-features = false, features = ["profile-spans", "tracing"] }
 zeroize = { version = "1", features = ["alloc", "zeroize_derive"] }
 zeroize_derive = { version = "1", default-features = false }
 zstd-sys = { version = "2", features = ["legacy", "zdict_builder"] }

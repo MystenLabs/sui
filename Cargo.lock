@@ -1185,6 +1185,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "coarsetime"
+version = "0.1.22"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "454038500439e141804c655b4cd1bc6a70bcb95cd2bc9463af5661b6956f0e46"
+dependencies = [
+ "libc",
+ "once_cell",
+ "wasi 0.11.0+wasi-snapshot-preview1",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "codespan"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8345,7 +8357,6 @@ dependencies = [
  "chrono",
  "clap 3.2.22",
  "futures",
- "jemalloc-ctl",
  "multiaddr",
  "mysten-network",
  "narwhal-network",
@@ -8365,6 +8376,7 @@ dependencies = [
  "tracing",
  "typed-store",
  "workspace-hack",
+ "ying-profiler",
 ]
 
 [[package]]
@@ -10337,6 +10349,7 @@ dependencies = [
  "clap_lex",
  "clear_on_drop",
  "clipboard-win",
+ "coarsetime",
  "codespan",
  "codespan-reporting",
  "collectable",
@@ -10996,14 +11009,25 @@ dependencies = [
  "windows-sys",
  "windows_x86_64_msvc",
  "winreg",
+ "wyhash",
  "wyz",
  "x509-parser",
  "yaml-rust",
  "yansi",
  "yasna",
+ "ying-profiler",
  "zeroize",
  "zeroize_derive",
  "zstd-sys",
+]
+
+[[package]]
+name = "wyhash"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "baf6e163c25e3fac820b4b453185ea2dea3b6a3e0a721d4d23d75bd33734c295"
+dependencies = [
+ "rand_core 0.6.4",
 ]
 
 [[package]]
@@ -11062,6 +11086,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "346d34a236c9d3e5f3b9b74563f238f955bbd05fa0b8b4efa53c130c43982f4c"
 dependencies = [
  "time 0.3.15",
+]
+
+[[package]]
+name = "ying-profiler"
+version = "0.1.0"
+source = "git+https://github.com/velvia/ying-profiler#1a3e476299bfc1ff4a3168edd9fcf1ccda521aea"
+dependencies = [
+ "backtrace",
+ "chrono",
+ "coarsetime",
+ "dashmap",
+ "once_cell",
+ "rand 0.8.5",
+ "regex",
+ "tracing",
+ "wyhash",
 ]
 
 [[package]]
