@@ -24,7 +24,9 @@ describe('Transaction Serialization and deserialization', () => {
   beforeAll(async () => {
     toolbox = await setup();
     localSerializer = new LocalTxnDataSerializer(toolbox.provider);
-    rpcSerializer = new RpcTxnDataSerializer(toolbox.provider.endpoint);
+    rpcSerializer = new RpcTxnDataSerializer(
+      toolbox.provider.endpoints.fullNode
+    );
   });
 
   async function serializeAndDeserialize(
