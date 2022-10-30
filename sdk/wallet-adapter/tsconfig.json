@@ -3,6 +3,7 @@
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
+      "@mysten/bcs": ["../bcs/src"],
       "@mysten/sui.js": ["../typescript/src"],
       "@mysten/wallet-adapter-react": ["./packages/react-providers/src"],
       "@mysten/wallet-adapter-react-ui": ["./packages/ui/src"],
@@ -23,6 +24,7 @@
   },
   "include": ["src"],
   "references": [
+    { "path": "../bcs" },
     { "path": "../typescript" },
     { "path": "./packages/react-providers" },
     { "path": "./packages/ui" },
