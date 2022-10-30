@@ -8691,6 +8691,7 @@ dependencies = [
  "narwhal-executor",
  "once_cell",
  "opentelemetry 0.17.0",
+ "proptest",
  "rand 0.8.5",
  "roaring",
  "schemars",
