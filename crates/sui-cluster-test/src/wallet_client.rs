@@ -9,6 +9,7 @@ use sui_keys::keystore::AccountKeystore;
 use sui_sdk::SuiClient;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{KeypairTraits, Signature};
+use sui_types::intent::Intent;
 use sui_types::messages::TransactionData;
 use tracing::{info, info_span, Instrument};
 
@@ -58,7 +59,7 @@ impl WalletClient {
         self.get_wallet()
             .config
             .keystore
-            .sign(&self.address, &txn_data.to_bytes())
+            .sign_secure(&self.address, txn_data, Intent::default())
             .unwrap_or_else(|e| panic!("Failed to sign transaction for {}. {}", desc, e))
     }
 }

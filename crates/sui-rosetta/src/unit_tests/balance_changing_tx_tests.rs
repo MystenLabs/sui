@@ -20,6 +20,7 @@ use sui_sdk::rpc_types::{
 use sui_sdk::{SuiClient, TransactionExecutionResult};
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::gas_coin::GasCoin;
+use sui_types::intent::Intent;
 use sui_types::messages::{
     CallArg, ExecuteTransactionRequestType, ExecutionStatus, InputObjectKind, MoveCall,
     MoveModulePublish, ObjectArg, Pay, PayAllSui, PaySui, SingleTransactionKind, Transaction,
@@ -267,7 +268,9 @@ async fn test_transaction(
 
     let data = TransactionData::new(TransactionKind::Single(tx.clone()), sender, gas, 10000);
 
-    let signature = keystore.sign(&data.signer(), &data.to_bytes()).unwrap();
+    let signature = keystore
+        .sign_secure(&data.signer(), &data, Intent::default())
+        .unwrap();
 
     // Balance before execution
     let mut balances = BTreeMap::new();
@@ -280,7 +283,9 @@ async fn test_transaction(
     let response = client
         .quorum_driver()
         .execute_transaction(
-            Transaction::new(data.clone(), signature).verify().unwrap(),
+            Transaction::new(data.clone(), Intent::default(), signature)
+                .verify()
+                .unwrap(),
             Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await

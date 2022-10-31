@@ -7,7 +7,7 @@ use std::sync::Arc;
 use strum_macros::Display;
 use strum_macros::EnumString;
 use sui_core::authority::AuthorityState;
-use sui_core::test_utils::to_sender_signed_transaction;
+use sui_core::test_utils::to_verified_transaction;
 use sui_core::transaction_input_checker;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SequenceNumber;
@@ -137,7 +137,7 @@ pub async fn estimate_transaction_computation_cost(
 ) -> anyhow::Result<GasCostSummary> {
     // Make a dummy transaction
     let (_, keypair): (_, AccountKeyPair) = get_key_pair();
-    let tx = to_sender_signed_transaction(tx_data, &keypair);
+    let tx = to_verified_transaction(tx_data, &keypair);
 
     let (_gas_status, input_objects) =
         transaction_input_checker::check_transaction_input(&state.db(), &tx).await?;

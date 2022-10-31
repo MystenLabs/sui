@@ -3,7 +3,7 @@
 use super::*;
 use crate::authority::{authority_tests::init_state_with_objects, AuthorityState};
 use crate::consensus_handler::VerifiedSequencedConsensusTransaction;
-use crate::test_utils::to_sender_signed_transaction;
+use crate::test_utils::to_verified_transaction;
 use move_core_types::{account_address::AccountAddress, ident_str};
 use narwhal_types::Transactions;
 use narwhal_types::TransactionsServer;
@@ -76,7 +76,7 @@ pub async fn test_certificates(authority: &AuthorityState) -> Vec<CertifiedTrans
             /* max_gas */ 10_000,
         );
 
-        let transaction = to_sender_signed_transaction(data, &keypair);
+        let transaction = to_verified_transaction(data, &keypair);
 
         // Submit the transaction and assemble a certificate.
         let response = authority

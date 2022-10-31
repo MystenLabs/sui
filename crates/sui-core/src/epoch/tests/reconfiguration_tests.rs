@@ -24,14 +24,13 @@ use sui_types::{
     SUI_SYSTEM_STATE_OBJECT_ID,
 };
 
-use crate::authority::AuthorityState;
 use crate::checkpoints::causal_order_effects::TestEffectsStore;
 use crate::checkpoints::reconstruction::SpanGraph;
+use crate::{authority::AuthorityState, test_utils::to_verified_transaction};
 use crate::{
     authority_active::ActiveAuthority,
     authority_aggregator::authority_aggregator_tests::init_local_authorities,
     checkpoints::{CheckpointLocals, CHECKPOINT_COUNT_PER_EPOCH},
-    test_utils::to_sender_signed_transaction,
 };
 
 #[tokio::test]
@@ -106,7 +105,7 @@ async fn test_start_epoch_change() {
         gas_object.compute_object_reference(),
         1000,
     );
-    let transaction = to_sender_signed_transaction(tx_data, &sender_key);
+    let transaction = to_verified_transaction(tx_data, &sender_key);
     assert_eq!(
         state
             .handle_transaction(transaction.clone())

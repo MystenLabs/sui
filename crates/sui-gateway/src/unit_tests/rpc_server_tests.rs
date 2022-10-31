@@ -6,7 +6,7 @@ use std::{path::Path, str::FromStr};
 
 use sui_config::utils::get_available_port;
 use sui_config::SUI_KEYSTORE_FILENAME;
-use sui_core::test_utils::to_sender_signed_transaction;
+use sui_core::test_utils::{to_sender_signed_transaction, to_verified_transaction};
 use sui_framework_build::compiled_package::BuildConfig;
 use sui_json::SuiJsonValue;
 use sui_json_rpc::api::{
@@ -264,7 +264,7 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
                 .transaction_builder()
                 .transfer_object(*address, oref.object_id, Some(gas_id), 1000, *address)
                 .await?;
-            let tx = to_sender_signed_transaction(data, keystore.get_key(address).unwrap());
+            let tx = to_verified_transaction(data, keystore.get_key(address).unwrap());
 
             let response = client
                 .quorum_driver()

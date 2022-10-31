@@ -32,7 +32,7 @@ use crate::authority_client::{
     LocalAuthorityClient, LocalAuthorityClientFaultConfig, NetworkAuthorityClient,
     NetworkAuthorityClientMetrics,
 };
-use crate::test_utils::to_sender_signed_transaction;
+use crate::test_utils::to_verified_transaction;
 use crate::validator_info::make_committee;
 
 use tokio::time::Instant;
@@ -187,7 +187,7 @@ pub fn transfer_coin_transaction(
     object_ref: ObjectRef,
     gas_object_ref: ObjectRef,
 ) -> VerifiedTransaction {
-    to_sender_signed_transaction(
+    to_verified_transaction(
         TransactionData::new_transfer(
             dest,
             object_ref,
@@ -212,7 +212,7 @@ pub fn transfer_object_move_transaction(
         CallArg::Pure(bcs::to_bytes(&AccountAddress::from(dest)).unwrap()),
     ];
 
-    to_sender_signed_transaction(
+    to_verified_transaction(
         TransactionData::new_move_call(
             src,
             framework_obj_ref,
@@ -241,7 +241,7 @@ pub fn crate_object_move_transaction(
         CallArg::Pure(bcs::to_bytes(&AccountAddress::from(dest)).unwrap()),
     ];
 
-    to_sender_signed_transaction(
+    to_verified_transaction(
         TransactionData::new_move_call(
             src,
             framework_obj_ref,
@@ -263,7 +263,7 @@ pub fn delete_object_move_transaction(
     framework_obj_ref: ObjectRef,
     gas_object_ref: ObjectRef,
 ) -> VerifiedTransaction {
-    to_sender_signed_transaction(
+    to_verified_transaction(
         TransactionData::new_move_call(
             src,
             framework_obj_ref,
@@ -291,7 +291,7 @@ pub fn set_object_move_transaction(
         CallArg::Pure(bcs::to_bytes(&value).unwrap()),
     ];
 
-    to_sender_signed_transaction(
+    to_verified_transaction(
         TransactionData::new_move_call(
             src,
             framework_obj_ref,

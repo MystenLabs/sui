@@ -5,14 +5,15 @@ use super::*;
 
 use crate::authority::authority_tests::{init_state, send_and_confirm_transaction};
 use crate::authority::AuthorityState;
+use crate::test_utils::to_verified_transaction;
 use futures::future::join_all;
 use std::collections::HashMap;
 use sui_types::crypto::AccountKeyPair;
 use sui_types::{
     base_types::dbg_addr,
-    crypto::{get_key_pair, Signature},
+    crypto::get_key_pair,
     error::SuiError,
-    messages::{Transaction, TransactionInfoResponse, TransactionKind},
+    messages::{TransactionInfoResponse, TransactionKind},
 };
 
 #[tokio::test]
@@ -448,9 +449,7 @@ async fn execute_pay_sui(
         amounts,
     }));
     let data = TransactionData::new_with_gas_price(kind, sender, gas_object_ref, gas_budget, 1);
-
-    let signature = Signature::new(&data, &sender_key);
-    let tx = Transaction::new(data, signature).verify().unwrap();
+    let tx = to_verified_transaction(data, &sender_key);
     let txn_result = send_and_confirm_transaction(&authority_state, tx)
         .await
         .map(|t| t.into());
@@ -484,13 +483,10 @@ async fn execute_pay_all_sui(
         recipient,
     }));
     let data = TransactionData::new_with_gas_price(kind, sender, gas_object_ref, gas_budget, 1);
-    let signature = Signature::new(&data, &sender_key);
-    let tx = Transaction::new(data, signature).verify().unwrap();
-
+    let tx = to_verified_transaction(data, &sender_key);
     let txn_result = send_and_confirm_transaction(&authority_state, tx)
         .await
         .map(|t| t.into());
-
     PaySuiTransactionExecutionResult {
         authority_state,
         txn_result,

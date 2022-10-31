@@ -8,7 +8,7 @@ use crate::{
         call_move, call_move_with_shared, init_state_with_ids, send_and_confirm_transaction,
         TestCallArg,
     },
-    test_utils::to_sender_signed_transaction,
+    test_utils::to_verified_transaction,
 };
 
 use move_core_types::{
@@ -1852,7 +1852,7 @@ pub async fn build_and_try_publish_test_package(
     let gas_object_ref = gas_object.unwrap().compute_object_reference();
 
     let data = TransactionData::new_module(*sender, gas_object_ref, all_module_bytes, gas_budget);
-    let transaction = to_sender_signed_transaction(data, sender_key);
+    let transaction = to_verified_transaction(data, sender_key);
 
     send_and_confirm_transaction(authority, transaction)
         .await

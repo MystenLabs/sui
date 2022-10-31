@@ -3,7 +3,7 @@
 
 use crate::{
     authority::authority_tests::init_state_with_ids_and_object_basics,
-    test_utils::to_sender_signed_transaction,
+    test_utils::to_verified_transaction,
 };
 
 use super::*;
@@ -64,7 +64,7 @@ async fn test_batch_transaction_ok() -> anyhow::Result<()> {
         1000000,
     );
 
-    let tx = to_sender_signed_transaction(data, &sender_key);
+    let tx = to_verified_transaction(data, &sender_key);
     let response = send_and_confirm_transaction(&authority_state, tx).await?;
     let effects = response.signed_effects.unwrap().effects;
     assert!(effects.status.is_ok());
@@ -128,7 +128,7 @@ async fn test_batch_transaction_last_one_fail() -> anyhow::Result<()> {
         100000,
     );
 
-    let tx = to_sender_signed_transaction(data, &sender_key);
+    let tx = to_verified_transaction(data, &sender_key);
 
     let response = send_and_confirm_transaction(&authority_state, tx).await?;
     let effects = response.signed_effects.unwrap().effects;
@@ -161,7 +161,7 @@ async fn test_batch_contains_publish() -> anyhow::Result<()> {
             .compute_object_reference(),
         100000,
     );
-    let tx = to_sender_signed_transaction(data, &sender_key);
+    let tx = to_verified_transaction(data, &sender_key);
     let response = send_and_confirm_transaction(&authority_state, tx).await;
     assert!(matches!(
         response.unwrap_err(),
@@ -191,7 +191,7 @@ async fn test_batch_contains_transfer_sui() -> anyhow::Result<()> {
         100000,
     );
 
-    let tx = to_sender_signed_transaction(data, &sender_key);
+    let tx = to_verified_transaction(data, &sender_key);
     let response = send_and_confirm_transaction(&authority_state, tx).await;
     assert!(matches!(
         response.unwrap_err(),
@@ -237,7 +237,7 @@ async fn test_batch_insufficient_gas_balance() -> anyhow::Result<()> {
         100000,
     );
 
-    let tx = to_sender_signed_transaction(data, &sender_key);
+    let tx = to_verified_transaction(data, &sender_key);
     let response = send_and_confirm_transaction(&authority_state, tx).await;
     assert!(matches!(
         response.unwrap_err(),

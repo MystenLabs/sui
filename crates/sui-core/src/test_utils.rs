@@ -11,6 +11,7 @@ use sui_types::{
     base_types::{dbg_addr, ObjectID, TransactionDigest},
     batch::UpdateItem,
     crypto::{get_key_pair, AccountKeyPair, Signature},
+    intent::Intent,
     messages::{
         BatchInfoRequest, BatchInfoResponseItem, Transaction, TransactionData, VerifiedTransaction,
     },
@@ -106,7 +107,7 @@ pub fn create_fake_transaction() -> VerifiedTransaction {
         object.compute_object_reference(),
         10000,
     );
-    to_sender_signed_transaction(data, &sender_key)
+    to_verified_transaction(data, &sender_key)
 }
 
 pub fn create_fake_cert_and_effect_digest<'a>(
@@ -140,10 +141,17 @@ pub fn create_fake_cert_and_effect_digest<'a>(
 pub fn to_sender_signed_transaction(
     data: TransactionData,
     signer: &dyn Signer<Signature>,
+) -> Transaction {
+    let signature = Signature::new_secure(&data, Intent::default(), signer);
+    Transaction::new(data, Intent::default(), signature)
+}
+
+// This is used to create a verified transaction from transaction data and signer signing with default intent.
+pub fn to_verified_transaction(
+    data: TransactionData,
+    signer: &dyn Signer<Signature>,
 ) -> VerifiedTransaction {
-    let signature = Signature::new_temp(&data.to_bytes(), signer);
-    // let signature = Signature::new_secure(&data, Intent::default(), signer).unwrap();
-    VerifiedTransaction::new_unchecked(Transaction::new(data, signature))
+    to_sender_signed_transaction(data, signer).verify().unwrap()
 }
 
 pub fn dummy_transaction_effects(tx: &Transaction) -> TransactionEffects {

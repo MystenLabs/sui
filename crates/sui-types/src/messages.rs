@@ -9,6 +9,7 @@ use crate::crypto::{
     SignatureScheme, SuiSignature, SuiSignatureInner, ToFromBytes, VerificationObligation,
 };
 use crate::gas::GasCostSummary;
+use crate::intent::{Intent, IntentMessage};
 use crate::messages_checkpoint::{
     AuthenticatedCheckpoint, CheckpointSequenceNumber, SignedCheckpointFragmentMessage,
 };
@@ -794,8 +795,9 @@ pub struct TransactionEnvelope<S> {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct SenderSignedData {
+    pub intent: Intent,
     pub data: TransactionData,
-    /// tx_signature is signed by the transaction sender, applied on `data`.
+    /// tx_signature is signed by the transaction sender, committing to the intent message containing the transaction data and intent.
     pub tx_signature: Signature,
 }
 
@@ -804,9 +806,13 @@ impl<S> TransactionEnvelope<S> {
         if self.signed_data.data.kind.is_system_tx() {
             return Ok(());
         }
-        self.signed_data
-            .tx_signature
-            .verify(&self.signed_data.data, self.signed_data.data.sender)
+        debug!("Received intent {:?}", &self.signed_data.intent);
+        // TODO (joyqvq): Check if the expected intent matches the submitted intent.
+        self.signed_data.tx_signature.verify_secure(
+            &self.signed_data.data,
+            self.signed_data.intent.clone(),
+            self.signed_data.data.sender,
+        )
     }
 
     pub fn sender_address(&self) -> SuiAddress {
@@ -904,14 +910,15 @@ pub type VerifiedTransaction = VerifiedTransactionEnvelope<EmptySignInfo>;
 impl Transaction {
     #[cfg(test)]
     pub fn from_data(data: TransactionData, signer: &dyn signature::Signer<Signature>) -> Self {
-        let signature = Signature::new(&data, signer);
-        Self::new(data, signature)
+        let signature = Signature::new_secure(&data, Intent::default(), signer);
+        Self::new(data, Intent::default(), signature)
     }
 
-    pub fn new(data: TransactionData, signature: Signature) -> Self {
+    pub fn new(data: TransactionData, intent: Intent, signature: Signature) -> Self {
         Self {
             transaction_digest: OnceCell::new(),
             signed_data: SenderSignedData {
+                intent,
                 data,
                 tx_signature: signature,
             },
@@ -925,8 +932,10 @@ impl Transaction {
     }
 
     pub fn to_network_data_for_execution(&self) -> (Base64, SignatureScheme, Base64, Base64) {
+        let intent_msg =
+            IntentMessage::new(self.signed_data.intent.clone(), &self.signed_data.data);
         (
-            Base64::from_bytes(&self.signed_data.data.to_bytes()),
+            Base64::from_bytes(bcs::to_bytes(&intent_msg).unwrap().as_slice()),
             self.signed_data.tx_signature.scheme(),
             Base64::from_bytes(self.signed_data.tx_signature.signature_bytes()),
             Base64::from_bytes(self.signed_data.tx_signature.public_key_bytes()),
@@ -988,10 +997,13 @@ impl VerifiedSignedTransaction {
 
     pub fn to_transaction(self) -> VerifiedTransaction {
         let SenderSignedData {
-            data, tx_signature, ..
+            intent,
+            data,
+            tx_signature,
+            ..
         } = self.into_inner().signed_data;
         // safe because VerifiedSignedTransaction has already passed verification
-        VerifiedTransaction::new_unchecked(Transaction::new(data, tx_signature))
+        VerifiedTransaction::new_unchecked(Transaction::new(data, intent, tx_signature))
     }
 }
 
@@ -1036,6 +1048,7 @@ impl SignedTransaction {
         );
         let signed_data = SenderSignedData {
             data,
+            intent: Intent::default(),
             // Arbitrary keypair
             tx_signature: Ed25519SuiSignature::from_bytes(&[0; Ed25519SuiSignature::LENGTH])
                 .unwrap()
@@ -1072,7 +1085,11 @@ impl SignedTransaction {
     // forming a CertifiedTransaction, where each transaction's authority signature
     // is taking out to form an aggregated signature.
     pub fn to_transaction(self) -> Transaction {
-        Transaction::new(self.signed_data.data, self.signed_data.tx_signature)
+        Transaction::new(
+            self.signed_data.data,
+            self.signed_data.intent,
+            self.signed_data.tx_signature,
+        )
     }
 }
 
@@ -2259,6 +2276,7 @@ impl CertifiedTransaction {
         // safe because CertifiedTransaction can only be constructed from a VerifiedTransaction
         VerifiedTransaction::new_unchecked(Transaction::new(
             self.signed_data.data,
+            self.signed_data.intent,
             self.signed_data.tx_signature,
         ))
     }

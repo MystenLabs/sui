@@ -24,7 +24,8 @@ use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::batch::TxSequenceNumber;
 use sui_types::committee::EpochId;
-use sui_types::crypto::{SignableBytes, SignatureScheme};
+use sui_types::crypto::SignatureScheme;
+use sui_types::intent::IntentMessage;
 use sui_types::messages::{
     CommitteeInfoRequest, CommitteeInfoResponse, Transaction, TransactionData,
 };
@@ -154,8 +155,9 @@ impl RpcFullNodeReadApiServer for FullNodeApi {
         signature: Base64,
         pub_key: Base64,
     ) -> RpcResult<SuiTransactionEffects> {
-        let data =
-            TransactionData::from_signable_bytes(&tx_bytes.to_vec().map_err(|e| anyhow!(e))?)?;
+        let intent_msg = IntentMessage::<TransactionData>::from_bytes(
+            &tx_bytes.to_vec().map_err(|e| anyhow!(e))?,
+        )?;
         let flag = vec![sig_scheme.flag()];
         let signature = Signature::from_bytes(
             &[
@@ -166,7 +168,7 @@ impl RpcFullNodeReadApiServer for FullNodeApi {
             .concat(),
         )
         .map_err(|e| anyhow!(e))?;
-        let txn = Transaction::new(data, signature)
+        let txn = Transaction::new(intent_msg.value, intent_msg.intent, signature)
             .verify()
             .map_err(|e| anyhow!(e))?;
         let txn_digest = *txn.digest();
