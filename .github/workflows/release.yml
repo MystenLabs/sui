@@ -1,10 +1,12 @@
 name: Release Binaries
 
 on:
-  push:
-    tags:
-      - 'devnet-*'
   workflow_dispatch:
+    inputs:
+      sui_tag:
+        description: 'Sui repo tag to build from'
+        type: string
+        required: true
 
 env:
   CARGO_TERM_COLOR: always
@@ -29,27 +31,16 @@ env:
   RUST_BACKTRACE: short
 
 jobs:
-  release:
-    runs-on: [ubuntu-ghcloud]
-    outputs:
-      isRelease: ${{ steps.release.outputs.isRelease }}
-    steps:
-      - name: Check for release
-        id: release
-        shell: bash
-        run: |
-          IS_RELEASE='false' ; if [[ $GITHUB_REF =~ ^refs/tags/devnet-[0-9].* ]]; then IS_RELEASE='true' ; fi
-          echo ::set-output name=isRelease::${IS_RELEASE}
-
   release-build:
     needs: release
-    if: needs.release.outputs.isRelease == 'true'
     timeout-minutes: 45
     runs-on: [ubuntu-ghcloud]
     strategy:
       fail-fast: false
     steps:
       - uses: actions/checkout@v3
+        with:
+          ref: ${{ inputs.sui_tag }}
       - uses: actions-rs/toolchain@v1
 
       - name: cargo build (release)
@@ -77,6 +68,7 @@ jobs:
       - name: Publish binaries
         uses: softprops/action-gh-release@v1
         with:
+          tag_name: ${{ inputs.sui_tag }}
           files: |
             ${{ steps.build.outputs.BIN_SUI }}
             ${{ steps.build.outputs.BIN_SUI_NODE }}
