@@ -166,7 +166,7 @@ use sui::{object, transfer, tx_context};
 use sui::tx_context::TxContext;
 
 public entry fun delete_child(parent: &mut Parent) {
-    let Child { id } = ofield::remove<vector<u8>, Child>(
+    let Child { id, count: _ } = ofield::remove<vector<u8>, Child>(
         &mut parent.id,
         b"child",
     );
