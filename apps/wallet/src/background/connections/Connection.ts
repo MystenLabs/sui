@@ -18,7 +18,7 @@ export abstract class Connection {
 
     public get onDisconnect() {
         return this._portStream.onDisconnect.pipe(
-            map((port) => ({ port, connection: this })),
+            map((port) => ({ port })),
             take(1)
         );
     }

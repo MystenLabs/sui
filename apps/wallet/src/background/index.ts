@@ -9,6 +9,7 @@ import Keyring from './Keyring';
 import Permissions from './Permissions';
 import { Connections } from './connections';
 import { openInNewTab } from '_shared/utils';
+import { MSG_CONNECT } from '_src/content-script/keep-bg-alive';
 
 Browser.runtime.onInstalled.addListener(async ({ reason, previousVersion }) => {
     if (reason === 'install') {
@@ -40,5 +41,20 @@ Keyring.on('lockedStatusUpdate', (isLocked: boolean) => {
 Browser.alarms.onAlarm.addListener((alarm) => {
     if (alarm.name === LOCK_ALARM_NAME) {
         Keyring.lock();
+    }
+});
+
+Keyring.on('lockedStatusUpdate', async (isLocked) => {
+    if (!isLocked) {
+        const allTabs = await Browser.tabs.query({});
+        for (const aTab of allTabs) {
+            if (aTab.id) {
+                try {
+                    await Browser.tabs.sendMessage(aTab.id, MSG_CONNECT);
+                } catch (e) {
+                    // not all tabs have the cs installed
+                }
+            }
+        }
     }
 });
