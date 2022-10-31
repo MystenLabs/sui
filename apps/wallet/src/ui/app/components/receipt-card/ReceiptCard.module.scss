@@ -114,6 +114,7 @@
         font-size: 14px;
         line-height: 100%;
         color: colors.$gray-90;
+        word-break: break-all;
     }
 
     .explorer-link {
@@ -234,5 +235,6 @@
 
     .label {
         text-transform: capitalize;
+        word-break: break-all;
     }
 }

@@ -47,7 +47,7 @@ function TransactionCard({ txn }: { txn: TxResultState }) {
     const transferType =
         txn.kind === 'Call' ? 'Call' : txn.isSender ? 'Sent' : 'Received';
 
-    const amount = txn?.balance || txn?.amount || txn?.txGas || 0;
+    const amount = txn?.amount || txn?.balance || txn?.txGas || 0;
 
     const transferMeta = {
         Call: {
