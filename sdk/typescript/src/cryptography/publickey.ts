@@ -1,24 +1,25 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import BN from 'bn.js';
 
 /**
  * Value to be converted into public key.
  */
-export type PublicKeyInitData =
-  | number
-  | string
-  | Uint8Array
-  | Array<number>
-  | PublicKeyData;
+export type PublicKeyInitData = string | Uint8Array | Iterable<number>;
 
-/**
- * JSON object representation of PublicKey class.
- */
-export type PublicKeyData = {
-  /** @internal */
-  _bn: BN;
-};
+export function bytesEqual(a: Uint8Array, b: Uint8Array) {
+  if (a === b) return true;
+
+  if (a.length !== b.length) {
+    return false;
+  }
+
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) {
+      return false;
+    }
+  }
+  return true;
+}
 
 /**
  * A keypair used for signing transactions.
@@ -29,12 +30,6 @@ export const SIGNATURE_SCHEME_TO_FLAG = {
   ED25519: 0x00,
   Secp256k1: 0x01,
 };
-
-export function checkPublicKeyData(
-  value: PublicKeyInitData
-): value is PublicKeyData {
-  return (value as PublicKeyData)._bn !== undefined;
-}
 
 /**
  * A public key
