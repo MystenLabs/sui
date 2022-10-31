@@ -9,6 +9,7 @@ import {
 import { describe, it, expect } from 'vitest';
 import * as secp from '@noble/secp256k1';
 import { Signature } from '@noble/secp256k1';
+import { fromB64, toB64 } from '@mysten/bcs';
 
 // Test case from https://github.com/rust-bitcoin/rust-secp256k1/blob/master/examples/sign_verify.rs#L26
 const VALID_SECP256K1_SECRET_KEY = [
@@ -39,18 +40,18 @@ describe('secp256k1-keypair', () => {
   });
 
   it('create keypair from secret key', () => {
-    const secret_key = Buffer.from(VALID_SECP256K1_SECRET_KEY);
-    const pub_key = Buffer.from(VALID_SECP256K1_PUBLIC_KEY);
-    let pub_key_base64 = pub_key.toString('base64');
+    const secret_key = new Uint8Array(VALID_SECP256K1_SECRET_KEY);
+    const pub_key = new Uint8Array(VALID_SECP256K1_PUBLIC_KEY);
+    let pub_key_base64 = toB64(pub_key);
     const keypair = Secp256k1Keypair.fromSecretKey(secret_key);
-    expect(keypair.getPublicKey().toBytes()).toEqual(Buffer.from(pub_key));
+    expect(keypair.getPublicKey().toBytes()).toEqual(new Uint8Array(pub_key));
     expect(keypair.getPublicKey().toBase64()).toEqual(pub_key_base64);
   });
 
   it('creating keypair from invalid secret key throws error', () => {
-    const secret_key = Buffer.from(INVALID_SECP256K1_SECRET_KEY);
-    let secret_key_base64 = secret_key.toString('base64');
-    const secretKey = Buffer.from(secret_key_base64, 'base64');
+    const secret_key = new Uint8Array(INVALID_SECP256K1_SECRET_KEY);
+    let secret_key_base64 = toB64(secret_key);
+    const secretKey = fromB64(secret_key_base64);
     expect(() => {
       Secp256k1Keypair.fromSecretKey(secretKey);
     }).toThrow('Expected 32 bytes of private key');
@@ -79,9 +80,7 @@ describe('secp256k1-keypair', () => {
       sig.getData()[64],
       true
     );
-    expect(Buffer.from(pubkey).toString('base64')).toEqual(
-      keypair.getPublicKey().toBase64()
-    );
+    expect(toB64(pubkey)).toEqual(keypair.getPublicKey().toBase64());
   });
 
   it('invalid mnemonics to derive secp256k1 keypair', () => {

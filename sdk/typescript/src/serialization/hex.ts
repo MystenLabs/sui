@@ -1,14 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Buffer } from 'buffer';
+import { fromHEX, toHEX } from '@mysten/bcs';
 
 export class HexDataBuffer {
   private _data: Uint8Array;
 
   constructor(data: Uint8Array | string) {
     if (typeof data === 'string') {
-      this._data = new Uint8Array(Buffer.from(data, 'hex'));
+      this._data = fromHEX(data);
     } else {
       this._data = data;
     }
@@ -23,6 +23,6 @@ export class HexDataBuffer {
   }
 
   toString(): string {
-    return Buffer.from(this._data).toString('hex');
+    return toHEX(this._data);
   }
 }

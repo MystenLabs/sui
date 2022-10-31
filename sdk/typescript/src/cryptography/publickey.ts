@@ -8,7 +8,6 @@ import BN from 'bn.js';
 export type PublicKeyInitData =
   | number
   | string
-  | Buffer
   | Uint8Array
   | Array<number>
   | PublicKeyData;
@@ -55,11 +54,6 @@ export interface PublicKey {
    * Return the byte array representation of the public key
    */
   toBytes(): Uint8Array;
-
-  /**
-   * Return the Buffer representation of the public key
-   */
-  toBuffer(): Buffer;
 
   /**
    * Return the base-64 representation of the public key

@@ -31,7 +31,7 @@ async function main() {
         LICENSE +
           file.replace(
             /import { BN } from ".*";\n/g,
-            'import { BN } from "bn.js";\nimport { Buffer } from "buffer";\n'
+            'import { BN } from "bn.js";\n'
           )
       );
     })

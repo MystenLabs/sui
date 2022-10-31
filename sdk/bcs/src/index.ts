@@ -119,7 +119,6 @@ export class BcsReader {
   }
   /**
    * Read U128 value from the buffer and shift cursor by 16.
-   * @returns
    */
   read128(): bigint {
     let value1 = this.read64();
@@ -142,7 +141,6 @@ export class BcsReader {
   /**
    * Read `num` number of bytes from the buffer and shift cursor by `num`.
    * @param num Number of bytes to read.
-   * @returns Selected Buffer.
    */
   readBytes(num: number): Uint8Array {
     let start = this.bytePosition + this.dataView.byteOffset;

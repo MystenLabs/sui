@@ -373,7 +373,6 @@ importers:
       '@types/lossless-json': ^1.0.1
       axios: ^0.27.2
       bn.js: ^5.2.0
-      buffer: ^6.0.3
       cross-fetch: ^3.1.5
       eslint: ^8.23.0
       eslint-config-prettier: ^8.5.0
@@ -404,7 +403,6 @@ importers:
       '@scure/bip32': 1.1.0
       '@scure/bip39': 1.1.0
       bn.js: 5.2.1
-      buffer: 6.0.3
       cross-fetch: 3.1.5
       jayson: 3.7.0
       js-sha3: 0.8.0

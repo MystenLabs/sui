@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { fromB64, toB64 } from '@mysten/bcs';
 import BN from 'bn.js';
-import { Buffer } from 'buffer';
 import sha3 from 'js-sha3';
 import {
   checkPublicKeyData,
@@ -29,7 +29,7 @@ export class Secp256k1PublicKey implements PublicKey {
       this._bn = value._bn;
     } else {
       if (typeof value === 'string') {
-        const buffer = Buffer.from(value, 'base64');
+        const buffer = fromB64(value);
         if (buffer.length !== SECP256K1_PUBLIC_KEY_SIZE) {
           throw new Error(
             `Invalid public key input. Expected ${SECP256K1_PUBLIC_KEY_SIZE} bytes, got ${buffer.length}`
@@ -40,7 +40,7 @@ export class Secp256k1PublicKey implements PublicKey {
         this._bn = new BN(value);
       }
       let length = this._bn.byteLength();
-      if (length != SECP256K1_PUBLIC_KEY_SIZE) {
+      if (length !== SECP256K1_PUBLIC_KEY_SIZE) {
         throw new Error(
           `Invalid public key input. Expected ${SECP256K1_PUBLIC_KEY_SIZE} bytes, got ${length}`
         );
@@ -59,28 +59,14 @@ export class Secp256k1PublicKey implements PublicKey {
    * Return the base-64 representation of the Secp256k1 public key
    */
   toBase64(): string {
-    return this.toBuffer().toString('base64');
+    return toB64(this.toBytes());
   }
 
   /**
    * Return the byte array representation of the Secp256k1 public key
    */
   toBytes(): Uint8Array {
-    return this.toBuffer();
-  }
-
-  /**
-   * Return the Buffer representation of the Secp256k1 public key
-   */
-  toBuffer(): Buffer {
-    const b = this._bn.toArrayLike(Buffer);
-    if (b.length === SECP256K1_PUBLIC_KEY_SIZE) {
-      return b;
-    }
-
-    const zeroPad = Buffer.alloc(SECP256K1_PUBLIC_KEY_SIZE);
-    b.copy(zeroPad, SECP256K1_PUBLIC_KEY_SIZE - b.length);
-    return zeroPad;
+    return Uint8Array.from(this._bn.toArray());
   }
 
   /**

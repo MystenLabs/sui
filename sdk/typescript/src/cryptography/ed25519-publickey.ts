@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import BN from 'bn.js';
-import { Buffer } from 'buffer';
 import sha3 from 'js-sha3';
+import { fromB64, toB64 } from '@mysten/bcs';
 import {
   checkPublicKeyData,
   PublicKeyInitData,
@@ -28,7 +28,7 @@ export class Ed25519PublicKey {
       this._bn = value._bn;
     } else {
       if (typeof value === 'string') {
-        const buffer = Buffer.from(value, 'base64');
+        const buffer = fromB64(value);
         if (buffer.length !== PUBLIC_KEY_SIZE) {
           throw new Error(
             `Invalid public key input. Expected ${PUBLIC_KEY_SIZE} bytes, got ${buffer.length}`
@@ -39,7 +39,7 @@ export class Ed25519PublicKey {
         this._bn = new BN(value);
       }
       let length = this._bn.byteLength();
-      if (length != PUBLIC_KEY_SIZE) {
+      if (length !== PUBLIC_KEY_SIZE) {
         throw new Error(
           `Invalid public key input. Expected ${PUBLIC_KEY_SIZE} bytes, got ${length}`
         );
@@ -58,28 +58,14 @@ export class Ed25519PublicKey {
    * Return the base-64 representation of the Ed25519 public key
    */
   toBase64(): string {
-    return this.toBuffer().toString('base64');
+    return toB64(this.toBytes());
   }
 
   /**
    * Return the byte array representation of the Ed25519 public key
    */
   toBytes(): Uint8Array {
-    return this.toBuffer();
-  }
-
-  /**
-   * Return the Buffer representation of the Ed25519 public key
-   */
-  toBuffer(): Buffer {
-    const b = this._bn.toArrayLike(Buffer);
-    if (b.length === PUBLIC_KEY_SIZE) {
-      return b;
-    }
-
-    const zeroPad = Buffer.alloc(PUBLIC_KEY_SIZE);
-    b.copy(zeroPad, PUBLIC_KEY_SIZE - b.length);
-    return zeroPad;
+    return Uint8Array.from(this._bn.toArray());
   }
 
   /**
