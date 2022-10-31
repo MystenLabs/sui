@@ -19,7 +19,7 @@ interface Props {
 }
 
 function PkgModuleViewWrapper({ id, data }: Props) {
-    const [searchParams] = useSearchParams();
+    const [searchParams, setSearchParams] = useSearchParams();
     const [modulesPageNumber, setModulesPageNumber] = useState(0);
 
     const clickModuleName = useCallback(
@@ -28,9 +28,11 @@ function PkgModuleViewWrapper({ id, data }: Props) {
                 ([moduleName]) => moduleName === module
             );
 
+            setSearchParams({ module });
+
             setModulesPageNumber(moduleIndex);
         },
-        [data.content]
+        [data.content, setSearchParams]
     );
 
     useEffect(() => {
@@ -47,7 +49,13 @@ function PkgModuleViewWrapper({ id, data }: Props) {
         <div className={'flex flex-wrap'}>
             <div className={styles.modulelist}>
                 {data.content.map(([name], idx) => (
-                    <button onClick={clickModuleName(name)} key={idx}>
+                    <button
+                        onClick={clickModuleName(name)}
+                        key={idx}
+                        className={
+                            idx === modulesPageNumber ? styles.activemodule : ''
+                        }
+                    >
                         {name}
                     </button>
                 ))}

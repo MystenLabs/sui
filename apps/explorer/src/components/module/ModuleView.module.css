@@ -84,7 +84,11 @@ section .codeview pre {
 }
 
 .modulelist button {
-    @apply w-[180px] text-left text-body bg-inherit cursor-pointer hover:bg-sui-grey-45 border-none hover:outline hover:rounded-[4px]  hover:outline-sui-grey-50 p-[10px] hover:font-semibold;
+    @apply w-[180px] text-left text-body bg-inherit cursor-pointer hover:bg-sui-grey-45 border-none hover:outline-[1px] hover:rounded-[4px]  hover:outline-sui-grey-50 p-[10px] hover:font-semibold;
+}
+
+button.activemodule {
+    @apply outline-[1px] rounded-[4px] outline-sui-grey-50 font-semibold bg-sui-grey-45;
 }
 
 .singlemodule {
