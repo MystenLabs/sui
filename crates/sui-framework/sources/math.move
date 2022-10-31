@@ -21,6 +21,22 @@ module sui::math {
             y
         }
     }
+    
+    /// Return the value of a base raised to a power
+    public fun pow(base: u64, exponent: u8): u64 {    
+        let res = 1;
+        while (exponent >= 1) {
+            if (exponent % 2 == 0) {
+                base = base * base;
+                exponent = exponent / 2;
+            } else {
+                res = res * base;
+                exponent = exponent - 1;
+            }
+        };
+
+        res
+    }
 
     /// Get a nearest lower integer Square Root for `x`. Given that this
     /// function can only operate with integers, it is impossible

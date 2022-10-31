@@ -8,6 +8,7 @@ Basic math for nicer programmability
 
 -  [Function `max`](#0x2_math_max)
 -  [Function `min`](#0x2_math_min)
+-  [Function `pow`](#0x2_math_pow)
 -  [Function `sqrt`](#0x2_math_sqrt)
 -  [Function `sqrt_u128`](#0x2_math_sqrt_u128)
 
@@ -67,6 +68,42 @@ Return the smaller of <code>x</code> and <code>y</code>
     } <b>else</b> {
         y
     }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_math_pow"></a>
+
+## Function `pow`
+
+Return the value of a base raised to a power
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="math.md#0x2_math_pow">pow</a>(base: u64, exponent: u8): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="math.md#0x2_math_pow">pow</a>(base: u64, exponent: u8): u64 {
+    <b>let</b> res = 1;
+    <b>while</b> (exponent &gt;= 1) {
+        <b>if</b> (exponent % 2 == 0) {
+            base = base * base;
+            exponent = exponent / 2;
+        } <b>else</b> {
+            res = res * base;
+            exponent = exponent - 1;
+        }
+    };
+
+    res
 }
 </code></pre>
 
