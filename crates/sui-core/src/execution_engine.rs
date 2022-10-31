@@ -459,7 +459,7 @@ fn pay<S>(
 ) -> Result<(), ExecutionError> {
     check_recipients(&recipients, &amounts)?;
     let (mut coins, coin_type) = check_coins(&coin_objects, None)?;
-    let (total_coins, total_amount) = check_total_coins(&coins, &amounts)?;
+    let (_total_coins, _total_amount) = check_total_coins(&coins, &amounts)?;
     let ctx = SingleTxContext::pay(tx_ctx.sender());
 
     debit_coins_and_transfer(
@@ -474,8 +474,8 @@ fn pay<S>(
 
     // double check that we didn't create or destroy money
     debug_assert_eq!(
-        total_coins - coins.iter().fold(0, |acc, c| acc + c.value()),
-        total_amount
+        _total_coins - coins.iter().fold(0, |acc, c| acc + c.value()),
+        _total_amount
     );
 
     // update the input coins to reflect the decrease in value.
@@ -513,7 +513,7 @@ fn pay_sui<S>(
 ) -> Result<(), ExecutionError> {
     let (mut coins, coin_type) = check_coins(coin_objects, Some(GasCoin::type_()))?;
     check_recipients(&recipients, &amounts)?;
-    let (total_coins, total_amount) = check_total_coins(&coins, &amounts)?;
+    let (_total_coins, _total_amount) = check_total_coins(&coins, &amounts)?;
 
     let mut merged_coin = coins.swap_remove(0);
     merged_coin.merge_coins(&mut coins);
@@ -536,7 +536,7 @@ fn pay_sui<S>(
     }
     update_input_coins(&ctx, temporary_store, coin_objects, &merged_coin, None);
 
-    debug_assert_eq!(total_coins - merged_coin.value(), total_amount);
+    debug_assert_eq!(_total_coins - merged_coin.value(), _total_amount);
     Ok(())
 }
 
@@ -547,7 +547,7 @@ fn pay_all_sui<S>(
     recipient: SuiAddress,
 ) -> Result<(), ExecutionError> {
     let (mut coins, _coin_type) = check_coins(coin_objects, Some(GasCoin::type_()))?;
-    let total_coins = coins.iter().fold(0, |acc, c| acc + c.value());
+    let _total_coins = coins.iter().fold(0, |acc, c| acc + c.value());
 
     let mut merged_coin = coins.swap_remove(0);
     merged_coin.merge_coins(&mut coins);
@@ -560,7 +560,7 @@ fn pay_all_sui<S>(
         Some(recipient),
     );
 
-    debug_assert_eq!(total_coins, merged_coin.value());
+    debug_assert_eq!(_total_coins, merged_coin.value());
     Ok(())
 }
 
