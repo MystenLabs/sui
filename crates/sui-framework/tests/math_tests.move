@@ -21,16 +21,16 @@ module sui::math_tests {
     
     #[test]
     fun test_pow() {
-        assert!(nft::pow(1, 0) == 1, 0);
-        assert!(nft::pow(3, 1) == 3, 0);
-        assert!(nft::pow(2, 10) == 1024, 0);
-        assert!(nft::pow(10, 6) == 1000000, 0);
+        assert!(math::pow(1, 0) == 1, 0);
+        assert!(math::pow(3, 1) == 3, 0);
+        assert!(math::pow(2, 10) == 1024, 0);
+        assert!(math::pow(10, 6) == 1000000, 0);
     }
 
     #[test]
     #[expected_failure]
     fun test_pow_overflow() {
-        nft::pow(10, 100);
+        math::pow(10, 100);
     }
 
     #[test]
