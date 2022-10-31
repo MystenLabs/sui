@@ -806,7 +806,7 @@ impl<S> TransactionEnvelope<S> {
         if self.signed_data.data.kind.is_system_tx() {
             return Ok(());
         }
-        debug!("Received intent {:?}", &self.signed_data.intent);
+        info!("Received intent {:?}", &self.signed_data.intent);
         // TODO (joyqvq): Check if the expected intent matches the submitted intent.
         self.signed_data.tx_signature.verify_secure(
             &self.signed_data.data,
