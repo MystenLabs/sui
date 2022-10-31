@@ -12,7 +12,6 @@ import {
     getObjectId,
     getTransferSuiTransaction,
     getTransferSuiAmount,
-    SUI_TYPE_ARG,
 } from '@mysten/sui.js';
 import cl from 'clsx';
 import { Link } from 'react-router-dom';
@@ -44,7 +43,6 @@ import type {
 
 import styles from './TransactionResult.module.css';
 
-import { CoinFormat, useFormatCoin } from '~/hooks/useFormatCoin';
 import { Banner } from '~/ui/Banner';
 import { PageHeader } from '~/ui/PageHeader';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
@@ -239,16 +237,6 @@ function ItemView({ data }: { data: TxItemView }) {
             </div>
         </div>
     );
-}
-
-function SingleAmount({ amount }: { amount: bigint }) {
-    const formattedAmount = useFormatCoin(
-        amount,
-        SUI_TYPE_ARG,
-        CoinFormat.FULL
-    );
-
-    return <>{formattedAmount}</>;
 }
 
 const isPayType = (
@@ -471,25 +459,6 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                                             txdata.timestamp_ms
                                         )}
                                     </h3>
-                                )}
-                                {amounts && amounts !== null && (
-                                    <div className={styles.amountbox}>
-                                        <div>Amount</div>
-                                        <div>
-                                            {amounts.length === 1 ? (
-                                                <SingleAmount
-                                                    amount={amounts[0]}
-                                                />
-                                            ) : (
-                                                <>
-                                                    {amounts.reduce(
-                                                        (x, y) => x + y
-                                                    )}
-                                                </>
-                                            )}
-                                            <sup>SUI</sup>
-                                        </div>
-                                    </div>
                                 )}
                                 <SendReceiveView
                                     sender={sendreceive.sender}

@@ -1,5 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
 import cl from 'clsx';
 import { useState, useEffect, useContext } from 'react';
 
@@ -21,6 +22,11 @@ type TxAddress = {
     objects?: string[];
 };
 
+const getObjType = (objId: string, network: string) =>
+    rpc(network)
+        .getObject(objId)
+        .then((obj) => parseObjectType(obj));
+
 function MultipleRecipients({ sender, recipient, amount, objects }: TxAddress) {
     const [network] = useContext(NetworkContext);
 
@@ -31,13 +37,7 @@ function MultipleRecipients({ sender, recipient, amount, objects }: TxAddress) {
 
     useEffect(() => {
         if (objects) {
-            Promise.all(
-                objects.map((objId) =>
-                    rpc(network)
-                        .getObject(objId)
-                        .then((obj) => parseObjectType(obj))
-                )
-            )
+            Promise.all(objects.map((objId) => getObjType(objId, network)))
                 .then((objTypes) =>
                     setCoinList({
                         loadState: 'loaded',
@@ -127,6 +127,46 @@ function Amount({ amount, label }: { amount: bigint; label: string }) {
     );
 }
 
+function SingleAmount({
+    amount,
+    objectId,
+}: {
+    amount: bigint;
+    objectId: string;
+}) {
+    const [network] = useContext(NetworkContext);
+
+    const [label, setLabel] = useState({
+        data: '',
+        loadState: 'pending',
+    });
+
+    useEffect(() => {
+        getObjType(objectId, network)
+            .then((res) =>
+                setLabel({
+                    data: /^0x2::coin::Coin<(.+)>$/.exec(res)?.[1]!,
+                    loadState: 'loaded',
+                })
+            )
+            .catch((err) =>
+                setLabel({
+                    data: '',
+                    loadState: 'fail',
+                })
+            );
+    }, [objectId, network]);
+
+    const formattedAmount = useFormatCoin(amount, label.data, CoinFormat.FULL);
+
+    return (
+        <div>
+            {formattedAmount[0]}
+            <sup>{formattedAmount[1]}</sup>
+        </div>
+    );
+}
+
 //TODO: Add date format function
 function SendReceiveView({ sender, recipient, amount, objects }: TxAddress) {
     const [isShortScreen, setIsShortScreen] = useState(false);
@@ -137,52 +177,62 @@ function SendReceiveView({ sender, recipient, amount, objects }: TxAddress) {
         setIsShortScreen(innerWidth < 440);
     }, [innerWidth]);
 
-    if (recipient && recipient.length === 1) {
+    if (recipient && recipient.length === 1 && amount) {
         return (
-            <div className={styles.txaddress}>
-                <h4 className={styles.oneheading}>Sender &#x26; Recipient</h4>
-                <div className={cl([styles.oneaddress, styles.senderwline])}>
-                    <div className="z-0">
-                        <StartIcon />
-                    </div>
-                    <Longtext
-                        text={sender}
-                        category="addresses"
-                        isLink={true}
-                    />
+            <>
+                <div className={styles.amountbox}>
+                    <div>Amount</div>
+                    <SingleAmount amount={amount[0]} objectId={objects![0]} />
                 </div>
-                <div>
-                    {recipient.map((add: string, idx: number) => (
-                        <div key={idx} className="flex">
-                            <div
-                                className={cl([
-                                    styles.oneaddress,
-                                    'mt-[20px] ml-[10px] w-[90%]',
-                                ])}
-                            >
+                <div className={styles.txaddress}>
+                    <h4 className={styles.oneheading}>
+                        Sender &#x26; Recipient
+                    </h4>
+                    <div
+                        className={cl([styles.oneaddress, styles.senderwline])}
+                    >
+                        <div className="z-0">
+                            <StartIcon />
+                        </div>
+                        <Longtext
+                            text={sender}
+                            category="addresses"
+                            isLink={true}
+                        />
+                    </div>
+                    <div>
+                        {recipient.map((add: string, idx: number) => (
+                            <div key={idx} className="flex">
                                 <div
-                                    className={`${styles.doneicon} ${
-                                        styles.doneiconwline
-                                    }
+                                    className={cl([
+                                        styles.oneaddress,
+                                        'mt-[20px] ml-[10px] w-[90%]',
+                                    ])}
+                                >
+                                    <div
+                                        className={`${styles.doneicon} ${
+                                            styles.doneiconwline
+                                        }
                                   ${
                                       isShortScreen
                                           ? styles.doneiconwlongline
                                           : styles.doneiconwshortline
                                   }`}
-                                >
-                                    <DoneIcon />
+                                    >
+                                        <DoneIcon />
+                                    </div>
+                                    <Longtext
+                                        text={add}
+                                        category="addresses"
+                                        isLink={true}
+                                        alttext={add}
+                                    />
                                 </div>
-                                <Longtext
-                                    text={add}
-                                    category="addresses"
-                                    isLink={true}
-                                    alttext={add}
-                                />
                             </div>
-                        </div>
-                    ))}
+                        ))}
+                    </div>
                 </div>
-            </div>
+            </>
         );
     }
 
