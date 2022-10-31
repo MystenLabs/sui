@@ -23,7 +23,10 @@ import {
 } from '../../components/events/eventDisplay';
 import Longtext from '../../components/longtext/Longtext';
 import ModulesWrapper from '../../components/module/ModulesWrapper';
-import { type LinkObj, TxAddresses } from '../../components/transaction-card/TxCardUtils';
+import {
+    type LinkObj,
+    TxAddresses,
+} from '../../components/transaction-card/TxCardUtils';
 import { convertNumberToDate } from '../../utils/timeUtils';
 import SendReceiveView from './SendReceiveView';
 import TxLinks from './TxLinks';
@@ -238,14 +241,14 @@ function ItemView({ data }: { data: TxItemView }) {
     );
 }
 
-function SingleAmount ({amount} : {amount : bigint}) {
- const formattedAmount = useFormatCoin(
+function SingleAmount({ amount }: { amount: bigint }) {
+    const formattedAmount = useFormatCoin(
         amount,
         SUI_TYPE_ARG,
         CoinFormat.FULL
-    ) ; 
+    );
 
-  return <>{formattedAmount}</>;
+    return <>{formattedAmount}</>;
 }
 
 const isPayType = (
@@ -469,16 +472,21 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                                         )}
                                     </h3>
                                 )}
-                                { amounts && amounts !== null && (
+                                {amounts && amounts !== null && (
                                     <div className={styles.amountbox}>
                                         <div>Amount</div>
                                         <div>
-                                            {(amounts.length === 1) ? <SingleAmount amount={amounts[0]}/>
-                                                                              : <>{amounts.reduce(
-                                                    (x, y) =>
-                                                        x + y
-                                                )}</>
-                                            }
+                                            {amounts.length === 1 ? (
+                                                <SingleAmount
+                                                    amount={amounts[0]}
+                                                />
+                                            ) : (
+                                                <>
+                                                    {amounts.reduce(
+                                                        (x, y) => x + y
+                                                    )}
+                                                </>
+                                            )}
                                             <sup>SUI</sup>
                                         </div>
                                     </div>

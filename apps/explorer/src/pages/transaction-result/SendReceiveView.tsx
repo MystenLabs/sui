@@ -12,8 +12,7 @@ import { parseObjectType } from '../../utils/objectUtils';
 
 import styles from './SendReceiveView.module.css';
 
-import {useFormatCoin } from '~/hooks/useFormatCoin';
-
+import { useFormatCoin, CoinFormat } from '~/hooks/useFormatCoin';
 
 type TxAddress = {
     sender: string;
@@ -81,25 +80,29 @@ function MultipleRecipients({ sender, recipient, amount, objects }: TxAddress) {
                         </div>
                         {recipient.map((add: string, idx: number) => (
                             <div key={idx}>
-                          <>
-                                <div className={styles.oneaddress}>
-                                    <div className={styles.doneicon}>
-                                        <DoneIcon />
+                                <>
+                                    <div className={styles.oneaddress}>
+                                        <div className={styles.doneicon}>
+                                            <DoneIcon />
+                                        </div>
+                                        <Longtext
+                                            text={add}
+                                            category="addresses"
+                                            isLink={true}
+                                            alttext={add}
+                                        />
                                     </div>
-                                    <Longtext
-                                        text={add}
-                                        category="addresses"
-                                        isLink={true}
-                                        alttext={add}
-                                    />
-                                </div>
-                          {(amount?.[idx] && <Amount 
-                            amount={amount![idx]}
-                            label={coinList.loadState === 'loaded'
-                                            ? coinList.data[idx]
-                                            : ''}
-                            /> )}
-                          </>
+                                    {amount?.[idx] && (
+                                        <Amount
+                                            amount={amount![idx]}
+                                            label={
+                                                coinList.loadState === 'loaded'
+                                                    ? coinList.data[idx]
+                                                    : ''
+                                            }
+                                        />
+                                    )}
+                                </>
                             </div>
                         ))}
                     </div>
@@ -109,15 +112,19 @@ function MultipleRecipients({ sender, recipient, amount, objects }: TxAddress) {
     );
 }
 
-function Amount ({amount, label} : {amount : BigInt, label: string}) {
-return <div className={styles.sui}>
-  <span className={styles.suiamount}>
-                                        {amount.toString()}
-                                    </span>
-                                    <span className={styles.suilabel}>
-    {label} 
-                                    </span> </div>
-
+function Amount({ amount, label }: { amount: bigint; label: string }) {
+    const coinBoilerPlateRemoved = /^0x2::coin::Coin<(.+)>$/.exec(label)?.[1];
+    const formattedCoin = useFormatCoin(
+        amount,
+        coinBoilerPlateRemoved,
+        CoinFormat.FULL
+    );
+    return (
+        <div className={styles.sui}>
+            <span className={styles.suiamount}>{formattedCoin[0]}</span>
+            <span className={styles.suilabel}>{formattedCoin[1]}</span>
+        </div>
+    );
 }
 
 //TODO: Add date format function
