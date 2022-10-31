@@ -3,7 +3,7 @@
 use crate::{legacy_emit_cost, legacy_empty_cost};
 use curve25519_dalek_ng::scalar::Scalar;
 use fastcrypto::{
-    bls12381::{BLS12381PublicKey, BLS12381Signature},
+    bls12381::min_sig::{BLS12381PublicKey, BLS12381Signature},
     bulletproofs::{BulletproofsRangeProof, PedersenCommitment},
     ed25519::{Ed25519PublicKey, Ed25519Signature},
     hmac,

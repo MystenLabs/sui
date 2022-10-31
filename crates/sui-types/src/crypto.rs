@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use anyhow::{anyhow, Error};
 use digest::Digest;
-use fastcrypto::bls12381::{
+use fastcrypto::bls12381::min_sig::{
     BLS12381AggregateSignature, BLS12381KeyPair, BLS12381PrivateKey, BLS12381PublicKey,
     BLS12381Signature,
 };
