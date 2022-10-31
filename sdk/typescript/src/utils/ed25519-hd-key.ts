@@ -7,7 +7,7 @@
 import { sha512 } from '@noble/hashes/sha512';
 import { hmac } from '@noble/hashes/hmac';
 import nacl from 'tweetnacl';
-import { fromHEX, toB64 } from '@mysten/bcs';
+import { fromHEX } from '@mysten/bcs';
 
 type Hex = string;
 type Path = string;
