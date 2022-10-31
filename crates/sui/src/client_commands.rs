@@ -26,7 +26,7 @@ use sui_framework::compiled_move_package_to_bytes;
 use tracing::info;
 
 use crate::config::{Config, PersistedConfig, SuiClientConfig};
-use sui_framework_build::compiled_package::{CompiledPackage};
+use sui_framework_build::compiled_package::CompiledPackage;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
     GetObjectDataResponse, SuiObjectInfo, SuiParsedObject, SuiTransactionResponse,
@@ -411,7 +411,7 @@ impl SuiClientCommands {
 
                 let sui_compiled_package = CompiledPackage {
                     package: compiled_package.clone(),
-                    path: package_path.clone()
+                    path: package_path.clone(),
                 };
                 let compiled_modules: Vec<Vec<u8>> =
                     compiled_move_package_to_bytes(&sui_compiled_package);

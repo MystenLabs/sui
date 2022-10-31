@@ -13,9 +13,12 @@ use once_cell::sync::Lazy;
 use std::{collections::BTreeMap, path::Path};
 use sui_framework_build::compiled_package::{BuildConfig, CompiledPackage};
 use sui_types::{
-    base_types::TransactionDigest, error::{SuiResult, SuiError}, in_memory_storage::InMemoryStorage,
-    messages::InputObjects, temporary_store::TemporaryStore, MOVE_STDLIB_ADDRESS,
-    SUI_FRAMEWORK_ADDRESS,
+    base_types::TransactionDigest,
+    error::{SuiError, SuiResult},
+    in_memory_storage::InMemoryStorage,
+    messages::InputObjects,
+    temporary_store::TemporaryStore,
+    MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
 
 pub mod cost_calib;
@@ -107,7 +110,8 @@ pub fn build_move_package_to_bytes(
     build_config: BuildConfig,
 ) -> Result<Vec<Vec<u8>>, SuiError> {
     build_move_package(path, build_config).map(|compiled_pkg| {
-        compiled_pkg.get_modules()
+        compiled_pkg
+            .get_modules()
             .map(|m| {
                 let mut bytes = Vec::new();
                 m.serialize(&mut bytes).unwrap();
