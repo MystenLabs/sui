@@ -9,6 +9,7 @@ use narwhal_executor::SubscriberError;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use thiserror::Error;
+use tonic::Status;
 use typed_store::rocks::TypedStoreError;
 
 pub const TRANSACTION_NOT_FOUND_MSG_PREFIX: &str = "Could not find the referenced transaction";
@@ -42,10 +43,6 @@ macro_rules! exit_main {
         }
     };
 }
-
-const VALIDATOR_HALTED_ERROR_MSG: &str =
-    "Validator temporarily stopped processing transactions due to epoch change";
-const MISSING_COMMITTEE_ERROR_MSG: &str = "Missing committee information for epoch";
 
 /// Custom error type for Sui.
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error, Hash)]
@@ -405,7 +402,7 @@ pub enum SuiError {
     #[error("Too many authority errors were detected for {}: {:?}", action, errors)]
     TooManyIncorrectAuthorities {
         errors: Vec<(AuthorityName, SuiError)>,
-        action: &'static str,
+        action: String,
     },
     #[error("Inconsistent results observed in the Gateway. This should not happen and typically means there is a bug in the Sui implementation. Details: {error:?}")]
     InconsistentGatewayResult { error: String },
@@ -443,7 +440,7 @@ pub enum SuiError {
     InvalidPrivateKey,
 
     // Epoch related errors.
-    #[error("{VALIDATOR_HALTED_ERROR_MSG}")]
+    #[error("Validator temporarily stopped processing transactions due to epoch change")]
     ValidatorHaltedAtEpochEnd,
     #[error("Inconsistent state detected during epoch change: {:?}", error)]
     InconsistentEpochState { error: String },
@@ -453,7 +450,7 @@ pub enum SuiError {
     // These are errors that occur when an RPC fails and is simply the utf8 message sent in a
     // Tonic::Status
     #[error("{1} - {0}")]
-    RpcError(String, &'static str),
+    RpcError(String, String),
 
     #[error("Error when calling executeTransaction rpc endpoint: {:?}", error)]
     RpcExecuteTransactionError { error: String },
@@ -473,7 +470,7 @@ pub enum SuiError {
     #[error("Invalid committee composition")]
     InvalidCommittee(String),
 
-    #[error("{MISSING_COMMITTEE_ERROR_MSG} {0}")]
+    #[error("Missing committee information for epoch {0}")]
     MissingCommitteeAtEpoch(EpochId),
 
     #[error("Failed to get supermajority's consensus on committee information for minimal epoch: {minimal_epoch}")]
@@ -514,9 +511,24 @@ impl From<SubscriberError> for SuiError {
     }
 }
 
-impl From<tonic::Status> for SuiError {
-    fn from(status: tonic::Status) -> Self {
-        Self::RpcError(status.message().to_owned(), status.code().description())
+impl From<Status> for SuiError {
+    fn from(status: Status) -> Self {
+        let result = bincode::deserialize::<SuiError>(status.details());
+        if let Ok(sui_error) = result {
+            sui_error
+        } else {
+            Self::RpcError(
+                status.message().to_owned(),
+                status.code().description().to_owned(),
+            )
+        }
+    }
+}
+
+impl From<SuiError> for Status {
+    fn from(error: SuiError) -> Self {
+        let bytes = bincode::serialize(&error).unwrap();
+        Status::with_details(tonic::Code::Internal, error.to_string(), bytes.into())
     }
 }
 
@@ -536,9 +548,8 @@ impl From<&str> for SuiError {
 
 impl SuiError {
     pub fn indicates_epoch_change(&self) -> bool {
-        let err_str = self.to_string();
-        err_str.contains(VALIDATOR_HALTED_ERROR_MSG)
-            || err_str.contains(MISSING_COMMITTEE_ERROR_MSG)
+        matches!(self, SuiError::ValidatorHaltedAtEpochEnd)
+            || matches!(self, SuiError::MissingCommitteeAtEpoch(_))
     }
 }
 

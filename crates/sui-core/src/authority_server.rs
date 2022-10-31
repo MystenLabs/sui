@@ -361,9 +361,8 @@ impl ValidatorService {
         });
         let tx_verif_metrics_guard = start_timer(metrics.tx_verification_latency.clone());
 
-        let transaction = transaction.verify().map_err(|e| {
+        let transaction = transaction.verify().tap_err(|_| {
             metrics.signature_errors.inc();
-            tonic::Status::invalid_argument(e.to_string())
         })?;
         drop(tx_verif_metrics_guard);
 
@@ -379,8 +378,7 @@ impl ValidatorService {
         let info = state
             .handle_transaction(transaction)
             .instrument(span)
-            .await
-            .map_err(|e| tonic::Status::internal(e.to_string()))?;
+            .await?;
 
         Ok(tonic::Response::new(info.into()))
     }
@@ -402,37 +400,24 @@ impl ValidatorService {
 
         // 1) Check if cert already executed
         let tx_digest = *certificate.digest();
-        if let Some(response) = state
-            .get_tx_info_already_executed(&tx_digest)
-            .await
-            .map_err(|e| tonic::Status::internal(e.to_string()))?
-        {
+        if let Some(response) = state.get_tx_info_already_executed(&tx_digest).await? {
             return Ok(tonic::Response::new(response.into()));
         }
 
         // 2) Verify cert signatures
         let cert_verif_metrics_guard = start_timer(metrics.cert_verification_latency.clone());
-        let certificate = certificate
-            .verify(&state.committee.load())
-            .map_err(|e| tonic::Status::invalid_argument(e.to_string()))?;
+        let certificate = certificate.verify(&state.committee.load())?;
         drop(cert_verif_metrics_guard);
 
         // 3) If the validator is already halted, we stop here, to avoid
         // sending the transaction to consensus.
         if state.is_halted() && !certificate.signed_data.data.kind.is_system_tx() {
-            return Err(tonic::Status::internal(
-                SuiError::ValidatorHaltedAtEpochEnd.to_string(),
-            ));
+            return Err(tonic::Status::from(SuiError::ValidatorHaltedAtEpochEnd));
         }
 
         // 4) If it's a shared object transaction and requires consensus, we need to do so.
         // This will wait until either timeout or we have heard back from consensus.
-        if is_consensus_tx
-            && !state
-                .transaction_shared_locks_exist(&certificate)
-                .await
-                .map_err(|e| tonic::Status::internal(e.to_string()))?
-        {
+        if is_consensus_tx && !state.transaction_shared_locks_exist(&certificate).await? {
             // Note that num_inflight_transactions() only include user submitted transactions, and only user txns can be dropped here.
             // This backpressure should not affect system transactions, e.g. for checkpointing.
             if consensus_adapter.num_inflight_transactions() > MAX_PENDING_CONSENSUS_TRANSACTIONS {
@@ -440,10 +425,7 @@ impl ValidatorService {
                 ));
             }
             let _metrics_guard = start_timer(metrics.consensus_latency.clone());
-            consensus_adapter
-                .submit(&state.name, &certificate)
-                .await
-                .map_err(|e| tonic::Status::internal(e.to_string()))?;
+            consensus_adapter.submit(&state.name, &certificate).await?;
         }
 
         // 5) Execute the certificate.
@@ -470,7 +452,7 @@ impl ValidatorService {
                 // afford this validator returning error.
                 err @ Err(SuiError::TransactionInputObjectsErrors { .. }) if is_consensus_tx => {
                     if retry_delay_ms >= 12800 {
-                        return Err(tonic::Status::internal(err.unwrap_err().to_string()));
+                        return Err(tonic::Status::from(err.unwrap_err()));
                     }
                     debug!(
                         ?tx_digest,
@@ -485,7 +467,7 @@ impl ValidatorService {
                     let _ = state
                         .add_pending_certificates(vec![(tx_digest, Some(certificate))])
                         .tap_err(|e| error!(?tx_digest, "add_pending_certificates failed: {}", e));
-                    return Err(tonic::Status::internal(e.to_string()));
+                    return Err(tonic::Status::from(e));
                 }
                 Ok(response) => {
                     return Ok(tonic::Response::new(response.into()));
@@ -534,11 +516,7 @@ impl Validator for ValidatorService {
     ) -> Result<tonic::Response<AccountInfoResponse>, tonic::Status> {
         let request = request.into_inner();
 
-        let response = self
-            .state
-            .handle_account_info_request(request)
-            .await
-            .map_err(|e| tonic::Status::internal(e.to_string()))?;
+        let response = self.state.handle_account_info_request(request).await?;
 
         Ok(tonic::Response::new(response))
     }
@@ -549,11 +527,7 @@ impl Validator for ValidatorService {
     ) -> Result<tonic::Response<ObjectInfoResponse>, tonic::Status> {
         let request = request.into_inner();
 
-        let response = self
-            .state
-            .handle_object_info_request(request)
-            .await
-            .map_err(|e| tonic::Status::internal(e.to_string()))?;
+        let response = self.state.handle_object_info_request(request).await?;
 
         Ok(tonic::Response::new(response.into()))
     }
@@ -564,11 +538,7 @@ impl Validator for ValidatorService {
     ) -> Result<tonic::Response<TransactionInfoResponse>, tonic::Status> {
         let request = request.into_inner();
 
-        let response = self
-            .state
-            .handle_transaction_info_request(request)
-            .await
-            .map_err(|e| tonic::Status::internal(e.to_string()))?;
+        let response = self.state.handle_transaction_info_request(request).await?;
 
         Ok(tonic::Response::new(response.into()))
     }
@@ -581,13 +551,9 @@ impl Validator for ValidatorService {
     ) -> Result<tonic::Response<Self::FollowTxStreamStream>, tonic::Status> {
         let request = request.into_inner();
 
-        let xstream = self
-            .state
-            .handle_batch_streaming(request)
-            .await
-            .map_err(|e| tonic::Status::internal(e.to_string()))?;
+        let xstream = self.state.handle_batch_streaming(request).await?;
 
-        let response = xstream.map_err(|e| tonic::Status::internal(e.to_string()));
+        let response = xstream.map_err(tonic::Status::from);
 
         Ok(tonic::Response::new(Box::pin(response)))
     }
@@ -598,10 +564,7 @@ impl Validator for ValidatorService {
     ) -> Result<tonic::Response<CheckpointResponse>, tonic::Status> {
         let request = request.into_inner();
 
-        let response = self
-            .state
-            .handle_checkpoint_request(&request)
-            .map_err(|e| tonic::Status::internal(e.to_string()))?;
+        let response = self.state.handle_checkpoint_request(&request)?;
 
         return Ok(tonic::Response::new(response));
     }
@@ -613,13 +576,9 @@ impl Validator for ValidatorService {
         request: tonic::Request<CheckpointStreamRequest>,
     ) -> Result<tonic::Response<Self::FollowCheckpointStreamStream>, tonic::Status> {
         let request = request.into_inner();
-        let xstream = self
-            .state
-            .handle_checkpoint_streaming(request)
-            .await
-            .map_err(|e| tonic::Status::internal(e.to_string()))?;
+        let xstream = self.state.handle_checkpoint_streaming(request).await?;
 
-        let response = xstream.map_err(|e| tonic::Status::internal(e.to_string()));
+        let response = xstream.map_err(tonic::Status::from);
 
         Ok(tonic::Response::new(Box::pin(response)))
     }
@@ -630,10 +589,7 @@ impl Validator for ValidatorService {
     ) -> Result<tonic::Response<CommitteeInfoResponse>, tonic::Status> {
         let request = request.into_inner();
 
-        let response = self
-            .state
-            .handle_committee_info_request(&request)
-            .map_err(|e| tonic::Status::internal(e.to_string()))?;
+        let response = self.state.handle_committee_info_request(&request)?;
 
         return Ok(tonic::Response::new(response));
     }
