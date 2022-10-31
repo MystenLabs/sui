@@ -40,8 +40,11 @@ pub fn format_signature_token(view: &BinaryIndexedView, t: &SignatureToken) -> S
     match t {
         SignatureToken::Bool => "bool".to_string(),
         SignatureToken::U8 => "u8".to_string(),
+        SignatureToken::U16 => "u16".to_string(),
+        SignatureToken::U32 => "u32".to_string(),
         SignatureToken::U64 => "u64".to_string(),
         SignatureToken::U128 => "u128".to_string(),
+        SignatureToken::U256 => "u256".to_string(),
         SignatureToken::Address => "address".to_string(),
         SignatureToken::Signer => "signer".to_string(),
         SignatureToken::Vector(inner) => {

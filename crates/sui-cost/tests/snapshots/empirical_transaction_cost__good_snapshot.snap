@@ -4,12 +4,12 @@ expression: common_costs_actual
 ---
 {
   "MergeCoin": {
-    "computation_cost": 662,
+    "computation_cost": 665,
     "storage_cost": 32,
     "storage_rebate": 0
   },
   "Publish": {
-    "computation_cost": 719,
+    "computation_cost": 722,
     "storage_cost": 83,
     "storage_rebate": 0
   },
@@ -29,7 +29,7 @@ expression: common_costs_actual
     "storage_rebate": 15
   },
   "SplitCoin": {
-    "computation_cost": 790,
+    "computation_cost": 792,
     "storage_cost": 80,
     "storage_rebate": 0
   },

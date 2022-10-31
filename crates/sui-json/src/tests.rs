@@ -4,6 +4,7 @@
 use std::path::Path;
 use std::str::FromStr;
 
+use move_core_types::u256::U256;
 use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, value::MoveTypeLayout,
 };
@@ -18,70 +19,94 @@ use super::{is_homogeneous, HEX_PREFIX};
 use super::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue};
 
 #[test]
-fn test_json_is_homogeneous() {
+fn test_json_not_homogeneous() {
     let checks = vec![
-        (json!([1, 2, 3, true, 5, 6, 7]), false),
-        (json!([1, 2, 3, 4, 5, 6, 7]), true),
+        (json!([1, 2, 3, true, 5, 6, 7])),
         // Although we can encode numbers as strings, we do not allow mixing primitive
         // numbers and string encoded numbers
-        (json!([1, 2, "4", 4, 5, 6, 7]), false),
-        (json!([1, 2, 3, 4, "", 6, 7]), false),
-        (json!([]), true),
-        (json!([[], 2, 3, 5, 6, 7]), false),
-        (
-            json!([[[9, 53, 434], [0], [300]], [], [300, 4, 5, 6, 7]]),
-            false,
-        ),
-        (
-            json!([[[9, 53, 434], [0], [300]], [], [[332], [4, 5, 6, 7]]]),
-            true,
-        ),
-        (json!([[], [true], [false], []]), true),
-        (json!([[[[[2]]]], [], [[]], []]), true),
-        (json!([3]), true),
-        (json!([]), true),
-        (json!(1), true),
+        (json!([1, 2, "4", 4, 5, 6, 7])),
+        (json!([1, 2, 3, 4, "", 6, 7])),
+        (json!([
+            1,
+            2,
+            3,
+            4,
+            "456478542957455650244254734723567875646785024425473472356787564678463250089787",
+            6,
+            7
+        ])),
+        (json!([[], 2, 3, 5, 6, 7])),
+        (json!([[[9, 53, 434], [0], [300]], [], [300, 4, 5, 6, 7]])),
+    ];
+    // Driver
+    for arg in checks {
+        assert!(!is_homogeneous(&arg));
+    }
+}
+#[test]
+fn test_json_is_homogeneous() {
+    let checks = vec![
+        (json!([1, 2, 3, 4, 5, 6, 7])),
+        (json!(["123", "456"])),
+        (json!([
+            "123",
+            "456478542957455650244254734723567875646785024425473472356787564678463250089787"
+        ])),
+        (json!([])),
+        (json!([[[9, 53, 434], [0], [300]], [], [[332], [4, 5, 6, 7]]])),
+        (json!([[], [true], [false], []])),
+        (json!([[[[[2]]]], [], [[]], []])),
+        (json!([3])),
+        (json!([])),
+        (json!(1)),
     ];
 
     // Driver
-    for (arg, expected_val) in checks {
-        assert_eq!(is_homogeneous(&arg), expected_val);
+    for arg in checks {
+        assert!(is_homogeneous(&arg));
+    }
+}
+
+#[test]
+fn test_json_is_not_valid_sui_json() {
+    let checks = vec![
+        // Not homogeneous
+        (json!([1, 2, 3, true, 5, 6, 7])),
+        // Not homogeneous
+        (json!([1, 2, 3, "123456", 5, 6, 7])),
+        // Float not allowed
+        (json!(1.3)),
+        // Negative not allowed
+        (json!(-10)),
+        // Not homogeneous
+        (json!([[[9, 53, 434], [0], [300]], [], [300, 4, 5, 6, 7]])),
+    ];
+
+    // Driver
+    for arg in checks {
+        assert!(SuiJsonValue::new(arg).is_err());
     }
 }
 
 #[test]
 fn test_json_is_valid_sui_json() {
     let checks = vec![
-        // Not homogeneous
-        (json!([1, 2, 3, true, 5, 6, 7]), false),
         // Homogeneous
-        (json!([1, 2, 3, 4, 5, 6, 7]), true),
+        (json!([1, 2, 3, 4, 5, 6, 7])),
         // String allowed
-        (json!("a string"), true),
-        // Float not allowed
-        (json!(1.3), false),
+        (json!("a string")),
         // Bool allowed
-        (json!(true), true),
-        // Negative not allowed
-        (json!(-10), false),
+        (json!(true)),
         // Uint allowed
-        (json!(100), true),
-        // Not homogeneous
-        (
-            json!([[[9, 53, 434], [0], [300]], [], [300, 4, 5, 6, 7]]),
-            false,
-        ),
-        (json!([]), true),
+        (json!(100)),
+        (json!([])),
         // Homogeneous
-        (
-            json!([[[9, 53, 434], [0], [300]], [], [[332], [4, 5, 6, 7]]]),
-            true,
-        ),
+        (json!([[[9, 53, 434], [0], [300]], [], [[332], [4, 5, 6, 7]]])),
     ];
 
     // Driver
-    for (arg, expected_val) in checks {
-        assert_eq!(SuiJsonValue::new(arg).is_ok(), expected_val);
+    for arg in checks {
+        assert!(SuiJsonValue::new(arg).is_ok());
     }
 }
 
@@ -92,6 +117,8 @@ fn test_basic_args_linter_pure_args() {
     let good_hex_val = "0x1234ABCD";
     let bad_hex_val = "0x1234AB  CD";
     let u128_val = u64::MAX as u128 + 0xff;
+    let u256_hex_val = "0x1234567812345678877EDA56789098ABCDEF12";
+    let u256_val = U256::from_str_radix(u256_hex_val.trim_start_matches("0x"), 16).unwrap();
 
     let checks = vec![
         // Expected Bool match
@@ -106,6 +133,18 @@ fn test_basic_args_linter_pure_args() {
             MoveTypeLayout::U8,
             Some(bcs::to_bytes(&9u8).unwrap()),
         ),
+        // Expected U16 match
+        (
+            Value::from(9000u16),
+            MoveTypeLayout::U16,
+            Some(bcs::to_bytes(&9000u16).unwrap()),
+        ),
+        // Expected U32 match
+        (
+            Value::from(1233459000u32),
+            MoveTypeLayout::U32,
+            Some(bcs::to_bytes(&1233459000u32).unwrap()),
+        ),
         // U64 value less than 256 can be used as U8
         (
             Value::from(9u64),
@@ -117,6 +156,18 @@ fn test_basic_args_linter_pure_args() {
             Value::from("89"),
             MoveTypeLayout::U8,
             Some(bcs::to_bytes(&89u8).unwrap()),
+        ),
+        // U16 value encoded as str
+        (
+            Value::from("12389"),
+            MoveTypeLayout::U16,
+            Some(bcs::to_bytes(&12389u16).unwrap()),
+        ),
+        // U32 value encoded as str
+        (
+            Value::from("123899856"),
+            MoveTypeLayout::U32,
+            Some(bcs::to_bytes(&123899856u32).unwrap()),
         ),
         // U8 value encoded as str promoted to U64
         (
@@ -135,6 +186,18 @@ fn test_basic_args_linter_pure_args() {
             Value::from(format!("{u128_val}")),
             MoveTypeLayout::U128,
             Some(bcs::to_bytes(&u128_val).unwrap()),
+        ),
+        // U256 value encoded as str
+        (
+            Value::from(format!("{u256_val}")),
+            MoveTypeLayout::U256,
+            Some(bcs::to_bytes(&u256_val).unwrap()),
+        ),
+        // Although U256 value can be encoded as num, we enforce it must be a string
+        (
+            Value::from(123),
+            MoveTypeLayout::U256,
+            None,
         ),
         // U8 value encoded as hex str
         (
@@ -159,6 +222,12 @@ fn test_basic_args_linter_pure_args() {
             Value::from(format!("0x{:02x}", u128_val)),
             MoveTypeLayout::U128,
             Some(bcs::to_bytes(&u128_val).unwrap()),
+        ),
+        // U256 value encoded as hex str
+        (
+            Value::from(u256_hex_val.to_string()),
+            MoveTypeLayout::U256,
+            Some(bcs::to_bytes(&u256_val).unwrap()),
         ),
         // Space not allowed
         (Value::from(" 9"), MoveTypeLayout::U8, None),
@@ -536,8 +605,6 @@ fn test_convert_number_array_from_bcs() {
     ];
 
     let value = SuiJsonValue::from_bcs_bytes(&bcs_bytes).unwrap();
-
-    println!("{:?}", value);
 
     for value in value.0.as_array().unwrap() {
         assert_eq!(50000, value.as_u64().unwrap())

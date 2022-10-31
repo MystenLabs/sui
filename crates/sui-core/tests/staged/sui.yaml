@@ -327,6 +327,12 @@ MoveTypeLayout:
           TYPENAME: MoveStructLayout
     7:
       signer: UNIT
+    8:
+      u16: UNIT
+    9:
+      u32: UNIT
+    10:
+      u256: UNIT
 ObjectArg:
   ENUM:
     0:
@@ -525,6 +531,12 @@ TypeTag:
       struct:
         NEWTYPE:
           TYPENAME: StructTag
+    8:
+      u16: UNIT
+    9:
+      u32: UNIT
+    10:
+      u256: UNIT
 TypedStoreError:
   ENUM:
     0:
