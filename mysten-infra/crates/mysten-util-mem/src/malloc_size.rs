@@ -567,6 +567,13 @@ impl<T: MallocSizeOf> MallocSizeOf for parking_lot::Mutex<T> {
 }
 
 #[cfg(feature = "std")]
+impl<T: MallocSizeOf> MallocSizeOf for once_cell::sync::OnceCell<T> {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        self.get().map(|v| v.size_of(ops)).unwrap_or(0)
+    }
+}
+
+#[cfg(feature = "std")]
 impl<T: MallocSizeOf> MallocSizeOf for std::sync::RwLock<T> {
     fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
         self.read().unwrap().size_of(ops)
