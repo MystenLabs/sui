@@ -91,7 +91,7 @@ button.activemodule {
 }
 
 .singlemodule {
-    @apply w-[80vw] h-[364px] overflow-auto;
+    @apply w-[70vw] h-[364px] overflow-auto border-0 border-x-[1px] border-solid border-sui-grey-45 pl-[30px];
 }
 
 .pagmodule {
