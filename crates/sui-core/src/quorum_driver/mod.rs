@@ -92,7 +92,7 @@ where
         request: QuorumDriverRequest,
     ) -> SuiResult<QuorumDriverResponse> {
         let tx_digest = request.transaction.digest();
-        debug!(?tx_digest, "Received tranasction execution request");
+        debug!(?tx_digest, "Received transaction execution request");
         self.metrics.current_requests_in_flight.inc();
         let _metrics_guard = scopeguard::guard(self.metrics.clone(), |metrics| {
             metrics.current_requests_in_flight.dec();
@@ -191,6 +191,7 @@ where
             .process_transaction(transaction)
             .instrument(tracing::debug_span!("process_tx", ?tx_digest))
             .await
+            .map(|v| v.into())
     }
 
     pub async fn process_certificate(

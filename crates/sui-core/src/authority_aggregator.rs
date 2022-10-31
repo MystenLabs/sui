@@ -157,6 +157,65 @@ impl AuthAggMetrics {
     }
 }
 
+struct EffectsStakeInfo {
+    stake: StakeUnit,
+    effects: TransactionEffects,
+    signatures: Vec<AuthoritySignInfo>,
+}
+
+#[derive(Default)]
+struct EffectsStakeMap {
+    effects_map: HashMap<(EpochId, TransactionEffectsDigest), EffectsStakeInfo>,
+    efects_cert: Option<CertifiedTransactionEffects>,
+}
+
+impl EffectsStakeMap {
+    pub fn add(
+        &mut self,
+        effects: SignedTransactionEffects,
+        weight: StakeUnit,
+        committee: &Committee,
+    ) -> bool {
+        let epoch = effects.auth_signature.epoch;
+        let entry = self
+            .effects_map
+            .entry((epoch, *effects.digest()))
+            .or_insert(EffectsStakeInfo {
+                stake: 0,
+                effects: effects.effects,
+                signatures: vec![],
+            });
+        entry.stake += weight;
+        entry.signatures.push(effects.auth_signature);
+
+        if entry.stake >= committee.quorum_threshold() {
+            self.efects_cert = CertifiedTransactionEffects::new(
+                entry.effects.clone(),
+                entry.signatures.clone(),
+                committee,
+            )
+            .tap_err(|err| {
+                error!(
+                    "A quorum of effects are available but failed to form a certificate: {:?}",
+                    err
+                );
+            })
+            .ok();
+            self.efects_cert.is_some()
+        } else {
+            false
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.effects_map.len()
+    }
+
+    pub fn get_cert(&self) -> Option<CertifiedTransactionEffects> {
+        self.efects_cert.clone()
+    }
+}
+
 #[derive(Clone)]
 pub struct AuthorityAggregator<A> {
     /// Our Sui committee.
@@ -1529,7 +1588,7 @@ where
     pub async fn process_transaction(
         &self,
         transaction: VerifiedTransaction,
-    ) -> Result<CertifiedTransaction, SuiError> {
+    ) -> Result<VerifiedCertificate, SuiError> {
         // Now broadcast the transaction to all authorities.
         let threshold = self.committee.quorum_threshold();
         let validity = self.committee.validity_threshold();
@@ -1542,11 +1601,13 @@ where
         );
         trace!("Transaction data: {:?}", transaction.signed_data.data);
 
+        #[derive(Default)]
         struct ProcessTransactionState {
             // The list of signatures gathered at any point
             signatures: Vec<AuthoritySignInfo>,
             // A certificate if we manage to make or find one
-            certificate: Option<CertifiedTransaction>,
+            certificate: Option<VerifiedCertificate>,
+            effects_map: EffectsStakeMap,
             // The list of errors gathered at any point
             errors: Vec<SuiError>,
             // Tally of stake for good vs bad responses.
@@ -1554,13 +1615,7 @@ where
             bad_stake: StakeUnit,
         }
 
-        let state = ProcessTransactionState {
-            signatures: vec![],
-            certificate: None,
-            errors: vec![],
-            good_stake: 0,
-            bad_stake: 0,
-        };
+        let state = ProcessTransactionState::default();
 
         let transaction_ref = &transaction;
         let state = self
@@ -1574,12 +1629,10 @@ where
                 |mut state, name, weight, result| {
                     Box::pin(async move {
                         match result {
-                            // TODO: Support the case of returning transaction result that
-                            // were executed in previous epochs.
-                            //
                             // If we are given back a certificate, then we do not need
                             // to re-submit this transaction, we just returned the ready made
-                            // certificate.
+                            // certificate. A certificate is only valid if it's formed in the
+                            // current epoch.
                             Ok(VerifiedTransactionInfoResponse {
                                 certified_transaction: Some(inner_certificate),
                                 ..
@@ -1587,9 +1640,27 @@ where
                                 // A validator could return a certificate from an epoch that's
                                 // different from what the authority aggregator is expecting.
                                 // In that case, we should not accept that certificate.
-                                let tx_digest = inner_certificate.digest();
                                 debug!(tx_digest = ?tx_digest, ?name, weight, "Received prev certificate from validator handle_transaction");
-                                state.certificate = Some(inner_certificate.into());
+                                state.certificate = Some(inner_certificate);
+                            }
+
+                            // If we didn't match the above case but here, it means that we have
+                            // a cert from a different epoch, and also have effects (i.e. already
+                            // executed), we can accept the certificate if we get 2f+1 effects.
+                            // It's an proof that the transaction has already been finalized
+                            // in a different epoch, and hence it's ok to reuse the old certificate.
+                            Ok(VerifiedTransactionInfoResponse {
+                                signed_effects: Some(inner_effects),
+                                certified_transaction: Some(inner_certificate),
+                                ..
+                            }) => {
+                                if state.effects_map.add(inner_effects, weight, &self.committee) {
+                                    debug!(
+                                        tx_digest = ?tx_digest,
+                                        "Got quorum for effects for certs that are from previous epochs handle_transaction"
+                                    );
+                                    state.certificate = Some(inner_certificate);
+                                }
                             }
 
                             // If we get back a signed transaction, then we aggregate the
@@ -1614,7 +1685,7 @@ where
                                             transaction_ref.clone(),
                                             state.signatures.clone(),
                                             &self.committee,
-                                        )?);
+                                        )?.verify(&self.committee)?);
                                 }
                             }
                             // If we get back an error, then we aggregate and check
@@ -1734,25 +1805,17 @@ where
         &self,
         certificate: CertifiedTransaction,
     ) -> Result<CertifiedTransactionEffects, SuiError> {
-        struct EffectsStakeInfo {
-            stake: StakeUnit,
-            effects: TransactionEffects,
-            signatures: Vec<AuthoritySignInfo>,
-        }
+        #[derive(Default)]
         struct ProcessCertificateState {
             // Different authorities could return different effects.  We want at least one effect to come
             // from 2f+1 authorities, which meets quorum and can be considered the approved effect.
             // The map here allows us to count the stake for each unique effect.
-            effects_map: HashMap<TransactionEffectsDigest, EffectsStakeInfo>,
+            effects_map: EffectsStakeMap,
             bad_stake: StakeUnit,
             errors: Vec<SuiError>,
         }
 
-        let state = ProcessCertificateState {
-            effects_map: HashMap::new(),
-            bad_stake: 0,
-            errors: vec![],
-        };
+        let state = ProcessCertificateState::default();
 
         let tx_digest = *certificate.digest();
         let timeout_after_quorum = self.timeouts.post_quorum_timeout;
@@ -1798,8 +1861,6 @@ where
                 },
                 |mut state, name, weight, result| {
                     Box::pin(async move {
-                        // TODO: We need to deal with signed effects from different epochs correctly.
-                        //
                         // We aggregate the effects response, until we have more than 2f
                         // and return.
                         match result {
@@ -1808,18 +1869,7 @@ where
                                 ..
                             }) => {
                                 // Note: here we aggregate votes by the hash of the effects structure
-                                let entry = state
-                                    .effects_map
-                                    .entry(*inner_effects.digest())
-                                    .or_insert(EffectsStakeInfo {
-                                        stake: 0,
-                                        effects: inner_effects.effects,
-                                        signatures: vec![],
-                                    });
-                                entry.stake += weight;
-                                entry.signatures.push(inner_effects.auth_signature);
-
-                                if entry.stake >= threshold {
+                                if state.effects_map.add(inner_effects, weight, &self.committee) {
                                     debug!(
                                         tx_digest = ?tx_digest,
                                         "Got quorum for validators handle_certificate."
@@ -1859,20 +1909,12 @@ where
 
         // Check that one effects structure has more than 2f votes,
         // and return it.
-        for stake_info in state.effects_map.into_values() {
-            let EffectsStakeInfo {
-                stake,
-                effects,
-                signatures,
-            } = stake_info;
-            if stake >= threshold {
-                debug!(
-                    tx_digest = ?tx_digest,
-                    good_stake = stake,
-                    "Found an effect with good stake over threshold"
-                );
-                return CertifiedTransactionEffects::new(effects, signatures, &self.committee);
-            }
+        if let Some(cert) = state.effects_map.get_cert() {
+            debug!(
+                tx_digest = ?tx_digest,
+                "Found an effect with good stake over threshold"
+            );
+            return Ok(cert);
         }
 
         // If none has, fail.
@@ -1891,13 +1933,9 @@ where
             .await?;
         self.metrics.total_tx_certificates_created.inc();
         let response = self
-            .process_certificate(new_certificate.clone())
+            .process_certificate(new_certificate.clone().into())
             .instrument(tracing::debug_span!("process_cert"))
             .await?;
-
-        // This isn't strictly necessary, but it makes many other things simpler if we return a
-        // VerifiedCertificate instead of a CertifiedTransaction
-        let new_certificate = new_certificate.verify(&self.committee)?;
 
         Ok((new_certificate, response))
     }
