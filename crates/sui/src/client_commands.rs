@@ -27,7 +27,7 @@ use tracing::info;
 
 use crate::config::{Config, PersistedConfig, SuiClientConfig};
 use sui_framework::build_move_package;
-use sui_framework_build::compiled_package::BuildConfig;
+use sui_framework_build::compiled_package::{BuildConfig, CompiledPackage};
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
     GetObjectDataResponse, SuiObjectInfo, SuiParsedObject, SuiTransactionResponse,
@@ -410,8 +410,12 @@ impl SuiClientCommands {
                     .clone()
                     .compile_package(&package_path, &mut Vec::new())?;
 
+                let sui_compiled_package = CompiledPackage {
+                    package: compiled_package.clone(),
+                    path: package_path.clone()
+                };
                 let compiled_modules: Vec<Vec<u8>> =
-                    compiled_move_package_to_bytes(&compiled_package);
+                    compiled_move_package_to_bytes(&sui_compiled_package);
 
                 // verify that all dependency packages have the correct on-chain bytecode
                 let mut verifier = BytecodeSourceVerifier::new(context.client.read_api(), false);

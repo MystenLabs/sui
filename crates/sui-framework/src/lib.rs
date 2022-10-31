@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use fastcrypto::encoding::{Base64, Encoding};
 use move_binary_format::CompiledModule;
 use move_cli::base::test::UnitTestResult;
 use move_core_types::gas_algebra::InternalGas;
@@ -12,7 +13,7 @@ use once_cell::sync::Lazy;
 use std::{collections::BTreeMap, path::Path};
 use sui_framework_build::compiled_package::{BuildConfig, CompiledPackage};
 use sui_types::{
-    base_types::TransactionDigest, error::SuiResult, in_memory_storage::InMemoryStorage,
+    base_types::TransactionDigest, error::{SuiResult, SuiError}, in_memory_storage::InMemoryStorage,
     messages::InputObjects, temporary_store::TemporaryStore, MOVE_STDLIB_ADDRESS,
     SUI_FRAMEWORK_ADDRESS,
 };
@@ -105,8 +106,8 @@ pub fn build_move_package_to_bytes(
     path: &Path,
     build_config: BuildConfig,
 ) -> Result<Vec<Vec<u8>>, SuiError> {
-    build_move_package(path, build_config).map(|mods| {
-        mods.iter()
+    build_move_package(path, build_config).map(|compiled_pkg| {
+        compiled_pkg.get_modules()
             .map(|m| {
                 let mut bytes = Vec::new();
                 m.serialize(&mut bytes).unwrap();
@@ -119,18 +120,13 @@ pub fn build_move_package_to_bytes(
 /// `build_move_package_to_bytes()`, for when you already have a CompiledPackage
 pub fn compiled_move_package_to_bytes(package: &CompiledPackage) -> Vec<Vec<u8>> {
     package
-        .root_modules()
-        .map(|m| m.unit.serialize(None))
+        .get_modules()
+        .map(|m| {
+            let mut bytes = Vec::new();
+            m.serialize(&mut bytes).unwrap();
+            bytes
+        })
         .collect()
-}
-
-pub fn build_and_verify_package(
-    path: &Path,
-    build_config: BuildConfig,
-) -> SuiResult<Vec<CompiledModule>> {
-    let modules = build_move_package(path, build_config)?;
-    verify_modules(&modules)?;
-    Ok(modules)
 }
 
 /// This function returns a result of UnitTestResult. The outer result indicates whether it
