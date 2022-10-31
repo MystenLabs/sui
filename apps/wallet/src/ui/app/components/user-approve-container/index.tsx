@@ -6,7 +6,7 @@ import { memo, useCallback, useMemo, useState } from 'react';
 
 import AccountAddress from '_components/account-address';
 import ExternalLink from '_components/external-link';
-import Icon from '_components/icon';
+import Icon, { SuiIcons } from '_components/icon';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
 
 import type { MouseEventHandler, ReactNode } from 'react';
@@ -60,7 +60,9 @@ function UserApproveContainer({
                             alt="Site favicon"
                         />
                     ) : null}
-                    <div className={st.host}>{parsedOrigin.host}</div>
+                    <div className={st.host}>
+                        {parsedOrigin.host.split('.')[0]}
+                    </div>
                     <ExternalLink
                         href={origin}
                         className={cl(st.origin, !isSecure && st.warning)}
@@ -88,27 +90,34 @@ function UserApproveContainer({
                         )}
                         disabled={submitting}
                     >
-                        <Icon icon="x" />
+                        <Icon icon={SuiIcons.CloseFill} />
                         {rejectTitle}
                     </button>
                     <button
                         type="button"
                         className={cl(
                             st.button,
-                            isWarning ? st.cancel : st.approve
+                            isWarning ? st.cancel : st.approve,
+                            submitting && st.loading
                         )}
                         data-allow="true"
                         onClick={handleOnResponse}
                         disabled={submitting}
                     >
-                        {!isWarning &&
+                        {!submitting &&
+                            !isWarning &&
                             (isConnect ? (
                                 <Icon icon="plus" />
                             ) : (
-                                <Icon icon="check" />
+                                <Icon icon={SuiIcons.CheckFill} />
                             ))}
+
                         <span>
-                            {submitting ? <LoadingIndicator /> : approveTitle}
+                            {submitting ? (
+                                <LoadingIndicator className={st.loader} />
+                            ) : (
+                                approveTitle
+                            )}
                         </span>
                         {isWarning && <Icon icon="arrow-right" />}
                     </button>

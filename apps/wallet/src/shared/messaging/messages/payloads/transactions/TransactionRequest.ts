@@ -4,6 +4,7 @@
 import type {
     SuiMoveNormalizedFunction,
     SuiTransactionResponse,
+    UnserializedSignableTransaction,
 } from '@mysten/sui.js';
 import type { TransactionDataType } from '_messages/payloads/transactions/ExecuteTransactionRequest';
 
@@ -17,4 +18,5 @@ export type TransactionRequest = {
     metadata?: SuiMoveNormalizedFunction;
     createdDate: string;
     tx: TransactionDataType;
+    unSerializedTxn?: UnserializedSignableTransaction | null;
 };

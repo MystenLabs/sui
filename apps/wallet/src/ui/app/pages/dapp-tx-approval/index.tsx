@@ -5,16 +5,28 @@ import cl from 'classnames';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 
+import ExplorerLink from '_components/explorer-link';
+import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
 import Loading from '_components/loading';
 import UserApproveContainer from '_components/user-approve-container';
-import { useAppDispatch, useAppSelector, useMiddleEllipsis } from '_hooks';
+import {
+    useAppDispatch,
+    useAppSelector,
+    useMiddleEllipsis,
+    useFormatCoin,
+} from '_hooks';
+import { GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
 import {
     loadTransactionResponseMetadata,
     respondToTransactionRequest,
     txRequestsSelectors,
+    deserializeTxn,
 } from '_redux/slices/transaction-requests';
 
-import type { SuiMoveNormalizedType } from '@mysten/sui.js';
+import type {
+    SuiMoveNormalizedType,
+    MoveCallTransaction,
+} from '@mysten/sui.js';
 import type { RootState } from '_redux/RootReducer';
 
 import st from './DappTxApprovalPage.module.scss';
@@ -67,22 +79,121 @@ function PassedObject({ id, module }: { id: string; module: string }) {
     );
     return (
         <div>
+            <ExplorerLink
+                type={ExplorerLinkType.object}
+                objectID={id}
+                className={st.objectId}
+                showIcon={false}
+            >
+                {objectId}
+            </ExplorerLink>
             <div className={st.objectName}>{module}</div>
-            <div className={st.objectId}>{objectId}</div>
         </div>
+    );
+}
+
+type PermissionsProps = {
+    metadata: {
+        transfer: MetadataGroup;
+        modify: MetadataGroup;
+        read: MetadataGroup;
+    } | null;
+};
+
+function Permissions({ metadata }: PermissionsProps) {
+    const [tab, setTab] = useState<TabType | null>(null);
+    // Set the initial tab state to whatever is visible:
+    useEffect(() => {
+        if (tab || !metadata) return;
+        setTab(
+            metadata.transfer.children.length
+                ? 'transfer'
+                : metadata.modify.children.length
+                ? 'modify'
+                : metadata.read.children.length
+                ? 'read'
+                : null
+        );
+    }, [tab, metadata]);
+    return (
+        metadata &&
+        tab && (
+            <div className={st.card}>
+                <div className={st.header}>Permissions requested</div>
+                <div className={st.content}>
+                    <div className={st.tabs}>
+                        {Object.entries(metadata).map(
+                            ([key, value]) =>
+                                value.children.length > 0 && (
+                                    <button
+                                        type="button"
+                                        key={key}
+                                        className={cl(
+                                            st.tab,
+                                            tab === key && st.active
+                                        )}
+                                        // eslint-disable-next-line react/jsx-no-bind
+                                        onClick={() => {
+                                            setTab(key as TabType);
+                                        }}
+                                    >
+                                        {value.name}
+                                    </button>
+                                )
+                        )}
+                    </div>
+                    <div className={st.objects}>
+                        {metadata[tab].children.map(({ id, module }, index) => (
+                            <PassedObject key={index} id={id} module={module} />
+                        ))}
+                    </div>
+                </div>
+            </div>
+        )
+    );
+}
+
+type TransferSummaryProps = {
+    label: string;
+    content: string | number;
+};
+
+const GAS_ESTIMATE_LABEL = 'Estimated Gas Fees';
+
+function TransactionSummery({ label, content }: TransferSummaryProps) {
+    const isGasEstimate = label === GAS_ESTIMATE_LABEL;
+    const [gasEstimate, symbol] = useFormatCoin(
+        (isGasEstimate && content) || 0,
+        GAS_TYPE_ARG
+    );
+
+    return (
+        <>
+            <div className={st.label}>{label}</div>
+            <div className={st.value}>
+                {isGasEstimate ? gasEstimate : content}{' '}
+                {isGasEstimate ? symbol : ''}
+            </div>
+        </>
     );
 }
 
 export function DappTxApprovalPage() {
     const { txID } = useParams();
-    const txRequestsLoading = useAppSelector(
-        ({ transactionRequests }) => !transactionRequests.initialized
+
+    const [txRequestsLoading, deserializeTxnFailed] = useAppSelector(
+        ({ transactionRequests }) => [
+            !transactionRequests.initialized,
+            transactionRequests.deserializeTxnFailed,
+        ]
     );
+
     const txRequestSelector = useMemo(
         () => (state: RootState) =>
             (txID && txRequestsSelectors.selectById(state, txID)) || null,
         [txID]
     );
+
     const txRequest = useAppSelector(txRequestSelector);
     const loading = txRequestsLoading;
     const dispatch = useAppDispatch();
@@ -111,21 +222,40 @@ export function DappTxApprovalPage() {
                 })
             );
         }
+
+        if (
+            txRequest?.tx?.type === 'serialized-move-call' &&
+            !txRequest.unSerializedTxn &&
+            txRequest?.tx.data
+        ) {
+            dispatch(
+                deserializeTxn({
+                    serializedTxn: txRequest?.tx.data,
+                    id: txRequest.id,
+                })
+            );
+        }
     }, [txRequest, dispatch]);
 
-    const [tab, setTab] = useState<TabType | null>(null);
     const metadata = useMemo(() => {
-        if (txRequest?.tx?.type !== 'move-call' || !txRequest?.metadata) {
+        if (
+            (txRequest?.tx?.type !== 'move-call' &&
+                txRequest?.tx?.type !== 'serialized-move-call' &&
+                !txRequest?.unSerializedTxn) ||
+            !txRequest?.metadata
+        ) {
             return null;
         }
-        const txData = txRequest.tx.data;
+        const txData =
+            (txRequest?.unSerializedTxn?.data as MoveCallTransaction) ??
+            txRequest.tx.data;
         const transfer: MetadataGroup = { name: 'Transfer', children: [] };
         const modify: MetadataGroup = { name: 'Modify', children: [] };
         const read: MetadataGroup = { name: 'Read', children: [] };
 
         txRequest.metadata.parameters.forEach((param, index) => {
             if (typeof param !== 'object') return;
-            const id = txData.arguments[index] as string;
+            const id = txData?.arguments[index] as string;
             const unwrappedType = unwrapTypeReference(param);
             if (!unwrappedType) return;
 
@@ -160,20 +290,6 @@ export function DappTxApprovalPage() {
         };
     }, [txRequest]);
 
-    // Set the initial tab state to whatever is visible:
-    useEffect(() => {
-        if (tab || !metadata) return;
-        setTab(
-            metadata.transfer.children.length
-                ? 'transfer'
-                : metadata.modify.children.length
-                ? 'modify'
-                : metadata.read.children.length
-                ? 'read'
-                : null
-        );
-    }, [tab, metadata]);
-
     useEffect(() => {
         if (
             !loading &&
@@ -182,6 +298,19 @@ export function DappTxApprovalPage() {
             window.close();
         }
     }, [loading, txRequest]);
+
+    // prevent serialized-move-call from being rendered while deserializing move-call
+    const [loadingState, setLoadingState] = useState<boolean>(true);
+    useEffect(() => {
+        if (
+            (!loading && txRequest?.tx.type !== 'serialized-move-call') ||
+            (!loading &&
+                txRequest?.tx.type === 'serialized-move-call' &&
+                (txRequest?.metadata || deserializeTxnFailed))
+        ) {
+            setLoadingState(false);
+        }
+    }, [deserializeTxnFailed, loading, txRequest]);
 
     const valuesContent = useMemo(() => {
         switch (txRequest?.tx.type) {
@@ -209,9 +338,33 @@ export function DappTxApprovalPage() {
                 return [
                     {
                         label: 'Transaction Type',
-                        content: 'SerializedMoveCall',
+                        content:
+                            txRequest?.unSerializedTxn?.kind ??
+                            'SerializedMoveCall',
                     },
-                    { label: 'Contents', content: txRequest?.tx?.data },
+                    ...(txRequest?.unSerializedTxn
+                        ? [
+                              {
+                                  label: 'Function',
+                                  content:
+                                      (
+                                          txRequest?.unSerializedTxn
+                                              ?.data as MoveCallTransaction
+                                      ).function ?? '',
+                              },
+                              {
+                                  label: GAS_ESTIMATE_LABEL,
+                                  content:
+                                      txRequest?.unSerializedTxn?.data
+                                          .gasBudget,
+                              },
+                          ]
+                        : [
+                              {
+                                  label: 'Content',
+                                  content: txRequest?.tx.data,
+                              },
+                          ]),
                 ];
             default:
                 return [];
@@ -219,7 +372,7 @@ export function DappTxApprovalPage() {
     }, [txRequest]);
 
     return (
-        <Loading loading={loading}>
+        <Loading loading={loadingState}>
             {txRequest ? (
                 <UserApproveContainer
                     origin={txRequest.origin}
@@ -228,51 +381,22 @@ export function DappTxApprovalPage() {
                     rejectTitle="Reject"
                     onSubmit={handleOnSubmit}
                 >
-                    <dl className={st.card}>
-                        <div className={st.content}>
-                            {valuesContent.map(({ label, content }) => (
-                                <div key={label} className={st.row}>
-                                    <dt>{label}</dt>
-                                    <dd>{content}</dd>
-                                </div>
-                            ))}
-                        </div>
-                    </dl>
-                    {metadata && tab && (
-                        <>
-                            <div className={st.tabs}>
-                                {Object.entries(metadata).map(
-                                    ([key, value]) =>
-                                        value.children.length > 0 && (
-                                            <button
-                                                type="button"
-                                                className={cl(
-                                                    st.tab,
-                                                    tab === key && st.active
-                                                )}
-                                                // eslint-disable-next-line react/jsx-no-bind
-                                                onClick={() => {
-                                                    setTab(key as TabType);
-                                                }}
-                                            >
-                                                {value.name}
-                                            </button>
-                                        )
-                                )}
-                            </div>
-                            <div className={st.objects}>
-                                {metadata[tab].children.map(
-                                    ({ id, module }, index) => (
-                                        <PassedObject
-                                            key={index}
-                                            id={id}
-                                            module={module}
+                    <section className={st.txInfo}>
+                        <div className={st.card}>
+                            <div className={st.header}>Transaction summary</div>
+                            <div className={st.content}>
+                                {valuesContent.map(({ label, content }) => (
+                                    <div key={label} className={st.row}>
+                                        <TransactionSummery
+                                            label={label}
+                                            content={content}
                                         />
-                                    )
-                                )}
+                                    </div>
+                                ))}
                             </div>
-                        </>
-                    )}
+                        </div>
+                        <Permissions metadata={metadata} />
+                    </section>
                 </UserApproveContainer>
             ) : null}
         </Loading>
