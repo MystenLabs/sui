@@ -54,7 +54,7 @@ move-cli.workspace = true
 move-package.workspace = true
 
 workspace-hack.workspace = true
-multiaddr = "0.14.0"
+multiaddr = "0.15.0"
 hex = "0.4.3"
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]

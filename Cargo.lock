@@ -90,7 +90,7 @@ dependencies = [
 [[package]]
 name = "anemo"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=f514987fa7f731058dd5a56e409e68600d84d909#f514987fa7f731058dd5a56e409e68600d84d909"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=87d60b249a9954775a95790e3bc9ca1a0df7969f#87d60b249a9954775a95790e3bc9ca1a0df7969f"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -120,7 +120,7 @@ dependencies = [
 [[package]]
 name = "anemo-build"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=f514987fa7f731058dd5a56e409e68600d84d909#f514987fa7f731058dd5a56e409e68600d84d909"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=87d60b249a9954775a95790e3bc9ca1a0df7969f#87d60b249a9954775a95790e3bc9ca1a0df7969f"
 dependencies = [
  "prettyplease",
  "proc-macro2 1.0.47",
@@ -131,7 +131,7 @@ dependencies = [
 [[package]]
 name = "anemo-tower"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=f514987fa7f731058dd5a56e409e68600d84d909#f514987fa7f731058dd5a56e409e68600d84d909"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=87d60b249a9954775a95790e3bc9ca1a0df7969f#87d60b249a9954775a95790e3bc9ca1a0df7969f"
 dependencies = [
  "anemo",
  "bytes",
@@ -579,6 +579,12 @@ dependencies = [
  "object",
  "rustc-demangle",
 ]
+
+[[package]]
+name = "base-x"
+version = "0.2.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4cbbc9d0964165b47557570cce6c952866c2678457aca742aafc9fb771d30270"
 
 [[package]]
 name = "base16ct"
@@ -1197,6 +1203,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "coarsetime"
+version = "0.1.22"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "454038500439e141804c655b4cd1bc6a70bcb95cd2bc9463af5661b6956f0e46"
+dependencies = [
+ "libc",
+ "once_cell",
+ "wasi 0.11.0+wasi-snapshot-preview1",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "codespan"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1804,6 +1822,26 @@ name = "data-encoding"
 version = "2.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ee2393c4a91429dffb4bedf19f4d6abf27d8a732c8ce4980305d782e5426d57"
+
+[[package]]
+name = "data-encoding-macro"
+version = "0.1.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "86927b7cd2fe88fa698b87404b287ab98d1a0063a34071d92e575b72d3029aca"
+dependencies = [
+ "data-encoding",
+ "data-encoding-macro-internal",
+]
+
+[[package]]
+name = "data-encoding-macro-internal"
+version = "0.1.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a5bbed42daaa95e780b60a50546aa345b8413a1e46f9a40a12907d3598f038db"
+dependencies = [
+ "data-encoding",
+ "syn 1.0.103",
+]
 
 [[package]]
 name = "datatest-stable"
@@ -4645,20 +4683,31 @@ dependencies = [
 
 [[package]]
 name = "multiaddr"
-version = "0.14.0"
+version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3c580bfdd8803cce319b047d239559a22f809094aaea4ac13902a1fdcfcd4261"
+checksum = "8b8d2f5ee4645ab2c09b846006f3bb0916e728a0384982544dba553be727d772"
 dependencies = [
  "arrayref",
- "bs58",
  "byteorder",
  "data-encoding",
+ "multibase",
  "multihash",
  "percent-encoding",
  "serde 1.0.147",
  "static_assertions",
  "unsigned-varint",
  "url",
+]
+
+[[package]]
+name = "multibase"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9b3539ec3c1f04ac9748a260728e855f261b4977f5c3406612c884564f329404"
+dependencies = [
+ "base-x",
+ "data-encoding",
+ "data-encoding-macro",
 ]
 
 [[package]]
@@ -4695,8 +4744,7 @@ checksum = "e5ce46fe64a9d73be07dcbe690a38ce1b293be448fd8ce1e6c1b8062c9f72c6a"
 [[package]]
 name = "mysten-network"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "51afa8dfc86c5d7bf4f3f9ec3b0a4e3235691fd15fcc4122118fb7f330f721c0"
+source = "git+https://github.com/MystenLabs/mysten-infra.git?rev=62dd8c9c4aa0f5ed2c243546d159d9cf2816f3d9#62dd8c9c4aa0f5ed2c243546d159d9cf2816f3d9"
 dependencies = [
  "bincode",
  "bytes",
@@ -8417,7 +8465,6 @@ dependencies = [
  "chrono",
  "clap 3.2.22",
  "futures",
- "jemalloc-ctl",
  "multiaddr",
  "mysten-network",
  "narwhal-network",
@@ -8437,6 +8484,7 @@ dependencies = [
  "tracing",
  "typed-store",
  "workspace-hack",
+ "ying-profiler",
 ]
 
 [[package]]
@@ -8751,6 +8799,7 @@ dependencies = [
  "narwhal-executor",
  "once_cell",
  "opentelemetry 0.17.0",
+ "proptest",
  "rand 0.8.5",
  "roaring",
  "schemars",
@@ -10362,6 +10411,7 @@ dependencies = [
  "axum-server",
  "backoff",
  "backtrace",
+ "base-x",
  "base16ct",
  "base64",
  "base64ct",
@@ -10379,6 +10429,7 @@ dependencies = [
  "bitflags",
  "bitmaps",
  "bitvec 0.19.6",
+ "bitvec 0.20.4",
  "blake2 0.10.4",
  "blake2 0.9.2",
  "blake2s_simd",
@@ -10393,6 +10444,7 @@ dependencies = [
  "bstr",
  "bulletproofs",
  "bumpalo",
+ "byte-slice-cast",
  "bytecode-interpreter-crypto",
  "bytemuck",
  "byteorder",
@@ -10420,6 +10472,7 @@ dependencies = [
  "clap_lex",
  "clear_on_drop",
  "clipboard-win",
+ "coarsetime",
  "codespan",
  "codespan-reporting",
  "collectable",
@@ -10454,6 +10507,7 @@ dependencies = [
  "crossterm 0.25.0",
  "crossterm_winapi 0.8.0",
  "crossterm_winapi 0.9.0",
+ "crunchy",
  "crypto-bigint",
  "crypto-common",
  "crypto-mac",
@@ -10469,6 +10523,8 @@ dependencies = [
  "darling_macro",
  "dashmap",
  "data-encoding",
+ "data-encoding-macro",
+ "data-encoding-macro-internal",
  "datatest-stable",
  "debug-ignore",
  "debugid",
@@ -10525,6 +10581,7 @@ dependencies = [
  "ff",
  "fiat-crypto",
  "findshlibs",
+ "fixed-hash",
  "fixedbitset 0.2.0",
  "fixedbitset 0.4.2",
  "flate2",
@@ -10597,6 +10654,8 @@ dependencies = [
  "if_chain",
  "ignore",
  "im",
+ "impl-codec",
+ "impl-serde",
  "impl-trait-for-tuples",
  "include_dir",
  "include_dir_macros",
@@ -10698,6 +10757,7 @@ dependencies = [
  "move-vm-test-utils",
  "move-vm-types",
  "multiaddr",
+ "multibase",
  "multihash",
  "multihash-derive",
  "multimap",
@@ -10757,6 +10817,8 @@ dependencies = [
  "output_vt100",
  "overload",
  "owo-colors",
+ "parity-scale-codec",
+ "parity-scale-codec-derive",
  "parking_lot 0.11.2",
  "parking_lot 0.12.1",
  "parking_lot_core 0.8.5",
@@ -10796,6 +10858,7 @@ dependencies = [
  "pretty",
  "pretty_assertions",
  "prettyplease",
+ "primitive-types",
  "proc-macro-crate",
  "proc-macro-error",
  "proc-macro-error-attr",
@@ -10822,6 +10885,7 @@ dependencies = [
  "quote 0.6.13",
  "quote 1.0.21",
  "radium 0.5.3",
+ "radium 0.6.2",
  "radix_trie",
  "rand 0.7.3",
  "rand 0.8.5",
@@ -10856,6 +10920,7 @@ dependencies = [
  "rust_decimal",
  "rustc-demangle",
  "rustc-hash",
+ "rustc-hex",
  "rustc_version",
  "rusticata-macros",
  "rustix",
@@ -11025,6 +11090,7 @@ dependencies = [
  "typed-store-derive",
  "typenum",
  "ucd-trie",
+ "uint",
  "uncased",
  "unescape",
  "unic-char-property",
@@ -11076,14 +11142,25 @@ dependencies = [
  "windows-sys",
  "windows_x86_64_msvc",
  "winreg",
+ "wyhash",
  "wyz",
  "x509-parser",
  "yaml-rust",
  "yansi",
  "yasna",
+ "ying-profiler",
  "zeroize",
  "zeroize_derive",
  "zstd-sys",
+]
+
+[[package]]
+name = "wyhash"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "baf6e163c25e3fac820b4b453185ea2dea3b6a3e0a721d4d23d75bd33734c295"
+dependencies = [
+ "rand_core 0.6.4",
 ]
 
 [[package]]
@@ -11142,6 +11219,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "346d34a236c9d3e5f3b9b74563f238f955bbd05fa0b8b4efa53c130c43982f4c"
 dependencies = [
  "time 0.3.15",
+]
+
+[[package]]
+name = "ying-profiler"
+version = "0.1.0"
+source = "git+https://github.com/velvia/ying-profiler#1a3e476299bfc1ff4a3168edd9fcf1ccda521aea"
+dependencies = [
+ "backtrace",
+ "chrono",
+ "coarsetime",
+ "dashmap",
+ "once_cell",
+ "rand 0.8.5",
+ "regex",
+ "tracing",
+ "wyhash",
 ]
 
 [[package]]

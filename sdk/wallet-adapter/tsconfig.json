@@ -9,9 +9,6 @@
         "./packages/adapters/all-wallets/src"
       ],
       "@mysten/wallet-adapter-base": ["./packages/adapters/base-adapter/src"],
-      "@mysten/wallet-adapter-sui-wallet": [
-        "./packages/adapters/sui-wallet/src"
-      ],
       "@mysten/wallet-adapter-mock-wallet": [
         "./packages/adapters/mock-wallet/src"
       ],
@@ -30,7 +27,6 @@
     { "path": "./packages/wallet-standard" },
     { "path": "./packages/adapters/all-wallets" },
     { "path": "./packages/adapters/base-adapter" },
-    { "path": "./packages/adapters/sui-wallet" },
     { "path": "./packages/adapters/mock-wallet" },
     { "path": "./packages/adapters/wallet-standard-adapter" }
   ]
