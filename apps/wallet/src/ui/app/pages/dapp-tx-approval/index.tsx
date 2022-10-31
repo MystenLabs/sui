@@ -5,6 +5,8 @@ import cl from 'classnames';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 
+import ExplorerLink from '_components/explorer-link';
+import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
 import Loading from '_components/loading';
 import UserApproveContainer from '_components/user-approve-container';
 import { useAppDispatch, useAppSelector, useMiddleEllipsis } from '_hooks';
@@ -71,8 +73,15 @@ function PassedObject({ id, module }: { id: string; module: string }) {
     );
     return (
         <div>
+            <ExplorerLink
+                type={ExplorerLinkType.object}
+                objectID={id}
+                className={st.objectId}
+                showIcon={false}
+            >
+                {objectId}
+            </ExplorerLink>
             <div className={st.objectName}>{module}</div>
-            <div className={st.objectId}>{objectId}</div>
         </div>
     );
 }
