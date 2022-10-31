@@ -225,11 +225,8 @@ export type StructTag = {
 export type TypeTag =
   | { bool: null }
   | { u8: null }
-  // | { u16: null }
-  // | { u32: null }
   | { u64: null }
   | { u128: null }
-  // | { u256: null }
   | { address: null }
   | { signer: null }
   | { vector: TypeTag }
