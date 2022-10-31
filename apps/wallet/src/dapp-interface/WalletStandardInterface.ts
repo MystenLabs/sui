@@ -122,10 +122,7 @@ export class SuiWallet implements Wallet {
                     // TODO: Expose public key instead of address:
                     publicKey: new Uint8Array(),
                     chains: SUI_CHAINS,
-                    features: [
-                        'sui:signAndExecuteTransaction',
-                        'standard:signMessage',
-                    ],
+                    features: ['sui:signAndExecuteTransaction'],
                 });
                 this.#events.emit('change', { accounts: this.accounts });
             }

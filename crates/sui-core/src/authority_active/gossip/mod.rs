@@ -21,7 +21,8 @@ use sui_types::{
     batch::{TxSequenceNumber, UpdateItem},
     error::{SuiError, SuiResult},
     messages::{
-        BatchInfoRequest, BatchInfoResponseItem, TransactionInfoRequest, TransactionInfoResponse,
+        BatchInfoRequest, BatchInfoResponseItem, TransactionInfoRequest,
+        VerifiedTransactionInfoResponse,
     },
 };
 use tap::TapFallible;
@@ -320,9 +321,14 @@ impl GossipDigestHandler {
     async fn process_response(
         state: Arc<AuthorityState>,
         peer_name: AuthorityName,
-        response: TransactionInfoResponse,
+        response: VerifiedTransactionInfoResponse,
     ) -> Result<(), SuiError> {
         if let Some(certificate) = response.certified_transaction {
+            // Ignore certificates containing shared object, because they will be received via
+            // consensus later.
+            if certificate.contains_shared_object() {
+                return Ok(());
+            }
             let digest = *certificate.digest();
             state
                 .add_pending_certificates(vec![(digest, Some(certificate))])
@@ -456,7 +462,7 @@ where
                         None => {
                             timer.stop_and_record();
                             timer = metrics.follower_stream_duration.start_timer();
-                            info!(peer = ?self.peer_name, "Gossip stream was closed. Restarting");
+                            debug!(peer = ?self.peer_name, "Gossip stream was closed. Restarting");
                             self.client.metrics_total_times_reconnect_follower_stream.inc();
                             tokio::time::sleep(Duration::from_secs(REFRESH_FOLLOWER_PERIOD_SECS / 12)).await;
                             let req = BatchInfoRequest {

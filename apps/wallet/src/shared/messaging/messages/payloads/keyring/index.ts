@@ -34,6 +34,14 @@ type MethodToPayloads = {
         args: never;
         return: never;
     };
+    appStatusUpdate: {
+        args: { active: boolean };
+        return: never;
+    };
+    setLockTimeout: {
+        args: { timeout: number };
+        return: never;
+    };
 };
 
 export interface KeyringPayload<Method extends keyof MethodToPayloads>

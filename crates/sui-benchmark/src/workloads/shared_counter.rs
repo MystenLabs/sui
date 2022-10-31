@@ -11,8 +11,8 @@ use futures::future::join_all;
 use std::{path::PathBuf, sync::Arc};
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress},
-    crypto::{get_key_pair, AccountKeyPair, EmptySignInfo},
-    messages::TransactionEnvelope,
+    crypto::{get_key_pair, AccountKeyPair},
+    messages::VerifiedTransaction,
     object::Owner,
 };
 use test_utils::messages::{make_counter_create_transaction, make_counter_increment_transaction};
@@ -40,7 +40,7 @@ impl Payload for SharedCounterTestPayload {
             keypair: self.keypair.clone(),
         })
     }
-    fn make_transaction(&self) -> TransactionEnvelope<EmptySignInfo> {
+    fn make_transaction(&self) -> VerifiedTransaction {
         make_counter_increment_transaction(
             self.gas.0,
             self.package_ref,
@@ -90,7 +90,7 @@ pub async fn publish_basics_package(
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("../../sui_programmability/examples/basics");
     let transaction = create_publish_move_package_transaction(gas, path, sender, keypair);
-    let (_, effects) = proxy.execute_transaction(transaction).await.unwrap();
+    let (_, effects) = proxy.execute_transaction(transaction.into()).await.unwrap();
     parse_package_ref(&effects.created()).unwrap()
 }
 
@@ -166,7 +166,7 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
                     sender,
                     &keypair,
                 );
-                if let Ok((_, effects)) = proxy_ref.execute_transaction(transaction).await {
+                if let Ok((_, effects)) = proxy_ref.execute_transaction(transaction.into()).await {
                     let counter_ref = effects.created()[0].0;
                     Box::new(SharedCounterTestPayload {
                         package_ref: self.basics_package_ref.unwrap(),

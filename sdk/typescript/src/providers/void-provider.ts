@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { SignatureScheme } from '../cryptography/publickey';
+import { HttpHeaders } from '../rpc/client';
 import {
   CertifiedTransaction,
   CoinDenominationInfoResponse,
@@ -10,7 +11,6 @@ import {
   GatewayTxSeqNumber,
   SuiObjectInfo,
   GetObjectDataResponse,
-  SuiTransactionResponse,
   SuiObjectRef,
   SuiMoveFunctionArgTypes,
   SuiMoveNormalizedFunction,
@@ -30,6 +30,7 @@ import {
   Ordering,
   PaginatedTransactionDigests,
   RpcApiVersion,
+  FaucetResponse,
 } from '../types';
 import { Provider } from './provider';
 
@@ -37,6 +38,14 @@ export class VoidProvider extends Provider {
   // API Version
   async getRpcApiVersion(): Promise<RpcApiVersion | undefined> {
     throw this.newError('getRpcApiVersion');
+  }
+
+  // Faucet
+  async requestSuiFromFaucet(
+    _recipient: SuiAddress,
+    _httpHeaders?: HttpHeaders
+  ): Promise<FaucetResponse> {
+    throw this.newError('requestSuiFromFaucet');
   }
 
   // Objects
@@ -94,15 +103,6 @@ export class VoidProvider extends Provider {
     throw this.newError('getTransaction');
   }
 
-  async executeTransaction(
-    _txnBytes: string,
-    _signatureScheme: SignatureScheme,
-    _signature: string,
-    _pubkey: string
-  ): Promise<SuiTransactionResponse> {
-    throw this.newError('executeTransaction');
-  }
-
   async executeTransactionWithRequestType(
     _txnBytes: string,
     _signatureScheme: SignatureScheme,
@@ -122,10 +122,6 @@ export class VoidProvider extends Provider {
     _end: GatewayTxSeqNumber
   ): Promise<GetTxnDigestsResponse> {
     throw this.newError('getTransactionDigestsInRange');
-  }
-
-  async getRecentTransactions(_count: number): Promise<GetTxnDigestsResponse> {
-    throw this.newError('getRecentTransactions');
   }
 
   async getMoveFunctionArgTypes(

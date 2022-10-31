@@ -2,14 +2,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use move_package::BuildConfig;
 use serde_json::json;
 use std::{collections::HashSet, path::Path};
 
 use signature::Signer;
 use typed_store::Map;
 
-use sui_framework::build_move_package_to_bytes;
+use sui_framework_build::compiled_package::BuildConfig;
 use sui_types::crypto::{AccountKeyPair, Signature};
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::Transaction;
@@ -123,7 +122,11 @@ async fn test_move_call() {
         gas_object.compute_object_reference(),
     );
 
-    let effects = gateway.execute_transaction(tx).await.unwrap().effects;
+    let effects = gateway
+        .execute_transaction(tx.into_inner())
+        .await
+        .unwrap()
+        .effects;
     assert!(effects.status.is_ok());
     assert_eq!(effects.mutated.len(), 1);
     assert_eq!(effects.created.len(), 1);
@@ -141,8 +144,10 @@ async fn test_publish() {
     let mut path = env!("CARGO_MANIFEST_DIR").to_owned();
     path.push_str("/src/unit_tests/data/object_owner/");
 
-    let compiled_modules =
-        build_move_package_to_bytes(Path::new(&path), BuildConfig::default()).unwrap();
+    let compiled_modules = BuildConfig::default()
+        .build(Path::new(&path).to_path_buf())
+        .unwrap()
+        .get_package_bytes();
     let data = gateway
         .publish(
             addr1,
@@ -443,7 +448,11 @@ async fn test_public_transfer_object_with_retry() {
         .fail_after_handle_confirmation = false;
 
     // Retry transaction, and this time it should succeed.
-    let effects = gateway.execute_transaction(tx).await.unwrap().effects;
+    let effects = gateway
+        .execute_transaction(tx.into_inner())
+        .await
+        .unwrap()
+        .effects;
     let oref = effects.mutated_excluding_gas().next().unwrap();
     let updated_obj_ref = &oref.reference;
     let new_owner = &oref.owner;
@@ -513,8 +522,10 @@ async fn test_get_owner_object() {
     path.push_str("/src/unit_tests/data/object_owner/");
 
     // Publish object_owner package
-    let compiled_modules =
-        build_move_package_to_bytes(Path::new(&path), BuildConfig::default()).unwrap();
+    let compiled_modules = BuildConfig::default()
+        .build(Path::new(&path).to_path_buf())
+        .unwrap()
+        .get_package_bytes();
     let data = gateway
         .publish(
             addr1,

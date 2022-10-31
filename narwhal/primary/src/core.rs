@@ -164,17 +164,20 @@ impl Core {
 
         let last_round_certificates = self
             .certificate_store
-            .last_round()
+            .last_two_rounds_certs()
             .expect("Failed recovering certificates in primary core");
+
         let last_round_number = last_round_certificates
             .first()
             .map(|c| c.round())
             .unwrap_or(0);
+
         for certificate in last_round_certificates {
             self.append_certificate_in_aggregator(certificate)
                 .await
                 .expect("Failed appending recovered certificates to aggregator in primary core");
         }
+
         self.highest_received_round = last_round_number;
         self.highest_processed_round = last_round_number;
         self
@@ -297,7 +300,9 @@ impl Core {
         }
 
         // Store the header.
-        self.header_store.write(header.id, header.clone()).await;
+        self.header_store
+            .async_write(header.id, header.clone())
+            .await;
 
         self.metrics
             .headers_processed
@@ -382,14 +387,14 @@ impl Core {
         // that are stored in the header store. This strategy can be used to re-deliver votes to
         // ensure progress / liveness.
         self.vote_digest_store
-            .write(
+            .sync_write(
                 header.author.clone(),
                 RoundVoteDigestPair {
                     round: header.round,
                     vote_digest,
                 },
             )
-            .await;
+            .await?;
 
         Ok(())
     }

@@ -99,7 +99,7 @@ impl TicTacToe {
             .client
             .quorum_driver()
             .execute_transaction(
-                Transaction::new(create_game_call, signature),
+                Transaction::new(create_game_call, signature).verify()?,
                 Some(ExecuteTransactionRequestType::WaitForLocalExecution),
             )
             .await?;
@@ -195,7 +195,7 @@ impl TicTacToe {
                 .client
                 .quorum_driver()
                 .execute_transaction(
-                    Transaction::new(place_mark_call, signature),
+                    Transaction::new(place_mark_call, signature).verify()?,
                     Some(ExecuteTransactionRequestType::WaitForLocalExecution),
                 )
                 .await?;

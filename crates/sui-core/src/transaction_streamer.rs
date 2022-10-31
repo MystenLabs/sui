@@ -63,7 +63,9 @@ mod tests {
         let tx_cert = tx_certs.swap_remove(0);
         let tx_digest = *tx_cert.digest();
         let signed_effects = signed_effects.swap_remove(0);
-        let result = streamer.enqueue((tx_cert, signed_effects.clone())).await;
+        let result = streamer
+            .enqueue((tx_cert.into(), signed_effects.clone()))
+            .await;
 
         assert!(result);
         if let Some((cert, effects)) = stream.next().await {

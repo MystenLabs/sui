@@ -57,8 +57,11 @@ fn test_signed_values() {
             10000,
         ),
         &sender_sec,
-    );
-    let bad_transaction = Transaction::from_data(
+    )
+    .verify()
+    .unwrap();
+
+    let bad_transaction = VerifiedTransaction::new_unchecked(Transaction::from_data(
         TransactionData::new_transfer(
             _a2,
             random_object_ref(),
@@ -67,7 +70,7 @@ fn test_signed_values() {
             10000,
         ),
         &sender_sec2,
-    );
+    ));
 
     let v = SignedTransaction::new(
         committee.epoch(),
@@ -129,7 +132,9 @@ fn test_certificates() {
             10000,
         ),
         &sender_sec,
-    );
+    )
+    .verify()
+    .unwrap();
 
     let v1 = SignedTransaction::new(
         committee.epoch(),
@@ -160,7 +165,7 @@ fn test_certificates() {
     sigs.push(v2.auth_sign_info);
     let c = CertifiedTransaction::new_with_auth_sign_infos(transaction.clone(), sigs, &committee)
         .unwrap();
-    assert!(c.verify(&committee).is_ok());
+    assert!(c.verify_signatures(&committee).is_ok());
 
     let sigs = vec![v1.auth_sign_info, v3.auth_sign_info];
 
@@ -394,7 +399,9 @@ fn test_digest_caching() {
     let transaction = Transaction::from_data(
         TransactionData::new_transfer(sa1, random_object_ref(), sa2, random_object_ref(), 10000),
         &ssec2,
-    );
+    )
+    .verify()
+    .unwrap();
 
     let mut signed_tx = SignedTransaction::new(
         committee.epoch(),
@@ -402,7 +409,7 @@ fn test_digest_caching() {
         AuthorityPublicKeyBytes::from(sec1.public()),
         &sec1,
     );
-    assert!(signed_tx.verify(&committee).is_ok());
+    assert!(signed_tx.verify_signatures(&committee).is_ok());
 
     let initial_digest = *signed_tx.digest();
 
@@ -491,8 +498,13 @@ fn test_user_signature_committed_in_signed_transactions() {
         random_object_ref(),
         10000,
     );
-    let transaction_a = Transaction::from_data(tx_data.clone(), &sender_sec);
-    let transaction_b = Transaction::from_data(tx_data, &sender_sec2);
+    let transaction_a = Transaction::from_data(tx_data.clone(), &sender_sec)
+        .verify()
+        .unwrap();
+    // transaction_b intentionally invalid (sender does not match signer).
+    let transaction_b =
+        VerifiedTransaction::new_unchecked(Transaction::from_data(tx_data, &sender_sec2));
+
     let signed_tx_a = SignedTransaction::new(
         0,
         transaction_a.clone(),
@@ -625,7 +637,9 @@ fn verify_sender_signature_correctly_with_flag() {
         10000,
     );
 
-    let transaction = Transaction::from_data(tx_data, &sender_kp);
+    let transaction = Transaction::from_data(tx_data, &sender_kp)
+        .verify()
+        .unwrap();
 
     // create tx also signed by authority
     let signed_tx = SignedTransaction::new(
@@ -657,7 +671,9 @@ fn verify_sender_signature_correctly_with_flag() {
             10000,
         ),
         &sender_kp_2,
-    );
+    )
+    .verify()
+    .unwrap();
 
     let signed_tx_1 = SignedTransaction::new(
         committee.epoch(),

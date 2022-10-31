@@ -13,8 +13,6 @@ import {
     createSlice,
 } from '@reduxjs/toolkit';
 
-import { FEATURES } from '_src/ui/app/experimentation/features';
-
 import type {
     SuiTransactionResponse,
     SignableTransaction,
@@ -76,7 +74,7 @@ export const respondToTransactionRequest = createAsyncThunk<
     'respond-to-transaction-request',
     async (
         { txRequestID, approved },
-        { extra: { background, api, keypairVault, growthbook }, getState }
+        { extra: { background, api, keypairVault }, getState }
     ) => {
         const state = getState();
         const txRequest = txRequestsSelectors.selectById(state, txRequestID);
@@ -88,65 +86,43 @@ export const respondToTransactionRequest = createAsyncThunk<
         if (approved) {
             const signer = api.getSignerInstance(keypairVault.getKeyPair());
             try {
-                if (growthbook.isOn(FEATURES.DEPRECATE_GATEWAY)) {
-                    let response: SuiExecuteTransactionResponse;
-                    if (
-                        txRequest.tx.type === 'v2' ||
+                let response: SuiExecuteTransactionResponse;
+                if (
+                    txRequest.tx.type === 'v2' ||
+                    txRequest.tx.type === 'move-call'
+                ) {
+                    const txn: SignableTransaction =
                         txRequest.tx.type === 'move-call'
-                    ) {
-                        const txn: SignableTransaction =
-                            txRequest.tx.type === 'move-call'
-                                ? {
-                                      kind: 'moveCall',
-                                      data: txRequest.tx.data,
-                                  }
-                                : txRequest.tx.data;
+                            ? {
+                                  kind: 'moveCall',
+                                  data: txRequest.tx.data,
+                              }
+                            : txRequest.tx.data;
 
-                        response =
-                            await signer.signAndExecuteTransactionWithRequestType(
-                                txn
-                            );
-                    } else if (txRequest.tx.type === 'serialized-move-call') {
-                        const txBytes = new Base64DataBuffer(txRequest.tx.data);
-                        response =
-                            await signer.signAndExecuteTransactionWithRequestType(
-                                txBytes
-                            );
-                    } else {
-                        throw new Error(
-                            `Either tx or txBytes needs to be defined.`
+                    response =
+                        await signer.signAndExecuteTransactionWithRequestType(
+                            txn
                         );
-                    }
-
-                    txResult = {
-                        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-                        certificate: getCertifiedTransaction(response)!,
-                        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-                        effects: getTransactionEffects(response)!,
-                        timestamp_ms: null,
-                        parsed_data: null,
-                    };
-                } else {
-                    await signer.syncAccountState();
-                    if (txRequest.tx.type === 'v2') {
-                        txResult = await signer.signAndExecuteTransaction(
-                            txRequest.tx.data
-                        );
-                    } else if (txRequest.tx.type === 'move-call') {
-                        txResult = await signer.executeMoveCall(
-                            txRequest.tx.data
-                        );
-                    } else if (txRequest.tx.type === 'serialized-move-call') {
-                        const txBytes = new Base64DataBuffer(txRequest.tx.data);
-                        txResult = await signer.signAndExecuteTransaction(
+                } else if (txRequest.tx.type === 'serialized-move-call') {
+                    const txBytes = new Base64DataBuffer(txRequest.tx.data);
+                    response =
+                        await signer.signAndExecuteTransactionWithRequestType(
                             txBytes
                         );
-                    } else {
-                        throw new Error(
-                            `Either tx or txBytes needs to be defined.`
-                        );
-                    }
+                } else {
+                    throw new Error(
+                        `Either tx or txBytes needs to be defined.`
+                    );
                 }
+
+                txResult = {
+                    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+                    certificate: getCertifiedTransaction(response)!,
+                    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+                    effects: getTransactionEffects(response)!,
+                    timestamp_ms: null,
+                    parsed_data: null,
+                };
             } catch (e) {
                 tsResultError = (e as Error).message;
             }

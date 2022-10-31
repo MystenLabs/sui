@@ -18,15 +18,8 @@ import {
 
 import { SUI_SYSTEM_STATE_OBJECT_ID } from './Coin';
 import { ExampleNFT } from './NFT';
-import { FEATURES } from '_app/experimentation/features';
 
-import type {
-    SuiObject,
-    SuiAddress,
-    ObjectId,
-    SuiExecuteTransactionResponse,
-    SuiTransactionResponse,
-} from '@mysten/sui.js';
+import type { SuiObject, SuiAddress, ObjectId } from '@mysten/sui.js';
 import type { RootState } from '_redux/RootReducer';
 import type { AppThunkConfig } from '_store/thunk-extras';
 
@@ -96,14 +89,9 @@ export const batchFetchObject = createAsyncThunk<
 
 export const mintDemoNFT = createAsyncThunk<void, void, AppThunkConfig>(
     'mintDemoNFT',
-    async (_, { extra: { api, keypairVault, growthbook }, dispatch }) => {
+    async (_, { extra: { api, keypairVault }, dispatch }) => {
         const signer = api.getSignerInstance(keypairVault.getKeyPair());
-        if (growthbook.isOn(FEATURES.DEPRECATE_GATEWAY)) {
-            await ExampleNFT.mintExampleNFTWithFullnode(signer);
-        } else {
-            await ExampleNFT.mintExampleNFT(signer);
-        }
-
+        await ExampleNFT.mintExampleNFT(signer);
         await dispatch(fetchAllOwnedAndRequiredObjects());
     }
 );
@@ -121,24 +109,14 @@ export const transferSuiNFT = createAsyncThunk<
     AppThunkConfig
 >(
     'transferSuiNFT',
-    async (data, { extra: { api, keypairVault, growthbook }, dispatch }) => {
-        let txn: SuiTransactionResponse | SuiExecuteTransactionResponse;
+    async (data, { extra: { api, keypairVault }, dispatch }) => {
         const signer = api.getSignerInstance(keypairVault.getKeyPair());
-        if (growthbook.isOn(FEATURES.DEPRECATE_GATEWAY)) {
-            txn = await ExampleNFT.TransferNFTWithFullnode(
-                signer,
-                data.nftId,
-                data.recipientAddress,
-                data.transferCost
-            );
-        } else {
-            txn = await ExampleNFT.TransferNFT(
-                signer,
-                data.nftId,
-                data.recipientAddress,
-                data.transferCost
-            );
-        }
+        const txn = await ExampleNFT.TransferNFT(
+            signer,
+            data.nftId,
+            data.recipientAddress,
+            data.transferCost
+        );
 
         await dispatch(fetchAllOwnedAndRequiredObjects());
         const txnResp = {

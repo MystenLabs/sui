@@ -13,15 +13,21 @@ use anyhow::{anyhow, ensure};
 use bip32::DerivationPath;
 use clap::*;
 use colored::Colorize;
-use fastcrypto::traits::ToFromBytes;
+use fastcrypto::{
+    encoding::{Base64, Encoding},
+    traits::ToFromBytes,
+};
 use move_core_types::language_storage::TypeTag;
-use move_package::BuildConfig;
+use move_package::BuildConfig as MoveBuildConfig;
 use serde::Serialize;
 use serde_json::json;
 use sui_bytecode_src_verifier::BytecodeSourceVerifier;
 use sui_framework::compiled_move_package_to_bytes;
 use tracing::info;
 
+use crate::config::{Config, PersistedConfig, SuiClientConfig};
+use sui_framework::build_move_package;
+use sui_framework_build::compiled_package::BuildConfig;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
     GetObjectDataResponse, SuiObjectInfo, SuiParsedObject, SuiTransactionResponse,
@@ -31,16 +37,13 @@ use sui_json_rpc_types::{SuiCertifiedTransaction, SuiExecutionStatus, SuiTransac
 use sui_keys::keystore::AccountKeystore;
 use sui_sdk::TransactionExecutionResult;
 use sui_sdk::{ClientType, SuiClient};
+use sui_types::crypto::SignableBytes;
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     gas_coin::GasCoin,
-    messages::Transaction,
+    messages::{Transaction, VerifiedTransaction},
     object::Owner,
     parse_sui_type_tag, SUI_FRAMEWORK_ADDRESS,
-};
-use sui_types::{
-    crypto::SignableBytes,
-    sui_serde::{Base64, Encoding},
 };
 use sui_types::{
     crypto::{Signature, SignatureScheme},
@@ -98,7 +101,7 @@ pub enum SuiClientCommands {
 
         /// Package build options
         #[clap(flatten)]
-        build_config: BuildConfig,
+        build_config: MoveBuildConfig,
 
         /// ID of the gas object for gas payment, in 20 bytes Hex string
         /// If not provided, a gas object with at least gas_budget value will be selected
@@ -429,7 +432,7 @@ impl SuiClientCommands {
                     .await?;
                 let signature = context.config.keystore.sign(&sender, &data.to_bytes())?;
                 let response = context
-                    .execute_transaction(Transaction::new(data, signature))
+                    .execute_transaction(Transaction::new(data, signature).verify()?)
                     .await?;
 
                 SuiClientCommandResult::Publish(response)
@@ -472,7 +475,7 @@ impl SuiClientCommands {
                     .await?;
                 let signature = context.config.keystore.sign(&from, &data.to_bytes())?;
                 let response = context
-                    .execute_transaction(Transaction::new(data, signature))
+                    .execute_transaction(Transaction::new(data, signature).verify()?)
                     .await?;
                 let cert = response.certificate;
                 let effects = response.effects;
@@ -499,7 +502,7 @@ impl SuiClientCommands {
                     .await?;
                 let signature = context.config.keystore.sign(&from, &data.to_bytes())?;
                 let response = context
-                    .execute_transaction(Transaction::new(data, signature))
+                    .execute_transaction(Transaction::new(data, signature).verify()?)
                     .await?;
                 let cert = response.certificate;
                 let effects = response.effects;
@@ -541,7 +544,7 @@ impl SuiClientCommands {
                     .await?;
                 let signature = context.config.keystore.sign(&from, &data.to_bytes())?;
                 let response = context
-                    .execute_transaction(Transaction::new(data, signature))
+                    .execute_transaction(Transaction::new(data, signature).verify()?)
                     .await?;
                 let cert = response.certificate;
                 let effects = response.effects;
@@ -584,7 +587,7 @@ impl SuiClientCommands {
                     .await?;
                 let signature = context.config.keystore.sign(&signer, &data.to_bytes())?;
                 let response = context
-                    .execute_transaction(Transaction::new(data, signature))
+                    .execute_transaction(Transaction::new(data, signature).verify()?)
                     .await?;
 
                 let cert = response.certificate;
@@ -616,7 +619,7 @@ impl SuiClientCommands {
 
                 let signature = context.config.keystore.sign(&signer, &data.to_bytes())?;
                 let response = context
-                    .execute_transaction(Transaction::new(data, signature))
+                    .execute_transaction(Transaction::new(data, signature).verify()?)
                     .await?;
 
                 let cert = response.certificate;
@@ -714,7 +717,7 @@ impl SuiClientCommands {
                 };
                 let signature = context.config.keystore.sign(&signer, &data.to_bytes())?;
                 let response = context
-                    .execute_transaction(Transaction::new(data, signature))
+                    .execute_transaction(Transaction::new(data, signature).verify()?)
                     .await?;
                 SuiClientCommandResult::SplitCoin(response)
             }
@@ -732,7 +735,7 @@ impl SuiClientCommands {
                     .await?;
                 let signature = context.config.keystore.sign(&signer, &data.to_bytes())?;
                 let response = context
-                    .execute_transaction(Transaction::new(data, signature))
+                    .execute_transaction(Transaction::new(data, signature).verify()?)
                     .await?;
 
                 SuiClientCommandResult::MergeCoin(response)
@@ -817,20 +820,24 @@ impl SuiClientCommands {
                 pubkey,
                 signature,
             } => {
-                let data =
-                    TransactionData::from_signable_bytes(&Base64::try_from(tx_data)?.to_vec()?)?;
+                let data = TransactionData::from_signable_bytes(
+                    &Base64::try_from(tx_data)
+                        .map_err(|e| anyhow!(e))?
+                        .to_vec()
+                        .map_err(|e| anyhow!(e))?,
+                )?;
                 let signed_tx = Transaction::new(
                     data,
                     Signature::from_bytes(
                         &[
                             vec![scheme.flag()],
-                            Base64::try_from(signature)?.to_vec()?,
-                            Base64::try_from(pubkey)?.to_vec()?,
+                            Base64::decode(signature.as_str()).map_err(|e| anyhow!(e))?,
+                            Base64::decode(pubkey.as_str()).map_err(|e| anyhow!(e))?,
                         ]
                         .concat(),
                     )?,
-                );
-                signed_tx.verify_sender_signature()?;
+                )
+                .verify()?;
 
                 let response = context.execute_transaction(signed_tx).await?;
                 SuiClientCommandResult::ExecuteSignedTx(response)
@@ -984,7 +991,7 @@ impl WalletContext {
     /// This function is compatible with both fullnode and an embedded gateway
     pub async fn execute_transaction(
         &self,
-        tx: Transaction,
+        tx: VerifiedTransaction,
     ) -> anyhow::Result<SuiTransactionResponse> {
         let tx_digest = *tx.digest();
 
@@ -1196,7 +1203,7 @@ pub async fn call_move(
         )
         .await?;
     let signature = context.config.keystore.sign(&sender, &data.to_bytes())?;
-    let transaction = Transaction::new(data, signature);
+    let transaction = Transaction::new(data, signature).verify()?;
 
     let response = context.execute_transaction(transaction).await?;
     let cert = response.certificate;

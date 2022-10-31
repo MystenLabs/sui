@@ -10,6 +10,7 @@ import {
     getTransferObjectTransaction,
     getTransferSuiTransaction,
     getTransferSuiAmount,
+    SUI_TYPE_ARG,
     type GetTxnDigestsResponse,
     type CertifiedTransaction,
     type ExecutionStatusType,
@@ -23,12 +24,13 @@ import { ReactComponent as ContentArrowRight } from '../../assets/SVGIcons/16px/
 import Longtext from '../../components/longtext/Longtext';
 import { DefaultRpcClient } from '../../utils/api/DefaultRpcClient';
 import { type Network } from '../../utils/api/rpcSetting';
-import { numberSuffix } from '../../utils/numberUtil';
 import { deduplicate } from '../../utils/searchUtil';
-import { truncate, presentBN } from '../../utils/stringUtils';
+import { truncate } from '../../utils/stringUtils';
 import { timeAgo } from '../../utils/timeUtils';
 
 import styles from './RecentTxCard.module.css';
+
+import { useFormatCoin } from '~/hooks/useFormatCoin';
 
 export type TxnData = {
     To?: string;
@@ -61,30 +63,24 @@ type TxStatus = {
     status: ExecutionStatusType;
 };
 
-export function SuiAmount({ amount }: { amount: bigint | string | undefined }) {
+export function SuiAmount({
+    amount,
+}: {
+    amount: bigint | number | string | undefined;
+}) {
+    const [formattedAmount] = useFormatCoin(amount, SUI_TYPE_ARG);
+
     if (amount) {
         const SuiSuffix = <abbr className={styles.suisuffix}>SUI</abbr>;
 
-        if (typeof amount === 'bigint') {
-            return (
-                <section>
-                    <span>
-                        {presentBN(amount)}
-                        {SuiSuffix}
-                    </span>
-                </section>
-            );
-        }
-        if (typeof amount === 'string') {
-            return (
-                <section>
-                    <span className={styles.suiamount}>
-                        {amount}
-                        {SuiSuffix}
-                    </span>
-                </section>
-            );
-        }
+        return (
+            <section>
+                <span className={styles.suiamount}>
+                    {formattedAmount}
+                    {SuiSuffix}
+                </span>
+            </section>
+        );
     }
 
     return <span className={styles.suiamount}>--</span>;
@@ -195,7 +191,7 @@ export const genTableDataFromTxData = (
                 />
             ),
             amounts: <SuiAmount amount={txn.suiAmount} />,
-            gas: <SuiAmount amount={numberSuffix(txn.txGas)} />,
+            gas: <SuiAmount amount={txn.txGas} />,
         })),
         columns: [
             {

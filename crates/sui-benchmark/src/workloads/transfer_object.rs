@@ -8,8 +8,8 @@ use rand::seq::IteratorRandom;
 
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress},
-    crypto::{get_key_pair, AccountKeyPair, EmptySignInfo},
-    messages::TransactionEnvelope,
+    crypto::{get_key_pair, AccountKeyPair},
+    messages::VerifiedTransaction,
     object::Owner,
 };
 
@@ -59,7 +59,7 @@ impl Payload for TransferObjectTestPayload {
             keypairs: self.keypairs.clone(),
         })
     }
-    fn make_transaction(&self) -> TransactionEnvelope<EmptySignInfo> {
+    fn make_transaction(&self) -> VerifiedTransaction {
         let (gas_obj, _) = self
             .gas
             .iter()

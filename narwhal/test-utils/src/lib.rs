@@ -26,11 +26,11 @@ use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tracing::info;
 use types::{
     Batch, BatchDigest, Certificate, CertificateDigest, ConsensusStore, FetchCertificatesRequest,
-    FetchCertificatesResponse, Header, HeaderBuilder, PrimaryMessage, PrimaryToPrimary,
-    PrimaryToPrimaryServer, PrimaryToWorker, PrimaryToWorkerServer, RequestBatchRequest,
-    RequestBatchResponse, Round, SequenceNumber, Transaction, Vote, WorkerBatchMessage,
-    WorkerDeleteBatchesMessage, WorkerReconfigureMessage, WorkerSynchronizeMessage, WorkerToWorker,
-    WorkerToWorkerServer,
+    FetchCertificatesResponse, Header, HeaderBuilder, PayloadAvailabilityRequest,
+    PayloadAvailabilityResponse, PrimaryMessage, PrimaryToPrimary, PrimaryToPrimaryServer,
+    PrimaryToWorker, PrimaryToWorkerServer, RequestBatchRequest, RequestBatchResponse, Round,
+    SequenceNumber, Transaction, Vote, WorkerBatchMessage, WorkerDeleteBatchesMessage,
+    WorkerReconfigureMessage, WorkerSynchronizeMessage, WorkerToWorker, WorkerToWorkerServer,
 };
 
 pub mod cluster;
@@ -201,6 +201,12 @@ impl PrimaryToPrimary for PrimaryToPrimaryMockServer {
         &self,
         _request: anemo::Request<FetchCertificatesRequest>,
     ) -> Result<anemo::Response<FetchCertificatesResponse>, anemo::rpc::Status> {
+        unimplemented!()
+    }
+    async fn get_payload_availability(
+        &self,
+        _request: anemo::Request<PayloadAvailabilityRequest>,
+    ) -> Result<anemo::Response<PayloadAvailabilityResponse>, anemo::rpc::Status> {
         unimplemented!()
     }
 }
@@ -685,7 +691,15 @@ impl CommitteeFixture {
 
         self.authorities
             .iter()
-            .map(|a| a.header(&committee))
+            .map(|a| a.header_with_round(&committee, 1))
+            .collect()
+    }
+
+    pub fn headers_next_round(&self) -> Vec<Header> {
+        let committee = self.committee();
+        self.authorities
+            .iter()
+            .map(|a| a.header_with_round(&committee, 2))
             .collect()
     }
 
@@ -818,6 +832,14 @@ impl AuthorityFixture {
     pub fn header(&self, committee: &Committee) -> Header {
         self.header_builder(committee)
             .payload(Default::default())
+            .build(&self.keypair)
+            .unwrap()
+    }
+
+    pub fn header_with_round(&self, committee: &Committee, round: Round) -> Header {
+        self.header_builder(committee)
+            .payload(Default::default())
+            .round(round)
             .build(&self.keypair)
             .unwrap()
     }

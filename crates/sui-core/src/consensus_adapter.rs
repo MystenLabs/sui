@@ -23,19 +23,17 @@ use std::{
     collections::{hash_map::DefaultHasher, HashMap},
     hash::{Hash, Hasher},
 };
-use sui_types::messages_checkpoint::CheckpointFragment;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+use sui_types::messages_checkpoint::SignedCheckpointFragmentMessage;
 use sui_types::{
-    committee::Committee,
     error::{SuiError, SuiResult},
-    messages::ConsensusTransaction,
+    messages::{ConsensusTransaction, VerifiedCertificate},
 };
 
 use tap::prelude::*;
 use tokio::time::Instant;
 
 use sui_types::base_types::AuthorityName;
-use sui_types::messages::CertifiedTransaction;
 use tokio::{
     sync::{
         mpsc::{Receiver, Sender},
@@ -208,8 +206,6 @@ impl ConsensusWaiter {
 pub struct ConsensusAdapter {
     /// The network client connecting to the consensus node of this authority.
     consensus_client: TransactionsClient<sui_network::tonic::transport::Channel>,
-    /// The Sui committee information.
-    committee: Committee,
     /// A channel to notify the consensus listener to take action for a transactions.
     tx_consensus_listener: Sender<ConsensusListenerMessage>,
     /// Retries sending a transaction to consensus after this timeout.
@@ -224,7 +220,6 @@ impl ConsensusAdapter {
     /// Make a new Consensus adapter instance.
     pub fn new(
         consensus_address: Multiaddr,
-        committee: Committee,
         tx_consensus_listener: Sender<ConsensusListenerMessage>,
         timeout: Duration,
         opt_metrics: OptArcConsensusAdapterMetrics,
@@ -236,7 +231,6 @@ impl ConsensusAdapter {
         let num_inflight_transactions = Default::default();
         Self {
             consensus_client,
-            committee,
             tx_consensus_listener,
             timeout,
             num_inflight_transactions,
@@ -249,7 +243,7 @@ impl ConsensusAdapter {
     }
 
     /// Check if this authority should submit the transaction to consensus.
-    fn should_submit(_certificate: &CertifiedTransaction) -> bool {
+    fn should_submit(_certificate: &VerifiedCertificate) -> bool {
         // TODO [issue #1647]: Right now every authority submits the transaction to consensus.
         true
     }
@@ -260,15 +254,12 @@ impl ConsensusAdapter {
     pub async fn submit(
         &self,
         authority: &AuthorityName,
-        certificate: &CertifiedTransaction,
+        certificate: &VerifiedCertificate,
     ) -> SuiResult {
-        // Check the Sui certificate (submitted by the user).
-        certificate.verify(&self.committee)?;
-
         // Serialize the certificate in a way that is understandable to consensus (i.e., using
         // bincode) and it certificate to consensus.
         let transaction =
-            ConsensusTransaction::new_certificate_message(authority, certificate.clone());
+            ConsensusTransaction::new_certificate_message(authority, certificate.clone().into());
         let tracking_id = transaction.get_tracking_id();
         let tx_digest = certificate.digest();
         debug!(
@@ -460,11 +451,11 @@ impl ConsensusListener {
 
 /// Send checkpoint fragments through consensus.
 pub struct CheckpointSender {
-    tx_checkpoint_consensus_adapter: Sender<CheckpointFragment>,
+    tx_checkpoint_consensus_adapter: Sender<SignedCheckpointFragmentMessage>,
 }
 
 impl CheckpointSender {
-    pub fn new(tx_checkpoint_consensus_adapter: Sender<CheckpointFragment>) -> Self {
+    pub fn new(tx_checkpoint_consensus_adapter: Sender<SignedCheckpointFragmentMessage>) -> Self {
         Self {
             tx_checkpoint_consensus_adapter,
         }
@@ -472,9 +463,9 @@ impl CheckpointSender {
 }
 
 impl ConsensusSender for CheckpointSender {
-    fn send_to_consensus(&self, fragment: CheckpointFragment) -> SuiResult {
+    fn send_to_consensus(&self, fragment_messages: SignedCheckpointFragmentMessage) -> SuiResult {
         self.tx_checkpoint_consensus_adapter
-            .try_send(fragment)
+            .try_send(fragment_messages)
             .map_err(|e| SuiError::from(&e.to_string()[..]))
     }
 }
@@ -490,7 +481,7 @@ pub struct CheckpointConsensusAdapter {
     /// Channel to request to be notified when a given consensus transaction is sequenced.
     tx_consensus_listener: Sender<ConsensusListenerMessage>,
     /// Receive new checkpoint fragments to sequence.
-    rx_checkpoint_consensus_adapter: Receiver<CheckpointFragment>,
+    rx_checkpoint_consensus_adapter: Receiver<SignedCheckpointFragmentMessage>,
     /// A pointer to the checkpoints local store.
     checkpoint_db: Arc<Mutex<CheckpointStore>>,
     /// The initial delay to wait before re-attempting a connection with consensus (in ms).
@@ -509,7 +500,7 @@ impl CheckpointConsensusAdapter {
     pub fn new(
         consensus_address: Multiaddr,
         tx_consensus_listener: Sender<ConsensusListenerMessage>,
-        rx_checkpoint_consensus_adapter: Receiver<CheckpointFragment>,
+        rx_checkpoint_consensus_adapter: Receiver<SignedCheckpointFragmentMessage>,
         checkpoint_db: Arc<Mutex<CheckpointStore>>,
         retry_delay: Duration,
         max_pending_transactions: usize,
@@ -622,7 +613,7 @@ impl CheckpointConsensusAdapter {
             tokio::select! {
                 // Listen to new checkpoint fragments.
                 Some(fragment) = self.rx_checkpoint_consensus_adapter.recv() => {
-                    let sequence_number = *fragment.proposer_sequence_number();
+                    let sequence_number = fragment.message.proposer_sequence_number();
 
                     // Cleanup the buffer.
                     if self.buffer.len() >= self.max_pending_transactions {
@@ -634,9 +625,7 @@ impl CheckpointConsensusAdapter {
                     }
 
                     // Add the fragment to the buffer.
-                    let cp_seq = *fragment.proposer_sequence_number();
-                    let proposer = fragment.proposer.auth_signature.authority;
-                    let other = fragment.other.auth_signature.authority;
+                    let (cp_seq, proposer, other) = fragment.message.message_key();
                     let transaction = ConsensusTransaction::new_checkpoint_message(fragment);
                     let tracking_id = transaction.get_tracking_id();
                     let serialized = bincode::serialize(&transaction).expect("Serialize consensus transaction cannot fail");

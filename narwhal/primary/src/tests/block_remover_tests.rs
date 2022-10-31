@@ -76,13 +76,15 @@ async fn test_successful_blocks_delete() {
         dag.insert(certificate).await.unwrap();
 
         // write the header
-        header_store.write(header.clone().id, header.clone()).await;
+        header_store
+            .async_write(header.clone().id, header.clone())
+            .await;
 
         header_ids.push(header.clone().id);
 
         // write the batches to payload store
         payload_store
-            .write_all(vec![
+            .sync_write_all(vec![
                 ((batch_1.clone().digest(), worker_id_0), 0),
                 ((batch_2.clone().digest(), worker_id_1), 0),
             ])
@@ -236,13 +238,15 @@ async fn test_failed_blocks_delete() {
         dag.insert(certificate).await.unwrap();
 
         // write the header
-        header_store.write(header.clone().id, header.clone()).await;
+        header_store
+            .async_write(header.clone().id, header.clone())
+            .await;
 
         header_ids.push(header.clone().id);
 
         // write the batches to payload store
         payload_store
-            .write_all(vec![
+            .sync_write_all(vec![
                 ((batch_1.clone().digest(), worker_id_0), 0),
                 ((batch_2.clone().digest(), worker_id_1), 0),
             ])

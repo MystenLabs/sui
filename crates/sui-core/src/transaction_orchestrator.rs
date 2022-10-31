@@ -24,7 +24,7 @@ use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{
     CertifiedTransaction, CertifiedTransactionEffects, ExecuteTransactionRequest,
     ExecuteTransactionRequestType, ExecuteTransactionResponse, QuorumDriverRequest,
-    QuorumDriverRequestType, QuorumDriverResponse,
+    QuorumDriverRequestType, QuorumDriverResponse, VerifiedCertificate,
 };
 use tap::TapFallible;
 use tokio::sync::broadcast::error::RecvError;
@@ -99,7 +99,7 @@ where
             request.request_type,
             ExecuteTransactionRequestType::WaitForLocalExecution
         );
-        let transaction = request.transaction;
+        let transaction = request.transaction.verify()?;
         let tx_digest = *transaction.digest();
         let request_type = match request.request_type {
             ExecuteTransactionRequestType::ImmediateReturn => {
@@ -135,9 +135,10 @@ where
             }
             QuorumDriverResponse::EffectsCert(result) => {
                 let (tx_cert, effects_cert) = *result;
+                let tx_cert = tx_cert.verify(&self.validator_state.committee.load())?;
                 if !wait_for_local_execution {
                     return Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
-                        tx_cert,
+                        tx_cert.into(),
                         effects_cert,
                         false,
                     ))));
@@ -152,12 +153,12 @@ where
                 .await
                 {
                     Ok(_) => Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
-                        tx_cert,
+                        tx_cert.into(),
                         effects_cert,
                         true,
                     )))),
                     Err(_) => Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
-                        tx_cert,
+                        tx_cert.into(),
                         effects_cert,
                         false,
                     )))),
@@ -170,7 +171,7 @@ where
     async fn execute_finalized_tx_locally_with_timeout(
         validator_state: &Arc<AuthorityState>,
         node_sync_handle: &NodeSyncHandle,
-        tx_cert: &CertifiedTransaction,
+        tx_cert: &VerifiedCertificate,
         effects_cert: &CertifiedTransactionEffects,
         metrics: &TransactionOrchestratorMetrics,
     ) -> SuiResult {
@@ -238,6 +239,16 @@ where
         loop {
             match effects_receiver.recv().await {
                 Ok((tx_cert, effects_cert)) => {
+                    let tx_cert = match tx_cert.verify(&validator_state.committee.load()) {
+                        Err(err) => {
+                            error!(
+                                "received certificate from quorum driver with bad signatures! {}",
+                                err
+                            );
+                            continue;
+                        }
+                        Ok(c) => c,
+                    };
                     let _ = Self::execute_finalized_tx_locally_with_timeout(
                         &validator_state,
                         &node_sync_handle,
@@ -274,7 +285,7 @@ where
     async fn execute_impl(
         state: &Arc<AuthorityState>,
         node_sync_handle: &NodeSyncHandle,
-        tx_cert: &CertifiedTransaction,
+        tx_cert: &VerifiedCertificate,
         effects_cert: &CertifiedTransactionEffects,
         metrics: &TransactionOrchestratorMetrics,
     ) -> SuiResult {

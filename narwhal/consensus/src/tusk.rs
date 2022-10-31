@@ -179,8 +179,8 @@ mod tests {
     use test_utils::{make_consensus_store, CommitteeFixture};
     use types::Certificate;
 
-    #[test]
-    fn state_limits_test() {
+    #[tokio::test]
+    async fn state_limits_test() {
         let gc_depth = 12;
         let rounds: Round = rand::thread_rng().gen_range(10..100);
 
@@ -223,8 +223,8 @@ mod tests {
         assert!(n <= 6, "DAG size: {}", n);
     }
 
-    #[test]
-    fn imperfect_state_limits_test() {
+    #[tokio::test]
+    async fn imperfect_state_limits_test() {
         let gc_depth = 12;
         let rounds: Round = rand::thread_rng().gen_range(10..100);
 

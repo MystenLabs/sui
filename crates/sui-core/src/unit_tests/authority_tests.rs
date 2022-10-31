@@ -2,7 +2,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::test_utils::to_sender_signed_transaction;
+use crate::{
+    authority_client::{AuthorityAPI, NetworkAuthorityClient, NetworkAuthorityClientMetrics},
+    authority_server::AuthorityServer,
+    test_utils::to_sender_signed_transaction,
+};
 
 use super::*;
 use bcs;
@@ -30,7 +34,7 @@ use sui_types::{
     base_types::dbg_addr,
     crypto::{get_key_pair, Signature},
     crypto::{AccountKeyPair, AuthorityKeyPair, KeypairTraits},
-    messages::Transaction,
+    messages::VerifiedTransaction,
     object::{Owner, GAS_VALUE_FOR_TESTING, OBJECT_START_VERSION},
     sui_system_state::SuiSystemState,
     SUI_SYSTEM_STATE_OBJECT_ID,
@@ -91,7 +95,10 @@ fn compare_certified_transactions(o1: &CertifiedTransaction, o2: &CertifiedTrans
 }
 
 // Only relevant in a ser/de context : the `CertifiedTransaction` for a transaction is not unique
-fn compare_transaction_info_responses(o1: &TransactionInfoResponse, o2: &TransactionInfoResponse) {
+fn compare_transaction_info_responses(
+    o1: &VerifiedTransactionInfoResponse,
+    o2: &VerifiedTransactionInfoResponse,
+) {
     assert_eq!(o1.signed_transaction, o2.signed_transaction);
     assert_eq!(o1.signed_effects, o2.signed_effects);
     match (
@@ -112,7 +119,7 @@ fn compare_transaction_info_responses(o1: &TransactionInfoResponse, o2: &Transac
 
 async fn construct_shared_object_transaction_with_sequence_number(
     sequence_number: SequenceNumber,
-) -> (AuthorityState, Transaction, ObjectID, ObjectID) {
+) -> (AuthorityState, VerifiedTransaction, ObjectID, ObjectID) {
     let (sender, keypair): (_, AccountKeyPair) = get_key_pair();
 
     // Initialize an authority with a (owned) gas object and a shared object.
@@ -177,7 +184,7 @@ async fn test_dry_run_transaction() {
     let transaction_digest = *transaction.digest();
 
     let response = authority
-        .dry_run_transaction(&transaction, transaction_digest)
+        .dry_run_transaction(transaction, transaction_digest)
         .await;
     assert!(response.is_ok());
 
@@ -205,7 +212,7 @@ async fn test_handle_transfer_transaction_bad_signature() {
     let object_id = ObjectID::random();
     let gas_object_id = ObjectID::random();
     let authority_state =
-        init_state_with_ids(vec![(sender, object_id), (sender, gas_object_id)]).await;
+        Arc::new(init_state_with_ids(vec![(sender, object_id), (sender, gas_object_id)]).await);
     let object = authority_state
         .get_object(&object_id)
         .await
@@ -224,8 +231,25 @@ async fn test_handle_transfer_transaction_bad_signature() {
         gas_object.compute_object_reference(),
     );
 
-    let num_orders = authority_state.metrics.tx_orders.get();
-    let num_errors = authority_state.metrics.signature_errors.get();
+    let consensus_address = "/ip4/127.0.0.1/tcp/0/http".parse().unwrap();
+    let (tx_consensus_listener, _rx_consensus_listener) = tokio::sync::mpsc::channel(1);
+
+    let server = AuthorityServer::new_for_test(
+        "/ip4/127.0.0.1/tcp/0/http".parse().unwrap(),
+        authority_state.clone(),
+        consensus_address,
+        tx_consensus_listener,
+    );
+    let metrics = server.metrics.clone();
+
+    let server_handle = server.spawn_for_test().await.unwrap();
+
+    let client = NetworkAuthorityClient::connect(
+        server_handle.address(),
+        Arc::new(NetworkAuthorityClientMetrics::new_for_tests()),
+    )
+    .await
+    .unwrap();
 
     let (_unknown_address, unknown_key): (_, AccountKeyPair) = get_key_pair();
     let mut bad_signature_transfer_transaction = transfer_transaction.clone();
@@ -234,25 +258,12 @@ async fn test_handle_transfer_transaction_bad_signature() {
         &unknown_key,
     );
 
-    // bad_signature_transfer_transaction.signed_data.tx_signature = Signature::new_secure(
-    //     &transfer_transaction.signed_data.data,
-    //     Intent::default(),
-    //     &unknown_key,
-    // )
-    // .unwrap();
-    assert!(authority_state
-        .handle_transaction(bad_signature_transfer_transaction)
+    assert!(client
+        .handle_transaction(bad_signature_transfer_transaction.into_inner())
         .await
         .is_err());
 
-    // Check that metrics were increased
-    let num_orders = authority_state.metrics.tx_orders.get() - num_orders;
-    // For some reason this is sometimes more than 1, maybe tests running in parallel
-    assert!(num_orders > 0);
-    assert_eq!(
-        authority_state.metrics.signature_errors.get() - num_errors,
-        1
-    );
+    assert_eq!(metrics.signature_errors.get(), 1);
 
     let object = authority_state
         .get_object(&object_id)
@@ -579,8 +590,8 @@ async fn test_objected_owned_gas() {
 
 pub async fn send_and_confirm_transaction(
     authority: &AuthorityState,
-    transaction: Transaction,
-) -> Result<TransactionInfoResponse, SuiError> {
+    transaction: VerifiedTransaction,
+) -> Result<VerifiedTransactionInfoResponse, SuiError> {
     send_and_confirm_transaction_with_shared(
         authority,
         transaction,
@@ -591,12 +602,12 @@ pub async fn send_and_confirm_transaction(
 
 pub async fn send_and_confirm_transaction_with_shared(
     authority: &AuthorityState,
-    transaction: Transaction,
+    transaction: VerifiedTransaction,
     with_shared: bool, // transaction includes shared objects
-) -> Result<TransactionInfoResponse, SuiError> {
+) -> Result<VerifiedTransactionInfoResponse, SuiError> {
     // Make the initial request
     let response = authority.handle_transaction(transaction.clone()).await?;
-    let vote = response.signed_transaction.unwrap();
+    let vote = response.signed_transaction.unwrap().into_inner();
 
     // Collect signatures from a quorum of authorities
     let committee = authority.committee.load();
@@ -605,6 +616,8 @@ pub async fn send_and_confirm_transaction_with_shared(
         vec![vote.auth_sign_info],
         &committee,
     )
+    .unwrap()
+    .verify(&committee)
     .unwrap();
 
     if with_shared {
@@ -1686,6 +1699,10 @@ async fn test_authority_persist() {
     // Close the authority
     drop(authority);
 
+    // TODO: The right fix is to invoke some function on DBMap and release the rocksdb arc references
+    // being held in the background thread but this will suffice for now
+    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+
     // Reopen the same authority with the same path
     let seed = [1u8; 32];
     let (committee, _, authority_key) =
@@ -1729,7 +1746,7 @@ async fn test_idempotent_reversed_confirmation() {
         .await;
     assert!(result1.is_ok());
     let result2 = authority_state
-        .handle_transaction(certified_transfer_transaction.to_transaction())
+        .handle_transaction(certified_transfer_transaction.into_inner().to_transaction())
         .await;
     assert!(result2.is_ok());
     assert_eq!(
@@ -1761,7 +1778,7 @@ async fn test_change_epoch_transaction() {
     committee.epoch += 1;
     authority_state.committee.store(Arc::new(committee));
 
-    let signed_tx = SignedTransaction::new_change_epoch(
+    let signed_tx = VerifiedSignedTransaction::new_change_epoch(
         1,
         100,
         100,
@@ -1783,6 +1800,8 @@ async fn test_change_epoch_transaction() {
         vec![signed_tx.auth_sign_info.clone()],
         &committee,
     )
+    .unwrap()
+    .verify(&committee)
     .unwrap();
     let result = authority_state
         .handle_certificate(&certificate)
@@ -2016,7 +2035,7 @@ pub async fn init_state_with_ids_and_object_basics<
 >(
     objects: I,
 ) -> (AuthorityState, ObjectRef) {
-    use move_package::BuildConfig;
+    use sui_framework_build::compiled_package::BuildConfig;
 
     let state = init_state().await;
     for (address, object_id) in objects {
@@ -2025,10 +2044,15 @@ pub async fn init_state_with_ids_and_object_basics<
     }
 
     // add object_basics package object to genesis, since lots of test use it
-    let build_config = BuildConfig::default();
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("src/unit_tests/data/object_basics");
-    let modules = sui_framework::build_move_package(&path, build_config).unwrap();
+    let modules = BuildConfig::default()
+        .build(path)
+        .unwrap()
+        .get_modules()
+        .into_iter()
+        .cloned()
+        .collect();
     let pkg = Object::new_package(modules, TransactionDigest::genesis());
     let pkg_ref = pkg.compute_object_reference();
     state.insert_genesis_object(pkg).await;
@@ -2088,7 +2112,7 @@ pub fn init_transfer_transaction(
     recipient: SuiAddress,
     object_ref: ObjectRef,
     gas_object_ref: ObjectRef,
-) -> Transaction {
+) -> VerifiedTransaction {
     let data = TransactionData::new_transfer(recipient, object_ref, sender, gas_object_ref, 10000);
     to_sender_signed_transaction(data, secret)
 }
@@ -2101,7 +2125,7 @@ fn init_certified_transfer_transaction(
     object_ref: ObjectRef,
     gas_object_ref: ObjectRef,
     authority_state: &AuthorityState,
-) -> CertifiedTransaction {
+) -> VerifiedCertificate {
     let transfer_transaction =
         init_transfer_transaction(sender, secret, recipient, object_ref, gas_object_ref);
     init_certified_transaction(transfer_transaction, authority_state)
@@ -2109,10 +2133,10 @@ fn init_certified_transfer_transaction(
 
 #[cfg(test)]
 fn init_certified_transaction(
-    transaction: Transaction,
+    transaction: VerifiedTransaction,
     authority_state: &AuthorityState,
-) -> CertifiedTransaction {
-    let vote = SignedTransaction::new(
+) -> VerifiedCertificate {
+    let vote = VerifiedSignedTransaction::new(
         0,
         transaction.clone(),
         authority_state.name,
@@ -2121,16 +2145,18 @@ fn init_certified_transaction(
     let committee = authority_state.committee.load();
     CertifiedTransaction::new_with_auth_sign_infos(
         transaction,
-        vec![vote.auth_sign_info],
+        vec![vote.auth_sign_info.clone()],
         &committee,
     )
+    .unwrap()
+    .verify(&committee)
     .unwrap()
 }
 
 #[cfg(test)]
-async fn send_consensus(authority: &AuthorityState, cert: &CertifiedTransaction) {
+async fn send_consensus(authority: &AuthorityState, cert: &VerifiedCertificate) {
     let transaction = SequencedConsensusTransaction::new_test(
-        ConsensusTransaction::new_certificate_message(&authority.name, cert.clone()),
+        ConsensusTransaction::new_certificate_message(&authority.name, cert.clone().into_inner()),
     );
 
     if let Ok(transaction) = authority.verify_consensus_transaction(transaction) {
@@ -2235,7 +2261,7 @@ async fn make_test_transaction(
     gas_object_ref: &ObjectRef,
     authorities: &[&AuthorityState],
     arg_value: u64,
-) -> CertifiedTransaction {
+) -> VerifiedCertificate {
     // Make a sample transaction.
     let module = "object_basics";
     let function = "set_value";
@@ -2276,7 +2302,7 @@ async fn make_test_transaction(
             sigs.clone(),
             &committee,
         ) {
-            return cert;
+            return cert.verify(&committee).unwrap();
         }
     }
 
@@ -2402,7 +2428,7 @@ async fn test_consensus_message_processed() {
 
     async fn handle_cert(
         authority: &AuthorityState,
-        cert: &CertifiedTransaction,
+        cert: &VerifiedCertificate,
     ) -> SignedTransactionEffects {
         if let TransactionInfoResponse {
             signed_effects: Some(effects),

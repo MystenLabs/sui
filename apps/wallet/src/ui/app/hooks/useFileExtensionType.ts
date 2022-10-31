@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-type FileExtentionType = {
+type FileExtensionType = {
     [key: string]: {
         name: string;
         type: string;
@@ -13,7 +13,7 @@ type FileExtentionType = {
 // Temporary solution until we have a better way to detect file types.
 // extentionType: FileExtentionType
 //    type?: 'image' | 'audio' | 'video';
-const FILE_EXTENSION_TYPE_MAP: FileExtentionType = {
+const FILE_EXTENSION_TYPE_MAP: FileExtensionType = {
     jpeg: {
         name: 'JPEG',
         type: 'image',
@@ -97,7 +97,7 @@ export const extractFileType = async (imgUrl: string) => {
         });
 };
  */
-export default function useFileExtentionType(url: string) {
+export default function useFileExtensionType(url: string) {
     if (!url) return { name: '', type: '' };
     const fileType = url.split('.').pop() || '';
     return FILE_EXTENSION_TYPE_MAP[fileType] || { name: '', type: '' };

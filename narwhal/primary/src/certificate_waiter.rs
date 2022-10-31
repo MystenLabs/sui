@@ -26,7 +26,7 @@ use types::{
 #[path = "tests/certificate_waiter_tests.rs"]
 pub mod certificate_waiter_tests;
 
-// Maximum number of certficates to fetch with one request.
+// Maximum number of certificates to fetch with one request.
 const MAX_CERTIFICATES_TO_FETCH: usize = 1000;
 // Seconds to wait for a response before issuing another parallel fetch request.
 const PARALLEL_FETCH_REQUEST_INTERVAL_SECS: u64 = 5;
@@ -379,7 +379,9 @@ async fn fetch_certificates_helper(
         peers.shuffle(&mut ThreadRng::default());
         let mut fut = FuturesUnordered::new();
         for peer in peers.iter() {
-            fut.push(network.fetch_certificates(peer, request.clone()));
+            let network = network.network();
+            let request = request.clone();
+            fut.push(async move { network.fetch_certificates(peer, request).await });
             let mut interval = Box::pin(time::sleep(request_interval));
             tokio::select! {
                 res = fut.next() => match res {

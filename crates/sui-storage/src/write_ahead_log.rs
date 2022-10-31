@@ -307,6 +307,8 @@ where
 #[cfg(test)]
 mod tests {
 
+    use std::time::Duration;
+
     use crate::write_ahead_log::{DBWriteAheadLog, TxGuard, WriteAheadLog};
     use anyhow;
     use sui_types::base_types::TransactionDigest;
@@ -346,6 +348,10 @@ mod tests {
             assert!(recover_queue_empty(&log).await);
         }
 
+        // TODO: The right fix is to invoke some function on DBMap and release the rocksdb arc references
+        // being held in the background thread but this will suffice for now
+        tokio::time::sleep(Duration::from_secs(1)).await;
+
         {
             // recover the log
             let log: DBWriteAheadLog<u32> = DBWriteAheadLog::new(working_dir.path().to_path_buf());
@@ -359,6 +365,10 @@ mod tests {
             // commit the recoverable tx
             r.commit_tx();
         }
+
+        // TODO: The right fix is to invoke some function on DBMap and release the rocksdb arc references
+        // being held in the background thread but this will suffice for now
+        tokio::time::sleep(Duration::from_secs(1)).await;
 
         {
             // recover the log again
