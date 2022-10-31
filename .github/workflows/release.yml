@@ -84,6 +84,7 @@ jobs:
       - name: Publish binaries
         uses: softprops/action-gh-release@v1
         with:
+          tag_name: ${{ inputs.sui_tag }}
           files: |
             ${{ steps.build.outputs.BIN_SUI }}
             ${{ steps.build.outputs.BIN_SUI_NODE }}
