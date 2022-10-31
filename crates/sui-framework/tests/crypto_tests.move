@@ -101,7 +101,7 @@ module sui::crypto_tests {
         188, 165, 33, 36, 120, 125, 60, 202, 20, 28, 54, 66, 157, 118, 82, 67, 90, 130, 12, 114, 153, 45, 94, 238, 99,
         23];
 
-        let verify = bls12381::bls12381_verify_g1_sig(&sig, &pk, &msg);
+        let verify = bls12381::bls12381_min_sig_verify(&sig, &pk, &msg);
         assert!(verify == true, 0)
     }
 
@@ -119,7 +119,7 @@ module sui::crypto_tests {
         188, 165, 33, 36, 120, 125, 60, 202, 20, 28, 54, 66, 157, 118, 82, 67, 90, 130, 12, 114, 153, 45, 94, 238, 99,
         23];
 
-        let verify = bls12381::bls12381_verify_g1_sig(&sig, &pk, &msg);
+        let verify = bls12381::bls12381_min_sig_verify(&sig, &pk, &msg);
         assert!(verify == false, 0)
     }
 
@@ -137,7 +137,7 @@ module sui::crypto_tests {
         188, 165, 33, 36, 120, 125, 60, 202, 20, 28, 54, 66, 157, 118, 82, 67, 90, 130, 12, 114, 153, 45, 94, 238, 99,
         23];
 
-        let verify = bls12381::bls12381_verify_g1_sig(&sig, &pk, &msg);
+        let verify = bls12381::bls12381_min_sig_verify(&sig, &pk, &msg);
         assert!(verify == false, 0)
     }
 
@@ -155,7 +155,7 @@ module sui::crypto_tests {
         188, 165, 33, 36, 120, 125, 60, 202, 20, 28, 54, 66, 157, 118, 82, 67, 90, 130, 12, 114, 153, 45, 94, 238, 99,
         23];
 
-        let verify = bls12381::bls12381_verify_g1_sig(&sig, &pk, &msg);
+        let verify = bls12381::bls12381_min_sig_verify(&sig, &pk, &msg);
         assert!(verify == false, 0)
     }
 

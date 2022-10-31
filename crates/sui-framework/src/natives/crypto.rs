@@ -164,7 +164,7 @@ pub fn secp256k1_verify(
 
 /// Native implementation of bls12381_verify in public Move API, see crypto.move for specifications.
 /// Note that this function only works for signatures in G1 and public keys in G2.
-pub fn bls12381_verify_g1_sig(
+pub fn bls12381_min_sig_verify(
     _context: &mut NativeContext,
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
