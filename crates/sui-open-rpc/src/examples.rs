@@ -373,7 +373,7 @@ impl RpcExampleProvider {
                         "query",
                         json!(TransactionQuery::InputObject(ObjectID::new(self.rng.gen()))),
                     ),
-                    ("cursor", json!(10)),
+                    ("cursor", json!(TransactionDigest::new(self.rng.gen()))),
                     ("limit", json!(100)),
                     ("order", json!(Ordering::Ascending)),
                 ],
