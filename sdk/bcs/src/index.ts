@@ -502,7 +502,7 @@ export class BCS {
     // if BCS instance is passed -> clone its schema
     if (schema instanceof BCS) {
       this.schema = schema.schema;
-      this.types = schema.types;
+      this.types = new Map(schema.types);
       return;
     }
 

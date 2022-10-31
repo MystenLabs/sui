@@ -8,21 +8,13 @@ describe('serde', () => {
     it('should work with Rust config', () => {
         const bcs = new BCS(getRustConfig());
         let value = [ 'beep', 'boop', 'beep' ];
-        assert_deep_equal(
-            serde(bcs, 'Vec<string>', value),
-            value,
-            'rust config test'
-        );
+        expect(serde(bcs, 'Vec<string>', value)).toEqual(value);
     });
 
     it('should work with Sui Move config', () => {
         const bcs = new BCS(getSuiMoveConfig());
         let value = [ 'beep', 'boop', 'beep' ];
-        assert_deep_equal(
-            serde(bcs, 'vector<string>', value),
-            value,
-            'rust config test'
-        );
+        expect(serde(bcs, 'vector<string>', value)).toEqual(value);
     });
 
     it('should fork config', () => {
@@ -32,8 +24,8 @@ describe('serde', () => {
         let bcs_v2 = new BCS(bcs_v1);
         bcs_v2.registerStructType('Worker', { user: 'User', experience: 'u64' });
 
-        assert(!bcs_v1.hasType('Worker'), 'fork');
-        assert(bcs_v2.hasType('Worker'), 'fork');
+        expect(bcs_v1.hasType('Worker')).toBeFalsy();
+        expect(bcs_v2.hasType('Worker')).toBeTruthy();
     });
 
     it('should work with custom config', () => {
@@ -53,18 +45,10 @@ describe('serde', () => {
         });
 
         let value_1 = { tags: [ 'beep', 'boop', 'beep' ] };
-        assert_deep_equal(
-            serde(bcs, 'SiteConfig', value_1),
-            value_1,
-            'struct definition config'
-        );
+        expect(serde(bcs, 'SiteConfig', value_1)).toEqual(value_1);
 
         let value_2 = { some: [ 'what', 'do', 'we', 'test' ]};
-        assert_deep_equal(
-            serde(bcs, 'Option[array[string]]', value_2),
-            value_2,
-            'enum definition config'
-        );
+        expect(serde(bcs, 'Option[array[string]]', value_2)).toEqual(value_2);
     });
 });
 
@@ -72,14 +56,4 @@ function serde(bcs, type, data) {
     let ser = bcs.ser(type, data).toString('hex');
     let de = bcs.de(type, ser, 'hex');
     return de;
-}
-
-function assert(cond, tag = '') {
-    if (!cond) {
-        throw new Error(`Assertion failed! Tag: ${tag}`);
-    }
-}
-
-function assert_deep_equal(v1, v2, tag = '') {
-    return assert(JSON.stringify(v1) == JSON.stringify(v2), tag);
 }
