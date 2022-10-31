@@ -123,8 +123,8 @@ export class JsonRpcProvider extends Provider {
   ) {
     super();
 
-    if (typeof endpoint !== 'string') {
-      this.endpoints = NETWORK_TO_API[endpoint];
+    if ((Object.values(Network) as string[]).includes(endpoint)) {
+      this.endpoints = NETWORK_TO_API[endpoint as Network];
     } else {
       this.endpoints = {
         fullNode: endpoint,

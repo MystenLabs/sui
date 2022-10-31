@@ -3,14 +3,16 @@
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
+      "@mysten/bcs": ["../bcs/src"],
+      "@mysten/sui.js": ["../typescript/src"],
       "@mysten/wallet-adapter-react": ["./packages/react-providers/src"],
       "@mysten/wallet-adapter-react-ui": ["./packages/ui/src"],
       "@mysten/wallet-adapter-all-wallets": [
         "./packages/adapters/all-wallets/src"
       ],
       "@mysten/wallet-adapter-base": ["./packages/adapters/base-adapter/src"],
-      "@mysten/wallet-adapter-mock-wallet": [
-        "./packages/adapters/mock-wallet/src"
+      "@mysten/wallet-adapter-unsafe-burner": [
+        "./packages/adapters/unsafe-burner/src"
       ],
       "@mysten/wallet-standard": [
         "./packages/wallet-standard/src"
@@ -22,12 +24,14 @@
   },
   "include": ["src"],
   "references": [
+    { "path": "../bcs" },
+    { "path": "../typescript" },
     { "path": "./packages/react-providers" },
     { "path": "./packages/ui" },
     { "path": "./packages/wallet-standard" },
     { "path": "./packages/adapters/all-wallets" },
     { "path": "./packages/adapters/base-adapter" },
-    { "path": "./packages/adapters/mock-wallet" },
+    { "path": "./packages/adapters/unsafe-burner" },
     { "path": "./packages/adapters/wallet-standard-adapter" }
   ]
 }
