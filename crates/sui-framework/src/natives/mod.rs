@@ -74,6 +74,11 @@ pub fn all_natives(
             "bls12381_min_sig_verify",
             make_native!(crypto::bls12381_min_sig_verify),
         ),
+        (
+            "bls12381",
+            "bls12381_min_pk_verify",
+            make_native!(crypto::bls12381_min_pk_verify),
+        ),
         ("event", "emit", make_native!(event::emit)),
         (
             "object",
