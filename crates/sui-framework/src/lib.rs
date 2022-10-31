@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use fastcrypto::encoding::{Base64, Encoding};
 use move_binary_format::CompiledModule;
 use move_cli::base::test::UnitTestResult;
 use move_core_types::gas_algebra::InternalGas;
@@ -12,7 +13,7 @@ use once_cell::sync::Lazy;
 use std::{collections::BTreeMap, path::Path};
 use sui_framework_build::compiled_package::{BuildConfig, CompiledPackage};
 use sui_types::{
-    base_types::TransactionDigest, error::SuiResult, in_memory_storage::InMemoryStorage,
+    base_types::TransactionDigest, error::{SuiResult, SuiError}, in_memory_storage::InMemoryStorage,
     messages::InputObjects, temporary_store::TemporaryStore, MOVE_STDLIB_ADDRESS,
     SUI_FRAMEWORK_ADDRESS,
 };
@@ -87,6 +88,45 @@ pub fn legacy_empty_cost() -> InternalGas {
 
 pub fn legacy_length_cost() -> InternalGas {
     InternalGas::new(98)
+}
+
+/// Given a `path` and a `build_config`, build the package in that path and return the compiled modules as base64.
+/// This is useful for when publishing via JSON
+pub fn build_move_package_to_base64(
+    path: &Path,
+    build_config: BuildConfig,
+) -> Result<Vec<String>, SuiError> {
+    build_move_package_to_bytes(path, build_config)
+        .map(|mods| mods.iter().map(Base64::encode).collect::<Vec<_>>())
+}
+
+/// Given a `path` and a `build_config`, build the package in that path and return the compiled modules as Vec<Vec<u8>>.
+/// This is useful for when publishing
+pub fn build_move_package_to_bytes(
+    path: &Path,
+    build_config: BuildConfig,
+) -> Result<Vec<Vec<u8>>, SuiError> {
+    build_move_package(path, build_config).map(|compiled_pkg| {
+        compiled_pkg.get_modules()
+            .map(|m| {
+                let mut bytes = Vec::new();
+                m.serialize(&mut bytes).unwrap();
+                bytes
+            })
+            .collect::<Vec<_>>()
+    })
+}
+
+/// `build_move_package_to_bytes()`, for when you already have a CompiledPackage
+pub fn compiled_move_package_to_bytes(package: &CompiledPackage) -> Vec<Vec<u8>> {
+    package
+        .get_modules()
+        .map(|m| {
+            let mut bytes = Vec::new();
+            m.serialize(&mut bytes).unwrap();
+            bytes
+        })
+        .collect()
 }
 
 /// This function returns a result of UnitTestResult. The outer result indicates whether it

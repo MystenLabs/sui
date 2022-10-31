@@ -21,11 +21,12 @@ use move_core_types::language_storage::TypeTag;
 use move_package::BuildConfig as MoveBuildConfig;
 use serde::Serialize;
 use serde_json::json;
+use sui_bytecode_src_verifier::BytecodeSourceVerifier;
+use sui_framework::compiled_move_package_to_bytes;
 use tracing::info;
 
 use crate::config::{Config, PersistedConfig, SuiClientConfig};
-use sui_framework::build_move_package;
-use sui_framework_build::compiled_package::BuildConfig;
+use sui_framework_build::compiled_package::{CompiledPackage};
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
     GetObjectDataResponse, SuiObjectInfo, SuiParsedObject, SuiTransactionResponse,
@@ -404,15 +405,29 @@ impl SuiClientCommands {
                 let sender = context.try_get_object_owner(&gas).await?;
                 let sender = sender.unwrap_or(context.active_address()?);
 
-                let compiled_modules = build_move_package(
-                    &package_path,
-                    BuildConfig {
-                        config: build_config,
-                        run_bytecode_verifier: true,
-                        print_diags_to_stderr: true,
-                    },
-                )?
-                .get_package_bytes();
+                let compiled_package = build_config
+                    .clone()
+                    .compile_package(&package_path, &mut Vec::new())?;
+
+                let sui_compiled_package = CompiledPackage {
+                    package: compiled_package.clone(),
+                    path: package_path.clone()
+                };
+                let compiled_modules: Vec<Vec<u8>> =
+                    compiled_move_package_to_bytes(&sui_compiled_package);
+
+                // verify that all dependency packages have the correct on-chain bytecode
+                let mut verifier = BytecodeSourceVerifier::new(context.client.read_api(), false);
+                match verifier
+                    .verify_deployed_dependencies(compiled_package)
+                    .await
+                {
+                    Ok(_vr) => println!("dependencies' on-chain bytecode successfully verified\n"),
+                    Err(err) => {
+                        return Err(anyhow!(err));
+                    }
+                };
+
                 let data = context
                     .client
                     .transaction_builder()
