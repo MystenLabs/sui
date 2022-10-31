@@ -88,7 +88,7 @@ function UserApproveContainer({
                         )}
                         disabled={submitting}
                     >
-                        <Icon icon="x" />
+                        <Icon icon={SuiIcons.CloseFill} />
                         {rejectTitle}
                     </button>
                     <button

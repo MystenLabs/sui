@@ -65,9 +65,8 @@
 
 .actions {
     padding: 15px 25px 25px;
-    background: white;
+    background: colors.$white;
     border-radius: 20px 20px 0 0;
-    box-shadow: 0 0 44px rgba(0 0 0 / 15%);
     display: flex;
     align-items: center;
     gap: 10px;
@@ -85,7 +84,7 @@
     justify-content: center;
     padding: 14px 20px;
     gap: 10px;
-    border-radius: 10px;
+    border-radius: 12px;
     font-size: 14px;
     line-height: 17px;
     font-weight: 600;
@@ -105,6 +104,7 @@
 
         & i {
             color: #e1f3ff;
+            font-weight: 300;
         }
     }
 
@@ -127,11 +127,12 @@
     }
 
     &.reject {
-        background: #fae4e4;
+        background: colors.$error-light;
         color: colors.$error;
 
         & i {
-            color: #d28a8a;
+            color: colors.$error;
+            font-weight: 300;
         }
     }
 }
