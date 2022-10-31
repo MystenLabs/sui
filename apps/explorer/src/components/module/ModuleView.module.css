@@ -7,7 +7,6 @@ pre {
 
 section .codeview {
     border-color: transparent !important;
-    max-height: 450px !important;
     @apply font-mono text-sm pl-0 pr-0;
 }
 
@@ -49,7 +48,7 @@ section .codeview pre {
 }
 
 .modulewrapper {
-    @apply p-0 pb-2 w-[400px];
+    @apply p-0 pb-2;
 }
 
 @media (min-width: 40em) {
@@ -92,5 +91,9 @@ button.activemodule {
 }
 
 .singlemodule {
-    @apply w-[400px];
+    @apply w-[80vw] h-[364px] overflow-auto;
+}
+
+.pagmodule {
+    @apply h-[556px] overflow-auto;
 }
