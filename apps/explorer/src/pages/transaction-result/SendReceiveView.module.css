@@ -15,6 +15,10 @@
     @apply flex gap-[8px] items-center text-[14px] leading-[90%] w-[99%];
 }
 
+.oneaddress a {
+    @apply pr-[8px];
+}
+
 .recipientbox {
     @apply flex flex-col items-start gap-[20px];
 }
