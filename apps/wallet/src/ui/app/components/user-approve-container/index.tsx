@@ -6,7 +6,7 @@ import { memo, useCallback, useMemo, useState } from 'react';
 
 import AccountAddress from '_components/account-address';
 import ExternalLink from '_components/external-link';
-import Icon from '_components/icon';
+import Icon, { SuiIcons } from '_components/icon';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
 
 import type { MouseEventHandler, ReactNode } from 'react';
@@ -107,7 +107,7 @@ function UserApproveContainer({
                             (isConnect ? (
                                 <Icon icon="plus" />
                             ) : (
-                                <Icon icon="check" />
+                                <Icon icon={SuiIcons.CheckFill} />
                             ))}
 
                         <span>
