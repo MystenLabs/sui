@@ -3,7 +3,7 @@
 use crate::{legacy_emit_cost, legacy_empty_cost};
 use curve25519_dalek_ng::scalar::Scalar;
 use fastcrypto::{
-    bls12381::{min_sig, min_pk},
+    bls12381::{min_pk, min_sig},
     bulletproofs::{BulletproofsRangeProof, PedersenCommitment},
     ed25519::{Ed25519PublicKey, Ed25519Signature},
     hmac,
@@ -183,15 +183,17 @@ pub fn bls12381_min_sig_verify(
     // TODO: implement native gas cost estimation https://github.com/MystenLabs/sui/issues/3868
     let cost = legacy_emit_cost();
 
-    let signature = match <min_sig::BLS12381Signature as ToFromBytes>::from_bytes(&signature_bytes_ref) {
-        Ok(signature) => signature,
-        Err(_) => return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
-    };
+    let signature =
+        match <min_sig::BLS12381Signature as ToFromBytes>::from_bytes(&signature_bytes_ref) {
+            Ok(signature) => signature,
+            Err(_) => return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
+        };
 
-    let public_key = match <min_sig::BLS12381PublicKey as ToFromBytes>::from_bytes(&public_key_bytes_ref) {
-        Ok(public_key) => public_key,
-        Err(_) => return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
-    };
+    let public_key =
+        match <min_sig::BLS12381PublicKey as ToFromBytes>::from_bytes(&public_key_bytes_ref) {
+            Ok(public_key) => public_key,
+            Err(_) => return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
+        };
 
     match public_key.verify(&msg_ref, &signature) {
         Ok(_) => Ok(NativeResult::ok(cost, smallvec![Value::bool(true)])),
@@ -220,15 +222,17 @@ pub fn bls12381_min_pk_verify(
     // TODO: implement native gas cost estimation https://github.com/MystenLabs/sui/issues/3868
     let cost = legacy_emit_cost();
 
-    let signature = match <min_pk::BLS12381Signature as ToFromBytes>::from_bytes(&signature_bytes_ref) {
-        Ok(signature) => signature,
-        Err(_) => return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
-    };
+    let signature =
+        match <min_pk::BLS12381Signature as ToFromBytes>::from_bytes(&signature_bytes_ref) {
+            Ok(signature) => signature,
+            Err(_) => return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
+        };
 
-    let public_key = match <min_pk::BLS12381PublicKey as ToFromBytes>::from_bytes(&public_key_bytes_ref) {
-        Ok(public_key) => public_key,
-        Err(_) => return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
-    };
+    let public_key =
+        match <min_pk::BLS12381PublicKey as ToFromBytes>::from_bytes(&public_key_bytes_ref) {
+            Ok(public_key) => public_key,
+            Err(_) => return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
+        };
 
     match public_key.verify(&msg_ref, &signature) {
         Ok(_) => Ok(NativeResult::ok(cost, smallvec![Value::bool(true)])),
