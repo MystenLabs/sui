@@ -30,7 +30,12 @@ const getObjType = (objId: string, network: string) =>
 function MultipleRecipients({ sender, recipient, amount, objects }: TxAddress) {
     const [network] = useContext(NetworkContext);
 
-    const [coinList, setCoinList] = useState({
+    interface coinListType {
+        loadState: 'pending' | 'loaded' | 'failed';
+        data: string[];
+    }
+
+    const [coinList, setCoinList] = useState<coinListType>({
         loadState: 'pending',
         data: [],
     });
