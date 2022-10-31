@@ -12,6 +12,9 @@ import { parseObjectType } from '../../utils/objectUtils';
 
 import styles from './SendReceiveView.module.css';
 
+import {useFormatCoin } from '~/hooks/useFormatCoin';
+
+
 type TxAddress = {
     sender: string;
     recipient?: string[];
@@ -78,6 +81,7 @@ function MultipleRecipients({ sender, recipient, amount, objects }: TxAddress) {
                         </div>
                         {recipient.map((add: string, idx: number) => (
                             <div key={idx}>
+                          <>
                                 <div className={styles.oneaddress}>
                                     <div className={styles.doneicon}>
                                         <DoneIcon />
@@ -89,16 +93,13 @@ function MultipleRecipients({ sender, recipient, amount, objects }: TxAddress) {
                                         alttext={add}
                                     />
                                 </div>
-                                <div className={styles.sui}>
-                                    <span className={styles.suiamount}>
-                                        {amount?.[idx].toString()}
-                                    </span>
-                                    <span className={styles.suilabel}>
-                                        {coinList.loadState === 'loaded'
+                          {(amount?.[idx] && <Amount 
+                            amount={amount![idx]}
+                            label={coinList.loadState === 'loaded'
                                             ? coinList.data[idx]
                                             : ''}
-                                    </span>
-                                </div>
+                            /> )}
+                          </>
                             </div>
                         ))}
                     </div>
@@ -106,6 +107,17 @@ function MultipleRecipients({ sender, recipient, amount, objects }: TxAddress) {
             </div>
         </div>
     );
+}
+
+function Amount ({amount, label} : {amount : BigInt, label: string}) {
+return <div className={styles.sui}>
+  <span className={styles.suiamount}>
+                                        {amount.toString()}
+                                    </span>
+                                    <span className={styles.suilabel}>
+    {label} 
+                                    </span> </div>
+
 }
 
 //TODO: Add date format function
