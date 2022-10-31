@@ -1,9 +1,6 @@
 name: Release Binaries
 
 on:
-  push:
-    tags:
-      - 'devnet-*'
   workflow_dispatch:
     inputs:
       sui_tag:
