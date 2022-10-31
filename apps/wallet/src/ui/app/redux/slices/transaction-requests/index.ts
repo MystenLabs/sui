@@ -18,6 +18,7 @@ import type {
     SuiTransactionResponse,
     SignableTransaction,
     SuiExecuteTransactionResponse,
+    MoveCallTransaction,
     UnserializedSignableTransaction,
 } from '@mysten/sui.js';
 import type { PayloadAction } from '@reduxjs/toolkit';
@@ -71,21 +72,49 @@ export const deserializeTxn = createAsyncThunk<
     },
     { serializedTxn: string; id: string },
     AppThunkConfig
->('deserialize-transaction', async (data, { extra: { api, keypairVault } }) => {
-    const { id, serializedTxn } = data;
-    const signer = api.getSignerInstance(keypairVault.getKeyPair());
-    const localSerializer = new LocalTxnDataSerializer(signer.provider);
-    const txnBytes = new Base64DataBuffer(serializedTxn);
-    const deserializeTx =
-        (await localSerializer.deserializeTransactionBytesToSignableTransaction(
-            txnBytes
-        )) as UnserializedSignableTransaction;
+>(
+    'deserialize-transaction',
+    async (data, { dispatch, extra: { api, keypairVault } }) => {
+        const { id, serializedTxn } = data;
+        const signer = api.getSignerInstance(keypairVault.getKeyPair());
+        const localSerializer = new LocalTxnDataSerializer(signer.provider);
+        const txnBytes = new Base64DataBuffer(serializedTxn);
 
-    return {
-        txRequestID: id,
-        unSerializedTxn: deserializeTx || null,
-    };
-});
+        //TODO: Error handling - either show the error or use the serialized txn
+        const deserializeTx =
+            (await localSerializer.deserializeTransactionBytesToSignableTransaction(
+                txnBytes
+            )) as UnserializedSignableTransaction;
+
+        const deserializeData = deserializeTx?.data as MoveCallTransaction;
+        const normalized = {
+            ...deserializeData,
+            gasBudget: Number(deserializeData.gasBudget.toString(10)),
+            gasPayment: '0x' + deserializeData.gasPayment,
+            arguments: deserializeData.arguments.map((d) => '0x' + d),
+        };
+
+        if (deserializeTx && normalized) {
+            dispatch(
+                loadTransactionResponseMetadata({
+                    txRequestID: id,
+                    objectId: normalized.packageObjectId,
+                    moduleName: normalized.module,
+                    functionName: normalized.function,
+                })
+            );
+        }
+
+        return {
+            txRequestID: id,
+            unSerializedTxn:
+                ({
+                    ...deserializeTx,
+                    data: normalized,
+                } as UnserializedSignableTransaction) || null,
+        };
+    }
+);
 
 export const respondToTransactionRequest = createAsyncThunk<
     {

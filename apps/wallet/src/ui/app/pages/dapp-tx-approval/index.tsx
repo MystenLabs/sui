@@ -15,7 +15,10 @@ import {
     deserializeTxn,
 } from '_redux/slices/transaction-requests';
 
-import type { SuiMoveNormalizedType } from '@mysten/sui.js';
+import type {
+    SuiMoveNormalizedType,
+    MoveCallTransaction,
+} from '@mysten/sui.js';
 import type { RootState } from '_redux/RootReducer';
 
 import st from './DappTxApprovalPage.module.scss';
@@ -130,17 +133,24 @@ export function DappTxApprovalPage() {
 
     const [tab, setTab] = useState<TabType | null>(null);
     const metadata = useMemo(() => {
-        if (txRequest?.tx?.type !== 'move-call' || !txRequest?.metadata) {
+        if (
+            (txRequest?.tx?.type !== 'move-call' &&
+                txRequest?.tx?.type !== 'serialized-move-call' &&
+                !txRequest?.unSerializedTxn) ||
+            !txRequest?.metadata
+        ) {
             return null;
         }
-        const txData = txRequest.tx.data;
+        const txData =
+            (txRequest?.unSerializedTxn?.data as MoveCallTransaction) ??
+            txRequest.tx.data;
         const transfer: MetadataGroup = { name: 'Transfer', children: [] };
         const modify: MetadataGroup = { name: 'Modify', children: [] };
         const read: MetadataGroup = { name: 'Read', children: [] };
 
         txRequest.metadata.parameters.forEach((param, index) => {
             if (typeof param !== 'object') return;
-            const id = txData.arguments[index] as string;
+            const id = txData?.arguments[index] as string;
             const unwrappedType = unwrapTypeReference(param);
             if (!unwrappedType) return;
 
@@ -224,14 +234,33 @@ export function DappTxApprovalPage() {
                 return [
                     {
                         label: 'Transaction Type',
-                        content: 'SerializedMoveCall',
+                        content:
+                            txRequest?.unSerializedTxn?.kind ??
+                            'SerializedMoveCall',
                     },
-                    {
-                        label: 'Contents',
-                        content: txRequest?.tx?.data,
-                        //TODO: display the full unSerializedTxn contents
-                        // txRequest?.unSerializedTxn ??
-                    },
+                    ...(txRequest?.unSerializedTxn
+                        ? [
+                              {
+                                  label: 'Function',
+                                  content:
+                                      (
+                                          txRequest?.unSerializedTxn
+                                              ?.data as MoveCallTransaction
+                                      ).function ?? '',
+                              },
+                              {
+                                  label: 'Gas Fees',
+                                  content:
+                                      txRequest?.unSerializedTxn?.data
+                                          .gasBudget,
+                              },
+                          ]
+                        : [
+                              {
+                                  label: 'Content',
+                                  content: txRequest?.tx.data,
+                              },
+                          ]),
                 ];
             default:
                 return [];
@@ -248,51 +277,66 @@ export function DappTxApprovalPage() {
                     rejectTitle="Reject"
                     onSubmit={handleOnSubmit}
                 >
-                    <dl className={st.card}>
-                        <div className={st.content}>
-                            {valuesContent.map(({ label, content }) => (
-                                <div key={label} className={st.row}>
-                                    <dt>{label}</dt>
-                                    <dd>{content}</dd>
-                                </div>
-                            ))}
+                    <section className={st.txInfo}>
+                        <div className={st.card}>
+                            <div className={st.header}>Transaction summary</div>
+                            <div className={st.content}>
+                                {valuesContent.map(({ label, content }) => (
+                                    <div key={label} className={st.row}>
+                                        <div className={st.label}>{label}</div>
+                                        <div className={st.value}>
+                                            {content}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
-                    </dl>
-                    {metadata && tab && (
-                        <>
-                            <div className={st.tabs}>
-                                {Object.entries(metadata).map(
-                                    ([key, value]) =>
-                                        value.children.length > 0 && (
-                                            <button
-                                                type="button"
-                                                className={cl(
-                                                    st.tab,
-                                                    tab === key && st.active
-                                                )}
-                                                // eslint-disable-next-line react/jsx-no-bind
-                                                onClick={() => {
-                                                    setTab(key as TabType);
-                                                }}
-                                            >
-                                                {value.name}
-                                            </button>
-                                        )
-                                )}
+
+                        {metadata && tab && (
+                            <div className={st.card}>
+                                <div className={st.header}>
+                                    Permissions requested
+                                </div>
+                                <div className={st.content}>
+                                    <div className={st.tabs}>
+                                        {Object.entries(metadata).map(
+                                            ([key, value]) =>
+                                                value.children.length > 0 && (
+                                                    <button
+                                                        type="button"
+                                                        key={key}
+                                                        className={cl(
+                                                            st.tab,
+                                                            tab === key &&
+                                                                st.active
+                                                        )}
+                                                        // eslint-disable-next-line react/jsx-no-bind
+                                                        onClick={() => {
+                                                            setTab(
+                                                                key as TabType
+                                                            );
+                                                        }}
+                                                    >
+                                                        {value.name}
+                                                    </button>
+                                                )
+                                        )}
+                                    </div>
+                                    <div className={st.objects}>
+                                        {metadata[tab].children.map(
+                                            ({ id, module }, index) => (
+                                                <PassedObject
+                                                    key={index}
+                                                    id={id}
+                                                    module={module}
+                                                />
+                                            )
+                                        )}
+                                    </div>
+                                </div>
                             </div>
-                            <div className={st.objects}>
-                                {metadata[tab].children.map(
-                                    ({ id, module }, index) => (
-                                        <PassedObject
-                                            key={index}
-                                            id={id}
-                                            module={module}
-                                        />
-                                    )
-                                )}
-                            </div>
-                        </>
-                    )}
+                        )}
+                    </section>
                 </UserApproveContainer>
             ) : null}
         </Loading>

@@ -1,35 +1,55 @@
 @use '_values/colors';
 
 .card {
-    background: colors.$gray-40;
-    border-radius: 10px;
-    border-bottom-left-radius: 0;
-    border-bottom-right-radius: 0;
+    background: colors.$white;
+    border-radius: 15px;
+    border: 1px solid colors.$gray-50;
+
+    .header {
+        background: colors.$gray-40;
+        height: 31px;
+        display: flex;
+        justify-content: center;
+        color: colors.$gray-75;
+        padding: 10px 0;
+        font-weight: 600;
+        font-size: 11px;
+        line-height: 100%;
+        text-transform: uppercase;
+    }
 }
 
 .content {
-    padding: 15px 20px;
+    padding: 15px;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 10px;
 }
 
 .row {
     display: flex;
     justify-content: space-between;
-    font-size: 14px;
-    line-height: 13px;
+    gap: 10px;
+    font-weight: 500;
+    font-size: 13px;
+    line-height: 100%;
 
-    dt {
+    .label {
         color: colors.$gray-80;
-        width: 30%;
+        width: 42%;
+        display: flex;
+        justify-content: flex-start;
     }
 
-    dd {
-        margin-inline-start: 1em;
+    .value {
         color: colors.$gray-90;
+        font-weight: 600;
         word-break: break-all;
-        width: 65%;
+        width: 58%;
+        padding: 0;
+        display: flex;
+        justify-content: flex-end;
+        text-align: justify;
     }
 }
 
@@ -91,4 +111,10 @@
     line-height: 17px;
     font-family: 'Space Mono', ui-monospace, monospace;
     color: colors.$sui-dark-blue;
+}
+
+.tx-info {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
 }
