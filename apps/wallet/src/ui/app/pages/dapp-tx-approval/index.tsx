@@ -116,7 +116,8 @@ export function DappTxApprovalPage() {
 
         if (
             txRequest?.tx?.type === 'serialized-move-call' &&
-            !txRequest.metadata
+            !txRequest.unSerializedTxn &&
+            txRequest?.tx.data
         ) {
             dispatch(
                 deserializeTxn({

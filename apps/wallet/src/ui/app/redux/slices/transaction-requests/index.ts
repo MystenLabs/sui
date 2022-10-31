@@ -67,20 +67,22 @@ export const loadTransactionResponseMetadata = createAsyncThunk<
 export const deserializeTxn = createAsyncThunk<
     {
         txRequestID: string;
-        unSerializedTxn: UnserializedSignableTransaction;
+        unSerializedTxn: UnserializedSignableTransaction | null;
     },
     { serializedTxn: string; id: string },
     AppThunkConfig
 >('deserialize-transaction', async (data, { extra: { api, keypairVault } }) => {
+    const { id, serializedTxn } = data;
     const signer = api.getSignerInstance(keypairVault.getKeyPair());
     const localSerializer = new LocalTxnDataSerializer(signer.provider);
+    const txnBytes = new Base64DataBuffer(serializedTxn);
     const deserializeTx =
         (await localSerializer.deserializeTransactionBytesToSignableTransaction(
-            new Base64DataBuffer(data.serializedTxn)
+            txnBytes
         )) as UnserializedSignableTransaction;
 
     return {
-        txRequestID: data.id,
+        txRequestID: id,
         unSerializedTxn: deserializeTx || null,
     };
 });
@@ -187,13 +189,17 @@ const slice = createSlice({
                 });
             }
         );
+
         build.addCase(deserializeTxn.fulfilled, (state, { payload }) => {
-            txRequestsAdapter.updateOne(state, {
-                id: payload.txRequestID,
-                changes: {
-                    unSerializedTxn: payload.unSerializedTxn,
-                },
-            });
+            const { txRequestID, unSerializedTxn } = payload;
+            if (unSerializedTxn) {
+                txRequestsAdapter.updateOne(state, {
+                    id: txRequestID,
+                    changes: {
+                        unSerializedTxn: unSerializedTxn || null,
+                    },
+                });
+            }
         });
 
         build.addCase(

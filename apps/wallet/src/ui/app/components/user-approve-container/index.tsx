@@ -102,7 +102,7 @@ function UserApproveContainer({
                         onClick={handleOnResponse}
                         disabled={submitting}
                     >
-                        {submitting &&
+                        {!submitting &&
                             !isWarning &&
                             (isConnect ? (
                                 <Icon icon="plus" />
