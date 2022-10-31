@@ -496,7 +496,7 @@ async fn test_map_reducer() {
                 Box::pin(async move {
                     Err(SuiError::TooManyIncorrectAuthorities {
                         errors: vec![],
-                        action: "",
+                        action: "".to_string(),
                     })
                 })
             },
@@ -516,7 +516,7 @@ async fn test_map_reducer() {
                 Box::pin(async move {
                     let res: Result<usize, SuiError> = Err(SuiError::TooManyIncorrectAuthorities {
                         errors: vec![],
-                        action: "",
+                        action: "".to_string(),
                     });
                     res
                 })
@@ -571,7 +571,7 @@ async fn test_map_reducer() {
                 Box::pin(async move {
                     Err(SuiError::TooManyIncorrectAuthorities {
                         errors: vec![],
-                        action: "",
+                        action: "".to_string(),
                     })
                 })
             },
@@ -1044,7 +1044,7 @@ async fn test_quorum_once_with_timeout() {
             },
             Duration::from_millis(authority_request_timeout),
             Some(Duration::from_millis(30 * 50)),
-            "test",
+            "test".to_string(),
         )
         .await
         .unwrap();
