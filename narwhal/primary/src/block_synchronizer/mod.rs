@@ -749,7 +749,7 @@ impl BlockSynchronizer {
             {
                 Ok(peer) => peer,
                 Err(e) => {
-                    info!("Could not extract peer from GetCertificates response: {e:?}");
+                    error!("Could not extract peer from GetCertificates response: {e:?}");
                     continue;
                 }
             };
