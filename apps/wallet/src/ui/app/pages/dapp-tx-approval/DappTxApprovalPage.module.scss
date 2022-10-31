@@ -51,7 +51,7 @@
         padding: 0;
         display: flex;
         justify-content: flex-end;
-        text-align: justify;
+        text-align: right;
     }
 }
 
@@ -83,17 +83,19 @@
         padding: 8px 0;
         margin-bottom: -1px;
         color: colors.$gray-75;
+        font-weight: 600;
+        font-size: 14px;
+        line-height: 100%;
         border-bottom: 1px solid colors.$gray-45;
 
         &.active {
-            color: colors.$gray-100;
-            border-color: colors.$gray-65;
+            color: colors.$cta-blue-hover;
+            border-color: colors.$cta-blue-hover;
         }
     }
 }
 
 .objects {
-    margin-top: 20px;
     display: flex;
     flex-direction: column;
     gap: 20px;
@@ -105,6 +107,7 @@
     line-height: 17px;
     color: colors.$gray-85;
     font-family: 'Space Mono', ui-monospace, monospace;
+    word-break: break-all;
 }
 
 .object-id {
@@ -119,4 +122,8 @@
     display: flex;
     flex-direction: column;
     gap: 20px;
+}
+
+.deserializing {
+    min-height: 450px;
 }

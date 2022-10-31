@@ -193,7 +193,11 @@ export const respondToTransactionRequest = createAsyncThunk<
 
 const slice = createSlice({
     name: 'transaction-requests',
-    initialState: txRequestsAdapter.getInitialState({ initialized: false }),
+    initialState: txRequestsAdapter.getInitialState({
+        initialized: false,
+        // show serialized txn if deserialization fails
+        deserializeTxnFailed: false,
+    }),
     reducers: {
         setTransactionRequests: (
             state,
@@ -202,6 +206,7 @@ const slice = createSlice({
             // eslint-disable-next-line @typescript-eslint/ban-ts-comment
             // @ts-ignore
             txRequestsAdapter.setAll(state, payload);
+            state.deserializeTxnFailed = false;
             state.initialized = true;
         },
     },
@@ -218,6 +223,10 @@ const slice = createSlice({
                 });
             }
         );
+
+        build.addCase(deserializeTxn.rejected, (state, { payload }) => {
+            state.deserializeTxnFailed = true;
+        });
 
         build.addCase(deserializeTxn.fulfilled, (state, { payload }) => {
             const { txRequestID, unSerializedTxn } = payload;
