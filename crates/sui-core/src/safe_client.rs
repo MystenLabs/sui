@@ -456,7 +456,8 @@ impl<C> SafeClient<C> {
         )>,
     ) -> SuiResult {
         // check the signature of the batch
-        signed_batch.verify(&self.get_committee(&signed_batch.auth_sig().epoch)?)?;
+        let epoch = signed_batch.auth_sig().epoch;
+        signed_batch.verify(&self.get_committee(&epoch)?)?;
 
         // ensure transactions enclosed match requested range
 
