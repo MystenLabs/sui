@@ -21,7 +21,10 @@ module sui::math_tests {
     
     #[test]
     fun test_pow() {
+        assert!(nft::pow(1, 0) == 1, 0);
+        assert!(nft::pow(1, 1) == 1, 0);
         assert!(nft::pow(2, 10) == 1024, 0);
+        assert!(nft::pow(10, 6) == 1000000, 0);
     }
 
     #[test]
@@ -32,7 +35,11 @@ module sui::math_tests {
 
     #[test]
     fun test_pow128() {
+        assert!(nft::pow128(1, 0) == 1, 0);
+        assert!(nft::pow128(1, 1) == 1, 0);
         assert!(nft::pow128(2, 10) == 1024, 0);
+        assert!(nft::pow128(10, 6) == 1000000, 0);
+        assert!(nft::pow128(10, 20) == 100000000000000000000, 0);
     }
 
     #[test]
