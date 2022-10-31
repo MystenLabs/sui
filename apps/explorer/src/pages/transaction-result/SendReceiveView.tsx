@@ -187,14 +187,6 @@ function SingleAmount({
 
 //TODO: Add date format function
 function SendReceiveView({ sender, recipient, amount, objects }: TxAddress) {
-    const [isShortScreen, setIsShortScreen] = useState(false);
-
-    const { innerWidth } = window;
-
-    useEffect(() => {
-        setIsShortScreen(innerWidth < 440);
-    }, [innerWidth]);
-
     if (recipient && recipient.length === 1 && amount) {
         return (
             <>
@@ -228,14 +220,7 @@ function SendReceiveView({ sender, recipient, amount, objects }: TxAddress) {
                                     ])}
                                 >
                                     <div
-                                        className={`${styles.doneicon} ${
-                                            styles.doneiconwline
-                                        }
-                                  ${
-                                      isShortScreen
-                                          ? styles.doneiconwlongline
-                                          : styles.doneiconwshortline
-                                  }`}
+                                        className={`${styles.doneicon} ${styles.doneiconwline}`}
                                     >
                                         <DoneIcon />
                                     </div>

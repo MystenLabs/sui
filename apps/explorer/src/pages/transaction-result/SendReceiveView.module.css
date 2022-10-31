@@ -51,7 +51,7 @@ h4.oneheading {
     @apply relative ml-[10px];
 }
 
-.doneiconwshortline::before {
+.doneiconwline::before {
     content: '';
     display: block;
     position: absolute;
@@ -66,19 +66,21 @@ h4.oneheading {
     overflow: hidden;
 }
 
-.doneiconwlongline::before {
-    content: '';
-    display: block;
-    position: absolute;
-    bottom: 50%;
-    right: 16px;
-    width: 12px;
-    height: 300%;
-    border: 1px dashed #a0b6c3;
-    border-bottom-left-radius: 4px;
-    border-right: none;
-    border-top: none;
-    overflow: hidden;
+@media only screen and (max-width: 439px) {
+    .doneiconwline::before {
+        content: '';
+        display: block;
+        position: absolute;
+        bottom: 50%;
+        right: 16px;
+        width: 12px;
+        height: 300%;
+        border: 1px dashed #a0b6c3;
+        border-bottom-left-radius: 4px;
+        border-right: none;
+        border-top: none;
+        overflow: hidden;
+    }
 }
 
 .amountbox {
