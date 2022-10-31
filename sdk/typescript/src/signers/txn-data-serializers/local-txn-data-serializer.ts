@@ -408,11 +408,12 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
     ? 'TransactionData_Deprecated'
     : 'TransactionData';
     
-    if (shouldUseIntentSigning(version)) {
-      return await this.serializeIntentTransactionData(txData, format);
-    } else {
-      return await this.serializeTransactionData(txData, format);
-    }
+    return await this.serializeIntentTransactionData(txData, format);
+    // if (shouldUseIntentSigning(version)) {
+      // return await this.serializeIntentTransactionData(txData, format);
+    // } else {
+    //   return await this.serializeTransactionData(txData, format);
+    // }
   }
 
   /**
