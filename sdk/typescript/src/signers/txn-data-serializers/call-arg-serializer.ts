@@ -253,7 +253,6 @@ export class CallArgSerializer {
       );
       const res = `vector<${innerType}>`;
       // TODO: can we get rid of this call and make it happen automatically?
-      bcs.registerVectorType(res, innerType);
       return res;
     }
 
