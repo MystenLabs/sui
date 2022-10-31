@@ -32,7 +32,7 @@ ark-crypto-primitives = { version = "0.3", features = ["parallel", "rayon", "std
 ark-ec = { version = "0.3", features = ["parallel", "rayon", "std"] }
 ark-ed-on-bw6-761 = { version = "0.3" }
 ark-ed-on-cp6-782 = { version = "0.3", default-features = false }
-ark-ff = { version = "0.3", features = ["parallel", "rayon", "std"] }
+ark-ff = { version = "0.3", features = ["asm", "parallel", "rayon", "std"] }
 ark-relations = { version = "0.3", default-features = false, features = ["std", "tracing-subscriber"] }
 ark-serialize = { version = "0.3", features = ["ark-serialize-derive", "derive", "std"] }
 ark-snark = { version = "0.3", default-features = false }
@@ -75,7 +75,7 @@ block-buffer-93f6ce9d446188ac = { package = "block-buffer", version = "0.10", de
 block-buffer-274715c4dabd11b0 = { package = "block-buffer", version = "0.9", default-features = false, features = ["block-padding"] }
 block-padding-6f8ce4dd05d13bba = { package = "block-padding", version = "0.2", default-features = false }
 block-padding-468e82937335b1c9 = { package = "block-padding", version = "0.3", default-features = false, features = ["std"] }
-bls-crypto = { git = "https://github.com/huitseeker/celo-bls-snark-rs", branch = "updates-2", features = ["compat"] }
+bls-crypto = { git = "https://github.com/huitseeker/celo-bls-snark-rs", branch = "updates-2-with-parallelism-toggle", default-features = false, features = ["parallel"] }
 blst = { version = "0.3" }
 bs58 = { version = "0.4", default-features = false, features = ["check", "sha2"] }
 bstr = { version = "0.2", features = ["lazy_static", "regex-automata", "serde", "serde1", "serde1-nostd", "std", "unicode"] }
@@ -179,7 +179,7 @@ ethnum = { version = "1", default-features = false }
 event-listener = { version = "2", default-features = false }
 eyre = { version = "0.6", features = ["auto-install", "track-caller"] }
 fail = { version = "0.4", default-features = false }
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "223ccb31da34823f6f7d940517872b37df08736a", features = ["copy_key", "secure"] }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "bbb2d02a7a64c27314721748cc4d015b00490dbe", features = ["copy_key", "secure", "threads-bls_12_377"] }
 fastrand = { version = "1", default-features = false }
 fd-lock = { version = "3", default-features = false }
 fdlimit = { version = "0.2", default-features = false }
@@ -336,7 +336,7 @@ multiaddr = { version = "0.15", features = ["url"] }
 multibase = { version = "0.9", features = ["std"] }
 multihash = { version = "0.16", default-features = false, features = ["alloc", "derive", "identity", "multihash-derive", "multihash-impl", "std"] }
 mysten-network = { git = "https://github.com/MystenLabs/mysten-infra.git", rev = "62dd8c9c4aa0f5ed2c243546d159d9cf2816f3d9", default-features = false }
-mysten-util-mem = { git = "https://github.com/MystenLabs/mysten-infra/", rev = "d69adb7aa133b6306aea4ddfe3df5fbb5daa9cb2", features = ["estimate-heapsize", "hashbrown", "parking_lot", "smallvec", "std"] }
+mysten-util-mem = { git = "https://github.com/MystenLabs/mysten-infra/", rev = "1aabc3ba6a8a353743168611fd2b8d1b27d64431", features = ["estimate-heapsize", "hashbrown", "parking_lot", "smallvec", "std"] }
 named-lock = { version = "0.2", default-features = false }
 nested = { version = "0.1", default-features = false }
 nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "5926141c20414814290bb1b04bd3b2238bbbc90e", default-features = false }
@@ -641,7 +641,7 @@ ark-crypto-primitives = { version = "0.3", features = ["parallel", "rayon", "std
 ark-ec = { version = "0.3", features = ["parallel", "rayon", "std"] }
 ark-ed-on-bw6-761 = { version = "0.3" }
 ark-ed-on-cp6-782 = { version = "0.3", default-features = false }
-ark-ff = { version = "0.3", features = ["parallel", "rayon", "std"] }
+ark-ff = { version = "0.3", features = ["asm", "parallel", "rayon", "std"] }
 ark-ff-asm = { version = "0.3", default-features = false }
 ark-ff-macros = { version = "0.3", default-features = false }
 ark-relations = { version = "0.3", default-features = false, features = ["std", "tracing-subscriber"] }
@@ -695,7 +695,7 @@ block-buffer-93f6ce9d446188ac = { package = "block-buffer", version = "0.10", de
 block-buffer-274715c4dabd11b0 = { package = "block-buffer", version = "0.9", default-features = false, features = ["block-padding"] }
 block-padding-6f8ce4dd05d13bba = { package = "block-padding", version = "0.2", default-features = false }
 block-padding-468e82937335b1c9 = { package = "block-padding", version = "0.3", default-features = false, features = ["std"] }
-bls-crypto = { git = "https://github.com/huitseeker/celo-bls-snark-rs", branch = "updates-2", features = ["compat"] }
+bls-crypto = { git = "https://github.com/huitseeker/celo-bls-snark-rs", branch = "updates-2-with-parallelism-toggle", default-features = false, features = ["parallel"] }
 blst = { version = "0.3" }
 bs58 = { version = "0.4", default-features = false, features = ["check", "sha2"] }
 bstr = { version = "0.2", features = ["lazy_static", "regex-automata", "serde", "serde1", "serde1-nostd", "std", "unicode"] }
@@ -815,8 +815,8 @@ ethnum = { version = "1", default-features = false }
 event-listener = { version = "2", default-features = false }
 eyre = { version = "0.6", features = ["auto-install", "track-caller"] }
 fail = { version = "0.4", default-features = false }
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "223ccb31da34823f6f7d940517872b37df08736a", features = ["copy_key", "secure"] }
-fastcrypto-derive = { git = "https://github.com/MystenLabs/fastcrypto", rev = "223ccb31da34823f6f7d940517872b37df08736a", default-features = false }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "bbb2d02a7a64c27314721748cc4d015b00490dbe", features = ["copy_key", "secure", "threads-bls_12_377"] }
+fastcrypto-derive = { git = "https://github.com/MystenLabs/fastcrypto", rev = "bbb2d02a7a64c27314721748cc4d015b00490dbe", default-features = false }
 fastrand = { version = "1", default-features = false }
 fd-lock = { version = "3", default-features = false }
 fdlimit = { version = "0.2", default-features = false }
@@ -988,8 +988,8 @@ multihash = { version = "0.16", default-features = false, features = ["alloc", "
 multihash-derive = { version = "0.8", default-features = false, features = ["std"] }
 multimap = { version = "0.8", default-features = false }
 mysten-network = { git = "https://github.com/MystenLabs/mysten-infra.git", rev = "62dd8c9c4aa0f5ed2c243546d159d9cf2816f3d9", default-features = false }
-mysten-util-mem = { git = "https://github.com/MystenLabs/mysten-infra/", rev = "d69adb7aa133b6306aea4ddfe3df5fbb5daa9cb2", features = ["estimate-heapsize", "hashbrown", "parking_lot", "smallvec", "std"] }
-mysten-util-mem-derive = { git = "https://github.com/MystenLabs/mysten-infra/", rev = "d69adb7aa133b6306aea4ddfe3df5fbb5daa9cb2", default-features = false }
+mysten-util-mem = { git = "https://github.com/MystenLabs/mysten-infra/", rev = "1aabc3ba6a8a353743168611fd2b8d1b27d64431", features = ["estimate-heapsize", "hashbrown", "parking_lot", "smallvec", "std"] }
+mysten-util-mem-derive = { git = "https://github.com/MystenLabs/mysten-infra/", rev = "1aabc3ba6a8a353743168611fd2b8d1b27d64431", default-features = false }
 name-variant = { version = "0.1", default-features = false }
 named-lock = { version = "0.2", default-features = false }
 nested = { version = "0.1", default-features = false }

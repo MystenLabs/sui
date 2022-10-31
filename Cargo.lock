@@ -825,7 +825,7 @@ dependencies = [
 [[package]]
 name = "bls-crypto"
 version = "0.2.0"
-source = "git+https://github.com/huitseeker/celo-bls-snark-rs?branch=updates-2#9f5a0e6f1a9c6afaa93e8112562e46e92b84a92e"
+source = "git+https://github.com/huitseeker/celo-bls-snark-rs?branch=updates-2-with-parallelism-toggle#78f379fe4b16348999a81f57c231102b0913224e"
 dependencies = [
  "ark-bls12-377",
  "ark-crypto-primitives",
@@ -2316,7 +2316,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto"
 version = "0.1.3"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=223ccb31da34823f6f7d940517872b37df08736a#223ccb31da34823f6f7d940517872b37df08736a"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=bbb2d02a7a64c27314721748cc4d015b00490dbe#bbb2d02a7a64c27314721748cc4d015b00490dbe"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -2362,7 +2362,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-derive"
 version = "0.1.2"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=223ccb31da34823f6f7d940517872b37df08736a#223ccb31da34823f6f7d940517872b37df08736a"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=bbb2d02a7a64c27314721748cc4d015b00490dbe#bbb2d02a7a64c27314721748cc4d015b00490dbe"
 dependencies = [
  "proc-macro2 1.0.47",
  "quote 1.0.21",
@@ -4707,7 +4707,7 @@ dependencies = [
 [[package]]
 name = "mysten-util-mem"
 version = "0.11.0"
-source = "git+https://github.com/MystenLabs/mysten-infra/?rev=d69adb7aa133b6306aea4ddfe3df5fbb5daa9cb2#d69adb7aa133b6306aea4ddfe3df5fbb5daa9cb2"
+source = "git+https://github.com/MystenLabs/mysten-infra/?rev=1aabc3ba6a8a353743168611fd2b8d1b27d64431#1aabc3ba6a8a353743168611fd2b8d1b27d64431"
 dependencies = [
  "cfg-if",
  "ed25519-consensus",
@@ -4724,7 +4724,7 @@ dependencies = [
 [[package]]
 name = "mysten-util-mem-derive"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysten-infra/?rev=d69adb7aa133b6306aea4ddfe3df5fbb5daa9cb2#d69adb7aa133b6306aea4ddfe3df5fbb5daa9cb2"
+source = "git+https://github.com/MystenLabs/mysten-infra/?rev=1aabc3ba6a8a353743168611fd2b8d1b27d64431#1aabc3ba6a8a353743168611fd2b8d1b27d64431"
 dependencies = [
  "proc-macro2 1.0.47",
  "syn 1.0.103",
