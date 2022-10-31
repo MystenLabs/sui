@@ -6,6 +6,7 @@ use std::collections::BTreeMap;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
 
+use fastcrypto::encoding::Base64;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
     GetObjectDataResponse, GetPastObjectDataResponse, GetRawObjectDataResponse,
@@ -23,7 +24,6 @@ use sui_types::messages::CommitteeInfoResponse;
 use sui_types::messages::ExecuteTransactionRequestType;
 use sui_types::object::Owner;
 use sui_types::query::{Ordering, TransactionQuery};
-use sui_types::sui_serde::Base64;
 
 /// Maximum number of events returned in an event query.
 /// This is equivalent to EVENT_STORE_QUERY_MAX_LIMIT in `sui-storage` crate.

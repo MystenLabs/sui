@@ -7,6 +7,7 @@ publish = false
 edition = "2021"
 
 [dependencies]
+fastcrypto = { workspace = true }
 jsonrpsee = { version = "0.15.1", features = ["full"] }
 jsonrpsee-core = "0.15.1"
 jsonrpsee-proc-macros = "0.15.1"

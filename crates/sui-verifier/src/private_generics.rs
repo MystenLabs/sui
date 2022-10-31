@@ -166,8 +166,11 @@ fn is_defined_in_current_module(view: &BinaryIndexedView, type_arg: &SignatureTo
         SignatureToken::TypeParameter(_)
         | SignatureToken::Bool
         | SignatureToken::U8
+        | SignatureToken::U16
+        | SignatureToken::U32
         | SignatureToken::U64
         | SignatureToken::U128
+        | SignatureToken::U256
         | SignatureToken::Address
         | SignatureToken::Vector(_)
         | SignatureToken::Signer

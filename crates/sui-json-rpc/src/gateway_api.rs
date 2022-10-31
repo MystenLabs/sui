@@ -7,6 +7,7 @@ use crate::api::{
 use crate::SuiRpcModule;
 use anyhow::anyhow;
 use async_trait::async_trait;
+use fastcrypto::encoding::Base64;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee_core::server::rpc_module::RpcModule;
 use signature::Signature;
@@ -19,7 +20,6 @@ use sui_json_rpc_types::{
 use sui_open_rpc::Module;
 use sui_types::batch::TxSequenceNumber;
 use sui_types::crypto::SignatureScheme;
-use sui_types::sui_serde::Base64;
 use sui_types::{
     base_types::{ObjectID, SuiAddress, TransactionDigest},
     crypto,
@@ -76,10 +76,16 @@ impl RpcGatewayApiServer for RpcGatewayImpl {
         signature: Base64,
         pub_key: Base64,
     ) -> RpcResult<SuiTransactionResponse> {
-        let data = TransactionData::from_signable_bytes(&tx_bytes.to_vec()?)?;
+        let data =
+            TransactionData::from_signable_bytes(&tx_bytes.to_vec().map_err(|e| anyhow!(e))?)?;
         let flag = vec![sig_scheme.flag()];
         let signature = crypto::Signature::from_bytes(
-            &[&*flag, &*signature.to_vec()?, &pub_key.to_vec()?].concat(),
+            &[
+                &*flag,
+                &*signature.to_vec().map_err(|e| anyhow!(e))?,
+                &pub_key.to_vec().map_err(|e| anyhow!(e))?,
+            ]
+            .concat(),
         )
         .map_err(|e| anyhow!(e))?;
         let result = self
@@ -257,7 +263,7 @@ impl RpcTransactionBuilderServer for TransactionBuilderImpl {
     ) -> RpcResult<TransactionBytes> {
         let compiled_modules = compiled_modules
             .into_iter()
-            .map(|data| data.to_vec())
+            .map(|data| data.to_vec().map_err(|e| anyhow!(e)))
             .collect::<Result<Vec<_>, _>>()?;
         let data = self
             .client

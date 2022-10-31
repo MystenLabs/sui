@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use axum::{Extension, Json};
 
+use fastcrypto::encoding::Hex;
 use sui_types::base_types::{encode_bytes_hex, ObjectInfo, SuiAddress};
 use sui_types::crypto;
 use sui_types::crypto::{SignableBytes, SignatureScheme, ToFromBytes};
@@ -14,7 +15,6 @@ use sui_types::messages::{
     TransactionData,
 };
 use sui_types::object::ObjectRead;
-use sui_types::sui_serde::Hex;
 
 use crate::errors::Error;
 use crate::operations::{Operation, SuiAction};
@@ -83,11 +83,18 @@ pub async fn combine(
     Extension(env): Extension<SuiEnv>,
 ) -> Result<ConstructionCombineResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
-    let unsigned_tx = request.unsigned_transaction.to_vec()?;
+    let unsigned_tx = request
+        .unsigned_transaction
+        .to_vec()
+        .map_err(|e| anyhow::anyhow!(e))?;
     let data = TransactionData::from_signable_bytes(&unsigned_tx)?;
     let sig = request.signatures.first().unwrap();
-    let sig_bytes = sig.hex_bytes.to_vec()?;
-    let pub_key = sig.public_key.hex_bytes.to_vec()?;
+    let sig_bytes = sig.hex_bytes.to_vec().map_err(|e| anyhow::anyhow!(e))?;
+    let pub_key = sig
+        .public_key
+        .hex_bytes
+        .to_vec()
+        .map_err(|e| anyhow::anyhow!(e))?;
     let flag = vec![match sig.signature_type {
         SignatureType::Ed25519 => SignatureScheme::ED25519,
         SignatureType::Ecdsa => SignatureScheme::Secp256k1,
@@ -115,7 +122,12 @@ pub async fn submit(
     Extension(env): Extension<SuiEnv>,
 ) -> Result<TransactionIdentifierResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
-    let signed_tx: Transaction = bcs::from_bytes(&request.signed_transaction.to_vec()?)?;
+    let signed_tx: Transaction = bcs::from_bytes(
+        &request
+            .signed_transaction
+            .to_vec()
+            .map_err(|e| anyhow::anyhow!(e))?,
+    )?;
     let signed_tx = signed_tx.verify()?;
     let hash = *signed_tx.digest();
 
@@ -165,7 +177,10 @@ pub async fn hash(
     Extension(env): Extension<SuiEnv>,
 ) -> Result<TransactionIdentifierResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
-    let tx_bytes = request.signed_transaction.to_vec()?;
+    let tx_bytes = request
+        .signed_transaction
+        .to_vec()
+        .map_err(|e| anyhow::anyhow!(e))?;
     let tx: Transaction = bcs::from_bytes(&tx_bytes)?;
 
     Ok(TransactionIdentifierResponse {
@@ -215,10 +230,20 @@ pub async fn parse(
     env.check_network_identifier(&request.network_identifier)?;
 
     let data = if request.signed {
-        let tx: Transaction = bcs::from_bytes(&request.transaction.to_vec()?)?;
+        let tx: Transaction = bcs::from_bytes(
+            &request
+                .transaction
+                .to_vec()
+                .map_err(|e| anyhow::anyhow!(e))?,
+        )?;
         tx.signed_data.data
     } else {
-        TransactionData::from_signable_bytes(&request.transaction.to_vec()?)?
+        TransactionData::from_signable_bytes(
+            &request
+                .transaction
+                .to_vec()
+                .map_err(|e| anyhow::anyhow!(e))?,
+        )?
     };
     let account_identifier_signers = if request.signed {
         vec![AccountIdentifier {

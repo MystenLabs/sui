@@ -14,7 +14,6 @@ use sui_types::crypto::AuthoritySignInfo;
 use sui_types::messages::CertifiedTransaction;
 use sui_types::messages_checkpoint::{
     AuthenticatedCheckpoint, CertifiedCheckpointSummary, CheckpointContents,
-    VerifiedCheckpointFragment,
 };
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
@@ -26,7 +25,6 @@ use sui_types::{
 };
 
 use crate::authority::AuthorityState;
-use crate::authority_active::execution_driver::PendCertificateForExecutionNoop;
 use crate::checkpoints::causal_order_effects::TestEffectsStore;
 use crate::checkpoints::reconstruction::SpanGraph;
 use crate::{
@@ -63,10 +61,10 @@ async fn test_start_epoch_change() {
             next_transaction_sequence: 0,
             current_proposal: None,
             in_construction_checkpoint_seq: CHECKPOINT_COUNT_PER_EPOCH,
-            in_construction_checkpoint: SpanGraph::mew(
+            in_construction_checkpoint: SpanGraph::new(
                 &genesis_committee,
                 CHECKPOINT_COUNT_PER_EPOCH,
-                &[],
+                vec![],
             ),
         })
         .unwrap();
@@ -169,10 +167,10 @@ async fn test_finish_epoch_change() {
                     next_transaction_sequence: 0,
                     current_proposal: None,
                     in_construction_checkpoint_seq: CHECKPOINT_COUNT_PER_EPOCH,
-                    in_construction_checkpoint: SpanGraph::mew(
+                    in_construction_checkpoint: SpanGraph::new(
                         &genesis_committee,
                         CHECKPOINT_COUNT_PER_EPOCH,
-                        &[],
+                        vec![],
                     ),
                 };
                 state
@@ -241,10 +239,10 @@ async fn test_consensus_pause_after_last_fragment() {
                 next_transaction_sequence: 0,
                 current_proposal: None,
                 in_construction_checkpoint_seq: CHECKPOINT_COUNT_PER_EPOCH - 1,
-                in_construction_checkpoint: SpanGraph::mew(
+                in_construction_checkpoint: SpanGraph::new(
                     &genesis_committee,
                     CHECKPOINT_COUNT_PER_EPOCH - 1,
-                    &[],
+                    vec![],
                 ),
             };
             state
@@ -259,23 +257,15 @@ async fn test_consensus_pause_after_last_fragment() {
             state.checkpoints.lock().set_proposal(0).unwrap()
         })
         .collect();
-    let fragment01 =
-        VerifiedCheckpointFragment::new_unchecked(proposals[0].fragment_with(&proposals[1]));
-    let fragment12 =
-        VerifiedCheckpointFragment::new_unchecked(proposals[1].fragment_with(&proposals[2]));
+    let fragment01 = proposals[0].fragment_with(&proposals[1]);
+    let fragment12 = proposals[1].fragment_with(&proposals[2]);
     let mut index = ExecutionIndices::default();
     states.iter().for_each(|state| {
         // Send the first fragment to every validator, and make sure ater this, none of them
         // have a complete span graph, nor should they start rejecting consensus transactions.
         let mut cp = state.checkpoints.lock();
-        cp.handle_internal_fragment(
-            index.clone(),
-            fragment01.clone(),
-            PendCertificateForExecutionNoop,
-            &net.committee,
-        )
-        .unwrap();
-        index.next_transaction_index += 1;
+        cp.handle_fragment_for_testing(&mut index, fragment01.clone(), &net.committee)
+            .unwrap();
         assert!(!cp.get_locals().in_construction_checkpoint.is_completed());
         assert!(!cp.should_reject_consensus_transaction());
     });
@@ -287,14 +277,8 @@ async fn test_consensus_pause_after_last_fragment() {
         .skip(1)
         .map(|state| {
             let mut cp = state.checkpoints.lock();
-            cp.handle_internal_fragment(
-                index.clone(),
-                fragment12.clone(),
-                PendCertificateForExecutionNoop,
-                &net.committee,
-            )
-            .unwrap();
-            index.next_transaction_index += 1;
+            cp.handle_fragment_for_testing(&mut index, fragment12.clone(), &net.committee)
+                .unwrap();
             assert!(cp.get_locals().in_construction_checkpoint.is_completed());
             assert!(cp.should_reject_consensus_transaction());
             cp.sign_new_checkpoint(
@@ -336,13 +320,8 @@ async fn test_consensus_pause_after_last_fragment() {
     // Now send the second fragment to validator 0. It will complete the span graph, and since it's
     // already at a new checkpoint, it will automatically clear the graph. It will also start
     // rejecting consensus transactions.
-    cp0.handle_internal_fragment(
-        index,
-        fragment12,
-        PendCertificateForExecutionNoop,
-        &net.committee,
-    )
-    .unwrap();
+    cp0.handle_fragment_for_testing(&mut index, fragment12, &net.committee)
+        .unwrap();
     assert!(!cp0.get_locals().in_construction_checkpoint.is_completed());
     assert!(cp0.should_reject_consensus_transaction());
 }

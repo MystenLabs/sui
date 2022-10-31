@@ -14,7 +14,7 @@ use sui_transaction_builder::{DataReader, TransactionBuilder};
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::object::Owner;
 
-use sui_types::sui_serde::Base64;
+use fastcrypto::encoding::Base64;
 
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::RPCTransactionRequestParams;
@@ -150,7 +150,7 @@ impl RpcTransactionBuilderServer for FullNodeTransactionBuilderApi {
     ) -> RpcResult<TransactionBytes> {
         let compiled_modules = compiled_modules
             .into_iter()
-            .map(|data| data.to_vec())
+            .map(|data| data.to_vec().map_err(|e| anyhow::anyhow!(e)))
             .collect::<Result<Vec<_>, _>>()?;
         let data = self
             .builder

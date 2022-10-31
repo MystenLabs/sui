@@ -206,7 +206,7 @@ export class CallArgSerializer {
     normalizedType: SuiMoveNormalizedType,
     argVal: SuiJsonValue | undefined
   ): string {
-    const allowedTypes = ['Address', 'Bool', 'U8', 'U32', 'U64', 'U128', 'U256'];
+    const allowedTypes = ['Address', 'Bool', 'U8', 'U16', 'U32', 'U64', 'U128', 'U256'];
     if (
       typeof normalizedType === 'string' &&
       allowedTypes.includes(normalizedType)
