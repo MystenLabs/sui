@@ -29,7 +29,7 @@ function NFTDisplayCard({
     expandable,
     wideview,
 }: NFTsProps) {
-    const { filePath, nftObjectID, nftFields, fileExtentionType, objType } =
+    const { filePath, nftObjectID, nftFields, fileExtensionType, objType } =
         useNFTBasicData(nftobj);
 
     const name = nftFields?.name || nftFields?.metadata?.fields?.name;
@@ -45,7 +45,7 @@ function NFTDisplayCard({
             <div className={st.nftName}>{displayTitle}</div>
             <div className={st.nftType}>
                 {filePath ? (
-                    `${fileExtentionType.name} ${fileExtentionType.type}`
+                    `${fileExtensionType.name} ${fileExtensionType.type}`
                 ) : (
                     <span className={st.noMediaTextWideView}>NO MEDIA</span>
                 )}
@@ -79,7 +79,7 @@ function NFTDisplayCard({
                 <img
                     className={cl(st.img)}
                     src={filePath}
-                    alt={fileExtentionType?.name || 'NFT'}
+                    alt={fileExtensionType?.name || 'NFT'}
                     title={nftTypeShort}
                 />
             ) : (

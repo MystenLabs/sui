@@ -13,6 +13,7 @@ import { growthbook, loadFeatures } from './app/experimentation/feature-gating';
 import { queryClient } from './app/helpers/queryClient';
 import { initAppType, initNetworkFromStorage } from '_redux/slices/app';
 import { getFromLocationSearch } from '_redux/slices/app/AppType';
+import initSentry from '_src/shared/sentry';
 import store from '_store';
 import { thunkExtras } from '_store/thunk-extras';
 
@@ -53,5 +54,6 @@ function renderApp() {
 
 (async () => {
     await init();
+    initSentry();
     renderApp();
 })();

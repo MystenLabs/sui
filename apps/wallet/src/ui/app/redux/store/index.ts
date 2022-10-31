@@ -5,6 +5,7 @@ import { configureStore } from '@reduxjs/toolkit';
 
 import { KeypairVaultMiddleware } from './middlewares/KeypairVaultMiddleware';
 import { NetworkSwitchMiddleware } from './middlewares/NetworkSwitchMiddleware';
+import { SentryMiddleware } from './middlewares/SentryMiddleware';
 import { thunkExtras } from './thunk-extras';
 import { FaucetRequestGasMiddleware } from '_app/shared/faucet/middlewares';
 import rootReducer from '_redux/RootReducer';
@@ -19,7 +20,8 @@ const store = configureStore({
         }).concat(
             KeypairVaultMiddleware,
             NetworkSwitchMiddleware,
-            FaucetRequestGasMiddleware
+            FaucetRequestGasMiddleware,
+            SentryMiddleware
         ),
 });
 
