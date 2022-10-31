@@ -7,12 +7,16 @@ import {
   extractStructTag,
   getObjectReference,
   getSharedObjectInitialVersion,
+  ID_STRUCT_NAME,
   isSharedObject,
   isValidSuiAddress,
+  MOVE_STDLIB_ADDRESS,
   normalizeSuiObjectId,
   ObjectId,
+  OBJECT_MODULE_NAME,
   SuiJsonValue,
   SuiMoveNormalizedType,
+  SUI_FRAMEWORK_ADDRESS,
 } from '../../types';
 import { bcs, CallArg, MoveCallTx, ObjectArg } from '../../types/sui-bcs';
 import { shouldUseOldSharedObjectAPI } from './local-txn-data-serializer';
@@ -20,7 +24,32 @@ import { MoveCallTransaction } from './txn-data-serializer';
 
 const MOVE_CALL_SER_ERROR = 'Move call argument serialization error:';
 
+const STD_ASCII_MODULE_NAME = 'ascii';
+const STD_ASCII_STRUCT_NAME = 'String';
+
+const STD_UTF8_MODULE_NAME = 'string';
+const STD_UTF8_STRUCT_NAME = 'String';
+
+const RESOLVED_SUI_ID = {
+  address: SUI_FRAMEWORK_ADDRESS,
+  module: OBJECT_MODULE_NAME,
+  name: ID_STRUCT_NAME,
+};
+
+const RESOLVED_ASCII_STR = {
+  address: MOVE_STDLIB_ADDRESS,
+  module: STD_ASCII_MODULE_NAME,
+  name: STD_ASCII_STRUCT_NAME,
+};
+const RESOLVED_UTF8_STR = {
+  address: MOVE_STDLIB_ADDRESS,
+  module: STD_UTF8_MODULE_NAME,
+  name: STD_UTF8_STRUCT_NAME,
+};
+
 const isTypeFunc = (type: string) => (t: any) => typeof t === type;
+const isSameStruct = (a: any, b: any) =>
+  a.address === b.address && a.module === b.module && a.name === b.name;
 
 export class CallArgSerializer {
   constructor(private provider: Provider) {}
@@ -131,6 +160,13 @@ export class CallArgSerializer {
     expectedType: SuiMoveNormalizedType,
     argVal: SuiJsonValue
   ): Promise<CallArg> {
+    const serType = this.getPureSerializationType(expectedType, argVal);
+    if (serType !== undefined) {
+      return {
+        Pure: bcs.ser(serType, argVal).toBytes(),
+      };
+    }
+
     const structVal = extractStructTag(expectedType);
     if (structVal != null) {
       if (typeof argVal !== 'string') {
@@ -163,10 +199,10 @@ export class CallArgSerializer {
       };
     }
 
-    let serType = this.getPureSerializationType(expectedType, argVal);
-    return {
-      Pure: bcs.ser(serType, argVal).toBytes(),
-    };
+    throw new Error(
+      `Unknown call arg type ${JSON.stringify(expectedType, null, 2)} ` +
+        `for value ${JSON.stringify(argVal, null, 2)}`
+    );
   }
 
   private extractIdFromObjectArg(arg: ObjectArg) {
@@ -192,7 +228,7 @@ export class CallArgSerializer {
     }
 
     const serType = this.getPureSerializationType(expectedType, undefined);
-    return bcs.de(serType, Uint8Array.from(argVal.Pure));
+    return bcs.de(serType!, Uint8Array.from(argVal.Pure));
   }
 
   /**
@@ -205,8 +241,17 @@ export class CallArgSerializer {
   private getPureSerializationType(
     normalizedType: SuiMoveNormalizedType,
     argVal: SuiJsonValue | undefined
-  ): string {
-    const allowedTypes = ['Address', 'Bool', 'U8', 'U16', 'U32', 'U64', 'U128', 'U256'];
+  ): string | undefined {
+    const allowedTypes = [
+      'Address',
+      'Bool',
+      'U8',
+      'U16',
+      'U32',
+      'U64',
+      'U128',
+      'U256',
+    ];
     if (
       typeof normalizedType === 'string' &&
       allowedTypes.includes(normalizedType)
@@ -251,18 +296,23 @@ export class CallArgSerializer {
         // undefined when argVal is empty
         argVal ? argVal[0] : undefined
       );
-      const res = `vector<${innerType}>`;
-      // TODO: can we get rid of this call and make it happen automatically?
-      return res;
+      if (innerType === undefined) {
+        return undefined;
+      }
+      return `vector<${innerType}>`;
     }
 
-    throw new Error(
-      `${MOVE_CALL_SER_ERROR} unknown normalized type ${JSON.stringify(
-        normalizedType,
-        null,
-        2
-      )}`
-    );
+    if ('Struct' in normalizedType) {
+      if (isSameStruct(normalizedType.Struct, RESOLVED_ASCII_STR)) {
+        return 'string';
+      } else if (isSameStruct(normalizedType.Struct, RESOLVED_UTF8_STR)) {
+        return 'utf8string';
+      } else if (isSameStruct(normalizedType.Struct, RESOLVED_SUI_ID)) {
+        return 'address';
+      }
+    }
+
+    return undefined;
   }
 
   private checkArgVal(

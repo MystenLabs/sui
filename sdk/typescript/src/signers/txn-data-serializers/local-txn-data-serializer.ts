@@ -7,7 +7,7 @@ import {
   Coin,
   PAY_JOIN_COIN_FUNC_NAME,
   PAY_MODULE_NAME,
-  SUI_PACKAGE_ID,
+  SUI_FRAMEWORK_ADDRESS,
   PAY_SPLIT_COIN_VEC_FUNC_NAME,
   ObjectId,
   SuiAddress,
@@ -234,7 +234,7 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
   ): Promise<Base64DataBuffer> {
     try {
       return await this.newMoveCall(signerAddress, {
-        packageObjectId: SUI_PACKAGE_ID,
+        packageObjectId: SUI_FRAMEWORK_ADDRESS,
         module: PAY_MODULE_NAME,
         function: PAY_JOIN_COIN_FUNC_NAME,
         typeArguments: [await this.getCoinStructTag(t.coinToMerge)],
@@ -257,7 +257,7 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
   ): Promise<Base64DataBuffer> {
     try {
       return await this.newMoveCall(signerAddress, {
-        packageObjectId: SUI_PACKAGE_ID,
+        packageObjectId: SUI_FRAMEWORK_ADDRESS,
         module: PAY_MODULE_NAME,
         function: PAY_SPLIT_COIN_VEC_FUNC_NAME,
         typeArguments: [await this.getCoinStructTag(t.coinObjectId)],
