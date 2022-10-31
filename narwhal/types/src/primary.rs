@@ -720,16 +720,19 @@ pub enum PrimaryMessage {
     Header(Header),
     Vote(Vote),
     Certificate(Certificate),
-    CertificatesRequest(Vec<CertificateDigest>, /* requestor */ PublicKey),
+}
 
-    CertificatesBatchRequest {
-        certificate_ids: Vec<CertificateDigest>,
-        requestor: PublicKey,
-    },
-    CertificatesBatchResponse {
-        certificates: Vec<(CertificateDigest, Option<Certificate>)>,
-        from: PublicKey,
-    },
+/// Used by the primary to get specific certificates from other primaries.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct GetCertificatesRequest {
+    pub digests: Vec<CertificateDigest>,
+}
+
+/// Used by the primary to reply to GetCertificatesRequest.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct GetCertificatesResponse {
+    // TODO should this just be Vec<Certificate>?
+    pub certificates: Vec<Certificate>,
 }
 
 /// Used by the primary to fetch certificates from other primaries.

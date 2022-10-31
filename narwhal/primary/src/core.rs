@@ -728,7 +728,6 @@ impl Core {
                                 error => error
                             }
                         },
-                        _ => panic!("Unexpected core message")
                     }
                 },
 

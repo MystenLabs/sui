@@ -29,6 +29,7 @@ async fn successfully_synchronize_batches() {
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
     let (tx_synchronizer, rx_synchronizer) = test_utils::test_channel!(10);
     let (tx_core, mut rx_core) = test_utils::test_channel!(10);
+    let (tx_primary_messages, _rx_primary_messages) = test_utils::test_channel!(1000);
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
 
@@ -51,6 +52,7 @@ async fn successfully_synchronize_batches() {
         rx_reconfigure,
         rx_synchronizer,
         tx_core,
+        tx_primary_messages,
         metrics,
         P2pNetwork::new(network.clone()),
     );

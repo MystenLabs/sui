@@ -16,7 +16,6 @@ mod certificate_waiter;
 mod core;
 mod grpc_server;
 mod header_waiter;
-mod helper;
 mod primary;
 mod proposer;
 mod state_handler;
@@ -34,9 +33,7 @@ mod certificate_tests;
 
 pub use crate::{
     block_remover::BlockRemover,
-    block_synchronizer::{
-        mock::MockBlockSynchronizer, responses::CertificatesResponse, BlockHeader,
-    },
+    block_synchronizer::{mock::MockBlockSynchronizer, BlockHeader},
     block_waiter::{BlockWaiter, GetBlockResponse},
     grpc_server::metrics::EndpointMetrics,
     metrics::PrimaryChannelMetrics,

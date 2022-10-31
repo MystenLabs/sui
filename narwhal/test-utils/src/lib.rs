@@ -26,11 +26,12 @@ use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tracing::info;
 use types::{
     Batch, BatchDigest, Certificate, CertificateDigest, ConsensusStore, FetchCertificatesRequest,
-    FetchCertificatesResponse, Header, HeaderBuilder, PayloadAvailabilityRequest,
-    PayloadAvailabilityResponse, PrimaryMessage, PrimaryToPrimary, PrimaryToPrimaryServer,
-    PrimaryToWorker, PrimaryToWorkerServer, RequestBatchRequest, RequestBatchResponse, Round,
-    SequenceNumber, Transaction, Vote, WorkerBatchMessage, WorkerDeleteBatchesMessage,
-    WorkerReconfigureMessage, WorkerSynchronizeMessage, WorkerToWorker, WorkerToWorkerServer,
+    FetchCertificatesResponse, GetCertificatesRequest, GetCertificatesResponse, Header,
+    HeaderBuilder, PayloadAvailabilityRequest, PayloadAvailabilityResponse, PrimaryMessage,
+    PrimaryToPrimary, PrimaryToPrimaryServer, PrimaryToWorker, PrimaryToWorkerServer,
+    RequestBatchRequest, RequestBatchResponse, Round, SequenceNumber, Transaction, Vote,
+    WorkerBatchMessage, WorkerDeleteBatchesMessage, WorkerReconfigureMessage,
+    WorkerSynchronizeMessage, WorkerToWorker, WorkerToWorkerServer,
 };
 
 pub mod cluster;
@@ -197,6 +198,12 @@ impl PrimaryToPrimary for PrimaryToPrimaryMockServer {
         Ok(anemo::Response::new(()))
     }
 
+    async fn get_certificates(
+        &self,
+        _request: anemo::Request<GetCertificatesRequest>,
+    ) -> Result<anemo::Response<GetCertificatesResponse>, anemo::rpc::Status> {
+        unimplemented!()
+    }
     async fn fetch_certificates(
         &self,
         _request: anemo::Request<FetchCertificatesRequest>,

@@ -9,11 +9,11 @@ use anyhow::Result;
 use config::{Committee, SharedWorkerCache, WorkerId};
 use crypto::PublicKey;
 use futures::{
-    future::{try_join_all, BoxFuture},
+    future::{try_join_all, BoxFuture, OptionFuture},
     stream::FuturesUnordered,
-    StreamExt,
+    Future, StreamExt,
 };
-use network::{CancelOnDropHandler, P2pNetwork, ReliableNetwork, UnreliableNetwork};
+use network::{CancelOnDropHandler, P2pNetwork, PrimaryToPrimaryRpc, ReliableNetwork};
 use std::{
     collections::HashMap,
     sync::Arc,
@@ -30,8 +30,8 @@ use tracing::{debug, info, warn};
 use types::{
     error::{DagError, DagResult},
     metered_channel::{Receiver, Sender},
-    BatchDigest, CertificateDigest, Header, HeaderDigest, ReconfigureNotification, Round,
-    WorkerSynchronizeMessage,
+    BatchDigest, CertificateDigest, GetCertificatesRequest, GetCertificatesResponse, Header,
+    HeaderDigest, ReconfigureNotification, Round, WorkerSynchronizeMessage,
 };
 
 #[cfg(test)]
@@ -68,6 +68,8 @@ pub struct HeaderWaiter {
     rx_header_waiter: Receiver<WaiterMessage>,
     /// Loops back to core the headers for which we got all parents and batches.
     tx_headers_loopback: Sender<Header>,
+    /// Channel to send certificates to Core for processing.
+    tx_primary_messages: Sender<PrimaryMessage>,
 
     /// Network driver allowing to send messages.
     network: P2pNetwork,
@@ -104,6 +106,7 @@ impl HeaderWaiter {
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
         rx_header_waiter: Receiver<WaiterMessage>,
         tx_headers_loopback: Sender<Header>,
+        tx_primary_messages: Sender<PrimaryMessage>,
         metrics: Arc<PrimaryMetrics>,
         primary_network: P2pNetwork,
     ) -> JoinHandle<()> {
@@ -119,6 +122,7 @@ impl HeaderWaiter {
                 rx_reconfigure,
                 rx_header_waiter,
                 tx_headers_loopback,
+                tx_primary_messages,
                 network: primary_network,
                 parent_requests: HashMap::new(),
                 batch_requests: HashMap::new(),
@@ -153,10 +157,24 @@ impl HeaderWaiter {
 
     async fn wait_for_parents(
         missing: Vec<CertificateDigest>,
+        network_future: OptionFuture<impl Future<Output = Result<GetCertificatesResponse>>>,
+        tx_primary_messages: Sender<PrimaryMessage>,
         store: CertificateStore,
         deliver: Header,
         handler: oneshot::Receiver<()>,
     ) -> DagResult<Option<Header>> {
+        if let Some(result) = network_future.await {
+            let certificates = result
+                .map_err(|e| DagError::NetworkError(format!("{e:?}")))?
+                .certificates;
+            for certificate in certificates {
+                tx_primary_messages
+                    .send(PrimaryMessage::Certificate(certificate))
+                    .await
+                    .map_err(|_| DagError::ChannelFull)?;
+            }
+        }
+        // Wait on certificates to show up in the store so we know they're processed by Core.
         let waiting: Vec<_> = missing.into_iter().map(|x| store.notify_read(x)).collect();
         tokio::select! {
             result = try_join_all(waiting) => {
@@ -239,33 +257,42 @@ impl HeaderWaiter {
                             self.metrics.last_parent_missing_round
                             .with_label_values(&[&self.committee.epoch.to_string()]).set(round as i64);
 
-                            // Add the header to the waiter pool. The waiter will return it to us
-                            // when all its parents are in the store.
-                            let wait_for = missing.clone();
-                            let (tx_cancel, rx_cancel) = oneshot::channel();
-                            self.pending.insert(header_id, (round, tx_cancel));
-                            let fut = Self::wait_for_parents(wait_for, self.certificate_store.clone(), header, rx_cancel);
-                            // pointer-size allocation, bounded by the # of blocks (may eventually go away, see rust RFC #1909)
-                            waiting.push(Box::pin(fut));
-
                             // Ensure we didn't already sent a sync request for these parents.
-                            // Optimistically send the sync request to the node that created the certificate.
-                            // If this fails (after a timeout), we broadcast the sync request.
+                            // Optimistically send a sync request to the node that created the certificate.
                             let now = SystemTime::now()
                                 .duration_since(UNIX_EPOCH)
                                 .expect("Failed to measure time")
                                 .as_millis();
                             let mut requires_sync = Vec::new();
-                            for missing in missing {
+                            for missing in missing.clone() {
                                 self.parent_requests.entry(missing).or_insert_with(|| {
                                     requires_sync.push(missing);
                                     (round, now)
                                 });
                             }
-                            if !requires_sync.is_empty() {
-                                let message = PrimaryMessage::CertificatesRequest(requires_sync, self.name.clone());
-                                let _ = self.network.unreliable_send(self.committee.network_key(&author).unwrap(), &message);
-                            }
+                            let network_future: OptionFuture<_> = if requires_sync.is_empty() {
+                                None
+                            } else {
+                                let network = self.network.network();
+                                let target = self.committee.network_key(&author).unwrap();
+                                let message = GetCertificatesRequest{digests: requires_sync};
+                                Some(async move {network.get_certificates(&target, message).await})
+                            }.into();
+
+                            // Add the header to the waiter pool. The waiter will return it to us
+                            // when all its parents are in the store.
+                            let (tx_cancel, rx_cancel) = oneshot::channel();
+                            self.pending.insert(header_id, (round, tx_cancel));
+                            let fut = Self::wait_for_parents(
+                                missing,
+                                network_future,
+                                self.tx_primary_messages.clone(),
+                                self.certificate_store.clone(),
+                                header,
+                                rx_cancel,
+                            );
+                            // pointer-size allocation, bounded by the # of blocks (may eventually go away, see rust RFC #1909)
+                            waiting.push(Box::pin(fut));
                         }
                     }
                 },

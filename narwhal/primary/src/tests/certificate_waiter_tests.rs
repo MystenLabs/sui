@@ -29,8 +29,9 @@ use tokio::{
 };
 use types::{
     Certificate, CertificateDigest, ConsensusStore, FetchCertificatesRequest,
-    FetchCertificatesResponse, PayloadAvailabilityRequest, PayloadAvailabilityResponse,
-    PrimaryMessage, PrimaryToPrimary, PrimaryToPrimaryServer, ReconfigureNotification, Round,
+    FetchCertificatesResponse, GetCertificatesRequest, GetCertificatesResponse,
+    PayloadAvailabilityRequest, PayloadAvailabilityResponse, PrimaryMessage, PrimaryToPrimary,
+    PrimaryToPrimaryServer, ReconfigureNotification, Round,
 };
 
 struct FetchCertificateProxy {
@@ -48,6 +49,12 @@ impl PrimaryToPrimary for FetchCertificateProxy {
             "FetchCertificateProxy::send_message() is unimplemented!! {:#?}",
             request
         );
+    }
+    async fn get_certificates(
+        &self,
+        _request: anemo::Request<GetCertificatesRequest>,
+    ) -> Result<anemo::Response<GetCertificatesResponse>, anemo::rpc::Status> {
+        unimplemented!()
     }
     async fn fetch_certificates(
         &self,
@@ -220,6 +227,7 @@ async fn fetch_certificates_basic() {
         rx_reconfigure.clone(),
         rx_header_waiter,
         tx_headers_loopback,
+        tx_primary_messages.clone(),
         metrics.clone(),
         P2pNetwork::new(client_network.clone()),
     );

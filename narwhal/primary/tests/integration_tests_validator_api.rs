@@ -630,6 +630,8 @@ async fn test_read_causal_signed_certificates() {
 
 #[tokio::test]
 async fn test_read_causal_unsigned_certificates() {
+    telemetry_subscribers::init_for_testing();
+
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
     let worker_cache = fixture.shared_worker_cache();
@@ -831,9 +833,13 @@ async fn test_read_causal_unsigned_certificates() {
 
     let status = client.read_causal(request).await.unwrap_err();
 
-    assert!(status
-        .message()
-        .contains("Error when trying to synchronize block headers: BlockNotFound"));
+    assert!(
+        status
+            .message()
+            .contains("Error when trying to synchronize block headers: BlockNotFound"),
+        "Saw unexpected status message: {}",
+        status.message()
+    );
 }
 
 /// Here we test the ability on our code to synchronize missing certificates

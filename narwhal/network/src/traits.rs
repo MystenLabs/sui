@@ -6,7 +6,10 @@ use async_trait::async_trait;
 use crypto::NetworkPublicKey;
 use rand::prelude::{SliceRandom, SmallRng};
 use tokio::task::JoinHandle;
-use types::{Batch, BatchDigest, FetchCertificatesRequest, FetchCertificatesResponse};
+use types::{
+    Batch, BatchDigest, FetchCertificatesRequest, FetchCertificatesResponse,
+    GetCertificatesRequest, GetCertificatesResponse,
+};
 
 pub trait UnreliableNetwork<Request: Clone + Send + Sync> {
     type Response: Clone + Send + Sync;
@@ -94,6 +97,11 @@ pub trait ReliableNetwork<Request: Clone + Send + Sync> {
 
 #[async_trait]
 pub trait PrimaryToPrimaryRpc {
+    async fn get_certificates(
+        &self,
+        peer: &NetworkPublicKey,
+        request: impl anemo::types::request::IntoRequest<GetCertificatesRequest> + Send,
+    ) -> Result<GetCertificatesResponse>;
     async fn fetch_certificates(
         &self,
         peer: &NetworkPublicKey,

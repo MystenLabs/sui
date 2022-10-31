@@ -265,13 +265,9 @@ async fn test_fetch_certificates_handler() {
     let committee = fixture.committee();
 
     let (tx_primary_messages, _) = test_utils::test_channel!(1);
-    let (tx_helper_requests, _) = test_utils::test_channel!(1);
-    let (tx_availability_responses, _) = test_utils::test_channel!(1);
     let (_, certificate_store, payload_store) = create_db_stores();
     let handler = PrimaryReceiverHandler {
         tx_primary_messages,
-        tx_helper_requests,
-        tx_availability_responses,
         certificate_store: certificate_store.clone(),
         payload_store: payload_store.clone(),
     };
@@ -365,13 +361,9 @@ async fn test_process_payload_availability_success() {
     let author = fixture.authorities().next().unwrap();
 
     let (tx_primary_messages, _) = test_utils::test_channel!(1);
-    let (tx_helper_requests, _) = test_utils::test_channel!(1);
-    let (tx_availability_responses, _) = test_utils::test_channel!(1);
     let (_, certificate_store, payload_store) = create_db_stores();
     let handler = PrimaryReceiverHandler {
         tx_primary_messages,
-        tx_helper_requests,
-        tx_availability_responses,
         certificate_store: certificate_store.clone(),
         payload_store: payload_store.clone(),
     };
@@ -479,12 +471,8 @@ async fn test_process_payload_availability_when_failures() {
     let author = fixture.authorities().next().unwrap();
 
     let (tx_primary_messages, _) = test_utils::test_channel!(1);
-    let (tx_helper_requests, _) = test_utils::test_channel!(1);
-    let (tx_availability_responses, _) = test_utils::test_channel!(1);
     let handler = PrimaryReceiverHandler {
         tx_primary_messages,
-        tx_helper_requests,
-        tx_availability_responses,
         certificate_store: certificate_store.clone(),
         payload_store: payload_store.clone(),
     };
