@@ -193,11 +193,11 @@ fn test_basic_args_linter_pure_args() {
             MoveTypeLayout::U256,
             Some(bcs::to_bytes(&u256_val).unwrap()),
         ),
-        // U256 value encoded as num
+        // Although U256 value can be encoded as num, we enforce it must be a string
         (
             Value::from(123),
             MoveTypeLayout::U256,
-            Some(bcs::to_bytes(&U256::from(123u8)).unwrap()),
+            None,
         ),
         // U8 value encoded as hex str
         (
@@ -605,8 +605,6 @@ fn test_convert_number_array_from_bcs() {
     ];
 
     let value = SuiJsonValue::from_bcs_bytes(&bcs_bytes).unwrap();
-
-    println!("{:?}", value);
 
     for value in value.0.as_array().unwrap() {
         assert_eq!(50000, value.as_u64().unwrap())

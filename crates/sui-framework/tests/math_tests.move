@@ -25,6 +25,11 @@ module sui::math_tests {
         while (i < 1000) {
             assert!(math::sqrt(i * i) == i, 1);
             i = i + 1;
+        };
+        let i = 0xFFFFFFFFFu128;
+        while (i < 0xFFFFFFFFFu128 + 1) {
+            assert!(math::sqrt_u128(i * i) == i, 1);
+            i = i + 1;
         }
     }
 

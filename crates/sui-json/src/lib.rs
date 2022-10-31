@@ -136,12 +136,6 @@ impl SuiJsonValue {
                 MoveValue::U32(u32::try_from(n.as_u64().unwrap())?)
             }
             (JsonValue::Number(n), MoveTypeLayout::U64) => MoveValue::U64(n.as_u64().unwrap()),
-            (JsonValue::Number(n), MoveTypeLayout::U128) => {
-                MoveValue::U128(n.as_u64().unwrap().into())
-            }
-            (JsonValue::Number(n), MoveTypeLayout::U256) => {
-                MoveValue::U256(n.as_u64().unwrap().into())
-            }
 
             // u8, u16, u32, u64, u128, u256 can be encoded as String
             (JsonValue::String(s), MoveTypeLayout::U8) => {
