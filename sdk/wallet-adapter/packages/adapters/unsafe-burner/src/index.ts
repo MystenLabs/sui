@@ -57,7 +57,14 @@ export class UnsafeBurnerWalletAdapter implements WalletAdapter {
 
   async connect() {
     this.connecting = true;
-    await this.#signer.requestSuiFromFaucet();
+    try {
+      await this.#signer.requestSuiFromFaucet();
+    } catch (e) {
+      console.warn(
+        "Failed to request Sui from the faucet. This may prevent transactions from being submitted."
+      );
+      console.warn(e);
+    }
     this.connecting = false;
     this.connected = true;
   }
