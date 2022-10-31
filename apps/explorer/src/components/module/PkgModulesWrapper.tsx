@@ -44,7 +44,7 @@ function PkgModuleViewWrapper({ id, data }: Props) {
     }, [searchParams, data.content]);
 
     return (
-        <div className={'flex'}>
+        <div className={'flex flex-wrap'}>
             <div className={styles.modulelist}>
                 {data.content.map(([name], idx) => (
                     <button onClick={clickModuleName(name)} key={idx}>
@@ -53,7 +53,7 @@ function PkgModuleViewWrapper({ id, data }: Props) {
                 ))}
             </div>
             <div className={styles.modulewraper}>
-                <div className={styles.module}>
+                <div className={styles.singlemodule}>
                     {[data.content[modulesPageNumber]].map(
                         ([name, code], idx) => (
                             <ModuleView
