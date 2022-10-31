@@ -35,15 +35,21 @@ function MultipleRecipients({ sender, recipient, amount, objects }: TxAddress) {
         data: [],
     });
 
+    const [isSingleCoin, setIsSingleCoin] = useState(false);
+
     useEffect(() => {
         if (objects) {
             Promise.all(objects.map((objId) => getObjType(objId, network)))
-                .then((objTypes) =>
+                .then((objTypes) => {
                     setCoinList({
                         loadState: 'loaded',
                         data: objTypes,
-                    })
-                )
+                    });
+
+                    if (objTypes.every((val) => val === objTypes[0])) {
+                        setIsSingleCoin(true);
+                    }
+                })
                 .catch((error) => {
                     console.error(error);
                     setCoinList({
@@ -55,60 +61,72 @@ function MultipleRecipients({ sender, recipient, amount, objects }: TxAddress) {
     }, [network, objects]);
 
     return (
-        <div className={styles.txaddress} data-testid="transaction-sender">
-            <div className={styles.senderbox}>
-                <h4>Sender</h4>
-                <div className={styles.oneaddress}>
-                    <StartIcon />
-                    <Longtext
-                        text={sender}
-                        category="addresses"
-                        isLink={true}
+        <>
+            {isSingleCoin && amount && (
+                <div className={styles.amountbox}>
+                    <div>Amount</div>
+                    <SingleAmount
+                        amount={amount.reduce((x, y) => x + y)}
+                        objectId={objects![0]}
                     />
                 </div>
-            </div>
-            <div
-                className={cl([
-                    styles.txaddresssender,
-                    recipient?.length ? styles.recipient : '',
-                ])}
-            >
-                {recipient && (
-                    <div className={styles.recipientbox}>
-                        <div>
-                            <h4>Recipients</h4>
-                        </div>
-                        {recipient.map((add: string, idx: number) => (
-                            <div key={idx}>
-                                <>
-                                    <div className={styles.oneaddress}>
-                                        <div className={styles.doneicon}>
-                                            <DoneIcon />
-                                        </div>
-                                        <Longtext
-                                            text={add}
-                                            category="addresses"
-                                            isLink={true}
-                                            alttext={add}
-                                        />
-                                    </div>
-                                    {amount?.[idx] && (
-                                        <Amount
-                                            amount={amount![idx]}
-                                            label={
-                                                coinList.loadState === 'loaded'
-                                                    ? coinList.data[idx]
-                                                    : ''
-                                            }
-                                        />
-                                    )}
-                                </>
-                            </div>
-                        ))}
+            )}
+            <div className={styles.txaddress} data-testid="transaction-sender">
+                <div className={styles.senderbox}>
+                    <h4>Sender</h4>
+                    <div className={styles.oneaddress}>
+                        <StartIcon />
+                        <Longtext
+                            text={sender}
+                            category="addresses"
+                            isLink={true}
+                        />
                     </div>
-                )}
+                </div>
+                <div
+                    className={cl([
+                        styles.txaddresssender,
+                        recipient?.length ? styles.recipient : '',
+                    ])}
+                >
+                    {recipient && (
+                        <div className={styles.recipientbox}>
+                            <div>
+                                <h4>Recipients</h4>
+                            </div>
+                            {recipient.map((add: string, idx: number) => (
+                                <div key={idx}>
+                                    <>
+                                        <div className={styles.oneaddress}>
+                                            <div className={styles.doneicon}>
+                                                <DoneIcon />
+                                            </div>
+                                            <Longtext
+                                                text={add}
+                                                category="addresses"
+                                                isLink={true}
+                                                alttext={add}
+                                            />
+                                        </div>
+                                        {amount?.[idx] && (
+                                            <Amount
+                                                amount={amount![idx]}
+                                                label={
+                                                    coinList.loadState ===
+                                                    'loaded'
+                                                        ? coinList.data[idx]
+                                                        : ''
+                                                }
+                                            />
+                                        )}
+                                    </>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
             </div>
-        </div>
+        </>
     );
 }
 
