@@ -841,7 +841,7 @@ dependencies = [
  "env_logger",
  "hex",
  "log",
- "lru",
+ "lru 0.7.8",
  "once_cell",
  "rand 0.7.3",
  "rand_chacha 0.3.1",
@@ -3757,6 +3757,15 @@ name = "lru"
 version = "0.7.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e999beba7b6e8345721bd280141ed958096a2e4abdf74f67ff4ce49b4b54e47a"
+dependencies = [
+ "hashbrown",
+]
+
+[[package]]
+name = "lru"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b6e8aaa3f231bb4bd57b84b2d5dc3ae7f350265df8aa96492e0bc394a1571909"
 dependencies = [
  "hashbrown",
 ]
@@ -10580,7 +10589,7 @@ dependencies = [
  "linux-raw-sys",
  "lock_api",
  "log",
- "lru",
+ "lru 0.8.1",
  "match_opt",
  "matchers",
  "matchit",
