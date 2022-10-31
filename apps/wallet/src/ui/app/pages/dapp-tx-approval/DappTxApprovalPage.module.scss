@@ -99,6 +99,7 @@
     display: flex;
     flex-direction: column;
     gap: 20px;
+    margin-top: 15px;
 }
 
 .object-name {
@@ -116,6 +117,7 @@
     line-height: 17px;
     font-family: 'Space Mono', ui-monospace, monospace;
     color: colors.$sui-dark-blue;
+    text-decoration: none;
 }
 
 .tx-info {

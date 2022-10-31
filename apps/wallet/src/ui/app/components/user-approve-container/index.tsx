@@ -60,7 +60,9 @@ function UserApproveContainer({
                             alt="Site favicon"
                         />
                     ) : null}
-                    <div className={st.host}>{parsedOrigin.host}</div>
+                    <div className={st.host}>
+                        {parsedOrigin.host.split('.')[0]}
+                    </div>
                     <ExternalLink
                         href={origin}
                         className={cl(st.origin, !isSecure && st.warning)}
