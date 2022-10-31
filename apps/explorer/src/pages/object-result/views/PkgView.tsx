@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 import Longtext from '../../../components/longtext/Longtext';
-import ModulesWrapper from '../../../components/module/ModulesWrapper';
+import PkgModulesWrapper from '../../../components/module/PkgModulesWrapper';
 import TxForID from '../../../components/transaction-card/TxForID';
 import { getOwnerStr } from '../../../utils/objectUtils';
 import { trimStdLibPrefix } from '../../../utils/stringUtils';
@@ -83,7 +83,7 @@ function PkgView({ data }: { data: DataType }) {
                     </TabPanels>
                 </TabGroup>
 
-                <ModulesWrapper
+                <PkgModulesWrapper
                     id={data.id}
                     data={{
                         title: 'Modules',

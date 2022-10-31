@@ -1,0 +1,72 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
+
+import ModuleView from './ModuleView';
+
+import styles from './ModuleView.module.css';
+
+type Modules = {
+    title: string;
+    content: [moduleName: string, code: string][];
+};
+
+interface Props {
+    id?: string;
+    data: Modules;
+}
+
+function PkgModuleViewWrapper({ id, data }: Props) {
+    const [searchParams] = useSearchParams();
+    const [modulesPageNumber, setModulesPageNumber] = useState(0);
+
+    const clickModuleName = useCallback(
+        (module: string) => () => {
+            const moduleIndex = data.content.findIndex(
+                ([moduleName]) => moduleName === module
+            );
+
+            setModulesPageNumber(moduleIndex);
+        },
+        [data.content]
+    );
+
+    useEffect(() => {
+        if (searchParams.get('module')) {
+            const moduleIndex = data.content.findIndex(([moduleName]) => {
+                return moduleName === searchParams.get('module');
+            });
+
+            setModulesPageNumber(moduleIndex);
+        }
+    }, [searchParams, data.content]);
+
+    return (
+        <div className={'flex'}>
+            <div className={styles.modulelist}>
+                {data.content.map(([name], idx) => (
+                    <button onClick={clickModuleName(name)} key={idx}>
+                        {name}
+                    </button>
+                ))}
+            </div>
+            <div className={styles.modulewraper}>
+                <div className={styles.module}>
+                    {[data.content[modulesPageNumber]].map(
+                        ([name, code], idx) => (
+                            <ModuleView
+                                key={idx}
+                                id={id}
+                                name={name}
+                                code={code}
+                            />
+                        )
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+}
+export default PkgModuleViewWrapper;
