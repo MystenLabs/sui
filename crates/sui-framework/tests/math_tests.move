@@ -34,21 +34,6 @@ module sui::math_tests {
     }
 
     #[test]
-    fun test_pow128() {
-        assert!(nft::pow128(1, 0) == 1, 0);
-        assert!(nft::pow128(1, 1) == 1, 0);
-        assert!(nft::pow128(2, 10) == 1024, 0);
-        assert!(nft::pow128(10, 6) == 1000000, 0);
-        assert!(nft::pow128(10, 20) == 100000000000000000000, 0);
-    }
-
-    #[test]
-    #[expected_failure]
-    fun test_pow128_overflow() {
-        nft::pow128(10, 100);
-    }
-
-    #[test]
     fun test_perfect_sqrt() {
         let i = 0;
         while (i < 1000) {
