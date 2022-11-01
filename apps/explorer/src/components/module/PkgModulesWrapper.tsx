@@ -8,6 +8,8 @@ import ModuleView from './ModuleView';
 
 import styles from './ModuleView.module.css';
 
+import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
+
 type Modules = {
     title: string;
     content: [moduleName: string, code: string][];
@@ -60,19 +62,28 @@ function PkgModuleViewWrapper({ id, data }: Props) {
                     </button>
                 ))}
             </div>
-            <div className={styles.modulewraper}>
-                <div className={styles.singlemodule}>
-                    {[data.content[modulesPageNumber]].map(
-                        ([name, code], idx) => (
-                            <ModuleView
-                                key={idx}
-                                id={id}
-                                name={name}
-                                code={code}
-                            />
-                        )
-                    )}
-                </div>
+            <div className={`${styles.modulewraper} ${styles.singlemodule}`}>
+                <TabGroup size="md">
+                    <TabList>
+                        <Tab>Bytecode</Tab>
+                    </TabList>
+                    <TabPanels>
+                        <TabPanel>
+                            <div>
+                                {[data.content[modulesPageNumber]].map(
+                                    ([name, code], idx) => (
+                                        <ModuleView
+                                            key={idx}
+                                            id={id}
+                                            name={name}
+                                            code={code}
+                                        />
+                                    )
+                                )}
+                            </div>
+                        </TabPanel>
+                    </TabPanels>
+                </TabGroup>
             </div>
         </div>
     );
