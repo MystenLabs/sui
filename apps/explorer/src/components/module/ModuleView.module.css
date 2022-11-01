@@ -83,7 +83,7 @@ section .codeview pre {
 }
 
 .modulelist button {
-    @apply w-full lg:w-[12vw] text-left text-body bg-inherit cursor-pointer hover:bg-sui-grey-45 border-none hover:outline-[1px] hover:rounded-[4px]  hover:outline-sui-grey-50 p-[10px] hover:font-semibold;
+    @apply w-full lg:min-w-[12vw] lg:w-fit text-left text-body bg-inherit cursor-pointer hover:bg-sui-grey-45 border-none hover:outline-[1px] hover:rounded-[4px]  hover:outline-sui-grey-50 p-[10px] hover:font-semibold;
 }
 
 button.activemodule {
