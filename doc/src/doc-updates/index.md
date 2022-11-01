@@ -17,7 +17,6 @@ This topic lists the significant updates to the [Sui documentation](https://docs
 
 | Topic | Update | 
 | :------ | :------- |
-
 | [Sui Wallet](../explore/wallet-browser.md) | Updates for version 0.2. |
 | [Multiple topics](https://github.com/MystenLabs/sui/pull/5266) | Updates related to gateway deprecation. |
 | [Sui Client CLI](../build/cli-client.md) | Moved information about creating a local network to a new [Sui Local Network](../build/sui-local-network.md) topic. General copyedit and updates for changes to Sui. |
