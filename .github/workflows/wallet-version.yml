@@ -22,7 +22,7 @@ jobs:
           private_key: ${{ secrets.APP_PRIVATE_KEY }}
       - uses: actions/checkout@v3
       - name: Increment patch version
-        working-directory: ./app
+        working-directory: ./apps/wallet
         run: |
           pnpm version patch
       - name: Create Pull Request
