@@ -1,0 +1,10 @@
+[package]
+name = "sui-capybaras"
+version = "0.1.0"
+
+[dependencies]
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework", rev = "7e98f5c7791520289230e9ec54ef082805c7e86b" }
+
+[addresses]
+capy = "0x0"
+me = "0x0"
