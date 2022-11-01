@@ -108,7 +108,7 @@ export function TopValidatorsCardAPI() {
         return <ValidatorLoadFail />;
     }
 
-    return <div>"Something went wrong"</div>;
+    return <div>Something went wrong</div>;
 }
 
 function TopValidatorsCard({ state }: { state: ValidatorState }) {

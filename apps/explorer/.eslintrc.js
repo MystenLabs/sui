@@ -105,6 +105,31 @@ module.exports = {
                 eventHandlerPropPrefix: 'on',
             },
         ],
+
+        // Avoid bad or problematic patterns
+        'react/jsx-uses-vars': 'error',
+        'react/no-access-state-in-setstate': 'error',
+        'react/no-arrow-function-lifecycle': 'error',
+        'react/no-children-prop': 'error',
+        'react/no-did-mount-set-state': 'error',
+        'react/no-did-update-set-state': 'error',
+        'react/no-direct-mutation-state': 'error',
+        'react/no-namespace': 'error',
+        'react/no-redundant-should-component-update': 'error',
+        'react/no-render-return-value': 'error',
+        'react/no-string-refs': 'error',
+        'react/no-this-in-sfc': 'error',
+        'react/no-typos': 'error',
+        'react/no-unescaped-entities': 'error',
+        'react/no-unknown-property': 'error',
+        'react/no-unused-class-component-methods': 'error',
+        'react/no-will-update-set-state': 'error',
+        'react/require-optimization': 'off',
+        'react/style-prop-object': 'error',
+        'react/no-unstable-nested-components': 'error',
+
+        // We may eventually want to turn this on but it requires migration:
+        'react/no-array-index-key': 'off',
     },
     overrides: [
         {

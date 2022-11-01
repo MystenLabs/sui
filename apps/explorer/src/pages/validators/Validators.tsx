@@ -259,7 +259,7 @@ export function ValidatorPageAPI() {
         return <ValidatorLoadFail />;
     }
 
-    return <div>"Something went wrong"</div>;
+    return <div>Something went wrong</div>;
 }
 
 export { ValidatorPageResult };

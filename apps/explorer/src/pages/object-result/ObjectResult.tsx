@@ -109,7 +109,7 @@ function ObjectResultAPI({ objID }: { objID: string }) {
         return <Fail objID={objID} />;
     }
 
-    return <div>"Something went wrong"</div>;
+    return <div>Something went wrong</div>;
 }
 
 function ObjectResultStatic({ objID }: { objID: string }) {

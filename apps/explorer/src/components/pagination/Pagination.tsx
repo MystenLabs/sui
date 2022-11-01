@@ -7,6 +7,58 @@ import { numberSuffix } from '../../utils/numberUtil';
 
 import styles from './Pagination.module.css';
 
+function IndexZeroButton({
+    label = '1',
+    pageIndex,
+    onClick,
+}: {
+    label?: string;
+    pageIndex: number;
+    onClick(): void;
+}) {
+    return (
+        <button
+            type="button"
+            className={
+                pageIndex === 0 ? styles.pagenumber : styles.btncontainer
+            }
+            data-testid="firstBtn"
+            onClick={onClick}
+            disabled={pageIndex === 0}
+        >
+            {label}
+        </button>
+    );
+}
+
+function FinalPageButton({
+    pageIndex,
+    finalPageNo,
+    label,
+    onClick,
+}: {
+    pageIndex: number;
+    finalPageNo: number;
+    label?: string;
+    onClick(): void;
+}) {
+    return (
+        <button
+            type="button"
+            data-testid="lastBtn"
+            disabled={pageIndex === finalPageNo - 1}
+            onClick={onClick}
+            className={
+                pageIndex === finalPageNo - 1
+                    ? styles.pagenumber
+                    : styles.btncontainer
+            }
+        >
+            {label || String(finalPageNo)}
+        </button>
+    );
+}
+
 function Pagination({
     totalItems,
     itemsPerPage,
@@ -131,43 +183,6 @@ function Pagination({
         </select>
     ) : null;
 
-    function IndexZeroButton(label: string = '1') {
-        return (
-            <button
-                type="button"
-                className={
-                    pageIndex === 0 ? styles.pagenumber : styles.btncontainer
-                }
-                data-testid="firstBtn"
-                onClick={handleBtnClick(0)}
-                disabled={pageIndex === 0}
-            >
-                {label}
-            </button>
-        );
-    }
-
-    function FinalPageButton(
-        finalPageNo: number,
-        label: string = String(finalPageNo)
-    ) {
-        return (
-            <button
-                type="button"
-                data-testid="lastBtn"
-                disabled={pageIndex === finalPageNo - 1}
-                onClick={handleBtnClick(finalPageNo - 1)}
-                className={
-                    pageIndex === finalPageNo - 1
-                        ? styles.pagenumber
-                        : styles.btncontainer
-                }
-            >
-                {label}
-            </button>
-        );
-    }
-
     // View when Total Number of Pages is one, which is an empty div:
 
     if (finalPageNo <= 1) return <div />;
@@ -211,7 +226,10 @@ function Pagination({
     const desktopPagination = (
         <div>
             {BackButton}
-            {IndexZeroButton()}
+            <IndexZeroButton
+                pageIndex={pageIndex}
+                onClick={handleBtnClick(0)}
+            />
 
             <button
                 type="button"
@@ -267,7 +285,11 @@ function Pagination({
                 {finalPageNo - 1}
             </button>
 
-            {FinalPageButton(finalPageNo)}
+            <FinalPageButton
+                finalPageNo={finalPageNo}
+                pageIndex={pageIndex}
+                onClick={handleBtnClick(finalPageNo - 1)}
+            />
 
             {NextButton}
         </div>
@@ -278,11 +300,18 @@ function Pagination({
     const mobilePagination = (
         <div>
             <div className={styles.mobiletoprow}>
-                {IndexZeroButton()}
+                <IndexZeroButton
+                    pageIndex={pageIndex}
+                    onClick={handleBtnClick(0)}
+                />
                 <button type="button" className={styles.basecontainer}>
                     Page {pageIndex + 1}
                 </button>
-                {FinalPageButton(finalPageNo)}
+                <FinalPageButton
+                    finalPageNo={finalPageNo}
+                    pageIndex={pageIndex}
+                    onClick={handleBtnClick(finalPageNo - 1)}
+                />
             </div>
             <div className={styles.mobilebottomrow}>
                 {BackButton}
