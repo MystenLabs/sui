@@ -62,14 +62,16 @@ function PkgModuleViewWrapper({ id, data }: Props) {
                     </button>
                 ))}
             </div>
-            <div className={`${styles.modulewraper} ${styles.singlemodule}`}>
+            <div
+                className={`${styles.modulewraper} ${styles.singlemodulewrapper}`}
+            >
                 <TabGroup size="md">
                     <TabList>
                         <Tab>Bytecode</Tab>
                     </TabList>
                     <TabPanels>
                         <TabPanel>
-                            <div className="overflow-auto h-[555px] w-[78vw]">
+                            <div className={styles.singlemodule}>
                                 {[data.content[modulesPageNumber]].map(
                                     ([name, code], idx) => (
                                         <ModuleView
