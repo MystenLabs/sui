@@ -24,6 +24,8 @@ import { type Payload } from '_payloads';
 import {
     type AcquirePermissionsRequest,
     type AcquirePermissionsResponse,
+    type HasPermissionsRequest,
+    type HasPermissionsResponse,
     ALL_PERMISSION_TYPES,
 } from '_payloads/permissions';
 
@@ -105,6 +107,9 @@ export class SuiWallet implements Wallet {
     };
 
     #connected = async () => {
+        if (!(await this.#hasPermissions(['viewAccount']))) {
+            return;
+        }
         const accounts = await mapToPromise(
             this.#send<GetAccount, GetAccountResponse>({
                 type: 'get-account',
@@ -162,6 +167,16 @@ export class SuiWallet implements Wallet {
             (response) => response.result
         );
     };
+
+    #hasPermissions(permissions: HasPermissionsRequest['permissions']) {
+        return mapToPromise(
+            this.#send<HasPermissionsRequest, HasPermissionsResponse>({
+                type: 'has-permissions-request',
+                permissions: permissions,
+            }),
+            ({ result }) => result
+        );
+    }
 
     #send<
         RequestPayload extends Payload,
