@@ -110,7 +110,7 @@ impl<'a> BytecodeSourceVerifier<'a> {
 
                 let mod_str = module_symbol.to_string();
                 let on_chain_bytes = match on_chain_package.module_map.get(&mod_str) {
-                    Some(oc_bytes) => oc_bytes.clone(),
+                    Some(oc_bytes) => oc_bytes,
                     None => {
                         return Err(DependencyVerificationError::OnChainDependencyNotFound(
                             pkg_symbol,
@@ -120,7 +120,7 @@ impl<'a> BytecodeSourceVerifier<'a> {
                 };
 
                 // compare local bytecode to on-chain bytecode to ensure integrity of our dependencies
-                if local_bytes != on_chain_bytes {
+                if &local_bytes != on_chain_bytes {
                     return Err(DependencyVerificationError::ModuleBytecodeMismatch(
                         pkg_symbol.to_string(),
                         module_symbol.to_string(),
