@@ -7,6 +7,7 @@ use fastcrypto::{
     hash::{Digest, Hash},
     traits::KeyPair as _,
 };
+use once_cell::sync::OnceCell;
 use proptest::{collection, prelude::*, strategy::Strategy};
 use rand::{rngs::StdRng, SeedableRng};
 use signature::Signer;
@@ -43,12 +44,12 @@ fn clean_signed_header(kp: KeyPair) -> impl Strategy<Value = Header> {
                 epoch,
                 payload,
                 parents,
-                id: HeaderDigest::default(),
+                id: OnceCell::default(),
                 signature: Signature::default(),
                 metadata: Metadata::default(),
             };
             Header {
-                id: header.digest(),
+                id: OnceCell::with_value(header.digest()),
                 signature: kp.sign(Digest::from(header.digest()).as_ref()),
                 ..header
             }
@@ -69,14 +70,14 @@ fn arb_signed_header(kp: KeyPair) -> impl Strategy<Value = Header> {
                 let signature = kp.sign(Digest::from(random_digest).as_ref());
                 // naughty: we provide a well-signed random header
                 Header {
-                    id: random_digest,
+                    id: OnceCell::with_value(random_digest),
                     signature,
                     ..clean_header
                 }
             } else {
                 // naughty: we provide an ill-signed random header
                 Header {
-                    id: random_digest,
+                    id: OnceCell::with_value(random_digest),
                     ..clean_header
                 }
             }
@@ -92,8 +93,13 @@ proptest! {
     fn header_deserializes_to_correct_id(header in arb_header()) {
         let serialized = bincode::serialize(&header).unwrap();
         let deserialized: Header = bincode::deserialize(&serialized).unwrap();
-        // we may not have header.digest() == header.id(), due to the naughty cases above
-        assert_eq!(deserialized.id, header.digest());
+        // We may not have header.digest() == header.id(), due to the naughty cases above.
+        //
+        // Indeed, the naughty headers are specially crafted so that their `id` is populated with a wrong id.
+        // They are malformed, since a correct header always has `foo.digest() == foo.id()`.
+        // We check here that deserializing a header, even a malformed one,
+        // produces a correctly-formed header in all cases.
+        assert_eq!(deserialized.id(), header.digest());
     }
 
 }

@@ -3,7 +3,7 @@
 use config::{Authority, Committee, Epoch, WorkerIndex, WorkerInfo};
 use crypto::{KeyPair, NetworkKeyPair};
 use fastcrypto::{
-    hash::{Digest, Hash},
+    hash::Hash,
     traits::{KeyPair as _, Signer},
 };
 use multiaddr::Multiaddr;
@@ -12,7 +12,7 @@ use serde_reflection::{Registry, Result, Samples, Tracer, TracerConfig};
 use std::{fs::File, io::Write};
 use structopt::{clap::arg_enum, StructOpt};
 use types::{
-    Batch, BatchDigest, Certificate, CertificateDigest, Header, HeaderDigest, Metadata,
+    Batch, BatchDigest, Certificate, CertificateDigest, HeaderBuilder, HeaderDigest, Metadata,
     ReconfigureNotification, WorkerOthersBatchMessage, WorkerOurBatchMessage,
     WorkerReconfigureMessage, WorkerSynchronizeMessage,
 };
@@ -71,20 +71,16 @@ fn get_registry() -> Result<Registry> {
     let certificates: Vec<Certificate> = Certificate::genesis(&committee);
 
     // The values have to be "complete" in a data-centric sense, but not "correct" cryptographically.
-    let mut header = Header {
-        author: kp.public().clone(),
-        round: 1,
-        payload: (0..4u32).map(|wid| (BatchDigest([0u8; 32]), wid)).collect(),
-        parents: certificates.iter().map(|x| x.digest()).collect(),
-        ..Header::default()
-    };
+    let header_builder = HeaderBuilder::default();
+    let header = header_builder
+        .author(kp.public().clone())
+        .epoch(0)
+        .round(1)
+        .payload((0..4u32).map(|wid| (BatchDigest([0u8; 32]), wid)).collect())
+        .parents(certificates.iter().map(|x| x.digest()).collect())
+        .build(&kp)
+        .unwrap();
 
-    let header_digest = header.digest();
-    header = Header {
-        id: header_digest,
-        signature: kp.sign(Digest::from(header_digest).as_ref()),
-        ..header
-    };
     let worker_pk = network_keys[0].public().clone();
     let certificate = Certificate::new_unsigned(&committee, header.clone(), vec![]).unwrap();
     let signature = keys[0].sign(certificate.digest().as_ref());

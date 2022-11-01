@@ -77,10 +77,10 @@ async fn test_get_collections() {
         // Write the header
         store
             .header_store
-            .async_write(header.clone().id, header.clone())
+            .async_write(header.clone().id(), header.clone())
             .await;
 
-        header_ids.push(header.clone().id);
+        header_ids.push(header.clone().id());
 
         // Write the batches to payload store
         store
@@ -277,10 +277,10 @@ async fn test_remove_collections() {
         // Write the header
         store
             .header_store
-            .async_write(header.clone().id, header.clone())
+            .async_write(header.clone().id(), header.clone())
             .await;
 
-        header_ids.push(header.clone().id);
+        header_ids.push(header.clone().id());
 
         // Write the batches to payload store
         store
@@ -1111,7 +1111,7 @@ async fn fixture_certificate(
 
     // Write the header
     header_store
-        .async_write(header.clone().id, header.clone())
+        .async_write(header.clone().id(), header.clone())
         .await;
 
     // Write the batches to payload store

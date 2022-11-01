@@ -492,31 +492,19 @@ pub fn make_signed_certificates(
     )
 }
 
-// Creates an unsigned certificate from its given round, origin and parents,
-// Note: the certificate is unsigned
+// Creates a badly signed certificate from its given round, origin and parents,
+// Note: the certificate is signed by a random key rather than its author
 pub fn mock_certificate(
     committee: &Committee,
     origin: PublicKey,
     round: Round,
     parents: BTreeSet<CertificateDigest>,
 ) -> (CertificateDigest, Certificate) {
-    let certificate = Certificate::new_unsigned(
-        committee,
-        Header {
-            author: origin,
-            round,
-            parents,
-            payload: fixture_payload(1),
-            ..Header::default()
-        },
-        Vec::new(),
-    )
-    .unwrap();
-    (certificate.digest(), certificate)
+    mock_certificate_with_epoch(committee, origin, round, 0, parents)
 }
 
-// Creates an unsigned certificate from its given round, epoch, origin, and parents,
-// Note: the certificate is unsigned
+// Creates a badly signed certificate from its given round, epoch, origin, and parents,
+// Note: the certificate is signed by a random key rather than its author
 pub fn mock_certificate_with_epoch(
     committee: &Committee,
     origin: PublicKey,
@@ -524,19 +512,16 @@ pub fn mock_certificate_with_epoch(
     epoch: Epoch,
     parents: BTreeSet<CertificateDigest>,
 ) -> (CertificateDigest, Certificate) {
-    let certificate = Certificate::new_unsigned(
-        committee,
-        Header {
-            author: origin,
-            round,
-            epoch,
-            parents,
-            payload: fixture_payload(1),
-            ..Header::default()
-        },
-        Vec::new(),
-    )
-    .unwrap();
+    let header_builder = HeaderBuilder::default();
+    let header = header_builder
+        .author(origin)
+        .round(round)
+        .epoch(epoch)
+        .parents(parents)
+        .payload(fixture_payload(1))
+        .build(&KeyPair::generate(&mut rand::thread_rng()))
+        .unwrap();
+    let certificate = Certificate::new_unsigned(committee, header, Vec::new()).unwrap();
     (certificate.digest(), certificate)
 }
 
