@@ -4,7 +4,6 @@
 use std::{
     collections::{BTreeMap, HashMap},
     fmt::{Debug, Display},
-    str::FromStr,
 };
 
 use move_compiler::compiled_unit::CompiledUnitEnum;
@@ -16,10 +15,7 @@ use sui_sdk::{
     rpc_types::{SuiRawData, SuiRawMoveObject, SuiRawMovePackage},
     ReadApi,
 };
-use sui_types::{
-    base_types::{ObjectID, ObjectIDParseError},
-    error::SuiError,
-};
+use sui_types::{base_types::ObjectID, error::SuiError};
 
 #[derive(Clone, Debug)]
 pub struct DependencyVerificationResult {
@@ -151,8 +147,7 @@ impl<'a> BytecodeSourceVerifier<'a> {
         let len = compiled_package.deps_compiled_units.len();
         // only need to check for less than, because if local modules are missing on-chain we've already errored out
         if len < on_chain_module_count {
-            let missing_modules =
-                get_missing_modules(&compiled_package, &verified_dependencies);
+            let missing_modules = get_missing_modules(&compiled_package, &verified_dependencies);
             return Err(DependencyVerificationError::ModuleCountMismatch(
                 len,
                 on_chain_module_count,
