@@ -321,7 +321,6 @@ mod tests {
                 storage_cost: 0,
                 storage_rebate: 0,
             },
-            mutable_input_versions: vec![],
             shared_objects: vec![],
             created: vec![],
             mutated: vec![],

@@ -975,6 +975,10 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     /// 4. owner_index table change is reverted.
     pub fn revert_state_update(&self, tx_digest: &TransactionDigest) -> SuiResult {
         let effects = self.get_effects(tx_digest)?;
+        let certificate = self
+            .get_certified_transaction(tx_digest)?
+            .expect("certificate for digest");
+
         let mut write_batch = self.perpetual_tables.certificates.batch();
         write_batch =
             write_batch.delete_batch(&self.perpetual_tables.certificates, iter::once(tx_digest))?;
@@ -1014,24 +1018,25 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             .map(|((id, _, _), owner)| (*owner, *id));
         write_batch =
             write_batch.delete_batch(&self.perpetual_tables.owner_index, owners_to_delete)?;
-        let mutated_objects = effects
-            .mutable_input_versions
-            .iter()
-            .map(|(id, version)| ObjectKey(*id, *version));
 
-        let old_objects = self
+        let old_mutable_inputs = self
             .perpetual_tables
             .objects
-            .multi_get(mutated_objects)?
+            .multi_get(input_object_keys(&effects, &certificate)?)?
             .into_iter()
-            .map(|obj_opt| {
+            .filter_map(|obj_opt| {
                 let obj = obj_opt.expect("Older object version not found");
-                (
-                    (obj.owner, obj.id()),
-                    ObjectInfo::new(&obj.compute_object_reference(), &obj),
-                )
+                if obj.is_immutable() {
+                    None
+                } else {
+                    Some((
+                        (obj.owner, obj.id()),
+                        ObjectInfo::new(&obj.compute_object_reference(), &obj),
+                    ))
+                }
             });
-        write_batch = write_batch.insert_batch(&self.perpetual_tables.owner_index, old_objects)?;
+        write_batch =
+            write_batch.insert_batch(&self.perpetual_tables.owner_index, old_mutable_inputs)?;
 
         write_batch.write()?;
         Ok(())
@@ -1526,4 +1531,30 @@ impl From<&ObjectRef> for ObjectKey {
 pub enum UpdateType {
     Transaction(TxSequenceNumber, TransactionEffectsDigest),
     Genesis,
+}
+
+/// Fetch the `ObjectKey`s (IDs and versions) for input objects (includes owned, immutable,
+/// shared, and immutable objects as well as the gas objects, but not move packges).  The shared
+/// object versions need to be pulled from `effects` because they are subject to sequencing, but
+/// everything else is already present in the `certificate`.
+fn input_object_keys(
+    effects: &TransactionEffects,
+    certificate: &VerifiedCertificate,
+) -> SuiResult<Vec<ObjectKey>> {
+    let shared_keys = effects.shared_objects.iter().map(|obj| obj.into());
+
+    let imm_or_owned_keys = certificate
+        .signed_data
+        .data
+        .input_objects()?
+        .into_iter()
+        .filter_map(|object| {
+            use InputObjectKind::*;
+            match object {
+                MovePackage(_) | SharedMoveObject { .. } => None,
+                ImmOrOwnedMoveObject(obj) => Some(obj.into()),
+            }
+        });
+
+    Ok(shared_keys.chain(imm_or_owned_keys).collect())
 }
