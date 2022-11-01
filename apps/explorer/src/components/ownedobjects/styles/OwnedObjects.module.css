@@ -20,11 +20,15 @@
 }
 
 .objectbox {
-    @apply my-[5vh] sm:my-[1vh] break-all lg:w-[50%] h-[72px] flex items-center;
+    @apply my-[5vh] sm:my-[1vh] break-all lg:w-[50%] h-fit min-h-[72px] flex items-center;
 }
 
 .objectbox a {
     @apply font-mono;
+}
+
+.textitem {
+    @apply sm:pr-[20px];
 }
 
 .ownedobjectheader {
