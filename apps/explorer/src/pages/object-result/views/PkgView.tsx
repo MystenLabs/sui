@@ -9,6 +9,7 @@ import { type DataType } from '../ObjectResultType';
 
 import styles from './ObjectView.module.css';
 
+import { Heading } from '~/ui/Heading';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 
 function PkgView({ data }: { data: DataType }) {
@@ -82,6 +83,12 @@ function PkgView({ data }: { data: DataType }) {
                         </TabPanel>
                     </TabPanels>
                 </TabGroup>
+
+                <div className="mb-[12px]">
+                    <Heading as="h2" variant="heading4" weight="semibold">
+                        Modules
+                    </Heading>
+                </div>
 
                 <PkgModulesWrapper
                     id={data.id}
