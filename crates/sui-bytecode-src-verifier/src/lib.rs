@@ -104,7 +104,7 @@ impl<'a> BytecodeSourceVerifier<'a> {
             for (module_symbol, local_bytes) in local_pkg_bytes {
                 // package addresses may show up many times, but we only need to verify them once
                 // zero address is the package we're checking dependencies for
-                if verified_dependencies.contains_key(&addr) || addr.eq(&AccountAddress::ZERO) {
+                if verified_dependencies.contains_key(&addr) || addr == AccountAddress::ZERO {
                     continue;
                 }
 
