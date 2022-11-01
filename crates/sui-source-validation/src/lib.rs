@@ -221,7 +221,7 @@ impl<'a> BytecodeSourceVerifier<'a> {
     ) -> Result<SuiRawMovePackage, DependencyVerificationError> {
         // Move packages are specified with an AccountAddress, but are
         // fetched from a sui network via sui_getObject, which takes an object ID
-        let obj_id = match ObjectID::from_str(addr.to_string().as_str()) {
+        let obj_id = match ObjectID::from(*addr) {
             Ok(id) => id,
             Err(err) => return Err(DependencyVerificationError::ObjectIdFromAddressFailure(err)),
         };
