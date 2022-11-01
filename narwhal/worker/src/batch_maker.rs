@@ -29,6 +29,9 @@ use types::{
     WorkerOurBatchMessage,
 };
 
+// The number of batches to store / transmit in parallel.
+pub const MAX_PARALLEL_BATCH: usize = 25;
+
 #[cfg(test)]
 #[path = "tests/batch_maker_tests.rs"]
 pub mod batch_maker_tests;
@@ -103,8 +106,6 @@ impl BatchMaker {
         let mut current_batch_size = 0;
 
         let mut batch_pipeline = FuturesOrdered::new();
-        // The number of batches to store / transmit in parallel.
-        const MAX_PARALLEL_BATCH: usize = 25;
 
         loop {
             tokio::select! {
@@ -327,7 +328,11 @@ impl BatchMaker {
             store.sync_write(digest, batch).await;
             
             // Also wait for sending to be done here
-            // (TODO: sending to others is an optimization, no need to wait.)
+            //
+            // TODO: Here if we get back Err it means that potentially this was not send
+            //       to a quorum. However, if that happens we can still proceed on the basis
+            //       that an other authority will request the batch from us, and we will deliver
+            //       it since it is now stored. So ignore the error for the moment.
             let _ = done_sending.await;
 
             // Finally send to primary
