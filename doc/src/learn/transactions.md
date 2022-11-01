@@ -1,8 +1,8 @@
 ---
-title: Transactions
+title: Sui Transactions
 ---
 
-All updates to the Sui ledger happen via a transaction. This section describes the transaction types supported by Sui and explains how their execution changes the ledger.
+All updates to the Sui ledger happen via a transaction. This topic describes the transaction types supported by Sui and explains how their execution changes the ledger.
 
 ## Transaction metadata
 

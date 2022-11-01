@@ -2,14 +2,14 @@
 title: Sui Contributor Covenant Code of Conduct
 ---
 
-Sui as an open source project encourages free discussion rooted in respect.
+Sui, as an open source project, encourages free discussion rooted in respect.
 We endeavor to always be mindful of others' perspectives and ask all
 fellow contributors to do the same. We welcome you to the Sui platform
 and ask you to help us grow it with relevant, on-point contributions.
 
 ## Our Pledge
 
-We as members, contributors, and leaders pledge to make participation in our
+We, as members, contributors, and leaders, pledge to make participation in our
 community a harassment-free experience for everyone, regardless of age, body
 size, visible or invisible disability, ethnicity, sex characteristics, gender
 identity and expression, level of experience, education, socio-economic status,
@@ -29,7 +29,7 @@ community include:
 * Giving and gracefully accepting constructive feedback
 * Accepting responsibility and apologizing to those affected by our mistakes,
   and learning from the experience
-* Focusing on what is best not just for us as individuals, but for the overall
+* Focusing on what is best, not just for us as individuals, but for the overall
   community
 
 Examples of unacceptable behavior include:
