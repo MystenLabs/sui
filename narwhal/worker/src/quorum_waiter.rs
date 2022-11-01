@@ -148,15 +148,18 @@ impl QuorumWaiter {
                 Some((_batch, mut remaining)) = pipeline.next() => {
 
                     // Attempt to send messages to the remaining workers
-                    best_effort_with_timeout.push(async move {
-                        // Bound the attempt to a few seconds to tolerate nodes that are
-                        // offline and will never succeed.
-                        //
-                        // TODO: make the constant a config parameter.
-                        timeout(Duration::from_secs(5), async move{
-                            while remaining.next().await.is_some() { }
-                        }).await
-                    });
+                    if remaining.len() > 0 {
+                        trace!("Best effort dissemination for batch {} for remaining {}", batch.digest(), remaining.len());
+                        best_effort_with_timeout.push(async move {
+                           // Bound the attempt to a few seconds to tolerate nodes that are
+                           // offline and will never succeed.
+                           //
+                           // TODO: make the constant a config parameter.
+                           timeout(Duration::from_secs(5), async move{
+                               while remaining.next().await.is_some() { }
+                           }).await
+                       });
+                    }
 
                 },
 
