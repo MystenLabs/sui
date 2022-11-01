@@ -27,6 +27,10 @@
     @apply font-mono;
 }
 
+.textitem {
+    @apply sm:pr-[20px];
+}
+
 .ownedobjectheader {
     @apply pb-1;
 }
