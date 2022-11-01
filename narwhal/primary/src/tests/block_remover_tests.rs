@@ -77,10 +77,10 @@ async fn test_successful_blocks_delete() {
 
         // write the header
         header_store
-            .async_write(header.clone().id, header.clone())
+            .async_write(header.clone().id(), header.clone())
             .await;
 
-        header_ids.push(header.clone().id);
+        header_ids.push(header.clone().id());
 
         // write the batches to payload store
         payload_store
@@ -239,10 +239,10 @@ async fn test_failed_blocks_delete() {
 
         // write the header
         header_store
-            .async_write(header.clone().id, header.clone())
+            .async_write(header.clone().id(), header.clone())
             .await;
 
-        header_ids.push(header.clone().id);
+        header_ids.push(header.clone().id());
 
         // write the batches to payload store
         payload_store

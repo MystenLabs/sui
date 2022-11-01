@@ -61,8 +61,6 @@ Header:
     - parents:
         SEQ:
           TYPENAME: CertificateDigest
-    - id:
-        TYPENAME: HeaderDigest
     - signature:
         TYPENAME: BLS12381Signature
     - metadata:
@@ -117,3 +115,4 @@ WorkerSynchronizeMessage:
         SEQ:
           TYPENAME: BatchDigest
     - target: STR
+

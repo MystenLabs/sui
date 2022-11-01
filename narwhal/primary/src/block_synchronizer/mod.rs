@@ -656,7 +656,7 @@ impl BlockSynchronizer {
         }
     }
 
-    #[instrument(level = "trace", skip_all, fields(request_id, certificate=?certificate.header.id))]
+    #[instrument(level = "trace", skip_all, fields(request_id, certificate=?certificate.header.id()))]
     async fn wait_for_block_payload<'a>(
         payload_synchronize_timeout: Duration,
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,

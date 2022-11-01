@@ -128,7 +128,7 @@ impl BlockRemover {
         certificates: Vec<Certificate>,
         batches_by_worker: HashMap<WorkerId, Vec<BatchDigest>>,
     ) -> Result<(), Either<TypedStoreError, ValidatorDagError>> {
-        let header_ids: Vec<HeaderDigest> = certificates.iter().map(|c| c.header.id).collect();
+        let header_ids: Vec<HeaderDigest> = certificates.iter().map(|c| c.header.id()).collect();
 
         self.header_store
             .remove_all(header_ids)

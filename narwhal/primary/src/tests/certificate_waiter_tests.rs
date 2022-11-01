@@ -6,12 +6,14 @@ use crate::{
 };
 use anemo::async_trait;
 use anyhow::Result;
-use config::Committee;
-use crypto::PublicKey;
+use config::{Committee, Epoch, WorkerId};
+use crypto::{PublicKey, Signature};
 use fastcrypto::{hash::Hash, traits::KeyPair, SignatureService};
+use indexmap::IndexMap;
 use itertools::Itertools;
 use network::P2pNetwork;
 use node::NodeStorage;
+use once_cell::sync::OnceCell;
 use prometheus::Registry;
 use std::{
     collections::{BTreeSet, HashMap},
@@ -28,10 +30,10 @@ use tokio::{
     time::sleep,
 };
 use types::{
-    Certificate, CertificateDigest, ConsensusStore, FetchCertificatesRequest,
-    FetchCertificatesResponse, GetCertificatesRequest, GetCertificatesResponse,
-    PayloadAvailabilityRequest, PayloadAvailabilityResponse, PrimaryMessage, PrimaryToPrimary,
-    PrimaryToPrimaryServer, ReconfigureNotification, Round,
+    BatchDigest, Certificate, CertificateDigest, ConsensusStore, FetchCertificatesRequest,
+    FetchCertificatesResponse, GetCertificatesRequest, GetCertificatesResponse, Header,
+    HeaderDigest, Metadata, PayloadAvailabilityRequest, PayloadAvailabilityResponse,
+    PrimaryMessage, PrimaryToPrimary, PrimaryToPrimaryServer, ReconfigureNotification, Round,
 };
 
 struct FetchCertificateProxy {
@@ -139,6 +141,20 @@ fn verify_certificates_not_in_store(
         .map_while(|c| c)
         .next()
         .is_none());
+}
+
+// Unsed below to construct malformed Headers
+// Note: this should always mimic the Header struct, only changing the visibility of the id field to public
+#[allow(dead_code)]
+struct BadHeader {
+    pub author: PublicKey,
+    pub round: Round,
+    pub epoch: Epoch,
+    pub payload: IndexMap<BatchDigest, WorkerId>,
+    pub parents: BTreeSet<CertificateDigest>,
+    pub id: OnceCell<HeaderDigest>,
+    pub signature: Signature,
+    pub metadata: Metadata,
 }
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
@@ -427,7 +443,14 @@ async fn fetch_certificates_basic() {
     certs.push(cert);
     // Add cert with incorrect digest.
     let mut cert = certificates[num_written].clone();
-    cert.header.id = Default::default();
+    // This is a bit tedious to craft
+    let cert_header = unsafe { std::mem::transmute::<Header, BadHeader>(cert.header) };
+    let wrong_header = BadHeader {
+        id: OnceCell::with_value(HeaderDigest::default()),
+        ..cert_header
+    };
+    let wolf_header = unsafe { std::mem::transmute::<BadHeader, Header>(wrong_header) };
+    cert.header = wolf_header;
     certs.push(cert);
     // Add cert without all parents in storage.
     certs.push(certificates[num_written + 1].clone());

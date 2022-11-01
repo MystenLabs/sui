@@ -200,7 +200,7 @@ impl HeaderWaiter {
                     match message {
                         WaiterMessage::SyncBatches(missing, header) => {
                             debug!("Synching the payload of {header}");
-                            let header_id = header.id;
+                            let header_id = header.id();
                             let round = header.round;
                             let author = header.author.clone();
 
@@ -246,7 +246,7 @@ impl HeaderWaiter {
 
                         WaiterMessage::SyncParents(missing, header) => {
                             debug!("Synching the parents of {header}");
-                            let header_id = header.id;
+                            let header_id = header.id();
                             let round = header.round;
                             let author = header.author.clone();
 
@@ -307,7 +307,7 @@ impl HeaderWaiter {
                         Ok(header) => header,
                     };
                     if let Some(header) = header {
-                        if let Some((_, tx_cancel)) = self.pending.remove(&header.id) {
+                        if let Some((_, tx_cancel)) = self.pending.remove(&header.id()) {
                             let _ = tx_cancel.send(());
                         }
                         for x in header.payload.keys() {

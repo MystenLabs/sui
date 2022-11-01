@@ -238,7 +238,7 @@ impl Core {
             .processing
             .entry(header.round)
             .or_insert_with(HashSet::new)
-            .insert(header.id);
+            .insert(header.id());
 
         if inserted {
             // Only increase the metric when the header has been seen for the first
@@ -270,7 +270,7 @@ impl Core {
                 .headers_suspended
                 .with_label_values(&[&header.epoch.to_string(), "missing_parents"])
                 .inc();
-            debug!("Processing of {} suspended: missing parent(s)", header.id);
+            debug!("Processing of {} suspended: missing parent(s)", header.id());
             return Ok(());
         }
 
@@ -279,13 +279,13 @@ impl Core {
         for x in parents {
             ensure!(
                 x.round() + 1 == header.round,
-                DagError::MalformedHeader(header.id)
+                DagError::MalformedHeader(header.id())
             );
             stake += self.committee.stake(&x.origin());
         }
         ensure!(
             stake >= self.committee.quorum_threshold(),
-            DagError::HeaderRequiresQuorum(header.id)
+            DagError::HeaderRequiresQuorum(header.id())
         );
 
         // Ensure we have the payload. If we don't, the synchronizer will ask our workers to get it, and then
@@ -301,7 +301,7 @@ impl Core {
 
         // Store the header.
         self.header_store
-            .async_write(header.id, header.clone())
+            .async_write(header.id(), header.clone())
             .await;
 
         self.metrics
@@ -500,7 +500,7 @@ impl Core {
         if !self
             .processing
             .get(&certificate.header.round)
-            .map_or_else(|| false, |x| x.contains(&certificate.header.id))
+            .map_or_else(|| false, |x| x.contains(&certificate.header.id()))
         {
             // This function may still throw an error if the storage fails.
             self.process_header_internal(&certificate.header, /* signed */ true)
@@ -540,7 +540,7 @@ impl Core {
             .await?;
 
         // Send it to the consensus layer.
-        let id = certificate.header.id;
+        let id = certificate.header.id();
         if let Err(e) = self.tx_new_certificates.send(certificate).await {
             warn!(
                 "Failed to deliver certificate {} to the consensus: {}",
@@ -596,14 +596,14 @@ impl Core {
         // in this node's DAG.
         ensure!(
             self.gc_round < header.round,
-            DagError::TooOld(header.id.into(), header.round, self.gc_round)
+            DagError::TooOld(header.id().into(), header.round, self.gc_round)
         );
         // TODO: enable below.
         // The header round is too high for this node, which is unlikely to acquire all
         // parent certificates in time.
         // ensure!(
         //     self.highest_processed_round + MAX_HEADER_ROUND_CATCHUP_THRESHOLD > header.round,
-        //     DagError::TooNew(header.id.into(), header.round, self.gc_round)
+        //     DagError::TooNew(header.id().into(), header.round, self.gc_round)
         // );
 
         // Verify the header's signature.
@@ -632,7 +632,7 @@ impl Core {
 
         // Ensure we receive a vote on the expected header.
         ensure!(
-            vote.id == self.current_header.id
+            vote.id == self.current_header.id()
                 && vote.origin == self.current_header.author
                 && vote.round == self.current_header.round,
             DagError::UnexpectedVote(vote.id)
