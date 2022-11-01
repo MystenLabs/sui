@@ -69,7 +69,7 @@ function PkgModuleViewWrapper({ id, data }: Props) {
                     </TabList>
                     <TabPanels>
                         <TabPanel>
-                            <div className="overflow-auto h-[304px] w-[78vw]">
+                            <div className="overflow-auto h-[555px] w-[78vw]">
                                 {[data.content[modulesPageNumber]].map(
                                     ([name, code], idx) => (
                                         <ModuleView
