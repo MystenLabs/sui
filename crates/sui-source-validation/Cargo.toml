@@ -1,5 +1,5 @@
 [package]
-name = "sui-bytecode-src-verifier"
+name = "sui-source-validation"
 version = "0.1.0"
 authors = ["Mysten Labs <build@mystenlabs.com>"]
 license = "Apache-2.0"
