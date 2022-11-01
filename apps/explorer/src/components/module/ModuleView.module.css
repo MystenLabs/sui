@@ -78,26 +78,6 @@ section .codeview pre {
     @apply mt-3 md:mt-1 mx-0 px-0 justify-start;
 }
 
-.modulelist {
-    @apply h-[605px] w-full lg:w-[15vw] overflow-auto pt-[10px] pr-[20px] pl-[1px];
-}
-
-.modulelist button {
-    @apply w-full lg:min-w-[12vw] lg:w-fit;
-}
-
-.pkgmodulewrapper {
-    @apply flex flex-wrap border-0 border-y-[1px] border-solid border-sui-grey-45;
-}
-
-.singlemodulewrapper {
-    @apply border-0 lg:border-l-[1px] border-solid border-sui-grey-45 lg:pl-[30px] pt-[20px];
-}
-
-.singlemodule {
-    @apply overflow-auto h-[555px] w-[87vw] lg:w-[75vw];
-}
-
 .pagmodule {
     @apply h-[556px] overflow-auto;
 }

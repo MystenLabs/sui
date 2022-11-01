@@ -6,8 +6,6 @@ import { useSearchParams } from 'react-router-dom';
 
 import ModuleView from './ModuleView';
 
-import styles from './ModuleView.module.css';
-
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 import { ListItem, VerticalList } from '~/ui/VerticalList';
 
@@ -44,30 +42,40 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
     }, [searchParams, modules]);
 
     return (
-        <div className={styles.pkgmodulewrapper}>
-            <div className={styles.modulelist}>
+        <div
+            className={
+                'flex flex-wrap border-0 border-y border-solid border-sui-grey-45'
+            }
+        >
+            <div
+                className={
+                    'h-[605px] w-full lg:w-[15vw] overflow-auto pt-[10px] pr-[20px] pl-[1px]'
+                }
+            >
                 <VerticalList>
                     {modules.map(([name], idx) => (
-                        <ListItem
+                        <div
                             key={idx}
-                            active={idx === modulesPageNumber}
-                            onClick={clickModuleName(name)}
+                            className="w-full lg:min-w-[12vw] lg:w-fit"
                         >
-                            {name}
-                        </ListItem>
+                            <ListItem
+                                active={idx === modulesPageNumber}
+                                onClick={clickModuleName(name)}
+                            >
+                                {name}
+                            </ListItem>
+                        </div>
                     ))}
                 </VerticalList>
             </div>
-            <div
-                className={`${styles.modulewraper} ${styles.singlemodulewrapper}`}
-            >
+            <div className="border-0 lg:border-l border-solid border-sui-grey-45 lg:pl-[30px] pt-[20px]">
                 <TabGroup size="md">
                     <TabList>
                         <Tab>Bytecode</Tab>
                     </TabList>
                     <TabPanels>
                         <TabPanel>
-                            <div className={styles.singlemodule}>
+                            <div className="overflow-auto h-[555px] w-[87vw] lg:w-[75vw]">
                                 {[modules[modulesPageNumber]].map(
                                     ([name, code], idx) => (
                                         <ModuleView
