@@ -15,6 +15,7 @@ import { parseObjectType } from '../../utils/objectUtils';
 import styles from './SendReceiveView.module.css';
 
 import { useFormatCoin, CoinFormat } from '~/hooks/useFormatCoin';
+import { Heading } from '~/ui/Heading';
 
 type TxAddress = {
     sender: string;
@@ -63,7 +64,9 @@ function MultipleRecipients({ sender, recipient, amount, objects }: TxAddress) {
             )}
             <div className={styles.txaddress} data-testid="transaction-sender">
                 <div className={styles.senderbox}>
-                    <h4>Sender</h4>
+                    <Heading as="h4" variant="heading4" weight="semibold">
+                        Sender
+                    </Heading>
                     <div className={styles.oneaddress}>
                         <StartIcon />
                         <Longtext
@@ -82,7 +85,13 @@ function MultipleRecipients({ sender, recipient, amount, objects }: TxAddress) {
                     {recipient && (
                         <div className={styles.recipientbox}>
                             <div>
-                                <h4>Recipients</h4>
+                                <Heading
+                                    as="h4"
+                                    variant="heading4"
+                                    weight="semibold"
+                                >
+                                    Recipients
+                                </Heading>
                             </div>
                             {recipient.map((add: string, idx: number) => (
                                 <div key={idx}>
@@ -172,9 +181,11 @@ function SendReceiveView({ sender, recipient, amount, objects }: TxAddress) {
                     <SingleAmount amount={amount[0]} objectId={objects![0]} />
                 </div>
                 <div className={styles.txaddress}>
-                    <h4 className={styles.oneheading}>
-                        Sender &#x26; Recipient
-                    </h4>
+                    <div className={styles.oneheading}>
+                        <Heading as="h4" variant="heading4" weight="semibold">
+                            Sender &#x26; Recipient
+                        </Heading>
+                    </div>
                     <div
                         className={cl([styles.oneaddress, styles.senderwline])}
                     >
