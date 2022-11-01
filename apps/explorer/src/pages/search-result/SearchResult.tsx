@@ -137,11 +137,7 @@ function SearchResult() {
                         Query type: <strong>{itm.category}</strong>
                     </div>
                     <div>
-                        <Longtext
-                            text={id}
-                            category={itm.category}
-                            isLink={true}
-                        />
+                        <Longtext text={id} category={itm.category} isLink />
                     </div>
                 </div>
             ))}

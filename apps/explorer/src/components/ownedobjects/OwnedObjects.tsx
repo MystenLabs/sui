@@ -38,16 +38,17 @@ const DATATYPE_DEFAULT: DataType = [
     },
 ];
 
-const NoOwnedObjects = () => (
-    <div className={styles.fail}>Failed to find Owned Objects</div>
-);
+function NoOwnedObjects() {
+    return <div className={styles.fail}>Failed to find Owned Objects</div>;
+}
 
-const OwnedObject = ({ id, byAddress }: { id: string; byAddress: boolean }) =>
-    IS_STATIC_ENV ? (
+function OwnedObject({ id, byAddress }: { id: string; byAddress: boolean }) {
+    return IS_STATIC_ENV ? (
         <OwnedObjectStatic id={id} />
     ) : (
         <OwnedObjectAPI id={id} byAddress={byAddress} />
     );
+}
 
 const NavigateFunctionContext = createContext<(id: string) => () => void>(
     (id: string) => () => {}

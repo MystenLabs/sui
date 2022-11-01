@@ -93,16 +93,18 @@ const getCreatedOrMutatedData = (
         : [];
 };
 
-const FailedToGetTxResults = ({ id }: { id: string }) => (
-    <ErrorResult
-        id={id}
-        errorMsg={
-            !id
-                ? "Can't search for a transaction without a digest"
-                : 'Data could not be extracted for the following specified transaction ID'
-        }
-    />
-);
+function FailedToGetTxResults({ id }: { id: string }) {
+    return (
+        <ErrorResult
+            id={id}
+            errorMsg={
+                !id
+                    ? "Can't search for a transaction without a digest"
+                    : 'Data could not be extracted for the following specified transaction ID'
+            }
+        />
+    );
+}
 
 const transformTransactionResponse = (
     txObj: SuiTransactionResponse,
@@ -122,7 +124,7 @@ const transformTransactionResponse = (
     };
 };
 
-const TransactionResultAPI = ({ id }: { id: string }) => {
+function TransactionResultAPI({ id }: { id: string }) {
     const [showTxState, setTxState] = useState(initState);
     const [network] = useContext(NetworkContext);
     useEffect(() => {
@@ -157,7 +159,7 @@ const TransactionResultAPI = ({ id }: { id: string }) => {
     // TODO update Error screen and account for Batch transactions
 
     return <FailedToGetTxResults id={id} />;
-};
+}
 
 const TransactionResultStatic = ({ id }: { id: string }) => {
     const entry = findDataFromID(id, undefined);
@@ -174,9 +176,9 @@ const TransactionResultStatic = ({ id }: { id: string }) => {
     }
 };
 
-const TransactionResultLoaded = ({ txData }: { txData: DataType }) => {
+function TransactionResultLoaded({ txData }: { txData: DataType }) {
     return <TransactionView txdata={txData} />;
-};
+}
 
 function TransactionResult() {
     const { id } = useParams();
@@ -207,7 +209,7 @@ function TransactionResult() {
         );
     }
 
-    return <ErrorResult id={id} errorMsg={'ID not a valid string'} />;
+    return <ErrorResult id={id} errorMsg="ID not a valid string" />;
 }
 
 export default TransactionResult;

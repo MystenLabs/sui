@@ -82,6 +82,7 @@ function Pagination({
 
     const BackButton = (
         <button
+            type="button"
             className={
                 pageIndex === 0
                     ? `${styles.nointeract} ${styles.gone}`
@@ -97,6 +98,7 @@ function Pagination({
 
     const NextButton = (
         <button
+            type="button"
             data-testid="nextBtn"
             className={
                 pageIndex === finalPageNo - 1
@@ -117,9 +119,7 @@ function Pagination({
                 : stats.count}{' '}
             {stats.stats_text}
         </div>
-    ) : (
-        <></>
-    );
+    ) : null;
 
     const PageLengthSelect = updateItemsPerPage ? (
         <select value={itemsPerPage} onChange={pageLengthChange}>
@@ -129,40 +129,44 @@ function Pagination({
                 </option>
             ))}
         </select>
-    ) : (
-        <></>
-    );
+    ) : null;
 
-    const IndexZeroButton = (label: string = '1') => (
-        <button
-            className={
-                pageIndex === 0 ? styles.pagenumber : styles.btncontainer
-            }
-            data-testid="firstBtn"
-            onClick={handleBtnClick(0)}
-            disabled={pageIndex === 0}
-        >
-            {label}
-        </button>
-    );
+    function IndexZeroButton(label: string = '1') {
+        return (
+            <button
+                type="button"
+                className={
+                    pageIndex === 0 ? styles.pagenumber : styles.btncontainer
+                }
+                data-testid="firstBtn"
+                onClick={handleBtnClick(0)}
+                disabled={pageIndex === 0}
+            >
+                {label}
+            </button>
+        );
+    }
 
-    const FinalPageButton = (
+    function FinalPageButton(
         finalPageNo: number,
         label: string = String(finalPageNo)
-    ) => (
-        <button
-            data-testid="lastBtn"
-            disabled={pageIndex === finalPageNo - 1}
-            onClick={handleBtnClick(finalPageNo - 1)}
-            className={
-                pageIndex === finalPageNo - 1
-                    ? styles.pagenumber
-                    : styles.btncontainer
-            }
-        >
-            {label}
-        </button>
-    );
+    ) {
+        return (
+            <button
+                type="button"
+                data-testid="lastBtn"
+                disabled={pageIndex === finalPageNo - 1}
+                onClick={handleBtnClick(finalPageNo - 1)}
+                className={
+                    pageIndex === finalPageNo - 1
+                        ? styles.pagenumber
+                        : styles.btncontainer
+                }
+            >
+                {label}
+            </button>
+        );
+    }
 
     // View when Total Number of Pages is one, which is an empty div:
 
@@ -179,6 +183,7 @@ function Pagination({
                         .fill(0)
                         .map((_: number, arrayIndex: number) => (
                             <button
+                                type="button"
                                 key={`page-${arrayIndex}`}
                                 className={
                                     pageIndex === arrayIndex
@@ -209,6 +214,7 @@ function Pagination({
             {IndexZeroButton()}
 
             <button
+                type="button"
                 className={
                     pageIndex === 1 ? styles.pagenumber : styles.btncontainer
                 }
@@ -220,15 +226,20 @@ function Pagination({
             </button>
 
             {pageIndex > 2 && (
-                <button className={styles.nointeract}>...</button>
+                <button type="button" className={styles.nointeract}>
+                    ...
+                </button>
             )}
 
             {pageIndex > 1 && pageIndex < finalPageNo - 2 && (
-                <button className={styles.pagenumber}>{pageIndex + 1}</button>
+                <button type="button" className={styles.pagenumber}>
+                    {pageIndex + 1}
+                </button>
             )}
 
             {pageIndex >= 1 && pageIndex < finalPageNo - 3 && (
                 <button
+                    type="button"
                     className={styles.btncontainer}
                     onClick={handleBtnClick(pageIndex + 1)}
                 >
@@ -237,10 +248,13 @@ function Pagination({
             )}
 
             {pageIndex < finalPageNo - 4 && (
-                <button className={styles.nointeract}>...</button>
+                <button type="button" className={styles.nointeract}>
+                    ...
+                </button>
             )}
 
             <button
+                type="button"
                 className={
                     pageIndex === finalPageNo - 2
                         ? styles.pagenumber
@@ -265,7 +279,7 @@ function Pagination({
         <div>
             <div className={styles.mobiletoprow}>
                 {IndexZeroButton()}
-                <button className={styles.basecontainer}>
+                <button type="button" className={styles.basecontainer}>
                     Page {pageIndex + 1}
                 </button>
                 {FinalPageButton(finalPageNo)}

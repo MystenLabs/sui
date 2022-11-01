@@ -48,8 +48,8 @@ function Longtext({
         toast.success('Copied!');
     }, [text]);
 
-    let icon;
-    let iconButton = <></>;
+    let icon = null;
+    let iconButton = null;
 
     if (copyButton !== 'none') {
         if (pleaseWait) {
@@ -70,8 +70,6 @@ function Longtext({
                 </div>
             );
         }
-    } else {
-        icon = <></>;
     }
 
     if (showIconButton) {

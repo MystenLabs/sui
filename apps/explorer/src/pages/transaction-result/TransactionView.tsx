@@ -211,13 +211,13 @@ function ItemView({ data }: { data: TxItemView }) {
                                 )}
                             >
                                 {links.length > 1 && (
-                                    <TxAddresses content={links}></TxAddresses>
+                                    <TxAddresses content={links} />
                                 )}
                                 {item.link ? (
                                     <Longtext
                                         text={item.value as string}
                                         category={item.category as Category}
-                                        isLink={true}
+                                        isLink
                                         copyButton="16"
                                     />
                                 ) : item.href ? (
@@ -276,7 +276,7 @@ function TransactionView({ txdata }: { txdata: DataType }) {
 
     let eventTitles: [string, string][] = [];
     const txEventDisplay = txEventData?.map((ed, index) => {
-        if (!ed) return <div></div>;
+        if (!ed) return <div />;
 
         let key = ed.top.title + index;
         eventTitles.push([ed.top.title, key]);
@@ -290,7 +290,7 @@ function TransactionView({ txdata }: { txdata: DataType }) {
 
     let eventTitlesDisplay = eventTitles.map((et) => (
         <div key={et[1]} className={styles.eventtitle}>
-            <Longtext text={et[0]} category={'unknown'} isLink={false} />
+            <Longtext text={et[0]} category="unknown" isLink={false} />
         </div>
     ));
 

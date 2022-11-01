@@ -35,7 +35,7 @@ function AddressResult() {
                 <div>
                     <h1>Owned Objects</h1>
                     <div>
-                        <OwnedObjects id={addressID} byAddress={true} />
+                        <OwnedObjects id={addressID} byAddress />
                     </div>
                 </div>
                 <div>
@@ -45,7 +45,7 @@ function AddressResult() {
             </>
         );
     } else {
-        return <ErrorResult id={addressID} errorMsg={'Something went wrong'} />;
+        return <ErrorResult id={addressID} errorMsg="Something went wrong" />;
     }
 }
 

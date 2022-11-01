@@ -38,11 +38,10 @@ function TabFooter({
     );
     return (
         <section className={styles.tabsfooter}>
-            {children ? (
-                [...(Array.isArray(children) ? children : [children])]
-            ) : (
-                <></>
-            )}
+            {children
+                ? [...(Array.isArray(children) ? children : [children])]
+                : null}
+
             {(stats || paging) && (
                 <div className={styles.stats}>
                     {stats && stats.loadState === 'pending' && (
@@ -57,7 +56,7 @@ function TabFooter({
                         </>
                     )}
 
-                    {stats && stats.loadState === 'fail' && <></>}
+                    {stats && stats.loadState === 'fail' && null}
 
                     {paging && (
                         <div>
