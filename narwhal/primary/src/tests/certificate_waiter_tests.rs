@@ -31,8 +31,8 @@ use types::{
     BatchDigest, Certificate, CertificateDigest, FetchCertificatesRequest,
     FetchCertificatesResponse, GetCertificatesRequest, GetCertificatesResponse, Header,
     HeaderDigest, LatestHeaderRequest, LatestHeaderResponse, Metadata, PayloadAvailabilityRequest,
-    PayloadAvailabilityResponse, PrimaryMessage, PrimaryToPrimary, PrimaryToPrimary,
-    PrimaryToPrimaryServer, PrimaryToPrimaryServer, ReconfigureNotification, Round,
+    PayloadAvailabilityResponse, PrimaryMessage, PrimaryToPrimary, PrimaryToPrimaryServer,
+    ReconfigureNotification, Round,
 };
 
 struct FetchCertificateProxy {
@@ -75,7 +75,7 @@ impl PrimaryToPrimary for FetchCertificateProxy {
         &self,
         _request: anemo::Request<LatestHeaderRequest>,
     ) -> Result<anemo::Response<LatestHeaderResponse>, anemo::rpc::Status> {
-        unimplemented!()
+        Ok(anemo::Response::new(LatestHeaderResponse { header: None }))
     }
 }
 

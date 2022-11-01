@@ -15,9 +15,7 @@ use crypto::{NetworkPublicKey, PublicKey, Signature};
 use fastcrypto::{hash::Hash as _, SignatureService};
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
-use network::{
-    CancelOnDropHandler, P2pNetwork, PrimaryToPrimaryRpc, ReliableNetwork, UnreliableNetwork,
-};
+use network::{CancelOnDropHandler, P2pNetwork, PrimaryToPrimaryRpc, ReliableNetwork};
 use std::time::Duration;
 use std::{
     collections::{HashMap, HashSet},
@@ -33,8 +31,8 @@ use types::{
     ensure,
     error::{DagError, DagError::StoreError, DagResult},
     metered_channel::{Receiver, Sender},
-    Certificate, Header, HeaderDigest, LatestHeaderRequest, PrimaryToPrimaryClient,
-    ReconfigureNotification, Round, RoundVoteDigestPair, Timestamp, Vote,
+    Certificate, Header, HeaderDigest, LatestHeaderRequest, ReconfigureNotification, Round,
+    RoundVoteDigestPair, Timestamp, Vote,
 };
 
 #[cfg(test)]
@@ -207,7 +205,7 @@ impl Core {
             });
         }
         let request_interval = Duration::from_secs(RECOVERY_REQUEST_TIMEOUT_SECS);
-        let interval = Box::pin(time::sleep(request_interval));
+        let mut interval = Box::pin(time::sleep(request_interval));
         loop {
             tokio::select! {
                 res = header_futures.next() => {

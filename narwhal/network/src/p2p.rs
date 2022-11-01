@@ -6,7 +6,7 @@ use crate::{
     traits::{Lucky, ReliableNetwork, UnreliableNetwork},
     BoundedExecutor, CancelOnDropHandler, RetryConfig, MAX_TASK_CONCURRENCY,
 };
-use anemo::{Peer, PeerId, Response};
+use anemo::PeerId;
 use anyhow::format_err;
 use anyhow::Result;
 use async_trait::async_trait;
@@ -18,11 +18,10 @@ use tokio::{runtime::Handle, task::JoinHandle};
 use types::{
     Batch, BatchDigest, FetchCertificatesRequest, FetchCertificatesResponse,
     GetCertificatesRequest, GetCertificatesResponse, LatestHeaderRequest, LatestHeaderResponse,
-    PrimaryMessage, PrimaryToPrimaryClient, PrimaryToPrimaryClient, PrimaryToWorkerClient,
-    PrimaryToWorkerClient, RequestBatchRequest, WorkerBatchMessage, WorkerDeleteBatchesMessage,
-    WorkerOthersBatchMessage, WorkerOurBatchMessage, WorkerReconfigureMessage,
-    WorkerSynchronizeMessage, WorkerToPrimaryClient, WorkerToPrimaryClient, WorkerToWorkerClient,
-    WorkerToWorkerClient,
+    PrimaryMessage, PrimaryToPrimaryClient, PrimaryToWorkerClient, RequestBatchRequest,
+    WorkerBatchMessage, WorkerDeleteBatchesMessage, WorkerOthersBatchMessage,
+    WorkerOurBatchMessage, WorkerReconfigureMessage, WorkerSynchronizeMessage,
+    WorkerToPrimaryClient, WorkerToWorkerClient,
 };
 
 fn default_executor() -> BoundedExecutor {

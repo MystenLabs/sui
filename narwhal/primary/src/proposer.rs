@@ -18,8 +18,7 @@ use tracing::{debug, info};
 use types::{
     error::{DagError, DagResult},
     metered_channel::{Receiver, Sender},
-    BatchDigest, Certificate, Header, PrimaryMessage, ReconfigureNotification, Round, Timestamp,
-    TimestampMs,
+    BatchDigest, Certificate, Header, ReconfigureNotification, Round, Timestamp, TimestampMs,
 };
 
 #[cfg(test)]
