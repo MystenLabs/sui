@@ -94,8 +94,12 @@ button.activemodule {
     @apply flex flex-wrap border-0 border-y-[1px] border-solid border-sui-grey-45;
 }
 
+.singlemodulewrapper {
+    @apply border-0 lg:border-l-[1px] border-solid border-sui-grey-45 lg:pl-[30px] pt-[20px];
+}
+
 .singlemodule {
-    @apply border-0 border-l-[1px] border-solid border-sui-grey-45 pl-[30px] pt-[20px];
+    @apply overflow-auto h-[555px] w-[87vw] lg:w-[78vw];
 }
 
 .pagmodule {
