@@ -18,8 +18,8 @@ function toLittleEndian(bigint: bigint, size: number) {
   let result = new Uint8Array(size);
   let i = 0;
   while (bigint > 0) {
-    result[i] = Number(bigint % 256n);
-    bigint = bigint / 256n;
+    result[i] = Number(bigint % BigInt(256));
+    bigint = bigint / BigInt(256);
     i += 1;
   }
   return result;
