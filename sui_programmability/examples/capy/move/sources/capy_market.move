@@ -201,24 +201,4 @@ module capy::capy_market {
         let coin = coin::split(paid, listing.price, ctx);
         purchase_and_take(market, item_id, coin, ctx)
     }
-
-    /// Use a set of Coins for the purchase.
-    ///
-    /// WARNING: This function is a workaround to simplify UX in the
-    /// Sui Capys application. Should be replaced by the matching wallet
-    /// functionality;
-    public entry fun purchase_and_take_with_multiple_coins<T: key + store>(
-        market: &mut CapyMarket<T>,
-        item_id: ID,
-        coins: vector<Coin<SUI>>,
-        ctx: &mut TxContext
-    ) {
-        // join all Coins into one;
-        let coin = std::vector::pop_back(&mut coins);
-        sui::pay::join_vec(&mut coin, coins);
-
-        purchase_and_take_mut(market, item_id, &mut coin, ctx);
-
-        sui::pay::keep(coin, ctx)
-    }
 }
