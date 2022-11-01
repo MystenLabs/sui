@@ -294,7 +294,13 @@ fn is_homogeneous_rec(curr_q: &mut VecDeque<&JsonValue>) -> bool {
         // Okay to unwrap since we know values exist
         let curr = match curr_q.pop_front().unwrap() {
             JsonValue::Bool(_) => ValidJsonType::Bool,
-            JsonValue::Number(_) => ValidJsonType::Number,
+            JsonValue::Number(x) => {
+                if x.is_u64() {
+                    ValidJsonType::Number
+                } else {
+                    return false;
+                }
+            }
             JsonValue::String(_) => ValidJsonType::String,
             JsonValue::Array(w) => {
                 // Add to the next level
