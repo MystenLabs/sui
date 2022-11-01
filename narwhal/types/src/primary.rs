@@ -879,6 +879,14 @@ impl PayloadAvailabilityResponse {
     }
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct LatestHeaderRequest {}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct LatestHeaderResponse {
+    pub header: Option<Header>,
+}
+
 /// Message to reconfigure worker tasks. This message must be sent by a trusted source.
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub enum ReconfigureNotification {

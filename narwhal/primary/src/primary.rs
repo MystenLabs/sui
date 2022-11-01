@@ -50,10 +50,12 @@ use types::{
     metered_channel::{channel_with_total, Receiver, Sender},
     BatchDigest, Certificate, CertificateDigest, FetchCertificatesRequest,
     FetchCertificatesResponse, GetCertificatesRequest, GetCertificatesResponse, Header,
-    HeaderDigest, PayloadAvailabilityRequest, PayloadAvailabilityResponse, PrimaryToPrimary,
-    PrimaryToPrimaryServer, ReconfigureNotification, Round, RoundVoteDigestPair,
-    WorkerInfoResponse, WorkerOthersBatchMessage, WorkerOurBatchMessage, WorkerToPrimary,
-    WorkerToPrimaryServer,
+    HeaderDigest, LatestHeaderRequest, LatestHeaderResponse, PayloadAvailabilityRequest,
+    PayloadAvailabilityResponse, PrimaryToPrimary, PrimaryToPrimary, PrimaryToPrimary,
+    PrimaryToPrimaryServer, PrimaryToPrimaryServer, PrimaryToPrimaryServer,
+    ReconfigureNotification, Round, RoundVoteDigestPair, WorkerInfoResponse,
+    WorkerOthersBatchMessage, WorkerOurBatchMessage, WorkerToPrimary, WorkerToPrimary,
+    WorkerToPrimary, WorkerToPrimaryServer, WorkerToPrimaryServer, WorkerToPrimaryServer,
 };
 
 #[cfg(any(test))]
@@ -198,6 +200,7 @@ impl Primary {
             tx_primary_messages: tx_primary_messages.clone(),
             certificate_store: certificate_store.clone(),
             payload_store: payload_store.clone(),
+            proposer_store: proposer_store.clone(),
         });
         let worker_service = WorkerToPrimaryServer::new(WorkerReceiverHandler {
             tx_our_digests,
@@ -516,6 +519,7 @@ struct PrimaryReceiverHandler {
     tx_primary_messages: Sender<PrimaryMessage>,
     certificate_store: CertificateStore,
     payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
+    proposer_store: ProposerStore,
 }
 
 #[allow(clippy::result_large_err)]
@@ -668,6 +672,20 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
 
         Ok(anemo::Response::new(PayloadAvailabilityResponse {
             payload_availability: result,
+        }))
+    }
+
+    async fn get_latest_header(
+        &self,
+        _request: anemo::Request<LatestHeaderRequest>,
+    ) -> Result<anemo::Response<LatestHeaderResponse>, anemo::rpc::Status> {
+        let latest_header = self.proposer_store.get_last_proposed().map_err(|e| {
+            anemo::rpc::Status::internal(format!(
+                "error fetching latest proposed header from store: {e}"
+            ))
+        })?;
+        Ok(anemo::Response::new(LatestHeaderResponse {
+            header: latest_header,
         }))
     }
 }
