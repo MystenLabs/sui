@@ -9,12 +9,9 @@ use fastcrypto::hash::Hash;
 use futures::stream::{futures_unordered::FuturesUnordered, FuturesOrdered, StreamExt as _};
 use network::{CancelOnDropHandler, P2pNetwork, ReliableNetwork};
 use std::time::Duration;
-use store::Store;
 use tokio::{sync::watch, task::JoinHandle, time::timeout};
-use tracing::trace;
-use types::{
-    metered_channel::Receiver, Batch, BatchDigest, ReconfigureNotification, WorkerBatchMessage,
-};
+use tracing::{error, trace};
+use types::{metered_channel::Receiver, Batch, ReconfigureNotification, WorkerBatchMessage};
 
 #[cfg(test)]
 #[path = "tests/quorum_waiter_tests.rs"]
@@ -44,7 +41,6 @@ impl QuorumWaiter {
     pub fn spawn(
         name: PublicKey,
         id: WorkerId,
-        _store: Store<BatchDigest, Batch>,
         committee: Committee,
         worker_cache: SharedWorkerCache,
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
@@ -128,7 +124,9 @@ impl QuorumWaiter {
 
                                     // Notify anyone waiting for this.
                                     if let Some(channel) = opt_channel {
-                                        let _ = channel.send(());
+                                        if let Err(e) = channel.send(()) {
+                                            error!("Channel waiting for quorum response dropped: {:?}", e);
+                                        }
                                     }
                                     break
                                 }

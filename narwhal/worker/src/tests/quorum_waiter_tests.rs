@@ -6,7 +6,6 @@ use test_utils::{batch, test_network, CommitteeFixture, WorkerToWorkerMockServer
 
 #[tokio::test]
 async fn wait_for_quorum() {
-    let store = test_utils::open_batch_store();
     let (tx_message, rx_message) = test_utils::test_channel!(1);
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
@@ -23,7 +22,6 @@ async fn wait_for_quorum() {
     let _quorum_waiter_handler = QuorumWaiter::spawn(
         my_primary.clone(),
         /* worker_id */ 0,
-        store.clone(),
         committee.clone(),
         worker_cache.clone(),
         rx_reconfiguration,
@@ -66,7 +64,6 @@ async fn wait_for_quorum() {
 
 #[tokio::test]
 async fn pipeline_for_quorum() {
-    let store = test_utils::open_batch_store();
     let (tx_message, rx_message) = test_utils::test_channel!(1);
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
@@ -83,7 +80,6 @@ async fn pipeline_for_quorum() {
     let _quorum_waiter_handler = QuorumWaiter::spawn(
         my_primary.clone(),
         /* worker_id */ 0,
-        store.clone(),
         committee.clone(),
         worker_cache.clone(),
         rx_reconfiguration,

@@ -10,6 +10,7 @@ use futures::stream::FuturesOrdered;
 use store::Store;
 
 use config::WorkerId;
+use tracing::error;
 
 #[cfg(feature = "benchmark")]
 use std::convert::TryInto;
@@ -127,8 +128,9 @@ impl BatchMaker {
                     current_batch.transactions.push(transaction);
                     current_responses.push(response_sender);
                     if current_batch_size >= self.batch_size {
-                        let seal = self.seal(false, current_batch, current_batch_size, current_responses).await;
-                        batch_pipeline.push_back(seal);
+                        if let Some(seal) = self.seal(false, current_batch, current_batch_size, current_responses).await{
+                            batch_pipeline.push_back(seal);
+                        }
                         self.node_metrics.parallel_worker_batches.set(batch_pipeline.len() as i64);
 
                         timer.as_mut().reset(Instant::now() + self.max_batch_delay);
@@ -141,8 +143,9 @@ impl BatchMaker {
                 // If the timer triggers, seal the batch even if it contains few transactions.
                 () = &mut timer => {
                     if !current_batch.transactions.is_empty() {
-                        let seal = self.seal(true, current_batch, current_batch_size, current_responses).await;
-                        batch_pipeline.push_back(seal);
+                        if let Some(seal) = self.seal(true, current_batch, current_batch_size, current_responses).await {
+                            batch_pipeline.push_back(seal);
+                        }
                         self.node_metrics.parallel_worker_batches.set(batch_pipeline.len() as i64);
 
                         current_batch = Batch::default();
@@ -191,7 +194,7 @@ impl BatchMaker {
         batch: Batch,
         size: usize,
         responses: Vec<TxResponse>,
-    ) -> impl Future<Output = ()> {
+    ) -> Option<impl Future<Output = ()>> {
         #[cfg(feature = "benchmark")]
         {
             use fastcrypto::hash::Hash;
@@ -250,7 +253,6 @@ impl BatchMaker {
             .observe(size as f64);
 
         // Send the batch through the deliver channel for further processing.
-        let mut closing = false; // flag if we are closing the core.
         let (notify_done, done_sending) = tokio::sync::oneshot::channel();
         if self
             .tx_message
@@ -259,7 +261,7 @@ impl BatchMaker {
             .is_err()
         {
             tracing::debug!("{}", DagError::ShuttingDown);
-            closing = true;
+            return None;
         }
 
         // we are deliberately measuring this after the sending to the downstream
@@ -270,63 +272,21 @@ impl BatchMaker {
             .with_label_values(&[self.committee.epoch.to_string().as_str(), reason])
             .observe(self.batch_start_timestamp.elapsed().as_secs_f64());
 
-
-        /*
-
-// Now save it to disk
-        let digest = batch.digest();
-        self.store.sync_write(digest, batch).await;
-        // Wait until the batch was written
-        let _ = self.store.notify_read(digest).await;
-
-        // Also wait for sending to be done here
-        // (TODO: sending to others is an optimization, no need to wait.)
-        let _ = done_sending.await;
-
-        // Finally send to primary
-        let (primary_response, batch_done) = tokio::sync::oneshot::channel();
-        let message = WorkerOurBatchMessage {
-            digest,
-            worker_id: self.id,
-            metadata,
-        };
-        if self
-            .tx_digest
-            .send((message, Some(primary_response)))
-            .await
-            .is_err()
-        {
-            tracing::debug!("{}", DagError::ShuttingDown);
-        };
-
-        // Wait for a primary response
-        if batch_done.await.is_err() {
-            // If there is an error it means the channel closed,
-            // and therefore we drop all response handers since we
-            // cannot ensure the primary has actually signaled the
-            // batch will eventually be sent.
-            return;
-        }
-
-        */
-
         // Clone things to not capture self
         let store = self.store.clone();
         let worker_id = self.id;
         let tx_digest = self.tx_digest.clone();
         let metadata = batch.metadata.clone();
 
-        async move {
-            // The channels are closed, so we are shutting down. Nothing to do.
-            if closing {
-                return;
-            }
-
+        Some(async move {
             // Now save it to disk
             let digest = batch.digest();
 
-            store.sync_write(digest, batch).await;
-            
+            if let Err(e) = store.sync_write(digest, batch).await {
+                error!("Store failed with error: {:?}", e);
+                return;
+            }
+
             // Also wait for sending to be done here
             //
             // TODO: Here if we get back Err it means that potentially this was not send
@@ -365,6 +325,6 @@ impl BatchMaker {
             for response in responses {
                 let _ = response.send(digest);
             }
-        }
+        })
     }
 }

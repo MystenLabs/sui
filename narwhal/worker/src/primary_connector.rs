@@ -54,14 +54,14 @@ impl PrimaryConnector {
         loop {
             tokio::select! {
                 // Send the digest through the network.
-                Some((batch, _response)) = self.rx_our_batch.recv() => {
+                Some((batch, response)) = self.rx_our_batch.recv() => {
                     if futures.len() >= MAX_PENDING_DIGESTS {
                         tracing::warn!("Primary unreachable: dropping {batch:?}");
                         continue;
                     }
 
                     let handle = self.primary_client.send(self.primary_name.to_owned(), &batch).await;
-                    futures.push( handle_future(handle, _response) );
+                    futures.push( handle_future(handle, response) );
                 },
                 Some(batch) = self.rx_others_batch.recv() => {
                     if futures.len() >= MAX_PENDING_DIGESTS {

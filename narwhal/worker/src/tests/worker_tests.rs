@@ -118,7 +118,7 @@ async fn handle_clients_transactions() {
     });
 
     // Ensure the primary received the batch's digest (ie. it did not panic).
-    assert_eq!(rx_await_batch.recv().await.unwrap(), ());
+    rx_await_batch.recv().await.unwrap();
 
     // Ensure sending ended.
     assert!(join_handle.await.is_ok());
