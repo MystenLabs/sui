@@ -21,6 +21,7 @@ use move_core_types::language_storage::TypeTag;
 use move_package::BuildConfig as MoveBuildConfig;
 use serde::Serialize;
 use serde_json::json;
+use sui_config::gateway::GatewayConfig;
 use tracing::info;
 
 use sui_framework::build_move_package;
@@ -884,9 +885,23 @@ impl WalletContext {
                 config_path
             ))
         })?;
+        let client = config.get_active_env()?.init().await?;
+        let config = config.persisted(config_path);
+        let context = Self { config, client };
+        Ok(context)
+    }
 
-        let env = config.get_active_env()?;
-        let client = env.init().await?;
+    pub async fn new_with_embedded_gateway(
+        config_path: &Path,
+        gateway_conf: &GatewayConfig,
+    ) -> Result<Self, anyhow::Error> {
+        let config: SuiClientConfig = PersistedConfig::read(config_path).map_err(|err| {
+            err.context(format!(
+                "Cannot open wallet config file at {:?}",
+                config_path
+            ))
+        })?;
+        let client = SuiClient::new_embedded_client(gateway_conf)?;
         let config = config.persisted(config_path);
         let context = Self { config, client };
         Ok(context)

@@ -9,13 +9,14 @@ use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee_http_client::{HttpClient, HttpClientBuilder};
 use prometheus::Registry;
 
+use sui::client_commands::SuiClientCommands;
 use sui::config::SuiEnv;
 use sui::{client_commands::WalletContext, config::SuiClientConfig};
+use sui_config::gateway::GatewayConfig;
 use sui_config::genesis_config::GenesisConfig;
 use sui_config::utils::get_available_port;
 use sui_config::{Config, SUI_CLIENT_CONFIG, SUI_NETWORK_CONFIG};
 use sui_config::{PersistedConfig, SUI_KEYSTORE_FILENAME};
-
 use sui_json_rpc::ServerHandle;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_node::SuiNode;
@@ -95,6 +96,7 @@ impl TestCluster {
 
 pub struct TestClusterBuilder {
     genesis_config: Option<GenesisConfig>,
+    use_embedded_gateway: bool,
     fullnode_rpc_port: Option<u16>,
     fullnode_ws_port: Option<u16>,
     do_not_build_fullnode: bool,
@@ -104,6 +106,7 @@ impl TestClusterBuilder {
     pub fn new() -> Self {
         TestClusterBuilder {
             genesis_config: None,
+            use_embedded_gateway: false,
             fullnode_rpc_port: None,
             fullnode_ws_port: None,
             do_not_build_fullnode: false,
@@ -130,8 +133,28 @@ impl TestClusterBuilder {
         self
     }
 
+    // Let WalltContext to use an embedded Gateway
+    // If set to false (default), WalletContext connects to an RPC endpoint,
+    // which will be Gateway if `set_gateway_rpc_port` is set, otherwise
+    // FullNode.
+    pub fn use_embedded_gateway(mut self) -> Self {
+        self.use_embedded_gateway = true;
+        self
+    }
+
     pub async fn build(self) -> anyhow::Result<TestCluster> {
-        Ok(self.start_test_network_with_customized_ports().await?)
+        let use_embedded_gateway = self.use_embedded_gateway;
+        let mut cluster = self.start_test_network_with_customized_ports().await?;
+
+        if use_embedded_gateway {
+            SuiClientCommands::SyncClientState {
+                address: Some(cluster.get_address_0()),
+            }
+            .execute(cluster.wallet_mut())
+            .await?;
+        };
+
+        Ok(cluster)
     }
 
     async fn start_test_network_with_customized_ports(self) -> Result<TestCluster, anyhow::Error> {
@@ -177,7 +200,19 @@ impl TestClusterBuilder {
             .save()?;
 
         let wallet_conf = swarm.dir().join(SUI_CLIENT_CONFIG);
-        let wallet = WalletContext::new(&wallet_conf).await?;
+        let wallet = if self.use_embedded_gateway {
+            let dir = swarm.dir();
+            let db_folder_path = dir.join("client_db");
+            let validators = swarm.config().validator_set().to_owned();
+            let conf = GatewayConfig {
+                db_folder_path: db_folder_path.clone(),
+                validator_set: validators.clone(),
+                ..Default::default()
+            };
+            WalletContext::new_with_embedded_gateway(&wallet_conf, &conf).await?
+        } else {
+            WalletContext::new(&wallet_conf).await?
+        };
 
         Ok(TestCluster {
             swarm,
@@ -320,5 +355,9 @@ pub async fn start_a_fullnode_with_handle(
 /// test runs. Before simtest supports jsonrpc/ws, we use an embedded
 /// Gateway.
 pub fn init_cluster_builder_env_aware() -> TestClusterBuilder {
-    TestClusterBuilder::new()
+    let mut builder = TestClusterBuilder::new();
+    if cfg!(msim) {
+        builder = builder.use_embedded_gateway().do_not_build_fullnode();
+    }
+    builder
 }
