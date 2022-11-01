@@ -353,15 +353,14 @@ importers:
 
   sdk/bcs:
     specifiers:
-      '@types/bn.js': ^5.1.0
-      bn.js: ^5.2.1
+      '@size-limit/preset-small-lib': ^7.0.8
+      size-limit: ^7.0.8
       tsup: ^6.2.2
       typescript: ^4.8.3
       vitest: ^0.22.1
-    dependencies:
-      bn.js: 5.2.1
     devDependencies:
-      '@types/bn.js': 5.1.0
+      '@size-limit/preset-small-lib': 7.0.8_size-limit@7.0.8
+      size-limit: 7.0.8
       tsup: 6.2.2_typescript@4.8.3
       typescript: 4.8.3
       vitest: 0.22.1
@@ -6966,7 +6965,7 @@ packages:
   /axios/0.25.0:
     resolution: {integrity: sha512-cD8FOb0tRH3uuEe6+evtAbgJtfxr7ly3fQjYcMcuPlgkwVS9xboaVIpcDV+cYQe+yGykgwZCs1pzjntcGa6l5g==}
     dependencies:
-      follow-redirects: 1.15.1
+      follow-redirects: 1.15.1_debug@4.3.2
     transitivePeerDependencies:
       - debug
     dev: true
@@ -10883,7 +10882,7 @@ packages:
     engines: {node: '>=8.9.0'}
     dev: true
 
-  /follow-redirects/1.15.1:
+  /follow-redirects/1.15.1_debug@4.3.2:
     resolution: {integrity: sha512-yLAMQs+k0b2m7cVxpS1VKJVvoz7SS9Td1zss3XRwXj+ZDH00RJgnuLx7E44wx02kQLrdM3aOOy+FpzS7+8OizA==}
     engines: {node: '>=4.0'}
     peerDependencies:
@@ -10891,6 +10890,8 @@ packages:
     peerDependenciesMeta:
       debug:
         optional: true
+    dependencies:
+      debug: 4.3.2
     dev: true
 
   /follow-redirects/1.15.1_debug@4.3.2:
