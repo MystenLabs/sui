@@ -18,7 +18,7 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use storage::CertificateStore;
+use storage::{CertificateStore, ProposerStore};
 use store::rocks::DBMap;
 use store::Store;
 use test_utils::{temp_dir, CommitteeFixture};
@@ -274,6 +274,7 @@ async fn test_fetch_certificates_handler() {
         tx_availability_responses,
         certificate_store: certificate_store.clone(),
         payload_store: payload_store.clone(),
+        proposer_store: ProposerStore::new_for_tests(),
     };
 
     let mut current_round: Vec<_> = Certificate::genesis(&committee)
@@ -374,6 +375,7 @@ async fn test_process_payload_availability_success() {
         tx_availability_responses,
         certificate_store: certificate_store.clone(),
         payload_store: payload_store.clone(),
+        proposer_store: ProposerStore::new_for_tests(),
     };
 
     // GIVEN some mock certificates
@@ -487,6 +489,7 @@ async fn test_process_payload_availability_when_failures() {
         tx_availability_responses,
         certificate_store: certificate_store.clone(),
         payload_store: payload_store.clone(),
+        proposer_store: ProposerStore::new_for_tests(),
     };
 
     // AND some mock certificates

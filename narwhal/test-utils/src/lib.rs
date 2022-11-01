@@ -26,11 +26,14 @@ use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tracing::info;
 use types::{
     Batch, BatchDigest, Certificate, CertificateDigest, ConsensusStore, FetchCertificatesRequest,
-    FetchCertificatesResponse, Header, HeaderBuilder, PayloadAvailabilityRequest,
-    PayloadAvailabilityResponse, PrimaryMessage, PrimaryToPrimary, PrimaryToPrimaryServer,
-    PrimaryToWorker, PrimaryToWorkerServer, RequestBatchRequest, RequestBatchResponse, Round,
-    SequenceNumber, Transaction, Vote, WorkerBatchMessage, WorkerDeleteBatchesMessage,
-    WorkerReconfigureMessage, WorkerSynchronizeMessage, WorkerToWorker, WorkerToWorkerServer,
+    FetchCertificatesResponse, GetCertificatesRequest, GetCertificatesResponse, Header,
+    HeaderBuilder, HeaderBuilder, LatestHeaderRequest, LatestHeaderResponse,
+    PayloadAvailabilityRequest, PayloadAvailabilityResponse, PrimaryMessage, PrimaryToPrimary,
+    PrimaryToPrimary, PrimaryToPrimaryServer, PrimaryToPrimaryServer, PrimaryToWorker,
+    PrimaryToWorker, PrimaryToWorkerServer, PrimaryToWorkerServer, RequestBatchRequest,
+    RequestBatchResponse, Round, SequenceNumber, Transaction, Vote, WorkerBatchMessage,
+    WorkerDeleteBatchesMessage, WorkerReconfigureMessage, WorkerSynchronizeMessage, WorkerToWorker,
+    WorkerToWorker, WorkerToWorkerServer, WorkerToWorkerServer,
 };
 
 pub mod cluster;
@@ -203,10 +206,18 @@ impl PrimaryToPrimary for PrimaryToPrimaryMockServer {
     ) -> Result<anemo::Response<FetchCertificatesResponse>, anemo::rpc::Status> {
         unimplemented!()
     }
+
     async fn get_payload_availability(
         &self,
         _request: anemo::Request<PayloadAvailabilityRequest>,
     ) -> Result<anemo::Response<PayloadAvailabilityResponse>, anemo::rpc::Status> {
+        unimplemented!()
+    }
+
+    async fn get_latest_header(
+        &self,
+        _request: anemo::Request<LatestHeaderRequest>,
+    ) -> Result<anemo::Response<LatestHeaderResponse>, anemo::rpc::Status> {
         unimplemented!()
     }
 }
