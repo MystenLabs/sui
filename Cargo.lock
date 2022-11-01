@@ -8175,6 +8175,7 @@ dependencies = [
  "sui-json",
  "sui-json-rpc-types",
  "sui-macros",
+ "sui-metrics",
  "sui-network",
  "sui-simulator",
  "sui-storage",
@@ -8447,6 +8448,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-metrics"
+version = "0.7.0"
+dependencies = [
+ "once_cell",
+ "prometheus",
+ "scopeguard",
+ "telemetry-subscribers 0.2.0",
+ "tokio",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
 name = "sui-network"
 version = "0.0.0"
 dependencies = [
@@ -8477,6 +8491,7 @@ dependencies = [
  "sui-config",
  "sui-core",
  "sui-json-rpc",
+ "sui-metrics",
  "sui-network",
  "sui-simulator",
  "sui-storage",

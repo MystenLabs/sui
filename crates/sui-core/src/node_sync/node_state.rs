@@ -10,6 +10,7 @@ use crate::{
 use tokio_stream::{Stream, StreamExt};
 
 use std::collections::{hash_map, BTreeSet, HashMap};
+use sui_metrics::monitored_future;
 use sui_storage::node_sync_store::NodeSyncStore;
 use sui_types::{
     base_types::{
@@ -321,9 +322,9 @@ where
                 );
 
                 return (
-                    tokio::spawn(async move {
+                    tokio::spawn(monitored_future!(async move {
                         let _guard = state.receiver.lock().await;
-                    }),
+                    })),
                     sender,
                 );
             }
@@ -331,7 +332,9 @@ where
         };
 
         (
-            tokio::spawn(async move { state.handle_messages(&mut receiver).await }),
+            tokio::spawn(monitored_future!(async move {
+                state.handle_messages(&mut receiver).await
+            })),
             sender,
         )
     }
