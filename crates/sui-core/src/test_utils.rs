@@ -154,6 +154,7 @@ pub fn dummy_transaction_effects(tx: &Transaction) -> TransactionEffects {
             storage_cost: 0,
             storage_rebate: 0,
         },
+        mutable_input_versions: Vec::new(),
         shared_objects: Vec::new(),
         transaction_digest: *tx.digest(),
         created: Vec::new(),

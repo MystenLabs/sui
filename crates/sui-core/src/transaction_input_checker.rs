@@ -256,10 +256,8 @@ fn check_one_object(
                 !object.is_package(),
                 SuiError::MovePackageAsObject { object_id }
             );
-            // wrapped objects that are then deleted will be set to MAX,
-            // so we need to cap the sequence number at MAX - 1
             fp_ensure!(
-                sequence_number < SequenceNumber::MAX.decrement().unwrap(),
+                sequence_number < SequenceNumber::MAX_NOT_WRAPPED_AND_DELETED,
                 SuiError::InvalidSequenceNumber
             );
 

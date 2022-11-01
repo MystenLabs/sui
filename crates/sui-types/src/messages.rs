@@ -1906,6 +1906,8 @@ pub struct TransactionEffects {
     // The status of the execution
     pub status: ExecutionStatus,
     pub gas_used: GasCostSummary,
+    // The versions of all objects that were updated by this transaction (shared, owned, child).
+    pub mutable_input_versions: Vec<(ObjectID, SequenceNumber)>,
     // The object references of the shared objects used in this transaction. Empty if no shared objects were used.
     pub shared_objects: Vec<ObjectRef>,
     // The transaction digest
@@ -2052,6 +2054,7 @@ impl Default for TransactionEffects {
                 storage_cost: 0,
                 storage_rebate: 0,
             },
+            mutable_input_versions: Vec::new(),
             shared_objects: Vec::new(),
             transaction_digest: TransactionDigest::random(),
             created: Vec::new(),

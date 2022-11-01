@@ -459,6 +459,12 @@ impl<S> TemporaryStore<S> {
         status: ExecutionStatus,
         gas_object_ref: ObjectRef,
     ) -> (InnerTemporaryStore, TransactionEffects) {
+        let mutable_input_versions = self
+            .mutable_input_refs
+            .iter()
+            .map(|(id, v, _)| (*id, *v))
+            .collect();
+
         let written: BTreeMap<ObjectID, (ObjectRef, Owner, WriteKind)> = self
             .written
             .iter()
@@ -504,6 +510,7 @@ impl<S> TemporaryStore<S> {
         let effects = TransactionEffects {
             status,
             gas_used: gas_cost_summary,
+            mutable_input_versions,
             shared_objects: shared_object_refs,
             transaction_digest: *transaction_digest,
             created,

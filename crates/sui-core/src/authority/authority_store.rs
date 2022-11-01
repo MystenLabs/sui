@@ -1015,19 +1015,10 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         write_batch =
             write_batch.delete_batch(&self.perpetual_tables.owner_index, owners_to_delete)?;
         let mutated_objects = effects
-            .mutated
+            .mutable_input_versions
             .iter()
-            .map(|(r, _)| r)
-            .chain(effects.deleted.iter())
-            .chain(effects.wrapped.iter())
-            .map(|(id, version, _)| {
-                ObjectKey(
-                    *id,
-                    version
-                        .decrement()
-                        .expect("version revert should never fail"),
-                )
-            });
+            .map(|(id, version)| ObjectKey(*id, *version));
+
         let old_objects = self
             .perpetual_tables
             .objects
