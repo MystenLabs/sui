@@ -19,3 +19,14 @@ export const lockWallet = createAsyncThunk<void, void, AppThunkConfig>(
         await background.lockWallet();
     }
 );
+
+export const setKeyringLockTimeout = createAsyncThunk<
+    void,
+    { timeout: number },
+    AppThunkConfig
+>(
+    'wallet-set-keyring-lock-timeout',
+    async ({ timeout }, { extra: { background } }) => {
+        await background.setKeyringLockTimeout(timeout);
+    }
+);

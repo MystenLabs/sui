@@ -12,7 +12,7 @@ use std::collections::HashSet;
 
 use sui::client_commands::{SuiClientCommands, WalletContext};
 use sui_json_rpc_types::{
-    SuiExecutionStatus, SuiObjectRead, SuiTransactionKind, SuiTransactionResponse, SuiTransferSui,
+    SuiExecutionStatus, SuiObjectRead, SuiPaySui, SuiTransactionKind, SuiTransactionResponse,
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_types::object::Owner;
@@ -40,7 +40,7 @@ pub struct SimpleFaucet {
 }
 
 const DEFAULT_GAS_BUDGET: u64 = 1000;
-const TRANSFER_SUI_GAS: u64 = 100;
+const PAY_SUI_GAS: u64 = 1000;
 
 impl SimpleFaucet {
     pub async fn new(
@@ -93,37 +93,31 @@ impl SimpleFaucet {
         })
     }
 
-    async fn select_coins(
+    async fn prepare_gas_coin(
         &self,
-        number_of_coins: usize,
-        transfer_amount: u64,
+        total_amount: u64,
         uuid: Uuid,
-    ) -> anyhow::Result<Vec<ObjectID>> {
-        assert!(number_of_coins > 0);
+    ) -> anyhow::Result<Option<ObjectID>> {
         // If the gas candidate queue is exhausted, the request will be
         // suspended indefinitely until a producer puts in more candidate
         // gas objects. At the same time, other requests will be blocked by the
         // lock acquisition as well.
         let mut consumer = self.consumer.lock().await;
         debug!(?uuid, "Got consumer lock, pulling coins.");
-        let mut coins = Vec::with_capacity(number_of_coins);
         loop {
             match tokio::time::timeout(Duration::from_secs(30), consumer.recv()).await {
                 Ok(Some(coin)) => {
                     debug!(?uuid, "Pulling coin from pool {:?}", coin);
                     let gas_coin = self.get_gas_coin(coin).await?;
                     if let Some(gas_coin) = gas_coin {
-                        if gas_coin.value() >= transfer_amount + TRANSFER_SUI_GAS {
+                        if gas_coin.value() >= total_amount + PAY_SUI_GAS {
                             info!(
                                 ?uuid,
                                 "Planning to use coin from pool {:?}, current balance: {}",
                                 coin,
                                 gas_coin.value()
                             );
-                            coins.push(coin);
-                            if coins.len() == number_of_coins {
-                                break;
-                            }
+                            return Ok(Some(coin));
                         } else {
                             // If amount is not big enough, remove it
                             warn!(
@@ -145,13 +139,12 @@ impl SimpleFaucet {
                     unreachable!("channel is closed");
                 }
                 Err(_) => {
-                    error!(?uuid, "Timeout when getting coins from the queue");
+                    error!(?uuid, "Timeout when getting gas coin from the queue");
                     break;
                 }
             }
         }
-
-        Ok(coins)
+        Ok(None)
     }
 
     /// Check if the gas coin is still valid. A valid gas coin is
@@ -185,181 +178,176 @@ impl SimpleFaucet {
     async fn transfer_gases(
         &self,
         amounts: &[u64],
-        to: SuiAddress,
+        recipient: SuiAddress,
         uuid: Uuid,
-    ) -> Result<Vec<(TransactionDigest, ObjectID, u64, ObjectID)>, FaucetError> {
+    ) -> Result<(TransactionDigest, Vec<ObjectID>, Vec<u64>), FaucetError> {
         let number_of_coins = amounts.len();
-        // We assume the amounts are the same
-        let coins = self
-            .select_coins(number_of_coins, amounts[0], uuid)
+        let total_amount: u64 = amounts.iter().sum();
+
+        let gas_coin_opt = self
+            .prepare_gas_coin(total_amount, uuid)
             .await
             .tap_ok(|res| {
-                debug!(recipient=?to, ?uuid, "Planning to use coins: {:?}", res);
+                debug!(recipient=?recipient, ?uuid, "Planning to use gas coin: {:?}", res);
             })
-            .tap_err(|err| error!(?uuid, "Failed to select coins: {:?}", err.to_string()))
-            .map_err(|err| {
-                FaucetError::Internal(format!("Failed to select coins: {:?}", err.to_string()))
-            })?;
-
-        if coins.is_empty() {
-            return Err(FaucetError::Internal("Failed to select coins".into()));
-        }
-
-        let futures: Vec<_> = coins
-            .iter()
-            .zip(amounts)
-            .map(|(coin_id, amount)| {
-                self.transfer_sui(
-                    *coin_id,
-                    self.active_address,
-                    to,
-                    DEFAULT_GAS_BUDGET,
-                    *amount,
-                    uuid,
+            .tap_err(|err| {
+                error!(
+                    ?uuid,
+                    "Failed to prepare gas coin with err: {:?}",
+                    err.to_string()
                 )
             })
-            .collect();
+            .map_err(|err| {
+                FaucetError::Internal(format!(
+                    "Failed to prepare gas coin with err: {:?}",
+                    err.to_string()
+                ))
+            })?;
+        let interal_err = FaucetError::Internal("Failed to prepare coin, None returned.".into());
+        let gas_coin = gas_coin_opt.ok_or(interal_err)?;
 
-        let results = futures::future::join_all(futures).await;
+        let result = self
+            .execute_pay_sui_txn_with_retrials(
+                gas_coin,
+                self.active_address,
+                recipient,
+                amounts,
+                DEFAULT_GAS_BUDGET,
+                uuid,
+            )
+            .await;
 
         // Once transactions are done, in despite of success or failure,
         // we put back the coins. The producer should never wait indefinitely,
         // in that the channel is initialized with big enough capacity.
         let producer = self.producer.lock().await;
-        debug!(?uuid, "Got producer lock, putting back coins.");
-        for coin in coins {
-            producer
-                .try_send(coin)
-                .expect("unexpected - queue is large enough to hold all coins");
-            debug!(?uuid, "Recycling coin {:?}", coin);
-        }
+        debug!(
+            ?uuid,
+            "Got producer lock and recycling gas coin {:?}.", gas_coin
+        );
+        producer
+            .try_send(gas_coin)
+            .expect("unexpected - queue is large enough to hold all coins");
+        debug!(?uuid, "Recycled coin {:?}", gas_coin);
         drop(producer);
 
-        let responses: Vec<_> = results
-            .into_iter()
-            .filter(|res| {
-                if res.is_ok() {
-                    true
-                } else {
-                    error!(?uuid, "Encountered error in transfer sui: {:?}", res);
-                    false
-                }
-            })
-            .map(|res| {
-                let response = res.unwrap();
-                let txns = response.certificate.data.transactions;
+        match result {
+            Ok(res) => {
+                let txns = res.certificate.data.transactions;
                 if txns.len() != 1 {
-                    panic!("TransferSui Transaction should create one and exactly one txn, but got {:?}", txns);
+                    panic!(
+                        "PaySui Transaction should create one and exactly one txn, but got {:?}",
+                        txns
+                    );
                 }
-                let created = response.effects.created;
-                if created.len() != 1 {
-                    panic!("TransferSui Transaction should create one and exactly one object, but got {:?}", created);
+                let created = res.effects.created;
+                if created.len() != number_of_coins {
+                    panic!(
+                        "PaySui Transaction should create exact {:?} new coins, but got {:?}",
+                        number_of_coins, created
+                    );
                 }
                 let txn = &txns[0];
-                let obj = &created[0];
-                if let SuiTransactionKind::TransferSui(SuiTransferSui{recipient, amount: Some(amount)}) = txn {
-                    assert_eq!(to, *recipient);
-                    (response.certificate.transaction_digest, obj.reference.object_id, *amount, response.certificate.data.gas_payment.object_id)
+                if let SuiTransactionKind::PaySui(SuiPaySui {
+                    // coins here are input coins, rather than the created coins under recipients.
+                    coins: _,
+                    recipients,
+                    amounts,
+                }) = txn
+                {
+                    assert!(recipients
+                        .iter()
+                        .all(|sent_recipient| sent_recipient == &recipient));
+                    let coin_ids: Vec<ObjectID> = created
+                        .iter()
+                        .map(|created_coin_owner_ref| created_coin_owner_ref.reference.object_id)
+                        .collect();
+                    Ok((
+                        res.certificate.transaction_digest,
+                        coin_ids,
+                        amounts.clone(),
+                    ))
                 } else {
-                    panic!("Expect SuiTransactionKind::TransferSui(SuiTransferSui) to address {} with Some(amount) but got {:?}", to, txn);
+                    panic!("Expect SuiTransactionKind::PaySui(SuiPaySui) to send coins to address {} but got txn {:?}", recipient, txn);
                 }
-            })
-            .collect();
-
-        Ok(responses)
+            }
+            Err(e) => Err(FaucetError::Internal(format!(
+                "Encountered error in transfer gases with err: {:?}.",
+                e
+            ))),
+        }
     }
 
-    async fn construct_transfer_sui_txn_with_retry(
+    async fn execute_pay_sui_txn_with_retrials(
         &self,
         coin_id: ObjectID,
         signer: SuiAddress,
         recipient: SuiAddress,
+        amounts: &[u64],
         budget: u64,
-        amount: u64,
         uuid: Uuid,
-    ) -> Result<TransactionData, anyhow::Error> {
-        // if needed, retry 2 times with the following interval
+    ) -> Result<SuiTransactionResponse, anyhow::Error> {
         let retry_intervals_ms = [Duration::from_millis(500), Duration::from_millis(1000)];
-
-        let mut data = self
-            .construct_transfer_sui_txn(coin_id, signer, recipient, budget, amount)
+        let mut retry_iter = retry_intervals_ms.iter();
+        let mut res = self
+            .execute_pay_sui_txn(coin_id, signer, recipient, amounts, budget, uuid)
             .await;
-        let mut iter = retry_intervals_ms.iter();
-        while data.is_err() {
-            if let Some(duration) = iter.next() {
-                tokio::time::sleep(*duration).await;
+        while res.is_err() {
+            if let Some(interval) = retry_iter.next() {
+                tokio::time::sleep(*interval).await;
                 debug!(
                     ?recipient,
                     ?coin_id,
                     ?uuid,
-                    "Retrying constructing TransferSui txn. Previous error: {:?}",
-                    &data,
+                    "Retrying executing PaySui transaction in faucet, previous error: {:?}",
+                    &res,
                 );
+                res = self
+                    .execute_pay_sui_txn(coin_id, signer, recipient, amounts, budget, uuid)
+                    .await;
             } else {
                 warn!(
                     ?recipient,
                     ?coin_id,
                     ?uuid,
-                    "Failed to construct TransferSui txn after {} retries with interval {:?}",
+                    "Failed to execute PaySui transactions in faucet with {} retries and intervals {:?}",
                     retry_intervals_ms.len(),
                     &retry_intervals_ms
                 );
                 break;
             }
-            data = self
-                .construct_transfer_sui_txn(coin_id, signer, recipient, budget, amount)
-                .await;
         }
-        data
+        res
     }
 
-    async fn construct_transfer_sui_txn(
+    async fn execute_pay_sui_txn(
         &self,
         coin_id: ObjectID,
         signer: SuiAddress,
         recipient: SuiAddress,
+        amounts: &[u64],
         budget: u64,
-        amount: u64,
-    ) -> Result<TransactionData, anyhow::Error> {
-        self.wallet
-            .client
-            .transaction_builder()
-            .transfer_sui(signer, coin_id, budget, recipient, Some(amount))
-            .await
-            .map_err(|e| {
-                anyhow::anyhow!(
-                    "Failed to construct TransferSui transaction for coin {:?}, {:?}",
-                    coin_id,
-                    e
-                )
-            })
-    }
-
-    async fn transfer_sui(
-        &self,
-        coin_id: ObjectID,
-        signer: SuiAddress,
-        recipient: SuiAddress,
-        budget: u64,
-        amount: u64,
         uuid: Uuid,
     ) -> Result<SuiTransactionResponse, anyhow::Error> {
         let context = &self.wallet;
-        let data = self
-            .construct_transfer_sui_txn_with_retry(coin_id, signer, recipient, budget, amount, uuid)
+        let txn_data = self
+            .build_pay_sui_txn(coin_id, signer, recipient, amounts, budget)
             .await?;
+        let signature = context
+            .config
+            .keystore
+            .sign(&signer, &txn_data.to_bytes())?;
 
-        let signature = context.config.keystore.sign(&signer, &data.to_bytes())?;
-
-        let tx = Transaction::new(data, signature).verify()?;
+        let tx = Transaction::new(txn_data, signature).verify()?;
         let tx_digest = *tx.digest();
         info!(
             ?tx_digest,
             ?recipient,
             ?coin_id,
             ?uuid,
-            "Broadcasting transfer obj txn"
+            "PaySui transaction in faucet."
         );
+
         let response = context
             .client
             .quorum_driver()
@@ -394,6 +382,31 @@ impl SimpleFaucet {
             timestamp_ms: None,
             parsed_data: None,
         })
+    }
+
+    async fn build_pay_sui_txn(
+        &self,
+        coin_id: ObjectID,
+        signer: SuiAddress,
+        recipient: SuiAddress,
+        amounts: &[u64],
+        budget: u64,
+    ) -> Result<TransactionData, anyhow::Error> {
+        let recipients: Vec<SuiAddress> =
+            std::iter::repeat(recipient).take(amounts.len()).collect();
+
+        self.wallet
+            .client
+            .transaction_builder()
+            .pay_sui(signer, vec![coin_id], recipients, amounts.to_vec(), budget)
+            .await
+            .map_err(|e| {
+                anyhow::anyhow!(
+                    "Failed to build PaySui transaction for coin {:?}, with err {:?}",
+                    coin_id,
+                    e
+                )
+            })
     }
 
     #[cfg(test)]
@@ -441,35 +454,27 @@ impl Faucet for SimpleFaucet {
 
         let timer = self.metrics.process_latency.start_timer();
 
-        let results = self.transfer_gases(amounts, recipient, id).await?;
-
-        if results.len() != amounts.len() {
+        let (digest, coin_ids, sent_amounts) = self.transfer_gases(amounts, recipient, id).await?;
+        if coin_ids.len() != amounts.len() {
             error!(
                 uuid = ?id, ?recipient,
-                "Requested {} coins but only got {}",
+                "Requested {} coins but got {}",
                 amounts.len(),
-                results.len()
+                coin_ids.len()
             );
         }
-
-        if results.is_empty() {
-            return Err(FaucetError::Transfer(
-                "Failed to transfer any coins to the requestor".into(),
-            ));
-        }
-
         let elapsed = timer.stop_and_record();
 
-        info!(uuid = ?id, ?recipient, ?results, "Transfer txn succeeded in {} secs", elapsed);
+        info!(uuid = ?id, ?recipient, ?digest, "PaySui txn succeeded in {} secs", elapsed);
         self.metrics.total_requests_succeeded.inc();
-
         Ok(FaucetReceipt {
-            sent: results
+            sent: coin_ids
                 .iter()
-                .map(|(digest, obj_id, amount, _gas_id)| CoinInfo {
-                    transfer_tx_digest: *digest,
-                    amount: *amount,
-                    id: *obj_id,
+                .zip(sent_amounts)
+                .map(|(coin_id, sent_amount)| CoinInfo {
+                    transfer_tx_digest: digest,
+                    amount: sent_amount,
+                    id: *coin_id,
                 })
                 .collect(),
         })
@@ -562,20 +567,19 @@ mod tests {
         let mut faucet = SimpleFaucet::new(context, &prom_registry).await.unwrap();
 
         // Now we transfer one gas out
-        let res = SuiClientCommands::TransferSui {
-            to: SuiAddress::random_for_testing_only(),
-            sui_coin_object_id: *bad_gas.id(),
-            amount: None,
+        let res = SuiClientCommands::PayAllSui {
+            input_coins: vec![*bad_gas.id()],
+            recipient: SuiAddress::random_for_testing_only(),
             gas_budget: 50000,
         }
         .execute(faucet.wallet_mut())
         .await
         .unwrap();
 
-        if let SuiClientCommandResult::TransferSui(_tx_cert, effects) = res {
+        if let SuiClientCommandResult::PayAllSui(_tx_cert, effects) = res {
             assert!(matches!(effects.status, SuiExecutionStatus::Success));
         } else {
-            panic!("transfer command did not return SuiClientCommandResult::TransferSui");
+            panic!("PayAllSui command did not return SuiClientCommandResult::PayAllSui");
         };
 
         let number_of_coins = gases.len();
@@ -616,7 +620,7 @@ mod tests {
         let tiny_value = 1;
         let res = SuiClientCommands::SplitCoin {
             coin_id: *gases[0].id(),
-            amounts: Some(vec![tiny_value + TRANSFER_SUI_GAS]),
+            amounts: Some(vec![tiny_value + PAY_SUI_GAS]),
             gas_budget: 50000,
             gas: None,
             count: None,
@@ -629,7 +633,7 @@ mod tests {
             assert!(matches!(resp.effects.status, SuiExecutionStatus::Success));
             resp.effects.created[0].reference.object_id
         } else {
-            panic!("transfer command did not return SuiClientCommandResult::TransferSui");
+            panic!("split command did not return SuiClientCommandResult::SplitCoin");
         };
 
         // Get the latest list of gas
@@ -639,7 +643,7 @@ mod tests {
             .find(|gas| gas.id() == &tiny_coin_id)
             .unwrap()
             .value();
-        assert_eq!(tiny_amount, tiny_value + TRANSFER_SUI_GAS);
+        assert_eq!(tiny_amount, tiny_value + PAY_SUI_GAS);
 
         let gases: HashSet<ObjectID> = HashSet::from_iter(gases.into_iter().map(|gas| *gas.id()));
 
@@ -647,7 +651,7 @@ mod tests {
         let mut faucet = SimpleFaucet::new(context, &prom_registry).await.unwrap();
 
         let number_of_coins = gases.len();
-        // Ask for a value higher than tiny coin + TRANSFER_SUI_GAS
+        // Ask for a value higher than tiny coin + PAY_SUI_GAS
         let amounts = &vec![tiny_value + 1; number_of_coins - 1];
         // We traverse the the list twice, which must trigger the tiny gas to be examined but not used
         let _ = futures::future::join_all((0..2).map(|_| {

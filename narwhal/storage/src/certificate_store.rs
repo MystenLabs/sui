@@ -270,8 +270,8 @@ impl CertificateStore {
             .collect()
     }
 
-    /// Retrieves the certificates of the last round
-    pub fn last_round(&self) -> StoreResult<Vec<Certificate>> {
+    /// Retrieves the certificates of the last round and the round before that
+    pub fn last_two_rounds_certs(&self) -> StoreResult<Vec<Certificate>> {
         // starting from the last element - hence the last round - move backwards until
         // we find certificates of different round.
         let certificates_reverse = self.certificate_id_by_round.iter().skip_to_last().reverse();
@@ -284,13 +284,11 @@ impl CertificateStore {
 
             // We treat zero as special value (round unset) in order to
             // capture the last certificate's round.
+            // We are now in a round less than the previous so we want to
+            // stop consuming
             if round == 0 {
                 round = certificate_round;
-            }
-
-            // We are now in a different round so we want to
-            // stop consuming anymore
-            if round != certificate_round {
+            } else if certificate_round < round - 1 {
                 break;
             }
 
@@ -502,7 +500,7 @@ mod test {
     }
 
     #[tokio::test]
-    async fn test_last_round() {
+    async fn test_last_two_rounds() {
         // GIVEN
         let store = new_store(temp_dir());
 
@@ -514,15 +512,18 @@ mod test {
         store.write_all(certs).unwrap();
 
         // WHEN
-        let result = store.last_round().unwrap();
+        let result = store.last_two_rounds_certs().unwrap();
         let last_round_number = store.last_round_number(&origin).unwrap().unwrap();
         let last_round_number_not_exist = store.last_round_number(&PublicKey::default()).unwrap();
 
         // THEN
-        assert_eq!(result.len(), 4);
+        assert_eq!(result.len(), 8);
         assert_eq!(last_round_number, 50);
         for certificate in result {
-            assert_eq!(certificate.round(), last_round_number);
+            assert!(
+                (certificate.round() == last_round_number)
+                    || (certificate.round() == last_round_number - 1)
+            );
         }
         assert!(last_round_number_not_exist.is_none());
     }
@@ -533,7 +534,7 @@ mod test {
         let store = new_store(temp_dir());
 
         // WHEN
-        let result = store.last_round().unwrap();
+        let result = store.last_two_rounds_certs().unwrap();
         let last_round_number = store.last_round_number(&PublicKey::default()).unwrap();
 
         // THEN

@@ -35,7 +35,7 @@ async fn make_batch() {
     // Ensure the batch is as expected.
     let expected_batch = Batch::new(vec![tx.clone(), tx.clone()]);
     let batch = rx_message.recv().await.unwrap();
-    assert_eq!(batch, expected_batch);
+    assert_eq!(batch.transactions, expected_batch.transactions);
 }
 
 #[tokio::test]

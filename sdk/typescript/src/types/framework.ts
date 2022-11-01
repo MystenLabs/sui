@@ -18,16 +18,20 @@ import { getOption, Option } from './option';
 import { StructTag } from './sui-bcs';
 import { isSuiMoveObject } from './index.guard';
 
-export const SUI_PACKAGE_ID = '0x2';
-export const COIN_TYPE = `${SUI_PACKAGE_ID}::coin::Coin`;
+export const SUI_FRAMEWORK_ADDRESS = '0x2';
+export const MOVE_STDLIB_ADDRESS = '0x1';
+export const OBJECT_MODULE_NAME = 'object';
+export const UID_STRUCT_NAME = 'UID';
+export const ID_STRUCT_NAME = 'ID';
+export const SUI_TYPE_ARG = `${SUI_FRAMEWORK_ADDRESS}::sui::SUI`;
+
+export const COIN_TYPE = `${SUI_FRAMEWORK_ADDRESS}::coin::Coin`;
 
 // `sui::pay` module is used for Coin management (split, join, join_and_transfer etc);
 export const PAY_MODULE_NAME = 'pay';
 export const PAY_SPLIT_COIN_VEC_FUNC_NAME = 'split_vec';
 export const PAY_JOIN_COIN_FUNC_NAME = 'join';
 const COIN_TYPE_ARG_REGEX = /^0x2::coin::Coin<(.+)>$/;
-
-export const SUI_TYPE_ARG = '0x2::sui::SUI';
 
 type ObjectData = ObjectDataFull | SuiObjectInfo;
 type ObjectDataFull = GetObjectDataResponse | SuiMoveObject;

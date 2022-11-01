@@ -16,7 +16,7 @@ fdlimit = "0.2"
 futures = "0.3.24"
 indexmap = { version = "1.9.1", features = ["serde"] }
 itertools = "0.10.5"
-multiaddr = "0.14.0"
+multiaddr = "0.15.0"
 prometheus = "0.13.2"
 rand = "0.8.5"
 serde = { version = "1.0.144", features = ["derive"] }
@@ -38,9 +38,10 @@ types = { path = "../types", package = "narwhal-types" }
 worker = { path = "../worker", package = "narwhal-worker" }
 mysten-network.workspace = true
 
-store = { version = "0.1.0", package = "typed-store"}
+store = { version = "0.4.0", package = "typed-store"}
 workspace-hack.workspace = true
 telemetry-subscribers.workspace = true
 
 anemo.workspace = true
 tower = { version = "0.4.13", features = ["full"] }
+once_cell = "1.16.0"

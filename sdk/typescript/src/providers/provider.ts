@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { SignatureScheme } from '../cryptography/publickey';
+import { HttpHeaders } from '../rpc/client';
 import {
   CoinDenominationInfoResponse,
   GetObjectDataResponse,
@@ -28,6 +29,7 @@ import {
   TransactionQuery,
   Ordering,
   RpcApiVersion,
+  FaucetResponse,
 } from '../types';
 
 ///////////////////////////////
@@ -40,8 +42,18 @@ export abstract class Provider {
    * @return the current version of the RPC API that the provider is
    * connected to, or undefined if any error occurred
    */
-
   abstract getRpcApiVersion(): Promise<RpcApiVersion | undefined>;
+
+  // Faucet
+  /**
+   * Request gas tokens from a faucet server
+   * @param recipient the address for receiving the tokens
+   * @param httpHeaders optional request headers
+   */
+  abstract requestSuiFromFaucet(
+    recipient: SuiAddress,
+    httpHeaders?: HttpHeaders
+  ): Promise<FaucetResponse>;
 
   // Objects
   /**

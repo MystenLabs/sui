@@ -6,12 +6,14 @@ use crate::{
 };
 use anemo::async_trait;
 use anyhow::Result;
-use config::Committee;
-use crypto::PublicKey;
+use config::{Committee, Epoch, WorkerId};
+use crypto::{PublicKey, Signature};
 use fastcrypto::{hash::Hash, traits::KeyPair, SignatureService};
+use indexmap::IndexMap;
 use itertools::Itertools;
 use network::P2pNetwork;
 use node::NodeStorage;
+use once_cell::sync::OnceCell;
 use prometheus::Registry;
 use std::{
     collections::{BTreeSet, HashMap},
@@ -28,9 +30,10 @@ use tokio::{
     time::sleep,
 };
 use types::{
-    Certificate, CertificateDigest, ConsensusStore, FetchCertificatesRequest,
-    FetchCertificatesResponse, PrimaryMessage, PrimaryToPrimary, PrimaryToPrimaryServer,
-    ReconfigureNotification, Round,
+    BatchDigest, Certificate, CertificateDigest, ConsensusStore, FetchCertificatesRequest,
+    FetchCertificatesResponse, GetCertificatesRequest, GetCertificatesResponse, Header,
+    HeaderDigest, Metadata, PayloadAvailabilityRequest, PayloadAvailabilityResponse,
+    PrimaryMessage, PrimaryToPrimary, PrimaryToPrimaryServer, ReconfigureNotification, Round,
 };
 
 struct FetchCertificateProxy {
@@ -49,7 +52,12 @@ impl PrimaryToPrimary for FetchCertificateProxy {
             request
         );
     }
-
+    async fn get_certificates(
+        &self,
+        _request: anemo::Request<GetCertificatesRequest>,
+    ) -> Result<anemo::Response<GetCertificatesResponse>, anemo::rpc::Status> {
+        unimplemented!()
+    }
     async fn fetch_certificates(
         &self,
         request: anemo::Request<FetchCertificatesRequest>,
@@ -61,6 +69,12 @@ impl PrimaryToPrimary for FetchCertificateProxy {
         Ok(anemo::Response::new(
             self.response.lock().await.recv().await.unwrap(),
         ))
+    }
+    async fn get_payload_availability(
+        &self,
+        _request: anemo::Request<PayloadAvailabilityRequest>,
+    ) -> Result<anemo::Response<PayloadAvailabilityResponse>, anemo::rpc::Status> {
+        unimplemented!()
     }
 }
 
@@ -127,6 +141,20 @@ fn verify_certificates_not_in_store(
         .map_while(|c| c)
         .next()
         .is_none());
+}
+
+// Unsed below to construct malformed Headers
+// Note: this should always mimic the Header struct, only changing the visibility of the id field to public
+#[allow(dead_code)]
+struct BadHeader {
+    pub author: PublicKey,
+    pub round: Round,
+    pub epoch: Epoch,
+    pub payload: IndexMap<BatchDigest, WorkerId>,
+    pub parents: BTreeSet<CertificateDigest>,
+    pub id: OnceCell<HeaderDigest>,
+    pub signature: Signature,
+    pub metadata: Metadata,
 }
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
@@ -215,6 +243,7 @@ async fn fetch_certificates_basic() {
         rx_reconfigure.clone(),
         rx_header_waiter,
         tx_headers_loopback,
+        tx_primary_messages.clone(),
         metrics.clone(),
         P2pNetwork::new(client_network.clone()),
     );
@@ -279,7 +308,7 @@ async fn fetch_certificates_basic() {
 
     // Avoid any sort of missing payload by pre-populating the batch
     for (digest, worker_id) in headers.iter().flat_map(|h| h.payload.iter()) {
-        payload_store.write((*digest, *worker_id), 0u8).await;
+        payload_store.async_write((*digest, *worker_id), 0u8).await;
     }
 
     let total_certificates = fixture.authorities().count() * rounds as usize;
@@ -414,7 +443,14 @@ async fn fetch_certificates_basic() {
     certs.push(cert);
     // Add cert with incorrect digest.
     let mut cert = certificates[num_written].clone();
-    cert.header.id = Default::default();
+    // This is a bit tedious to craft
+    let cert_header = unsafe { std::mem::transmute::<Header, BadHeader>(cert.header) };
+    let wrong_header = BadHeader {
+        id: OnceCell::with_value(HeaderDigest::default()),
+        ..cert_header
+    };
+    let wolf_header = unsafe { std::mem::transmute::<BadHeader, Header>(wrong_header) };
+    cert.header = wolf_header;
     certs.push(cert);
     // Add cert without all parents in storage.
     certs.push(certificates[num_written + 1].clone());

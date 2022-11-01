@@ -252,6 +252,7 @@ async fn main() -> Result<()> {
         config.log_file = Some(opts.log_path);
     }
     let _guard = config.with_env().init();
+
     let registry: Arc<Registry> = Arc::new(metrics::start_prometheus_server(
         format!("{}:{}", opts.client_metric_host, opts.client_metric_port)
             .parse()

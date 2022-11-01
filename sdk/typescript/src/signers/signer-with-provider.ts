@@ -4,9 +4,11 @@
 import { JsonRpcProvider } from '../providers/json-rpc-provider';
 import { Provider } from '../providers/provider';
 import { VoidProvider } from '../providers/void-provider';
+import { HttpHeaders } from '../rpc/client';
 import { Base64DataBuffer } from '../serialization/base64';
 import {
   ExecuteTransactionRequestType,
+  FaucetResponse,
   SuiAddress,
   SuiExecuteTransactionResponse,
 } from '../types';
@@ -50,12 +52,26 @@ export abstract class SignerWithProvider implements Signer {
   ///////////////////
   // Sub-classes MAY override these
 
+  /**
+   * Request gas tokens from a faucet server and send to the signer
+   * address
+   * @param httpHeaders optional request headers
+   */
+  async requestSuiFromFaucet(
+    httpHeaders?: HttpHeaders
+  ): Promise<FaucetResponse> {
+    return this.provider.requestSuiFromFaucet(
+      await this.getAddress(),
+      httpHeaders
+    );
+  }
+
   constructor(provider?: Provider, serializer?: TxnDataSerializer) {
     this.provider = provider || new VoidProvider();
     let endpoint = '';
     let skipDataValidation = false;
     if (this.provider instanceof JsonRpcProvider) {
-      endpoint = this.provider.endpoint;
+      endpoint = this.provider.endpoints.fullNode;
       skipDataValidation = this.provider.options.skipDataValidation!;
     }
     this.serializer =

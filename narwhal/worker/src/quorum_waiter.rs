@@ -119,7 +119,7 @@ impl QuorumWaiter {
                                 if total_stake >= threshold {
                                     let digest = batch.digest();
                                     let metadata = batch.metadata.clone();
-                                    self.store.write(digest, batch).await;
+                                    self.store.async_write(digest, batch).await;
                                     if self.tx_our_batch.send(WorkerOurBatchMessage{
                                         digest,
                                         worker_id: self.id,

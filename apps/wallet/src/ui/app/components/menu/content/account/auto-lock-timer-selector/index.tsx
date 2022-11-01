@@ -8,24 +8,25 @@ import * as Yup from 'yup';
 
 import Button from '_app/shared/button';
 import InputWithAction from '_app/shared/input-with-action';
+import { setKeyringLockTimeout } from '_app/wallet/actions';
 import Alert from '_components/alert';
 import Loading from '_components/loading';
+import { useAppDispatch } from '_hooks';
 import {
     AUTO_LOCK_TIMER_DEFAULT_INTERVAL_MINUTES,
     AUTO_LOCK_TIMER_STORAGE_KEY,
+    AUTO_LOCK_TIMER_MIN_MINUTES,
+    AUTO_LOCK_TIMER_MAX_MINUTES,
 } from '_src/shared/constants';
 
 import st from './AutoLockTimerSelector.module.scss';
-
-const MIN_TIMER_MINUTES = 1;
-const MAX_TIMER_MINUTES = 30;
 
 const validation = Yup.object({
     timer: Yup.number()
         .integer()
         .required()
-        .min(MIN_TIMER_MINUTES)
-        .max(MAX_TIMER_MINUTES)
+        .min(AUTO_LOCK_TIMER_MIN_MINUTES)
+        .max(AUTO_LOCK_TIMER_MAX_MINUTES)
         .label('Auto-lock timer'),
 });
 
@@ -41,15 +42,22 @@ export default function AutoLockTimerSelector() {
                 setTimerMinutes(storedTimer)
             );
     }, []);
+    const dispatch = useAppDispatch();
     return (
         <Loading loading={timerMinutes === null}>
             <Formik
                 initialValues={{ timer: timerMinutes }}
                 validationSchema={validation}
                 onSubmit={async ({ timer }) => {
-                    await Browser.storage.local.set({
-                        [AUTO_LOCK_TIMER_STORAGE_KEY]: timer,
-                    });
+                    if (timer !== null) {
+                        try {
+                            await dispatch(
+                                setKeyringLockTimeout({ timeout: timer })
+                            ).unwrap();
+                        } catch (e) {
+                            // log it?
+                        }
+                    }
                     setTimerMinutes(timer);
                 }}
                 enableReinitialize={true}
@@ -59,8 +67,8 @@ export default function AutoLockTimerSelector() {
                         <Field
                             component={InputWithAction}
                             name="timer"
-                            min={MIN_TIMER_MINUTES}
-                            max={MAX_TIMER_MINUTES}
+                            min={AUTO_LOCK_TIMER_MIN_MINUTES}
+                            max={AUTO_LOCK_TIMER_MAX_MINUTES}
                             step="1"
                             disabled={isSubmitting}
                         >

@@ -1,8 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
-use std::fmt::{Display, Formatter};
+use std::fmt::{Debug, Display, Formatter};
 use std::str::FromStr;
 
 use axum::response::{IntoResponse, Response};
@@ -15,14 +14,12 @@ use serde_with::serde_as;
 use strum_macros::EnumIter;
 use strum_macros::EnumString;
 
+use fastcrypto::encoding::{Base64, Hex};
 use sui_types::base_types::{
-    ObjectID, ObjectInfo, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
-    TRANSACTION_DIGEST_LENGTH,
+    ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest, TRANSACTION_DIGEST_LENGTH,
 };
 use sui_types::crypto::SignatureScheme;
 use sui_types::messages::ExecutionStatus;
-use sui_types::sui_serde::Base64;
-use sui_types::sui_serde::Hex;
 use sui_types::sui_serde::Readable;
 
 use crate::errors::Error;
@@ -137,7 +134,7 @@ impl From<u64> for SignedValue {
     fn from(value: u64) -> Self {
         Self {
             negative: false,
-            value: value.try_into().unwrap(),
+            value: value as u128,
         }
     }
 }
@@ -151,11 +148,20 @@ impl From<u128> for SignedValue {
     }
 }
 
+impl From<i128> for SignedValue {
+    fn from(value: i128) -> Self {
+        Self {
+            negative: value.is_negative(),
+            value: value.unsigned_abs(),
+        }
+    }
+}
+
 impl From<i64> for SignedValue {
     fn from(value: i64) -> Self {
         Self {
             negative: value.is_negative(),
-            value: value.abs().try_into().unwrap(),
+            value: value.unsigned_abs().into(),
         }
     }
 }
@@ -352,7 +358,7 @@ impl TryInto<SuiAddress> for PublicKey {
     type Error = Error;
 
     fn try_into(self) -> Result<SuiAddress, Self::Error> {
-        let key_bytes = self.hex_bytes.to_vec()?;
+        let key_bytes = self.hex_bytes.to_vec().map_err(|e| anyhow::anyhow!(e))?;
         let pub_key =
             sui_types::crypto::PublicKey::try_from_bytes(self.curve_type.into(), &key_bytes)
                 .map_err(|e| Error::new_with_cause(ErrorType::ParsingError, e))?;
@@ -398,21 +404,23 @@ pub struct ConstructionPayloadsRequest {
     pub public_keys: Vec<PublicKey>,
 }
 
-#[derive(Deserialize, Serialize, Copy, Clone, Debug, EnumIter)]
+#[derive(Deserialize, Serialize, Copy, Clone, Debug, EnumIter, Eq, PartialEq)]
 pub enum OperationType {
     // Balance changing operations from TransactionEffect
     GasSpent,
     SuiBalanceChange,
-    // Sui transaction types, readonly
+    // sui-rosetta supported operation type
+    PaySui,
     GasBudget,
+    // All other Sui transaction types, readonly
     TransferSUI,
     Pay,
-    PaySui,
     PayAllSui,
     TransferObject,
     Publish,
     MoveCall,
     EpochChange,
+    // Rosetta only transaction type, used for fabricating genesis transactions.
     Genesis,
 }
 
@@ -543,7 +551,7 @@ pub struct ConstructionPreprocessResponse {
 
 #[derive(Serialize, Deserialize)]
 pub struct MetadataOptions {
-    pub input_objects: Vec<ObjectID>,
+    pub sender: SuiAddress,
 }
 
 impl IntoResponse for ConstructionPreprocessResponse {
@@ -575,15 +583,7 @@ pub struct ConstructionMetadataResponse {
 
 #[derive(Serialize, Deserialize)]
 pub struct ConstructionMetadata {
-    pub input_objects: BTreeMap<ObjectID, ObjectInfo>,
-}
-
-impl ConstructionMetadata {
-    pub fn try_get_info(&self, id: &ObjectID) -> Result<&ObjectInfo, Error> {
-        self.input_objects
-            .get(id)
-            .ok_or_else(|| Error::missing_metadata(id))
-    }
+    pub sender_coins: Vec<ObjectRef>,
 }
 
 impl IntoResponse for ConstructionMetadataResponse {

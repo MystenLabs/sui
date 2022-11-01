@@ -10,6 +10,7 @@ use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use serde_json::json;
 
+use fastcrypto::encoding::Base64;
 use sui::client_commands::EXAMPLE_NFT_DESCRIPTION;
 use sui::client_commands::EXAMPLE_NFT_NAME;
 use sui::client_commands::EXAMPLE_NFT_URL;
@@ -28,7 +29,6 @@ use sui_types::base_types::{
 };
 use sui_types::crypto::{get_key_pair_from_rng, AccountKeyPair, Signature};
 use sui_types::crypto::{AuthorityQuorumSignInfo, SuiSignature};
-use sui_types::event::TransferType;
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::{
     CallArg, ExecuteTransactionRequestType, MoveCall, SingleTransactionKind, Transaction,
@@ -37,7 +37,6 @@ use sui_types::messages::{
 use sui_types::object::Owner;
 use sui_types::query::Ordering;
 use sui_types::query::TransactionQuery;
-use sui_types::sui_serde::Base64;
 use sui_types::SUI_FRAMEWORK_OBJECT_ID;
 
 struct Examples {
@@ -374,7 +373,7 @@ impl RpcExampleProvider {
                         "query",
                         json!(TransactionQuery::InputObject(ObjectID::new(self.rng.gen()))),
                     ),
-                    ("cursor", json!(10)),
+                    ("cursor", json!(TransactionDigest::new(self.rng.gen()))),
                     ("limit", json!(100)),
                     ("order", json!(Ordering::Ascending)),
                 ],
@@ -428,10 +427,9 @@ impl RpcExampleProvider {
             transaction_module: String::from("native"),
             sender: signer,
             recipient: Owner::AddressOwner(recipient),
+            object_type: "0x2::example::Object".to_string(),
             object_id: object_ref.0,
             version: object_ref.1,
-            type_: TransferType::ToAddress,
-            amount: Some(100),
         };
         let events = vec![SuiEventEnvelope {
             timestamp: std::time::Instant::now().elapsed().as_secs(),

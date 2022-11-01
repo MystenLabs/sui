@@ -1,7 +1,7 @@
 {
-  "name": "@mysten/wallet-adapter-sui-wallet",
-  "version": "0.3.0",
-  "description": "Integration of Sui Wallet into the Sui Wallet Adapter",
+  "name": "@mysten/wallet-adapter-unsafe-burner",
+  "version": "0.1.0",
+  "description": "",
   "license": "Apache-2.0",
   "author": "Mysten Labs <build@mystenlabs.com>",
   "main": "./dist/index.js",

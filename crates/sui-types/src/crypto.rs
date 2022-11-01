@@ -1,9 +1,8 @@
-use std::collections::BTreeMap;
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use anyhow::{anyhow, Error};
 use digest::Digest;
-use fastcrypto::bls12381::{
+use fastcrypto::bls12381::min_sig::{
     BLS12381AggregateSignature, BLS12381KeyPair, BLS12381PrivateKey, BLS12381PublicKey,
     BLS12381Signature,
 };
@@ -25,6 +24,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 use serde_with::{serde_as, Bytes};
 use sha3::Sha3_256;
 use signature::Signer;
+use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::str::FromStr;
@@ -33,8 +33,15 @@ use crate::base_types::{AuthorityName, SuiAddress};
 use crate::committee::{Committee, EpochId, StakeUnit};
 use crate::error::{SuiError, SuiResult};
 use crate::intent::{Intent, IntentMessage};
-use crate::sui_serde::{AggrAuthSignature, Base64, Encoding, Readable, SuiBitmap};
+use crate::sui_serde::{AggrAuthSignature, Readable, SuiBitmap};
+use fastcrypto::encoding::{Base64, Encoding};
+use std::fmt::Debug;
+
 pub use enum_dispatch::enum_dispatch;
+
+#[cfg(test)]
+#[path = "unit_tests/crypto_tests.rs"]
+mod crypto_tests;
 
 // Authority Objects
 pub type AuthorityKeyPair = BLS12381KeyPair;
@@ -600,6 +607,14 @@ where
     <KP as KeypairTraits>::PubKey: SuiPublicKey,
 {
     let priv_length = <KP as KeypairTraits>::PrivKey::LENGTH;
+    let pub_key_length = <KP as KeypairTraits>::PubKey::LENGTH;
+    if bytes.len() != priv_length + pub_key_length {
+        return Err(SuiError::KeyConversionError(format!(
+            "Invalid input byte length, expected {}: {}",
+            priv_length,
+            bytes.len()
+        )));
+    }
     let sk = <KP as KeypairTraits>::PrivKey::from_bytes(&bytes[..priv_length])
         .map_err(|_| SuiError::InvalidPrivateKey)?;
     let kp: KP = sk.into();
@@ -1329,6 +1344,10 @@ mod bcs_signable {
     impl BcsSignable for crate::messages_checkpoint::CheckpointContents {}
     impl BcsSignable for crate::messages_checkpoint::CheckpointProposalContents {}
     impl BcsSignable for crate::messages_checkpoint::CheckpointProposalSummary {}
+    impl BcsSignable for crate::messages_checkpoint::CheckpointFragmentMessageHeader {}
+    impl BcsSignable for crate::messages_checkpoint::CheckpointFragmentMessageChunk {}
+    impl BcsSignable for crate::messages_checkpoint::CheckpointFragmentMessage {}
+
     impl BcsSignable for crate::messages::CommitteeInfoResponse {}
     impl BcsSignable for crate::messages::TransactionEffects {}
     impl BcsSignable for crate::messages::TransactionData {}
@@ -1361,6 +1380,10 @@ where
         // Remove name tag before deserialization using BCS
         let name = serde_name::trace_name::<Self>().expect("Self should be a struct or an enum");
         let name_byte_len = format!("{}::", name).bytes().len();
+        let actual_bytes_len = bytes.len();
+        if name_byte_len >= actual_bytes_len {
+            anyhow::bail!("Failed to deserialize shorter than expected signable bytes (len:{actual_bytes_len}) to {name}.");
+        }
         Ok(bcs::from_bytes(&bytes[name_byte_len..])?)
     }
 }

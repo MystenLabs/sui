@@ -1,23 +1,23 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use axum::{Extension, Json};
+use fastcrypto::encoding::Hex;
 
-use sui_types::base_types::{encode_bytes_hex, ObjectInfo, SuiAddress};
+use sui_types::base_types::{encode_bytes_hex, SuiAddress};
 use sui_types::crypto;
 use sui_types::crypto::{SignableBytes, SignatureScheme, ToFromBytes};
+use sui_types::gas_coin::GasCoin;
 use sui_types::messages::{
     QuorumDriverRequest, QuorumDriverRequestType, QuorumDriverResponse, Transaction,
     TransactionData,
 };
-use sui_types::object::ObjectRead;
-use sui_types::sui_serde::Hex;
+use sui_types::object::Owner;
 
 use crate::errors::Error;
-use crate::operations::{Operation, SuiAction};
+use crate::operations::Operation;
 use crate::types::{
     AccountIdentifier, ConstructionCombineRequest, ConstructionCombineResponse,
     ConstructionDeriveRequest, ConstructionDeriveResponse, ConstructionHashRequest,
@@ -59,7 +59,8 @@ pub async fn payloads(
     let metadata = request
         .metadata
         .ok_or_else(|| Error::new(ErrorType::MissingMetadata))?;
-    let data = Operation::parse_transaction_data(request.operations, metadata).await?;
+
+    let data = Operation::create_data(request.operations, metadata).await?;
     let hex_bytes = encode_bytes_hex(data.to_bytes());
 
     Ok(ConstructionPayloadsResponse {
@@ -83,11 +84,18 @@ pub async fn combine(
     Extension(env): Extension<SuiEnv>,
 ) -> Result<ConstructionCombineResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
-    let unsigned_tx = request.unsigned_transaction.to_vec()?;
+    let unsigned_tx = request
+        .unsigned_transaction
+        .to_vec()
+        .map_err(|e| anyhow::anyhow!(e))?;
     let data = TransactionData::from_signable_bytes(&unsigned_tx)?;
     let sig = request.signatures.first().unwrap();
-    let sig_bytes = sig.hex_bytes.to_vec()?;
-    let pub_key = sig.public_key.hex_bytes.to_vec()?;
+    let sig_bytes = sig.hex_bytes.to_vec().map_err(|e| anyhow::anyhow!(e))?;
+    let pub_key = sig
+        .public_key
+        .hex_bytes
+        .to_vec()
+        .map_err(|e| anyhow::anyhow!(e))?;
     let flag = vec![match sig.signature_type {
         SignatureType::Ed25519 => SignatureScheme::ED25519,
         SignatureType::Ecdsa => SignatureScheme::Secp256k1,
@@ -115,7 +123,12 @@ pub async fn submit(
     Extension(env): Extension<SuiEnv>,
 ) -> Result<TransactionIdentifierResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
-    let signed_tx: Transaction = bcs::from_bytes(&request.signed_transaction.to_vec()?)?;
+    let signed_tx: Transaction = bcs::from_bytes(
+        &request
+            .signed_transaction
+            .to_vec()
+            .map_err(|e| anyhow::anyhow!(e))?,
+    )?;
     let signed_tx = signed_tx.verify()?;
     let hash = *signed_tx.digest();
 
@@ -146,14 +159,15 @@ pub async fn preprocess(
     Extension(env): Extension<SuiEnv>,
 ) -> Result<ConstructionPreprocessResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
-    let action: SuiAction = request.operations.try_into()?;
+    let sender = request
+        .operations
+        .first()
+        .and_then(|op| op.account.clone())
+        .ok_or_else(|| Error::new(ErrorType::MalformedOperationError))?
+        .address;
     Ok(ConstructionPreprocessResponse {
-        options: Some(MetadataOptions {
-            input_objects: action.input_objects(),
-        }),
-        required_public_keys: vec![AccountIdentifier {
-            address: action.signer(),
-        }],
+        options: Some(MetadataOptions { sender }),
+        required_public_keys: vec![AccountIdentifier { address: sender }],
     })
 }
 
@@ -165,7 +179,10 @@ pub async fn hash(
     Extension(env): Extension<SuiEnv>,
 ) -> Result<TransactionIdentifierResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
-    let tx_bytes = request.signed_transaction.to_vec()?;
+    let tx_bytes = request
+        .signed_transaction
+        .to_vec()
+        .map_err(|e| anyhow::anyhow!(e))?;
     let tx: Transaction = bcs::from_bytes(&tx_bytes)?;
 
     Ok(TransactionIdentifierResponse {
@@ -186,20 +203,25 @@ pub async fn metadata(
 ) -> Result<ConstructionMetadataResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
 
-    let input_objects = if let Some(option) = request.options {
-        let mut input_objects = BTreeMap::new();
-        for id in option.input_objects {
-            if let ObjectRead::Exists(oref, o, _) = context.state.get_object_read(&id).await? {
-                input_objects.insert(id, ObjectInfo::new(&oref, &o));
-            };
-        }
-        input_objects
+    let sender_coins = if let Some(option) = request.options {
+        context
+            .state
+            .get_owner_objects(Owner::AddressOwner(option.sender))?
+            .iter()
+            .filter_map(|info| {
+                if info.type_ == GasCoin::type_().to_string() {
+                    Some(info.into())
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>()
     } else {
         Default::default()
     };
 
     Ok(ConstructionMetadataResponse {
-        metadata: ConstructionMetadata { input_objects },
+        metadata: ConstructionMetadata { sender_coins },
         suggested_fee: vec![],
     })
 }
@@ -215,10 +237,20 @@ pub async fn parse(
     env.check_network_identifier(&request.network_identifier)?;
 
     let data = if request.signed {
-        let tx: Transaction = bcs::from_bytes(&request.transaction.to_vec()?)?;
+        let tx: Transaction = bcs::from_bytes(
+            &request
+                .transaction
+                .to_vec()
+                .map_err(|e| anyhow::anyhow!(e))?,
+        )?;
         tx.signed_data.data
     } else {
-        TransactionData::from_signable_bytes(&request.transaction.to_vec()?)?
+        TransactionData::from_signable_bytes(
+            &request
+                .transaction
+                .to_vec()
+                .map_err(|e| anyhow::anyhow!(e))?,
+        )?
     };
     let account_identifier_signers = if request.signed {
         vec![AccountIdentifier {

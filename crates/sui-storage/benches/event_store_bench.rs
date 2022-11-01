@@ -14,7 +14,7 @@ use tokio::runtime::Builder;
 use sui_storage::event_store::{sql::SqlEventStore, test_utils, EventStore};
 use sui_types::{
     base_types::{SuiAddress, TransactionDigest},
-    event::{EventEnvelope, TransferType},
+    event::EventEnvelope,
 };
 
 async fn repeat_batch_insert(db: &SqlEventStore, events: &[EventEnvelope], batch_size: usize) {
@@ -70,7 +70,7 @@ fn bench_sqlite_ingestion_varying_batch_size(c: &mut Criterion) {
             0,
             0,
             n,
-            TransferType::ToAddress,
+            "0x2::test::Object",
             None,
             Some(sender),
             None,

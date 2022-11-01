@@ -76,12 +76,8 @@ pub struct PrimaryChannelMetrics {
     pub tx_certificates_loopback: IntGauge,
     /// occupancy of the channel from the `primary::PrimaryReceiverHandler` to the `primary::Core`
     pub tx_primary_messages: IntGauge,
-    /// occupancy of the channel from the `primary::PrimaryReceiverHandler` to the `primary::Helper`
-    pub tx_helper_requests: IntGauge,
     /// occupancy of the channel from the `primary::BlockSynchronizerHandler` to the `primary::BlockSynchronizer`
     pub tx_block_synchronizer_commands: IntGauge,
-    /// occupancy of the channel from the `primary::PrimaryReceiverHandler` to the `primary::BlockSynchronizer`
-    pub tx_availability_responses: IntGauge,
     /// occupancy of the channel from the `primary::WorkerReceiverHandler` to the `primary::StateHandler`
     pub tx_state_handler: IntGauge,
     /// occupancy of the channel from the reconfigure notification to most components.
@@ -110,12 +106,8 @@ pub struct PrimaryChannelMetrics {
     pub tx_certificates_loopback_total: IntCounter,
     /// total received on channel from the `primary::PrimaryReceiverHandler` to the `primary::Core`
     pub tx_primary_messages_total: IntCounter,
-    /// total received on channel from the `primary::PrimaryReceiverHandler` to the `primary::Helper`
-    pub tx_helper_requests_total: IntCounter,
     /// total received on channel from the `primary::BlockSynchronizerHandler` to the `primary::BlockSynchronizer`
     pub tx_block_synchronizer_commands_total: IntCounter,
-    /// total received on channel from the `primary::PrimaryReceiverHandler` to the `primary::BlockSynchronizer`
-    pub tx_availability_responses_total: IntCounter,
     /// total received on channel from the `primary::WorkerReceiverHandler` to the `primary::StateHandler`
     pub tx_state_handler_total: IntCounter,
     /// total received on channel from the reconfigure notification to most components.
@@ -196,19 +188,9 @@ impl PrimaryChannelMetrics {
                 "occupancy of the channel from the `primary::PrimaryReceiverHandler` to the `primary::Core`",
                 registry
             ).unwrap(),
-            tx_helper_requests: register_int_gauge_with_registry!(
-                "tx_helper_requests",
-                "occupancy of the channel from the `primary::PrimaryReceiverHandler` to the `primary::Helper`",
-                registry
-            ).unwrap(),
             tx_block_synchronizer_commands: register_int_gauge_with_registry!(
                 "tx_block_synchronizer_commands",
                 "occupancy of the channel from the `primary::BlockSynchronizerHandler` to the `primary::BlockSynchronizer`",
-                registry
-            ).unwrap(),
-            tx_availability_responses: register_int_gauge_with_registry!(
-                "tx_availability_responses",
-                "occupancy of the channel from the `primary::PrimaryReceiverHandler` to the `primary::BlockSynchronizer`",
                 registry
             ).unwrap(),
             tx_state_handler: register_int_gauge_with_registry!(
@@ -278,19 +260,9 @@ impl PrimaryChannelMetrics {
                 "total received on channel from the `primary::PrimaryReceiverHandler` to the `primary::Core`",
                 registry
             ).unwrap(),
-            tx_helper_requests_total: register_int_counter_with_registry!(
-                "tx_helper_requests_total",
-                "total received on channel from the `primary::PrimaryReceiverHandler` to the `primary::Helper`",
-                registry
-            ).unwrap(),
             tx_block_synchronizer_commands_total: register_int_counter_with_registry!(
                 "tx_block_synchronizer_commands_total",
                 "total received on channel from the `primary::BlockSynchronizerHandler` to the `primary::BlockSynchronizer`",
-                registry
-            ).unwrap(),
-            tx_availability_responses_total: register_int_counter_with_registry!(
-                "tx_availability_responses_total",
-                "total received on channel from the `primary::PrimaryReceiverHandler` to the `primary::BlockSynchronizer`",
                 registry
             ).unwrap(),
             tx_state_handler_total: register_int_counter_with_registry!(

@@ -77,20 +77,23 @@ async fn test_get_collections() {
         // Write the header
         store
             .header_store
-            .write(header.clone().id, header.clone())
+            .async_write(header.clone().id(), header.clone())
             .await;
 
-        header_ids.push(header.clone().id);
+        header_ids.push(header.clone().id());
 
         // Write the batches to payload store
         store
             .payload_store
-            .write_all(vec![((batch.clone().digest(), worker_id), 0)])
+            .sync_write_all(vec![((batch.clone().digest(), worker_id), 0)])
             .await
             .expect("couldn't store batches");
         if n != 4 {
             // Add batches to the workers store
-            store.batch_store.write(batch.digest(), batch.clone()).await;
+            store
+                .batch_store
+                .async_write(batch.digest(), batch.clone())
+                .await;
         } else {
             missing_block = block_id;
         }
@@ -274,20 +277,23 @@ async fn test_remove_collections() {
         // Write the header
         store
             .header_store
-            .write(header.clone().id, header.clone())
+            .async_write(header.clone().id(), header.clone())
             .await;
 
-        header_ids.push(header.clone().id);
+        header_ids.push(header.clone().id());
 
         // Write the batches to payload store
         store
             .payload_store
-            .write_all(vec![((batch.clone().digest(), worker_id), 0)])
+            .sync_write_all(vec![((batch.clone().digest(), worker_id), 0)])
             .await
             .expect("couldn't store batches");
         if n != 4 {
             // Add batches to the workers store
-            store.batch_store.write(batch.digest(), batch.clone()).await;
+            store
+                .batch_store
+                .async_write(batch.digest(), batch.clone())
+                .await;
         }
     }
 
@@ -624,6 +630,8 @@ async fn test_read_causal_signed_certificates() {
 
 #[tokio::test]
 async fn test_read_causal_unsigned_certificates() {
+    telemetry_subscribers::init_for_testing();
+
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
     let worker_cache = fixture.shared_worker_cache();
@@ -825,9 +833,13 @@ async fn test_read_causal_unsigned_certificates() {
 
     let status = client.read_causal(request).await.unwrap_err();
 
-    assert!(status
-        .message()
-        .contains("Error when trying to synchronize block headers: BlockNotFound"));
+    assert!(
+        status
+            .message()
+            .contains("Error when trying to synchronize block headers: BlockNotFound"),
+        "Saw unexpected status message: {}",
+        status.message()
+    );
 }
 
 /// Here we test the ability on our code to synchronize missing certificates
@@ -1098,16 +1110,18 @@ async fn fixture_certificate(
     certificate_store.write(certificate.clone()).unwrap();
 
     // Write the header
-    header_store.write(header.clone().id, header.clone()).await;
+    header_store
+        .async_write(header.clone().id(), header.clone())
+        .await;
 
     // Write the batches to payload store
     payload_store
-        .write_all(vec![((batch_digest, worker_id), 0)])
+        .sync_write_all(vec![((batch_digest, worker_id), 0)])
         .await
         .expect("couldn't store batches");
 
     // Add a batch to the workers store
-    batch_store.write(batch_digest, batch.clone()).await;
+    batch_store.async_write(batch_digest, batch.clone()).await;
 
     (certificate, batch)
 }

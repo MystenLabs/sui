@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { SignatureScheme } from '../cryptography/publickey';
+import { HttpHeaders } from '../rpc/client';
 import {
   CertifiedTransaction,
   CoinDenominationInfoResponse,
@@ -29,6 +30,7 @@ import {
   Ordering,
   PaginatedTransactionDigests,
   RpcApiVersion,
+  FaucetResponse,
 } from '../types';
 import { Provider } from './provider';
 
@@ -36,6 +38,14 @@ export class VoidProvider extends Provider {
   // API Version
   async getRpcApiVersion(): Promise<RpcApiVersion | undefined> {
     throw this.newError('getRpcApiVersion');
+  }
+
+  // Faucet
+  async requestSuiFromFaucet(
+    _recipient: SuiAddress,
+    _httpHeaders?: HttpHeaders
+  ): Promise<FaucetResponse> {
+    throw this.newError('requestSuiFromFaucet');
   }
 
   // Objects

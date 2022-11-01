@@ -44,7 +44,7 @@ curl --location --request POST $SUI_RPC_HOST \
 The examples in this section demonstrate how to create transfer transactions. To use the example commands, replace the values between double brackets ({{ example_ID }} with actual values.
 
 Objects IDs for `{{coin_object_id}}` and `{{gas_object_id}}` must
-be owned by the address specified for `{{owner_address}}` for the command to succeed. Use [`sui_getOwnedObjects`](#sui_getownedobjects) to return object IDs. 
+be owned by the address specified for `{{owner_address}}` for the command to succeed. Use [`sui_getOwnedObjectsByAddress`](#sui_getObjectsOwnedByAddress) to return object IDs. 
 
 #### Create an unsigned transaction to transfer a Sui coin from one address to another
 
@@ -55,13 +55,13 @@ curl --location --request POST $SUI_RPC_HOST \
   "jsonrpc": "2.0",
   "id": 1,
   "method": "sui_transferObject",
-  "params":["{{owner_address}}",
+  "params":[
+    "{{owner_address}}",
     "{{object_id}}",
     "{{gas_object_id}}",
     {{gas_budget}},
     "{{to_address}}"],
-  ]
-}'
+}' | json_pp
 ```
 A response resembles the following:
 ```json
@@ -69,7 +69,7 @@ A response resembles the following:
   "id" : 1,
   "jsonrpc" : "2.0",
   "result" : {
-    "tx_bytes" : "VHJhbnNhY3Rpb25EYXRhOjoAAFHe8jecgzoGWyGlZ1sJ2KBFN8aZF7NIkDsM+3X8mrVCa7adg9HnVqUBAAAAAAAAACDOlrjlT0A18D0DqJLTU28ChUfRFtgHprmuOGCHYdv8YVHe8jecgzoGWyGlZ1sJ2KBFN8aZdZnY6h3kyWFtB38Wyg6zjN7KzAcBAAAAAAAAACDxI+LSHrFUxU0G8bPMXhF+46hpchJ22IHlpPv4FgNvGOgDAAAAAAAA"
+    "tx_bytes" : "VHJhbnNhY3Rpb25EYXRhOjoAAFHe8jecgzoGWyGlZ1sJ2KBFN8aZF7NIkDsM+3X8mrVCa7adg9HnVqUBAAAAAAAAACDOlrjlT0A18D0DqJLTU28ChUfRFtgHprmuOGCHYdv8YVHe8jecgzoGWyGlZ1sJ2KBFN8aZdZnY6h3kyWFtB38Wyg6zjN7KzAcBAAAAAAAAACDxI+LSHrFUxU0G8bPMXhF+46hpchJ22IHlpPv4FgNvGOgDAAAAAAAA="
   }
 }
 
@@ -92,13 +92,13 @@ curl --location --request POST $SUI_RPC_HOST \
   "id": 1,
   "method": "sui_executeTransaction",
   "params": [ 
-    {{tx_bytes}},
-    {{sig_scheme}},
-    {{signature}},
-    {{pub_key}},
-    {{request_type}}
+    "{{tx_bytes}}",
+    "{{sig_scheme}}",
+    "{{signature}}",
+    "{{pub_key}}",
+    "{{request_type}}"
   ]
-}'
+}' | json_pp
 ```
 
 Native transfer by `sui_transferObject` supports any object that allows for public transfers. Some objects cannot be transferred natively and require a [Move call](#sui_movecall). See [Transactions](../learn/transactions.md#native-transaction) for more information about native transfers.
@@ -115,19 +115,21 @@ the [Move](move/index.md) language):
 ```shell
 curl --location --request POST $SUI_RPC_HOST \
 --header 'Content-Type: application/json' \
---data-raw '{ "jsonrpc": "2.0",
-              "method": "sui_moveCall",
-              "params": [
-                  "{{owner_address}}",
-                  "0x2",
-                  "coin",
-                  "transfer",
-                  ["0x2::sui::sui"],
-                  ["{{object_id}}", "{{recipient_address}}"],
-                  "{{gas_object_id}}",
-                  2000
-              ],
-              "id": 1 }' | json_pp
+--data-raw '{ 
+  "jsonrpc": "2.0",
+  "method": "sui_moveCall",
+  "params": [
+    "{{owner_address}}",
+    "0x2",
+    "coin",
+    "transfer",
+    ["0x2::sui::sui"],
+    ["{{object_id}}", "{{recipient_address}}"],
+    "{{gas_object_id}}",
+     2000
+  ],
+  "id": 1 
+}' | json_pp
 ```
 
 #### Sign the transaction
@@ -147,13 +149,13 @@ curl --location --request POST $SUI_RPC_HOST \
   "id": 1,
   "method": "sui_executeTransaction",
   "params": [ 
-    {{tx_bytes}},
-    {{sig_scheme}},
-    {{signature}},
-    {{pub_key}},
-    {{request_type}}
+    "{{tx_bytes}}",
+    "{{sig_scheme}}",
+    "{{signature}}",
+    "{{pub_key}}",
+    "{{request_type}}"
   ]
-}'
+}' | json_pp
 ```
 
 Arguments are passed in, and type is inferred from the function
@@ -170,13 +172,17 @@ To learn more about which `args` a Move call accepts, see [SuiJSON](sui-json.md)
 ```shell
 curl --location --request POST $SUI_RPC_HOST \
 --header 'Content-Type: application/json' \
---data-raw '{ "jsonrpc":"2.0",
-              "method":"sui_publish",
-              "params":[ "{{owner_address}}",
-                         {{vector_of_compiled_modules}},
-                         "{{gas_object_id}}",
-                         10000],
-              "id":1}' | json_pp
+--data-raw '{ 
+  "jsonrpc":"2.0",
+  "method":"sui_publish",
+  "params":[
+    "{{owner_address}}",
+    ["{{vector_of_compiled_modules}}"],
+    "{{gas_object_id}}",
+     10000
+   ],
+  "id":1
+}' | json_pp
 ```
 
 This endpoint performs proper verification and linking to make
@@ -217,11 +223,11 @@ curl --location --request POST $SUI_RPC_HOST \
   "id": 1,
   "method": "sui_executeTransaction",
   "params": [ 
-    {{tx_bytes}},
-    {{sig_scheme}},
-    {{signature}},
-    {{pub_key}},
-    {{request_type}}
+    "{{tx_bytes}}",
+    "{{sig_scheme}}",
+    "{{signature}}",
+    "{{pub_key}}",
+    "{{request_type}}"
   ]
 }'
 ```

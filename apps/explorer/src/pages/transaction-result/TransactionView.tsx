@@ -12,6 +12,7 @@ import {
     getObjectId,
     getTransferSuiTransaction,
     getTransferSuiAmount,
+    SUI_TYPE_ARG,
 } from '@mysten/sui.js';
 import cl from 'clsx';
 import { Link } from 'react-router-dom';
@@ -26,7 +27,6 @@ import {
     type LinkObj,
     TxAddresses,
 } from '../../components/transaction-card/TxCardUtils';
-import { presentBN } from '../../utils/stringUtils';
 import SendReceiveView from './SendReceiveView';
 import TxLinks from './TxLinks';
 
@@ -42,6 +42,7 @@ import type {
 
 import styles from './TransactionResult.module.css';
 
+import { CoinFormat, useFormatCoin } from '~/hooks/useFormatCoin';
 import { Banner } from '~/ui/Banner';
 import { PageHeader } from '~/ui/PageHeader';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
@@ -62,7 +63,7 @@ function generateMutatedCreated(tx: TxDataProps) {
             ? [
                   {
                       label: 'Updated',
-                      links: tx.mutated.map((obj) => obj.objectId),
+                      links: tx.mutated,
                   },
               ]
             : []),
@@ -70,7 +71,7 @@ function generateMutatedCreated(tx: TxDataProps) {
             ? [
                   {
                       label: 'Created',
-                      links: tx.created.map((obj) => obj.objectId),
+                      links: tx.created,
                   },
               ]
             : []),
@@ -241,6 +242,11 @@ function ItemView({ data }: { data: TxItemView }) {
 function TransactionView({ txdata }: { txdata: DataType }) {
     const txdetails = getTransactions(txdata)[0];
     const amount = getTransferSuiAmount(txdetails);
+    const [formattedAmount] = useFormatCoin(
+        amount,
+        SUI_TYPE_ARG,
+        CoinFormat.FULL
+    );
     const txKindName = getTransactionKindName(txdetails);
     const sender = getTransactionSender(txdata);
     const recipient =
@@ -250,13 +256,14 @@ function TransactionView({ txdata }: { txdata: DataType }) {
 
     const txEventData = txdata.events?.map(eventToDisplay);
 
-    let eventTitles: string[] = [];
-    const txEventDisplay = txEventData?.map((ed) => {
+    let eventTitles: [string, string][] = [];
+    const txEventDisplay = txEventData?.map((ed, index) => {
         if (!ed) return <div></div>;
 
-        eventTitles.push(ed.top.title);
+        let key = ed.top.title + index;
+        eventTitles.push([ed.top.title, key]);
         return (
-            <div className={styles.txgridcomponent} key={ed.top.title}>
+            <div className={styles.txgridcomponent} key={key}>
                 <ItemView data={ed.top as TxItemView} />
                 {ed.fields && <ItemView data={ed.fields as TxItemView} />}
             </div>
@@ -264,8 +271,8 @@ function TransactionView({ txdata }: { txdata: DataType }) {
     });
 
     let eventTitlesDisplay = eventTitles.map((et) => (
-        <div key={et} className={styles.eventtitle}>
-            <Longtext text={et} category={'unknown'} isLink={false} />
+        <div key={et[1]} className={styles.eventtitle}>
+            <Longtext text={et[0]} category={'unknown'} isLink={false} />
         </div>
     ));
 
@@ -432,7 +439,7 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                                     <div className={styles.amountbox}>
                                         <div>Amount</div>
                                         <div>
-                                            {presentBN(amount)}
+                                            {formattedAmount}
                                             <sup>SUI</sup>
                                         </div>
                                     </div>
@@ -473,16 +480,18 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                             <ItemView data={GasStorageFees} />
                         </div>
                     </TabPanel>
-                    <TabPanel>
-                        <div className={styles.txevents}>
-                            <div className={styles.txeventsleft}>
-                                {eventTitlesDisplay}
+                    {hasEvents && (
+                        <TabPanel>
+                            <div className={styles.txevents}>
+                                <div className={styles.txeventsleft}>
+                                    {eventTitlesDisplay}
+                                </div>
+                                <div className={styles.txeventsright}>
+                                    {txEventDisplay}
+                                </div>
                             </div>
-                            <div className={styles.txeventsright}>
-                                {txEventDisplay}
-                            </div>
-                        </div>
-                    </TabPanel>
+                        </TabPanel>
+                    )}
                     <TabPanel>
                         <div className={styles.txgridcomponent}>
                             <ItemView data={transactionSignatureData} />

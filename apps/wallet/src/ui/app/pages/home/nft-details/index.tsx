@@ -32,7 +32,7 @@ function NFTdetailsContent({
     nft: SuiObject;
     onClick?: ButtonHTMLAttributes<HTMLButtonElement>['onClick'];
 }) {
-    const { nftObjectID, nftFields, fileExtentionType } = useNFTBasicData(nft);
+    const { nftObjectID, nftFields, fileExtensionType } = useNFTBasicData(nft);
     const isTransferable = hasPublicTransfer(nft);
     const shortAddress = useMiddleEllipsis(nftObjectID);
     const NFTDetails = (
@@ -53,11 +53,11 @@ function NFTdetailsContent({
                     </div>
                 </div>
 
-                {fileExtentionType.name !== '' && (
+                {fileExtensionType.name !== '' && (
                     <div className={st.nftItemDetail}>
                         <div className={st.label}>Media Type</div>
                         <div className={st.value}>
-                            {fileExtentionType?.name} {fileExtentionType.type}
+                            {fileExtensionType?.name} {fileExtensionType.type}
                         </div>
                     </div>
                 )}

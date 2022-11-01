@@ -427,7 +427,7 @@ async fn execute_transaction_with_fault_configs(
         get_local_client(&mut authorities, *index).fault_config = *config;
     }
 
-    authorities.process_certificate(cert).await?;
+    authorities.process_certificate(cert.into()).await?;
     Ok(())
 }
 
@@ -461,7 +461,9 @@ async fn test_quorum_map_and_reduce_timeout() {
     // Send request with a very small timeout to trigger timeout error
     authorities.timeouts.pre_quorum_timeout = Duration::from_millis(2);
     authorities.timeouts.post_quorum_timeout = Duration::from_millis(2);
-    let certified_effects = authorities.process_certificate(certificate.clone()).await;
+    let certified_effects = authorities
+        .process_certificate(certificate.clone().into())
+        .await;
     // Ensure it is an error
     assert!(certified_effects.is_err());
     assert!(matches!(
@@ -496,7 +498,7 @@ async fn test_map_reducer() {
                 Box::pin(async move {
                     Err(SuiError::TooManyIncorrectAuthorities {
                         errors: vec![],
-                        action: "",
+                        action: "".to_string(),
                     })
                 })
             },
@@ -516,7 +518,7 @@ async fn test_map_reducer() {
                 Box::pin(async move {
                     let res: Result<usize, SuiError> = Err(SuiError::TooManyIncorrectAuthorities {
                         errors: vec![],
-                        action: "",
+                        action: "".to_string(),
                     });
                     res
                 })
@@ -571,7 +573,7 @@ async fn test_map_reducer() {
                 Box::pin(async move {
                     Err(SuiError::TooManyIncorrectAuthorities {
                         errors: vec![],
-                        action: "",
+                        action: "".to_string(),
                     })
                 })
             },
@@ -1044,7 +1046,7 @@ async fn test_quorum_once_with_timeout() {
             },
             Duration::from_millis(authority_request_timeout),
             Some(Duration::from_millis(30 * 50)),
-            "test",
+            "test".to_string(),
         )
         .await
         .unwrap();

@@ -32,10 +32,9 @@ use crate::error::ExecutionError;
 use crate::error::ExecutionErrorKind;
 use crate::error::SuiError;
 use crate::object::{Object, Owner};
-use crate::sui_serde::Hex;
 use crate::sui_serde::Readable;
-use crate::sui_serde::{Base64, Encoding};
 use crate::waypoint::IntoPoint;
+use fastcrypto::encoding::{Base64, Encoding, Hex};
 
 #[cfg(test)]
 #[path = "unit_tests/base_types_tests.rs"]
@@ -79,6 +78,14 @@ pub struct ObjectID(
 );
 
 pub type ObjectRef = (ObjectID, SequenceNumber, ObjectDigest);
+
+pub fn random_object_ref() -> ObjectRef {
+    (
+        ObjectID::random(),
+        SequenceNumber::new(),
+        ObjectDigest::new([0; 32]),
+    )
+}
 
 #[derive(Clone, Serialize, Deserialize, Ord, PartialOrd, Eq, PartialEq, Debug)]
 pub struct ObjectInfo {
@@ -981,7 +988,7 @@ impl FromStr for TransactionDigest {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut result = [0u8; TRANSACTION_DIGEST_LENGTH];
-        result.copy_from_slice(&Base64::decode(s)?);
+        result.copy_from_slice(&Base64::decode(s).map_err(|e| anyhow!(e))?);
         Ok(TransactionDigest(result))
     }
 }

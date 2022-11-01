@@ -1,31 +1,57 @@
 @use '_values/colors';
 
 .card {
-    background: colors.$gray-40;
-    border-radius: 10px;
-    border-bottom-left-radius: 0;
-    border-bottom-right-radius: 0;
+    background: colors.$white;
+    border-radius: 15px;
+    border: 1px solid colors.$gray-50;
+
+    .header {
+        background: colors.$gray-40;
+        height: 31px;
+        display: flex;
+        justify-content: center;
+        color: colors.$gray-75;
+        padding: 10px 0;
+        font-weight: 600;
+        font-size: 11px;
+        line-height: 100%;
+        text-transform: uppercase;
+        border-radius: 15px 15px 0 0;
+        border-bottom: 1px solid colors.$gray-50;
+    }
 }
 
 .content {
-    padding: 15px 20px;
+    padding: 15px;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 10px;
 }
 
 .row {
     display: flex;
     justify-content: space-between;
-    font-size: 14px;
-    line-height: 13px;
+    gap: 10px;
+    font-weight: 500;
+    font-size: 13px;
+    line-height: 100%;
 
-    dt {
+    .label {
         color: colors.$gray-80;
+        width: 42%;
+        display: flex;
+        justify-content: flex-start;
     }
 
-    dd {
+    .value {
         color: colors.$gray-90;
+        font-weight: 600;
+        word-break: break-all;
+        width: 58%;
+        padding: 0;
+        display: flex;
+        justify-content: flex-end;
+        text-align: right;
     }
 }
 
@@ -57,20 +83,23 @@
         padding: 8px 0;
         margin-bottom: -1px;
         color: colors.$gray-75;
+        font-weight: 600;
+        font-size: 14px;
+        line-height: 100%;
         border-bottom: 1px solid colors.$gray-45;
 
         &.active {
-            color: colors.$gray-100;
-            border-color: colors.$gray-65;
+            color: colors.$cta-blue-hover;
+            border-color: colors.$cta-blue-hover;
         }
     }
 }
 
 .objects {
-    margin-top: 20px;
     display: flex;
     flex-direction: column;
     gap: 20px;
+    margin-top: 15px;
 }
 
 .object-name {
@@ -79,6 +108,7 @@
     line-height: 17px;
     color: colors.$gray-85;
     font-family: 'Space Mono', ui-monospace, monospace;
+    word-break: break-all;
 }
 
 .object-id {
@@ -87,4 +117,15 @@
     line-height: 17px;
     font-family: 'Space Mono', ui-monospace, monospace;
     color: colors.$sui-dark-blue;
+    text-decoration: none;
+}
+
+.tx-info {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.deserializing {
+    min-height: 450px;
 }

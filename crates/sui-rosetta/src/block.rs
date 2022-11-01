@@ -4,8 +4,6 @@
 use std::sync::Arc;
 
 use axum::{Extension, Json};
-use sui_types::gas_coin::GasCoin;
-use sui_types::object::PastObjectRead;
 use tracing::debug;
 
 use crate::operations::Operation;
@@ -49,18 +47,7 @@ pub async fn transaction(
     let hash = *cert.digest();
     let data = &cert.signed_data.data;
 
-    let mut new_coins = vec![];
-    for ((id, version, _), _) in &effects.created {
-        if let Ok(PastObjectRead::VersionFound(oref, obj, _)) =
-            context.state.get_past_object_read(id, *version).await
-        {
-            if let Ok(coin) = GasCoin::try_from(&obj) {
-                new_coins.push((coin, oref))
-            }
-        }
-    }
-
-    let operations = Operation::from_data_and_effect(data, &effects, &new_coins)?;
+    let operations = Operation::from_data_and_events(data, &effects.status, &effects.events)?;
 
     let transaction = Transaction {
         transaction_identifier: TransactionIdentifier { hash },

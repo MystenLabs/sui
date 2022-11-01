@@ -26,6 +26,7 @@ importers:
   apps/explorer:
     specifiers:
       '@babel/core': ^7.19.3
+      '@floating-ui/react-dom-interactions': ^0.10.1
       '@growthbook/growthbook': ^0.18.1
       '@growthbook/growthbook-react': ^0.9.1
       '@headlessui/react': ^1.7.2
@@ -60,6 +61,7 @@ importers:
       '@vitest/ui': ^0.22.1
       autoprefixer: ^10.4.2
       axios: ^0.27.2
+      bignumber.js: ^9.1.0
       bn.js: ^5.2.0
       class-variance-authority: ^0.2.3
       clsx: ^1.2.1
@@ -68,6 +70,7 @@ importers:
       eslint-config-prettier: ^8.3.0
       eslint-config-react-app: ^7.0.1
       eslint-plugin-header: ^3.1.1
+      framer-motion: ^7.5.1
       onchange: ^7.1.0
       plausible-tracker: ^0.3.8
       postcss: ^8.4.6
@@ -92,6 +95,7 @@ importers:
       vite-plugin-svgr: ^2.2.1
       vitest: ^0.22.1
     dependencies:
+      '@floating-ui/react-dom-interactions': 0.10.1_7ey2zzynotv32rpkwno45fsx4e
       '@growthbook/growthbook': 0.18.1
       '@growthbook/growthbook-react': 0.9.1_react@18.2.0
       '@headlessui/react': 1.7.2_biqbaboplfbrettd7655fr4n2y
@@ -107,9 +111,11 @@ importers:
       '@visx/geo': 2.10.0_react@18.2.0
       '@visx/responsive': 2.10.0_react@18.2.0
       '@visx/tooltip': 2.10.0_biqbaboplfbrettd7655fr4n2y
+      bignumber.js: 9.1.0
       bn.js: 5.2.1
       class-variance-authority: 0.2.3_typescript@4.8.3
       clsx: 1.2.1
+      framer-motion: 7.5.1_biqbaboplfbrettd7655fr4n2y
       plausible-tracker: 0.3.8
       prism-react-renderer: 1.3.5_react@18.2.0
       prism-themes: 1.9.0
@@ -154,7 +160,7 @@ importers:
       stylelint-config-prettier: 9.0.3_stylelint@14.10.0
       stylelint-config-standard: 25.0.0_stylelint@14.10.0
       stylelint-config-standard-scss: 3.0.0_azcu7ozukcosyoqn57hruaqjcq
-      tailwindcss: 3.1.8
+      tailwindcss: 3.1.8_postcss@8.4.16
       typescript: 4.8.3
       vite: 3.0.9
       vite-plugin-svgr: 2.2.1_vite@3.0.9
@@ -172,12 +178,15 @@ importers:
       '@reduxjs/toolkit': ^1.8.3
       '@scure/bip32': ^1.1.0
       '@scure/bip39': ^1.1.0
+      '@sentry/react': ^7.6.0
+      '@sentry/tracing': ^7.6.0
       '@tanstack/react-query': ^4.0.10
       '@types/dotenv-webpack': ^7.0.3
       '@types/node': ^18.0.6
       '@types/react': ^18.0.20
       '@types/react-dom': ^18.0.6
       '@types/semver': ^7.3.12
+      '@types/throttle-debounce': ^5.0.0
       '@types/uuid': ^8.3.4
       '@types/webextension-polyfill': ^0.9.0
       '@types/webpack': ^5.28.0
@@ -228,6 +237,7 @@ importers:
       stylelint-webpack-plugin: ^3.3.0
       svgtofont: ^3.17.8
       tailwindcss: ^3.0.23
+      throttle-debounce: ^5.0.0
       ts-loader: ^9.3.1
       ts-node: ^10.9.1
       tsconfig-paths: ^4.0.0
@@ -274,6 +284,7 @@ importers:
       semver: 7.3.8
       stream-browserify: 3.0.0
       tailwindcss: 3.1.8_ts-node@10.9.1
+      throttle-debounce: 5.0.0
       tweetnacl: 1.0.3
       uuid: 8.3.2
       vite-tsconfig-paths: 3.5.0
@@ -281,11 +292,14 @@ importers:
       yup: 0.32.11
       zxcvbn: 4.4.2
     devDependencies:
+      '@sentry/react': 7.11.1_react@18.2.0
+      '@sentry/tracing': 7.11.1
       '@types/dotenv-webpack': 7.0.3_webpack-cli@4.10.0
       '@types/node': 18.7.6
       '@types/react': 18.0.20
       '@types/react-dom': 18.0.6
       '@types/semver': 7.3.12
+      '@types/throttle-debounce': 5.0.0
       '@types/uuid': 8.3.4
       '@types/webextension-polyfill': 0.9.0
       '@types/webpack': 5.28.0_webpack-cli@4.10.0
@@ -436,7 +450,6 @@ importers:
       '@mysten/wallet-adapter-base': workspace:*
       '@mysten/wallet-adapter-react': workspace:*
       '@mysten/wallet-adapter-react-ui': workspace:*
-      '@mysten/wallet-adapter-sui-wallet': workspace:*
       '@mysten/wallet-adapter-wallet-standard': workspace:*
       '@testing-library/jest-dom': ^5.16.4
       '@testing-library/react': ^13.3.0
@@ -460,7 +473,6 @@ importers:
       '@mysten/wallet-adapter-base': link:packages/adapters/base-adapter
       '@mysten/wallet-adapter-react': link:packages/react-providers
       '@mysten/wallet-adapter-react-ui': link:packages/ui
-      '@mysten/wallet-adapter-sui-wallet': link:packages/adapters/sui-wallet
       '@mysten/wallet-adapter-wallet-standard': link:packages/adapters/wallet-standard-adapter
       '@testing-library/jest-dom': 5.16.5
       '@testing-library/react': 13.3.0_biqbaboplfbrettd7655fr4n2y
@@ -478,14 +490,12 @@ importers:
 
   sdk/wallet-adapter/packages/adapters/all-wallets:
     specifiers:
-      '@mysten/wallet-adapter-mock-wallet': workspace:*
-      '@mysten/wallet-adapter-sui-wallet': workspace:*
+      '@mysten/wallet-adapter-unsafe-burner': workspace:*
       '@mysten/wallet-adapter-wallet-standard': workspace:*
       tsup: ^6.2.2
       typescript: ^4.8.3
     dependencies:
-      '@mysten/wallet-adapter-mock-wallet': link:../mock-wallet
-      '@mysten/wallet-adapter-sui-wallet': link:../sui-wallet
+      '@mysten/wallet-adapter-unsafe-burner': link:../unsafe-burner
       '@mysten/wallet-adapter-wallet-standard': link:../wallet-standard-adapter
     devDependencies:
       tsup: 6.2.2_typescript@4.8.3
@@ -502,20 +512,7 @@ importers:
       tsup: 6.2.2_typescript@4.8.3
       typescript: 4.8.3
 
-  sdk/wallet-adapter/packages/adapters/mock-wallet:
-    specifiers:
-      '@mysten/sui.js': workspace:*
-      '@mysten/wallet-adapter-base': workspace:*
-      tsup: ^6.2.2
-      typescript: ^4.8.3
-    dependencies:
-      '@mysten/sui.js': link:../../../../typescript
-      '@mysten/wallet-adapter-base': link:../base-adapter
-    devDependencies:
-      tsup: 6.2.2_typescript@4.8.3
-      typescript: 4.8.3
-
-  sdk/wallet-adapter/packages/adapters/sui-wallet:
+  sdk/wallet-adapter/packages/adapters/unsafe-burner:
     specifiers:
       '@mysten/sui.js': workspace:*
       '@mysten/wallet-adapter-base': workspace:*
@@ -533,7 +530,6 @@ importers:
       '@mysten/sui.js': workspace:*
       '@mysten/wallet-adapter-base': workspace:*
       '@mysten/wallet-standard': workspace:*
-      '@wallet-standard/app': 0.1.0-alpha.6
       mitt: ^3.0.0
       tsup: ^6.2.2
       typescript: ^4.8.3
@@ -541,7 +537,6 @@ importers:
       '@mysten/sui.js': link:../../../../typescript
       '@mysten/wallet-adapter-base': link:../base-adapter
       '@mysten/wallet-standard': link:../../wallet-standard
-      '@wallet-standard/app': 0.1.0-alpha.6
       mitt: 3.0.0
     devDependencies:
       tsup: 6.2.2_typescript@4.8.3
@@ -592,16 +587,12 @@ importers:
   sdk/wallet-adapter/packages/wallet-standard:
     specifiers:
       '@mysten/sui.js': workspace:*
-      '@wallet-standard/features': 0.1.0-alpha.4
-      '@wallet-standard/standard': 0.1.0-alpha.5
-      '@wallet-standard/util': 0.1.0-alpha.6
+      '@wallet-standard/core': 1.0.0
       tsup: ^6.2.2
       typescript: ^4.8.3
     dependencies:
       '@mysten/sui.js': link:../../../typescript
-      '@wallet-standard/features': 0.1.0-alpha.4
-      '@wallet-standard/standard': 0.1.0-alpha.5
-      '@wallet-standard/util': 0.1.0-alpha.6
+      '@wallet-standard/core': 1.0.0
     devDependencies:
       tsup: 6.2.2_typescript@4.8.3
       typescript: 4.8.3
@@ -3847,7 +3838,6 @@ packages:
       '@sentry/types': 7.11.1
       '@sentry/utils': 7.11.1
       tslib: 1.14.1
-    dev: false
 
   /@sentry/core/7.11.1:
     resolution: {integrity: sha512-kaDSZ6VNuO4ZZdqUOOX6XM6x+kjo2bMnDQ3IJG51FPvVjr8lXYhXj1Ccxcot3pBYAIWPPby2+vNDOXllmXqoBA==}
@@ -3857,7 +3847,6 @@ packages:
       '@sentry/types': 7.11.1
       '@sentry/utils': 7.11.1
       tslib: 1.14.1
-    dev: false
 
   /@sentry/hub/7.11.1:
     resolution: {integrity: sha512-M6ClgdXdptS0lUBKB5KpXXe2qMQhsoiEN2pEGRI6+auqhfHCUQB1ZXsfjiOYexKC9fwx7TyFyZ9Jcaf2DTxEhw==}
@@ -3866,7 +3855,6 @@ packages:
       '@sentry/types': 7.11.1
       '@sentry/utils': 7.11.1
       tslib: 1.14.1
-    dev: false
 
   /@sentry/react/7.11.1_react@18.2.0:
     resolution: {integrity: sha512-kp/vBgwNrlFEtW3e6DY9T4s3di9peL66n5UIY5n6dYkiN7A7D6/Kz1WJ/ZCL82DvaCMEY577wNyr2C+442l7fw==}
@@ -3880,7 +3868,6 @@ packages:
       hoist-non-react-statics: 3.3.2
       react: 18.2.0
       tslib: 1.14.1
-    dev: false
 
   /@sentry/tracing/7.11.1:
     resolution: {integrity: sha512-ilgnHfpdYUWKG/5yAXIfIbPVsCfrC4ONFBR/wN25/hdAyVfXMa3AJx7NCCXxZBOPDWH3hMW8rl4La5yuDbXofg==}
@@ -3890,12 +3877,10 @@ packages:
       '@sentry/types': 7.11.1
       '@sentry/utils': 7.11.1
       tslib: 1.14.1
-    dev: false
 
   /@sentry/types/7.11.1:
     resolution: {integrity: sha512-gIEhOPxC2cjrxQ0+K2SFJ1P6e/an5osSxVc9OOtekN28eHtVsXFCLB8XVWeNQnS7N2VkrVrkqORMBz1kvIcvVQ==}
     engines: {node: '>=8'}
-    dev: false
 
   /@sentry/utils/7.11.1:
     resolution: {integrity: sha512-tRVXNT5O9ilkV31pyHeTqA1PcPQfMV/2OR6yUYM4ah+QVISovC0f0ybhByuH5nYg6x/Gsnx1o7pc8L1GE3+O7A==}
@@ -3903,7 +3888,6 @@ packages:
     dependencies:
       '@sentry/types': 7.11.1
       tslib: 1.14.1
-    dev: false
 
   /@sideway/address/4.1.4:
     resolution: {integrity: sha512-7vwq+rOHVWjyXxVlR76Agnvhy8I9rpzjosTESvmhNeXOXdZZB15Fl+TI9x1SiHZH5Jv2wTGduSxFDIaq0m3DUw==}
@@ -5697,6 +5681,10 @@ packages:
     dependencies:
       '@types/jest': 28.1.7
 
+  /@types/throttle-debounce/5.0.0:
+    resolution: {integrity: sha512-Pb7k35iCGFcGPECoNE4DYp3Oyf2xcTd3FbFQxXUI9hEYKUl6YX+KLf7HrBmgVcD05nl50LIH6i+80js4iYmWbw==}
+    dev: true
+
   /@types/topojson-client/3.1.1:
     resolution: {integrity: sha512-E4/Z2Xg56kVLRzYWem/6uOKVcVNqqxEqlWM9qCG2tCV1BxuzvvXC02/ELoGJWgtKkQhfycBPlMFEuTFdA/YiTg==}
     dependencies:
@@ -6166,26 +6154,40 @@ packages:
       sirv: 2.0.2
     dev: true
 
-  /@wallet-standard/app/0.1.0-alpha.6:
-    resolution: {integrity: sha512-Z/aTiMpI2qjh/YDS8GtmHrIwpsHhHlzYffkEvuiG3RY7j0ZNsQWOx38hNN/V6lOlKrh7S+azPcFL7ESiilqvcA==}
+  /@wallet-standard/app/1.0.0:
+    resolution: {integrity: sha512-ElUzbW0QpqNEVcjfak1oE/abd0CgjXH2URJmj60VjSx5/g30HPZxynfBAyUV3EiSPyvo4CgM1HyLQ73Y+cDy3w==}
+    engines: {node: '>=16'}
     dependencies:
-      '@wallet-standard/standard': 0.1.0-alpha.5
+      '@wallet-standard/base': 1.0.0
     dev: false
 
-  /@wallet-standard/features/0.1.0-alpha.4:
-    resolution: {integrity: sha512-HF7i//1oqadV8269Jp8rEFxSf+nCxLZ+CGKT5giuavSb/hdbiPPDbQLMhWfyLRatSnssIZN1LtsyzGe9kDFJrg==}
-    dependencies:
-      '@wallet-standard/standard': 0.1.0-alpha.5
+  /@wallet-standard/base/1.0.0:
+    resolution: {integrity: sha512-MxGmm4vFvz2zZ/NPphdsQxSsAEtHMFSgDLqo6WNaI0w1MLxj1S93cRIjhHCn7Ny7lpNJ6jVEZqhB3F/dqRkFlg==}
+    engines: {node: '>=16'}
     dev: false
 
-  /@wallet-standard/standard/0.1.0-alpha.5:
-    resolution: {integrity: sha512-rqs9vD+Hww8kWtF8/8wi+hhLIWN1ank/ZfK7mGALen+9XhxAcgOJwl96l30MCSL2w1AHykOEELOZK6lUbg13gQ==}
+  /@wallet-standard/core/1.0.0:
+    resolution: {integrity: sha512-T6D/qONZF21tGpF7amwc4NlKNL9I6ioi+Lezdg8YTx+5apvzevyM1MkivYJT0WUZeUfhSjmGw9RbsaXL957V6A==}
+    engines: {node: '>=16'}
+    dependencies:
+      '@wallet-standard/app': 1.0.0
+      '@wallet-standard/base': 1.0.0
+      '@wallet-standard/features': 1.0.0
+      '@wallet-standard/wallet': 1.0.0
     dev: false
 
-  /@wallet-standard/util/0.1.0-alpha.6:
-    resolution: {integrity: sha512-dyfgryEo5PU3XXZ20Zs9jRtyVuP/7qsKD9yNyPy9XlcZpB6HR3OtdqiXJQsm1KOxz8VsOsfRIdmzri4O/1MR7Q==}
+  /@wallet-standard/features/1.0.0:
+    resolution: {integrity: sha512-t0Fr+ds2e1L53NoIht8jLAt2pZJYupOouI9ztk4DEXRWZAC+iiPvIrH/fqI2YKmsfvNBRn6hUVsd3UsV3Uw3Sg==}
+    engines: {node: '>=16'}
     dependencies:
-      '@wallet-standard/standard': 0.1.0-alpha.5
+      '@wallet-standard/base': 1.0.0
+    dev: false
+
+  /@wallet-standard/wallet/1.0.0:
+    resolution: {integrity: sha512-w+eiUj05Z0JCXYFEuFvzy6IkdAC46VvVe7nl33FPQ2MUmCfDTX7Q39dIOtf6g8yM+O3fzFNlvnTcuXgcqqmRrg==}
+    engines: {node: '>=16'}
+    dependencies:
+      '@wallet-standard/base': 1.0.0
     dev: false
 
   /@webassemblyjs/ast/1.11.1:
@@ -6964,7 +6966,7 @@ packages:
   /axios/0.25.0:
     resolution: {integrity: sha512-cD8FOb0tRH3uuEe6+evtAbgJtfxr7ly3fQjYcMcuPlgkwVS9xboaVIpcDV+cYQe+yGykgwZCs1pzjntcGa6l5g==}
     dependencies:
-      follow-redirects: 1.15.1_debug@4.3.2
+      follow-redirects: 1.15.1
     transitivePeerDependencies:
       - debug
     dev: true
@@ -10881,6 +10883,16 @@ packages:
     engines: {node: '>=8.9.0'}
     dev: true
 
+  /follow-redirects/1.15.1:
+    resolution: {integrity: sha512-yLAMQs+k0b2m7cVxpS1VKJVvoz7SS9Td1zss3XRwXj+ZDH00RJgnuLx7E44wx02kQLrdM3aOOy+FpzS7+8OizA==}
+    engines: {node: '>=4.0'}
+    peerDependencies:
+      debug: '*'
+    peerDependenciesMeta:
+      debug:
+        optional: true
+    dev: true
+
   /follow-redirects/1.15.1_debug@4.3.2:
     resolution: {integrity: sha512-yLAMQs+k0b2m7cVxpS1VKJVvoz7SS9Td1zss3XRwXj+ZDH00RJgnuLx7E44wx02kQLrdM3aOOy+FpzS7+8OizA==}
     engines: {node: '>=4.0'}
@@ -11694,7 +11706,6 @@ packages:
     resolution: {integrity: sha512-/gGivxi8JPKWNm/W0jSmzcMPpfpPLc3dY/6GxhX2hQ9iGj3aDfklV4ET7NjKpSinLpJ5vafa9iiGIEZg10SfBw==}
     dependencies:
       react-is: 16.13.1
-    dev: false
 
   /hosted-git-info/2.8.9:
     resolution: {integrity: sha512-mxIDAb9Lsm6DoOJ7xH+5+X4y1LU/4Hi50L9C5sIswK3JzULS4bwk1FvjdBgvYR4bzT4tuUQiC15FE2f5HbLvYw==}
@@ -18223,6 +18234,39 @@ packages:
       - ts-node
     dev: true
 
+  /tailwindcss/3.1.8_postcss@8.4.16:
+    resolution: {integrity: sha512-YSneUCZSFDYMwk+TGq8qYFdCA3yfBRdBlS7txSq0LUmzyeqRe3a8fBQzbz9M3WS/iFT4BNf/nmw9mEzrnSaC0g==}
+    engines: {node: '>=12.13.0'}
+    hasBin: true
+    peerDependencies:
+      postcss: ^8.0.9
+    dependencies:
+      arg: 5.0.2
+      chokidar: 3.5.3
+      color-name: 1.1.4
+      detective: 5.2.1
+      didyoumean: 1.2.2
+      dlv: 1.1.3
+      fast-glob: 3.2.11
+      glob-parent: 6.0.2
+      is-glob: 4.0.3
+      lilconfig: 2.0.6
+      normalize-path: 3.0.0
+      object-hash: 3.0.0
+      picocolors: 1.0.0
+      postcss: 8.4.16
+      postcss-import: 14.1.0_postcss@8.4.16
+      postcss-js: 4.0.0_postcss@8.4.16
+      postcss-load-config: 3.1.4_postcss@8.4.16
+      postcss-nested: 5.0.6_postcss@8.4.16
+      postcss-selector-parser: 6.0.10
+      postcss-value-parser: 4.2.0
+      quick-lru: 5.1.1
+      resolve: 1.22.1
+    transitivePeerDependencies:
+      - ts-node
+    dev: true
+
   /tailwindcss/3.1.8_ts-node@10.9.1:
     resolution: {integrity: sha512-YSneUCZSFDYMwk+TGq8qYFdCA3yfBRdBlS7txSq0LUmzyeqRe3a8fBQzbz9M3WS/iFT4BNf/nmw9mEzrnSaC0g==}
     engines: {node: '>=12.13.0'}
@@ -18383,6 +18427,11 @@ packages:
     resolution: {integrity: sha512-dTEWWNu6JmeVXY0ZYoPuH5cRIwc0MeGbJwah9KUNYSJwommQpCzTySTpEe8Gs1J23aeWEuAobe4Ag7EHVt/LOg==}
     engines: {node: '>=10'}
     dev: true
+
+  /throttle-debounce/5.0.0:
+    resolution: {integrity: sha512-2iQTSgkkc1Zyk0MeVrt/3BvuOXYPl/R8Z0U2xxo9rjwNciaHDG3R+Lm6dh4EeUci49DanvBnuqI6jshoQQRGEg==}
+    engines: {node: '>=12.22'}
+    dev: false
 
   /throttleit/1.0.0:
     resolution: {integrity: sha512-rkTVqu6IjfQ/6+uNuuc3sZek4CEYxTJom3IktzgdSxcZqdARuebbA/f4QmAxMQIxqq9ZLEUkSYqvuk1I6VKq4g==}

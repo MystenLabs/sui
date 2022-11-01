@@ -6,6 +6,7 @@ use move_binary_format::{
     access::ModuleAccess, binary_views::BinaryIndexedView, file_format::SignatureToken,
 };
 use move_core_types::account_address::AccountAddress;
+use move_core_types::u256::U256;
 use move_core_types::{
     identifier::Identifier,
     language_storage::{StructTag, TypeTag},
@@ -100,11 +101,12 @@ impl SuiJsonValue {
 
         match &inner_vec[0] {
             MoveTypeLayout::Vector(inner) => match **inner {
-                MoveTypeLayout::U8 | MoveTypeLayout::Address => {
-                    Ok(MoveValue::Struct(MoveStruct::Runtime(vec![
-                        Self::to_move_value(val, &inner_vec[0].clone())?,
-                    ])))
-                }
+                MoveTypeLayout::U8 => Ok(MoveValue::Struct(MoveStruct::Runtime(vec![
+                    Self::to_move_value(val, &inner_vec[0].clone())?,
+                ]))),
+                MoveTypeLayout::Address => Ok(MoveValue::Struct(MoveStruct::Runtime(vec![
+                    Self::to_move_value(val, &MoveTypeLayout::Address)?,
+                ]))),
                 _ => bail!(
                     "Cannot convert string arg {s} to {ty} \
                              which is expected to be a struct \
@@ -128,17 +130,32 @@ impl SuiJsonValue {
             (JsonValue::Number(n), MoveTypeLayout::U8) => {
                 MoveValue::U8(u8::try_from(n.as_u64().unwrap())?)
             }
+            (JsonValue::Number(n), MoveTypeLayout::U16) => {
+                MoveValue::U16(u16::try_from(n.as_u64().unwrap())?)
+            }
+            (JsonValue::Number(n), MoveTypeLayout::U32) => {
+                MoveValue::U32(u32::try_from(n.as_u64().unwrap())?)
+            }
             (JsonValue::Number(n), MoveTypeLayout::U64) => MoveValue::U64(n.as_u64().unwrap()),
 
-            // u8, u64, u128 can be encoded as String
+            // u8, u16, u32, u64, u128, u256 can be encoded as String
             (JsonValue::String(s), MoveTypeLayout::U8) => {
-                MoveValue::U8(u8::try_from(convert_string_to_u128(s.as_str())?)?)
+                MoveValue::U8(u8::try_from(convert_string_to_u256(s.as_str())?)?)
+            }
+            (JsonValue::String(s), MoveTypeLayout::U16) => {
+                MoveValue::U16(u16::try_from(convert_string_to_u256(s.as_str())?)?)
+            }
+            (JsonValue::String(s), MoveTypeLayout::U32) => {
+                MoveValue::U32(u32::try_from(convert_string_to_u256(s.as_str())?)?)
             }
             (JsonValue::String(s), MoveTypeLayout::U64) => {
-                MoveValue::U64(u64::try_from(convert_string_to_u128(s.as_str())?)?)
+                MoveValue::U64(u64::try_from(convert_string_to_u256(s.as_str())?)?)
             }
             (JsonValue::String(s), MoveTypeLayout::U128) => {
-                MoveValue::U128(convert_string_to_u128(s.as_str())?)
+                MoveValue::U128(u128::try_from(convert_string_to_u256(s.as_str())?)?)
+            }
+            (JsonValue::String(s), MoveTypeLayout::U256) => {
+                MoveValue::U256(convert_string_to_u256(s.as_str())?)
             }
             (JsonValue::String(s), MoveTypeLayout::Struct(MoveStructLayout::Runtime(inner))) => {
                 Self::handle_inner_struct_layout(inner, val, ty, s)?
@@ -146,8 +163,6 @@ impl SuiJsonValue {
             (JsonValue::String(s), MoveTypeLayout::Vector(t)) => {
                 match &**t {
                     MoveTypeLayout::U8 => {
-                        // U256 Not allowed for now
-
                         // We can encode U8 Vector as string in 2 ways
                         // 1. If it starts with 0x, we treat it as hex strings, where each pair is a
                         //    byte
@@ -209,6 +224,10 @@ fn try_from_bcs_bytes(bytes: &[u8]) -> Result<JsonValue, anyhow::Error> {
     } else if let Ok(v) = bcs::from_bytes::<AccountAddress>(bytes) {
         Ok(JsonValue::String(v.to_hex_literal()))
     } else if let Ok(v) = bcs::from_bytes::<u8>(bytes) {
+        Ok(JsonValue::Number(Number::from(v)))
+    } else if let Ok(v) = bcs::from_bytes::<u16>(bytes) {
+        Ok(JsonValue::Number(Number::from(v)))
+    } else if let Ok(v) = bcs::from_bytes::<u32>(bytes) {
         Ok(JsonValue::Number(Number::from(v)))
     } else if let Ok(v) = bcs::from_bytes::<u64>(bytes) {
         Ok(JsonValue::Number(Number::from(v)))
@@ -587,9 +606,9 @@ pub fn resolve_move_function_args(
     resolve_call_args(&view, type_args, &combined_args_json, parameters)
 }
 
-fn convert_string_to_u128(s: &str) -> Result<u128, anyhow::Error> {
+fn convert_string_to_u256(s: &str) -> Result<U256, anyhow::Error> {
     // Try as normal number
-    if let Ok(v) = s.parse::<u128>() {
+    if let Ok(v) = s.parse::<U256>() {
         return Ok(v);
     }
 
@@ -601,5 +620,5 @@ fn convert_string_to_u128(s: &str) -> Result<u128, anyhow::Error> {
     if !s.starts_with(HEX_PREFIX) {
         bail!("Unable to convert {s} to unsigned int.",);
     }
-    u128::from_str_radix(s.trim_start_matches(HEX_PREFIX), 16).map_err(|e| e.into())
+    U256::from_str_radix(s.trim_start_matches(HEX_PREFIX), 16).map_err(|e| e.into())
 }

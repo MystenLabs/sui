@@ -7,8 +7,8 @@ use axum::{Extension, Json};
 use serde_json::json;
 use strum::IntoEnumIterator;
 
+use fastcrypto::encoding::Hex;
 use sui_types::base_types::ObjectID;
-use sui_types::sui_serde::Hex;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::SUI_SYSTEM_STATE_OBJECT_ID;
 

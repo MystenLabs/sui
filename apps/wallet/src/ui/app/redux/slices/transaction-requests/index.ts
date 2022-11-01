@@ -5,6 +5,7 @@ import {
     Base64DataBuffer,
     getCertifiedTransaction,
     getTransactionEffects,
+    LocalTxnDataSerializer,
     type SuiMoveNormalizedFunction,
 } from '@mysten/sui.js';
 import {
@@ -17,6 +18,8 @@ import type {
     SuiTransactionResponse,
     SignableTransaction,
     SuiExecuteTransactionResponse,
+    MoveCallTransaction,
+    UnserializedSignableTransaction,
 } from '@mysten/sui.js';
 import type { PayloadAction } from '@reduxjs/toolkit';
 import type { TransactionRequest } from '_payloads/transactions';
@@ -59,6 +62,57 @@ export const loadTransactionResponseMetadata = createAsyncThunk<
         );
 
         return { txRequestID, metadata };
+    }
+);
+
+export const deserializeTxn = createAsyncThunk<
+    {
+        txRequestID: string;
+        unSerializedTxn: UnserializedSignableTransaction | null;
+    },
+    { serializedTxn: string; id: string },
+    AppThunkConfig
+>(
+    'deserialize-transaction',
+    async (data, { dispatch, extra: { api, keypairVault } }) => {
+        const { id, serializedTxn } = data;
+        const signer = api.getSignerInstance(keypairVault.getKeyPair());
+        const localSerializer = new LocalTxnDataSerializer(signer.provider);
+        const txnBytes = new Base64DataBuffer(serializedTxn);
+
+        //TODO: Error handling - either show the error or use the serialized txn
+        const deserializeTx =
+            (await localSerializer.deserializeTransactionBytesToSignableTransaction(
+                txnBytes
+            )) as UnserializedSignableTransaction;
+
+        const deserializeData = deserializeTx?.data as MoveCallTransaction;
+        const normalized = {
+            ...deserializeData,
+            gasBudget: Number(deserializeData.gasBudget.toString(10)),
+            gasPayment: '0x' + deserializeData.gasPayment,
+            arguments: deserializeData.arguments.map((d) => '0x' + d),
+        };
+
+        if (deserializeTx && normalized) {
+            dispatch(
+                loadTransactionResponseMetadata({
+                    txRequestID: id,
+                    objectId: normalized.packageObjectId,
+                    moduleName: normalized.module,
+                    functionName: normalized.function,
+                })
+            );
+        }
+
+        return {
+            txRequestID: id,
+            unSerializedTxn:
+                ({
+                    ...deserializeTx,
+                    data: normalized,
+                } as UnserializedSignableTransaction) || null,
+        };
     }
 );
 
@@ -139,7 +193,11 @@ export const respondToTransactionRequest = createAsyncThunk<
 
 const slice = createSlice({
     name: 'transaction-requests',
-    initialState: txRequestsAdapter.getInitialState({ initialized: false }),
+    initialState: txRequestsAdapter.getInitialState({
+        initialized: false,
+        // show serialized txn if deserialization fails
+        deserializeTxnFailed: false,
+    }),
     reducers: {
         setTransactionRequests: (
             state,
@@ -148,6 +206,7 @@ const slice = createSlice({
             // eslint-disable-next-line @typescript-eslint/ban-ts-comment
             // @ts-ignore
             txRequestsAdapter.setAll(state, payload);
+            state.deserializeTxnFailed = false;
             state.initialized = true;
         },
     },
@@ -164,6 +223,22 @@ const slice = createSlice({
                 });
             }
         );
+
+        build.addCase(deserializeTxn.rejected, (state, { payload }) => {
+            state.deserializeTxnFailed = true;
+        });
+
+        build.addCase(deserializeTxn.fulfilled, (state, { payload }) => {
+            const { txRequestID, unSerializedTxn } = payload;
+            if (unSerializedTxn) {
+                txRequestsAdapter.updateOne(state, {
+                    id: txRequestID,
+                    changes: {
+                        unSerializedTxn: unSerializedTxn || null,
+                    },
+                });
+            }
+        });
 
         build.addCase(
             respondToTransactionRequest.fulfilled,

@@ -26,11 +26,12 @@ use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tracing::info;
 use types::{
     Batch, BatchDigest, Certificate, CertificateDigest, ConsensusStore, FetchCertificatesRequest,
-    FetchCertificatesResponse, Header, HeaderBuilder, PrimaryMessage, PrimaryToPrimary,
-    PrimaryToPrimaryServer, PrimaryToWorker, PrimaryToWorkerServer, RequestBatchRequest,
-    RequestBatchResponse, Round, SequenceNumber, Transaction, Vote, WorkerBatchMessage,
-    WorkerDeleteBatchesMessage, WorkerReconfigureMessage, WorkerSynchronizeMessage, WorkerToWorker,
-    WorkerToWorkerServer,
+    FetchCertificatesResponse, GetCertificatesRequest, GetCertificatesResponse, Header,
+    HeaderBuilder, PayloadAvailabilityRequest, PayloadAvailabilityResponse, PrimaryMessage,
+    PrimaryToPrimary, PrimaryToPrimaryServer, PrimaryToWorker, PrimaryToWorkerServer,
+    RequestBatchRequest, RequestBatchResponse, Round, SequenceNumber, Transaction, Vote,
+    WorkerBatchMessage, WorkerDeleteBatchesMessage, WorkerReconfigureMessage,
+    WorkerSynchronizeMessage, WorkerToWorker, WorkerToWorkerServer,
 };
 
 pub mod cluster;
@@ -197,10 +198,22 @@ impl PrimaryToPrimary for PrimaryToPrimaryMockServer {
         Ok(anemo::Response::new(()))
     }
 
+    async fn get_certificates(
+        &self,
+        _request: anemo::Request<GetCertificatesRequest>,
+    ) -> Result<anemo::Response<GetCertificatesResponse>, anemo::rpc::Status> {
+        unimplemented!()
+    }
     async fn fetch_certificates(
         &self,
         _request: anemo::Request<FetchCertificatesRequest>,
     ) -> Result<anemo::Response<FetchCertificatesResponse>, anemo::rpc::Status> {
+        unimplemented!()
+    }
+    async fn get_payload_availability(
+        &self,
+        _request: anemo::Request<PayloadAvailabilityRequest>,
+    ) -> Result<anemo::Response<PayloadAvailabilityResponse>, anemo::rpc::Status> {
         unimplemented!()
     }
 }
@@ -479,31 +492,19 @@ pub fn make_signed_certificates(
     )
 }
 
-// Creates an unsigned certificate from its given round, origin and parents,
-// Note: the certificate is unsigned
+// Creates a badly signed certificate from its given round, origin and parents,
+// Note: the certificate is signed by a random key rather than its author
 pub fn mock_certificate(
     committee: &Committee,
     origin: PublicKey,
     round: Round,
     parents: BTreeSet<CertificateDigest>,
 ) -> (CertificateDigest, Certificate) {
-    let certificate = Certificate::new_unsigned(
-        committee,
-        Header {
-            author: origin,
-            round,
-            parents,
-            payload: fixture_payload(1),
-            ..Header::default()
-        },
-        Vec::new(),
-    )
-    .unwrap();
-    (certificate.digest(), certificate)
+    mock_certificate_with_epoch(committee, origin, round, 0, parents)
 }
 
-// Creates an unsigned certificate from its given round, epoch, origin, and parents,
-// Note: the certificate is unsigned
+// Creates a badly signed certificate from its given round, epoch, origin, and parents,
+// Note: the certificate is signed by a random key rather than its author
 pub fn mock_certificate_with_epoch(
     committee: &Committee,
     origin: PublicKey,
@@ -511,19 +512,16 @@ pub fn mock_certificate_with_epoch(
     epoch: Epoch,
     parents: BTreeSet<CertificateDigest>,
 ) -> (CertificateDigest, Certificate) {
-    let certificate = Certificate::new_unsigned(
-        committee,
-        Header {
-            author: origin,
-            round,
-            epoch,
-            parents,
-            payload: fixture_payload(1),
-            ..Header::default()
-        },
-        Vec::new(),
-    )
-    .unwrap();
+    let header_builder = HeaderBuilder::default();
+    let header = header_builder
+        .author(origin)
+        .round(round)
+        .epoch(epoch)
+        .parents(parents)
+        .payload(fixture_payload(1))
+        .build(&KeyPair::generate(&mut rand::thread_rng()))
+        .unwrap();
+    let certificate = Certificate::new_unsigned(committee, header, Vec::new()).unwrap();
     (certificate.digest(), certificate)
 }
 
@@ -685,7 +683,15 @@ impl CommitteeFixture {
 
         self.authorities
             .iter()
-            .map(|a| a.header(&committee))
+            .map(|a| a.header_with_round(&committee, 1))
+            .collect()
+    }
+
+    pub fn headers_next_round(&self) -> Vec<Header> {
+        let committee = self.committee();
+        self.authorities
+            .iter()
+            .map(|a| a.header_with_round(&committee, 2))
             .collect()
     }
 
@@ -818,6 +824,14 @@ impl AuthorityFixture {
     pub fn header(&self, committee: &Committee) -> Header {
         self.header_builder(committee)
             .payload(Default::default())
+            .build(&self.keypair)
+            .unwrap()
+    }
+
+    pub fn header_with_round(&self, committee: &Committee, round: Round) -> Header {
+        self.header_builder(committee)
+            .payload(Default::default())
+            .round(round)
             .build(&self.keypair)
             .unwrap()
     }

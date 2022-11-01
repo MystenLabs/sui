@@ -55,6 +55,14 @@ export const Package: StoryObj<PageHeaderProps> = {
     },
 };
 
+export const PackageLongSubtitle: StoryObj<PageHeaderProps> = {
+    args: {
+        title,
+        type: 'Package',
+        subtitle: title,
+    },
+};
+
 export const Pay: StoryObj<PageHeaderProps> = {
     args: {
         title,

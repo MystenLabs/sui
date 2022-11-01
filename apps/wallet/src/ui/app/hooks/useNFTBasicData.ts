@@ -3,7 +3,7 @@
 
 import { isSuiMoveObject, getObjectId, getObjectFields } from '@mysten/sui.js';
 
-import useFileExtentionType from './useFileExtentionType';
+import useFileExtensionType from './useFileExtensionType';
 import useMediaUrl from './useMediaUrl';
 
 import type { SuiObject } from '@mysten/sui.js';
@@ -17,12 +17,12 @@ export default function useNFTBasicData(nftObj: SuiObject) {
         objType = nftObj.data.type;
         nftFields = getObjectFields(nftObj.data);
     }
-    const fileExtentionType = useFileExtentionType(filePath || '');
+    const fileExtensionType = useFileExtensionType(filePath || '');
     return {
         nftObjectID,
         filePath,
         nftFields,
-        fileExtentionType,
+        fileExtensionType,
         objType,
     };
 }
