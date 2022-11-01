@@ -553,3 +553,8 @@ impl WriteStore for SharedInMemoryStore {
         Ok(())
     }
 }
+
+/// Trait for resolving the timestamp to assign to objects that are modified in storage.
+pub trait TimestampResolver {
+    fn lamport_timestamp(&self) -> SequenceNumber;
+}

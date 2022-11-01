@@ -500,33 +500,43 @@ impl<'a> SuiTestAdapter<'a> {
             // TODO: Support different epochs in transactional tests.
             0,
         );
-        let created_set: BTreeSet<_> = created.iter().map(|((id, _, _), _)| *id).collect();
-        let mut created_ids: Vec<_> = created_set.iter().copied().collect();
-        let mut written_ids: Vec<_> = mutated
-            .iter()
-            .chain(&unwrapped)
-            .map(|((id, _, _), _)| *id)
-            .collect();
+
+        let mut created_ids: Vec<_> = created.iter().map(|((id, _, _), _)| *id).collect();
+        let unwrapped_ids: Vec<_> = unwrapped.iter().map(|((id, _, _), _)| *id).collect();
+        let mut written_ids: Vec<_> = mutated.iter().map(|((id, _, _), _)| *id).collect();
         let mut deleted_ids: Vec<_> = deleted
             .iter()
             .chain(&wrapped)
             .map(|(id, _, _)| *id)
             .collect();
+
         // update storage
         Arc::get_mut(&mut self.storage)
             .unwrap()
             .finish(inner.written, inner.deleted);
-        // enumerate objects after written to storage, sort by a "stable" sorting as the
-        // object ID is not stable
-        let mut created_ids_vec = created_set.iter().collect::<Vec<_>>();
-        created_ids_vec.sort_by_key(|id| self.get_object_sorting_key(id));
-        for id in created_ids_vec {
-            self.enumerate_fake(*id);
+
+        // make sure objects that have previously not been in storage get assigned a fake id.
+        let mut might_need_fake_id: Vec<_> = created_ids
+            .iter()
+            .chain(unwrapped_ids.iter())
+            .copied()
+            .collect();
+
+        // Use a stable sort before assigning fake ids, so test output remains stable.
+        might_need_fake_id.sort_by_key(|id| self.get_object_sorting_key(id));
+        for id in might_need_fake_id {
+            self.enumerate_fake(id);
         }
+
+        // Treat unwrapped objects as writes (even though sometimes this is the first time we can
+        // refer to them at their id in storage).
+        written_ids.extend(unwrapped_ids.into_iter());
+
         // sort by fake id
         created_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
         written_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
         deleted_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
+
         match status {
             ExecutionStatus::Success { .. } => Ok(TxnSummary {
                 created: created_ids,

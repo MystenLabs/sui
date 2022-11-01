@@ -27,5 +27,5 @@ deleted: object(108)
 
 task 6 'view-object'. lines 81-81:
 Owner: Account Address ( A )
-Version: 2
+Version: 3
 Contents: test::object_basics::Object {id: sui::object::UID {id: sui::object::ID {bytes: fake(106)}}, value: 10u64}

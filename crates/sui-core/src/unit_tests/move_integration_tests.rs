@@ -21,7 +21,6 @@ use sui_types::{
     error::SuiError,
     event::{Event, EventType},
     messages::ExecutionStatus,
-    object::OBJECT_START_VERSION,
 };
 
 use std::path::PathBuf;
@@ -62,6 +61,9 @@ fn test_object_wrapping_unwrapping() {
         )
         .await;
 
+        let gas_version = authority.get_object(&gas).await.unwrap().unwrap().version();
+        let create_child_version = SequenceNumber::lamport_increment([gas_version]);
+
         // Create a Child object.
         let effects = call_move(
             &authority,
@@ -82,7 +84,10 @@ fn test_object_wrapping_unwrapping() {
             effects.status
         );
         let child_object_ref = effects.created[0].0;
-        assert_eq!(child_object_ref.1, OBJECT_START_VERSION);
+        assert_eq!(child_object_ref.1, create_child_version);
+
+        let wrapped_version =
+            SequenceNumber::lamport_increment([child_object_ref.1, effects.gas_object.0 .1]);
 
         // Create a Parent object, by wrapping the child object.
         let effects = call_move(
@@ -115,16 +120,18 @@ fn test_object_wrapping_unwrapping() {
         let new_child_object_ref = effects.wrapped[0];
         let expected_child_object_ref = (
             child_object_ref.0,
-            child_object_ref.1.increment(),
+            wrapped_version,
             ObjectDigest::OBJECT_DIGEST_WRAPPED,
         );
         // Make sure that the child's version gets increased after wrapped.
         assert_eq!(new_child_object_ref, expected_child_object_ref);
         check_latest_object_ref(&authority, &expected_child_object_ref).await;
-        let child_object_ref = new_child_object_ref;
 
         let parent_object_ref = effects.created[0].0;
-        assert_eq!(parent_object_ref.1, OBJECT_START_VERSION);
+        assert_eq!(parent_object_ref.1, wrapped_version);
+
+        let unwrapped_version =
+            SequenceNumber::lamport_increment([parent_object_ref.1, effects.gas_object.0 .1]);
 
         // Extract the child out of the parent.
         let effects = call_move(
@@ -156,9 +163,15 @@ fn test_object_wrapping_unwrapping() {
             (2, 0, 1)
         );
         // Make sure that version increments again when unwrapped.
-        assert_eq!(effects.unwrapped[0].0 .1, child_object_ref.1.increment());
+        assert_eq!(effects.unwrapped[0].0 .1, unwrapped_version);
         check_latest_object_ref(&authority, &effects.unwrapped[0].0).await;
         let child_object_ref = effects.unwrapped[0].0;
+
+        let rewrap_version = SequenceNumber::lamport_increment([
+            parent_object_ref.1,
+            child_object_ref.1,
+            effects.gas_object.0 .1,
+        ]);
 
         // Wrap the child to the parent again.
         let effects = call_move(
@@ -187,13 +200,16 @@ fn test_object_wrapping_unwrapping() {
         assert_eq!((effects.mutated.len(), effects.wrapped.len()), (2, 1));
         let expected_child_object_ref = (
             child_object_ref.0,
-            child_object_ref.1.increment(),
+            rewrap_version,
             ObjectDigest::OBJECT_DIGEST_WRAPPED,
         );
         assert_eq!(effects.wrapped[0], expected_child_object_ref);
         check_latest_object_ref(&authority, &expected_child_object_ref).await;
         let child_object_ref = effects.wrapped[0];
         let parent_object_ref = effects.mutated_excluding_gas().next().unwrap().0;
+
+        let deleted_version =
+            SequenceNumber::lamport_increment([parent_object_ref.1, effects.gas_object.0 .1]);
 
         // Now delete the parent object, which will in turn delete the child object.
         let effects = call_move(
@@ -215,17 +231,17 @@ fn test_object_wrapping_unwrapping() {
             effects.status
         );
         assert_eq!(effects.deleted.len(), 2);
-        // Check that both objects are marked as wrapped in the authority.
+        // Check that both objects are marked as deleted in the authority.
         let expected_child_object_ref = (
             child_object_ref.0,
-            child_object_ref.1.increment(),
+            deleted_version,
             ObjectDigest::OBJECT_DIGEST_DELETED,
         );
         assert!(effects.deleted.contains(&expected_child_object_ref));
         check_latest_object_ref(&authority, &expected_child_object_ref).await;
         let expected_parent_object_ref = (
             parent_object_ref.0,
-            parent_object_ref.1.increment(),
+            deleted_version,
             ObjectDigest::OBJECT_DIGEST_DELETED,
         );
         assert!(effects.deleted.contains(&expected_parent_object_ref));

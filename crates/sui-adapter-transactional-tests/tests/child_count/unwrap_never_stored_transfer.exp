@@ -12,6 +12,5 @@ created: object(107)
 written: object(106)
 
 task 3 'run'. lines 42-42:
-created: object(109)
-written: object(108)
+written: object(108), object(109)
 deleted: object(107)
