@@ -31,7 +31,10 @@ pub enum DependencyVerificationError {
     /// Dependency address contains a Sui object, not a Move package
     ObjectFoundWhenPackageExpected(ObjectID, SuiRawMoveObject),
     /// A local dependency was not found
-    LocalDependencyNotFound { package: Symbol, module: Option<Symbol> },
+    LocalDependencyNotFound {
+        package: Symbol,
+        module: Option<Symbol>,
+    },
     /// An on-chain version of a local dependency was not found
     ///
     /// params:  package, module
