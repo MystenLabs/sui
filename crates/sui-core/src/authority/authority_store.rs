@@ -1129,8 +1129,17 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             .contains_key(digest)?)
     }
 
+    pub async fn record_owned_object_cert_from_consensus(
+        &self,
+        certificate: &VerifiedCertificate,
+        consensus_index: ExecutionIndicesWithHash,
+    ) -> Result<(), SuiError> {
+        let write_batch = self.epoch_tables().last_consensus_index.batch();
+        self.finish_consensus_message_process(write_batch, certificate, consensus_index)
+    }
+
     /// Lock a sequence number for the shared objects of the input transaction. Also update the
-    /// last consensus index.
+    /// last consensus index and consensus_message_processed table.
     /// This function must only be called from the consensus task (i.e. from handle_consensus_transaction).
     ///
     /// Caller is responsible to call consensus_message_processed before this method
@@ -1176,7 +1185,6 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
                "locking shared objects");
 
         // Make an iterator to update the last consensus index.
-        let index_to_write = iter::once((LAST_CONSENSUS_INDEX_ADDR, consensus_index));
 
         // Holding _tx_lock avoids the following race:
         // - we check effects_exist, returns false
@@ -1218,13 +1226,29 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
 
         write_batch = write_batch
             .insert_batch(&self.epoch_tables().next_object_versions, schedule_to_write)?;
-        write_batch =
-            write_batch.insert_batch(&self.epoch_tables().last_consensus_index, index_to_write)?;
-        write_batch = write_batch.insert_batch(
+
+        self.finish_consensus_message_process(write_batch, certificate, consensus_index)
+    }
+
+    /// When we finish processing certificate from consensus we record this information.
+    /// Tables updated:
+    ///  * consensus_message_processed - indicate that this certificate was processed by consensus
+    ///  * last_consensus_index - records last processed position in consensus stream
+    /// Self::consensus_message_processed returns true after this call for given certificate
+    fn finish_consensus_message_process(
+        &self,
+        mut batch: DBBatch,
+        certificate: &VerifiedCertificate,
+        consensus_index: ExecutionIndicesWithHash,
+    ) -> SuiResult {
+        let transaction_digest = *certificate.digest();
+        let index_to_write = iter::once((LAST_CONSENSUS_INDEX_ADDR, consensus_index));
+        batch = batch.insert_batch(&self.epoch_tables().last_consensus_index, index_to_write)?;
+        batch = batch.insert_batch(
             &self.epoch_tables().consensus_message_processed,
             iter::once((transaction_digest, true)),
         )?;
-        write_batch.write().map_err(SuiError::from)
+        Ok(batch.write()?)
     }
 
     pub fn transactions_in_seq_range(

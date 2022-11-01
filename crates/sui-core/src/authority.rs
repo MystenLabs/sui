@@ -2221,13 +2221,6 @@ impl AuthorityState {
     }
 
     fn verify_narwhal_transaction(&self, certificate: &CertifiedTransaction) -> SuiResult {
-        // Ensure the input is a shared object certificate. Remember that Byzantine authorities
-        // may input anything into consensus.
-        fp_ensure!(
-            certificate.contains_shared_object(),
-            SuiError::NotASharedObjectTransaction
-        );
-
         // Check the certificate. Remember that Byzantine authorities may input anything into
         // consensus.
         certificate.verify_signatures(&self.committee.load())
@@ -2326,11 +2319,15 @@ impl AuthorityState {
                     Some(certificate.clone()),
                 )])?;
 
-                self.database
-                    .lock_shared_objects(&certificate, consensus_index)
-                    .await?;
-
-                Ok(())
+                if certificate.contains_shared_object() {
+                    self.database
+                        .lock_shared_objects(&certificate, consensus_index)
+                        .await
+                } else {
+                    self.database
+                        .record_owned_object_cert_from_consensus(&certificate, consensus_index)
+                        .await
+                }
             }
             ConsensusTransactionKind::Checkpoint(fragment) => {
                 match &fragment.message {
