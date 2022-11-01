@@ -144,7 +144,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             // prevent the client from continually retrying it.
             let err = "tx has exceeded the maximum retry limit for transient errors".to_owned();
             debug!(?digest, "{}", err);
-            return Err(SuiError::ErrorWhileProcessingConfirmationTransaction { err });
+            return Err(SuiError::ErrorWhileProcessingCertificate { err });
         }
 
         Ok(guard)

@@ -1726,8 +1726,8 @@ where
                                     );
                                 }
                                 state.errors.push(
-                                    SuiError::ErrorWhileProcessingTransactionTransaction {
-                                        err: format!("Unexpected: {:?}", ret),
+                                    SuiError::UnexectedResultFromValidatorHandleTransaction {
+                                        err: format!("{:?}", ret),
                                     },
                                 );
                                 state.bad_stake += weight; // This is the bad stake counter
@@ -1790,8 +1790,8 @@ where
         // If we have some certificate return it, or return an error.
         state
             .certificate
-            .ok_or_else(|| SuiError::ErrorWhileProcessingTransactionTransaction {
-                err: format!("No certificate: {:?}", state.errors),
+            .ok_or(SuiError::QuorumFailedToProcessTransaction {
+                errors: state.errors,
             })
     }
 
