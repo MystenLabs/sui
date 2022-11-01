@@ -47,9 +47,9 @@ function TxLinks({ data }: { data: Addresslist }) {
                                     isLink={true}
                                     copyButton="16"
                                     extra={
-                                        <IconTooltip>
-                                            VERSION {obj.version}
-                                        </IconTooltip>
+                                        <IconTooltip
+                                            tip={`VERSION ${obj.version}`}
+                                        />
                                     }
                                 />
                             </li>
