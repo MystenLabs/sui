@@ -18,6 +18,7 @@ use move_core_types::{
 use sui_framework_build::compiled_package::BuildConfig;
 use sui_types::{
     crypto::{get_key_pair, AccountKeyPair},
+    error::SuiError,
     event::{Event, EventType},
     messages::ExecutionStatus,
     object::OBJECT_START_VERSION,
@@ -1829,6 +1830,23 @@ fn test_entry_point_string_vec_error() {
             "{:?}",
             effects.status
         );
+    })
+}
+
+#[test]
+#[cfg_attr(msim, ignore)]
+fn test_object_struct_error() {
+    run_tokio_test_with_big_stack(async move {
+        let mut build_config = BuildConfig::default();
+        build_config.config.test_mode = true;
+        let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        // in this package object struct is defined incorrectly and publishing should fail (it's
+        // defined in test-only code hence cannot be checked by transactional testing framework
+        // which goes through "normal" publishing path which excludes tests).
+        path.push("src/unit_tests/data/object_struct/");
+        let res = sui_framework::build_move_package(&path, build_config);
+        eprintln!("ERR: {}", res.as_ref().err().unwrap());
+        assert!(matches!(res.err().unwrap(), SuiError::ExecutionError(_)));
     })
 }
 

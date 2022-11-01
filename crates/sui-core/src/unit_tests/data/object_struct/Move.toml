@@ -1,0 +1,9 @@
+[package]
+name = "object_struct"
+version = "0.0.1"
+
+[dependencies]
+Sui = { local = "../../../../../sui-framework" }
+
+[addresses]
+object_struct =  "0x0"
