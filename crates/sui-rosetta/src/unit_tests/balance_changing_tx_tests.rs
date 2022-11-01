@@ -287,8 +287,6 @@ async fn test_transaction(
         .map_err(|e| anyhow!("TX execution failed for {data:#?}, error : {e}"))
         .unwrap();
 
-    println!("{:#?}", response.effects);
-
     let effect = response.effects.clone().unwrap();
 
     assert_eq!(

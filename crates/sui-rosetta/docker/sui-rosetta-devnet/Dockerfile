@@ -8,8 +8,7 @@ ENV PATH="/root/.cargo/bin:${PATH}"
 
 FROM chef AS builder
 RUN git clone https://github.com/MystenLabs/sui .
-# We can change this to `git checkout -b devnet` after next devnet update
-RUN git checkout 65aa6883aebbe7e429a1d95c82b4b5b2fc2d73bc
+RUN git checkout devnet
 
 RUN curl -sSfL https://raw.githubusercontent.com/coinbase/rosetta-cli/master/scripts/install.sh | sh -s
 RUN curl -fLJO https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob

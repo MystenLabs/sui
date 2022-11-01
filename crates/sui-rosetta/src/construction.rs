@@ -1,23 +1,23 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use axum::{Extension, Json};
-
 use fastcrypto::encoding::Hex;
-use sui_types::base_types::{encode_bytes_hex, ObjectInfo, SuiAddress};
+
+use sui_types::base_types::{encode_bytes_hex, SuiAddress};
 use sui_types::crypto;
 use sui_types::crypto::{SignableBytes, SignatureScheme, ToFromBytes};
+use sui_types::gas_coin::GasCoin;
 use sui_types::messages::{
     QuorumDriverRequest, QuorumDriverRequestType, QuorumDriverResponse, Transaction,
     TransactionData,
 };
-use sui_types::object::ObjectRead;
+use sui_types::object::Owner;
 
 use crate::errors::Error;
-use crate::operations::{Operation, SuiAction};
+use crate::operations::Operation;
 use crate::types::{
     AccountIdentifier, ConstructionCombineRequest, ConstructionCombineResponse,
     ConstructionDeriveRequest, ConstructionDeriveResponse, ConstructionHashRequest,
@@ -59,7 +59,8 @@ pub async fn payloads(
     let metadata = request
         .metadata
         .ok_or_else(|| Error::new(ErrorType::MissingMetadata))?;
-    let data = Operation::parse_transaction_data(request.operations, metadata).await?;
+
+    let data = Operation::create_data(request.operations, metadata).await?;
     let hex_bytes = encode_bytes_hex(data.to_bytes());
 
     Ok(ConstructionPayloadsResponse {
@@ -158,14 +159,15 @@ pub async fn preprocess(
     Extension(env): Extension<SuiEnv>,
 ) -> Result<ConstructionPreprocessResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
-    let action: SuiAction = request.operations.try_into()?;
+    let sender = request
+        .operations
+        .first()
+        .and_then(|op| op.account.clone())
+        .ok_or_else(|| Error::new(ErrorType::MalformedOperationError))?
+        .address;
     Ok(ConstructionPreprocessResponse {
-        options: Some(MetadataOptions {
-            input_objects: action.input_objects(),
-        }),
-        required_public_keys: vec![AccountIdentifier {
-            address: action.signer(),
-        }],
+        options: Some(MetadataOptions { sender }),
+        required_public_keys: vec![AccountIdentifier { address: sender }],
     })
 }
 
@@ -201,20 +203,25 @@ pub async fn metadata(
 ) -> Result<ConstructionMetadataResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
 
-    let input_objects = if let Some(option) = request.options {
-        let mut input_objects = BTreeMap::new();
-        for id in option.input_objects {
-            if let ObjectRead::Exists(oref, o, _) = context.state.get_object_read(&id).await? {
-                input_objects.insert(id, ObjectInfo::new(&oref, &o));
-            };
-        }
-        input_objects
+    let sender_coins = if let Some(option) = request.options {
+        context
+            .state
+            .get_owner_objects(Owner::AddressOwner(option.sender))?
+            .iter()
+            .filter_map(|info| {
+                if info.type_ == GasCoin::type_().to_string() {
+                    Some(info.into())
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>()
     } else {
         Default::default()
     };
 
     Ok(ConstructionMetadataResponse {
-        metadata: ConstructionMetadata { input_objects },
+        metadata: ConstructionMetadata { sender_coins },
         suggested_fee: vec![],
     })
 }
