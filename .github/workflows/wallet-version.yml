@@ -1,4 +1,4 @@
-name: Wallet Extension PR Checks
+name: Automated Wallet Versioning
 
 on:
   workflow_dispatch:
@@ -21,6 +21,14 @@ jobs:
           app_id: ${{ secrets.APP_ID }}
           private_key: ${{ secrets.APP_PRIVATE_KEY }}
       - uses: actions/checkout@v3
+      - uses: pnpm/action-setup@v2.2.4
+        with:
+          version: 7
+      - name: Install Nodejs
+        uses: actions/setup-node@v3
+        with:
+          node-version: "16"
+          cache: "pnpm"
       - name: Increment patch version
         working-directory: ./apps/wallet
         run: |
