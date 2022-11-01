@@ -1,5 +1,19 @@
 # @mysten/wallet-adapter-all-wallets
 
+## 0.3.0
+
+### Minor Changes
+
+- 3ead1eefb: Remove legacy Sui Wallet adapter
+- f5679be35: Introduce unsafe burner wallet adapter
+
+### Patch Changes
+
+- Updated dependencies [56de8448f]
+- Updated dependencies [f5679be35]
+  - @mysten/wallet-adapter-wallet-standard@0.3.0
+  - @mysten/wallet-adapter-unsafe-burner@0.2.0
+
 ## 0.2.2
 
 ### Patch Changes
