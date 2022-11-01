@@ -22,11 +22,11 @@ use move_package::BuildConfig as MoveBuildConfig;
 use serde::Serialize;
 use serde_json::json;
 use sui_bytecode_src_verifier::BytecodeSourceVerifier;
-use sui_framework::compiled_move_package_to_bytes;
+use sui_framework::build_move_package;
 use tracing::info;
 
-use sui_framework::build_move_package;
-use sui_framework_build::compiled_package::{BuildConfig, CompiledPackage};
+
+use sui_framework_build::compiled_package::{BuildConfig};
 use crate::config::{Config, PersistedConfig, SuiClientConfig};
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
@@ -49,12 +49,10 @@ use sui_types::{
     messages::TransactionData,
 };
 
-#[cfg(msim)]
-use sui_sdk::embedded_gateway::SuiClient;
 #[cfg(not(msim))]
 use sui_sdk::SuiClient;
 
-use crate::config::{Config, PersistedConfig, SuiClientConfig, SuiEnv};
+use crate::config::{SuiEnv};
 
 pub const EXAMPLE_NFT_NAME: &str = "Example NFT";
 pub const EXAMPLE_NFT_DESCRIPTION: &str = "An NFT created by the Sui Command Line Tool";
@@ -427,10 +425,12 @@ impl SuiClientCommands {
                     },
                 )?;
 
+                let compiled_modules = compiled_package.get_package_bytes();
+
                 // verify that all dependency packages have the correct on-chain bytecode
                 let mut verifier = BytecodeSourceVerifier::new(context.client.read_api(), false);
                 match verifier
-                    .verify_deployed_dependencies(compiled_package)
+                    .verify_deployed_dependencies(compiled_package.package)
                     .await
                 {
                     Ok(_vr) => println!("dependencies' on-chain bytecode successfully verified\n"),
