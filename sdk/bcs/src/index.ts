@@ -11,7 +11,6 @@
  * @property {BcsReader}
  */
 
-import * as BN from 'bn.js';
 import { toB64, fromB64 } from './b64';
 import { toHEX, fromHEX } from './hex';
 
@@ -72,61 +71,58 @@ export class BcsReader {
    * Read U8 value from the buffer and shift cursor by 1.
    * @returns
    */
-  read8(): BN {
+  read8(): bigint {
     let value = this.dataView.getUint8(this.bytePosition);
     this.shift(1);
-    return new BN.BN(value, 10);
+    return BigInt(value) as bigint;
   }
   /**
    * Read U16 value from the buffer and shift cursor by 2.
    * @returns
    */
-  read16(): BN {
+  read16(): bigint {
     let value = this.dataView.getUint16(this.bytePosition, true);
     this.shift(2);
-    return new BN.BN(value, 10);
+    return BigInt(value) as bigint;
   }
   /**
    * Read U32 value from the buffer and shift cursor by 4.
    * @returns
    */
-  read32(): BN {
+  read32(): bigint {
     let value = this.dataView.getUint32(this.bytePosition, true);
     this.shift(4);
-    return new BN.BN(value, 10);
+    return BigInt(value) as bigint;
   }
   /**
    * Read U64 value from the buffer and shift cursor by 8.
    * @returns
    */
-  read64(): BN {
+  read64(): bigint {
     let value1 = this.read32();
     let value2 = this.read32();
     let result = value2.toString(16) + value1.toString(16).padStart(8, '0');
-
-    return new BN.BN(result, 16);
+    return BigInt(result);
   }
   /**
    * Read U128 value from the buffer and shift cursor by 16.
    * @returns
    */
-  read128(): BN {
+  read128(): bigint {
     let value1 = this.read64();
     let value2 = this.read64();
-    let result = value2.toString(16) + value1.toString(16).padStart(8, '0');
-
-    return new BN.BN(result, 16);
+    let result = '0x' + value2.toString(16) + value1.toString(16).padStart(8, '0');
+    return BigInt(result);
   }
   /**
    * Read U128 value from the buffer and shift cursor by 32.
    * @returns
    */
-  read256(): BN {
+  read256(): bigint {
     let value1 = this.read128();
     let value2 = this.read128();
     let result = value2.toString(16) + value1.toString(16).padStart(16, '0');
-
-    return new BN.BN(result, 16);
+    return BigInt(result);
   }
   /**
    * Read `num` number of bytes from the buffer and shift cursor by `num`.
@@ -196,17 +192,17 @@ export class BcsWriter {
   }
 
   /**
-   * Unify argument types by converting them to BN.
+   * Unify argument types by converting them to bigint.
    */
-  static toBN(number: number | BN | bigint | string): BN {
+  static toBN(number: number | bigint | bigint | string): bigint {
     switch (typeof number) {
       case 'boolean':
         number = +number;
-        return new BN.BN(number.toString());
+        return BigInt(number.toString());
       case 'bigint':
-        return new BN.BN(number.toString());
+        return number
       default:
-        return new BN.BN(number);
+        return BigInt(number);
     }
   }
 
@@ -225,8 +221,8 @@ export class BcsWriter {
    * @param {Number} value Value to write.
    * @returns {this}
    */
-  write8(value: number | bigint | BN): this {
-    this.dataView.setUint8(this.bytePosition, +BcsWriter.toBN(value));
+  write8(value: number | bigint | bigint): this {
+    this.dataView.setUint8(this.bytePosition, Number(BigInt(value)));
     return this.shift(1);
   }
   /**
@@ -234,8 +230,8 @@ export class BcsWriter {
    * @param {Number} value Value to write.
    * @returns {this}
    */
-  write16(value: number | bigint | BN): this {
-    this.dataView.setUint16(this.bytePosition, +BcsWriter.toBN(value), true);
+  write16(value: number | bigint | bigint): this {
+    this.dataView.setUint16(this.bytePosition, Number(BigInt(value)), true);
     return this.shift(2);
   }
   /**
@@ -243,8 +239,8 @@ export class BcsWriter {
    * @param {Number} value Value to write.
    * @returns {this}
    */
-  write32(value: number | bigint | BN): this {
-    this.dataView.setUint32(this.bytePosition, +BcsWriter.toBN(value), true);
+  write32(value: number | bigint | bigint): this {
+    this.dataView.setUint32(this.bytePosition, Number(BcsWriter.toBN(value)), true);
     return this.shift(4);
   }
   /**
@@ -252,12 +248,9 @@ export class BcsWriter {
    * @param {bigint} value Value to write.
    * @returns {this}
    */
-  write64(value: bigint | BN): this {
-    BcsWriter.toBN(value)
-      .toArray('le', 8)
-      .forEach(el => this.write8(el));
-
-    return this;
+  write64(value: bigint): this {
+    this.dataView.setBigUint64(this.bytePosition, value, true);
+    return this.shift(8);
   }
   /**
    * Write a U128 value into a buffer and shift cursor position by 16.
@@ -266,8 +259,13 @@ export class BcsWriter {
    * @param {bigint} value Value to write.
    * @returns {this}
    */
-  write128(value: bigint | BN): this {
+  write128(value: bigint): this {
+    this.dataView.setBigUint64(this.bytePosition, value, true);
+    this.shift(8);
+
+    this.dataView.setBigUint64
     BcsWriter.toBN(value)
+
       .toArray('le', 16)
       .forEach(el => this.write8(el));
 
@@ -280,8 +278,9 @@ export class BcsWriter {
    * @param {bigint} value Value to write.
    * @returns {this}
    */
-  write256(value: bigint | BN): this {
+  write256(value: bigint): this {
     BcsWriter.toBN(value)
+    value.
       .toArray('le', 32)
       .forEach(el => this.write8(el));
 
@@ -1051,7 +1050,7 @@ export function registerPrimitives(bcs: BCS): void {
 
   bcs.registerType(
     BCS.U128,
-    (writer: BcsWriter, data: BN | bigint) => writer.write128(data),
+    (writer: BcsWriter, data: bigint | bigint) => writer.write128(data),
     (reader: BcsReader) => reader.read128(),
     _u128 => true
   );

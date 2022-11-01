@@ -88,9 +88,9 @@ export type CertifiedTransaction = {
 };
 
 export type GasCostSummary = {
-  computationCost: HexInteger;
-  storageCost: HexInteger;
-  storageRebate: HexInteger;
+  computationCost: bigint;
+  storageCost: bigint;
+  storageRebate: bigint;
 };
 
 export type ExecutionStatusType = 'success' | 'failure';
@@ -391,7 +391,7 @@ export function getExecutionStatusGasSummary(
 
 export function getTotalGasUsed(
   data: SuiTransactionResponse | SuiExecuteTransactionResponse
-): number | undefined {
+): bigint | undefined {
   const gasSummary = getExecutionStatusGasSummary(data);
   return gasSummary
     ? gasSummary.computationCost +
