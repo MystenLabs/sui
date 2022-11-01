@@ -15,6 +15,8 @@ use tokio::task::JoinHandle;
 use tokio::time::Instant;
 use tracing::info;
 
+use sui_metrics::spawn_monitored_task;
+
 type InnerLockTable<K> = HashMap<K, Arc<Mutex<()>>>;
 // MutexTable supports mutual exclusion on keys such as TransactionDigest or ObjectDigest
 pub struct MutexTable<K: Hash> {
@@ -65,7 +67,7 @@ impl<K: Hash + Eq + Send + Sync + 'static> MutexTable<K> {
             random_state: RandomState::new(),
             lock_table,
             _k: std::marker::PhantomData {},
-            _cleaner: tokio::spawn(async move {
+            _cleaner: spawn_monitored_task!(async move {
                 tokio::time::sleep(cleanup_initial_delay).await;
                 let mut previous_cleanup_instant = Instant::now();
                 while !stop_cloned.load(Ordering::SeqCst) {
@@ -228,7 +230,7 @@ async fn test_mutex_table_concurrent_in_same_bucket() {
     john.unwrap();
     {
         let mutex_table = mutex_table.clone();
-        tokio::spawn(async move {
+        spawn_monitored_task!(async move {
             mutex_table.acquire_lock("john".to_string()).await;
         });
     }
@@ -240,7 +242,7 @@ async fn test_mutex_table_concurrent_in_same_bucket() {
     let _john = mutex_table.acquire_lock("john".to_string()).await;
     {
         let mutex_table = mutex_table.clone();
-        tokio::spawn(async move {
+        spawn_monitored_task!(async move {
             mutex_table.acquire_lock("john".to_string()).await;
         });
     }

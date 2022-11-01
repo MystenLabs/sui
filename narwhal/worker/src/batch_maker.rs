@@ -18,6 +18,7 @@ use std::convert::TryInto;
 use futures::{Future, StreamExt};
 
 use std::sync::Arc;
+use sui_metrics::spawn_monitored_task;
 use tokio::{
     sync::watch,
     task::JoinHandle,
@@ -78,7 +79,7 @@ impl BatchMaker {
         store: Store<BatchDigest, Batch>,
         tx_digest: Sender<(WorkerOurBatchMessage, PrimaryResponse)>,
     ) -> JoinHandle<()> {
-        tokio::spawn(async move {
+        spawn_monitored_task!(async move {
             Self {
                 id,
                 committee,

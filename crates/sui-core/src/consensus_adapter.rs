@@ -23,6 +23,7 @@ use std::{
     collections::{hash_map::DefaultHasher, HashMap},
     hash::{Hash, Hasher},
 };
+use sui_metrics::spawn_monitored_task;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::messages_checkpoint::SignedCheckpointFragmentMessage;
 use sui_types::{
@@ -360,13 +361,11 @@ pub struct ConsensusListener {
 impl ConsensusListener {
     /// Spawn a new consensus adapter in a dedicated tokio task.
     pub fn spawn(rx_consensus_input: Receiver<ConsensusListenerMessage>) -> JoinHandle<()> {
-        tokio::spawn(
-            Self {
-                rx_consensus_input,
-                pending: HashMap::new(),
-            }
-            .run(),
-        )
+        spawn_monitored_task!(Self {
+            rx_consensus_input,
+            pending: HashMap::new(),
+        }
+        .run())
     }
 
     /// Hash serialized consensus transactions. We do not need specific cryptographic properties except
@@ -526,7 +525,7 @@ impl CheckpointConsensusAdapter {
 
     /// Spawn a `CheckpointConsensusAdapter` in a dedicated tokio task.
     pub fn spawn(mut self) -> JoinHandle<()> {
-        tokio::spawn(async move { self.run().await })
+        spawn_monitored_task!(async move { self.run().await })
     }
 
     /// Submit a transaction to consensus.

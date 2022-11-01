@@ -23,6 +23,7 @@ use network::metrics::MetricsMakeCallbackHandler;
 use network::P2pNetwork;
 use std::{net::Ipv4Addr, sync::Arc};
 use store::Store;
+use sui_metrics::spawn_monitored_task;
 use tokio::{sync::watch, task::JoinHandle};
 use tonic::{Request, Response, Status};
 use tower::ServiceBuilder;
@@ -385,7 +386,7 @@ impl TxReceiverHandler {
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
         endpoint_metrics: WorkerEndpointMetrics,
     ) -> JoinHandle<()> {
-        tokio::spawn(async move {
+        spawn_monitored_task!(async move {
             tokio::select! {
                 _result =  mysten_network::config::Config::new()
                     .server_builder_with_metrics(endpoint_metrics)

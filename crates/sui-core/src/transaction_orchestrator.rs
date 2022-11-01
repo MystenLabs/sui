@@ -20,6 +20,7 @@ use prometheus::{
     register_int_counter_vec_with_registry, register_int_counter_with_registry,
     register_int_gauge_vec_with_registry, register_int_gauge_with_registry, Registry,
 };
+use sui_metrics::spawn_monitored_task;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{
     CertifiedTransaction, CertifiedTransactionEffects, ExecuteTransactionRequest,
@@ -65,7 +66,7 @@ where
         let metrics = Arc::new(TransactionOrchestratorMetrics::new(prometheus_registry));
         let metrics_clone = metrics.clone();
         let _local_executor_handle = {
-            tokio::task::spawn(async move {
+            spawn_monitored_task!(async move {
                 Self::loop_execute_finalized_tx_locally(
                     state_clone,
                     handle_clone,

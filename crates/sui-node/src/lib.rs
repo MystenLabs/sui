@@ -58,7 +58,7 @@ use sui_json_rpc::read_api::ReadApi;
 use sui_json_rpc::transaction_execution_api::FullNodeTransactionExecutionApi;
 use sui_json_rpc::ws_server::WsServerHandle;
 use sui_json_rpc::JsonRpcServerBuilder;
-use sui_metrics::monitored_future;
+use sui_metrics::spawn_monitored_task;
 use sui_types::crypto::KeypairTraits;
 
 pub mod admin;
@@ -303,7 +303,7 @@ impl SuiNode {
                 .map_err(|err| anyhow!(err.to_string()))?;
             let local_addr = server.local_addr();
             info!("Listening to traffic on {local_addr}");
-            tokio::spawn(server.serve().map_err(Into::into))
+            spawn_monitored_task!(server.serve().map_err(Into::into))
         };
 
         let p2p_network = {

@@ -27,6 +27,7 @@ use std::{
 };
 use storage::CertificateStore;
 use store::Store;
+use sui_metrics::spawn_monitored_task;
 use thiserror::Error;
 use tokio::{
     sync::{mpsc::Sender, watch},
@@ -197,7 +198,7 @@ impl BlockSynchronizer {
         certificate_store: CertificateStore,
         parameters: Parameters,
     ) -> JoinHandle<()> {
-        tokio::spawn(async move {
+        spawn_monitored_task!(async move {
             let _ = &parameters;
             Self {
                 name,

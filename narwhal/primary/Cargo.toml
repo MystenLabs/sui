@@ -44,6 +44,8 @@ mysten-network.workspace = true
 store.workspace = true
 workspace-hack.workspace = true
 
+sui-metrics = { path = "../../crates/sui-metrics" }
+
 anemo.workspace = true
 anemo-tower.workspace = true
 

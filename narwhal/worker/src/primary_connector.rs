@@ -5,6 +5,7 @@
 use crypto::NetworkPublicKey;
 use futures::{stream::FuturesUnordered, StreamExt};
 use network::{CancelOnDropHandler, P2pNetwork, ReliableNetwork};
+use sui_metrics::spawn_monitored_task;
 use tokio::{sync::watch, task::JoinHandle};
 use types::{
     metered_channel::Receiver, PrimaryResponse, ReconfigureNotification, WorkerOthersBatchMessage,
@@ -36,7 +37,7 @@ impl PrimaryConnector {
         rx_others_batch: Receiver<WorkerOthersBatchMessage>,
         primary_client: P2pNetwork,
     ) -> JoinHandle<()> {
-        tokio::spawn(async move {
+        spawn_monitored_task!(async move {
             Self {
                 primary_name,
                 rx_reconfigure,

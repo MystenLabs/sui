@@ -4,6 +4,7 @@ use crate::{ExecutionIndices, ExecutionState, ExecutorMetrics};
 use consensus::ConsensusOutput;
 use fastcrypto::hash::Hash;
 use std::sync::Arc;
+use sui_metrics::spawn_monitored_task;
 use tokio::task::JoinHandle;
 use tracing::debug;
 
@@ -33,7 +34,7 @@ impl<State: ExecutionState + Send + Sync + 'static> Notifier<State> {
             callback,
             metrics,
         };
-        tokio::spawn(notifier.run())
+        spawn_monitored_task!(notifier.run())
     }
 
     async fn run(mut self) {

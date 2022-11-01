@@ -17,6 +17,7 @@ use sui_json_rpc_types::SuiCertifiedTransaction;
 use sui_json_rpc_types::SuiTransactionEffects;
 use sui_json_rpc_types::SuiTransactionFilter;
 use sui_json_rpc_types::SuiTransactionResponse;
+use sui_metrics::spawn_monitored_task;
 use sui_open_rpc::Module;
 use sui_types::filter::TransactionFilter;
 use tracing::warn;
@@ -86,7 +87,7 @@ where
     T: Serialize,
     E: Display,
 {
-    tokio::spawn(async move {
+    spawn_monitored_task!(async move {
         match sink.pipe_from_try_stream(rx).await {
             SubscriptionClosed::Success => {
                 sink.close(SubscriptionClosed::Success);

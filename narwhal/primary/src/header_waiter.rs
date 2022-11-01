@@ -21,6 +21,7 @@ use std::{
 };
 use storage::CertificateStore;
 use store::Store;
+use sui_metrics::spawn_monitored_task;
 use tokio::{
     sync::{oneshot, watch},
     task::JoinHandle,
@@ -110,7 +111,7 @@ impl HeaderWaiter {
         metrics: Arc<PrimaryMetrics>,
         primary_network: P2pNetwork,
     ) -> JoinHandle<()> {
-        tokio::spawn(async move {
+        spawn_monitored_task!(async move {
             Self {
                 name,
                 committee,

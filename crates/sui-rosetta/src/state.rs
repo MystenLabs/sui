@@ -15,6 +15,7 @@ use sui_config::genesis::Genesis;
 use sui_core::authority::AuthorityState;
 use sui_core::authority_client::NetworkAuthorityClient;
 use sui_core::quorum_driver::QuorumDriver;
+use sui_metrics::spawn_monitored_task;
 use sui_types::base_types::{
     SequenceNumber, SuiAddress, TransactionDigest, TRANSACTION_DIGEST_LENGTH,
 };
@@ -181,7 +182,7 @@ impl PseudoBlockProvider {
         let block_interval = Duration::from_millis(block_interval);
 
         let f = blocks.clone();
-        tokio::spawn(async move {
+        spawn_monitored_task!(async move {
             if let Err(e) = f.update_balance(0, genesis_txs).await {
                 error!("Error updating balance, cause: {e:?}")
             }

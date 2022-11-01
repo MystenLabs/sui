@@ -23,6 +23,7 @@ use async_trait::async_trait;
 use fastcrypto::hash::Hash;
 use rand::prelude::SliceRandom;
 use rand::rngs::ThreadRng;
+use sui_metrics::spawn_monitored_task;
 use tokio::time::Instant;
 use tokio::{
     sync::{oneshot, watch},
@@ -64,7 +65,7 @@ pub fn spawn_subscriber(
     metrics: Arc<ExecutorMetrics>,
     restored_consensus_output: Vec<ConsensusOutput>,
 ) -> JoinHandle<()> {
-    tokio::spawn(async move {
+    spawn_monitored_task!(async move {
         // This is ugly but has to be done this way for now
         // Currently network incorporate both server and client side of RPC interface
         // To construct server side we need to set up routes first, which requires starting Primary

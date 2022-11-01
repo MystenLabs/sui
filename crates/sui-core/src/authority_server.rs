@@ -35,6 +35,7 @@ use tokio::{
     task::JoinHandle,
 };
 
+use sui_metrics::spawn_monitored_task;
 use sui_types::messages_checkpoint::CheckpointRequest;
 use sui_types::messages_checkpoint::CheckpointResponse;
 
@@ -126,10 +127,9 @@ impl AuthorityServer {
     ) -> SuiResult<JoinHandle<()>> {
         // Start the batching subsystem, and register the handles with the authority.
         let state = self.state.clone();
-        let batch_join_handle =
-            tokio::task::spawn(
-                async move { state.run_batch_service(min_batch_size, max_delay).await },
-            );
+        let batch_join_handle = spawn_monitored_task!(async move {
+            state.run_batch_service(min_batch_size, max_delay).await
+        });
 
         Ok(batch_join_handle)
     }
@@ -164,7 +164,7 @@ impl AuthorityServer {
         let handle = AuthorityServerHandle {
             tx_cancellation: server.take_cancel_handle().unwrap(),
             local_addr,
-            handle: tokio::spawn(server.serve()),
+            handle: spawn_monitored_task!(server.serve()),
         };
         Ok(handle)
     }
@@ -286,7 +286,7 @@ impl ValidatorService {
         let network_keypair = config.network_key_pair.copy();
 
         let registry = prometheus_registry.clone();
-        tokio::spawn(async move {
+        spawn_monitored_task!(async move {
             narwhal_node::restarter::NodeRestarter::watch(
                 consensus_keypair,
                 network_keypair,
@@ -488,9 +488,11 @@ impl Validator for ValidatorService {
         // Spawns a task which handles the transaction. The task will unconditionally continue
         // processing in the event that the client connection is dropped.
         let metrics = self.metrics.clone();
-        tokio::spawn(async move { Self::handle_transaction(state, request, metrics).await })
-            .await
-            .unwrap()
+        spawn_monitored_task!(
+            async move { Self::handle_transaction(state, request, metrics).await }
+        )
+        .await
+        .unwrap()
     }
 
     async fn handle_certificate(
@@ -503,7 +505,7 @@ impl Validator for ValidatorService {
         // Spawns a task which handles the certificate. The task will unconditionally continue
         // processing in the event that the client connection is dropped.
         let metrics = self.metrics.clone();
-        tokio::spawn(async move {
+        spawn_monitored_task!(async move {
             Self::handle_certificate(state, consensus_adapter, request, metrics).await
         })
         .await

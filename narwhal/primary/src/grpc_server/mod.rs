@@ -13,6 +13,7 @@ use consensus::dag::Dag;
 use crypto::PublicKey;
 use multiaddr::Multiaddr;
 use std::{sync::Arc, time::Duration};
+use sui_metrics::spawn_monitored_task;
 use tokio::task::JoinHandle;
 use tracing::{error, info};
 use types::{ConfigurationServer, ProposerServer, ValidatorServer};
@@ -50,7 +51,7 @@ impl<SynchronizerHandler: Handler + Send + Sync + 'static> ConsensusAPIGrpc<Sync
         committee: SharedCommittee,
         endpoints_metrics: EndpointMetrics,
     ) -> JoinHandle<()> {
-        tokio::spawn(async move {
+        spawn_monitored_task!(async move {
             let _ = Self {
                 name,
                 socket_address,
