@@ -28,8 +28,6 @@ pub struct DependencyVerificationResult {
 
 #[derive(Debug)]
 pub enum DependencyVerificationError {
-    /// Could not convert a dependencies' resolved Sui address to a Sui object ID
-    ObjectIdFromAddressFailure(ObjectIDParseError),
     /// Could not read a dependencies' on-chain object
     DependencyObjectReadFailure(anyhow::Error),
     /// Dependency object does not exist or was deleted
@@ -88,7 +86,7 @@ impl<'a> BytecodeSourceVerifier<'a> {
         &mut self,
         compiled_package: CompiledPackage,
     ) -> Result<DependencyVerificationResult, DependencyVerificationError> {
-        let compiled_dep_map = Self::get_module_bytes_map(&compiled_package);
+        let compiled_dep_map = get_module_bytes_map(&compiled_package);
 
         let mut on_chain_module_count = 0usize;
         let mut verified_dependencies: HashMap<AccountAddress, Dependency> = HashMap::new();
@@ -173,10 +171,7 @@ impl<'a> BytecodeSourceVerifier<'a> {
     ) -> Result<SuiRawMovePackage, DependencyVerificationError> {
         // Move packages are specified with an AccountAddress, but are
         // fetched from a sui network via sui_getObject, which takes an object ID
-        let obj_id = match ObjectID::from(*addr) {
-            Ok(id) => id,
-            Err(err) => return Err(DependencyVerificationError::ObjectIdFromAddressFailure(err)),
-        };
+        let obj_id = ObjectID::from(*addr);
 
         // fetch the Sui object at the address specified for the package in the local resolution table
         // if future packages with a large set of dependency packages prove too slow to verify,
