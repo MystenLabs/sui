@@ -34,22 +34,21 @@ function MultipleRecipients({ sender, recipient, amount, objects }: TxAddress) {
 
     const [isSingleCoin, setIsSingleCoin] = useState(false);
 
-    const { data: coinList, isSuccess } = useQuery(
-        ['get-coin-types-for-pay-tx', network, objects],
-        async () => {
-            if (objects) {
-                const coinList = await Promise.all(
-                    objects.map((objId) => getObjType(objId, network))
-                );
+    const { data: coinList, isSuccess } = useQuery({
+        queryKey: ['get-coin-types-for-pay-tx', network, objects],
+        queryFn: async () => {
+            const coinList = await Promise.all(
+                objects!.map((objId) => getObjType(objId, network))
+            );
 
-                if (coinList.every((val) => val === coinList[0])) {
-                    setIsSingleCoin(true);
-                }
-
-                return coinList;
+            if (coinList.every((val) => val === coinList[0])) {
+                setIsSingleCoin(true);
             }
-        }
-    );
+
+            return coinList;
+        },
+        enabled: !!objects,
+    });
 
     return (
         <>
