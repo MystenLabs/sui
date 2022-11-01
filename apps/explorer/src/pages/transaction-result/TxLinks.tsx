@@ -37,10 +37,7 @@ function TxLinks({ data }: { data: Addresslist }) {
                                 : numberOfListItemsToShow
                         )
                         .map((obj, idx) => (
-                            <li
-                                key={idx}
-                                className="flex flex-nowrap flex-row items-center gap-1"
-                            >
+                            <li key={idx}>
                                 <Longtext
                                     text={obj.objectId}
                                     category={data?.category as Category}

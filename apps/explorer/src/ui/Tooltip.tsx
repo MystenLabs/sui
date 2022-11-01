@@ -95,7 +95,11 @@ export function Tooltip({ tip, children, placement = 'top' }: TooltipProps) {
 
     return (
         <>
-            <div tabIndex={0} className="w-fit" {...getReferenceProps({ ref: reference })}>
+            <div
+                tabIndex={0}
+                className="w-fit"
+                {...getReferenceProps({ ref: reference })}
+            >
                 {children}
             </div>
             <FloatingPortal>
