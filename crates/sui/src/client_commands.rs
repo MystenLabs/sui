@@ -23,7 +23,6 @@ use serde::Serialize;
 use serde_json::json;
 use tracing::info;
 
-use crate::config::{Config, PersistedConfig, SuiClientConfig};
 use sui_framework::build_move_package;
 use sui_framework_build::compiled_package::BuildConfig;
 use sui_json::SuiJsonValue;
@@ -33,8 +32,8 @@ use sui_json_rpc_types::{
 use sui_json_rpc_types::{GetRawObjectDataResponse, SuiData};
 use sui_json_rpc_types::{SuiCertifiedTransaction, SuiExecutionStatus, SuiTransactionEffects};
 use sui_keys::keystore::AccountKeystore;
+use sui_sdk::SuiClient;
 use sui_sdk::TransactionExecutionResult;
-use sui_sdk::{ClientType, SuiClient};
 use sui_types::crypto::SignableBytes;
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
@@ -47,6 +46,8 @@ use sui_types::{
     crypto::{Signature, SignatureScheme},
     messages::TransactionData,
 };
+
+use crate::config::{Config, PersistedConfig, SuiClientConfig, SuiEnv};
 
 pub const EXAMPLE_NFT_NAME: &str = "Example NFT";
 pub const EXAMPLE_NFT_DESCRIPTION: &str = "An NFT created by the Sui Command Line Tool";
@@ -65,16 +66,29 @@ pub enum SuiClientCommands {
         address: Option<SuiAddress>,
         /// The RPC server URL (e.g., local rpc server, devnet rpc server, etc) to be
         /// used for subsequent commands.
+        #[clap(long)]
+        env: Option<String>,
+    },
+    /// Add new Sui environment.
+    #[clap(name = "new-env")]
+    NewEnv {
+        #[clap(long)]
+        alias: String,
         #[clap(long, value_hint = ValueHint::Url)]
-        rpc: Option<String>,
-        /// The pubsub Websocket server URL
+        rpc: String,
         #[clap(long, value_hint = ValueHint::Url)]
         ws: Option<String>,
     },
+    /// List all Sui environments
+    Envs,
 
     /// Default address used for commands when none specified
     #[clap(name = "active-address")]
     ActiveAddress,
+
+    /// Default environment used for commands when none specified
+    #[clap(name = "active-env")]
+    ActiveEnv,
 
     /// Get object info
     #[clap(name = "object")]
@@ -728,23 +742,21 @@ impl SuiClientCommands {
 
                 SuiClientCommandResult::MergeCoin(response)
             }
-            SuiClientCommands::Switch { address, rpc, ws } => {
-                if let Some(addr) = address {
-                    if !context.config.keystore.addresses().contains(&addr) {
-                        return Err(anyhow!("Address {} not managed by wallet", addr));
+            SuiClientCommands::Switch { address, env } => {
+                match (address, &env) {
+                    (None, Some(env)) => {
+                        Self::switch_env(&mut context.config, env)?;
                     }
-                    context.config.active_address = Some(addr);
-                }
-
-                Self::switch_server(&mut context.config, &rpc, &ws)?;
-
-                if Option::is_none(&address) && Option::is_none(&rpc) && Option::is_none(&ws) {
-                    return Err(anyhow!(
-                        "No address or RPC url specified. Please Specify one."
-                    ));
+                    (Some(addr), None) => {
+                        if !context.config.keystore.addresses().contains(&addr) {
+                            return Err(anyhow!("Address {} not managed by wallet", addr));
+                        }
+                        context.config.active_address = Some(addr);
+                    }
+                    _ => return Err(anyhow!("No address or env specified. Please Specify one.")),
                 }
                 context.config.save()?;
-                SuiClientCommandResult::Switch(SwitchResponse { address, rpc, ws })
+                SuiClientCommandResult::Switch(SwitchResponse { address, env })
             }
             SuiClientCommands::ActiveAddress => {
                 SuiClientCommandResult::ActiveAddress(context.active_address().ok())
@@ -830,30 +842,37 @@ impl SuiClientCommands {
                 let response = context.execute_transaction(signed_tx).await?;
                 SuiClientCommandResult::ExecuteSignedTx(response)
             }
+            SuiClientCommands::NewEnv { alias, rpc, ws } => {
+                if context
+                    .config
+                    .envs
+                    .iter()
+                    .find(|env| env.alias == alias)
+                    .is_some()
+                {
+                    return Err(anyhow!(
+                        "Environment config with name [{alias}] already exists."
+                    ));
+                }
+                let env = SuiEnv { alias, rpc, ws };
+
+                // Check urls are valid and server is reachable
+                env.init().await?;
+                context.config.envs.push(env.clone());
+                context.config.save()?;
+                SuiClientCommandResult::NewEnv(env)
+            }
+            SuiClientCommands::ActiveEnv => {
+                SuiClientCommandResult::ActiveEnv(context.config.active_env.clone())
+            }
+            SuiClientCommands::Envs => SuiClientCommandResult::Envs(context.config.envs.clone()),
         });
         ret
     }
 
-    pub fn switch_server(
-        config: &mut SuiClientConfig,
-        rpc: &Option<String>,
-        ws: &Option<String>,
-    ) -> Result<(), anyhow::Error> {
-        if let Some(rpc) = rpc {
-            let ws = match &config.client_type {
-                ClientType::RPC(_, Some(ws)) => Some(ws.clone()),
-                _ => None,
-            };
-            config.client_type = ClientType::RPC(rpc.clone(), ws);
-        }
-
-        if let Some(ws) = ws {
-            let rpc = match &config.client_type {
-                ClientType::RPC(rpc, _) => rpc.clone(),
-                _ => return Err(anyhow!("RPC server address must be defined")),
-            };
-            config.client_type = ClientType::RPC(rpc, Some(ws.clone()));
-        }
+    pub fn switch_env(config: &mut SuiClientConfig, env: &str) -> Result<(), anyhow::Error> {
+        ensure!(config.get_env(env).is_some(), "Environment config not found for [{env}], add new environment config using the `sui client new-env` command.");
+        config.active_env = env.into();
         Ok(())
     }
 }
@@ -872,7 +891,8 @@ impl WalletContext {
             ))
         })?;
 
-        let client = config.client_type.init().await?;
+        let env = config.get_active_env();
+        let client = env.init().await?;
         let config = config.persisted(config_path);
         let context = Self { config, client };
         Ok(context)
@@ -1155,6 +1175,17 @@ impl Display for SuiClientCommandResult {
             SuiClientCommandResult::SerializeTransferSui(res) => {
                 write!(writer, "{}", res)?;
             }
+            SuiClientCommandResult::ActiveEnv(env) => {
+                write!(writer, "{}", env)?;
+            }
+            SuiClientCommandResult::NewEnv(env) => {
+                writeln!(writer, "Added new Sui env [{}] to config.", env.alias)?;
+            }
+            SuiClientCommandResult::Envs(envs) => {
+                for env in envs {
+                    writeln!(writer, "{} => {}", env.alias, env.rpc)?;
+                }
+            }
         }
         write!(f, "{}", writer.trim_end_matches('\n'))
     }
@@ -1283,31 +1314,29 @@ pub enum SuiClientCommandResult {
     MergeCoin(SuiTransactionResponse),
     Switch(SwitchResponse),
     ActiveAddress(Option<SuiAddress>),
+    ActiveEnv(String),
+    Envs(Vec<SuiEnv>),
     CreateExampleNFT(GetObjectDataResponse),
     SerializeTransferSui(String),
     ExecuteSignedTx(SuiTransactionResponse),
+    NewEnv(SuiEnv),
 }
 
 #[derive(Serialize, Clone, Debug)]
 pub struct SwitchResponse {
     /// Active address
     pub address: Option<SuiAddress>,
-    pub rpc: Option<String>,
-    pub ws: Option<String>,
+    pub env: Option<String>,
 }
 
 impl Display for SwitchResponse {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut writer = String::new();
         if let Some(addr) = self.address {
-            writeln!(writer, "Active address switched to {}", addr)?;
+            writeln!(writer, "Active address switched to {addr}")?;
         }
-        if let Some(rpc) = &self.rpc {
-            writeln!(writer, "Active RPC server switched to {}", rpc)?;
-        }
-
-        if let Some(ws) = &self.ws {
-            writeln!(writer, "Active Websocket server switched to {}", ws)?;
+        if let Some(env) = &self.env {
+            writeln!(writer, "Active environment switched to [{env}]")?;
         }
         write!(f, "{}", writer)
     }

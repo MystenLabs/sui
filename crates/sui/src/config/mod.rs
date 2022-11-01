@@ -2,25 +2,74 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::fmt::{Display, Formatter, Write};
+
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-use std::fmt::{Display, Formatter, Write};
-use sui_keys::keystore::AccountKeystore;
-use sui_keys::keystore::Keystore;
-use sui_types::base_types::*;
-
-pub use sui_config::Config;
-pub use sui_config::PersistedConfig;
 
 pub use sui_config::utils;
-use sui_sdk::ClientType;
+pub use sui_config::Config;
+pub use sui_config::PersistedConfig;
+use sui_config::SUI_DEV_NET_URL;
+use sui_keys::keystore::AccountKeystore;
+use sui_keys::keystore::Keystore;
+use sui_sdk::SuiClient;
+use sui_types::base_types::*;
 
 #[serde_as]
 #[derive(Serialize, Deserialize)]
 pub struct SuiClientConfig {
     pub keystore: Keystore,
-    pub client_type: ClientType,
+    pub envs: Vec<SuiEnv>,
+    pub active_env: String,
     pub active_address: Option<SuiAddress>,
+}
+
+impl SuiClientConfig {
+    pub fn get_env(&self, alias: &str) -> Option<&SuiEnv> {
+        self.envs.iter().find(|env| env.alias == alias)
+    }
+
+    pub fn get_active_env(&self) -> &SuiEnv {
+        self.get_env(&self.active_env).expect(&format!(
+            "Environment configuration not found for env [{}]",
+            self.active_env
+        ))
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct SuiEnv {
+    pub alias: String,
+    pub rpc: String,
+    pub ws: Option<String>,
+}
+
+impl SuiEnv {
+    pub async fn init(&self) -> Result<SuiClient, anyhow::Error> {
+        Ok(SuiClient::new_rpc_client(&self.rpc, self.ws.as_deref()).await?)
+    }
+
+    pub fn devnet() -> Self {
+        Self {
+            alias: "devnet".to_string(),
+            rpc: SUI_DEV_NET_URL.into(),
+            ws: None,
+        }
+    }
+}
+
+impl Display for SuiEnv {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut writer = String::new();
+        writeln!(writer, "Active environment : {}", self.alias)?;
+        write!(writer, "RPC URL: {}", self.rpc)?;
+        if let Some(ws) = &self.ws {
+            writeln!(writer)?;
+            write!(writer, "Websocket URL: {ws}")?;
+        }
+        write!(f, "{}", writer)
+    }
 }
 
 impl Config for SuiClientConfig {}
@@ -40,7 +89,7 @@ impl Display for SuiClientConfig {
             None => writeln!(writer, "None")?,
         };
         writeln!(writer, "{}", self.keystore)?;
-        write!(writer, "{}", self.client_type)?;
+        write!(writer, "{}", self.get_active_env())?;
         write!(f, "{}", writer)
     }
 }

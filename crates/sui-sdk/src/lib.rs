@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fmt::{Debug, Write};
-use std::fmt::{Display, Formatter};
+use std::fmt::Debug;
+use std::fmt::Formatter;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -13,8 +13,6 @@ use futures_core::Stream;
 use jsonrpsee::core::client::{ClientT, Subscription};
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use jsonrpsee::ws_client::{WsClient, WsClientBuilder};
-use serde::Deserialize;
-use serde::Serialize;
 use serde_json::Value;
 
 use rpc_types::{
@@ -562,7 +560,7 @@ impl SuiClient {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+/*#[derive(Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ClientType {
     Embedded(GatewayConfig),
@@ -617,7 +615,7 @@ impl ClientType {
             }
         })
     }
-}
+}*/
 
 #[async_trait]
 impl DataReader for ReadApi {
