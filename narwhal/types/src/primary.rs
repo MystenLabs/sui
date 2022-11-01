@@ -26,6 +26,9 @@ use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
     fmt,
 };
+#[cfg(test)]
+#[path = "./tests/primary_type_tests.rs"]
+mod primary_type_tests;
 
 /// The round number.
 pub type Round = u64;
@@ -89,7 +92,18 @@ impl Batch {
 }
 
 #[derive(
-    Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq, Hash, PartialOrd, Ord, MallocSizeOf,
+    Clone,
+    Copy,
+    Serialize,
+    Deserialize,
+    Default,
+    PartialEq,
+    Eq,
+    Hash,
+    PartialOrd,
+    Ord,
+    MallocSizeOf,
+    Arbitrary,
 )]
 pub struct BatchDigest(pub [u8; crypto::DIGEST_LENGTH]);
 
@@ -244,7 +258,18 @@ impl Header {
 }
 
 #[derive(
-    Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq, Hash, PartialOrd, Ord, MallocSizeOf,
+    Clone,
+    Copy,
+    Serialize,
+    Deserialize,
+    Default,
+    PartialEq,
+    Eq,
+    Hash,
+    PartialOrd,
+    Ord,
+    MallocSizeOf,
+    Arbitrary,
 )]
 pub struct HeaderDigest([u8; crypto::DIGEST_LENGTH]);
 
@@ -386,7 +411,9 @@ impl Vote {
             .map_err(DagError::from)
     }
 }
-#[derive(Clone, Serialize, Deserialize, Default, PartialEq, Eq, Hash, PartialOrd, Ord, Copy)]
+#[derive(
+    Clone, Serialize, Deserialize, Default, PartialEq, Eq, Hash, PartialOrd, Ord, Copy, Arbitrary,
+)]
 pub struct VoteDigest([u8; crypto::DIGEST_LENGTH]);
 
 impl From<VoteDigest> for Digest<{ crypto::DIGEST_LENGTH }> {
@@ -624,7 +651,18 @@ impl Certificate {
 }
 
 #[derive(
-    Clone, Copy, Serialize, Deserialize, Default, MallocSizeOf, PartialEq, Eq, Hash, PartialOrd, Ord,
+    Clone,
+    Copy,
+    Serialize,
+    Deserialize,
+    Default,
+    MallocSizeOf,
+    PartialEq,
+    Eq,
+    Hash,
+    PartialOrd,
+    Ord,
+    Arbitrary,
 )]
 pub struct CertificateDigest([u8; crypto::DIGEST_LENGTH]);
 
