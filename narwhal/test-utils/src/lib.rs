@@ -27,13 +27,11 @@ use tracing::info;
 use types::{
     Batch, BatchDigest, Certificate, CertificateDigest, ConsensusStore, FetchCertificatesRequest,
     FetchCertificatesResponse, GetCertificatesRequest, GetCertificatesResponse, Header,
-    HeaderBuilder, HeaderBuilder, LatestHeaderRequest, LatestHeaderResponse,
-    PayloadAvailabilityRequest, PayloadAvailabilityResponse, PrimaryMessage, PrimaryToPrimary,
-    PrimaryToPrimary, PrimaryToPrimaryServer, PrimaryToPrimaryServer, PrimaryToWorker,
-    PrimaryToWorker, PrimaryToWorkerServer, PrimaryToWorkerServer, RequestBatchRequest,
-    RequestBatchResponse, Round, SequenceNumber, Transaction, Vote, WorkerBatchMessage,
-    WorkerDeleteBatchesMessage, WorkerReconfigureMessage, WorkerSynchronizeMessage, WorkerToWorker,
-    WorkerToWorker, WorkerToWorkerServer, WorkerToWorkerServer,
+    HeaderBuilder, LatestHeaderRequest, LatestHeaderResponse, PayloadAvailabilityRequest,
+    PayloadAvailabilityResponse, PrimaryMessage, PrimaryToPrimary, PrimaryToPrimaryServer,
+    PrimaryToWorker, PrimaryToWorkerServer, RequestBatchRequest, RequestBatchResponse, Round,
+    SequenceNumber, Transaction, Vote, WorkerBatchMessage, WorkerDeleteBatchesMessage,
+    WorkerReconfigureMessage, WorkerSynchronizeMessage, WorkerToWorker, WorkerToWorkerServer,
 };
 
 pub mod cluster;
