@@ -1,8 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useQuery } from '@tanstack/react-query';
 import cl from 'clsx';
-import { useState, useEffect, useContext } from 'react';
+import { useState, useContext } from 'react';
 
 import { ReactComponent as DoneIcon } from '../../assets/SVGIcons/16px/CheckFill.svg';
 import { ReactComponent as StartIcon } from '../../assets/SVGIcons/Start.svg';
@@ -30,40 +31,24 @@ const getObjType = (objId: string, network: string) =>
 function MultipleRecipients({ sender, recipient, amount, objects }: TxAddress) {
     const [network] = useContext(NetworkContext);
 
-    interface coinListType {
-        loadState: 'pending' | 'loaded' | 'failed';
-        data: string[];
-    }
-
-    const [coinList, setCoinList] = useState<coinListType>({
-        loadState: 'pending',
-        data: [],
-    });
-
     const [isSingleCoin, setIsSingleCoin] = useState(false);
 
-    useEffect(() => {
-        if (objects) {
-            Promise.all(objects.map((objId) => getObjType(objId, network)))
-                .then((objTypes) => {
-                    setCoinList({
-                        loadState: 'loaded',
-                        data: objTypes,
-                    });
+    const { data: coinList, isSuccess } = useQuery(
+        ['get-coin-types-for-pay-tx', network, objects],
+        async () => {
+            if (objects) {
+                const coinList = await Promise.all(
+                    objects.map((objId) => getObjType(objId, network))
+                );
 
-                    if (objTypes.every((val) => val === objTypes[0])) {
-                        setIsSingleCoin(true);
-                    }
-                })
-                .catch((error) => {
-                    console.error(error);
-                    setCoinList({
-                        loadState: 'failed',
-                        data: [],
-                    });
-                });
+                if (coinList.every((val) => val === coinList[0])) {
+                    setIsSingleCoin(true);
+                }
+
+                return coinList;
+            }
         }
-    }, [network, objects]);
+    );
 
     return (
         <>
@@ -117,9 +102,8 @@ function MultipleRecipients({ sender, recipient, amount, objects }: TxAddress) {
                                             <Amount
                                                 amount={amount![idx]}
                                                 label={
-                                                    coinList.loadState ===
-                                                    'loaded'
-                                                        ? coinList.data[idx]
+                                                    isSuccess && coinList
+                                                        ? coinList[idx]
                                                         : ''
                                                 }
                                             />
@@ -159,28 +143,16 @@ function SingleAmount({
 }) {
     const [network] = useContext(NetworkContext);
 
-    const [label, setLabel] = useState({
-        data: '',
-        loadState: 'pending',
-    });
+    const { data: label } = useQuery(
+        ['get-coin-type-for-pay-tx', objectId, network],
+        async () => {
+            const objType = await getObjType(objectId, network);
 
-    useEffect(() => {
-        getObjType(objectId, network)
-            .then((res) =>
-                setLabel({
-                    data: /^0x2::coin::Coin<(.+)>$/.exec(res)?.[1]!,
-                    loadState: 'loaded',
-                })
-            )
-            .catch((err) =>
-                setLabel({
-                    data: '',
-                    loadState: 'fail',
-                })
-            );
-    }, [objectId, network]);
+            return /^0x2::coin::Coin<(.+)>$/.exec(objType)?.[1]!;
+        }
+    );
 
-    const formattedAmount = useFormatCoin(amount, label.data, CoinFormat.FULL);
+    const formattedAmount = useFormatCoin(amount, label, CoinFormat.FULL);
 
     return (
         <div>
