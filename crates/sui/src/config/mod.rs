@@ -2,6 +2,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::anyhow;
 use std::fmt::{Display, Formatter, Write};
 
 use serde::{Deserialize, Serialize};
@@ -30,11 +31,13 @@ impl SuiClientConfig {
         self.envs.iter().find(|env| env.alias == alias)
     }
 
-    pub fn get_active_env(&self) -> &SuiEnv {
-        self.get_env(&self.active_env).expect(&format!(
-            "Environment configuration not found for env [{}]",
-            self.active_env
-        ))
+    pub fn get_active_env(&self) -> Result<&SuiEnv, anyhow::Error> {
+        self.get_env(&self.active_env).ok_or_else(|| {
+            anyhow!(
+                "Environment configuration not found for env [{}]",
+                self.active_env
+            )
+        })
     }
 }
 
@@ -47,7 +50,7 @@ pub struct SuiEnv {
 
 impl SuiEnv {
     pub async fn init(&self) -> Result<SuiClient, anyhow::Error> {
-        Ok(SuiClient::new_rpc_client(&self.rpc, self.ws.as_deref()).await?)
+        SuiClient::new_rpc_client(&self.rpc, self.ws.as_deref()).await
     }
 
     pub fn devnet() -> Self {
@@ -89,7 +92,9 @@ impl Display for SuiClientConfig {
             None => writeln!(writer, "None")?,
         };
         writeln!(writer, "{}", self.keystore)?;
-        write!(writer, "{}", self.get_active_env())?;
+        if let Ok(env) = self.get_active_env() {
+            write!(writer, "{}", env)?;
+        }
         write!(f, "{}", writer)
     }
 }

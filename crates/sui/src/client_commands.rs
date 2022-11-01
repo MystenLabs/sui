@@ -843,13 +843,7 @@ impl SuiClientCommands {
                 SuiClientCommandResult::ExecuteSignedTx(response)
             }
             SuiClientCommands::NewEnv { alias, rpc, ws } => {
-                if context
-                    .config
-                    .envs
-                    .iter()
-                    .find(|env| env.alias == alias)
-                    .is_some()
-                {
+                if context.config.envs.iter().any(|env| env.alias == alias) {
                     return Err(anyhow!(
                         "Environment config with name [{alias}] already exists."
                     ));
@@ -891,7 +885,7 @@ impl WalletContext {
             ))
         })?;
 
-        let env = config.get_active_env();
+        let env = config.get_active_env()?;
         let client = env.init().await?;
         let config = config.persisted(config_path);
         let context = Self { config, client };
