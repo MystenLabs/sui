@@ -488,6 +488,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     }
 
     /// Read a lock for a specific (transaction, shared object) pair.
+    #[cfg(test)] // Nothing wrong with this function, but it is not currently used outside of tests
     pub fn get_assigned_object_versions<'a>(
         &self,
         transaction_digest: &TransactionDigest,
