@@ -64,6 +64,7 @@ pub struct Dependency {
     pub module_bytes: BTreeMap<String, Vec<u8>>,
 }
 
+/// map the package's direct dependency symbols to their addresses and nested dependencies
 type ModuleBytesMap = HashMap<Symbol, (AccountAddress, HashMap<Symbol, Vec<u8>>)>;
 
 impl<'a> BytecodeSourceVerifier<'a> {
