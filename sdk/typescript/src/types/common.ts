@@ -4,6 +4,11 @@
 import { Base64DataBuffer } from '../serialization/base64';
 import { ObjectId } from './objects';
 
+export type HexInteger = string;
+export const isHexInteger = (data: any) =>
+  typeof data === 'string' &&
+  isPrefixedHex(data);
+
 /** Base64 string representing the object digest */
 export type TransactionDigest = string;
 export type SuiAddress = string;
@@ -77,6 +82,10 @@ export function normalizeSuiObjectId(
 
 function isHex(value: string): boolean {
   return /^(0x|0X)?[a-fA-F0-9]+$/.test(value) && value.length % 2 === 0;
+}
+
+export function isBigintHex(value: string): boolean {
+  return /^(0x|0X)([a-fA-F0-9]){16,256}$/.test(value) && value.length % 2 === 0;
 }
 
 function getHexByteLength(value: string): number {

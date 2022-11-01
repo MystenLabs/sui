@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { ObjectOwner, SuiAddress, TransactionDigest } from './common';
+import { HexInteger, ObjectOwner, SuiAddress, TransactionDigest } from './common';
 import { ObjectId, SuiMovePackage, SuiObject, SuiObjectRef } from './objects';
 
 export type TransferObject = {
@@ -88,9 +88,9 @@ export type CertifiedTransaction = {
 };
 
 export type GasCostSummary = {
-  computationCost: number;
-  storageCost: number;
-  storageRebate: number;
+  computationCost: HexInteger;
+  storageCost: HexInteger;
+  storageRebate: HexInteger;
 };
 
 export type ExecutionStatusType = 'success' | 'failure';

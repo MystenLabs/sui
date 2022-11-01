@@ -5,6 +5,7 @@ import RpcClient from 'jayson/lib/client/browser/index.js';
 import fetch from 'cross-fetch';
 import { isErrorResponse, isValidResponse } from './client.guard';
 import * as LosslessJSON from 'lossless-json';
+import { isBigintHex } from '../types/common';
 
 /**
  * An object defining headers to be passed to the RPC server
@@ -61,6 +62,10 @@ export class JsonRpcClient {
               LosslessJSON.parse(text, (key, value) => {
                 if (value == null) {
                   return value;
+                }
+
+                if (isBigintHex(value)) {
+                  console.log(`BIG INT HEX in reviver!  ${key} : ${value}`);
                 }
 
                 // TODO: This is a bad hack, we really shouldn't be doing this here:
