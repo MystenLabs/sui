@@ -12,6 +12,8 @@ import { NetworkContext } from '../../context';
 import { navigateWithUnknown } from '../../utils/searchUtil';
 import ExternalLink from '../external-link/ExternalLink';
 
+import type { ReactNode } from 'react';
+
 import styles from './Longtext.module.css';
 
 function Longtext({
@@ -21,6 +23,7 @@ function Longtext({
     alttext = '',
     copyButton = 'none',
     showIconButton = false,
+    extra,
 }: {
     text: string;
     category:
@@ -34,6 +37,7 @@ function Longtext({
     alttext?: string;
     copyButton?: '16' | '24' | 'none';
     showIconButton?: boolean;
+    extra?: ReactNode;
 }) {
     const [pleaseWait, setPleaseWait] = useState(false);
     const [network] = useContext(NetworkContext);
@@ -127,6 +131,7 @@ function Longtext({
     return (
         <div className={styles.longtextwrapper}>
             {textComponent}
+            {extra ? <div className={styles.extra}>{extra}</div> : null}
             {icon}
         </div>
     );

@@ -1,6 +1,7 @@
+.extra,
 .copy16,
 .copy24 {
-    @apply cursor-pointer stroke-sui-steel leading-[100%] self-start sm:self-end;
+    @apply cursor-pointer stroke-sui-grey-60 self-start sm:self-end leading-[100%] hover:stroke-sui-steel text-sui-grey-60 hover:text-sui-steel;
 }
 
 .copy16 {
