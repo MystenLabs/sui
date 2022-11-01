@@ -10,7 +10,7 @@ publish = false
 [dependencies]
 anyhow = { version = "1.0.64", features = ["backtrace"] }
 fastcrypto = { workspace = true }
-once_cell = "1.14.0"
+once_cell = "1.16"
 
 sui-types = { path = "../sui-types" }
 sui-verifier = { path = "../../crates/sui-verifier" }
