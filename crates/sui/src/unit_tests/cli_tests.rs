@@ -13,9 +13,10 @@ use sui::{
     config::SuiClientConfig,
     sui_commands::SuiCommand,
 };
+use sui_config::gateway::GatewayConfig;
 use sui_config::genesis_config::{AccountConfig, GenesisConfig, ObjectConfig};
 use sui_config::{
-    Config, NetworkConfig, PersistedConfig, SUI_CLIENT_CONFIG, SUI_FULLNODE_CONFIG,
+    Config, NetworkConfig, PersistedConfig, ValidatorInfo, SUI_CLIENT_CONFIG, SUI_FULLNODE_CONFIG,
     SUI_GATEWAY_CONFIG, SUI_GENESIS_FILENAME, SUI_KEYSTORE_FILENAME, SUI_NETWORK_CONFIG,
 };
 use sui_json::SuiJsonValue;
@@ -65,7 +66,7 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
         .flat_map(|r| r.map(|file| file.file_name().to_str().unwrap().to_owned()))
         .collect::<Vec<_>>();
 
-    assert_eq!(10, files.len());
+    assert_eq!(9, files.len());
     assert!(files.contains(&SUI_CLIENT_CONFIG.to_string()));
     assert!(files.contains(&SUI_GATEWAY_CONFIG.to_string()));
     assert!(files.contains(&SUI_NETWORK_CONFIG.to_string()));
@@ -115,10 +116,32 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
         active_address: None,
         active_env: "".to_string(),
     };
+
+    let gateway_config = GatewayConfig {
+        db_folder_path: working_dir.join("client_db"),
+        validator_set: vec![ValidatorInfo {
+            name: "0".into(),
+            protocol_key: keypair.public().into(),
+            worker_key: worker_keypair.public().clone(),
+            account_key: account_keypair.public(),
+            network_key: network_keypair.public().clone(),
+            stake: 1,
+            delegation: 1,
+            gas_price: 1,
+            network_address: sui_config::utils::new_network_address(),
+            narwhal_primary_address: sui_config::utils::new_network_address(),
+            narwhal_worker_address: sui_config::utils::new_network_address(),
+            narwhal_consensus_address: sui_config::utils::new_network_address(),
+        }],
+        ..Default::default()
+    };
+
     let wallet_conf_path = working_dir.join(SUI_CLIENT_CONFIG);
     let wallet_config = wallet_config.persisted(&wallet_conf_path);
     wallet_config.save().unwrap();
-    let mut context = WalletContext::new(&wallet_conf_path).await.unwrap();
+    let mut context = WalletContext::new_with_embedded_gateway(&wallet_conf_path, &gateway_config)
+        .await
+        .unwrap();
 
     // Add 3 accounts
     for _ in 0..3 {
