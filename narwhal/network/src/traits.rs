@@ -8,7 +8,7 @@ use rand::prelude::{SliceRandom, SmallRng};
 use tokio::task::JoinHandle;
 use types::{
     Batch, BatchDigest, FetchCertificatesRequest, FetchCertificatesResponse,
-    GetCertificatesRequest, GetCertificatesResponse,
+    GetCertificatesRequest, GetCertificatesResponse, LatestHeaderRequest, LatestHeaderResponse,
 };
 
 pub trait UnreliableNetwork<Request: Clone + Send + Sync> {
@@ -107,6 +107,12 @@ pub trait PrimaryToPrimaryRpc {
         peer: &NetworkPublicKey,
         request: FetchCertificatesRequest,
     ) -> Result<FetchCertificatesResponse>;
+
+    async fn get_latest_header(
+        &self,
+        peer: &NetworkPublicKey,
+        request: LatestHeaderRequest,
+    ) -> Result<LatestHeaderResponse>;
 }
 
 #[async_trait]

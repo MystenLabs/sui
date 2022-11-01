@@ -6,7 +6,7 @@ use crate::{
     traits::{Lucky, ReliableNetwork, UnreliableNetwork},
     BoundedExecutor, CancelOnDropHandler, RetryConfig, MAX_TASK_CONCURRENCY,
 };
-use anemo::PeerId;
+use anemo::{Peer, PeerId, Response};
 use anyhow::format_err;
 use anyhow::Result;
 use async_trait::async_trait;
@@ -17,10 +17,12 @@ use std::time::Duration;
 use tokio::{runtime::Handle, task::JoinHandle};
 use types::{
     Batch, BatchDigest, FetchCertificatesRequest, FetchCertificatesResponse,
-    GetCertificatesRequest, GetCertificatesResponse, PrimaryMessage, PrimaryToPrimaryClient,
+    GetCertificatesRequest, GetCertificatesResponse, LatestHeaderRequest, LatestHeaderResponse,
+    PrimaryMessage, PrimaryToPrimaryClient, PrimaryToPrimaryClient, PrimaryToWorkerClient,
     PrimaryToWorkerClient, RequestBatchRequest, WorkerBatchMessage, WorkerDeleteBatchesMessage,
     WorkerOthersBatchMessage, WorkerOurBatchMessage, WorkerReconfigureMessage,
-    WorkerSynchronizeMessage, WorkerToPrimaryClient, WorkerToWorkerClient,
+    WorkerSynchronizeMessage, WorkerToPrimaryClient, WorkerToPrimaryClient, WorkerToWorkerClient,
+    WorkerToWorkerClient,
 };
 
 fn default_executor() -> BoundedExecutor {
@@ -232,6 +234,22 @@ impl PrimaryToPrimaryRpc for anemo::Network {
             .ok_or_else(|| format_err!("Network has no connection with peer {peer_id}"))?;
         let response = PrimaryToPrimaryClient::new(peer)
             .fetch_certificates(request)
+            .await
+            .map_err(|e| format_err!("Network error {:?}", e))?;
+        Ok(response.into_body())
+    }
+
+    async fn get_latest_header(
+        &self,
+        peer: &NetworkPublicKey,
+        request: LatestHeaderRequest,
+    ) -> Result<LatestHeaderResponse> {
+        let peer_id = PeerId(peer.0.to_bytes());
+        let peer = self
+            .peer(peer_id)
+            .ok_or_else(|| format_err!("Network has no connection with peer {peer_id}"))?;
+        let response = PrimaryToPrimaryClient::new(peer)
+            .get_latest_header(request)
             .await
             .map_err(|e| format_err!("Network error {:?}", e))?;
         Ok(response.into_body())
