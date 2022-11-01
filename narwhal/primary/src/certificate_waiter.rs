@@ -9,7 +9,7 @@ use network::{P2pNetwork, PrimaryToPrimaryRpc};
 use rand::{rngs::ThreadRng, seq::SliceRandom};
 use std::{collections::BTreeMap, future::pending, sync::Arc, time::Duration};
 use storage::CertificateStore;
-use sui_metrics::spawn_monitored_task;
+use sui_metrics::{monitored_future, spawn_monitored_task};
 use tokio::{
     sync::{oneshot, watch},
     task::{JoinError, JoinHandle},
@@ -382,7 +382,9 @@ async fn fetch_certificates_helper(
         for peer in peers.iter() {
             let network = network.network();
             let request = request.clone();
-            fut.push(async move { network.fetch_certificates(peer, request).await });
+            fut.push(monitored_future!(async move {
+                network.fetch_certificates(peer, request).await
+            }));
             let mut interval = Box::pin(time::sleep(request_interval));
             tokio::select! {
                 res = fut.next() => match res {

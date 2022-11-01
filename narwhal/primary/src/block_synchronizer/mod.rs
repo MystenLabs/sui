@@ -27,7 +27,7 @@ use std::{
 };
 use storage::CertificateStore;
 use store::Store;
-use sui_metrics::spawn_monitored_task;
+use sui_metrics::{monitored_future, spawn_monitored_task};
 use thiserror::Error;
 use tokio::{
     sync::{mpsc::Sender, watch},
@@ -398,14 +398,16 @@ impl BlockSynchronizer {
             .collect();
 
         // Now create the future that will send the requests.
+        let timeout = self.payload_availability_timeout;
+        let network = self.network.network();
         Some(
-            Self::send_payload_availability_requests(
-                self.payload_availability_timeout,
+            monitored_future!(Self::send_payload_availability_requests(
+                timeout,
                 certificates_to_sync,
                 request,
                 primaries,
-                self.network.network(),
-            )
+                network,
+            ))
             .boxed(),
         )
     }
@@ -455,14 +457,14 @@ impl BlockSynchronizer {
             .map(|(_name, _address, network_key)| network_key)
             .collect();
         Some(
-            Self::send_certificate_requests(
+            monitored_future!(Self::send_certificate_requests(
                 self.network.network(),
                 network_keys,
                 self.certificates_synchronize_timeout,
                 self.committee.clone(),
                 self.worker_cache.clone(),
                 to_sync,
-            )
+            ))
             .boxed(),
         )
     }
@@ -610,11 +612,11 @@ impl BlockSynchronizer {
             .unique_values()
             .into_iter()
             .map(|certificate| {
-                Self::wait_for_block_payload(
+                monitored_future!(Self::wait_for_block_payload(
                     self.payload_synchronize_timeout,
                     self.payload_store.clone(),
                     certificate,
-                )
+                ))
                 .boxed()
             })
             .collect()
@@ -709,7 +711,7 @@ impl BlockSynchronizer {
             .map(|target| {
                 let network = network.clone();
                 let request = anemo::Request::new(request.clone()).with_timeout(timeout);
-                async move {
+                monitored_future!(async move {
                     let peer_id = PeerId(target.0.to_bytes());
                     let peer = network.peer(peer_id).ok_or_else(|| {
                         anemo::rpc::Status::internal(format!(
@@ -719,7 +721,7 @@ impl BlockSynchronizer {
                     PrimaryToPrimaryClient::new(peer)
                         .get_certificates(request)
                         .await
-                }
+                })
             })
             .collect();
 
@@ -834,7 +836,10 @@ impl BlockSynchronizer {
                 let peer = network.waiting_peer(id);
                 let request =
                     anemo::Request::new(request.clone()).with_timeout(fetch_certificates_timeout);
-                get_payload_availability_fn(PrimaryToPrimaryClient::new(peer), request)
+                monitored_future!(get_payload_availability_fn(
+                    PrimaryToPrimaryClient::new(peer),
+                    request
+                ))
             })
             .collect();
         let mut peers = Peers::<Certificate>::new(SmallRng::from_entropy());

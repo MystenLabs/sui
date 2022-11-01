@@ -16,7 +16,7 @@ use move_core_types::value::MoveStructLayout;
 use mysten_network::config::Config;
 use sui_config::genesis::Genesis;
 use sui_config::NetworkConfig;
-use sui_metrics::spawn_monitored_task;
+use sui_metrics::{monitored_future, spawn_monitored_task};
 use sui_network::{
     default_mysten_network_config, DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_REQUEST_TIMEOUT_SEC,
 };
@@ -803,14 +803,14 @@ where
             .map(|name| {
                 let client = &self.authority_clients[name];
                 let execute = map_each_authority.clone();
-                async move {
+                monitored_future!(async move {
                     (
                         *name,
                         execute(*name, client)
                             .instrument(tracing::trace_span!("quorum_map_auth", authority =? name.concise()))
                             .await,
                     )
-                }
+                })
             })
             .collect();
 
@@ -877,19 +877,19 @@ where
 
             let start_req = |name: AuthorityName, client: SafeClient<A>| {
                 let map_each_authority = map_each_authority.clone();
-                Box::pin(async move {
+                Box::pin(monitored_future!(async move {
                     trace!(?name, now = ?tokio::time::Instant::now() - start, "new request");
                     let map = map_each_authority(name, client);
                     Event::Request(name, timeout(timeout_each_authority, map).await)
-                })
+                }))
             };
 
             let schedule_next = || {
                 let delay = self.timeouts.serial_authority_request_interval;
-                Box::pin(async move {
+                Box::pin(monitored_future!(async move {
                     sleep(delay).await;
                     Event::StartNext
-                })
+                }))
             };
 
             // This process is intended to minimize latency in the face of unreliable authorities,

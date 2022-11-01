@@ -5,7 +5,7 @@
 use crypto::NetworkPublicKey;
 use futures::{stream::FuturesUnordered, StreamExt};
 use network::{CancelOnDropHandler, P2pNetwork, ReliableNetwork};
-use sui_metrics::spawn_monitored_task;
+use sui_metrics::{monitored_future, spawn_monitored_task};
 use tokio::{sync::watch, task::JoinHandle};
 use types::{
     metered_channel::Receiver, PrimaryResponse, ReconfigureNotification, WorkerOthersBatchMessage,
@@ -52,6 +52,11 @@ impl PrimaryConnector {
 
     async fn run(&mut self) {
         let mut futures = FuturesUnordered::new();
+
+        // need to call monitored_future! via a function so that the opaque future type is the same
+        // at both futures.push sites.
+        let monitor = |fut| monitored_future!(fut);
+
         loop {
             tokio::select! {
                 // Send the digest through the network.
@@ -62,7 +67,7 @@ impl PrimaryConnector {
                     }
 
                     let handle = self.primary_client.send(self.primary_name.to_owned(), &batch).await;
-                    futures.push( handle_future(handle, response) );
+                    futures.push( monitor(handle_future(handle, response)) );
                 },
                 Some(batch) = self.rx_others_batch.recv() => {
                     if futures.len() >= MAX_PENDING_DIGESTS {
@@ -71,7 +76,7 @@ impl PrimaryConnector {
                     }
 
                     let handle = self.primary_client.send(self.primary_name.to_owned(), &batch).await;
-                    futures.push( handle_future(handle, None) );
+                    futures.push( monitor(handle_future(handle, None)) );
                 },
 
                 // Trigger reconfigure.

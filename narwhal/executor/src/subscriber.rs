@@ -23,7 +23,7 @@ use async_trait::async_trait;
 use fastcrypto::hash::Hash;
 use rand::prelude::SliceRandom;
 use rand::rngs::ThreadRng;
-use sui_metrics::spawn_monitored_task;
+use sui_metrics::{monitored_future, spawn_monitored_task};
 use tokio::time::Instant;
 use tokio::{
     sync::{oneshot, watch},
@@ -199,10 +199,10 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
             };
             workers.shuffle(&mut ThreadRng::default());
             debug!("Scheduling fetching batch {}", digest);
-            ret.push(
-                self.fetch_payload(*digest, *worker_id, workers)
-                    .map(move |batch| (batch_index, batch)),
-            );
+            let fut = self
+                .fetch_payload(*digest, *worker_id, workers)
+                .map(move |batch| (batch_index, batch));
+            ret.push(monitored_future!(fut));
         }
 
         ret
