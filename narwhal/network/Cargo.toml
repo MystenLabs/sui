@@ -22,6 +22,7 @@ tonic = { version = "0.8.2", features = ["tls"] }
 tracing = "0.1.36"
 types = { path = "../types", package = "narwhal-types" }
 crypto = { path = "../crypto", package = "narwhal-crypto" }
+sui-metrics = { path = "../../crates/sui-metrics" }
 
 serde = "1.0.144"
 workspace-hack.workspace = true

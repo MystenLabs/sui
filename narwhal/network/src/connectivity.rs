@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::metrics::NetworkConnectionMetrics;
+use sui_metrics::spawn_monitored_task;
 use tokio::task::JoinHandle;
 
 pub struct ConnectionMonitor {
@@ -15,13 +16,11 @@ impl ConnectionMonitor {
         network: anemo::NetworkRef,
         connection_metrics: NetworkConnectionMetrics,
     ) -> JoinHandle<()> {
-        tokio::spawn(
-            Self {
-                network,
-                connection_metrics,
-            }
-            .run(),
-        )
+        spawn_monitored_task!(Self {
+            network,
+            connection_metrics,
+        }
+        .run())
     }
 
     async fn run(self) {

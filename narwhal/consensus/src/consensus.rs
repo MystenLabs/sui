@@ -14,6 +14,7 @@ use std::{
     sync::Arc,
 };
 use storage::CertificateStore;
+use sui_metrics::spawn_monitored_task;
 use tokio::{sync::watch, task::JoinHandle};
 use tracing::{debug, info, instrument};
 use types::{
@@ -272,7 +273,7 @@ where
             state,
         };
 
-        tokio::spawn(s.run())
+        spawn_monitored_task!(s.run())
     }
 
     fn change_epoch(&mut self, new_committee: Committee) -> StoreResult<ConsensusState> {

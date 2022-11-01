@@ -33,4 +33,5 @@ sui-open-rpc-macros = { path = "../sui-open-rpc-macros" }
 sui-json-rpc-types = { path = "../sui-json-rpc-types" }
 sui-cost = { path = "../sui-cost" }
 sui-transaction-builder = { path = "../sui-transaction-builder" }
+sui-metrics = { path = "../sui-metrics" }
 workspace-hack.workspace = true

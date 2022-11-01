@@ -20,6 +20,7 @@ use std::{
 use sui::client_commands::WalletContext;
 use sui_config::{sui_config_dir, SUI_CLIENT_CONFIG};
 use sui_faucet::{Faucet, FaucetRequest, FaucetResponse, SimpleFaucet};
+use sui_metrics::spawn_monitored_task;
 use tower::ServiceBuilder;
 use tower_http::cors::{Any, CorsLayer};
 use tracing::{info, warn};
@@ -142,7 +143,7 @@ async fn request_gas(
         FaucetRequest::FixedAmountRequest(requests) => {
             // We spawn a tokio task for this such that connection drop will not interrupt
             // it and impact the reclycing of coins
-            tokio::spawn(async move {
+            spawn_monitored_task!(async move {
                 state
                     .faucet
                     .send(
