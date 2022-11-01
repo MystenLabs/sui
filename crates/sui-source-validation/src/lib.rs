@@ -154,7 +154,7 @@ impl<'a> BytecodeSourceVerifier<'a> {
         // only need to check for less than, because if local modules are missing on-chain we've already errored out
         if len < on_chain_module_count {
             let missing_modules =
-                Self::get_missing_modules(&compiled_package, &verified_dependencies);
+                get_missing_modules(&compiled_package, &verified_dependencies);
             return Err(DependencyVerificationError::ModuleCountMismatch(
                 len,
                 on_chain_module_count,
@@ -165,54 +165,6 @@ impl<'a> BytecodeSourceVerifier<'a> {
         Ok(DependencyVerificationResult {
             verified_dependencies,
         })
-    }
-
-    fn get_missing_modules(
-        package: &CompiledPackage,
-        verified_dependencies: &HashMap<AccountAddress, Dependency>,
-    ) -> Vec<String> {
-        let mut missing_modules: Vec<String> = vec![];
-        for (local_pkg_symbol, local_unit) in &package.deps_compiled_units {
-            let local_pkg_symbol_str = local_pkg_symbol.to_string();
-            let local_mod_name = local_unit.unit.name().to_string();
-            let mod_str = local_mod_name.as_str();
-
-            if !verified_dependencies.iter().any(|(_, dep)| {
-                dep.symbol == local_pkg_symbol_str && dep.module_bytes.contains_key(mod_str)
-            }) {
-                missing_modules.push(format!("{}::{}", local_pkg_symbol_str, mod_str))
-            }
-        }
-        missing_modules
-    }
-
-    fn get_module_bytes_map(compiled_package: &CompiledPackage) -> ModuleBytesMap {
-        let mut map: ModuleBytesMap = HashMap::new();
-        compiled_package
-            .deps_compiled_units
-            .iter()
-            .for_each(|(symbol, unit_src)| {
-                let name = unit_src.unit.name();
-                // in the future, this probably needs to specify the compiler version instead of None
-                let bytes = unit_src.unit.serialize(None);
-
-                if let CompiledUnitEnum::Module(m) = unit_src.unit.clone() {
-                    let module_addr: AccountAddress = m.address.into_inner();
-
-                    match map.get_mut(symbol) {
-                        Some((_addr, existing_modules)) => {
-                            existing_modules.insert(name, bytes);
-                        }
-                        None => {
-                            let mut new_map = HashMap::new();
-                            new_map.insert(name, bytes);
-                            map.insert(*symbol, (module_addr, new_map));
-                        }
-                    }
-                }
-            });
-
-        map
     }
 
     async fn pkg_for_address(
@@ -249,4 +201,52 @@ impl<'a> BytecodeSourceVerifier<'a> {
             ),
         }
     }
+}
+
+fn get_missing_modules(
+    package: &CompiledPackage,
+    verified_dependencies: &HashMap<AccountAddress, Dependency>,
+) -> Vec<String> {
+    let mut missing_modules: Vec<String> = vec![];
+    for (local_pkg_symbol, local_unit) in &package.deps_compiled_units {
+        let local_pkg_symbol_str = local_pkg_symbol.to_string();
+        let local_mod_name = local_unit.unit.name().to_string();
+        let mod_str = local_mod_name.as_str();
+
+        if !verified_dependencies.iter().any(|(_, dep)| {
+            dep.symbol == local_pkg_symbol_str && dep.module_bytes.contains_key(mod_str)
+        }) {
+            missing_modules.push(format!("{}::{}", local_pkg_symbol_str, mod_str))
+        }
+    }
+    missing_modules
+}
+
+fn get_module_bytes_map(compiled_package: &CompiledPackage) -> ModuleBytesMap {
+    let mut map: ModuleBytesMap = HashMap::new();
+    compiled_package
+        .deps_compiled_units
+        .iter()
+        .for_each(|(symbol, unit_src)| {
+            let name = unit_src.unit.name();
+            // in the future, this probably needs to specify the compiler version instead of None
+            let bytes = unit_src.unit.serialize(None);
+
+            if let CompiledUnitEnum::Module(m) = unit_src.unit.clone() {
+                let module_addr: AccountAddress = m.address.into_inner();
+
+                match map.get_mut(symbol) {
+                    Some((_addr, existing_modules)) => {
+                        existing_modules.insert(name, bytes);
+                    }
+                    None => {
+                        let mut new_map = HashMap::new();
+                        new_map.insert(name, bytes);
+                        map.insert(*symbol, (module_addr, new_map));
+                    }
+                }
+            }
+        });
+
+    map
 }
