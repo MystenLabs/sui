@@ -4,7 +4,7 @@
 // This is an implementation of the TicTacToe game.
 // The game object (which includes gameboard) is owned by a game admin.
 // Since players don't have ownership over the game object, they cannot
-// mutate the gameboard directly. In order for each plaer to place
+// mutate the gameboard directly. In order for each player to place
 // a marker, they must first show their intention of placing a marker
 // by creating a marker object with the placement information and send
 // the marker to the admin. The admin needs to run a centralized service
