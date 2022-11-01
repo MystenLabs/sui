@@ -1,5 +1,15 @@
 # Change Log
 
+## 0.4.0
+
+### Minor Changes
+
+- 1591726e8: Support multiple instances of BCS
+
+### Patch Changes
+
+- 1591726e8: Add support for generic types
+
 ## 0.3.0
 
 ### Minor Changes
