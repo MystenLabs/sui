@@ -5,11 +5,13 @@
 use crate::batch_maker::MAX_PARALLEL_BATCH;
 use config::{Committee, SharedWorkerCache, Stake, WorkerId};
 use crypto::PublicKey;
+use fastcrypto::hash::Hash;
 use futures::stream::{futures_unordered::FuturesUnordered, FuturesOrdered, StreamExt as _};
 use network::{CancelOnDropHandler, P2pNetwork, ReliableNetwork};
 use std::time::Duration;
 use store::Store;
 use tokio::{sync::watch, task::JoinHandle, time::timeout};
+use tracing::trace;
 use types::{
     metered_channel::Receiver, Batch, BatchDigest, ReconfigureNotification, WorkerBatchMessage,
 };
@@ -145,10 +147,10 @@ impl QuorumWaiter {
                 // Process futures in the pipeline. They complete when we have sent to >2/3
                 // of other worker by stake, but after that we still try to send to the remaining
                 // on a best effort basis.
-                Some((_batch, mut remaining)) = pipeline.next() => {
+                Some((batch, mut remaining)) = pipeline.next() => {
 
                     // Attempt to send messages to the remaining workers
-                    if remaining.len() > 0 {
+                    if !remaining.is_empty() {
                         trace!("Best effort dissemination for batch {} for remaining {}", batch.digest(), remaining.len());
                         best_effort_with_timeout.push(async move {
                            // Bound the attempt to a few seconds to tolerate nodes that are
