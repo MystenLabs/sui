@@ -8,8 +8,8 @@ describe('Move bcs', () => {
   it('should de/ser primitives: u8', () => {
     const bcs = new BCS(getSuiMoveConfig());
 
-    expect(bcs.de('u8', fromB64('AQ=='))).toEqual(1n);
-    expect(bcs.de('u8', fromB64('AA=='))).toEqual(0n);
+    expect(bcs.de('u8', fromB64('AQ=='))).toEqual(1);
+    expect(bcs.de('u8', fromB64('AA=='))).toEqual(0);
   });
 
   it('should ser/de u64', () => {

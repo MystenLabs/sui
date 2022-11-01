@@ -82,28 +82,28 @@ export class BcsReader {
    * Read U8 value from the buffer and shift cursor by 1.
    * @returns
    */
-  read8(): bigint {
+  read8(): number {
     let value = this.dataView.getUint8(this.bytePosition);
     this.shift(1);
-    return BigInt(value);
+    return value;
   }
   /**
    * Read U16 value from the buffer and shift cursor by 2.
    * @returns
    */
-  read16(): bigint {
+  read16(): number {
     let value = this.dataView.getUint16(this.bytePosition, true);
     this.shift(2);
-    return BigInt(value);
+    return value;
   }
   /**
    * Read U32 value from the buffer and shift cursor by 4.
    * @returns
    */
-  read32(): bigint {
+  read32(): number {
     let value = this.dataView.getUint32(this.bytePosition, true);
     this.shift(4);
-    return BigInt(value);
+    return value;
   }
   /**
    * Read U64 value from the buffer and shift cursor by 8.
