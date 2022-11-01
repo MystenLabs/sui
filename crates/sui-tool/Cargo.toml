@@ -26,6 +26,7 @@ sui-storage = { path = "../sui-storage" }
 strum_macros = "^0.24"
 strum = "0.24.1"
 serde = { version = "1.0.144", features = ["derive"] }
+jsonrpsee = { version = "0.15.1", features = ["full"] }
 eyre = "0.6.8"
 
 sui-core = { path = "../sui-core" }

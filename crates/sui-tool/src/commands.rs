@@ -3,6 +3,8 @@
 
 use anyhow::Result;
 use futures::future::join_all;
+use jsonrpsee::rpc_params;
+use jsonrpsee::{core::client::ClientT, http_client::HttpClientBuilder};
 use std::cmp::min;
 use std::collections::BTreeMap;
 use std::fs::File;
@@ -11,6 +13,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use sui_config::genesis::Genesis;
 use sui_network::default_mysten_network_config;
+use sui_sdk::rpc_types::{SuiObjectRead, SuiParsedData};
 use sui_tool::db_tool::{execute_db_tool_command, print_db_all_tables, DbToolCommand};
 
 use sui_core::authority_client::{
@@ -33,6 +36,7 @@ use sui_types::object::ObjectFormatOptions;
 pub enum TargetApi {
     GetObject,
     GetObjectsOwnedByAddress,
+    GetObjectInvalid,
 }
 
 #[derive(Parser)]
@@ -425,10 +429,10 @@ async fn handle_batch(client: &dyn AuthorityAPI, req: &BatchInfoRequest) {
 
 async fn spam_fullnode_rpc(
     input_file_path: PathBuf,
-    url: &str,
+    url: String,
     target_api: TargetApi,
 ) -> Result<()> {
-    let sui = Arc::new(SuiClient::new_rpc_client(url, None).await.unwrap());
+    let sui = Arc::new(SuiClient::new_rpc_client(&url, None).await.unwrap());
     let file = File::open(input_file_path).unwrap();
     let mut inputs: Vec<ObjectID> = vec![];
     for line in io::BufReader::new(file).lines().flatten() {
@@ -441,6 +445,7 @@ async fn spam_fullnode_rpc(
     loop {
         let sui_clone = sui.clone();
         let inputs = inputs.clone();
+        let url_clone = url.clone();
         tokio::spawn(async move {
             let api = sui_clone.read_api();
             let id = *inputs.get(idx).unwrap();
@@ -455,8 +460,16 @@ async fn spam_fullnode_rpc(
                         println!("Error: {:?}", e);
                     }
                 }
+                TargetApi::GetObjectInvalid => {
+                    let rpc_client = HttpClientBuilder::default().build(&url_clone).unwrap();
+                    let bad_params = rpc_params!["object_id"];
+                    let resp: Result<SuiObjectRead<SuiParsedData>, jsonrpsee::core::Error> =
+                        rpc_client.request("sui_getObject", bad_params).await;
+                    println!("resp: {:?}", resp);
+                }
             }
         });
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
         idx += 1;
         if idx == num_of_inputs {
             idx = 0;
@@ -587,7 +600,7 @@ impl ToolCommand {
                 url,
                 target_api,
             } => {
-                let _ = spam_fullnode_rpc(input_list, &url, target_api).await;
+                let _ = spam_fullnode_rpc(input_list, url, target_api).await;
             }
             ToolCommand::FetchAuthenticatedCheckpoint {
                 genesis,

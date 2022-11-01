@@ -8684,6 +8684,7 @@ dependencies = [
  "colored",
  "eyre",
  "futures",
+ "jsonrpsee",
  "mysten-network",
  "narwhal-executor",
  "rocksdb",
