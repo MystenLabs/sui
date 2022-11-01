@@ -342,7 +342,7 @@ multiaddr = { version = "0.15", features = ["url"] }
 multibase = { version = "0.9", features = ["std"] }
 multihash = { version = "0.16", default-features = false, features = ["alloc", "derive", "identity", "multihash-derive", "multihash-impl", "std"] }
 mysten-network = { git = "https://github.com/MystenLabs/mysten-infra.git", rev = "62dd8c9c4aa0f5ed2c243546d159d9cf2816f3d9", default-features = false }
-mysten-util-mem = { git = "https://github.com/MystenLabs/mysten-infra/", rev = "1aabc3ba6a8a353743168611fd2b8d1b27d64431", features = ["estimate-heapsize", "hashbrown", "parking_lot", "smallvec", "std"] }
+mysten-util-mem = { git = "https://github.com/MystenLabs/mysten-infra/", rev = "87c2cf04f4d9c7ef1f157ddbe68af15269ae9424", features = ["estimate-heapsize", "hashbrown", "parking_lot", "smallvec", "std"] }
 named-lock = { version = "0.2", default-features = false }
 nested = { version = "0.1", default-features = false }
 nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "5926141c20414814290bb1b04bd3b2238bbbc90e", default-features = false }
@@ -1005,8 +1005,8 @@ multihash = { version = "0.16", default-features = false, features = ["alloc", "
 multihash-derive = { version = "0.8", default-features = false, features = ["std"] }
 multimap = { version = "0.8", default-features = false }
 mysten-network = { git = "https://github.com/MystenLabs/mysten-infra.git", rev = "62dd8c9c4aa0f5ed2c243546d159d9cf2816f3d9", default-features = false }
-mysten-util-mem = { git = "https://github.com/MystenLabs/mysten-infra/", rev = "1aabc3ba6a8a353743168611fd2b8d1b27d64431", features = ["estimate-heapsize", "hashbrown", "parking_lot", "smallvec", "std"] }
-mysten-util-mem-derive = { git = "https://github.com/MystenLabs/mysten-infra/", rev = "1aabc3ba6a8a353743168611fd2b8d1b27d64431", default-features = false }
+mysten-util-mem = { git = "https://github.com/MystenLabs/mysten-infra/", rev = "87c2cf04f4d9c7ef1f157ddbe68af15269ae9424", features = ["estimate-heapsize", "hashbrown", "parking_lot", "smallvec", "std"] }
+mysten-util-mem-derive = { git = "https://github.com/MystenLabs/mysten-infra/", rev = "87c2cf04f4d9c7ef1f157ddbe68af15269ae9424", default-features = false }
 name-variant = { version = "0.1", default-features = false }
 named-lock = { version = "0.2", default-features = false }
 nested = { version = "0.1", default-features = false }

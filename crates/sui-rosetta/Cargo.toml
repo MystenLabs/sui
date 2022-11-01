@@ -16,7 +16,7 @@ serde_json = { version = "1.0.83", features = ["preserve_order"] }
 tower = { version = "0.4.12", features = ["util", "timeout", "load-shed", "limit"] }
 tower-http = { version = "0.3.4", features = ["cors"] }
 tokio = "1.20.1"
-once_cell = "1.13.1"
+once_cell = "1.16"
 serde_with = "2.0.1"
 signature = "1.6.0"
 bcs = "0.1.4"

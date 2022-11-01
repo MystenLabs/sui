@@ -4765,7 +4765,7 @@ dependencies = [
 [[package]]
 name = "mysten-util-mem"
 version = "0.11.0"
-source = "git+https://github.com/MystenLabs/mysten-infra/?rev=1aabc3ba6a8a353743168611fd2b8d1b27d64431#1aabc3ba6a8a353743168611fd2b8d1b27d64431"
+source = "git+https://github.com/MystenLabs/mysten-infra/?rev=87c2cf04f4d9c7ef1f157ddbe68af15269ae9424#87c2cf04f4d9c7ef1f157ddbe68af15269ae9424"
 dependencies = [
  "cfg-if",
  "ed25519-consensus",
@@ -4774,6 +4774,7 @@ dependencies = [
  "impl-trait-for-tuples",
  "indexmap",
  "mysten-util-mem-derive",
+ "once_cell",
  "parking_lot 0.12.1",
  "roaring",
  "smallvec",
@@ -4782,7 +4783,7 @@ dependencies = [
 [[package]]
 name = "mysten-util-mem-derive"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysten-infra/?rev=1aabc3ba6a8a353743168611fd2b8d1b27d64431#1aabc3ba6a8a353743168611fd2b8d1b27d64431"
+source = "git+https://github.com/MystenLabs/mysten-infra/?rev=87c2cf04f4d9c7ef1f157ddbe68af15269ae9424#87c2cf04f4d9c7ef1f157ddbe68af15269ae9424"
 dependencies = [
  "proc-macro2 1.0.47",
  "syn 1.0.103",
@@ -5567,9 +5568,9 @@ dependencies = [
 
 [[package]]
 name = "once_cell"
-version = "1.15.0"
+version = "1.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e82dad04139b71a90c080c8463fe0dc7902db5192d939bd0950f074d014339e1"
+checksum = "86f0b0d4bf799edbc74508c1e8bf170ff5f41238e5f8225603ca7caaae2b7860"
 
 [[package]]
 name = "oorandom"
