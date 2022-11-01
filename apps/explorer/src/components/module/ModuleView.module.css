@@ -79,7 +79,7 @@ section .codeview pre {
 }
 
 .modulelist {
-    @apply flex flex-col items-start h-[354px] w-full lg:w-[12vw] overflow-auto pt-[10px] pr-[20px] pl-[1px];
+    @apply flex flex-col items-start h-[605px] w-full lg:w-[12vw] overflow-auto pt-[10px] pr-[20px] pl-[1px];
 }
 
 .modulelist button {
