@@ -84,7 +84,7 @@ function PkgView({ data }: { data: DataType }) {
                     </TabPanels>
                 </TabGroup>
 
-                <div className="mb-[12px]">
+                <div className="mb-3">
                     <Heading as="h2" variant="heading4" weight="semibold">
                         Modules
                     </Heading>
