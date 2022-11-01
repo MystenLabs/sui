@@ -63,6 +63,7 @@ pub async fn check_transaction_input<S, T>(
 where
     S: Eq + Debug + Serialize + for<'de> Deserialize<'de>,
 {
+    transaction.signed_data.data.validity_check()?;
     transaction.signed_data.data.kind.validity_check()?;
     let gas_status = get_gas_status(store, transaction).await?;
     let input_objects = transaction.signed_data.data.input_objects()?;
