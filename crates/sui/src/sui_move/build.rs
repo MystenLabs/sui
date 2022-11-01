@@ -37,7 +37,6 @@ impl Build {
             BuildConfig {
                 config: MoveBuildConfig {
                     test_mode: true,
-                    dev_mode: true,
                     ..config
                 },
                 run_bytecode_verifier: true,
