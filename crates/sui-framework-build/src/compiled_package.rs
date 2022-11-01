@@ -254,7 +254,10 @@ impl CompiledPackage {
 impl Default for BuildConfig {
     fn default() -> Self {
         BuildConfig {
-            config: MoveBuildConfig::default(),
+            config: MoveBuildConfig {
+                test_mode: true,
+                ..MoveBuildConfig::default()
+            },
             run_bytecode_verifier: true,
             print_diags_to_stderr: false,
         }
