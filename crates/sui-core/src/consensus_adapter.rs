@@ -525,7 +525,7 @@ impl CheckpointConsensusAdapter {
 
     /// Spawn a `CheckpointConsensusAdapter` in a dedicated tokio task.
     pub fn spawn(mut self) -> JoinHandle<()> {
-        spawn_monitored_task!(async move { self.run().await })
+        spawn_monitored_task!(self.run())
     }
 
     /// Submit a transaction to consensus.

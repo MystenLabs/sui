@@ -239,9 +239,7 @@ where
         ));
         let handle = {
             let quorum_driver_copy = quorum_driver.clone();
-            spawn_monitored_task!(async move {
-                Self::task_queue_processor(quorum_driver_copy, task_rx).await;
-            })
+            spawn_monitored_task!(Self::task_queue_processor(quorum_driver_copy, task_rx))
         };
         Self {
             quorum_driver,
@@ -267,9 +265,7 @@ where
         });
         let handle = {
             let quorum_driver_copy = quorum_driver.clone();
-            spawn_monitored_task!(async move {
-                Self::task_queue_processor(quorum_driver_copy, task_rx).await;
-            })
+            spawn_monitored_task!(Self::task_queue_processor(quorum_driver_copy, task_rx))
         };
         Self {
             quorum_driver,

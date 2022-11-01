@@ -127,9 +127,8 @@ impl AuthorityServer {
     ) -> SuiResult<JoinHandle<()>> {
         // Start the batching subsystem, and register the handles with the authority.
         let state = self.state.clone();
-        let batch_join_handle = spawn_monitored_task!(async move {
-            state.run_batch_service(min_batch_size, max_delay).await
-        });
+        let batch_join_handle =
+            spawn_monitored_task!(state.run_batch_service(min_batch_size, max_delay));
 
         Ok(batch_join_handle)
     }
@@ -286,21 +285,18 @@ impl ValidatorService {
         let network_keypair = config.network_key_pair.copy();
 
         let registry = prometheus_registry.clone();
-        spawn_monitored_task!(async move {
-            narwhal_node::restarter::NodeRestarter::watch(
-                consensus_keypair,
-                network_keypair,
-                vec![(0, consensus_worker_keypair)],
-                &consensus_committee,
-                consensus_worker_cache,
-                consensus_storage_base_path,
-                consensus_execution_state,
-                consensus_parameters,
-                rx_reconfigure_consensus,
-                &registry,
-            )
-            .await
-        });
+        spawn_monitored_task!(narwhal_node::restarter::NodeRestarter::watch(
+            consensus_keypair,
+            network_keypair,
+            vec![(0, consensus_worker_keypair)],
+            &consensus_committee,
+            consensus_worker_cache,
+            consensus_storage_base_path,
+            consensus_execution_state,
+            consensus_parameters,
+            rx_reconfigure_consensus,
+            &registry,
+        ));
 
         // Spawn a consensus listener. It listen for consensus outputs and notifies the
         // authority server when a sequenced transaction is ready for execution.
@@ -488,11 +484,9 @@ impl Validator for ValidatorService {
         // Spawns a task which handles the transaction. The task will unconditionally continue
         // processing in the event that the client connection is dropped.
         let metrics = self.metrics.clone();
-        spawn_monitored_task!(
-            async move { Self::handle_transaction(state, request, metrics).await }
-        )
-        .await
-        .unwrap()
+        spawn_monitored_task!(Self::handle_transaction(state, request, metrics))
+            .await
+            .unwrap()
     }
 
     async fn handle_certificate(
@@ -505,9 +499,12 @@ impl Validator for ValidatorService {
         // Spawns a task which handles the certificate. The task will unconditionally continue
         // processing in the event that the client connection is dropped.
         let metrics = self.metrics.clone();
-        spawn_monitored_task!(async move {
-            Self::handle_certificate(state, consensus_adapter, request, metrics).await
-        })
+        spawn_monitored_task!(Self::handle_certificate(
+            state,
+            consensus_adapter,
+            request,
+            metrics
+        ))
         .await
         .unwrap()
     }

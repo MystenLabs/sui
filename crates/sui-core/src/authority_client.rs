@@ -413,11 +413,9 @@ impl AuthorityAPI for LocalAuthorityClient {
     ) -> Result<TransactionInfoResponse, SuiError> {
         let state = self.state.clone();
         let fault_config = self.fault_config;
-        spawn_monitored_task!(async move {
-            Self::handle_certificate(state, certificate, fault_config).await
-        })
-        .await
-        .unwrap()
+        spawn_monitored_task!(Self::handle_certificate(state, certificate, fault_config))
+            .await
+            .unwrap()
     }
 
     async fn handle_account_info_request(

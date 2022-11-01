@@ -300,9 +300,7 @@ where
         let committee = self.state.committee.load().deref().clone();
         let target_num_tasks = usize::min(committee.num_members() - 1, degree);
 
-        spawn_monitored_task!(async move {
-            gossip_process(&self, target_num_tasks).await;
-        })
+        spawn_monitored_task!(gossip_process(&self, target_num_tasks))
     }
 
     /// Restart the node sync process only if one currently exists.
@@ -375,9 +373,7 @@ where
 
     /// Spawn pending certificate execution process
     pub async fn spawn_execute_process(self: Arc<Self>) -> JoinHandle<()> {
-        spawn_monitored_task!(async move {
-            execution_process(self).await;
-        })
+        spawn_monitored_task!(execution_process(self))
     }
 
     pub async fn cancel_node_sync_process_for_tests(&self) {
@@ -404,8 +400,10 @@ where
         metrics: CheckpointMetrics,
     ) -> JoinHandle<()> {
         // Spawn task to take care of checkpointing
-        spawn_monitored_task!(async move {
-            checkpoint_process(self, &checkpoint_process_control, metrics).await;
-        })
+        spawn_monitored_task!(checkpoint_process(
+            self,
+            &checkpoint_process_control,
+            metrics
+        ))
     }
 }

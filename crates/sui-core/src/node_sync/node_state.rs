@@ -333,9 +333,7 @@ where
         };
 
         (
-            spawn_monitored_task!(monitored_future!(async move {
-                state.handle_messages(&mut receiver).await
-            })),
+            spawn_monitored_task!(monitored_future!(state.handle_messages(&mut receiver))),
             sender,
         )
     }
