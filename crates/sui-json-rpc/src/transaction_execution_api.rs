@@ -66,14 +66,19 @@ impl TransactionExecutionApiServer for FullNodeTransactionExecutionApi {
         let txn = Transaction::new(data, signature);
         let txn_digest = *txn.digest();
 
-        let response = self
-            .transaction_orchestrator
-            .execute_transaction(ExecuteTransactionRequest {
-                transaction: txn,
-                request_type,
-            })
-            .await
-            .map_err(|e| anyhow!(e))?;
+        let transaction_orchestrator = self.transaction_orchestrator.clone();
+        let response = tokio::spawn(async move {
+            transaction_orchestrator
+                .execute_transaction(ExecuteTransactionRequest {
+                    transaction: txn,
+                    request_type,
+                })
+                .await
+        })
+        .await
+        .map_err(|e| anyhow!(e))? // for JoinError
+        .map_err(|e| anyhow!(e))?; // For Sui transaction execution error (SuiResult<ExecuteTransactionResponse>)
+
         SuiExecuteTransactionResponse::from_execute_transaction_response(
             response,
             txn_digest,
