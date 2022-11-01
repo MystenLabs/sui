@@ -9,6 +9,7 @@ import ModuleView from './ModuleView';
 import styles from './ModuleView.module.css';
 
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
+import { ListItem, VerticalList } from '~/ui/VerticalList';
 
 type Modules = {
     title: string;
@@ -50,17 +51,17 @@ function PkgModuleViewWrapper({ id, data }: Props) {
     return (
         <div className={styles.pkgmodulewrapper}>
             <div className={styles.modulelist}>
-                {data.content.map(([name], idx) => (
-                    <button
-                        onClick={clickModuleName(name)}
-                        key={idx}
-                        className={
-                            idx === modulesPageNumber ? styles.activemodule : ''
-                        }
-                    >
-                        {name}
-                    </button>
-                ))}
+                <VerticalList>
+                    {data.content.map(([name], idx) => (
+                        <ListItem
+                            key={idx}
+                            active={idx === modulesPageNumber}
+                            onClick={clickModuleName(name)}
+                        >
+                            {name}
+                        </ListItem>
+                    ))}
+                </VerticalList>
             </div>
             <div
                 className={`${styles.modulewraper} ${styles.singlemodulewrapper}`}
