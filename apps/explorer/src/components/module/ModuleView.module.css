@@ -90,8 +90,12 @@ button.activemodule {
     @apply outline-[1px] rounded-[4px] outline-sui-grey-50 font-semibold bg-sui-grey-45;
 }
 
+.pkgmodulewrapper {
+    @apply flex flex-wrap border-0 border-y-[1px] border-solid border-sui-grey-45;
+}
+
 .singlemodule {
-    @apply w-[70vw] h-[364px] overflow-auto border-0 border-x-[1px] border-solid border-sui-grey-45 pl-[30px];
+    @apply w-[78vw] h-[364px] overflow-auto border-0 border-l-[1px] border-solid border-sui-grey-45 pl-[30px];
 }
 
 .pagmodule {

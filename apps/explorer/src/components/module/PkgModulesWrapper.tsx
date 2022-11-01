@@ -46,7 +46,7 @@ function PkgModuleViewWrapper({ id, data }: Props) {
     }, [searchParams, data.content]);
 
     return (
-        <div className={'flex flex-wrap'}>
+        <div className={styles.pkgmodulewrapper}>
             <div className={styles.modulelist}>
                 {data.content.map(([name], idx) => (
                     <button
