@@ -101,11 +101,12 @@ impl SuiJsonValue {
 
         match &inner_vec[0] {
             MoveTypeLayout::Vector(inner) => match **inner {
-                MoveTypeLayout::U8 | MoveTypeLayout::Address => {
-                    Ok(MoveValue::Struct(MoveStruct::Runtime(vec![
-                        Self::to_move_value(val, &inner_vec[0].clone())?,
-                    ])))
-                }
+                MoveTypeLayout::U8 => Ok(MoveValue::Struct(MoveStruct::Runtime(vec![
+                    Self::to_move_value(val, &inner_vec[0].clone())?,
+                ]))),
+                MoveTypeLayout::Address => Ok(MoveValue::Struct(MoveStruct::Runtime(vec![
+                    Self::to_move_value(val, &MoveTypeLayout::Address)?,
+                ]))),
                 _ => bail!(
                     "Cannot convert string arg {s} to {ty} \
                              which is expected to be a struct \
