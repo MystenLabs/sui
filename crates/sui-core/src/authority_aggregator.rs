@@ -352,6 +352,10 @@ impl<A> AuthorityAggregator<A> {
         })
     }
 
+    pub fn get_client(&self, name: &AuthorityName) -> Option<&SafeClient<A>> {
+        self.authority_clients.get(name)
+    }
+
     pub fn clone_client(&self, name: &AuthorityName) -> SafeClient<A>
     where
         A: Clone,
@@ -1614,6 +1618,9 @@ where
             // Tally of stake for good vs bad responses.
             good_stake: StakeUnit,
             bad_stake: StakeUnit,
+            // If there are conflicting transactions, we note them down and may attempt to retry
+            conflicting_tx_digests:
+                BTreeMap<ObjectRef, BTreeMap<TransactionDigest, (Vec<AuthorityName>, StakeUnit)>>,
         }
 
         let state = ProcessTransactionState::default();
@@ -1696,8 +1703,23 @@ where
                             // authorities we just stop, as there is no hope to finish.
                             Err(err) => {
                                 // We have an error here.
-                                // Append to the list off errors
-                                debug!(tx_digest = ?tx_digest, ?name, weight, "Failed to get signed transaction from validator handle_transaction: {:?}", err);
+                                debug!(tx_digest = ?tx_digest, ?name, weight, "Failed to let validator sign transaction by handle_transaction: {:?}", err);
+
+                                if let SuiError::ObjectLockConflict {
+                                    obj_ref,
+                                    pending_transaction,
+                                } = err {
+                                    let conflicting_txes_for_obj_ref = state.conflicting_tx_digests
+                                        .entry(obj_ref)
+                                        .or_insert(BTreeMap::new());
+                                    let (names, stake) = conflicting_txes_for_obj_ref
+                                        .entry(pending_transaction)
+                                        .or_insert((Vec::new(), 0));
+                                    names.push(name);
+                                    *stake += weight;
+                                }
+
+                                // Append to the list of errors
                                 state.errors.push(err);
                                 state.bad_stake += weight; // This is the bad stake counter
                             }
@@ -1727,7 +1749,7 @@ where
                                     );
                                 }
                                 state.errors.push(
-                                    SuiError::UnexectedResultFromValidatorHandleTransaction {
+                                    SuiError::UnexpectedResultFromValidatorHandleTransaction {
                                         err: format!("{:?}", ret),
                                     },
                                 );
@@ -1751,15 +1773,10 @@ where
                             self.metrics.num_bad_stake.observe(state.bad_stake as f64);
 
                             let unique_errors: HashSet<_> = state.errors.into_iter().collect();
-                            // If no authority succeeded and all authorities returned the same error,
-                            // return that error.
-                            if unique_errors.len() == 1 && state.good_stake == 0 {
-                                return Err(unique_errors.into_iter().next().unwrap());
-                            } else {
-                                return Err(SuiError::QuorumNotReached {
-                                    errors: unique_errors.into_iter().collect(),
-                                });
-                            }
+                            return Err(SuiError::QuorumFailedToProcessTransaction {
+                                errors: unique_errors.into_iter().collect(),
+                                conflicting_tx_digests: state.conflicting_tx_digests,
+                            });
                         }
 
                         // If we have a certificate, then finish, otherwise continue.
@@ -1793,6 +1810,7 @@ where
             .certificate
             .ok_or(SuiError::QuorumFailedToProcessTransaction {
                 errors: state.errors,
+                conflicting_tx_digests: state.conflicting_tx_digests,
             })
     }
 

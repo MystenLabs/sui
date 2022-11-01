@@ -2,12 +2,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{base_types::*, committee::EpochId, messages::ExecutionFailureStatus, object::Owner};
+use crate::{
+    base_types::*,
+    committee::{EpochId, StakeUnit},
+    messages::ExecutionFailureStatus,
+    object::Owner,
+};
 use move_binary_format::errors::{Location, PartialVMError, VMError};
 use move_core_types::vm_status::{StatusCode, StatusType};
 use narwhal_executor::SubscriberError;
 use serde::{Deserialize, Serialize};
-use std::fmt::Debug;
+use std::{collections::BTreeMap, fmt::Debug};
 use thiserror::Error;
 use tonic::Status;
 use typed_store::rocks::TypedStoreError;
@@ -114,16 +119,21 @@ pub enum SuiError {
     #[error("Invalid Authority Bitmap: {}", error)]
     InvalidAuthorityBitmap { error: String },
     #[error("Unexpected validator response from handle_transaction: {err}")]
-    UnexectedResultFromValidatorHandleTransaction { err: String },
+    UnexpectedResultFromValidatorHandleTransaction { err: String },
     #[error("Transaction certificate processing failed: {err}")]
     ErrorWhileProcessingCertificate { err: String },
     #[error(
-        "Failed to process transaction on a quorum of validators to form a transaction certificate, caused by : {:#?}",
+        "Failed to process transaction on a quorum of validators to form a transaction certificate. Locked objects: {:#?}. Validator errors: {:#?}",
+        conflicting_tx_digests,
         errors.iter().map(| e | ToString::to_string(&e)).collect::<Vec<String>>()
-        )]
-    QuorumFailedToProcessTransaction { errors: Vec<SuiError> },
+    )]
+    QuorumFailedToProcessTransaction {
+        errors: Vec<SuiError>,
+        conflicting_tx_digests:
+            BTreeMap<ObjectRef, BTreeMap<TransactionDigest, (Vec<AuthorityName>, StakeUnit)>>,
+    },
     #[error(
-    "Failed to execute certificate on a quorum of validators, caused by : {:#?}",
+    "Failed to execute certificate on a quorum of validators. Validator errors: {:#?}",
     errors.iter().map(| e | ToString::to_string(&e)).collect::<Vec<String>>()
     )]
     QuorumFailedToExecuteCertificate { errors: Vec<SuiError> },
@@ -386,12 +396,6 @@ pub enum SuiError {
 
     #[error("Failed to execute transaction locally by Orchestrator: {error:?}")]
     TransactionOrchestratorLocalExecutionError { error: String },
-
-    #[error(
-    "Failed to achieve quorum between authorities, cause by : {:#?}",
-    errors.iter().map(| e | ToString::to_string(&e)).collect::<Vec<String>>()
-    )]
-    QuorumNotReached { errors: Vec<SuiError> },
 
     // Errors returned by authority and client read API's
     #[error("Failure serializing object in the requested format: {:?}", error)]

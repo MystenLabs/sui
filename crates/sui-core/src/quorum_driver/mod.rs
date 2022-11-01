@@ -5,13 +5,15 @@ mod metrics;
 pub use metrics::*;
 
 use arc_swap::ArcSwap;
+use std::collections::BTreeMap;
 use std::sync::Arc;
-use sui_types::committee::{Committee, EpochId};
+use sui_types::base_types::{AuthorityName, ObjectRef, TransactionDigest};
+use sui_types::committee::{Committee, EpochId, StakeUnit};
 
 use tokio::sync::mpsc::{self, Receiver, Sender};
 use tokio::task::JoinHandle;
 use tracing::Instrument;
-use tracing::{debug, warn};
+use tracing::{debug, info, warn};
 
 use crate::authority_aggregator::AuthorityAggregator;
 use crate::authority_client::AuthorityAPI;
@@ -19,7 +21,8 @@ use sui_metrics::spawn_monitored_task;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{
     CertifiedTransaction, CertifiedTransactionEffects, QuorumDriverRequest,
-    QuorumDriverRequestType, QuorumDriverResponse, VerifiedTransaction,
+    QuorumDriverRequestType, QuorumDriverResponse, TransactionEnvelope, TransactionInfoRequest,
+    TransactionInfoResponse, VerifiedTransaction, VerifiedTransactionEnvelope,
 };
 
 const TASK_QUEUE_SIZE: usize = 5000;
@@ -187,12 +190,33 @@ where
         transaction: VerifiedTransaction,
     ) -> SuiResult<CertifiedTransaction> {
         let tx_digest = *transaction.digest();
-        self.validators
+        let result = self
+            .validators
             .load()
             .process_transaction(transaction)
             .instrument(tracing::debug_span!("process_tx", ?tx_digest))
             .await
-            .map(|v| v.into())
+            .map(|v| v.into());
+
+        match &result {
+            Err(SuiError::QuorumFailedToProcessTransaction {
+                errors: _errors,
+                conflicting_tx_digests,
+            }) if !conflicting_tx_digests.is_empty() => {
+                // TODO metrics
+                debug!(
+                    ?tx_digest,
+                    "Attempting to retry {} conflicting transactions: {:?}",
+                    conflicting_tx_digests.len(),
+                    conflicting_tx_digests
+                );
+                let _ = self
+                    .attempt_conflicting_transactions(conflicting_tx_digests)
+                    .await;
+            }
+            _ => (),
+        }
+        result
     }
 
     pub async fn process_certificate(
@@ -219,6 +243,106 @@ where
         new_validators: Arc<AuthorityAggregator<A>>,
     ) -> SuiResult {
         self.validators.store(new_validators);
+        Ok(())
+    }
+
+    // TODO currently this function is not epoch-boundary-safe. We need to make it so.
+    async fn attempt_conflicting_transactions(
+        &self,
+        conflicting_tx_digests: &BTreeMap<
+            ObjectRef,
+            BTreeMap<TransactionDigest, (Vec<AuthorityName>, StakeUnit)>,
+        >,
+    ) -> SuiResult<()> {
+        let validity = self.validators.load().committee.validity_threshold();
+
+        let mut futs = Vec::new();
+        for (obj_ref, tx_digests) in conflicting_tx_digests {
+            futs.push(self.attempt_one_conflicting_transaction(obj_ref, tx_digests, validity));
+        }
+
+        futures::future::join_all(futs).await;
+        Ok(())
+    }
+
+    async fn attempt_one_conflicting_transaction(
+        &self,
+        obj_ref: &ObjectRef,
+        conflicting_tx_digests: &BTreeMap<TransactionDigest, (Vec<AuthorityName>, StakeUnit)>,
+        validity: u64,
+    ) -> SuiResult<()> {
+        if conflicting_tx_digests.is_empty() {
+            // TODO log error
+            return Ok(());
+        }
+        let mut conflicting_tx_digests = Vec::from_iter(conflicting_tx_digests.iter());
+        // sort by weights
+        conflicting_tx_digests.sort_by(|lhs, rhs| rhs.1 .1.cmp(&lhs.1 .1));
+
+        // we checked emptiness above, safe to unwrap.
+        let (tx_digest, (validators, total_stake)) = conflicting_tx_digests.get(0).unwrap();
+        if let Some((tx_digest_2, (validators_2, total_stake_2))) = conflicting_tx_digests.get(1) {
+            // If the 2nd digest's total stake also surpasses f+1, the object is fully equivocated.
+            if *total_stake_2 >= validity {
+                // TODO add metric here
+                info!(
+                    ?obj_ref,
+                    tx_digest_1=?tx_digest,
+                    validators_1=?validators,
+                    total_stake_1=?total_stake,
+                    tx_digest_2=?tx_digest_2,
+                    validators_2=?validators_2,
+                    total_stake_2=?total_stake_2,
+                    "Object is now fully equivocated on validators"
+                );
+                return Ok(());
+            }
+        }
+
+        // Now, we optimistically assume the object is not fully equivocated yet, and try to execute the tx.
+        let clients = self.validators.load();
+        for validator_name in validators {
+            // If we cannot find the client, it indicates an epoch change. Then we stop all attempts.
+            let client = clients.get_client(validator_name).ok_or_else( ||
+                SuiError::InconsistentEpochState { error: format!("Epoch advance caused validator {:?} missing in AuthorityAggreagtor, giving up all attempts.", validator_name) }
+            )?;
+            if let Ok(TransactionInfoResponse {
+                signed_transaction,
+                certified_transaction,
+                signed_effects: _,
+            }) = client
+                .handle_transaction_info_request(TransactionInfoRequest {
+                    transaction_digest: **tx_digest,
+                })
+                .await
+            {
+                // If we happen to find that a validator returns TransactionCertificate, this transaction is finalized.
+                if certified_transaction.is_some() {
+                    return Ok(());
+                }
+                if let Some(verified_transaction) = signed_transaction {
+                    let transaction =
+                        TransactionEnvelope::from(verified_transaction).remove_auth_sig_info();
+                    // SafeClient checked the transaction is legit in `handle_transaction_info_request`
+                    let verified_transaction =
+                        VerifiedTransactionEnvelope::new_unchecked(transaction);
+                    let _ = self
+                        .validators
+                        .load()
+                        .execute_transaction(&verified_transaction)
+                        .await;
+                    // TODO log & metrics
+                    // Now for each digest, we only give it one shot.
+                    return Ok(());
+                } else {
+                    // TODO log byzantinue behavior
+                    // try the next validator
+                }
+            }
+        }
+        // if we reach here, it means none of the validators gives us the transaction.
+        // TODO metrics
+        warn!(?obj_ref, "No one validator gives us the transaction info. They either just experienced an epoch change, or are byzantine.");
         Ok(())
     }
 }
