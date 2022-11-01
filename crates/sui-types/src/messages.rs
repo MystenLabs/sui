@@ -766,6 +766,37 @@ impl TransactionData {
         }
         Ok(inputs)
     }
+
+    pub fn validity_check(&self) -> SuiResult {
+        match &self.kind {
+            TransactionKind::Batch(_) => (),
+            TransactionKind::Single(s) => match s {
+                SingleTransactionKind::Pay(_)
+                | SingleTransactionKind::Call(_)
+                | SingleTransactionKind::Publish(_)
+                | SingleTransactionKind::TransferObject(_)
+                | SingleTransactionKind::TransferSui(_)
+                | SingleTransactionKind::ChangeEpoch(_) => (),
+                SingleTransactionKind::PaySui(p) => {
+                    fp_ensure!(!p.coins.is_empty(), SuiError::EmptyInputCoins);
+                    fp_ensure!(
+                        // unwrap() is safe because coins are not empty.
+                        p.coins.first().unwrap() == &self.gas_payment,
+                        SuiError::UnexpectedGasPaymentObject
+                    );
+                }
+                SingleTransactionKind::PayAllSui(pa) => {
+                    fp_ensure!(!pa.coins.is_empty(), SuiError::EmptyInputCoins);
+                    fp_ensure!(
+                        // unwrap() is safe because coins are not empty.
+                        pa.coins.first().unwrap() == &self.gas_payment,
+                        SuiError::UnexpectedGasPaymentObject
+                    );
+                }
+            },
+        }
+        Ok(())
+    }
 }
 
 /// A transaction signed by a client, optionally signed by an authority (depending on `S`).
