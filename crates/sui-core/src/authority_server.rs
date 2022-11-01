@@ -417,7 +417,7 @@ impl ValidatorService {
 
         // 4) If it's a shared object transaction and requires consensus, we need to do so.
         // This will wait until either timeout or we have heard back from consensus.
-        if is_consensus_tx && !state.transaction_shared_locks_exist(&certificate).await? {
+        if is_consensus_tx && !state.consensus_message_processed(&certificate)? {
             // Note that num_inflight_transactions() only include user submitted transactions, and only user txns can be dropped here.
             // This backpressure should not affect system transactions, e.g. for checkpointing.
             if consensus_adapter.num_inflight_transactions() > MAX_PENDING_CONSENSUS_TRANSACTIONS {
