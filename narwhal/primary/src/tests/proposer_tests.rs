@@ -180,7 +180,6 @@ async fn equivocation_protection() {
 
     // Ensure the proposer makes a correct header from the provided payload.
     let header = rx_headers.recv().await.unwrap();
-    assert_eq!(header.round, 2);
     assert_eq!(header.payload.get(&digest), Some(&worker_id));
     assert!(header.verify(&committee, shared_worker_cache).is_ok());
 

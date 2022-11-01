@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use rustversion::{beta, nightly, stable};
 use std::{
     env,
     path::{Path, PathBuf},
