@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use rustversion::{beta, nightly, stable};
 use std::{
     env,
     path::{Path, PathBuf},
@@ -83,6 +84,15 @@ fn build_anemo_services(out_dir: &Path) {
                 .route_name("FetchCertificates")
                 .request_type("crate::FetchCertificatesRequest")
                 .response_type("crate::FetchCertificatesResponse")
+                .codec_path("anemo::rpc::codec::BincodeCodec")
+                .build(),
+        )
+        .method(
+            anemo_build::manual::Method::builder()
+                .name("get_latest_header")
+                .route_name("GetLatestHeader")
+                .request_type("crate::LatestHeaderRequest")
+                .response_type("crate::LatestHeaderResponse")
                 .codec_path("anemo::rpc::codec::BincodeCodec")
                 .build(),
         )

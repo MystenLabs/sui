@@ -8,11 +8,17 @@ use crate::{
     primary::PrimaryMessage,
     synchronizer::Synchronizer,
 };
+
 use async_recursion::async_recursion;
 use config::{Committee, Epoch, SharedWorkerCache};
-use crypto::{PublicKey, Signature};
+use crypto::{NetworkPublicKey, PublicKey, Signature};
 use fastcrypto::{hash::Hash as _, SignatureService};
-use network::{CancelOnDropHandler, P2pNetwork, ReliableNetwork};
+use futures::stream::FuturesUnordered;
+use futures::StreamExt;
+use network::{
+    CancelOnDropHandler, P2pNetwork, PrimaryToPrimaryRpc, ReliableNetwork, UnreliableNetwork,
+};
+use std::time::Duration;
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
@@ -21,23 +27,21 @@ use std::{
 use storage::CertificateStore;
 use store::Store;
 use sui_metrics::spawn_monitored_task;
-use tokio::{sync::watch, task::JoinHandle};
+use tokio::{sync::watch, task::JoinHandle, time};
 use tracing::{debug, error, info, instrument, trace, warn};
 use types::{
     ensure,
     error::{DagError, DagError::StoreError, DagResult},
     metered_channel::{Receiver, Sender},
-    Certificate, Header, HeaderDigest, ReconfigureNotification, Round, RoundVoteDigestPair,
-    Timestamp, Vote,
+    Certificate, Header, HeaderDigest, LatestHeaderRequest, PrimaryToPrimaryClient,
+    ReconfigureNotification, Round, RoundVoteDigestPair, Timestamp, Vote,
 };
 
 #[cfg(test)]
 #[path = "tests/core_tests.rs"]
 pub mod core_tests;
 
-// TODO: enable below.
-// Rejects a header if it requires catching up the following number of rounds.
-// const MAX_HEADER_ROUND_CATCHUP_THRESHOLD: u64 = 20;
+const RECOVERY_REQUEST_TIMEOUT_SECS: u64 = 60;
 
 pub struct Core {
     /// The public key of this primary.
@@ -181,6 +185,56 @@ impl Core {
 
         self.highest_received_round = last_round_number;
         self.highest_processed_round = last_round_number;
+
+        // Get latest header from all peers and process it.
+        let peers: Vec<NetworkPublicKey> = self
+            .committee
+            .others_primaries(&self.name)
+            .into_iter()
+            .map(|(_, _, network_key)| network_key)
+            .collect();
+
+        let network = P2pNetwork::new(self.network.network().clone());
+        let mut header_futures = FuturesUnordered::new();
+        let request = LatestHeaderRequest {};
+        for peer in peers.iter() {
+            let network = network.network();
+            let request = request.clone();
+
+            header_futures.push(async move {
+                let _ = &network;
+                network.get_latest_header(peer, request).await
+            });
+        }
+        let request_interval = Duration::from_secs(RECOVERY_REQUEST_TIMEOUT_SECS);
+        let interval = Box::pin(time::sleep(request_interval));
+        loop {
+            tokio::select! {
+                res = header_futures.next() => {
+                    match res {
+                Some(Ok(response)) => {
+                    if let Some(header) = response.header {
+                        self.process_header(&header);
+                    }
+                }
+                Some(Err(e)) => {
+                    error!(
+                        "failed to get latest header from peer as recovery on startup: {:?}",
+                        e
+                    )
+                }
+                None => {
+                            break;
+                        }
+                    }
+                }
+                _ = &mut interval => {
+                     debug!("timeout was passed when requesting recovery header from peer");
+                     break;
+                 }
+            }
+        }
+
         self
     }
 
