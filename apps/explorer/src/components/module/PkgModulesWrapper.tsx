@@ -11,23 +11,18 @@ import styles from './ModuleView.module.css';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 import { ListItem, VerticalList } from '~/ui/VerticalList';
 
-type Modules = {
-    title: string;
-    content: [moduleName: string, code: string][];
-};
-
 interface Props {
     id?: string;
-    data: Modules;
+    modules: [moduleName: string, code: string][];
 }
 
-function PkgModuleViewWrapper({ id, data }: Props) {
+function PkgModuleViewWrapper({ id, modules }: Props) {
     const [searchParams, setSearchParams] = useSearchParams();
     const [modulesPageNumber, setModulesPageNumber] = useState(0);
 
     const clickModuleName = useCallback(
         (module: string) => () => {
-            const moduleIndex = data.content.findIndex(
+            const moduleIndex = modules.findIndex(
                 ([moduleName]) => moduleName === module
             );
 
@@ -35,24 +30,24 @@ function PkgModuleViewWrapper({ id, data }: Props) {
 
             setModulesPageNumber(moduleIndex);
         },
-        [data.content, setSearchParams]
+        [modules, setSearchParams]
     );
 
     useEffect(() => {
         if (searchParams.get('module')) {
-            const moduleIndex = data.content.findIndex(([moduleName]) => {
+            const moduleIndex = modules.findIndex(([moduleName]) => {
                 return moduleName === searchParams.get('module');
             });
 
             setModulesPageNumber(moduleIndex);
         }
-    }, [searchParams, data.content]);
+    }, [searchParams, modules]);
 
     return (
         <div className={styles.pkgmodulewrapper}>
             <div className={styles.modulelist}>
                 <VerticalList>
-                    {data.content.map(([name], idx) => (
+                    {modules.map(([name], idx) => (
                         <ListItem
                             key={idx}
                             active={idx === modulesPageNumber}
@@ -73,7 +68,7 @@ function PkgModuleViewWrapper({ id, data }: Props) {
                     <TabPanels>
                         <TabPanel>
                             <div className={styles.singlemodule}>
-                                {[data.content[modulesPageNumber]].map(
+                                {[modules[modulesPageNumber]].map(
                                     ([name, code], idx) => (
                                         <ModuleView
                                             key={idx}
