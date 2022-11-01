@@ -79,11 +79,11 @@ section .codeview pre {
 }
 
 .modulelist {
-    @apply flex flex-col items-start h-[354px] w-[200px] overflow-auto pt-[10px] pr-[20px] pl-[1px];
+    @apply flex flex-col items-start h-[354px] w-full lg:w-[12vw] overflow-auto pt-[10px] pr-[20px] pl-[1px];
 }
 
 .modulelist button {
-    @apply w-[180px] text-left text-body bg-inherit cursor-pointer hover:bg-sui-grey-45 border-none hover:outline-[1px] hover:rounded-[4px]  hover:outline-sui-grey-50 p-[10px] hover:font-semibold;
+    @apply w-full lg:w-[12vw] text-left text-body bg-inherit cursor-pointer hover:bg-sui-grey-45 border-none hover:outline-[1px] hover:rounded-[4px]  hover:outline-sui-grey-50 p-[10px] hover:font-semibold;
 }
 
 button.activemodule {
