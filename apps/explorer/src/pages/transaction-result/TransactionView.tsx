@@ -63,7 +63,7 @@ function generateMutatedCreated(tx: TxDataProps) {
             ? [
                   {
                       label: 'Updated',
-                      links: tx.mutated.map((obj) => obj.objectId),
+                      links: tx.mutated,
                   },
               ]
             : []),
@@ -71,7 +71,7 @@ function generateMutatedCreated(tx: TxDataProps) {
             ? [
                   {
                       label: 'Created',
-                      links: tx.created.map((obj) => obj.objectId),
+                      links: tx.created,
                   },
               ]
             : []),
