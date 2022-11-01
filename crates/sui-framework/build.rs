@@ -53,7 +53,11 @@ fn build_framework_and_stdlib(sui_framework_path: &Path, out_dir: PathBuf) {
         ..Default::default()
     };
     let pkg = BuildConfig {
-        config,
+        config: MoveBuildConfig {
+            test_mode: true,
+            dev_mode: true,
+            ..config
+        },
         run_bytecode_verifier: true,
         print_diags_to_stderr: false,
     }

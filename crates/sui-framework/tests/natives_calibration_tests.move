@@ -26,12 +26,22 @@ module sui::natives_calibration_tests {
     // But normally we want something like 1000000
     const NUM_TRIALS: u64 = 1;
 
-    // A very basic object to be used in calls
-    struct ObjectSimple has key, store, drop, copy {
+    // A very basic struct to be used in calls
+    struct StructSimple has store, drop, copy {
     }
     // A very basic object which has an Info to be used in calls
     struct ObjectWithID has key, store{
         id: UID,
+    }
+
+    // Cost calibration functions
+    #[test_only]
+    public fun calibrate_emit(obj: StructSimple) {
+        event::emit(obj);
+    }
+    #[test_only]
+    public fun calibrate_emit_nop(obj: StructSimple) {
+        let _ = obj;
     }
 
     // =================================================================
@@ -51,8 +61,8 @@ module sui::natives_calibration_tests {
         let trials: u64 = NUM_TRIALS;
 
         while (trials > 0) {
-            let obj1 = ObjectSimple { };
-            event::calibrate_emit(obj1);
+            let str1 = StructSimple { };
+            calibrate_emit(str1);
             trials = trials - 1;
         }
     }
@@ -62,8 +72,8 @@ module sui::natives_calibration_tests {
         let trials: u64 = NUM_TRIALS;
 
         while (trials > 0) {
-            let obj1 = ObjectSimple { };
-            event::calibrate_emit_nop(obj1);
+            let str1 = StructSimple { };
+            calibrate_emit_nop(str1);
             trials = trials - 1;
         }
     }
@@ -85,8 +95,8 @@ module sui::natives_calibration_tests {
     //     let trials: u64 = NUM_TRIALS;
 
     //     while (trials > 0) {
-    //         let obj1 = ObjectSimple { };
-    //         transfer::calibrate_freeze_object(obj1);
+    //         let str1 = StructSimple { };
+    //         transfer::calibrate_freeze_object(str1);
     //         trials = trials - 1;
     //     }
     // }
@@ -96,8 +106,8 @@ module sui::natives_calibration_tests {
     //     let trials: u64 = NUM_TRIALS;
 
     //     while (trials > 0) {
-    //         let obj1 = ObjectSimple { };
-    //         transfer::calibrate_freeze_object_nop(obj1);
+    //         let str1 = StructSimple { };
+    //         transfer::calibrate_freeze_object_nop(str1);
     //         trials = trials - 1;
     //     }
     // }
@@ -113,8 +123,8 @@ module sui::natives_calibration_tests {
     //     let trials: u64 = NUM_TRIALS;
 
     //     while (trials > 0) {
-    //         let obj1 = ObjectSimple { };
-    //         transfer::calibrate_share_object(obj1);
+    //         let str1 = StructSimple { };
+    //         transfer::calibrate_share_object(str1);
     //         trials = trials - 1;
     //     }
     // }
@@ -124,8 +134,8 @@ module sui::natives_calibration_tests {
     //     let trials: u64 = NUM_TRIALS;
 
     //     while (trials > 0) {
-    //         let obj1 = ObjectSimple { };
-    //         transfer::calibrate_share_object_nop(obj1);
+    //         let str1 = StructSimple { };
+    //         transfer::calibrate_share_object_nop(str1);
     //         trials = trials - 1;
     //     }
     // }
@@ -140,10 +150,10 @@ module sui::natives_calibration_tests {
     // public entry fun test_calibrate_transfer_transfer_internal() {
     //     let trials: u64 = NUM_TRIALS;
     //     while (trials > 0) {
-    //         let obj1 = ObjectSimple { };
+    //         let str1 = StructSimple { };
     //         let addr = @0x0;
     //         let to_object = false;
-    //         transfer::calibrate_transfer_internal(obj1, addr, to_object);
+    //         transfer::calibrate_transfer_internal(str1, addr, to_object);
     //         trials = trials - 1;
     //     }
     // }
@@ -152,10 +162,10 @@ module sui::natives_calibration_tests {
     // public entry fun test_calibrate_transfer_transfer_internal__baseline() {
     //     let trials: u64 = NUM_TRIALS;
     //     while (trials > 0) {
-    //         let obj1 = ObjectSimple { };
+    //         let str1 = StructSimple { };
     //         let addr = @0x0;
     //         let to_object = false;
-    //         transfer::calibrate_transfer_internal_nop(obj1, addr, to_object);
+    //         transfer::calibrate_transfer_internal_nop(str1, addr, to_object);
     //         trials = trials - 1;
     //     }
     // }
