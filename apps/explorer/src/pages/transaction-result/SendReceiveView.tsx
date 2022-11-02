@@ -40,11 +40,7 @@ function MultipleRecipients({ sender, recipient, amount, objects }: TxAddress) {
             const coinList = await Promise.all(
                 objects!.map((objId) => getObjType(objId, network))
             );
-
-            if (coinList.every((val) => val === coinList[0])) {
-                setIsSingleCoin(true);
-            }
-
+            setIsSingleCoin(coinList.every((val) => val === coinList[0]));
             return coinList;
         },
         enabled: !!objects,
