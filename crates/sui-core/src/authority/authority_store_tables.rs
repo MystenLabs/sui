@@ -51,6 +51,13 @@ pub struct AuthorityEpochTables<S> {
     /// epoch change.
     pub(crate) consensus_message_processed: DBMap<TransactionDigest, bool>,
 
+    /// This is an inverse index for consensus_message_processed - it allows to select
+    /// all transactions at the specific consensus range
+    ///
+    /// The consensus position for the transaction is defined as first position at which valid
+    /// certificate for this transaction is seen in consensus
+    pub(crate) consensus_message_order: DBMap<ExecutionIndices, TransactionDigest>,
+
     /// The following table is used to store a single value (the corresponding key is a constant). The value
     /// represents the index of the latest consensus message this authority processed. This field is written
     /// by a single process acting as consensus (light) client. It is used to ensure the authority processes
