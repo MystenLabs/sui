@@ -18,7 +18,8 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use storage::CertificateStore;
+
+use storage::{CertificateStore, ProposerStore};
 use test_utils::{temp_dir, CommitteeFixture};
 use tokio::{
     sync::{
@@ -35,13 +36,14 @@ use types::{
     ReconfigureNotification, Round,
 };
 
-struct FetchCertificateProxy {
+pub struct NetworkProxy {
     request: Sender<FetchCertificatesRequest>,
     response: Arc<Mutex<Receiver<FetchCertificatesResponse>>>,
+    proposer_store: ProposerStore,
 }
 
 #[async_trait]
-impl PrimaryToPrimary for FetchCertificateProxy {
+impl PrimaryToPrimary for NetworkProxy {
     async fn send_message(
         &self,
         request: anemo::Request<PrimaryMessage>,
@@ -75,7 +77,14 @@ impl PrimaryToPrimary for FetchCertificateProxy {
         &self,
         _request: anemo::Request<LatestHeaderRequest>,
     ) -> Result<anemo::Response<LatestHeaderResponse>, anemo::rpc::Status> {
-        Ok(anemo::Response::new(LatestHeaderResponse { header: None }))
+        let latest_header = self.proposer_store.get_last_proposed().map_err(|e| {
+            anemo::rpc::Status::internal(format!(
+                "error fetching latest proposed header from store: {e}"
+            ))
+        })?;
+        Ok(anemo::Response::new(LatestHeaderResponse {
+            header: latest_header,
+        }))
     }
 }
 
@@ -200,9 +209,10 @@ async fn fetch_certificates_basic() {
 
     let fake_primary_addr = network::multiaddr_to_address(fake_primary.address()).unwrap();
     let fake_route =
-        anemo::Router::new().add_rpc_service(PrimaryToPrimaryServer::new(FetchCertificateProxy {
+        anemo::Router::new().add_rpc_service(PrimaryToPrimaryServer::new(NetworkProxy {
             request: tx_fetch_req,
             response: Arc::new(Mutex::new(rx_fetch_resp)),
+            proposer_store: ProposerStore::new_for_tests(),
         }));
     let fake_server_network = anemo::Network::bind(fake_primary_addr.clone())
         .server_name("narwhal")

@@ -47,7 +47,7 @@ mod test {
     use test_utils::{fixture_batch_with_transactions, CommitteeFixture};
     use types::{CertificateDigest, Header, Round};
 
-    fn create_header_for_round(round: Round) -> Header {
+    pub fn create_header_for_round(round: Round) -> Header {
         let builder = types::HeaderBuilder::default();
         let fixture = CommitteeFixture::builder().randomize_ports(true).build();
         let primary = fixture.authorities().next().unwrap();
