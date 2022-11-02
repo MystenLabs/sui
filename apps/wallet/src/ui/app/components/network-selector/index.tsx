@@ -5,33 +5,42 @@ import cl from 'classnames';
 import { useMemo, useCallback } from 'react';
 
 import { API_ENV_TO_INFO, API_ENV } from '_app/ApiProvider';
+import { growthbook } from '_app/experimentation/feature-gating';
+import { FEATURES } from '_app/experimentation/features';
 import Icon from '_components/icon';
 import { useAppSelector, useAppDispatch } from '_hooks';
 import { changeRPCNetwork } from '_redux/slices/app';
 
 import st from './NetworkSelector.module.scss';
 
+const EXCLUDE_STAGING =
+    process.env.SHOW_STAGING !== 'false'
+        ? []
+        : [API_ENV.staging as keyof typeof API_ENV];
+
 const NetworkSelector = () => {
     const selectedApiEnv = useAppSelector(({ app }) => app.apiEnv);
     const dispatch = useAppDispatch();
-    const netWorks = useMemo(
-        () =>
-            Object.keys(API_ENV)
-                .filter(
-                    (env) =>
-                        process.env.SHOW_STAGING !== 'false' ||
-                        env !== API_ENV.staging
-                )
-                .map((itm) => ({
-                    style: {
-                        color: API_ENV_TO_INFO[itm as keyof typeof API_ENV]
-                            .color,
-                    },
-                    ...API_ENV_TO_INFO[itm as keyof typeof API_ENV],
-                    networkName: itm,
-                })),
-        []
-    );
+
+    const netWorks = useMemo(() => {
+        const excludeCustomRPC = growthbook.isOn(FEATURES.USE_CUSTOM_RPC_URL)
+            ? []
+            : [API_ENV.customRPC as keyof typeof API_ENV];
+
+        const excludeNetworks = [...EXCLUDE_STAGING, ...excludeCustomRPC];
+
+        return Object.keys(API_ENV)
+            .filter(
+                (env) => !excludeNetworks.includes(env as keyof typeof API_ENV)
+            )
+            .map((itm) => ({
+                style: {
+                    color: API_ENV_TO_INFO[itm as keyof typeof API_ENV].color,
+                },
+                ...API_ENV_TO_INFO[itm as keyof typeof API_ENV],
+                networkName: itm,
+            }));
+    }, []);
 
     const changeNetwork = useCallback(
         (e: React.MouseEvent<HTMLElement>) => {

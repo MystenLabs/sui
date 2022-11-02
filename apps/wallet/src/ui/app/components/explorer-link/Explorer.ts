@@ -9,6 +9,8 @@ const API_ENV_TO_EXPLORER_URL: Record<API_ENV, string | undefined> = {
     [API_ENV.local]: process.env.EXPLORER_URL_LOCAL,
     [API_ENV.devNet]: process.env.EXPLORER_URL_DEV_NET,
     [API_ENV.staging]: process.env.EXPLORER_URL_STAGING,
+    [API_ENV.testNet]: process.env.EXPLORER_URL_TEST_NET,
+    [API_ENV.customRPC]: process.env.EXPLORER_URL_CUSTOM_RPC,
 };
 
 // TODO: rewrite this

@@ -17,6 +17,8 @@ export enum API_ENV {
     local = 'local',
     devNet = 'devNet',
     staging = 'staging',
+    testNet = 'testNet',
+    customRPC = 'customRPC',
 }
 
 type EnvInfo = {
@@ -32,6 +34,8 @@ export const API_ENV_TO_INFO: Record<API_ENV, EnvInfo> = {
     [API_ENV.local]: { name: 'Local', color: '#9064ff' },
     [API_ENV.devNet]: { name: 'DevNet', color: '#29b6af' },
     [API_ENV.staging]: { name: 'Staging', color: '#ff4a8d' },
+    [API_ENV.customRPC]: { name: 'Custom RPC URL', color: '#d8e0e6' },
+    [API_ENV.testNet]: { name: 'TestNet', color: '#6fbcf0' },
 };
 
 export const ENV_TO_API: Record<API_ENV, ApiEndpoints> = {
@@ -46,6 +50,16 @@ export const ENV_TO_API: Record<API_ENV, ApiEndpoints> = {
     [API_ENV.staging]: {
         fullNode: process.env.API_ENDPOINT_STAGING_FULLNODE || '',
         faucet: process.env.API_ENDPOINT_STAGING_FAUCET || '',
+    },
+    [API_ENV.customRPC]: {
+        // TODO: Add custom RPC URL
+        fullNode: 'http://127.0.0.1:9000',
+        faucet: 'http://127.0.0.1:9000',
+    },
+    [API_ENV.testNet]: {
+        // TODO: Add custom RPC URL
+        fullNode: process.env.API_ENDPOINT_TEST_NET_FULLNODE || '',
+        faucet: process.env.API_ENDPOINT_TEST_NET_FAUCET || '',
     },
 };
 
