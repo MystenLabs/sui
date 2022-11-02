@@ -50,9 +50,9 @@ fn main() {
 fn build_framework_and_stdlib(sui_framework_path: &Path, out_dir: PathBuf) {
     let config = MoveBuildConfig {
         generate_docs: true,
-        test_mode: false,
         ..Default::default()
     };
+    debug_assert!(!config.test_mode);
     build_framework_and_stdlib_with_move_config(
         sui_framework_path,
         out_dir.clone(),
