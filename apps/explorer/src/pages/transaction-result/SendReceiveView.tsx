@@ -30,7 +30,8 @@ const getObjType = (objId: string, network: string) =>
         .getObject(objId)
         .then((obj) => parseObjectType(obj));
 
-const getCoinLabelFromObjType = (objType: string) =>  COIN_TYPE_ARG_REGEX.exec(objType)?.[1];
+const getCoinLabelFromObjType = (objType: string) =>
+    COIN_TYPE_ARG_REGEX.exec(objType)?.[1];
 
 function MultipleRecipients({ sender, recipient, amount, objects }: TxAddress) {
     const [network] = useContext(NetworkContext);
@@ -128,15 +129,15 @@ function MultipleRecipients({ sender, recipient, amount, objects }: TxAddress) {
 
 function Amount({ amount, label }: { amount: bigint; label: string }) {
     const coinBoilerPlateRemoved = getCoinLabelFromObjType(label);
-    const formattedCoin = useFormatCoin(
+    const [formattedAmount, suffix] = useFormatCoin(
         amount,
         coinBoilerPlateRemoved,
         CoinFormat.FULL
     );
     return (
         <div className={styles.sui}>
-            <span className={styles.suiamount}>{formattedCoin[0]}</span>
-            <span className={styles.suilabel}>{formattedCoin[1]}</span>
+            <span className={styles.suiamount}>{formattedAmount}</span>
+            <span className={styles.suilabel}>{suffix}</span>
         </div>
     );
 }
@@ -159,12 +160,16 @@ function SingleAmount({
         }
     );
 
-    const formattedAmount = useFormatCoin(amount, label, CoinFormat.FULL);
+    const [formattedAmount, suffix] = useFormatCoin(
+        amount,
+        label,
+        CoinFormat.FULL
+    );
 
     return (
         <div>
-            {formattedAmount[0]}
-            <sup>{formattedAmount[1]}</sup>
+            {formattedAmount}
+            <sup>{suffix}</sup>
         </div>
     );
 }
