@@ -8462,6 +8462,7 @@ dependencies = [
  "once_cell",
  "prometheus",
  "scopeguard",
+ "tap",
  "telemetry-subscribers 0.2.0",
  "tokio",
  "tracing",

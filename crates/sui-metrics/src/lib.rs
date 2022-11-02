@@ -56,15 +56,15 @@ macro_rules! monitored_future {
     }};
 
     ($metric: ident, $fut: expr) => {{
-        let name = format!("{}_{}", file!(), line!());
+        const LOCATION: &str = concat!(file!(), ':', line!());
 
         async move {
             let metrics = sui_metrics::get_metrics();
 
             let _guard = if let Some(m) = &metrics {
-                m.$metric.with_label_values(&[&name]).inc();
+                m.$metric.with_label_values(&[LOCATION]).inc();
                 Some(sui_metrics::scopeguard::guard(m, |metrics| {
-                    m.$metric.with_label_values(&[&name]).dec();
+                    m.$metric.with_label_values(&[LOCATION]).dec();
                 }))
             } else {
                 None
