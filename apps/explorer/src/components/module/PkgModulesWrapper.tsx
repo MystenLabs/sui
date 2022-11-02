@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Combobox } from '@headlessui/react';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import ModuleView from './ModuleView';
@@ -15,41 +15,37 @@ interface Props {
     modules: [moduleName: string, code: string][];
 }
 
+const initialSelectModule = (searchParams, modulenames: string[]) => {
+    const paramModule = searchParams.get('module') || null;
+
+    if (!!paramModule && modulenames.includes(paramModule)) {
+        return paramModule;
+    } else {
+        return modulenames[0];
+    }
+};
+
 function PkgModuleViewWrapper({ id, modules }: Props) {
+    const modulenames = useMemo(
+        () => modules.map(([name], idx) => name),
+        [modules]
+    );
     const [searchParams, setSearchParams] = useSearchParams();
-    const [modulesPageNumber, setModulesPageNumber] = useState(0);
     const [query, setQuery] = useState('');
-    const [selectedModule, setSelectedModule] = useState(modules[0][0]);
+    const [selectedModule, setSelectedModule] = useState(
+        initialSelectModule(searchParams, modulenames)
+    );
 
     const filteredModules =
         query === ''
-            ? modules.map(([name], idx) => name)
+            ? modulenames
             : modules
                   .filter(([name]) => name.startsWith(query))
                   .map(([name]) => name);
 
-    const clickModuleName = useCallback(
-        (module: string) => () => {
-            const moduleIndex = modules.findIndex(
-                ([moduleName]) => moduleName === module
-            );
-
-            setSearchParams({ module });
-
-            setModulesPageNumber(moduleIndex);
-        },
-        [modules, setSearchParams]
-    );
-
     useEffect(() => {
-        if (searchParams.get('module')) {
-            const moduleIndex = modules.findIndex(([moduleName]) => {
-                return moduleName === searchParams.get('module');
-            });
-
-            setModulesPageNumber(moduleIndex);
-        }
-    }, [searchParams, modules]);
+        setSearchParams({ module: selectedModule });
+    }, [selectedModule, setSearchParams]);
 
     return (
         <div
@@ -62,9 +58,14 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                     'h-[605px] w-full lg:w-[15vw] overflow-auto pt-[10px] pr-[20px] pl-[1px]'
                 }
             >
-                <Combobox value={selectedModule} onChange={setSelectedModule}>
+                <Combobox
+                    value={selectedModule}
+                    onChange={setSelectedModule}
+                    nullable
+                >
                     <Combobox.Input
                         onChange={(event) => setQuery(event.target.value)}
+                        displayValue={() => ''}
                     />
                     <Combobox.Options static as="div">
                         <VerticalList>
@@ -80,7 +81,6 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                                                     active ||
                                                     selectedModule === name
                                                 }
-                                                onClick={clickModuleName(name)}
                                             >
                                                 {name}
                                             </ListItem>
@@ -100,16 +100,16 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                     <TabPanels>
                         <TabPanel>
                             <div className="overflow-auto h-[555px] w-[87vw] lg:w-[75vw]">
-                                {[modules[modulesPageNumber]].map(
-                                    ([name, code], idx) => (
+                                {modules
+                                    .filter(([name]) => name === selectedModule)
+                                    .map(([name, code], idx) => (
                                         <ModuleView
                                             key={idx}
                                             id={id}
                                             name={name}
                                             code={code}
                                         />
-                                    )
-                                )}
+                                    ))}
                             </div>
                         </TabPanel>
                     </TabPanels>
