@@ -31,7 +31,7 @@ use types::{
     error::DagError,
     metered_channel::{channel_with_total, Sender},
     Batch, BatchDigest, Empty, PrimaryToWorkerServer, ReconfigureNotification, Transaction,
-    TransactionProto, Transactions, TransactionsServer, WorkerOurBatchMessage,
+    TransactionProto, Transactions, TransactionsServer, TxResponse, WorkerOurBatchMessage,
     WorkerToWorkerServer,
 };
 
@@ -287,7 +287,10 @@ impl Worker {
     fn handle_clients_transactions(
         &self,
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
-        tx_our_batch: Sender<WorkerOurBatchMessage>,
+        tx_our_batch: Sender<(
+            WorkerOurBatchMessage,
+            Option<tokio::sync::oneshot::Sender<()>>,
+        )>,
         node_metrics: Arc<WorkerMetrics>,
         channel_metrics: Arc<WorkerChannelMetrics>,
         endpoint_metrics: WorkerEndpointMetrics,
@@ -324,6 +327,7 @@ impl Worker {
         // (in a reliable manner) the batches to all other workers that share the same `id` as us. Finally, it
         // gathers the 'cancel handlers' of the messages and send them to the `QuorumWaiter`.
         let batch_maker_handle = BatchMaker::spawn(
+            self.id,
             (*(*(*self.committee).load()).clone()).clone(),
             self.parameters.batch_size,
             self.parameters.max_batch_delay,
@@ -331,6 +335,8 @@ impl Worker {
             rx_batch_maker,
             tx_quorum_waiter,
             node_metrics,
+            self.store.clone(),
+            tx_our_batch,
         );
 
         // The `QuorumWaiter` waits for 2f authorities to acknowledge reception of the batch. It then forwards
@@ -338,12 +344,10 @@ impl Worker {
         let quorum_waiter_handle = QuorumWaiter::spawn(
             self.primary_name.clone(),
             self.id,
-            self.store.clone(),
             (*(*(*self.committee).load()).clone()).clone(),
             self.worker_cache.clone(),
             rx_reconfigure,
-            rx_quorum_waiter,
-            tx_our_batch,
+            /* rx_message */ rx_quorum_waiter,
             P2pNetwork::new(network),
         );
 
@@ -359,7 +363,7 @@ impl Worker {
 /// Defines how the network receiver handles incoming transactions.
 #[derive(Clone)]
 struct TxReceiverHandler {
-    tx_batch_maker: Sender<Transaction>,
+    tx_batch_maker: Sender<(Transaction, TxResponse)>,
 }
 
 impl TxReceiverHandler {
@@ -412,11 +416,16 @@ impl Transactions for TxReceiverHandler {
             )));
         }
         // Send the transaction to the batch maker.
+        let (notifier, when_done) = tokio::sync::oneshot::channel();
         self.tx_batch_maker
-            .send(message.to_vec())
+            .send((message.to_vec(), notifier))
             .await
             .map_err(|_| DagError::ShuttingDown)
             .map_err(|e| Status::not_found(e.to_string()))?;
+
+        // TODO: distingush between a digest being returned vs the channel closing
+        // suggesting an error.
+        let _digest = when_done.await;
 
         Ok(Response::new(Empty {}))
     }
@@ -426,14 +435,29 @@ impl Transactions for TxReceiverHandler {
         request: Request<tonic::Streaming<types::TransactionProto>>,
     ) -> Result<Response<types::Empty>, Status> {
         let mut transactions = request.into_inner();
+        let mut responses = Vec::new();
 
         while let Some(Ok(txn)) = transactions.next().await {
             // Send the transaction to the batch maker.
+            let (notifier, when_done) = tokio::sync::oneshot::channel();
             self.tx_batch_maker
-                .send(txn.transaction.to_vec())
+                .send((txn.transaction.to_vec(), notifier))
                 .await
                 .expect("Failed to send transaction");
+
+            // Note that here we do not wait for a response because this would
+            // mean that we process only a single message from this stream at a
+            // time. Instead we gather them and resolve them once the stream is over.
+            responses.push(when_done);
         }
+
+        // TODO: activate when we provide a meaningful guarantee, and
+        // distingush between a digest being returned vs the channel closing
+        // suggesting an error.
+        // for response in responses {
+        //     let _digest = response.await;
+        // }
+
         Ok(Response::new(Empty {}))
     }
 }

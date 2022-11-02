@@ -7,6 +7,7 @@ use arc_swap::ArcSwap;
 use bytes::Bytes;
 use consensus::{dag::Dag, metrics::ConsensusMetrics};
 use fastcrypto::hash::Hash;
+use futures::stream::FuturesOrdered;
 use node::NodeStorage;
 use primary::{NetworkModel, Primary, CHANNEL_CAPACITY};
 use prometheus::Registry;
@@ -95,21 +96,32 @@ async fn handle_clients_transactions() {
         .transactions;
     let config = mysten_network::config::Config::new();
     let channel = config.connect_lazy(&address).unwrap();
-    let mut client = TransactionsClient::new(channel);
-    for tx in batch.transactions {
-        let txn = TransactionProto {
-            transaction: Bytes::from(tx.clone()),
-        };
-        client.submit_transaction(txn).await.unwrap();
-    }
+    let client = TransactionsClient::new(channel);
 
-    // Wait for batch to be reported to primary.
+    let join_handle = tokio::task::spawn(async move {
+        let mut fut_list = FuturesOrdered::new();
+        for tx in batch.transactions {
+            let txn = TransactionProto {
+                transaction: Bytes::from(tx.clone()),
+            };
+
+            // Calls to submit_transaction are now blocking, so we need to drive them
+            // all at the same time, rather than sequentially.
+            let mut inner_client = client.clone();
+            fut_list.push_back(async move {
+                inner_client.submit_transaction(txn).await.unwrap();
+            });
+        }
+
+        // Drive all sending in parallel.
+        while fut_list.next().await.is_some() {}
+    });
+
+    // Ensure the primary received the batch's digest (ie. it did not panic).
     rx_await_batch.recv().await.unwrap();
 
-    let txn = TransactionProto {
-        transaction: Bytes::from(vec![8u8; 10 * 1024 * 1024]),
-    };
-    assert!(client.submit_transaction(txn).await.is_err());
+    // Ensure sending ended.
+    assert!(join_handle.await.is_ok());
 }
 
 #[tokio::test]

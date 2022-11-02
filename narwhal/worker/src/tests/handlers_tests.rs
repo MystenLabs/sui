@@ -56,6 +56,9 @@ async fn synchronize() {
     let target_worker = target_primary.worker(id);
     let _recv_network = target_worker.new_network(routes);
 
+    // Check not in store
+    assert!(store.read(digest).await.unwrap().is_none());
+
     // Send a sync request.
     let mut request = anemo::Request::new(message);
     let send_network = test_utils::random_network();
@@ -71,7 +74,9 @@ async fn synchronize() {
         .insert(send_network.downgrade())
         .is_none());
     handler.synchronize(request).await.unwrap();
-    assert_eq!(store.read(digest).await.unwrap().unwrap(), batch);
+
+    // Check its now stored
+    assert!(store.notify_read(digest).await.unwrap().is_some())
 }
 
 #[tokio::test]

@@ -82,6 +82,7 @@ pub struct PrimaryReceiverHandler {
     pub committee: SharedCommittee,
     // The worker information cache.
     pub worker_cache: SharedWorkerCache,
+    // The batch store
     pub store: Store<BatchDigest, Batch>,
     // Timeout on RequestBatch RPC.
     pub request_batch_timeout: Duration,
