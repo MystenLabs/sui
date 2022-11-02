@@ -42,8 +42,8 @@ describe('End-to-end Tests', () => {
 
         it('includes the sender time information', () => {
             cy.visit(`/transactions/${successID}`);
-            cy.get('[data-testid=transaction-sender]').contains(
-                'Sun, 15 Dec 2024 00:00:00 GMT'
+            cy.get('[data-testid=transaction-timestamp]').contains(
+                'Dec 15, 2024, 00:00:00 UTC'
             );
         });
     });

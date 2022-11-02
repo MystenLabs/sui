@@ -1,72 +1,9 @@
-.txaddress ul {
-    @apply list-none p-0;
-}
-
-.txaddresssender a,
-.txaddresssender,
-.txaddress ul li a {
+.txaddress a {
     @apply break-all font-mono text-sm text-sui-dark;
 }
 
-.label span {
-    @apply block sm:inline text-sui-grey-80 font-[500] text-[13px] mb-2;
-}
-
-.recipient.txaddresssender a,
-.recipient.txaddresssender span {
-    @apply pl-0 pr-0 mx-0;
-}
-
-.txaddress ul li div {
-    @apply ml-2;
-}
-
-.recipient.txaddresssender > div {
-    @apply ml-2;
-}
-
-.txaddress ul li {
-    @apply p-1.5 pl-5 md:pl-4 pr-0  ml-2;
-
-    display: flex;
-    align-items: center;
-}
-
-.txaddresssender {
-    @apply relative mt-1;
-}
-
-.recipient.txaddresssender {
-    @apply pl-1.5;
-}
-
-.recipient.txaddresssender::before {
-    content: '';
-    background-image: url('../../assets/SVGIcons/Start.svg');
-    background-size: 16px 16px;
-    height: 16px;
-    width: 16px;
-    position: absolute;
-    margin-left: -13px;
-    z-index: 2;
-    display: flex;
-    align-items: center;
-}
-
-.recipient.txaddresssender::after {
-    @apply ml-[-0.5rem];
-
-    top: 10px;
-    content: '';
-    position: absolute;
-    margin-left: -5px;
-    height: 15%;
-
-    /* Sui Steel Blue */
-
-    border: 1px dashed #a0b6c3;
-    border-right: none;
-    border-bottom: none;
+.txaddress h4 {
+    @apply m-0 font-semibold text-heading4;
 }
 
 .label {
@@ -74,48 +11,94 @@
     @apply text-sui-grey-100 font-[500] text-lg  mt-0 mb-2 border-b-[1px] border-[#f0f1f2] md:border-0;
 }
 
-.txaddressheader {
-    display: inline-block;
+.oneaddress {
+    @apply flex gap-[8px] items-center text-[14px] leading-[90%] w-[99%];
 }
 
-.txrecipents {
-    @apply break-all relative mt-0 !important;
+.oneaddress a {
+    @apply pr-[8px];
 }
 
-.txrecipents li::before {
+.recipientbox {
+    @apply flex flex-col items-start gap-[20px];
+}
+
+.senderbox {
+    @apply flex flex-col gap-[10px];
+}
+
+.recipientbox h4 {
+    @apply mt-[30px];
+}
+
+.oneheading {
+    @apply mb-[25px];
+}
+
+.doneicon svg {
+    @apply fill-success;
+}
+
+.sui {
+    @apply mt-[9.5px] flex flex-row items-start gap-[4px];
+}
+
+.suiamount {
+    @apply text-heading6 font-semibold ml-[24px] text-sui-grey-100;
+}
+
+.suilabel {
+    @apply text-bodySmall pt-[2px] text-sui-grey-80;
+}
+
+.doneiconwline {
+    @apply relative ml-[10px];
+}
+
+.doneiconwline::before {
     content: '';
-    @apply text-white;
-
-    background-image: url('../../assets/SVGIcons/Done.svg');
-    background-size: 16px 16px;
-    height: 16px;
-    width: 16px;
+    display: block;
     position: absolute;
-    left: 8px;
-    z-index: 2;
-    display: flex;
-    align-items: center;
-}
-
-.txrecipents li::after {
-    @apply ml-[-0.5rem];
-
-    content: '';
-    position: absolute;
-    width: 40px;
-    height: 20px;
-    left: -7px;
-    margin-top: -40px;
-
-    /* Sui Steel Blue */
-
+    bottom: 50%;
+    right: 16px;
+    width: 12px;
+    height: 200%;
     border: 1px dashed #a0b6c3;
+    border-bottom-left-radius: 4px;
     border-right: none;
-    border-bottom: none;
-    border-radius: 4px;
-    transform: rotate(270deg);
+    border-top: none;
+    overflow: hidden;
 }
 
-.txrecipents li :first-child::after {
-    height: 20px;
+@media only screen and (max-width: 439px) {
+    .doneiconwline::before {
+        content: '';
+        display: block;
+        position: absolute;
+        bottom: 50%;
+        right: 16px;
+        width: 12px;
+        height: 300%;
+        border: 1px dashed #a0b6c3;
+        border-bottom-left-radius: 4px;
+        border-right: none;
+        border-top: none;
+        overflow: hidden;
+    }
+}
+
+.amountbox {
+    @apply mt-[10px];
+}
+
+.amountbox > :first-child {
+    @apply font-semibold text-sui-grey-100 text-heading4 mb-[10px];
+}
+
+.amountbox > :nth-child(2) {
+    @apply font-bold text-sui-grey-90 text-[24px] h-[19px] leading-[80%] mt-0 mb-[40px];
+}
+
+.amountbox > :nth-child(2) sup {
+    @apply font-medium text-sui-grey-80 text-[13px] h-[13px] leading-[100%] ml-[4px];
 }
