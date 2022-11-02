@@ -25,7 +25,7 @@ export const COIN_TYPE = `${SUI_PACKAGE_ID}::coin::Coin`;
 export const PAY_MODULE_NAME = 'pay';
 export const PAY_SPLIT_COIN_VEC_FUNC_NAME = 'split_vec';
 export const PAY_JOIN_COIN_FUNC_NAME = 'join';
-const COIN_TYPE_ARG_REGEX = /^0x2::coin::Coin<(.+)>$/;
+export const COIN_TYPE_ARG_REGEX = /^0x2::coin::Coin<(.+)>$/;
 
 export const SUI_TYPE_ARG = '0x2::sui::SUI';
 

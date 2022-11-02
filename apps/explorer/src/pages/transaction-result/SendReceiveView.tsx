@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { COIN_TYPE_ARG_REGEX } from '@mysten/sui.js';
 import { useQuery } from '@tanstack/react-query';
 import cl from 'clsx';
 import { useState, useContext } from 'react';
@@ -28,6 +29,8 @@ const getObjType = (objId: string, network: string) =>
     rpc(network)
         .getObject(objId)
         .then((obj) => parseObjectType(obj));
+
+const getCoinLabelFromObjType = (objType: string) =>  COIN_TYPE_ARG_REGEX.exec(objType)?.[1];
 
 function MultipleRecipients({ sender, recipient, amount, objects }: TxAddress) {
     const [network] = useContext(NetworkContext);
@@ -124,7 +127,7 @@ function MultipleRecipients({ sender, recipient, amount, objects }: TxAddress) {
 }
 
 function Amount({ amount, label }: { amount: bigint; label: string }) {
-    const coinBoilerPlateRemoved = /^0x2::coin::Coin<(.+)>$/.exec(label)?.[1];
+    const coinBoilerPlateRemoved = getCoinLabelFromObjType(label);
     const formattedCoin = useFormatCoin(
         amount,
         coinBoilerPlateRemoved,
@@ -152,7 +155,7 @@ function SingleAmount({
         async () => {
             const objType = await getObjType(objectId, network);
 
-            return /^0x2::coin::Coin<(.+)>$/.exec(objType)?.[1]!;
+            return getCoinLabelFromObjType(objType);
         }
     );
 
