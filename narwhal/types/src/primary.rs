@@ -350,7 +350,7 @@ impl PartialEq for Header {
         self.digest() == other.digest()
     }
 }
-
+impl Eq for Header {}
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Vote {
     pub digest: HeaderDigest,
@@ -751,6 +751,19 @@ impl PartialEq for Certificate {
         ret
     }
 }
+impl Eq for Certificate {}
+
+impl std::hash::Hash for Certificate {
+    fn hash<H>(&self, state: &mut H)
+    where
+        H: std::hash::Hasher,
+    {
+        self.header.digest().hash(state);
+        self.round().hash(state);
+        self.epoch().hash(state);
+        self.origin().hash(state);
+    }
+}
 
 impl Affiliated for Certificate {
     fn parents(&self) -> Vec<<Self as Hash<{ crypto::DIGEST_LENGTH }>>::TypedDigest> {
@@ -871,7 +884,7 @@ impl FetchCertificatesRequest {
 }
 
 /// Used by the primary to reply to FetchCertificatesRequest.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct FetchCertificatesResponse {
     /// Certificates sorted from lower to higher rounds.
     pub certificates: Vec<Certificate>,

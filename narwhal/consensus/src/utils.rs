@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::consensus::{ConsensusState, Dag};
 use config::Committee;
-use std::collections::HashSet;
+use dag::bft::Bft;
 use tracing::debug;
 use types::{Certificate, CertificateDigest, Round};
 
@@ -54,49 +54,50 @@ fn linked(leader: &Certificate, prev_leader: &Certificate, dag: &Dag) -> bool {
     parents.contains(&prev_leader)
 }
 
-/// Flatten the dag referenced by the input certificate. This is a classic depth-first search (pre-order):
-/// https://en.wikipedia.org/wiki/Tree_traversal#Pre-order
-pub fn order_dag(
+/// Flatten the dag referenced by the input certificate. This is a classic breadth-first search:
+/// https://en.wikipedia.org/wiki/Breadth-first_search
+pub fn order_dag<'a>(
     gc_depth: Round,
-    leader: &Certificate,
-    state: &ConsensusState,
+    leader: &'a Certificate,
+    state: &'a ConsensusState,
 ) -> Vec<Certificate> {
     debug!("Processing sub-dag of {:?}", leader);
-    let mut ordered = Vec::new();
-    let mut already_ordered = HashSet::new();
 
-    let mut buffer = vec![leader];
-    while let Some(x) = buffer.pop() {
-        debug!("Sequencing {:?}", x);
-        ordered.push(x.clone());
-        for parent in &x.header.parents {
-            let (digest, certificate) = match state
-                .dag
-                .get(&(x.round() - 1))
-                .and_then(|x| x.values().find(|(x, _)| x == parent))
-            {
-                Some(x) => x,
-                None => continue, // We already ordered or GC up to here.
-            };
-
-            // We skip the certificate if we (1) already processed it or (2) we reached a round that we already
-            // committed for this authority.
-            let mut skip = already_ordered.contains(&digest);
-            skip |= state
-                .last_committed
-                .get(&certificate.origin())
-                .map_or_else(|| false, |r| r == &certificate.round());
-            if !skip {
-                buffer.push(certificate);
-                already_ordered.insert(digest);
-            }
+    // This gives us the committable parents for a given certificate. The committable parents are the parents
+    // that have not yet been included in a prior commit.
+    let parents = |input_certificate: &&'a Certificate| {
+        match input_certificate
+            .round()
+            .checked_sub(1)
+            .and_then(|prior_round| state.dag.get(&prior_round))
+        {
+            Some(map) => map
+                .values()
+                .filter_map(|(digest, certificate)| {
+                    let in_parent_set = input_certificate.header.parents.contains(digest);
+                    // We skip the certificate if we reached a round that we already
+                    // committed for this authority.
+                    let committed_before = state
+                        .last_committed
+                        .get(&certificate.origin())
+                        .map_or(false, |r| r == &certificate.round());
+                    (in_parent_set && !committed_before).then_some(certificate)
+                })
+                .collect::<Vec<_>>(),
+            // This is the genesis, or we have GC'ed up the input_certificate's round from
+            // the dag
+            None => vec![],
         }
-    }
+        .into_iter()
+    };
+    let mut ordered: Vec<Certificate> = Bft::new(leader, parents).cloned().collect();
 
     // Ensure we do not commit garbage collected certificates.
     ordered.retain(|x| x.round() + gc_depth >= state.last_committed_round);
 
-    // Ordering the output by round is not really necessary but it makes the commit sequence prettier.
-    ordered.sort_by_key(|x| x.round());
+    // Since this is a BFT, no need to sort commits: they are in round order. This particular BFT is in
+    // root-to-leaves order, though, and we'd like the reverse (older to newer blocks).
+    ordered.reverse();
+
     ordered
 }
