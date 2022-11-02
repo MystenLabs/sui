@@ -15,6 +15,7 @@ use sui_core::authority::{AuthorityStore, ResolverWrapper};
 use sui_core::authority_client::NetworkAuthorityClient;
 use sui_core::transaction_orchestrator::TransactiondOrchestrator;
 use sui_json_rpc_types::SuiExecuteTransactionResponse;
+use sui_metrics::spawn_monitored_task;
 use sui_open_rpc::Module;
 use sui_types::crypto::SignatureScheme;
 use sui_types::messages::{ExecuteTransactionRequest, ExecuteTransactionRequestType};
@@ -66,14 +67,17 @@ impl TransactionExecutionApiServer for FullNodeTransactionExecutionApi {
         let txn = Transaction::new(data, signature);
         let txn_digest = *txn.digest();
 
-        let response = self
-            .transaction_orchestrator
-            .execute_transaction(ExecuteTransactionRequest {
+        let transaction_orchestrator = self.transaction_orchestrator.clone();
+        let response = spawn_monitored_task!(transaction_orchestrator.execute_transaction(
+            ExecuteTransactionRequest {
                 transaction: txn,
                 request_type,
-            })
-            .await
-            .map_err(|e| anyhow!(e))?;
+            }
+        ))
+        .await
+        .map_err(|e| anyhow!(e))? // for JoinError
+        .map_err(|e| anyhow!(e))?; // For Sui transaction execution error (SuiResult<ExecuteTransactionResponse>)
+
         SuiExecuteTransactionResponse::from_execute_transaction_response(
             response,
             txn_digest,
