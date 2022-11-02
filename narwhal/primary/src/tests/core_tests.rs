@@ -3,12 +3,67 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 use crate::common::{create_db_stores, create_test_vote_store};
-use anemo::{types::PeerInfo, PeerId};
+use anemo::{async_trait, types::PeerInfo, PeerId};
 use fastcrypto::traits::KeyPair;
 use prometheus::Registry;
+use storage::ProposerStore;
 use test_utils::{fixture_batch_with_transactions, CommitteeFixture, PrimaryToPrimaryMockServer};
 use tokio::time::Duration;
-use types::{CertificateDigest, Header, Vote};
+use types::{
+    CertificateDigest, FetchCertificatesRequest, FetchCertificatesResponse, GetCertificatesRequest,
+    GetCertificatesResponse, Header, LatestHeaderResponse, PayloadAvailabilityRequest,
+    PayloadAvailabilityResponse, PrimaryToPrimary, Vote,
+};
+
+pub struct NetworkProxy {
+    proposer_store: ProposerStore,
+}
+
+#[async_trait]
+impl PrimaryToPrimary for NetworkProxy {
+    async fn send_message(
+        &self,
+        request: anemo::Request<PrimaryMessage>,
+    ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
+        unimplemented!(
+            "FetchCertificateProxy::send_message() is unimplemented!! {:#?}",
+            request
+        );
+    }
+    async fn get_certificates(
+        &self,
+        _request: anemo::Request<GetCertificatesRequest>,
+    ) -> Result<anemo::Response<GetCertificatesResponse>, anemo::rpc::Status> {
+        unimplemented!()
+    }
+    async fn fetch_certificates(
+        &self,
+        _request: anemo::Request<FetchCertificatesRequest>,
+    ) -> Result<anemo::Response<FetchCertificatesResponse>, anemo::rpc::Status> {
+        unimplemented!()
+    }
+
+    async fn get_payload_availability(
+        &self,
+        _request: anemo::Request<PayloadAvailabilityRequest>,
+    ) -> Result<anemo::Response<PayloadAvailabilityResponse>, anemo::rpc::Status> {
+        unimplemented!()
+    }
+
+    async fn get_latest_header(
+        &self,
+        _request: anemo::Request<LatestHeaderRequest>,
+    ) -> Result<anemo::Response<LatestHeaderResponse>, anemo::rpc::Status> {
+        let latest_header = self.proposer_store.get_last_proposed().map_err(|e| {
+            anemo::rpc::Status::internal(format!(
+                "error fetching latest proposed header from store: {e}"
+            ))
+        })?;
+        Ok(anemo::Response::new(LatestHeaderResponse {
+            header: latest_header,
+        }))
+    }
+}
 
 #[tokio::test]
 async fn process_header() {
@@ -1026,6 +1081,123 @@ async fn recover_core_expecting_header_of_previous_round() {
     for c in &certificates {
         assert!(received.0.contains(c));
     }
+}
+
+#[tokio::test(flavor = "current_thread", start_paused = true)]
+async fn recover_core_latest_headers() {
+    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let committee = fixture.committee();
+    let worker_cache = fixture.shared_worker_cache();
+    let primary = fixture.authorities().last().unwrap();
+    let name = primary.public_key();
+    let other_primary = fixture.authorities().nth(1).unwrap();
+    let signature_service = SignatureService::new(primary.keypair().copy());
+
+    let (_tx_reconfigure, rx_reconfigure) =
+        watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
+    let (tx_sync_headers, _rx_sync_headers) = test_utils::test_channel!(1);
+    let (tx_certificate_waiter, _rx_certificate_waiter) = test_utils::test_channel!(1);
+    let (_tx_primary_messages, rx_primary_messages) = test_utils::test_channel!(3);
+    let (_tx_headers_loopback, rx_headers_loopback) = test_utils::test_channel!(1);
+    let (_tx_certificates_loopback, rx_certificates_loopback) = test_utils::test_channel!(1);
+    let (_tx_headers, rx_headers) = test_utils::test_channel!(1);
+    let (tx_consensus, _rx_consensus) = test_utils::test_channel!(3);
+    let (tx_parents, _rx_parents) = test_utils::test_channel!(3);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
+
+    // Create test stores.
+    let (header_store, certificates_store, payload_store) = create_db_stores();
+    let proposer_store = ProposerStore::new_for_tests();
+
+    // add a header to store
+    let builder = types::HeaderBuilder::default();
+    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let primary = fixture.authorities().next().unwrap();
+    let header = builder
+        .author(name.clone())
+        .round(1)
+        .epoch(0)
+        .parents([CertificateDigest::default()].iter().cloned().collect())
+        .with_payload_batch(fixture_batch_with_transactions(10), 0)
+        .build(primary.keypair())
+        .unwrap();
+
+    let result = proposer_store.write_last_proposed(&header);
+    assert!(result.is_ok());
+
+    // Make a synchronizer for the core.
+    let synchronizer = Synchronizer::new(
+        name.clone(),
+        &committee,
+        certificates_store.clone(),
+        payload_store.clone(),
+        /* tx_header_waiter */ tx_sync_headers.clone(),
+        tx_certificate_waiter.clone(),
+        None,
+    );
+
+    let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
+
+    let fake_primary_addr = network::multiaddr_to_address(other_primary.address()).unwrap();
+    let fake_route =
+        anemo::Router::new().add_rpc_service(types::PrimaryToPrimaryServer::new(NetworkProxy {
+            proposer_store,
+        }));
+    let fake_server_network = anemo::Network::bind(fake_primary_addr.clone())
+        .server_name("narwhal")
+        .private_key(
+            other_primary
+                .network_keypair()
+                .copy()
+                .private()
+                .0
+                .to_bytes(),
+        )
+        .start(fake_route)
+        .unwrap();
+    let client_network = test_utils::test_network(primary.network_keypair(), primary.address());
+    client_network
+        .connect_with_peer_id(fake_primary_addr, fake_server_network.peer_id())
+        .await
+        .unwrap();
+
+    // Spawn the core.
+    let _core_handle = Core::spawn(
+        name.clone(),
+        committee.clone(),
+        worker_cache.clone(),
+        header_store.clone(),
+        certificates_store.clone(),
+        create_test_vote_store(),
+        synchronizer,
+        signature_service.clone(),
+        rx_consensus_round_updates.clone(),
+        /* gc_depth */ 50,
+        rx_reconfigure.clone(),
+        /* rx_primaries */ rx_primary_messages,
+        /* rx_header_waiter */ rx_headers_loopback,
+        /* rx_certificate_waiter */ rx_certificates_loopback,
+        /* rx_proposer */ rx_headers,
+        tx_consensus,
+        /* tx_proposer */ tx_parents,
+        metrics.clone(),
+        P2pNetwork::new(client_network.clone()),
+    );
+
+    tokio::time::sleep(Duration::from_secs(5)).await;
+
+    // assert that the header was processed
+    let mut m = HashMap::new();
+    m.insert("epoch", "0");
+    m.insert("source", "own");
+    assert_eq!(
+        metrics
+            .unique_headers_received
+            .get_metric_with(&m)
+            .unwrap()
+            .get(),
+        1
+    );
 }
 
 #[tokio::test]
