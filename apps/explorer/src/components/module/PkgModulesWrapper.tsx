@@ -57,11 +57,7 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                 'flex flex-wrap border-0 border-y border-solid border-sui-grey-45'
             }
         >
-            <div
-                className={
-                    'w-full lg:w-[15vw] pr-[20px] pl-[1px]'
-                }
-            >
+            <div className={'w-full lg:w-[15vw] pr-[20px] pl-[1px]'}>
                 <Combobox
                     value={selectedModule}
                     onChange={setSelectedModule}
@@ -81,7 +77,11 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                             <SearchIcon className="fill-sui-steel" />
                         </button>
                     </div>
-                    <Combobox.Options static as="div" className="overflow-auto h-[571px]">
+                    <Combobox.Options
+                        static
+                        as="div"
+                        className="overflow-auto h-[571px]"
+                    >
                         <VerticalList>
                             {filteredModules.map((name, idx) => (
                                 <Combobox.Option key={name} value={name}>
