@@ -63,11 +63,7 @@ function MultipleRecipients({ sender, recipient, amount, objects }: TxAddress) {
                     </Heading>
                     <div className={styles.oneaddress}>
                         <StartIcon />
-                        <Longtext
-                            text={sender}
-                            category="addresses"
-                            isLink={true}
-                        />
+                        <Longtext text={sender} category="addresses" isLink />
                     </div>
                 </div>
                 <div
@@ -89,29 +85,27 @@ function MultipleRecipients({ sender, recipient, amount, objects }: TxAddress) {
                             </div>
                             {recipient.map((add: string, idx: number) => (
                                 <div key={idx}>
-                                    <>
-                                        <div className={styles.oneaddress}>
-                                            <div className={styles.doneicon}>
-                                                <DoneIcon />
-                                            </div>
-                                            <Longtext
-                                                text={add}
-                                                category="addresses"
-                                                isLink={true}
-                                                alttext={add}
-                                            />
+                                    <div className={styles.oneaddress}>
+                                        <div className={styles.doneicon}>
+                                            <DoneIcon />
                                         </div>
-                                        {amount?.[idx] && (
-                                            <Amount
-                                                amount={amount![idx]}
-                                                label={
-                                                    isSuccess && coinList
-                                                        ? coinList[idx]
-                                                        : ''
-                                                }
-                                            />
-                                        )}
-                                    </>
+                                        <Longtext
+                                            text={add}
+                                            category="addresses"
+                                            isLink
+                                            alttext={add}
+                                        />
+                                    </div>
+                                    {!!amount?.[idx] && (
+                                        <Amount
+                                            amount={amount![idx]}
+                                            label={
+                                                isSuccess && coinList
+                                                    ? coinList[idx]
+                                                    : ''
+                                            }
+                                        />
+                                    )}
                                 </div>
                             ))}
                         </div>
@@ -190,11 +184,7 @@ function SendReceiveView({ sender, recipient, amount, objects }: TxAddress) {
                         <div className="z-0">
                             <StartIcon />
                         </div>
-                        <Longtext
-                            text={sender}
-                            category="addresses"
-                            isLink={true}
-                        />
+                        <Longtext text={sender} category="addresses" isLink />
                     </div>
                     <div>
                         {recipient.map((add: string, idx: number) => (
@@ -213,7 +203,7 @@ function SendReceiveView({ sender, recipient, amount, objects }: TxAddress) {
                                     <Longtext
                                         text={add}
                                         category="addresses"
-                                        isLink={true}
+                                        isLink
                                         alttext={add}
                                     />
                                 </div>
