@@ -16,7 +16,6 @@ use fastcrypto::{hash::Hash as _, SignatureService};
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use network::{CancelOnDropHandler, P2pNetwork, PrimaryToPrimaryRpc, ReliableNetwork};
-use std::time::Duration;
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
@@ -26,6 +25,7 @@ use storage::CertificateStore;
 use store::Store;
 use sui_metrics::spawn_monitored_task;
 use tokio::{sync::watch, task::JoinHandle, time};
+
 use tracing::{debug, error, info, instrument, trace, warn};
 use types::{
     ensure,
@@ -38,8 +38,6 @@ use types::{
 #[cfg(test)]
 #[path = "tests/core_tests.rs"]
 pub mod core_tests;
-
-const RECOVERY_REQUEST_TIMEOUT_SECS: u64 = 60;
 
 pub struct Core {
     /// The public key of this primary.
@@ -192,7 +190,7 @@ impl Core {
             .map(|(_, _, network_key)| network_key)
             .collect();
 
-        let network = P2pNetwork::new(self.network.network().clone());
+        let network = P2pNetwork::new(self.network.network());
         let mut header_futures = FuturesUnordered::new();
         let request = LatestHeaderRequest {};
         for peer in peers.iter() {
@@ -204,32 +202,27 @@ impl Core {
                 network.get_latest_header(peer, request).await
             });
         }
-        let request_interval = Duration::from_secs(RECOVERY_REQUEST_TIMEOUT_SECS);
-        let mut interval = Box::pin(time::sleep(request_interval));
-        loop {
-            tokio::select! {
-                res = header_futures.next() => {
-                    match res {
-                Some(Ok(response)) => {
+        while let Some(res) = header_futures.next().await {
+            match res {
+                Ok(response) => {
                     if let Some(header) = response.header {
-                        self.process_header(&header);
+                        let result = self.process_header(&header).await;
+                        if result.is_err() {
+                            error!(
+                                "error on recovery path processing latest header: {:?}",
+                                result.err()
+                            );
+                        }
+                    } else {
+                        trace!("peer's latest header was None on recovery path")
                     }
                 }
-                Some(Err(e)) => {
-                    error!(
+                Err(e) => {
+                    debug!(
                         "failed to get latest header from peer as recovery on startup: {:?}",
                         e
                     )
                 }
-                None => {
-                            break;
-                        }
-                    }
-                }
-                _ = &mut interval => {
-                     debug!("timeout was passed when requesting recovery header from peer");
-                     break;
-                 }
             }
         }
 
@@ -747,7 +740,7 @@ impl Core {
         // Cleanup internal state.
         let keys = self.vote_digest_store.iter(None).await.into_keys();
         if let Err(e) = self.vote_digest_store.remove_all(keys).await {
-            error!("Error in change epoch when clearing vote store {}", e);
+            error!("Error in change epoch when clearing vote store {:?}", e);
         }
         self.processing.clear();
         self.certificates_aggregators.clear();
