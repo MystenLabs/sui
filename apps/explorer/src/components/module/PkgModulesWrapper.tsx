@@ -15,7 +15,7 @@ interface Props {
     modules: [moduleName: string, code: string][];
 }
 
-const initialSelectModule = (searchParams, modulenames: string[]) => {
+const initialSelectModule = (searchParams: any, modulenames: string[]) => {
     const paramModule = searchParams.get('module') || null;
 
     if (!!paramModule && modulenames.includes(paramModule)) {
