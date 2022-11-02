@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module object_struct::object_struct {
+module object_no_id::test_only_object_no_id {
     #[test_only]
     struct NotObject has key {f: u64}
 

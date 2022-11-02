@@ -1835,18 +1835,25 @@ fn test_entry_point_string_vec_error() {
 
 #[test]
 #[cfg_attr(msim, ignore)]
-fn test_object_struct_error() {
+fn test_object_no_id_error() {
     run_tokio_test_with_big_stack(async move {
         let mut build_config = BuildConfig::default();
         build_config.config.test_mode = true;
         let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        // in this package object struct is defined incorrectly and publishing should fail (it's
-        // defined in test-only code hence cannot be checked by transactional testing framework
-        // which goes through "normal" publishing path which excludes tests).
-        path.push("src/unit_tests/data/object_struct/");
+        // in this package object struct (NotObject) is defined incorrectly and publishing should
+        // fail (it's defined in test-only code hence cannot be checked by transactional testing
+        // framework which goes through "normal" publishing path which excludes tests).
+        path.push("src/unit_tests/data/object_no_id/");
         let res = sui_framework::build_move_package(&path, build_config);
-        eprintln!("ERR: {}", res.as_ref().err().unwrap());
-        assert!(matches!(res.err().unwrap(), SuiError::ExecutionError(_)));
+        match res.err().unwrap() {
+            SuiError::ExecutionError(err_str) => {
+                assert!(
+                    err_str.contains("SuiMoveVerificationError")
+                        && err_str.contains("First field of struct NotObject must be 'id'")
+                )
+            }
+            _ => panic!(),
+        }
     })
 }
 
