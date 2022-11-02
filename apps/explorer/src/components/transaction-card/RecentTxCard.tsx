@@ -141,7 +141,7 @@ export function LatestTxCard({
     });
 
     const transactionQuery = useQuery(
-        ['transactions', txPerPage, pageIndex],
+        ['transactions', { total: countQuery.data, txPerPage, pageIndex }],
         async () => {
             const { data: count } = countQuery;
 
