@@ -599,6 +599,24 @@ export class JsonRpcProvider extends Provider {
     }
   }
 
+  async getEventsByTransaction(
+    digest: TransactionDigest,
+    count: number = EVENT_QUERY_MAX_LIMIT
+  ): Promise<SuiEvents> {
+    try {
+      return await this.client.requestWithType(
+        'sui_getEventsByTransaction',
+        [digest, count],
+        isSuiEvents,
+        this.options.skipDataValidation
+      );
+    } catch (err) {
+      throw new Error(
+        `Error getting events by transaction: ${digest}, with error: ${err}`
+      );
+    }
+  }
+
   async getEventsByModule(
     package_: string,
     module: string,
