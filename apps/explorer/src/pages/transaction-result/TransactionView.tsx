@@ -11,6 +11,7 @@ import {
     getMovePackageContent,
     getObjectId,
     getTransferSuiTransaction,
+    getTransferSuiAmount,
     SUI_TYPE_ARG,
 } from '@mysten/sui.js';
 import cl from 'clsx';
@@ -26,7 +27,6 @@ import {
     type LinkObj,
     TxAddresses,
 } from '../../components/transaction-card/TxCardUtils';
-import { getAmount } from '../../utils/getAmount';
 import SendReceiveView from './SendReceiveView';
 import TxLinks from './TxLinks';
 
@@ -241,7 +241,7 @@ function ItemView({ data }: { data: TxItemView }) {
 
 function TransactionView({ txdata }: { txdata: DataType }) {
     const txdetails = getTransactions(txdata)[0];
-    const amount = getAmount(txdetails);
+    const amount = getTransferSuiAmount(txdetails);
 
     const [formattedAmount] = useFormatCoin(
         amount,
