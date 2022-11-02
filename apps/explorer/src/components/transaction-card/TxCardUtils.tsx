@@ -9,7 +9,6 @@ import {
     getTransactionKindName,
     getTransferObjectTransaction,
     getTransferSuiTransaction,
-    getTransferSuiAmount,
     SUI_TYPE_ARG,
     type GetTxnDigestsResponse,
     type CertifiedTransaction,
@@ -24,6 +23,7 @@ import { ReactComponent as ContentArrowRight } from '../../assets/SVGIcons/16px/
 import Longtext from '../../components/longtext/Longtext';
 import { DefaultRpcClient } from '../../utils/api/DefaultRpcClient';
 import { type Network } from '../../utils/api/rpcSetting';
+import { getAmount } from '../../utils/getAmount';
 import { deduplicate } from '../../utils/searchUtil';
 import { truncate } from '../../utils/stringUtils';
 import { timeAgo } from '../../utils/timeUtils';
@@ -261,7 +261,7 @@ export const getDataOnTxDigests = (
                             txId: digest,
                             status: getExecutionStatusType(txEff)!,
                             txGas: getTotalGasUsed(txEff),
-                            suiAmount: getTransferSuiAmount(txn),
+                            suiAmount: getAmount(txn),
                             kind: txKind,
                             From: res.data.sender,
                             timestamp_ms: txEff.timestamp_ms,
