@@ -4,7 +4,7 @@
 import { COIN_TYPE_ARG_REGEX } from '@mysten/sui.js';
 import { useQuery } from '@tanstack/react-query';
 import cl from 'clsx';
-import { useState, useContext } from 'react';
+import { useContext } from 'react';
 
 import { ReactComponent as DoneIcon } from '../../assets/SVGIcons/16px/CheckFill.svg';
 import { ReactComponent as StartIcon } from '../../assets/SVGIcons/Start.svg';
@@ -36,19 +36,14 @@ const getCoinLabelFromObjType = (objType: string) =>
 function MultipleRecipients({ sender, recipient, amount, objects }: TxAddress) {
     const [network] = useContext(NetworkContext);
 
-    const [isSingleCoin, setIsSingleCoin] = useState(false);
-
     const { data: coinList, isSuccess } = useQuery({
         queryKey: ['get-coin-types-for-pay-tx', objects],
-        queryFn: async () => {
-            const coinList = await Promise.all(
-                objects!.map((objId) => getObjType(objId, network))
-            );
-            setIsSingleCoin(coinList.every((val) => val === coinList[0]));
-            return coinList;
-        },
+        queryFn: async () =>
+            Promise.all(objects!.map((objId) => getObjType(objId, network))),
         enabled: !!objects,
     });
+
+    const isSingleCoin = coinList?.every((val) => val === coinList[0]) || false;
 
     return (
         <>
