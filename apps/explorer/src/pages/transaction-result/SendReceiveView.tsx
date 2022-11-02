@@ -35,7 +35,7 @@ function MultipleRecipients({ sender, recipient, amount, objects }: TxAddress) {
     const [isSingleCoin, setIsSingleCoin] = useState(false);
 
     const { data: coinList, isSuccess } = useQuery({
-        queryKey: ['get-coin-types-for-pay-tx', network, objects],
+        queryKey: ['get-coin-types-for-pay-tx', objects],
         queryFn: async () => {
             const coinList = await Promise.all(
                 objects!.map((objId) => getObjType(objId, network))
@@ -152,7 +152,7 @@ function SingleAmount({
     const [network] = useContext(NetworkContext);
 
     const { data: label } = useQuery(
-        ['get-coin-type-for-pay-tx', objectId, network],
+        ['get-coin-type-for-pay-tx', objectId],
         async () => {
             const objType = await getObjType(objectId, network);
 
