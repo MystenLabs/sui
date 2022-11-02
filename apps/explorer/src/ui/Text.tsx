@@ -24,6 +24,10 @@ const textStyles = cva([], {
             true: 'italic',
             false: '',
         },
+        mono: {
+            true: 'font-mono',
+            false: 'font-sans',
+        },
     },
     defaultVariants: {
         weight: 'medium',
