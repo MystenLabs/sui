@@ -3,7 +3,7 @@
 use crate::{legacy_emit_cost, legacy_empty_cost};
 use curve25519_dalek_ng::scalar::Scalar;
 use fastcrypto::{
-    bls12381::min_sig::{BLS12381PublicKey, BLS12381Signature},
+    bls12381::{min_pk, min_sig},
     bulletproofs::{BulletproofsRangeProof, PedersenCommitment},
     ed25519::{Ed25519PublicKey, Ed25519Signature},
     hmac,
@@ -162,9 +162,9 @@ pub fn secp256k1_verify(
     }
 }
 
-/// Native implementation of bls12381_verify in public Move API, see crypto.move for specifications.
+/// Native implementation of bls12381_min_sig_verify in public Move API, see bls12381.move for specifications.
 /// Note that this function only works for signatures in G1 and public keys in G2.
-pub fn bls12381_verify_g1_sig(
+pub fn bls12381_min_sig_verify(
     _context: &mut NativeContext,
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
@@ -183,15 +183,56 @@ pub fn bls12381_verify_g1_sig(
     // TODO: implement native gas cost estimation https://github.com/MystenLabs/sui/issues/3868
     let cost = legacy_emit_cost();
 
-    let signature = match <BLS12381Signature as ToFromBytes>::from_bytes(&signature_bytes_ref) {
-        Ok(signature) => signature,
-        Err(_) => return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
-    };
+    let signature =
+        match <min_sig::BLS12381Signature as ToFromBytes>::from_bytes(&signature_bytes_ref) {
+            Ok(signature) => signature,
+            Err(_) => return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
+        };
 
-    let public_key = match <BLS12381PublicKey as ToFromBytes>::from_bytes(&public_key_bytes_ref) {
-        Ok(public_key) => public_key,
-        Err(_) => return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
-    };
+    let public_key =
+        match <min_sig::BLS12381PublicKey as ToFromBytes>::from_bytes(&public_key_bytes_ref) {
+            Ok(public_key) => public_key,
+            Err(_) => return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
+        };
+
+    match public_key.verify(&msg_ref, &signature) {
+        Ok(_) => Ok(NativeResult::ok(cost, smallvec![Value::bool(true)])),
+        Err(_) => Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
+    }
+}
+
+/// Native implementation of bls12381_min_pk_verify in public Move API, see bls12381.move for specifications.
+/// Note that this function only works for signatures in G2 and public keys in G1.
+pub fn bls12381_min_pk_verify(
+    _context: &mut NativeContext,
+    ty_args: Vec<Type>,
+    mut args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    debug_assert!(ty_args.is_empty());
+    debug_assert!(args.len() == 3);
+
+    let msg = pop_arg!(args, VectorRef);
+    let public_key_bytes = pop_arg!(args, VectorRef);
+    let signature_bytes = pop_arg!(args, VectorRef);
+
+    let msg_ref = msg.as_bytes_ref();
+    let public_key_bytes_ref = public_key_bytes.as_bytes_ref();
+    let signature_bytes_ref = signature_bytes.as_bytes_ref();
+
+    // TODO: implement native gas cost estimation https://github.com/MystenLabs/sui/issues/3868
+    let cost = legacy_emit_cost();
+
+    let signature =
+        match <min_pk::BLS12381Signature as ToFromBytes>::from_bytes(&signature_bytes_ref) {
+            Ok(signature) => signature,
+            Err(_) => return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
+        };
+
+    let public_key =
+        match <min_pk::BLS12381PublicKey as ToFromBytes>::from_bytes(&public_key_bytes_ref) {
+            Ok(public_key) => public_key,
+            Err(_) => return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
+        };
 
     match public_key.verify(&msg_ref, &signature) {
         Ok(_) => Ok(NativeResult::ok(cost, smallvec![Value::bool(true)])),

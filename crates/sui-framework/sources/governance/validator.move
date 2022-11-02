@@ -13,7 +13,7 @@ module sui::validator {
     use sui::stake::Stake;
     use sui::epoch_time_lock::EpochTimeLock;
     use std::option::Option;
-    use sui::bls12381::bls12381_verify_with_domain;
+    use sui::bls12381::bls12381_min_sig_verify_with_domain;
     use sui::staking_pool::{Self, Delegation, StakedSui, StakingPool};
 
     friend sui::genesis;
@@ -81,7 +81,7 @@ module sui::validator {
         let address_bytes = bcs::to_bytes(&sui_address);
         vector::append(&mut signed_bytes, address_bytes);
         assert!(
-            bls12381_verify_with_domain(&proof_of_possession, &pubkey_bytes, signed_bytes, PROOF_OF_POSSESSION_DOMAIN) == true,
+            bls12381_min_sig_verify_with_domain(&proof_of_possession, &pubkey_bytes, signed_bytes, PROOF_OF_POSSESSION_DOMAIN) == true,
             0
         );
     }

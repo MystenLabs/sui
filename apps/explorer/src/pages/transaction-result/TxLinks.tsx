@@ -7,13 +7,16 @@ import { useState, useCallback } from 'react';
 import Longtext from '../../components/longtext/Longtext';
 
 import type { Category } from './TransactionResultType';
+import type { SuiObjectRef } from '@mysten/sui.js';
 
 import styles from './TxLinks.module.css';
+
+import { IconTooltip } from '~/ui/Tooltip';
 
 type Addresslist = {
     label: string;
     category?: string;
-    links: string[];
+    links: SuiObjectRef[];
 };
 function TxLinks({ data }: { data: Addresslist }) {
     const [viewMore, setVeiwMore] = useState(false);
@@ -33,13 +36,18 @@ function TxLinks({ data }: { data: Addresslist }) {
                                 ? data.links.length
                                 : numberOfListItemsToShow
                         )
-                        .map((objId, idx) => (
+                        .map((obj, idx) => (
                             <li key={idx}>
                                 <Longtext
-                                    text={objId}
+                                    text={obj.objectId}
                                     category={data?.category as Category}
                                     isLink={true}
                                     copyButton="16"
+                                    extra={
+                                        <IconTooltip
+                                            tip={`VERSION ${obj.version}`}
+                                        />
+                                    }
                                 />
                             </li>
                         ))}

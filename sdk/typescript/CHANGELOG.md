@@ -1,5 +1,20 @@
 # @mysten/sui.js
 
+## 0.15.0
+
+### Minor Changes
+
+- c27933292: Update the type of the `endpoint` field in JsonRpcProvider from string to object
+
+### Patch Changes
+
+- c27933292: Add util function for faucet
+- 90898d366: Support passing utf8 and ascii string
+- c27933292: Add constants for default API endpoints
+- Updated dependencies [1591726e8]
+- Updated dependencies [1591726e8]
+  - @mysten/bcs@0.4.0
+
 ## 0.14.0
 
 ### Minor Changes
