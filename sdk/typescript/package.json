@@ -54,12 +54,12 @@
   },
   "size-limit": [
     {
-      "path": "dist/sui.js.cjs.production.min.js",
-      "limit": "10 KB"
+      "path": "dist/index.js",
+      "limit": "100 KB"
     },
     {
-      "path": "dist/sui.js.esm.js",
-      "limit": "10 KB"
+      "path": "dist/index.mjs",
+      "limit": "100 KB"
     }
   ],
   "devDependencies": {
