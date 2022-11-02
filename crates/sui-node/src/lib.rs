@@ -58,6 +58,7 @@ use sui_json_rpc::read_api::ReadApi;
 use sui_json_rpc::transaction_execution_api::FullNodeTransactionExecutionApi;
 use sui_json_rpc::ws_server::WsServerHandle;
 use sui_json_rpc::JsonRpcServerBuilder;
+use sui_metrics::spawn_monitored_task;
 use sui_types::crypto::KeypairTraits;
 
 pub mod admin;
@@ -98,6 +99,7 @@ impl SuiNode {
 
         // Initialize metrics to track db usage before creating any stores
         DBMetrics::init(&prometheus_registry);
+        sui_metrics::init_metrics(&prometheus_registry);
 
         let genesis = config.genesis()?;
 
@@ -218,7 +220,7 @@ impl SuiNode {
         let batch_subsystem_handle = {
             // Start batch system so that this node can be followed
             let batch_state = state.clone();
-            tokio::task::spawn(async move {
+            spawn_monitored_task!(async move {
                 batch_state
                     .run_batch_service(1000, Duration::from_secs(1))
                     .await
@@ -228,7 +230,7 @@ impl SuiNode {
         let post_processing_subsystem_handle =
             if index_store.is_some() || config.enable_event_processing {
                 let indexing_state = state.clone();
-                Some(tokio::task::spawn(async move {
+                Some(spawn_monitored_task!(async move {
                     indexing_state
                         .run_tx_post_processing_process()
                         .await
@@ -301,7 +303,7 @@ impl SuiNode {
                 .map_err(|err| anyhow!(err.to_string()))?;
             let local_addr = server.local_addr();
             info!("Listening to traffic on {local_addr}");
-            tokio::spawn(server.serve().map_err(Into::into))
+            spawn_monitored_task!(server.serve().map_err(Into::into))
         };
 
         let p2p_network = {

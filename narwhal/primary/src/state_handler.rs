@@ -5,6 +5,7 @@ use config::{Committee, SharedCommittee, SharedWorkerCache, WorkerCache, WorkerI
 use crypto::PublicKey;
 use network::{P2pNetwork, UnreliableNetwork};
 use std::{collections::BTreeMap, sync::Arc};
+use sui_metrics::spawn_monitored_task;
 use tap::TapOptional;
 use tokio::{sync::watch, task::JoinHandle};
 use tracing::{info, warn};
@@ -47,7 +48,7 @@ impl StateHandler {
         tx_reconfigure: watch::Sender<ReconfigureNotification>,
         network: P2pNetwork,
     ) -> JoinHandle<()> {
-        tokio::spawn(async move {
+        spawn_monitored_task!(async move {
             Self {
                 name,
                 committee,

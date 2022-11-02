@@ -11,6 +11,7 @@ use std::{
     ops::RangeInclusive,
     sync::{Arc, RwLock},
 };
+use sui_metrics::spawn_monitored_task;
 use thiserror::Error;
 use tokio::{
     sync::{
@@ -351,7 +352,7 @@ impl Dag {
             metrics,
         );
 
-        let handle = tokio::spawn(async move { idg.run().await });
+        let handle = spawn_monitored_task!(async move { idg.run().await });
         let dag = Dag { tx_commands };
         (handle, dag)
     }

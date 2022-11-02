@@ -14,6 +14,7 @@ use sui_config::genesis::Genesis;
 use sui_core::authority::AuthorityState;
 use sui_core::authority_client::NetworkAuthorityClient;
 use sui_core::quorum_driver::QuorumDriver;
+use sui_metrics::spawn_monitored_task;
 
 use crate::errors::{Error, ErrorType};
 use crate::state::{OnlineServerContext, PseudoBlockProvider};
@@ -73,7 +74,7 @@ impl RosettaOnlineServer {
             "Sui Rosetta online server listening on {}",
             server.local_addr()
         );
-        tokio::spawn(server)
+        spawn_monitored_task!(server)
     }
 }
 
@@ -103,6 +104,6 @@ impl RosettaOfflineServer {
             "Sui Rosetta offline server listening on {}",
             server.local_addr()
         );
-        tokio::spawn(server)
+        spawn_monitored_task!(server)
     }
 }

@@ -16,6 +16,7 @@ use move_core_types::value::MoveStructLayout;
 use mysten_network::config::Config;
 use sui_config::genesis::Genesis;
 use sui_config::NetworkConfig;
+use sui_metrics::{monitored_future, spawn_monitored_task};
 use sui_network::{
     default_mysten_network_config, DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_REQUEST_TIMEOUT_SEC,
 };
@@ -564,7 +565,7 @@ where
             .unwrap()
             .clone();
         let authority_clients = self.authority_clients.clone();
-        if let Ok(res) = timeout(total_timeout, tokio::spawn(async move {
+        if let Ok(res) = timeout(total_timeout, spawn_monitored_task!(async move {
             Self::sync_certificate_to_authority_with_timeout(
                 &committee,
                 &authority_clients,
@@ -802,14 +803,14 @@ where
             .map(|name| {
                 let client = &self.authority_clients[name];
                 let execute = map_each_authority.clone();
-                async move {
+                monitored_future!(async move {
                     (
                         *name,
                         execute(*name, client)
                             .instrument(tracing::trace_span!("quorum_map_auth", authority =? name.concise()))
                             .await,
                     )
-                }
+                })
             })
             .collect();
 
@@ -876,19 +877,19 @@ where
 
             let start_req = |name: AuthorityName, client: SafeClient<A>| {
                 let map_each_authority = map_each_authority.clone();
-                Box::pin(async move {
+                Box::pin(monitored_future!(async move {
                     trace!(?name, now = ?tokio::time::Instant::now() - start, "new request");
                     let map = map_each_authority(name, client);
                     Event::Request(name, timeout(timeout_each_authority, map).await)
-                })
+                }))
             };
 
             let schedule_next = || {
                 let delay = self.timeouts.serial_authority_request_interval;
-                Box::pin(async move {
+                Box::pin(monitored_future!(async move {
                     sleep(delay).await;
                     Event::StartNext
-                })
+                }))
             };
 
             // This process is intended to minimize latency in the face of unreliable authorities,
@@ -2000,12 +2001,9 @@ where
         let (sender, receiver) = tokio::sync::mpsc::channel(OBJECT_DOWNLOAD_CHANNEL_BOUND);
         for object_ref in object_refs {
             let sender = sender.clone();
-            tokio::spawn(Self::fetch_one_object(
-                self.authority_clients.clone(),
-                object_ref,
-                self.timeouts.authority_request_timeout,
-                sender,
-            ));
+            let client = self.authority_clients.clone();
+            let timeout = self.timeouts.authority_request_timeout;
+            spawn_monitored_task!(Self::fetch_one_object(client, object_ref, timeout, sender,));
         }
         // Close unused channel
         drop(sender);

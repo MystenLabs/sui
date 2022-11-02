@@ -4867,6 +4867,7 @@ dependencies = [
  "prometheus",
  "rand 0.8.5",
  "serde 1.0.147",
+ "sui-metrics",
  "thiserror",
  "tokio",
  "tracing",
@@ -4962,6 +4963,7 @@ dependencies = [
  "prometheus",
  "rand 0.8.5",
  "serde 1.0.147",
+ "sui-metrics",
  "telemetry-subscribers 0.2.0",
  "tempfile",
  "thiserror",
@@ -4996,6 +4998,7 @@ dependencies = [
  "prometheus",
  "rand 0.8.5",
  "serde 1.0.147",
+ "sui-metrics",
  "thiserror",
  "tokio",
  "tokio-util 0.7.4",
@@ -5043,6 +5046,7 @@ dependencies = [
  "serde-reflection",
  "serde_yaml",
  "structopt",
+ "sui-metrics",
  "telemetry-subscribers 0.2.0",
  "thiserror",
  "tokio",
@@ -5098,6 +5102,7 @@ dependencies = [
  "reqwest",
  "roaring",
  "serde 1.0.147",
+ "sui-metrics",
  "tap",
  "telemetry-subscribers 0.2.0",
  "tempfile",
@@ -5249,6 +5254,7 @@ dependencies = [
  "rand 0.8.5",
  "reqwest",
  "serde 1.0.147",
+ "sui-metrics",
  "tap",
  "telemetry-subscribers 0.2.0",
  "tempfile",
@@ -8175,6 +8181,7 @@ dependencies = [
  "sui-json",
  "sui-json-rpc-types",
  "sui-macros",
+ "sui-metrics",
  "sui-network",
  "sui-simulator",
  "sui-storage",
@@ -8249,6 +8256,7 @@ dependencies = [
  "sui-config",
  "sui-json-rpc-types",
  "sui-keys",
+ "sui-metrics",
  "sui-node",
  "sui-types",
  "tap",
@@ -8382,6 +8390,7 @@ dependencies = [
  "sui-cost",
  "sui-json",
  "sui-json-rpc-types",
+ "sui-metrics",
  "sui-open-rpc",
  "sui-open-rpc-macros",
  "sui-transaction-builder",
@@ -8447,6 +8456,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-metrics"
+version = "0.7.0"
+dependencies = [
+ "once_cell",
+ "prometheus",
+ "scopeguard",
+ "tap",
+ "telemetry-subscribers 0.2.0",
+ "tokio",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
 name = "sui-network"
 version = "0.0.0"
 dependencies = [
@@ -8477,6 +8500,7 @@ dependencies = [
  "sui-config",
  "sui-core",
  "sui-json-rpc",
+ "sui-metrics",
  "sui-network",
  "sui-simulator",
  "sui-storage",
@@ -8553,6 +8577,7 @@ dependencies = [
  "sui-framework",
  "sui-framework-build",
  "sui-keys",
+ "sui-metrics",
  "sui-node",
  "sui-sdk",
  "sui-types",
@@ -8639,6 +8664,7 @@ dependencies = [
  "strum",
  "strum_macros",
  "sui-json-rpc-types",
+ "sui-metrics",
  "sui-types",
  "tap",
  "telemetry-subscribers 0.2.0",

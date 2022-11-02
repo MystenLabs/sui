@@ -25,6 +25,8 @@ use types::{
     WorkerToWorkerClient,
 };
 
+use sui_metrics::monitored_future;
+
 #[cfg(test)]
 #[path = "tests/handlers_tests.rs"]
 pub mod handlers_tests;
@@ -173,11 +175,11 @@ impl PrimaryToWorker for PrimaryReceiverHandler {
             let request_batch_fn =
                 |mut client: WorkerToWorkerClient<anemo::Peer>, batch_request, timeout| {
                     // Wrapper function enables us to move `client` into the future.
-                    async move {
+                    monitored_future!(async move {
                         client
                             .request_batch(anemo::Request::new(batch_request).with_timeout(timeout))
                             .await
-                    }
+                    })
                 };
             if first_attempt {
                 // Send first sync request to a single node.

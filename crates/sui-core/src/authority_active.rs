@@ -31,6 +31,7 @@
 
 use arc_swap::ArcSwap;
 use std::{collections::HashMap, ops::Deref, sync::Arc, time::Duration};
+use sui_metrics::spawn_monitored_task;
 use sui_types::{base_types::AuthorityName, error::SuiResult};
 use tokio::{
     sync::{oneshot, Mutex, MutexGuard},
@@ -299,9 +300,7 @@ where
         let committee = self.state.committee.load().deref().clone();
         let target_num_tasks = usize::min(committee.num_members() - 1, degree);
 
-        tokio::task::spawn(async move {
-            gossip_process(&self, target_num_tasks).await;
-        })
+        spawn_monitored_task!(gossip_process(&self, target_num_tasks))
     }
 
     /// Restart the node sync process only if one currently exists.
@@ -361,7 +360,7 @@ where
         let node_sync_store = self.state.node_sync_store.clone();
 
         info!("spawning node sync task");
-        let join_handle = tokio::task::spawn(node_sync_process(
+        let join_handle = spawn_monitored_task!(node_sync_process(
             node_sync_handle,
             node_sync_store,
             epoch,
@@ -374,9 +373,7 @@ where
 
     /// Spawn pending certificate execution process
     pub async fn spawn_execute_process(self: Arc<Self>) -> JoinHandle<()> {
-        tokio::task::spawn(async move {
-            execution_process(self).await;
-        })
+        spawn_monitored_task!(execution_process(self))
     }
 
     pub async fn cancel_node_sync_process_for_tests(&self) {
@@ -403,8 +400,10 @@ where
         metrics: CheckpointMetrics,
     ) -> JoinHandle<()> {
         // Spawn task to take care of checkpointing
-        tokio::task::spawn(async move {
-            checkpoint_process(self, &checkpoint_process_control, metrics).await;
-        })
+        spawn_monitored_task!(checkpoint_process(
+            self,
+            &checkpoint_process_control,
+            metrics
+        ))
     }
 }

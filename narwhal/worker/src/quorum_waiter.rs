@@ -9,6 +9,7 @@ use fastcrypto::hash::Hash;
 use futures::stream::{futures_unordered::FuturesUnordered, FuturesOrdered, StreamExt as _};
 use network::{CancelOnDropHandler, P2pNetwork, ReliableNetwork};
 use std::time::Duration;
+use sui_metrics::{monitored_future, spawn_monitored_task};
 use tokio::{sync::watch, task::JoinHandle, time::timeout};
 use tracing::{error, trace};
 use types::{metered_channel::Receiver, Batch, ReconfigureNotification, WorkerBatchMessage};
@@ -47,7 +48,7 @@ impl QuorumWaiter {
         rx_message: Receiver<(Batch, Option<tokio::sync::oneshot::Sender<()>>)>,
         network: P2pNetwork,
     ) -> JoinHandle<()> {
-        tokio::spawn(async move {
+        spawn_monitored_task!(async move {
             Self {
                 name,
                 id,
@@ -103,7 +104,7 @@ impl QuorumWaiter {
                         .zip(handlers.into_iter())
                         .map(|(name, handler)| {
                             let stake = self.committee.stake(&name);
-                            Self::waiter(handler, stake)
+                            monitored_future!(Self::waiter(handler, stake))
                         })
                         .collect();
 
