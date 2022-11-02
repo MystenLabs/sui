@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "0.14.0"
+    "version": "0.15.0"
   },
   "methods": [
     {
@@ -458,7 +458,7 @@
             {
               "name": "query",
               "value": {
-                "Transaction": "oJVAcGBknvJoPEaULmTnpnNxR5+G0wMWstPxKwKyNXE="
+                "Transaction": "WSPBt/tI+k8Avb/jMZLWn4VwgaPSlGzbTb/8UNr9PMY="
               }
             },
             {
@@ -480,17 +480,17 @@
               "data": [
                 {
                   "timestamp": 0,
-                  "txDigest": "oJVAcGBknvJoPEaULmTnpnNxR5+G0wMWstPxKwKyNXE=",
+                  "txDigest": "WSPBt/tI+k8Avb/jMZLWn4VwgaPSlGzbTb/8UNr9PMY=",
                   "event": {
                     "transferObject": {
                       "packageId": "0x0000000000000000000000000000000000000002",
                       "transactionModule": "native",
-                      "sender": "0xebf0b18d878780dad32556f6ff9a7bdc9b59e157",
+                      "sender": "0x9cce11a3b6afff14a4ab2421d0159ef1e7486655",
                       "recipient": {
-                        "AddressOwner": "0x98d2d7d17ba91ddc7e717cf708c937060f040487"
+                        "AddressOwner": "0xc677ed804f82f1c8587b98d64c00bfb46c3843bd"
                       },
                       "objectType": "0x2::example::Object",
-                      "objectId": "0x36ec33fb1746d999a5e58cd5c677ed804f82f1c8",
+                      "objectId": "0x8bf6ccfa7c65a86138698cd1fdcac3dce8d8c7ce",
                       "version": 2
                     }
                   }
@@ -1210,7 +1210,7 @@
             },
             {
               "name": "cursor",
-              "value": "8n7y9+zMf7DVqvLCAi+Xd1qrSBa7vjWoF5keAEUxCbo="
+              "value": "A1MdyY6D9uGY0tfRe6kd3H5xfPcIyTcGDwQEhzbsM/s="
             },
             {
               "name": "limit",
@@ -3995,8 +3995,11 @@
             "enum": [
               "Bool",
               "U8",
+              "U16",
+              "U32",
               "U64",
               "U128",
+              "U256",
               "Address",
               "Signer"
             ]
