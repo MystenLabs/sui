@@ -3,6 +3,9 @@
 
 use once_cell::sync::OnceCell;
 use prometheus::{register_int_gauge_vec_with_registry, IntGaugeVec, Registry};
+use tap::TapFallible;
+
+use tracing::warn;
 
 pub use scopeguard;
 
@@ -36,9 +39,10 @@ impl Metrics {
 static METRICS: OnceCell<Metrics> = OnceCell::new();
 
 pub fn init_metrics(registry: &Registry) {
-    METRICS
+    let _ = METRICS
         .set(Metrics::new(registry))
-        .expect("sui_metrics::init_metrics duplicate init")
+        // this happens many times during tests
+        .tap_err(|_| warn!("init_metrics registry overwritten"));
 }
 
 pub fn get_metrics() -> Option<&'static Metrics> {
