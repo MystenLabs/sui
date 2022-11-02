@@ -292,23 +292,8 @@ async fn shared_object_sync() {
     .unwrap();
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
 
-    // Let's submit the transaction to the out-of-date authorities.
-    // Right now grpc doesn't send back the error message in a recoverable way.
-    // Ideally we expect Err(SuiError::SharedObjectLockingFailure(_)).
-    let _err = submit_shared_object_transaction(
-        increment_counter_transaction.clone(),
-        &configs.validator_set()[1..],
-    )
-    .await
-    .unwrap_err();
-
-    // Now send the missing certificates to the outdated authorities. We also re-send
-    // the transaction to the first authority who should simply ignore it.
-    let effects =
-        submit_single_owner_transaction(create_counter_transaction, configs.validator_set()).await;
-    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
-
-    // Now we can try again with the shared-object transaction who failed before.
+    // Submit transactions to out-of-date authorities.
+    // It will succeed because we share owned object certificates through narwhal
     let effects = submit_shared_object_transaction(
         increment_counter_transaction,
         &configs.validator_set()[1..],

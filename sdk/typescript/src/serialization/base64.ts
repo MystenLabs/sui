@@ -1,14 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Buffer } from 'buffer';
+import { fromB64, toB64 } from '@mysten/bcs';
 
 export class Base64DataBuffer {
   private data: Uint8Array;
 
   constructor(data: Uint8Array | string) {
     if (typeof data === 'string') {
-      this.data = new Uint8Array(Buffer.from(data, 'base64'));
+      this.data = fromB64(data);
     } else {
       this.data = data;
     }
@@ -23,6 +23,6 @@ export class Base64DataBuffer {
   }
 
   toString(): string {
-    return Buffer.from(this.data).toString('base64');
+    return toB64(this.data);
   }
 }

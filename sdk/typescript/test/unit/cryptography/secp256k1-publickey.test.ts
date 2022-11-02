@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { toB64, toHEX } from '@mysten/bcs';
 import { describe, it, expect } from 'vitest';
 import { Secp256k1PublicKey } from '../../../src/cryptography/secp256k1-publickey';
 import {
@@ -37,14 +38,16 @@ describe('Secp256k1PublicKey', () => {
     }).toThrow();
 
     expect(() => {
-      const invalid_pubkey_buffer = Buffer.from(INVALID_SECP256K1_PUBLIC_KEY);
-      let invalid_pubkey_base64 = invalid_pubkey_buffer.toString('base64');
+      const invalid_pubkey_buffer = new Uint8Array(
+        INVALID_SECP256K1_PUBLIC_KEY
+      );
+      let invalid_pubkey_base64 = toB64(invalid_pubkey_buffer);
       new Secp256k1PublicKey(invalid_pubkey_base64);
     }).toThrow();
 
     expect(() => {
-      const pubkey_buffer = Buffer.from(VALID_SECP256K1_PUBLIC_KEY);
-      let wrong_encode = pubkey_buffer.toString('hex');
+      const pubkey_buffer = new Uint8Array(VALID_SECP256K1_PUBLIC_KEY);
+      let wrong_encode = toHEX(pubkey_buffer);
       new Secp256k1PublicKey(wrong_encode);
     }).toThrow();
 
@@ -54,19 +57,19 @@ describe('Secp256k1PublicKey', () => {
   });
 
   it('toBase64', () => {
-    const pub_key = Buffer.from(VALID_SECP256K1_PUBLIC_KEY);
-    let pub_key_base64 = pub_key.toString('base64');
+    const pub_key = new Uint8Array(VALID_SECP256K1_PUBLIC_KEY);
+    let pub_key_base64 = toB64(pub_key);
     const key = new Secp256k1PublicKey(pub_key_base64);
     expect(key.toBase64()).toEqual(pub_key_base64);
     expect(key.toString()).toEqual(pub_key_base64);
   });
 
   it('toBuffer', () => {
-    const pub_key = Buffer.from(VALID_SECP256K1_PUBLIC_KEY);
-    let pub_key_base64 = pub_key.toString('base64');
+    const pub_key = new Uint8Array(VALID_SECP256K1_PUBLIC_KEY);
+    let pub_key_base64 = toB64(pub_key);
     const key = new Secp256k1PublicKey(pub_key_base64);
-    expect(key.toBuffer().length).toBe(33);
-    expect(new Secp256k1PublicKey(key.toBuffer()).equals(key)).toBe(true);
+    expect(key.toBytes().length).toBe(33);
+    expect(new Secp256k1PublicKey(key.toBytes()).equals(key)).toBe(true);
   });
 
   SECP_TEST_CASES.forEach((address, base64) => {

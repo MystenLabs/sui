@@ -20,6 +20,7 @@ use std::{
 };
 use storage::CertificateStore;
 use store::Store;
+use sui_metrics::spawn_monitored_task;
 use tokio::{sync::watch, task::JoinHandle};
 use tracing::{debug, error, info, instrument, trace, warn};
 use types::{
@@ -121,7 +122,7 @@ impl Core {
         metrics: Arc<PrimaryMetrics>,
         primary_network: P2pNetwork,
     ) -> JoinHandle<()> {
-        tokio::spawn(async move {
+        spawn_monitored_task!(async move {
             Self {
                 name,
                 committee,

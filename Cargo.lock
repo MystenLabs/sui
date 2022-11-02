@@ -4867,6 +4867,7 @@ dependencies = [
  "prometheus",
  "rand 0.8.5",
  "serde 1.0.147",
+ "sui-metrics",
  "thiserror",
  "tokio",
  "tracing",
@@ -4962,6 +4963,7 @@ dependencies = [
  "prometheus",
  "rand 0.8.5",
  "serde 1.0.147",
+ "sui-metrics",
  "telemetry-subscribers 0.2.0",
  "tempfile",
  "thiserror",
@@ -4996,6 +4998,7 @@ dependencies = [
  "prometheus",
  "rand 0.8.5",
  "serde 1.0.147",
+ "sui-metrics",
  "thiserror",
  "tokio",
  "tokio-util 0.7.4",
@@ -5043,6 +5046,7 @@ dependencies = [
  "serde-reflection",
  "serde_yaml",
  "structopt",
+ "sui-metrics",
  "telemetry-subscribers 0.2.0",
  "thiserror",
  "tokio",
@@ -5098,6 +5102,7 @@ dependencies = [
  "reqwest",
  "roaring",
  "serde 1.0.147",
+ "sui-metrics",
  "tap",
  "telemetry-subscribers 0.2.0",
  "tempfile",
@@ -5249,6 +5254,7 @@ dependencies = [
  "rand 0.8.5",
  "reqwest",
  "serde 1.0.147",
+ "sui-metrics",
  "tap",
  "telemetry-subscribers 0.2.0",
  "tempfile",
@@ -7922,7 +7928,7 @@ checksum = "734676eb262c623cec13c3155096e08d1f8f29adce39ba17948b18dad1e54142"
 
 [[package]]
 name = "sui"
-version = "0.14.0"
+version = "0.15.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -8130,7 +8136,7 @@ dependencies = [
 
 [[package]]
 name = "sui-core"
-version = "0.14.0"
+version = "0.15.0"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -8175,6 +8181,7 @@ dependencies = [
  "sui-json",
  "sui-json-rpc-types",
  "sui-macros",
+ "sui-metrics",
  "sui-network",
  "sui-simulator",
  "sui-storage",
@@ -8234,7 +8241,7 @@ dependencies = [
 
 [[package]]
 name = "sui-faucet"
-version = "0.14.0"
+version = "0.15.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -8249,6 +8256,7 @@ dependencies = [
  "sui-config",
  "sui-json-rpc-types",
  "sui-keys",
+ "sui-metrics",
  "sui-node",
  "sui-types",
  "tap",
@@ -8382,6 +8390,7 @@ dependencies = [
  "sui-cost",
  "sui-json",
  "sui-json-rpc-types",
+ "sui-metrics",
  "sui-open-rpc",
  "sui-open-rpc-macros",
  "sui-transaction-builder",
@@ -8447,6 +8456,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-metrics"
+version = "0.7.0"
+dependencies = [
+ "once_cell",
+ "prometheus",
+ "scopeguard",
+ "tap",
+ "telemetry-subscribers 0.2.0",
+ "tokio",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
 name = "sui-network"
 version = "0.0.0"
 dependencies = [
@@ -8460,7 +8483,7 @@ dependencies = [
 
 [[package]]
 name = "sui-node"
-version = "0.14.0"
+version = "0.15.0"
 dependencies = [
  "anemo",
  "anemo-tower",
@@ -8477,6 +8500,7 @@ dependencies = [
  "sui-config",
  "sui-core",
  "sui-json-rpc",
+ "sui-metrics",
  "sui-network",
  "sui-simulator",
  "sui-storage",
@@ -8553,6 +8577,7 @@ dependencies = [
  "sui-framework",
  "sui-framework-build",
  "sui-keys",
+ "sui-metrics",
  "sui-node",
  "sui-sdk",
  "sui-types",
@@ -8570,7 +8595,7 @@ dependencies = [
 
 [[package]]
 name = "sui-sdk"
-version = "0.14.0"
+version = "0.15.0"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -8639,6 +8664,7 @@ dependencies = [
  "strum",
  "strum_macros",
  "sui-json-rpc-types",
+ "sui-metrics",
  "sui-types",
  "tap",
  "telemetry-subscribers 0.2.0",
@@ -8708,7 +8734,7 @@ dependencies = [
 
 [[package]]
 name = "sui-tool"
-version = "0.14.0"
+version = "0.15.0"
 dependencies = [
  "anyhow",
  "clap 3.2.22",
@@ -11228,7 +11254,7 @@ dependencies = [
 [[package]]
 name = "ying-profiler"
 version = "0.1.0"
-source = "git+https://github.com/velvia/ying-profiler#1a3e476299bfc1ff4a3168edd9fcf1ccda521aea"
+source = "git+https://github.com/velvia/ying-profiler#d1763c711c4bcf1a98fa7d80c79f31fdafe88ad1"
 dependencies = [
  "backtrace",
  "chrono",

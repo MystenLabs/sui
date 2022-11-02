@@ -12,7 +12,6 @@ import {
     getObjectId,
     getTransferSuiTransaction,
     getTransferSuiAmount,
-    SUI_TYPE_ARG,
 } from '@mysten/sui.js';
 import cl from 'clsx';
 import { Link } from 'react-router-dom';
@@ -27,6 +26,7 @@ import {
     type LinkObj,
     TxAddresses,
 } from '../../components/transaction-card/TxCardUtils';
+import { convertNumberToDate } from '../../utils/timeUtils';
 import SendReceiveView from './SendReceiveView';
 import TxLinks from './TxLinks';
 
@@ -35,6 +35,7 @@ import type {
     CertifiedTransaction,
     TransactionKindName,
     ExecutionStatusType,
+    Pay,
     SuiTransactionKind,
     SuiObjectRef,
     SuiEvent,
@@ -42,7 +43,6 @@ import type {
 
 import styles from './TransactionResult.module.css';
 
-import { CoinFormat, useFormatCoin } from '~/hooks/useFormatCoin';
 import { Banner } from '~/ui/Banner';
 import { PageHeader } from '~/ui/PageHeader';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
@@ -239,19 +239,37 @@ function ItemView({ data }: { data: TxItemView }) {
     );
 }
 
+const isPayType = (
+    txdetails: SuiTransactionKind
+): txdetails is { Pay: Pay } => {
+    return 'Pay' in txdetails;
+};
+
+const convertAmounts = (
+    amounts: (number | bigint | null)[]
+): bigint[] | undefined =>
+    amounts.every((amount) => amount)
+        ? amounts.map((amount) => BigInt(amount!))
+        : undefined;
+
 function TransactionView({ txdata }: { txdata: DataType }) {
     const txdetails = getTransactions(txdata)[0];
-    const amount = getTransferSuiAmount(txdetails);
-    const [formattedAmount] = useFormatCoin(
-        amount,
-        SUI_TYPE_ARG,
-        CoinFormat.FULL
-    );
+    const amounts = isPayType(txdetails)
+        ? convertAmounts(txdetails.Pay.amounts)
+        : convertAmounts([getTransferSuiAmount(txdetails)]);
     const txKindName = getTransactionKindName(txdetails);
     const sender = getTransactionSender(txdata);
+
     const recipient =
-        getTransferObjectTransaction(txdetails) ||
-        getTransferSuiTransaction(txdetails);
+        getTransferObjectTransaction(txdetails)?.recipient ||
+        getTransferSuiTransaction(txdetails)?.recipient;
+
+    const recipients = isPayType(txdetails)
+        ? txdetails.Pay.recipients
+        : recipient
+        ? [recipient]
+        : undefined;
+
     const txKindData = formatByTransactionKind(txKindName, txdetails, sender);
 
     const txEventData = txdata.events?.map(eventToDisplay);
@@ -316,12 +334,9 @@ function TransactionView({ txdata }: { txdata: DataType }) {
 
     const sendreceive = {
         sender: sender,
-        ...(txdata.timestamp_ms
-            ? {
-                  timestamp_ms: txdata.timestamp_ms,
-              }
-            : {}),
-        recipient: [...(recipient?.recipient ? [recipient.recipient] : [])],
+        recipient: recipients,
+        amount: amounts,
+        objects: txdata.created,
     };
     const GasStorageFees = {
         title: 'Gas & Storage Fees',
@@ -435,18 +450,24 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                                     styles.txsender,
                                 ])}
                             >
-                                {amount !== null && (
-                                    <div className={styles.amountbox}>
-                                        <div>Amount</div>
-                                        <div>
-                                            {formattedAmount}
-                                            <sup>SUI</sup>
-                                        </div>
-                                    </div>
+                                {txdata.timestamp_ms && (
+                                    <h3
+                                        data-testid="transaction-timestamp"
+                                        className={styles.datetime}
+                                    >
+                                        {convertNumberToDate(
+                                            txdata.timestamp_ms
+                                        )}
+                                    </h3>
                                 )}
-                                <div className={styles.txaddress}>
-                                    <SendReceiveView data={sendreceive} />
-                                </div>
+                                <SendReceiveView
+                                    sender={sendreceive.sender}
+                                    recipient={sendreceive.recipient}
+                                    amount={sendreceive.amount}
+                                    objects={sendreceive.objects.map(
+                                        (obj) => obj.objectId
+                                    )}
+                                />
                             </section>
 
                             <section

@@ -36,6 +36,8 @@ store.workspace = true
 match_opt = "0.1.2"
 rand = "0.8.5"
 
+sui-metrics = { path = "../../crates/sui-metrics" }
+
 workspace-hack.workspace = true
 
 [dev-dependencies]

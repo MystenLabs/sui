@@ -45,6 +45,8 @@ worker = { path = "../worker", package = "narwhal-worker" }
 workspace-hack.workspace = true
 eyre = "0.6.8"
 
+sui-metrics = { path = "../../crates/sui-metrics" }
+
 anemo.workspace = true
 reqwest = { version = "0.11.12", features = ["json"] }
 once_cell = "1.16.0"

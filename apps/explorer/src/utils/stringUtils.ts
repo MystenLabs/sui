@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type { SuiAddress } from '@mysten/sui.js';
-import type BN from 'bn.js';
 
 const IPFS_START_STRING = 'https://ipfs.io/ipfs/';
 const SUI_ADDRESS_LENGTH = 20;
@@ -94,7 +93,7 @@ export async function genFileTypeMsg(
         });
 }
 
-export const alttextgen = (value: number | string | boolean | BN): string =>
+export const alttextgen = (value: number | string | boolean): string =>
     truncate(String(value), 19);
 
 // TODO: Use version of this function from the SDK when it is exposed.

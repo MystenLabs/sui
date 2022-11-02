@@ -27,6 +27,7 @@ use std::{
 };
 use storage::CertificateStore;
 use store::Store;
+use sui_metrics::{monitored_future, spawn_monitored_task};
 use thiserror::Error;
 use tokio::{
     sync::{mpsc::Sender, watch},
@@ -197,7 +198,7 @@ impl BlockSynchronizer {
         certificate_store: CertificateStore,
         parameters: Parameters,
     ) -> JoinHandle<()> {
-        tokio::spawn(async move {
+        spawn_monitored_task!(async move {
             let _ = &parameters;
             Self {
                 name,
@@ -397,14 +398,16 @@ impl BlockSynchronizer {
             .collect();
 
         // Now create the future that will send the requests.
+        let timeout = self.payload_availability_timeout;
+        let network = self.network.network();
         Some(
-            Self::send_payload_availability_requests(
-                self.payload_availability_timeout,
+            monitored_future!(Self::send_payload_availability_requests(
+                timeout,
                 certificates_to_sync,
                 request,
                 primaries,
-                self.network.network(),
-            )
+                network,
+            ))
             .boxed(),
         )
     }
@@ -453,15 +456,19 @@ impl BlockSynchronizer {
             .into_iter()
             .map(|(_name, _address, network_key)| network_key)
             .collect();
+        let network = self.network.network();
+        let timeout = self.certificates_synchronize_timeout;
+        let committee = self.committee.clone();
+        let worker_cache = self.worker_cache.clone();
         Some(
-            Self::send_certificate_requests(
-                self.network.network(),
+            monitored_future!(Self::send_certificate_requests(
+                network,
                 network_keys,
-                self.certificates_synchronize_timeout,
-                self.committee.clone(),
-                self.worker_cache.clone(),
+                timeout,
+                committee,
+                worker_cache,
                 to_sync,
-            )
+            ))
             .boxed(),
         )
     }
@@ -609,11 +616,13 @@ impl BlockSynchronizer {
             .unique_values()
             .into_iter()
             .map(|certificate| {
-                Self::wait_for_block_payload(
-                    self.payload_synchronize_timeout,
-                    self.payload_store.clone(),
+                let timeout = self.payload_synchronize_timeout;
+                let payload_store = self.payload_store.clone();
+                monitored_future!(Self::wait_for_block_payload(
+                    timeout,
+                    payload_store,
                     certificate,
-                )
+                ))
                 .boxed()
             })
             .collect()
@@ -708,7 +717,7 @@ impl BlockSynchronizer {
             .map(|target| {
                 let network = network.clone();
                 let request = anemo::Request::new(request.clone()).with_timeout(timeout);
-                async move {
+                monitored_future!(async move {
                     let peer_id = PeerId(target.0.to_bytes());
                     let peer = network.peer(peer_id).ok_or_else(|| {
                         anemo::rpc::Status::internal(format!(
@@ -718,7 +727,7 @@ impl BlockSynchronizer {
                     PrimaryToPrimaryClient::new(peer)
                         .get_certificates(request)
                         .await
-                }
+                })
             })
             .collect();
 
@@ -833,7 +842,10 @@ impl BlockSynchronizer {
                 let peer = network.waiting_peer(id);
                 let request =
                     anemo::Request::new(request.clone()).with_timeout(fetch_certificates_timeout);
-                get_payload_availability_fn(PrimaryToPrimaryClient::new(peer), request)
+                monitored_future!(get_payload_availability_fn(
+                    PrimaryToPrimaryClient::new(peer),
+                    request
+                ))
             })
             .collect();
         let mut peers = Peers::<Certificate>::new(SmallRng::from_entropy());

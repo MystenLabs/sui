@@ -132,32 +132,6 @@ curl --location --request POST $SUI_RPC_HOST \
 }' | json_pp
 ```
 
-#### Sign the transaction
-
-```shell
-sui keytool sign --address <owner_address> --data <tx_bytes>
-```
-The keytool creates a key and then returns the signature and public key information.
-
-#### Execute the transaction
-
-```shell
-curl --location --request POST $SUI_RPC_HOST \
---header 'Content-Type: application/json' \
---data-raw '{
-  "jsonrpc": "2.0",
-  "id": 1,
-  "method": "sui_executeTransaction",
-  "params": [ 
-    "{{tx_bytes}}",
-    "{{sig_scheme}}",
-    "{{signature}}",
-    "{{pub_key}}",
-    "{{request_type}}"
-  ]
-}' | json_pp
-```
-
 Arguments are passed in, and type is inferred from the function
 signature.  Gas usage is capped by the `gas_budget`. The `transfer`
 function is described in more detail in the [Sui CLI client](cli-client.md#calling-move-code) documentation.
@@ -205,31 +179,5 @@ Build Successful
 
 Copy the output base64 representation of the compiled Move module into the
 REST publish endpoint.
-
-#### Sign the transaction
-
-```shell
-sui keytool sign --address <owner_address> --data <tx_bytes>
-```
-The keytool creates a key and then returns the signature and public key information.
-
-#### Execute the transaction
-
-```shell
-curl --location --request POST $SUI_RPC_HOST \
---header 'Content-Type: application/json' \
---data-raw '{
-  "jsonrpc": "2.0",
-  "id": 1,
-  "method": "sui_executeTransaction",
-  "params": [ 
-    "{{tx_bytes}}",
-    "{{sig_scheme}}",
-    "{{signature}}",
-    "{{pub_key}}",
-    "{{request_type}}"
-  ]
-}'
-```
 
 The command generates a package object that represents the published Move code. You can use the package ID as an argument for subsequent Move calls to functions defined in this package.

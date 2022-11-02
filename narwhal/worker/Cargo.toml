@@ -32,6 +32,8 @@ types = { path = "../types", package = "narwhal-types" }
 mysten-network.workspace = true
 prometheus = "0.13.2"
 
+sui-metrics = { path = "../../crates/sui-metrics" }
+
 anemo.workspace = true
 anemo-tower.workspace = true
 anyhow = "1.0.65"

@@ -15,6 +15,7 @@ use tracing::{debug, warn};
 
 use crate::authority_aggregator::AuthorityAggregator;
 use crate::authority_client::AuthorityAPI;
+use sui_metrics::spawn_monitored_task;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{
     CertifiedTransaction, CertifiedTransactionEffects, QuorumDriverRequest,
@@ -238,9 +239,7 @@ where
         ));
         let handle = {
             let quorum_driver_copy = quorum_driver.clone();
-            tokio::task::spawn(async move {
-                Self::task_queue_processor(quorum_driver_copy, task_rx).await;
-            })
+            spawn_monitored_task!(Self::task_queue_processor(quorum_driver_copy, task_rx))
         };
         Self {
             quorum_driver,
@@ -266,9 +265,7 @@ where
         });
         let handle = {
             let quorum_driver_copy = quorum_driver.clone();
-            tokio::task::spawn(async move {
-                Self::task_queue_processor(quorum_driver_copy, task_rx).await;
-            })
+            spawn_monitored_task!(Self::task_queue_processor(quorum_driver_copy, task_rx))
         };
         Self {
             quorum_driver,

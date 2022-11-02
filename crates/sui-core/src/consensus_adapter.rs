@@ -23,6 +23,7 @@ use std::{
     collections::{hash_map::DefaultHasher, HashMap},
     hash::{Hash, Hasher},
 };
+use sui_metrics::{monitored_future, spawn_monitored_task};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::messages_checkpoint::SignedCheckpointFragmentMessage;
 use sui_types::{
@@ -271,19 +272,28 @@ impl ConsensusAdapter {
             .expect("Serializing consensus transaction cannot fail");
         let bytes = Bytes::from(serialized.clone());
 
-        // Notify the consensus listener that we are expecting to process this certificate.
-        let (waiter, signals) = ConsensusWaiter::new();
+        let waiter = if certificate.contains_shared_object() {
+            // Notify the consensus listener that we are expecting to process this certificate.
+            let (waiter, signals) = ConsensusWaiter::new();
 
-        let consensus_input = ConsensusListenerMessage::New(serialized, signals);
-        self.tx_consensus_listener
-            .send(consensus_input)
-            .await
-            .expect("Failed to notify consensus listener");
-
+            let consensus_input = ConsensusListenerMessage::New(serialized, signals);
+            self.tx_consensus_listener
+                .send(consensus_input)
+                .await
+                .expect("Failed to notify consensus listener");
+            Some(waiter)
+        } else {
+            None
+        };
         // Check if this authority submits the transaction to consensus.
-        let now = Instant::now();
+        let _timer = self
+            .opt_metrics
+            .as_ref()
+            .map(|m| m.sequencing_certificate_latency.start_timer());
         let should_submit = Self::should_submit(certificate);
-        if should_submit {
+        let _inflight_guard = if should_submit {
+            // todo - we need stronger guarantees for checkpoints here (issue #5763)
+            // todo - for owned objects this can also be done async
             self.consensus_client
                 .clone()
                 .submit_transaction(TransactionProto { transaction: bytes })
@@ -292,14 +302,16 @@ impl ConsensusAdapter {
                 .tap_err(|r| {
                     error!("Submit transaction failed with: {:?}", r);
                 })?;
-            let inflight = self
-                .num_inflight_transactions
-                .fetch_add(1, Ordering::SeqCst);
-            self.opt_metrics.as_ref().map(|metrics| {
-                metrics.sequencing_certificate_attempt.inc();
-                metrics.sequencing_certificate_inflight.set(inflight as i64);
-            });
-        }
+            Some(InflightDropGuard::acquire(self))
+        } else {
+            None
+        };
+
+        let waiter = if let Some(waiter) = waiter {
+            waiter
+        } else {
+            return Ok(());
+        };
 
         // TODO: make consensus guarantee delivery after submit_transaction() returns, and avoid the timeout below.
         let result = match timeout(self.timeout, waiter.wait_for_result()).await {
@@ -331,19 +343,38 @@ impl ConsensusAdapter {
             }
         };
 
-        if should_submit {
-            let inflight = self
-                .num_inflight_transactions
-                .fetch_sub(1, Ordering::SeqCst);
-            let elapsed_secs = now.elapsed().as_secs_f64();
-            // Store the latest latency
-            self.opt_metrics.as_ref().map(|metrics| {
-                metrics.sequencing_certificate_inflight.set(inflight as i64);
-                metrics.sequencing_certificate_latency.observe(elapsed_secs);
-            });
-        }
-
         result
+    }
+}
+
+/// Tracks number of inflight consensus requests and relevant metrics
+struct InflightDropGuard<'a> {
+    adapter: &'a ConsensusAdapter,
+}
+
+impl<'a> InflightDropGuard<'a> {
+    pub fn acquire(adapter: &'a ConsensusAdapter) -> Self {
+        let inflight = adapter
+            .num_inflight_transactions
+            .fetch_add(1, Ordering::SeqCst);
+        if let Some(metrics) = adapter.opt_metrics.as_ref() {
+            metrics.sequencing_certificate_attempt.inc();
+            metrics.sequencing_certificate_inflight.set(inflight as i64);
+        }
+        Self { adapter }
+    }
+}
+
+impl<'a> Drop for InflightDropGuard<'a> {
+    fn drop(&mut self) {
+        let inflight = self
+            .adapter
+            .num_inflight_transactions
+            .fetch_sub(1, Ordering::SeqCst);
+        // Store the latest latency
+        if let Some(metrics) = self.adapter.opt_metrics.as_ref() {
+            metrics.sequencing_certificate_inflight.set(inflight as i64);
+        }
     }
 }
 
@@ -360,13 +391,11 @@ pub struct ConsensusListener {
 impl ConsensusListener {
     /// Spawn a new consensus adapter in a dedicated tokio task.
     pub fn spawn(rx_consensus_input: Receiver<ConsensusListenerMessage>) -> JoinHandle<()> {
-        tokio::spawn(
-            Self {
-                rx_consensus_input,
-                pending: HashMap::new(),
-            }
-            .run(),
-        )
+        spawn_monitored_task!(Self {
+            rx_consensus_input,
+            pending: HashMap::new(),
+        }
+        .run())
     }
 
     /// Hash serialized consensus transactions. We do not need specific cryptographic properties except
@@ -409,12 +438,12 @@ impl ConsensusListener {
                             list.push((id, replier));
 
                             // Register with the close notification.
-                            closed_notifications.push(async move {
+                            closed_notifications.push(monitored_future!(async move {
                                 // Wait for the channel to close
                                 _closer.closed().await;
                                 // Return he digest concerned
                                 (digest, id)
-                            });
+                            }));
                         },
                         ConsensusListenerMessage::Processed(serialized) => {
                             let digest = Self::hash_serialized_transaction(&serialized);
@@ -526,7 +555,7 @@ impl CheckpointConsensusAdapter {
 
     /// Spawn a `CheckpointConsensusAdapter` in a dedicated tokio task.
     pub fn spawn(mut self) -> JoinHandle<()> {
-        tokio::spawn(async move { self.run().await })
+        spawn_monitored_task!(self.run())
     }
 
     /// Submit a transaction to consensus.
@@ -592,7 +621,8 @@ impl CheckpointConsensusAdapter {
                         let deliver = (serialized, sequence_number);
                         let timeout_delay =
                             Duration::from_millis(latency_estimate) + self.retry_delay;
-                        let future = Self::waiter(waiter, timeout_delay, deliver);
+                        let future =
+                            monitored_future!(Self::waiter(waiter, timeout_delay, deliver));
                         waiting.push(future);
 
                         // Finally sent to consensus, after registering to avoid a race condition

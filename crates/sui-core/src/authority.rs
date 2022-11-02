@@ -2158,17 +2158,14 @@ impl AuthorityState {
         }
     }
 
-    /// Check whether a shared-object certificate has already been given shared-locks.
-    pub async fn transaction_shared_locks_exist(
+    /// Check whether certificate was processed by consensus.
+    /// For shared lock certificates, if this function returns true means shared locks for this certificate are set
+    pub fn consensus_message_processed(
         &self,
-        certificate: &VerifiedCertificate,
+        certificate: &CertifiedTransaction,
     ) -> SuiResult<bool> {
-        let digest = certificate.digest();
-        let shared_inputs = certificate.shared_input_objects().map(|(id, _)| id);
-        let shared_locks = self
-            .database
-            .get_assigned_object_versions(digest, shared_inputs)?;
-        Ok(shared_locks[0].is_some())
+        self.database
+            .consensus_message_processed(certificate.digest())
     }
 
     /// Get a read reference to an object/seq lock
@@ -2224,13 +2221,6 @@ impl AuthorityState {
     }
 
     fn verify_narwhal_transaction(&self, certificate: &CertifiedTransaction) -> SuiResult {
-        // Ensure the input is a shared object certificate. Remember that Byzantine authorities
-        // may input anything into consensus.
-        fp_ensure!(
-            certificate.contains_shared_object(),
-            SuiError::NotASharedObjectTransaction
-        );
-
         // Check the certificate. Remember that Byzantine authorities may input anything into
         // consensus.
         certificate.verify_signatures(&self.committee.load())
@@ -2329,11 +2319,15 @@ impl AuthorityState {
                     Some(certificate.clone()),
                 )])?;
 
-                self.database
-                    .lock_shared_objects(&certificate, consensus_index)
-                    .await?;
-
-                Ok(())
+                if certificate.contains_shared_object() {
+                    self.database
+                        .lock_shared_objects(&certificate, consensus_index)
+                        .await
+                } else {
+                    self.database
+                        .record_owned_object_cert_from_consensus(&certificate, consensus_index)
+                        .await
+                }
             }
             ConsensusTransactionKind::Checkpoint(fragment) => {
                 match &fragment.message {

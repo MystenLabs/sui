@@ -15,6 +15,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use sui_config::genesis::Genesis;
 use sui_config::ValidatorInfo;
+use sui_metrics::spawn_monitored_task;
 use sui_network::{api::ValidatorClient, tonic};
 use sui_types::base_types::AuthorityName;
 use sui_types::committee::CommitteeWithNetAddresses;
@@ -412,11 +413,9 @@ impl AuthorityAPI for LocalAuthorityClient {
     ) -> Result<TransactionInfoResponse, SuiError> {
         let state = self.state.clone();
         let fault_config = self.fault_config;
-        tokio::spawn(
-            async move { Self::handle_certificate(state, certificate, fault_config).await },
-        )
-        .await
-        .unwrap()
+        spawn_monitored_task!(Self::handle_certificate(state, certificate, fault_config))
+            .await
+            .unwrap()
     }
 
     async fn handle_account_info_request(

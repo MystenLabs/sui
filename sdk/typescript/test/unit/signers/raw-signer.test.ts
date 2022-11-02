@@ -11,6 +11,7 @@ import {
 } from '../../../src';
 import * as secp from '@noble/secp256k1';
 import { Signature } from '@noble/secp256k1';
+import { toB64 } from '@mysten/bcs';
 
 describe('RawSigner', () => {
   it('Ed25519 keypair signData', async () => {
@@ -44,6 +45,6 @@ describe('RawSigner', () => {
     );
     const expected = keypair.getPublicKey().toBase64();
     expect(pubKey.toBase64()).toEqual(expected);
-    expect(Buffer.from(recovered_pubkey).toString('base64')).toEqual(expected);
+    expect(toB64(recovered_pubkey)).toEqual(expected);
   });
 });

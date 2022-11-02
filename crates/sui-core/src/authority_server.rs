@@ -35,6 +35,7 @@ use tokio::{
     task::JoinHandle,
 };
 
+use sui_metrics::spawn_monitored_task;
 use sui_types::messages_checkpoint::CheckpointRequest;
 use sui_types::messages_checkpoint::CheckpointResponse;
 
@@ -127,9 +128,7 @@ impl AuthorityServer {
         // Start the batching subsystem, and register the handles with the authority.
         let state = self.state.clone();
         let batch_join_handle =
-            tokio::task::spawn(
-                async move { state.run_batch_service(min_batch_size, max_delay).await },
-            );
+            spawn_monitored_task!(state.run_batch_service(min_batch_size, max_delay));
 
         Ok(batch_join_handle)
     }
@@ -164,7 +163,7 @@ impl AuthorityServer {
         let handle = AuthorityServerHandle {
             tx_cancellation: server.take_cancel_handle().unwrap(),
             local_addr,
-            handle: tokio::spawn(server.serve()),
+            handle: spawn_monitored_task!(server.serve()),
         };
         Ok(handle)
     }
@@ -286,21 +285,18 @@ impl ValidatorService {
         let network_keypair = config.network_key_pair.copy();
 
         let registry = prometheus_registry.clone();
-        tokio::spawn(async move {
-            narwhal_node::restarter::NodeRestarter::watch(
-                consensus_keypair,
-                network_keypair,
-                vec![(0, consensus_worker_keypair)],
-                &consensus_committee,
-                consensus_worker_cache,
-                consensus_storage_base_path,
-                consensus_execution_state,
-                consensus_parameters,
-                rx_reconfigure_consensus,
-                &registry,
-            )
-            .await
-        });
+        spawn_monitored_task!(narwhal_node::restarter::NodeRestarter::watch(
+            consensus_keypair,
+            network_keypair,
+            vec![(0, consensus_worker_keypair)],
+            &consensus_committee,
+            consensus_worker_cache,
+            consensus_storage_base_path,
+            consensus_execution_state,
+            consensus_parameters,
+            rx_reconfigure_consensus,
+            &registry,
+        ));
 
         // Spawn a consensus listener. It listen for consensus outputs and notifies the
         // authority server when a sequenced transaction is ready for execution.
@@ -390,13 +386,15 @@ impl ValidatorService {
         metrics: Arc<ValidatorServiceMetrics>,
     ) -> Result<tonic::Response<TransactionInfoResponse>, tonic::Status> {
         let certificate = request.into_inner();
-        let is_consensus_tx = certificate.contains_shared_object();
+        let shared_object_tx = certificate.contains_shared_object();
 
-        let _metrics_guard = start_timer(if is_consensus_tx {
-            metrics.handle_certificate_consensus_latency.clone()
+        let _metrics_guard = if shared_object_tx {
+            metrics.handle_certificate_consensus_latency.start_timer()
         } else {
-            metrics.handle_certificate_non_consensus_latency.clone()
-        });
+            metrics
+                .handle_certificate_non_consensus_latency
+                .start_timer()
+        };
 
         // 1) Check if cert already executed
         let tx_digest = *certificate.digest();
@@ -415,16 +413,21 @@ impl ValidatorService {
             return Err(tonic::Status::from(SuiError::ValidatorHaltedAtEpochEnd));
         }
 
-        // 4) If it's a shared object transaction and requires consensus, we need to do so.
-        // This will wait until either timeout or we have heard back from consensus.
-        if is_consensus_tx && !state.transaction_shared_locks_exist(&certificate).await? {
+        // 4) All certificates are sent to consensus (at least by some authorities)
+        // For shared objects this will wait until either timeout or we have heard back from consensus.
+        // For owned objects this will return without waiting for certificate to be sequenced
+        if !state.consensus_message_processed(&certificate)? {
             // Note that num_inflight_transactions() only include user submitted transactions, and only user txns can be dropped here.
             // This backpressure should not affect system transactions, e.g. for checkpointing.
             if consensus_adapter.num_inflight_transactions() > MAX_PENDING_CONSENSUS_TRANSACTIONS {
                 return Err(tonic::Status::resource_exhausted("Reached {MAX_PENDING_CONSENSUS_TRANSACTIONS} concurrent consensus transactions",
                 ));
             }
-            let _metrics_guard = start_timer(metrics.consensus_latency.clone());
+            let _metrics_guard = if shared_object_tx {
+                Some(metrics.consensus_latency.start_timer())
+            } else {
+                None
+            };
             consensus_adapter.submit(&state.name, &certificate).await?;
         }
 
@@ -450,7 +453,7 @@ impl ValidatorService {
                 // if this validator hasn't executed some of the causal dependencies.
                 // And that's ok because there must exist 2f+1 that has. So we can
                 // afford this validator returning error.
-                err @ Err(SuiError::TransactionInputObjectsErrors { .. }) if is_consensus_tx => {
+                err @ Err(SuiError::TransactionInputObjectsErrors { .. }) if shared_object_tx => {
                     if retry_delay_ms >= 12800 {
                         return Err(tonic::Status::from(err.unwrap_err()));
                     }
@@ -488,7 +491,7 @@ impl Validator for ValidatorService {
         // Spawns a task which handles the transaction. The task will unconditionally continue
         // processing in the event that the client connection is dropped.
         let metrics = self.metrics.clone();
-        tokio::spawn(async move { Self::handle_transaction(state, request, metrics).await })
+        spawn_monitored_task!(Self::handle_transaction(state, request, metrics))
             .await
             .unwrap()
     }
@@ -503,9 +506,12 @@ impl Validator for ValidatorService {
         // Spawns a task which handles the certificate. The task will unconditionally continue
         // processing in the event that the client connection is dropped.
         let metrics = self.metrics.clone();
-        tokio::spawn(async move {
-            Self::handle_certificate(state, consensus_adapter, request, metrics).await
-        })
+        spawn_monitored_task!(Self::handle_certificate(
+            state,
+            consensus_adapter,
+            request,
+            metrics
+        ))
         .await
         .unwrap()
     }

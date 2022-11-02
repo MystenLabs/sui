@@ -29,6 +29,7 @@ sui-network = { path = "../sui-network" }
 sui-json-rpc = { path = "../sui-json-rpc" }
 sui-telemetry = { path = "../sui-telemetry" }
 sui-types = { path = "../sui-types" }
+sui-metrics = { path = "../sui-metrics" }
 narwhal-network = { path = "../../narwhal/network" }
 
 ying-profiler = { git = "https://github.com/velvia/ying-profiler", features = ["profile-spans"] }

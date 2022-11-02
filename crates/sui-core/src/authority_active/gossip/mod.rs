@@ -15,6 +15,7 @@ use prometheus::{
 use std::future::Future;
 use std::ops::Deref;
 use std::{collections::HashSet, sync::Arc, time::Duration};
+use sui_metrics::monitored_future;
 use sui_types::committee::StakeUnit;
 use sui_types::{
     base_types::{AuthorityName, ExecutionDigests},
@@ -205,7 +206,7 @@ async fn follower_process<A, Handler: DigestHandler<A> + Clone>(
             peer_names.insert(name);
             let local_active_ref_copy = local_active.clone();
             let handler_clone = handler.clone();
-            gossip_tasks.push(async move {
+            gossip_tasks.push(monitored_future!(async move {
                 let follower = Follower::new(name, &local_active_ref_copy);
                 // Add more duration if we make more than 1 to ensure overlap
                 debug!(peer = ?name, "Starting gossip from peer");
@@ -215,7 +216,7 @@ async fn follower_process<A, Handler: DigestHandler<A> + Clone>(
                         handler_clone,
                     )
                     .await
-            });
+            }));
             k += 1;
 
             // If we have already used all the good stake, then stop here and
@@ -445,10 +446,10 @@ where
                             metrics.total_tx_received.inc();
 
                             let fut = handler.handle_digest(self, digests).await?;
-                            results.push_back(async move {
+                            results.push_back(monitored_future!(async move {
                                 fut.await?;
                                 Ok::<(TxSequenceNumber, ExecutionDigests), SuiError>((seq, digests))
-                            });
+                            }));
 
                             self.state.metrics.gossip_queued_count.inc();
                         },
