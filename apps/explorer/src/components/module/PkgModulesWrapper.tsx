@@ -19,6 +19,7 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
     const [searchParams, setSearchParams] = useSearchParams();
     const [modulesPageNumber, setModulesPageNumber] = useState(0);
     const [query, setQuery] = useState('');
+    const [selectedModule, setSelectedModule] = useState(modules[0][0]);
 
     const filteredModules =
         query === ''
@@ -61,7 +62,7 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                     'h-[605px] w-full lg:w-[15vw] overflow-auto pt-[10px] pr-[20px] pl-[1px]'
                 }
             >
-                <Combobox>
+                <Combobox value={selectedModule} onChange={setSelectedModule}>
                     <Combobox.Input
                         onChange={(event) => setQuery(event.target.value)}
                     />
@@ -69,17 +70,22 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                         <VerticalList>
                             {filteredModules.map((name, idx) => (
                                 <Combobox.Option key={name} value={name}>
-                                    <div
-                                        key={idx}
-                                        className="w-full lg:min-w-[12vw] lg:w-fit"
-                                    >
-                                        <ListItem
-                                            active={idx === modulesPageNumber}
-                                            onClick={clickModuleName(name)}
+                                    {({ active }) => (
+                                        <div
+                                            key={idx}
+                                            className="w-full lg:min-w-[12vw] lg:w-fit"
                                         >
-                                            {name}
-                                        </ListItem>
-                                    </div>
+                                            <ListItem
+                                                active={
+                                                    active ||
+                                                    selectedModule === name
+                                                }
+                                                onClick={clickModuleName(name)}
+                                            >
+                                                {name}
+                                            </ListItem>
+                                        </div>
+                                    )}
                                 </Combobox.Option>
                             ))}
                         </VerticalList>
