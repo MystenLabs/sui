@@ -63,7 +63,7 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                     onChange={setSelectedModule}
                     nullable
                 >
-                    <div className="border-sui-grey-50 border-solid rounded-[6px] h-[34px] shadow-sm placeholder-sui-grey-65 pl-3 w-full lg:w-[11vw] flex my-[10px]">
+                    <div className="border border-sui-grey-50 border-solid rounded-[6px] h-[34px] shadow-sm placeholder-sui-grey-65 pl-3 w-full lg:w-[11vw] flex my-[10px]">
                         <Combobox.Input
                             onChange={(event) => setQuery(event.target.value)}
                             displayValue={() => ''}
