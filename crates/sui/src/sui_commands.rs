@@ -252,35 +252,61 @@ async fn genesis(
     // if Sui config dir is not empty then either clean it
     // up (if --force/-f option was specified or report an
     // error
-    if write_config.is_none()
-        && sui_config_dir
-            .read_dir()
-            .map_err(|err| {
-                anyhow!(err).context(format!("Cannot open Sui config dir {:?}", sui_config_dir))
-            })?
-            .next()
-            .is_some()
-    {
+    let dir = sui_config_dir.read_dir().map_err(|err| {
+        anyhow!(err).context(format!("Cannot open Sui config dir {:?}", sui_config_dir))
+    })?;
+    let files = dir.collect::<Result<Vec<_>, _>>()?;
+
+    let client_path = sui_config_dir.join(SUI_CLIENT_CONFIG);
+    let keystore_path = sui_config_dir.join(SUI_KEYSTORE_FILENAME);
+
+    if write_config.is_none() && files.len() > 0 {
         if force {
-            fs::remove_dir_all(sui_config_dir).map_err(|err| {
-                anyhow!(err).context(format!("Cannot remove Sui config dir {:?}", sui_config_dir))
-            })?;
-            fs::create_dir(sui_config_dir).map_err(|err| {
-                anyhow!(err).context(format!("Cannot create Sui config dir {:?}", sui_config_dir))
-            })?;
-        } else {
+            // check old keystore and client.yaml is compatible
+            let is_compatible = FileBasedKeystore::new(&keystore_path).is_ok()
+                && PersistedConfig::<SuiClientConfig>::read(&client_path).is_ok();
+            if is_compatible {
+                for file in files {
+                    let path = file.path();
+                    if path != client_path && path != keystore_path {
+                        if path.is_file() {
+                            fs::remove_file(path)
+                        } else {
+                            fs::remove_dir_all(path)
+                        }
+                        .map_err(|err| {
+                            anyhow!(err).context(format!("Cannot remove file {:?}", file.path()))
+                        })?;
+                    }
+                }
+            } else {
+                fs::remove_dir_all(sui_config_dir).map_err(|err| {
+                    anyhow!(err)
+                        .context(format!("Cannot remove Sui config dir {:?}", sui_config_dir))
+                })?;
+                fs::create_dir(sui_config_dir).map_err(|err| {
+                    anyhow!(err)
+                        .context(format!("Cannot create Sui config dir {:?}", sui_config_dir))
+                })?;
+            }
+        } else if files.len() != 2 || !client_path.exists() || !keystore_path.exists() {
             bail!("Cannot run genesis with non-empty Sui config directory {}, please use --force/-f option to remove existing configuration", sui_config_dir.to_str().unwrap());
         }
     }
 
     let network_path = sui_config_dir.join(SUI_NETWORK_CONFIG);
     let genesis_path = sui_config_dir.join(SUI_GENESIS_FILENAME);
-    let client_path = sui_config_dir.join(SUI_CLIENT_CONFIG);
-    let keystore_path = sui_config_dir.join(SUI_KEYSTORE_FILENAME);
 
     let mut genesis_conf = match from_config {
         Some(path) => PersistedConfig::read(&path)?,
-        None => GenesisConfig::for_local_testing(),
+        None => {
+            if keystore_path.exists() {
+                let existing_keys = FileBasedKeystore::new(&keystore_path)?.addresses();
+                GenesisConfig::for_local_testing_with_addresses(existing_keys)
+            } else {
+                GenesisConfig::for_local_testing()
+            }
+        }
     };
 
     if let Some(path) = write_config {
@@ -333,19 +359,25 @@ async fn genesis(
         validator.save(path)?;
     }
 
-    let client_config = SuiClientConfig {
-        keystore: Keystore::from(keystore),
-        envs: vec![
-            SuiEnv {
-                alias: "localnet".to_string(),
-                rpc: format!("http://{}", fullnode_config.json_rpc_address),
-                ws: None,
-            },
-            SuiEnv::devnet(),
-        ],
-        active_env: "localnet".into(),
-        active_address,
+    let mut client_config = if client_path.exists() {
+        PersistedConfig::read(&client_path)?
+    } else {
+        SuiClientConfig::new(keystore.into())
     };
+
+    if client_config.active_address.is_none() {
+        client_config.active_address = active_address;
+    }
+    client_config.add_env(SuiEnv {
+        alias: "localnet".to_string(),
+        rpc: format!("http://{}", fullnode_config.json_rpc_address),
+        ws: None,
+    });
+    client_config.add_env(SuiEnv::devnet());
+
+    if client_config.active_env.is_none() {
+        client_config.active_env = client_config.envs.first().map(|env| env.alias.clone());
+    }
 
     client_config.save(&client_path)?;
     info!("Client config file is stored in {:?}.", client_path);
@@ -414,7 +446,7 @@ async fn prompt_if_no_config(wallet_conf_path: &Path) -> Result<(), anyhow::Erro
                 keystore,
                 envs: vec![env],
                 active_address: Some(new_address),
-                active_env: alias,
+                active_env: Some(alias),
             }
             .persisted(wallet_conf_path)
             .save()?;

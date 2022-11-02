@@ -172,7 +172,7 @@ impl TestClusterBuilder {
                 rpc: handle.rpc_url.clone(),
                 ws: handle.ws_url.clone(),
             });
-            wallet_conf.active_env = "localnet".to_string();
+            wallet_conf.active_env = Some("localnet".to_string());
 
             Some(handle)
         };

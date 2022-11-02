@@ -2,9 +2,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::anyhow;
 use std::fmt::{Display, Formatter, Write};
 
+use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
@@ -22,22 +22,45 @@ use sui_types::base_types::*;
 pub struct SuiClientConfig {
     pub keystore: Keystore,
     pub envs: Vec<SuiEnv>,
-    pub active_env: String,
+    pub active_env: Option<String>,
     pub active_address: Option<SuiAddress>,
 }
 
 impl SuiClientConfig {
-    pub fn get_env(&self, alias: &str) -> Option<&SuiEnv> {
-        self.envs.iter().find(|env| env.alias == alias)
+    pub fn new(keystore: Keystore) -> Self {
+        SuiClientConfig {
+            keystore,
+            envs: vec![],
+            active_env: None,
+            active_address: None,
+        }
+    }
+
+    pub fn get_env(&self, alias: &Option<String>) -> Option<&SuiEnv> {
+        if let Some(alias) = alias {
+            self.envs.iter().find(|env| &env.alias == alias)
+        } else {
+            self.envs.first()
+        }
     }
 
     pub fn get_active_env(&self) -> Result<&SuiEnv, anyhow::Error> {
         self.get_env(&self.active_env).ok_or_else(|| {
             anyhow!(
                 "Environment configuration not found for env [{}]",
-                self.active_env
+                self.active_env.as_deref().unwrap_or("None")
             )
         })
+    }
+
+    pub fn add_env(&mut self, env: SuiEnv) {
+        if !self
+            .envs
+            .iter()
+            .any(|other_env| other_env.alias == env.alias)
+        {
+            self.envs.push(env)
+        }
     }
 }
 

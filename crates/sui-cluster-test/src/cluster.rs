@@ -263,7 +263,7 @@ pub async fn new_wallet_context_from_cluster(
             ws: None,
         }],
         active_address: Some(address),
-        active_env: "localnet".to_string(),
+        active_env: Some("localnet".to_string()),
     }
     .persisted(&wallet_config_path)
     .save()

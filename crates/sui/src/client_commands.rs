@@ -846,14 +846,18 @@ impl SuiClientCommands {
             SuiClientCommands::ActiveEnv => {
                 SuiClientCommandResult::ActiveEnv(context.config.active_env.clone())
             }
-            SuiClientCommands::Envs => SuiClientCommandResult::Envs(context.config.envs.clone()),
+            SuiClientCommands::Envs => SuiClientCommandResult::Envs(
+                context.config.envs.clone(),
+                context.config.active_env.clone(),
+            ),
         });
         ret
     }
 
     pub fn switch_env(config: &mut SuiClientConfig, env: &str) -> Result<(), anyhow::Error> {
-        ensure!(config.get_env(env).is_some(), "Environment config not found for [{env}], add new environment config using the `sui client new-env` command.");
-        config.active_env = env.into();
+        let env = Some(env.into());
+        ensure!(config.get_env(&env).is_some(), "Environment config not found for [{env:?}], add new environment config using the `sui client new-env` command.");
+        config.active_env = env;
         Ok(())
     }
 }
@@ -1155,14 +1159,18 @@ impl Display for SuiClientCommandResult {
                 write!(writer, "{}", res)?;
             }
             SuiClientCommandResult::ActiveEnv(env) => {
-                write!(writer, "{}", env)?;
+                write!(writer, "{}", env.as_deref().unwrap_or("None"))?;
             }
             SuiClientCommandResult::NewEnv(env) => {
                 writeln!(writer, "Added new Sui env [{}] to config.", env.alias)?;
             }
-            SuiClientCommandResult::Envs(envs) => {
+            SuiClientCommandResult::Envs(envs, active) => {
                 for env in envs {
-                    writeln!(writer, "{} => {}", env.alias, env.rpc)?;
+                    write!(writer, "{} => {}", env.alias, env.rpc)?;
+                    if Some(env.alias.as_str()) == active.as_deref() {
+                        write!(writer, " (active)")?;
+                    }
+                    writeln!(writer)?;
                 }
             }
         }
@@ -1293,8 +1301,8 @@ pub enum SuiClientCommandResult {
     MergeCoin(SuiTransactionResponse),
     Switch(SwitchResponse),
     ActiveAddress(Option<SuiAddress>),
-    ActiveEnv(String),
-    Envs(Vec<SuiEnv>),
+    ActiveEnv(Option<String>),
+    Envs(Vec<SuiEnv>, Option<String>),
     CreateExampleNFT(GetObjectDataResponse),
     SerializeTransferSui(String),
     ExecuteSignedTx(SuiTransactionResponse),
