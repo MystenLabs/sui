@@ -1,11 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import BN from 'bn.js';
-import { Buffer } from 'buffer';
+import { fromB64, toB64 } from '@mysten/bcs';
 import sha3 from 'js-sha3';
 import {
-  checkPublicKeyData,
+  bytesEqual,
   PublicKey,
   PublicKeyInitData,
   SIGNATURE_SCHEME_TO_FLAG,
@@ -17,34 +16,25 @@ const SECP256K1_PUBLIC_KEY_SIZE = 33;
  * A Secp256k1 public key
  */
 export class Secp256k1PublicKey implements PublicKey {
-  /** @internal */
-  _bn: BN;
+  private data: Uint8Array;
 
   /**
    * Create a new Secp256k1PublicKey object
    * @param value secp256k1 public key as buffer or base-64 encoded string
    */
   constructor(value: PublicKeyInitData) {
-    if (checkPublicKeyData(value)) {
-      this._bn = value._bn;
+    if (typeof value === 'string') {
+      this.data = fromB64(value);
+    } else if (value instanceof Uint8Array) {
+      this.data = value;
     } else {
-      if (typeof value === 'string') {
-        const buffer = Buffer.from(value, 'base64');
-        if (buffer.length !== SECP256K1_PUBLIC_KEY_SIZE) {
-          throw new Error(
-            `Invalid public key input. Expected ${SECP256K1_PUBLIC_KEY_SIZE} bytes, got ${buffer.length}`
-          );
-        }
-        this._bn = new BN(buffer);
-      } else {
-        this._bn = new BN(value);
-      }
-      let length = this._bn.byteLength();
-      if (length != SECP256K1_PUBLIC_KEY_SIZE) {
-        throw new Error(
-          `Invalid public key input. Expected ${SECP256K1_PUBLIC_KEY_SIZE} bytes, got ${length}`
-        );
-      }
+      this.data = Uint8Array.from(value);
+    }
+
+    if (this.data.length !== SECP256K1_PUBLIC_KEY_SIZE) {
+      throw new Error(
+        `Invalid public key input. Expected ${SECP256K1_PUBLIC_KEY_SIZE} bytes, got ${this.data.length}`
+      );
     }
   }
 
@@ -52,35 +42,21 @@ export class Secp256k1PublicKey implements PublicKey {
    * Checks if two Secp256k1 public keys are equal
    */
   equals(publicKey: Secp256k1PublicKey): boolean {
-    return this._bn.eq(publicKey._bn);
+    return bytesEqual(this.toBytes(), publicKey.toBytes());
   }
 
   /**
    * Return the base-64 representation of the Secp256k1 public key
    */
   toBase64(): string {
-    return this.toBuffer().toString('base64');
+    return toB64(this.toBytes());
   }
 
   /**
    * Return the byte array representation of the Secp256k1 public key
    */
   toBytes(): Uint8Array {
-    return this.toBuffer();
-  }
-
-  /**
-   * Return the Buffer representation of the Secp256k1 public key
-   */
-  toBuffer(): Buffer {
-    const b = this._bn.toArrayLike(Buffer);
-    if (b.length === SECP256K1_PUBLIC_KEY_SIZE) {
-      return b;
-    }
-
-    const zeroPad = Buffer.alloc(SECP256K1_PUBLIC_KEY_SIZE);
-    b.copy(zeroPad, SECP256K1_PUBLIC_KEY_SIZE - b.length);
-    return zeroPad;
+    return this.data;
   }
 
   /**

@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { fromB64 } from '@mysten/bcs';
 import nacl from 'tweetnacl';
 import { describe, it, expect } from 'vitest';
 import { Base64DataBuffer, Ed25519Keypair } from '../../../src';
@@ -20,7 +21,7 @@ describe('ed25519-keypair', () => {
   });
 
   it('create keypair from secret key', () => {
-    const secretKey = Buffer.from(VALID_SECRET_KEY, 'base64');
+    const secretKey = fromB64(VALID_SECRET_KEY);
     const keypair = Ed25519Keypair.fromSecretKey(secretKey);
     expect(keypair.getPublicKey().toBase64()).toEqual(
       'Gy9JCW4+Xb0Pz6nAwM2S2as7IVRLNNXdSmXZi4eLmSI='
@@ -28,14 +29,14 @@ describe('ed25519-keypair', () => {
   });
 
   it('creating keypair from invalid secret key throws error', () => {
-    const secretKey = Buffer.from(INVALID_SECRET_KEY, 'base64');
+    const secretKey = fromB64(INVALID_SECRET_KEY);
     expect(() => {
       Ed25519Keypair.fromSecretKey(secretKey);
     }).toThrow('provided secretKey is invalid');
   });
 
   it('creating keypair from invalid secret key succeeds if validation is skipped', () => {
-    const secretKey = Buffer.from(INVALID_SECRET_KEY, 'base64');
+    const secretKey = fromB64(INVALID_SECRET_KEY);
     const keypair = Ed25519Keypair.fromSecretKey(secretKey, {
       skipValidation: true,
     });

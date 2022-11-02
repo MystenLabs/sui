@@ -7,6 +7,7 @@
 import { sha512 } from '@noble/hashes/sha512';
 import { hmac } from '@noble/hashes/hmac';
 import nacl from 'tweetnacl';
+import { fromHEX } from '@mysten/bcs';
 
 type Hex = string;
 type Path = string;
@@ -25,7 +26,7 @@ export const replaceDerive = (val: string): string => val.replace("'", '');
 
 export const getMasterKeyFromSeed = (seed: Hex): Keys => {
   const h = hmac.create(sha512, ED25519_CURVE);
-  const I = h.update(Buffer.from(seed, 'hex')).digest();
+  const I = h.update(fromHEX(seed)).digest();
   const IL = I.slice(0, 32);
   const IR = I.slice(32);
   return {
@@ -34,11 +35,18 @@ export const getMasterKeyFromSeed = (seed: Hex): Keys => {
   };
 };
 
-export const CKDPriv = ({ key, chainCode }: Keys, index: number): Keys => {
-  const indexBuffer = Buffer.allocUnsafe(4);
-  indexBuffer.writeUInt32BE(index, 0);
+const CKDPriv = ({ key, chainCode }: Keys, index: number): Keys => {
+  const indexBuffer = new ArrayBuffer(4);
+  const cv = new DataView(indexBuffer);
+  cv.setUint32(0, index);
 
-  const data = Buffer.concat([Buffer.alloc(1, 0), key, indexBuffer]);
+  const data = new Uint8Array(1 + key.length + indexBuffer.byteLength);
+  data.set(new Uint8Array(1).fill(0));
+  data.set(key, 1);
+  data.set(
+    new Uint8Array(indexBuffer, 0, indexBuffer.byteLength),
+    key.length + 1
+  );
 
   const I = hmac.create(sha512, chainCode).update(data).digest();
   const IL = I.slice(0, 32);

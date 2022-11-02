@@ -369,11 +369,8 @@ importers:
       '@scure/bip32': ^1.1.0
       '@scure/bip39': ^1.1.0
       '@size-limit/preset-small-lib': ^7.0.8
-      '@types/bn.js': ^5.1.0
       '@types/lossless-json': ^1.0.1
       axios: ^0.27.2
-      bn.js: ^5.2.0
-      buffer: ^6.0.3
       cross-fetch: ^3.1.5
       eslint: ^8.23.0
       eslint-config-prettier: ^8.5.0
@@ -403,8 +400,6 @@ importers:
       '@noble/secp256k1': 1.6.3
       '@scure/bip32': 1.1.0
       '@scure/bip39': 1.1.0
-      bn.js: 5.2.1
-      buffer: 6.0.3
       cross-fetch: 3.1.5
       jayson: 3.7.0
       js-sha3: 0.8.0
@@ -413,7 +408,6 @@ importers:
       tweetnacl: 1.0.3
     devDependencies:
       '@size-limit/preset-small-lib': 7.0.8_size-limit@7.0.8
-      '@types/bn.js': 5.1.0
       '@types/lossless-json': 1.0.1
       axios: 0.27.2
       eslint: 8.23.0

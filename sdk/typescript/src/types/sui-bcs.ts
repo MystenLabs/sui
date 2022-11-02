@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { BCS, decodeStr, encodeStr, getSuiMoveConfig } from '@mysten/bcs';
-import { Buffer } from 'buffer';
 import { SuiObjectRef } from './objects';
 
 const bcs = new BCS(getSuiMoveConfig());
@@ -11,12 +10,12 @@ bcs
   .registerType(
     'utf8string',
     (writer, str) => {
-      let bytes = Array.from(Buffer.from(str));
+      const bytes = Array.from(new TextEncoder().encode(str));
       return writer.writeVec(bytes, (writer, el) => writer.write8(el));
     },
     (reader) => {
       let bytes = reader.readVec((reader) => reader.read8());
-      return Buffer.from(bytes).toString('utf-8');
+      return new TextDecoder().decode(new Uint8Array(bytes));
     }
   )
   .registerType(
