@@ -264,7 +264,7 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
         .unwrap();
 
     let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port);
-    let client = SuiClient::new_rpc_client(&format!("http://{}", addr), None).await?;
+    let client = SuiClient::new(&format!("http://{}", addr), None).await?;
     let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
     let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
     let mut tx_responses = Vec::new();
@@ -300,7 +300,7 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
 
     // test get_recent_transactions with smaller range
     let tx = client
-        .full_node_api()
+        .read_api()
         .get_transactions(TransactionQuery::All, None, Some(3), Ordering::Descending)
         .await
         .unwrap();
@@ -308,7 +308,7 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
 
     // test get all transactions paged
     let first_page = client
-        .full_node_api()
+        .read_api()
         .get_transactions(TransactionQuery::All, None, Some(5), Ordering::Ascending)
         .await
         .unwrap();
@@ -317,7 +317,7 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
 
     // test get all transactions in ascending order
     let second_page = client
-        .full_node_api()
+        .read_api()
         .get_transactions(
             TransactionQuery::All,
             first_page.next_cursor,
@@ -335,7 +335,7 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
 
     // test get 10 latest transactions paged
     let latest = client
-        .full_node_api()
+        .read_api()
         .get_transactions(TransactionQuery::All, None, Some(10), Ordering::Descending)
         .await
         .unwrap();
@@ -346,7 +346,7 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
 
     // test get from address txs in ascending order
     let address_txs_asc = client
-        .full_node_api()
+        .read_api()
         .get_transactions(
             TransactionQuery::FromAddress(cluster.accounts[0]),
             None,
@@ -359,7 +359,7 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
 
     // test get from address txs in descending order
     let address_txs_desc = client
-        .full_node_api()
+        .read_api()
         .get_transactions(
             TransactionQuery::FromAddress(cluster.accounts[0]),
             None,
@@ -377,7 +377,7 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
 
     // test get_recent_transactions
     let tx = client
-        .full_node_api()
+        .read_api()
         .get_transactions(TransactionQuery::All, None, Some(20), Ordering::Descending)
         .await
         .unwrap();

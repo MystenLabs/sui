@@ -21,7 +21,6 @@ use move_core_types::language_storage::TypeTag;
 use move_package::BuildConfig as MoveBuildConfig;
 use serde::Serialize;
 use serde_json::json;
-use sui_config::gateway::GatewayConfig;
 use tracing::info;
 
 use sui_framework::build_move_package;
@@ -33,7 +32,6 @@ use sui_json_rpc_types::{
 use sui_json_rpc_types::{GetRawObjectDataResponse, SuiData};
 use sui_json_rpc_types::{SuiCertifiedTransaction, SuiExecutionStatus, SuiTransactionEffects};
 use sui_keys::keystore::AccountKeystore;
-use sui_sdk::SuiClient;
 use sui_sdk::TransactionExecutionResult;
 use sui_types::crypto::SignableBytes;
 use sui_types::{
@@ -264,13 +262,6 @@ pub enum SuiClientCommands {
         /// Gas budget for this transaction
         #[clap(long)]
         gas_budget: u64,
-    },
-
-    /// Synchronize client state with authorities.
-    #[clap(name = "sync")]
-    SyncClientState {
-        #[clap(long)]
-        address: Option<SuiAddress>,
     },
 
     /// Obtain the Addresses managed by the client.
@@ -657,16 +648,6 @@ impl SuiClientCommands {
                 SuiClientCommandResult::Objects(address_object)
             }
 
-            SuiClientCommands::SyncClientState { address } => {
-                let address = address.unwrap_or(context.active_address()?);
-                context
-                    .client
-                    .wallet_sync_api()
-                    .sync_account_state(address)
-                    .await?;
-
-                SuiClientCommandResult::SyncClientState
-            }
             SuiClientCommands::NewAddress {
                 key_scheme,
                 derivation_path,
@@ -852,7 +833,7 @@ impl SuiClientCommands {
                 let env = SuiEnv { alias, rpc, ws };
 
                 // Check urls are valid and server is reachable
-                env.init().await?;
+                env.create_rpc_client().await?;
                 context.config.envs.push(env.clone());
                 context.config.save()?;
                 SuiClientCommandResult::NewEnv(env)
@@ -874,7 +855,10 @@ impl SuiClientCommands {
 
 pub struct WalletContext {
     pub config: PersistedConfig<SuiClientConfig>,
-    pub client: SuiClient,
+    #[cfg(msim)]
+    pub client: sui_sdk::embedded_gateway::SuiClient,
+    #[cfg(not(msim))]
+    pub client: sui_sdk::SuiClient,
 }
 
 impl WalletContext {
@@ -885,23 +869,11 @@ impl WalletContext {
                 config_path
             ))
         })?;
-        let client = config.get_active_env()?.init().await?;
-        let config = config.persisted(config_path);
-        let context = Self { config, client };
-        Ok(context)
-    }
+        #[cfg(not(msim))]
+        let client = config.get_active_env()?.create_rpc_client().await?;
+        #[cfg(msim)]
+        let client = sui_sdk::embedded_gateway::SuiClient::new(&config_path.parent().unwrap())?;
 
-    pub async fn new_with_embedded_gateway(
-        config_path: &Path,
-        gateway_conf: &GatewayConfig,
-    ) -> Result<Self, anyhow::Error> {
-        let config: SuiClientConfig = PersistedConfig::read(config_path).map_err(|err| {
-            err.context(format!(
-                "Cannot open wallet config file at {:?}",
-                config_path
-            ))
-        })?;
-        let client = SuiClient::new_embedded_client(gateway_conf)?;
         let config = config.persisted(config_path);
         let context = Self { config, client };
         Ok(context)
@@ -1040,9 +1012,9 @@ impl WalletContext {
         }
     }
 
-    pub fn switch_client(&mut self, new_client: SuiClient) {
+    /*    pub fn switch_client(&mut self, new_client: SuiClient) {
         self.client = new_client;
-    }
+    }*/
 }
 
 impl Display for SuiClientCommandResult {

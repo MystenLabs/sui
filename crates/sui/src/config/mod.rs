@@ -49,8 +49,8 @@ pub struct SuiEnv {
 }
 
 impl SuiEnv {
-    pub async fn init(&self) -> Result<SuiClient, anyhow::Error> {
-        SuiClient::new_rpc_client(&self.rpc, self.ws.as_deref()).await
+    pub async fn create_rpc_client(&self) -> Result<SuiClient, anyhow::Error> {
+        SuiClient::new(&self.rpc, self.ws.as_deref()).await
     }
 
     pub fn devnet() -> Self {

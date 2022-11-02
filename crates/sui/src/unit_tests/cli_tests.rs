@@ -4,7 +4,6 @@
 use std::{fmt::Write, fs::read_dir, path::PathBuf, str, time::Duration};
 
 use anyhow::anyhow;
-use fastcrypto::traits::KeyPair;
 use move_package::BuildConfig;
 use serde_json::json;
 
@@ -14,11 +13,10 @@ use sui::{
     config::SuiClientConfig,
     sui_commands::SuiCommand,
 };
-use sui_config::gateway::GatewayConfig;
 use sui_config::genesis_config::{AccountConfig, GenesisConfig, ObjectConfig};
 use sui_config::{
-    Config, NetworkConfig, PersistedConfig, ValidatorInfo, SUI_CLIENT_CONFIG, SUI_FULLNODE_CONFIG,
-    SUI_GATEWAY_CONFIG, SUI_GENESIS_FILENAME, SUI_KEYSTORE_FILENAME, SUI_NETWORK_CONFIG,
+    Config, NetworkConfig, PersistedConfig, SUI_CLIENT_CONFIG, SUI_FULLNODE_CONFIG,
+    SUI_GENESIS_FILENAME, SUI_KEYSTORE_FILENAME, SUI_NETWORK_CONFIG,
 };
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
@@ -26,17 +24,15 @@ use sui_json_rpc_types::{
     SuiTransactionEffects,
 };
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
+use sui_macros::sim_test;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{
-    AccountKeyPair, AuthorityKeyPair, Ed25519SuiSignature, NetworkKeyPair, Secp256k1SuiSignature,
-    SignatureScheme, SuiKeyPair, SuiSignatureInner,
+    Ed25519SuiSignature, Secp256k1SuiSignature, SignatureScheme, SuiKeyPair, SuiSignatureInner,
 };
 use sui_types::{base_types::ObjectID, crypto::get_key_pair, gas_coin::GasCoin};
 use sui_types::{sui_framework_address_concat_string, SUI_FRAMEWORK_ADDRESS};
 use test_utils::messages::make_transactions_with_wallet_context;
 use test_utils::network::init_cluster_builder_env_aware;
-
-use sui_macros::sim_test;
 
 const TEST_DATA_DIR: &str = "src/unit_tests/data/";
 
@@ -104,14 +100,10 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[sim_test]
+#[tokio::test]
 async fn test_addresses_command() -> Result<(), anyhow::Error> {
     let temp_dir = tempfile::tempdir().unwrap();
     let working_dir = temp_dir.path();
-    let keypair: AuthorityKeyPair = get_key_pair().1;
-    let worker_keypair: NetworkKeyPair = get_key_pair().1;
-    let network_keypair: NetworkKeyPair = get_key_pair().1;
-    let account_keypair: SuiKeyPair = get_key_pair::<AccountKeyPair>().1.into();
 
     let wallet_config = SuiClientConfig {
         keystore: Keystore::from(FileBasedKeystore::new(
@@ -122,31 +114,10 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
         active_env: "".to_string(),
     };
 
-    let gateway_config = GatewayConfig {
-        db_folder_path: working_dir.join("client_db"),
-        validator_set: vec![ValidatorInfo {
-            name: "0".into(),
-            protocol_key: keypair.public().into(),
-            worker_key: worker_keypair.public().clone(),
-            account_key: account_keypair.public(),
-            network_key: network_keypair.public().clone(),
-            stake: 1,
-            delegation: 1,
-            gas_price: 1,
-            network_address: sui_config::utils::new_network_address(),
-            narwhal_primary_address: sui_config::utils::new_network_address(),
-            narwhal_worker_address: sui_config::utils::new_network_address(),
-            narwhal_consensus_address: sui_config::utils::new_network_address(),
-        }],
-        ..Default::default()
-    };
-
     let wallet_conf_path = working_dir.join(SUI_CLIENT_CONFIG);
     let wallet_config = wallet_config.persisted(&wallet_conf_path);
     wallet_config.save().unwrap();
-    let mut context = WalletContext::new_with_embedded_gateway(&wallet_conf_path, &gateway_config)
-        .await
-        .unwrap();
+    let mut context = WalletContext::new(&wallet_conf_path).await.unwrap();
 
     // Add 3 accounts
     for _ in 0..3 {
@@ -356,12 +327,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     .await?;
 
     let package = if let SuiClientCommandResult::Publish(response) = resp {
-        if context.client.is_gateway() {
-            let publish_resp = response.parsed_data.unwrap().to_publish_response().unwrap();
-            publish_resp.package.object_id
-        } else {
-            response.effects.created[0].reference.object_id
-        }
+        response.effects.created[0].reference.object_id
     } else {
         unreachable!("Invalid response");
     };
@@ -532,20 +498,12 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
     resp.print(true);
 
     let obj_ids = if let SuiClientCommandResult::Publish(response) = resp {
-        if context.client.is_gateway() {
-            let publish_resp = response.parsed_data.unwrap().to_publish_response().unwrap();
-            vec![
-                publish_resp.package.object_id,
-                publish_resp.created_objects[0].reference.object_id,
-            ]
-        } else {
-            response
-                .effects
-                .created
-                .iter()
-                .map(|refe| refe.reference.object_id)
-                .collect::<Vec<_>>()
-        }
+        response
+            .effects
+            .created
+            .iter()
+            .map(|refe| refe.reference.object_id)
+            .collect::<Vec<_>>()
     } else {
         unreachable!("Invalid response");
     };
@@ -909,22 +867,14 @@ async fn test_merge_coin() -> Result<(), anyhow::Error> {
     .execute(context)
     .await?;
     let g = if let SuiClientCommandResult::MergeCoin(r) = resp {
-        if context.client.is_gateway() {
-            r.parsed_data
-                .unwrap()
-                .to_merge_coin_response()
-                .unwrap()
-                .updated_coin
-        } else {
-            let object_id = r
-                .effects
-                .mutated_excluding_gas()
-                .next()
-                .unwrap()
-                .reference
-                .object_id;
-            get_parsed_object_assert_existence(object_id, context).await
-        }
+        let object_id = r
+            .effects
+            .mutated_excluding_gas()
+            .next()
+            .unwrap()
+            .reference
+            .object_id;
+        get_parsed_object_assert_existence(object_id, context).await
     } else {
         panic!("Command failed")
     };
@@ -958,22 +908,14 @@ async fn test_merge_coin() -> Result<(), anyhow::Error> {
     .await?;
 
     let g = if let SuiClientCommandResult::MergeCoin(r) = resp {
-        if context.client.is_gateway() {
-            r.parsed_data
-                .unwrap()
-                .to_merge_coin_response()
-                .unwrap()
-                .updated_coin
-        } else {
-            let object_id = r
-                .effects
-                .mutated_excluding_gas()
-                .next()
-                .unwrap()
-                .reference
-                .object_id;
-            get_parsed_object_assert_existence(object_id, context).await
-        }
+        let object_id = r
+            .effects
+            .mutated_excluding_gas()
+            .next()
+            .unwrap()
+            .reference
+            .object_id;
+        get_parsed_object_assert_existence(object_id, context).await
     } else {
         panic!("Command failed")
     };
@@ -1018,27 +960,22 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
     .await?;
 
     let (updated_coin, new_coins) = if let SuiClientCommandResult::SplitCoin(r) = resp {
-        if context.client.is_gateway() {
-            let resp = r.parsed_data.unwrap().to_split_coin_response().unwrap();
-            (resp.updated_coin, resp.new_coins)
-        } else {
-            let updated_object_id = r
-                .effects
-                .mutated_excluding_gas()
-                .next()
-                .unwrap()
-                .reference
-                .object_id;
-            let updated_obj = get_parsed_object_assert_existence(updated_object_id, context).await;
-            let new_object_refs = r.effects.created;
-            let mut new_objects = Vec::with_capacity(new_object_refs.len());
-            for obj_ref in new_object_refs {
-                new_objects.push(
-                    get_parsed_object_assert_existence(obj_ref.reference.object_id, context).await,
-                );
-            }
-            (updated_obj, new_objects)
+        let updated_object_id = r
+            .effects
+            .mutated_excluding_gas()
+            .next()
+            .unwrap()
+            .reference
+            .object_id;
+        let updated_obj = get_parsed_object_assert_existence(updated_object_id, context).await;
+        let new_object_refs = r.effects.created;
+        let mut new_objects = Vec::with_capacity(new_object_refs.len());
+        for obj_ref in new_object_refs {
+            new_objects.push(
+                get_parsed_object_assert_existence(obj_ref.reference.object_id, context).await,
+            );
         }
+        (updated_obj, new_objects)
     } else {
         panic!("Command failed")
     };
@@ -1074,27 +1011,22 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
     .await?;
 
     let (updated_coin, new_coins) = if let SuiClientCommandResult::SplitCoin(r) = resp {
-        if context.client.is_gateway() {
-            let resp = r.parsed_data.unwrap().to_split_coin_response().unwrap();
-            (resp.updated_coin, resp.new_coins)
-        } else {
-            let updated_object_id = r
-                .effects
-                .mutated_excluding_gas()
-                .next()
-                .unwrap()
-                .reference
-                .object_id;
-            let updated_obj = get_parsed_object_assert_existence(updated_object_id, context).await;
-            let new_object_refs = r.effects.created;
-            let mut new_objects = Vec::with_capacity(new_object_refs.len());
-            for obj_ref in new_object_refs {
-                new_objects.push(
-                    get_parsed_object_assert_existence(obj_ref.reference.object_id, context).await,
-                );
-            }
-            (updated_obj, new_objects)
+        let updated_object_id = r
+            .effects
+            .mutated_excluding_gas()
+            .next()
+            .unwrap()
+            .reference
+            .object_id;
+        let updated_obj = get_parsed_object_assert_existence(updated_object_id, context).await;
+        let new_object_refs = r.effects.created;
+        let mut new_objects = Vec::with_capacity(new_object_refs.len());
+        for obj_ref in new_object_refs {
+            new_objects.push(
+                get_parsed_object_assert_existence(obj_ref.reference.object_id, context).await,
+            );
         }
+        (updated_obj, new_objects)
     } else {
         panic!("Command failed")
     };
@@ -1133,27 +1065,22 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
     .await?;
 
     let (updated_coin, new_coins) = if let SuiClientCommandResult::SplitCoin(r) = resp {
-        if context.client.is_gateway() {
-            let resp = r.parsed_data.unwrap().to_split_coin_response().unwrap();
-            (resp.updated_coin, resp.new_coins)
-        } else {
-            let updated_object_id = r
-                .effects
-                .mutated_excluding_gas()
-                .next()
-                .unwrap()
-                .reference
-                .object_id;
-            let updated_obj = get_parsed_object_assert_existence(updated_object_id, context).await;
-            let new_object_refs = r.effects.created;
-            let mut new_objects = Vec::with_capacity(new_object_refs.len());
-            for obj_ref in new_object_refs {
-                new_objects.push(
-                    get_parsed_object_assert_existence(obj_ref.reference.object_id, context).await,
-                );
-            }
-            (updated_obj, new_objects)
+        let updated_object_id = r
+            .effects
+            .mutated_excluding_gas()
+            .next()
+            .unwrap()
+            .reference
+            .object_id;
+        let updated_obj = get_parsed_object_assert_existence(updated_object_id, context).await;
+        let new_object_refs = r.effects.created;
+        let mut new_objects = Vec::with_capacity(new_object_refs.len());
+        for obj_ref in new_object_refs {
+            new_objects.push(
+                get_parsed_object_assert_existence(obj_ref.reference.object_id, context).await,
+            );
         }
+        (updated_obj, new_objects)
     } else {
         panic!("Command failed")
     };

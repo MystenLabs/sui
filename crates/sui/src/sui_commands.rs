@@ -200,7 +200,7 @@ impl SuiCommand {
                     let mut config = config.persisted(&config_path);
                     SuiClientCommands::switch_env(&mut config, env)?;
                     // This will init the client to check if the urls are correct and reachable
-                    config.get_active_env()?.init().await?;
+                    config.get_active_env()?.create_rpc_client().await?;
                     config.save()?;
                 }
 
