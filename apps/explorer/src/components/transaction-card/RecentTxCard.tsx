@@ -7,7 +7,7 @@ import {
 } from '@mysten/sui.js';
 import { useQuery } from '@tanstack/react-query';
 import cl from 'clsx';
-import { useState, useContext, useCallback } from 'react';
+import { useState, useContext, useCallback, useMemo } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 
 import { ReactComponent as ArrowRight } from '../../assets/SVGIcons/12px/ArrowRight.svg';
@@ -32,7 +32,6 @@ import { Banner } from '~/ui/Banner';
 import { PlaceholderTable } from '~/ui/PlaceholderTable';
 import { TableCard } from '~/ui/TableCard';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
-import { Text } from '~/ui/Text';
 
 const TRUNCATE_LENGTH = 10;
 const NUMBER_OF_TX_PER_PAGE = 20;
@@ -107,10 +106,6 @@ async function getRecentTransactions(
     return transactionData as TxnData[];
 }
 
-async function getTransactionCount(network: Network | string): Promise<number> {
-    return rpc(network).getTotalTransactionNumber();
-}
-
 type Props = {
     paginationtype?: PaginationType;
     txPerPage?: number;
@@ -141,46 +136,48 @@ export function LatestTxCard({
         [setSearchParams]
     );
 
-    const { data, status, error, isError } = useQuery(
+    const countQuery = useQuery(['transactions', 'count'], () => {
+        return rpc(network).getTotalTransactionNumber();
+    });
+
+    const transactionQuery = useQuery(
         ['transactions', txPerPage, pageIndex],
         async () => {
-            const count = await getTransactionCount(network);
+            const { data: count } = countQuery;
 
-            if (!count) throw new Error('No transactions found.');
+            if (!count) {
+                throw new Error('No transactions found');
+            }
 
             // If pageIndex is greater than maxTxPage, set to maxTxPage
             const maxTxPage = Math.ceil(count / txPerPage);
             const pg = pageIndex > maxTxPage ? maxTxPage : pageIndex;
 
-            const transactions = await getRecentTransactions(
-                network,
-                count,
-                txPerPage,
-                pg
-            );
-
-            return {
-                count,
-                transactions,
-            };
+            return getRecentTransactions(network, count, txPerPage, pg);
         },
-        { retry: false }
+        {
+            enabled: countQuery.isFetched,
+            keepPreviousData: true,
+        }
     );
 
-    const recentTx = data?.transactions
-        ? genTableDataFromTxData(data.transactions, truncateLength)
-        : null;
+    const recentTx = useMemo(
+        () =>
+            transactionQuery.data
+                ? genTableDataFromTxData(transactionQuery.data, truncateLength)
+                : null,
+        [transactionQuery.data, truncateLength]
+    );
 
     const stats = {
-        count: data?.count || 0,
+        count: countQuery?.data || 0,
         stats_text: 'Total transactions',
-        loadState: status,
     };
 
     const PaginationWithStatsOrStatsWithLink =
         paginationtype === 'pagination' ? (
             <Pagination
-                totalItems={data?.count || 0}
+                totalItems={countQuery?.data || 0}
                 itemsPerPage={txPerPage}
                 updateItemsPerPage={setTxPerPage}
                 onPagiChangeFn={handlePageChange}
@@ -195,19 +192,18 @@ export function LatestTxCard({
             </TabFooter>
         );
 
-    if (isError) {
+    if (countQuery.isError) {
         return (
             <Banner variant="error" fullWidth>
-                <div className="space-y-1">
-                    <div>
-                        There was an issue getting the latest transactions.
-                    </div>
-                    {error && (error as Error).message ? (
-                        <Text variant="bodySmall" mono>
-                            {(error as Error).message}
-                        </Text>
-                    ) : null}
-                </div>
+                No transactions found.
+            </Banner>
+        );
+    }
+
+    if (transactionQuery.isError) {
+        return (
+            <Banner variant="error" fullWidth>
+                There was an issue getting the latest transactions.
             </Banner>
         );
     }
@@ -222,6 +218,7 @@ export function LatestTxCard({
                     <TabPanel>
                         {recentTx ? (
                             <TableCard
+                                refetching={transactionQuery.isPreviousData}
                                 data={recentTx.data}
                                 columns={recentTx.columns}
                             />

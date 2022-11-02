@@ -6,6 +6,7 @@ import {
     getCoreRowModel,
     useReactTable,
 } from '@tanstack/react-table';
+import clsx from 'clsx';
 import { useMemo } from 'react';
 
 import type { ExecutionStatusType, TransactionKindName } from '@mysten/sui.js';
@@ -54,11 +55,12 @@ function columnsContent(columns: TableColumn[]) {
 }
 
 export interface TableCardProps {
+    refetching?: boolean;
     data: DataType[];
     columns: TableColumn[];
 }
 
-export function TableCard({ data, columns }: TableCardProps) {
+export function TableCard({ refetching, data, columns }: TableCardProps) {
     // Use Columns to create a table
     const processedcol = useMemo(() => columnsContent(columns), [columns]);
     const table = useReactTable({
@@ -68,7 +70,12 @@ export function TableCard({ data, columns }: TableCardProps) {
     });
 
     return (
-        <div className="w-full overflow-x-auto">
+        <div
+            className={clsx(
+                'w-full overflow-x-auto',
+                refetching && 'opacity-50'
+            )}
+        >
             <table className="text-left min-w-max border-collapse w-full border-solid border-sui-grey-45 border-0 border-b">
                 <thead>
                     {table.getHeaderGroups().map((headerGroup: any) => (
