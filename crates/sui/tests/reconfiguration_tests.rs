@@ -8,7 +8,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use sui_config::{NetworkConfig, ValidatorInfo};
 use sui_core::authority_active::checkpoint_driver::{
-    checkpoint_process_step, CheckpointProcessControl,
+    checkpoint_drive_process_step, CheckpointProcessControl,
 };
 use sui_node::SuiNodeHandle;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress};
@@ -295,9 +295,11 @@ async fn reconfig_last_checkpoint_sync_missing_tx() {
                 .lock()
                 .is_ready_to_finish_epoch_change()
             {
-                let _ =
-                    checkpoint_process_step(active.clone(), &CheckpointProcessControl::default())
-                        .await;
+                let _ = checkpoint_drive_process_step(
+                    active.clone(),
+                    &CheckpointProcessControl::default(),
+                )
+                .await;
             }
         })
     });
@@ -316,7 +318,7 @@ async fn reconfig_last_checkpoint_sync_missing_tx() {
                 .lock()
                 .is_ready_to_finish_epoch_change()
             {
-                let _ = checkpoint_process_step(
+                let _ = checkpoint_drive_process_step(
                     node.active().clone(),
                     &CheckpointProcessControl::default(),
                 )
@@ -429,9 +431,11 @@ async fn fast_forward_to_ready_for_reconfig_start(handles: &[SuiNodeHandle]) {
                 .lock()
                 .is_ready_to_start_epoch_change()
             {
-                let _ =
-                    checkpoint_process_step(active.clone(), &CheckpointProcessControl::default())
-                        .await;
+                let _ = checkpoint_drive_process_step(
+                    active.clone(),
+                    &CheckpointProcessControl::default(),
+                )
+                .await;
             }
         })
     });
@@ -449,9 +453,11 @@ async fn fast_forward_to_ready_for_reconfig_finish(handles: &[SuiNodeHandle]) {
                 .lock()
                 .is_ready_to_finish_epoch_change()
             {
-                let _ =
-                    checkpoint_process_step(active.clone(), &CheckpointProcessControl::default())
-                        .await;
+                let _ = checkpoint_drive_process_step(
+                    active.clone(),
+                    &CheckpointProcessControl::default(),
+                )
+                .await;
             }
         })
     });

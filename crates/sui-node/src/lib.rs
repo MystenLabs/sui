@@ -13,7 +13,6 @@ use narwhal_network::metrics::{NetworkConnectionMetrics, NetworkMetrics};
 use parking_lot::Mutex;
 use prometheus::Registry;
 use std::option::Option::None;
-use std::time::Instant;
 use std::{sync::Arc, time::Duration};
 use sui_config::NodeConfig;
 use sui_core::authority_active::checkpoint_driver::CheckpointMetrics;
@@ -44,7 +43,7 @@ use sui_storage::{
 use sui_types::messages::{CertifiedTransaction, CertifiedTransactionEffects};
 use tokio::sync::mpsc::channel;
 use tower::ServiceBuilder;
-use tracing::{error, info, warn};
+use tracing::{info, warn};
 use typed_store::DBMetrics;
 
 use crate::metrics::GrpcMetrics;
@@ -241,26 +240,13 @@ impl SuiNode {
             };
 
         let gossip_handle = if is_full_node {
-            info!("Starting full node sync to latest checkpoint (this may take a while)");
-            let now = Instant::now();
-            if let Err(err) = active_authority.clone().sync_to_latest_checkpoint().await {
-                error!(
-                    "Full node failed to catch up to latest checkpoint: {:?}",
-                    err
-                );
-            } else {
-                info!(
-                    "Full node caught up to latest checkpoint in {:?}",
-                    now.elapsed()
-                );
-            }
             active_authority.clone().spawn_node_sync_process().await;
             None
         } else {
             None
         };
         let execute_driver_handle = active_authority.clone().spawn_execute_process().await;
-        let checkpoint_process_handle = if config.enable_checkpoint && is_validator {
+        let checkpoint_process_handle = if config.enable_checkpoint {
             Some(
                 active_authority
                     .clone()
