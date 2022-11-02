@@ -59,7 +59,7 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
         >
             <div
                 className={
-                    'h-[605px] w-full lg:w-[15vw] overflow-auto pt-[10px] pr-[20px] pl-[1px]'
+                    'w-full lg:w-[15vw] pr-[20px] pl-[1px]'
                 }
             >
                 <Combobox
@@ -67,7 +67,7 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                     onChange={setSelectedModule}
                     nullable
                 >
-                    <div className="border-sui-grey-50 border-solid rounded-[6px] h-[34px] shadow-sm placeholder-sui-grey-65 pl-3 w-full lg:w-[11vw] flex">
+                    <div className="border-sui-grey-50 border-solid rounded-[6px] h-[34px] shadow-sm placeholder-sui-grey-65 pl-3 w-full lg:w-[11vw] flex my-[10px]">
                         <Combobox.Input
                             onChange={(event) => setQuery(event.target.value)}
                             displayValue={() => ''}
@@ -81,7 +81,7 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                             <SearchIcon className="fill-sui-steel" />
                         </button>
                     </div>
-                    <Combobox.Options static as="div">
+                    <Combobox.Options static as="div" className="overflow-auto h-[571px]">
                         <VerticalList>
                             {filteredModules.map((name, idx) => (
                                 <Combobox.Option key={name} value={name}>
