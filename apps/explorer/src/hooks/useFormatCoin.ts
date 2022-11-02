@@ -4,10 +4,9 @@
 import { Coin } from '@mysten/sui.js';
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import BigNumber from 'bignumber.js';
-import { useContext, useMemo } from 'react';
+import { useMemo } from 'react';
 
-import { NetworkContext } from '~/context';
-import { DefaultRpcClient as rpc } from '~/utils/api/DefaultRpcClient';
+import { useRpc } from './useRpc';
 
 type FormattedCoin = [
     formattedBalance: string,
@@ -56,7 +55,7 @@ export function formatBalance(
 }
 
 export function useCoinDecimals(coinType?: string | null) {
-    const [network] = useContext(NetworkContext);
+    const rpc = useRpc();
 
     const queryResult = useQuery(
         ['denomination', coinType],
@@ -67,7 +66,7 @@ export function useCoinDecimals(coinType?: string | null) {
                 );
             }
 
-            return rpc(network).getCoinDenominationInfo(coinType);
+            return rpc.getCoinDenominationInfo(coinType);
         },
         {
             // This is currently expected to fail for non-SUI tokens, so disable retries:

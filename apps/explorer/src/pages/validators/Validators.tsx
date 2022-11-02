@@ -3,24 +3,24 @@
 
 import {
     Base64DataBuffer,
-    type GetObjectDataResponse,
     isSuiMoveObject,
     isSuiObject,
+    type JsonRpcProvider,
+    type GetObjectDataResponse,
 } from '@mysten/sui.js';
-import { useState, useContext, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 
 import ErrorResult from '../../components/error-result/ErrorResult';
 import Longtext from '../../components/longtext/Longtext';
 import TabFooter from '../../components/tabs/TabFooter';
 import { STATE_DEFAULT } from '../../components/top-validators-card/TopValidatorsCard';
-import { NetworkContext } from '../../context';
 import theme from '../../styles/theme.module.css';
-import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
 import { IS_STATIC_ENV } from '../../utils/envUtil';
 import { truncate } from '../../utils/stringUtils';
 import { mockState } from './mockData';
 
+import { useRpc } from '~/hooks/useRpc';
 import { Heading } from '~/ui/Heading';
 import { TableCard } from '~/ui/TableCard';
 
@@ -106,8 +106,10 @@ function instanceOfValidatorState(object: any): object is ValidatorState {
 
 const VALIDATORS_OBJECT_ID = '0x05';
 
-export function getValidatorState(network: string): Promise<ValidatorState> {
-    return rpc(network)
+export function getValidatorState(
+    rpc: JsonRpcProvider
+): Promise<ValidatorState> {
+    return rpc
         .getObject(VALIDATORS_OBJECT_ID)
         .then((objState: GetObjectDataResponse) => {
             if (
@@ -236,9 +238,9 @@ export function ValidatorLoadFail() {
 export function ValidatorPageAPI() {
     const [showObjectState, setObjectState] = useState(STATE_DEFAULT);
     const [loadState, setLoadState] = useState('pending');
-    const [network] = useContext(NetworkContext);
+    const rpc = useRpc();
     useEffect(() => {
-        getValidatorState(network)
+        getValidatorState(rpc)
             .then((objState: ValidatorState) => {
                 setObjectState(objState);
                 setLoadState('loaded');
@@ -247,7 +249,7 @@ export function ValidatorPageAPI() {
                 console.error(error);
                 setLoadState('fail');
             });
-    }, [network]);
+    }, [rpc]);
 
     if (loadState === 'loaded') {
         return <ValidatorsPage state={showObjectState as ValidatorState} />;

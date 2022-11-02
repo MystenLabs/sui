@@ -4,18 +4,17 @@ import { useQuery } from '@tanstack/react-query';
 import cl from 'clsx';
 import Highlight, { defaultProps, Prism } from 'prism-react-renderer';
 import 'prism-themes/themes/prism-one-light.css';
-import { useContext } from 'react';
 import { Link } from 'react-router-dom';
 
-import { NetworkContext } from '../../context';
 import codestyle from '../../styles/bytecode.module.css';
-import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
 import { normalizeSuiAddress } from '../../utils/stringUtils';
 
 import type { SuiMoveNormalizedType } from '@mysten/sui.js';
 import type { Language } from 'prism-react-renderer';
 
 import styles from './ModuleView.module.css';
+
+import { useRpc } from '~/hooks/useRpc';
 
 // Include Rust language support.
 // TODO: Write a custom prismjs syntax for Move Bytecode.
@@ -59,11 +58,12 @@ function unwrapTypeReference(
 }
 
 function ModuleView({ id, name, code }: Props) {
-    const [network] = useContext(NetworkContext);
+    const rpc = useRpc();
+
     const { data: normalizedModuleReferences } = useQuery(
         ['normalized-module', id, name],
         async () => {
-            const normalizedModule = await rpc(network).getNormalizedMoveModule(
+            const normalizedModule = await rpc.getNormalizedMoveModule(
                 id!,
                 name
             );
