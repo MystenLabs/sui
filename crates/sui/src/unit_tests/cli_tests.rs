@@ -15,15 +15,15 @@ use sui::{
 };
 use sui_config::genesis_config::{AccountConfig, GenesisConfig, ObjectConfig};
 use sui_config::{
-    Config, NetworkConfig, PersistedConfig, SUI_CLIENT_CONFIG, SUI_FULLNODE_CONFIG,
-    SUI_GENESIS_FILENAME, SUI_KEYSTORE_FILENAME, SUI_NETWORK_CONFIG,
+    NetworkConfig, PersistedConfig, SUI_CLIENT_CONFIG, SUI_FULLNODE_CONFIG, SUI_GENESIS_FILENAME,
+    SUI_KEYSTORE_FILENAME, SUI_NETWORK_CONFIG,
 };
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
     GetObjectDataResponse, SuiData, SuiObject, SuiParsedData, SuiParsedObject,
     SuiTransactionEffects,
 };
-use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
+use sui_keys::keystore::AccountKeystore;
 use sui_macros::sim_test;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{
@@ -102,22 +102,8 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
 
 #[tokio::test]
 async fn test_addresses_command() -> Result<(), anyhow::Error> {
-    let temp_dir = tempfile::tempdir().unwrap();
-    let working_dir = temp_dir.path();
-
-    let wallet_config = SuiClientConfig {
-        keystore: Keystore::from(FileBasedKeystore::new(
-            &working_dir.join(SUI_KEYSTORE_FILENAME),
-        )?),
-        envs: vec![],
-        active_address: None,
-        active_env: "".to_string(),
-    };
-
-    let wallet_conf_path = working_dir.join(SUI_CLIENT_CONFIG);
-    let wallet_config = wallet_config.persisted(&wallet_conf_path);
-    wallet_config.save().unwrap();
-    let mut context = WalletContext::new(&wallet_conf_path).await.unwrap();
+    let test_cluster = init_cluster_builder_env_aware().build().await?;
+    let mut context = test_cluster.wallet;
 
     // Add 3 accounts
     for _ in 0..3 {

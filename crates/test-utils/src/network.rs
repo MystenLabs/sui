@@ -138,7 +138,6 @@ impl TestClusterBuilder {
             .wallet_sync_api()
             .sync_account_state(cluster.get_address_0())
             .await?;
-
         Ok(cluster)
     }
 
@@ -185,12 +184,13 @@ impl TestClusterBuilder {
             .save()?;
 
         let wallet_conf = swarm.dir().join(SUI_CLIENT_CONFIG);
+        let wallet = WalletContext::new(&wallet_conf).await?;
 
         Ok(TestCluster {
             swarm,
             fullnode_handle,
             accounts,
-            wallet: WalletContext::new(&wallet_conf).await?,
+            wallet,
         })
     }
 
@@ -198,9 +198,8 @@ impl TestClusterBuilder {
     async fn start_test_swarm_with_fullnodes(
         genesis_config: Option<GenesisConfig>,
     ) -> Result<Swarm, anyhow::Error> {
-        let mut builder: SwarmBuilder = Swarm::builder()
-            .committee_size(NonZeroUsize::new(NUM_VALIDAOTR).unwrap())
-            .with_fullnode_count(1);
+        let mut builder: SwarmBuilder =
+            Swarm::builder().committee_size(NonZeroUsize::new(NUM_VALIDAOTR).unwrap());
 
         if let Some(genesis_config) = genesis_config {
             builder = builder.initial_accounts_config(genesis_config);
@@ -223,23 +222,12 @@ impl TestClusterBuilder {
 
         let active_address = keystore.addresses().first().cloned();
 
-        let envs = swarm
-            .fullnodes()
-            .map(|fullnode| SuiEnv {
-                alias: fullnode.name().to_string(),
-                rpc: fullnode.json_rpc_address().to_string(),
-                ws: None,
-            })
-            .collect::<Vec<_>>();
-
-        let active_env = envs.first().unwrap().alias.clone();
-
         // Create wallet config with stated authorities port
         SuiClientConfig {
             keystore: Keystore::from(FileBasedKeystore::new(&keystore_path)?),
-            envs,
+            envs: Default::default(),
             active_address,
-            active_env,
+            active_env: Default::default(),
         }
         .save(&wallet_path)?;
 

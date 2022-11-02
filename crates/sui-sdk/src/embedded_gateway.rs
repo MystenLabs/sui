@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+// TODO: Remove this file when sim test supports jsonrpc/ws
 use std::sync::Arc;
 
-use anyhow::anyhow;
 use async_trait::async_trait;
 use std::path::Path;
 use sui_config::gateway::GatewayConfig;
@@ -66,13 +66,6 @@ impl SuiClient {
             wallet_sync_api,
         })
     }
-
-    /*    pub fn is_gateway(&self) -> bool {
-        match &*self.api {
-            SuiClientApi::Rpc(c) => c.is_gateway(),
-            SuiClientApi::Embedded(_) => true,
-        }
-    }*/
 
     pub fn available_rpc_methods(&self) -> Vec<String> {
         vec![]

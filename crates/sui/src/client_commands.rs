@@ -46,6 +46,11 @@ use sui_types::{
     messages::TransactionData,
 };
 
+#[cfg(msim)]
+use sui_sdk::embedded_gateway::SuiClient;
+#[cfg(not(msim))]
+use sui_sdk::SuiClient;
+
 use crate::config::{Config, PersistedConfig, SuiClientConfig, SuiEnv};
 
 pub const EXAMPLE_NFT_NAME: &str = "Example NFT";
@@ -855,10 +860,7 @@ impl SuiClientCommands {
 
 pub struct WalletContext {
     pub config: PersistedConfig<SuiClientConfig>,
-    #[cfg(msim)]
-    pub client: sui_sdk::embedded_gateway::SuiClient,
-    #[cfg(not(msim))]
-    pub client: sui_sdk::SuiClient,
+    pub client: SuiClient,
 }
 
 impl WalletContext {
@@ -1011,10 +1013,6 @@ impl WalletContext {
             )),
         }
     }
-
-    /*    pub fn switch_client(&mut self, new_client: SuiClient) {
-        self.client = new_client;
-    }*/
 }
 
 impl Display for SuiClientCommandResult {

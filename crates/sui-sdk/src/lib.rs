@@ -440,63 +440,6 @@ impl SuiClient {
     }
 }
 
-/*#[derive(Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum ClientType {
-    Embedded(GatewayConfig),
-    RPC(
-        String,
-        #[serde(default, skip_serializing_if = "Option::is_none")] Option<String>,
-    ),
-}
-
-impl Display for ClientType {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let mut writer = String::new();
-
-        match self {
-            ClientType::Embedded(config) => {
-                writeln!(writer, "Client Type : Embedded Gateway")?;
-                writeln!(
-                    writer,
-                    "Gateway state DB folder path : {:?}",
-                    config.db_folder_path
-                )?;
-                let authorities = config
-                    .validator_set
-                    .iter()
-                    .map(|info| info.network_address());
-                write!(
-                    writer,
-                    "Authorities : {:?}",
-                    authorities.collect::<Vec<_>>()
-                )?;
-            }
-            ClientType::RPC(url, ws_url) => {
-                writeln!(writer, "Client Type : JSON-RPC")?;
-                writeln!(writer, "HTTP RPC URL : {}", url)?;
-                write!(
-                    writer,
-                    "WS RPC URL : {}",
-                    ws_url.clone().unwrap_or_else(|| "None".to_string())
-                )?;
-            }
-        }
-        write!(f, "{}", writer)
-    }
-}
-
-impl ClientType {
-    pub async fn init(&self) -> Result<SuiClient, anyhow::Error> {
-        Ok(match self {
-            ClientType::Embedded(config) => SuiClient::new_embedded_client(config)?,
-            ClientType::RPC(url, ws_url) => {
-                SuiClient::new_rpc_client(url, ws_url.as_deref()).await?
-            }
-        })
-    }
-}*/
-
 #[async_trait]
 impl DataReader for ReadApi {
     async fn get_objects_owned_by_address(
