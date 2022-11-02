@@ -4,6 +4,7 @@
 use std::{fmt::Write, fs::read_dir, path::PathBuf, str, time::Duration};
 
 use anyhow::anyhow;
+use fastcrypto::traits::KeyPair;
 use move_package::BuildConfig;
 use serde_json::json;
 
@@ -27,7 +28,8 @@ use sui_json_rpc_types::{
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{
-    Ed25519SuiSignature, Secp256k1SuiSignature, SignatureScheme, SuiKeyPair, SuiSignatureInner,
+    AccountKeyPair, AuthorityKeyPair, Ed25519SuiSignature, NetworkKeyPair, Secp256k1SuiSignature,
+    SignatureScheme, SuiKeyPair, SuiSignatureInner,
 };
 use sui_types::{base_types::ObjectID, crypto::get_key_pair, gas_coin::GasCoin};
 use sui_types::{sui_framework_address_concat_string, SUI_FRAMEWORK_ADDRESS};
@@ -107,6 +109,10 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
 async fn test_addresses_command() -> Result<(), anyhow::Error> {
     let temp_dir = tempfile::tempdir().unwrap();
     let working_dir = temp_dir.path();
+    let keypair: AuthorityKeyPair = get_key_pair().1;
+    let worker_keypair: NetworkKeyPair = get_key_pair().1;
+    let network_keypair: NetworkKeyPair = get_key_pair().1;
+    let account_keypair: SuiKeyPair = get_key_pair::<AccountKeyPair>().1.into();
 
     let wallet_config = SuiClientConfig {
         keystore: Keystore::from(FileBasedKeystore::new(
