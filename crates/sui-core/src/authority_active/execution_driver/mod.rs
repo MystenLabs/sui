@@ -113,7 +113,7 @@ where
                 true
             }
         })
-        .partition(|(_, (seq, _))| seq.is_some());
+        .partition(|(_, (is_sequenced, _))| *is_sequenced);
 
     active_authority
         .state
@@ -121,8 +121,8 @@ where
         .remove_pending_digests(indexes_to_delete)?;
 
     // Sort by earlier shared cert sequences
-    pending_sequenced.sort_by(|a, b| match (a.1 .0, b.1 .0) {
-        (Some(seq_a), Some(seq_b)) => seq_a.cmp(&seq_b),
+    pending_sequenced.sort_by(|a, b| match (a, b) {
+        ((seq_a, (true, _)), (seq_b, (true, _))) => seq_a.cmp(seq_b),
         _ => unreachable!(),
     });
 
@@ -131,7 +131,7 @@ where
     let sync_handle = active_authority.clone().node_sync_handle();
 
     // Execute certs that have a sequencing index associated with them serially.
-    for (idx, (seq, digest)) in pending_sequenced.iter() {
+    for (seq, (_, digest)) in pending_sequenced.iter() {
         let mut result_stream = sync_handle
             .handle_execution_request(epoch, std::iter::once(*digest))
             .await?;
@@ -142,7 +142,7 @@ where
                 active_authority
                     .state
                     .database
-                    .remove_pending_digests(vec![*idx])
+                    .remove_pending_digests(vec![*seq])
                     .tap_err(|err| {
                         error!(?seq, ?digest, "pending digest deletion failed: {}", err)
                     })?;

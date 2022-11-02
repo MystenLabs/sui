@@ -36,7 +36,7 @@ pub type AuthorityStore = SuiDataStore<AuthoritySignInfo>;
 pub type GatewayStore = SuiDataStore<EmptySignInfo>;
 
 pub type InternalSequenceNumber = u64;
-pub type PendingDigest = (Option<u64>, TransactionDigest);
+pub type PendingDigest = (bool /* is sequenced */, TransactionDigest);
 
 pub struct CertLockGuard(LockGuard);
 
@@ -236,11 +236,10 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         let batch = self.epoch_tables().pending_execution.batch();
         let batch = batch.insert_batch(
             &self.epoch_tables().pending_execution,
-            digests.iter().enumerate().map(|(num, digest)| {
-                let idx = (num as u64) + first_index;
-                let seq = if is_sequenced { Some(idx) } else { None };
-                (idx, (seq, *digest))
-            }),
+            digests
+                .iter()
+                .enumerate()
+                .map(|(num, digest)| ((num as u64) + first_index, (is_sequenced, *digest))),
         )?;
         batch.write()?;
 
