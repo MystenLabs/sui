@@ -49,7 +49,6 @@ importers:
       '@testing-library/jest-dom': ^5.16.2
       '@testing-library/react': ^13.3.0
       '@testing-library/user-event': ^14.4.3
-      '@types/bn.js': ^5.1.0
       '@types/node': ^16.11.24
       '@types/react': ^18.0.20
       '@types/react-dom': ^18.0.6
@@ -62,7 +61,6 @@ importers:
       autoprefixer: ^10.4.2
       axios: ^0.27.2
       bignumber.js: ^9.1.0
-      bn.js: ^5.2.0
       class-variance-authority: ^0.2.3
       clsx: ^1.2.1
       cypress: ^10.10.0
@@ -112,7 +110,6 @@ importers:
       '@visx/responsive': 2.10.0_react@18.2.0
       '@visx/tooltip': 2.10.0_biqbaboplfbrettd7655fr4n2y
       bignumber.js: 9.1.0
-      bn.js: 5.2.1
       class-variance-authority: 0.2.3_typescript@4.8.3
       clsx: 1.2.1
       framer-motion: 7.5.1_biqbaboplfbrettd7655fr4n2y
@@ -137,7 +134,6 @@ importers:
       '@testing-library/jest-dom': 5.16.5
       '@testing-library/react': 13.3.0_biqbaboplfbrettd7655fr4n2y
       '@testing-library/user-event': 14.4.3_wl4iynrlixafokvgqnhzlvigei
-      '@types/bn.js': 5.1.0
       '@types/node': 16.11.49
       '@types/react': 18.0.20
       '@types/react-dom': 18.0.6
