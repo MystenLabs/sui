@@ -8,6 +8,7 @@ use config::Committee;
 #[cfg(feature = "benchmark")]
 use std::convert::TryInto;
 use std::sync::Arc;
+use sui_metrics::spawn_monitored_task;
 use tokio::{
     sync::watch,
     task::JoinHandle,
@@ -59,7 +60,7 @@ impl BatchMaker {
         tx_quorum_waiter: Sender<Batch>,
         node_metrics: Arc<WorkerMetrics>,
     ) -> JoinHandle<()> {
-        tokio::spawn(async move {
+        spawn_monitored_task!(async move {
             Self {
                 committee,
                 batch_size,

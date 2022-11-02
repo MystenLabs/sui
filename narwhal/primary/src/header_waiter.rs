@@ -21,6 +21,7 @@ use std::{
 };
 use storage::CertificateStore;
 use store::Store;
+use sui_metrics::{monitored_future, spawn_monitored_task};
 use tokio::{
     sync::{oneshot, watch},
     task::JoinHandle,
@@ -107,7 +108,7 @@ impl HeaderWaiter {
         metrics: Arc<PrimaryMetrics>,
         primary_network: P2pNetwork,
     ) -> JoinHandle<()> {
-        tokio::spawn(async move {
+        spawn_monitored_task!(async move {
             Self {
                 name,
                 committee,
@@ -215,12 +216,13 @@ impl HeaderWaiter {
                             // its parents are in the store.
                             let (tx_cancel, rx_cancel) = oneshot::channel();
                             self.pending.insert(header_id, (round, tx_cancel));
-                            let fut = Self::wait_for_batches(
+                            let payload_store = self.payload_store.clone();
+                            let fut = monitored_future!(Self::wait_for_batches(
                                 requires_sync,
                                 synchronize_handles,
-                                self.payload_store.clone(),
+                                payload_store,
                                 header,
-                                rx_cancel);
+                                rx_cancel));
                             // pointer-size allocation, bounded by the # of blocks
                             // (may eventually go away, see rust RFC #1909)
                             waiting.push(Box::pin(fut));
@@ -244,7 +246,8 @@ impl HeaderWaiter {
                             let wait_for = missing.clone();
                             let (tx_cancel, rx_cancel) = oneshot::channel();
                             self.pending.insert(header_id, (round, tx_cancel));
-                            let fut = Self::wait_for_parents(wait_for, self.certificate_store.clone(), header, rx_cancel);
+                            let certificate_store = self.certificate_store.clone();
+                            let fut = monitored_future!(Self::wait_for_parents(wait_for, certificate_store, header, rx_cancel));
                             // pointer-size allocation, bounded by the # of blocks (may eventually go away, see rust RFC #1909)
                             waiting.push(Box::pin(fut));
 

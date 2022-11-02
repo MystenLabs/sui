@@ -4,6 +4,7 @@
 use axum::routing::post;
 use axum::{extract::Extension, http::StatusCode, routing::get, Json, Router};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use sui_metrics::spawn_monitored_task;
 use tokio::sync::watch;
 use tracing::info;
 use types::metered_channel::Sender;
@@ -39,7 +40,7 @@ pub fn start_admin_server(
     let shutdown_handle = handle.clone();
 
     // Spawn a task to shutdown server.
-    tokio::spawn(async move {
+    spawn_monitored_task!(async move {
         while (rx_reconfigure.changed().await).is_ok() {
             let message = rx_reconfigure.borrow().clone();
             if let ReconfigureNotification::Shutdown = message {
@@ -49,7 +50,7 @@ pub fn start_admin_server(
         }
     });
 
-    tokio::spawn(async move {
+    spawn_monitored_task!(async move {
         axum_server::bind(socket_address)
             .handle(shutdown_handle)
             .serve(router.into_make_service())

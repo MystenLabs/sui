@@ -10,6 +10,8 @@ use crate::{
 use tokio_stream::{Stream, StreamExt};
 
 use std::collections::{hash_map, BTreeSet, HashMap};
+use sui_metrics::monitored_future;
+use sui_metrics::spawn_monitored_task;
 use sui_storage::node_sync_store::NodeSyncStore;
 use sui_types::{
     base_types::{
@@ -321,9 +323,9 @@ where
                 );
 
                 return (
-                    tokio::spawn(async move {
+                    spawn_monitored_task!(monitored_future!(async move {
                         let _guard = state.receiver.lock().await;
-                    }),
+                    })),
                     sender,
                 );
             }
@@ -331,7 +333,7 @@ where
         };
 
         (
-            tokio::spawn(async move { state.handle_messages(&mut receiver).await }),
+            spawn_monitored_task!(monitored_future!(state.handle_messages(&mut receiver))),
             sender,
         )
     }
@@ -421,7 +423,7 @@ where
             // the semaphore in this context.
             let permit = limit.acquire_owned().await.unwrap();
 
-            tokio::spawn(async move {
+            spawn_monitored_task!(async move {
                 let res = timeout(
                     MAX_NODE_TASK_LIFETIME,
                     state.process_digest(epoch_id, sync_arg, permit),
@@ -883,7 +885,7 @@ where
             let node_sync_store = self.store();
             let req = req.clone();
             let metrics = self.active_authority.gossip_metrics.clone();
-            tokio::task::spawn(async move {
+            spawn_monitored_task!(async move {
                 let _ = pending_downloads
                     .notify(
                         &tx_digest,

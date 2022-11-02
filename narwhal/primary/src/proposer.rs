@@ -7,6 +7,7 @@ use crypto::{PublicKey, Signature};
 use fastcrypto::{hash::Hash as _, SignatureService};
 use std::{cmp::Ordering, sync::Arc};
 use storage::ProposerStore;
+use sui_metrics::spawn_monitored_task;
 use tokio::time::Instant;
 use tokio::{
     sync::watch,
@@ -86,7 +87,7 @@ impl Proposer {
         metrics: Arc<PrimaryMetrics>,
     ) -> JoinHandle<()> {
         let genesis = Certificate::genesis(&committee);
-        tokio::spawn(async move {
+        spawn_monitored_task!(async move {
             Self {
                 name,
                 committee,

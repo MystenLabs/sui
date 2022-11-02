@@ -5,6 +5,7 @@ use crate::{
     authority_active::gossip::GossipMetrics, authority_aggregator::AuthorityAggregator,
     authority_client::AuthorityAPI, safe_client::SafeClient,
 };
+use sui_metrics::monitored_future;
 use sui_storage::node_sync_store::NodeSyncStore;
 use sui_types::{
     base_types::{AuthorityName, EpochId, ExecutionDigests},
@@ -75,7 +76,7 @@ async fn follower_process<A, Handler>(
         let start_one_task = |name, handle, store| {
             let start_time = Instant::now();
             let client = aggregator.clone_client(name);
-            async move {
+            monitored_future!(async move {
                 let result = follow_one_peer(
                     handle,
                     store,
@@ -88,7 +89,7 @@ async fn follower_process<A, Handler>(
                 .await
                 .tap_err(|e| warn!(peer=?name, "follower task exited with error {}", e));
                 (result, start_time, name)
-            }
+            })
         };
 
         for (name, _) in aggregator.committee.members() {
@@ -128,10 +129,10 @@ async fn follower_process<A, Handler>(
 
                     info!(?peer, ?delay, "will restart task after delay");
 
-                    reconnects.push(async move {
+                    reconnects.push(monitored_future!(async move {
                         sleep(delay).await;
                         peer
-                    });
+                    }));
                 }
 
                 Some(reconnect) = reconnects.next() => {
@@ -196,10 +197,12 @@ where
     // Global timeout, we do not exceed this time in this task.
     let mut results = FuturesUnordered::new();
 
-    let result_block = |fut, seq, digests| async move {
-        fut.await?;
-        trace!(?peer, ?seq, ?digests, "digest handler finished");
-        Ok::<TxSequenceNumber, SuiError>(seq)
+    let result_block = |fut, seq, digests| {
+        monitored_future!(async move {
+            fut.await?;
+            trace!(?peer, ?seq, ?digests, "digest handler finished");
+            Ok::<TxSequenceNumber, SuiError>(seq)
+        })
     };
 
     // Using a macro to avoid duplicating code - was much too difficult to satisfy the borrow

@@ -7,6 +7,7 @@ use crypto::PublicKey;
 use network::{P2pNetwork, UnreliableNetwork};
 use storage::CertificateStore;
 use store::StoreError;
+use sui_metrics::spawn_monitored_task;
 use thiserror::Error;
 use tokio::{sync::watch, task::JoinHandle};
 use tracing::{error, info, instrument};
@@ -52,7 +53,7 @@ impl Helper {
         rx_helper_requests: Receiver<PrimaryMessage>,
         primary_network: P2pNetwork,
     ) -> JoinHandle<()> {
-        tokio::spawn(async move {
+        spawn_monitored_task!(async move {
             Self {
                 name,
                 committee,

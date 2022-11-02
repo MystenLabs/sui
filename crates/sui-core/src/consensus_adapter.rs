@@ -23,6 +23,7 @@ use std::{
     collections::{hash_map::DefaultHasher, HashMap},
     hash::{Hash, Hasher},
 };
+use sui_metrics::{monitored_future, spawn_monitored_task};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::messages_checkpoint::SignedCheckpointFragmentMessage;
 use sui_types::{
@@ -360,13 +361,11 @@ pub struct ConsensusListener {
 impl ConsensusListener {
     /// Spawn a new consensus adapter in a dedicated tokio task.
     pub fn spawn(rx_consensus_input: Receiver<ConsensusListenerMessage>) -> JoinHandle<()> {
-        tokio::spawn(
-            Self {
-                rx_consensus_input,
-                pending: HashMap::new(),
-            }
-            .run(),
-        )
+        spawn_monitored_task!(Self {
+            rx_consensus_input,
+            pending: HashMap::new(),
+        }
+        .run())
     }
 
     /// Hash serialized consensus transactions. We do not need specific cryptographic properties except
@@ -409,12 +408,12 @@ impl ConsensusListener {
                             list.push((id, replier));
 
                             // Register with the close notification.
-                            closed_notifications.push(async move {
+                            closed_notifications.push(monitored_future!(async move {
                                 // Wait for the channel to close
                                 _closer.closed().await;
                                 // Return he digest concerned
                                 (digest, id)
-                            });
+                            }));
                         },
                         ConsensusListenerMessage::Processed(serialized) => {
                             let digest = Self::hash_serialized_transaction(&serialized);
@@ -526,7 +525,7 @@ impl CheckpointConsensusAdapter {
 
     /// Spawn a `CheckpointConsensusAdapter` in a dedicated tokio task.
     pub fn spawn(mut self) -> JoinHandle<()> {
-        tokio::spawn(async move { self.run().await })
+        spawn_monitored_task!(self.run())
     }
 
     /// Submit a transaction to consensus.
@@ -592,7 +591,8 @@ impl CheckpointConsensusAdapter {
                         let deliver = (serialized, sequence_number);
                         let timeout_delay =
                             Duration::from_millis(latency_estimate) + self.retry_delay;
-                        let future = Self::waiter(waiter, timeout_delay, deliver);
+                        let future =
+                            monitored_future!(Self::waiter(waiter, timeout_delay, deliver));
                         waiting.push(future);
 
                         // Finally sent to consensus, after registering to avoid a race condition
