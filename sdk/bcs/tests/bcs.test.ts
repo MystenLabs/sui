@@ -3,14 +3,13 @@
 
 import { describe, it, expect } from 'vitest';
 import { BCS, fromB64, getSuiMoveConfig } from './../src/index';
-import { BN } from 'bn.js';
 
 describe('Move bcs', () => {
   it('should de/ser primitives: u8', () => {
     const bcs = new BCS(getSuiMoveConfig());
 
-    expect(bcs.de('u8', fromB64('AQ=='))).toEqual(new BN(1));
-    expect(bcs.de('u8', fromB64('AA=='))).toEqual(new BN(0));
+    expect(bcs.de('u8', fromB64('AQ=='))).toEqual(1);
+    expect(bcs.de('u8', fromB64('AA=='))).toEqual(0);
   });
 
   it('should ser/de u64', () => {
@@ -22,7 +21,7 @@ describe('Move bcs', () => {
 
     expect(set).toEqual(exp);
     expect(bcs.de('u64', exp, 'base64')).toEqual(
-      new BN('1311768467750121216')
+      1311768467750121216n
     );
   });
 
@@ -50,7 +49,7 @@ describe('Move bcs', () => {
     const rustBcs = 'gNGxBWAAAAAOQmlnIFdhbGxldCBHdXkA';
     const expected = {
       owner: 'Big Wallet Guy',
-      value: new BN('412412400000', 10),
+      value: 412412400000n,
       is_locked: false,
     };
 

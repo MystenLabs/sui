@@ -11,9 +11,19 @@
  * @property {BcsReader}
  */
 
-import * as BN from 'bn.js';
-import { toB64, fromB64 } from './b64';
-import { toHEX, fromHEX } from './hex';
+import { toB64, fromB64 } from "./b64";
+import { toHEX, fromHEX } from "./hex";
+
+function toLittleEndian(bigint: bigint, size: number) {
+  let result = new Uint8Array(size);
+  let i = 0;
+  while (bigint > 0) {
+    result[i] = Number(bigint % BigInt(256));
+    bigint = bigint / BigInt(256);
+    i += 1;
+  }
+  return result;
+}
 
 // Re-export all encoding dependencies.
 export { toB64, fromB64, fromHEX, toHEX };
@@ -72,61 +82,62 @@ export class BcsReader {
    * Read U8 value from the buffer and shift cursor by 1.
    * @returns
    */
-  read8(): BN {
+  read8(): number {
     let value = this.dataView.getUint8(this.bytePosition);
     this.shift(1);
-    return new BN.BN(value, 10);
+    return value;
   }
   /**
    * Read U16 value from the buffer and shift cursor by 2.
    * @returns
    */
-  read16(): BN {
+  read16(): number {
     let value = this.dataView.getUint16(this.bytePosition, true);
     this.shift(2);
-    return new BN.BN(value, 10);
+    return value;
   }
   /**
    * Read U32 value from the buffer and shift cursor by 4.
    * @returns
    */
-  read32(): BN {
+  read32(): number {
     let value = this.dataView.getUint32(this.bytePosition, true);
     this.shift(4);
-    return new BN.BN(value, 10);
+    return value;
   }
   /**
    * Read U64 value from the buffer and shift cursor by 8.
    * @returns
    */
-  read64(): BN {
+  read64(): bigint {
     let value1 = this.read32();
     let value2 = this.read32();
-    let result = value2.toString(16) + value1.toString(16).padStart(8, '0');
 
-    return new BN.BN(result, 16);
+    let result = value2.toString(16) + value1.toString(16).padStart(8, "0");
+
+    return BigInt("0x" + result);
   }
   /**
    * Read U128 value from the buffer and shift cursor by 16.
    * @returns
    */
-  read128(): BN {
+  read128(): bigint {
     let value1 = this.read64();
     let value2 = this.read64();
-    let result = value2.toString(16) + value1.toString(16).padStart(8, '0');
+    let result = value2.toString(16) + value1.toString(16).padStart(8, "0");
 
-    return new BN.BN(result, 16);
+    return BigInt("0x" + result);
   }
   /**
    * Read U128 value from the buffer and shift cursor by 32.
    * @returns
    */
-  read256(): BN {
+  read256(): bigint {
     let value1 = this.read128();
     let value2 = this.read128();
-    let result = value2.toString(16) + value1.toString(16).padStart(16, '0');
+    let result = value2.toString(16) + value1.toString(16).padStart(16, "0");
 
-    return new BN.BN(result, 16);
+    return BigInt("0x" + result);
   }
   /**
    * Read `num` number of bytes from the buffer and shift cursor by `num`.
@@ -196,21 +207,6 @@ export class BcsWriter {
   }
 
   /**
-   * Unify argument types by converting them to BN.
-   */
-  static toBN(number: number | BN | bigint | string): BN {
-    switch (typeof number) {
-      case 'boolean':
-        number = +number;
-        return new BN.BN(number.toString());
-      case 'bigint':
-        return new BN.BN(number.toString());
-      default:
-        return new BN.BN(number);
-    }
-  }
-
-  /**
    * Shift current cursor position by `bytes`.
    *
    * @param {Number} bytes Number of bytes to
@@ -225,8 +221,8 @@ export class BcsWriter {
    * @param {Number} value Value to write.
    * @returns {this}
    */
-  write8(value: number | bigint | BN): this {
-    this.dataView.setUint8(this.bytePosition, +BcsWriter.toBN(value));
+  write8(value: number | bigint): this {
+    this.dataView.setUint8(this.bytePosition, Number(value));
     return this.shift(1);
   }
   /**
@@ -234,8 +230,8 @@ export class BcsWriter {
    * @param {Number} value Value to write.
    * @returns {this}
    */
-  write16(value: number | bigint | BN): this {
-    this.dataView.setUint16(this.bytePosition, +BcsWriter.toBN(value), true);
+  write16(value: number | bigint): this {
+    this.dataView.setUint16(this.bytePosition, Number(value), true);
     return this.shift(2);
   }
   /**
@@ -243,8 +239,8 @@ export class BcsWriter {
    * @param {Number} value Value to write.
    * @returns {this}
    */
-  write32(value: number | bigint | BN): this {
-    this.dataView.setUint32(this.bytePosition, +BcsWriter.toBN(value), true);
+  write32(value: number | bigint): this {
+    this.dataView.setUint32(this.bytePosition, Number(value), true);
     return this.shift(4);
   }
   /**
@@ -252,38 +248,30 @@ export class BcsWriter {
    * @param {bigint} value Value to write.
    * @returns {this}
    */
-  write64(value: bigint | BN): this {
-    BcsWriter.toBN(value)
-      .toArray('le', 8)
-      .forEach(el => this.write8(el));
+  write64(value: number | bigint): this {
+    toLittleEndian(BigInt(value), 8).forEach((el) => this.write8(el));
 
     return this;
   }
   /**
    * Write a U128 value into a buffer and shift cursor position by 16.
    *
-   * @unimplemented
    * @param {bigint} value Value to write.
    * @returns {this}
    */
-  write128(value: bigint | BN): this {
-    BcsWriter.toBN(value)
-      .toArray('le', 16)
-      .forEach(el => this.write8(el));
+  write128(value: number | bigint): this {
+    toLittleEndian(BigInt(value), 16).forEach((el) => this.write8(el));
 
     return this;
   }
   /**
    * Write a U256 value into a buffer and shift cursor position by 16.
    *
-   * @unimplemented
    * @param {bigint} value Value to write.
    * @returns {this}
    */
-  write256(value: bigint | BN): this {
-    BcsWriter.toBN(value)
-      .toArray('le', 32)
-      .forEach(el => this.write8(el));
+  write256(value: number | bigint): this {
+    toLittleEndian(BigInt(value), 32).forEach((el) => this.write8(el));
 
     return this;
   }
@@ -294,7 +282,7 @@ export class BcsWriter {
    * @returns {this}
    */
   writeULEB(value: number): this {
-    ulebEncode(value).forEach(el => this.write8(el));
+    ulebEncode(value).forEach((el) => this.write8(el));
     return this;
   }
   /**
@@ -365,9 +353,7 @@ function ulebEncode(num: number): number[] {
 
 // Helper utility: decode ULEB as an array of numbers.
 // Original code is taken from: https://www.npmjs.com/package/uleb128 (no longer exists)
-function ulebDecode(
-  arr: number[] | Uint8Array
-): {
+function ulebDecode(arr: number[] | Uint8Array): {
   value: number;
   length: number;
 } {
@@ -443,7 +429,7 @@ export type BcsConfig = {
    * Custom encoding for address. Supported values are
    * either 'hex' or 'base64'.
    */
-  addressEncoding?: 'hex' | 'base64';
+  addressEncoding?: "hex" | "base64";
   /**
    * Opening and closing symbol for type parameters. Can be
    * any pair of symbols (eg `['(', ')']`); default value follows
@@ -456,9 +442,9 @@ export type BcsConfig = {
    * Optional.
    */
   types?: {
-    structs?: { [key: string]: StructTypeDefinition },
-    enums?: { [key: string]: EnumTypeDefinition }
-  },
+    structs?: { [key: string]: StructTypeDefinition };
+    enums?: { [key: string]: EnumTypeDefinition };
+  };
   /**
    * Whether to auto-register primitive types on launch.
    */
@@ -470,16 +456,16 @@ export type BcsConfig = {
  */
 export class BCS {
   // Prefefined types constants
-  static readonly U8: string = 'u8';
-  static readonly U16: string = 'u16';
-  static readonly U32: string = 'u32';
-  static readonly U64: string = 'u64';
-  static readonly U128: string = 'u128';
-  static readonly U256: string = 'u256';
-  static readonly BOOL: string = 'bool';
-  static readonly VECTOR: string = 'vector';
-  static readonly ADDRESS: string = 'address';
-  static readonly STRING: string = 'string';
+  static readonly U8: string = "u8";
+  static readonly U16: string = "u16";
+  static readonly U32: string = "u32";
+  static readonly U64: string = "u64";
+  static readonly U128: string = "u128";
+  static readonly U256: string = "u256";
+  static readonly BOOL: string = "bool";
+  static readonly VECTOR: string = "vector";
+  static readonly ADDRESS: string = "address";
+  static readonly STRING: string = "string";
 
   /**
    * Map of kind `TypeName => TypeInterface`. Holds all
@@ -509,7 +495,11 @@ export class BCS {
     this.schema = schema;
 
     // Register address type under key 'address'.
-    this.registerAddressType(BCS.ADDRESS, schema.addressLength, schema.addressEncoding);
+    this.registerAddressType(
+      BCS.ADDRESS,
+      schema.addressLength,
+      schema.addressEncoding
+    );
     this.registerVectorType(schema.vectorType);
 
     // Register struct types if they were passed.
@@ -566,16 +556,12 @@ export class BCS {
    * @param encoding Optional - encoding to use if data is of type String
    * @return Deserialized data.
    */
-  public de(
-    type: string,
-    data: Uint8Array | string,
-    encoding?: string
-  ): any {
-    if (typeof data == 'string') {
+  public de(type: string, data: Uint8Array | string, encoding?: string): any {
+    if (typeof data == "string") {
       if (encoding) {
         data = decodeStr(data, encoding);
       } else {
-        throw new Error('To pass a string to `bcs.de`, specify encoding');
+        throw new Error("To pass a string to `bcs.de`, specify encoding");
       }
     }
 
@@ -659,25 +645,25 @@ export class BCS {
   public registerAddressType(
     name: string,
     length: number,
-    encoding: string | void = 'hex'
+    encoding: string | void = "hex"
   ): BCS {
     switch (encoding) {
-      case 'base64':
+      case "base64":
         return this.registerType(
           name,
           (writer, data: string) =>
             fromB64(data).reduce((writer, el) => writer.write8(el), writer),
-          reader => toB64(reader.readBytes(length))
+          (reader) => toB64(reader.readBytes(length))
         );
-      case 'hex':
+      case "hex":
         return this.registerType(
           name,
           (writer, data: string) =>
             fromHEX(data).reduce((writer, el) => writer.write8(el), writer),
-          reader => toHEX(reader.readBytes(length))
+          (reader) => toHEX(reader.readBytes(length))
         );
       default:
-        throw new Error('Unsupported encoding! Use either hex or base64');
+        throw new Error("Unsupported encoding! Use either hex or base64");
     }
   }
 
@@ -693,13 +679,10 @@ export class BCS {
    * @param elementType Optional name of the inner type of the vector
    * @return Returns self for chaining.
    */
-  private registerVectorType(
-    name: string,
-    elementType?: string
-  ): BCS {
+  private registerVectorType(name: string, elementType?: string): BCS {
     let { typeName, typeParams } = this.parseTypeName(name);
     if (typeParams.length > 1) {
-      throw new Error('Vector can have only one type parameter; got ' + name);
+      throw new Error("Vector can have only one type parameter; got " + name);
     }
 
     return this.registerType(
@@ -710,19 +693,30 @@ export class BCS {
 
           if (!!vectorType) {
             let { typeName, typeParams } = this.parseTypeName(vectorType);
-            return this.getTypeInterface(elementType || typeName)._encodeRaw(writer, el, typeParams);
+            return this.getTypeInterface(elementType || typeName)._encodeRaw(
+              writer,
+              el,
+              typeParams
+            );
           } else {
-            throw new Error(`Incorrect number of type parameters passed to vector '${typeName}'`);
+            throw new Error(
+              `Incorrect number of type parameters passed to vector '${typeName}'`
+            );
           }
         }),
       (reader: BcsReader, typeParams) =>
-        reader.readVec(reader => {
+        reader.readVec((reader) => {
           let vectorType = elementType || typeParams[0];
           if (!!vectorType) {
             let { typeName, typeParams } = this.parseTypeName(vectorType);
-            return this.getTypeInterface(elementType || typeName)._decodeRaw(reader, typeParams);
+            return this.getTypeInterface(elementType || typeName)._decodeRaw(
+              reader,
+              typeParams
+            );
           } else {
-            throw new Error(`Incorrect number of type parameters passed to vector '${typeName}'`);
+            throw new Error(
+              `Incorrect number of type parameters passed to vector '${typeName}'`
+            );
           }
         })
     );
@@ -772,10 +766,7 @@ export class BCS {
    * @param fields Fields of the struct. Must be in the correct order.
    * @return Returns BCS for chaining.
    */
-  public registerStructType(
-    name: string,
-    fields: StructTypeDefinition
-  ): BCS {
+  public registerStructType(name: string, fields: StructTypeDefinition): BCS {
     let struct = Object.freeze(fields); // Make sure the order doesn't get changed
 
     // IMPORTANT: we need to store canonical order of fields for each registered
@@ -799,11 +790,16 @@ export class BCS {
         for (let key of canonicalOrder) {
           if (key in data) {
             let paramIndex = structTypeParams.indexOf(struct[key]);
-            let typeOrParam = (paramIndex === -1) ? struct[key] : typeParams[paramIndex];
+            let typeOrParam =
+              paramIndex === -1 ? struct[key] : typeParams[paramIndex];
             {
               let { typeName, typeParams } = this.parseTypeName(typeOrParam);
-              this.getTypeInterface(typeName)._encodeRaw(writer, data[key], typeParams);
-            };
+              this.getTypeInterface(typeName)._encodeRaw(
+                writer,
+                data[key],
+                typeParams
+              );
+            }
           } else {
             throw new Error(
               `Struct ${name} requires field ${key}:${struct[key]}`
@@ -816,11 +812,15 @@ export class BCS {
         let result: { [key: string]: any } = {};
         for (let key of canonicalOrder) {
           let paramIndex = structTypeParams.indexOf(struct[key]);
-          let typeOrParam = (paramIndex === -1) ? struct[key] : typeParams[paramIndex];
+          let typeOrParam =
+            paramIndex === -1 ? struct[key] : typeParams[paramIndex];
           {
             let { typeName, typeParams } = this.parseTypeName(typeOrParam);
-            result[key] = this.getTypeInterface(typeName)._decodeRaw(reader, typeParams);
-          };
+            result[key] = this.getTypeInterface(typeName)._decodeRaw(
+              reader,
+              typeParams
+            );
+          }
         }
         return result;
       }
@@ -849,17 +849,15 @@ export class BCS {
    * @param name
    * @param variants
    */
-  public registerEnumType(
-    name: string,
-    variants: EnumTypeDefinition
-  ): BCS {
+  public registerEnumType(name: string, variants: EnumTypeDefinition): BCS {
     let struct = Object.freeze(variants); // Make sure the order doesn't get changed
 
     // IMPORTANT: enum is an ordered type and we have to preserve ordering in BCS
     let canonicalOrder = Object.keys(struct);
 
     // Parse type parameters in advance to know the index of each generic parameter.
-    let { typeName, typeParams: canonicalTypeParams } = this.parseTypeName(name);
+    let { typeName, typeParams: canonicalTypeParams } =
+      this.parseTypeName(name);
 
     return this.registerType(
       typeName,
@@ -890,12 +888,17 @@ export class BCS {
         }
 
         let paramIndex = canonicalTypeParams.indexOf(invariantType);
-        let typeOrParam = (paramIndex === -1) ? invariantType : typeParams[paramIndex];
+        let typeOrParam =
+          paramIndex === -1 ? invariantType : typeParams[paramIndex];
 
         {
           let { typeName, typeParams } = this.parseTypeName(typeOrParam);
-          return this.getTypeInterface(typeName)._encodeRaw(writer, data[key], typeParams);
-        };
+          return this.getTypeInterface(typeName)._encodeRaw(
+            writer,
+            data[key],
+            typeParams
+          );
+        }
       },
       (reader: BcsReader, typeParams) => {
         let orderByte = reader.readULEB();
@@ -914,12 +917,18 @@ export class BCS {
         }
 
         let paramIndex = canonicalTypeParams.indexOf(invariantType);
-        let typeOrParam = (paramIndex === -1) ? invariantType : typeParams[paramIndex];
+        let typeOrParam =
+          paramIndex === -1 ? invariantType : typeParams[paramIndex];
 
         {
           let { typeName, typeParams } = this.parseTypeName(typeOrParam);
-          return { [invariant]: this.getTypeInterface(typeName)._decodeRaw(reader, typeParams) };
-        };
+          return {
+            [invariant]: this.getTypeInterface(typeName)._decodeRaw(
+              reader,
+              typeParams
+            ),
+          };
+        }
       }
     );
   }
@@ -930,7 +939,7 @@ export class BCS {
    * @param type
    * @returns {TypeInterface}
    */
-   public getTypeInterface(type: string): TypeInterface {
+  public getTypeInterface(type: string): TypeInterface {
     let typeInterface = this.types.get(type);
     if (typeInterface === undefined) {
       throw new Error(`Type ${type} is not registered`);
@@ -949,8 +958,11 @@ export class BCS {
    * @param name Name of the type to process
    * @returns Object with typeName and typeParams listed as Array
    */
-  public parseTypeName(name: string): { typeName: string, typeParams: string[] } {
-    let [left, right] = this.schema.genericSeparators || ['<', '>'];
+  public parseTypeName(name: string): {
+    typeName: string;
+    typeParams: string[];
+  } {
+    let [left, right] = this.schema.genericSeparators || ["<", ">"];
 
     let l_bound = name.indexOf(left);
     let r_bound = Array.from(name).reverse().indexOf(right);
@@ -968,7 +980,7 @@ export class BCS {
     let typeName = name.slice(0, l_bound);
     let typeParams = name
       .slice(l_bound + 1, name.length - r_bound - 1)
-      .split(',')
+      .split(",")
       .map((e) => e.trim());
 
     return { typeName, typeParams };
@@ -984,13 +996,13 @@ export class BCS {
  */
 export function encodeStr(data: Uint8Array, encoding: string): string {
   switch (encoding) {
-    case 'base64':
+    case "base64":
       return toB64(data);
-    case 'hex':
+    case "hex":
       return toHEX(data);
     default:
       throw new Error(
-        'Unsupported encoding, supported values are: base64, hex'
+        "Unsupported encoding, supported values are: base64, hex"
       );
   }
 }
@@ -1004,13 +1016,13 @@ export function encodeStr(data: Uint8Array, encoding: string): string {
  */
 export function decodeStr(data: string, encoding: string): Uint8Array {
   switch (encoding) {
-    case 'base64':
+    case "base64":
       return fromB64(data);
-    case 'hex':
+    case "hex":
       return fromHEX(data);
     default:
       throw new Error(
-        'Unsupported encoding, supported values are: base64, hex'
+        "Unsupported encoding, supported values are: base64, hex"
       );
   }
 }
@@ -1025,48 +1037,48 @@ export function registerPrimitives(bcs: BCS): void {
     BCS.U8,
     (writer: BcsWriter, data) => writer.write8(data),
     (reader: BcsReader) => reader.read8(),
-    u8 => u8 < 256
+    (u8) => u8 < 256
   );
 
   bcs.registerType(
     BCS.U16,
     (writer: BcsWriter, data) => writer.write16(data),
     (reader: BcsReader) => reader.read16(),
-    u16 => u16 < 65536
+    (u16) => u16 < 65536
   );
 
   bcs.registerType(
     BCS.U32,
     (writer: BcsWriter, data) => writer.write32(data),
     (reader: BcsReader) => reader.read32(),
-    u32 => u32 <= 4294967296
+    (u32) => u32 <= 4294967296
   );
 
   bcs.registerType(
     BCS.U64,
     (writer: BcsWriter, data) => writer.write64(data),
     (reader: BcsReader) => reader.read64(),
-    _u64 => true
+    (_u64) => true
   );
 
   bcs.registerType(
     BCS.U128,
-    (writer: BcsWriter, data: BN | bigint) => writer.write128(data),
+    (writer: BcsWriter, data: bigint) => writer.write128(data),
     (reader: BcsReader) => reader.read128(),
-    _u128 => true
+    (_u128) => true
   );
 
   bcs.registerType(
     BCS.U256,
     (writer: BcsWriter, data) => writer.write256(data),
     (reader: BcsReader) => reader.read256(),
-    _u256 => true
+    (_u256) => true
   );
 
   bcs.registerType(
     BCS.BOOL,
     (writer: BcsWriter, data) => writer.write8(data),
-    (reader: BcsReader) => reader.read8().toString(10) === '1',
+    (reader: BcsReader) => reader.read8().toString(10) === "1",
     (_bool: boolean) => true
   );
 
@@ -1078,9 +1090,9 @@ export function registerPrimitives(bcs: BCS): void {
       ),
     (reader: BcsReader) => {
       return reader
-        .readVec(reader => reader.read8())
-        .map(el => String.fromCharCode(el))
-        .join('');
+        .readVec((reader) => reader.read8())
+        .map((el: bigint) => String.fromCharCode(Number(el)))
+        .join("");
     },
     (_str: string) => true
   );
@@ -1088,18 +1100,18 @@ export function registerPrimitives(bcs: BCS): void {
 
 export function getRustConfig(): BcsConfig {
   return {
-    genericSeparators: ['<', '>'],
-    vectorType: 'Vec',
+    genericSeparators: ["<", ">"],
+    vectorType: "Vec",
     addressLength: 20,
-    addressEncoding: 'hex',
+    addressEncoding: "hex",
   };
 }
 
 export function getSuiMoveConfig(): BcsConfig {
   return {
-    genericSeparators: ['<', '>'],
-    vectorType: 'vector',
+    genericSeparators: ["<", ">"],
+    vectorType: "vector",
     addressLength: 20,
-    addressEncoding: 'hex',
-  }
+    addressEncoding: "hex",
+  };
 }
