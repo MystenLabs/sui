@@ -257,7 +257,7 @@ fn check_one_object(
                 SuiError::MovePackageAsObject { object_id }
             );
             fp_ensure!(
-                sequence_number < SequenceNumber::MAX_NOT_WRAPPED_AND_DELETED,
+                sequence_number < SequenceNumber::MAX,
                 SuiError::InvalidSequenceNumber
             );
 

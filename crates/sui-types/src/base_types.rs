@@ -642,10 +642,6 @@ impl SequenceNumber {
     pub const MIN: SequenceNumber = SequenceNumber(u64::MIN);
     pub const MAX: SequenceNumber = SequenceNumber(0x7fff_ffff_ffff_ffff);
 
-    // Wrapped objects that are then deleted will be set to MAX, so cap sequence
-    // numbers for other objects at MAX - 1.
-    pub const MAX_NOT_WRAPPED_AND_DELETED: SequenceNumber = SequenceNumber(Self::MAX.0 - 1);
-
     pub fn new() -> Self {
         SequenceNumber(0)
     }
