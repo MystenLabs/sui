@@ -63,18 +63,18 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                     onChange={setSelectedModule}
                     nullable
                 >
-                    <div className="border border-sui-grey-50 border-solid rounded-[6px] h-[34px] shadow-sm placeholder-sui-grey-65 pl-3 w-full lg:w-[11vw] flex my-[10px]">
+                    <div className="border border-sui-grey-50 border-solid rounded-[6px] h-[34px] shadow-sm placeholder-sui-grey-65 pl-3 w-full flex my-[10px] justify-between">
                         <Combobox.Input
                             onChange={(event) => setQuery(event.target.value)}
                             displayValue={() => ''}
                             placeholder="Search"
-                            className="border-none w-[80%]"
+                            className="border-none w-full"
                         />
                         <button
                             onClick={submitSearch}
-                            className="bg-inherit border-none"
+                            className="bg-inherit border-none pr-3"
                         >
-                            <SearchIcon className="fill-sui-steel" />
+                            <SearchIcon className="fill-sui-steel cursor-pointer" />
                         </button>
                     </div>
                     <Combobox.Options
