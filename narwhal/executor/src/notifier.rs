@@ -57,6 +57,15 @@ impl<State: ExecutionState + Send + Sync + 'static> Notifier<State> {
                     )
                     .await;
             }
+            // this is temporary
+            // we will get explicit signal from consensus on where is commit boundary in the future
+            if index.batch_index + 1
+                == index.consensus_output.certificate.header.payload.len() as u64
+            {
+                self.callback
+                    .notify_commit_boundary(&index.consensus_output)
+                    .await;
+            }
             self.metrics
                 .batch_execution_latency
                 .observe(batch.metadata.created_at.elapsed().as_secs_f64());
