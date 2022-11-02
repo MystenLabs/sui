@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Combobox } from '@headlessui/react';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import ModuleView from './ModuleView';
@@ -26,10 +26,7 @@ const initialSelectModule = (searchParams, modulenames: string[]) => {
 };
 
 function PkgModuleViewWrapper({ id, modules }: Props) {
-    const modulenames = useMemo(
-        () => modules.map(([name], idx) => name),
-        [modules]
-    );
+    const modulenames = modules.map(([name], idx) => name);
     const [searchParams, setSearchParams] = useSearchParams();
     const [query, setQuery] = useState('');
     const [selectedModule, setSelectedModule] = useState(
