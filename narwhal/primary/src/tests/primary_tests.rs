@@ -380,9 +380,9 @@ async fn test_process_payload_availability_success() {
             .unwrap();
 
         let certificate = fixture.certificate(&header);
-        let id = certificate.clone().digest();
+        let digest = certificate.clone().digest();
 
-        certificates.insert(id, certificate.clone());
+        certificates.insert(digest, certificate.clone());
 
         // We want to simulate the scenario of both having some certificates
         // found and some non found. Store only the half. The other half
@@ -395,13 +395,13 @@ async fn test_process_payload_availability_success() {
                 payload_store.async_write(payload, 1).await;
             }
         } else {
-            missing_certificates.insert(id);
+            missing_certificates.insert(digest);
         }
     }
 
     // WHEN requesting the payload availability for all the certificates
     let request = anemo::Request::new(PayloadAvailabilityRequest {
-        certificate_ids: certificates.keys().copied().collect(),
+        certificate_digests: certificates.keys().copied().collect(),
     });
     let response = handler.get_payload_availability(request).await.unwrap();
     let result_digests: HashSet<CertificateDigest> = response
@@ -443,23 +443,28 @@ async fn test_process_payload_availability_when_failures() {
         None,
         &[
             test_utils::CERTIFICATES_CF,
-            test_utils::CERTIFICATE_ID_BY_ROUND_CF,
-            test_utils::CERTIFICATE_ID_BY_ORIGIN_CF,
+            test_utils::CERTIFICATE_DIGEST_BY_ROUND_CF,
+            test_utils::CERTIFICATE_DIGEST_BY_ORIGIN_CF,
             test_utils::PAYLOAD_CF,
         ],
     )
     .expect("Failed creating database");
 
-    let (certificate_map, certificate_id_by_round_map, certificate_id_by_origin_map, payload_map) = store::reopen!(&rocksdb,
+    let (
+        certificate_map,
+        certificate_digest_by_round_map,
+        certificate_digest_by_origin_map,
+        payload_map,
+    ) = store::reopen!(&rocksdb,
         test_utils::CERTIFICATES_CF;<CertificateDigest, Certificate>,
-        test_utils::CERTIFICATE_ID_BY_ROUND_CF;<(Round, PublicKey), CertificateDigest>,
-        test_utils::CERTIFICATE_ID_BY_ORIGIN_CF;<(PublicKey, Round), CertificateDigest>,
+        test_utils::CERTIFICATE_DIGEST_BY_ROUND_CF;<(Round, PublicKey), CertificateDigest>,
+        test_utils::CERTIFICATE_DIGEST_BY_ORIGIN_CF;<(PublicKey, Round), CertificateDigest>,
         test_utils::PAYLOAD_CF;<(BatchDigest, WorkerId), PayloadToken>);
 
     let certificate_store = CertificateStore::new(
         certificate_map,
-        certificate_id_by_round_map,
-        certificate_id_by_origin_map,
+        certificate_digest_by_round_map,
+        certificate_digest_by_origin_map,
     );
     let payload_store: Store<(BatchDigest, WorkerId), PayloadToken> = Store::new(payload_map);
 
@@ -478,7 +483,7 @@ async fn test_process_payload_availability_when_failures() {
     };
 
     // AND some mock certificates
-    let mut certificate_ids = Vec::new();
+    let mut certificate_digests = Vec::new();
     for _ in 0..10 {
         let header = author
             .header_builder(&committee)
@@ -487,15 +492,15 @@ async fn test_process_payload_availability_when_failures() {
             .unwrap();
 
         let certificate = fixture.certificate(&header);
-        let id = certificate.clone().digest();
+        let digest = certificate.clone().digest();
 
         // In order to test an error scenario that is coming from the data store,
-        // we are going to store for the provided certificate ids some unexpected
+        // we are going to store for the provided certificate digests some unexpected
         // payload in order to blow up the deserialisation.
         let serialised_key = bincode::DefaultOptions::new()
             .with_big_endian()
             .with_fixint_encoding()
-            .serialize(&id.borrow())
+            .serialize(&digest.borrow())
             .expect("Couldn't serialise key");
 
         // Just serialise the "false" value
@@ -511,11 +516,13 @@ async fn test_process_payload_availability_when_failures() {
             )
             .expect("Couldn't insert value");
 
-        certificate_ids.push(id);
+        certificate_digests.push(digest);
     }
 
     // WHEN requesting the payload availability for all the certificates
-    let request = anemo::Request::new(PayloadAvailabilityRequest { certificate_ids });
+    let request = anemo::Request::new(PayloadAvailabilityRequest {
+        certificate_digests,
+    });
     let result = handler.get_payload_availability(request).await;
     assert!(result.is_err(), "expected error reading certificates");
 }

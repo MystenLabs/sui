@@ -152,7 +152,7 @@ pub struct Header {
     pub payload: IndexMap<BatchDigest, WorkerId>,
     pub parents: BTreeSet<CertificateDigest>,
     #[serde(skip)]
-    id: OnceCell<HeaderDigest>,
+    digest: OnceCell<HeaderDigest>,
     pub signature: Signature,
     pub metadata: Metadata,
 }
@@ -168,15 +168,15 @@ impl HeaderBuilder {
             epoch: self.epoch.unwrap(),
             payload: self.payload.unwrap(),
             parents: self.parents.unwrap(),
-            id: OnceCell::default(),
+            digest: OnceCell::default(),
             signature: Signature::default(),
             metadata: Metadata::default(),
         };
-        h.id.set(h.digest()).unwrap();
+        h.digest.set(Hash::digest(&h)).unwrap();
 
         Ok(Header {
             signature: signer
-                .try_sign(Digest::from(h.digest()).as_ref())
+                .try_sign(Digest::from(Hash::digest(&h)).as_ref())
                 .map_err(|_| fastcrypto::error::FastCryptoError::GeneralError)?,
             ..h
         })
@@ -210,21 +210,21 @@ impl Header {
             epoch,
             payload,
             parents,
-            id: OnceCell::default(),
+            digest: OnceCell::default(),
             signature: Signature::default(),
             metadata: Metadata::default(),
         };
-        let id = header.digest();
-        header.id.set(id).unwrap();
-        let signature = signature_service.request_signature(id.into()).await;
+        let digest = Hash::digest(&header);
+        header.digest.set(digest).unwrap();
+        let signature = signature_service.request_signature(digest.into()).await;
         Self {
             signature,
             ..header
         }
     }
 
-    pub fn id(&self) -> HeaderDigest {
-        *self.id.get_or_init(|| self.digest())
+    pub fn digest(&self) -> HeaderDigest {
+        *self.digest.get_or_init(|| Hash::digest(self))
     }
 
     pub fn verify(&self, committee: &Committee, worker_cache: SharedWorkerCache) -> DagResult<()> {
@@ -237,8 +237,11 @@ impl Header {
             }
         );
 
-        // Ensure the header id is well formed.
-        ensure!(self.digest() == self.id(), DagError::InvalidHeaderId);
+        // Ensure the header digest is well formed.
+        ensure!(
+            Hash::digest(self) == self.digest(),
+            DagError::InvalidHeaderDigest
+        );
 
         // Ensure the authority has voting rights.
         let voting_rights = committee.stake(&self.author);
@@ -252,13 +255,13 @@ impl Header {
             worker_cache
                 .load()
                 .worker(&self.author, worker_id)
-                .map_err(|_| DagError::MalformedHeader(self.id()))?;
+                .map_err(|_| DagError::MalformedHeader(self.digest()))?;
         }
 
         // Check the signature.
-        let id_digest: Digest<{ crypto::DIGEST_LENGTH }> = Digest::from(self.id());
+        let digest: Digest<{ crypto::DIGEST_LENGTH }> = Digest::from(self.digest());
         self.author
-            .verify(id_digest.as_ref(), &self.signature)
+            .verify(digest.as_ref(), &self.signature)
             .map_err(DagError::from)
     }
 }
@@ -321,7 +324,7 @@ impl fmt::Debug for Header {
         write!(
             f,
             "{}: B{}({}, E{}, {}B)",
-            self.id.get().cloned().unwrap_or_default(),
+            self.digest.get().cloned().unwrap_or_default(),
             self.round,
             self.author.encode_base64(),
             self.epoch,
@@ -341,13 +344,13 @@ impl fmt::Display for Header {
 
 impl PartialEq for Header {
     fn eq(&self, other: &Self) -> bool {
-        self.id() == other.id()
+        self.digest() == other.digest()
     }
 }
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Vote {
-    pub id: HeaderDigest,
+    pub digest: HeaderDigest,
     pub round: Round,
     pub epoch: Epoch,
     pub origin: PublicKey,
@@ -362,7 +365,7 @@ impl Vote {
         signature_service: &mut SignatureService<Signature, { crypto::DIGEST_LENGTH }>,
     ) -> Self {
         let vote = Self {
-            id: header.id(),
+            digest: header.digest(),
             round: header.round,
             epoch: header.epoch,
             origin: header.author.clone(),
@@ -380,7 +383,7 @@ impl Vote {
         S: Signer<Signature>,
     {
         let vote = Self {
-            id: header.id(),
+            digest: header.digest(),
             round: header.round,
             epoch: header.epoch,
             origin: header.author.clone(),
@@ -445,7 +448,7 @@ impl Hash<{ crypto::DIGEST_LENGTH }> for Vote {
 
     fn digest(&self) -> VoteDigest {
         let mut hasher = crypto::DefaultHashFunction::default();
-        hasher.update(Digest::from(self.id));
+        hasher.update(Digest::from(self.digest));
         hasher.update(self.round.to_le_bytes());
         hasher.update(self.epoch.to_le_bytes());
         hasher.update(&self.origin);
@@ -461,7 +464,7 @@ impl fmt::Debug for Vote {
             self.digest(),
             self.round,
             self.author.encode_base64(),
-            self.id,
+            self.digest,
             self.epoch
         )
     }
@@ -714,7 +717,7 @@ impl Hash<{ crypto::DIGEST_LENGTH }> for Certificate {
 
     fn digest(&self) -> CertificateDigest {
         let mut hasher = crypto::DefaultHashFunction::new();
-        hasher.update(Digest::from(self.header.id()));
+        hasher.update(Digest::from(self.header.digest()));
         hasher.update(self.round().to_le_bytes());
         hasher.update(self.epoch().to_le_bytes());
         hasher.update(&self.origin());
@@ -730,7 +733,7 @@ impl fmt::Debug for Certificate {
             self.digest(),
             self.round(),
             self.origin().encode_base64(),
-            self.header.id(),
+            self.header.digest(),
             self.epoch()
         )
     }
@@ -738,7 +741,7 @@ impl fmt::Debug for Certificate {
 
 impl PartialEq for Certificate {
     fn eq(&self, other: &Self) -> bool {
-        let mut ret = self.header.id() == other.header.id();
+        let mut ret = self.header.digest() == other.header.digest();
         ret &= self.round() == other.round();
         ret &= self.epoch() == other.epoch();
         ret &= self.origin() == other.origin();
@@ -801,7 +804,7 @@ pub struct FetchCertificatesResponse {
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct PayloadAvailabilityRequest {
-    pub certificate_ids: Vec<CertificateDigest>,
+    pub certificate_digests: Vec<CertificateDigest>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
@@ -810,10 +813,10 @@ pub struct PayloadAvailabilityResponse {
 }
 
 impl PayloadAvailabilityResponse {
-    pub fn available_block_ids(&self) -> Vec<CertificateDigest> {
+    pub fn available_certificates(&self) -> Vec<CertificateDigest> {
         self.payload_availability
             .iter()
-            .filter_map(|(id, available)| available.then_some(*id))
+            .filter_map(|(digest, available)| available.then_some(*digest))
             .collect()
     }
 }
@@ -850,7 +853,7 @@ pub struct WorkerDeleteBatchesMessage {
 
 #[derive(Clone, Default, Debug, Eq, PartialEq)]
 pub struct BatchMessage {
-    // TODO: revisit including the id here [see #188]
+    // TODO: revisit including the digest here [see #188]
     pub digest: BatchDigest,
     pub batch: Batch,
 }
