@@ -88,7 +88,7 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                                     {({ active }) => (
                                         <div
                                             key={idx}
-                                            className="w-full lg:min-w-[12vw] lg:w-fit"
+                                            className="w-full mr-[4px]"
                                         >
                                             <ListItem
                                                 active={
