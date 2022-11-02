@@ -2,11 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Combobox } from '@headlessui/react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import ModuleView from './ModuleView';
 
+import { ReactComponent as SearchIcon } from '~/assets/SVGIcons/24px/Search.svg';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 import { ListItem, VerticalList } from '~/ui/VerticalList';
 
@@ -44,6 +45,12 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
         setSearchParams({ module: selectedModule });
     }, [selectedModule, setSearchParams]);
 
+    const submitSearch = useCallback(() => {
+        setSelectedModule((prev: string) =>
+            filteredModules.includes(query) ? query : prev
+        );
+    }, [filteredModules, query]);
+
     return (
         <div
             className={
@@ -60,12 +67,20 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                     onChange={setSelectedModule}
                     nullable
                 >
-                    <Combobox.Input
-                        onChange={(event) => setQuery(event.target.value)}
-                        displayValue={() => ''}
-                        className="border-sui-grey-50 border-solid rounded-[6px] h-[34px] shadow-sm placeholder-sui-grey-65 pl-3 w-[11vw]"
-                        placeholder="Search"
-                    />
+                    <div className="border-sui-grey-50 border-solid rounded-[6px] h-[34px] shadow-sm placeholder-sui-grey-65 pl-3 w-[11vw] flex">
+                        <Combobox.Input
+                            onChange={(event) => setQuery(event.target.value)}
+                            displayValue={() => ''}
+                            placeholder="Search"
+                            className="border-none w-[80%]"
+                        />
+                        <button
+                            onClick={submitSearch}
+                            className="bg-inherit border-none"
+                        >
+                            <SearchIcon className="fill-sui-steel" />
+                        </button>
+                    </div>
                     <Combobox.Options static as="div">
                         <VerticalList>
                             {filteredModules.map((name, idx) => (
