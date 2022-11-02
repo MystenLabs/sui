@@ -38,7 +38,7 @@ use tracing::{debug, error, instrument, warn};
 use typed_store::Map;
 
 pub use authority_store::{
-    AuthorityStore, GatewayStore, ResolverWrapper, SuiDataStore, UpdateType,
+    AuthorityStore, GatewayStore, PendingDigest, ResolverWrapper, SuiDataStore, UpdateType,
 };
 use narwhal_config::{
     Committee as ConsensusCommittee, WorkerCache as ConsensusWorkerCache,
@@ -1614,6 +1614,10 @@ impl AuthorityState {
         .await
     }
 
+    pub fn add_pending_sequenced_certificate(&self, cert: VerifiedCertificate) -> SuiResult {
+        self.add_pending_impl(vec![(*cert.digest(), Some(cert))], true)
+    }
+
     /// Add a number of certificates to the pending transactions as well as the
     /// certificates structure if they are not already executed.
     /// Certificates are optional, and if not provided, they will be eventually
@@ -1622,11 +1626,24 @@ impl AuthorityState {
         &self,
         certs: Vec<(TransactionDigest, Option<VerifiedCertificate>)>,
     ) -> SuiResult<()> {
+        self.add_pending_impl(certs, false)
+    }
+
+    fn add_pending_impl(
+        &self,
+        certs: Vec<(TransactionDigest, Option<VerifiedCertificate>)>,
+        is_sequenced: bool,
+    ) -> SuiResult {
         self.node_sync_store
             .batch_store_certs(certs.iter().filter_map(|(_, cert_opt)| cert_opt.clone()))?;
 
-        self.database
-            .add_pending_digests(certs.iter().map(|(digest, _)| *digest).collect())
+        self.database.add_pending_digests(
+            certs
+                .iter()
+                .map(|(seq_and_digest, _)| *seq_and_digest)
+                .collect(),
+            is_sequenced,
+        )
     }
 
     // Continually pop in-progress txes from the WAL and try to drive them to completion.
@@ -2314,10 +2331,7 @@ impl AuthorityState {
                 );
 
                 // Schedule the certificate for execution
-                self.add_pending_certificates(vec![(
-                    *certificate.digest(),
-                    Some(certificate.clone()),
-                )])?;
+                self.add_pending_sequenced_certificate(certificate.clone())?;
 
                 if certificate.contains_shared_object() {
                     self.database

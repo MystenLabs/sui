@@ -3,7 +3,7 @@
 
 use std::{collections::HashSet, sync::Arc};
 use sui_types::{base_types::TransactionDigest, error::SuiResult, messages::VerifiedCertificate};
-use tracing::{debug, info};
+use tracing::{debug, error, info};
 
 use crate::authority::AuthorityState;
 use crate::authority_client::AuthorityAPI;
@@ -101,9 +101,10 @@ where
     // Before executing de-duplicate the list of pending trasnactions
     let mut seen = HashSet::new();
     let mut indexes_to_delete = Vec::new();
-    let pending_transactions: Vec<_> = pending_transactions
+
+    let (mut pending_sequenced, pending_transactions): (Vec<_>, Vec<_>) = pending_transactions
         .into_iter()
-        .filter(|(idx, digest)| {
+        .filter(|(idx, (_, digest))| {
             if seen.contains(digest) {
                 indexes_to_delete.push(*idx);
                 false
@@ -112,31 +113,67 @@ where
                 true
             }
         })
-        .collect();
+        .partition(|(_, (seq, _))| seq.is_some());
+
     active_authority
         .state
         .database
         .remove_pending_digests(indexes_to_delete)?;
 
+    // Sort by earlier shared cert sequences
+    pending_sequenced.sort_by(|a, b| match (a.1 .0, b.1 .0) {
+        (Some(seq_a), Some(seq_b)) => seq_a.cmp(&seq_b),
+        _ => unreachable!(),
+    });
+
     // Send them for execution
     let epoch = active_authority.state.committee.load().epoch;
     let sync_handle = active_authority.clone().node_sync_handle();
+
+    // Execute certs that have a sequencing index associated with them serially.
+    for (idx, (seq, digest)) in pending_sequenced.iter() {
+        let mut result_stream = sync_handle
+            .handle_execution_request(epoch, std::iter::once(*digest))
+            .await?;
+
+        match result_stream.next().await.unwrap() {
+            Ok(_) => {
+                debug!(?seq, ?digest, "serial certificate execution complete");
+                active_authority
+                    .state
+                    .database
+                    .remove_pending_digests(vec![*idx])
+                    .tap_err(|err| {
+                        error!(?seq, ?digest, "pending digest deletion failed: {}", err)
+                    })?;
+            }
+            Err(err) => {
+                info!(
+                    ?seq,
+                    ?digest,
+                    "serial certificate execution failed: {}",
+                    err
+                );
+            }
+        }
+    }
+
     let executed: Vec<_> = sync_handle
         // map to extract digest
         .handle_execution_request(
             epoch,
-            pending_transactions.iter().map(|(_, digest)| *digest),
+            pending_transactions.iter().map(|(_, (_, digest))| *digest),
         )
         .await?
         // zip results back together with seq
         .zip(stream::iter(pending_transactions.iter()))
         // filter out errors
-        .filter_map(|(result, (seq, digest))| async move {
+        .filter_map(|(result, (idx, digest))| async move {
             result
-                .tap_err(|e| info!(?seq, ?digest, "certificate execution failed: {}", e))
-                .tap_ok(|_| debug!(?seq, ?digest, "certificate execution complete"))
+                .tap_err(|e| info!(?idx, ?digest, "certificate execution failed: {}", e))
+                .tap_ok(|_| debug!(?idx, ?digest, "certificate execution complete"))
                 .ok()
-                .map(|_| seq)
+                .map(|_| idx)
         })
         .collect()
         .await;
