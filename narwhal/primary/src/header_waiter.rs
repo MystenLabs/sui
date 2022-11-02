@@ -285,11 +285,13 @@ impl HeaderWaiter {
                             // when all its parents are in the store.
                             let (tx_cancel, rx_cancel) = oneshot::channel();
                             self.pending.insert(header_id, (round, tx_cancel));
+                            let tx_primary_messages = self.tx_primary_messages.clone();
+                            let certificate_store = self.certificate_store.clone();
                             let fut = monitored_future!(Self::wait_for_parents(
                                 missing,
                                 network_future,
-                                self.tx_primary_messages.clone(),
-                                self.certificate_store.clone(),
+                                tx_primary_messages,
+                                certificate_store,
                                 header,
                                 rx_cancel,
                             ));

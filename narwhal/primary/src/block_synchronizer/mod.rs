@@ -456,13 +456,17 @@ impl BlockSynchronizer {
             .into_iter()
             .map(|(_name, _address, network_key)| network_key)
             .collect();
+        let network = self.network.network();
+        let timeout = self.certificates_synchronize_timeout;
+        let committee = self.committee.clone();
+        let worker_cache = self.worker_cache.clone();
         Some(
             monitored_future!(Self::send_certificate_requests(
-                self.network.network(),
+                network,
                 network_keys,
-                self.certificates_synchronize_timeout,
-                self.committee.clone(),
-                self.worker_cache.clone(),
+                timeout,
+                committee,
+                worker_cache,
                 to_sync,
             ))
             .boxed(),
@@ -612,9 +616,11 @@ impl BlockSynchronizer {
             .unique_values()
             .into_iter()
             .map(|certificate| {
+                let timeout = self.payload_synchronize_timeout;
+                let payload_store = self.payload_store.clone();
                 monitored_future!(Self::wait_for_block_payload(
-                    self.payload_synchronize_timeout,
-                    self.payload_store.clone(),
+                    timeout,
+                    payload_store,
                     certificate,
                 ))
                 .boxed()
