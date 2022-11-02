@@ -312,10 +312,9 @@ impl QuorumDriver {
         tx: VerifiedTransaction,
         request_type: Option<ExecuteTransactionRequestType>,
     ) -> anyhow::Result<TransactionExecutionResult> {
-        use ExecuteTransactionRequestType::*;
-
         let (tx_bytes, flag, signature, pub_key) = tx.to_network_data_for_execution();
-        let request_type = request_type.unwrap_or(WaitForLocalExecution);
+        let request_type =
+            request_type.unwrap_or(ExecuteTransactionRequestType::WaitForLocalExecution);
         let resp = TransactionExecutionApiClient::execute_transaction(
             &self.api.http,
             tx_bytes,
@@ -327,28 +326,30 @@ impl QuorumDriver {
         .await?;
 
         Ok(match (request_type, resp) {
-            (ImmediateReturn, SuiExecuteTransactionResponse::ImmediateReturn { tx_digest }) => {
-                TransactionExecutionResult {
-                    tx_digest,
-                    tx_cert: None,
-                    effects: None,
-                    confirmed_local_execution: false,
-                    timestamp_ms: None,
-                    parsed_data: None,
-                }
-            }
-            (WaitForTxCert, SuiExecuteTransactionResponse::TxCert { certificate }) => {
-                TransactionExecutionResult {
-                    tx_digest: certificate.transaction_digest,
-                    tx_cert: Some(certificate),
-                    effects: None,
-                    confirmed_local_execution: false,
-                    timestamp_ms: None,
-                    parsed_data: None,
-                }
-            }
             (
-                WaitForEffectsCert,
+                ExecuteTransactionRequestType::ImmediateReturn,
+                SuiExecuteTransactionResponse::ImmediateReturn { tx_digest },
+            ) => TransactionExecutionResult {
+                tx_digest,
+                tx_cert: None,
+                effects: None,
+                confirmed_local_execution: false,
+                timestamp_ms: None,
+                parsed_data: None,
+            },
+            (
+                ExecuteTransactionRequestType::WaitForTxCert,
+                SuiExecuteTransactionResponse::TxCert { certificate },
+            ) => TransactionExecutionResult {
+                tx_digest: certificate.transaction_digest,
+                tx_cert: Some(certificate),
+                effects: None,
+                confirmed_local_execution: false,
+                timestamp_ms: None,
+                parsed_data: None,
+            },
+            (
+                ExecuteTransactionRequestType::WaitForEffectsCert,
                 SuiExecuteTransactionResponse::EffectsCert {
                     certificate,
                     effects,
@@ -363,7 +364,7 @@ impl QuorumDriver {
                 parsed_data: None,
             },
             (
-                WaitForLocalExecution,
+                ExecuteTransactionRequestType::WaitForLocalExecution,
                 SuiExecuteTransactionResponse::EffectsCert {
                     certificate,
                     effects,
