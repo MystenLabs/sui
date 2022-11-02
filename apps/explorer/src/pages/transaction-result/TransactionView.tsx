@@ -242,7 +242,7 @@ function ItemView({ data }: { data: TxItemView }) {
 function TransactionView({ txdata }: { txdata: DataType }) {
     const txdetails = getTransactions(txdata)[0];
     const amount = getAmount(txdetails);
-   
+
     const [formattedAmount] = useFormatCoin(
         amount,
         SUI_TYPE_ARG,
