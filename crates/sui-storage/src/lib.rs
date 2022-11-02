@@ -44,7 +44,9 @@ pub fn default_db_options(
         .set_compression_type(rocksdb::DBCompressionType::None);
 
     let mut point_lookup = db_options.clone();
-    point_lookup.options.optimize_for_point_lookup(1024 * 1024);
+    point_lookup
+        .options
+        .optimize_for_point_lookup(64 /* 64MB (default is 8) */);
     point_lookup.options.set_memtable_whole_key_filtering(true);
 
     (db_options, point_lookup)
