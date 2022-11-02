@@ -1845,15 +1845,10 @@ fn test_object_no_id_error() {
         // framework which goes through "normal" publishing path which excludes tests).
         path.push("src/unit_tests/data/object_no_id/");
         let res = sui_framework::build_move_package(&path, build_config);
-        match res.err().unwrap() {
-            SuiError::ExecutionError(err_str) => {
-                assert!(
-                    err_str.contains("SuiMoveVerificationError")
-                        && err_str.contains("First field of struct NotObject must be 'id'")
-                )
-            }
-            _ => panic!(),
-        }
+
+        matches!(res.err(), Some(SuiError::ExecutionError(err_str)) if
+                 err_str.contains("SuiMoveVerificationError")
+                 && err_str.contains("First field of struct NotObject must be 'id'"));
     })
 }
 

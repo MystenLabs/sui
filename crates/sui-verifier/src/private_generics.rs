@@ -28,12 +28,17 @@ const TEST_SCENARIO_MODULE_NAME: &str = "test_scenario";
 /// Concretely, with `event::emit<T>(...)`:
 /// - `T` must be a type declared in the current module
 pub fn verify_module(module: &CompiledModule) -> Result<(), ExecutionError> {
-    let test_scenario_module = *module.address() == SUI_FRAMEWORK_ADDRESS
-        && module.name() == IdentStr::new(TEST_SCENARIO_MODULE_NAME).unwrap();
+    if *module.address() == SUI_FRAMEWORK_ADDRESS
+        && module.name() == IdentStr::new(TEST_SCENARIO_MODULE_NAME).unwrap()
+    {
+        // exclude test_module which is a test-only module in the Sui framework which "emulates"
+        // transactional execution and needs to allow test code to bypass private generics
+        return Ok(());
+    }
     let view = &BinaryIndexedView::Module(module);
     // do not need to check the sui::transfer module itself
     for func_def in &module.function_defs {
-        verify_function(view, func_def, test_scenario_module).map_err(|error| {
+        verify_function(view, func_def).map_err(|error| {
             verification_failure(format!(
                 "{}::{}. {}",
                 module.self_id(),
@@ -45,11 +50,7 @@ pub fn verify_module(module: &CompiledModule) -> Result<(), ExecutionError> {
     Ok(())
 }
 
-fn verify_function(
-    view: &BinaryIndexedView,
-    fdef: &FunctionDefinition,
-    test_scenario_module: bool,
-) -> Result<(), String> {
+fn verify_function(view: &BinaryIndexedView, fdef: &FunctionDefinition) -> Result<(), String> {
     let code = match &fdef.code {
         None => return Ok(()),
         Some(code) => code,
@@ -72,7 +73,6 @@ fn verify_function(
                     function_type_parameters,
                     fhandle,
                     type_arguments,
-                    test_scenario_module,
                 )?,
                 (SUI_FRAMEWORK_ADDRESS, "event") => {
                     verify_private_event_emit(view, fhandle, type_arguments)?
@@ -89,14 +89,7 @@ fn verify_private_transfer(
     function_type_parameters: &[AbilitySet],
     fhandle: &FunctionHandle,
     type_arguments: &[SignatureToken],
-    test_scenario_module: bool,
 ) -> Result<(), String> {
-    if test_scenario_module {
-        // exclude test_module which is a test-only module in the Sui framework which "emulates"
-        // transactional execution and needs to allow test code to bypass private transfer rules
-        return Ok(());
-    }
-
     let self_handle = view.module_handle_at(view.self_handle_idx().unwrap());
     if addr_module(view, self_handle) == (SUI_FRAMEWORK_ADDRESS, "transfer") {
         return Ok(());
