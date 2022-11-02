@@ -281,7 +281,6 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                     websocket_address: None,
                     consensus_config: Some(consensus_config),
                     enable_event_processing: false,
-                    enable_gossip: true,
                     enable_checkpoint: true,
                     enable_reconfig: false,
                     genesis: crate::node::Genesis::new(genesis.clone()),

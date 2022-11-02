@@ -43,7 +43,6 @@ validator_configs:
           primary_network_admin_server_port: 5678
           worker_network_admin_server_base_port: 8765
     enable-event-processing: false
-    enable-gossip: true
     enable-checkpoint: true
     enable-reconfig: false
     grpc-load-shed: ~
@@ -92,7 +91,6 @@ validator_configs:
           primary_network_admin_server_port: 5678
           worker_network_admin_server_base_port: 8765
     enable-event-processing: false
-    enable-gossip: true
     enable-checkpoint: true
     enable-reconfig: false
     grpc-load-shed: ~
@@ -141,7 +139,6 @@ validator_configs:
           primary_network_admin_server_port: 5678
           worker_network_admin_server_base_port: 8765
     enable-event-processing: false
-    enable-gossip: true
     enable-checkpoint: true
     enable-reconfig: false
     grpc-load-shed: ~
@@ -190,7 +187,6 @@ validator_configs:
           primary_network_admin_server_port: 5678
           worker_network_admin_server_base_port: 8765
     enable-event-processing: false
-    enable-gossip: true
     enable-checkpoint: true
     enable-reconfig: false
     grpc-load-shed: ~
@@ -239,7 +235,6 @@ validator_configs:
           primary_network_admin_server_port: 5678
           worker_network_admin_server_base_port: 8765
     enable-event-processing: false
-    enable-gossip: true
     enable-checkpoint: true
     enable-reconfig: false
     grpc-load-shed: ~
@@ -288,7 +283,6 @@ validator_configs:
           primary_network_admin_server_port: 5678
           worker_network_admin_server_base_port: 8765
     enable-event-processing: false
-    enable-gossip: true
     enable-checkpoint: true
     enable-reconfig: false
     grpc-load-shed: ~
@@ -337,7 +331,6 @@ validator_configs:
           primary_network_admin_server_port: 5678
           worker_network_admin_server_base_port: 8765
     enable-event-processing: false
-    enable-gossip: true
     enable-checkpoint: true
     enable-reconfig: false
     grpc-load-shed: ~
