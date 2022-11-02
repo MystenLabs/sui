@@ -693,7 +693,10 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
 /// Defines how the network receiver handles incoming workers messages.
 #[derive(Clone)]
 struct WorkerReceiverHandler {
-    tx_our_digests: Sender<(BatchDigest, WorkerId, u64)>,
+    tx_our_digests: Sender<(
+        (BatchDigest, WorkerId, u64),
+        tokio::sync::oneshot::Sender<()>,
+    )>,
     payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
     our_workers: BTreeMap<WorkerId, WorkerInfo>,
 }
@@ -705,15 +708,26 @@ impl WorkerToPrimary for WorkerReceiverHandler {
         request: anemo::Request<WorkerOurBatchMessage>,
     ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
         let message = request.into_body();
-        self.tx_our_digests
+        let (tx_ack, rx_ack) = tokio::sync::oneshot::channel();
+        let response = self
+            .tx_our_digests
             .send((
-                message.digest,
-                message.worker_id,
-                message.metadata.created_at,
+                (
+                    message.digest,
+                    message.worker_id,
+                    message.metadata.created_at,
+                ),
+                tx_ack,
             ))
             .await
             .map(|_| anemo::Response::new(()))
-            .map_err(|e| anemo::rpc::Status::internal(e.to_string()))
+            .map_err(|e| anemo::rpc::Status::internal(e.to_string()));
+
+        // TODO: if there is an error here, we should send an error back to the client
+        //       since it means the primary does not work correctly, and the batch may
+        //       not be included.
+        let _ = rx_ack.await;
+        response
     }
 
     async fn report_others_batch(

@@ -91,7 +91,11 @@ async fn propose_payload() {
 
     let digest = BatchDigest(name_bytes);
     let worker_id = 0;
-    tx_our_digests.send((digest, worker_id, 0)).await.unwrap();
+    let (tx_ack, rx_ack) = tokio::sync::oneshot::channel();
+    tx_our_digests
+        .send(((digest, worker_id, 0), tx_ack))
+        .await
+        .unwrap();
 
     // Ensure the proposer makes a correct header from the provided payload.
     let header = rx_headers.recv().await.unwrap();
@@ -103,7 +107,14 @@ async fn propose_payload() {
     let batches: IndexMap<BatchDigest, WorkerId> = fixture_payload((max_num_of_batches * 2) as u8);
 
     for (batch_id, worker_id) in batches {
-        tx_our_digests.send((batch_id, worker_id, 0)).await.unwrap();
+        let (tx_ack, rx_ack) = tokio::sync::oneshot::channel();
+        tx_our_digests
+            .send(((batch_id, worker_id, 0), tx_ack))
+            .await
+            .unwrap();
+
+        // Just check it is being acked
+        assert!(rx_ack.await.is_ok());
     }
 
     // AND send some parents to advance the round
@@ -121,6 +132,7 @@ async fn propose_payload() {
     let header = rx_headers.recv().await.unwrap();
     assert_eq!(header.round, 2);
     assert_eq!(header.payload.len(), max_num_of_batches);
+    assert!(rx_ack.await.is_ok());
 }
 
 #[tokio::test]
@@ -165,7 +177,11 @@ async fn equivocation_protection() {
 
     let digest = BatchDigest(name_bytes);
     let worker_id = 0;
-    tx_our_digests.send((digest, worker_id, 0)).await.unwrap();
+    let (tx_ack, rx_ack) = tokio::sync::oneshot::channel();
+    tx_our_digests
+        .send(((digest, worker_id, 0), tx_ack))
+        .await
+        .unwrap();
 
     // Create and send parents
     let parents: Vec<_> = fixture
@@ -177,6 +193,7 @@ async fn equivocation_protection() {
 
     let result = tx_parents.send((parents, 1, 0)).await;
     assert!(result.is_ok());
+    assert!(rx_ack.await.is_ok());
 
     // Ensure the proposer makes a correct header from the provided payload.
     let header = rx_headers.recv().await.unwrap();
@@ -219,7 +236,11 @@ async fn equivocation_protection() {
 
     let digest = BatchDigest(name_bytes);
     let worker_id = 0;
-    tx_our_digests.send((digest, worker_id, 0)).await.unwrap();
+    let (tx_ack, rx_ack) = tokio::sync::oneshot::channel();
+    tx_our_digests
+        .send(((digest, worker_id, 0), tx_ack))
+        .await
+        .unwrap();
 
     // Create and send a superset parents, same round but different set from before
     let parents: Vec<_> = fixture
@@ -231,6 +252,7 @@ async fn equivocation_protection() {
 
     let result = tx_parents.send((parents, 1, 0)).await;
     assert!(result.is_ok());
+    assert!(rx_ack.await.is_ok());
 
     // Ensure the proposer makes the same header as before
     let new_header = rx_headers.recv().await.unwrap();

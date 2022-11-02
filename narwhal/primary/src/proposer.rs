@@ -50,7 +50,10 @@ pub struct Proposer {
     /// Receives the parents to include in the next header (along with their round number) from core.
     rx_parents: Receiver<(Vec<Certificate>, Round, Epoch)>,
     /// Receives the batches' digests from our workers.
-    rx_our_digests: Receiver<(BatchDigest, WorkerId, TimestampMs)>,
+    rx_our_digests: Receiver<(
+        (BatchDigest, WorkerId, TimestampMs),
+        tokio::sync::oneshot::Sender<()>,
+    )>,
     /// Sends newly created headers to the `Core`.
     tx_headers: Sender<Header>,
 
@@ -82,7 +85,10 @@ impl Proposer {
         network_model: NetworkModel,
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
         rx_parents: Receiver<(Vec<Certificate>, Round, Epoch)>,
-        rx_our_digests: Receiver<(BatchDigest, WorkerId, TimestampMs)>,
+        rx_our_digests: Receiver<(
+            (BatchDigest, WorkerId, TimestampMs),
+            tokio::sync::oneshot::Sender<()>,
+        )>,
         tx_headers: Sender<Header>,
         metrics: Arc<PrimaryMetrics>,
     ) -> JoinHandle<()> {
@@ -402,8 +408,11 @@ impl Proposer {
                 }
 
                 // Receive digests from our workers.
-                Some(digest_record) = self.rx_our_digests.recv() => {
+                Some((digest_record, ack_sender)) = self.rx_our_digests.recv() => {
                     self.digests.push(digest_record);
+                    // Signal back to the worker that the batch is recorded on the
+                    // primary, and will be tracked until inclusion.
+                    let _ = ack_sender.send(());
                 }
 
                 // Check whether the timer expired.
