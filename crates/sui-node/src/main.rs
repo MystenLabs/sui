@@ -27,8 +27,8 @@ struct Args {
 use ying_profiler::utils::ProfilerRunner;
 use ying_profiler::YingProfiler;
 
-#[global_allocator]
-static YING_ALLOC: YingProfiler = YingProfiler;
+// #[global_allocator]
+// static YING_ALLOC: YingProfiler = YingProfiler;
 
 #[tokio::main]
 async fn main() -> Result<()> {
