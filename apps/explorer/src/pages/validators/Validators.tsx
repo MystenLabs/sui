@@ -123,7 +123,7 @@ export function getValidatorState(network: string): Promise<ValidatorState> {
         });
 }
 
-const ValidatorPageResult = (): JSX.Element => {
+function ValidatorPageResult() {
     const { state } = useLocation();
 
     if (instanceOfValidatorState(state)) {
@@ -135,7 +135,7 @@ const ValidatorPageResult = (): JSX.Element => {
     ) : (
         <ValidatorPageAPI />
     );
-};
+}
 
 export function processValidators(set: Validator[]) {
     return set.map((av, i) => {
@@ -161,7 +161,7 @@ export function getTabFooter(count: number) {
     };
 }
 
-function ValidatorsPage({ state }: { state: ValidatorState }): JSX.Element {
+function ValidatorsPage({ state }: { state: ValidatorState }) {
     const validatorsData = processValidators(
         state.validators.fields.active_validators
     );
@@ -175,15 +175,15 @@ function ValidatorsPage({ state }: { state: ValidatorState }): JSX.Element {
                     <Longtext
                         text={validator.address}
                         alttext={truncate(validator.address, 14)}
-                        category={'addresses'}
-                        isLink={true}
+                        category="addresses"
+                        isLink
                     />
                 ),
                 pubkeyBytes: (
                     <Longtext
                         text={validator.pubkeyBytes}
                         alttext={truncate(validator.pubkeyBytes, 14)}
-                        category={'addresses'}
+                        category="addresses"
                         isLink={false}
                     />
                 ),
@@ -229,13 +229,11 @@ function ValidatorsPage({ state }: { state: ValidatorState }): JSX.Element {
     );
 }
 
-export const ValidatorLoadFail = (): JSX.Element => {
-    return (
-        <ErrorResult id={''} errorMsg="Validator data could not be loaded" />
-    );
-};
+export function ValidatorLoadFail() {
+    return <ErrorResult id="" errorMsg="Validator data could not be loaded" />;
+}
 
-export const ValidatorPageAPI = (): JSX.Element => {
+export function ValidatorPageAPI() {
     const [showObjectState, setObjectState] = useState(STATE_DEFAULT);
     const [loadState, setLoadState] = useState('pending');
     const [network] = useContext(NetworkContext);
@@ -261,7 +259,7 @@ export const ValidatorPageAPI = (): JSX.Element => {
         return <ValidatorLoadFail />;
     }
 
-    return <div>"Something went wrong"</div>;
-};
+    return <div>Something went wrong</div>;
+}
 
 export { ValidatorPageResult };

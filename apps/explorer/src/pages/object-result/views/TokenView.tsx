@@ -111,7 +111,7 @@ function TokenView({ data }: { data: DataType }) {
                                         <Longtext
                                             text={viewedData.tx_digest}
                                             category="transactions"
-                                            isLink={true}
+                                            isLink
                                         />
                                     </td>
                                 </tr>
@@ -146,7 +146,7 @@ function TokenView({ data }: { data: DataType }) {
                                         <Longtext
                                             text={viewedData.contract_id.bytes}
                                             category="objects"
-                                            isLink={true}
+                                            isLink
                                         />
                                     </td>
                                 </tr>
@@ -169,6 +169,7 @@ function TokenView({ data }: { data: DataType }) {
                                 ]}
                             />
                             <button
+                                type="button"
                                 onClick={handlePreviewClick}
                                 className={styles.mobilepreviewmedia}
                             >
@@ -181,6 +182,7 @@ function TokenView({ data }: { data: DataType }) {
                                 <p className={styles.header}>{fileType}</p>
                             )}
                             <button
+                                type="button"
                                 onClick={handlePreviewClick}
                                 className={styles.desktoppreviewmedia}
                             >

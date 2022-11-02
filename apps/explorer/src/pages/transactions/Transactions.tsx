@@ -88,7 +88,8 @@ function TransactionsAPI() {
     );
 }
 
-const Transactions = () =>
-    IS_STATIC_ENV ? <TransactionsStatic /> : <TransactionsAPI />;
+function Transactions() {
+    return IS_STATIC_ENV ? <TransactionsStatic /> : <TransactionsAPI />;
+}
 
 export default Transactions;

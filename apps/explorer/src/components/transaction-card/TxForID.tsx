@@ -61,7 +61,7 @@ function TxForIDStatic({
     const data = deduplicate(findTxfromID(id)?.data as string[] | undefined)
         .map((id) => findTxDatafromID(id))
         .filter((x) => x !== undefined) as TxnData[];
-    if (!data) return <></>;
+    if (!data) return null;
     return (
         <PaginationLogic
             results={data}
@@ -105,7 +105,7 @@ function TxForIDAPI({ id, category }: { id: string; category: categoryType }) {
 
     if (showData.loadState === 'loaded') {
         const data = showData.data;
-        if (!data) return <></>;
+        if (!data) return null;
         return (
             <PaginationLogic
                 results={data}

@@ -41,7 +41,7 @@ function TxLinks({ data }: { data: Addresslist }) {
                                 <Longtext
                                     text={obj.objectId}
                                     category={data?.category as Category}
-                                    isLink={true}
+                                    isLink
                                     copyButton="16"
                                     extra={
                                         <IconTooltip

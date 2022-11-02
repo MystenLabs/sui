@@ -58,6 +58,8 @@ function HomeAPI() {
     );
 }
 
-const Home = () => (IS_STATIC_ENV ? <HomeStatic /> : <HomeAPI />);
+function Home() {
+    return IS_STATIC_ENV ? <HomeStatic /> : <HomeAPI />;
+}
 
 export default Home;

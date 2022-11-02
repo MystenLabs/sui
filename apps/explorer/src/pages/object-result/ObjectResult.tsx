@@ -33,14 +33,14 @@ const DATATYPE_DEFAULT: DataType = {
     loadState: 'pending',
 };
 
-const Fail = ({ objID }: { objID: string | undefined }): JSX.Element => {
+function Fail({ objID }: { objID: string | undefined }) {
     return (
         <ErrorResult
             id={objID}
             errorMsg="Data could not be extracted on the following specified object ID"
         />
     );
-};
+}
 
 // Get the data for the object ID and address that publishes a Package:
 function getObjectDataWithPackageAddress(objID: string, network: string) {
@@ -80,7 +80,7 @@ function getObjectDataWithPackageAddress(objID: string, network: string) {
         });
 }
 
-const ObjectResultAPI = ({ objID }: { objID: string }): JSX.Element => {
+function ObjectResultAPI({ objID }: { objID: string }) {
     const [showObjectState, setObjectState] = useState(DATATYPE_DEFAULT);
     const [network] = useContext(NetworkContext);
     useEffect(() => {
@@ -109,10 +109,10 @@ const ObjectResultAPI = ({ objID }: { objID: string }): JSX.Element => {
         return <Fail objID={objID} />;
     }
 
-    return <div>"Something went wrong"</div>;
-};
+    return <div>Something went wrong</div>;
+}
 
-const ObjectResultStatic = ({ objID }: { objID: string }): JSX.Element => {
+function ObjectResultStatic({ objID }: { objID: string }) {
     const data = findDataFromID(objID, undefined);
 
     if (instanceOfDataType(data)) {
@@ -126,9 +126,9 @@ const ObjectResultStatic = ({ objID }: { objID: string }): JSX.Element => {
             return <Fail objID={objID} />;
         }
     }
-};
+}
 
-const ObjectResult = (): JSX.Element => {
+function ObjectResult() {
     const { id: objID } = useParams();
     const { state } = useLocation();
 
@@ -145,7 +145,7 @@ const ObjectResult = (): JSX.Element => {
     }
 
     return <Fail objID={objID} />;
-};
+}
 
 export { ObjectResult };
 export type { DataType };

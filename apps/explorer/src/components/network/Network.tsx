@@ -111,7 +111,7 @@ export default function NetworkSelect() {
                         )}
                     </div>
                 </div>
-                <div className={styles.detailsbg} onClick={closeModal}></div>
+                <div className={styles.detailsbg} onClick={closeModal} />
             </div>
         </div>
     );

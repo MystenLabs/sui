@@ -33,6 +33,7 @@ export const ButtonOrLink = forwardRef<
         return <Link to={to} ref={ref} {...props} />;
     }
 
-    // NOTE: We set the default type to be "button" to avoid accidentally submitting forms.
+    // We set the default type to be "button" to avoid accidentally submitting forms.
+    // eslint-disable-next-line react/button-has-type
     return <button {...props} type={props.type || 'button'} ref={ref} />;
 });
