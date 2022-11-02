@@ -63,6 +63,7 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                     <Combobox.Input
                         onChange={(event) => setQuery(event.target.value)}
                         displayValue={() => ''}
+                        className="border-sui-grey-50 border-solid rounded-[6px] h-[34px] shadow-sm w-[11.5vw]"
                     />
                     <Combobox.Options static as="div">
                         <VerticalList>
