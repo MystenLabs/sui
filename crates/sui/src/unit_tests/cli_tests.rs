@@ -70,7 +70,6 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
 
     assert_eq!(9, files.len());
     assert!(files.contains(&SUI_CLIENT_CONFIG.to_string()));
-    assert!(files.contains(&SUI_GATEWAY_CONFIG.to_string()));
     assert!(files.contains(&SUI_NETWORK_CONFIG.to_string()));
     assert!(files.contains(&SUI_FULLNODE_CONFIG.to_string()));
     assert!(files.contains(&SUI_GENESIS_FILENAME.to_string()));
