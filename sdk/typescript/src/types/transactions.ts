@@ -345,6 +345,12 @@ export function getPaySuiTransaction(
   return 'PaySui' in data ? data.PaySui : undefined;
 }
 
+export function getPayAllSuiTransaction(
+  data: SuiTransactionKind
+): PayAllSui | undefined {
+  return 'PayAllSui' in data ? data.PayAllSui : undefined;
+}
+
 export function getChangeEpochTransaction(
   data: SuiTransactionKind
 ): SuiChangeEpoch | undefined {
