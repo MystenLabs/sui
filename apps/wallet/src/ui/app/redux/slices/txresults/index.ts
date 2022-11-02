@@ -16,6 +16,8 @@ import {
     getObjectFields,
     Coin,
     isSuiObject,
+    getPaySuiTransaction,
+    getPayTransaction,
 } from '@mysten/sui.js';
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 
@@ -147,6 +149,14 @@ export const getTransactionsByAddress = createAsyncThunk<
                 address
             );
             const sender = getTransactionSender(txEff.certificate);
+            const paySuiData =
+                getPaySuiTransaction(txn) ?? getPayTransaction(txn);
+            const paySuiAmount = paySuiData?.amounts.reduce(
+                (acc, value) => value + acc,
+                0
+            );
+
+            const amount = paySuiAmount ?? transferSui?.amount;
 
             return {
                 txId: digest,
@@ -159,8 +169,8 @@ export const getTransactionsByAddress = createAsyncThunk<
                 error: getExecutionStatusError(txEff),
                 timestampMs: txEff.timestamp_ms,
                 ...(recipient && { to: recipient }),
-                ...(transferSui?.amount && {
-                    amount: transferSui.amount,
+                ...(amount && {
+                    amount,
                 }),
                 ...((txTransferObject?.objectRef?.objectId ||
                     metaDataObjectId.length > 0) && {
