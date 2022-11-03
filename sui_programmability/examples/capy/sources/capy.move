@@ -405,39 +405,4 @@ module capy::capy {
 
         url::new_unsafe_from_bytes(capy_url)
     }
-
-    #[test]
-    fun test_raw_vec_to_values() {
-        let definitions: vector<vector<u8>> = vec::empty();
-
-        /* push [127, "red"] */ {
-            let def = vec::empty();
-            vec::push_back(&mut def, 127);
-            vec::append(&mut def, b"red");
-            vec::push_back(&mut definitions, def);
-        };
-
-        /* push [255, "blue"] */ {
-            let def = vec::empty();
-            vec::push_back(&mut def, 255);
-            vec::append(&mut def, b"blue");
-            vec::push_back(&mut definitions, def);
-        };
-
-        let values: vector<Value> = raw_vec_to_values(definitions);
-
-        /* expect [255, blue] */ {
-            let Value { selector, name } = vec::pop_back(&mut values);
-            assert!(selector == 255, 0);
-            assert!(string::bytes(&name) == &b"blue", 0);
-        };
-
-        /* expect [127, red] */ {
-            let Value { selector, name } = vec::pop_back(&mut values);
-            assert!(selector == 127, 0);
-            assert!(string::bytes(&name) == &b"red", 0);
-        };
-
-        vec::destroy_empty(values);
-    }
 }
