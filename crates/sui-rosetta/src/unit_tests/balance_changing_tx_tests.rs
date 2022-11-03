@@ -17,7 +17,7 @@ use sui_keys::keystore::Keystore;
 use sui_sdk::rpc_types::{
     OwnedObjectRef, SuiData, SuiEvent, SuiExecutionStatus, SuiTransactionEffects,
 };
-use sui_sdk::{SuiClient, TransactionExecutionResult};
+use sui_sdk::TransactionExecutionResult;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::{
@@ -30,6 +30,11 @@ use test_utils::network::TestClusterBuilder;
 use crate::operations::Operation;
 use crate::state::extract_balance_changes_from_ops;
 use crate::types::SignedValue;
+
+#[cfg(msim)]
+use sui_sdk::embedded_gateway::SuiClient;
+#[cfg(not(msim))]
+use sui_sdk::SuiClient;
 
 #[tokio::test]
 async fn test_all_transaction_type() {

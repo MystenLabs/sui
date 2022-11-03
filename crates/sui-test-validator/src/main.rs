@@ -55,7 +55,6 @@ async fn main() -> Result<()> {
 
     let cluster = LocalNewCluster::start(&ClusterTestOpt {
         env: Env::NewLocal,
-        gateway_address: Some(format!("127.0.0.1:{}", args.gateway_rpc_port)),
         fullnode_address: Some(format!("127.0.0.1:{}", args.fullnode_rpc_port)),
         websocket_address: Some(format!("127.0.0.1:{}", args.websocket_rpc_port)),
         faucet_address: None,
