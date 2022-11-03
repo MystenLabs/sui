@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+extern crate core;
+
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
