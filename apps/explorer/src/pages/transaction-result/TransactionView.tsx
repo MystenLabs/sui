@@ -41,6 +41,7 @@ import type {
     SuiObjectRef,
     SuiEvent,
 } from '@mysten/sui.js';
+import type { ReactNode } from 'react';
 
 import styles from './TransactionResult.module.css';
 
@@ -164,7 +165,7 @@ type TxItemView = {
     titleStyle?: string;
     content: {
         label?: string | number | any;
-        value: string | number;
+        value: ReactNode;
         link?: boolean;
         category?: string;
         monotypeClass?: boolean;
