@@ -52,12 +52,8 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
     }, [filteredModules]);
 
     return (
-        <div
-            className={
-                'flex flex-wrap border-0 border-y border-solid border-sui-grey-45'
-            }
-        >
-            <div className={'w-full md:w-[15vw] pr-[20px]'}>
+        <div className="flex flex-wrap border-0 border-y border-solid border-sui-grey-45">
+            <div className="w-full md:w-[15vw] pr-[20px]">
                 <Combobox value={selectedModule} onChange={setSelectedModule}>
                     <div className="box-border border border-sui-grey-50 border-solid rounded-[6px] h-[34px] shadow-sm placeholder-sui-grey-65 pl-3 w-full flex my-[10px] justify-between  ml-[2px]">
                         <Combobox.Input
@@ -69,6 +65,7 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                         <button
                             onClick={submitSearch}
                             className="bg-inherit border-none pr-3"
+                            type="submit"
                         >
                             <SearchIcon className="fill-sui-steel cursor-pointer" />
                         </button>
