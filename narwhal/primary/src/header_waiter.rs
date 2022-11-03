@@ -140,7 +140,7 @@ impl HeaderWaiter {
         synchronize_handles: Vec<CancelOnDropHandler<Result<anemo::Response<()>>>>,
         store: Store<(BatchDigest, WorkerId), PayloadToken>,
         deliver: Header,
-        handler: oneshot::Receiver<()>,
+        cancel: oneshot::Receiver<()>,
     ) -> DagResult<Option<Header>> {
         tokio::select! {
             result = try_join_all(synchronize_handles) => {
@@ -152,7 +152,7 @@ impl HeaderWaiter {
                 }
                 Ok(Some(deliver))
             },
-            _ = handler => Ok(None),
+            _ = cancel => Ok(None),
         }
     }
 
@@ -162,18 +162,21 @@ impl HeaderWaiter {
         tx_primary_messages: Sender<PrimaryMessage>,
         store: CertificateStore,
         deliver: Header,
-        handler: oneshot::Receiver<()>,
+        mut cancel: oneshot::Receiver<()>,
     ) -> DagResult<Option<Header>> {
-        if let Some(result) = network_future.await {
-            let certificates = result
-                .map_err(|e| DagError::NetworkError(format!("{e:?}")))?
-                .certificates;
-            for certificate in certificates {
-                tx_primary_messages
-                    .send(PrimaryMessage::Certificate(certificate))
-                    .await
-                    .map_err(|_| DagError::ChannelFull)?;
-            }
+        tokio::select! {
+            Some(result) = network_future => {
+                let certificates = result
+                    .map_err(|e| DagError::NetworkError(format!("{e:?}")))?
+                    .certificates;
+                for certificate in certificates {
+                    tx_primary_messages
+                        .send(PrimaryMessage::Certificate(certificate))
+                        .await
+                        .map_err(|_| DagError::ChannelFull)?;
+                }
+            },
+            _ = &mut cancel => return Ok(None),
         }
         // Wait on certificates to show up in the store so we know they're processed by Core.
         let waiting: Vec<_> = missing.into_iter().map(|x| store.notify_read(x)).collect();
@@ -181,7 +184,7 @@ impl HeaderWaiter {
             result = try_join_all(waiting) => {
                 result.map(|_| Some(deliver)).map_err(DagError::from)
             }
-            _ = handler => Ok(None),
+            _ = cancel => Ok(None),
         }
     }
 
