@@ -145,6 +145,7 @@ mod tests {
         let examples = vec![
             "basics",
             "defi",
+            "capy",
             "fungible_tokens",
             "games",
             "move_tutorial",
