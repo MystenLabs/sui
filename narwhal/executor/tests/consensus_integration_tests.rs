@@ -1,5 +1,3 @@
-use std::collections::{BTreeSet, HashMap};
-use std::sync::Arc;
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use bytes::Bytes;
@@ -7,48 +5,17 @@ use consensus::bullshark::Bullshark;
 use consensus::metrics::ConsensusMetrics;
 use consensus::Consensus;
 use fastcrypto::hash::Hash;
+use narwhal_executor::MockExecutionState;
 use narwhal_executor::{get_restored_consensus_output, ExecutionIndices};
 use node::NodeStorage;
 use prometheus::Registry;
+use std::collections::BTreeSet;
+use std::sync::Arc;
 use telemetry_subscribers::TelemetryGuards;
 use test_utils::{cluster::Cluster, temp_dir, CommitteeFixture};
 use tokio::sync::watch;
-use mockall::*;
-use narwhal_executor::MockExecutionState;
 
-use types::{
-    Certificate, CertificateDigest, ReconfigureNotification, TransactionProto,
-};
-
-#[tokio::test]
-async fn test_restore_consensus_output() {
-    let storage = NodeStorage::reopen(temp_dir());
-
-    let consensus_store = storage.consensus_store;
-    let certificate_store = storage.certificate_store;
-
-    let mock_execution_state = MockExecutionState::new();
-
-    // Store certificates in consensus store
-    let committed_state = HashMap::new();
-    let consensus_index = 1;
-    let certificate_id = CertificateDigest::default();
-
-    // write a few certificates like Bullshark would do
-
-    // Write some state
-    consensus_store
-        .write_consensus_state(&committed_state, &consensus_index, &certificate_id)
-        .unwrap();
-
-    // Now read the output
-    let consensus_output =
-        get_restored_consensus_output(consensus_store, certificate_store, &mock_execution_state)
-            .await
-            .unwrap();
-
-    assert_eq!(consensus_output.len(), 100);
-}
+use types::{Certificate, ReconfigureNotification, TransactionProto};
 
 #[tokio::test]
 async fn test_recovery() {
@@ -139,28 +106,34 @@ async fn test_recovery() {
         consensus_index_counter += 1;
     }
 
-    // Now assume that we want to recover from a crash. Via the ExecutionState we'll return
-    // that next_certificate_index is zero, so certificates should be replayed practically
-    // from the beginning of commit.
+    // Now assume that we want to recover from a crash. We are testing all the recovery cases
+    // from having executed no certificates at all (or certificate with index = 0), up to
+    // have executed the last committed certificate
     for last_executed_certificate_index in 0..consensus_index_counter {
         let mut execution_state = MockExecutionState::new();
         execution_state
             .expect_load_execution_indices()
             .times(1)
-            .returning(move || {
-                ExecutionIndices {
-                    next_certificate_index: last_executed_certificate_index,
-                    next_batch_index: 0,
-                    next_transaction_index: 0
-                }
+            .returning(move || ExecutionIndices {
+                next_certificate_index: last_executed_certificate_index,
+                next_batch_index: 0,
+                next_transaction_index: 0,
             });
 
-        let consensus_output =
-            get_restored_consensus_output(consensus_store.clone(), certificate_store.clone(), &execution_state)
-                .await
-                .unwrap();
+        let consensus_output = get_restored_consensus_output(
+            consensus_store.clone(),
+            certificate_store.clone(),
+            &execution_state,
+        )
+        .await
+        .unwrap();
 
-        assert_eq!(consensus_output.len(), (num_of_committed_certificates - last_executed_certificate_index) as usize);
+        // we expect to have recovered all the certificates between the "last executed certificate" (included)
+        // up to the "last committed certificate" (included).
+        assert_eq!(
+            consensus_output.len(),
+            (num_of_committed_certificates - last_executed_certificate_index) as usize
+        );
     }
 }
 

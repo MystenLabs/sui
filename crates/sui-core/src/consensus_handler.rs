@@ -70,7 +70,11 @@ impl ExecutionState for ConsensusHandler {
         consensus_index: ExecutionIndices,
         serialized_transaction: Vec<u8>,
     ) {
-        let index = Self::update_hash(&self.last_seen, consensus_index, &serialized_transaction);
+        let index = Self::update_hash(
+            &self.last_seen,
+            consensus_index.clone(),
+            &serialized_transaction,
+        );
         let index = if let Some(index) = index {
             index
         } else {

@@ -122,21 +122,40 @@ pub async fn get_restored_consensus_output<State: ExecutionState>(
         .read_last_consensus_index()
         .map_err(SubscriberError::StoreError)?;
 
+    // Execution state always keeps the index of the latest certificate that has been executed.
+    // However, in consensus_store the committed certificates are stored alongside the "next" index
+    // that should be assigned to a certificate. Thus, to successfully recover the un-executed
+    // certificates from the consensus_store we are incrementing the `next_certificate_index` by 1
+    // to align the semantics.
+    // TODO: https://github.com/MystenLabs/sui/issues/5819
     let last_executed_index = execution_state
         .load_execution_indices()
         .await
-        .next_certificate_index + 1;
+        .next_certificate_index
+        + 1;
 
+    debug!(
+        "Recovering with last executed index:{}, last consensus index:{}",
+        last_executed_index, consensus_next_index
+    );
+
+    // We use <= check here as we always want to recover at least the last committed certificate
+    // since we can't know whether the execution has been interrupted and there are still batches/transactions
+    // that need to be send for execution.
     if last_executed_index <= consensus_next_index {
-
         let missing = consensus_store
             .read_sequenced_certificates(&(last_executed_index..=consensus_next_index))?
             .into_iter()
             .map(|(seq, digest)| (seq - 1, digest))
             .collect::<Vec<(SequenceNumber, CertificateDigest)>>();
 
+        debug!("Found {} certificates to recover", missing.len());
+
         for (seq, cert_digest) in missing {
-            debug!("Recovered index:{}, digest:{}", seq, cert_digest);
+            debug!(
+                "Recovered certificate index:{}, digest:{}",
+                seq, cert_digest
+            );
             if let Some(cert) = certificate_store.read(cert_digest).unwrap() {
                 // Save the missing sequence / cert pair as ConsensusOutput to re-send to the executor.
                 restored_consensus_output.push(ConsensusOutput {
