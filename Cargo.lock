@@ -11455,7 +11455,6 @@ dependencies = [
  "once_cell",
  "rand 0.8.5",
  "regex",
- "tracing",
  "wyhash",
 ]
 
