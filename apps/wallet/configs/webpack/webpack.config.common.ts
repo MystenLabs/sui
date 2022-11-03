@@ -14,7 +14,20 @@ import packageJson from '../../package.json';
 
 import type { Configuration } from 'webpack';
 
-const APP_NAME = 'Sui Wallet';
+function generateDateVersion(patch?: number) {
+    const date = new Date();
+    return [
+        String(date.getUTCFullYear()).slice(2),
+        String(date.getUTCMonth() + 1),
+        String(date.getUTCDate()),
+        patch ?? 0,
+    ].join('.');
+}
+
+const WALLET_BETA = !!process.env.WALLET_BETA;
+
+const APP_NAME = WALLET_BETA ? 'Sui Wallet (BETA)' : 'Sui Wallet';
+const APP_VERSION = WALLET_BETA ? generateDateVersion() : packageJson.version;
 const PROJECT_ROOT = resolve(__dirname, '..', '..');
 const CONFIGS_ROOT = resolve(PROJECT_ROOT, 'configs');
 const SRC_ROOT = resolve(PROJECT_ROOT, 'src');
@@ -155,12 +168,11 @@ const commonConfig: () => Promise<Configuration> = async () => {
                         from: resolve(SRC_ROOT, 'manifest', 'manifest.json'),
                         to: resolve(OUTPUT_ROOT, '[name][ext]'),
                         transform: (content) => {
-                            const { description, version } = packageJson;
                             const manifestJson = {
                                 ...JSON.parse(content.toString()),
                                 name: APP_NAME,
-                                description,
-                                version,
+                                version: APP_VERSION,
+                                description: packageJson.description,
                             };
                             return JSON.stringify(manifestJson, null, 4);
                         },
@@ -181,6 +193,7 @@ const commonConfig: () => Promise<Configuration> = async () => {
                 'process.env.WALLET_KEYRING_PASSWORD': JSON.stringify(
                     Buffer.from(randomBytes(64)).toString('hex')
                 ),
+                'process.env.WALLET_BETA': WALLET_BETA,
             }),
             new ProvidePlugin({
                 Buffer: ['buffer', 'Buffer'],

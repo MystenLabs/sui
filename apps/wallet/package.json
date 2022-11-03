@@ -7,6 +7,7 @@
     "scripts": {
         "build:prod": "cross-env NODE_ENV=\"production\" TS_NODE_PROJECT=\"./configs/ts/tsconfig.webpack.json\" webpack --progress",
         "build:dev": "cross-env NODE_ENV=\"development\" TS_NODE_PROJECT=\"./configs/ts/tsconfig.webpack.json\" webpack --progress",
+        "build:beta": "cross-env WALLET_BETA=true NODE_ENV=\"production\" TS_NODE_PROJECT=\"./configs/ts/tsconfig.webpack.json\" webpack --progress",
         "prettier:check": "prettier -c --ignore-unknown .",
         "prettier:fix": "prettier -w --ignore-unknown .",
         "prettier:fix:watch": "onchange '**' -i -f add -f change -j 5 -- prettier -w --ignore-unknown {{file}}",
