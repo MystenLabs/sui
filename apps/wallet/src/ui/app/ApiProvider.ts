@@ -23,7 +23,6 @@ export enum API_ENV {
 
 type EnvInfo = {
     name: string;
-    color: string;
 };
 
 type ApiEndpoints = {
@@ -31,11 +30,11 @@ type ApiEndpoints = {
     faucet: string;
 };
 export const API_ENV_TO_INFO: Record<API_ENV, EnvInfo> = {
-    [API_ENV.local]: { name: 'Local', color: '#9064ff' },
-    [API_ENV.devNet]: { name: 'DevNet', color: '#29b6af' },
-    [API_ENV.staging]: { name: 'Staging', color: '#ff4a8d' },
-    [API_ENV.customRPC]: { name: 'Custom RPC URL', color: '#d8e0e6' },
-    [API_ENV.testNet]: { name: 'TestNet', color: '#6fbcf0' },
+    [API_ENV.local]: { name: 'Local' },
+    [API_ENV.devNet]: { name: 'Sui DevNet' },
+    [API_ENV.staging]: { name: 'Sui Staging' },
+    [API_ENV.customRPC]: { name: 'Custom RPC URL' },
+    [API_ENV.testNet]: { name: 'Sui TestNet' },
 };
 
 export const ENV_TO_API: Record<API_ENV, ApiEndpoints> = {
@@ -89,11 +88,14 @@ export default class ApiProvider {
     private _apiFullNodeProvider?: JsonRpcProvider;
     private _signer: RawSigner | null = null;
 
-    public setNewJsonRpcProvider(apiEnv: API_ENV = DEFAULT_API_ENV) {
+    public setNewJsonRpcProvider(
+        apiEnv: API_ENV = DEFAULT_API_ENV,
+        customRPC?: string | null
+    ) {
         // We also clear the query client whenever set set a new API provider:
         queryClient.clear();
         this._apiFullNodeProvider = new JsonRpcProvider(
-            getDefaultAPI(apiEnv).fullNode
+            customRPC ?? getDefaultAPI(apiEnv).fullNode
         );
         this._signer = null;
     }
