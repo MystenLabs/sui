@@ -39,7 +39,7 @@ pub trait CausalOrder {
 pub trait EffectsStore {
     fn get_effects<'a>(
         &self,
-        transactions: impl Iterator<Item = &'a ExecutionDigests> + Clone,
+        transactions: impl Iterator<Item = &'a TransactionDigest> + Clone,
     ) -> SuiResult<Vec<Option<TransactionEffects>>>;
 
     fn get_causal_order_and_gas_summary_from_effects<'a>(
@@ -47,7 +47,8 @@ pub trait EffectsStore {
         transactions: impl Iterator<Item = &'a ExecutionDigests> + Clone,
         ckpt_store: &mut CheckpointStore,
     ) -> SuiResult<(Vec<ExecutionDigests>, GasCostSummary)> {
-        let effects = self.get_effects(transactions)?;
+        let digests = transactions.map(|x| &x.transaction);
+        let effects = self.get_effects(digests)?;
 
         // Ensure all transactions included are executed (static property). This should be true since we should not
         // be signing a checkpoint unless we have processed all transactions within it.
@@ -189,12 +190,12 @@ pub trait EffectsStore {
 impl EffectsStore for Arc<AuthorityStore> {
     fn get_effects<'a>(
         &self,
-        transactions: impl Iterator<Item = &'a ExecutionDigests> + Clone,
+        transactions: impl Iterator<Item = &'a TransactionDigest> + Clone,
     ) -> SuiResult<Vec<Option<TransactionEffects>>> {
         Ok(self
             .perpetual_tables
             .effects
-            .multi_get(transactions.map(|d| d.transaction))?
+            .multi_get(transactions)?
             .into_iter()
             .map(|item| item.map(|x| x.effects))
             .collect())
@@ -218,10 +219,10 @@ impl CausalOrder for TestEffectsStore {
 impl EffectsStore for TestEffectsStore {
     fn get_effects<'a>(
         &self,
-        transactions: impl Iterator<Item = &'a ExecutionDigests> + Clone,
+        transactions: impl Iterator<Item = &'a TransactionDigest> + Clone,
     ) -> SuiResult<Vec<Option<TransactionEffects>>> {
         Ok(transactions
-            .map(|item| self.0.get(&item.transaction).cloned())
+            .map(|item| self.0.get(item.as_ref()).cloned())
             .collect())
     }
 
@@ -230,10 +231,9 @@ impl EffectsStore for TestEffectsStore {
         transactions: impl Iterator<Item = &'a ExecutionDigests> + Clone,
         _ckpt_store: &mut CheckpointStore,
     ) -> SuiResult<(Vec<ExecutionDigests>, GasCostSummary)> {
+        let digests = transactions.clone().map(|x| &x.transaction);
         let gas_costs = get_total_gas_costs_from_txn_effects(
-            self.get_effects(transactions.clone())?
-                .iter()
-                .filter_map(|e| e.as_ref()),
+            self.get_effects(digests)?.iter().filter_map(|e| e.as_ref()),
         );
         Ok((
             self.get_complete_causal_order(transactions, _ckpt_store)?,
@@ -245,10 +245,10 @@ impl EffectsStore for TestEffectsStore {
 impl EffectsStore for BTreeMap<TransactionDigest, TransactionEffects> {
     fn get_effects<'a>(
         &self,
-        transactions: impl Iterator<Item = &'a ExecutionDigests> + Clone,
+        transactions: impl Iterator<Item = &'a TransactionDigest> + Clone,
     ) -> SuiResult<Vec<Option<TransactionEffects>>> {
         Ok(transactions
-            .map(|item| self.get(&item.transaction).cloned())
+            .map(|item| self.get(item.as_ref()).cloned())
             .collect())
     }
 }
