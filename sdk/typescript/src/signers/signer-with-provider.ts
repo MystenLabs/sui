@@ -82,7 +82,7 @@ export abstract class SignerWithProvider implements Signer {
    * Sign a transaction and submit to the Fullnode for execution. Only exists
    * on Fullnode
    */
-  async signAndExecuteTransactionWithRequestType(
+  async signAndExecuteTransaction(
     transaction: Base64DataBuffer | SignableTransaction,
     requestType: ExecuteTransactionRequestType = 'WaitForLocalExecution'
   ): Promise<SuiExecuteTransactionResponse> {
@@ -97,7 +97,7 @@ export abstract class SignerWithProvider implements Signer {
           : new Base64DataBuffer(transaction.data);
 
       const sig = await this.signData(txBytes);
-      return await this.provider.executeTransactionWithRequestType(
+      return await this.provider.executeTransaction(
         txBytes.toString(),
         sig.signatureScheme,
         sig.signature.toString(),
@@ -108,29 +108,23 @@ export abstract class SignerWithProvider implements Signer {
 
     switch (transaction.kind) {
       case 'moveCall':
-        return this.executeMoveCallWithRequestType(
-          transaction.data,
-          requestType
-        );
+        return this.executeMoveCall(transaction.data, requestType);
       case 'transferSui':
-        return this.transferSuiWithRequestType(transaction.data, requestType);
+        return this.transferSui(transaction.data, requestType);
       case 'transferObject':
-        return this.transferObjectWithRequestType(
-          transaction.data,
-          requestType
-        );
+        return this.transferObject(transaction.data, requestType);
       case 'mergeCoin':
-        return this.mergeCoinWithRequestType(transaction.data, requestType);
+        return this.mergeCoin(transaction.data, requestType);
       case 'splitCoin':
-        return this.splitCoinWithRequestType(transaction.data, requestType);
+        return this.splitCoin(transaction.data, requestType);
       case 'pay':
-        return this.payWithRequestType(transaction.data, requestType);
+        return this.pay(transaction.data, requestType);
       case 'paySui':
-        return this.paySuiWithRequestType(transaction.data, requestType);
+        return this.paySui(transaction.data, requestType);
       case 'payAllSui':
-        return this.payAllSuiWithRequestType(transaction.data, requestType);
+        return this.payAllSui(transaction.data, requestType);
       case 'publish':
-        return this.publishWithRequestType(transaction.data, requestType);
+        return this.publish(transaction.data, requestType);
       default:
         throw new Error(
           `Unknown transaction kind: "${(transaction as any).kind}"`
@@ -143,7 +137,7 @@ export abstract class SignerWithProvider implements Signer {
    * Serialize and sign a `TransferObject` transaction and submit to the Fullnode
    * for execution
    */
-  async transferObjectWithRequestType(
+  async transferObject(
     transaction: TransferObjectTransaction,
     requestType: ExecuteTransactionRequestType = 'WaitForLocalExecution'
   ): Promise<SuiExecuteTransactionResponse> {
@@ -152,10 +146,7 @@ export abstract class SignerWithProvider implements Signer {
       signerAddress,
       transaction
     );
-    return await this.signAndExecuteTransactionWithRequestType(
-      txBytes,
-      requestType
-    );
+    return await this.signAndExecuteTransaction(txBytes, requestType);
   }
 
   /**
@@ -163,7 +154,7 @@ export abstract class SignerWithProvider implements Signer {
    * Serialize and sign a `TransferSui` transaction and submit to the Fullnode
    * for execution
    */
-  async transferSuiWithRequestType(
+  async transferSui(
     transaction: TransferSuiTransaction,
     requestType: ExecuteTransactionRequestType = 'WaitForLocalExecution'
   ): Promise<SuiExecuteTransactionResponse> {
@@ -172,47 +163,38 @@ export abstract class SignerWithProvider implements Signer {
       signerAddress,
       transaction
     );
-    return await this.signAndExecuteTransactionWithRequestType(
-      txBytes,
-      requestType
-    );
+    return await this.signAndExecuteTransaction(txBytes, requestType);
   }
 
   /**
    *
    * Serialize and Sign a `Pay` transaction and submit to the fullnode for execution
    */
-  async payWithRequestType(
+  async pay(
     transaction: PayTransaction,
     requestType: ExecuteTransactionRequestType = 'WaitForLocalExecution'
   ): Promise<SuiExecuteTransactionResponse> {
     const signerAddress = await this.getAddress();
     const txBytes = await this.serializer.newPay(signerAddress, transaction);
-    return await this.signAndExecuteTransactionWithRequestType(
-      txBytes,
-      requestType
-    );
+    return await this.signAndExecuteTransaction(txBytes, requestType);
   }
 
   /**
    * Serialize and Sign a `PaySui` transaction and submit to the fullnode for execution
    */
-  async paySuiWithRequestType(
+  async paySui(
     transaction: PaySuiTransaction,
     requestType: ExecuteTransactionRequestType = 'WaitForLocalExecution'
   ): Promise<SuiExecuteTransactionResponse> {
     const signerAddress = await this.getAddress();
     const txBytes = await this.serializer.newPaySui(signerAddress, transaction);
-    return await this.signAndExecuteTransactionWithRequestType(
-      txBytes,
-      requestType
-    );
+    return await this.signAndExecuteTransaction(txBytes, requestType);
   }
 
   /**
    * Serialize and Sign a `PayAllSui` transaction and submit to the fullnode for execution
    */
-  async payAllSuiWithRequestType(
+  async payAllSui(
     transaction: PayAllSuiTransaction,
     requestType: ExecuteTransactionRequestType = 'WaitForLocalExecution'
   ): Promise<SuiExecuteTransactionResponse> {
@@ -221,10 +203,7 @@ export abstract class SignerWithProvider implements Signer {
       signerAddress,
       transaction
     );
-    return await this.signAndExecuteTransactionWithRequestType(
-      txBytes,
-      requestType
-    );
+    return await this.signAndExecuteTransaction(txBytes, requestType);
   }
 
   /**
@@ -232,7 +211,7 @@ export abstract class SignerWithProvider implements Signer {
    * Serialize and sign a `MergeCoin` transaction and submit to the Fullnode
    * for execution
    */
-  async mergeCoinWithRequestType(
+  async mergeCoin(
     transaction: MergeCoinTransaction,
     requestType: ExecuteTransactionRequestType = 'WaitForLocalExecution'
   ): Promise<SuiExecuteTransactionResponse> {
@@ -241,10 +220,7 @@ export abstract class SignerWithProvider implements Signer {
       signerAddress,
       transaction
     );
-    return await this.signAndExecuteTransactionWithRequestType(
-      txBytes,
-      requestType
-    );
+    return await this.signAndExecuteTransaction(txBytes, requestType);
   }
 
   /**
@@ -252,7 +228,7 @@ export abstract class SignerWithProvider implements Signer {
    * Serialize and sign a `SplitCoin` transaction and submit to the Fullnode
    * for execution
    */
-  async splitCoinWithRequestType(
+  async splitCoin(
     transaction: SplitCoinTransaction,
     requestType: ExecuteTransactionRequestType = 'WaitForLocalExecution'
   ): Promise<SuiExecuteTransactionResponse> {
@@ -261,17 +237,14 @@ export abstract class SignerWithProvider implements Signer {
       signerAddress,
       transaction
     );
-    return await this.signAndExecuteTransactionWithRequestType(
-      txBytes,
-      requestType
-    );
+    return await this.signAndExecuteTransaction(txBytes, requestType);
   }
 
   /**
    * Serialize and sign a `MoveCall` transaction and submit to the Fullnode
    * for execution
    */
-  async executeMoveCallWithRequestType(
+  async executeMoveCall(
     transaction: MoveCallTransaction,
     requestType: ExecuteTransactionRequestType = 'WaitForLocalExecution'
   ): Promise<SuiExecuteTransactionResponse> {
@@ -280,10 +253,7 @@ export abstract class SignerWithProvider implements Signer {
       signerAddress,
       transaction
     );
-    return await this.signAndExecuteTransactionWithRequestType(
-      txBytes,
-      requestType
-    );
+    return await this.signAndExecuteTransaction(txBytes, requestType);
   }
 
   /**
@@ -291,7 +261,7 @@ export abstract class SignerWithProvider implements Signer {
    * Serialize and sign a `Publish` transaction and submit to the Fullnode
    * for execution
    */
-  async publishWithRequestType(
+  async publish(
     transaction: PublishTransaction,
     requestType: ExecuteTransactionRequestType = 'WaitForLocalExecution'
   ): Promise<SuiExecuteTransactionResponse> {
@@ -300,9 +270,6 @@ export abstract class SignerWithProvider implements Signer {
       signerAddress,
       transaction
     );
-    return await this.signAndExecuteTransactionWithRequestType(
-      txBytes,
-      requestType
-    );
+    return await this.signAndExecuteTransaction(txBytes, requestType);
   }
 }

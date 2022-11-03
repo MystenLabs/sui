@@ -181,7 +181,7 @@ import { Ed25519Keypair, JsonRpcProvider, RawSigner } from '@mysten/sui.js';
 const keypair = new Ed25519Keypair();
 const provider = new JsonRpcProvider();
 const signer = new RawSigner(keypair, provider);
-const transferTxn = await signer.transferObjectWithRequestType({
+const transferTxn = await signer.transferObject({
   objectId: '0x5015b016ab570df14c87649eda918e09e5cc61e0',
   gasBudget: 1000,
   recipient: '0xd84058cb73bdeabe123b56632713dcd65e1a6c92',
@@ -197,7 +197,7 @@ import { Ed25519Keypair, JsonRpcProvider, RawSigner } from '@mysten/sui.js';
 const keypair = new Ed25519Keypair();
 const provider = new JsonRpcProvider();
 const signer = new RawSigner(keypair, provider);
-const splitTxn = await signer.splitCoinWithRequestType({
+const splitTxn = await signer.splitCoin({
   coinObjectId: '0x5015b016ab570df14c87649eda918e09e5cc61e0',
   // Say if the original coin has a balance of 100,
   // This function will create three new coins of amount 10, 20, 30,
@@ -216,7 +216,7 @@ import { Ed25519Keypair, JsonRpcProvider, RawSigner } from '@mysten/sui.js';
 const keypair = new Ed25519Keypair();
 const provider = new JsonRpcProvider();
 const signer = new RawSigner(keypair, provider);
-const mergeTxn = await signer.mergeCoinWithRequestType({
+const mergeTxn = await signer.mergeCoin({
   primaryCoin: '0x5015b016ab570df14c87649eda918e09e5cc61e0',
   coinToMerge: '0xcc460051569bfb888dedaf5182e76f473ee351af',
   gasBudget: 1000,
@@ -232,7 +232,7 @@ import { Ed25519Keypair, JsonRpcProvider, RawSigner } from '@mysten/sui.js';
 const keypair = new Ed25519Keypair();
 const provider = new JsonRpcProvider();
 const signer = new RawSigner(keypair, provider);
-const moveCallTxn = await signer.executeMoveCallWithRequestType({
+const moveCallTxn = await signer.executeMoveCall({
   packageObjectId: '0x2',
   module: 'devnet_nft',
   function: 'mint',
@@ -306,7 +306,7 @@ const compiledModules = JSON.parse(
 const modulesInBytes = compiledModules.map((m) =>
   Array.from(new Base64DataBuffer(m).getData())
 );
-const publishTxn = await signer.publishWithRequestType({
+const publishTxn = await signer.publish({
   compiledModules: modulesInBytes,
   gasBudget: 10000,
 });

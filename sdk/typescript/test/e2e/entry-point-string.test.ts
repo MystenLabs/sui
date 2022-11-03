@@ -23,7 +23,7 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
     let packageId: ObjectId;
 
     async function callWithString(str: string | string[], funcName: string) {
-      const txn = await signer.executeMoveCallWithRequestType({
+      const txn = await signer.executeMoveCall({
         packageObjectId: packageId,
         module: 'entry_point_string',
         function: funcName,

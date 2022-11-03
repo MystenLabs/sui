@@ -39,7 +39,7 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
       const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
         toolbox.address()
       );
-      const txn = await signer.splitCoinWithRequestType({
+      const txn = await signer.splitCoin({
         coinObjectId: coins[0].objectId,
         splitAmounts: [DEFAULT_GAS_BUDGET * 2],
         gasBudget: DEFAULT_GAS_BUDGET,
@@ -51,7 +51,7 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
       const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
         toolbox.address()
       );
-      const txn = await signer.mergeCoinWithRequestType({
+      const txn = await signer.mergeCoin({
         primaryCoin: coins[0].objectId,
         coinToMerge: coins[1].objectId,
         gasBudget: DEFAULT_GAS_BUDGET,
@@ -63,7 +63,7 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
       const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
         toolbox.address()
       );
-      const txn = await signer.executeMoveCallWithRequestType({
+      const txn = await signer.executeMoveCall({
         packageObjectId: '0x2',
         module: 'devnet_nft',
         function: 'mint',
@@ -90,7 +90,7 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
       const validator_address = (validator_metadata as SuiMoveObject).fields
         .sui_address;
 
-      const txn = await signer.executeMoveCallWithRequestType({
+      const txn = await signer.executeMoveCall({
         packageObjectId: '0x2',
         module: 'sui_system',
         function: 'request_add_delegation',
@@ -111,7 +111,7 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
       const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
         toolbox.address()
       );
-      const txn = await signer.transferSuiWithRequestType({
+      const txn = await signer.transferSui({
         suiObjectId: coins[0].objectId,
         gasBudget: DEFAULT_GAS_BUDGET,
         recipient: DEFAULT_RECIPIENT,
@@ -124,7 +124,7 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
       const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
         toolbox.address()
       );
-      const txn = await signer.transferObjectWithRequestType({
+      const txn = await signer.transferObject({
         objectId: coins[0].objectId,
         gasBudget: DEFAULT_GAS_BUDGET,
         recipient: DEFAULT_RECIPIENT,
@@ -141,7 +141,7 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
         );
 
       // get some new coins with small amount
-      const splitTxn = await signer.splitCoinWithRequestType({
+      const splitTxn = await signer.splitCoin({
         coinObjectId: getObjectId(coins[0]),
         splitAmounts: [1, 2, 3],
         gasBudget: DEFAULT_GAS_BUDGET,
@@ -152,7 +152,7 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
       );
 
       // use the newly created coins as the input coins for the pay transaction
-      const txn = await signer.payWithRequestType({
+      const txn = await signer.pay({
         inputCoins: splitCoins,
         gasBudget: DEFAULT_GAS_BUDGET,
         recipients: [DEFAULT_RECIPIENT, DEFAULT_RECIPIENT_2],
@@ -170,7 +170,7 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
           BigInt(DEFAULT_GAS_BUDGET)
         );
 
-      const splitTxn = await signer.splitCoinWithRequestType({
+      const splitTxn = await signer.splitCoin({
         coinObjectId: getObjectId(coins[0]),
         splitAmounts: [2000, 2000, 2000],
         gasBudget: gasBudget,
@@ -180,7 +180,7 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
         getObjectId(c)
       );
 
-      const txn = await signer.paySuiWithRequestType({
+      const txn = await signer.paySui({
         inputCoins: splitCoins,
         recipients: [DEFAULT_RECIPIENT, DEFAULT_RECIPIENT_2],
         amounts: [1000, 1000],
@@ -197,7 +197,7 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
           BigInt(DEFAULT_GAS_BUDGET)
         );
 
-      const splitTxn = await signer.splitCoinWithRequestType({
+      const splitTxn = await signer.splitCoin({
         coinObjectId: getObjectId(coins[0]),
         splitAmounts: [2000, 2000, 2000],
         gasBudget: gasBudget,
@@ -207,7 +207,7 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
         getObjectId(c)
       );
 
-      const txn = await signer.payAllSuiWithRequestType({
+      const txn = await signer.payAllSui({
         inputCoins: splitCoins,
         recipient: DEFAULT_RECIPIENT,
         gasBudget: gasBudget,
