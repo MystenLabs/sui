@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{
-    authority_store::{InternalSequenceNumber, ObjectKey},
+    authority_store::{InternalSequenceNumber, ObjectKey, PendingDigest},
     *,
 };
 use narwhal_executor::ExecutionIndices;
@@ -32,7 +32,7 @@ pub struct AuthorityEpochTables<S> {
     /// reads this table and executes the certificates. The order is a hint as to their
     /// causal dependencies. Note that there is no guarantee digests are unique. Once executed, and
     /// effects are written the entry should be deleted.
-    pub(crate) pending_execution: DBMap<InternalSequenceNumber, TransactionDigest>,
+    pub(crate) pending_execution: DBMap<InternalSequenceNumber, PendingDigest>,
 
     /// Hold the lock for shared objects. These locks are written by a single task: upon receiving a valid
     /// certified transaction from consensus, the authority assigns a lock to each shared objects of the
