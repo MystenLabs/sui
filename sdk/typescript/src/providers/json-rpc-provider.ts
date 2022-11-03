@@ -183,36 +183,24 @@ export class JsonRpcProvider extends Provider {
     moduleName: string,
     functionName: string
   ): Promise<SuiMoveFunctionArgTypes> {
-    try {
-      return await this.client.requestWithType(
-        'sui_getMoveFunctionArgTypes',
-        [packageId, moduleName, functionName],
-        isSuiMoveFunctionArgTypes,
-        this.options.skipDataValidation
-      );
-    } catch (err) {
-      throw new Error(
-        `Error fetching Move function arg types with package object ID: ${packageId}, module name: ${moduleName}, function name: ${functionName}`
-      );
-    }
+    return await this.client.requestWithType(
+      'sui_getMoveFunctionArgTypes',
+      [packageId, moduleName, functionName],
+      isSuiMoveFunctionArgTypes,
+      this.options.skipDataValidation
+    );
   }
 
   async getNormalizedMoveModulesByPackage(
     packageId: string
   ): Promise<SuiMoveNormalizedModules> {
     // TODO: Add caching since package object does not change
-    try {
-      return await this.client.requestWithType(
-        'sui_getNormalizedMoveModulesByPackage',
-        [packageId],
-        isSuiMoveNormalizedModules,
-        this.options.skipDataValidation
-      );
-    } catch (err) {
-      throw new Error(
-        `Error fetching package: ${err} for package ${packageId}`
-      );
-    }
+    return await this.client.requestWithType(
+      'sui_getNormalizedMoveModulesByPackage',
+      [packageId],
+      isSuiMoveNormalizedModules,
+      this.options.skipDataValidation
+    );
   }
 
   async getNormalizedMoveModule(
@@ -220,18 +208,12 @@ export class JsonRpcProvider extends Provider {
     moduleName: string
   ): Promise<SuiMoveNormalizedModule> {
     // TODO: Add caching since package object does not change
-    try {
-      return await this.client.requestWithType(
-        'sui_getNormalizedMoveModule',
-        [packageId, moduleName],
-        isSuiMoveNormalizedModule,
-        this.options.skipDataValidation
-      );
-    } catch (err) {
-      throw new Error(
-        `Error fetching module: ${err} for package ${packageId}, module ${moduleName}}`
-      );
-    }
+    return await this.client.requestWithType(
+      'sui_getNormalizedMoveModule',
+      [packageId, moduleName],
+      isSuiMoveNormalizedModule,
+      this.options.skipDataValidation
+    );
   }
 
   async getNormalizedMoveFunction(
@@ -240,18 +222,12 @@ export class JsonRpcProvider extends Provider {
     functionName: string
   ): Promise<SuiMoveNormalizedFunction> {
     // TODO: Add caching since package object does not change
-    try {
-      return await this.client.requestWithType(
-        'sui_getNormalizedMoveFunction',
-        [packageId, moduleName, functionName],
-        isSuiMoveNormalizedFunction,
-        this.options.skipDataValidation
-      );
-    } catch (err) {
-      throw new Error(
-        `Error fetching function: ${err} for package ${packageId}, module ${moduleName} and function ${functionName}}`
-      );
-    }
+    return await this.client.requestWithType(
+      'sui_getNormalizedMoveFunction',
+      [packageId, moduleName, functionName],
+      isSuiMoveNormalizedFunction,
+      this.options.skipDataValidation
+    );
   }
 
   async getNormalizedMoveStruct(
@@ -259,34 +235,22 @@ export class JsonRpcProvider extends Provider {
     moduleName: string,
     structName: string
   ): Promise<SuiMoveNormalizedStruct> {
-    try {
-      return await this.client.requestWithType(
-        'sui_getNormalizedMoveStruct',
-        [packageId, moduleName, structName],
-        isSuiMoveNormalizedStruct,
-        this.options.skipDataValidation
-      );
-    } catch (err) {
-      throw new Error(
-        `Error fetching struct: ${err} for package ${packageId}, module ${moduleName} and struct ${structName}}`
-      );
-    }
+    return await this.client.requestWithType(
+      'sui_getNormalizedMoveStruct',
+      [packageId, moduleName, structName],
+      isSuiMoveNormalizedStruct,
+      this.options.skipDataValidation
+    );
   }
 
   // Objects
   async getObjectsOwnedByAddress(address: string): Promise<SuiObjectInfo[]> {
-    try {
-      return await this.client.requestWithType(
-        'sui_getObjectsOwnedByAddress',
-        [address],
-        isGetOwnedObjectsResponse,
-        this.options.skipDataValidation
-      );
-    } catch (err) {
-      throw new Error(
-        `Error fetching owned object: ${err} for address ${address}`
-      );
-    }
+    return await this.client.requestWithType(
+      'sui_getObjectsOwnedByAddress',
+      [address],
+      isGetOwnedObjectsResponse,
+      this.options.skipDataValidation
+    );
   }
 
   async getGasObjectsOwnedByAddress(address: string): Promise<SuiObjectInfo[]> {
@@ -298,7 +262,7 @@ export class JsonRpcProvider extends Provider {
     const [packageId, module, symbol] = coinType.split('::');
     if (
       normalizeSuiAddress(packageId) !== normalizeSuiAddress('0x2') ||
-      module != 'sui' ||
+      module !== 'sui' ||
       symbol !== 'SUI'
     ) {
       throw new Error(
@@ -358,31 +322,21 @@ export class JsonRpcProvider extends Provider {
   }
 
   async getObjectsOwnedByObject(objectId: string): Promise<SuiObjectInfo[]> {
-    try {
-      return await this.client.requestWithType(
-        'sui_getObjectsOwnedByObject',
-        [objectId],
-        isGetOwnedObjectsResponse,
-        this.options.skipDataValidation
-      );
-    } catch (err) {
-      throw new Error(
-        `Error fetching owned object: ${err} for objectId ${objectId}`
-      );
-    }
+    return await this.client.requestWithType(
+      'sui_getObjectsOwnedByObject',
+      [objectId],
+      isGetOwnedObjectsResponse,
+      this.options.skipDataValidation
+    );
   }
 
   async getObject(objectId: string): Promise<GetObjectDataResponse> {
-    try {
-      return await this.client.requestWithType(
-        'sui_getObject',
-        [objectId],
-        isGetObjectDataResponse,
-        this.options.skipDataValidation
-      );
-    } catch (err) {
-      throw new Error(`Error fetching object info: ${err} for id ${objectId}`);
-    }
+    return await this.client.requestWithType(
+      'sui_getObject',
+      [objectId],
+      isGetObjectDataResponse,
+      this.options.skipDataValidation
+    );
   }
 
   async getObjectRef(objectId: string): Promise<SuiObjectRef | undefined> {
@@ -395,15 +349,12 @@ export class JsonRpcProvider extends Provider {
       method: 'sui_getObject',
       args: [id],
     }));
-    try {
-      return await this.client.batchRequestWithType(
-        requests,
-        isGetObjectDataResponse,
-        this.options.skipDataValidation
-      );
-    } catch (err) {
-      throw new Error(`Error fetching object info: ${err} for id ${objectIds}`);
-    }
+
+    return await this.client.batchRequestWithType(
+      requests,
+      isGetObjectDataResponse,
+      this.options.skipDataValidation
+    );
   }
 
   // Transactions
@@ -413,18 +364,12 @@ export class JsonRpcProvider extends Provider {
     limit: number | null = null,
     order: Ordering = 'Descending'
   ): Promise<PaginatedTransactionDigests> {
-    try {
-      return await this.client.requestWithType(
-        'sui_getTransactions',
-        [query, cursor, limit, order],
-        isPaginatedTransactionDigests,
-        this.options.skipDataValidation
-      );
-    } catch (err) {
-      throw new Error(
-        `Error getting transactions for query: ${err} for query ${query}`
-      );
-    }
+    return await this.client.requestWithType(
+      'sui_getTransactions',
+      [query, cursor, limit, order],
+      isPaginatedTransactionDigests,
+      this.options.skipDataValidation
+    );
   }
 
   async getTransactionsForObject(
@@ -442,18 +387,12 @@ export class JsonRpcProvider extends Provider {
       },
     ];
 
-    try {
-      const results = await this.client.batchRequestWithType(
-        requests,
-        isPaginatedTransactionDigests,
-        this.options.skipDataValidation
-      );
-      return [...results[0].data, ...results[1].data];
-    } catch (err) {
-      throw new Error(
-        `Error getting transactions for object: ${err} for id ${objectID}`
-      );
-    }
+    const results = await this.client.batchRequestWithType(
+      requests,
+      isPaginatedTransactionDigests,
+      this.options.skipDataValidation
+    );
+    return [...results[0].data, ...results[1].data];
   }
 
   async getTransactionsForAddress(
@@ -470,36 +409,25 @@ export class JsonRpcProvider extends Provider {
         args: [{ FromAddress: addressID }, null, null, ordering],
       },
     ];
-    try {
-      const results = await this.client.batchRequestWithType(
-        requests,
-        isPaginatedTransactionDigests,
-        this.options.skipDataValidation
-      );
-      return [...results[0].data, ...results[1].data];
-    } catch (err) {
-      throw new Error(
-        `Error getting transactions for address: ${err} for id ${addressID}`
-      );
-    }
+
+    const results = await this.client.batchRequestWithType(
+      requests,
+      isPaginatedTransactionDigests,
+      this.options.skipDataValidation
+    );
+    return [...results[0].data, ...results[1].data];
   }
 
   async getTransactionWithEffects(
     digest: TransactionDigest
   ): Promise<SuiTransactionResponse> {
-    try {
-      const resp = await this.client.requestWithType(
-        'sui_getTransaction',
-        [digest],
-        isSuiTransactionResponse,
-        this.options.skipDataValidation
-      );
-      return resp;
-    } catch (err) {
-      throw new Error(
-        `Error getting transaction with effects: ${err} for digest ${digest}`
-      );
-    }
+    const resp = await this.client.requestWithType(
+      'sui_getTransaction',
+      [digest],
+      isSuiTransactionResponse,
+      this.options.skipDataValidation
+    );
+    return resp;
   }
 
   async getTransactionWithEffectsBatch(
@@ -509,18 +437,11 @@ export class JsonRpcProvider extends Provider {
       method: 'sui_getTransaction',
       args: [d],
     }));
-    try {
-      return await this.client.batchRequestWithType(
-        requests,
-        isSuiTransactionResponse,
-        this.options.skipDataValidation
-      );
-    } catch (err) {
-      const list = digests.join(', ').substring(0, -2);
-      throw new Error(
-        `Error getting transaction effects: ${err} for digests [${list}]`
-      );
-    }
+    return await this.client.batchRequestWithType(
+      requests,
+      isSuiTransactionResponse,
+      this.options.skipDataValidation
+    );
   }
 
   async executeTransactionWithRequestType(
@@ -530,49 +451,35 @@ export class JsonRpcProvider extends Provider {
     pubkey: string,
     requestType: ExecuteTransactionRequestType = 'WaitForEffectsCert'
   ): Promise<SuiExecuteTransactionResponse> {
-    try {
-      const resp = await this.client.requestWithType(
-        'sui_executeTransaction',
-        [txnBytes, signatureScheme, signature, pubkey, requestType],
-        isSuiExecuteTransactionResponse,
-        this.options.skipDataValidation
-      );
-      return resp;
-    } catch (err) {
-      throw new Error(`Error executing transaction with request type: ${err}}`);
-    }
+    const resp = await this.client.requestWithType(
+      'sui_executeTransaction',
+      [txnBytes, signatureScheme, signature, pubkey, requestType],
+      isSuiExecuteTransactionResponse,
+      this.options.skipDataValidation
+    );
+    return resp;
   }
 
   async getTotalTransactionNumber(): Promise<number> {
-    try {
-      const resp = await this.client.requestWithType(
-        'sui_getTotalTransactionNumber',
-        [],
-        isNumber,
-        this.options.skipDataValidation
-      );
-      return resp;
-    } catch (err) {
-      throw new Error(`Error fetching total transaction number: ${err}`);
-    }
+    const resp = await this.client.requestWithType(
+      'sui_getTotalTransactionNumber',
+      [],
+      isNumber,
+      this.options.skipDataValidation
+    );
+    return resp;
   }
 
   async getTransactionDigestsInRange(
     start: GatewayTxSeqNumber,
     end: GatewayTxSeqNumber
   ): Promise<GetTxnDigestsResponse> {
-    try {
-      return await this.client.requestWithType(
-        'sui_getTransactionsInRange',
-        [start, end],
-        isGetTxnDigestsResponse,
-        this.options.skipDataValidation
-      );
-    } catch (err) {
-      throw new Error(
-        `Error fetching transaction digests in range: ${err} for range ${start}-${end}`
-      );
-    }
+    return await this.client.requestWithType(
+      'sui_getTransactionsInRange',
+      [start, end],
+      isGetTxnDigestsResponse,
+      this.options.skipDataValidation
+    );
   }
 
   // Events
@@ -581,39 +488,27 @@ export class JsonRpcProvider extends Provider {
     digest: TransactionDigest,
     count: number = EVENT_QUERY_MAX_LIMIT
   ): Promise<SuiEvents> {
-    try {
-      return await this.client.requestWithType(
-        'sui_getEventsByTransaction',
-        [digest, count],
-        isSuiEvents,
-        this.options.skipDataValidation
-      );
-    } catch (err) {
-      throw new Error(
-        `Error getting events by transaction: ${digest}, with error: ${err}`
-      );
-    }
+    return await this.client.requestWithType(
+      'sui_getEventsByTransaction',
+      [digest, count],
+      isSuiEvents,
+      this.options.skipDataValidation
+    );
   }
 
   async getEventsByModule(
-    package_: string,
+    packageId: string,
     module: string,
     count: number = EVENT_QUERY_MAX_LIMIT,
     startTime: number = DEFAULT_START_TIME,
     endTime: number = DEFAULT_END_TIME
   ): Promise<SuiEvents> {
-    try {
-      return await this.client.requestWithType(
-        'sui_getEventsByModule',
-        [package_, module, count, startTime, endTime],
-        isSuiEvents,
-        this.options.skipDataValidation
-      );
-    } catch (err) {
-      throw new Error(
-        `Error getting events by transaction module: ${package_}::${module}, with error: ${err}`
-      );
-    }
+    return await this.client.requestWithType(
+      'sui_getEventsByModule',
+      [packageId, module, count, startTime, endTime],
+      isSuiEvents,
+      this.options.skipDataValidation
+    );
   }
 
   async getEventsByMoveEventStructName(
@@ -622,18 +517,12 @@ export class JsonRpcProvider extends Provider {
     startTime: number = DEFAULT_START_TIME,
     endTime: number = DEFAULT_END_TIME
   ): Promise<SuiEvents> {
-    try {
-      return await this.client.requestWithType(
-        'sui_getEventsByMoveEventStructName',
-        [moveEventStructName, count, startTime, endTime],
-        isSuiEvents,
-        this.options.skipDataValidation
-      );
-    } catch (err) {
-      throw new Error(
-        `Error getting events by move event struct name: ${moveEventStructName}, with error: ${err}`
-      );
-    }
+    return await this.client.requestWithType(
+      'sui_getEventsByMoveEventStructName',
+      [moveEventStructName, count, startTime, endTime],
+      isSuiEvents,
+      this.options.skipDataValidation
+    );
   }
 
   async getEventsBySender(
@@ -642,18 +531,12 @@ export class JsonRpcProvider extends Provider {
     startTime: number = DEFAULT_START_TIME,
     endTime: number = DEFAULT_END_TIME
   ): Promise<SuiEvents> {
-    try {
-      return await this.client.requestWithType(
-        'sui_getEventsBySender',
-        [sender, count, startTime, endTime],
-        isSuiEvents,
-        this.options.skipDataValidation
-      );
-    } catch (err) {
-      throw new Error(
-        `Error getting events by sender: ${sender}, with error: ${err}`
-      );
-    }
+    return await this.client.requestWithType(
+      'sui_getEventsBySender',
+      [sender, count, startTime, endTime],
+      isSuiEvents,
+      this.options.skipDataValidation
+    );
   }
 
   async getEventsByRecipient(
@@ -662,18 +545,12 @@ export class JsonRpcProvider extends Provider {
     startTime: number = DEFAULT_START_TIME,
     endTime: number = DEFAULT_END_TIME
   ): Promise<SuiEvents> {
-    try {
-      return await this.client.requestWithType(
-        'sui_getEventsByRecipient',
-        [recipient, count, startTime, endTime],
-        isSuiEvents,
-        this.options.skipDataValidation
-      );
-    } catch (err) {
-      throw new Error(
-        `Error getting events by receipient: ${recipient}, with error: ${err}`
-      );
-    }
+    return await this.client.requestWithType(
+      'sui_getEventsByRecipient',
+      [recipient, count, startTime, endTime],
+      isSuiEvents,
+      this.options.skipDataValidation
+    );
   }
 
   async getEventsByObject(
@@ -682,18 +559,12 @@ export class JsonRpcProvider extends Provider {
     startTime: number = DEFAULT_START_TIME,
     endTime: number = DEFAULT_END_TIME
   ): Promise<SuiEvents> {
-    try {
-      return await this.client.requestWithType(
-        'sui_getEventsByObject',
-        [object, count, startTime, endTime],
-        isSuiEvents,
-        this.options.skipDataValidation
-      );
-    } catch (err) {
-      throw new Error(
-        `Error getting events by object: ${object}, with error: ${err}`
-      );
-    }
+    return await this.client.requestWithType(
+      'sui_getEventsByObject',
+      [object, count, startTime, endTime],
+      isSuiEvents,
+      this.options.skipDataValidation
+    );
   }
 
   async getEventsByTimeRange(
@@ -701,18 +572,12 @@ export class JsonRpcProvider extends Provider {
     startTime: number = DEFAULT_START_TIME,
     endTime: number = DEFAULT_END_TIME
   ): Promise<SuiEvents> {
-    try {
-      return await this.client.requestWithType(
-        'sui_getEventsByTimeRange',
-        [count, startTime, endTime],
-        isSuiEvents,
-        this.options.skipDataValidation
-      );
-    } catch (err) {
-      throw new Error(
-        `Error getting events by time range: ${startTime} thru ${endTime}, with error: ${err}`
-      );
-    }
+    return await this.client.requestWithType(
+      'sui_getEventsByTimeRange',
+      [count, startTime, endTime],
+      isSuiEvents,
+      this.options.skipDataValidation
+    );
   }
 
   async subscribeEvent(

@@ -197,83 +197,67 @@ export class WebsocketClient {
   private async refreshSubscriptions() {
     if (this.eventSubscriptions.size === 0) return;
 
-    try {
-      let newSubs: Map<SubscriptionId, SubscriptionData> = new Map();
+    let newSubs: Map<SubscriptionId, SubscriptionData> = new Map();
 
-      let newSubsArr: (FilterSubHandler | null)[] = await Promise.all(
-        Array.from(this.eventSubscriptions.values()).map(async (sub) => {
-          const onMessage = sub.onMessage;
-          const filter = sub.filter;
-          if (!filter || !onMessage) return Promise.resolve(null);
-          /**
+    let newSubsArr: (FilterSubHandler | null)[] = await Promise.all(
+      Array.from(this.eventSubscriptions.values()).map(async (sub) => {
+        const onMessage = sub.onMessage;
+        const filter = sub.filter;
+        if (!filter || !onMessage) return Promise.resolve(null);
+        /**
             re-subscribe to the same filter & replace the subscription id.
             we skip calling sui_unsubscribeEvent for the old sub id, because:
               * we assume this is being called after a reconnection
               * the node keys subscriptions with a combo of connection id & subscription id
           */
-          const id = await this.subscribeEvent(filter, onMessage);
-          return { id, onMessage, filter };
-        })
-      );
+        const id = await this.subscribeEvent(filter, onMessage);
+        return { id, onMessage, filter };
+      })
+    );
 
-      newSubsArr.forEach((entry) => {
-        if (entry === null) return;
-        const filter = entry.filter;
-        const onMessage = entry.onMessage;
-        newSubs.set(entry.id, { filter, onMessage });
-      });
+    newSubsArr.forEach((entry) => {
+      if (entry === null) return;
+      const filter = entry.filter;
+      const onMessage = entry.onMessage;
+      newSubs.set(entry.id, { filter, onMessage });
+    });
 
-      this.eventSubscriptions = newSubs;
-    } catch (err) {
-      throw new Error(`error refreshing event subscriptions: ${err}`);
-    }
+    this.eventSubscriptions = newSubs;
   }
 
   async subscribeEvent(
     filter: SuiEventFilter,
     onMessage: (event: SuiEventEnvelope) => void
   ): Promise<SubscriptionId> {
-    try {
-      // lazily connect to websocket to avoid spamming node with connections
-      if (this.connectionState != ConnectionState.Connected)
-        await this.connect();
+    // lazily connect to websocket to avoid spamming node with connections
+    if (this.connectionState !== ConnectionState.Connected)
+      await this.connect();
 
-      let subId = (await this.rpcClient.call(
-        SUBSCRIBE_EVENT_METHOD,
-        [filter],
-        this.options.callTimeout
-      )) as SubscriptionId;
+    let subId = (await this.rpcClient.call(
+      SUBSCRIBE_EVENT_METHOD,
+      [filter],
+      this.options.callTimeout
+    )) as SubscriptionId;
 
-      this.eventSubscriptions.set(subId, { filter, onMessage });
-      return subId;
-    } catch (err) {
-      throw new Error(
-        `Error subscribing to event: ${err}, filter: ${JSON.stringify(filter)}`
-      );
-    }
+    this.eventSubscriptions.set(subId, { filter, onMessage });
+    return subId;
   }
 
   async unsubscribeEvent(id: SubscriptionId): Promise<boolean> {
-    try {
-      if (this.connectionState != ConnectionState.Connected)
-        await this.connect();
+    if (this.connectionState !== ConnectionState.Connected)
+      await this.connect();
 
-      let removedOnNode = (await this.rpcClient.call(
-        UNSUBSCRIBE_EVENT_METHOD,
-        [id],
-        this.options.callTimeout
-      )) as boolean;
-      /**
+    let removedOnNode = (await this.rpcClient.call(
+      UNSUBSCRIBE_EVENT_METHOD,
+      [id],
+      this.options.callTimeout
+    )) as boolean;
+    /**
         if the connection closes before unsubscribe is called,
         the remote node will remove us from its subscribers list without notification,
         leading to removedOnNode being false. but if we still had a record of it locally,
         we should still report that it was deleted successfully
       */
-      return this.eventSubscriptions.delete(id) || removedOnNode;
-    } catch (err) {
-      throw new Error(
-        `Error unsubscribing from event: ${err}, subscription: ${id}}`
-      );
-    }
+    return this.eventSubscriptions.delete(id) || removedOnNode;
   }
 }

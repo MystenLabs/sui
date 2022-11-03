@@ -49,254 +49,186 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
     signerAddress: SuiAddress,
     t: TransferObjectTransaction
   ): Promise<Base64DataBuffer> {
-    try {
-      const objectRef = await this.provider.getObjectRef(t.objectId);
-      const tx = {
-        TransferObject: {
-          recipient: t.recipient,
-          object_ref: objectRef!,
-        },
-      };
-      return await this.constructTransactionData(
-        tx,
-        { kind: 'transferObject', data: t },
-        t.gasPayment,
-        signerAddress
-      );
-    } catch (err) {
-      throw new Error(
-        `Error constructing a TransferObject transaction: ${err} args ${JSON.stringify(
-          t
-        )}`
-      );
-    }
+    const objectRef = await this.provider.getObjectRef(t.objectId);
+    const tx = {
+      TransferObject: {
+        recipient: t.recipient,
+        object_ref: objectRef!,
+      },
+    };
+    return await this.constructTransactionData(
+      tx,
+      { kind: 'transferObject', data: t },
+      t.gasPayment,
+      signerAddress
+    );
   }
 
   async newTransferSui(
     signerAddress: SuiAddress,
     t: TransferSuiTransaction
   ): Promise<Base64DataBuffer> {
-    try {
-      const tx = {
-        TransferSui: {
-          recipient: t.recipient,
-          amount: t.amount == null ? { None: null } : { Some: t.amount },
-        },
-      };
-      return await this.constructTransactionData(
-        tx,
-        { kind: 'transferSui', data: t },
-        t.suiObjectId,
-        signerAddress
-      );
-    } catch (err) {
-      throw new Error(
-        `Error constructing a TransferSui transaction: ${err} args ${JSON.stringify(
-          t
-        )}`
-      );
-    }
+    const tx = {
+      TransferSui: {
+        recipient: t.recipient,
+        amount: t.amount == null ? { None: null } : { Some: t.amount },
+      },
+    };
+    return await this.constructTransactionData(
+      tx,
+      { kind: 'transferSui', data: t },
+      t.suiObjectId,
+      signerAddress
+    );
   }
 
   async newPay(
     signerAddress: SuiAddress,
     t: PayTransaction
   ): Promise<Base64DataBuffer> {
-    try {
-      const inputCoinRefs = (
-        await Promise.all(
-          t.inputCoins.map((coin) => this.provider.getObjectRef(coin))
-        )
-      ).map((ref) => ref!);
-      const tx = {
-        Pay: {
-          coins: inputCoinRefs,
-          recipients: t.recipients,
-          amounts: t.amounts,
-        },
-      };
-      return await this.constructTransactionData(
-        tx,
-        { kind: 'pay', data: t },
-        t.gasPayment,
-        signerAddress
-      );
-    } catch (err) {
-      throw new Error(
-        `Error constructing a Pay transaction: ${err} args ${JSON.stringify(t)}`
-      );
-    }
+    const inputCoinRefs = (
+      await Promise.all(
+        t.inputCoins.map((coin) => this.provider.getObjectRef(coin))
+      )
+    ).map((ref) => ref!);
+    const tx = {
+      Pay: {
+        coins: inputCoinRefs,
+        recipients: t.recipients,
+        amounts: t.amounts,
+      },
+    };
+    return await this.constructTransactionData(
+      tx,
+      { kind: 'pay', data: t },
+      t.gasPayment,
+      signerAddress
+    );
   }
 
   async newPaySui(
     signerAddress: SuiAddress,
     t: PaySuiTransaction
   ): Promise<Base64DataBuffer> {
-    try {
-      const inputCoinRefs = (
-        await Promise.all(
-          t.inputCoins.map((coin) => this.provider.getObjectRef(coin))
-        )
-      ).map((ref) => ref!);
-      const tx = {
-        PaySui: {
-          coins: inputCoinRefs,
-          recipients: t.recipients,
-          amounts: t.amounts,
-        },
-      };
-      const gas_coin_obj = t.inputCoins[0];
-      return await this.constructTransactionData(
-        tx,
-        { kind: 'paySui', data: t },
-        gas_coin_obj,
-        signerAddress
-      );
-    } catch (err) {
-      throw new Error(
-        `Error constructing a PaySui transaction: ${err} args ${JSON.stringify(
-          t
-        )}`
-      );
-    }
+    const inputCoinRefs = (
+      await Promise.all(
+        t.inputCoins.map((coin) => this.provider.getObjectRef(coin))
+      )
+    ).map((ref) => ref!);
+    const tx = {
+      PaySui: {
+        coins: inputCoinRefs,
+        recipients: t.recipients,
+        amounts: t.amounts,
+      },
+    };
+    const gas_coin_obj = t.inputCoins[0];
+    return await this.constructTransactionData(
+      tx,
+      { kind: 'paySui', data: t },
+      gas_coin_obj,
+      signerAddress
+    );
   }
 
   async newPayAllSui(
     signerAddress: SuiAddress,
     t: PayAllSuiTransaction
   ): Promise<Base64DataBuffer> {
-    try {
-      const inputCoinRefs = (
-        await Promise.all(
-          t.inputCoins.map((coin) => this.provider.getObjectRef(coin))
-        )
-      ).map((ref) => ref!);
-      const tx = {
-        PayAllSui: {
-          coins: inputCoinRefs,
-          recipient: t.recipient,
-        },
-      };
-      const gas_coin_obj = t.inputCoins[0];
-      return await this.constructTransactionData(
-        tx,
-        { kind: 'payAllSui', data: t },
-        gas_coin_obj,
-        signerAddress
-      );
-    } catch (err) {
-      throw new Error(
-        `Error constructing a PayAllSui transaction: ${err} args ${JSON.stringify(
-          t
-        )}`
-      );
-    }
+    const inputCoinRefs = (
+      await Promise.all(
+        t.inputCoins.map((coin) => this.provider.getObjectRef(coin))
+      )
+    ).map((ref) => ref!);
+    const tx = {
+      PayAllSui: {
+        coins: inputCoinRefs,
+        recipient: t.recipient,
+      },
+    };
+    const gas_coin_obj = t.inputCoins[0];
+    return await this.constructTransactionData(
+      tx,
+      { kind: 'payAllSui', data: t },
+      gas_coin_obj,
+      signerAddress
+    );
   }
 
   async newMoveCall(
     signerAddress: SuiAddress,
     t: MoveCallTransaction
   ): Promise<Base64DataBuffer> {
-    try {
-      const pkg = await this.provider.getObjectRef(t.packageObjectId);
-      const tx = {
-        Call: {
-          package: pkg!,
-          module: t.module,
-          function: t.function,
-          typeArguments: t.typeArguments.map((a) =>
-            typeof a === 'string'
-              ? new TypeTagSerializer().parseFromStr(a)
-              : (a as TypeTag)
-          ),
-          arguments: await new CallArgSerializer(
-            this.provider
-          ).serializeMoveCallArguments(t),
-        },
-      };
+    const pkg = await this.provider.getObjectRef(t.packageObjectId);
+    const tx = {
+      Call: {
+        package: pkg!,
+        module: t.module,
+        function: t.function,
+        typeArguments: t.typeArguments.map((a) =>
+          typeof a === 'string'
+            ? new TypeTagSerializer().parseFromStr(a)
+            : (a as TypeTag)
+        ),
+        arguments: await new CallArgSerializer(
+          this.provider
+        ).serializeMoveCallArguments(t),
+      },
+    };
 
-      return await this.constructTransactionData(
-        tx,
-        { kind: 'moveCall', data: t },
-        t.gasPayment,
-        signerAddress
-      );
-    } catch (err) {
-      throw new Error(
-        `Error constructing a move call: ${err} args ${JSON.stringify(t)}`
-      );
-    }
+    return await this.constructTransactionData(
+      tx,
+      { kind: 'moveCall', data: t },
+      t.gasPayment,
+      signerAddress
+    );
   }
 
   async newMergeCoin(
     signerAddress: SuiAddress,
     t: MergeCoinTransaction
   ): Promise<Base64DataBuffer> {
-    try {
-      return await this.newMoveCall(signerAddress, {
-        packageObjectId: SUI_FRAMEWORK_ADDRESS,
-        module: PAY_MODULE_NAME,
-        function: PAY_JOIN_COIN_FUNC_NAME,
-        typeArguments: [await this.getCoinStructTag(t.coinToMerge)],
-        arguments: [t.primaryCoin, t.coinToMerge],
-        gasPayment: t.gasPayment,
-        gasBudget: t.gasBudget,
-      });
-    } catch (err) {
-      throw new Error(
-        `Error constructing a MergeCoin Transaction: ${err} args ${JSON.stringify(
-          t
-        )}`
-      );
-    }
+    return await this.newMoveCall(signerAddress, {
+      packageObjectId: SUI_FRAMEWORK_ADDRESS,
+      module: PAY_MODULE_NAME,
+      function: PAY_JOIN_COIN_FUNC_NAME,
+      typeArguments: [await this.getCoinStructTag(t.coinToMerge)],
+      arguments: [t.primaryCoin, t.coinToMerge],
+      gasPayment: t.gasPayment,
+      gasBudget: t.gasBudget,
+    });
   }
 
   async newSplitCoin(
     signerAddress: SuiAddress,
     t: SplitCoinTransaction
   ): Promise<Base64DataBuffer> {
-    try {
-      return await this.newMoveCall(signerAddress, {
-        packageObjectId: SUI_FRAMEWORK_ADDRESS,
-        module: PAY_MODULE_NAME,
-        function: PAY_SPLIT_COIN_VEC_FUNC_NAME,
-        typeArguments: [await this.getCoinStructTag(t.coinObjectId)],
-        arguments: [t.coinObjectId, t.splitAmounts],
-        gasPayment: t.gasPayment,
-        gasBudget: t.gasBudget,
-      });
-    } catch (err) {
-      throw new Error(
-        `Error constructing a SplitCoin Transaction: ${err} args ${JSON.stringify(
-          t
-        )}`
-      );
-    }
+    return await this.newMoveCall(signerAddress, {
+      packageObjectId: SUI_FRAMEWORK_ADDRESS,
+      module: PAY_MODULE_NAME,
+      function: PAY_SPLIT_COIN_VEC_FUNC_NAME,
+      typeArguments: [await this.getCoinStructTag(t.coinObjectId)],
+      arguments: [t.coinObjectId, t.splitAmounts],
+      gasPayment: t.gasPayment,
+      gasBudget: t.gasBudget,
+    });
   }
 
   async newPublish(
     signerAddress: SuiAddress,
     t: PublishTransaction
   ): Promise<Base64DataBuffer> {
-    try {
-      const tx = {
-        Publish: {
-          modules: t.compiledModules as ArrayLike<ArrayLike<number>>,
-        },
-      };
-      return await this.constructTransactionData(
-        tx,
-        { kind: 'publish', data: t },
-        t.gasPayment,
-        signerAddress
-      );
-    } catch (err) {
-      throw new Error(
-        `Error constructing a newPublish transaction: ${err} with args ${JSON.stringify(
-          t
-        )}`
-      );
-    }
+    const tx = {
+      Publish: {
+        modules: t.compiledModules as ArrayLike<ArrayLike<number>>,
+      },
+    };
+    return await this.constructTransactionData(
+      tx,
+      { kind: 'publish', data: t },
+      t.gasPayment,
+      signerAddress
+    );
   }
 
   /**
