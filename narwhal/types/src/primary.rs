@@ -303,7 +303,7 @@ impl Hash<{ crypto::DIGEST_LENGTH }> for Header {
     fn digest(&self) -> HeaderDigest {
         let mut hasher = crypto::DefaultHashFunction::new();
         hasher.update(&self.author);
-        hasher.update(&self.round.to_le_bytes());
+        hasher.update(self.round.to_le_bytes());
         hasher.update(self.epoch.to_le_bytes());
         for (x, y) in self.payload.iter() {
             hasher.update(Digest::from(*x));
@@ -446,8 +446,8 @@ impl Hash<{ crypto::DIGEST_LENGTH }> for Vote {
     fn digest(&self) -> VoteDigest {
         let mut hasher = crypto::DefaultHashFunction::default();
         hasher.update(Digest::from(self.id));
-        hasher.update(&self.round.to_le_bytes());
-        hasher.update(&self.epoch.to_le_bytes());
+        hasher.update(self.round.to_le_bytes());
+        hasher.update(self.epoch.to_le_bytes());
         hasher.update(&self.origin);
         VoteDigest(hasher.finalize().into())
     }
