@@ -31,7 +31,8 @@ use sui_json_rpc_types::{SuiEvent, SuiEventEnvelope};
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress, TransactionDigest};
 use sui_types::error::SuiError;
 use sui_types::error::SuiError::{StorageCorruptedFieldError, StorageMissingFieldError};
-use sui_types::event::{BalanceChangeType, Event, EventEnvelope, EventType};
+use sui_types::event::{BalanceChangeType, Event, EventID};
+use sui_types::event::{EventEnvelope, EventType};
 use sui_types::object::Owner;
 
 pub mod sql;
@@ -48,6 +49,7 @@ pub const BALANCE_CHANGE_TYPE_KEY: &str = "change_type";
 #[allow(unused)]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StoredEvent {
+    id: EventID,
     /// UTC timestamp in milliseconds
     timestamp: u64,
     /// Not present for non-transaction System events (eg EpochChange)
@@ -232,11 +234,12 @@ impl StoredEvent {
     /// Returns Err when any conversion fails.
     pub fn into_event_envelopes(
         stored_events: Vec<Self>,
-    ) -> Result<Vec<SuiEventEnvelope>, anyhow::Error> {
+    ) -> Result<Vec<(EventID, SuiEventEnvelope)>, anyhow::Error> {
         let mut events = Vec::with_capacity(stored_events.len());
         for stored_event in stored_events {
+            let id = stored_event.id.clone();
             let event_envelope: SuiEventEnvelope = stored_event.try_into()?;
-            events.push(event_envelope);
+            events.push((id, event_envelope));
         }
         Ok(events)
     }
@@ -397,83 +400,94 @@ pub trait EventStore {
     /// Returns Ok(rows_affected).
     async fn add_events(&self, events: &[EventEnvelope]) -> Result<u64, SuiError>;
 
+    /// Returns at most `limit` events emitted by all transaction, ordered .
+    async fn all_events(
+        &self,
+        cursor: EventID,
+        limit: usize,
+        descending: bool,
+    ) -> Result<Vec<StoredEvent>, SuiError>;
     /// Returns at most `limit` events emitted by a given
-    /// transaction, sorted in order emitted.
+    /// transaction, sorted in time order defined by the [descending] parameter.
     async fn events_by_transaction(
         &self,
         digest: TransactionDigest,
+        cursor: EventID,
         limit: usize,
+        descending: bool,
     ) -> Result<Vec<StoredEvent>, SuiError>;
 
     /// Returns at most `limit` events of a certain EventType
     /// (e.g. `TransferObject`) within [start_time, end_time),
-    /// sorted in in ascending time.
+    /// sorted in time order defined by the [descending] parameter.
     async fn events_by_type(
         &self,
-        start_time: u64,
-        end_time: u64,
         event_type: EventType,
+        cursor: EventID,
         limit: usize,
+        descending: bool,
     ) -> Result<Vec<StoredEvent>, SuiError>;
 
     /// Returns at most `limit` events emitted in a certain Module ID during
-    /// [start_time, end_time), sorted in ascending time.
+    /// sorted in time order defined by the [descending] parameter.
     async fn events_by_module_id(
         &self,
-        start_time: u64,
-        end_time: u64,
         module: &ModuleId,
+        cursor: EventID,
         limit: usize,
+        descending: bool,
     ) -> Result<Vec<StoredEvent>, SuiError>;
 
     /// Returns at most `limit` events with the move event struct name
     /// (e.g. `0x2::devnet_nft::MintNFTEvent`) emitted
-    /// during [start_time, end_time), sorted in ascending time.
+    /// sorted in time order defined by the [descending] parameter.
     async fn events_by_move_event_struct_name(
         &self,
-        start_time: u64,
-        end_time: u64,
         move_event_struct_name: &str,
+        cursor: EventID,
         limit: usize,
+        descending: bool,
     ) -> Result<Vec<StoredEvent>, SuiError>;
 
     /// Returns at most `limit` events associated with a certain sender
-    /// emitted during [start_time, end_time), sorted in ascending time.
+    /// sorted in time order defined by the [descending] parameter.
     async fn events_by_sender(
         &self,
-        start_time: u64,
-        end_time: u64,
         sender: &SuiAddress,
+        cursor: EventID,
         limit: usize,
+        descending: bool,
     ) -> Result<Vec<StoredEvent>, SuiError>;
 
     /// Returns at most `limit` events associated with a certain recipient
-    /// emitted during [start_time, end_time), sorted in ascending time.
+    /// sorted in time order defined by the [descending] parameter.
     async fn events_by_recipient(
         &self,
-        start_time: u64,
-        end_time: u64,
         recipient: &Owner,
+        cursor: EventID,
         limit: usize,
+        descending: bool,
     ) -> Result<Vec<StoredEvent>, SuiError>;
 
     /// Returns at most `limit` events associated with a certain object id
-    /// emitted during [start_time, end_time), sorted in ascending time.
+    /// sorted in time order defined by the [descending] parameter.
     async fn events_by_object(
         &self,
-        start_time: u64,
-        end_time: u64,
         object: &ObjectID,
+        cursor: EventID,
         limit: usize,
+        descending: bool,
     ) -> Result<Vec<StoredEvent>, SuiError>;
 
     /// Generic event iterator that returns events emitted between
-    /// [start_time, end_time), sorted in ascending time.
+    /// [start_time, end_time), sorted in time order defined by the [descending] parameter.
     async fn event_iterator(
         &self,
         start_time: u64,
         end_time: u64,
+        cursor: EventID,
         limit: usize,
+        descending: bool,
     ) -> Result<Vec<StoredEvent>, SuiError>;
 }
 

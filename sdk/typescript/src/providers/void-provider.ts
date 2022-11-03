@@ -27,10 +27,13 @@ import {
   ObjectId,
   SuiEvents,
   TransactionQuery,
-  Ordering,
   PaginatedTransactionDigests,
+  EventQuery,
+  PaginatedEvents,
+  EventId,
   RpcApiVersion,
   FaucetResponse,
+  Order,
 } from '../types';
 import { Provider } from './provider';
 
@@ -242,11 +245,20 @@ export class VoidProvider extends Provider {
   }
 
   async getTransactions(
-    _query: TransactionQuery,
-    _cursor: TransactionDigest | null,
-    _limit: number | null,
-    _order: Ordering
+      _query: TransactionQuery,
+      _cursor: TransactionDigest | null,
+      _limit: number | null,
+      _order: Order
   ): Promise<PaginatedTransactionDigests> {
     throw this.newError('getTransactions');
+  }
+
+  async getEvents(
+      _query: EventQuery,
+      _cursor: EventId | null,
+      _limit: number | null,
+      _order: Order
+  ): Promise<PaginatedEvents> {
+    throw this.newError('getEvents');
   }
 }

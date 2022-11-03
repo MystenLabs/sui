@@ -2,7 +2,7 @@
     "data": [
         {
             "id": "player1",
-            "owner": { "SingleOwner": "receiverAddress" },
+            "owner": { "AddressOwner": "receiverAddress" },
             "category": "object",
             "version": "6",
             "readonly": "false",
@@ -26,7 +26,7 @@
         },
         {
             "id": "player2",
-            "owner": { "SingleOwner": "receiverAddress" },
+            "owner": { "AddressOwner": "receiverAddress" },
             "category": "object",
             "version": "5",
             "readonly": "false",
@@ -58,7 +58,7 @@
         },
         {
             "id": "player0",
-            "owner": { "SingleOwner": "" },
+            "owner": { "AddressOwner": "" },
             "category": "object",
             "version": "100",
             "readonly": "false",
@@ -80,7 +80,7 @@
         },
         {
             "id": "player3",
-            "owner": { "SingleOwner": "" },
+            "owner": { "AddressOwner": "" },
             "category": "object",
             "version": "100",
             "readonly": "false",
@@ -102,7 +102,7 @@
         },
         {
             "id": "player4",
-            "owner": { "SingleOwner": "" },
+            "owner": { "AddressOwner": "" },
             "category": "object",
             "version": "100",
             "readonly": "false",
@@ -124,7 +124,7 @@
         },
         {
             "id": "player5",
-            "owner": { "SingleOwner": "" },
+            "owner": { "AddressOwner": "" },
             "category": "object",
             "version": "100",
             "readonly": "false",
@@ -146,7 +146,7 @@
         },
         {
             "id": "player6",
-            "owner": { "SingleOwner": "" },
+            "owner": { "AddressOwner": "" },
             "category": "object",
             "version": "100",
             "readonly": "false",
@@ -168,7 +168,7 @@
         },
         {
             "id": "player7",
-            "owner": { "SingleOwner": "" },
+            "owner": { "AddressOwner": "" },
             "category": "object",
             "version": "100",
             "readonly": "false",
@@ -190,7 +190,7 @@
         },
         {
             "id": "player8",
-            "owner": { "SingleOwner": "" },
+            "owner": { "AddressOwner": "" },
             "category": "object",
             "version": "100",
             "readonly": "false",
@@ -212,7 +212,7 @@
         },
         {
             "id": "player9",
-            "owner": { "SingleOwner": "" },
+            "owner": { "AddressOwner": "" },
             "category": "object",
             "version": "100",
             "readonly": "false",
@@ -234,7 +234,7 @@
         },
         {
             "id": "playerA1",
-            "owner": { "SingleOwner": "" },
+            "owner": { "AddressOwner": "" },
             "category": "object",
             "version": "100",
             "readonly": "false",
@@ -258,7 +258,7 @@
         {
             "id": "Image1",
             "category": "object",
-            "owner": { "SingleOwner": "player2" },
+            "owner": { "AddressOwner": "player2" },
             "version": "1",
             "readonly": "true",
             "objType": "0x2::Cosmetic::Plant",
@@ -278,7 +278,7 @@
         {
             "id": "Image2",
             "category": "object",
-            "owner": { "SingleOwner": "CollectionObject" },
+            "owner": { "AddressOwner": "CollectionObject" },
             "version": "1",
             "readonly": "true",
             "objType": "0x2::Cosmetic::Plant",
@@ -298,7 +298,7 @@
         {
             "id": "Image3",
             "category": "object",
-            "owner": { "SingleOwner": "CollectionObject" },
+            "owner": { "AddressOwner": "CollectionObject" },
             "version": "1",
             "readonly": "true",
             "objType": "0x2::Cosmetic::Plant",
@@ -318,7 +318,7 @@
         {
             "id": "Image4",
             "category": "object",
-            "owner": { "SingleOwner": "CollectionObject" },
+            "owner": { "AddressOwner": "CollectionObject" },
             "version": "1",
             "readonly": "true",
             "objType": "0x2::Cosmetic::Plant",
@@ -338,7 +338,7 @@
         {
             "id": "Image5",
             "category": "object",
-            "owner": { "SingleOwner": "CollectionObject" },
+            "owner": { "AddressOwner": "CollectionObject" },
             "version": "1",
             "readonly": "true",
             "objType": "0x2::Cosmetic::Plant",
@@ -358,7 +358,7 @@
         {
             "id": "Image6",
             "category": "object",
-            "owner": { "SingleOwner": "CollectionObject" },
+            "owner": { "AddressOwner": "CollectionObject" },
             "version": "1",
             "readonly": "true",
             "objType": "0x2::Cosmetic::Plant",
@@ -378,7 +378,7 @@
         {
             "id": "Image7",
             "category": "object",
-            "owner": { "SingleOwner": "CollectionObject" },
+            "owner": { "AddressOwner": "CollectionObject" },
             "version": "1",
             "readonly": "true",
             "objType": "0x2::Cosmetic::Plant",
@@ -398,7 +398,7 @@
         {
             "id": "Image8",
             "category": "object",
-            "owner": { "SingleOwner": "CollectionObject" },
+            "owner": { "AddressOwner": "CollectionObject" },
             "version": "1",
             "readonly": "true",
             "objType": "0x2::Cosmetic::Plant",
@@ -418,7 +418,7 @@
         {
             "id": "Image9",
             "category": "object",
-            "owner": { "SingleOwner": "CollectionObject" },
+            "owner": { "AddressOwner": "CollectionObject" },
             "version": "1",
             "readonly": "true",
             "objType": "0x2::Cosmetic::Plant",
@@ -438,7 +438,7 @@
         {
             "id": "Image10",
             "category": "object",
-            "owner": { "SingleOwner": "CollectionObject" },
+            "owner": { "AddressOwner": "CollectionObject" },
             "version": "1",
             "readonly": "true",
             "objType": "0x2::Cosmetic::Plant",
@@ -458,7 +458,7 @@
         {
             "id": "Image11",
             "category": "object",
-            "owner": { "SingleOwner": "CollectionObject" },
+            "owner": { "AddressOwner": "CollectionObject" },
             "version": "1",
             "readonly": "true",
             "objType": "0x2::Cosmetic::Plant",
@@ -590,7 +590,7 @@
         {
             "id": "standaloneObject",
             "category": "object",
-            "owner": { "SingleOwner": "player2" },
+            "owner": { "AddressOwner": "player2" },
             "version": "87",
             "readonly": "true",
             "objType": "0x2::coin::Coin<0x2::USD::USD>",
@@ -605,7 +605,7 @@
         {
             "id": "standaloneObject2",
             "category": "object",
-            "owner": { "SingleOwner": "player2" },
+            "owner": { "AddressOwner": "player2" },
             "version": "87",
             "readonly": "true",
             "objType": "0x2::coin::Coin<0x2::USD::USD>",
@@ -619,7 +619,7 @@
         {
             "id": "standaloneObjectSUI50",
             "category": "object",
-            "owner": { "SingleOwner": "player2" },
+            "owner": { "AddressOwner": "player2" },
             "version": "87",
             "readonly": "true",
             "objType": "0x2::coin::Coin<0x2::sui::SUI>",
@@ -633,7 +633,7 @@
         {
             "id": "standaloneObjectSUI150",
             "category": "object",
-            "owner": { "SingleOwner": "player2" },
+            "owner": { "AddressOwner": "player2" },
             "version": "87",
             "readonly": "true",
             "objType": "0x2::coin::Coin<0x2::sui::SUI>",
@@ -647,7 +647,7 @@
         {
             "id": "standaloneObjectABC",
             "category": "object",
-            "owner": { "SingleOwner": "player2" },
+            "owner": { "AddressOwner": "player2" },
             "version": "87",
             "readonly": "true",
             "objType": "0x2::coin::Coin<0x2::abc::ABC>",
@@ -661,7 +661,7 @@
         {
             "id": "standaloneObjectDEF",
             "category": "object",
-            "owner": { "SingleOwner": "player2" },
+            "owner": { "AddressOwner": "player2" },
             "version": "87",
             "readonly": "true",
             "objType": "0x2::coin::Coin<0x2::def::DEF>",
@@ -675,7 +675,7 @@
         {
             "id": "standaloneObjectGHI",
             "category": "object",
-            "owner": { "SingleOwner": "player2" },
+            "owner": { "AddressOwner": "player2" },
             "version": "87",
             "readonly": "true",
             "objType": "0x2::coin::Coin<0x2::ghi::GHI>",
@@ -689,7 +689,7 @@
         {
             "id": "standaloneObjectJKL",
             "category": "object",
-            "owner": { "SingleOwner": "player2" },
+            "owner": { "AddressOwner": "player2" },
             "version": "87",
             "readonly": "true",
             "objType": "0x2::coin::Coin<0x2::jkl::JKL>",
@@ -703,7 +703,7 @@
         {
             "id": "standaloneObjectMNO",
             "category": "object",
-            "owner": { "SingleOwner": "player2" },
+            "owner": { "AddressOwner": "player2" },
             "version": "87",
             "readonly": "true",
             "objType": "0x2::coin::Coin<0x2::mno::MNO>",
@@ -721,7 +721,7 @@
         {
             "id": "CollectionObject",
             "category": "object",
-            "owner": { "SingleOwner": "player2" },
+            "owner": { "AddressOwner": "player2" },
             "version": "2",
             "readonly": "false",
             "objType": "0x2::MystenUniverse::Collection",
@@ -743,7 +743,7 @@
         {
             "id": "ComponentObject",
             "category": "object",
-            "owner": { "SingleOwner": "CollectionObject" },
+            "owner": { "AddressOwner": "CollectionObject" },
             "version": "1",
             "readonly": "true",
             "objType": "0x2::Cosmetic::Plant",
@@ -763,7 +763,7 @@
         {
             "id": "ObjectThatOwns",
             "category": "object",
-            "owner": { "SingleOwner": "CollectionObject" },
+            "owner": { "AddressOwner": "CollectionObject" },
             "version": "1",
             "readonly": "true",
             "objType": "0x2::Cosmetic::Plant",
@@ -789,7 +789,7 @@
         {
             "id": "ObjectWBrokenChild",
             "category": "object",
-            "owner": { "SingleOwner": "CollectionObject" },
+            "owner": { "AddressOwner": "CollectionObject" },
             "version": "1",
             "readonly": "true",
             "objType": "0x2::Cosmetic::Plant",
@@ -816,7 +816,7 @@
         {
             "id": "ChildObjectWImage",
             "category": "object",
-            "owner": { "SingleOwner": "ObjectWBrokenChild" },
+            "owner": { "AddressOwner": "ObjectWBrokenChild" },
             "version": "1",
             "readonly": "true",
             "objType": "0x2::Cosmetic::Plant",
@@ -832,7 +832,7 @@
         {
             "id": "ChildObjectWBrokenImage",
             "category": "object",
-            "owner": { "SingleOwner": "ObjectWBrokenChild" },
+            "owner": { "AddressOwner": "ObjectWBrokenChild" },
             "version": "1",
             "readonly": "true",
             "objType": "0x2::Cosmetic::Plant",
@@ -849,7 +849,7 @@
             "id": "7bc832ec31709638cd8d9323e90edf332gff4389",
             "category": "object",
             "owner": {
-                "SingleOwner": "0xa5e6dbcf33730ace6ec8b400ff4788c1f150ff7e"
+                "AddressOwner": "0xa5e6dbcf33730ace6ec8b400ff4788c1f150ff7e"
             },
             "version": "1",
             "objType": "0x2::SuiDrop::NFT",
@@ -909,7 +909,7 @@
         {
             "id": "8cd943fd42810749de9e0434f01feg443hgg54v1",
             "owner": {
-                "SingleOwner": "0xb6f7ecdg44841bdf7fd9c511gg5899d2g261gg8f"
+                "AddressOwner": "0xb6f7ecdg44841bdf7fd9c511gg5899d2g261gg8f"
             },
             "category": "object",
             "version": "5",
@@ -934,7 +934,7 @@
         {
             "id": "8cd943fd42810749de9e0434f01feg443hgg54v2",
             "owner": {
-                "SingleOwner": "0xb6f7ecdg44841bdf7fd9c511gg5899d2g261gg8f"
+                "AddressOwner": "0xb6f7ecdg44841bdf7fd9c511gg5899d2g261gg8f"
             },
             "category": "object",
             "version": "6",
@@ -967,7 +967,7 @@
         {
             "id": "3a4e674ce2810749de9e0434f01feg443hgg54v2",
             "owner": {
-                "SingleOwner": "8cd943fd42810749de9e0434f01feg443hgg54v2"
+                "AddressOwner": "8cd943fd42810749de9e0434f01feg443hgg54v2"
             },
             "category": "object",
             "version": "1",
@@ -985,7 +985,7 @@
         {
             "id": "9de054ge53921850ef0f1545g12gfh554ihh65v1",
             "owner": {
-                "SingleOwner": "0xb6f7ecdg44841bdf7fd9c511gg5899d2g261gg8f"
+                "AddressOwner": "0xb6f7ecdg44841bdf7fd9c511gg5899d2g261gg8f"
             },
             "category": "object",
             "version": "4",
@@ -1010,7 +1010,7 @@
         {
             "id": "9de054ge53921850ef0f1545g12gfh554ihh65v2",
             "owner": {
-                "SingleOwner": "0xb6f7ecdg44841bdf7fd9c511gg5899d2g261gg8f"
+                "AddressOwner": "0xb6f7ecdg44841bdf7fd9c511gg5899d2g261gg8f"
             },
             "category": "object",
             "version": "5",
@@ -1042,7 +1042,7 @@
         {
             "id": "f4a5535e53921850ef0f1545g12gfh554ihh65v2",
             "owner": {
-                "SingleOwner": "9de054ge53921850ef0f1545g12gfh554ihh65v2"
+                "AddressOwner": "9de054ge53921850ef0f1545g12gfh554ihh65v2"
             },
             "category": "object",
             "version": "1",
@@ -1060,7 +1060,7 @@
         {
             "id": "0ef165hf64032961fg1g2656h23hgi665jii7690",
             "owner": {
-                "SingleOwner": "0xb6f7ecdg44841bdf7fd9c511gg5899d2g261gg8f"
+                "AddressOwner": "0xb6f7ecdg44841bdf7fd9c511gg5899d2g261gg8f"
             },
             "category": "object",
             "version": "7",
@@ -1093,7 +1093,7 @@
         {
             "id": "f14e489364032961fg1g2656h23hgi665jii7690",
             "owner": {
-                "SingleOwner": "0ef165hf64032961fg1g2656h23hgi665jii7690"
+                "AddressOwner": "0ef165hf64032961fg1g2656h23hgi665jii7690"
             },
             "category": "object",
             "version": "1",

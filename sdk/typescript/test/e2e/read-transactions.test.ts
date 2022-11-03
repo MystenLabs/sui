@@ -21,7 +21,7 @@ describe('Transaction Reading API', () => {
       'All',
       null,
       1,
-      'Descending'
+      true
     );
     const digest = resp.data[0];
     const txn = await toolbox.provider.getTransactionWithEffects(digest);
@@ -31,7 +31,7 @@ describe('Transaction Reading API', () => {
   it('Get Transactions', async () => {
     const resp = await toolbox.provider.getTransactionsForAddress(
       toolbox.address(),
-      'Ascending'
+      false
     );
     expect(resp.length).to.greaterThan(0);
 
@@ -39,7 +39,7 @@ describe('Transaction Reading API', () => {
       'All',
       null,
       10,
-      'Ascending'
+      false
     );
     expect(allTransactions.data.length).to.greaterThan(0);
 
@@ -47,13 +47,13 @@ describe('Transaction Reading API', () => {
       { ToAddress: toolbox.address() },
       null,
       null,
-      'Ascending'
+      false
     );
     const resp3 = await toolbox.provider.getTransactions(
       { FromAddress: toolbox.address() },
       null,
       null,
-      'Ascending'
+      false
     );
     expect([...resp2.data, ...resp3.data]).toEqual(resp);
   });
