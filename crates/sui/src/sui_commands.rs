@@ -260,11 +260,12 @@ async fn genesis(
     let client_path = sui_config_dir.join(SUI_CLIENT_CONFIG);
     let keystore_path = sui_config_dir.join(SUI_KEYSTORE_FILENAME);
 
-    if write_config.is_none() && files.len() > 0 {
+    if write_config.is_none() && !files.is_empty() {
         if force {
             // check old keystore and client.yaml is compatible
             let is_compatible = FileBasedKeystore::new(&keystore_path).is_ok()
                 && PersistedConfig::<SuiClientConfig>::read(&client_path).is_ok();
+            // Keep keystore and client.yaml if they are compatible
             if is_compatible {
                 for file in files {
                     let path = file.path();
