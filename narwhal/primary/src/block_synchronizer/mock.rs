@@ -10,13 +10,13 @@ use types::{metered_channel, CertificateDigest};
 #[derive(Debug)]
 enum Core {
     SynchronizeBlockHeaders {
-        block_ids: Vec<CertificateDigest>,
+        digests: Vec<CertificateDigest>,
         times: u32,
         result: Vec<BlockSynchronizeResult<BlockHeader>>,
         ready: oneshot::Sender<()>,
     },
     SynchronizeBlockPayload {
-        block_ids: Vec<CertificateDigest>,
+        digests: Vec<CertificateDigest>,
         times: u32,
         result: Vec<BlockSynchronizeResult<BlockHeader>>,
         ready: oneshot::Sender<()>,
@@ -51,15 +51,15 @@ impl MockBlockSynchronizerCore {
             tokio::select! {
                 Some(command) = self.rx_commands.recv() => {
                     match command {
-                        Command::SynchronizeBlockHeaders { block_ids, respond_to } => {
+                        Command::SynchronizeBlockHeaders { digests, respond_to } => {
                             let (times, results) = self
                                 .block_headers_expected_requests
-                                .remove(&block_ids)
-                                .unwrap_or_else(||panic!("{}", format!("Unexpected call received for SynchronizeBlockHeaders, {:?}", block_ids).as_str()))
+                                .remove(&digests)
+                                .unwrap_or_else(||panic!("{}", format!("Unexpected call received for SynchronizeBlockHeaders, {:?}", digests).as_str()))
                                 .to_owned();
 
                             if times > 1 {
-                                self.block_headers_expected_requests.insert(block_ids, (times - 1, results.clone()));
+                                self.block_headers_expected_requests.insert(digests, (times - 1, results.clone()));
                             }
 
                             for result in results {
@@ -67,15 +67,15 @@ impl MockBlockSynchronizerCore {
                             }
                         }
                         Command::SynchronizeBlockPayload { certificates, respond_to } => {
-                            let block_ids = certificates.into_iter().map(|c|c.digest()).collect();
+                            let digests = certificates.into_iter().map(|c|c.digest()).collect();
                             let (times, results) = self
                                 .block_payload_expected_requests
-                                .remove(&block_ids)
-                                .unwrap_or_else(||panic!("{}", format!("Unexpected call received for SynchronizeBlockPayload, {:?}", block_ids).as_str()))
+                                .remove(&digests)
+                                .unwrap_or_else(||panic!("{}", format!("Unexpected call received for SynchronizeBlockPayload, {:?}", digests).as_str()))
                                 .to_owned();
 
                             if times > 1 {
-                                self.block_payload_expected_requests.insert(block_ids, (times - 1, results.clone()));
+                                self.block_payload_expected_requests.insert(digests, (times - 1, results.clone()));
                             }
 
                             for result in results {
@@ -87,21 +87,21 @@ impl MockBlockSynchronizerCore {
                 Some(command) = self.rx_core.recv() => {
                     match command {
                         Core::SynchronizeBlockHeaders {
-                            block_ids,
+                            digests,
                             times,
                             result,
                             ready,
                         } => {
-                            self.block_headers_expected_requests.insert(block_ids, (times, result));
+                            self.block_headers_expected_requests.insert(digests, (times, result));
                             ready.send(()).expect("Failed to send ready message");
                         },
                         Core::SynchronizeBlockPayload {
-                            block_ids,
+                            digests,
                             times,
                             result,
                             ready,
                         } => {
-                            self.block_payload_expected_requests.insert(block_ids, (times, result));
+                            self.block_payload_expected_requests.insert(digests, (times, result));
                             ready.send(()).expect("Failed to send ready message");
                         },
                         Core::AssertExpectations {ready} => {
@@ -117,21 +117,21 @@ impl MockBlockSynchronizerCore {
     fn assert_expectations(&self) {
         let mut result: String = "".to_string();
 
-        for (ids, results) in &self.block_headers_expected_requests {
+        for (digests, results) in &self.block_headers_expected_requests {
             result.push_str(
                 format!(
-                    "SynchronizeBlockHeaders, ids={:?}, results={:?}",
-                    ids, results
+                    "SynchronizeBlockHeaders, digests={:?}, results={:?}",
+                    digests, results
                 )
                 .as_str(),
             );
         }
 
-        for (ids, results) in &self.block_payload_expected_requests {
+        for (digests, results) in &self.block_payload_expected_requests {
             result.push_str(
                 format!(
-                    "SynchronizeBlockPayload, ids={:?}, results={:?}",
-                    ids, results
+                    "SynchronizeBlockPayload, digests={:?}, results={:?}",
+                    digests, results
                 )
                 .as_str(),
             );
@@ -174,19 +174,19 @@ impl MockBlockSynchronizer {
 
     /// A simple method that allow us to mock responses for the
     /// SynchronizeBlockHeaders requests.
-    /// `block_ids`: The block_ids we expect
+    /// `digests`: The digests we expect
     /// `results`: The results we would like to respond with
     /// `times`: How many times we should expect to be called.
     pub async fn expect_synchronize_block_headers(
         &self,
-        block_ids: Vec<CertificateDigest>,
+        digests: Vec<CertificateDigest>,
         result: Vec<BlockSynchronizeResult<BlockHeader>>,
         times: u32,
     ) {
         let (tx, rx) = oneshot::channel();
         self.tx_core
             .send(Core::SynchronizeBlockHeaders {
-                block_ids,
+                digests,
                 times,
                 result,
                 ready: tx,
@@ -199,21 +199,21 @@ impl MockBlockSynchronizer {
 
     /// A method that allow us to mock responses for the
     /// SynchronizeBlockPayload requests. It has to be noted that we use
-    /// the block_ids as a way to identify the expected certificates for
+    /// the digests as a way to identify the expected certificates for
     /// the request since that on its own suffice to identify them.
-    /// `block_ids`: The block_ids we expect
+    /// `digests`: The digests we expect
     /// `results`: The results we would like to respond with
     /// `times`: How many times we should expect to be called.
     pub async fn expect_synchronize_block_payload(
         &self,
-        block_ids: Vec<CertificateDigest>,
+        digests: Vec<CertificateDigest>,
         result: Vec<BlockSynchronizeResult<BlockHeader>>,
         times: u32,
     ) {
         let (tx, rx) = oneshot::channel();
         self.tx_core
             .send(Core::SynchronizeBlockPayload {
-                block_ids,
+                digests,
                 times,
                 result,
                 ready: tx,

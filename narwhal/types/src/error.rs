@@ -46,8 +46,8 @@ pub enum DagError {
     #[error("Serialization error: {0}")]
     SerializationError(#[from] Box<bincode::ErrorKind>),
 
-    #[error("Invalid header id")]
-    InvalidHeaderId,
+    #[error("Invalid header digest")]
+    InvalidHeaderDigest,
 
     #[error("Malformed header {0}")]
     MalformedHeader(HeaderDigest),

@@ -27,29 +27,31 @@ mod handler_tests;
 /// also the errors returned from the block_synchronizer.
 #[derive(Debug, Error, Copy, Clone)]
 pub enum Error {
-    #[error("Block with id {block_id} not found")]
-    BlockNotFound { block_id: CertificateDigest },
+    #[error("Certificate with digest {digest} not found")]
+    BlockNotFound { digest: CertificateDigest },
 
-    #[error("Block with id {block_id} couldn't be retrieved, internal error occurred")]
-    Internal { block_id: CertificateDigest },
+    #[error("Certificate with digest {digest} couldn't be retrieved, internal error occurred")]
+    Internal { digest: CertificateDigest },
 
-    #[error("Timed out while waiting for {block_id} to become available after submitting for processing")]
-    BlockDeliveryTimeout { block_id: CertificateDigest },
+    #[error(
+        "Timed out while waiting for {digest} to become available after submitting for processing"
+    )]
+    BlockDeliveryTimeout { digest: CertificateDigest },
 
-    #[error("Payload for block with {block_id} couldn't be synchronized: {error}")]
+    #[error("Payload for certificate with {digest} couldn't be synchronized: {error}")]
     PayloadSyncError {
-        block_id: CertificateDigest,
+        digest: CertificateDigest,
         error: SyncError,
     },
 }
 
 impl Error {
-    pub fn block_id(&self) -> CertificateDigest {
+    pub fn digest(&self) -> CertificateDigest {
         match *self {
-            BlockNotFound { block_id }
-            | Internal { block_id }
-            | BlockDeliveryTimeout { block_id }
-            | PayloadSyncError { block_id, .. } => block_id,
+            BlockNotFound { digest }
+            | Internal { digest }
+            | BlockDeliveryTimeout { digest }
+            | PayloadSyncError { digest, .. } => digest,
         }
     }
 }
@@ -72,7 +74,7 @@ pub trait Handler {
     /// and made sure all the requirements have been fulfilled.
     async fn get_and_synchronize_block_headers(
         &self,
-        block_ids: Vec<CertificateDigest>,
+        digests: Vec<CertificateDigest>,
     ) -> Vec<Result<Certificate, Error>>;
 
     /// It retrieves the requested blocks via the block_synchronizer, but it
@@ -80,7 +82,7 @@ pub trait Handler {
     /// will take place (causal completion etc).
     async fn get_block_headers(
         &self,
-        block_ids: Vec<CertificateDigest>,
+        digests: Vec<CertificateDigest>,
     ) -> Vec<BlockSynchronizeResult<BlockHeader>>;
 
     /// Synchronizes the block payload for the provided certificates via the
@@ -135,23 +137,23 @@ impl BlockSynchronizerHandler {
         join_all(futures).await
     }
 
-    async fn wait(&self, block_id: CertificateDigest) -> Result<Certificate, Error> {
+    async fn wait(&self, digest: CertificateDigest) -> Result<Certificate, Error> {
         if let Ok(result) = timeout(
             self.certificate_deliver_timeout,
-            self.certificate_store.notify_read(block_id),
+            self.certificate_store.notify_read(digest),
         )
         .await
         {
-            result.map_err(|_| Internal { block_id })
+            result.map_err(|_| Internal { digest })
         } else {
-            Err(BlockDeliveryTimeout { block_id })
+            Err(BlockDeliveryTimeout { digest })
         }
     }
 }
 
 #[async_trait]
 impl Handler for BlockSynchronizerHandler {
-    /// The method will return a separate result for each requested block id.
+    /// The method will return a separate result for each requested certificate.
     /// If a certificate has been successfully retrieved (and processed via core
     /// if has been fetched from peers) then an OK result will be returned with the
     /// certificate value.
@@ -160,17 +162,17 @@ impl Handler for BlockSynchronizerHandler {
     /// * Internal: An internal error caused
     /// * BlockDeliveryTimeout: Timed out while waiting for the certificate to become available
     /// after submitting it for processing to core
-    #[instrument(level="trace", skip_all, fields(num_block_ids = block_ids.len()))]
+    #[instrument(level="trace", skip_all, fields(num_blocks = digests.len()))]
     async fn get_and_synchronize_block_headers(
         &self,
-        block_ids: Vec<CertificateDigest>,
+        digests: Vec<CertificateDigest>,
     ) -> Vec<Result<Certificate, Error>> {
-        if block_ids.is_empty() {
+        if digests.is_empty() {
             trace!("No blocks were provided, will now return an empty list");
             return vec![];
         }
 
-        let sync_results = self.get_block_headers(block_ids).await;
+        let sync_results = self.get_block_headers(digests).await;
         let mut results: Vec<Result<Certificate, Error>> = Vec::new();
 
         // send certificates to core for processing and potential
@@ -209,7 +211,7 @@ impl Handler for BlockSynchronizerHandler {
                         err
                     );
                     results.push(Err(BlockNotFound {
-                        block_id: err.block_id(),
+                        digest: err.digest(),
                     }));
                 }
             }
@@ -225,21 +227,21 @@ impl Handler for BlockSynchronizerHandler {
         results
     }
 
-    #[instrument(level="trace", skip_all, fields(num_block_ids = block_ids.len()))]
+    #[instrument(level="trace", skip_all, fields(num_blocks = digests.len()))]
     async fn get_block_headers(
         &self,
-        block_ids: Vec<CertificateDigest>,
+        digests: Vec<CertificateDigest>,
     ) -> Vec<BlockSynchronizeResult<BlockHeader>> {
-        if block_ids.is_empty() {
+        if digests.is_empty() {
             trace!("No blocks were provided, will now return an empty list");
             return vec![];
         }
 
-        let (tx, mut rx) = channel(block_ids.len());
+        let (tx, mut rx) = channel(digests.len());
 
         self.tx_block_synchronizer
             .send(Command::SynchronizeBlockHeaders {
-                block_ids,
+                digests,
                 respond_to: tx,
             })
             .await
@@ -281,14 +283,14 @@ impl Handler for BlockSynchronizerHandler {
         // We want to block and wait until we get all the results back.
         while let Some(result) = rx.recv().await {
             let r = result.map(|h| h.certificate).map_err(|e| PayloadSyncError {
-                block_id: e.block_id(),
+                digest: e.digest(),
                 error: e,
             });
 
             if let Err(err) = r {
                 error!(
-                    "Error for payload synchronization with block id {}, error: {err}",
-                    err.block_id()
+                    "Error for payload synchronization with block digest {}, error: {err}",
+                    err.digest()
                 );
             }
 

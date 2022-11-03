@@ -23,7 +23,7 @@ use types::{
 pub mod block_remover_tests;
 
 /// BlockRemover is responsible for removing blocks identified by
-/// their certificate id (digest) from across our system. On high level
+/// their certificate digest from across our system. On high level
 /// It will make sure that the DAG is updated, internal storage where
 /// there certificates and headers are stored, and the corresponding
 /// batches as well.
@@ -79,13 +79,13 @@ impl BlockRemover {
 
     /// Deletes all batches from worker storage that are part of the given certificates.
     /// Returns an error unless *all* batches were successfully deleted.
-    #[instrument(level = "debug", skip_all, fields(ids = ?ids), err)]
-    pub async fn remove_blocks(&self, ids: Vec<CertificateDigest>) -> Result<()> {
+    #[instrument(level = "debug", skip_all, fields(digests = ?digests), err)]
+    pub async fn remove_blocks(&self, digests: Vec<CertificateDigest>) -> Result<()> {
         // Look up certificates requested for removal.
-        let certificates = self.certificate_store.read_all(ids.clone())?;
+        let certificates = self.certificate_store.read_all(digests.clone())?;
         let non_found_digests: Vec<CertificateDigest> = certificates
             .iter()
-            .zip(ids.clone())
+            .zip(digests.clone())
             .filter_map(|(c, digest)| if c.is_none() { Some(digest) } else { None })
             .collect();
         if !non_found_digests.is_empty() {
@@ -97,7 +97,7 @@ impl BlockRemover {
         let mut worker_requests = Vec::new();
         let batches_by_worker =
             utils::map_certificate_batches_by_worker(found_certificates.as_slice());
-        for (worker_id, batch_ids) in batches_by_worker.iter() {
+        for (worker_id, batch_digests) in batches_by_worker.iter() {
             let worker_name = self
                 .worker_cache
                 .load()
@@ -106,11 +106,11 @@ impl BlockRemover {
                 .name;
 
             debug!(
-                "Sending DeleteBatches request for batch ids {batch_ids:?} to worker {worker_name}"
+                "Sending DeleteBatches request for batch digests {batch_digests:?} to worker {worker_name}"
             );
             worker_requests.push(
                 self.worker_network
-                    .delete_batches(worker_name, batch_ids.clone()),
+                    .delete_batches(worker_name, batch_digests.clone()),
             );
         }
         try_join_all(worker_requests).await?;
@@ -128,17 +128,18 @@ impl BlockRemover {
         certificates: Vec<Certificate>,
         batches_by_worker: HashMap<WorkerId, Vec<BatchDigest>>,
     ) -> Result<(), Either<TypedStoreError, ValidatorDagError>> {
-        let header_ids: Vec<HeaderDigest> = certificates.iter().map(|c| c.header.id()).collect();
+        let header_digests: Vec<HeaderDigest> =
+            certificates.iter().map(|c| c.header.digest()).collect();
 
         self.header_store
-            .remove_all(header_ids)
+            .remove_all(header_digests)
             .await
             .map_err(Either::Left)?;
 
         // delete batch from the payload store as well
         let mut batches_to_cleanup: Vec<(BatchDigest, WorkerId)> = Vec::new();
-        for (worker_id, batch_ids) in batches_by_worker {
-            batch_ids.into_iter().for_each(|d| {
+        for (worker_id, batch_digests) in batches_by_worker {
+            batch_digests.into_iter().for_each(|d| {
                 batches_to_cleanup.push((d, worker_id));
             })
         }
@@ -149,14 +150,16 @@ impl BlockRemover {
 
         // NOTE: delete certificates in the end since if we need to repeat the request
         // we want to be able to find them in storage.
-        let certificate_ids: Vec<CertificateDigest> =
+        let certificate_digests: Vec<CertificateDigest> =
             certificates.as_slice().iter().map(|c| c.digest()).collect();
         if let Some(dag) = &self.dag {
-            dag.remove(&certificate_ids).await.map_err(Either::Right)?
+            dag.remove(&certificate_digests)
+                .await
+                .map_err(Either::Right)?
         }
 
         self.certificate_store
-            .delete_all(certificate_ids)
+            .delete_all(certificate_digests)
             .map_err(Either::Left)?;
 
         // Now output all the removed certificates

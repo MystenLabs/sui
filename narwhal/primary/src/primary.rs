@@ -622,7 +622,7 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
         &self,
         request: anemo::Request<PayloadAvailabilityRequest>,
     ) -> Result<anemo::Response<PayloadAvailabilityResponse>, anemo::rpc::Status> {
-        let digests = request.into_body().certificate_ids;
+        let digests = request.into_body().certificate_digests;
         let certificates = self
             .certificate_store
             .read_all(digests.to_owned())

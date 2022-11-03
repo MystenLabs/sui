@@ -40,7 +40,7 @@ async fn test_get_and_synchronize_block_headers_when_fetched_from_storage() {
     let certificate = fixture.certificate(&header);
 
     // AND
-    let block_ids = vec![CertificateDigest::default()];
+    let digests = vec![CertificateDigest::default()];
 
     // AND mock the block_synchronizer
     let mock_synchronizer = MockBlockSynchronizer::new(rx_block_synchronizer);
@@ -49,12 +49,12 @@ async fn test_get_and_synchronize_block_headers_when_fetched_from_storage() {
         fetched_from_storage: true,
     })];
     mock_synchronizer
-        .expect_synchronize_block_headers(block_ids.clone(), expected_result, 1)
+        .expect_synchronize_block_headers(digests.clone(), expected_result, 1)
         .await;
 
     // WHEN
     let result = synchronizer
-        .get_and_synchronize_block_headers(block_ids)
+        .get_and_synchronize_block_headers(digests)
         .await;
 
     // THEN
@@ -107,9 +107,9 @@ async fn test_get_and_synchronize_block_headers_when_fetched_from_peers() {
     let cert_missing = fixture.certificate(&header);
 
     // AND
-    let mut block_ids = HashSet::new();
-    block_ids.insert(cert_stored.digest());
-    block_ids.insert(cert_missing.digest());
+    let mut digests = HashSet::new();
+    digests.insert(cert_stored.digest());
+    digests.insert(cert_missing.digest());
 
     // AND mock the block_synchronizer where the certificate is fetched
     // from peers (fetched_from_storage = false)
@@ -126,7 +126,7 @@ async fn test_get_and_synchronize_block_headers_when_fetched_from_peers() {
     ];
     mock_synchronizer
         .expect_synchronize_block_headers(
-            block_ids
+            digests
                 .clone()
                 .into_iter()
                 .collect::<Vec<CertificateDigest>>(),
@@ -150,7 +150,7 @@ async fn test_get_and_synchronize_block_headers_when_fetched_from_peers() {
     // WHEN
     let result = synchronizer
         .get_and_synchronize_block_headers(
-            block_ids
+            digests
                 .clone()
                 .into_iter()
                 .collect::<Vec<CertificateDigest>>(),
@@ -163,7 +163,7 @@ async fn test_get_and_synchronize_block_headers_when_fetched_from_peers() {
     // AND
     for r in result {
         assert!(r.is_ok());
-        assert!(block_ids.contains(&r.unwrap().digest()))
+        assert!(digests.contains(&r.unwrap().digest()))
     }
 
     // AND
@@ -206,7 +206,7 @@ async fn test_get_and_synchronize_block_headers_timeout_on_causal_completion() {
     let cert_missing = fixture.certificate(&header);
 
     // AND
-    let block_ids = vec![cert_stored.digest(), cert_missing.digest()];
+    let digests = vec![cert_stored.digest(), cert_missing.digest()];
 
     // AND mock the block_synchronizer where the certificate is fetched
     // from peers (fetched_from_storage = false)
@@ -222,12 +222,12 @@ async fn test_get_and_synchronize_block_headers_timeout_on_causal_completion() {
         }),
     ];
     mock_synchronizer
-        .expect_synchronize_block_headers(block_ids.clone(), expected_result, 1)
+        .expect_synchronize_block_headers(digests.clone(), expected_result, 1)
         .await;
 
     // WHEN
     let result = synchronizer
-        .get_and_synchronize_block_headers(block_ids)
+        .get_and_synchronize_block_headers(digests)
         .await;
 
     // THEN
@@ -239,8 +239,8 @@ async fn test_get_and_synchronize_block_headers_timeout_on_causal_completion() {
             assert_eq!(cert_stored.digest(), cert.digest());
         } else {
             match r.err().unwrap() {
-                Error::BlockDeliveryTimeout { block_id } => {
-                    assert_eq!(cert_missing.digest(), block_id)
+                Error::BlockDeliveryTimeout { digest } => {
+                    assert_eq!(cert_missing.digest(), digest)
                 }
                 _ => panic!("Unexpected error returned"),
             }
@@ -289,7 +289,7 @@ async fn test_synchronize_block_payload() {
     let cert_missing = fixture.certificate(&header);
 
     // AND
-    let block_ids = vec![cert_stored.digest(), cert_missing.digest()];
+    let digests = vec![cert_stored.digest(), cert_missing.digest()];
 
     // AND mock the block_synchronizer where the certificate is fetched
     // from peers (fetched_from_storage = false)
@@ -300,11 +300,11 @@ async fn test_synchronize_block_payload() {
             fetched_from_storage: true,
         }),
         Err(SyncError::NoResponse {
-            block_id: cert_missing.digest(),
+            digest: cert_missing.digest(),
         }),
     ];
     mock_synchronizer
-        .expect_synchronize_block_payload(block_ids.clone(), expected_result, 1)
+        .expect_synchronize_block_payload(digests.clone(), expected_result, 1)
         .await;
 
     // WHEN
@@ -321,8 +321,8 @@ async fn test_synchronize_block_payload() {
             assert_eq!(cert_stored.digest(), cert.digest());
         } else {
             match r.err().unwrap() {
-                Error::PayloadSyncError { block_id, .. } => {
-                    assert_eq!(cert_missing.digest(), block_id)
+                Error::PayloadSyncError { digest, .. } => {
+                    assert_eq!(cert_missing.digest(), digest)
                 }
                 _ => panic!("Unexpected error returned"),
             }
