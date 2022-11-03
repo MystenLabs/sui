@@ -115,6 +115,12 @@ where
         })
         .partition(|(_, (is_sequenced, _))| *is_sequenced);
 
+    debug!(
+        num_sequenced = ?pending_sequenced.len(),
+        num_unsequenced = ?pending_transactions.len(),
+        "executing sequenced and unsequenced transactions"
+    );
+
     active_authority
         .state
         .database
