@@ -196,8 +196,8 @@
             "fileName": "build/fullnode"
           },
           {
-            "label": "Subscribe to Events",
-            "fileName": "build/pubsub"
+            "label": "Event Query and Subscription",
+            "fileName": "build/event_api"
           }
         ]
       }
