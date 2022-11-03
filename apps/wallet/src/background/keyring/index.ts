@@ -6,11 +6,15 @@ import mitt from 'mitt';
 import { throttle } from 'throttle-debounce';
 import Browser from 'webextension-polyfill';
 
-import Alarms from './Alarms';
+import { Vault } from './Vault';
 import { createMessage } from '_messages';
 import { isKeyringPayload } from '_payloads/keyring';
-import { encrypt, decrypt } from '_shared/cryptography/keystore';
-import { generateMnemonic } from '_shared/utils/bip39';
+import {
+    entropyToSerialized,
+    getRandomEntropy,
+    toEntropy,
+} from '_shared/utils/bip39';
+import Alarms from '_src/background/Alarms';
 import {
     AUTO_LOCK_TIMER_MAX_MINUTES,
     AUTO_LOCK_TIMER_MIN_MINUTES,
@@ -33,46 +37,49 @@ class Keyring {
     #events = mitt<KeyringEvents>();
     #locked = true;
     #keypair: Keypair | null = null;
-    #mnemonic: string | null = null;
+    #vault: Vault | null = null;
 
-    // Creates a new mnemonic and saves it to storage encrypted
-    // if importedMnemonic is provided it uses that one instead
-    public async createMnemonic(password: string, importedMnemonic?: string) {
+    /**
+     * Creates a vault and stores it encrypted to the storage of the extension. It doesn't unlock the vault.
+     * @param password The password to encrypt the vault
+     * @param importedEntropy The entropy that was generated from an existing mnemonic that the user provided
+     * @throws If the wallet exists or any other error during encrypting/saving to storage or if importedEntropy is invalid
+     */
+    public async createVault(password: string, importedEntropy?: string) {
         if (await this.isWalletInitialized()) {
             throw new Error(
                 'Mnemonic already exists, creating a new one will override it. Clear the existing one first.'
             );
         }
-        const encryptedMnemonic = await encrypt(
-            password,
-            Buffer.from(importedMnemonic || generateMnemonic(), 'utf8')
+        const vault = new Vault(
+            importedEntropy ? toEntropy(importedEntropy) : getRandomEntropy()
         );
-        await this.storeEncryptedMnemonic(encryptedMnemonic);
+        await this.storeEncryptedVault(await vault.encrypt(password));
     }
 
     public lock() {
         Alarms.clearLockAlarm();
         this.#keypair = null;
-        this.#mnemonic = null;
+        this.#vault = null;
         this.#locked = true;
         this.notifyLockedStatusUpdate(this.#locked);
     }
 
     public async unlock(password: string) {
         Alarms.setLockAlarm();
-        this.#mnemonic = await this.decryptMnemonic(password);
-        this.#keypair = Ed25519Keypair.deriveKeypair(this.#mnemonic);
+        this.#vault = await this.decryptVault(password);
+        this.#keypair = Ed25519Keypair.deriveKeypair(this.#vault.getMnemonic());
         this.#locked = false;
         this.notifyLockedStatusUpdate(this.#locked);
     }
 
-    public async clearMnemonic() {
-        await this.storeEncryptedMnemonic(null);
+    public async clearVault() {
+        await this.storeEncryptedVault(null);
         this.lock();
     }
 
     public async isWalletInitialized() {
-        return !!(await this.loadMnemonic());
+        return !!(await this.loadVault());
     }
 
     public get isLocked() {
@@ -83,8 +90,8 @@ class Keyring {
         return this.#keypair;
     }
 
-    public mnemonic() {
-        return this.#mnemonic;
+    public get entropy() {
+        return this.#vault?.entropy;
     }
 
     // sui address always prefixed with 0x
@@ -107,56 +114,50 @@ class Keyring {
         const { id, payload } = msg;
         try {
             if (
-                isKeyringPayload<'createMnemonic'>(payload, 'createMnemonic') &&
+                isKeyringPayload(payload, 'create') &&
                 payload.args !== undefined
             ) {
-                const { password, importedMnemonic } = payload.args;
-                await this.createMnemonic(password, importedMnemonic);
+                const { password, importedEntropy } = payload.args;
+                await this.createVault(password, importedEntropy);
                 await this.unlock(password);
-                if (!this.#mnemonic) {
-                    throw new Error('Error created mnemonic is empty');
+                if (!this.#vault) {
+                    throw new Error('Error created vault is empty');
                 }
                 uiConnection.send(
-                    createMessage<KeyringPayload<'createMnemonic'>>(
+                    createMessage<KeyringPayload<'create'>>(
                         {
                             type: 'keyring',
-                            method: 'createMnemonic',
-                            return: { mnemonic: this.#mnemonic },
+                            method: 'create',
+                            return: {
+                                entropy: entropyToSerialized(
+                                    this.#vault.entropy
+                                ),
+                            },
                         },
                         id
                     )
                 );
-            } else if (
-                isKeyringPayload<'getMnemonic'>(payload, 'getMnemonic')
-            ) {
+            } else if (isKeyringPayload(payload, 'getEntropy')) {
                 if (this.#locked) {
                     throw new Error('Keyring is locked. Unlock it first.');
                 }
-                if (!this.#mnemonic) {
-                    throw new Error('Error mnemonic is empty');
+                if (!this.#vault) {
+                    throw new Error('Error vault is empty');
                 }
                 uiConnection.send(
-                    createMessage<KeyringPayload<'getMnemonic'>>(
+                    createMessage<KeyringPayload<'getEntropy'>>(
                         {
                             type: 'keyring',
-                            method: 'getMnemonic',
-                            return: this.#mnemonic,
+                            method: 'getEntropy',
+                            return: entropyToSerialized(this.#vault.entropy),
                         },
                         id
                     )
                 );
-            } else if (
-                isKeyringPayload<'unlock'>(payload, 'unlock') &&
-                payload.args
-            ) {
+            } else if (isKeyringPayload(payload, 'unlock') && payload.args) {
                 await this.unlock(payload.args.password);
                 uiConnection.send(createMessage({ type: 'done' }, id));
-            } else if (
-                isKeyringPayload<'walletStatusUpdate'>(
-                    payload,
-                    'walletStatusUpdate'
-                )
-            ) {
+            } else if (isKeyringPayload(payload, 'walletStatusUpdate')) {
                 uiConnection.send(
                     createMessage<KeyringPayload<'walletStatusUpdate'>>(
                         {
@@ -165,28 +166,26 @@ class Keyring {
                             return: {
                                 isLocked: this.isLocked,
                                 isInitialized: await this.isWalletInitialized(),
-                                mnemonic: this.#mnemonic || undefined,
+                                entropy: this.#vault?.entropy
+                                    ? entropyToSerialized(this.#vault.entropy)
+                                    : undefined,
                             },
                         },
                         id
                     )
                 );
-            } else if (isKeyringPayload<'lock'>(payload, 'lock')) {
+            } else if (isKeyringPayload(payload, 'lock')) {
                 this.lock();
                 uiConnection.send(createMessage({ type: 'done' }, id));
-            } else if (isKeyringPayload<'clear'>(payload, 'clear')) {
-                await this.clearMnemonic();
+            } else if (isKeyringPayload(payload, 'clear')) {
+                await this.clearVault();
                 uiConnection.send(createMessage({ type: 'done' }, id));
-            } else if (
-                isKeyringPayload<'appStatusUpdate'>(payload, 'appStatusUpdate')
-            ) {
+            } else if (isKeyringPayload(payload, 'appStatusUpdate')) {
                 const appActive = payload.args?.active;
                 if (appActive) {
                     this.postponeLock();
                 }
-            } else if (
-                isKeyringPayload<'setLockTimeout'>(payload, 'setLockTimeout')
-            ) {
+            } else if (isKeyringPayload(payload, 'setLockTimeout')) {
                 if (payload.args) {
                     await this.setLockTimeout(payload.args.timeout);
                 }
@@ -203,26 +202,28 @@ class Keyring {
     }
 
     // pass null to delete it
-    private async storeEncryptedMnemonic(encryptedMnemonic: string | null) {
-        await Browser.storage.local.set({ [STORAGE_KEY]: encryptedMnemonic });
+    private async storeEncryptedVault(
+        encryptedVault: Awaited<ReturnType<Vault['encrypt']>> | null
+    ) {
+        await Browser.storage.local.set({ [STORAGE_KEY]: encryptedVault });
     }
 
-    private async loadMnemonic() {
+    private async loadVault() {
         const storedMnemonic = await Browser.storage.local.get({
             [STORAGE_KEY]: null,
         });
         return storedMnemonic[STORAGE_KEY];
     }
 
-    private async decryptMnemonic(password: string) {
-        const encryptedMnemonic = await this.loadMnemonic();
-        if (!encryptedMnemonic) {
+    private async decryptVault(password: string) {
+        const encryptedVault = await this.loadVault();
+        if (!encryptedVault) {
             throw new Error(
                 'Mnemonic is not initialized. Create a new one first.'
             );
         }
-        return Buffer.from(await decrypt(password, encryptedMnemonic)).toString(
-            'utf8'
+        return Vault.from(password, encryptedVault, async (aVault) =>
+            this.storeEncryptedVault(await aVault.encrypt(password))
         );
     }
 

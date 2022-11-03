@@ -6,11 +6,11 @@ import { isBasePayload } from '_payloads';
 import type { BasePayload, Payload } from '_payloads';
 
 type MethodToPayloads = {
-    createMnemonic: {
-        args: { password: string; importedMnemonic?: string };
-        return: { mnemonic: string };
+    create: {
+        args: { password: string; importedEntropy?: string };
+        return: { entropy: string };
     };
-    getMnemonic: {
+    getEntropy: {
         args: string | undefined;
         return: string;
     };
@@ -23,7 +23,7 @@ type MethodToPayloads = {
         return: Partial<{
             isLocked: boolean;
             isInitialized: boolean;
-            mnemonic: string;
+            entropy: string;
         }>;
     };
     lock: {
