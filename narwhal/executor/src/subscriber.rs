@@ -184,12 +184,13 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
                 .as_secs_f64(),
         );
 
-        let mut ret = Vec::with_capacity(deliver.certificate.header.payload.len());
-
-        if ret.is_empty() {
+        let num_of_batches = deliver.certificate.header.payload.len();
+        if num_of_batches == 0 {
             debug!("No batches to fetch, payload is empty");
             return vec![];
         }
+
+        let mut ret = Vec::with_capacity(num_of_batches);
 
         let deliver = Arc::new(deliver);
         for (batch_index, (digest, worker_id)) in
