@@ -259,19 +259,19 @@ function GasAmount({ amount }: { amount: bigint | number }) {
     return (
         <div className="flex items-center gap-1">
             <div className="text-sui-grey-90 flex items-baseline gap-0.5">
-                <Text variant="body" weight="medium">
-                    {formattedAmount}
-                </Text>
-                <Text variant="subtitleSmall" weight="medium">
-                    {symbol}
-                </Text>
+                <Text variant="body">{formattedAmount}</Text>
+                <Text variant="subtitleSmall">{symbol}</Text>
             </div>
-            <div className="text-sui-grey-65 flex items-baseline gap-0.5">
-                <Text variant="bodySmall">({amount.toLocaleString()}</Text>
-                <Text variant="subtitleSmall" weight="medium">
-                    MIST)
-                </Text>
-            </div>
+            <Text variant="bodySmall">
+                <div className="text-sui-grey-65 flex items-center">
+                    (
+                    <div className="flex items-baseline gap-0.5">
+                        <div>{amount.toLocaleString()}</div>
+                        <Text variant="subtitleSmall">MIST</Text>
+                    </div>
+                    )
+                </div>
+            </Text>
         </div>
     );
 }
