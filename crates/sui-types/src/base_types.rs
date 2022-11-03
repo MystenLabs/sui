@@ -623,7 +623,7 @@ impl TryFrom<&[u8]> for ObjectDigest {
 
 impl std::fmt::Debug for TransactionDigest {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        let s = Base64::encode(self.0);
+        let s = Base64::encode(&self.0);
         write!(f, "{}", s)?;
         Ok(())
     }
@@ -631,7 +631,7 @@ impl std::fmt::Debug for TransactionDigest {
 
 impl std::fmt::Debug for TransactionEffectsDigest {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        let s = Base64::encode(self.0);
+        let s = Base64::encode(&self.0);
         write!(f, "{}", s)?;
         Ok(())
     }

@@ -271,7 +271,7 @@ async fn reconfig_last_checkpoint_sync_missing_tx() {
         // Check that the object is mutated on validator 0 only.
         assert_eq!(
             get_object(validator, object_ref.0).await.version(),
-            SequenceNumber::from(u64::from(idx == 0))
+            SequenceNumber::from(if idx == 0 { 1 } else { 0 })
         );
     }
 

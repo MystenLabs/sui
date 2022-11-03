@@ -731,7 +731,7 @@ impl signature::Signature for Signature {
 
 impl std::fmt::Debug for Signature {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
-        let flag = Base64::encode([self.scheme().flag()]);
+        let flag = Base64::encode(&[self.scheme().flag()]);
         let s = Base64::encode(self.signature_bytes());
         let p = Base64::encode(self.public_key_bytes());
         write!(f, "{flag}@{s}@{p}")?;
