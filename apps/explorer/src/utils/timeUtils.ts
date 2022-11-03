@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useEffect, useMemo, useState } from 'react';
+
 import { IS_STATIC_ENV } from './envUtil';
 
 const stdToN = (original: number, length: number) =>
@@ -35,10 +37,67 @@ export const convertNumberToDate = (epochMilliSecs: number | null): string => {
     )}:${stdToN(date.getUTCSeconds(), 2)} UTC`;
 };
 
+const TIME_LABEL = {
+    year: {
+        full: 'year',
+        short: 'y',
+    },
+    month: {
+        full: 'month',
+        short: 'm',
+    },
+    day: {
+        full: 'day',
+        short: 'd',
+    },
+    hour: {
+        full: 'hour',
+        short: 'h',
+    },
+    min: {
+        full: 'min',
+        short: 'm',
+    },
+    sec: {
+        full: 'sec',
+        short: 's',
+    },
+};
+
+const ONE_SECOND = 1000;
+const ONE_MINUTE = ONE_SECOND * 60;
+const ONE_HOUR = ONE_MINUTE * 60;
+const ONE_DAY = ONE_HOUR * 24;
+
+/**
+ * Formats a timestamp using `timeAgo`, and automatically updates it when the value is small.
+ */
+export function useTimeAgo(
+    timeFrom?: number | null,
+    shortedTimeLabel?: boolean
+) {
+    const [now, setNow] = useState(() => Date.now());
+    const formattedTime = useMemo(
+        () => timeAgo(timeFrom, now, shortedTimeLabel),
+        [now, timeFrom, shortedTimeLabel]
+    );
+
+    const intervalEnabled = !!timeFrom && now - timeFrom < ONE_HOUR;
+
+    useEffect(() => {
+        if (!timeFrom || !intervalEnabled) return;
+
+        const timeout = setInterval(() => setNow(Date.now()), ONE_SECOND);
+        return () => clearTimeout(timeout);
+    }, [intervalEnabled, timeFrom]);
+
+    return formattedTime;
+}
+
 // TODO - this need a bit of modification to account for multiple display formate types
 export const timeAgo = (
     epochMilliSecs: number | null | undefined,
-    timeNow?: number,
+    timeNow?: number | null,
     shortenTimeLabel?: boolean
 ): string => {
     if (!epochMilliSecs) return '';
@@ -46,51 +105,25 @@ export const timeAgo = (
     //In static mode the time is fixed at 1 Jan 2025 01:13:10 UTC for testing purposes
     timeNow = timeNow ? timeNow : IS_STATIC_ENV ? 1735693990000 : Date.now();
 
-    const timeLabel = {
-        year: {
-            full: 'year',
-            short: 'y',
-        },
-        month: {
-            full: 'month',
-            short: 'm',
-        },
-        day: {
-            full: 'day',
-            short: 'd',
-        },
-        hour: {
-            full: 'hour',
-            short: 'h',
-        },
-        min: {
-            full: 'min',
-            short: 'm',
-        },
-        sec: {
-            full: 'sec',
-            short: 's',
-        },
-    };
     const dateKeyType = shortenTimeLabel ? 'short' : 'full';
 
     let timeUnit: [string, number][];
     let timeCol = timeNow - epochMilliSecs;
 
-    if (timeCol >= 1000 * 60 * 60 * 24) {
+    if (timeCol >= ONE_DAY) {
         timeUnit = [
-            [timeLabel.day[dateKeyType], 1000 * 60 * 60 * 24],
-            [timeLabel.hour[dateKeyType], 1000 * 60 * 60],
+            [TIME_LABEL.day[dateKeyType], ONE_DAY],
+            [TIME_LABEL.hour[dateKeyType], ONE_HOUR],
         ];
-    } else if (timeCol >= 1000 * 60 * 60) {
+    } else if (timeCol >= ONE_HOUR) {
         timeUnit = [
-            [timeLabel.hour[dateKeyType], 1000 * 60 * 60],
-            [timeLabel.min[dateKeyType], 1000 * 60],
+            [TIME_LABEL.hour[dateKeyType], ONE_HOUR],
+            [TIME_LABEL.min[dateKeyType], ONE_MINUTE],
         ];
     } else {
         timeUnit = [
-            [timeLabel.min[dateKeyType], 1000 * 60],
-            [timeLabel.sec[dateKeyType], 1000],
+            [TIME_LABEL.min[dateKeyType], ONE_MINUTE],
+            [TIME_LABEL.sec[dateKeyType], ONE_SECOND],
         ];
     }
 
