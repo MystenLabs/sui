@@ -1441,7 +1441,7 @@ impl From<PaySui> for SuiPaySui {
 /// 3. the balance of the first input coin after tx is sum(input_coins) - actual_gas_cost.
 /// 4. all other input coins other than the first are deleted.
 #[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, Eq, PartialEq)]
-#[serde(rename = "PaySui")]
+#[serde(rename = "PayAllSui")]
 pub struct SuiPayAllSui {
     /// The coins to be used for payment
     pub coins: Vec<SuiObjectRef>,
