@@ -57,13 +57,13 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                 'flex flex-wrap border-0 border-y border-solid border-sui-grey-45'
             }
         >
-            <div className={'w-full lg:w-[15vw] pr-[20px] pl-[1px]'}>
+            <div className={'w-full lg:w-[15vw] pr-[20px]'}>
                 <Combobox
                     value={selectedModule}
                     onChange={setSelectedModule}
                     nullable
                 >
-                    <div className="border border-sui-grey-50 border-solid rounded-[6px] h-[34px] shadow-sm placeholder-sui-grey-65 pl-3 w-full flex my-[10px] justify-between">
+                    <div className="box-border border border-sui-grey-50 border-solid rounded-[6px] h-[34px] shadow-sm placeholder-sui-grey-65 pl-3 w-full flex my-[10px] justify-between  ml-[2px]">
                         <Combobox.Input
                             onChange={(event) => setQuery(event.target.value)}
                             displayValue={() => ''}
@@ -80,7 +80,7 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                     <Combobox.Options
                         static
                         as="div"
-                        className="overflow-auto h-[571px]"
+                        className="w-full h-[571px] overflow-auto mr-[-20px] pr-[20px]"
                     >
                         <VerticalList>
                             {filteredModules.map((name, idx) => (
@@ -88,7 +88,7 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                                     {({ active }) => (
                                         <div
                                             key={idx}
-                                            className="w-full mr-[4px]"
+                                            className="min-w-full w-fit"
                                         >
                                             <ListItem
                                                 active={
