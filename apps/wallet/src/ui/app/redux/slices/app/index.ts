@@ -75,9 +75,18 @@ export const initNetworkFromStorage = createAsyncThunk<
         network === API_ENV.customRPC && result?.sui_Env_RPC !== ''
             ? result.sui_Env_RPC
             : null;
-    if (network) {
+
+    // Prevent setting customRPC if empty
+    const setDefaultNetwork =
+        network && Object.values(API_ENV).includes(network);
+
+    // only set if API_ENV exists
+    if (setDefaultNetwork) {
         api.setNewJsonRpcProvider(network, customRPCURL);
         await dispatch(setApiEnv(network));
+    } else {
+        api.setNewJsonRpcProvider(DEFAULT_API_ENV);
+        await dispatch(setApiEnv(DEFAULT_API_ENV));
     }
 });
 
