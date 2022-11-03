@@ -47,6 +47,16 @@ pub trait ExecutionState {
         transaction: Vec<u8>,
     );
 
+    /// Notifies executor that narwhal commit boundary was reached
+    /// Consumers can use this boundary as an approximate signal that it might take some
+    /// time before more transactions will arrive
+    /// Consumers can use this boundary, for example, to form checkpoints
+    ///
+    /// Current implementation sends this notification at the end of narwhal certificate
+    ///
+    /// In the future this will be triggered on the actual commit boundary, once per narwhal commit
+    async fn notify_commit_boundary(&self, _consensus_output: &Arc<ConsensusOutput>) {}
+
     /// Load the last consensus index from storage.
     async fn load_execution_indices(&self) -> ExecutionIndices;
 }
