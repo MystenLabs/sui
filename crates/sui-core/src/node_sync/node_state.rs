@@ -102,7 +102,7 @@ where
         }
     }
 
-    async fn notify(&self, key: &Key, res: ResultT) -> SuiResult {
+    fn notify(&self, key: &Key, res: ResultT) -> SuiResult {
         if let Some(tx) = self.waiters.lock().unwrap().remove(key) {
             tx.send(res).map_err(|_| SuiError::GenericAuthorityError {
                 error: format!("couldn't notify waiters for key {:?}", key),
@@ -338,14 +338,13 @@ where
         )
     }
 
-    async fn notify(
+    fn notify(
         waiter: &Waiter<TransactionDigest, SyncResult>,
         digest: &TransactionDigest,
         result: SyncResult,
     ) {
         waiter
             .notify(digest, result)
-            .await
             .tap_err(|e| debug!(?digest, "{}", e))
             .ok();
     }
@@ -455,8 +454,8 @@ where
 
                 // Notify waiters even if tx failed, to avoid leaking resources.
                 trace!(?epoch_id, ?tx_digest, "notifying parents and waiters");
-                Self::notify(&state.pending_parents, tx_digest, res.clone()).await;
-                Self::notify(&state.pending_txes, tx_digest, res.clone()).await;
+                Self::notify(&state.pending_parents, tx_digest, res.clone());
+                Self::notify(&state.pending_txes, tx_digest, res.clone());
 
                 Self::send_sync_res_to_receiver(tx, res, &sync_arg, &epoch_id);
             });
@@ -886,20 +885,18 @@ where
             let req = req.clone();
             let metrics = self.active_authority.gossip_metrics.clone();
             spawn_monitored_task!(async move {
-                let _ = pending_downloads
-                    .notify(
-                        &tx_digest,
-                        Self::download_impl(
-                            epoch_id,
-                            authorities_with_cert,
-                            aggregator,
-                            &req,
-                            node_sync_store,
-                            metrics,
-                        )
-                        .await,
+                let _ = pending_downloads.notify(
+                    &tx_digest,
+                    Self::download_impl(
+                        epoch_id,
+                        authorities_with_cert,
+                        aggregator,
+                        &req,
+                        node_sync_store,
+                        metrics,
                     )
-                    .await;
+                    .await,
+                );
             });
         }
 
