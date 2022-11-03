@@ -27,6 +27,9 @@ const NetworkSelector = () => {
     const [showCustomRPCInput, setShowCustomRPCInput] = useState<boolean>(
         selectedApiEnv === API_ENV.customRPC
     );
+
+    const [activeClass, setActiveClass] = useState<string>(selectedApiEnv);
+
     const dispatch = useAppDispatch();
     const excludeCustomRPC =
         !useFeature(FEATURES.USE_CUSTOM_RPC_URL).on && API_ENV.customRPC;
@@ -62,8 +65,12 @@ const NetworkSelector = () => {
         (e: React.MouseEvent<HTMLElement>) => {
             const networkName = e.currentTarget.dataset.network;
             setShowCustomRPCInput(networkName === API_ENV.customRPC);
+            const isEmptyCustomRpc =
+                networkName === API_ENV.customRPC && !customRPC;
 
-            if (networkName === API_ENV.customRPC && !customRPC) {
+            setActiveClass(networkName && !isEmptyCustomRpc ? networkName : '');
+
+            if (isEmptyCustomRpc) {
                 setShowCustomRPCInput(true);
                 return;
             }
@@ -89,7 +96,7 @@ const NetworkSelector = () => {
                                 className={cl(
                                     st.networkIcon,
                                     st.selectedNetwork,
-                                    selectedApiEnv === apiEnv.networkName &&
+                                    activeClass === apiEnv.networkName &&
                                         st.networkActive,
                                     apiEnv.networkName === API_ENV.customRPC &&
                                         showCustomRPCInput &&

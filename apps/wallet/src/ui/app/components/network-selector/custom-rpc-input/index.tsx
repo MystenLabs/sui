@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import cl from 'classnames';
 import { Field, Formik, Form } from 'formik';
 import { useState, useCallback } from 'react';
 import * as Yup from 'yup';
@@ -39,6 +40,7 @@ export function CustomRPCInput() {
         <Formik
             initialValues={{ rpcInput: customRPCURL }}
             validationSchema={validation}
+            validateOnMount
             onSubmit={changeNetwork}
             enableReinitialize={false}
         >
@@ -56,11 +58,16 @@ export function CustomRPCInput() {
                             type="submit"
                             disabled={!dirty || isSubmitting || !isValid}
                             size="mini"
-                            className={st.action}
+                            className={cl(
+                                st.action,
+                                isValid && dirty && st.canSave,
+                                isValid && st.valid
+                            )}
                         >
                             Save
                         </Button>
                     </Field>
+
                     {touched.rpcInput && errors.rpcInput && dirty ? (
                         <Alert className={st.error}>{errors.rpcInput}</Alert>
                     ) : null}

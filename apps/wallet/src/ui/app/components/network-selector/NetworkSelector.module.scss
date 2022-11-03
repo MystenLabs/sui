@@ -59,12 +59,16 @@
         border-bottom: none;
     }
 
-    .custom-rpc-active {
-        color: colors.$gray-70;
-    }
-
     .network-active {
         color: colors.$success;
+
+        &.custom-rpc-active {
+            color: colors.$success;
+        }
+    }
+
+    .custom-rpc-active {
+        color: colors.$gray-60;
     }
 }
 
@@ -91,4 +95,13 @@
 
 .action {
     text-transform: uppercase;
+
+    &.valid {
+        opacity: 1;
+    }
+
+    &.can-save {
+        background: colors.$gray-90;
+        color: colors.$white;
+    }
 }
