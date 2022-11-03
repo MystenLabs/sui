@@ -9,7 +9,7 @@ mod notifier;
 
 pub use errors::{SubscriberError, SubscriberResult};
 pub use state::ExecutionIndices;
-use tracing::info;
+use tracing::{debug, info};
 
 use crate::metrics::ExecutorMetrics;
 use crate::notifier::Notifier;
@@ -25,6 +25,7 @@ use std::sync::Arc;
 use storage::CertificateStore;
 
 use crate::subscriber::spawn_subscriber;
+use mockall::automock;
 use tokio::sync::oneshot;
 use tokio::{sync::watch, task::JoinHandle};
 use types::{
@@ -37,6 +38,7 @@ pub type SerializedTransaction = Vec<u8>;
 /// Convenience type representing a serialized transaction digest.
 pub type SerializedTransactionDigest = u64;
 
+#[automock]
 #[async_trait]
 pub trait ExecutionState {
     /// Execute the transaction and atomically persist the consensus index.
@@ -120,20 +122,21 @@ pub async fn get_restored_consensus_output<State: ExecutionState>(
         .read_last_consensus_index()
         .map_err(SubscriberError::StoreError)?;
 
-    let next_cert_index = execution_state
+    let last_executed_index = execution_state
         .load_execution_indices()
         .await
-        .next_certificate_index;
+        .next_certificate_index + 1;
 
-    if next_cert_index < consensus_next_index {
+    if last_executed_index <= consensus_next_index {
+
         let missing = consensus_store
-            .read_sequenced_certificates(&(next_cert_index..=consensus_next_index - 1))?
-            .iter()
-            .zip(next_cert_index..consensus_next_index)
-            .filter_map(|(c, seq)| c.map(|digest| (digest, seq)))
-            .collect::<Vec<(CertificateDigest, SequenceNumber)>>();
+            .read_sequenced_certificates(&(last_executed_index..=consensus_next_index))?
+            .into_iter()
+            .map(|(seq, digest)| (seq - 1, digest))
+            .collect::<Vec<(SequenceNumber, CertificateDigest)>>();
 
-        for (cert_digest, seq) in missing {
+        for (seq, cert_digest) in missing {
+            debug!("Recovered index:{}, digest:{}", seq, cert_digest);
             if let Some(cert) = certificate_store.read(cert_digest).unwrap() {
                 // Save the missing sequence / cert pair as ConsensusOutput to re-send to the executor.
                 restored_consensus_output.push(ConsensusOutput {

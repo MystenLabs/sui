@@ -35,6 +35,7 @@ anyhow = "1.0.65"
 store.workspace = true
 match_opt = "0.1.2"
 rand = "0.8.5"
+mockall = "0.11.2"
 
 sui-metrics = { path = "../../crates/sui-metrics" }
 
@@ -44,6 +45,7 @@ workspace-hack.workspace = true
 indexmap = { version = "1.9.1", features = ["serde"] }
 tempfile = "3.3.0"
 primary = { path = "../primary", package = "narwhal-primary" }
+node = { path = "../node", package = "narwhal-node" }
 test-utils = { path = "../test-utils", package = "narwhal-test-utils" }
 types = { path = "../types", package = "narwhal-types" }
 telemetry-subscribers.workspace = true

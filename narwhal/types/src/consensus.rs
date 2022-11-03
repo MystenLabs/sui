@@ -77,16 +77,17 @@ impl ConsensusStore {
     }
 
     /// Load the certificate digests sequenced at a specific indices.
+    /// Method returns a vector of a tuple of the certificate digest
+    /// with the next certificate index.
     pub fn read_sequenced_certificates(
         &self,
         missing: &RangeInclusive<SequenceNumber>,
-    ) -> StoreResult<Vec<Option<CertificateDigest>>> {
+    ) -> StoreResult<Vec<(SequenceNumber, CertificateDigest)>> {
         Ok(self
             .sequence
             .iter()
             .skip_to(missing.start())?
             .take_while(|(index, _)| index <= missing.end())
-            .map(|(_, digest)| Some(digest))
             .collect())
     }
 

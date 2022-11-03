@@ -1,9 +1,168 @@
+use std::collections::{BTreeSet, HashMap};
+use std::sync::Arc;
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use bytes::Bytes;
+use consensus::bullshark::Bullshark;
+use consensus::metrics::ConsensusMetrics;
+use consensus::Consensus;
+use fastcrypto::hash::Hash;
+use narwhal_executor::{get_restored_consensus_output, ExecutionIndices};
+use node::NodeStorage;
+use prometheus::Registry;
 use telemetry_subscribers::TelemetryGuards;
-use test_utils::cluster::Cluster;
-use types::TransactionProto;
+use test_utils::{cluster::Cluster, temp_dir, CommitteeFixture};
+use tokio::sync::watch;
+use mockall::*;
+use narwhal_executor::MockExecutionState;
+
+use types::{
+    Certificate, CertificateDigest, ReconfigureNotification, TransactionProto,
+};
+
+#[tokio::test]
+async fn test_restore_consensus_output() {
+    let storage = NodeStorage::reopen(temp_dir());
+
+    let consensus_store = storage.consensus_store;
+    let certificate_store = storage.certificate_store;
+
+    let mock_execution_state = MockExecutionState::new();
+
+    // Store certificates in consensus store
+    let committed_state = HashMap::new();
+    let consensus_index = 1;
+    let certificate_id = CertificateDigest::default();
+
+    // write a few certificates like Bullshark would do
+
+    // Write some state
+    consensus_store
+        .write_consensus_state(&committed_state, &consensus_index, &certificate_id)
+        .unwrap();
+
+    // Now read the output
+    let consensus_output =
+        get_restored_consensus_output(consensus_store, certificate_store, &mock_execution_state)
+            .await
+            .unwrap();
+
+    assert_eq!(consensus_output.len(), 100);
+}
+
+#[tokio::test]
+async fn test_recovery() {
+    let _guard = setup_tracing();
+
+    // Create storage
+    let storage = NodeStorage::reopen(temp_dir());
+
+    let consensus_store = storage.consensus_store;
+    let certificate_store = storage.certificate_store;
+
+    // Setup consensus
+    let fixture = CommitteeFixture::builder().build();
+    let committee = fixture.committee();
+
+    // Make certificates for rounds 1 and 2.
+    let keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
+    let genesis = Certificate::genesis(&committee)
+        .iter()
+        .map(|x| x.digest())
+        .collect::<BTreeSet<_>>();
+    let (mut certificates, next_parents) =
+        test_utils::make_optimal_certificates(&committee, 1..=2, &genesis, &keys);
+
+    // Make two certificate (f+1) with round 3 to trigger the commits.
+    let (_, certificate) =
+        test_utils::mock_certificate(&committee, keys[0].clone(), 3, next_parents.clone());
+    certificates.push_back(certificate);
+    let (_, certificate) =
+        test_utils::mock_certificate(&committee, keys[1].clone(), 3, next_parents);
+    certificates.push_back(certificate);
+
+    // Spawn the consensus engine and sink the primary channel.
+    let (tx_waiter, rx_waiter) = test_utils::test_channel!(1);
+    let (tx_primary, mut rx_primary) = test_utils::test_channel!(1);
+    let (tx_output, mut rx_output) = test_utils::test_channel!(1);
+
+    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
+    let (_tx_reconfigure, rx_reconfigure) = watch::channel(initial_committee);
+
+    let gc_depth = 50;
+    let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
+    let bullshark = Bullshark::new(
+        committee.clone(),
+        consensus_store.clone(),
+        gc_depth,
+        metrics.clone(),
+    );
+
+    let _consensus_handle = Consensus::spawn(
+        committee,
+        consensus_store.clone(),
+        certificate_store.clone(),
+        rx_reconfigure,
+        rx_waiter,
+        tx_primary,
+        tx_output,
+        bullshark,
+        metrics,
+        gc_depth,
+    );
+    tokio::spawn(async move { while rx_primary.recv().await.is_some() {} });
+
+    // Feed all certificates to the consensus. Only the last certificate should trigger
+    // commits, so the task should not block.
+    while let Some(certificate) = certificates.pop_front() {
+        // we store the certificates so we can enable the recovery
+        // mechanism later.
+        certificate_store.write(certificate.clone()).unwrap();
+        tx_waiter.send(certificate).await.unwrap();
+    }
+
+    // Ensure the first 4 ordered certificates are from round 1 (they are the parents of the committed
+    // leader); then the leader's certificate should be committed.
+    let mut consensus_index_counter = 0;
+    let num_of_committed_certificates = 5;
+
+    for i in 1..=num_of_committed_certificates {
+        let output = rx_output.recv().await.unwrap();
+        assert_eq!(output.consensus_index, consensus_index_counter);
+
+        if i < 5 {
+            assert_eq!(output.certificate.round(), 1);
+        } else {
+            assert_eq!(output.certificate.round(), 2);
+        }
+
+        consensus_index_counter += 1;
+    }
+
+    // Now assume that we want to recover from a crash. Via the ExecutionState we'll return
+    // that next_certificate_index is zero, so certificates should be replayed practically
+    // from the beginning of commit.
+    for last_executed_certificate_index in 0..consensus_index_counter {
+        let mut execution_state = MockExecutionState::new();
+        execution_state
+            .expect_load_execution_indices()
+            .times(1)
+            .returning(move || {
+                ExecutionIndices {
+                    next_certificate_index: last_executed_certificate_index,
+                    next_batch_index: 0,
+                    next_transaction_index: 0
+                }
+            });
+
+        let consensus_output =
+            get_restored_consensus_output(consensus_store.clone(), certificate_store.clone(), &execution_state)
+                .await
+                .unwrap();
+
+        assert_eq!(consensus_output.len(), (num_of_committed_certificates - last_executed_certificate_index) as usize);
+    }
+}
 
 #[tokio::test]
 async fn test_internal_consensus_output() {
