@@ -47,9 +47,9 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
 
     const submitSearch = useCallback(() => {
         setSelectedModule((prev: string) =>
-            filteredModules.includes(query) ? query : prev
+            (filteredModules.length === 1) ? filteredModules[0] : prev 
         );
-    }, [filteredModules, query]);
+    }, [filteredModules ]);
 
     return (
         <div
@@ -65,7 +65,7 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                     <div className="box-border border border-sui-grey-50 border-solid rounded-[6px] h-[34px] shadow-sm placeholder-sui-grey-65 pl-3 w-full flex my-[10px] justify-between  ml-[2px]">
                         <Combobox.Input
                             onChange={(event) => setQuery(event.target.value)}
-                            displayValue={() => ''}
+                            displayValue={() => query}
                             placeholder="Search"
                             className="border-none w-full"
                         />
