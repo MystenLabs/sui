@@ -16,7 +16,7 @@ import {
     type ExecutionStatusType,
     type TransactionKindName,
 } from '@mysten/sui.js';
-import { Fragment, useEffect } from 'react';
+import { Fragment } from 'react';
 
 import { ReactComponent as ContentSuccessStatus } from '../../assets/SVGIcons/12px/Check.svg';
 import { ReactComponent as ContentFailedStatus } from '../../assets/SVGIcons/12px/X.svg';
@@ -26,7 +26,7 @@ import { DefaultRpcClient } from '../../utils/api/DefaultRpcClient';
 import { type Network } from '../../utils/api/rpcSetting';
 import { deduplicate } from '../../utils/searchUtil';
 import { truncate } from '../../utils/stringUtils';
-import { timeAgo, useTimeAgo } from '../../utils/timeUtils';
+import { useTimeAgo } from '../../utils/timeUtils';
 
 import styles from './RecentTxCard.module.css';
 
