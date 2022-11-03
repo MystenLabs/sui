@@ -3,9 +3,9 @@
 
 use std::{collections::HashSet, sync::Arc};
 use sui_types::{base_types::TransactionDigest, error::SuiResult, messages::VerifiedCertificate};
-use tracing::{debug, info};
+use tracing::{debug, error, info};
 
-use crate::authority::AuthorityState;
+use crate::authority::{AuthorityState, PendingDigest};
 use crate::authority_client::AuthorityAPI;
 
 use futures::{stream, StreamExt};
@@ -89,6 +89,86 @@ where
     }
 }
 
+type PendingVec = Vec<(u64, PendingDigest)>;
+
+fn sort_and_partition_pending_certs(
+    mut pending_transactions: PendingVec,
+) -> (
+    PendingVec, // sequenced
+    PendingVec, // unsequenced
+    Vec<u64>,   // duplicated indices, to be deleted
+) {
+    // sort sequenced digests before unsequenced so that the deduplication below favors
+    // sequenced digests.
+    pending_transactions.sort_by(|(idx_a, (is_seq_a, _)), (idx_b, (is_seq_b, _))| {
+        match is_seq_b.cmp(is_seq_a) {
+            // when both are sequenced or unsequenced, sort by idx.
+            std::cmp::Ordering::Equal => idx_a.cmp(idx_b),
+            // otherwise sort sequenced before unsequenced
+            res => res,
+        }
+    });
+
+    // Before executing de-duplicate the list of pending trasnactions
+    let mut seen = HashSet::new();
+    let mut indexes_to_delete = Vec::new();
+
+    let (pending_sequenced, pending_transactions): (Vec<_>, Vec<_>) = pending_transactions
+        .into_iter()
+        .filter(|(idx, (_, digest))| {
+            if seen.contains(digest) {
+                indexes_to_delete.push(*idx);
+                false
+            } else {
+                seen.insert(*digest);
+                true
+            }
+        })
+        .partition(|(_, (is_sequenced, _))| *is_sequenced);
+
+    debug!(
+        num_sequenced = ?pending_sequenced.len(),
+        num_unsequenced = ?pending_transactions.len()
+    );
+
+    (pending_sequenced, pending_transactions, indexes_to_delete)
+}
+
+#[test]
+fn test_sort_and_partition_pending_certs() {
+    let tx1 = TransactionDigest::random();
+    let tx2 = TransactionDigest::random();
+    let tx3 = TransactionDigest::random();
+    let tx4 = TransactionDigest::random();
+
+    // partitioning works correctly.
+    assert_eq!(
+        sort_and_partition_pending_certs(vec![(0, (false, tx1)), (1, (true, tx2))]),
+        (vec![(1, (true, tx2))], vec![(0, (false, tx1))], vec![],)
+    );
+
+    // if certs are duplicated, but some are sequenced, the sequenced certs take priority.
+    assert_eq!(
+        sort_and_partition_pending_certs(vec![(0, (false, tx1)), (1, (true, tx1))]),
+        (vec![(1, (true, tx1))], vec![], vec![0],)
+    );
+
+    // sorting works correctly for both sequenced and unsequenced.
+    assert_eq!(
+        sort_and_partition_pending_certs(vec![
+            (2, (false, tx3)),
+            (0, (false, tx2)),
+            (4, (true, tx4)),
+            (1, (true, tx1))
+        ]),
+        (
+            vec![(1, (true, tx1)), (4, (true, tx4))],
+            vec![(0, (false, tx2)), (2, (false, tx3))],
+            vec![],
+        )
+    );
+}
+
 /// Reads all pending transactions as a block and executes them.
 /// Returns whether all pending transactions succeeded.
 async fn execute_pending<A>(active_authority: Arc<ActiveAuthority<A>>) -> SuiResult<bool>
@@ -98,21 +178,9 @@ where
     // Get the pending transactions
     let pending_transactions = active_authority.state.database.get_pending_digests()?;
 
-    // Before executing de-duplicate the list of pending trasnactions
-    let mut seen = HashSet::new();
-    let mut indexes_to_delete = Vec::new();
-    let pending_transactions: Vec<_> = pending_transactions
-        .into_iter()
-        .filter(|(idx, digest)| {
-            if seen.contains(digest) {
-                indexes_to_delete.push(*idx);
-                false
-            } else {
-                seen.insert(*digest);
-                true
-            }
-        })
-        .collect();
+    let (pending_sequenced, pending_transactions, indexes_to_delete) =
+        sort_and_partition_pending_certs(pending_transactions);
+
     active_authority
         .state
         .database
@@ -121,22 +189,51 @@ where
     // Send them for execution
     let epoch = active_authority.state.committee.load().epoch;
     let sync_handle = active_authority.clone().node_sync_handle();
+
+    // Execute certs that have a sequencing index associated with them serially.
+    for (seq, (_, digest)) in pending_sequenced.iter() {
+        let mut result_stream = sync_handle
+            .handle_execution_request(epoch, std::iter::once(*digest))
+            .await?;
+
+        match result_stream.next().await.unwrap() {
+            Ok(_) => {
+                debug!(?seq, ?digest, "serial certificate execution complete");
+                active_authority
+                    .state
+                    .database
+                    .remove_pending_digests(vec![*seq])
+                    .tap_err(|err| {
+                        error!(?seq, ?digest, "pending digest deletion failed: {}", err)
+                    })?;
+            }
+            Err(err) => {
+                info!(
+                    ?seq,
+                    ?digest,
+                    "serial certificate execution failed: {}",
+                    err
+                );
+            }
+        }
+    }
+
     let executed: Vec<_> = sync_handle
         // map to extract digest
         .handle_execution_request(
             epoch,
-            pending_transactions.iter().map(|(_, digest)| *digest),
+            pending_transactions.iter().map(|(_, (_, digest))| *digest),
         )
         .await?
         // zip results back together with seq
         .zip(stream::iter(pending_transactions.iter()))
         // filter out errors
-        .filter_map(|(result, (seq, digest))| async move {
+        .filter_map(|(result, (idx, digest))| async move {
             result
-                .tap_err(|e| info!(?seq, ?digest, "certificate execution failed: {}", e))
-                .tap_ok(|_| debug!(?seq, ?digest, "certificate execution complete"))
+                .tap_err(|e| info!(?idx, ?digest, "certificate execution failed: {}", e))
+                .tap_ok(|_| debug!(?idx, ?digest, "certificate execution complete"))
                 .ok()
-                .map(|_| seq)
+                .map(|_| idx)
         })
         .collect()
         .await;

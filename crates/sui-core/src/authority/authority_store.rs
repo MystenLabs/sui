@@ -36,6 +36,7 @@ pub type AuthorityStore = SuiDataStore<AuthoritySignInfo>;
 pub type GatewayStore = SuiDataStore<EmptySignInfo>;
 
 pub type InternalSequenceNumber = u64;
+pub type PendingDigest = (bool /* is sequenced */, TransactionDigest);
 
 pub struct CertLockGuard(LockGuard);
 
@@ -223,7 +224,11 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     /// index. If two instanced run concurrently, the indexes are guaranteed to not overlap
     /// although some certificates may be included twice in the `pending_execution`, and
     /// the same certificate may be written twice (but that is OK since it is valid.)
-    pub fn add_pending_digests(&self, digests: Vec<TransactionDigest>) -> SuiResult<()> {
+    pub fn add_pending_digests(
+        &self,
+        digests: Vec<TransactionDigest>,
+        is_sequenced: bool,
+    ) -> SuiResult<()> {
         let first_index = self
             .next_pending_seq
             .fetch_add(digests.len() as u64, Ordering::Relaxed);
@@ -234,7 +239,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             digests
                 .iter()
                 .enumerate()
-                .map(|(num, digest)| ((num as u64) + first_index, digest)),
+                .map(|(num, digest)| ((num as u64) + first_index, (is_sequenced, *digest))),
         )?;
         batch.write()?;
 
@@ -245,9 +250,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     }
 
     /// Get all stored certificate digests
-    pub fn get_pending_digests(
-        &self,
-    ) -> SuiResult<Vec<(InternalSequenceNumber, TransactionDigest)>> {
+    pub fn get_pending_digests(&self) -> SuiResult<Vec<(InternalSequenceNumber, PendingDigest)>> {
         Ok(self.epoch_tables().pending_execution.iter().collect())
     }
 
