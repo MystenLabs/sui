@@ -5,6 +5,7 @@ use crate::authority::authority_store_tables::ExecutionIndicesWithHash;
 use crate::authority::AuthorityState;
 use crate::consensus_adapter::ConsensusListenerMessage;
 use async_trait::async_trait;
+use narwhal_consensus::ConsensusOutput;
 use narwhal_executor::{ExecutionIndices, ExecutionState};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -65,7 +66,7 @@ impl ExecutionState for ConsensusHandler {
     async fn handle_consensus_transaction(
         &self,
         // TODO [2533]: use this once integrating Narwhal reconfiguration
-        consensus_output: &Arc<narwhal_consensus::ConsensusOutput>,
+        consensus_output: &Arc<ConsensusOutput>,
         consensus_index: ExecutionIndices,
         serialized_transaction: Vec<u8>,
     ) {
@@ -129,6 +130,13 @@ impl ExecutionState for ConsensusHandler {
             .expect("Should not have contention on ExecutionState::load_execution_indices") =
             index_with_hash.clone();
         index_with_hash.index
+    }
+
+    #[instrument(level = "trace", skip_all)]
+    async fn notify_commit_boundary(&self, consensus_output: &Arc<ConsensusOutput>) {
+        self.state
+            .handle_commit_boundary(consensus_output)
+            .expect("Unrecoverable error in consensus handler when processing commit boundary")
     }
 }
 

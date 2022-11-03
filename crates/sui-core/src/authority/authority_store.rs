@@ -1262,6 +1262,40 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         Ok(batch.write()?)
     }
 
+    pub fn record_checkpoint_boundary(&self, certificate_height: u64) -> SuiResult {
+        if let Some((index, height)) = self
+            .epoch_tables()
+            .checkpoint_boundary
+            .iter()
+            .skip_to_last()
+            .next()
+        {
+            if height >= certificate_height {
+                // Due to crash recovery we might see same boundary twice
+                debug!("Not recording checkpoint boundary - already updated");
+            } else {
+                let index = index + 1;
+                debug!(
+                    "Recording checkpoint boundary {} at {}",
+                    index, certificate_height
+                );
+                self.epoch_tables()
+                    .checkpoint_boundary
+                    .insert(&index, &certificate_height)?;
+            }
+        } else {
+            // Table is empty
+            debug!(
+                "Recording first checkpoint boundary at {}",
+                certificate_height
+            );
+            self.epoch_tables()
+                .checkpoint_boundary
+                .insert(&0, &certificate_height)?;
+        }
+        Ok(())
+    }
+
     pub fn transactions_in_seq_range(
         &self,
         start: u64,
