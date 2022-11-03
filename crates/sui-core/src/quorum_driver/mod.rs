@@ -9,11 +9,12 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use sui_types::base_types::{AuthorityName, ObjectRef, TransactionDigest};
 use sui_types::committee::{Committee, EpochId, StakeUnit};
+use tap::TapFallible;
 
 use tokio::sync::mpsc::{self, Receiver, Sender};
 use tokio::task::JoinHandle;
 use tracing::Instrument;
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info, warn};
 
 use crate::authority_aggregator::AuthorityAggregator;
 use crate::authority_client::AuthorityAPI;
@@ -157,10 +158,7 @@ where
         &self,
         transaction: VerifiedTransaction,
     ) -> SuiResult<QuorumDriverResponse> {
-        let certificate = self
-            .process_transaction(transaction)
-            .instrument(tracing::debug_span!("process_tx"))
-            .await?;
+        let certificate = self.process_transaction(transaction).await?;
         self.task_sender
             .send(QuorumTask::ProcessCertificate(certificate.clone()))
             .await
@@ -174,14 +172,8 @@ where
         &self,
         transaction: VerifiedTransaction,
     ) -> SuiResult<QuorumDriverResponse> {
-        let certificate = self
-            .process_transaction(transaction)
-            .instrument(tracing::debug_span!("process_tx"))
-            .await?;
-        let response = self
-            .process_certificate(certificate)
-            .instrument(tracing::debug_span!("process_cert"))
-            .await?;
+        let certificate = self.process_transaction(transaction).await?;
+        let response = self.process_certificate(certificate).await?;
         Ok(QuorumDriverResponse::EffectsCert(Box::new(response)))
     }
 
@@ -200,19 +192,56 @@ where
 
         match &result {
             Err(SuiError::QuorumFailedToProcessTransaction {
+                good_stake,
                 errors: _errors,
                 conflicting_tx_digests,
             }) if !conflicting_tx_digests.is_empty() => {
-                // TODO metrics
+                self.metrics
+                    .total_err_process_tx_responses_with_nonzero_conflicting_transactions
+                    .inc();
                 debug!(
                     ?tx_digest,
-                    "Attempting to retry {} conflicting transactions: {:?}",
+                    ?good_stake,
+                    "Observed {} conflicting transactions: {:?}",
                     conflicting_tx_digests.len(),
                     conflicting_tx_digests
                 );
-                let _ = self
-                    .attempt_conflicting_transactions(conflicting_tx_digests)
+                let attempt_result = self
+                    .attempt_conflicting_transactions_maybe(
+                        *good_stake,
+                        conflicting_tx_digests,
+                        &tx_digest,
+                    )
                     .await;
+                match attempt_result {
+                    Err(err) => {
+                        debug!(
+                            ?tx_digest,
+                            "Encountered error in attempt_conflicting_transactions_maybe: {:?}",
+                            err
+                        );
+                    }
+                    Ok(None) => {
+                        debug!(?tx_digest, "Did not retry any conflicting transactions");
+                    }
+                    Ok(Some((retried_tx_digest, success))) => {
+                        self.metrics
+                            .total_attempts_retrying_conflicting_transaction
+                            .inc();
+                        debug!(
+                            ?tx_digest,
+                            ?retried_tx_digest,
+                            "Retried conflicting transaction success: {}",
+                            success
+                        );
+                        if success {
+                            self.metrics
+                                .total_successful_attempts_retrying_conflicting_transaction
+                                .inc();
+                        }
+                        return Err(SuiError::QuorumFailedToProcessTransactionWithConflictingTransactionRetried { conflicting_tx_digest: retried_tx_digest, conflicting_tx_retry_success: success });
+                    }
+                }
             }
             _ => (),
         }
@@ -247,65 +276,76 @@ where
     }
 
     // TODO currently this function is not epoch-boundary-safe. We need to make it so.
-    async fn attempt_conflicting_transactions(
+    /// Returns Ok(None) if the no conflicting transaction was retried.
+    /// Returns Ok(Some((tx_digest, true))) if one conflicting transaction was retried and succeeded,
+    /// Some((tx_digest, false)) otherwise.
+    /// Returns Error on unexpected errors.
+    #[allow(clippy::type_complexity)]
+    async fn attempt_conflicting_transactions_maybe(
         &self,
+        good_stake: StakeUnit,
         conflicting_tx_digests: &BTreeMap<
-            ObjectRef,
-            BTreeMap<TransactionDigest, (Vec<AuthorityName>, StakeUnit)>,
+            TransactionDigest,
+            (Vec<(AuthorityName, ObjectRef)>, StakeUnit),
         >,
-    ) -> SuiResult<()> {
+        original_tx_digest: &TransactionDigest,
+    ) -> SuiResult<Option<(TransactionDigest, bool)>> {
         let validity = self.validators.load().committee.validity_threshold();
-
-        let mut futs = Vec::new();
-        for (obj_ref, tx_digests) in conflicting_tx_digests {
-            futs.push(self.attempt_one_conflicting_transaction(obj_ref, tx_digests, validity));
+        // if we have >= f+1 good stake on the current transaction, no point in retrying conflicting ones
+        if good_stake >= validity {
+            return Ok(None);
         }
 
-        futures::future::join_all(futs).await;
-        Ok(())
-    }
-
-    async fn attempt_one_conflicting_transaction(
-        &self,
-        obj_ref: &ObjectRef,
-        conflicting_tx_digests: &BTreeMap<TransactionDigest, (Vec<AuthorityName>, StakeUnit)>,
-        validity: u64,
-    ) -> SuiResult<()> {
-        if conflicting_tx_digests.is_empty() {
-            // TODO log error
-            return Ok(());
-        }
         let mut conflicting_tx_digests = Vec::from_iter(conflicting_tx_digests.iter());
-        // sort by weights
         conflicting_tx_digests.sort_by(|lhs, rhs| rhs.1 .1.cmp(&lhs.1 .1));
+        if conflicting_tx_digests.is_empty() {
+            error!("This path in unreachable with an emtpy conflicting_tx_digests.");
+            return Ok(None);
+        }
 
         // we checked emptiness above, safe to unwrap.
         let (tx_digest, (validators, total_stake)) = conflicting_tx_digests.get(0).unwrap();
-        if let Some((tx_digest_2, (validators_2, total_stake_2))) = conflicting_tx_digests.get(1) {
-            // If the 2nd digest's total stake also surpasses f+1, the object is fully equivocated.
-            if *total_stake_2 >= validity {
-                // TODO add metric here
-                info!(
-                    ?obj_ref,
-                    tx_digest_1=?tx_digest,
-                    validators_1=?validators,
-                    total_stake_1=?total_stake,
-                    tx_digest_2=?tx_digest_2,
-                    validators_2=?validators_2,
-                    total_stake_2=?total_stake_2,
-                    "Object is now fully equivocated on validators"
-                );
-                return Ok(());
-            }
-        }
 
-        // Now, we optimistically assume the object is not fully equivocated yet, and try to execute the tx.
+        // To be more conservative and try not to actually cause full equivocation,
+        // we only retry a transaction when at least f+1 validators claims this tx locks objects
+        if *total_stake < validity {
+            return Ok(None);
+        }
+        info!(
+            ?tx_digest,
+            ?total_stake,
+            ?original_tx_digest,
+            "retrying conflicting tx."
+        );
+        let is_tx_executed = self
+            .attempt_one_conflicting_transaction(
+                tx_digest,
+                original_tx_digest,
+                validators
+                    .iter()
+                    .map(|(name, _obj_ref)| name)
+                    .collect::<Vec<_>>(),
+            )
+            .await?;
+
+        Ok(Some((**tx_digest, is_tx_executed)))
+    }
+
+    /// Returns Some(true) if the conflicting transaction is executed successfully
+    /// (or already executed), or Some(false) if it did not.
+    async fn attempt_one_conflicting_transaction(
+        &self,
+        tx_digest: &&TransactionDigest,
+        original_tx_digest: &TransactionDigest,
+        validators: Vec<&AuthorityName>,
+    ) -> SuiResult<bool> {
         let clients = self.validators.load();
         for validator_name in validators {
             // If we cannot find the client, it indicates an epoch change. Then we stop all attempts.
-            let client = clients.get_client(validator_name).ok_or_else( ||
+            let client = clients.get_client(validator_name).ok_or_else( || {
+                info!(?tx_digest, "It looks like we have an epoch change when doing attempt_one_conflicting_transaction.");
                 SuiError::InconsistentEpochState { error: format!("Epoch advance caused validator {:?} missing in AuthorityAggreagtor, giving up all attempts.", validator_name) }
-            )?;
+            })?;
             if let Ok(TransactionInfoResponse {
                 signed_transaction,
                 certified_transaction,
@@ -316,9 +356,35 @@ where
                 })
                 .await
             {
-                // If we happen to find that a validator returns TransactionCertificate, this transaction is finalized.
-                if certified_transaction.is_some() {
-                    return Ok(());
+                // If we happen to find that a validator returns TransactionCertificate:
+                if let Some(certified_transaction) = certified_transaction {
+                    self.metrics
+                        .total_times_conflicting_transaction_already_finalized_when_retrying
+                        .inc();
+                    // We still want to ask validators to execute this certificate in case this certificate is not
+                    // known to the rest of them (e.g. when *this* validator is bad).
+                    let result = self
+                        .validators
+                        .load()
+                        .process_certificate(certified_transaction.into_inner())
+                        .await
+                        .tap_ok(|_resp| {
+                            debug!(
+                                ?tx_digest,
+                                ?original_tx_digest,
+                                "Retry conflicting transaction certificate succeeded."
+                            );
+                        })
+                        .tap_err(|err| {
+                            debug!(
+                                ?tx_digest,
+                                ?original_tx_digest,
+                                "Retry conflicting transaction certificate got an error: {:?}",
+                                err
+                            );
+                        });
+                    // We only retry once.
+                    return Ok(result.is_ok());
                 }
                 if let Some(verified_transaction) = signed_transaction {
                     let transaction =
@@ -326,24 +392,44 @@ where
                     // SafeClient checked the transaction is legit in `handle_transaction_info_request`
                     let verified_transaction =
                         VerifiedTransactionEnvelope::new_unchecked(transaction);
-                    let _ = self
+                    // Now ask validators to execute this transaction.
+                    let result = self
                         .validators
                         .load()
                         .execute_transaction(&verified_transaction)
-                        .await;
-                    // TODO log & metrics
-                    // Now for each digest, we only give it one shot.
-                    return Ok(());
+                        .await
+                        .tap_ok(|_resp| {
+                            debug!(
+                                ?tx_digest,
+                                ?original_tx_digest,
+                                "Retry conflicting transaction succeeded."
+                            );
+                        })
+                        .tap_err(|err| {
+                            debug!(
+                                ?tx_digest,
+                                ?original_tx_digest,
+                                "Retry conflicting transaction got an error: {:?}",
+                                err
+                            );
+                        });
+                    // We only retry once.
+                    return Ok(result.is_ok());
                 } else {
-                    // TODO log byzantinue behavior
+                    self.metrics
+                        .total_times_could_not_get_conflicting_transaction_from_a_validator
+                        .inc();
+                    warn!(name=?validator_name, ?tx_digest, ?original_tx_digest, "Suspicious Byzantine behavior - valdiator couldn't give transaction info that it is supposed to know about");
                     // try the next validator
                 }
             }
         }
-        // if we reach here, it means none of the validators gives us the transaction.
-        // TODO metrics
-        warn!(?obj_ref, "No one validator gives us the transaction info. They either just experienced an epoch change, or are byzantine.");
-        Ok(())
+        // if we reach here, it means none of the validators returned the transaction info.
+        self.metrics
+            .total_times_could_not_get_conflicting_transaction_from_any_validators
+            .inc();
+        warn!(?tx_digest, ?original_tx_digest, "No one validator could give the transaction info. They either just experienced an epoch change, or are byzantine");
+        Ok(false)
     }
 }
 
@@ -454,5 +540,69 @@ where
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::authority_aggregator::authority_aggregator_tests::init_local_authorities;
+
+    #[tokio::test]
+    async fn test_not_retry_on_object_locked() -> Result<(), anyhow::Error> {
+        let (auth_agg, _, _) = init_local_authorities(4, vec![]).await;
+
+        let quorum_driver_handler = QuorumDriverHandler::new(
+            Arc::new(auth_agg.clone()),
+            QuorumDriverMetrics::new_for_tests(),
+        );
+        let quorum_driver = quorum_driver_handler.clone_quorum_driver();
+        let validity = quorum_driver
+            .authority_aggregator()
+            .load()
+            .committee
+            .validity_threshold();
+
+        assert_eq!(auth_agg.clone_inner_clients().keys().cloned().count(), 4);
+
+        // good stake >= validity, no transaction will be retried, expect Ok(None)
+        assert_eq!(
+            quorum_driver
+                .attempt_conflicting_transactions_maybe(
+                    validity,
+                    &BTreeMap::new(),
+                    &TransactionDigest::random()
+                )
+                .await,
+            Ok(None)
+        );
+        assert_eq!(
+            quorum_driver
+                .attempt_conflicting_transactions_maybe(
+                    validity + 1,
+                    &BTreeMap::new(),
+                    &TransactionDigest::random()
+                )
+                .await,
+            Ok(None)
+        );
+
+        // good stake < validity, but the top transaction total stake < validaty too, no transaction will be retried, expect Ok(None)
+        let conflicting_tx_digests = BTreeMap::from([
+            (TransactionDigest::random(), (vec![], validity - 1)),
+            (TransactionDigest::random(), (vec![], 1)),
+        ]);
+        assert_eq!(
+            quorum_driver
+                .attempt_conflicting_transactions_maybe(
+                    validity - 1,
+                    &conflicting_tx_digests,
+                    &TransactionDigest::random()
+                )
+                .await,
+            Ok(None)
+        );
+
+        Ok(())
     }
 }

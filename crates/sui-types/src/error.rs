@@ -128,9 +128,19 @@ pub enum SuiError {
         errors.iter().map(| e | ToString::to_string(&e)).collect::<Vec<String>>()
     )]
     QuorumFailedToProcessTransaction {
+        good_stake: StakeUnit,
         errors: Vec<SuiError>,
         conflicting_tx_digests:
-            BTreeMap<ObjectRef, BTreeMap<TransactionDigest, (Vec<AuthorityName>, StakeUnit)>>,
+            BTreeMap<TransactionDigest, (Vec<(AuthorityName, ObjectRef)>, StakeUnit)>,
+    },
+    #[error(
+        "Failed to process transaction on a quorum of validators to form a transaction certificate because of locked objects, but retried a conflicting transaction {:?}, success: {}",
+        conflicting_tx_digest,
+        conflicting_tx_retry_success
+    )]
+    QuorumFailedToProcessTransactionWithConflictingTransactionRetried {
+        conflicting_tx_digest: TransactionDigest,
+        conflicting_tx_retry_success: bool,
     },
     #[error(
     "Failed to execute certificate on a quorum of validators. Validator errors: {:#?}",
