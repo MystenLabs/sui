@@ -241,7 +241,7 @@ impl PrimaryToPrimaryRpc for anemo::Network {
     async fn get_latest_header(
         &self,
         peer: &NetworkPublicKey,
-        request: LatestHeaderRequest,
+        request: impl anemo::types::request::IntoRequest<LatestHeaderRequest> + Send,
     ) -> Result<LatestHeaderResponse> {
         let peer_id = PeerId(peer.0.to_bytes());
         let peer = self
