@@ -3,67 +3,12 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 use crate::common::{create_db_stores, create_test_vote_store};
-use anemo::{async_trait, types::PeerInfo, PeerId};
+use anemo::{types::PeerInfo, PeerId};
 use fastcrypto::traits::KeyPair;
 use prometheus::Registry;
-use storage::ProposerStore;
 use test_utils::{fixture_batch_with_transactions, CommitteeFixture, PrimaryToPrimaryMockServer};
 use tokio::time::Duration;
-use types::{
-    CertificateDigest, FetchCertificatesRequest, FetchCertificatesResponse, GetCertificatesRequest,
-    GetCertificatesResponse, Header, LatestHeaderResponse, PayloadAvailabilityRequest,
-    PayloadAvailabilityResponse, PrimaryToPrimary, Vote,
-};
-
-pub struct NetworkProxy {
-    proposer_store: ProposerStore,
-}
-
-#[async_trait]
-impl PrimaryToPrimary for NetworkProxy {
-    async fn send_message(
-        &self,
-        request: anemo::Request<PrimaryMessage>,
-    ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
-        unimplemented!(
-            "FetchCertificateProxy::send_message() is unimplemented!! {:#?}",
-            request
-        );
-    }
-    async fn get_certificates(
-        &self,
-        _request: anemo::Request<GetCertificatesRequest>,
-    ) -> Result<anemo::Response<GetCertificatesResponse>, anemo::rpc::Status> {
-        unimplemented!()
-    }
-    async fn fetch_certificates(
-        &self,
-        _request: anemo::Request<FetchCertificatesRequest>,
-    ) -> Result<anemo::Response<FetchCertificatesResponse>, anemo::rpc::Status> {
-        unimplemented!()
-    }
-
-    async fn get_payload_availability(
-        &self,
-        _request: anemo::Request<PayloadAvailabilityRequest>,
-    ) -> Result<anemo::Response<PayloadAvailabilityResponse>, anemo::rpc::Status> {
-        unimplemented!()
-    }
-
-    async fn get_latest_header(
-        &self,
-        _request: anemo::Request<LatestHeaderRequest>,
-    ) -> Result<anemo::Response<LatestHeaderResponse>, anemo::rpc::Status> {
-        let latest_header = self.proposer_store.get_last_proposed().map_err(|e| {
-            anemo::rpc::Status::internal(format!(
-                "error fetching latest proposed header from store: {e}"
-            ))
-        })?;
-        Ok(anemo::Response::new(LatestHeaderResponse {
-            header: latest_header,
-        }))
-    }
-}
+use types::{CertificateDigest, Header, LatestHeaderResponse, MockPrimaryToPrimary, Vote};
 
 #[tokio::test]
 async fn process_header() {
@@ -1090,7 +1035,6 @@ async fn recover_core_latest_headers() {
     let worker_cache = fixture.shared_worker_cache();
     let primary = fixture.authorities().last().unwrap();
     let name = primary.public_key();
-    let other_primary = fixture.authorities().nth(1).unwrap();
     let signature_service = SignatureService::new(primary.keypair().copy());
 
     let (_tx_reconfigure, rx_reconfigure) =
@@ -1107,23 +1051,6 @@ async fn recover_core_latest_headers() {
 
     // Create test stores.
     let (header_store, certificates_store, payload_store) = create_db_stores();
-    let proposer_store = ProposerStore::new_for_tests();
-
-    // add a header to store
-    let builder = types::HeaderBuilder::default();
-    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
-    let primary = fixture.authorities().next().unwrap();
-    let header = builder
-        .author(name.clone())
-        .round(1)
-        .epoch(0)
-        .parents([CertificateDigest::default()].iter().cloned().collect())
-        .with_payload_batch(fixture_batch_with_transactions(10), 0)
-        .build(primary.keypair())
-        .unwrap();
-
-    let result = proposer_store.write_last_proposed(&header);
-    assert!(result.is_ok());
 
     // Make a synchronizer for the core.
     let synchronizer = Synchronizer::new(
@@ -1138,28 +1065,51 @@ async fn recover_core_latest_headers() {
 
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
 
-    let fake_primary_addr = network::multiaddr_to_address(other_primary.address()).unwrap();
-    let fake_route =
-        anemo::Router::new().add_rpc_service(types::PrimaryToPrimaryServer::new(NetworkProxy {
-            proposer_store,
-        }));
-    let fake_server_network = anemo::Network::bind(fake_primary_addr.clone())
+    let own_address = network::multiaddr_to_address(&committee.primary(&name).unwrap()).unwrap();
+    println!("New primary added: {:?}", own_address);
+    let network = anemo::Network::bind(own_address)
         .server_name("narwhal")
-        .private_key(
-            other_primary
-                .network_keypair()
-                .copy()
-                .private()
-                .0
-                .to_bytes(),
-        )
-        .start(fake_route)
+        .private_key(primary.network_keypair().copy().private().0.to_bytes())
+        .start(anemo::Router::new())
         .unwrap();
-    let client_network = test_utils::test_network(primary.network_keypair(), primary.address());
-    client_network
-        .connect_with_peer_id(fake_primary_addr, fake_server_network.peer_id())
-        .await
-        .unwrap();
+
+    let mut primary_networks = Vec::new();
+    let fixture_authorities = fixture.authorities().filter(|a| a.public_key() != name);
+    for primary in fixture_authorities {
+        let address = committee.primary(&primary.public_key()).unwrap();
+
+        let mut mock_server = MockPrimaryToPrimary::new();
+        mock_server
+            .expect_get_latest_header()
+            .returning(move |_request| {
+                let builder = types::HeaderBuilder::default();
+                let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+                let primary = fixture.authorities().next().unwrap();
+
+                let header = builder
+                    .author(primary.public_key())
+                    .round(1)
+                    .epoch(0)
+                    .parents([CertificateDigest::default()].iter().cloned().collect())
+                    .with_payload_batch(fixture_batch_with_transactions(10), 0)
+                    .build(primary.keypair())
+                    .unwrap();
+                Ok(anemo::Response::new(LatestHeaderResponse {
+                    header: Some(header),
+                }))
+            });
+
+        let routes =
+            anemo::Router::new().add_rpc_service(types::PrimaryToPrimaryServer::new(mock_server));
+        primary_networks.push(primary.new_network(routes));
+
+        let address = network::multiaddr_to_address(&address).unwrap();
+        let peer_id = PeerId(primary.network_keypair().public().0.to_bytes());
+        network
+            .connect_with_peer_id(address, peer_id)
+            .await
+            .unwrap();
+    }
 
     // Spawn the core.
     let _core_handle = Core::spawn(
@@ -1181,7 +1131,7 @@ async fn recover_core_latest_headers() {
         tx_consensus,
         /* tx_proposer */ tx_parents,
         metrics.clone(),
-        P2pNetwork::new(client_network.clone()),
+        P2pNetwork::new(network.clone()),
     );
 
     tokio::time::sleep(Duration::from_secs(5)).await;
@@ -1189,14 +1139,14 @@ async fn recover_core_latest_headers() {
     // assert that the header was processed
     let mut m = HashMap::new();
     m.insert("epoch", "0");
-    m.insert("source", "own");
+    m.insert("source", "other");
     assert_eq!(
         metrics
             .unique_headers_received
             .get_metric_with(&m)
             .unwrap()
             .get(),
-        1
+        3
     );
 }
 

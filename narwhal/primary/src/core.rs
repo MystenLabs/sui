@@ -16,6 +16,7 @@ use fastcrypto::{hash::Hash as _, SignatureService};
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use network::{CancelOnDropHandler, P2pNetwork, PrimaryToPrimaryRpc, ReliableNetwork};
+use std::time::Duration;
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
@@ -24,7 +25,7 @@ use std::{
 use storage::CertificateStore;
 use store::Store;
 use sui_metrics::spawn_monitored_task;
-use tokio::{sync::watch, task::JoinHandle, time};
+use tokio::{sync::watch, task::JoinHandle};
 
 use tracing::{debug, error, info, instrument, trace, warn};
 use types::{
@@ -38,6 +39,8 @@ use types::{
 #[cfg(test)]
 #[path = "tests/core_tests.rs"]
 pub mod core_tests;
+
+const LATEST_HEADER_REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
 
 pub struct Core {
     /// The public key of this primary.
@@ -190,31 +193,24 @@ impl Core {
             .map(|(_, _, network_key)| network_key)
             .collect();
 
-        let network = P2pNetwork::new(self.network.network());
         let mut header_futures = FuturesUnordered::new();
-        let request = LatestHeaderRequest {};
-        for peer in peers.iter() {
-            let network = network.network();
-            let request = request.clone();
 
-            header_futures.push(async move {
-                let _ = &network;
-                network.get_latest_header(peer, request).await
-            });
+        for peer in peers.iter() {
+            let network = self.network.network();
+            let request = anemo::Request::new(LatestHeaderRequest {})
+                .with_timeout(LATEST_HEADER_REQUEST_TIMEOUT);
+
+            header_futures.push(async move { network.get_latest_header(peer, request).await });
         }
+
+        let mut latest_headers = Vec::new();
         while let Some(res) = header_futures.next().await {
             match res {
                 Ok(response) => {
                     if let Some(header) = response.header {
-                        let result = self.process_header(&header).await;
-                        if result.is_err() {
-                            error!(
-                                "error on recovery path processing latest header: {:?}",
-                                result.err()
-                            );
-                        }
+                        latest_headers.push(header);
                     } else {
-                        trace!("peer's latest header was None on recovery path")
+                        debug!("peer's latest header was None on recovery path")
                     }
                 }
                 Err(e) => {
@@ -223,6 +219,12 @@ impl Core {
                         e
                     )
                 }
+            }
+        }
+
+        for header in latest_headers {
+            if let Err(err) = self.process_header(&header).await {
+                error!("error on recovery path processing latest header: {:?}", err);
             }
         }
 
