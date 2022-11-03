@@ -23,7 +23,7 @@ pub struct StateHandler {
     /// The worker information cache.
     worker_cache: SharedWorkerCache,
     /// Receives the ordered certificates from consensus.
-    rx_committed_certificates: Receiver<Certificate>,
+    rx_committed_certificates: Receiver<(Round, Vec<Certificate>)>,
     /// Signals a new consensus round
     tx_consensus_round_updates: watch::Sender<u64>,
     /// Receives notifications to reconfigure the system.
@@ -42,7 +42,7 @@ impl StateHandler {
         name: PublicKey,
         committee: SharedCommittee,
         worker_cache: SharedWorkerCache,
-        rx_committed_certificates: Receiver<Certificate>,
+        rx_committed_certificates: Receiver<(Round, Vec<Certificate>)>,
         tx_consensus_round_updates: watch::Sender<u64>,
         rx_state_handler: Receiver<ReconfigureNotification>,
         tx_reconfigure: watch::Sender<ReconfigureNotification>,
@@ -65,10 +65,9 @@ impl StateHandler {
         })
     }
 
-    async fn handle_sequenced(&mut self, certificate: Certificate) {
+    async fn handle_sequenced(&mut self, round: Round, _certificates: Vec<Certificate>) {
         // TODO [issue #9]: Re-include batch digests that have not been sequenced into our next block.
 
-        let round = certificate.round();
         if round > self.last_committed_round {
             self.last_committed_round = round;
 
@@ -130,8 +129,8 @@ impl StateHandler {
         );
         loop {
             tokio::select! {
-                Some(certificate) = self.rx_committed_certificates.recv() => {
-                    self.handle_sequenced(certificate).await;
+                Some((round, certificates)) = self.rx_committed_certificates.recv() => {
+                    self.handle_sequenced(round, certificates).await;
                 },
 
                 Some(message) = self.rx_state_handler.recv() => {

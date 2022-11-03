@@ -92,11 +92,11 @@ impl Primary {
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
         vote_digest_store: Store<PublicKey, RoundVoteDigestPair>,
         tx_new_certificates: Sender<Certificate>,
-        rx_committed_certificates: Receiver<Certificate>,
+        rx_committed_certificates: Receiver<(Round, Vec<Certificate>)>,
         dag: Option<Arc<Dag>>,
         network_model: NetworkModel,
         tx_reconfigure: watch::Sender<ReconfigureNotification>,
-        tx_committed_certificates: Sender<Certificate>,
+        tx_committed_certificates: Sender<(Round, Vec<Certificate>)>,
         registry: &Registry,
         // See comments in Subscriber::spawn
         rx_executor_network: Option<oneshot::Sender<P2pNetwork>>,
