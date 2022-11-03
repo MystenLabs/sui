@@ -5,9 +5,9 @@ import { lte } from 'semver';
 import Browser from 'webextension-polyfill';
 
 import { LOCK_ALARM_NAME } from './Alarms';
-import Keyring from './Keyring';
 import Permissions from './Permissions';
 import { Connections } from './connections';
+import Keyring from './keyring';
 import { openInNewTab } from '_shared/utils';
 import { MSG_CONNECT } from '_src/content-script/keep-bg-alive';
 

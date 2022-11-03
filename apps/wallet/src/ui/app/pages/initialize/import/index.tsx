@@ -8,8 +8,9 @@ import StepOne from './steps/StepOne';
 import StepTwo from './steps/StepTwo';
 import CardLayout from '_app/shared/card-layout';
 import { useAppDispatch } from '_hooks';
-import { createMnemonic, logout } from '_redux/slices/account';
-import { MAIN_UI_URL } from '_src/shared/utils';
+import { createVault, logout } from '_redux/slices/account';
+import { MAIN_UI_URL } from '_shared/utils';
+import { entropyToSerialized, mnemonicToEntropy } from '_shared/utils/bip39';
 
 const initialValues = {
     mnemonic: '',
@@ -36,7 +37,12 @@ const ImportPage = ({ mode = 'import' }: ImportPageProps) => {
                     await dispatch(logout());
                 }
                 await dispatch(
-                    createMnemonic({ importedMnemonic: mnemonic, password })
+                    createVault({
+                        importedEntropy: entropyToSerialized(
+                            mnemonicToEntropy(mnemonic)
+                        ),
+                        password,
+                    })
                 ).unwrap();
                 if (mode === 'import') {
                     navigate('../backup-imported');

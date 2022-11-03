@@ -18,39 +18,39 @@ import type { KeyringPayload } from '_payloads/keyring';
 import type { RootState } from '_redux/RootReducer';
 import type { AppThunkConfig } from '_store/thunk-extras';
 
-export const createMnemonic = createAsyncThunk<
+export const createVault = createAsyncThunk<
     string,
     {
-        importedMnemonic?: string;
+        importedEntropy?: string;
         password: string;
     },
     AppThunkConfig
 >(
-    'account/createMnemonic',
-    async ({ importedMnemonic, password }, { extra: { background } }) => {
-        const { payload } = await background.createMnemonic(
+    'account/createVault',
+    async ({ importedEntropy, password }, { extra: { background } }) => {
+        const { payload } = await background.createVault(
             password,
-            importedMnemonic
+            importedEntropy
         );
         await background.unlockWallet(password);
-        if (!isKeyringPayload<'createMnemonic'>(payload, 'createMnemonic')) {
+        if (!isKeyringPayload(payload, 'create')) {
             throw new Error('Unknown payload');
         }
-        if (!payload.return?.mnemonic) {
-            throw new Error('Empty mnemonic in payload');
+        if (!payload.return?.entropy) {
+            throw new Error('Empty entropy in payload');
         }
-        return payload.return.mnemonic;
+        return payload.return.entropy;
     }
 );
 
-export const loadMnemonicFromKeyring = createAsyncThunk<
+export const loadEntropyFromKeyring = createAsyncThunk<
     string,
     { password?: string }, // can be undefined when we know Keyring is unlocked
     AppThunkConfig
 >(
-    'account/loadMnemonicFromKeyring',
+    'account/loadEntropyFromKeyring',
     async ({ password }, { extra: { background } }) =>
-        await background.getMnemonic(password)
+        await background.getEntropy(password)
 );
 
 export const logout = createAsyncThunk<void, void, AppThunkConfig>(
@@ -98,14 +98,14 @@ const accountSlice = createSlice({
     },
     extraReducers: (builder) =>
         builder
-            .addCase(createMnemonic.pending, (state) => {
+            .addCase(createVault.pending, (state) => {
                 state.creating = true;
             })
-            .addCase(createMnemonic.fulfilled, (state, action) => {
+            .addCase(createVault.fulfilled, (state) => {
                 state.creating = false;
                 state.isInitialized = true;
             })
-            .addCase(createMnemonic.rejected, (state) => {
+            .addCase(createVault.rejected, (state) => {
                 state.creating = false;
             }),
 });
