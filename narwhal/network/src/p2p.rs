@@ -16,10 +16,9 @@ use std::collections::HashMap;
 use std::time::Duration;
 use tokio::{runtime::Handle, task::JoinHandle};
 use types::{
-    Batch, BatchDigest, FetchCertificatesRequest, FetchCertificatesResponse,
-    GetCertificatesRequest, GetCertificatesResponse, LatestHeaderRequest, LatestHeaderResponse,
-    PrimaryMessage, PrimaryToPrimaryClient, PrimaryToWorkerClient, RequestBatchRequest,
-    WorkerBatchMessage, WorkerDeleteBatchesMessage, WorkerOthersBatchMessage,
+    Batch, BatchDigest, FetchCertificatesRequest, FetchCertificatesResponse, LatestHeaderRequest,
+    LatestHeaderResponse, PrimaryMessage, PrimaryToPrimaryClient, PrimaryToWorkerClient,
+    RequestBatchRequest, WorkerBatchMessage, WorkerDeleteBatchesMessage, WorkerOthersBatchMessage,
     WorkerOurBatchMessage, WorkerReconfigureMessage, WorkerSynchronizeMessage,
     WorkerToPrimaryClient, WorkerToWorkerClient,
 };
@@ -226,7 +225,7 @@ impl PrimaryToPrimaryRpc for anemo::Network {
     async fn get_latest_header(
         &self,
         peer: &NetworkPublicKey,
-        request: LatestHeaderRequest,
+        request: impl anemo::types::request::IntoRequest<LatestHeaderRequest> + Send,
     ) -> Result<LatestHeaderResponse> {
         let peer_id = PeerId(peer.0.to_bytes());
         let peer = self

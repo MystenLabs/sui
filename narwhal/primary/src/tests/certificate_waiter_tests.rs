@@ -18,7 +18,6 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-
 use storage::{CertificateStore, ProposerStore};
 use test_utils::{temp_dir, CommitteeFixture};
 use tokio::{
@@ -29,11 +28,10 @@ use tokio::{
     time::sleep,
 };
 use types::{
-    BatchDigest, Certificate, CertificateDigest, FetchCertificatesRequest,
-    FetchCertificatesResponse, GetCertificatesRequest, GetCertificatesResponse, Header,
-    HeaderDigest, LatestHeaderRequest, LatestHeaderResponse, Metadata, PayloadAvailabilityRequest,
-    PayloadAvailabilityResponse, PrimaryMessage, PrimaryToPrimary, PrimaryToPrimaryServer,
-    ReconfigureNotification, Round,
+    Certificate, CertificateDigest, ConsensusStore, FetchCertificatesRequest,
+    FetchCertificatesResponse, LatestHeaderRequest, LatestHeaderResponse,
+    PayloadAvailabilityRequest, PayloadAvailabilityResponse, PrimaryMessage, PrimaryToPrimary,
+    PrimaryToPrimaryServer, ReconfigureNotification, Round,
 };
 
 pub struct NetworkProxy {

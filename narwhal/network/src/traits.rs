@@ -7,8 +7,8 @@ use crypto::NetworkPublicKey;
 use rand::prelude::{SliceRandom, SmallRng};
 use tokio::task::JoinHandle;
 use types::{
-    Batch, BatchDigest, FetchCertificatesRequest, FetchCertificatesResponse,
-    GetCertificatesRequest, GetCertificatesResponse, LatestHeaderRequest, LatestHeaderResponse,
+    Batch, BatchDigest, FetchCertificatesRequest, FetchCertificatesResponse, LatestHeaderRequest,
+    LatestHeaderResponse,
 };
 
 pub trait UnreliableNetwork<Request: Clone + Send + Sync> {
@@ -106,7 +106,7 @@ pub trait PrimaryToPrimaryRpc {
     async fn get_latest_header(
         &self,
         peer: &NetworkPublicKey,
-        request: LatestHeaderRequest,
+        request: impl anemo::types::request::IntoRequest<LatestHeaderRequest> + Send,
     ) -> Result<LatestHeaderResponse>;
 }
 
