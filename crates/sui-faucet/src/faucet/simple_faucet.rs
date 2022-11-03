@@ -640,8 +640,8 @@ mod tests {
         let prom_registry = Registry::new();
         let mut faucet = SimpleFaucet::new(context, &prom_registry).await.unwrap();
 
-        let number_of_coins = gases.len();
         // Ask for a value higher than tiny coin + PAY_SUI_GAS
+        let number_of_coins = gases.len();
         let amounts = &vec![tiny_value + 1; number_of_coins - 1];
         // We traverse the the list twice, which must trigger the tiny gas to be examined but not used
         let _ = futures::future::join_all((0..2).map(|_| {
@@ -655,8 +655,15 @@ mod tests {
         .into_iter()
         .map(|res| res.unwrap())
         .collect::<Vec<_>>();
+        info!(
+            ?number_of_coins,
+            "Sent to random addresses: {} {}",
+            amounts[0],
+            amounts.len(),
+        );
 
         // Verify that the tiny gas is still in the queue.
+        tokio::task::yield_now().await;
         let candidates = faucet.drain_gas_queue(gases.len() - 1).await;
         assert!(candidates.get(&tiny_coin_id).is_none());
     }

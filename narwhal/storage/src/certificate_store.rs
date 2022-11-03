@@ -3,7 +3,12 @@
 use crypto::PublicKey;
 use dashmap::DashMap;
 use fastcrypto::hash::Hash;
-use std::{cmp::Ordering, collections::VecDeque, iter, sync::Arc};
+use std::{
+    cmp::Ordering,
+    collections::{BTreeMap, VecDeque},
+    iter,
+    sync::Arc,
+};
 use store::{
     rocks::{DBMap, TypedStoreError::RocksDBError},
     Map,
@@ -268,6 +273,28 @@ impl CertificateStore {
                 })
             })
             .collect()
+    }
+
+    /// Retrieves origins with certificates in each round >= the provided round.
+    pub fn origins_after_round(
+        &self,
+        round: Round,
+    ) -> StoreResult<BTreeMap<Round, Vec<PublicKey>>> {
+        // Skip to a row at or before the requested round.
+        // TODO: Add a more efficient seek method to typed store.
+        let mut iter = self.certificate_id_by_round.iter();
+        if round > 0 {
+            iter = iter.skip_to(&(round - 1, PublicKey::default()))?;
+        }
+
+        let mut result = BTreeMap::<Round, Vec<PublicKey>>::new();
+        for ((r, origin), _) in iter {
+            if r < round {
+                continue;
+            }
+            result.entry(r).or_default().push(origin);
+        }
+        Ok(result)
     }
 
     /// Retrieves the certificates of the last round and the round before that
@@ -612,6 +639,15 @@ mod test {
 
         // AND none should be left in the original set
         assert!(certs_ids_over_cutoff_round.is_empty());
+
+        // WHEN get rounds per origin.
+        let rounds = store
+            .origins_after_round(round_cutoff)
+            .expect("Error returned while reading origins_after_round");
+        assert_eq!(rounds.len(), (total_rounds - round_cutoff + 1) as usize);
+        for origins in rounds.values() {
+            assert_eq!(origins.len(), 4);
+        }
     }
 
     #[tokio::test]

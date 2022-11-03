@@ -82,7 +82,6 @@ async fn get_network_peers_from_admin_server() {
         store.proposer_store.clone(),
         store.payload_store.clone(),
         store.vote_digest_store.clone(),
-        store.consensus_store.clone(),
         /* tx_consensus */ tx_new_certificates,
         /* rx_consensus */ rx_feedback,
         /* dag */
@@ -194,7 +193,6 @@ async fn get_network_peers_from_admin_server() {
         store.proposer_store.clone(),
         store.payload_store.clone(),
         store.vote_digest_store.clone(),
-        store.consensus_store.clone(),
         /* tx_consensus */ tx_new_certificates_2,
         /* rx_consensus */ rx_feedback_2,
         /* dag */
@@ -316,26 +314,64 @@ async fn test_fetch_certificates_handler() {
         }
     }
 
-    // Each test case contains (rounds exclusive_lower_bounds, max items, expected output).
+    // Each test case contains (lower bound round, skip rounds, max items, expected output).
     let test_cases = vec![
-        (vec![0u64, 0, 0, 0], 20, vec![1, 1, 1, 1, 2, 2, 2, 3, 3, 4]),
-        (vec![1u64, 1, 0, 0], 20, vec![1, 1, 2, 2, 2, 3, 3, 4]),
-        (vec![0u64, 0, 1, 1], 20, vec![1, 1, 2, 2, 2, 3, 3, 4]),
-        (vec![1u64, 1, 2, 2], 4, vec![2, 3, 3, 4]),
-        (vec![1u64, 1, 3, 3], 2, vec![2, 4]),
-        (vec![1u64, 1, 2, 2], 2, vec![2, 3]),
-        (vec![2u64, 2, 2, 2], 3, vec![3, 3, 4]),
-        (vec![2u64, 2, 2, 2], 2, vec![3, 3]),
+        (
+            0,
+            vec![vec![], vec![], vec![], vec![]],
+            20,
+            vec![1, 1, 1, 1, 2, 2, 2, 3, 3, 4],
+        ),
+        (
+            0,
+            vec![vec![1u64], vec![1], vec![], vec![]],
+            20,
+            vec![1, 1, 2, 2, 2, 3, 3, 4],
+        ),
+        (
+            0,
+            vec![vec![], vec![], vec![1], vec![1]],
+            20,
+            vec![1, 1, 2, 2, 2, 3, 3, 4],
+        ),
+        (
+            1,
+            vec![vec![], vec![], vec![2], vec![2]],
+            4,
+            vec![2, 3, 3, 4],
+        ),
+        (1, vec![vec![], vec![], vec![2], vec![2]], 2, vec![2, 3]),
+        (
+            0,
+            vec![vec![1], vec![1], vec![1, 2, 3], vec![1, 2, 3]],
+            2,
+            vec![2, 4],
+        ),
+        (2, vec![vec![], vec![], vec![], vec![]], 3, vec![3, 3, 4]),
+        (2, vec![vec![], vec![], vec![], vec![]], 2, vec![3, 3]),
+        // Check that round 2 and 4 are fetched for the last authority, skipping round 3.
+        (
+            1,
+            vec![vec![], vec![], vec![3], vec![3]],
+            5,
+            vec![2, 2, 2, 4],
+        ),
     ];
-    for (rounds_exclusive_lower_bounds, max_items, expected_rounds) in test_cases {
-        let req = FetchCertificatesRequest {
-            exclusive_lower_bounds: authorities
-                .clone()
-                .into_iter()
-                .zip(rounds_exclusive_lower_bounds)
-                .collect_vec(),
-            max_items,
-        };
+    for (lower_bound_round, skip_rounds_vec, max_items, expected_rounds) in test_cases {
+        let req = FetchCertificatesRequest::default()
+            .set_bounds(
+                lower_bound_round,
+                authorities
+                    .clone()
+                    .into_iter()
+                    .zip(
+                        skip_rounds_vec
+                            .into_iter()
+                            .map(|rounds| rounds.into_iter().collect()),
+                    )
+                    .collect(),
+            )
+            .set_max_items(max_items);
         let resp = handler
             .fetch_certificates(anemo::Request::new(req.clone()))
             .await

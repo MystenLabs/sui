@@ -7,7 +7,11 @@ use crypto::{NetworkPublicKey, PublicKey};
 use futures::{future::BoxFuture, stream::FuturesUnordered, FutureExt, StreamExt};
 use network::{P2pNetwork, PrimaryToPrimaryRpc};
 use rand::{rngs::ThreadRng, seq::SliceRandom};
-use std::{collections::BTreeMap, future::pending, sync::Arc, time::Duration};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+    time::Duration,
+};
 use storage::CertificateStore;
 use sui_metrics::{monitored_future, spawn_monitored_task};
 use tokio::{
@@ -19,8 +23,8 @@ use tracing::{debug, error, instrument, trace, warn};
 use types::{
     error::{DagError, DagResult},
     metered_channel::{Receiver, Sender},
-    Certificate, ConsensusStore, FetchCertificatesRequest, FetchCertificatesResponse,
-    ReconfigureNotification, Round,
+    Certificate, FetchCertificatesRequest, FetchCertificatesResponse, ReconfigureNotification,
+    Round,
 };
 
 #[cfg(test)]
@@ -54,8 +58,6 @@ pub(crate) struct CertificateWaiter {
     committee: Committee,
     /// Persistent storage for certificates. Read-only usage.
     certificate_store: CertificateStore,
-    /// Persistent storage for consensus when using internal consensus. Read-only usage.
-    consensus_store: Option<Arc<ConsensusStore>>,
     /// Receiver for signal of round changes. Used for calculating gc_round.
     rx_consensus_round_updates: watch::Receiver<u64>,
     /// The depth of the garbage collector.
@@ -71,8 +73,7 @@ pub(crate) struct CertificateWaiter {
     /// of certificates (for avoiding jitters of voting / processing certificates instead of
     /// correctness).
     targets: BTreeMap<PublicKey, Round>,
-    /// Keeps the handle to the inflight fetch certificates task.
-    /// Contains a pending future that never returns, and at most 1 other task.
+    /// Keeps the handle to the (at most one) inflight fetch certificates task.
     fetch_certificates_task: FuturesUnordered<BoxFuture<'static, Result<(), JoinError>>>,
 }
 
@@ -95,7 +96,6 @@ impl CertificateWaiter {
         committee: Committee,
         network: P2pNetwork,
         certificate_store: CertificateStore,
-        consensus_store: Option<Arc<ConsensusStore>>,
         rx_consensus_round_updates: watch::Receiver<u64>,
         gc_depth: Round,
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
@@ -111,13 +111,11 @@ impl CertificateWaiter {
         });
         // Add a future that never returns to fetch_certificates_task, so it is blocked when empty.
         let fetch_certificates_task = FuturesUnordered::new();
-        fetch_certificates_task.push(pending().boxed());
         spawn_monitored_task!(async move {
             Self {
                 state,
                 committee,
                 certificate_store,
-                consensus_store,
                 rx_consensus_round_updates,
                 gc_depth,
                 rx_reconfigure,
@@ -157,9 +155,11 @@ impl CertificateWaiter {
                     }
 
                     // The header should have been verified as part of the certificate.
-                    match self.last_committed_round(&header.author) {
+                    match self
+                    .certificate_store
+                    .last_round_number(&header.author) {
                         Ok(r) => {
-                            if r >= header.round {
+                            if header.round <= r.unwrap_or(0) {
                                 // Ignore fetch request. Possibly the certificate was processed
                                 // while the message is in the queue.
                                 continue;
@@ -176,15 +176,15 @@ impl CertificateWaiter {
                     // Update the target rounds for the authority.
                     self.targets.insert(header.author.clone(), header.round);
 
-                    // Kick start a fetch task if there is no task other than the pending task running.
-                    if self.fetch_certificates_task.len() == 1 {
+                    // Kick start a fetch task if there is no other task running.
+                    if self.fetch_certificates_task.is_empty() {
                         self.kickstart();
                     }
                 },
-                _ = self.fetch_certificates_task.next() => {
+                _ = self.fetch_certificates_task.next(), if !self.fetch_certificates_task.is_empty() => {
                     // Kick start another fetch task after the previous one terminates.
                     // If all targets have been fetched, the new task will clean up the targets and exit.
-                    if self.fetch_certificates_task.len() == 1 {
+                    if self.fetch_certificates_task.is_empty() {
                         self.kickstart();
                     }
                 },
@@ -196,7 +196,6 @@ impl CertificateWaiter {
                             self.committee = committee;
                             self.targets.clear();
                             self.fetch_certificates_task = FuturesUnordered::new();
-                            self.fetch_certificates_task.push(pending().boxed());
                         },
                         ReconfigureNotification::UpdateCommittee(committee) => {
                             self.committee = committee;
@@ -217,30 +216,46 @@ impl CertificateWaiter {
     // continue until there are no more target rounds to catch up to.
     #[allow(clippy::mutable_key_type)]
     fn kickstart(&mut self) {
+        // Skip fetching certificates at or below the gc round.
         let gc_round = self.gc_round();
-        let committed_rounds: BTreeMap<_, _> = match self.all_committed_rounds() {
-            Ok(committed_rounds) => committed_rounds,
+        // Skip fetching certificates that already exist locally.
+        let mut written_rounds = BTreeMap::<PublicKey, BTreeSet<Round>>::new();
+        for (origin, _) in self.committee.authorities() {
+            // Initialize written_rounds for all authorities, because the handler only sends back
+            // certificates for the set of authorities here.
+            written_rounds.insert(origin.clone(), BTreeSet::new());
+        }
+        // NOTE: origins_after_round() is inclusive.
+        match self.certificate_store.origins_after_round(gc_round + 1) {
+            Ok(origins) => {
+                for (round, origins) in origins {
+                    for origin in origins {
+                        written_rounds.entry(origin).or_default().insert(round);
+                    }
+                }
+            }
             Err(e) => {
-                warn!("Failed to read rounds per authority from the certificate store: {e}");
+                warn!("Failed to read from certificate store: {e}");
                 return;
             }
-        }
-        .into_iter()
-        .map(|(key, r)| (key, r.max(gc_round)))
-        .collect();
+        };
+
         self.targets.retain(|origin, target_round| {
-            let committed_round = committed_rounds.get(origin).unwrap_or(&gc_round);
+            let last_written_round = written_rounds.get(origin).map_or(gc_round, |rounds| {
+                // TODO: switch to last() after it stabilizes for BTreeSet.
+                rounds.iter().rev().next().unwrap_or(&gc_round).to_owned()
+            });
             // Drop sync target when cert store already has an equal or higher round for the origin.
-            // This will apply GC to targets as well.
+            // This applies GC to targets as well.
             //
-            // Similarly, even if the store actually does not have target_round for the origin,
+            // NOTE: even if the store actually does not have target_round for the origin,
             // it is ok to stop fetching without this certificate.
             // If this certificate becomes a parent of other certificates, another
             // fetch will be triggered eventually because of missing certificates.
-            committed_round < target_round
+            last_written_round < *target_round
         });
         if self.targets.is_empty() {
-            trace!("Certificates have caught up. Skip fetching.");
+            debug!("Certificates have caught up. Skip fetching.");
             return;
         }
 
@@ -248,9 +263,9 @@ impl CertificateWaiter {
         let committee = self.committee.clone();
 
         debug!(
-            "Starting task to fetch missing certificates: max target {}, committed {:?}",
+            "Starting task to fetch missing certificates: max target {}, gc round {:?}",
             self.targets.values().max().unwrap_or(&0),
-            committed_rounds.values()
+            gc_round
         );
         self.fetch_certificates_task.push(
             spawn_monitored_task!(async move {
@@ -266,7 +281,9 @@ impl CertificateWaiter {
                     .inc();
 
                 let now = Instant::now();
-                match run_fetch_task(state.clone(), committee.clone(), committed_rounds).await {
+                match run_fetch_task(state.clone(), committee.clone(), gc_round, written_rounds)
+                    .await
+                {
                     Ok(_) => {
                         debug!(
                             "Finished task to fetch certificates successfully, elapsed = {}s",
@@ -299,33 +316,6 @@ impl CertificateWaiter {
             .to_owned()
             .saturating_sub(self.gc_depth)
     }
-
-    fn last_committed_round(&self, authority: &PublicKey) -> DagResult<Round> {
-        match &self.consensus_store {
-            // Last round is 0 (genesis) when authority is not found in store.
-            Some(consensus_store) => Ok(consensus_store
-                .read_last_committed_round(authority)?
-                .unwrap_or(0)),
-            // When using external consensus, consensus_store is empty.
-            // TODO: use all origins and rounds of written certs above gc_round, instead of just
-            // the last written rounds.
-            None => Ok(self
-                .certificate_store
-                .last_round_number(authority)?
-                .unwrap_or(0)),
-        }
-    }
-
-    #[allow(clippy::mutable_key_type)]
-    fn all_committed_rounds(&self) -> DagResult<BTreeMap<PublicKey, Round>> {
-        let mut all_committed_rounds = BTreeMap::new();
-        for (name, _) in self.committee.authorities() {
-            // Last round is 0 (genesis) when authority is not found in store.
-            let last_round = self.last_committed_round(name)?;
-            all_committed_rounds.insert(name.clone(), last_round);
-        }
-        Ok(all_committed_rounds)
-    }
 }
 
 #[allow(clippy::mutable_key_type)]
@@ -333,15 +323,13 @@ impl CertificateWaiter {
 async fn run_fetch_task(
     state: Arc<CertificateWaiterState>,
     committee: Committee,
-    committed_rounds: BTreeMap<PublicKey, Round>,
+    gc_round: Round,
+    written_rounds: BTreeMap<PublicKey, BTreeSet<Round>>,
 ) -> DagResult<()> {
     // Send request to fetch certificates.
-    // TODO: use a BTreeSet / RoaringTreemap to represent existing certificates per validator,
-    // from the last committed round or even gc round.
-    let request = FetchCertificatesRequest {
-        exclusive_lower_bounds: committed_rounds.into_iter().collect(),
-        max_items: MAX_CERTIFICATES_TO_FETCH,
-    };
+    let request = FetchCertificatesRequest::default()
+        .set_bounds(gc_round, written_rounds)
+        .set_max_items(MAX_CERTIFICATES_TO_FETCH);
     let response =
         fetch_certificates_helper(&state.name, &state.network, &committee, request).await;
 

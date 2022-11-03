@@ -143,10 +143,10 @@ impl Synchronizer {
         Ok(Vec::new())
     }
 
-    /// Check whether we have seen all the ancestors of the certificate. If we don't, send the
-    /// certificate to the `CertificateWaiter` which will trigger re-processing once we have
-    /// all the missing data.
-    pub async fn deliver_certificate(&mut self, certificate: &Certificate) -> DagResult<bool> {
+    /// Checks whether we have seen all the ancestors of the certificate. If we don't, send the
+    /// certificate to the `CertificateWaiter` which will trigger range fetching of missing
+    /// certificates.
+    pub async fn check_parents(&mut self, certificate: &Certificate) -> DagResult<bool> {
         for digest in &certificate.header.parents {
             if self.genesis.iter().any(|(x, _)| x == digest) {
                 continue;
