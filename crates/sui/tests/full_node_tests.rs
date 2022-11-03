@@ -87,6 +87,26 @@ async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
 }
 
 #[sim_test]
+async fn test_full_node_syncs_checkpoints() -> Result<(), anyhow::Error> {
+    let test_cluster = init_cluster_builder_env_aware().build().await?;
+    let sui_node: SuiNode = start_a_fullnode(&test_cluster.swarm, false).await?;
+    let node = if cfg!(msim) {
+        &sui_node
+    } else {
+        &test_cluster.fullnode_handle.as_ref().unwrap().sui_node
+    };
+
+    // Wait for long enough to have generated some checkpoint.
+    tokio::time::sleep(Duration::from_secs(5 * 60)).await;
+
+    let active = node.active();
+    let next_checkpoint_sequence = active.state.checkpoints.lock().next_checkpoint();
+    assert!(next_checkpoint_sequence > 0);
+
+    Ok(())
+}
+
+#[sim_test]
 async fn test_full_node_shared_objects() -> Result<(), anyhow::Error> {
     let mut test_cluster = init_cluster_builder_env_aware().build().await?;
     let sui_node = start_a_fullnode(&test_cluster.swarm, false).await?;

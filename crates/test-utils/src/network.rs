@@ -24,7 +24,7 @@ use sui_types::base_types::SuiAddress;
 use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::SuiKeyPair::Ed25519SuiKeyPair;
 
-const NUM_VALIDAOTR: usize = 4;
+const NUM_VALIDATOR: usize = 4;
 
 pub struct FullNodeHandle {
     pub sui_node: SuiNode,
@@ -199,7 +199,7 @@ impl TestClusterBuilder {
         genesis_config: Option<GenesisConfig>,
     ) -> Result<Swarm, anyhow::Error> {
         let mut builder: SwarmBuilder =
-            Swarm::builder().committee_size(NonZeroUsize::new(NUM_VALIDAOTR).unwrap());
+            Swarm::builder().committee_size(NonZeroUsize::new(NUM_VALIDATOR).unwrap());
 
         if let Some(genesis_config) = genesis_config {
             builder = builder.initial_accounts_config(genesis_config);
@@ -242,7 +242,7 @@ impl Default for TestClusterBuilder {
     }
 }
 
-/// Note: the initial purpose of thi function is to make tests compatible with
+/// Note: the initial purpose of this function is to make tests compatible with
 /// simtest before it supports jsonrpc/ws. We should use `start_a_fullnode_with_handle`
 /// once the support is added.
 /// Start a fullnode for an existing Swarm and return FullNodeHandle
