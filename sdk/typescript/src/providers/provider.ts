@@ -23,13 +23,16 @@ import {
   TransactionDigest,
   ObjectId,
   SuiAddress,
+  EventQuery,
+  EventId,
   ObjectOwner,
   SuiEvents,
   PaginatedTransactionDigests,
   TransactionQuery,
-  Ordering,
+  PaginatedEvents,
   RpcApiVersion,
   FaucetResponse,
+  Order,
 } from '../types';
 
 ///////////////////////////////
@@ -159,7 +162,7 @@ export abstract class Provider {
     query: TransactionQuery,
     cursor: TransactionDigest | null,
     limit: number | null,
-    order: Ordering
+    order: Order
   ): Promise<PaginatedTransactionDigests>;
 
   /**
@@ -226,9 +229,25 @@ export abstract class Provider {
   ): Promise<SuiMoveNormalizedStruct>;
 
   /**
+   * Get events for a given query criteria
+   * @param query - the event query criteria.
+   * @param cursor - optional paging cursor
+   * @param limit - maximum number of items per page
+   * @param order - event query ordering
+   */
+  abstract getEvents(
+      query: EventQuery,
+      cursor: EventId | null,
+      limit: number | null,
+      order: Order,
+  ): Promise<PaginatedEvents>;
+
+  /**
    * Get events for one transaction
    * @param digest transaction digest to search by
    * @param count max result count
+   *
+   * @deprecated The method will be replaced by 'getEvents'
    */
   abstract getEventsByTransaction(
     digest: TransactionDigest,
@@ -237,11 +256,13 @@ export abstract class Provider {
 
   /**
    * Get events emitted from within the specified Move module
-   * @param package_ Move package object ID
+   * @param packageId Move package object ID
    * @param module Move module name
    * @param count max result count
    * @param startTime start of time range
    * @param endTime end of time range, exclusive
+   *
+   * @deprecated The method will be replaced by 'getEvents'
    */
   abstract getEventsByModule(
     packageId: ObjectId,
@@ -257,6 +278,8 @@ export abstract class Provider {
    * @param count max result count
    * @param startTime start of time range to search
    * @param endTime end of time range
+   *
+   * @deprecated The method will be replaced by 'getEvents'
    */
   abstract getEventsByMoveEventStructName(
     moveEventStructName: string,
@@ -271,6 +294,8 @@ export abstract class Provider {
    * @param count max result count
    * @param startTime start of time range to search
    * @param endTime end of time range
+   *
+   * @deprecated The method will be replaced by 'getEvents'
    */
   abstract getEventsBySender(
     sender: SuiAddress,
@@ -285,6 +310,8 @@ export abstract class Provider {
    * @param count max result count
    * @param startTime start of time range to search
    * @param endTime end of time range
+   *
+   * @deprecated The method will be replaced by 'getEvents'
    */
   abstract getEventsByRecipient(
     recipient: ObjectOwner,
@@ -299,6 +326,8 @@ export abstract class Provider {
    * @param count max result count
    * @param startTime start of time range to search
    * @param endTime end of time range
+   *
+   * @deprecated The method will be replaced by 'getEvents'
    */
   abstract getEventsByObject(
     object: ObjectId,
@@ -312,6 +341,8 @@ export abstract class Provider {
    * @param count max result count
    * @param startTime start of time range to search
    * @param endTime end of time range
+   *
+   * @deprecated The method will be replaced by 'getEvents'
    */
   abstract getEventsByTimeRange(
     count: number,

@@ -5,6 +5,7 @@
 use std::hash::Hash;
 use std::ops::Deref;
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::{
     collections::{HashMap, VecDeque},
     pin::Pin,
@@ -16,11 +17,13 @@ use std::{
 
 use anyhow::anyhow;
 use arc_swap::ArcSwap;
-
 use chrono::prelude::*;
 use fastcrypto::traits::KeyPair;
 use futures::stream::{self, Stream};
 use move_bytecode_utils::module_cache::SyncModuleCache;
+use move_core_types::account_address::AccountAddress;
+use move_core_types::identifier::Identifier;
+use move_core_types::parser::parse_struct_tag;
 use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
 use parking_lot::Mutex;
@@ -44,10 +47,11 @@ use narwhal_config::{
     Committee as ConsensusCommittee, WorkerCache as ConsensusWorkerCache,
     WorkerId as ConsensusWorkerId,
 };
-
 use sui_adapter::adapter;
 use sui_config::genesis::Genesis;
-use sui_json_rpc_types::{SuiEventEnvelope, SuiTransactionEffects};
+use sui_json_rpc_types::{
+    type_and_fields_from_move_struct, SuiEvent, SuiEventEnvelope, SuiTransactionEffects,
+};
 use sui_simulator::nondeterministic;
 use sui_storage::{
     event_store::{EventStore, EventStoreType, StoredEvent},
@@ -57,12 +61,13 @@ use sui_storage::{
 };
 use sui_types::committee::EpochId;
 use sui_types::crypto::{AuthorityKeyPair, NetworkKeyPair};
+use sui_types::event::{Event, EventID};
 use sui_types::messages_checkpoint::{
     AuthenticatedCheckpoint, CertifiedCheckpointSummary, CheckpointFragmentMessage,
     CheckpointRequest, CheckpointRequestType, CheckpointResponse, CheckpointSequenceNumber,
 };
 use sui_types::object::{Owner, PastObjectRead};
-use sui_types::query::TransactionQuery;
+use sui_types::query::{EventQuery, TransactionQuery};
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::temporary_store::InnerTemporaryStore;
 pub use sui_types::temporary_store::TemporaryStore;
@@ -81,13 +86,12 @@ use sui_types::{
 
 use crate::authority::authority_notifier::TransactionNotifierTicket;
 use crate::checkpoints::ConsensusSender;
-use crate::scoped_counter;
-
 use crate::consensus_handler::{
     SequencedConsensusTransaction, VerifiedSequencedConsensusTransaction,
 };
 use crate::epoch::committee_store::CommitteeStore;
 use crate::metrics::TaskUtilizationExt;
+use crate::scoped_counter;
 use crate::{
     authority_batch::{BroadcastReceiver, BroadcastSender},
     checkpoints::CheckpointStore,
@@ -1465,7 +1469,9 @@ impl AuthorityState {
 
         let committee = committee_store.get_latest_committee();
 
-        let event_handler = event_store.map(|es| Arc::new(EventHandler::new(store.clone(), es)));
+        let module_cache = Arc::new(SyncModuleCache::new(ResolverWrapper(store.clone())));
+        let event_handler =
+            event_store.map(|es| Arc::new(EventHandler::new(es, module_cache.clone())));
 
         let mut state = AuthorityState {
             name,
@@ -1478,7 +1484,7 @@ impl AuthorityState {
             indexes,
             // `module_cache` uses a separate in-mem cache from `event_handler`
             // this is because they largely deal with different types of MoveStructs
-            module_cache: Arc::new(SyncModuleCache::new(ResolverWrapper(store.clone()))),
+            module_cache,
             event_handler,
             transaction_streamer,
             checkpoints,
@@ -1946,118 +1952,78 @@ impl AuthorityState {
             .map(|handler| handler.event_store.clone())
     }
 
-    /// Returns at most `limit` events emitted in the given transaction,
-    /// emitted within [start_time, end_time) in order of events emitted.
-    /// `limit` is capped to EVENT_STORE_QUERY_MAX_LIMIT
-    pub async fn get_events_by_transaction(
+    pub async fn get_events(
         &self,
-        digest: TransactionDigest,
+        query: EventQuery,
+        cursor: Option<EventID>,
         limit: usize,
-    ) -> Result<Vec<SuiEventEnvelope>, anyhow::Error> {
+        descending: bool,
+    ) -> Result<Vec<(EventID, SuiEventEnvelope)>, anyhow::Error> {
         let es = self.get_event_store().ok_or(SuiError::NoEventStore)?;
-        let stored_events = es.events_by_transaction(digest, limit).await?;
-        StoredEvent::into_event_envelopes(stored_events)
-    }
+        let cursor = cursor.unwrap_or(if descending {
+            // Database only support up to i64::MAX
+            (i64::MAX, i64::MAX).into()
+        } else {
+            (0, 0).into()
+        });
 
-    /// Returns at most `limit` events emitted in the given module,
-    /// emitted within [start_time, end_time), sorted in in descending time.
-    /// `limit` is capped to EVENT_STORE_QUERY_MAX_LIMIT
-    pub async fn get_events_by_transaction_module(
-        &self,
-        module_id: &ModuleId,
-        start_time: u64,
-        end_time: u64,
-        limit: usize,
-    ) -> Result<Vec<SuiEventEnvelope>, anyhow::Error> {
-        let es = self.get_event_store().ok_or(SuiError::NoEventStore)?;
-        let stored_events = es
-            .events_by_module_id(start_time, end_time, module_id, limit)
-            .await?;
-        StoredEvent::into_event_envelopes(stored_events)
-    }
-
-    /// Returns at most `limit` events with the given move event struct name, e.g.
-    /// `0x2::devnet_nft::MintNFTEvent` or
-    /// `0x2::SUI::test_foo<address, vector<u8>>` with type params,
-    /// emitted within [start_time, end_time), sorted in in descending time.
-    /// `limit` is capped to EVENT_STORE_QUERY_MAX_LIMIT
-    pub async fn get_events_by_move_event_struct_name(
-        &self,
-        move_event_struct_name: &str,
-        start_time: u64,
-        end_time: u64,
-        limit: usize,
-    ) -> Result<Vec<SuiEventEnvelope>, anyhow::Error> {
-        let es = self.get_event_store().ok_or(SuiError::NoEventStore)?;
-        let stored_events = es
-            .events_by_move_event_struct_name(start_time, end_time, move_event_struct_name, limit)
-            .await?;
-        StoredEvent::into_event_envelopes(stored_events)
-    }
-
-    /// Returns at most `limit` events associated with the given sender,
-    /// emitted within [start_time, end_time), sorted in in descending time.
-    /// `limit` is capped to EVENT_STORE_QUERY_MAX_LIMIT
-    pub async fn get_events_by_sender(
-        &self,
-        sender: &SuiAddress,
-        start_time: u64,
-        end_time: u64,
-        limit: usize,
-    ) -> Result<Vec<SuiEventEnvelope>, anyhow::Error> {
-        let es = self.get_event_store().ok_or(SuiError::NoEventStore)?;
-        let stored_events = es
-            .events_by_sender(start_time, end_time, sender, limit)
-            .await?;
-        StoredEvent::into_event_envelopes(stored_events)
-    }
-
-    /// Returns at most `limit` events associated with the given recipient,
-    /// emitted within [start_time, end_time), sorted in in descending time.
-    /// `limit` is capped to EVENT_STORE_QUERY_MAX_LIMIT
-    pub async fn get_events_by_recipient(
-        &self,
-        recipient: &Owner,
-        start_time: u64,
-        end_time: u64,
-        limit: usize,
-    ) -> Result<Vec<SuiEventEnvelope>, anyhow::Error> {
-        let es = self.get_event_store().ok_or(SuiError::NoEventStore)?;
-        let stored_events = es
-            .events_by_recipient(start_time, end_time, recipient, limit)
-            .await?;
-        StoredEvent::into_event_envelopes(stored_events)
-    }
-
-    /// Returns at most `limit` events associated with the given object,
-    /// emitted within [start_time, end_time), sorted in in descending time.
-    /// `limit` is capped to EVENT_STORE_QUERY_MAX_LIMIT
-    pub async fn get_events_by_object(
-        &self,
-        object: &ObjectID,
-        start_time: u64,
-        end_time: u64,
-        limit: usize,
-    ) -> Result<Vec<SuiEventEnvelope>, anyhow::Error> {
-        let es = self.get_event_store().ok_or(SuiError::NoEventStore)?;
-        let stored_events = es
-            .events_by_object(start_time, end_time, object, limit)
-            .await?;
-        StoredEvent::into_event_envelopes(stored_events)
-    }
-
-    /// Returns at most `limit` events emitted within [start_time, end_time),
-    /// sorted in in descending time.
-    /// `limit` is capped to EVENT_STORE_QUERY_MAX_LIMIT
-    pub async fn get_events_by_timerange(
-        &self,
-        start_time: u64,
-        end_time: u64,
-        limit: usize,
-    ) -> Result<Vec<SuiEventEnvelope>, anyhow::Error> {
-        let es = self.get_event_store().ok_or(SuiError::NoEventStore)?;
-        let stored_events = es.event_iterator(start_time, end_time, limit).await?;
-        StoredEvent::into_event_envelopes(stored_events)
+        let stored_events = match query {
+            EventQuery::All => es.all_events(cursor, limit, descending).await?,
+            EventQuery::Transaction(digest) => {
+                es.events_by_transaction(digest, cursor, limit, descending)
+                    .await?
+            }
+            EventQuery::MoveModule { package, module } => {
+                let module_id = ModuleId::new(
+                    AccountAddress::from(package),
+                    Identifier::from_str(&module)?,
+                );
+                es.events_by_module_id(&module_id, cursor, limit, descending)
+                    .await?
+            }
+            EventQuery::MoveEvent(struct_name) => {
+                es.events_by_move_event_struct_name(&struct_name, cursor, limit, descending)
+                    .await?
+            }
+            EventQuery::Sender(sender) => {
+                es.events_by_sender(&sender, cursor, limit, descending)
+                    .await?
+            }
+            EventQuery::Recipient(recipient) => {
+                es.events_by_recipient(&recipient, cursor, limit, descending)
+                    .await?
+            }
+            EventQuery::Object(object) => {
+                es.events_by_object(&object, cursor, limit, descending)
+                    .await?
+            }
+            EventQuery::TimeRange {
+                start_time,
+                end_time,
+            } => {
+                es.event_iterator(start_time, end_time, cursor, limit, descending)
+                    .await?
+            }
+            EventQuery::EventType(event_type) => {
+                es.events_by_type(event_type, cursor, limit, descending)
+                    .await?
+            }
+        };
+        let mut events = StoredEvent::into_event_envelopes(stored_events)?;
+        // populate parsed json event
+        for event in &mut events {
+            if let SuiEvent::MoveEvent {
+                type_, fields, bcs, ..
+            } = &mut event.1.event
+            {
+                let struct_tag = parse_struct_tag(type_)?;
+                let event =
+                    Event::move_event_to_move_struct(&struct_tag, bcs, &*self.module_cache)?;
+                let (_, event) = type_and_fields_from_move_struct(&struct_tag, event);
+                *fields = Some(event)
+            }
+        }
+        Ok(events)
     }
 
     pub async fn insert_genesis_object(&self, object: Object) {

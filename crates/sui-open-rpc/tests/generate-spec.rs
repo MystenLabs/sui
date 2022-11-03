@@ -8,7 +8,7 @@ fn test_json_rpc_spec() {
     // # cargo -q run --example generate-json-rpc-spec -- record
     let status = std::process::Command::new("cargo")
         .current_dir("..")
-        .args(&["run", "--example", "generate-json-rpc-spec", "--"])
+        .args(["run", "--example", "generate-json-rpc-spec", "--"])
         .arg("test")
         .status()
         .expect("failed to execute process");

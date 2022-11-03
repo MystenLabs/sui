@@ -404,34 +404,32 @@
       }
     },
     {
-      "name": "sui_getEventsByModule",
+      "name": "sui_getEvents",
       "tags": [
         {
           "name": "Event Read API"
         }
       ],
-      "description": "Return events emitted in a specified Move module",
+      "description": "Return list of events for a specified query criteria.",
       "params": [
         {
-          "name": "package",
-          "description": "the Move package ID",
+          "name": "query",
+          "description": "the event query criteria.",
           "required": true,
           "schema": {
-            "$ref": "#/components/schemas/ObjectID"
+            "$ref": "#/components/schemas/EventQuery"
           }
         },
         {
-          "name": "module",
-          "description": "the module name",
-          "required": true,
+          "name": "cursor",
+          "description": "optional paging cursor",
           "schema": {
-            "type": "string"
+            "$ref": "#/components/schemas/EventID"
           }
         },
         {
-          "name": "count",
-          "description": "maximum size of the result, capped to EVENT_QUERY_MAX_LIMIT",
-          "required": true,
+          "name": "limit",
+          "description": "maximum number of items per page",
           "schema": {
             "type": "integer",
             "format": "uint",
@@ -439,628 +437,18 @@
           }
         },
         {
-          "name": "start_time",
-          "description": "left endpoint of time interval, inclusive",
-          "required": true,
+          "name": "descending_order",
+          "description": "query result ordering, default to false (ascending order), oldest record first.  ",
           "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        },
-        {
-          "name": "end_time",
-          "description": "right endpoint of time interval, exclusive",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
+            "type": "boolean"
           }
         }
       ],
       "result": {
-        "name": "Vec<SuiEventEnvelope>",
+        "name": "EventPage",
         "required": true,
         "schema": {
-          "type": "array",
-          "items": {
-            "$ref": "#/components/schemas/EventEnvelope"
-          }
-        }
-      },
-      "examples": [
-        {
-          "name": "Return the Events emitted in a specified Move module",
-          "params": [
-            {
-              "name": "package",
-              "value": "0x0000000000000000000000000000000000000002"
-            },
-            {
-              "name": "module",
-              "value": "devnet_nft"
-            },
-            {
-              "name": "count",
-              "value": 5
-            },
-            {
-              "name": "start_time",
-              "value": 0
-            },
-            {
-              "name": "end_time",
-              "value": 10
-            }
-          ],
-          "result": {
-            "name": "Result",
-            "value": [
-              {
-                "timestamp": 0,
-                "txDigest": "ZsLY9XN0LSefrCNp23ij/AD+iuUHSphf8218SAVVqH8=",
-                "event": {
-                  "transferObject": {
-                    "packageId": "0x0000000000000000000000000000000000000002",
-                    "transactionModule": "native",
-                    "sender": "0xa0a896a7856ad6d29d2b9957f558e230c755a67b",
-                    "recipient": {
-                      "AddressOwner": "0xa08e0e5dfd566e977968fa81937919da0294cbba"
-                    },
-                    "objectType": "0x2::example::Object",
-                    "objectId": "0x1d4980fbaf0a4dbfbcc39033d817566297f9de95",
-                    "version": 2
-                  }
-                }
-              }
-            ]
-          }
-        }
-      ]
-    },
-    {
-      "name": "sui_getEventsByMoveEventStructName",
-      "tags": [
-        {
-          "name": "Event Read API"
-        }
-      ],
-      "description": "Return events with the given move event struct name",
-      "params": [
-        {
-          "name": "move_event_struct_name",
-          "description": "the event struct name type, e.g. `0x2::devnet_nft::MintNFTEvent` or `0x2::SUI::test_foo<address, vector<u8>>` with type params",
-          "required": true,
-          "schema": {
-            "type": "string"
-          }
-        },
-        {
-          "name": "count",
-          "description": "maximum size of the result, capped to EVENT_QUERY_MAX_LIMIT",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint",
-            "minimum": 0.0
-          }
-        },
-        {
-          "name": "start_time",
-          "description": "left endpoint of time interval, inclusive",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        },
-        {
-          "name": "end_time",
-          "description": "right endpoint of time interval, exclusive",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        }
-      ],
-      "result": {
-        "name": "Vec<SuiEventEnvelope>",
-        "required": true,
-        "schema": {
-          "type": "array",
-          "items": {
-            "$ref": "#/components/schemas/EventEnvelope"
-          }
-        }
-      },
-      "examples": [
-        {
-          "name": "Return the Events with the given move event struct name",
-          "params": [
-            {
-              "name": "move_event_struct_name",
-              "value": "0x2::devnet_nft::MintNFTEvent"
-            },
-            {
-              "name": "count",
-              "value": 5
-            },
-            {
-              "name": "start_time",
-              "value": 0
-            },
-            {
-              "name": "end_time",
-              "value": 10
-            }
-          ],
-          "result": {
-            "name": "Result",
-            "value": [
-              {
-                "timestamp": 0,
-                "txDigest": "4r0EjnZqU68fXn5k/zRrAm97AtK08x2F7N4JJuhfzV8=",
-                "event": {
-                  "moveEvent": {
-                    "packageId": "0x0000000000000000000000000000000000000002",
-                    "transactionModule": "devnet_nft",
-                    "sender": "0x9421e7ad826ba13aca8ae41316644f06759b4506",
-                    "type": "0x2::devnet_nft::MintNFTEvent",
-                    "bcs": ""
-                  }
-                }
-              }
-            ]
-          }
-        }
-      ]
-    },
-    {
-      "name": "sui_getEventsByObject",
-      "tags": [
-        {
-          "name": "Event Read API"
-        }
-      ],
-      "description": "Return events associated with the given object",
-      "params": [
-        {
-          "name": "object",
-          "description": "the object ID",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/ObjectID"
-          }
-        },
-        {
-          "name": "count",
-          "description": "maximum size of the result, capped to EVENT_QUERY_MAX_LIMIT",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint",
-            "minimum": 0.0
-          }
-        },
-        {
-          "name": "start_time",
-          "description": "left endpoint of time interval, inclusive",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        },
-        {
-          "name": "end_time",
-          "description": "right endpoint of time interval, exclusive",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        }
-      ],
-      "result": {
-        "name": "Vec<SuiEventEnvelope>",
-        "required": true,
-        "schema": {
-          "type": "array",
-          "items": {
-            "$ref": "#/components/schemas/EventEnvelope"
-          }
-        }
-      },
-      "examples": [
-        {
-          "name": "Return the Events associated with the given object",
-          "params": [
-            {
-              "name": "object",
-              "value": "0x1403e49a4b296adcb22ea27d3c92e4ce2256ac64"
-            },
-            {
-              "name": "count",
-              "value": 2
-            },
-            {
-              "name": "start_time",
-              "value": 0
-            },
-            {
-              "name": "end_time",
-              "value": 10
-            }
-          ],
-          "result": {
-            "name": "Result",
-            "value": [
-              {
-                "timestamp": 0,
-                "txDigest": "MvKayCOJAQZPU/BnxMQ+9pquir1dhLLkLiyr33t91X0=",
-                "event": {
-                  "transferObject": {
-                    "packageId": "0x0000000000000000000000000000000000000002",
-                    "transactionModule": "native",
-                    "sender": "0xaa2165d12e40f2431d1101f226114a4886cc1b46",
-                    "recipient": {
-                      "AddressOwner": "0x6efc44edb5cd3dfe32f4bf6c3e8ac42eef1385e0"
-                    },
-                    "objectType": "0x2::example::Object",
-                    "objectId": "0x1403e49a4b296adcb22ea27d3c92e4ce2256ac64",
-                    "version": 2
-                  }
-                }
-              }
-            ]
-          }
-        }
-      ]
-    },
-    {
-      "name": "sui_getEventsByRecipient",
-      "tags": [
-        {
-          "name": "Event Read API"
-        }
-      ],
-      "description": "Return events associated with the given recipient",
-      "params": [
-        {
-          "name": "recipient",
-          "description": "the recipient",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/Owner"
-          }
-        },
-        {
-          "name": "count",
-          "description": "maximum size of the result, capped to EVENT_QUERY_MAX_LIMIT",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint",
-            "minimum": 0.0
-          }
-        },
-        {
-          "name": "start_time",
-          "description": "left endpoint of time interval, inclusive",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        },
-        {
-          "name": "end_time",
-          "description": "right endpoint of time interval, exclusive",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        }
-      ],
-      "result": {
-        "name": "Vec<SuiEventEnvelope>",
-        "required": true,
-        "schema": {
-          "type": "array",
-          "items": {
-            "$ref": "#/components/schemas/EventEnvelope"
-          }
-        }
-      },
-      "examples": [
-        {
-          "name": "Return the Events associated with the given recipient",
-          "params": [
-            {
-              "name": "recipient",
-              "value": {
-                "AddressOwner": "0xd70420418b84502e506794227f897237764dde8d"
-              }
-            },
-            {
-              "name": "count",
-              "value": 2
-            },
-            {
-              "name": "start_time",
-              "value": 0
-            },
-            {
-              "name": "end_time",
-              "value": 10
-            }
-          ],
-          "result": {
-            "name": "Result",
-            "value": [
-              {
-                "timestamp": 0,
-                "txDigest": "ySHmwS1bnA2F3wchK8gW/twFs36SbU6OL+fBFUPRnHw=",
-                "event": {
-                  "transferObject": {
-                    "packageId": "0x0000000000000000000000000000000000000002",
-                    "transactionModule": "native",
-                    "sender": "0xd3d26b46b5447b26aa0482ebce3f2fd20d332366",
-                    "recipient": {
-                      "AddressOwner": "0xd70420418b84502e506794227f897237764dde8d"
-                    },
-                    "objectType": "0x2::example::Object",
-                    "objectId": "0x79a01ab2104bf742a277a2abe035ca41c556b722",
-                    "version": 2
-                  }
-                }
-              }
-            ]
-          }
-        }
-      ]
-    },
-    {
-      "name": "sui_getEventsBySender",
-      "tags": [
-        {
-          "name": "Event Read API"
-        }
-      ],
-      "description": "Return events associated with the given sender.",
-      "params": [
-        {
-          "name": "sender",
-          "description": "the sender's Sui address",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/SuiAddress"
-          }
-        },
-        {
-          "name": "count",
-          "description": "maximum size of the result, capped to EVENT_QUERY_MAX_LIMIT",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint",
-            "minimum": 0.0
-          }
-        },
-        {
-          "name": "start_time",
-          "description": "left endpoint of time interval, inclusive",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        },
-        {
-          "name": "end_time",
-          "description": "right endpoint of time interval, exclusive",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        }
-      ],
-      "result": {
-        "name": "Vec<SuiEventEnvelope>",
-        "required": true,
-        "schema": {
-          "type": "array",
-          "items": {
-            "$ref": "#/components/schemas/EventEnvelope"
-          }
-        }
-      },
-      "examples": [
-        {
-          "name": "Return the Events associated with the given sender",
-          "params": [
-            {
-              "name": "sender",
-              "value": "0xbf7e5aec45e7614613615d17962dfd493d501f5b"
-            },
-            {
-              "name": "count",
-              "value": 2
-            },
-            {
-              "name": "start_time",
-              "value": 0
-            },
-            {
-              "name": "end_time",
-              "value": 10
-            }
-          ],
-          "result": {
-            "name": "Result",
-            "value": [
-              {
-                "timestamp": 0,
-                "txDigest": "kElcjWAQhJ1c2eTxZe0hO5O8MfnIhAZ4oFlXOGePWTE=",
-                "event": {
-                  "transferObject": {
-                    "packageId": "0x0000000000000000000000000000000000000002",
-                    "transactionModule": "native",
-                    "sender": "0xbf7e5aec45e7614613615d17962dfd493d501f5b",
-                    "recipient": {
-                      "AddressOwner": "0xa933b8899efb20735a4f6aec82136eff73e6819c"
-                    },
-                    "objectType": "0x2::example::Object",
-                    "objectId": "0x73777d2b3144059d1096336053abc8d0e8437122",
-                    "version": 2
-                  }
-                }
-              }
-            ]
-          }
-        }
-      ]
-    },
-    {
-      "name": "sui_getEventsByTimeRange",
-      "tags": [
-        {
-          "name": "Event Read API"
-        }
-      ],
-      "description": "Return events emitted in [start_time, end_time) interval",
-      "params": [
-        {
-          "name": "count",
-          "description": "maximum size of the result, capped to EVENT_QUERY_MAX_LIMIT",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint",
-            "minimum": 0.0
-          }
-        },
-        {
-          "name": "start_time",
-          "description": "left endpoint of time interval, inclusive",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        },
-        {
-          "name": "end_time",
-          "description": "right endpoint of time interval, exclusive",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        }
-      ],
-      "result": {
-        "name": "Vec<SuiEventEnvelope>",
-        "required": true,
-        "schema": {
-          "type": "array",
-          "items": {
-            "$ref": "#/components/schemas/EventEnvelope"
-          }
-        }
-      },
-      "examples": [
-        {
-          "name": "Return the Events emitted in [start_time, end_time) interval",
-          "params": [
-            {
-              "name": "count",
-              "value": 2
-            },
-            {
-              "name": "start_time",
-              "value": 0
-            },
-            {
-              "name": "end_time",
-              "value": 10
-            }
-          ],
-          "result": {
-            "name": "Result",
-            "value": [
-              {
-                "timestamp": 0,
-                "txDigest": "+NpeTwzIR1KEey3/drK7HKYqkIfd8+P/NCM8O3CE7lo=",
-                "event": {
-                  "transferObject": {
-                    "packageId": "0x0000000000000000000000000000000000000002",
-                    "transactionModule": "native",
-                    "sender": "0x7579ffba80959d2e0f5e237f63e06d908aa9462f",
-                    "recipient": {
-                      "AddressOwner": "0x4c46a29bd0ebfd9819a093759afc2c4425b5db66"
-                    },
-                    "objectType": "0x2::example::Object",
-                    "objectId": "0x94f1a597b4e8f709a396f7f6b1482bdcd65a673d",
-                    "version": 2
-                  }
-                }
-              }
-            ]
-          }
-        }
-      ]
-    },
-    {
-      "name": "sui_getEventsByTransaction",
-      "tags": [
-        {
-          "name": "Event Read API"
-        }
-      ],
-      "description": "Return events emitted by the given transaction.",
-      "params": [
-        {
-          "name": "digest",
-          "description": "digest of the transaction, as base-64 encoded string",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/TransactionDigest"
-          }
-        },
-        {
-          "name": "count",
-          "description": "maximum size of the result, capped to EVENT_QUERY_MAX_LIMIT",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint",
-            "minimum": 0.0
-          }
-        }
-      ],
-      "result": {
-        "name": "Vec<SuiEventEnvelope>",
-        "required": true,
-        "schema": {
-          "type": "array",
-          "items": {
-            "$ref": "#/components/schemas/EventEnvelope"
-          }
+          "$ref": "#/components/schemas/Page_for_EventEnvelope_and_EventID"
         }
       },
       "examples": [
@@ -1068,35 +456,48 @@
           "name": "Return the Events emitted by a transaction",
           "params": [
             {
-              "name": "digest",
-              "value": "WSPBt/tI+k8Avb/jMZLWn4VwgaPSlGzbTb/8UNr9PMY="
+              "name": "query",
+              "value": {
+                "Transaction": "WSPBt/tI+k8Avb/jMZLWn4VwgaPSlGzbTb/8UNr9PMY="
+              }
             },
             {
-              "name": "count",
-              "value": 2
+              "name": "cursor",
+              "value": "10:0"
+            },
+            {
+              "name": "limit",
+              "value": 1
+            },
+            {
+              "name": "descending_order",
+              "value": false
             }
           ],
           "result": {
             "name": "Result",
-            "value": [
-              {
-                "timestamp": 0,
-                "txDigest": "WSPBt/tI+k8Avb/jMZLWn4VwgaPSlGzbTb/8UNr9PMY=",
-                "event": {
-                  "transferObject": {
-                    "packageId": "0x0000000000000000000000000000000000000002",
-                    "transactionModule": "native",
-                    "sender": "0x9cce11a3b6afff14a4ab2421d0159ef1e7486655",
-                    "recipient": {
-                      "AddressOwner": "0xc677ed804f82f1c8587b98d64c00bfb46c3843bd"
-                    },
-                    "objectType": "0x2::example::Object",
-                    "objectId": "0x8bf6ccfa7c65a86138698cd1fdcac3dce8d8c7ce",
-                    "version": 2
+            "value": {
+              "data": [
+                {
+                  "timestamp": 0,
+                  "txDigest": "WSPBt/tI+k8Avb/jMZLWn4VwgaPSlGzbTb/8UNr9PMY=",
+                  "event": {
+                    "transferObject": {
+                      "packageId": "0x0000000000000000000000000000000000000002",
+                      "transactionModule": "native",
+                      "sender": "0x9cce11a3b6afff14a4ab2421d0159ef1e7486655",
+                      "recipient": {
+                        "AddressOwner": "0xc677ed804f82f1c8587b98d64c00bfb46c3843bd"
+                      },
+                      "objectType": "0x2::example::Object",
+                      "objectId": "0x8bf6ccfa7c65a86138698cd1fdcac3dce8d8c7ce",
+                      "version": 2
+                    }
                   }
                 }
-              }
-            ]
+              ],
+              "nextCursor": "1000:5"
+            }
           }
         }
       ]
@@ -1783,11 +1184,10 @@
           }
         },
         {
-          "name": "order",
-          "description": "Transaction query ordering",
-          "required": true,
+          "name": "descending_order",
+          "description": "query result ordering, default to false (ascending order), oldest record first.  ",
           "schema": {
-            "$ref": "#/components/schemas/Ordering"
+            "type": "boolean"
           }
         }
       ],
@@ -1817,8 +1217,8 @@
               "value": 100
             },
             {
-              "name": "order",
-              "value": "Ascending"
+              "name": "descending_order",
+              "value": false
             }
           ],
           "result": {
@@ -3370,6 +2770,159 @@
           }
         ]
       },
+      "EventID": {
+        "type": "string"
+      },
+      "EventQuery": {
+        "oneOf": [
+          {
+            "description": "Return all events.",
+            "type": "string",
+            "enum": [
+              "All"
+            ]
+          },
+          {
+            "description": "Return events emitted by the given transaction.",
+            "type": "object",
+            "required": [
+              "Transaction"
+            ],
+            "properties": {
+              "Transaction": {
+                "$ref": "#/components/schemas/TransactionDigest"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Return events emitted in a specified Move module",
+            "type": "object",
+            "required": [
+              "MoveModule"
+            ],
+            "properties": {
+              "MoveModule": {
+                "type": "object",
+                "required": [
+                  "module",
+                  "package"
+                ],
+                "properties": {
+                  "module": {
+                    "description": "the module name",
+                    "type": "string"
+                  },
+                  "package": {
+                    "description": "the Move package ID",
+                    "allOf": [
+                      {
+                        "$ref": "#/components/schemas/ObjectID"
+                      }
+                    ]
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Return events with the given move event struct name",
+            "type": "object",
+            "required": [
+              "MoveEvent"
+            ],
+            "properties": {
+              "MoveEvent": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "EventType"
+            ],
+            "properties": {
+              "EventType": {
+                "$ref": "#/components/schemas/EventType"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Query by sender address.",
+            "type": "object",
+            "required": [
+              "Sender"
+            ],
+            "properties": {
+              "Sender": {
+                "$ref": "#/components/schemas/SuiAddress"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Query by recipient address.",
+            "type": "object",
+            "required": [
+              "Recipient"
+            ],
+            "properties": {
+              "Recipient": {
+                "$ref": "#/components/schemas/Owner"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Return events associated with the given object",
+            "type": "object",
+            "required": [
+              "Object"
+            ],
+            "properties": {
+              "Object": {
+                "$ref": "#/components/schemas/ObjectID"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Return events emitted in [start_time, end_time] interval",
+            "type": "object",
+            "required": [
+              "TimeRange"
+            ],
+            "properties": {
+              "TimeRange": {
+                "type": "object",
+                "required": [
+                  "end_time",
+                  "start_time"
+                ],
+                "properties": {
+                  "end_time": {
+                    "description": "right endpoint of time interval, exclusive",
+                    "type": "integer",
+                    "format": "uint64",
+                    "minimum": 0.0
+                  },
+                  "start_time": {
+                    "description": "left endpoint of time interval, inclusive",
+                    "type": "integer",
+                    "format": "uint64",
+                    "minimum": 0.0
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      },
       "EventType": {
         "description": "Auto-generated discriminant enum variants",
         "oneOf": [
@@ -3928,13 +3481,6 @@
           "ByValue"
         ]
       },
-      "Ordering": {
-        "type": "string",
-        "enum": [
-          "Ascending",
-          "Descending"
-        ]
-      },
       "Owner": {
         "oneOf": [
           {
@@ -3997,6 +3543,30 @@
             ]
           }
         ]
+      },
+      "Page_for_EventEnvelope_and_EventID": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EventEnvelope"
+            }
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EventID"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
       },
       "Page_for_TransactionDigest_and_TransactionDigest": {
         "type": "object",
@@ -4965,12 +4535,14 @@
       "TransactionQuery": {
         "oneOf": [
           {
+            "description": "All transaction hashes.",
             "type": "string",
             "enum": [
               "All"
             ]
           },
           {
+            "description": "Query by move function.",
             "type": "object",
             "required": [
               "MoveFunction"
@@ -5003,6 +4575,7 @@
             "additionalProperties": false
           },
           {
+            "description": "Query by input object.",
             "type": "object",
             "required": [
               "InputObject"
@@ -5015,6 +4588,7 @@
             "additionalProperties": false
           },
           {
+            "description": "Query by mutated object.",
             "type": "object",
             "required": [
               "MutatedObject"
@@ -5027,6 +4601,7 @@
             "additionalProperties": false
           },
           {
+            "description": "Query by sender address.",
             "type": "object",
             "required": [
               "FromAddress"
@@ -5039,6 +4614,7 @@
             "additionalProperties": false
           },
           {
+            "description": "Query by recipient address.",
             "type": "object",
             "required": [
               "ToAddress"

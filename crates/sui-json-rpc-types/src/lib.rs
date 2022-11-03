@@ -38,7 +38,7 @@ use sui_types::base_types::{
 use sui_types::committee::EpochId;
 use sui_types::crypto::{AuthorityStrongQuorumSignInfo, SignableBytes, Signature};
 use sui_types::error::SuiError;
-use sui_types::event::{BalanceChangeType, Event};
+use sui_types::event::{BalanceChangeType, Event, EventID};
 use sui_types::event::{EventEnvelope, EventType};
 use sui_types::filter::{EventFilter, TransactionFilter};
 use sui_types::gas::GasCostSummary;
@@ -62,6 +62,8 @@ mod rpc_types_tests;
 
 pub type SuiMoveTypeParameterIndex = u16;
 pub type TransactionsPage = Page<TransactionDigest, TransactionDigest>;
+
+pub type EventPage = Page<SuiEventEnvelope, EventID>;
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
 pub enum SuiMoveAbility {
@@ -791,17 +793,13 @@ impl SuiMoveObject for SuiParsedMoveObject {
     }
 }
 
-impl SuiParsedMoveObject {
-    fn try_type_and_fields_from_move_struct(
-        type_: &StructTag,
-        move_struct: MoveStruct,
-    ) -> Result<(String, SuiMoveStruct), anyhow::Error> {
-        Ok(match move_struct.into() {
-            SuiMoveStruct::WithTypes { type_, fields } => {
-                (type_, SuiMoveStruct::WithFields(fields))
-            }
-            fields => (type_.to_string(), fields),
-        })
+pub fn type_and_fields_from_move_struct(
+    type_: &StructTag,
+    move_struct: MoveStruct,
+) -> (String, SuiMoveStruct) {
+    match move_struct.into() {
+        SuiMoveStruct::WithTypes { type_, fields } => (type_, SuiMoveStruct::WithFields(fields)),
+        fields => (type_.to_string(), fields),
     }
 }
 
@@ -1974,7 +1972,6 @@ pub struct OwnedObjectRef {
     pub reference: SuiObjectRef,
 }
 
-#[serde_as]
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(rename = "EventEnvelope", rename_all = "camelCase")]
 pub struct SuiEventEnvelope {
@@ -2193,10 +2190,7 @@ impl SuiEvent {
                 let (type_, fields) = if let Ok(move_struct) =
                     Event::move_event_to_move_struct(&type_, &contents, resolver)
                 {
-                    let (type_, field) = SuiParsedMoveObject::try_type_and_fields_from_move_struct(
-                        &type_,
-                        move_struct,
-                    )?;
+                    let (type_, field) = type_and_fields_from_move_struct(&type_, move_struct);
                     (type_, Some(field))
                 } else {
                     (type_.to_string(), None)

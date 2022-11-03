@@ -157,6 +157,7 @@ export type GetObjectDataResponse = {
 export type ObjectDigest = string;
 export type ObjectId = string;
 export type SequenceNumber = number;
+export type Order = 'ascending' | 'descending';
 
 /* -------------------------------------------------------------------------- */
 /*                              Helper functions                              */

@@ -20,7 +20,8 @@ use sui_types::base_types::ObjectID;
 use sui_types::base_types::TransactionDigest;
 use sui_types::gas_coin::GAS;
 use sui_types::messages::ExecuteTransactionRequestType;
-use sui_types::query::{Ordering, TransactionQuery};
+use sui_types::object::Owner;
+use sui_types::query::{EventQuery, TransactionQuery};
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 use test_utils::network::TestClusterBuilder;
 
@@ -301,7 +302,7 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
     // test get_recent_transactions with smaller range
     let tx = client
         .read_api()
-        .get_transactions(TransactionQuery::All, None, Some(3), Ordering::Descending)
+        .get_transactions(TransactionQuery::All, None, Some(3), Some(true))
         .await
         .unwrap();
     assert_eq!(3, tx.data.len());
@@ -309,7 +310,7 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
     // test get all transactions paged
     let first_page = client
         .read_api()
-        .get_transactions(TransactionQuery::All, None, Some(5), Ordering::Ascending)
+        .get_transactions(TransactionQuery::All, None, Some(5), None)
         .await
         .unwrap();
     assert_eq!(5, first_page.data.len());
@@ -318,12 +319,7 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
     // test get all transactions in ascending order
     let second_page = client
         .read_api()
-        .get_transactions(
-            TransactionQuery::All,
-            first_page.next_cursor,
-            None,
-            Ordering::Ascending,
-        )
+        .get_transactions(TransactionQuery::All, first_page.next_cursor, None, None)
         .await
         .unwrap();
     assert_eq!(15, second_page.data.len());
@@ -336,7 +332,7 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
     // test get 10 latest transactions paged
     let latest = client
         .read_api()
-        .get_transactions(TransactionQuery::All, None, Some(10), Ordering::Descending)
+        .get_transactions(TransactionQuery::All, None, Some(10), Some(true))
         .await
         .unwrap();
     assert_eq!(10, latest.data.len());
@@ -351,7 +347,7 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
             TransactionQuery::FromAddress(cluster.accounts[0]),
             None,
             None,
-            Ordering::Ascending,
+            None,
         )
         .await
         .unwrap();
@@ -364,7 +360,7 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
             TransactionQuery::FromAddress(cluster.accounts[0]),
             None,
             None,
-            Ordering::Descending,
+            Some(true),
         )
         .await
         .unwrap();
@@ -378,7 +374,7 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
     // test get_recent_transactions
     let tx = client
         .read_api()
-        .get_transactions(TransactionQuery::All, None, Some(20), Ordering::Descending)
+        .get_transactions(TransactionQuery::All, None, Some(20), Some(true))
         .await
         .unwrap();
     assert_eq!(20, tx.data.len());
@@ -394,6 +390,125 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
             .transaction_digest
             == response.effects.transaction_digest))
     }
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_get_fullnode_events() -> Result<(), anyhow::Error> {
+    let cluster = TestClusterBuilder::new()
+        .set_fullnode_rpc_port(get_available_port())
+        .build()
+        .await
+        .unwrap();
+    let client = cluster.wallet.client;
+    let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
+    let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
+    let mut tx_responses = Vec::new();
+
+    for address in cluster.accounts.iter() {
+        let objects = client
+            .read_api()
+            .get_objects_owned_by_address(*address)
+            .await
+            .unwrap();
+        let gas_id = objects.last().unwrap().object_id;
+
+        // Make some transactions
+        for oref in &objects[..objects.len() - 1] {
+            let data = client
+                .transaction_builder()
+                .transfer_object(*address, oref.object_id, Some(gas_id), 1000, *address)
+                .await?;
+            let tx = to_sender_signed_transaction(data, keystore.get_key(address).unwrap());
+
+            let response = client
+                .quorum_driver()
+                .execute_transaction(
+                    tx,
+                    Some(ExecuteTransactionRequestType::WaitForLocalExecution),
+                )
+                .await
+                .unwrap();
+
+            tx_responses.push(response);
+        }
+    }
+
+    // test get all events ascending
+    let page1 = client
+        .event_api()
+        .get_events(EventQuery::All, Some((2, 0).into()), Some(3), None)
+        .await
+        .unwrap();
+    assert_eq!(3, page1.data.len());
+    assert_eq!(Some((5, 0).into()), page1.next_cursor);
+    let page2 = client
+        .event_api()
+        .get_events(EventQuery::All, Some((5, 0).into()), Some(20), None)
+        .await
+        .unwrap();
+    assert_eq!(15, page2.data.len());
+    assert_eq!(None, page2.next_cursor);
+
+    // test get all events descending
+    let page1 = client
+        .event_api()
+        .get_events(EventQuery::All, None, Some(3), Some(true))
+        .await
+        .unwrap();
+    assert_eq!(3, page1.data.len());
+    assert_eq!(Some((16, 0).into()), page1.next_cursor);
+    let page2 = client
+        .event_api()
+        .get_events(EventQuery::All, Some((16, 0).into()), None, Some(true))
+        .await
+        .unwrap();
+    assert_eq!(17, page2.data.len());
+    assert_eq!(None, page2.next_cursor);
+
+    // test get sender events
+    let page = client
+        .event_api()
+        .get_events(
+            EventQuery::Sender(cluster.accounts[0]),
+            None,
+            Some(10),
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(4, page.data.len());
+
+    // test get recipient events
+    let page = client
+        .event_api()
+        .get_events(
+            EventQuery::Recipient(Owner::AddressOwner(cluster.accounts[1])),
+            None,
+            Some(10),
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(4, page.data.len());
+
+    let object = client
+        .read_api()
+        .get_objects_owned_by_address(cluster.accounts[2])
+        .await
+        .unwrap()
+        .last()
+        .unwrap()
+        .object_id;
+
+    // test get object events
+    let page = client
+        .event_api()
+        .get_events(EventQuery::Object(object), None, Some(10), None)
+        .await
+        .unwrap();
+    assert_eq!(4, page.data.len());
 
     Ok(())
 }

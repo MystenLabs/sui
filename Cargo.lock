@@ -8653,6 +8653,7 @@ dependencies = [
  "fdlimit",
  "flexstr",
  "futures",
+ "move-bytecode-utils",
  "move-core-types",
  "num_cpus",
  "once_cell",
