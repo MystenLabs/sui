@@ -518,6 +518,7 @@ struct PrimaryReceiverHandler {
     payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
 }
 
+#[allow(clippy::result_large_err)]
 impl PrimaryReceiverHandler {
     fn find_next_round(
         &self,
