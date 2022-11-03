@@ -119,7 +119,6 @@ async fn test_get_collections() {
         store.proposer_store.clone(),
         store.payload_store.clone(),
         store.vote_digest_store,
-        store.consensus_store,
         /* tx_consensus */ tx_new_certificates,
         /* rx_consensus */ rx_feedback,
         /* dag */
@@ -314,7 +313,6 @@ async fn test_remove_collections() {
         store.proposer_store.clone(),
         store.payload_store.clone(),
         store.vote_digest_store.clone(),
-        store.consensus_store,
         /* tx_consensus */ tx_new_certificates,
         /* rx_consensus */ rx_feedback,
         /* dag */ Some(dag.clone()),
@@ -526,7 +524,6 @@ async fn test_read_causal_signed_certificates() {
         primary_store_1.proposer_store.clone(),
         primary_store_1.payload_store.clone(),
         primary_store_1.vote_digest_store.clone(),
-        primary_store_1.consensus_store,
         /* tx_consensus */ tx_new_certificates,
         /* rx_consensus */ rx_feedback,
         /* dag */ Some(dag.clone()),
@@ -566,7 +563,6 @@ async fn test_read_causal_signed_certificates() {
         primary_store_2.proposer_store,
         primary_store_2.payload_store,
         primary_store_2.vote_digest_store,
-        primary_store_2.consensus_store,
         /* tx_consensus */ tx_new_certificates_2,
         /* rx_consensus */ rx_feedback_2,
         /* external_consensus */
@@ -739,7 +735,6 @@ async fn test_read_causal_unsigned_certificates() {
         primary_store_1.proposer_store.clone(),
         primary_store_1.payload_store.clone(),
         primary_store_1.vote_digest_store.clone(),
-        primary_store_1.consensus_store,
         /* tx_consensus */ tx_new_certificates,
         /* rx_consensus */ rx_feedback,
         /* dag */ Some(dag.clone()),
@@ -772,7 +767,6 @@ async fn test_read_causal_unsigned_certificates() {
         primary_store_2.proposer_store,
         primary_store_2.payload_store,
         primary_store_2.vote_digest_store,
-        primary_store_2.consensus_store,
         /* tx_consensus */ tx_new_certificates_2,
         /* rx_consensus */ rx_feedback_2,
         /* external_consensus */
@@ -938,7 +932,6 @@ async fn test_get_collections_with_missing_certificates() {
         store_primary_1.proposer_store,
         store_primary_1.payload_store,
         store_primary_1.vote_digest_store,
-        store_primary_1.consensus_store,
         /* tx_consensus */ tx_new_certificates_1,
         /* rx_consensus */ rx_feedback_1,
         /* external_consensus */
@@ -999,7 +992,6 @@ async fn test_get_collections_with_missing_certificates() {
         store_primary_2.proposer_store,
         store_primary_2.payload_store,
         store_primary_2.vote_digest_store,
-        store_primary_2.consensus_store,
         /* tx_consensus */ tx_new_certificates_2,
         /* rx_consensus */ rx_feedback_2,
         /* external_consensus */

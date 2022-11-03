@@ -58,10 +58,7 @@ async fn deliver_certificate_using_dag() {
     let test_certificate = certificates.pop_back().unwrap();
 
     // ensure that the certificate parents are found
-    let parents_available = synchronizer
-        .deliver_certificate(&test_certificate)
-        .await
-        .unwrap();
+    let parents_available = synchronizer.check_parents(&test_certificate).await.unwrap();
     assert!(parents_available);
 }
 
@@ -111,10 +108,7 @@ async fn deliver_certificate_using_store() {
     let test_certificate = certificates.pop_back().unwrap();
 
     // ensure that the certificate parents are found
-    let parents_available = synchronizer
-        .deliver_certificate(&test_certificate)
-        .await
-        .unwrap();
+    let parents_available = synchronizer.check_parents(&test_certificate).await.unwrap();
     assert!(parents_available);
 }
 
@@ -159,10 +153,7 @@ async fn deliver_certificate_not_found_parents() {
     let test_certificate = certificates.pop_back().unwrap();
 
     // we try to find the certificate's parents
-    let parents_available = synchronizer
-        .deliver_certificate(&test_certificate)
-        .await
-        .unwrap();
+    let parents_available = synchronizer.check_parents(&test_certificate).await.unwrap();
 
     // and we should fail
     assert!(!parents_available);
