@@ -31,8 +31,8 @@ module sui::coin {
         balance: Balance<T>
     }
 
-    /// Each Coin<T> will have a unique instance of CoinMetadata<T> that
-    /// stores the metadata for this coin type.
+    /// Each Coin type T created through `create_currency` function will have a 
+    /// unique instance of CoinMetadata<T> that stores the metadata for this coin type.
     struct CoinMetadata<phantom T> has key, store {
         id: UID,
         /// Number of decimal places the coin uses.
@@ -272,13 +272,6 @@ module sui::coin {
     }
 
     // === Update coin metadata ===
-
-    /// Update decimals in `CoinMetadata`
-    public entry fun update_decimals<T>(
-        _treasury: &TreasuryCap<T>, metadata: &mut CoinMetadata<T>, decimals: u8
-    ) {
-        metadata.decimals = decimals;
-    }
 
     /// Update name of the coin in `CoinMetadata`
     public entry fun update_name<T>(

@@ -35,7 +35,6 @@ tokens and coins. <code><a href="coin.md#0x2_coin_Coin">Coin</a></code> can be d
 -  [Function `burn`](#0x2_coin_burn)
 -  [Function `mint_and_transfer`](#0x2_coin_mint_and_transfer)
 -  [Function `burn_`](#0x2_coin_burn_)
--  [Function `update_decimals`](#0x2_coin_update_decimals)
 -  [Function `update_name`](#0x2_coin_update_name)
 -  [Function `update_symbol`](#0x2_coin_update_symbol)
 -  [Function `update_description`](#0x2_coin_update_description)
@@ -94,8 +93,8 @@ A coin of type <code>T</code> worth <code>value</code>. Transferable and storabl
 
 ## Resource `CoinMetadata`
 
-Each Coin<T> will have a unique instance of CoinMetadata<T> that
-stores the metadata for this coin type.
+Each Coin type T created through <code>create_currency</code> function will have a
+unique instance of CoinMetadata<T> that stores the metadata for this coin type.
 
 
 <pre><code><b>struct</b> <a href="coin.md#0x2_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt; <b>has</b> store, key
@@ -886,33 +885,6 @@ Burn a Coin and reduce the total_supply. Invokes <code><a href="coin.md#0x2_coin
 
 </details>
 
-<a name="0x2_coin_update_decimals"></a>
-
-## Function `update_decimals`
-
-Update decimals in <code><a href="coin.md#0x2_coin_CoinMetadata">CoinMetadata</a></code>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_update_decimals">update_decimals</a>&lt;T&gt;(_treasury: &<a href="coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;, metadata: &<b>mut</b> <a href="coin.md#0x2_coin_CoinMetadata">coin::CoinMetadata</a>&lt;T&gt;, decimals: u8)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> entry <b>fun</b> <a href="coin.md#0x2_coin_update_decimals">update_decimals</a>&lt;T&gt;(
-    _treasury: &<a href="coin.md#0x2_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;, metadata: &<b>mut</b> <a href="coin.md#0x2_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt;, decimals: u8
-) {
-    metadata.decimals = decimals;
-}
-</code></pre>
-
-
-
-</details>
-
 <a name="0x2_coin_update_name"></a>
 
 ## Function `update_name`
@@ -920,7 +892,7 @@ Update decimals in <code><a href="coin.md#0x2_coin_CoinMetadata">CoinMetadata</a
 Update name of the coin in <code><a href="coin.md#0x2_coin_CoinMetadata">CoinMetadata</a></code>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_update_name">update_name</a>&lt;T&gt;(_treasury: &<a href="coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;, metadata: &<b>mut</b> <a href="coin.md#0x2_coin_CoinMetadata">coin::CoinMetadata</a>&lt;T&gt;, name: <a href="_String">string::String</a>)
+<pre><code><b>public</b> entry <b>fun</b> <a href="coin.md#0x2_coin_update_name">update_name</a>&lt;T&gt;(_treasury: &<a href="coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;, metadata: &<b>mut</b> <a href="coin.md#0x2_coin_CoinMetadata">coin::CoinMetadata</a>&lt;T&gt;, name: <a href="_String">string::String</a>)
 </code></pre>
 
 
@@ -947,7 +919,7 @@ Update name of the coin in <code><a href="coin.md#0x2_coin_CoinMetadata">CoinMet
 Update the symbol of the coin in <code><a href="coin.md#0x2_coin_CoinMetadata">CoinMetadata</a></code>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_update_symbol">update_symbol</a>&lt;T&gt;(_treasury: &<a href="coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;, metadata: &<b>mut</b> <a href="coin.md#0x2_coin_CoinMetadata">coin::CoinMetadata</a>&lt;T&gt;, symbol: <a href="_String">ascii::String</a>)
+<pre><code><b>public</b> entry <b>fun</b> <a href="coin.md#0x2_coin_update_symbol">update_symbol</a>&lt;T&gt;(_treasury: &<a href="coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;, metadata: &<b>mut</b> <a href="coin.md#0x2_coin_CoinMetadata">coin::CoinMetadata</a>&lt;T&gt;, symbol: <a href="_String">ascii::String</a>)
 </code></pre>
 
 
@@ -974,7 +946,7 @@ Update the symbol of the coin in <code><a href="coin.md#0x2_coin_CoinMetadata">C
 Update the description of the coin in <code><a href="coin.md#0x2_coin_CoinMetadata">CoinMetadata</a></code>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_update_description">update_description</a>&lt;T&gt;(_treasury: &<a href="coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;, metadata: &<b>mut</b> <a href="coin.md#0x2_coin_CoinMetadata">coin::CoinMetadata</a>&lt;T&gt;, description: <a href="_String">string::String</a>)
+<pre><code><b>public</b> entry <b>fun</b> <a href="coin.md#0x2_coin_update_description">update_description</a>&lt;T&gt;(_treasury: &<a href="coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;, metadata: &<b>mut</b> <a href="coin.md#0x2_coin_CoinMetadata">coin::CoinMetadata</a>&lt;T&gt;, description: <a href="_String">string::String</a>)
 </code></pre>
 
 
@@ -1001,7 +973,7 @@ Update the description of the coin in <code><a href="coin.md#0x2_coin_CoinMetada
 Update the url of the coin in <code><a href="coin.md#0x2_coin_CoinMetadata">CoinMetadata</a></code>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_update_icon_url">update_icon_url</a>&lt;T&gt;(_treasury: &<a href="coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;, metadata: &<b>mut</b> <a href="coin.md#0x2_coin_CoinMetadata">coin::CoinMetadata</a>&lt;T&gt;, <a href="url.md#0x2_url">url</a>: <a href="_String">ascii::String</a>)
+<pre><code><b>public</b> entry <b>fun</b> <a href="coin.md#0x2_coin_update_icon_url">update_icon_url</a>&lt;T&gt;(_treasury: &<a href="coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;, metadata: &<b>mut</b> <a href="coin.md#0x2_coin_CoinMetadata">coin::CoinMetadata</a>&lt;T&gt;, <a href="url.md#0x2_url">url</a>: <a href="_String">ascii::String</a>)
 </code></pre>
 
 
