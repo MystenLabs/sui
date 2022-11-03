@@ -45,9 +45,14 @@ export class Coin {
     return Coin.getType(data)?.startsWith(COIN_TYPE) ?? false;
   }
 
+  static getCoinType(type: string) {
+    const [, res] = type.match(COIN_TYPE_ARG_REGEX) ?? [];
+    return res || null;
+  }
+
   static getCoinTypeArg(obj: ObjectData) {
-    const res = Coin.getType(obj)?.match(COIN_TYPE_ARG_REGEX);
-    return res ? res[1] : null;
+    const type = Coin.getType(obj);
+    return type ? Coin.getCoinType(type) : null;
   }
 
   static isSUI(obj: ObjectData) {

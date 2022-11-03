@@ -155,15 +155,15 @@ describe('End-to-end Tests', () => {
 
             cy.visit(`/addresses/${address}`);
 
-            cy.get(`${rowCSSSelector(1)} ${label}`).contains('0x2::USD::USD');
+            cy.get(`${rowCSSSelector(1)} ${label}`).contains('USD');
             cy.get(`${rowCSSSelector(1)} ${count}`).contains('2');
             cy.get(`${rowCSSSelector(1)} ${balance}`).contains(
-                '9007199254740993'
+                '9,007,199,254,740,993'
             );
 
             cy.get(`${rowCSSSelector(2)} ${label}`).contains('SUI');
             cy.get(`${rowCSSSelector(2)} ${count}`).contains('2');
-            cy.get(`${rowCSSSelector(2)} ${balance}`).contains('200');
+            cy.get(`${rowCSSSelector(2)} ${balance}`).contains('0.0000002');
         });
     });
 
