@@ -2,21 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
+    type JsonRpcProvider,
     type ExecutionStatusType,
     type TransactionKindName,
 } from '@mysten/sui.js';
 import { useQuery } from '@tanstack/react-query';
 import cl from 'clsx';
-import { useState, useContext, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 
 import { ReactComponent as ArrowRight } from '../../assets/SVGIcons/12px/ArrowRight.svg';
 import TabFooter from '../../components/tabs/TabFooter';
-import { NetworkContext } from '../../context';
-import {
-    DefaultRpcClient as rpc,
-    type Network,
-} from '../../utils/api/DefaultRpcClient';
 import { IS_STATIC_ENV } from '../../utils/envUtil';
 import { getAllMockTransaction } from '../../utils/static/searchUtil';
 import Pagination from '../pagination/Pagination';
@@ -28,6 +24,7 @@ import {
 
 import styles from './RecentTxCard.module.css';
 
+import { useRpc } from '~/hooks/useRpc';
 import { Banner } from '~/ui/Banner';
 import { PlaceholderTable } from '~/ui/PlaceholderTable';
 import { TableCard } from '~/ui/TableCard';
@@ -70,7 +67,7 @@ const getRecentTransactionsStatic = (): Promise<TxnData[]> => {
 
 // TOD0: Optimize this method to use fewer API calls. Move the total tx count to this component.
 async function getRecentTransactions(
-    network: Network | string,
+    rpc: JsonRpcProvider,
     totalTx: number,
     txNum: number,
     pageNum?: number
@@ -91,14 +88,14 @@ async function getRecentTransactions(
     if (endGatewayTxSeqNumber < 0) {
         throw new Error('Invalid transaction number');
     }
-    const transactionDigests = await rpc(network).getTransactionDigestsInRange(
+    const transactionDigests = await rpc.getTransactionDigestsInRange(
         startGatewayTxSeqNumber,
         endGatewayTxSeqNumber
     );
 
     // result returned by getTransactionDigestsInRange is in ascending order
     const transactionData = await getDataOnTxDigests(
-        network,
+        rpc,
         [...transactionDigests].reverse()
     );
 
@@ -124,7 +121,7 @@ export function LatestTxCard({
         initialTxPerPage || NUMBER_OF_TX_PER_PAGE
     );
 
-    const [network] = useContext(NetworkContext);
+    const rpc = useRpc();
     const [searchParams, setSearchParams] = useSearchParams();
 
     const [pageIndex, setPageIndex] = useState(
@@ -142,7 +139,7 @@ export function LatestTxCard({
     const countQuery = useQuery(
         ['transactions', 'count'],
         () => {
-            return rpc(network).getTotalTransactionNumber();
+            return rpc.getTotalTransactionNumber();
         },
         {
             staleTime: TRANSACTION_STALE_TIME,
@@ -162,7 +159,7 @@ export function LatestTxCard({
             const maxTxPage = Math.ceil(count / txPerPage);
             const pg = pageIndex > maxTxPage ? maxTxPage : pageIndex;
 
-            return getRecentTransactions(network, count, txPerPage, pg);
+            return getRecentTransactions(rpc, count, txPerPage, pg);
         },
         {
             enabled: countQuery.isFetched,

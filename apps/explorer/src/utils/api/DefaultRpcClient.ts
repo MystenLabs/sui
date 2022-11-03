@@ -8,6 +8,7 @@ import { getEndpoint, Network } from './rpcSetting';
 export { Network, getEndpoint };
 
 const defaultRpcMap: Map<Network | string, JsonRpcProvider> = new Map();
+/** @deprecated This shouldn't be directly used, and instead should be used through `useRpc()`. */
 export const DefaultRpcClient = (network: Network | string) => {
     const existingClient = defaultRpcMap.get(network);
     if (existingClient) return existingClient;
