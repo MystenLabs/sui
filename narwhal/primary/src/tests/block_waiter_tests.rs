@@ -36,7 +36,7 @@ async fn test_successfully_retrieve_block() {
         .build(author.keypair())
         .unwrap();
     let certificate = fixture.certificate(&header);
-    let block_id = certificate.digest();
+    let digest = certificate.digest();
 
     let network = test_network(primary.network_keypair(), primary.address());
 
@@ -50,10 +50,10 @@ async fn test_successfully_retrieve_block() {
 
     // Mock the batch responses.
     let expected_block_count = header.payload.len();
-    for (batch_id, _) in header.payload {
+    for (batch_digest, _) in header.payload {
         mock_server
             .expect_request_batch()
-            .withf(move |request| request.body().batch == batch_id)
+            .withf(move |request| request.body().batch == batch_digest)
             .returning(|_| {
                 Ok(anemo::Response::new(RequestBatchResponse {
                     batch: Some(Batch::new(vec![vec![10u8, 5u8, 2u8], vec![8u8, 2u8, 3u8]])),
@@ -74,7 +74,7 @@ async fn test_successfully_retrieve_block() {
     let mut mock_handler = MockHandler::new();
     mock_handler
         .expect_get_and_synchronize_block_headers()
-        .with(predicate::eq(vec![block_id]))
+        .with(predicate::eq(vec![digest]))
         .times(1)
         .return_const(vec![Ok(certificate.clone())]);
 
@@ -91,13 +91,13 @@ async fn test_successfully_retrieve_block() {
         P2pNetwork::new(network),
         Arc::new(mock_handler),
     );
-    let mut response = block_waiter.get_blocks(vec![block_id]).await.unwrap();
+    let mut response = block_waiter.get_blocks(vec![digest]).await.unwrap();
 
     // THEN we should expect to get back the correct result
     assert_eq!(1, response.blocks.len());
     let block = response.blocks.remove(0).unwrap();
     assert_eq!(block.batches.len(), expected_block_count);
-    assert_eq!(block.digest, block_id.clone());
+    assert_eq!(block.digest, digest.clone());
     for batch in block.batches {
         assert_eq!(batch.batch.transactions.len(), 2);
     }
@@ -113,7 +113,7 @@ async fn test_successfully_retrieve_multiple_blocks() {
     let primary = fixture.authorities().nth(1).unwrap();
     let name = primary.public_key();
 
-    let mut block_ids = Vec::new();
+    let mut digests = Vec::new();
     let mut mock_server = MockWorkerToWorker::new();
     let worker_id = 0;
     let mut expected_get_block_responses = Vec::new();
@@ -196,7 +196,7 @@ async fn test_successfully_retrieve_multiple_blocks() {
         let certificate = fixture.certificate(&header);
         certificates.push(certificate.clone());
 
-        block_ids.push(certificate.digest());
+        digests.push(certificate.digest());
 
         expected_get_block_responses.push(Ok(GetBlockResponse {
             digest: certificate.digest(),
@@ -205,13 +205,13 @@ async fn test_successfully_retrieve_multiple_blocks() {
     }
 
     // AND add a missing block as well
-    let missing_block_id = CertificateDigest::default();
+    let missing_digest = CertificateDigest::default();
     expected_get_block_responses.push(Err(BlockError {
-        digest: missing_block_id,
+        digest: missing_digest,
         error: BlockErrorKind::BlockNotFound,
     }));
 
-    block_ids.push(missing_block_id);
+    digests.push(missing_digest);
 
     // AND the expected get blocks response
     let expected_get_blocks_response = GetBlocksResponse {
@@ -240,13 +240,13 @@ async fn test_successfully_retrieve_multiple_blocks() {
         certificates.clone().into_iter().map(Ok).collect();
 
     expected_result.push(Err(handler::Error::BlockNotFound {
-        block_id: missing_block_id,
+        digest: missing_digest,
     }));
 
     let mut mock_handler = MockHandler::new();
     mock_handler
         .expect_get_and_synchronize_block_headers()
-        .with(predicate::eq(block_ids.clone()))
+        .with(predicate::eq(digests.clone()))
         .times(1)
         .return_const(expected_result.clone());
 
@@ -263,7 +263,7 @@ async fn test_successfully_retrieve_multiple_blocks() {
         P2pNetwork::new(network),
         Arc::new(mock_handler),
     );
-    let response = block_waiter.get_blocks(block_ids).await.unwrap();
+    let response = block_waiter.get_blocks(digests).await.unwrap();
 
     // THEN we should expect to get back the correct result
     assert_eq!(response, expected_get_blocks_response);
@@ -279,15 +279,15 @@ async fn test_return_error_when_certificate_is_missing() {
 
     // AND create a certificate but don't store it
     let certificate = Certificate::default();
-    let block_id = certificate.digest();
+    let digest = certificate.digest();
 
     // AND mock the responses of the BlockSynchronizer
     let mut mock_handler = MockHandler::new();
     mock_handler
         .expect_get_and_synchronize_block_headers()
-        .with(predicate::eq(vec![block_id]))
+        .with(predicate::eq(vec![digest]))
         .times(1)
-        .return_const(vec![Err(handler::Error::BlockDeliveryTimeout { block_id })]);
+        .return_const(vec![Err(handler::Error::BlockDeliveryTimeout { digest })]);
     mock_handler
         .expect_synchronize_block_payloads()
         .with(predicate::eq(vec![]))
@@ -303,14 +303,14 @@ async fn test_return_error_when_certificate_is_missing() {
         P2pNetwork::new(network),
         Arc::new(mock_handler),
     );
-    let mut response = block_waiter.get_blocks(vec![block_id]).await.unwrap();
+    let mut response = block_waiter.get_blocks(vec![digest]).await.unwrap();
 
     // THEN we should expect to get back the error
     assert_eq!(1, response.blocks.len());
     let block = response.blocks.remove(0);
     assert!(block.is_err());
     let block_error = block.err().unwrap();
-    assert_eq!(block_error.digest, block_id.clone());
+    assert_eq!(block_error.digest, digest.clone());
     assert_eq!(block_error.error, BlockErrorKind::BlockNotFound);
 }
 
@@ -324,15 +324,15 @@ async fn test_return_error_when_certificate_is_missing_when_get_blocks() {
 
     // AND create a certificate but don't store it
     let certificate = Certificate::default();
-    let block_id = certificate.digest();
+    let digest = certificate.digest();
 
     // AND mock the responses of the BlockSynchronizer
     let mut mock_handler = MockHandler::new();
     mock_handler
         .expect_get_and_synchronize_block_headers()
-        .with(predicate::eq(vec![block_id]))
+        .with(predicate::eq(vec![digest]))
         .times(1)
-        .return_const(vec![Err(handler::Error::BlockNotFound { block_id })]);
+        .return_const(vec![Err(handler::Error::BlockNotFound { digest })]);
 
     // AND mock the response when we request to synchronise the payloads for non
     // found certificates
@@ -351,10 +351,10 @@ async fn test_return_error_when_certificate_is_missing_when_get_blocks() {
         P2pNetwork::new(network),
         Arc::new(mock_handler),
     );
-    let response = block_waiter.get_blocks(vec![block_id]).await.unwrap();
+    let response = block_waiter.get_blocks(vec![digest]).await.unwrap();
     let r = response.blocks.get(0).unwrap().to_owned();
     let block_error = r.err().unwrap();
 
-    assert_eq!(block_error.digest, block_id.clone());
+    assert_eq!(block_error.digest, digest.clone());
     assert_eq!(block_error.error, BlockErrorKind::BlockNotFound);
 }

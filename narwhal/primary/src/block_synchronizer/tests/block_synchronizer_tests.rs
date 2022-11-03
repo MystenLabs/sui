@@ -129,7 +129,7 @@ async fn test_successful_headers_synchronization() {
     // WHEN
     tx_commands
         .send(Command::SynchronizeBlockHeaders {
-            block_ids: certificates.keys().copied().collect(),
+            digests: certificates.keys().copied().collect(),
             respond_to: tx_synchronize,
         })
         .await
@@ -249,9 +249,9 @@ async fn test_successful_payload_synchronization() {
                 Ok(anemo::Response::new(PayloadAvailabilityResponse {
                     payload_availability: request
                         .body()
-                        .certificate_ids
+                        .certificate_digests
                         .iter()
-                        .map(|id| (*id, certificates.contains_key(id)))
+                        .map(|digest| (*digest, certificates.contains_key(digest)))
                         .collect(),
                 }))
             });
@@ -310,8 +310,8 @@ async fn test_successful_payload_synchronization() {
             for m in sync_messages {
                 // Assume that the request is the correct one and just immediately
                 // store the batch to the payload store.
-                for batch_id in m.digests {
-                    payload_store.async_write((batch_id, worker), 1).await;
+                for digest in m.digests {
+                    payload_store.async_write((digest, worker), 1).await;
                 }
             }
         }
@@ -370,8 +370,8 @@ async fn test_timeout_while_waiting_for_certificates() {
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
     let (tx_commands, rx_block_synchronizer_commands) = test_utils::test_channel!(10);
 
-    // AND some random block ids
-    let block_ids: Vec<CertificateDigest> = (0..10)
+    // AND some random block digests
+    let digests: Vec<CertificateDigest> = (0..10)
         .into_iter()
         .map(|_| {
             let header = author
@@ -418,7 +418,7 @@ async fn test_timeout_while_waiting_for_certificates() {
     // WHEN
     tx_commands
         .send(Command::SynchronizeBlockHeaders {
-            block_ids: block_ids.clone(),
+            digests: digests.clone(),
             respond_to: tx_synchronize,
         })
         .await
@@ -431,7 +431,7 @@ async fn test_timeout_while_waiting_for_certificates() {
 
     let mut total_results_received = 0;
 
-    let mut block_ids_seen: HashSet<CertificateDigest> = HashSet::new();
+    let mut digests_seen: HashSet<CertificateDigest> = HashSet::new();
 
     loop {
         tokio::select! {
@@ -439,10 +439,10 @@ async fn test_timeout_while_waiting_for_certificates() {
                 assert!(result.is_err(), "Expected error result, instead received: {:?}", result.unwrap());
 
                 match result.err().unwrap() {
-                    SyncError::Timeout { block_id } => {
+                    SyncError::Timeout { digest } => {
                         // ensure the results are unique and within the expected set
-                        assert!(block_ids_seen.insert(block_id), "Already received response for this block id - this shouldn't happen");
-                        assert!(block_ids.iter().any(|d|d.eq(&block_id)), "Received not expected block id");
+                        assert!(digests_seen.insert(digest), "Already received response for this block digest - this shouldn't happen");
+                        assert!(digests.iter().any(|d|d.eq(&digest)), "Received not expected block digest");
                     },
                     err => panic!("Didn't expect this sync error: {:?}", err)
                 }
@@ -450,7 +450,7 @@ async fn test_timeout_while_waiting_for_certificates() {
                 total_results_received += 1;
 
                 // received all expected results, now break
-                if total_results_received == block_ids.as_slice().len() {
+                if total_results_received == digests.as_slice().len() {
                     break;
                 }
             },
@@ -502,7 +502,7 @@ async fn test_reply_with_certificates_already_in_storage() {
     };
 
     let mut certificates: HashMap<CertificateDigest, Certificate> = HashMap::new();
-    let mut block_ids = Vec::new();
+    let mut digests = Vec::new();
     const NUM_OF_MISSING_CERTIFICATES: u32 = 5;
 
     // AND storing some certificates
@@ -517,7 +517,7 @@ async fn test_reply_with_certificates_already_in_storage() {
 
         let certificate = fixture.certificate(&header);
 
-        block_ids.push(certificate.digest());
+        digests.push(certificate.digest());
         certificates.insert(certificate.clone().digest(), certificate.clone());
 
         if i > NUM_OF_MISSING_CERTIFICATES {
@@ -530,7 +530,7 @@ async fn test_reply_with_certificates_already_in_storage() {
 
     // WHEN
     let missing_certificates = synchronizer
-        .reply_with_certificates_already_in_storage(block_ids, tx)
+        .reply_with_certificates_already_in_storage(digests, tx)
         .await;
 
     // THEN some missing certificates exist

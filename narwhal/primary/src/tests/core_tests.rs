@@ -114,7 +114,7 @@ async fn process_header() {
     }
 
     // Ensure the header is correctly stored.
-    let stored = header_store.read(header.id()).await.unwrap();
+    let stored = header_store.read(header.digest()).await.unwrap();
     assert_eq!(stored, Some(header.clone()));
 
     let mut m = HashMap::new();
@@ -223,14 +223,14 @@ async fn process_header_missing_parent() {
         .build(primary.keypair())
         .unwrap();
 
-    let id = header.id();
+    let digest = header.digest();
     tx_primary_messages
         .send(PrimaryMessage::Header(header))
         .await
         .unwrap();
 
     // Ensure the header is not stored.
-    assert!(header_store.read(id).await.unwrap().is_none());
+    assert!(header_store.read(digest).await.unwrap().is_none());
 }
 
 #[tokio::test]
@@ -311,14 +311,14 @@ async fn process_header_missing_payload() {
         .build(author.keypair())
         .unwrap();
 
-    let id = header.id();
+    let digest = header.digest();
     tx_primary_messages
         .send(PrimaryMessage::Header(header))
         .await
         .unwrap();
 
     // Ensure the header is not stored.
-    assert!(header_store.read(id).await.unwrap().is_none());
+    assert!(header_store.read(digest).await.unwrap().is_none());
 }
 
 #[tokio::test]
@@ -1204,6 +1204,6 @@ async fn reconfigure_core() {
     }
 
     // Ensure the header is correctly stored.
-    let stored = header_store.read(header.id()).await.unwrap();
+    let stored = header_store.read(header.digest()).await.unwrap();
     assert_eq!(stored, Some(header));
 }

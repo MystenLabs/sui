@@ -181,7 +181,7 @@ impl<SynchronizerHandler: Handler + Send + Sync + 'static> BlockWaiter<Synchroni
             if let Ok(certificate) = result {
                 results.push((certificate.digest(), Some(certificate)));
             } else {
-                results.push((result.err().unwrap().block_id(), None));
+                results.push((result.err().unwrap().digest(), None));
             }
         }
 

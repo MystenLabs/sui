@@ -53,8 +53,8 @@ impl NodeStorage {
     const VOTES_CF: &'static str = "votes";
     const HEADERS_CF: &'static str = "headers";
     const CERTIFICATES_CF: &'static str = "certificates";
-    const CERTIFICATE_ID_BY_ROUND_CF: &'static str = "certificate_id_by_round";
-    const CERTIFICATE_ID_BY_ORIGIN_CF: &'static str = "certificate_id_by_origin";
+    const CERTIFICATE_DIGEST_BY_ROUND_CF: &'static str = "certificate_digest_by_round";
+    const CERTIFICATE_DIGEST_BY_ORIGIN_CF: &'static str = "certificate_digest_by_origin";
     const PAYLOAD_CF: &'static str = "payload";
     const BATCHES_CF: &'static str = "batches";
     const LAST_COMMITTED_CF: &'static str = "last_committed";
@@ -71,8 +71,8 @@ impl NodeStorage {
                 Self::VOTES_CF,
                 Self::HEADERS_CF,
                 Self::CERTIFICATES_CF,
-                Self::CERTIFICATE_ID_BY_ROUND_CF,
-                Self::CERTIFICATE_ID_BY_ORIGIN_CF,
+                Self::CERTIFICATE_DIGEST_BY_ROUND_CF,
+                Self::CERTIFICATE_DIGEST_BY_ORIGIN_CF,
                 Self::PAYLOAD_CF,
                 Self::BATCHES_CF,
                 Self::LAST_COMMITTED_CF,
@@ -87,8 +87,8 @@ impl NodeStorage {
             votes_map,
             header_map,
             certificate_map,
-            certificate_id_by_round_map,
-            certificate_id_by_origin_map,
+            certificate_digest_by_round_map,
+            certificate_digest_by_origin_map,
             payload_map,
             batch_map,
             last_committed_map,
@@ -99,8 +99,8 @@ impl NodeStorage {
             Self::VOTES_CF;<PublicKey, RoundVoteDigestPair>,
             Self::HEADERS_CF;<HeaderDigest, Header>,
             Self::CERTIFICATES_CF;<CertificateDigest, Certificate>,
-            Self::CERTIFICATE_ID_BY_ROUND_CF;<(Round, PublicKey), CertificateDigest>,
-            Self::CERTIFICATE_ID_BY_ORIGIN_CF;<(PublicKey, Round), CertificateDigest>,
+            Self::CERTIFICATE_DIGEST_BY_ROUND_CF;<(Round, PublicKey), CertificateDigest>,
+            Self::CERTIFICATE_DIGEST_BY_ORIGIN_CF;<(PublicKey, Round), CertificateDigest>,
             Self::PAYLOAD_CF;<(BatchDigest, WorkerId), PayloadToken>,
             Self::BATCHES_CF;<BatchDigest, Batch>,
             Self::LAST_COMMITTED_CF;<PublicKey, Round>,
@@ -113,8 +113,8 @@ impl NodeStorage {
         let header_store = Store::new(header_map);
         let certificate_store = CertificateStore::new(
             certificate_map,
-            certificate_id_by_round_map,
-            certificate_id_by_origin_map,
+            certificate_digest_by_round_map,
+            certificate_digest_by_origin_map,
         );
         let payload_store = Store::new(payload_map);
         let batch_store = Store::new(batch_map);
