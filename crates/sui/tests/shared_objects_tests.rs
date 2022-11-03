@@ -1,11 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
-use sui_core::authority::GatewayStore;
-use sui_core::authority_aggregator::AuthorityAggregatorBuilder;
 use sui_core::authority_client::AuthorityAPI;
-use sui_core::gateway_state::{GatewayAPI, GatewayMetrics, GatewayState};
 use sui_types::messages::{
     CallArg, ExecutionStatus, ObjectArg, ObjectInfoRequest, ObjectInfoRequestKind,
 };
@@ -336,122 +332,5 @@ async fn replay_shared_object_transaction() {
         // Ensure the sequence number of the shared object did not change.
         let ((_, seq, _), _) = effects.created[0];
         assert_eq!(seq, OBJECT_START_VERSION);
-    }
-}
-
-// TODO [gateway-deprecation] remove test case
-#[sim_test]
-async fn shared_object_on_gateway() {
-    let mut gas_objects = test_gas_objects();
-
-    // Get the authority configs and spawn them. Note that it is important to not drop
-    // the handles (or the authorities will stop).
-    let configs = test_authority_configs();
-    let handles = spawn_test_authorities(gas_objects.clone(), &configs).await;
-    let committee_store = handles[0].with(|h| h.state().committee_store().clone());
-    let (aggregator, _) = AuthorityAggregatorBuilder::from_network_config(&configs)
-        .with_committee_store(committee_store)
-        .build()
-        .unwrap();
-    let path = tempfile::tempdir().unwrap().into_path();
-    let gateway_store = Arc::new(GatewayStore::open(&path.join("store"), None).unwrap());
-    let gateway = Arc::new(
-        GatewayState::new_with_authorities(
-            gateway_store,
-            aggregator,
-            GatewayMetrics::new_for_tests(),
-        )
-        .unwrap(),
-    );
-
-    // Publish the move package to all authorities and get the new package ref.
-    let package_ref =
-        publish_counter_package(gas_objects.pop().unwrap(), configs.validator_set()).await;
-
-    // Send a transaction to create a counter.
-    let create_counter_transaction = move_transaction(
-        gas_objects.pop().unwrap(),
-        "counter",
-        "create",
-        package_ref,
-        /* arguments */ Vec::default(),
-    );
-    let resp = gateway
-        .execute_transaction(create_counter_transaction.into_inner())
-        .await
-        .unwrap();
-    let effects = resp.effects;
-    let shared_object_ref = &effects.created[0].reference;
-    let shared_object_arg = ObjectArg::SharedObject {
-        id: shared_object_ref.object_id,
-        initial_shared_version: shared_object_ref.version,
-    };
-    // We need to have one gas object left for the final value check.
-    let last_gas_object = gas_objects.pop().unwrap();
-    let increment_amount = gas_objects.len();
-
-    // It may happen that no authorities manage to get their transaction sequenced by consensus
-    // (we may be unlucky and consensus may drop all our transactions). It would have been nice
-    // to only filter "timeout" errors, but the game way simply returns `anyhow::Error`, this
-    // will be fixed by issue #1717. Note that the gateway has an internal retry mechanism but
-    // it is not an infinite loop.
-    let mut retry = 10;
-    loop {
-        let futures: Vec<_> = gas_objects
-            .iter()
-            .cloned()
-            .map(|gas_object| {
-                let g = gateway.clone();
-                let increment_counter_transaction = move_transaction(
-                    gas_object,
-                    "counter",
-                    "increment",
-                    package_ref,
-                    /* arguments */
-                    vec![CallArg::Object(shared_object_arg)],
-                );
-                async move {
-                    g.execute_transaction(increment_counter_transaction.into_inner())
-                        .await
-                }
-            })
-            .collect();
-
-        let replies: Vec<_> = futures::future::join_all(futures)
-            .await
-            .into_iter()
-            .collect();
-        assert_eq!(replies.len(), increment_amount);
-        if replies.iter().all(|result| result.is_ok()) {
-            break;
-        }
-        if retry == 0 {
-            unreachable!("Failed after 10 retries. Latest replies: {:?}", replies);
-        }
-        retry -= 1;
-    }
-
-    let assert_value_transaction = move_transaction(
-        last_gas_object,
-        "counter",
-        "assert_value",
-        package_ref,
-        vec![
-            CallArg::Object(shared_object_arg),
-            CallArg::Pure((increment_amount as u64).to_le_bytes().to_vec()),
-        ],
-    );
-
-    // Same problem may happen here (consensus may drop transactions).
-    loop {
-        let result = gateway
-            .clone()
-            .execute_transaction(assert_value_transaction.clone().into_inner())
-            .await;
-        if let Ok(response) = result {
-            let effects = response.effects;
-            assert!(effects.status.is_ok());
-            break;
-        }
     }
 }

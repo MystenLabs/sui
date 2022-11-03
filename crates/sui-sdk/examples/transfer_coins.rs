@@ -14,7 +14,7 @@ use sui_types::messages::ExecuteTransactionRequestType;
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    let sui = SuiClient::new_rpc_client("https://fullnode.devnet.sui.io:443", None).await?;
+    let sui = SuiClient::new("https://fullnode.devnet.sui.io:443", None).await?;
     // Load keystore from ~/.sui/sui_config/sui.keystore
     let keystore_path = match dirs::home_dir() {
         Some(v) => v.join(".sui").join("sui_config").join("sui.keystore"),

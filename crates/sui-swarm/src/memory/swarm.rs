@@ -158,11 +158,21 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
             .map(|config| (config.sui_address(), Node::new(config.to_owned())))
             .collect();
 
+        let fullnodes = if let Some(fullnode_rpc_addr) = self.fullnode_rpc_addr {
+            let mut config =
+                network_config.generate_fullnode_config_with_random_dir_name(true, true);
+            config.websocket_address = self.websocket_rpc_addr;
+            config.json_rpc_address = fullnode_rpc_addr;
+            HashMap::from([(config.sui_address(), Node::new(config))])
+        } else {
+            Default::default()
+        };
+
         Swarm {
             dir,
             network_config,
             validators,
-            fullnodes: HashMap::new(),
+            fullnodes,
         }
     }
 }
