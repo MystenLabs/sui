@@ -34,12 +34,6 @@ pub fn test_and_configure_authority_configs(committee_size: usize) -> NetworkCon
     let rng = StdRng::from_seed([0; 32]);
     let mut configs = NetworkConfig::generate_with_rng(&config_dir, committee_size, rng);
     for config in configs.validator_configs.iter_mut() {
-        // Disable gossip by default to reduce non-determinism.
-        // TODO: Once this library is more broadly used, we can make this a config argument.
-        // Note: Enabling this will break checkpoint_catchup test, which needs a way to keep one
-        // authority behind the others.
-        config.enable_gossip = false;
-
         let parameters = &mut config.consensus_config.as_mut().unwrap().narwhal_config;
         // NOTE: the following parameters are important to ensure tests run fast. Using the default
         // Narwhal parameters may result in tests taking >60 seconds.
