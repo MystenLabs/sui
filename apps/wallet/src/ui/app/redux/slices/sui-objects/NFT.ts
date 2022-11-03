@@ -19,7 +19,7 @@ export class ExampleNFT {
         description?: string,
         imageUrl?: string
     ): Promise<SuiExecuteTransactionResponse> {
-        return await signer.executeMoveCallWithRequestType({
+        return await signer.executeMoveCall({
             packageObjectId: '0x2',
             module: 'devnet_nft',
             function: 'mint',
@@ -39,7 +39,7 @@ export class ExampleNFT {
         recipientID: string,
         transferCost: number
     ): Promise<SuiExecuteTransactionResponse> {
-        return await signer.transferObjectWithRequestType({
+        return await signer.transferObject({
             objectId: nftId,
             gasBudget: transferCost,
             recipient: recipientID,
