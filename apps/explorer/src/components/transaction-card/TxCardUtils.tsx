@@ -15,6 +15,7 @@ import {
     type CertifiedTransaction,
     type ExecutionStatusType,
     type TransactionKindName,
+    type JsonRpcProvider,
 } from '@mysten/sui.js';
 import { Fragment } from 'react';
 
@@ -22,8 +23,6 @@ import { ReactComponent as ContentSuccessStatus } from '../../assets/SVGIcons/12
 import { ReactComponent as ContentFailedStatus } from '../../assets/SVGIcons/12px/X.svg';
 import { ReactComponent as ContentArrowRight } from '../../assets/SVGIcons/16px/ArrowRight.svg';
 import Longtext from '../../components/longtext/Longtext';
-import { DefaultRpcClient } from '../../utils/api/DefaultRpcClient';
-import { type Network } from '../../utils/api/rpcSetting';
 import { deduplicate } from '../../utils/searchUtil';
 import { truncate } from '../../utils/stringUtils';
 import { useTimeAgo } from '../../utils/timeUtils';
@@ -229,10 +228,10 @@ export const genTableDataFromTxData = (
 };
 
 export const getDataOnTxDigests = (
-    network: Network | string,
+    rpc: JsonRpcProvider,
     transactions: GetTxnDigestsResponse
 ) =>
-    DefaultRpcClient(network)
+    rpc
         .getTransactionWithEffectsBatch(deduplicate(transactions))
         .then((txEffs) => {
             return (

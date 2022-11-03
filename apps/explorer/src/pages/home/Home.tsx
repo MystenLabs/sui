@@ -7,7 +7,7 @@ import {
     TopValidatorsCardAPI,
     TopValidatorsCardStatic,
 } from '../../components/top-validators-card/TopValidatorsCard';
-import LatestTxCard from '../../components/transaction-card/RecentTxCard';
+import { LatestTxCard } from '../../components/transaction-card/RecentTxCard';
 import { IS_STATIC_ENV } from '../../utils/envUtil';
 
 import styles from './Home.module.css';

@@ -17,6 +17,7 @@ import {
     getDataOnTxDigests,
 } from './TxCardUtils';
 
+import { useRpc } from '~/hooks/useRpc';
 import { TableCard } from '~/ui/TableCard';
 
 const TRUNCATE_LENGTH = 14;
@@ -76,6 +77,7 @@ function TxForIDAPI({ id, category }: { id: string; category: categoryType }) {
     const [showData, setData] =
         useState<{ data?: TxnData[]; loadState: string }>(DATATYPE_DEFAULT);
     const [network] = useContext(NetworkContext);
+    const rpc = useRpc();
     useEffect(() => {
         getTx(id, network, category).then((transactions) => {
             //If the API method does not exist, the transactions will be undefined
@@ -84,7 +86,7 @@ function TxForIDAPI({ id, category }: { id: string; category: categoryType }) {
                     loadState: 'loaded',
                 });
             } else {
-                getDataOnTxDigests(network, transactions)
+                getDataOnTxDigests(rpc, transactions)
                     .then((data) => {
                         setData({
                             data: data as TxnData[],
@@ -97,7 +99,7 @@ function TxForIDAPI({ id, category }: { id: string; category: categoryType }) {
                     });
             }
         });
-    }, [id, network, category]);
+    }, [id, network, rpc, category]);
 
     if (showData.loadState === 'pending') {
         return <div>Loading ...</div>;
