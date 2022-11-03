@@ -10,13 +10,14 @@ const API_ENV_TO_EXPLORER_URL: Record<API_ENV, string | undefined> = {
     [API_ENV.devNet]: process.env.EXPLORER_URL_DEV_NET,
     [API_ENV.staging]: process.env.EXPLORER_URL_STAGING,
     [API_ENV.testNet]: process.env.EXPLORER_URL_TEST_NET,
-    [API_ENV.customRPC]: process.env.EXPLORER_URL_CUSTOM_RPC,
+    //No explorer url for Custom PRC
+    [API_ENV.customRPC]: '',
 };
 
 // TODO: rewrite this
 function getDefaultUrl(apiEnv?: API_ENV) {
     const url = API_ENV_TO_EXPLORER_URL[apiEnv || DEFAULT_API_ENV];
-    if (!url) {
+    if (!url && !API_ENV.customRPC) {
         throw new Error(`Url for API_ENV ${DEFAULT_API_ENV} is not defined`);
     }
     return url;
@@ -24,7 +25,7 @@ function getDefaultUrl(apiEnv?: API_ENV) {
 
 export class Explorer {
     public static getObjectUrl(objectID: ObjectId, apiEnv: API_ENV) {
-        return new URL(`/objects/${objectID}`, getDefaultUrl(apiEnv)).href;
+        return new URL(`/objects/${objectID}`, getDefaultUrl(apiEnv))?.href;
     }
 
     public static getTransactionUrl(
@@ -38,6 +39,6 @@ export class Explorer {
     }
 
     public static getAddressUrl(address: SuiAddress, apiEnv: API_ENV) {
-        return new URL(`/addresses/${address}`, getDefaultUrl(apiEnv)).href;
+        return new URL(`/addresses/${address}`, getDefaultUrl(apiEnv))?.href;
     }
 }

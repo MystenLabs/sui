@@ -21,7 +21,7 @@ const validation = Yup.object({
 });
 
 export function CustomRPCInput() {
-    const placeholder = ENV_TO_API.customRPC.fullNode;
+    const placeholder = ENV_TO_API.customRPC?.fullNode;
 
     const customRPC = useAppSelector(({ app }) => app.customRPC);
     const [customRPCURL, setTimerMinutes] = useState<string>(customRPC || '');
@@ -61,7 +61,7 @@ export function CustomRPCInput() {
                             Save
                         </Button>
                     </Field>
-                    {touched.rpcInput && errors.rpcInput ? (
+                    {touched.rpcInput && errors.rpcInput && dirty ? (
                         <Alert className={st.error}>{errors.rpcInput}</Alert>
                     ) : null}
                 </Form>

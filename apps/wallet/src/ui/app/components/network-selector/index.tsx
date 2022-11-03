@@ -4,7 +4,7 @@
 import { useFeature } from '@growthbook/growthbook-react';
 import cl from 'classnames';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useMemo, useCallback } from 'react';
+import { useMemo, useCallback, useState } from 'react';
 
 import { CustomRPCInput } from './custom-rpc-input';
 import { API_ENV_TO_INFO, API_ENV } from '_app/ApiProvider';
@@ -20,7 +20,13 @@ const EXCLUDE_STAGING = process.env.SHOW_STAGING !== 'false' && API_ENV.staging;
 type NetworkTypes = keyof typeof API_ENV;
 
 const NetworkSelector = () => {
-    const selectedApiEnv = useAppSelector(({ app }) => app.apiEnv);
+    const [selectedApiEnv, customRPC] = useAppSelector(({ app }) => [
+        app.apiEnv,
+        app.customRPC,
+    ]);
+    const [showCustomRPCInput, setShowCustomRPCInput] = useState<boolean>(
+        selectedApiEnv === API_ENV.customRPC
+    );
     const dispatch = useAppDispatch();
     const excludeCustomRPC =
         !useFeature(FEATURES.USE_CUSTOM_RPC_URL).on && API_ENV.customRPC;
@@ -54,12 +60,17 @@ const NetworkSelector = () => {
 
     const changeNetwork = useCallback(
         (e: React.MouseEvent<HTMLElement>) => {
-            e.preventDefault();
             const networkName = e.currentTarget.dataset.network;
+            setShowCustomRPCInput(networkName === API_ENV.customRPC);
+
+            if (networkName === API_ENV.customRPC && !customRPC) {
+                setShowCustomRPCInput(true);
+                return;
+            }
             const apiEnv = API_ENV[networkName as keyof typeof API_ENV];
             dispatch(changeRPCNetwork(apiEnv));
         },
-        [dispatch]
+        [customRPC, dispatch]
     );
 
     return (
@@ -79,7 +90,10 @@ const NetworkSelector = () => {
                                     st.networkIcon,
                                     st.selectedNetwork,
                                     selectedApiEnv === apiEnv.networkName &&
-                                        st.networkActive
+                                        st.networkActive,
+                                    apiEnv.networkName === API_ENV.customRPC &&
+                                        showCustomRPCInput &&
+                                        st.customRpcActive
                                 )}
                             />
 
@@ -89,7 +103,7 @@ const NetworkSelector = () => {
                 ))}
             </ul>
             <AnimatePresence>
-                {selectedApiEnv === API_ENV.customRPC && (
+                {showCustomRPCInput && (
                     <motion.div
                         initial={{
                             opacity: 0,

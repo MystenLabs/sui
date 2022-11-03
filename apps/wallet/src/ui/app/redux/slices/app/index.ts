@@ -35,9 +35,15 @@ const initialState: AppState = {
 // TODO: add clear Object state because edge cases where use state stays in cache
 export const changeRPCNetwork = createAsyncThunk<void, API_ENV, AppThunkConfig>(
     'changeRPCNetwork',
-    (networkName, { extra: { api }, dispatch }) => {
+    (networkName, { extra: { api }, dispatch, getState }) => {
+        const { app } = getState();
+        const isCustomRPC = networkName === API_ENV.customRPC;
+        const customRPCURL =
+            app?.customRPC && isCustomRPC ? app?.customRPC : null;
+
+        // don't switch if customRPC and empty input //handle default
         dispatch(setApiEnv(networkName));
-        api.setNewJsonRpcProvider(networkName);
+        api.setNewJsonRpcProvider(networkName, customRPCURL);
         dispatch(getTransactionsByAddress());
         dispatch(fetchAllOwnedAndRequiredObjects());
         // Set persistent network state
@@ -49,11 +55,9 @@ export const setCustomRPC = createAsyncThunk<void, string, AppThunkConfig>(
     'setCustomRPC',
     (customRPC, { extra: { api }, dispatch }) => {
         // Set persistent network state
-        api.setNewJsonRpcProvider(API_ENV.customRPC, customRPC);
-        dispatch(setCustomRPCURL(customRPC));
-        dispatch(getTransactionsByAddress());
-        dispatch(fetchAllOwnedAndRequiredObjects());
         Browser.storage.local.set({ sui_Env_RPC: customRPC });
+        dispatch(setCustomRPCURL(customRPC));
+        dispatch(changeRPCNetwork(API_ENV.customRPC));
     }
 );
 

@@ -28,13 +28,13 @@ type EnvInfo = {
 type ApiEndpoints = {
     fullNode: string;
     faucet: string;
-};
+} | null;
 export const API_ENV_TO_INFO: Record<API_ENV, EnvInfo> = {
     [API_ENV.local]: { name: 'Local' },
-    [API_ENV.devNet]: { name: 'Sui Devnet' },
+    [API_ENV.devNet]: { name: 'Sui DevNet' },
     [API_ENV.staging]: { name: 'Sui Staging' },
     [API_ENV.customRPC]: { name: 'Custom RPC URL' },
-    [API_ENV.testNet]: { name: 'Sui Testnet' },
+    [API_ENV.testNet]: { name: 'Sui TestNet' },
 };
 
 export const ENV_TO_API: Record<API_ENV, ApiEndpoints> = {
@@ -50,13 +50,8 @@ export const ENV_TO_API: Record<API_ENV, ApiEndpoints> = {
         fullNode: process.env.API_ENDPOINT_STAGING_FULLNODE || '',
         faucet: process.env.API_ENDPOINT_STAGING_FAUCET || '',
     },
-    [API_ENV.customRPC]: {
-        // TODO: Add custom RPC URL
-        fullNode: '',
-        faucet: '',
-    },
+    [API_ENV.customRPC]: null,
     [API_ENV.testNet]: {
-        // TODO: Add custom RPC URL
         fullNode: process.env.API_ENDPOINT_TEST_NET_FULLNODE || '',
         faucet: process.env.API_ENDPOINT_TEST_NET_FAUCET || '',
     },
