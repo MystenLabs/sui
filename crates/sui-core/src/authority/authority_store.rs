@@ -1132,6 +1132,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             .contains_key(digest)?)
     }
 
+    /// Caller is responsible to call consensus_message_processed before this method
     pub async fn record_owned_object_cert_from_consensus(
         &self,
         certificate: &VerifiedCertificate,
@@ -1237,19 +1238,26 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     /// Tables updated:
     ///  * consensus_message_processed - indicate that this certificate was processed by consensus
     ///  * last_consensus_index - records last processed position in consensus stream
+    ///  * consensus_message_order - records at what position this transaction was first seen in consensus
     /// Self::consensus_message_processed returns true after this call for given certificate
     fn finish_consensus_message_process(
         &self,
-        mut batch: DBBatch,
+        batch: DBBatch,
         certificate: &VerifiedCertificate,
         consensus_index: ExecutionIndicesWithHash,
     ) -> SuiResult {
         let transaction_digest = *certificate.digest();
-        let index_to_write = iter::once((LAST_CONSENSUS_INDEX_ADDR, consensus_index));
-        batch = batch.insert_batch(&self.epoch_tables().last_consensus_index, index_to_write)?;
-        batch = batch.insert_batch(
+        let batch = batch.insert_batch(
+            &self.epoch_tables().consensus_message_order,
+            [(consensus_index.index.clone(), transaction_digest)],
+        )?;
+        let batch = batch.insert_batch(
+            &self.epoch_tables().last_consensus_index,
+            [(LAST_CONSENSUS_INDEX_ADDR, consensus_index)],
+        )?;
+        let batch = batch.insert_batch(
             &self.epoch_tables().consensus_message_processed,
-            iter::once((transaction_digest, true)),
+            [(transaction_digest, true)],
         )?;
         Ok(batch.write()?)
     }
