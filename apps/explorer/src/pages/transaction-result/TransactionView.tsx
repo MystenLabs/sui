@@ -257,7 +257,7 @@ function GasAmount({ amount }: { amount: bigint | number }) {
     );
 
     return (
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 h-full">
             <div className="text-sui-grey-90 flex items-baseline gap-0.5">
                 <Text variant="body">{formattedAmount}</Text>
                 <Text variant="subtitleSmall">{symbol}</Text>
