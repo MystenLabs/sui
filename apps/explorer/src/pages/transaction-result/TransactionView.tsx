@@ -12,7 +12,6 @@ import {
     getObjectId,
     getTransferSuiTransaction,
     getTransferSuiAmount,
-    getExecutionStatusGasSummary,
     SUI_TYPE_ARG,
 } from '@mysten/sui.js';
 import cl from 'clsx';
@@ -257,20 +256,19 @@ function GasAmount({ amount }: { amount: bigint | number }) {
     );
 
     return (
-        <div className="flex items-baseline gap-1">
-            <div className="text-sui-grey-90">
+        <div className="flex items-center gap-1">
+            <div className="text-sui-grey-90 flex items-baseline gap-0.5">
                 <Text variant="body" weight="medium">
                     {formattedAmount}
                 </Text>
-            </div>
-            <div className="text-sui-grey-65">
                 <Text variant="subtitleSmall" weight="medium">
                     {symbol}
                 </Text>
             </div>
-            <div className="text-sui-grey-65">
-                <Text variant="bodySmall">
-                    ({amount.toLocaleString()} MIST)
+            <div className="text-sui-grey-65 flex items-baseline gap-0.5">
+                <Text variant="bodySmall">({amount.toLocaleString()}</Text>
+                <Text variant="subtitleSmall" weight="medium">
+                    MIST)
                 </Text>
             </div>
         </div>
