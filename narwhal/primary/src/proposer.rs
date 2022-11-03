@@ -5,6 +5,7 @@ use crate::{metrics::PrimaryMetrics, NetworkModel};
 use config::{Committee, Epoch, WorkerId};
 use crypto::{PublicKey, Signature};
 use fastcrypto::{hash::Hash as _, SignatureService};
+use std::collections::HashMap;
 use std::{cmp::Ordering, sync::Arc};
 use storage::ProposerStore;
 use sui_metrics::spawn_monitored_task;
@@ -67,6 +68,11 @@ pub struct Proposer {
     last_leader: Option<Certificate>,
     /// Holds the batches' digests waiting to be included in the next header.
     digests: Vec<(BatchDigest, WorkerId, TimestampMs)>,
+
+    /// Holds the map of proposed previous round headers, used to ensure that
+    /// all digests included will eventually be re-sent.
+    proposed_headers: HashMap<Round, Header>,
+
     /// Metrics handler
     metrics: Arc<PrimaryMetrics>,
 }
@@ -111,6 +117,7 @@ impl Proposer {
                 last_parents: genesis,
                 last_leader: None,
                 digests: Vec::with_capacity(2 * max_header_num_of_batches),
+                proposed_headers: HashMap::new(),
                 metrics,
             }
             .run()
@@ -149,40 +156,40 @@ impl Proposer {
     // If we detect that a different header has been already produced for the same round, then
     // this method returns the earlier header. Otherwise the newly created header will be returned.
     async fn create_new_header(&mut self) -> DagResult<Header> {
+        let this_round = self.round;
+        let this_epoch = self.committee.epoch();
+
+        // Check if we already have stored a header for this round.
+        if let Some(last_header) = self.proposer_store.get_last_proposed()? {
+            if last_header.round == this_round && last_header.epoch == this_epoch {
+                // We have already produced a header for the current round, idempotent re-send
+                return Ok(last_header);
+            }
+        }
+
         // Make a new header.
         let num_of_digests = self.digests.len().min(self.max_header_num_of_batches);
         let digests: Vec<_> = self.digests.drain(..num_of_digests).collect();
+        let parents: Vec<_> = self.last_parents.drain(..).collect();
 
         let header = Header::new(
             self.name.clone(),
-            self.round,
-            self.committee.epoch(),
+            this_round,
+            this_epoch,
             digests
                 .iter()
                 .map(|(digest, worker_id, _)| (*digest, *worker_id))
                 .collect(),
-            self.last_parents.drain(..).map(|x| x.digest()).collect(),
+            parents.iter().map(|x| x.digest()).collect(),
             &mut self.signature_service,
         )
         .await;
 
-        if let Some(last_header) = self.proposer_store.get_last_proposed()? {
-            if last_header.round == header.round && last_header.epoch == header.epoch {
-                // We have already produced a header for the current round, idempotent re-send
-                if last_header != header {
-                    debug!("Equivocation protection was enacted in the proposer");
+        // Register the header by the current round, to remember that we need to commit
+        // it, or re-include the batch digests that it contains.
+        self.proposed_headers.insert(this_round, header.clone());
 
-                    // add again the digests for proposal
-                    // keeping their original order
-                    digests
-                        .iter()
-                        .for_each(|value| self.digests.insert(0, *value));
-
-                    return Ok(last_header);
-                }
-            }
-        }
-
+        // Update metrics related to latency
         for (_, _, created_at_timestamp) in digests {
             self.metrics
                 .proposer_batch_latency

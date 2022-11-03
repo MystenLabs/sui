@@ -338,6 +338,11 @@ where
                     // Update the consensus index.
                     self.consensus_index += sequence.len() as u64;
 
+                    // We extract a list of headers from this specific validator that
+                    // have been agreed upon, and signal this back to the narwhal sub-system
+                    // to be used to re-send batches that have not made it to a commit.
+                    // let mut own_commited_batches = Vec::new();
+
                     // Output the sequence in the right order.
                     for output in sequence {
                         let certificate = &output.certificate;
