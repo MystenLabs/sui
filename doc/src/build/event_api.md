@@ -134,10 +134,7 @@ the move contract.
 
 ## Event query criteria
 
-Sui event query api uses `EventQuery` criteria object to enable ;
-the client can subscribe to the event stream using one or a combination of event attribute filters to get the exact
-event
-relevant to the client.
+Users can query the full node using `EventQuery` criteria object to get the exact event relevant to the client.
 
 ### List of queryable criteria
 
