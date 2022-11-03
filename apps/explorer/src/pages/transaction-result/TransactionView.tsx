@@ -12,6 +12,8 @@ import {
     getObjectId,
     getTransferSuiTransaction,
     getTransferSuiAmount,
+    getExecutionStatusGasSummary,
+    SUI_TYPE_ARG,
 } from '@mysten/sui.js';
 import cl from 'clsx';
 import { Link } from 'react-router-dom';
@@ -43,9 +45,11 @@ import type {
 
 import styles from './TransactionResult.module.css';
 
+import { CoinFormat, useFormatCoin } from '~/hooks/useFormatCoin';
 import { Banner } from '~/ui/Banner';
 import { PageHeader } from '~/ui/PageHeader';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
+import { Text } from '~/ui/Text';
 
 type TxDataProps = CertifiedTransaction & {
     status: ExecutionStatusType;
@@ -245,6 +249,34 @@ const isPayType = (
     return 'Pay' in txdetails;
 };
 
+function GasAmount({ amount }: { amount: bigint | number }) {
+    const [formattedAmount, symbol] = useFormatCoin(
+        amount,
+        SUI_TYPE_ARG,
+        CoinFormat.FULL
+    );
+
+    return (
+        <div className="flex items-baseline gap-1">
+            <div className="text-sui-grey-90">
+                <Text variant="body" weight="medium">
+                    {formattedAmount}
+                </Text>
+            </div>
+            <div className="text-sui-grey-65">
+                <Text variant="subtitleSmall" weight="medium">
+                    {symbol}
+                </Text>
+            </div>
+            <div className="text-sui-grey-65">
+                <Text variant="bodySmall">
+                    ({amount.toLocaleString()} MIST)
+                </Text>
+            </div>
+        </div>
+    );
+}
+
 const convertAmounts = (
     amounts: (number | bigint | null)[]
 ): bigint[] | undefined =>
@@ -347,12 +379,12 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                 link: true,
             },
             {
-                label: 'Gas Fees',
-                value: txdata.gasFee,
+                label: 'Gas Budget',
+                value: <GasAmount amount={txdata.data.gasBudget} />,
             },
             {
-                label: 'Gas Budget',
-                value: txdata.data.gasBudget,
+                label: 'Total Gas Fee',
+                value: <GasAmount amount={txdata.gasFee} />,
             },
             //TODO: Add Storage Fees
         ],
