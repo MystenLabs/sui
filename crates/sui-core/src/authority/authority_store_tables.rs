@@ -63,6 +63,12 @@ pub struct AuthorityEpochTables<S> {
     /// by a single process acting as consensus (light) client. It is used to ensure the authority processes
     /// every message output by consensus (and in the right order).
     pub(crate) last_consensus_index: DBMap<u64, ExecutionIndicesWithHash>,
+
+    /// This table lists all checkpoint boundaries in the consensus sequence
+    ///
+    /// The key in this table is incremental index and value is corresponding narwhal
+    /// consensus output index
+    pub(crate) checkpoint_boundary: DBMap<u64, u64>,
 }
 
 impl<S> AuthorityEpochTables<S>
