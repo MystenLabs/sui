@@ -2,24 +2,52 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Coin } from '@mysten/sui.js';
-import React, { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { ReactComponent as OpenIcon } from '../../../assets/SVGIcons/12px/ShowNHideDown.svg';
 import { ReactComponent as ClosedIcon } from '../../../assets/SVGIcons/12px/ShowNHideRight.svg';
-import { handleCoinType } from '../../../utils/stringUtils';
 import Longtext from '../../longtext/Longtext';
 import Pagination from '../../pagination/Pagination';
 import { type DataType, ITEMS_PER_PAGE } from '../OwnedObjectConstants';
 
 import styles from '../styles/OwnedCoin.module.css';
 
+import { useFormatCoin } from '~/hooks/useFormatCoin';
+
+function CoinItem({
+    id,
+    balance,
+    coinType,
+}: {
+    id: string;
+    balance?: bigint | null;
+    coinType?: string | null;
+}) {
+    const [formattedBalance] = useFormatCoin(balance, coinType);
+
+    return (
+        <div className={styles.singlecoin}>
+            <div className={styles.openrow}>
+                <div className={styles.label}>Object ID</div>
+                <div className={`${styles.oneline} ${styles.value}`}>
+                    <Longtext text={id} category="objects" />
+                </div>
+            </div>
+            <div className={styles.openrow}>
+                <div className={styles.label}>Balance</div>
+                <div className={styles.value}>{formattedBalance}</div>
+            </div>
+        </div>
+    );
+}
+
 function SingleCoinView({
     results,
-    coinLabel,
+    coinType,
     currentPage,
 }: {
     results: DataType;
-    coinLabel: string;
+    coinType: string;
     currentPage: number;
 }) {
     const [isOpen, setIsOpen] = useState(false);
@@ -34,7 +62,23 @@ function SingleCoinView({
         setIsOpen(false);
     }, [currentPage]);
 
-    const subObjList = results.filter(({ Type }) => Type === coinLabel);
+    const subObjList = results.filter(({ Type }) => Type === coinType);
+
+    const totalBalance =
+        subObjList[0]._isCoin &&
+        subObjList.every((el) => el.balance !== undefined)
+            ? subObjList.reduce(
+                  (prev, current) => prev + current.balance!,
+                  Coin.getZero()
+              )
+            : null;
+
+    const extractedCoinType = Coin.getCoinType(coinType);
+
+    const [formattedTotalBalance, symbol] = useFormatCoin(
+        totalBalance,
+        extractedCoinType
+    );
 
     return (
         <div
@@ -48,7 +92,7 @@ function SingleCoinView({
                         className={styles.oneline}
                         data-testid="ownedcoinlabel"
                     >
-                        {handleCoinType(coinLabel)}
+                        {symbol}
                     </div>
                 </div>
                 <div
@@ -58,37 +102,19 @@ function SingleCoinView({
                     {subObjList.length}
                 </div>
                 <div className={styles.balance} data-testid="ownedcoinbalance">
-                    {subObjList[0]._isCoin &&
-                    subObjList.every((el) => el.balance !== undefined)
-                        ? `${subObjList.reduce(
-                              (prev, current) => prev + current.balance!,
-                              Coin.getZero()
-                          )}`
-                        : ''}
+                    {formattedTotalBalance}
                 </div>
             </div>
+
             {isOpen && (
                 <div className={styles.openbody}>
-                    {subObjList.map((subObj, index) => (
-                        <div key={index} className={styles.singlecoin}>
-                            <div className={styles.openrow}>
-                                <div className={styles.label}>Object ID</div>
-                                <div
-                                    className={`${styles.oneline} ${styles.value}`}
-                                >
-                                    <Longtext
-                                        text={subObj.id}
-                                        category="objects"
-                                    />
-                                </div>
-                            </div>
-                            <div className={styles.openrow}>
-                                <div className={styles.label}>Balance</div>
-                                <div className={styles.value}>
-                                    {subObj.balance?.toString()}
-                                </div>
-                            </div>
-                        </div>
+                    {subObjList.map((subObj) => (
+                        <CoinItem
+                            key={subObj.id}
+                            id={subObj.id}
+                            coinType={extractedCoinType}
+                            balance={subObj.balance}
+                        />
                     ))}
                 </div>
             )}
@@ -115,11 +141,11 @@ export default function OwnedCoinView({ results }: { results: DataType }) {
                             (currentPage - 1) * ITEMS_PER_PAGE,
                             currentPage * ITEMS_PER_PAGE
                         )
-                        .map((typeV) => (
+                        .map((type) => (
                             <SingleCoinView
-                                key={typeV}
+                                key={type}
                                 results={results}
-                                coinLabel={typeV}
+                                coinType={type}
                                 currentPage={currentPage}
                             />
                         ))}
