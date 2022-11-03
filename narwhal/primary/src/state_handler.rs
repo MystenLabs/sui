@@ -74,6 +74,8 @@ impl StateHandler {
             // Trigger cleanup on the primary.
             let _ = self.tx_consensus_round_updates.send(round); // ignore error when receivers dropped.
         }
+
+        // Now we are going to signal which of our own batches have been committed.
     }
 
     fn update_committee(&mut self, committee: Committee) {
