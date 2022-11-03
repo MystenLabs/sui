@@ -56,6 +56,7 @@ import {
   EventId,
   PaginatedEvents,
   FaucetResponse,
+  Order,
 } from '../types';
 import { SignatureScheme } from '../cryptography/publickey';
 import {
@@ -414,12 +415,12 @@ export class JsonRpcProvider extends Provider {
     query: TransactionQuery,
     cursor: TransactionDigest | null = null,
     limit: number | null = null,
-    descendingOrder: boolean | null = true
+    order: Order = 'descending'
   ): Promise<PaginatedTransactionDigests> {
     try {
       return await this.client.requestWithType(
         'sui_getTransactions',
-        [query, cursor, limit, descendingOrder],
+        [query, cursor, limit, order === 'descending'],
         isPaginatedTransactionDigests,
         this.options.skipDataValidation
       );
@@ -581,14 +582,14 @@ export class JsonRpcProvider extends Provider {
   // Events
   async getEvents(
       query: EventQuery,
-      cursor: EventId| null,
-      limit: number|null,
-      descendingOrder: boolean| null
+      cursor: EventId | null,
+      limit: number | null,
+      order: Order = 'descending'
   ): Promise<PaginatedEvents> {
     try {
       return await this.client.requestWithType(
           'sui_getEvents',
-          [query, cursor, limit, descendingOrder],
+          [query, cursor, limit, order === 'descending'],
           isPaginatedEvents,
           this.options.skipDataValidation
       );

@@ -32,6 +32,7 @@ import {
   PaginatedEvents,
   RpcApiVersion,
   FaucetResponse,
+  Order,
 } from '../types';
 
 ///////////////////////////////
@@ -161,7 +162,7 @@ export abstract class Provider {
     query: TransactionQuery,
     cursor: TransactionDigest | null,
     limit: number | null,
-    descendingOrder: boolean | null
+    order: Order
   ): Promise<PaginatedTransactionDigests>;
 
   /**
@@ -229,16 +230,16 @@ export abstract class Provider {
 
   /**
    * Get events for a given query criteria
-   * @param query - the transaction query criteria.
+   * @param query - the event query criteria.
    * @param cursor - optional paging cursor
    * @param limit - maximum number of items per page
-   * @param descendingOrder - transaction query ordering
+   * @param order - event query ordering
    */
   abstract getEvents(
       query: EventQuery,
       cursor: EventId | null,
       limit: number | null,
-      descendingOrder: boolean | null,
+      order: Order,
   ): Promise<PaginatedEvents>;
 
   /**
