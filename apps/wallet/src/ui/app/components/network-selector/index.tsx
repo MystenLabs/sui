@@ -1,13 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useFeature } from '@growthbook/growthbook-react';
 import cl from 'classnames';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useMemo, useCallback } from 'react';
 
 import { CustomRPCInput } from './custom-rpc-input';
 import { API_ENV_TO_INFO, API_ENV } from '_app/ApiProvider';
-import { growthbook } from '_app/experimentation/feature-gating';
 import { FEATURES } from '_app/experimentation/features';
 import Icon, { SuiIcons } from '_components/icon';
 import { useAppSelector, useAppDispatch } from '_hooks';
@@ -22,6 +22,10 @@ type NetworkTypes = keyof typeof API_ENV;
 const NetworkSelector = () => {
     const selectedApiEnv = useAppSelector(({ app }) => app.apiEnv);
     const dispatch = useAppDispatch();
+    const excludeCustomRPC =
+        !useFeature(FEATURES.USE_CUSTOM_RPC_URL).on && API_ENV.customRPC;
+    const excludeTestnet =
+        !useFeature(FEATURES.USE_TEST_NET_ENDPOINT).on && API_ENV.testNet;
 
     const netWorks = useMemo(() => {
         const excludedNetworks: NetworkTypes[] = [];
@@ -30,15 +34,9 @@ const NetworkSelector = () => {
             excludedNetworks.push(EXCLUDE_STAGING);
         }
 
-        const excludeCustomRPC =
-            !growthbook.isOn(FEATURES.USE_CUSTOM_RPC_URL) && API_ENV.customRPC;
-
         if (excludeCustomRPC) {
             excludedNetworks.push(excludeCustomRPC);
         }
-
-        const excludeTestnet =
-            !growthbook.isOn(FEATURES.USE_TEST_NET_ENDPOINT) && API_ENV.testNet;
 
         if (excludeTestnet) {
             excludedNetworks.push(excludeTestnet);
@@ -52,7 +50,7 @@ const NetworkSelector = () => {
                 ...API_ENV_TO_INFO[itm as keyof typeof API_ENV],
                 networkName: itm,
             }));
-    }, []);
+    }, [excludeCustomRPC, excludeTestnet]);
 
     const changeNetwork = useCallback(
         (e: React.MouseEvent<HTMLElement>) => {
