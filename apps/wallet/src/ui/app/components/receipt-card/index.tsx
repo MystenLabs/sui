@@ -120,7 +120,7 @@ function ReceiptCard({ txDigest }: TxResponseProps) {
 
     const [formatted, symbol] = useFormatCoin(
         txDigest.amount || txDigest.balance || 0,
-        txDigest.coinType
+        txDigest.coinType || GAS_TYPE_ARG
     );
 
     const [gas, gasSymbol] = useFormatCoin(txDigest.txGas, GAS_TYPE_ARG);
