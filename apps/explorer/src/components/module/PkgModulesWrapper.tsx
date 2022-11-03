@@ -17,7 +17,7 @@ interface Props {
 }
 
 const initialSelectModule = (searchParams: any, modulenames: string[]) => {
-    const paramModule = searchParams.get('module') || null;
+    const paramModule = searchParams.get('module') || modulenames?.[0] || null;
 
     if (!!paramModule && modulenames.includes(paramModule)) {
         return paramModule;
@@ -61,7 +61,6 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                 <Combobox
                     value={selectedModule}
                     onChange={setSelectedModule}
-                    nullable
                 >
                     <div className="box-border border border-sui-grey-50 border-solid rounded-[6px] h-[34px] shadow-sm placeholder-sui-grey-65 pl-3 w-full flex my-[10px] justify-between  ml-[2px]">
                         <Combobox.Input
