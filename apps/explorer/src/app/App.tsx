@@ -20,8 +20,10 @@ import { usePrevious } from '~/hooks/usePrevious';
 const queryClient = new QueryClient({
     defaultOptions: {
         queries: {
-            refetchOnMount: false,
-            refetchOnWindowFocus: false,
+            // We default the stale time to 5 minutes, which is an arbitrary number selected to
+            // strike the balance between stale data and cache hits.
+            // Individual queries can override this value based on their caching needs.
+            staleTime: 5 * 60 * 1000,
         },
     },
 });

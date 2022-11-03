@@ -112,6 +112,9 @@ type Props = {
     truncateLength?: number;
 };
 
+// Transactions frequently update, so we consider them stale after 10 seconds:
+const TRANSACTION_STALE_TIME = 10 * 1000;
+
 export function LatestTxCard({
     truncateLength = TRUNCATE_LENGTH,
     paginationtype = DEFAULT_PAGINATION_TYPE,
@@ -136,9 +139,15 @@ export function LatestTxCard({
         [setSearchParams]
     );
 
-    const countQuery = useQuery(['transactions', 'count'], () => {
-        return rpc(network).getTotalTransactionNumber();
-    });
+    const countQuery = useQuery(
+        ['transactions', 'count'],
+        () => {
+            return rpc(network).getTotalTransactionNumber();
+        },
+        {
+            staleTime: TRANSACTION_STALE_TIME,
+        }
+    );
 
     const transactionQuery = useQuery(
         ['transactions', { total: countQuery.data, txPerPage, pageIndex }],
@@ -158,6 +167,7 @@ export function LatestTxCard({
         {
             enabled: countQuery.isFetched,
             keepPreviousData: true,
+            staleTime: TRANSACTION_STALE_TIME,
         }
     );
 
