@@ -32,19 +32,21 @@ async fn test_restore_from_disk() {
         .subscribe();
 
     // Create arbitrary transactions
-    let mut total_tx = 0;
+    let mut total_tx = 3;
     for tx in [
         string_transaction(),
         string_transaction(),
         string_transaction(),
     ] {
-        let tr = bincode::serialize(&tx).unwrap();
-        let txn = TransactionProto {
-            transaction: Bytes::from(tr),
-        };
-        client.submit_transaction(txn).await.unwrap();
+        let mut c = client.clone();
+        tokio::spawn(async move {
+            let tr = bincode::serialize(&tx).unwrap();
+            let txn = TransactionProto {
+                transaction: Bytes::from(tr),
+            };
 
-        total_tx += 1;
+            c.submit_transaction(txn).await.unwrap();
+        });
     }
 
     // wait for transactions to complete
