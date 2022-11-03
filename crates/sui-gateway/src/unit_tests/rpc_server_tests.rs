@@ -396,15 +396,12 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
 
 #[tokio::test]
 async fn test_get_fullnode_events() -> Result<(), anyhow::Error> {
-    let port = get_available_port();
     let cluster = TestClusterBuilder::new()
-        .set_fullnode_rpc_port(port)
+        .set_fullnode_rpc_port(get_available_port())
         .build()
         .await
         .unwrap();
-
-    let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port);
-    let client = SuiClient::new_rpc_client(&format!("http://{}", addr), None).await?;
+    let client = cluster.wallet.client;
     let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
     let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
     let mut tx_responses = Vec::new();

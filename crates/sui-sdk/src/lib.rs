@@ -18,8 +18,6 @@ use rpc_types::{
     GetPastObjectDataResponse, SuiCertifiedTransaction, SuiExecuteTransactionResponse,
     SuiParsedTransactionResponse, SuiTransactionEffects,
 };
-use serde::Deserialize;
-use serde::Serialize;
 use serde_json::Value;
 pub use sui_config::gateway;
 use sui_core::gateway_state::TxSeqNumber;
@@ -302,15 +300,11 @@ impl EventApi {
         limit: Option<usize>,
         descending_order: Option<bool>,
     ) -> anyhow::Result<EventPage> {
-        Ok(match &*self.0 {
-            SuiClientApi::Rpc(RpcClient { http, .. }) => {
-                http.get_events(query, cursor, limit, descending_order)
-                    .await?
-            }
-            SuiClientApi::Embedded(_) => {
-                return Err(anyhow!("Method not supported by embedded gateway client."))
-            }
-        })
+        Ok(self
+            .0
+            .http
+            .get_events(query, cursor, limit, descending_order)
+            .await?)
     }
 }
 
