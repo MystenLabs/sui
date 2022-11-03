@@ -5,7 +5,7 @@ use crate::{metrics::PrimaryMetrics, NetworkModel};
 use config::{Committee, Epoch, WorkerId};
 use crypto::{PublicKey, Signature};
 use fastcrypto::{hash::Hash as _, SignatureService};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::{cmp::Ordering, sync::Arc};
 use storage::ProposerStore;
 use sui_metrics::spawn_monitored_task;
@@ -71,7 +71,10 @@ pub struct Proposer {
 
     /// Holds the map of proposed previous round headers, used to ensure that
     /// all digests included will eventually be re-sent.
-    proposed_headers: HashMap<Round, Header>,
+    proposed_headers: BTreeMap<Round, Header>,
+    /// Commited headers channel on which we get updates on which of
+    /// our own headers have been committed to re-play batch digests
+    rx_commited_own_headers: Receiver<(Round, Vec<Round>)>,
 
     /// Metrics handler
     metrics: Arc<PrimaryMetrics>,
@@ -96,6 +99,7 @@ impl Proposer {
             tokio::sync::oneshot::Sender<()>,
         )>,
         tx_headers: Sender<Header>,
+        rx_commited_own_headers: Receiver<(Round, Vec<Round>)>,
         metrics: Arc<PrimaryMetrics>,
     ) -> JoinHandle<()> {
         let genesis = Certificate::genesis(&committee);
@@ -117,7 +121,8 @@ impl Proposer {
                 last_parents: genesis,
                 last_leader: None,
                 digests: Vec::with_capacity(2 * max_header_num_of_batches),
-                proposed_headers: HashMap::new(),
+                proposed_headers: BTreeMap::new(),
+                rx_commited_own_headers,
                 metrics,
             }
             .run()
@@ -351,6 +356,44 @@ impl Proposer {
             }
 
             tokio::select! {
+
+                Some((commit_round, commit_headers)) = self.rx_commited_own_headers.recv() => {
+                    // Remove committed headers from the list of pending
+                    for round in &commit_headers {
+                        self.proposed_headers.remove(round);
+                    }
+
+                    // Now for any round much below the current commit round we re-insert
+                    // the batches into the digests we need to send, effectivelly re-sending
+                    // them
+                    let mut digests_to_resend = Vec::new();
+                    let mut retransmit_rounds = Vec::new();
+
+                    // Iterate in order of rounds of our own headers.
+                    for (round_header, header) in &mut self.proposed_headers {
+                        // If we are within 2 rounds of the commit we break
+                        if round_header + 2 >= commit_round {
+                            break;
+                        }
+
+                        digests_to_resend.extend(header.payload.iter().map(|(digest, worker)| (*digest, *worker, 0)));
+                        retransmit_rounds.push(*round_header);
+                    }
+
+                    if !retransmit_rounds.is_empty() {
+                    // Add the digests to retransmit to the digests for the next header
+                    digests_to_resend.extend(&self.digests);
+                    self.digests = digests_to_resend;
+
+                    // Now delete the headers with batches we re-transmit
+                    for round in &retransmit_rounds {
+                        self.proposed_headers.remove(round);
+                    }
+
+                    debug!("Retransmit batches in undelivered headers {:?} at commit round {:?}", retransmit_rounds, commit_round);
+                }
+                },
+
                 Some((parents, round, epoch)) = self.rx_parents.recv() => {
                     // If the core already moved to the next epoch we should pull the next
                     // committee as well.

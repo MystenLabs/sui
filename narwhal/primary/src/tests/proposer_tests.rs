@@ -19,6 +19,7 @@ async fn propose_empty() {
     let (_tx_reconfigure, rx_reconfigure) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
     let (_tx_parents, rx_parents) = test_utils::test_channel!(1);
+    let (_tx_commited_own_headers, rx_commited_own_headers) = test_utils::test_channel!(1);
     let (_tx_our_digests, rx_our_digests) = test_utils::test_channel!(1);
     let (tx_headers, mut rx_headers) = test_utils::test_channel!(1);
 
@@ -38,6 +39,7 @@ async fn propose_empty() {
         /* rx_core */ rx_parents,
         /* rx_workers */ rx_our_digests,
         /* tx_core */ tx_headers,
+        rx_commited_own_headers,
         metrics,
     );
 
@@ -61,6 +63,7 @@ async fn propose_payload() {
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
     let (tx_parents, rx_parents) = test_utils::test_channel!(1);
     let (tx_our_digests, rx_our_digests) = test_utils::test_channel!(1);
+    let (_tx_commited_own_headers, rx_commited_own_headers) = test_utils::test_channel!(1);
     let (tx_headers, mut rx_headers) = test_utils::test_channel!(1);
 
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
@@ -82,6 +85,7 @@ async fn propose_payload() {
         /* rx_core */ rx_parents,
         /* rx_workers */ rx_our_digests,
         /* tx_core */ tx_headers,
+        rx_commited_own_headers,
         metrics,
     );
 
@@ -150,7 +154,7 @@ async fn equivocation_protection() {
     let (tx_parents, rx_parents) = test_utils::test_channel!(1);
     let (tx_our_digests, rx_our_digests) = test_utils::test_channel!(1);
     let (tx_headers, mut rx_headers) = test_utils::test_channel!(1);
-
+    let (_tx_commited_own_headers, rx_commited_own_headers) = test_utils::test_channel!(1);
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
 
     // Spawn the proposer.
@@ -168,6 +172,7 @@ async fn equivocation_protection() {
         /* rx_core */ rx_parents,
         /* rx_workers */ rx_our_digests,
         /* tx_core */ tx_headers,
+        rx_commited_own_headers,
         metrics,
     );
 
@@ -210,7 +215,7 @@ async fn equivocation_protection() {
     let (tx_parents, rx_parents) = test_utils::test_channel!(1);
     let (tx_our_digests, rx_our_digests) = test_utils::test_channel!(1);
     let (tx_headers, mut rx_headers) = test_utils::test_channel!(1);
-
+    let (_tx_commited_own_headers, rx_commited_own_headers) = test_utils::test_channel!(1);
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
 
     let _proposer_handle = Proposer::spawn(
@@ -227,6 +232,7 @@ async fn equivocation_protection() {
         /* rx_core */ rx_parents,
         /* rx_workers */ rx_our_digests,
         /* tx_core */ tx_headers,
+        rx_commited_own_headers,
         metrics,
     );
 

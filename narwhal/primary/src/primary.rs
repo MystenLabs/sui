@@ -163,6 +163,11 @@ impl Primary {
             &primary_channel_metrics.tx_state_handler,
             &primary_channel_metrics.tx_state_handler_total,
         );
+        let (tx_commited_own_headers, rx_commited_own_headers) = channel_with_total(
+            CHANNEL_CAPACITY,
+            &primary_channel_metrics.tx_commited_own_headers,
+            &primary_channel_metrics.tx_commited_own_headers_total,
+        );
 
         // we need to hack the gauge from this consensus channel into the primary registry
         // This avoids a cyclic dependency in the initialization of consensus and primary
@@ -427,6 +432,7 @@ impl Primary {
             rx_parents,
             rx_our_digests,
             tx_headers,
+            rx_commited_own_headers,
             node_metrics,
         );
 
@@ -439,6 +445,7 @@ impl Primary {
             tx_consensus_round_updates,
             rx_state_handler,
             tx_reconfigure,
+            Some(tx_commited_own_headers),
             P2pNetwork::new(network.clone()),
         );
 
