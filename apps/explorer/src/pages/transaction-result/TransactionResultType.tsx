@@ -10,7 +10,7 @@ import type {
 } from '@mysten/sui.js';
 
 export type DataType = CertifiedTransaction & {
-    transaction: SuiTransactionResponse | null
+    transaction: SuiTransactionResponse | null;
     loadState: string;
     txId: string;
     status: ExecutionStatusType;
