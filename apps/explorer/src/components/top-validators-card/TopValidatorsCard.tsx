@@ -1,10 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useContext, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import Longtext from '../../components/longtext/Longtext';
-import { NetworkContext } from '../../context';
 import {
     getValidatorState,
     processValidators,
@@ -14,6 +13,7 @@ import {
 import { mockState } from '../../pages/validators/mockData';
 import { truncate } from '../../utils/stringUtils';
 
+import { useRpc } from '~/hooks/useRpc';
 import { PlaceholderTable } from '~/ui/PlaceholderTable';
 import { TableCard } from '~/ui/TableCard';
 import { TabGroup, TabList, Tab, TabPanels, TabPanel } from '~/ui/Tabs';
@@ -55,9 +55,9 @@ export function TopValidatorsCardStatic() {
 export function TopValidatorsCardAPI() {
     const [showObjectState, setObjectState] = useState(STATE_DEFAULT);
     const [loadState, setLoadState] = useState('pending');
-    const [network] = useContext(NetworkContext);
+    const rpc = useRpc();
     useEffect(() => {
-        getValidatorState(network)
+        getValidatorState(rpc)
             .then((objState: ValidatorState) => {
                 setObjectState(objState);
                 setLoadState('loaded');
@@ -66,7 +66,7 @@ export function TopValidatorsCardAPI() {
                 console.log(error);
                 setLoadState('fail');
             });
-    }, [network]);
+    }, [rpc]);
 
     if (loadState === 'loaded') {
         return <TopValidatorsCard state={showObjectState as ValidatorState} />;

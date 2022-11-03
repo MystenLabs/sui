@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Coin, getObjectFields, getObjectId } from '@mysten/sui.js';
-import React, {
+import {
     useCallback,
     useEffect,
     useState,
@@ -12,7 +12,6 @@ import React, {
 import { useNavigate } from 'react-router-dom';
 
 import { NetworkContext } from '../../context';
-import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
 import { IS_STATIC_ENV } from '../../utils/envUtil';
 import {
     parseImageURL,
@@ -29,6 +28,8 @@ import { type DataType } from './OwnedObjectConstants';
 import OwnedObjectView from './views/OwnedObjectView';
 
 import styles from './styles/OwnedObjects.module.css';
+
+import { useRpc } from '~/hooks/useRpc';
 
 const DATATYPE_DEFAULT: DataType = [
     {
@@ -95,6 +96,7 @@ function OwnedObjectAPI({ id, byAddress }: { id: string; byAddress: boolean }) {
     const [isLoaded, setIsLoaded] = useState(false);
     const [isFail, setIsFail] = useState(false);
     const [network] = useContext(NetworkContext);
+    const rpc = useRpc();
     const navigate = useNavigate();
     const navigateFn = useCallback(
         (id: string) => () => navigateWithUnknown(id, navigate, network),
@@ -105,43 +107,41 @@ function OwnedObjectAPI({ id, byAddress }: { id: string; byAddress: boolean }) {
         setIsFail(false);
         setIsLoaded(false);
         const req = byAddress
-            ? rpc(network).getObjectsOwnedByAddress(id)
-            : rpc(network).getObjectsOwnedByObject(id);
+            ? rpc.getObjectsOwnedByAddress(id)
+            : rpc.getObjectsOwnedByObject(id);
 
         req.then((objects) => {
             const ids = objects.map(({ objectId }) => objectId);
-            rpc(network)
-                .getObjectBatch(ids)
-                .then((results) => {
-                    setResults(
-                        results
-                            .filter(({ status }) => status === 'Exists')
-                            .map(
-                                (resp) => {
-                                    const contents = getObjectFields(resp);
-                                    const url = parseImageURL(contents);
+            rpc.getObjectBatch(ids).then((results) => {
+                setResults(
+                    results
+                        .filter(({ status }) => status === 'Exists')
+                        .map(
+                            (resp) => {
+                                const contents = getObjectFields(resp);
+                                const url = parseImageURL(contents);
 
-                                    const name = extractName(contents);
-                                    const objType = parseObjectType(resp);
-                                    const balanceValue = Coin.getBalance(resp);
-                                    return {
-                                        id: getObjectId(resp),
-                                        Type: objType,
-                                        _isCoin: Coin.isCoin(resp),
-                                        display: url
-                                            ? transformURL(url)
-                                            : undefined,
-                                        balance: balanceValue,
-                                        name: name,
-                                    };
-                                }
-                                // TODO - add back version
-                            )
-                    );
-                    setIsLoaded(true);
-                });
+                                const name = extractName(contents);
+                                const objType = parseObjectType(resp);
+                                const balanceValue = Coin.getBalance(resp);
+                                return {
+                                    id: getObjectId(resp),
+                                    Type: objType,
+                                    _isCoin: Coin.isCoin(resp),
+                                    display: url
+                                        ? transformURL(url)
+                                        : undefined,
+                                    balance: balanceValue,
+                                    name: name,
+                                };
+                            }
+                            // TODO - add back version
+                        )
+                );
+                setIsLoaded(true);
+            });
         }).catch(() => setIsFail(true));
-    }, [id, network, byAddress]);
+    }, [id, byAddress, rpc]);
 
     if (isFail) return <NoOwnedObjects />;
 

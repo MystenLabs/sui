@@ -4,18 +4,16 @@
 import { COIN_TYPE_ARG_REGEX } from '@mysten/sui.js';
 import { useQuery } from '@tanstack/react-query';
 import cl from 'clsx';
-import { useContext } from 'react';
 
 import { ReactComponent as DoneIcon } from '../../assets/SVGIcons/16px/CheckFill.svg';
 import { ReactComponent as StartIcon } from '../../assets/SVGIcons/Start.svg';
 import Longtext from '../../components/longtext/Longtext';
-import { NetworkContext } from '../../context';
-import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
 import { parseObjectType } from '../../utils/objectUtils';
 
 import styles from './SendReceiveView.module.css';
 
 import { useFormatCoin, CoinFormat } from '~/hooks/useFormatCoin';
+import { useRpc } from '~/hooks/useRpc';
 import { Heading } from '~/ui/Heading';
 
 type TxAddress = {
@@ -25,23 +23,24 @@ type TxAddress = {
     objects?: string[];
 };
 
-const getObjType = (objId: string, network: string) =>
-    rpc(network)
-        .getObject(objId)
-        .then((obj) => parseObjectType(obj));
-
 const getCoinLabelFromObjType = (objType: string) =>
     COIN_TYPE_ARG_REGEX.exec(objType)?.[1];
 
 function MultipleRecipients({ sender, recipient, amount, objects }: TxAddress) {
-    const [network] = useContext(NetworkContext);
+    const rpc = useRpc();
 
-    const { data: coinList, isSuccess } = useQuery({
-        queryKey: ['get-coin-types-for-pay-tx', objects],
-        queryFn: async () =>
-            Promise.all(objects!.map((objId) => getObjType(objId, network))),
-        enabled: !!objects,
-    });
+    const { data: coinList, isSuccess } = useQuery(
+        ['get-coin-types-for-pay-tx', objects],
+        async () =>
+            Promise.all(
+                objects!.map((objId) =>
+                    rpc.getObject(objId).then((obj) => parseObjectType(obj))
+                )
+            ),
+        {
+            enabled: !!objects,
+        }
+    );
 
     const isSingleCoin = coinList?.every((val) => val === coinList[0]) || false;
 
@@ -138,14 +137,14 @@ function SingleAmount({
     amount: bigint;
     objectId: string;
 }) {
-    const [network] = useContext(NetworkContext);
+    const rpc = useRpc();
 
     const { data: label } = useQuery(
         ['get-coin-type-for-pay-tx', objectId],
         async () => {
-            const objType = await getObjType(objectId, network);
+            const obj = await rpc.getObject(objectId);
 
-            return getCoinLabelFromObjType(objType);
+            return getCoinLabelFromObjType(parseObjectType(obj));
         }
     );
 
