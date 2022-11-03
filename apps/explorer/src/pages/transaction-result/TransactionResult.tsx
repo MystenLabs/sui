@@ -7,16 +7,11 @@ import {
     getExecutionStatusError,
 } from '@mysten/sui.js';
 import * as Sentry from '@sentry/react';
-import { useEffect, useState, useContext } from 'react';
+import { useEffect, useState } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
 
 import ErrorResult from '../../components/error-result/ErrorResult';
-import { NetworkContext } from '../../context';
 import theme from '../../styles/theme.module.css';
-import {
-    DefaultRpcClient as rpc,
-    type Network,
-} from '../../utils/api/DefaultRpcClient';
 import { IS_STATIC_ENV } from '../../utils/envUtil';
 import { findDataFromID } from '../../utils/static/searchUtil';
 import { type DataType } from './TransactionResultType';
@@ -30,6 +25,8 @@ import type {
     SuiObjectRef,
     SuiEvent,
 } from '@mysten/sui.js';
+
+import { useRpc } from '~/hooks/useRpc';
 
 type TxnState = CertifiedTransaction & {
     loadState: string;
@@ -67,22 +64,6 @@ const initState: TxnState = {
     created: [],
     events: [],
 };
-
-function fetchTransactionData(
-    txId: string | undefined,
-    network: Network | string
-): Promise<SuiTransactionResponse> {
-    try {
-        if (!txId) {
-            throw new Error('No Txid found');
-        }
-        return rpc(network)
-            .getTransactionWithEffects(txId)
-            .then((txEff: SuiTransactionResponse) => txEff);
-    } catch (error) {
-        throw error;
-    }
-}
 
 const getCreatedOrMutatedData = (
     txEffects: TransactionEffects,
@@ -126,12 +107,13 @@ const transformTransactionResponse = (
 
 function TransactionResultAPI({ id }: { id: string }) {
     const [showTxState, setTxState] = useState(initState);
-    const [network] = useContext(NetworkContext);
+    const rpc = useRpc();
     useEffect(() => {
         if (id == null) {
             return;
         }
-        fetchTransactionData(id, network)
+
+        rpc.getTransactionWithEffects(id)
             .then((txObj) => {
                 setTxState(transformTransactionResponse(txObj, id));
             })
@@ -142,7 +124,7 @@ function TransactionResultAPI({ id }: { id: string }) {
                     loadState: 'fail',
                 });
             });
-    }, [id, network]);
+    }, [id, rpc]);
 
     // TODO update Loading screen
     if (showTxState.loadState === 'pending') {
