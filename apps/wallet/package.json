@@ -92,6 +92,7 @@
         "@mysten/core": "workspace:*",
         "@mysten/sui.js": "workspace:*",
         "@mysten/wallet-standard": "workspace:*",
+        "@noble/hashes": "^1.1.2",
         "@reduxjs/toolkit": "^1.8.3",
         "@scure/bip32": "^1.1.0",
         "@scure/bip39": "^1.1.0",
