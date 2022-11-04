@@ -121,8 +121,8 @@ core2 = { version = "0.4", default-features = false, features = ["alloc"] }
 crc = { version = "3", default-features = false }
 crc-catalog = { version = "2", default-features = false }
 crc32fast = { version = "1", features = ["std"] }
-criterion = { version = "0.3", features = ["async", "async_tokio", "cargo_bench_support", "futures", "tokio"] }
-criterion-plot = { version = "0.4", default-features = false }
+criterion-468e82937335b1c9 = { package = "criterion", version = "0.3", features = ["async", "async_tokio", "cargo_bench_support", "futures", "tokio"] }
+criterion-plot-9fbad63c4bcf4a8f = { package = "criterion-plot", version = "0.4", default-features = false }
 crossbeam = { version = "0.8", features = ["alloc", "crossbeam-channel", "crossbeam-deque", "crossbeam-epoch", "crossbeam-queue", "std"] }
 crossbeam-channel = { version = "0.5", features = ["crossbeam-utils", "std"] }
 crossbeam-deque = { version = "0.8", features = ["crossbeam-epoch", "crossbeam-utils", "std"] }
@@ -758,8 +758,8 @@ core2 = { version = "0.4", default-features = false, features = ["alloc"] }
 crc = { version = "3", default-features = false }
 crc-catalog = { version = "2", default-features = false }
 crc32fast = { version = "1", features = ["std"] }
-criterion = { version = "0.3", features = ["async", "async_tokio", "cargo_bench_support", "futures", "tokio"] }
-criterion-plot = { version = "0.4", default-features = false }
+criterion-468e82937335b1c9 = { package = "criterion", version = "0.3", features = ["async", "async_tokio", "cargo_bench_support", "futures", "tokio"] }
+criterion-plot-9fbad63c4bcf4a8f = { package = "criterion-plot", version = "0.4", default-features = false }
 crossbeam = { version = "0.8", features = ["alloc", "crossbeam-channel", "crossbeam-deque", "crossbeam-epoch", "crossbeam-queue", "std"] }
 crossbeam-channel = { version = "0.5", features = ["crossbeam-utils", "std"] }
 crossbeam-deque = { version = "0.8", features = ["crossbeam-epoch", "crossbeam-utils", "std"] }
@@ -1363,10 +1363,16 @@ zeroize_derive = { version = "1", default-features = false }
 zstd-sys = { version = "2", features = ["legacy", "zdict_builder"] }
 
 [target.aarch64-apple-darwin.dependencies]
+anes = { version = "0.1" }
+ciborium = { version = "0.2", features = ["std"] }
+ciborium-io = { version = "0.2", default-features = false, features = ["alloc", "std"] }
+ciborium-ll = { version = "0.2", default-features = false }
 core-foundation = { version = "0.9", default-features = false }
 core-foundation-sys = { version = "0.8", default-features = false }
 cpp_demangle = { version = "0.3", features = ["std"] }
 cpufeatures = { version = "0.2", default-features = false }
+criterion-9fbad63c4bcf4a8f = { package = "criterion", version = "0.4", features = ["cargo_bench_support", "plotters", "rayon"] }
+criterion-plot-d8f496e17d97b5cb = { package = "criterion-plot", version = "0.5", default-features = false }
 debugid = { version = "0.8", default-features = false }
 encoding_rs = { version = "0.8", features = ["alloc"] }
 errno = { version = "0.2", default-features = false }
@@ -1385,7 +1391,7 @@ nix-2b5c6dc72f624058 = { package = "nix", version = "0.23", default-features = f
 nix-adf3d7031871b0af = { package = "nix", version = "0.24", default-features = false, features = ["fs", "process", "signal"] }
 num-format = { version = "0.4", default-features = false }
 num_threads = { version = "0.1", default-features = false }
-pprof = { version = "0.10", features = ["cpp", "criterion", "flamegraph", "inferno"] }
+pprof = { version = "0.11", features = ["cpp", "criterion", "flamegraph", "inferno"] }
 quick-xml = { version = "0.23", default-features = false }
 rand_chacha-6f8ce4dd05d13bba = { package = "rand_chacha", version = "0.2", default-features = false, features = ["std"] }
 rgb = { version = "0.8", features = ["as-bytes", "bytemuck"] }
@@ -1397,17 +1403,23 @@ signal-hook-mio = { version = "0.2", default-features = false, features = ["mio-
 signal-hook-registry = { version = "1", default-features = false }
 socket2 = { version = "0.4", default-features = false, features = ["all"] }
 str_stack = { version = "0.1", default-features = false }
-symbolic-common = { version = "9", default-features = false }
-symbolic-demangle = { version = "9", default-features = false, features = ["cpp", "cpp_demangle", "rust", "rustc-demangle"] }
+symbolic-common = { version = "10", default-features = false }
+symbolic-demangle = { version = "10", default-features = false, features = ["cpp", "cpp_demangle", "rust", "rustc-demangle"] }
 tokio-native-tls = { version = "0.3", default-features = false }
 web-sys = { version = "0.3", default-features = false, features = ["Worker"] }
 
 [target.aarch64-apple-darwin.build-dependencies]
+anes = { version = "0.1" }
 autotools = { version = "0.2", default-features = false }
+ciborium = { version = "0.2", features = ["std"] }
+ciborium-io = { version = "0.2", default-features = false, features = ["alloc", "std"] }
+ciborium-ll = { version = "0.2", default-features = false }
 core-foundation = { version = "0.9", default-features = false }
 core-foundation-sys = { version = "0.8", default-features = false }
 cpp_demangle = { version = "0.3", features = ["std"] }
 cpufeatures = { version = "0.2", default-features = false }
+criterion-9fbad63c4bcf4a8f = { package = "criterion", version = "0.4", features = ["cargo_bench_support", "plotters", "rayon"] }
+criterion-plot-d8f496e17d97b5cb = { package = "criterion-plot", version = "0.5", default-features = false }
 debugid = { version = "0.8", default-features = false }
 encoding_rs = { version = "0.8", features = ["alloc"] }
 errno = { version = "0.2", default-features = false }
@@ -1427,7 +1439,7 @@ nix-2b5c6dc72f624058 = { package = "nix", version = "0.23", default-features = f
 nix-adf3d7031871b0af = { package = "nix", version = "0.24", default-features = false, features = ["fs", "process", "signal"] }
 num-format = { version = "0.4", default-features = false }
 num_threads = { version = "0.1", default-features = false }
-pprof = { version = "0.10", features = ["cpp", "criterion", "flamegraph", "inferno"] }
+pprof = { version = "0.11", features = ["cpp", "criterion", "flamegraph", "inferno"] }
 protobuf-src = { version = "1", default-features = false }
 quick-xml = { version = "0.23", default-features = false }
 rand_chacha-6f8ce4dd05d13bba = { package = "rand_chacha", version = "0.2", default-features = false, features = ["std"] }
@@ -1440,14 +1452,20 @@ signal-hook-mio = { version = "0.2", default-features = false, features = ["mio-
 signal-hook-registry = { version = "1", default-features = false }
 socket2 = { version = "0.4", default-features = false, features = ["all"] }
 str_stack = { version = "0.1", default-features = false }
-symbolic-common = { version = "9", default-features = false }
-symbolic-demangle = { version = "9", default-features = false, features = ["cpp", "cpp_demangle", "rust", "rustc-demangle"] }
+symbolic-common = { version = "10", default-features = false }
+symbolic-demangle = { version = "10", default-features = false, features = ["cpp", "cpp_demangle", "rust", "rustc-demangle"] }
 tokio-native-tls = { version = "0.3", default-features = false }
 web-sys = { version = "0.3", default-features = false, features = ["Worker"] }
 
 [target.x86_64-unknown-linux-gnu.dependencies]
+anes = { version = "0.1" }
+ciborium = { version = "0.2", features = ["std"] }
+ciborium-io = { version = "0.2", default-features = false, features = ["alloc", "std"] }
+ciborium-ll = { version = "0.2", default-features = false }
 cpp_demangle = { version = "0.3", features = ["std"] }
 cpufeatures = { version = "0.2", default-features = false }
+criterion-9fbad63c4bcf4a8f = { package = "criterion", version = "0.4", features = ["cargo_bench_support", "plotters", "rayon"] }
+criterion-plot-d8f496e17d97b5cb = { package = "criterion-plot", version = "0.5", default-features = false }
 debugid = { version = "0.8", default-features = false }
 encoding_rs = { version = "0.8", features = ["alloc"] }
 findshlibs = { version = "0.10", default-features = false }
@@ -1471,7 +1489,7 @@ num_threads = { version = "0.1", default-features = false }
 openssl = { version = "0.10" }
 openssl-probe = { version = "0.1", default-features = false }
 openssl-sys = { version = "0.9", default-features = false }
-pprof = { version = "0.10", features = ["cpp", "criterion", "flamegraph", "inferno"] }
+pprof = { version = "0.11", features = ["cpp", "criterion", "flamegraph", "inferno"] }
 quick-xml = { version = "0.23", default-features = false }
 rand_chacha-6f8ce4dd05d13bba = { package = "rand_chacha", version = "0.2", default-features = false, features = ["std"] }
 rgb = { version = "0.8", features = ["as-bytes", "bytemuck"] }
@@ -1482,15 +1500,21 @@ signal-hook-registry = { version = "1", default-features = false }
 socket2 = { version = "0.4", default-features = false, features = ["all"] }
 spin-d8f496e17d97b5cb = { package = "spin", version = "0.5", default-features = false }
 str_stack = { version = "0.1", default-features = false }
-symbolic-common = { version = "9", default-features = false }
-symbolic-demangle = { version = "9", default-features = false, features = ["cpp", "cpp_demangle", "rust", "rustc-demangle"] }
+symbolic-common = { version = "10", default-features = false }
+symbolic-demangle = { version = "10", default-features = false, features = ["cpp", "cpp_demangle", "rust", "rustc-demangle"] }
 tokio-native-tls = { version = "0.3", default-features = false }
 web-sys = { version = "0.3", default-features = false, features = ["Worker"] }
 
 [target.x86_64-unknown-linux-gnu.build-dependencies]
+anes = { version = "0.1" }
 autotools = { version = "0.2", default-features = false }
+ciborium = { version = "0.2", features = ["std"] }
+ciborium-io = { version = "0.2", default-features = false, features = ["alloc", "std"] }
+ciborium-ll = { version = "0.2", default-features = false }
 cpp_demangle = { version = "0.3", features = ["std"] }
 cpufeatures = { version = "0.2", default-features = false }
+criterion-9fbad63c4bcf4a8f = { package = "criterion", version = "0.4", features = ["cargo_bench_support", "plotters", "rayon"] }
+criterion-plot-d8f496e17d97b5cb = { package = "criterion-plot", version = "0.5", default-features = false }
 debugid = { version = "0.8", default-features = false }
 encoding_rs = { version = "0.8", features = ["alloc"] }
 findshlibs = { version = "0.10", default-features = false }
@@ -1516,7 +1540,7 @@ openssl = { version = "0.10" }
 openssl-macros = { version = "0.1", default-features = false }
 openssl-probe = { version = "0.1", default-features = false }
 openssl-sys = { version = "0.9", default-features = false }
-pprof = { version = "0.10", features = ["cpp", "criterion", "flamegraph", "inferno"] }
+pprof = { version = "0.11", features = ["cpp", "criterion", "flamegraph", "inferno"] }
 protobuf-src = { version = "1", default-features = false }
 quick-xml = { version = "0.23", default-features = false }
 rand_chacha-6f8ce4dd05d13bba = { package = "rand_chacha", version = "0.2", default-features = false, features = ["std"] }
@@ -1528,8 +1552,8 @@ signal-hook-registry = { version = "1", default-features = false }
 socket2 = { version = "0.4", default-features = false, features = ["all"] }
 spin-d8f496e17d97b5cb = { package = "spin", version = "0.5", default-features = false }
 str_stack = { version = "0.1", default-features = false }
-symbolic-common = { version = "9", default-features = false }
-symbolic-demangle = { version = "9", default-features = false, features = ["cpp", "cpp_demangle", "rust", "rustc-demangle"] }
+symbolic-common = { version = "10", default-features = false }
+symbolic-demangle = { version = "10", default-features = false, features = ["cpp", "cpp_demangle", "rust", "rustc-demangle"] }
 tokio-native-tls = { version = "0.3", default-features = false }
 web-sys = { version = "0.3", default-features = false, features = ["Worker"] }
 
