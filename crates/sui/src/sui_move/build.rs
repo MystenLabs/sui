@@ -35,10 +35,7 @@ impl Build {
         let pkg = sui_framework::build_move_package(
             rerooted_path,
             BuildConfig {
-                config: MoveBuildConfig {
-                    test_mode: true,
-                    ..config
-                },
+                config,
                 run_bytecode_verifier: true,
                 print_diags_to_stderr: true,
             },
