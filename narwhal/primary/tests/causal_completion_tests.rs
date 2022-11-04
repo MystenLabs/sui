@@ -21,7 +21,7 @@ async fn test_restore_from_disk() {
     cluster.start(Some(4), Some(1), None).await;
 
     let id = 0;
-    let mut client = cluster.authority(0).new_transactions_client(&id).await;
+    let client = cluster.authority(0).new_transactions_client(&id).await;
 
     // Subscribe to the transaction confirmation channel
     let mut receiver = cluster

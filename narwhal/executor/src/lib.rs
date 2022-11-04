@@ -139,30 +139,28 @@ pub async fn get_restored_consensus_output<State: ExecutionState>(
         last_executed_index, consensus_next_index
     );
 
-    // We use <= check here as we always want to recover at least the last committed certificate
-    // since we can't know whether the execution has been interrupted and there are still batches/transactions
+    // We always want to recover at least the last committed certificate since we can't know
+    // whether the execution has been interrupted and there are still batches/transactions
     // that need to be send for execution.
-    if last_executed_index <= consensus_next_index {
-        let missing = consensus_store
-            .read_sequenced_certificates(&(last_executed_index..=consensus_next_index))?
-            .into_iter()
-            .map(|(seq, digest)| (seq - 1, digest))
-            .collect::<Vec<(SequenceNumber, CertificateDigest)>>();
+    let missing = consensus_store
+        .read_sequenced_certificates_from(&last_executed_index)?
+        .into_iter()
+        .map(|(seq, digest)| (seq - 1, digest))
+        .collect::<Vec<(SequenceNumber, CertificateDigest)>>();
 
-        debug!("Found {} certificates to recover", missing.len());
+    debug!("Found {} certificates to recover", missing.len());
 
-        for (seq, cert_digest) in missing {
-            debug!(
-                "Recovered certificate index:{}, digest:{}",
-                seq, cert_digest
-            );
-            if let Some(cert) = certificate_store.read(cert_digest).unwrap() {
-                // Save the missing sequence / cert pair as ConsensusOutput to re-send to the executor.
-                restored_consensus_output.push(ConsensusOutput {
-                    certificate: cert,
-                    consensus_index: seq,
-                })
-            }
+    for (seq, cert_digest) in missing {
+        debug!(
+            "Recovered certificate index:{}, digest:{}",
+            seq, cert_digest
+        );
+        if let Some(cert) = certificate_store.read(cert_digest).unwrap() {
+            // Save the missing sequence / cert pair as ConsensusOutput to re-send to the executor.
+            restored_consensus_output.push(ConsensusOutput {
+                certificate: cert,
+                consensus_index: seq,
+            })
         }
     }
     Ok(restored_consensus_output)

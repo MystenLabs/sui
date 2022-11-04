@@ -6,6 +6,7 @@ use axum::{extract::Extension, http::StatusCode, routing::get, Json, Router};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use sui_metrics::spawn_monitored_task;
 use tokio::sync::watch;
+use tokio::task::JoinHandle;
 use tracing::info;
 use types::metered_channel::Sender;
 use types::ReconfigureNotification;
@@ -15,7 +16,7 @@ pub fn start_admin_server(
     network: anemo::Network,
     mut rx_reconfigure: watch::Receiver<ReconfigureNotification>,
     tx_state_handler: Option<Sender<ReconfigureNotification>>,
-) {
+) -> Vec<JoinHandle<()>> {
     let mut router = Router::new()
         .route("/peers", get(get_peers))
         .route("/known_peers", get(get_known_peers));
@@ -39,8 +40,9 @@ pub fn start_admin_server(
     let handle = axum_server::Handle::new();
     let shutdown_handle = handle.clone();
 
+    let mut handles = Vec::new();
     // Spawn a task to shutdown server.
-    spawn_monitored_task!(async move {
+    handles.push(spawn_monitored_task!(async move {
         while (rx_reconfigure.changed().await).is_ok() {
             let message = rx_reconfigure.borrow().clone();
             if let ReconfigureNotification::Shutdown = message {
@@ -48,15 +50,17 @@ pub fn start_admin_server(
                 return;
             }
         }
-    });
+    }));
 
-    spawn_monitored_task!(async move {
+    handles.push(spawn_monitored_task!(async move {
         axum_server::bind(socket_address)
             .handle(shutdown_handle)
             .serve(router.into_make_service())
             .await
             .unwrap();
-    });
+    }));
+
+    handles
 }
 
 async fn get_peers(
