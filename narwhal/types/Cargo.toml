@@ -44,7 +44,7 @@ once_cell = "1.16.0"
 [dev-dependencies]
 criterion = "0.3.6"
 hex = "0.4.3"
-serde_test = "1.0.144"
+serde_test = "1.0.147"
 test-utils = { path = "../test-utils", package = "narwhal-test-utils" }
 
 [target.'cfg(not(target_env = "msvc"))'.build-dependencies]
