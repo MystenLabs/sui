@@ -18,20 +18,30 @@ import st from '../NetworkSelector.module.scss';
 const MIN_CHAR = 5;
 
 const validation = Yup.object({
-    rpcInput: Yup.string().required().min(MIN_CHAR).label('Custom RPC URL'),
+    rpcInput: Yup.string()
+        .required()
+        .label('Custom RPC URL')
+        .min(MIN_CHAR)
+        .test(
+            'validate-url',
+            'Not a valid URL',
+            (value) =>
+                value?.indexOf('http://') === 0 ||
+                value?.indexOf('https://') === 0
+        ),
 });
 
 export function CustomRPCInput() {
     const placeholder = ENV_TO_API.customRPC?.fullNode;
 
     const customRPC = useAppSelector(({ app }) => app.customRPC);
-    const [customRPCURL, setTimerMinutes] = useState<string>(customRPC || '');
+    const [customRPCURL, setCustomRPCURL] = useState<string>(customRPC || '');
     const dispatch = useAppDispatch();
 
     const changeNetwork = useCallback(
         async ({ rpcInput }: { rpcInput: string }) => {
             dispatch(setCustomRPC(rpcInput));
-            setTimerMinutes(rpcInput);
+            setCustomRPCURL(rpcInput);
         },
         [dispatch]
     );
@@ -40,9 +50,8 @@ export function CustomRPCInput() {
         <Formik
             initialValues={{ rpcInput: customRPCURL }}
             validationSchema={validation}
-            validateOnMount
             onSubmit={changeNetwork}
-            enableReinitialize={false}
+            enableReinitialize={true}
         >
             {({ dirty, isSubmitting, isValid, touched, errors }) => (
                 <Form>
@@ -68,7 +77,7 @@ export function CustomRPCInput() {
                         </Button>
                     </Field>
 
-                    {touched.rpcInput && errors.rpcInput && dirty ? (
+                    {touched.rpcInput && errors.rpcInput ? (
                         <Alert className={st.error}>{errors.rpcInput}</Alert>
                     ) : null}
                 </Form>

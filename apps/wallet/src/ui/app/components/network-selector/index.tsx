@@ -4,7 +4,7 @@
 import { useFeature } from '@growthbook/growthbook-react';
 import cl from 'classnames';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useMemo, useCallback, useState } from 'react';
+import { useMemo, useCallback, useState, useEffect } from 'react';
 
 import { CustomRPCInput } from './custom-rpc-input';
 import { API_ENV_TO_INFO, API_ENV } from '_app/ApiProvider';
@@ -28,7 +28,13 @@ const NetworkSelector = () => {
         selectedApiEnv === API_ENV.customRPC
     );
 
-    const [activeClass, setActiveClass] = useState<string>(selectedApiEnv);
+    const [selectedNetworkName, setSelectedNetworkName] =
+        useState<string>(selectedApiEnv);
+
+    // change the selected network name whenever the selectedApiEnv changes
+    useEffect(() => {
+        setSelectedNetworkName(selectedApiEnv);
+    }, [selectedApiEnv]);
 
     const dispatch = useAppDispatch();
     const excludeCustomRPC =
@@ -68,7 +74,9 @@ const NetworkSelector = () => {
             const isEmptyCustomRpc =
                 networkName === API_ENV.customRPC && !customRPC;
 
-            setActiveClass(networkName && !isEmptyCustomRpc ? networkName : '');
+            setSelectedNetworkName(
+                networkName && !isEmptyCustomRpc ? networkName : ''
+            );
 
             if (isEmptyCustomRpc) {
                 setShowCustomRPCInput(true);
@@ -96,8 +104,8 @@ const NetworkSelector = () => {
                                 className={cl(
                                     st.networkIcon,
                                     st.selectedNetwork,
-                                    activeClass === apiEnv.networkName &&
-                                        st.networkActive,
+                                    selectedNetworkName ===
+                                        apiEnv.networkName && st.networkActive,
                                     apiEnv.networkName === API_ENV.customRPC &&
                                         showCustomRPCInput &&
                                         st.customRpcActive
