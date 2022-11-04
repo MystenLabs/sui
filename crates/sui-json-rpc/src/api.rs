@@ -116,13 +116,7 @@ pub trait RpcReadApi {
 #[rpc(server, client, namespace = "sui")]
 pub trait RpcFullNodeReadApi {
     #[method(name = "dryRunTransaction")]
-    async fn dry_run_transaction(
-        &self,
-        tx_bytes: Base64,
-        sig_scheme: SignatureScheme,
-        signature: Base64,
-        pub_key: Base64,
-    ) -> RpcResult<SuiTransactionEffects>;
+    async fn dry_run_transaction(&self, tx_bytes: Base64) -> RpcResult<SuiTransactionEffects>;
 
     /// Return the argument types of a Move function,
     /// based on normalized Type.

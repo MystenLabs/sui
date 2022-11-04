@@ -140,7 +140,8 @@ pub async fn estimate_transaction_computation_cost(
     let tx = to_sender_signed_transaction(tx_data, &keypair);
 
     let (_gas_status, input_objects) =
-        transaction_input_checker::check_transaction_input(&state.db(), &tx).await?;
+        transaction_input_checker::check_transaction_input(&state.db(), &tx.signed_data.data)
+            .await?;
     let in_mem_temporary_store =
         TemporaryStore::new(state.db(), input_objects, TransactionDigest::random());
 

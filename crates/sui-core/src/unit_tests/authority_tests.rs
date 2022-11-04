@@ -184,7 +184,7 @@ async fn test_dry_run_transaction() {
     let transaction_digest = *transaction.digest();
 
     let response = authority
-        .dry_run_transaction(transaction, transaction_digest)
+        .dry_exec_transaction(transaction.signed_data.data.clone(), transaction_digest)
         .await;
     assert!(response.is_ok());
 

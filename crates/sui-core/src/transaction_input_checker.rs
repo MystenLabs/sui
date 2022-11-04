@@ -14,20 +14,19 @@ use sui_types::{
     gas::{self, SuiGasStatus},
     messages::{
         InputObjectKind, InputObjects, SingleTransactionKind, TransactionData, VerifiedCertificate,
-        VerifiedTransactionEnvelope,
     },
     object::{Object, Owner},
 };
 use tracing::instrument;
 
-async fn get_gas_status<S, T>(
+async fn get_gas_status<S>(
     store: &SuiDataStore<S>,
-    transaction: &VerifiedTransactionEnvelope<T>,
+    transaction: &TransactionData,
 ) -> SuiResult<SuiGasStatus<'static>>
 where
     S: Eq + Debug + Serialize + for<'de> Deserialize<'de>,
 {
-    let tx_kind = &transaction.signed_data.data.kind;
+    let tx_kind = &transaction.kind;
     let gas_object_ref = transaction.gas_payment_object_ref();
     let gas_object_refs = match tx_kind {
         TransactionKind::Single(SingleTransactionKind::PaySui(p)) => p.coins.clone(),
@@ -39,9 +38,9 @@ where
     let mut gas_status = check_gas(
         store,
         gas_object_ref,
-        transaction.signed_data.data.gas_budget,
-        transaction.signed_data.data.gas_price,
-        &transaction.signed_data.data.kind,
+        transaction.gas_budget,
+        transaction.gas_price,
+        &transaction.kind,
         extra_gas_object_refs,
     )
     .await?;
@@ -56,20 +55,19 @@ where
 }
 
 #[instrument(level = "trace", skip_all)]
-pub async fn check_transaction_input<S, T>(
+pub async fn check_transaction_input<S>(
     store: &SuiDataStore<S>,
-    transaction: &VerifiedTransactionEnvelope<T>,
+    transaction: &TransactionData,
 ) -> SuiResult<(SuiGasStatus<'static>, InputObjects)>
 where
     S: Eq + Debug + Serialize + for<'de> Deserialize<'de>,
 {
-    transaction.signed_data.data.validity_check()?;
-    transaction.signed_data.data.kind.validity_check()?;
+    transaction.validity_check()?;
+    transaction.kind.validity_check()?;
     let gas_status = get_gas_status(store, transaction).await?;
-    let input_objects = transaction.signed_data.data.input_objects()?;
+    let input_objects = transaction.input_objects()?;
     let objects = store.get_input_objects(&input_objects)?;
-    let input_objects =
-        check_objects(&transaction.signed_data.data, input_objects, objects).await?;
+    let input_objects = check_objects(transaction, input_objects, objects).await?;
     Ok((gas_status, input_objects))
 }
 
@@ -80,7 +78,7 @@ pub async fn check_certificate_input<S>(
 where
     S: Eq + Debug + Serialize + for<'de> Deserialize<'de>,
 {
-    let gas_status = get_gas_status(store, cert).await?;
+    let gas_status = get_gas_status(store, &cert.signed_data.data).await?;
     let input_objects = cert.signed_data.data.input_objects()?;
 
     let tx_data = &cert.signed_data.data;
