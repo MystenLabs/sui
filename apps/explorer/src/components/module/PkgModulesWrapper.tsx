@@ -11,9 +11,17 @@ import { ReactComponent as SearchIcon } from '~/assets/SVGIcons/24px/Search.svg'
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 import { ListItem, VerticalList } from '~/ui/VerticalList';
 
+type ModuleType = [moduleName: string, code: string];
+
 interface Props {
     id?: string;
-    modules: [moduleName: string, code: string][];
+    modules: ModuleType[];
+}
+
+interface ModuleViewWrapperProps {
+    id?: string;
+    selectedModuleName: string;
+    modules: ModuleType[];
 }
 
 const initialSelectModule = (searchParams: any, modulenames: string[]) => {
@@ -25,6 +33,24 @@ const initialSelectModule = (searchParams: any, modulenames: string[]) => {
         return modulenames[0];
     }
 };
+
+function ModuleViewWrapper({
+    id,
+    selectedModuleName,
+    modules,
+}: ModuleViewWrapperProps) {
+    const selectedModuleData = modules.find(
+        ([name]) => name === selectedModuleName
+    );
+
+    if (selectedModuleData) {
+        const [name, code] = selectedModuleData;
+
+        return <ModuleView id={id} name={name} code={code} />;
+    }
+
+    return <div />;
+}
 
 function PkgModuleViewWrapper({ id, modules }: Props) {
     const modulenames = modules.map(([name], idx) => name);
@@ -107,16 +133,11 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                     <TabPanels>
                         <TabPanel>
                             <div className="overflow-auto h-[555px] w-[87vw] md:w-[70vw] lg:w-[75vw]">
-                                {modules
-                                    .filter(([name]) => name === selectedModule)
-                                    .map(([name, code], idx) => (
-                                        <ModuleView
-                                            key={idx}
-                                            id={id}
-                                            name={name}
-                                            code={code}
-                                        />
-                                    ))}
+                                <ModuleViewWrapper
+                                    id={id}
+                                    modules={modules}
+                                    selectedModuleName={selectedModule}
+                                />
                             </div>
                         </TabPanel>
                     </TabPanels>
