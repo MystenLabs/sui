@@ -1,12 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
+import { useFeature } from '@growthbook/growthbook-react';
 import { useCallback, useContext, useState } from 'react';
 
 import { ReactComponent as DownSVG } from '../../assets/Down.svg';
 import { NetworkContext } from '../../context';
 import { Network, getEndpoint } from '../../utils/api/DefaultRpcClient';
 import { IS_STATIC_ENV, IS_STAGING_ENV } from '../../utils/envUtil';
+import { GROWTHBOOK_FEATURES } from '../../utils/growthbook';
 
 import styles from './Network.module.css';
 
@@ -14,6 +15,10 @@ export default function NetworkSelect() {
     const [network, setNetwork] = useContext(NetworkContext);
     const [isModuleOpen, setModuleOpen] = useState(false);
     const [isOpenInput, setIsOpenInput] = useState(false);
+
+    const showTestNet = useFeature(
+        GROWTHBOOK_FEATURES.USE_TEST_NET_ENDPOINT
+    ).on;
 
     const openModal = useCallback(
         () => (isModuleOpen ? setModuleOpen(false) : setModuleOpen(true)),
@@ -88,6 +93,14 @@ export default function NetworkSelect() {
                                 className={networkStyle(Network.Staging)}
                             >
                                 Staging
+                            </div>
+                        ) : null}
+                        {showTestNet ? (
+                            <div
+                                onClick={chooseNetwork(Network.Testnet)}
+                                className={networkStyle(Network.Testnet)}
+                            >
+                                Testnet
                             </div>
                         ) : null}
                         <div

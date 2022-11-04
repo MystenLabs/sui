@@ -32,3 +32,7 @@ export async function loadFeatures() {
         console.warn('Failed to fetch feature definitions from Growthbook', e);
     }
 }
+
+export enum GROWTHBOOK_FEATURES {
+    USE_TEST_NET_ENDPOINT = 'testnet-selection',
+}

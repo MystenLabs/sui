@@ -6,6 +6,7 @@ export enum Network {
     Static = 'Static',
     Devnet = 'Devnet',
     Staging = 'Staging',
+    Testnet = 'Testnet',
     CI = 'CI',
 }
 
@@ -16,6 +17,7 @@ const ENDPOINTS: Record<Network, string> = {
     [Network.Staging]: 'https://fullnode.staging.sui.io:443',
     // NOTE: Static is pointed to devnet, but it shouldn't actually fetch data.
     [Network.Static]: 'https://fullnode.devnet.sui.io:443',
+    [Network.Testnet]: 'https://fullnode.testnet.sui.io:443',
 };
 
 export function getEndpoint(network: Network | string): string {
