@@ -369,20 +369,20 @@ where
         checkpoint_process_control: CheckpointProcessControl,
         metrics: CheckpointMetrics,
     ) -> JoinHandle<()> {
-        if !self.state.is_fullnode() {
-            // Spawn task to take care of checkpointing driving
-            spawn_monitored_task!(checkpoint_drive_process(
-                self,
-                &checkpoint_process_control,
-                metrics
-            ));
-        } else {
+        if self.state.is_fullnode() {
             // Spawn task to take care of checkpointing syncing
             spawn_monitored_task!(checkpoint_sync_process(
                 self,
                 &checkpoint_process_control,
                 metrics
-            ));
+            ))
+        } else {
+            // Spawn task to take care of checkpointing driving
+            spawn_monitored_task!(checkpoint_drive_process(
+                self,
+                &checkpoint_process_control,
+                metrics
+            ))
         }
     }
 }

@@ -63,7 +63,7 @@ impl CheckpointProcessControl {
     pub fn default_for_test() -> Self {
         CheckpointProcessControl {
             long_pause_between_checkpoints: Duration::from_secs(3),
-            ..Default::default()
+            ..CheckpointProcessControl::default()
         }
     }
 }
