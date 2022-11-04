@@ -78,10 +78,10 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
     }, [filteredModules]);
 
     return (
-        <div className="flex flex-wrap md:flex-nowrap border-0 border-y border-solid border-sui-grey-45">
-            <div className="w-full md:w-[15vw] pr-[20px]">
+        <div className="flex flex-col md:flex-row md:flex-nowrap gap-5 border-0 border-y border-solid border-sui-grey-45">
+            <div className="w-full md:w-1/5">
                 <Combobox value={selectedModule} onChange={setSelectedModule}>
-                    <div className="box-border border border-sui-grey-50 border-solid rounded-[6px] h-[34px] shadow-sm placeholder-sui-grey-65 pl-3 w-full flex my-[10px] justify-between  ml-[2px]">
+                    <div className="box-border border border-sui-grey-50 border-solid rounded-md shadow-sm placeholder-sui-grey-65 pl-3 w-full flex my-2.5 justify-between py-2">
                         <Combobox.Input
                             onChange={(event) => setQuery(event.target.value)}
                             displayValue={() => query}
@@ -90,7 +90,7 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                         />
                         <button
                             onClick={submitSearch}
-                            className="bg-inherit border-none pr-3"
+                            className="bg-inherit border-none pr-2"
                             type="submit"
                         >
                             <SearchIcon className="fill-sui-steel cursor-pointer" />
@@ -99,13 +99,16 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                     <Combobox.Options
                         static
                         as="div"
-                        className="w-full h-[209px] md:h-[571px] overflow-auto mr-[-20px] pr-[20px]"
+                        className="h-[209px] md:h-[571px] overflow-auto pr-1"
                     >
                         <VerticalList>
                             {filteredModules.map((name, idx) => (
                                 <Combobox.Option key={name} value={name}>
                                     {({ active }) => (
-                                        <div key={idx}>
+                                        <div
+                                            key={idx}
+                                            className="md:min-w-fit "
+                                        >
                                             <ListItem
                                                 active={
                                                     active ||
@@ -122,14 +125,14 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                     </Combobox.Options>
                 </Combobox>
             </div>
-            <div className="border-0 md:border-l border-solid border-sui-grey-45 md:pl-[30px] pt-[20px]">
+            <div className="border-0 md:border-l border-solid border-sui-grey-45 md:pl-7 pt-5 grow">
                 <TabGroup size="md">
                     <TabList>
                         <Tab>Bytecode</Tab>
                     </TabList>
                     <TabPanels>
                         <TabPanel>
-                            <div className="overflow-auto h-[555px] w-[87vw] md:w-[70vw] lg:w-[75vw]">
+                            <div className="overflow-auto h-[555px]">
                                 <ModuleViewWrapper
                                     id={id}
                                     modules={modules}
