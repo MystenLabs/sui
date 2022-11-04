@@ -13,6 +13,7 @@ use sui::config::SuiEnv;
 use sui::{client_commands::WalletContext, config::SuiClientConfig};
 use sui_config::genesis_config::GenesisConfig;
 use sui_config::utils::get_available_port;
+use sui_config::CheckpointProcessControl;
 use sui_config::{Config, SUI_CLIENT_CONFIG, SUI_NETWORK_CONFIG};
 use sui_config::{PersistedConfig, SUI_KEYSTORE_FILENAME};
 use sui_json_rpc::ServerHandle;
@@ -198,8 +199,9 @@ impl TestClusterBuilder {
     async fn start_test_swarm_with_fullnodes(
         genesis_config: Option<GenesisConfig>,
     ) -> Result<Swarm, anyhow::Error> {
-        let mut builder: SwarmBuilder =
-            Swarm::builder().committee_size(NonZeroUsize::new(NUM_VALIDATOR).unwrap());
+        let mut builder: SwarmBuilder = Swarm::builder()
+            .committee_size(NonZeroUsize::new(NUM_VALIDATOR).unwrap())
+            .with_checkpoint_config(CheckpointProcessControl::default_for_test());
 
         if let Some(genesis_config) = genesis_config {
             builder = builder.initial_accounts_config(genesis_config);
@@ -254,6 +256,7 @@ pub async fn start_a_fullnode(swarm: &Swarm, disable_ws: bool) -> Result<SuiNode
         .config()
         .generate_fullnode_config_with_random_dir_name(true, false);
     config.json_rpc_address = jsonrpc_addr;
+    config.checkpoint_config = CheckpointProcessControl::default_for_test();
 
     if !disable_ws {
         let ws_server_url = format!("127.0.0.1:{}", get_available_port());
@@ -279,6 +282,7 @@ pub async fn start_a_fullnode_with_handle(
         .config()
         .generate_fullnode_config_with_random_dir_name(true, false);
     config.json_rpc_address = jsonrpc_addr;
+    config.checkpoint_config = CheckpointProcessControl::default_for_test();
 
     let ws_url = if !disable_ws {
         let ws_server_url = format!("127.0.0.1:{}", ws_port.unwrap_or_else(get_available_port));

@@ -40,6 +40,8 @@ use tokio::{
 };
 use tracing::{debug, error, info, warn};
 
+use sui_config::checkpoint::CheckpointProcessControl;
+
 use crate::{
     authority::AuthorityState,
     authority_aggregator::AuthorityAggregator,
@@ -63,7 +65,7 @@ use checkpoint_driver::{checkpoint_drive_process, checkpoint_sync_process};
 
 pub mod execution_driver;
 
-use self::{checkpoint_driver::CheckpointProcessControl, execution_driver::execution_process};
+use self::execution_driver::execution_process;
 
 // TODO: Make these into a proper config
 const MAX_RETRIES_RECORDED: u32 = 10;

@@ -5,8 +5,8 @@ use crate::{
     genesis,
     genesis_config::{GenesisConfig, ValidatorGenesisInfo},
     p2p::P2pConfig,
-    utils, ConsensusConfig, NetworkConfig, NodeConfig, ValidatorInfo, AUTHORITIES_DB_NAME,
-    CONSENSUS_DB_NAME,
+    utils, CheckpointProcessControl, ConsensusConfig, NetworkConfig, NodeConfig, ValidatorInfo,
+    AUTHORITIES_DB_NAME, CONSENSUS_DB_NAME,
 };
 use rand::rngs::OsRng;
 use std::{
@@ -41,6 +41,7 @@ pub struct ConfigBuilder<R = OsRng> {
     initial_accounts_config: Option<GenesisConfig>,
     with_swarm: bool,
     validator_ip_sel: ValidatorIpSelection,
+    checkpoint_config: CheckpointProcessControl,
 }
 
 impl ConfigBuilder {
@@ -59,6 +60,7 @@ impl ConfigBuilder {
             } else {
                 ValidatorIpSelection::Localhost
             },
+            checkpoint_config: CheckpointProcessControl::default(),
         }
     }
 }
@@ -89,6 +91,11 @@ impl<R> ConfigBuilder<R> {
         self
     }
 
+    pub fn with_checkpoint_config(mut self, checkpoint_config: CheckpointProcessControl) -> Self {
+        self.checkpoint_config = checkpoint_config;
+        self
+    }
+
     pub fn initial_accounts_config(mut self, initial_accounts_config: GenesisConfig) -> Self {
         self.initial_accounts_config = Some(initial_accounts_config);
         self
@@ -103,6 +110,7 @@ impl<R> ConfigBuilder<R> {
             initial_accounts_config: self.initial_accounts_config,
             with_swarm: self.with_swarm,
             validator_ip_sel: self.validator_ip_sel,
+            checkpoint_config: self.checkpoint_config,
         }
     }
 }
@@ -287,6 +295,7 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                     grpc_load_shed: initial_accounts_config.grpc_load_shed,
                     grpc_concurrency_limit: initial_accounts_config.grpc_concurrency_limit,
                     p2p_config,
+                    checkpoint_config: self.checkpoint_config.clone(),
                 }
             })
             .collect();

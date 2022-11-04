@@ -6,10 +6,8 @@ use multiaddr::Multiaddr;
 use prometheus::Registry;
 use std::sync::Arc;
 use std::time::Duration;
-use sui_config::{NetworkConfig, ValidatorInfo};
-use sui_core::authority_active::checkpoint_driver::{
-    checkpoint_drive_process_step, CheckpointProcessControl,
-};
+use sui_config::{CheckpointProcessControl, NetworkConfig, ValidatorInfo};
+use sui_core::authority_active::checkpoint_driver::checkpoint_drive_process_step;
 use sui_node::SuiNodeHandle;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress};
 use sui_types::committee::Committee;

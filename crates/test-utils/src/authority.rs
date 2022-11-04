@@ -5,13 +5,11 @@ use prometheus::Registry;
 use rand::{prelude::StdRng, SeedableRng};
 use std::sync::Arc;
 use std::time::Duration;
+use sui_config::CheckpointProcessControl;
 use sui_config::{NetworkConfig, NodeConfig, ValidatorInfo};
 use sui_core::authority_client::{AuthorityAPI, NetworkAuthorityClientMetrics};
 use sui_core::{
-    authority_active::{
-        checkpoint_driver::{CheckpointMetrics, CheckpointProcessControl},
-        ActiveAuthority,
-    },
+    authority_active::{checkpoint_driver::CheckpointMetrics, ActiveAuthority},
     authority_aggregator::AuthorityAggregatorBuilder,
     authority_client::NetworkAuthorityClient,
 };

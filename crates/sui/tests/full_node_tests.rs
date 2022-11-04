@@ -97,7 +97,8 @@ async fn test_full_node_syncs_checkpoints() -> Result<(), anyhow::Error> {
     };
 
     // Wait for long enough to have generated some checkpoint.
-    tokio::time::sleep(Duration::from_secs(5 * 60)).await;
+    // Note that in test, pause between checkpoints is made much smaller
+    tokio::time::sleep(Duration::from_secs(20)).await;
 
     let active = node.active();
     let next_checkpoint_sequence = active.state.checkpoints.lock().next_checkpoint();

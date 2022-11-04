@@ -250,7 +250,10 @@ impl SuiNode {
             Some(
                 active_authority
                     .clone()
-                    .spawn_checkpoint_process(CheckpointMetrics::new(&prometheus_registry))
+                    .spawn_checkpoint_process_with_config(
+                        config.checkpoint_config.clone(),
+                        CheckpointMetrics::new(&prometheus_registry),
+                    )
                     .await,
             )
         } else {

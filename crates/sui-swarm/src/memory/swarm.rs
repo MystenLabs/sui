@@ -12,9 +12,11 @@ use std::{
     mem, ops,
     path::{Path, PathBuf},
 };
-use sui_config::builder::{CommitteeConfig, ConfigBuilder};
-use sui_config::genesis_config::{GenesisConfig, ValidatorGenesisInfo};
-use sui_config::NetworkConfig;
+use sui_config::{
+    builder::{CommitteeConfig, ConfigBuilder},
+    genesis_config::{GenesisConfig, ValidatorGenesisInfo},
+    CheckpointProcessControl, NetworkConfig,
+};
 use sui_types::base_types::SuiAddress;
 use tempfile::TempDir;
 
@@ -27,6 +29,7 @@ pub struct SwarmBuilder<R = OsRng> {
     fullnode_count: usize,
     fullnode_rpc_addr: Option<SocketAddr>,
     websocket_rpc_addr: Option<SocketAddr>,
+    checkpoint_config: Option<CheckpointProcessControl>,
 }
 
 impl SwarmBuilder {
@@ -40,6 +43,7 @@ impl SwarmBuilder {
             fullnode_count: 0,
             fullnode_rpc_addr: None,
             websocket_rpc_addr: None,
+            checkpoint_config: None,
         }
     }
 }
@@ -54,6 +58,7 @@ impl<R> SwarmBuilder<R> {
             fullnode_count: self.fullnode_count,
             fullnode_rpc_addr: self.fullnode_rpc_addr,
             websocket_rpc_addr: self.websocket_rpc_addr,
+            checkpoint_config: None,
         }
     }
 
@@ -99,6 +104,11 @@ impl<R> SwarmBuilder<R> {
         self.websocket_rpc_addr = Some(websocket_rpc_addr);
         self
     }
+
+    pub fn with_checkpoint_config(mut self, checkpoint_config: CheckpointProcessControl) -> Self {
+        self.checkpoint_config = Some(checkpoint_config);
+        self
+    }
 }
 
 impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
@@ -116,9 +126,16 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
             config_builder = config_builder.initial_accounts_config(initial_accounts_config);
         }
 
+        let checkpoint_config = if let Some(cfg) = self.checkpoint_config {
+            cfg
+        } else {
+            CheckpointProcessControl::default()
+        };
+
         let network_config = config_builder
             .committee(self.committee)
             .with_swarm()
+            .with_checkpoint_config(checkpoint_config)
             .rng(self.rng)
             .build();
 

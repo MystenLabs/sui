@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::p2p::P2pConfig;
+use crate::CheckpointProcessControl;
 use crate::{builder, genesis, utils, Config, NodeConfig, ValidatorInfo, FULL_NODE_DB_PATH};
 use rand::rngs::OsRng;
 use rand::RngCore;
@@ -126,6 +127,7 @@ impl NetworkConfig {
             grpc_load_shed: None,
             grpc_concurrency_limit: None,
             p2p_config,
+            checkpoint_config: CheckpointProcessControl::default(),
         }
     }
 }

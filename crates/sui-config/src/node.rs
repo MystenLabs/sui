@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::checkpoint::CheckpointProcessControl;
 use crate::genesis;
 use crate::p2p::P2pConfig;
 use crate::Config;
@@ -81,6 +82,8 @@ pub struct NodeConfig {
     pub p2p_config: P2pConfig,
 
     pub genesis: Genesis,
+
+    pub checkpoint_config: CheckpointProcessControl,
 }
 
 fn default_key_pair() -> Arc<AuthorityKeyPair> {

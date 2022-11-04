@@ -11,6 +11,7 @@ use sui_types::committee::StakeUnit;
 use tracing::trace;
 
 pub mod builder;
+pub mod checkpoint;
 pub mod gateway;
 pub mod genesis;
 pub mod genesis_config;
@@ -19,6 +20,7 @@ pub mod p2p;
 mod swarm;
 pub mod utils;
 
+pub use checkpoint::CheckpointProcessControl;
 pub use node::{ConsensusConfig, NodeConfig, ValidatorInfo};
 pub use swarm::NetworkConfig;
 
