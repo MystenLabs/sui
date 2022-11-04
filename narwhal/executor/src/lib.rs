@@ -128,15 +128,12 @@ pub async fn get_restored_consensus_output<State: ExecutionState>(
     // certificates from the consensus_store we are incrementing the `next_certificate_index` by 1
     // to align the semantics.
     // TODO: https://github.com/MystenLabs/sui/issues/5819
-    let last_executed_index = execution_state
-        .load_execution_indices()
-        .await
-        .next_certificate_index
-        + 1;
+    let last = execution_state.load_execution_indices().await;
+    let last_executed_index = last.next_certificate_index + 1;
 
     debug!(
-        "Recovering with last executed index:{}, last consensus index:{}",
-        last_executed_index, consensus_next_index
+        "Recovering with last executor index:{:?}, last consensus index:{}",
+        last, consensus_next_index
     );
 
     // We always want to recover at least the last committed certificate since we can't know
