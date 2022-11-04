@@ -23,7 +23,7 @@ jobs:
         run: echo "::set-output name=hasChanges::$(pnpm list --filter "...[$(git rev-parse HEAD^1)]" --depth -1 --json | jq "any(.[] | select(.private != true) ; length > 0)")"
       - name: Get changed files in the changesets folder
         id: has-changesets
-        uses: tj-actions/changed-files@v32
+        uses: tj-actions/changed-files@v34
         with:
           files: |
             .changeset/**
