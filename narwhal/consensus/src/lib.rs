@@ -26,7 +26,7 @@ use types::{Certificate, SequenceNumber};
 pub const DEFAULT_CHANNEL_SIZE: usize = 1_000;
 
 /// The output format of the consensus.
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct ConsensusOutput {
     /// The sequenced certificate.
     pub certificate: Certificate,
