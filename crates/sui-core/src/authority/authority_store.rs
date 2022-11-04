@@ -393,6 +393,13 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         }
     }
 
+    pub async fn get_tx_sequence(
+        &self,
+        tx: TransactionDigest,
+    ) -> SuiResult<Option<TxSequenceNumber>> {
+        self.lock_service.get_tx_sequence(tx).await
+    }
+
     /// Get the transaction envelope that currently locks the given object,
     /// or returns Err(TransactionLockDoesNotExist) if the lock does not exist.
     pub async fn get_object_locking_transaction(

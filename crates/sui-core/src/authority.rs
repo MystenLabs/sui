@@ -830,7 +830,7 @@ impl AuthorityState {
         // If commit_certificate returns an error, tx_guard will be dropped and the certificate
         // will be persisted in the log for later recovery.
         let notifier_ticket = self.batch_notifier.ticket(bypass_validator_halt)?;
-        let seq = notifier_ticket.seq();
+        let ticket_seq = notifier_ticket.seq();
         let res = self
             .commit_certificate(
                 inner_temporary_store,
@@ -839,7 +839,6 @@ impl AuthorityState {
                 notifier_ticket,
             )
             .await;
-
         let seq = match res {
             Err(err) => {
                 if matches!(err, SuiError::ValidatorHaltedAtEpochEnd) {
@@ -849,12 +848,56 @@ impl AuthorityState {
                     );
                     tx_guard.release();
                 } else {
-                    error!(?digest, "commit_certificate failed: {}", err);
+                    error!(?digest, seq=?ticket_seq, "commit_certificate failed: {}", err);
                 }
-                debug!("Failed to notify ticket with sequence number: {}", seq);
+                debug!(
+                     seq=?ticket_seq,
+                    "Ticket not notified due to commit failure",
+                );
+                // Check if we were able to sequence the tx at all
+                match self.db().get_tx_sequence(*certificate.digest()).await {
+                    Err(db_err) => {
+                        // TODO: Add retries on failing to read from db because
+                        // this still stalls the batch maker
+                        error!(
+                            ?digest,
+                            seq=?ticket_seq,
+                            "validator failed to read if db has locked the tx sequence: {}", db_err
+                        );
+                    }
+                    Ok(None) => {
+                        debug!(?digest, seq=?ticket_seq, "Closing the notifier ticket because we couldn't lock the tx sequence");
+                        self.batch_notifier.notify(ticket_seq);
+                    }
+                    Ok(Some(tx_seq)) => {
+                        if tx_seq < ticket_seq {
+                            debug!(
+                                ?digest,
+                                ?tx_seq,
+                                ?ticket_seq,
+                                "Notifying during retry failure, current low watermark {:?}",
+                                self.batch_notifier.low_watermark()
+                            );
+                            // Notify if we failed during a retry after sequencing
+                            self.batch_notifier.notify(ticket_seq);
+                        };
+                    }
+                }
                 return Err(err);
             }
-            Ok(seq) => seq,
+            Ok(seq) => {
+                if seq < ticket_seq {
+                    debug!(
+                        ?digest,
+                        ?seq,
+                        ?ticket_seq,
+                        "Notifying during retry, current low watermark {:?}",
+                        self.batch_notifier.low_watermark()
+                    );
+                    self.batch_notifier.notify(seq);
+                };
+                seq
+            }
         };
 
         // commit_certificate finished, the tx is fully committed to the store.
