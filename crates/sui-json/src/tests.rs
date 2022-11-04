@@ -15,9 +15,10 @@ use test_fuzz::runtime::num_traits::ToPrimitive;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::object::Object;
 
-use super::{is_homogeneous, HEX_PREFIX};
+use super::{check_valid_homogeneous, HEX_PREFIX};
 use super::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue};
 
+// Negative test cases
 #[test]
 fn test_json_not_homogeneous() {
     let checks = vec![
@@ -37,12 +38,17 @@ fn test_json_not_homogeneous() {
         ])),
         (json!([[], 2, 3, 5, 6, 7])),
         (json!([[[9, 53, 434], [0], [300]], [], [300, 4, 5, 6, 7]])),
+        (json!([1, 2, 3, 4, 5, 6, 0.4])),
+        (json!([4.2])),
+        (json!(4.7)),
     ];
     // Driver
     for arg in checks {
-        assert!(!is_homogeneous(&arg));
+        assert!(check_valid_homogeneous(&arg).is_err());
     }
 }
+
+// Positive test cases
 #[test]
 fn test_json_is_homogeneous() {
     let checks = vec![
@@ -63,7 +69,7 @@ fn test_json_is_homogeneous() {
 
     // Driver
     for arg in checks {
-        assert!(is_homogeneous(&arg));
+        assert!(check_valid_homogeneous(&arg).is_ok());
     }
 }
 
@@ -111,11 +117,64 @@ fn test_json_is_valid_sui_json() {
 }
 
 #[test]
-fn test_basic_args_linter_pure_args() {
+fn test_basic_args_linter_pure_args_bad() {
+    let bad_hex_val = "0x1234AB  CD";
+
+    let checks = vec![
+            // Although U256 value can be encoded as num, we enforce it must be a string
+            (
+                Value::from(123),
+                MoveTypeLayout::U256,
+            ),
+             // Space not allowed
+             (Value::from(" 9"), MoveTypeLayout::U8),
+             // Hex must start with 0x
+             (Value::from("AB"), MoveTypeLayout::U8),
+             // Too large
+             (Value::from("123456789"), MoveTypeLayout::U8),
+             // Too large
+             (Value::from("123456789123456789123456789123456789"), MoveTypeLayout::U64),
+             // Too large
+             (Value::from("123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789"), MoveTypeLayout::U128),
+             // U64 value greater than 255 cannot be used as U8
+             (Value::from(900u64), MoveTypeLayout::U8),
+             // floats cannot be used as U8
+             (Value::from(0.4f32), MoveTypeLayout::U8),
+             // floats cannot be used as U64
+             (Value::from(3.4f32), MoveTypeLayout::U64),
+             // Negative cannot be used as U64
+             (Value::from(-19), MoveTypeLayout::U64),
+             // Negative cannot be used as Unsigned
+             (Value::from(-1), MoveTypeLayout::U8),
+              // u8 vector from bad hex repr
+            (
+                Value::from(bad_hex_val),
+                MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8)),
+            ),
+            // u8 vector from heterogenous array
+            (
+                json!([1, 2, 3, true, 5, 6, 7]),
+                MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8)),
+            ),
+            // U64 deep nest, bad because heterogenous array
+            (
+                json!([[[9, 53, 434], [0], [300]], [], [300, 4, 5, 6, 7]]),
+                MoveTypeLayout::Vector(Box::new(MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U64)))),
+            ),
+    ];
+
+    // Driver
+    for (arg, expected_type) in checks {
+        let r = SuiJsonValue::new(arg);
+        assert!(r.is_err() || r.unwrap().to_bcs_bytes(&expected_type).is_err());
+    }
+}
+
+#[test]
+fn test_basic_args_linter_pure_args_good() {
     let good_ascii_str = "123456789hdffwfof libgude ihibhdede +_))@+";
     let good_utf8_str = "enbeuf√12∫∆∂3456789hdπ˚ffwfof libgude ˚ø˙ßƒçß +_))@+";
     let good_hex_val = "0x1234ABCD";
-    let bad_hex_val = "0x1234AB  CD";
     let u128_val = u64::MAX as u128 + 0xff;
     let u256_hex_val = "0x1234567812345678877EDA56789098ABCDEF12";
     let u256_val = U256::from_str_radix(u256_hex_val.trim_start_matches("0x"), 16).unwrap();
@@ -125,234 +184,215 @@ fn test_basic_args_linter_pure_args() {
         (
             Value::from(true),
             MoveTypeLayout::Bool,
-            Some(bcs::to_bytes(&true).unwrap()),
+            bcs::to_bytes(&true).unwrap(),
         ),
         // Expected U8 match
         (
             Value::from(9u8),
             MoveTypeLayout::U8,
-            Some(bcs::to_bytes(&9u8).unwrap()),
+            bcs::to_bytes(&9u8).unwrap(),
+        ),
+        // Expected U8 match
+        (
+            Value::from(u8::MAX),
+            MoveTypeLayout::U8,
+            bcs::to_bytes(&u8::MAX).unwrap(),
         ),
         // Expected U16 match
         (
             Value::from(9000u16),
             MoveTypeLayout::U16,
-            Some(bcs::to_bytes(&9000u16).unwrap()),
+            bcs::to_bytes(&9000u16).unwrap(),
         ),
         // Expected U32 match
         (
             Value::from(1233459000u32),
             MoveTypeLayout::U32,
-            Some(bcs::to_bytes(&1233459000u32).unwrap()),
+            bcs::to_bytes(&1233459000u32).unwrap(),
+        ),
+        // Expected U16 match
+        (
+            Value::from(u16::MAX),
+            MoveTypeLayout::U16,
+            bcs::to_bytes(&u16::MAX).unwrap(),
+        ),
+        // Expected U32 match
+        (
+            Value::from(u32::MAX),
+            MoveTypeLayout::U32,
+            bcs::to_bytes(&u32::MAX).unwrap(),
         ),
         // U64 value less than 256 can be used as U8
         (
             Value::from(9u64),
             MoveTypeLayout::U8,
-            Some(bcs::to_bytes(&9u8).unwrap()),
+            bcs::to_bytes(&9u8).unwrap(),
         ),
         // U8 value encoded as str
         (
             Value::from("89"),
             MoveTypeLayout::U8,
-            Some(bcs::to_bytes(&89u8).unwrap()),
+            bcs::to_bytes(&89u8).unwrap(),
         ),
         // U16 value encoded as str
         (
             Value::from("12389"),
             MoveTypeLayout::U16,
-            Some(bcs::to_bytes(&12389u16).unwrap()),
+            bcs::to_bytes(&12389u16).unwrap(),
         ),
         // U32 value encoded as str
         (
             Value::from("123899856"),
             MoveTypeLayout::U32,
-            Some(bcs::to_bytes(&123899856u32).unwrap()),
+            bcs::to_bytes(&123899856u32).unwrap(),
         ),
         // U8 value encoded as str promoted to U64
         (
             Value::from("89"),
             MoveTypeLayout::U64,
-            Some(bcs::to_bytes(&89u64).unwrap()),
+            bcs::to_bytes(&89u64).unwrap(),
         ),
         // U64 value encoded as str
         (
             Value::from("890"),
             MoveTypeLayout::U64,
-            Some(bcs::to_bytes(&890u64).unwrap()),
+            bcs::to_bytes(&890u64).unwrap(),
+        ),
+        // U64 value encoded as str
+        (
+            Value::from(format!("{}", u64::MAX)),
+            MoveTypeLayout::U64,
+            bcs::to_bytes(&u64::MAX).unwrap(),
         ),
         // U128 value encoded as str
         (
             Value::from(format!("{u128_val}")),
             MoveTypeLayout::U128,
-            Some(bcs::to_bytes(&u128_val).unwrap()),
+            bcs::to_bytes(&u128_val).unwrap(),
+        ),
+        // U128 value encoded as str
+        (
+            Value::from(format!("{}", u128::MAX)),
+            MoveTypeLayout::U128,
+            bcs::to_bytes(&u128::MAX).unwrap(),
         ),
         // U256 value encoded as str
         (
             Value::from(format!("{u256_val}")),
             MoveTypeLayout::U256,
-            Some(bcs::to_bytes(&u256_val).unwrap()),
-        ),
-        // Although U256 value can be encoded as num, we enforce it must be a string
-        (
-            Value::from(123),
-            MoveTypeLayout::U256,
-            None,
+            bcs::to_bytes(&u256_val).unwrap(),
         ),
         // U8 value encoded as hex str
         (
             Value::from("0x12"),
             MoveTypeLayout::U8,
-            Some(bcs::to_bytes(&0x12u8).unwrap()),
+            bcs::to_bytes(&0x12u8).unwrap(),
         ),
         // U8 value encoded as hex str promoted to U64
         (
             Value::from("0x12"),
             MoveTypeLayout::U64,
-            Some(bcs::to_bytes(&0x12u64).unwrap()),
+            bcs::to_bytes(&0x12u64).unwrap(),
         ),
         // U64 value encoded as hex str
         (
             Value::from("0x890"),
             MoveTypeLayout::U64,
-            Some(bcs::to_bytes(&0x890u64).unwrap()),
+            bcs::to_bytes(&0x890u64).unwrap(),
         ),
         // U128 value encoded as hex str
         (
             Value::from(format!("0x{:02x}", u128_val)),
             MoveTypeLayout::U128,
-            Some(bcs::to_bytes(&u128_val).unwrap()),
+            bcs::to_bytes(&u128_val).unwrap(),
         ),
         // U256 value encoded as hex str
         (
             Value::from(u256_hex_val.to_string()),
             MoveTypeLayout::U256,
-            Some(bcs::to_bytes(&u256_val).unwrap()),
+            bcs::to_bytes(&u256_val).unwrap(),
         ),
-        // Space not allowed
-        (Value::from(" 9"), MoveTypeLayout::U8, None),
-        // Hex must start with 0x
-        (Value::from("AB"), MoveTypeLayout::U8, None),
-        // Too large
-        (Value::from("123456789"), MoveTypeLayout::U8, None),
-        // Too large
-        (Value::from("123456789123456789123456789123456789"), MoveTypeLayout::U64, None),
-        // Too large
-        (Value::from("123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789"), MoveTypeLayout::U128, None),
-
-        // U64 value greater than 255 cannot be used as U8
-        (Value::from(900u64), MoveTypeLayout::U8, None),
-        // floats cannot be used as U8
-        (Value::from(0.4f32), MoveTypeLayout::U8, None),
-        // floats cannot be used as U64
-        (Value::from(3.4f32), MoveTypeLayout::U64, None),
-        // Negative cannot be used as Unsigned
-        (Value::from(-1), MoveTypeLayout::U8, None),
+        // U256 value encoded as hex str
+        (
+            Value::from(format!("0x{:02x}", U256::max_value())),
+            MoveTypeLayout::U256,
+            bcs::to_bytes(&U256::max_value()).unwrap(),
+        ),
         // u8 vector can be gotten from string
         (
             Value::from(good_ascii_str),
             MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8)),
-            Some(bcs::to_bytes(&good_ascii_str.as_bytes()).unwrap()),
+            bcs::to_bytes(&good_ascii_str.as_bytes()).unwrap(),
         ),
         // u8 vector from bad string
         (
             Value::from(good_utf8_str),
             MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8)),
-            Some(bcs::to_bytes(&good_utf8_str.as_bytes()).unwrap()),
+            bcs::to_bytes(&good_utf8_str.as_bytes()).unwrap(),
         ),
         // u8 vector from hex repr
         (
             Value::from(good_hex_val),
             MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8)),
-            Some(
-                bcs::to_bytes(&hex::decode(good_hex_val.trim_start_matches(HEX_PREFIX)).unwrap())
-                    .unwrap(),
-            ),
-        ),
-        // u8 vector from bad hex repr
-        (
-            Value::from(bad_hex_val),
-            MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8)),
-            None,
+            bcs::to_bytes(&hex::decode(good_hex_val.trim_start_matches(HEX_PREFIX)).unwrap())
+                .unwrap(),
         ),
         // u8 vector from u8 array
         (
             json!([1, 2, 3, 4, 5, 6, 7]),
             MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8)),
-            Some(bcs::to_bytes(&vec![1u8, 2u8, 3u8, 4u8, 5u8, 6u8, 7u8]).unwrap()),
-        ),
-        // u8 vector from heterogenous array
-        (
-            json!([1, 2, 3, true, 5, 6, 7]),
-            MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8)),
-            None,
+            bcs::to_bytes(&vec![1u8, 2u8, 3u8, 4u8, 5u8, 6u8, 7u8]).unwrap(),
         ),
         // Vector of vector of u8s
         (
             json!([[1, 2, 3], [], [3, 4, 5, 6, 7]]),
-            MoveTypeLayout::Vector(Box::new(MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8)))),
-            Some(
-                bcs::to_bytes(&vec![
-                    vec![1u8, 2u8, 3u8],
-                    vec![],
-                    vec![3u8, 4u8, 5u8, 6u8, 7u8],
-                ])
-                .unwrap(),
-            ),
+            MoveTypeLayout::Vector(Box::new(MoveTypeLayout::Vector(Box::new(
+                MoveTypeLayout::U8,
+            )))),
+            bcs::to_bytes(&vec![
+                vec![1u8, 2u8, 3u8],
+                vec![],
+                vec![3u8, 4u8, 5u8, 6u8, 7u8],
+            ])
+            .unwrap(),
         ),
         // U64 nest
         (
             json!([[1111, 2, 3], [], [300, 4, 5, 6, 7]]),
-            MoveTypeLayout::Vector(Box::new(MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U64)))),
-            Some(
-                bcs::to_bytes(&vec![
-                    vec![1111u64, 2u64, 3u64],
-                    vec![],
-                    vec![300u64, 4u64, 5u64, 6u64, 7u64],
-                ])
-                .unwrap(),
-            ),
-        ),
-        // U64 deep nest, bad because heterogenous array
-        (
-            json!([[[9, 53, 434], [0], [300]], [], [300, 4, 5, 6, 7]]),
-            MoveTypeLayout::Vector(Box::new(MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U64)))),
-            None,
+            MoveTypeLayout::Vector(Box::new(MoveTypeLayout::Vector(Box::new(
+                MoveTypeLayout::U64,
+            )))),
+            bcs::to_bytes(&vec![
+                vec![1111u64, 2u64, 3u64],
+                vec![],
+                vec![300u64, 4u64, 5u64, 6u64, 7u64],
+            ])
+            .unwrap(),
         ),
         // U64 deep nest, good
         (
             json!([[[9, 53, 434], [0], [300]], [], [[332], [4, 5, 6, 7]]]),
-            MoveTypeLayout::Vector(Box::new(MoveTypeLayout::Vector(Box::new(MoveTypeLayout::Vector(Box::new(
-                MoveTypeLayout::U64,
-            )))))),
-            Some(
-                bcs::to_bytes(&vec![
-                    vec![vec![9u64, 53u64, 434u64], vec![0u64], vec![300u64]],
-                    vec![],
-                    vec![vec![332u64], vec![4u64, 5u64, 6u64, 7u64]],
-                ])
-                .unwrap(),
-            ),
+            MoveTypeLayout::Vector(Box::new(MoveTypeLayout::Vector(Box::new(
+                MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U64)),
+            )))),
+            bcs::to_bytes(&vec![
+                vec![vec![9u64, 53u64, 434u64], vec![0u64], vec![300u64]],
+                vec![],
+                vec![vec![332u64], vec![4u64, 5u64, 6u64, 7u64]],
+            ])
+            .unwrap(),
         ),
     ];
 
     // Driver
     for (arg, expected_type, expected_val) in checks {
         let r = SuiJsonValue::new(arg);
-
-        match expected_val {
-            Some(q) => {
-                // Must be conform
-                assert!(r.is_ok());
-                // Must be serializable
-                let sr = r.unwrap().to_bcs_bytes(&expected_type);
-                // Must match expected serialized value
-                assert_eq!(sr.unwrap(), q);
-            }
-            None => {
-                assert!(r.is_err() || r.unwrap().to_bcs_bytes(&expected_type).is_err());
-            }
-        }
+        // Must conform
+        assert!(r.is_ok());
+        // Must be serializable
+        let sr = r.unwrap().to_bcs_bytes(&expected_type);
+        // Must match expected serialized value
+        assert_eq!(sr.unwrap(), expected_val);
     }
 }
 
