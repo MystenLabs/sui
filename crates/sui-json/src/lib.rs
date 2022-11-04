@@ -16,7 +16,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Number, Value as JsonValue};
 use std::collections::VecDeque;
-use std::fmt::{Debug, Formatter};
+use std::fmt::{self, Debug, Formatter};
 use sui_types::base_types::{decode_bytes_hex, ObjectID, SuiAddress};
 use sui_types::move_package::MovePackage;
 use sui_verifier::entry_points_verifier::{
@@ -27,6 +27,47 @@ const HEX_PREFIX: &str = "0x";
 
 #[cfg(test)]
 mod tests;
+
+/// A list of error categories encountered when parsing numbers.
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
+pub enum SuiJsonValueErrorKind {
+    /// JSON value must be of specific types.
+    ValueTypeNotAllowed,
+
+    /// JSON arrays must be homogeneous.
+    ArrayNotHomogeneous,
+}
+
+#[derive(Debug)]
+pub struct SuiJsonValueError {
+    kind: SuiJsonValueErrorKind,
+    val: JsonValue,
+}
+
+impl SuiJsonValueError {
+    pub fn new(val: &JsonValue, kind: SuiJsonValueErrorKind) -> Self {
+        Self {
+            kind,
+            val: val.clone(),
+        }
+    }
+}
+
+impl std::error::Error for SuiJsonValueError {}
+
+impl fmt::Display for SuiJsonValueError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let err_str = match self.kind {
+            SuiJsonValueErrorKind::ValueTypeNotAllowed => {
+                format!("JSON value type {} not allowed.", self.val)
+            }
+            SuiJsonValueErrorKind::ArrayNotHomogeneous => {
+                format!("Array not homogeneous. Mismatched value: {}.", self.val)
+            }
+        };
+        write!(f, "{err_str}")
+    }
+}
 
 #[derive(Eq, PartialEq, Debug, Clone)]
 pub enum SuiJsonCallArg {
@@ -54,9 +95,7 @@ impl SuiJsonValue {
             // Must be homogeneous
             JsonValue::Array(a) => {
                 // Fail if not homogeneous
-                if !is_homogeneous(&JsonValue::Array(a)) {
-                    bail!("Arrays must be homogeneous",);
-                }
+                check_valid_homogeneous(&JsonValue::Array(a))?
             }
             _ => bail!("{json_value} not allowed."),
         };
@@ -271,19 +310,19 @@ enum ValidJsonType {
 }
 
 /// Check via BFS
-/// The invariant is that all types at a given level must be the same or be empty
-pub fn is_homogeneous(val: &JsonValue) -> bool {
+/// The invariant is that all types at a given level must be the same or be empty, and all must be valid
+pub fn check_valid_homogeneous(val: &JsonValue) -> Result<(), SuiJsonValueError> {
     let mut deq: VecDeque<&JsonValue> = VecDeque::new();
     deq.push_back(val);
-    is_homogeneous_rec(&mut deq)
+    check_valid_homogeneous_rec(&mut deq)
 }
 
 /// Check via BFS
 /// The invariant is that all types at a given level must be the same or be empty
-fn is_homogeneous_rec(curr_q: &mut VecDeque<&JsonValue>) -> bool {
+fn check_valid_homogeneous_rec(curr_q: &mut VecDeque<&JsonValue>) -> Result<(), SuiJsonValueError> {
     if curr_q.is_empty() {
         // Nothing to do
-        return true;
+        return Ok(());
     }
     // Queue for the next level
     let mut next_q = VecDeque::new();
@@ -293,9 +332,10 @@ fn is_homogeneous_rec(curr_q: &mut VecDeque<&JsonValue>) -> bool {
     // Process all in this queue/level
     while !curr_q.is_empty() {
         // Okay to unwrap since we know values exist
-        let curr = match curr_q.pop_front().unwrap() {
+        let v = curr_q.pop_front().unwrap();
+        let curr = match v {
             JsonValue::Bool(_) => ValidJsonType::Bool,
-            JsonValue::Number(_) => ValidJsonType::Number,
+            JsonValue::Number(x) if x.is_u64() => ValidJsonType::Number,
             JsonValue::String(_) => ValidJsonType::String,
             JsonValue::Array(w) => {
                 // Add to the next level
@@ -303,7 +343,12 @@ fn is_homogeneous_rec(curr_q: &mut VecDeque<&JsonValue>) -> bool {
                 ValidJsonType::Array
             }
             // Not valid
-            _ => return false,
+            _ => {
+                return Err(SuiJsonValueError::new(
+                    v,
+                    SuiJsonValueErrorKind::ValueTypeNotAllowed,
+                ))
+            }
         };
 
         if level_type == ValidJsonType::Any {
@@ -311,11 +356,14 @@ fn is_homogeneous_rec(curr_q: &mut VecDeque<&JsonValue>) -> bool {
             level_type = curr;
         } else if level_type != curr {
             // Mismatch in the level
-            return false;
+            return Err(SuiJsonValueError::new(
+                v,
+                SuiJsonValueErrorKind::ArrayNotHomogeneous,
+            ));
         }
     }
     // Process the next level
-    is_homogeneous_rec(&mut next_q)
+    check_valid_homogeneous_rec(&mut next_q)
 }
 
 fn is_primitive_type_tag(t: &TypeTag) -> bool {
