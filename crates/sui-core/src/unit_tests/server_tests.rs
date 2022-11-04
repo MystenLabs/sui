@@ -449,20 +449,23 @@ async fn test_subscription_safe_client() {
         i += 1;
         tokio::time::sleep(Duration::from_millis(20)).await;
         ticket.notify();
+        if i > 129 {
+            break;
+        }
+    }
 
-        // Then we wait to receive
-        if let Some(data) = stream1.next().await {
-            match data.expect("Bad response") {
-                BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) => {
-                    num_batches += 1;
-                    if signed_batch.data().next_sequence_number >= 129 {
-                        break;
-                    }
+    // Then we wait to receive
+    while let Some(data) = stream1.next().await {
+        match data.expect("Bad response") {
+            BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) => {
+                num_batches += 1;
+                if signed_batch.data().next_sequence_number >= 129 {
+                    break;
                 }
-                BatchInfoResponseItem(UpdateItem::Transaction((seq, _digest))) => {
-                    println!("Received {seq}");
-                    num_transactions += 1;
-                }
+            }
+            BatchInfoResponseItem(UpdateItem::Transaction((seq, _digest))) => {
+                println!("Received {seq}");
+                num_transactions += 1;
             }
         }
     }

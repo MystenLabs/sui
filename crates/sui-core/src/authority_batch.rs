@@ -11,19 +11,17 @@ use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::BatchInfoRequest;
 use sui_types::messages::BatchInfoResponseItem;
 
-use crate::authority::AuthorityMetrics;
+use crate::authority::AuthorityStore;
 use crate::scoped_counter;
-
-use std::collections::VecDeque;
-use std::sync::Arc;
-use std::time::Duration;
-use tokio::time::interval;
 
 use futures::stream::{self, Stream};
 use futures::StreamExt;
+use std::sync::Arc;
+use std::time::Duration;
+use tokio::time::interval;
 use typed_store::Map;
 
-use tokio::sync::broadcast::{error::RecvError, Receiver, Sender};
+use tokio::sync::broadcast::{Receiver, Sender};
 use tracing::{debug, error};
 
 #[cfg(test)]
@@ -283,121 +281,136 @@ impl crate::authority::AuthorityState {
             .follower_start_seq_num
             .observe(request.start.unwrap_or(0) as f64);
 
-        // Register a subscriber to not miss any updates
-        let subscriber = self.subscribe_batch();
+        // If we do not have a start, pick next sequence number that has
+        // not yet been put into a batch.
+        let start = match request.start {
+            Some(start) => start,
+            None => {
+                self.last_batch()?
+                    .expect("Authority is always initialized with a batch")
+                    .data()
+                    .next_sequence_number
+            }
+        };
 
-        // Get the historical data requested
-        let (items, (should_subscribe, _start, end)) =
-            self.handle_batch_info_request(request).await?;
+        let end = start + request.length;
 
-        // unwrap safe - converting usize -> u64
-        metrics
-            .follower_items_loaded
-            .inc_by(items.len().try_into().unwrap());
+        let batch = self
+            .db()
+            .perpetual_tables
+            .batches
+            .iter()
+            .skip_prior_to(&start)
+            .map(|mut o| o.next())
+            .unwrap_or_default();
+
+        // We could not even find batch 0, return error
+        if batch.is_none() {
+            return Err(SuiError::BatchErrorSender);
+        }
+
+        let (seq, signed_batch) = batch.unwrap();
+
+        #[derive(PartialEq)]
+        enum NextItemToPublish {
+            Transaction,
+            Batch,
+        }
 
         // Define a local structure to support the stream construction.
         struct BatchStreamingLocals<GuardT> {
-            items: VecDeque<UpdateItem>,
-            next_expected_seq: TxSequenceNumber,
-            next_expected_batch: TxSequenceNumber,
-            subscriber: Receiver<UpdateItem>,
-            exit: bool,
-            should_subscribe: bool,
-            metrics: Arc<AuthorityMetrics>,
             _guard: GuardT,
+            // Next tx with sequence number that should be
+            // read from db and published
+            next_tx_seq: TxSequenceNumber,
+            // Next batch to be read from db should have its next_sequence_number
+            // be at least this much
+            next_batch_seq: TxSequenceNumber,
+            // Read txn from db if this is true or a batch otherwise
+            next_item: NextItemToPublish,
+            // If none, no more batches will be published to the stream
+            // i.e. only trailing transactions will be published and stream
+            // will be closed
+            pending_batch: Option<SignedBatch>,
+            db: Arc<AuthorityStore>,
         }
 
         let local_state = BatchStreamingLocals {
-            // The historical items
-            items,
-            // The next expected tx and batch after the historical items
-            next_expected_seq: 0,
-            next_expected_batch: 0,
-            // A subscriber that listens to the latest item updates
-            subscriber,
-            // A flag signifying the loop should exit
-            exit: false,
-            // A flag indicating if real-time subscrition is needed.
-            should_subscribe,
-            metrics,
             _guard: follower_connections_concurrent_guard,
+            next_tx_seq: seq,
+            next_batch_seq: seq + 1,
+            next_item: NextItemToPublish::Batch,
+            pending_batch: Some(signed_batch),
+            db: self.db(),
         };
 
         // Construct the stream
         let stream1 = stream::unfold(local_state, move |mut local_state| async move {
-            // We have sent the last item
-            if local_state.exit {
-                return None;
-            }
-
-            // If there are historical items send them.
-            if let Some(item) = local_state.items.pop_front() {
-                // Update the last processed items to ensure we do not repeat them
-                match &item {
-                    UpdateItem::Transaction((seq, _)) => {
-                        local_state.next_expected_seq = *seq + 1;
+            loop {
+                if local_state.pending_batch.is_some()
+                    && local_state.next_item == NextItemToPublish::Batch
+                {
+                    // We already publihsed all txns for this pending batch, now is the time to
+                    // publish the batch
+                    let batch = local_state.pending_batch.unwrap();
+                    local_state.pending_batch = None;
+                    return Some((
+                        Ok(BatchInfoResponseItem(UpdateItem::Batch(batch))),
+                        local_state,
+                    ));
+                } else if local_state.next_item == NextItemToPublish::Transaction {
+                    let tx: Option<(TxSequenceNumber, ExecutionDigests)> = local_state
+                        .db
+                        .perpetual_tables
+                        .executed_sequence
+                        .iter()
+                        .skip_to(&local_state.next_tx_seq)
+                        .map(|mut o| o.next())
+                        .unwrap_or_default();
+                    if let Some((seq, digest)) = tx {
+                        local_state.next_tx_seq = seq + 1;
+                        if local_state.next_tx_seq >= (local_state.next_batch_seq - 1) {
+                            // We read all txns for this batch, time to publish the batch
+                            local_state.next_item = NextItemToPublish::Batch;
+                        }
+                        return Some((
+                            Ok(BatchInfoResponseItem(UpdateItem::Transaction((
+                                seq, digest,
+                            )))),
+                            local_state,
+                        ));
+                    } else {
+                        // We failed to read the next txn, close the stream
+                        error!("Failed to read txn from db, closing stream");
+                        return None;
                     }
-                    UpdateItem::Batch(signed_batch) => {
-                        local_state.next_expected_batch =
-                            signed_batch.data().next_sequence_number + 1;
-                    }
-                }
-
-                local_state.metrics.follower_items_streamed.inc();
-                Some((Ok(BatchInfoResponseItem(item)), local_state))
-            } else {
-                // Release memory now that the historical items have been processed.
-                local_state.items = VecDeque::new();
-
-                // When there are no more historical items, maybe subscribe
-                if !local_state.should_subscribe {
-                    None
                 } else {
-                    loop {
-                        return match local_state.subscriber.recv().await {
-                            Ok(item) => {
-                                match &item {
-                                    UpdateItem::Transaction((seq, _)) => {
-                                        // Do not re-send transactions already sent from the database
-                                        if !(local_state.next_expected_seq <= *seq) {
-                                            continue;
-                                        }
-                                    }
-                                    UpdateItem::Batch(signed_batch) => {
-                                        // Do not re-send batches already sent from the database
-                                        if !(local_state.next_expected_batch
-                                            <= signed_batch.data().next_sequence_number)
-                                        {
-                                            continue;
-                                        }
-                                    }
-                                };
-
-                                // Only stop at the batch boundary, once we have covered the last item.
-                                if let UpdateItem::Batch(signed_batch) = &item {
-                                    if end <= signed_batch.data().next_sequence_number {
-                                        local_state.exit = true;
-                                    }
-                                }
-
-                                local_state.metrics.follower_items_streamed.inc();
-                                Some((Ok(BatchInfoResponseItem(item)), local_state))
-                            }
-                            Err(RecvError::Closed) => {
-                                // The service closed the channel, so we tell the client.
-                                let err_response = Err(SuiError::SubscriptionServiceClosed);
-                                local_state.exit = true;
-                                Some((err_response, local_state))
-                            }
-                            Err(RecvError::Lagged(number_skipped)) => {
-                                // We tell the client they are too slow to consume, and
-                                // stop.
-                                let err_response =
-                                    Err(SuiError::SubscriptionItemsDroppedError(number_skipped));
-                                local_state.exit = true;
-                                Some((err_response, local_state))
-                            }
-                        };
+                    if local_state.next_tx_seq >= end {
+                        return None;
+                    }
+                    let batch = local_state
+                        .db
+                        .perpetual_tables
+                        .batches
+                        .iter()
+                        .skip_to(&local_state.next_batch_seq)
+                        .map(|mut o| o.next())
+                        .unwrap_or_default();
+                    if let Some((_, signed_batch)) = batch {
+                        // we found a new batch
+                        let initial_seq_num = signed_batch.data().initial_sequence_number;
+                        let next_seq_num = signed_batch.data().next_sequence_number;
+                        if initial_seq_num < end {
+                            local_state.pending_batch = Some(signed_batch);
+                        } else {
+                            local_state.pending_batch = None;
+                        }
+                        local_state.next_item = NextItemToPublish::Transaction;
+                        local_state.next_batch_seq = next_seq_num + 1;
+                    } else {
+                        // sleep and come back to check if the next batch is ready
+                        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+                        continue;
                     }
                 }
             }

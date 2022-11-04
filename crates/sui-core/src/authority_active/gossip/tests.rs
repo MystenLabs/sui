@@ -131,25 +131,6 @@ pub async fn test_gossip_after_revert() {
         .map(|s| s.database.next_sequence_number().unwrap());
     assert_eq!(all_seq.clone().filter(|s| s == &2).count(), 3,);
     assert_eq!(all_seq.filter(|s| s == &1).count(), 1,);
-
-    // 3 (quorum) validator should still have 2 tx + 1 batch in the system,
-    // while one validator (since it never see the second tx) only has 1 tx + 1 batch.
-    let mut all_batch_item_counts = vec![];
-    for state in &states {
-        all_batch_item_counts.push(
-            state
-                .handle_batch_info_request(BatchInfoRequest {
-                    start: Some(0),
-                    length: 2,
-                })
-                .await
-                .unwrap()
-                .0
-                .len(),
-        );
-    }
-    assert_eq!(all_batch_item_counts.iter().filter(|c| *c == &3).count(), 3);
-    assert_eq!(all_batch_item_counts.iter().filter(|c| *c == &2).count(), 1);
 }
 
 async fn start_gossip_process(
