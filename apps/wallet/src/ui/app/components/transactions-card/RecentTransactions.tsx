@@ -3,6 +3,7 @@
 
 import { useEffect } from 'react';
 
+import { ErrorBoundary } from '_components/error-boundary';
 import Loading from '_components/loading';
 import TransactionCard from '_components/transactions-card';
 import { useAppSelector, useAppDispatch } from '_hooks';
@@ -36,7 +37,9 @@ function RecentTransactions({ coinType }: Props) {
         <>
             <Loading loading={loading} className={st.centerLoading}>
                 {txByAddress.map((txn) => (
-                    <TransactionCard txn={txn} key={txn.txId} />
+                    <ErrorBoundary key={txn.txId}>
+                        <TransactionCard txn={txn} />
+                    </ErrorBoundary>
                 ))}
             </Loading>
         </>
