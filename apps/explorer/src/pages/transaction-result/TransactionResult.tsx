@@ -18,30 +18,17 @@ import { type DataType } from './TransactionResultType';
 import TransactionView from './TransactionView';
 
 import type {
-    CertifiedTransaction,
     SuiTransactionResponse,
-    ExecutionStatusType,
     TransactionEffects,
     SuiObjectRef,
-    SuiEvent,
 } from '@mysten/sui.js';
 
 import { useRpc } from '~/hooks/useRpc';
 
-type TxnState = CertifiedTransaction & {
-    loadState: string;
-    txId: string;
-    status: ExecutionStatusType;
-    gasFee: number;
-    txError: string;
-    mutated: SuiObjectRef[];
-    created: SuiObjectRef[];
-    events?: SuiEvent[];
-    timestamp_ms: number | null;
-};
 // TODO: update state to include Call types
 // TODO: clean up duplicate fields
-const initState: TxnState = {
+const initState: DataType = {
+    transaction: null,
     loadState: 'pending',
     txId: '',
     data: {
@@ -90,9 +77,10 @@ function FailedToGetTxResults({ id }: { id: string }) {
 const transformTransactionResponse = (
     txObj: SuiTransactionResponse,
     id: string
-): TxnState => {
+): DataType => {
     return {
         ...txObj.certificate,
+        transaction: txObj,
         status: getExecutionStatusType(txObj)!,
         gasFee: getTotalGasUsed(txObj)!,
         txError: getExecutionStatusError(txObj) ?? '',
@@ -135,7 +123,7 @@ function TransactionResultAPI({ id }: { id: string }) {
         );
     }
     if (id && showTxState.loadState === 'loaded') {
-        return <TransactionResultLoaded txData={showTxState} />;
+        return <TransactionView txdata={showTxState} />;
     }
     // For Batch transactions show error
     // TODO update Error screen and account for Batch transactions
@@ -147,9 +135,7 @@ const TransactionResultStatic = ({ id }: { id: string }) => {
     const entry = findDataFromID(id, undefined);
     try {
         return (
-            <TransactionResultLoaded
-                txData={transformTransactionResponse(entry, id)}
-            />
+            <TransactionView txdata={transformTransactionResponse(entry, id)} />
         );
     } catch (error) {
         console.error(error);
@@ -157,10 +143,6 @@ const TransactionResultStatic = ({ id }: { id: string }) => {
         return <FailedToGetTxResults id={id} />;
     }
 };
-
-function TransactionResultLoaded({ txData }: { txData: DataType }) {
-    return <TransactionView txdata={txData} />;
-}
 
 function TransactionResult() {
     const { id } = useParams();
@@ -177,8 +159,8 @@ function TransactionResult() {
 
     if (checkStateHasData(state) && id) {
         return (
-            <TransactionResultLoaded
-                txData={transformTransactionResponse(state.data, id)}
+            <TransactionView
+                txdata={transformTransactionResponse(state.data, id)}
             />
         );
     }

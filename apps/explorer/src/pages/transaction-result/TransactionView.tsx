@@ -12,6 +12,7 @@ import {
     getObjectId,
     getTransferSuiTransaction,
     getTransferSuiAmount,
+    SUI_TYPE_ARG,
 } from '@mysten/sui.js';
 import cl from 'clsx';
 import { Link } from 'react-router-dom';
@@ -40,12 +41,15 @@ import type {
     SuiObjectRef,
     SuiEvent,
 } from '@mysten/sui.js';
+import type { ReactNode } from 'react';
 
 import styles from './TransactionResult.module.css';
 
+import { CoinFormat, useFormatCoin } from '~/hooks/useFormatCoin';
 import { Banner } from '~/ui/Banner';
 import { PageHeader } from '~/ui/PageHeader';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
+import { Text } from '~/ui/Text';
 
 type TxDataProps = CertifiedTransaction & {
     status: ExecutionStatusType;
@@ -161,7 +165,7 @@ type TxItemView = {
     titleStyle?: string;
     content: {
         label?: string | number | any;
-        value: string | number;
+        value: ReactNode;
         link?: boolean;
         category?: string;
         monotypeClass?: boolean;
@@ -244,6 +248,33 @@ const isPayType = (
 ): txdetails is { Pay: Pay } => {
     return 'Pay' in txdetails;
 };
+
+function GasAmount({ amount }: { amount: bigint | number }) {
+    const [formattedAmount, symbol] = useFormatCoin(
+        amount,
+        SUI_TYPE_ARG,
+        CoinFormat.FULL
+    );
+
+    return (
+        <div className="flex items-center gap-1 h-full">
+            <div className="text-sui-grey-90 flex items-baseline gap-0.5">
+                <Text variant="body">{formattedAmount}</Text>
+                <Text variant="subtitleSmall">{symbol}</Text>
+            </div>
+            <Text variant="bodySmall">
+                <div className="text-sui-grey-65 flex items-center">
+                    (
+                    <div className="flex items-baseline gap-0.5">
+                        <div>{amount.toLocaleString()}</div>
+                        <Text variant="subtitleSmall">MIST</Text>
+                    </div>
+                    )
+                </div>
+            </Text>
+        </div>
+    );
+}
 
 const convertAmounts = (
     amounts: (number | bigint | null)[]
@@ -347,12 +378,12 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                 link: true,
             },
             {
-                label: 'Gas Fees',
-                value: txdata.gasFee,
+                label: 'Gas Budget',
+                value: <GasAmount amount={txdata.data.gasBudget} />,
             },
             {
-                label: 'Gas Budget',
-                value: txdata.data.gasBudget,
+                label: 'Total Gas Fee',
+                value: <GasAmount amount={txdata.gasFee} />,
             },
             //TODO: Add Storage Fees
         ],
