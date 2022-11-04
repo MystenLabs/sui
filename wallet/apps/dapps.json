@@ -1,5 +1,12 @@
 [
     {
+        "name": "Capy",
+        "description": "Sui Capy",
+        "link": "https://capy.art/",
+        "icon": "https://storage.googleapis.com/sui-cms-content/capy_64caa3122e/capy_64caa3122e.png",
+        "tags": ["Game"]
+    },
+    {
         "name": "Sui NFT Mint",
         "description": "Mint your NFTs on the Sui Network",
         "link": "https://sui-wallet-demo.sui.io/",
