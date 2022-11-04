@@ -121,6 +121,7 @@
         "vite-tsconfig-paths": "^3.5.0",
         "webextension-polyfill": "^0.9.0",
         "yup": "^0.32.11",
-        "zxcvbn": "^4.4.2"
+        "zxcvbn": "^4.4.2",
+        "@originbyte/js-sdk": "^0.3.14"
     }
 }

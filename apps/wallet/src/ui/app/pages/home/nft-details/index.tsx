@@ -61,20 +61,17 @@ function NFTdetailsContent({
                         </div>
                     </div>
                 )}
-                {!!nftFields?.metadata?.fields?.attributes && (
+                {!!nftFields?.attributes && (
                     <>
-                        {nftFields.metadata.fields.attributes.fields.keys.map(
-                            (key: string, idx: number) => (
+                        {Object.keys(nftFields.attributes).map(
+                            (key: string) => (
                                 <div
                                     key={`nft_attribute_${key}`}
                                     className={st.nftItemDetail}
                                 >
                                     <div className={st.label}>{key}</div>
                                     <div className={st.value}>
-                                        {
-                                            nftFields.metadata.fields.attributes
-                                                .fields.values[idx]
-                                        }
+                                        {nftFields.attributes[key]}
                                     </div>
                                 </div>
                             )
