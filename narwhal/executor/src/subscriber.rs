@@ -166,6 +166,7 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
     /// Returns ordered vector of futures for downloading individual payloads for certificate
     /// Order of futures returned follows order of payloads in the certificate
     /// See fetch_payload for more details
+    #[instrument(level = "debug", skip_all, fields(certificate = % deliver.certificate.digest()))]
     fn fetch_payloads(
         &self,
         deliver: ConsensusOutput,
@@ -183,8 +184,14 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
                 .as_secs_f64(),
         );
 
-        debug!("Fetching payload for {:?}", deliver);
-        let mut ret = Vec::with_capacity(deliver.certificate.header.payload.len());
+        let num_of_batches = deliver.certificate.header.payload.len();
+        if num_of_batches == 0 {
+            debug!("No batches to fetch, payload is empty");
+            return vec![];
+        }
+
+        let mut ret = Vec::with_capacity(num_of_batches);
+
         let deliver = Arc::new(deliver);
         for (batch_index, (digest, worker_id)) in
             deliver.certificate.header.payload.iter().enumerate()
@@ -198,6 +205,7 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
                 batch_index: batch_index as u64,
             };
             workers.shuffle(&mut ThreadRng::default());
+
             debug!("Scheduling fetching batch {}", digest);
             let fut = self
                 .fetch_payload(*digest, *worker_id, workers)

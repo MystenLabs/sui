@@ -294,7 +294,7 @@ impl Primary {
                 .primary_network_admin_server_port
         );
 
-        network::admin::start_admin_server(
+        let admin_handles = network::admin::start_admin_server(
             parameters
                 .network_admin_server
                 .primary_network_admin_server_port,
@@ -502,6 +502,8 @@ impl Primary {
             state_handler_handle,
             connection_monitor_handle,
         ];
+
+        handles.extend(admin_handles);
 
         if let Some(h) = consensus_api_handle {
             handles.push(h);

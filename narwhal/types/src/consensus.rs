@@ -4,7 +4,7 @@
 
 use crate::{CertificateDigest, Round};
 use crypto::PublicKey;
-use std::{collections::HashMap, ops::RangeInclusive};
+use std::collections::HashMap;
 use store::{
     rocks::{DBMap, TypedStoreError},
     traits::Map,
@@ -76,18 +76,17 @@ impl ConsensusStore {
         self.last_committed.get(validator)
     }
 
-    /// Load the certificate digests sequenced at a specific indices.
-    pub fn read_sequenced_certificates(
+    /// Load the certificate digests sequenced starting from the specified
+    /// sequence number (inclusive). If the specified sequence number is not
+    /// found then the method will skip to the next higher one and consume
+    /// until the end.
+    /// Method returns a vector of a tuple of the certificate digest
+    /// with the next certificate index.
+    pub fn read_sequenced_certificates_from(
         &self,
-        missing: &RangeInclusive<SequenceNumber>,
-    ) -> StoreResult<Vec<Option<CertificateDigest>>> {
-        Ok(self
-            .sequence
-            .iter()
-            .skip_to(missing.start())?
-            .take_while(|(index, _)| index <= missing.end())
-            .map(|(_, digest)| Some(digest))
-            .collect())
+        from: &SequenceNumber,
+    ) -> StoreResult<Vec<(SequenceNumber, CertificateDigest)>> {
+        Ok(self.sequence.iter().skip_to(from)?.collect())
     }
 
     /// Load the last (ie. the highest) consensus index associated to a certificate.

@@ -227,7 +227,7 @@ impl Worker {
             id, network_admin_server_base_port
         );
 
-        network::admin::start_admin_server(
+        let admin_handles = network::admin::start_admin_server(
             network_admin_server_base_port,
             network.clone(),
             rx_reconfigure.clone(),
@@ -280,6 +280,7 @@ impl Worker {
         );
 
         let mut handles = vec![primary_connector_handle, connection_monitor_handle];
+        handles.extend(admin_handles);
         handles.extend(client_flow_handles);
         handles
     }

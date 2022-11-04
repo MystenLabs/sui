@@ -36,6 +36,7 @@ primary = { path = "../primary", package = "narwhal-primary" }
 network = { path = "../network", package = "narwhal-network" }
 types = { path = "../types", package = "narwhal-types" }
 worker = { path = "../worker", package = "narwhal-worker" }
+storage = { path = "../storage", package = "narwhal-storage" }
 mysten-network.workspace = true
 
 store = { version = "0.4.0", package = "typed-store"}

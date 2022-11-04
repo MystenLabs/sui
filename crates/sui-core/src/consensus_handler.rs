@@ -41,6 +41,7 @@ impl ConsensusHandler {
         if last_seen_guard.index >= index {
             return None;
         }
+
         let previous_hash = last_seen_guard.hash;
         let mut hasher = DefaultHasher::new();
         previous_hash.hash(&mut hasher);
@@ -70,10 +71,13 @@ impl ExecutionState for ConsensusHandler {
         consensus_index: ExecutionIndices,
         serialized_transaction: Vec<u8>,
     ) {
-        let consensus_index =
-            Self::update_hash(&self.last_seen, consensus_index, &serialized_transaction);
-        let consensus_index = if let Some(consensus_index) = consensus_index {
-            consensus_index
+        let index = Self::update_hash(
+            &self.last_seen,
+            consensus_index.clone(),
+            &serialized_transaction,
+        );
+        let index = if let Some(index) = index {
+            index
         } else {
             debug!(
                 "Ignore consensus transaction at index {:?} as it appear to be already processed",
@@ -94,7 +98,7 @@ impl ExecutionState for ConsensusHandler {
             };
         let sequenced_transaction = SequencedConsensusTransaction {
             consensus_output: consensus_output.clone(),
-            consensus_index,
+            consensus_index: index,
             transaction,
         };
         let verified_transaction = match self
@@ -118,6 +122,7 @@ impl ExecutionState for ConsensusHandler {
         }
     }
 
+    #[instrument(level = "debug", skip_all, fields(result))]
     async fn load_execution_indices(&self) -> ExecutionIndices {
         let index_with_hash = self
             .state

@@ -174,6 +174,10 @@ impl ConsensusProtocol for Bullshark {
                     &consensus_index,
                     &digest,
                 )?;
+                debug!(
+                    "Store commit index:{}, digest:{}",
+                    &consensus_index, &digest
+                );
             }
         }
 

@@ -39,7 +39,11 @@ impl<State: ExecutionState + Send + Sync + 'static> Notifier<State> {
 
     async fn run(mut self) {
         while let Some((index, batch)) = self.rx_notifier.recv().await {
-            debug!("Notifier processes batch {}", batch.digest());
+            debug!(
+                "Notifier processes batch {}, num of transactions: {}",
+                batch.digest(),
+                batch.transactions.len()
+            );
             self.metrics.notifier_processed_batches.inc();
             let mut bytes = 0usize;
             for (transaction_index, transaction) in batch.transactions.into_iter().enumerate() {

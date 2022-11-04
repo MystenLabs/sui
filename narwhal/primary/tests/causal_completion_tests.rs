@@ -4,7 +4,7 @@ use bytes::Bytes;
 use std::time::Duration;
 use test_utils::cluster::{setup_tracing, Cluster};
 use tracing::info;
-use types::{TransactionProto, TransactionsClient};
+use types::TransactionProto;
 
 type StringTransaction = String;
 
@@ -21,13 +21,7 @@ async fn test_restore_from_disk() {
     cluster.start(Some(4), Some(1), None).await;
 
     let id = 0;
-    let name = cluster.authority(0).name;
-
-    let worker_cache = &cluster.worker_cache_shared;
-    let address = worker_cache.load().worker(&name, &id).unwrap().transactions;
-    let config = mysten_network::config::Config::new();
-    let channel = config.connect_lazy(&address).unwrap();
-    let mut client = TransactionsClient::new(channel);
+    let client = cluster.authority(0).new_transactions_client(&id).await;
 
     // Subscribe to the transaction confirmation channel
     let mut receiver = cluster
@@ -38,24 +32,28 @@ async fn test_restore_from_disk() {
         .subscribe();
 
     // Create arbitrary transactions
-    let mut batch_len = 3;
+    let mut total_tx = 3;
     for tx in [
         string_transaction(),
         string_transaction(),
         string_transaction(),
     ] {
-        let tr = bincode::serialize(&tx).unwrap();
-        let txn = TransactionProto {
-            transaction: Bytes::from(tr),
-        };
-        client.submit_transaction(txn).await.unwrap();
+        let mut c = client.clone();
+        tokio::spawn(async move {
+            let tr = bincode::serialize(&tx).unwrap();
+            let txn = TransactionProto {
+                transaction: Bytes::from(tr),
+            };
+
+            c.submit_transaction(txn).await.unwrap();
+        });
     }
 
     // wait for transactions to complete
     loop {
         if let Ok(_result) = receiver.recv().await {
-            batch_len -= 1;
-            if batch_len < 1 {
+            total_tx -= 1;
+            if total_tx < 1 {
                 break;
             }
         }
