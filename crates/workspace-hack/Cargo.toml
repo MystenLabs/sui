@@ -1385,7 +1385,7 @@ nix-2b5c6dc72f624058 = { package = "nix", version = "0.23", default-features = f
 nix-adf3d7031871b0af = { package = "nix", version = "0.24", default-features = false, features = ["fs", "process", "signal"] }
 num-format = { version = "0.4", default-features = false }
 num_threads = { version = "0.1", default-features = false }
-pprof = { version = "0.10", features = ["cpp", "criterion", "flamegraph", "inferno"] }
+pprof = { version = "0.11", features = ["cpp", "criterion", "flamegraph", "inferno"] }
 quick-xml = { version = "0.23", default-features = false }
 rand_chacha-6f8ce4dd05d13bba = { package = "rand_chacha", version = "0.2", default-features = false, features = ["std"] }
 rgb = { version = "0.8", features = ["as-bytes", "bytemuck"] }
@@ -1427,7 +1427,7 @@ nix-2b5c6dc72f624058 = { package = "nix", version = "0.23", default-features = f
 nix-adf3d7031871b0af = { package = "nix", version = "0.24", default-features = false, features = ["fs", "process", "signal"] }
 num-format = { version = "0.4", default-features = false }
 num_threads = { version = "0.1", default-features = false }
-pprof = { version = "0.10", features = ["cpp", "criterion", "flamegraph", "inferno"] }
+pprof = { version = "0.11", features = ["cpp", "criterion", "flamegraph", "inferno"] }
 protobuf-src = { version = "1", default-features = false }
 quick-xml = { version = "0.23", default-features = false }
 rand_chacha-6f8ce4dd05d13bba = { package = "rand_chacha", version = "0.2", default-features = false, features = ["std"] }
@@ -1471,7 +1471,7 @@ num_threads = { version = "0.1", default-features = false }
 openssl = { version = "0.10" }
 openssl-probe = { version = "0.1", default-features = false }
 openssl-sys = { version = "0.9", default-features = false }
-pprof = { version = "0.10", features = ["cpp", "criterion", "flamegraph", "inferno"] }
+pprof = { version = "0.11", features = ["cpp", "criterion", "flamegraph", "inferno"] }
 quick-xml = { version = "0.23", default-features = false }
 rand_chacha-6f8ce4dd05d13bba = { package = "rand_chacha", version = "0.2", default-features = false, features = ["std"] }
 rgb = { version = "0.8", features = ["as-bytes", "bytemuck"] }
@@ -1516,7 +1516,7 @@ openssl = { version = "0.10" }
 openssl-macros = { version = "0.1", default-features = false }
 openssl-probe = { version = "0.1", default-features = false }
 openssl-sys = { version = "0.9", default-features = false }
-pprof = { version = "0.10", features = ["cpp", "criterion", "flamegraph", "inferno"] }
+pprof = { version = "0.11", features = ["cpp", "criterion", "flamegraph", "inferno"] }
 protobuf-src = { version = "1", default-features = false }
 quick-xml = { version = "0.23", default-features = false }
 rand_chacha-6f8ce4dd05d13bba = { package = "rand_chacha", version = "0.2", default-features = false, features = ["std"] }
