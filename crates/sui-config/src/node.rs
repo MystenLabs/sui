@@ -83,6 +83,7 @@ pub struct NodeConfig {
 
     pub genesis: Genesis,
 
+    #[serde(default = "default_checkpoint_config")]
     pub checkpoint_config: CheckpointProcessControl,
 }
 
@@ -124,6 +125,10 @@ pub fn default_websocket_address() -> Option<SocketAddr> {
 
 pub fn default_concurrency_limit() -> Option<usize> {
     Some(DEFAULT_GRPC_CONCURRENCY_LIMIT)
+}
+
+pub fn default_checkpoint_config() -> CheckpointProcessControl {
+    CheckpointProcessControl::default()
 }
 
 pub fn bool_true() -> bool {

@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
 pub struct CheckpointProcessControl {
     /// The time to allow upon quorum failure for sufficient
     /// authorities to come online, to proceed with the checkpointing
@@ -62,7 +63,7 @@ impl Default for CheckpointProcessControl {
 impl CheckpointProcessControl {
     pub fn default_for_test() -> Self {
         CheckpointProcessControl {
-            long_pause_between_checkpoints: Duration::from_secs(3),
+            long_pause_between_checkpoints: Duration::from_secs(5),
             ..CheckpointProcessControl::default()
         }
     }
