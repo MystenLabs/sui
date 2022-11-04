@@ -4,15 +4,27 @@ expression: natives_calib
 ---
 // Move bytecode v6
 module 2.natives_calibration_tests {
-struct ObjectSimple has copy, drop, store, key {
-	dummy_field: bool
-}
 struct ObjectWithID has store, key {
 	id: UID
 }
+struct StructSimple has copy, drop, store {
+	dummy_field: bool
+}
 
+public calibrate_emit(obj: StructSimple) {
+B0:
+	0: MoveLoc[0](obj: StructSimple)
+	1: Call[0](emit<StructSimple>(StructSimple))
+	2: Ret
+}
+public calibrate_emit_nop(obj: StructSimple) {
+B0:
+	0: MoveLoc[0](obj: StructSimple)
+	1: Pop
+	2: Ret
+}
 entry public test_calibrate_event_emit() {
-L0:	obj1: ObjectSimple
+L0:	str1: StructSimple
 L1:	trials: u64
 B0:
 	0: LdConst[0](U64: [1, 0, 0, 0, 0, 0, 0, 0])
@@ -26,8 +38,8 @@ B2:
 	6: Branch(15)
 B3:
 	7: LdFalse
-	8: Pack[0](ObjectSimple)
-	9: Call[0](calibrate_emit<ObjectSimple>(ObjectSimple))
+	8: Pack[1](StructSimple)
+	9: Call[0](calibrate_emit(StructSimple))
 	10: MoveLoc[1](trials: u64)
 	11: LdU64(1)
 	12: Sub
@@ -37,7 +49,7 @@ B4:
 	15: Ret
 }
 entry public test_calibrate_event_emit__baseline() {
-L0:	obj1: ObjectSimple
+L0:	str1: StructSimple
 L1:	trials: u64
 B0:
 	0: LdConst[0](U64: [1, 0, 0, 0, 0, 0, 0, 0])
@@ -51,8 +63,8 @@ B2:
 	6: Branch(15)
 B3:
 	7: LdFalse
-	8: Pack[0](ObjectSimple)
-	9: Call[1](calibrate_emit_nop<ObjectSimple>(ObjectSimple))
+	8: Pack[1](StructSimple)
+	9: Call[1](calibrate_emit_nop(StructSimple))
 	10: MoveLoc[1](trials: u64)
 	11: LdU64(1)
 	12: Sub
@@ -76,7 +88,7 @@ B2:
 	6: Branch(14)
 B3:
 	7: LdConst[1](Vector(U8): [20, 58, 152, 93, 167, 79, 226, 37, 178, 4, 92, 23, 45, 107, 211, 144, 189, 133, 95, 8, 110])
-	8: Call[13](calibrate_address_from_bytes(vector<u8>))
+	8: Call[14](calibrate_address_from_bytes(vector<u8>))
 	9: MoveLoc[1](trials: u64)
 	10: LdU64(1)
 	11: Sub
@@ -100,7 +112,7 @@ B2:
 	6: Branch(14)
 B3:
 	7: LdConst[1](Vector(U8): [20, 58, 152, 93, 167, 79, 226, 37, 178, 4, 92, 23, 45, 107, 211, 144, 189, 133, 95, 8, 110])
-	8: Call[14](calibrate_address_from_bytes_nop(vector<u8>))
+	8: Call[15](calibrate_address_from_bytes_nop(vector<u8>))
 	9: MoveLoc[1](trials: u64)
 	10: LdU64(1)
 	11: Sub
@@ -120,7 +132,7 @@ B0:
 	0: LdConst[0](U64: [1, 0, 0, 0, 0, 0, 0, 0])
 	1: StLoc[5](trials: u64)
 	2: LdConst[2](Address: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
-	3: Call[15](begin(address): Scenario)
+	3: Call[16](begin(address): Scenario)
 	4: StLoc[3](scenario_val: Scenario)
 	5: MutBorrowLoc[3](scenario_val: Scenario)
 	6: StLoc[2](scenario: &mut Scenario)
@@ -133,17 +145,17 @@ B2:
 	11: Branch(29)
 B3:
 	12: CopyLoc[2](scenario: &mut Scenario)
-	13: Call[16](ctx(&mut Scenario): &mut TxContext)
-	14: Call[17](new(&mut TxContext): UID)
-	15: Pack[1](ObjectWithID)
+	13: Call[17](ctx(&mut Scenario): &mut TxContext)
+	14: Call[18](new(&mut TxContext): UID)
+	15: Pack[0](ObjectWithID)
 	16: StLoc[1](obj: ObjectWithID)
 	17: ImmBorrowLoc[1](obj: ObjectWithID)
-	18: Call[2](calibrate_borrow_uid<ObjectWithID>(&ObjectWithID))
+	18: Call[1](calibrate_borrow_uid<ObjectWithID>(&ObjectWithID))
 	19: MoveLoc[1](obj: ObjectWithID)
-	20: Unpack[1](ObjectWithID)
+	20: Unpack[0](ObjectWithID)
 	21: StLoc[0](id: UID)
 	22: MoveLoc[0](id: UID)
-	23: Call[19](delete(UID))
+	23: Call[20](delete(UID))
 	24: MoveLoc[5](trials: u64)
 	25: LdU64(1)
 	26: Sub
@@ -153,7 +165,7 @@ B4:
 	29: MoveLoc[2](scenario: &mut Scenario)
 	30: Pop
 	31: MoveLoc[3](scenario_val: Scenario)
-	32: Call[20](end(Scenario): TransactionEffects)
+	32: Call[21](end(Scenario): TransactionEffects)
 	33: Pop
 	34: Ret
 }
@@ -168,7 +180,7 @@ B0:
 	0: LdConst[0](U64: [1, 0, 0, 0, 0, 0, 0, 0])
 	1: StLoc[5](trials: u64)
 	2: LdConst[2](Address: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
-	3: Call[15](begin(address): Scenario)
+	3: Call[16](begin(address): Scenario)
 	4: StLoc[3](scenario_val: Scenario)
 	5: MutBorrowLoc[3](scenario_val: Scenario)
 	6: StLoc[2](scenario: &mut Scenario)
@@ -181,19 +193,19 @@ B2:
 	11: Branch(31)
 B3:
 	12: CopyLoc[2](scenario: &mut Scenario)
-	13: Call[16](ctx(&mut Scenario): &mut TxContext)
-	14: Call[17](new(&mut TxContext): UID)
-	15: Pack[1](ObjectWithID)
+	13: Call[17](ctx(&mut Scenario): &mut TxContext)
+	14: Call[18](new(&mut TxContext): UID)
+	15: Pack[0](ObjectWithID)
 	16: StLoc[1](obj: ObjectWithID)
 	17: ImmBorrowLoc[1](obj: ObjectWithID)
-	18: Call[2](calibrate_borrow_uid<ObjectWithID>(&ObjectWithID))
+	18: Call[1](calibrate_borrow_uid<ObjectWithID>(&ObjectWithID))
 	19: ImmBorrowLoc[1](obj: ObjectWithID)
 	20: Pop
 	21: MoveLoc[1](obj: ObjectWithID)
-	22: Unpack[1](ObjectWithID)
+	22: Unpack[0](ObjectWithID)
 	23: StLoc[0](id: UID)
 	24: MoveLoc[0](id: UID)
-	25: Call[19](delete(UID))
+	25: Call[20](delete(UID))
 	26: MoveLoc[5](trials: u64)
 	27: LdU64(1)
 	28: Sub
@@ -203,7 +215,7 @@ B4:
 	31: MoveLoc[2](scenario: &mut Scenario)
 	32: Pop
 	33: MoveLoc[3](scenario_val: Scenario)
-	34: Call[20](end(Scenario): TransactionEffects)
+	34: Call[21](end(Scenario): TransactionEffects)
 	35: Pop
 	36: Ret
 }
@@ -269,7 +281,7 @@ B2:
 B3:
 	7: LdConst[3](Vector(U8): [32, 58, 152, 93, 167, 79, 226, 37, 178, 4, 92, 23, 45, 107, 211, 144, 189, 133, 95, 8, 110, 62, 157, 82, 91, 70, 191, 226, 69, 17, 67, 21, 50])
 	8: LdU64(0)
-	9: Call[21](calibrate_derive_id(vector<u8>, u64))
+	9: Call[22](calibrate_derive_id(vector<u8>, u64))
 	10: MoveLoc[1](trials: u64)
 	11: LdU64(1)
 	12: Sub
@@ -295,7 +307,7 @@ B2:
 B3:
 	7: LdConst[3](Vector(U8): [32, 58, 152, 93, 167, 79, 226, 37, 178, 4, 92, 23, 45, 107, 211, 144, 189, 133, 95, 8, 110, 62, 157, 82, 91, 70, 191, 226, 69, 17, 67, 21, 50])
 	8: LdU64(0)
-	9: Call[22](calibrate_derive_id_nop(vector<u8>, u64))
+	9: Call[23](calibrate_derive_id_nop(vector<u8>, u64))
 	10: MoveLoc[1](trials: u64)
 	11: LdU64(1)
 	12: Sub
@@ -307,7 +319,7 @@ B4:
 unit_test_poison() {
 B0:
 	0: LdU64(0)
-	1: Call[23](create_signers_for_testing(u64): vector<signer>)
+	1: Call[24](create_signers_for_testing(u64): vector<signer>)
 	2: Pop
 	3: Ret
 }

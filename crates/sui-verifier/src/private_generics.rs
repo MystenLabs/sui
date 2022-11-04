@@ -10,10 +10,12 @@ use move_binary_format::{
     },
     CompiledModule,
 };
-use move_core_types::account_address::AccountAddress;
+use move_core_types::{account_address::AccountAddress, identifier::IdentStr};
 use sui_types::{error::ExecutionError, SUI_FRAMEWORK_ADDRESS};
 
 use crate::{format_signature_token, verification_failure};
+
+const TEST_SCENARIO_MODULE_NAME: &str = "test_scenario";
 
 /// All transfer functions (the functions in `sui::transfer`) are "private" in that they are
 /// restricted to the module.
@@ -26,6 +28,13 @@ use crate::{format_signature_token, verification_failure};
 /// Concretely, with `event::emit<T>(...)`:
 /// - `T` must be a type declared in the current module
 pub fn verify_module(module: &CompiledModule) -> Result<(), ExecutionError> {
+    if *module.address() == SUI_FRAMEWORK_ADDRESS
+        && module.name() == IdentStr::new(TEST_SCENARIO_MODULE_NAME).unwrap()
+    {
+        // exclude test_module which is a test-only module in the Sui framework which "emulates"
+        // transactional execution and needs to allow test code to bypass private generics
+        return Ok(());
+    }
     let view = &BinaryIndexedView::Module(module);
     // do not need to check the sui::transfer module itself
     for func_def in &module.function_defs {
@@ -88,15 +97,7 @@ fn verify_private_transfer(
     let fident = view.identifier_at(fhandle.name);
     match fident.as_str() {
         // transfer functions
-        "transfer"
-        | "transfer_to_object"
-        | "transfer_to_object_id"
-        | "freeze_object"
-        | "share_object" => (),
-        // these functions operate over ChildRef
-        "is_child" | "inner" => {
-            return Ok(());
-        }
+        "transfer" | "freeze_object" | "share_object" => (),
         // should be unreachable
         // these are private and the module itself is skipped
         "transfer_internal" => {

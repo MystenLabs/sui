@@ -36,7 +36,7 @@ impl Build {
             rerooted_path,
             BuildConfig {
                 config,
-                run_bytecode_verifier: false,
+                run_bytecode_verifier: true,
                 print_diags_to_stderr: true,
             },
         )?;
