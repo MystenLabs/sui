@@ -735,8 +735,11 @@ where
         self.download_object_from_authorities(SUI_SYSTEM_STATE_OBJECT_ID)
             .await?;
 
-        let (_gas_status, input_objects) =
-            transaction_input_checker::check_transaction_input(&self.store, transaction).await?;
+        let (_gas_status, input_objects) = transaction_input_checker::check_transaction_input(
+            &self.store,
+            &transaction.signed_data.data,
+        )
+        .await?;
 
         let owned_objects = input_objects.filter_owned_objects();
         if let Err(err) = self

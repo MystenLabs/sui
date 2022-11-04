@@ -749,6 +749,16 @@ impl TransactionData {
         &self.gas_payment
     }
 
+    pub fn contains_shared_object(&self) -> bool {
+        self.shared_input_objects().next().is_some()
+    }
+
+    pub fn shared_input_objects(
+        &self,
+    ) -> impl Iterator<Item = (&ObjectID, /* shared at version */ &SequenceNumber)> {
+        self.kind.shared_input_objects()
+    }
+
     pub fn move_calls(&self) -> Vec<&MoveCall> {
         self.kind
             .single_transactions()

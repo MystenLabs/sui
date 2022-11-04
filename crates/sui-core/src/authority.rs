@@ -559,9 +559,11 @@ impl AuthorityState {
             return Err(SuiError::ValidatorHaltedAtEpochEnd);
         }
 
-        let (_gas_status, input_objects) =
-            transaction_input_checker::check_transaction_input(&self.database, &transaction)
-                .await?;
+        let (_gas_status, input_objects) = transaction_input_checker::check_transaction_input(
+            &self.database,
+            &transaction.signed_data.data,
+        )
+        .await?;
 
         let owned_objects = input_objects.filter_owned_objects();
 
@@ -994,9 +996,9 @@ impl AuthorityState {
         Ok((inner_temp_store, signed_effects))
     }
 
-    pub async fn dry_run_transaction(
+    pub async fn dry_exec_transaction(
         &self,
-        transaction: VerifiedTransaction,
+        transaction: TransactionData,
         transaction_digest: TransactionDigest,
     ) -> Result<SuiTransactionEffects, anyhow::Error> {
         let (gas_status, input_objects) =
@@ -1011,7 +1013,7 @@ impl AuthorityState {
             execution_engine::execute_transaction_to_effects(
                 shared_object_refs,
                 temporary_store,
-                transaction.signed_data.data.clone(),
+                transaction,
                 transaction_digest,
                 transaction_dependencies,
                 &self.move_vm,

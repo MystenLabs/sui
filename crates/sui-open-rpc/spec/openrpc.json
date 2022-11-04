@@ -156,27 +156,6 @@
           "schema": {
             "$ref": "#/components/schemas/Base64"
           }
-        },
-        {
-          "name": "sig_scheme",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/SignatureScheme"
-          }
-        },
-        {
-          "name": "signature",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/Base64"
-          }
-        },
-        {
-          "name": "pub_key",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/Base64"
-          }
         }
       ],
       "result": {

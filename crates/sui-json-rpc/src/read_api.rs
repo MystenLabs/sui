@@ -7,7 +7,6 @@ use jsonrpsee::core::RpcResult;
 use jsonrpsee_core::server::rpc_module::RpcModule;
 use move_binary_format::normalized::{Module as NormalizedModule, Type};
 use move_core_types::identifier::Identifier;
-use signature::Signature;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use tap::TapFallible;
@@ -24,10 +23,8 @@ use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::batch::TxSequenceNumber;
 use sui_types::committee::EpochId;
-use sui_types::crypto::{SignableBytes, SignatureScheme};
-use sui_types::messages::{
-    CommitteeInfoRequest, CommitteeInfoResponse, Transaction, TransactionData,
-};
+use sui_types::crypto::{sha3_hash, SignableBytes};
+use sui_types::messages::{CommitteeInfoRequest, CommitteeInfoResponse, TransactionData};
 use sui_types::move_package::normalize_modules;
 use sui_types::object::{Data, ObjectRead, Owner};
 use sui_types::query::TransactionQuery;
@@ -147,31 +144,11 @@ impl SuiRpcModule for ReadApi {
 
 #[async_trait]
 impl RpcFullNodeReadApiServer for FullNodeApi {
-    async fn dry_run_transaction(
-        &self,
-        tx_bytes: Base64,
-        sig_scheme: SignatureScheme,
-        signature: Base64,
-        pub_key: Base64,
-    ) -> RpcResult<SuiTransactionEffects> {
-        let data =
+    async fn dry_run_transaction(&self, tx_bytes: Base64) -> RpcResult<SuiTransactionEffects> {
+        let tx_data =
             TransactionData::from_signable_bytes(&tx_bytes.to_vec().map_err(|e| anyhow!(e))?)?;
-        let flag = vec![sig_scheme.flag()];
-        let signature = Signature::from_bytes(
-            &[
-                &*flag,
-                &*signature.to_vec().map_err(|e| anyhow!(e))?,
-                &pub_key.to_vec().map_err(|e| anyhow!(e))?,
-            ]
-            .concat(),
-        )
-        .map_err(|e| anyhow!(e))?;
-        let txn = Transaction::new(data, signature)
-            .verify()
-            .map_err(|e| anyhow!(e))?;
-        let txn_digest = *txn.digest();
-
-        Ok(self.state.dry_run_transaction(txn, txn_digest).await?)
+        let txn_digest = TransactionDigest::new(sha3_hash(&tx_data));
+        Ok(self.state.dry_exec_transaction(tx_data, txn_digest).await?)
     }
 
     async fn get_normalized_move_modules_by_package(
