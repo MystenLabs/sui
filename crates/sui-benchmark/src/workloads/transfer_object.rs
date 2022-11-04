@@ -111,7 +111,11 @@ impl TransferObjectWorkload {
 
 #[async_trait]
 impl Workload<dyn Payload> for TransferObjectWorkload {
-    async fn init(&mut self, _proxy: Arc<dyn ValidatorProxy + Sync + Send>) {
+    async fn init(
+        &mut self,
+        _num_shared_counters: u64,
+        _proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+    ) {
         return;
     }
     async fn make_test_payloads(
@@ -148,7 +152,7 @@ impl Workload<dyn Payload> for TransferObjectWorkload {
             }
             transfer_gas.push(account_transfer_gas);
         }
-        eprintln!("Creating objects to transfer..");
+        eprintln!("Creating transfer object txns, almost done..");
         // create transfer objects with 1 SUI value each
         let mut transfer_objects: Vec<Gas> = vec![];
         for _i in 0..count {

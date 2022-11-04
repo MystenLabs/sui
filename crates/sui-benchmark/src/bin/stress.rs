@@ -148,6 +148,14 @@ pub enum RunSpec {
         // transaction in the benchmark workload
         #[clap(long, default_value = "0")]
         shared_counter: u32,
+        // 100 for max hotness i.e all requests target
+        // just the same shared counter, 0 for no hotness
+        // i.e. all requests target a different shared
+        // counter. The way total number of counters to
+        // create is computed roughly as:
+        // total_shared_counters = max(1, qps * (1.0 - hotness/100.0))
+        #[clap(long, default_value = "50")]
+        shared_counter_hotness_factor: u32,
         // relative weight of transfer object
         // transactions in the benchmark workload
         #[clap(long, default_value = "1")]
@@ -404,8 +412,11 @@ async fn main() -> Result<()> {
                     stat_collection_interval,
                     shared_counter,
                     transfer_object,
+                    shared_counter_hotness_factor,
                     ..
                 } => {
+                    let shared_counter_ratio = 1.0
+                        - (std::cmp::min(shared_counter_hotness_factor as u32, 100) as f32 / 100.0);
                     let workloads = if !opts.disjoint_mode {
                         let mut combination_workload = make_combination_workload(
                             target_qps,
@@ -418,7 +429,12 @@ async fn main() -> Result<()> {
                             shared_counter,
                             transfer_object,
                         );
-                        combination_workload.workload.init(arc_agg.clone()).await;
+                        let max_ops = target_qps * in_flight_ratio;
+                        let num_shared_counters = (max_ops as f32 * shared_counter_ratio) as u64;
+                        combination_workload
+                            .workload
+                            .init(num_shared_counters, arc_agg.clone())
+                            .await;
                         vec![combination_workload]
                     } else {
                         let mut workloads = vec![];
@@ -428,6 +444,8 @@ async fn main() -> Result<()> {
                         let shared_counter_num_workers =
                             (shared_counter_weight * num_workers as f32).ceil() as u64;
                         let shared_counter_max_ops = (shared_counter_qps * in_flight_ratio) as u64;
+                        let num_shared_counters =
+                            (shared_counter_max_ops as f32 * shared_counter_ratio) as u64;
                         if let Some(mut shared_counter_workload) = make_shared_counter_workload(
                             shared_counter_qps,
                             shared_counter_num_workers,
@@ -436,7 +454,10 @@ async fn main() -> Result<()> {
                             owner,
                             keypair.clone(),
                         ) {
-                            shared_counter_workload.workload.init(arc_agg.clone()).await;
+                            shared_counter_workload
+                                .workload
+                                .init(num_shared_counters, arc_agg.clone())
+                                .await;
                             workloads.push(shared_counter_workload);
                         }
                         let transfer_object_weight = 1.0 - shared_counter_weight;
@@ -456,7 +477,7 @@ async fn main() -> Result<()> {
                         ) {
                             transfer_object_workload
                                 .workload
-                                .init(arc_agg.clone())
+                                .init(num_shared_counters, arc_agg.clone())
                                 .await;
                             workloads.push(transfer_object_workload);
                         }

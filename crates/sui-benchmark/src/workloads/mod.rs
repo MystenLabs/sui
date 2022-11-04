@@ -35,6 +35,7 @@ pub fn make_combination_workload(
             primary_gas_account_owner,
             primary_gas_account_keypair.clone(),
             None,
+            vec![],
         );
         workloads
             .entry(WorkloadType::SharedCounter)
@@ -71,7 +72,8 @@ pub fn make_shared_counter_workload(
     if target_qps == 0 || max_in_flight_ops == 0 || num_workers == 0 {
         None
     } else {
-        let workload = SharedCounterWorkload::new_boxed(primary_gas_id, owner, keypair, None);
+        let workload =
+            SharedCounterWorkload::new_boxed(primary_gas_id, owner, keypair, None, vec![]);
         Some(WorkloadInfo {
             target_qps,
             num_workers,

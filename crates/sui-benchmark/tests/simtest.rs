@@ -85,7 +85,7 @@ mod test {
         );
 
         for w in workloads.iter_mut() {
-            w.workload.init(proxy.clone()).await;
+            w.workload.init(5, proxy.clone()).await;
         }
 
         let driver = BenchDriver::new(5);

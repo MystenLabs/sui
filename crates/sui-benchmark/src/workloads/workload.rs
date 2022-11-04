@@ -138,7 +138,11 @@ impl fmt::Display for WorkloadType {
 
 #[async_trait]
 pub trait Workload<T: Payload + ?Sized>: Send + Sync {
-    async fn init(&mut self, proxy: Arc<dyn ValidatorProxy + Sync + Send>);
+    async fn init(
+        &mut self,
+        num_shared_counters: u64,
+        proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+    );
     async fn make_test_payloads(
         &self,
         count: u64,
@@ -153,9 +157,13 @@ pub struct CombinationWorkload {
 
 #[async_trait]
 impl Workload<dyn Payload> for CombinationWorkload {
-    async fn init(&mut self, proxy: Arc<dyn ValidatorProxy + Sync + Send>) {
+    async fn init(
+        &mut self,
+        num_shared_counters: u64,
+        proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+    ) {
         for (_, (_, workload)) in self.workloads.iter_mut() {
-            workload.init(proxy.clone()).await;
+            workload.init(num_shared_counters, proxy.clone()).await;
         }
     }
     async fn make_test_payloads(
