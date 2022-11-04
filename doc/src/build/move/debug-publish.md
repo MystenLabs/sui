@@ -138,6 +138,7 @@ We can now create a function to test the module initialization:
             test_scenario::return_to_sender(scenario, forge);
         };
         test_scenario::end(scenario_val);
+    }
 
 ```
 
