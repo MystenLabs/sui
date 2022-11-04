@@ -105,10 +105,7 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                             {filteredModules.map((name, idx) => (
                                 <Combobox.Option key={name} value={name}>
                                     {({ active }) => (
-                                        <div
-                                            key={idx}
-                                            className="min-w-full w-fit"
-                                        >
+                                        <div key={idx}>
                                             <ListItem
                                                 active={
                                                     active ||
