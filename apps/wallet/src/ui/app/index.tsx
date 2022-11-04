@@ -46,6 +46,7 @@ const App = () => {
     );
     useEffect(() => {
         document.body.classList[isPopup ? 'add' : 'remove']('is-popup');
+        document.body.classList.remove('app-initializing');
     }, [isPopup]);
     const location = useLocation();
     useEffect(() => {

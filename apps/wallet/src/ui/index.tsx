@@ -11,6 +11,7 @@ import { HashRouter } from 'react-router-dom';
 import App from './app';
 import { growthbook, loadFeatures } from './app/experimentation/feature-gating';
 import { queryClient } from './app/helpers/queryClient';
+import { ErrorBoundary } from '_components/error-boundary';
 import { initAppType, initNetworkFromStorage } from '_redux/slices/app';
 import { getFromLocationSearch } from '_redux/slices/app/AppType';
 import initSentry from '_src/shared/sentry';
@@ -43,7 +44,9 @@ function renderApp() {
                 <Provider store={store}>
                     <IntlProvider locale={navigator.language}>
                         <QueryClientProvider client={queryClient}>
-                            <App />
+                            <ErrorBoundary>
+                                <App />
+                            </ErrorBoundary>
                         </QueryClientProvider>
                     </IntlProvider>
                 </Provider>
