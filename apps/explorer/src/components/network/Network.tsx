@@ -16,8 +16,9 @@ export default function NetworkSelect() {
     const [isModuleOpen, setModuleOpen] = useState(false);
     const [isOpenInput, setIsOpenInput] = useState(false);
 
-    const showTestNet =
-         useFeature(GROWTHBOOK_FEATURES.USE_TEST_NET_ENDPOINT).on ;
+    const showTestNet = useFeature(
+        GROWTHBOOK_FEATURES.USE_TEST_NET_ENDPOINT
+    ).on;
 
     const openModal = useCallback(
         () => (isModuleOpen ? setModuleOpen(false) : setModuleOpen(true)),
@@ -94,7 +95,7 @@ export default function NetworkSelect() {
                                 Staging
                             </div>
                         ) : null}
-                         {showTestNet ? (
+                        {showTestNet ? (
                             <div
                                 onClick={chooseNetwork(Network.Testnet)}
                                 className={networkStyle(Network.Testnet)}
