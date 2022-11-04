@@ -899,14 +899,6 @@ impl<S> TransactionEnvelope<S> {
     pub fn is_system_tx(&self) -> bool {
         self.signed_data.data.kind.is_system_tx()
     }
-
-    pub fn remove_auth_sig_info(self) -> Transaction {
-        Transaction {
-            transaction_digest: self.transaction_digest,
-            signed_data: self.signed_data,
-            auth_sign_info: EmptySignInfo {},
-        }
-    }
 }
 
 // In combination with #[serde(remote = "TransactionEnvelope")].

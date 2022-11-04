@@ -22,7 +22,7 @@ use sui_metrics::spawn_monitored_task;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{
     CertifiedTransaction, CertifiedTransactionEffects, QuorumDriverRequest,
-    QuorumDriverRequestType, QuorumDriverResponse, TransactionEnvelope, TransactionInfoRequest,
+    QuorumDriverRequestType, QuorumDriverResponse, TransactionInfoRequest,
     TransactionInfoResponse, VerifiedTransaction, VerifiedTransactionEnvelope,
 };
 
@@ -291,10 +291,7 @@ where
         original_tx_digest: &TransactionDigest,
     ) -> SuiResult<Option<(TransactionDigest, bool)>> {
         let validity = self.validators.load().committee.validity_threshold();
-        // if we have >= f+1 good stake on the current transaction, no point in retrying conflicting ones
-        if good_stake >= validity {
-            return Ok(None);
-        }
+
 
         let mut conflicting_tx_digests = Vec::from_iter(conflicting_tx_digests.iter());
         conflicting_tx_digests.sort_by(|lhs, rhs| rhs.1 .1.cmp(&lhs.1 .1));
@@ -306,11 +303,22 @@ where
         // we checked emptiness above, safe to unwrap.
         let (tx_digest, (validators, total_stake)) = conflicting_tx_digests.get(0).unwrap();
 
+        if good_stake >= validity && *total_stake >= validity {
+            warn!(?tx_digest, ?original_tx_digest, original_tx_stake=good_stake, tx_stake=*total_stake, "Equivocation detected: {:?}", validators);
+            return Ok(None)
+        }
+
+        // if we have >= f+1 good stake on the current transaction, no point in retrying conflicting ones
+        if good_stake >= validity {
+            return Ok(None);
+        }
+
         // To be more conservative and try not to actually cause full equivocation,
         // we only retry a transaction when at least f+1 validators claims this tx locks objects
         if *total_stake < validity {
             return Ok(None);
         }
+
         info!(
             ?tx_digest,
             ?total_stake,
@@ -388,7 +396,7 @@ where
                 }
                 if let Some(verified_transaction) = signed_transaction {
                     let transaction =
-                        TransactionEnvelope::from(verified_transaction).remove_auth_sig_info();
+                        verified_transaction.into_inner().to_transaction();
                     // SafeClient checked the transaction is legit in `handle_transaction_info_request`
                     let verified_transaction =
                         VerifiedTransactionEnvelope::new_unchecked(transaction);
