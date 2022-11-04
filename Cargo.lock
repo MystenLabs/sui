@@ -6233,7 +6233,7 @@ dependencies = [
  "once_cell",
  "parking_lot 0.12.1",
  "smallvec",
- "symbolic-demangle 10.1.1",
+ "symbolic-demangle",
  "tempfile",
  "thiserror",
 ]
@@ -8950,18 +8950,6 @@ dependencies = [
 
 [[package]]
 name = "symbolic-common"
-version = "9.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "800963ba330b09a2ae4a4f7c6392b81fbc2784099a98c1eac68c3437aa9382b2"
-dependencies = [
- "debugid",
- "memmap2",
- "stable_deref_trait",
- "uuid",
-]
-
-[[package]]
-name = "symbolic-common"
 version = "10.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ac457d054f793cedfde6f32d21d692b8351cfec9084fefd0470c0373f6d799bc"
@@ -8974,24 +8962,13 @@ dependencies = [
 
 [[package]]
 name = "symbolic-demangle"
-version = "9.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b940a1fdbc72bb3369e38714efe6cd332dbbe46d093cf03d668b9ac390d1ad0"
-dependencies = [
- "cpp_demangle",
- "rustc-demangle",
- "symbolic-common 9.2.1",
-]
-
-[[package]]
-name = "symbolic-demangle"
 version = "10.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "48808b846eef84e0ac06365dc620f028ae632355e5dcffc007bf1b2bf5eab17b"
 dependencies = [
  "cpp_demangle",
  "rustc-demangle",
- "symbolic-common 10.1.1",
+ "symbolic-common",
 ]
 
 [[package]]
@@ -10500,6 +10477,7 @@ dependencies = [
  "anemo",
  "anemo-build",
  "anemo-tower",
+ "anes",
  "ansi_term",
  "anyhow",
  "arc-swap",
@@ -10590,6 +10568,9 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "chrono-tz-build",
+ "ciborium",
+ "ciborium-io",
+ "ciborium-ll",
  "cipher",
  "clang-sys",
  "clap 2.34.0",
@@ -10621,7 +10602,9 @@ dependencies = [
  "crc-catalog",
  "crc32fast",
  "criterion 0.3.6",
+ "criterion 0.4.0",
  "criterion-plot 0.4.5",
+ "criterion-plot 0.5.0",
  "crossbeam",
  "crossbeam-channel",
  "crossbeam-deque",
@@ -11138,8 +11121,8 @@ dependencies = [
  "subprocess",
  "subtle",
  "subtle-ng",
- "symbolic-common 9.2.1",
- "symbolic-demangle 9.2.1",
+ "symbolic-common",
+ "symbolic-demangle",
  "syn 0.15.44",
  "syn 1.0.103",
  "sync_wrapper",
