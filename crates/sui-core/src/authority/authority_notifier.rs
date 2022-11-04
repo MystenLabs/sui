@@ -85,6 +85,23 @@ impl TransactionNotifier {
         self.low_watermark.load(Ordering::SeqCst)
     }
 
+    pub fn notify(&self, seq: u64) {
+        let mut inner = self.inner.lock();
+        inner.live_tickets.remove(&seq);
+
+        // The new low watermark is either the lowest outstanding ticket
+        // or the high watermark.
+        let new_low_watermark = *inner
+            .live_tickets
+            .iter()
+            .next()
+            .unwrap_or(&inner.high_watermark);
+
+        self.low_watermark
+            .store(new_low_watermark, Ordering::SeqCst);
+        self.notify.notify_one();
+    }
+
     pub fn pause(&self) {
         self.is_paused.store(true, Ordering::SeqCst);
     }
@@ -261,21 +278,7 @@ impl TransactionNotifierTicket {
         self.seq
     }
     pub fn notify(self) {
-        let mut inner = self.transaction_notifier.inner.lock();
-        inner.live_tickets.remove(&self.seq);
-
-        // The new low watermark is either the lowest outstanding ticket
-        // or the high watermark.
-        let new_low_watermark = *inner
-            .live_tickets
-            .iter()
-            .next()
-            .unwrap_or(&inner.high_watermark);
-
-        self.transaction_notifier
-            .low_watermark
-            .store(new_low_watermark, Ordering::SeqCst);
-        self.transaction_notifier.notify.notify_one();
+        self.transaction_notifier.notify(self.seq);
     }
 }
 
