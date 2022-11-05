@@ -11,7 +11,6 @@ use futures::future::join_all;
 use anyhow::anyhow;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
-use tracing::debug;
 
 use sui_adapter::adapter::resolve_and_type_check;
 use sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue};
@@ -137,21 +136,10 @@ impl TransactionBuilder {
             .iter()
             .map(|id| self.get_object_ref(*id))
             .collect();
-        let coins: Vec<anyhow::Result<ObjectRef>> = join_all(handles).await.into_iter().collect();
-        let coins_len = coins.len();
-        let coin_refs: Vec<ObjectRef> = coins
+        let coin_refs = join_all(handles)
+            .await
             .into_iter()
-            .map(|c| {
-                c.map_err(|e| {
-                    debug!("Failed reading Pay input coin with err {:?}", e);
-                    e
-                })
-            })
-            .filter_map(|c| c.ok())
-            .collect();
-        if coins_len != coin_refs.len() {
-            return Err(anyhow!("Failed reading Pay input coin objects!"));
-        }
+            .collect::<anyhow::Result<Vec<ObjectRef>>>()?;
         let gas = self
             .select_gas(signer, gas, gas_budget, input_coins)
             .await?;
@@ -174,21 +162,10 @@ impl TransactionBuilder {
             .into_iter()
             .map(|id| self.get_object_ref(id))
             .collect();
-        let coins: Vec<anyhow::Result<ObjectRef>> = join_all(handles).await.into_iter().collect();
-        let coins_len = coins.len();
-        let coin_refs: Vec<ObjectRef> = coins
+        let coin_refs = join_all(handles)
+            .await
             .into_iter()
-            .map(|c| {
-                c.map_err(|e| {
-                    debug!("Failed reading PaySui input coin with err {:?}", e);
-                    e
-                })
-            })
-            .filter_map(|c| c.ok())
-            .collect();
-        if coins_len != coin_refs.len() {
-            return Err(anyhow!("Failed reading PaySui input coin objects!"));
-        }
+            .collect::<anyhow::Result<Vec<ObjectRef>>>()?;
         // [0] is safe because input_coins is non-empty and coins are of same length as input_coins.
         let gas_object_ref = coin_refs[0];
         Ok(TransactionData::new_pay_sui(
@@ -214,21 +191,11 @@ impl TransactionBuilder {
             .into_iter()
             .map(|id| self.get_object_ref(id))
             .collect();
-        let coins: Vec<anyhow::Result<ObjectRef>> = join_all(handles).await.into_iter().collect();
-        let coins_len = coins.len();
-        let coin_refs: Vec<ObjectRef> = coins
+
+        let coin_refs = join_all(handles)
+            .await
             .into_iter()
-            .map(|c| {
-                c.map_err(|e| {
-                    debug!("Failed reading PayAllSui input coin with err {:?}", e);
-                    e
-                })
-            })
-            .filter_map(|c| c.ok())
-            .collect();
-        if coins_len != coin_refs.len() {
-            return Err(anyhow!("Failed reading PayAllSui input coin objects!"));
-        }
+            .collect::<anyhow::Result<Vec<ObjectRef>>>()?;
         // [0] is safe because input_coins is non-empty and coins are of same length as input_coins.
         let gas_object_ref = coin_refs[0];
         Ok(TransactionData::new_pay_all_sui(
