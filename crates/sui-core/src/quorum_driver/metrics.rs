@@ -27,8 +27,7 @@ pub struct QuorumDriverMetrics {
     pub(crate) total_successful_attempts_retrying_conflicting_transaction: IntCounter,
     pub(crate) total_times_conflicting_transaction_already_finalized_when_retrying: IntCounter,
 
-    pub(crate) total_times_could_not_get_conflicting_transaction_from_any_validators: IntCounter,
-    pub(crate) total_times_could_not_get_conflicting_transaction_from_a_validator: IntCounter,
+    pub(crate) total_equivocation_detected: IntCounter,
 }
 
 const LATENCY_SEC_BUCKETS: &[f64] = &[
@@ -125,15 +124,9 @@ impl QuorumDriverMetrics {
                 registry,
             )
             .unwrap(),
-            total_times_could_not_get_conflicting_transaction_from_any_validators: register_int_counter_with_registry!(
-                "quorum_driver_total_times_could_not_get_conflicting_transaction_from_any_validators",
-                "Total number of times a validator could not return conflicting transaction info it is supposed to have",
-                registry,
-            )
-            .unwrap(),
-            total_times_could_not_get_conflicting_transaction_from_a_validator: register_int_counter_with_registry!(
-                "quorum_driver_total_times_could_not_get_conflicting_transaction_from_a_validator",
-                "Total number of times no validators could return conflicting transaction info they are supposed to have",
+            total_equivocation_detected: register_int_counter_with_registry!(
+                "quorum_driver_total_equivocation_detected",
+                "Total number of equivocations that are detected",
                 registry,
             )
             .unwrap(),

@@ -5,8 +5,9 @@ mod metrics;
 pub use metrics::*;
 
 use arc_swap::ArcSwap;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
+use std::time::Duration;
 use sui_types::base_types::{AuthorityName, ObjectRef, TransactionDigest};
 use sui_types::committee::{Committee, EpochId, StakeUnit};
 use tap::TapFallible;
@@ -22,8 +23,8 @@ use sui_metrics::spawn_monitored_task;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{
     CertifiedTransaction, CertifiedTransactionEffects, QuorumDriverRequest,
-    QuorumDriverRequestType, QuorumDriverResponse, TransactionInfoRequest,
-    TransactionInfoResponse, VerifiedTransaction, VerifiedTransactionEnvelope,
+    QuorumDriverRequestType, QuorumDriverResponse, VerifiedTransaction,
+    VerifiedTransactionEnvelope,
 };
 
 const TASK_QUEUE_SIZE: usize = 5000;
@@ -292,7 +293,6 @@ where
     ) -> SuiResult<Option<(TransactionDigest, bool)>> {
         let validity = self.validators.load().committee.validity_threshold();
 
-
         let mut conflicting_tx_digests = Vec::from_iter(conflicting_tx_digests.iter());
         conflicting_tx_digests.sort_by(|lhs, rhs| rhs.1 .1.cmp(&lhs.1 .1));
         if conflicting_tx_digests.is_empty() {
@@ -304,8 +304,16 @@ where
         let (tx_digest, (validators, total_stake)) = conflicting_tx_digests.get(0).unwrap();
 
         if good_stake >= validity && *total_stake >= validity {
-            warn!(?tx_digest, ?original_tx_digest, original_tx_stake=good_stake, tx_stake=*total_stake, "Equivocation detected: {:?}", validators);
-            return Ok(None)
+            warn!(
+                ?tx_digest,
+                ?original_tx_digest,
+                original_tx_stake = good_stake,
+                tx_stake = *total_stake,
+                "Equivocation detected: {:?}",
+                validators
+            );
+            self.metrics.total_equivocation_detected.inc();
+            return Ok(None);
         }
 
         // if we have >= f+1 good stake on the current transaction, no point in retrying conflicting ones
@@ -331,8 +339,8 @@ where
                 original_tx_digest,
                 validators
                     .iter()
-                    .map(|(name, _obj_ref)| name)
-                    .collect::<Vec<_>>(),
+                    .map(|(name, _obj_ref)| *name)
+                    .collect::<BTreeSet<_>>(),
             )
             .await?;
 
@@ -345,99 +353,82 @@ where
         &self,
         tx_digest: &&TransactionDigest,
         original_tx_digest: &TransactionDigest,
-        validators: Vec<&AuthorityName>,
+        validators: BTreeSet<AuthorityName>,
     ) -> SuiResult<bool> {
-        let clients = self.validators.load();
-        for validator_name in validators {
-            // If we cannot find the client, it indicates an epoch change. Then we stop all attempts.
-            let client = clients.get_client(validator_name).ok_or_else( || {
-                info!(?tx_digest, "It looks like we have an epoch change when doing attempt_one_conflicting_transaction.");
-                SuiError::InconsistentEpochState { error: format!("Epoch advance caused validator {:?} missing in AuthorityAggreagtor, giving up all attempts.", validator_name) }
-            })?;
-            if let Ok(TransactionInfoResponse {
-                signed_transaction,
-                certified_transaction,
-                signed_effects: _,
-            }) = client
-                .handle_transaction_info_request(TransactionInfoRequest {
-                    transaction_digest: **tx_digest,
-                })
+        let (signed_transaction, certified_transaction) = self
+            .validators
+            .load()
+            .handle_transaction_info_request_from_some_validators(
+                tx_digest,
+                &validators,
+                Some(Duration::from_secs(10)),
+            )
+            .await?;
+
+        // If we happen to find that a validator returns TransactionCertificate:
+        if let Some(certified_transaction) = certified_transaction {
+            self.metrics
+                .total_times_conflicting_transaction_already_finalized_when_retrying
+                .inc();
+            // We still want to ask validators to execute this certificate in case this certificate is not
+            // known to the rest of them (e.g. when *this* validator is bad).
+            let result = self
+                .validators
+                .load()
+                .process_certificate(certified_transaction.into_inner())
                 .await
-            {
-                // If we happen to find that a validator returns TransactionCertificate:
-                if let Some(certified_transaction) = certified_transaction {
-                    self.metrics
-                        .total_times_conflicting_transaction_already_finalized_when_retrying
-                        .inc();
-                    // We still want to ask validators to execute this certificate in case this certificate is not
-                    // known to the rest of them (e.g. when *this* validator is bad).
-                    let result = self
-                        .validators
-                        .load()
-                        .process_certificate(certified_transaction.into_inner())
-                        .await
-                        .tap_ok(|_resp| {
-                            debug!(
-                                ?tx_digest,
-                                ?original_tx_digest,
-                                "Retry conflicting transaction certificate succeeded."
-                            );
-                        })
-                        .tap_err(|err| {
-                            debug!(
-                                ?tx_digest,
-                                ?original_tx_digest,
-                                "Retry conflicting transaction certificate got an error: {:?}",
-                                err
-                            );
-                        });
-                    // We only retry once.
-                    return Ok(result.is_ok());
-                }
-                if let Some(verified_transaction) = signed_transaction {
-                    let transaction =
-                        verified_transaction.into_inner().to_transaction();
-                    // SafeClient checked the transaction is legit in `handle_transaction_info_request`
-                    let verified_transaction =
-                        VerifiedTransactionEnvelope::new_unchecked(transaction);
-                    // Now ask validators to execute this transaction.
-                    let result = self
-                        .validators
-                        .load()
-                        .execute_transaction(&verified_transaction)
-                        .await
-                        .tap_ok(|_resp| {
-                            debug!(
-                                ?tx_digest,
-                                ?original_tx_digest,
-                                "Retry conflicting transaction succeeded."
-                            );
-                        })
-                        .tap_err(|err| {
-                            debug!(
-                                ?tx_digest,
-                                ?original_tx_digest,
-                                "Retry conflicting transaction got an error: {:?}",
-                                err
-                            );
-                        });
-                    // We only retry once.
-                    return Ok(result.is_ok());
-                } else {
-                    self.metrics
-                        .total_times_could_not_get_conflicting_transaction_from_a_validator
-                        .inc();
-                    warn!(name=?validator_name, ?tx_digest, ?original_tx_digest, "Suspicious Byzantine behavior - valdiator couldn't give transaction info that it is supposed to know about");
-                    // try the next validator
-                }
-            }
+                .tap_ok(|_resp| {
+                    debug!(
+                        ?tx_digest,
+                        ?original_tx_digest,
+                        "Retry conflicting transaction certificate succeeded."
+                    );
+                })
+                .tap_err(|err| {
+                    debug!(
+                        ?tx_digest,
+                        ?original_tx_digest,
+                        "Retry conflicting transaction certificate got an error: {:?}",
+                        err
+                    );
+                });
+            // We only try it once.
+            return Ok(result.is_ok());
         }
-        // if we reach here, it means none of the validators returned the transaction info.
-        self.metrics
-            .total_times_could_not_get_conflicting_transaction_from_any_validators
-            .inc();
-        warn!(?tx_digest, ?original_tx_digest, "No one validator could give the transaction info. They either just experienced an epoch change, or are byzantine");
-        Ok(false)
+
+        if let Some(signed_transaction) = signed_transaction {
+            let transaction = signed_transaction.into_inner().to_transaction();
+            // SafeClient checked the transaction is legit in `handle_transaction_info_request`
+            let verified_transaction = VerifiedTransactionEnvelope::new_unchecked(transaction);
+            // Now ask validators to execute this transaction.
+            let result = self
+                .validators
+                .load()
+                .execute_transaction(&verified_transaction)
+                .await
+                .tap_ok(|_resp| {
+                    debug!(
+                        ?tx_digest,
+                        ?original_tx_digest,
+                        "Retry conflicting transaction succeeded."
+                    );
+                })
+                .tap_err(|err| {
+                    debug!(
+                        ?tx_digest,
+                        ?original_tx_digest,
+                        "Retry conflicting transaction got an error: {:?}",
+                        err
+                    );
+                });
+            // We only try it once
+            return Ok(result.is_ok());
+        }
+
+        // This is unreachable.
+        let err_str = "handle_transaction_info_request_from_some_validators shouldn't return empty SignedTransaction and empty CertifiedTransaction";
+        error!(err_str);
+        Err(SuiError::from(err_str))
     }
 }
 
