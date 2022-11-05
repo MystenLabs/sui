@@ -24,7 +24,7 @@ use sui_core::transaction_orchestrator::TransactiondOrchestrator;
 use sui_core::transaction_streamer::TransactionStreamer;
 use sui_core::{
     authority::{AuthorityState, AuthorityStore},
-    authority_active::{gossip::GossipMetrics, ActiveAuthority},
+    authority_active::ActiveAuthority,
     authority_client::{
         make_network_authority_client_sets_from_genesis,
         make_network_authority_client_sets_from_system_state, NetworkAuthorityClient,
@@ -200,7 +200,7 @@ impl SuiNode {
         let active_authority = Arc::new(ActiveAuthority::new(
             state.clone(),
             net.clone(),
-            GossipMetrics::new(&prometheus_registry),
+            &prometheus_registry,
             network_metrics.clone(),
         )?);
 
