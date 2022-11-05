@@ -8772,6 +8772,7 @@ dependencies = [
  "sui-json",
  "sui-json-rpc-types",
  "sui-types",
+ "tracing",
  "workspace-hack",
 ]
 
