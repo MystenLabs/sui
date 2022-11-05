@@ -11,7 +11,6 @@ anyhow = "1.0.64"
 async-trait = "0.1.57"
 futures = "0.3.23"
 bcs = "0.1.4"
-tracing = "0.1.36"
 
 sui-json-rpc-types= { path = "../sui-json-rpc-types" }
 sui-types = { path = "../sui-types" }
