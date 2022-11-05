@@ -686,12 +686,6 @@ impl SuiClientCommands {
                     .read_api()
                     .get_objects_owned_by_address(address)
                     .await?;
-                let object_objects = client
-                    .read_api()
-                    .get_objects_owned_by_object(address.into())
-                    .await?;
-                address_object.extend(object_objects);
-
                 SuiClientCommandResult::Objects(address_object)
             }
 

@@ -15,11 +15,17 @@ use jsonrpsee::ws_client::{WsClient, WsClientBuilder};
 use crate::error::{RpcError, SuiRpcResult};
 use rpc_types::{SuiCertifiedTransaction, SuiParsedTransactionResponse, SuiTransactionEffects};
 use serde_json::Value;
+pub use sui_config::gateway;
+use sui_core::gateway_state::TxSeqNumber;
 pub use sui_json as json;
 
 use crate::apis::{CoinReadApi, EventApi, QuorumDriver, ReadApi};
 pub use sui_json_rpc_types as rpc_types;
-use sui_json_rpc_types::{GetRawObjectDataResponse, SuiObjectInfo};
+use sui_json_rpc_types::{
+    DynamicFieldPage, EventPage, GetObjectDataResponse, GetRawObjectDataResponse, SuiEventEnvelope,
+    SuiEventFilter, SuiMoveNormalizedModule, SuiObjectInfo, SuiTransactionResponse,
+    TransactionsPage,
+};
 use sui_transaction_builder::{DataReader, TransactionBuilder};
 pub use sui_types as types;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};

@@ -5,10 +5,10 @@
 use anyhow::anyhow;
 use curve25519_dalek::ristretto::RistrettoPoint;
 use fastcrypto::encoding::decode_bytes_hex;
+use fastcrypto::encoding::{Base64, Encoding, Hex};
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
-use move_core_types::language_storage::StructTag;
 use opentelemetry::{global, Context};
 use rand::Rng;
 use schemars::JsonSchema;
@@ -35,7 +35,9 @@ use crate::gas_coin::GasCoin;
 use crate::object::{Object, Owner};
 use crate::sui_serde::Readable;
 use fastcrypto::encoding::{Base58, Base64, Encoding, Hex};
+use crate::SUI_FRAMEWORK_ADDRESS;
 use fastcrypto::hash::{HashFunction, Sha3_256};
+use move_core_types::language_storage::StructTag;
 
 #[cfg(test)]
 #[path = "unit_tests/base_types_tests.rs"]
@@ -145,6 +147,23 @@ impl From<&ObjectInfo> for ObjectRef {
     fn from(info: &ObjectInfo) -> Self {
         (info.object_id, info.version, info.digest)
     }
+}
+
+#[derive(Clone, Serialize, Deserialize, JsonSchema, Ord, PartialOrd, Eq, PartialEq, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct DynamicFieldInfo {
+    pub name: String,
+    pub type_: DynamicFieldType,
+    pub object_type: String,
+    pub object_id: ObjectID,
+    pub version: SequenceNumber,
+    pub digest: ObjectDigest,
+}
+
+#[derive(Clone, Serialize, Deserialize, JsonSchema, Ord, PartialOrd, Eq, PartialEq, Debug)]
+pub enum DynamicFieldType {
+    Field(ObjectID),
+    Object,
 }
 
 pub const SUI_ADDRESS_LENGTH: usize = ObjectID::LENGTH;

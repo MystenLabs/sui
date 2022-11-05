@@ -34,7 +34,9 @@ pub struct AuthorityPerpetualTables {
     /// composite key of the SuiAddress of their owner and the object ID of the object.
     /// This composite index allows an efficient iterator to list all objected currently owned
     /// by a specific user, and their object reference.
-    pub(crate) owner_index: DBMap<(Owner, ObjectID), ObjectInfo>,
+    pub(crate) owner_index: DBMap<(SuiAddress, ObjectID), ObjectInfo>,
+
+    pub(crate) dynamic_field_index: DBMap<(ObjectID, ObjectID), DynamicFieldInfo>,
 
     /// This is a map between the transaction digest and the corresponding certificate for all
     /// certificates that have been successfully processed by this authority. This set of certificates

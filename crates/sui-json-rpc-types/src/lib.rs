@@ -28,6 +28,9 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
 use serde_with::serde_as;
+use sui_types::coin::CoinMetadata;
+use tracing::warn;
+
 use sui_json::SuiJsonValue;
 use sui_types::base_types::{
     AuthorityName, ObjectDigest, ObjectID, ObjectInfo, ObjectRef, SequenceNumber, SuiAddress,
@@ -64,6 +67,7 @@ pub type SuiMoveTypeParameterIndex = u16;
 pub type TransactionsPage = Page<TransactionDigest, TransactionDigest>;
 pub type EventPage = Page<SuiEventEnvelope, EventID>;
 pub type CoinPage = Page<Coin, ObjectID>;
+pub type DynamicFieldPage = Page<DynamicFieldInfo, String>;
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
 #[serde(rename_all = "camelCase")]

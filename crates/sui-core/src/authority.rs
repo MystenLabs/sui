@@ -58,7 +58,7 @@ use sui_types::committee::EpochId;
 use sui_types::crypto::{AuthorityKeyPair, NetworkKeyPair};
 use sui_types::event::{Event, EventID};
 use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
-use sui_types::object::{Owner, PastObjectRead};
+use sui_types::object::PastObjectRead;
 use sui_types::query::{EventQuery, TransactionQuery};
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::temporary_store::InnerTemporaryStore;
@@ -1861,15 +1861,12 @@ impl AuthorityState {
         }
     }
 
-    pub fn get_owner_objects(&self, owner: Owner) -> SuiResult<Vec<ObjectInfo>> {
+    pub fn get_owner_objects(&self, owner: SuiAddress) -> SuiResult<Vec<ObjectInfo>> {
         self.database.get_owner_objects(owner)
     }
 
-    pub fn get_owner_objects_iterator(
-        &self,
-        owner: Owner,
-    ) -> SuiResult<impl Iterator<Item = ObjectInfo> + '_> {
-        self.database.get_owner_objects_iterator(owner)
+    pub fn get_dynamic_fields(&self, owner: ObjectID) -> SuiResult<Vec<DynamicFieldInfo>> {
+        self.database.get_dynamic_fields(owner)
     }
 
     pub fn get_total_transaction_number(&self) -> Result<u64, anyhow::Error> {
@@ -2132,7 +2129,7 @@ impl AuthorityState {
 
     fn make_account_info(&self, account: SuiAddress) -> Result<AccountInfoResponse, SuiError> {
         self.database
-            .get_owner_objects(Owner::AddressOwner(account))
+            .get_owner_objects(account)
             .map(|object_ids| AccountInfoResponse {
                 object_ids: object_ids.into_iter().map(|id| id.into()).collect(),
                 owner: account,

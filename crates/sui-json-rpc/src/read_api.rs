@@ -6,20 +6,23 @@ use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
 use move_binary_format::normalized::{Module as NormalizedModule, Type};
 use move_core_types::identifier::Identifier;
+use move_core_types::language_storage::StructTag;
+use signature::Signature;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use sui_types::intent::{Intent, IntentMessage};
 use sui_types::sui_system_state::SuiSystemState;
 use tap::TapFallible;
+use tracing::debug;
 
 use fastcrypto::encoding::Base64;
 use jsonrpsee::RpcModule;
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{
-    GetObjectDataResponse, GetPastObjectDataResponse, MoveFunctionArgType, ObjectValueKind, Page,
-    SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiObjectInfo,
-    SuiTransactionAuthSignersResponse, SuiTransactionEffects, SuiTransactionResponse,
-    TransactionsPage,
+    DynamicFieldPage, GetObjectDataResponse, GetPastObjectDataResponse, MoveFunctionArgType,
+    ObjectValueKind, Page,  SuiMoveNormalizedFunction, SuiMoveNormalizedModule,
+    SuiMoveNormalizedStruct, SuiObjectInfo, SuiTransactionAuthSignersResponse,
+    SuiTransactionEffects, SuiTransactionResponse, TransactionsPage,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::SequenceNumber;
@@ -29,10 +32,8 @@ use sui_types::committee::EpochId;
 use sui_types::crypto::sha3_hash;
 use sui_types::messages::{CommitteeInfoRequest, CommitteeInfoResponse};
 use sui_types::move_package::normalize_modules;
-use sui_types::object::{Data, ObjectRead, Owner};
+use sui_types::object::{Data, ObjectRead};
 use sui_types::query::TransactionQuery;
-
-use tracing::debug;
 
 use crate::api::RpcFullNodeReadApiServer;
 use crate::api::{cap_page_limit, RpcReadApiServer};
@@ -68,24 +69,23 @@ impl RpcReadApiServer for ReadApi {
     ) -> RpcResult<Vec<SuiObjectInfo>> {
         Ok(self
             .state
-            .get_owner_objects(Owner::AddressOwner(address))
+            .get_owner_objects(address)
             .map_err(|e| anyhow!("{e}"))?
             .into_iter()
             .map(SuiObjectInfo::from)
             .collect())
     }
 
-    async fn get_objects_owned_by_object(
-        &self,
-        object_id: ObjectID,
-    ) -> RpcResult<Vec<SuiObjectInfo>> {
-        Ok(self
+    async fn get_dynamic_fields(&self, object_id: ObjectID) -> RpcResult<DynamicFieldPage> {
+        let data = self
             .state
-            .get_owner_objects(Owner::ObjectOwner(object_id.into()))
-            .map_err(|e| anyhow!("{e}"))?
-            .into_iter()
-            .map(SuiObjectInfo::from)
-            .collect())
+            .get_dynamic_fields(object_id)
+            .map_err(|e| anyhow!("{e}"))?;
+
+        Ok(DynamicFieldPage {
+            data,
+            next_cursor: None,
+        })
     }
 
     async fn get_object(&self, object_id: ObjectID) -> RpcResult<GetObjectDataResponse> {
@@ -380,3 +380,25 @@ pub async fn get_move_modules_by_package(
         _ => Err(anyhow!("Package object does not exist with ID {}", package)),
     }?)
 }
+
+/*
+#[test]
+fn test() {
+    let tag = "0x2::dynamic_field::Field<0x2::dynamic_object_field::Wrapper<0x2::typed_id::TypedID<0xdf496988c6d4571684d9f4edcaec5a1cf889fa2c::geniteam::Farm>>, 0x2::object::ID>";
+    let tag2 = "0x2::dynamic_field::Field<0x2::object::ID, 0xdf496988c6d4571684d9f4edcaec5a1cf889fa2c::marketplace::Listing<0x2::devnet_nft::DevNetNFT, 0x2::sui::SUI>>";
+
+    let tag = parse_sui_struct_tag(tag).unwrap();
+    let tag2 = parse_sui_struct_tag(tag2).unwrap();
+
+    for tag in [tag, tag2] {
+        if is_dynamic_field(&tag) {
+            if matches!(&tag.type_params[0], TypeTag::Struct(tag) if is_dynamic_field_wrapper(&tag))
+            {
+                println!("1")
+            } else {
+                println!("2")
+            }
+        }
+    }
+}
+*/
