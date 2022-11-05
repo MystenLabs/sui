@@ -11,6 +11,7 @@ use futures::future::join_all;
 use anyhow::anyhow;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
+use tracing::debug;
 
 use sui_adapter::adapter::resolve_and_type_check;
 use sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue};
@@ -136,15 +137,26 @@ impl TransactionBuilder {
             .iter()
             .map(|id| self.get_object_ref(*id))
             .collect();
-        let coins = join_all(handles)
-            .await
+        let coins: Vec<anyhow::Result<ObjectRef>> = join_all(handles).await.into_iter().collect();
+        let coins_len = coins.len();
+        let coin_refs: Vec<ObjectRef> = coins
             .into_iter()
-            .map(|c| c.unwrap())
+            .map(|c| {
+                c.map_err(|e| {
+                    debug!("Failed reading Pay input coin with err {:?}", e);
+                    e
+                })
+            })
+            .filter_map(|c| c.ok())
             .collect();
+        if coins_len != coin_refs.len() {
+            return Err(anyhow!("Failed reading Pay input coin objects!"));
+        }
         let gas = self
             .select_gas(signer, gas, gas_budget, input_coins)
             .await?;
-        let data = TransactionData::new_pay(signer, coins, recipients, amounts, gas, gas_budget);
+        let data =
+            TransactionData::new_pay(signer, coin_refs, recipients, amounts, gas, gas_budget);
         Ok(data)
     }
 
@@ -162,15 +174,30 @@ impl TransactionBuilder {
             .into_iter()
             .map(|id| self.get_object_ref(id))
             .collect();
-        let coins: Vec<ObjectRef> = join_all(handles)
-            .await
+        let coins: Vec<anyhow::Result<ObjectRef>> = join_all(handles).await.into_iter().collect();
+        let coins_len = coins.len();
+        let coin_refs: Vec<ObjectRef> = coins
             .into_iter()
-            .map(|c| c.unwrap())
+            .map(|c| {
+                c.map_err(|e| {
+                    debug!("Failed reading PaySui input coin with err {:?}", e);
+                    e
+                })
+            })
+            .filter_map(|c| c.ok())
             .collect();
+        if coins_len != coin_refs.len() {
+            return Err(anyhow!("Failed reading PaySui input coin objects!"));
+        }
         // [0] is safe because input_coins is non-empty and coins are of same length as input_coins.
-        let gas_object = *coins.get(0).unwrap();
+        let gas_object_ref = coin_refs[0];
         Ok(TransactionData::new_pay_sui(
-            signer, coins, recipients, amounts, gas_object, gas_budget,
+            signer,
+            coin_refs,
+            recipients,
+            amounts,
+            gas_object_ref,
+            gas_budget,
         ))
     }
 
@@ -187,15 +214,29 @@ impl TransactionBuilder {
             .into_iter()
             .map(|id| self.get_object_ref(id))
             .collect();
-        let coins: Vec<ObjectRef> = join_all(handles)
-            .await
+        let coins: Vec<anyhow::Result<ObjectRef>> = join_all(handles).await.into_iter().collect();
+        let coins_len = coins.len();
+        let coin_refs: Vec<ObjectRef> = coins
             .into_iter()
-            .map(|c| c.unwrap())
+            .map(|c| {
+                c.map_err(|e| {
+                    debug!("Failed reading PayAllSui input coin with err {:?}", e);
+                    e
+                })
+            })
+            .filter_map(|c| c.ok())
             .collect();
+        if coins_len != coin_refs.len() {
+            return Err(anyhow!("Failed reading PayAllSui input coin objects!"));
+        }
         // [0] is safe because input_coins is non-empty and coins are of same length as input_coins.
-        let gas_object = coins[0];
+        let gas_object_ref = coin_refs[0];
         Ok(TransactionData::new_pay_all_sui(
-            signer, coins, recipient, gas_object, gas_budget,
+            signer,
+            coin_refs,
+            recipient,
+            gas_object_ref,
+            gas_budget,
         ))
     }
 
@@ -519,6 +560,7 @@ impl TransactionBuilder {
         ))
     }
 
+    // TODO: we should add retrial to reduce the transaction building error rate
     async fn get_object_ref(&self, object_id: ObjectID) -> anyhow::Result<ObjectRef> {
         Ok(self
             .0
