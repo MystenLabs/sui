@@ -14,30 +14,30 @@
 // and thus it may depend on randomness that is already public to everyone.
 //
 // Below we design a game that overcomes this issue as following:
-// - A game is defined for a specific drand round N in the future. N can be, for example, the round that is expected in
-//   5 mins from now, where the current round can be retrieved (off-chain) using
+// - A game is defined for a specific drand round N in the future, for example, the round that is expected in
+//   5 mins from now.
+//   The current round can be retrieved (off-chain) using
 //   `curl https://drand.cloudflare.com/8990e7a9aaed2ffed73dbd7092123d6f289930540d7651336225dc172e51b2ce/public/latest',
-//   or, the value for round N can be retrieved using
-//   `curl https://drand.cloudflare.com/8990e7a9aaed2ffed73dbd7092123d6f289930540d7651336225dc172e51b2ce/public/N'.
+//   or using the following python script:
+//      import time
+//      genesis = 1595431050
+//      curr_round = (time.time() - genesis) // 30 + 1
+//   The round in 5 mins from now will be curr_round + 5*2.
+//   (genesis is the epoch of the first round as returned from
+//   curl https://drand.cloudflare.com/8990e7a9aaed2ffed73dbd7092123d6f289930540d7651336225dc172e51b2ce/info.)
 // - Anyone can "close" the game to new participants by providing drand's randomness of round N-2 (i.e., 1 minute before
-//   round N).
+//   round N). The randomness of round X can be retrieved using
+//  `curl https://drand.cloudflare.com/8990e7a9aaed2ffed73dbd7092123d6f289930540d7651336225dc172e51b2ce/public/X'.
 // - Users can join the game as long as it is not closed and receive a "ticket".
 // - Anyone can "complete" the game by proving drand's randomness of round N, which is used to declare the winner.
 // - The owner of the winning "ticket" can request a "winner ticket" and finish the game.
 // As long as someone is closing the game in time (or at least before round N) we have the guarantee that the winner is
 // selected using unpredictable and unbiasable randomness. Otherwise, someone could wait until the randomness of round N
-// is public, see if it could won the game and if so, join the game and drive it to completion.
+// is public, see if it could won the game and if so, join the game and drive it to completion. Therefore, honest users
+// are encourged to close the game in time.
 //
 // All the external inputs needed for the following APIs can be retrieved from one of drand's public APIs, e.g. using
-// the above curl command.
-//
-// In order to find the round number in X minutes from now, one can use the following python script:
-//      import time
-//      curr_round = (time.time() - 1595431050) // 30 + 1
-//      requested_round = int(curr_round + X*2)
-//
-// The value 1595431050 is the epoch of the first round (called genesis_time) as returned from
-// curl https://drand.cloudflare.com/8990e7a9aaed2ffed73dbd7092123d6f289930540d7651336225dc172e51b2ce/info.
+// the above curl commands.
 //
 module games::drand_random_selection {
     use std::vector;
