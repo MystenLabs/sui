@@ -16,7 +16,9 @@
 // Below we design a game that overcomes this issue as following:
 // - A game is defined for a specific drand round N in the future. N can be, for example, the round that is expected in
 //   5 mins from now, where the current round can be retrieved (off-chain) using
-//   `curl https://drand.cloudflare.com/8990e7a9aaed2ffed73dbd7092123d6f289930540d7651336225dc172e51b2ce/public/latest'.
+//   `curl https://drand.cloudflare.com/8990e7a9aaed2ffed73dbd7092123d6f289930540d7651336225dc172e51b2ce/public/latest',
+//   or, the value for round N can be retrieved using
+//   `curl https://drand.cloudflare.com/8990e7a9aaed2ffed73dbd7092123d6f289930540d7651336225dc172e51b2ce/public/N'.
 // - Anyone can "close" the game to new participants by providing drand's randomness of round N-2 (i.e., 1 minute before
 //   round N).
 // - Users can join the game as long as it is not closed and receive a "ticket".
@@ -29,7 +31,14 @@
 // All the external inputs needed for the following APIs can be retrieved from one of drand's public APIs, e.g. using
 // the above curl command.
 //
-// TODO code for round number from epoch
+// In order to find the round number in X minutes from now, one can use the following python script:
+//      import time
+//      curr_round = (time.time() - 1595431050) // 30 + 1
+//      requested_round = int(curr_round + X*2)
+//
+// The value 1595431050 is the epoch of the first round (called genesis_time) as returned from
+// curl https://drand.cloudflare.com/8990e7a9aaed2ffed73dbd7092123d6f289930540d7651336225dc172e51b2ce/info.
+//
 module games::drand_random_selection {
     use std::vector;
 

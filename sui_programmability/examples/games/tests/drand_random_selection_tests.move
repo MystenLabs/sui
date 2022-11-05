@@ -5,7 +5,6 @@
 module games::drand_random_selection_tests {
     use sui::test_scenario::{Self};
     use games::drand_random_selection::{Self, Game, Ticket, WinnerTicket};
-    use std::debug;
 
     #[test]
     fun test_play_drand_random_selection() {
@@ -22,31 +21,18 @@ module games::drand_random_selection_tests {
         let game_val = test_scenario::take_shared<Game>(scenario);
         let game = &mut game_val;
 
-        debug::print(game);
         // User1 buys a ticket.
         test_scenario::next_tx(scenario, user1);
-        {
-            drand_random_selection::participate(game, test_scenario::ctx(scenario));
-            debug::print(game);
-        };
+        drand_random_selection::participate(game, test_scenario::ctx(scenario));
         // User2 buys a ticket.
         test_scenario::next_tx(scenario, user2);
-        {
-            drand_random_selection::participate(game, test_scenario::ctx(scenario));
-            debug::print(game);
-        };
+        drand_random_selection::participate(game, test_scenario::ctx(scenario));
         // User3 buys a tcket
         test_scenario::next_tx(scenario, user3);
-        {
-            drand_random_selection::participate(game, test_scenario::ctx(scenario));
-            debug::print(game);
-        };
+        drand_random_selection::participate(game, test_scenario::ctx(scenario));
         // User4 buys a tcket
         test_scenario::next_tx(scenario, user4);
-        {
-            drand_random_selection::participate(game, test_scenario::ctx(scenario));
-            debug::print(game);
-        };
+        drand_random_selection::participate(game, test_scenario::ctx(scenario));
 
         // User 2 closes the game.
         test_scenario::next_tx(scenario, user2);
