@@ -197,11 +197,12 @@ module sui::validator {
         self: &mut Validator,
         delegated_stake: Balance<SUI>,
         locking_period: Option<EpochTimeLock>,
+        delegator: address,
         ctx: &mut TxContext,
     ) {
         let delegate_amount = balance::value(&delegated_stake);
         assert!(delegate_amount > 0, 0);
-        staking_pool::request_add_delegation(&mut self.delegation_staking_pool, delegated_stake, locking_period, ctx);
+        staking_pool::request_add_delegation(&mut self.delegation_staking_pool, delegated_stake, locking_period, delegator, ctx);
 
         increase_next_epoch_delegation(self, delegate_amount);
     }
@@ -217,7 +218,7 @@ module sui::validator {
         withdraw_pool_token_amount: u64,
         ctx: &mut TxContext,
     ) {
-        let withdraw_sui_amount = staking_pool::withdraw_stake(
+        let withdraw_sui_amount = staking_pool::request_withdraw_stake(
                 &mut self.delegation_staking_pool, delegation, staked_sui, withdraw_pool_token_amount, ctx);
         decrease_next_epoch_delegation(self, withdraw_sui_amount);
     }
@@ -234,9 +235,14 @@ module sui::validator {
         self.metadata.next_epoch_commission_rate = new_commission_rate;
     }
 
-    public(friend) fun distribute_rewards_and_new_delegations(self: &mut Validator, reward: Balance<SUI>, ctx: &mut TxContext) {
+    public(friend) fun distribute_rewards(self: &mut Validator, reward: Balance<SUI>, ctx: &mut TxContext) {
         self.metadata.next_epoch_delegation = self.metadata.next_epoch_delegation + balance::value(&reward);
-        staking_pool::advance_epoch(&mut self.delegation_staking_pool, reward, ctx);
+        let reward_withdraw = staking_pool::distribute_rewards(&mut self.delegation_staking_pool, reward, ctx);
+        self.metadata.next_epoch_delegation = self.metadata.next_epoch_delegation - reward_withdraw;
+    }
+
+    public(friend) fun process_pending_delegations(self: &mut Validator, ctx: &mut TxContext) {
+        let _sui_deposit = staking_pool::process_pending_delegations(&mut self.delegation_staking_pool, ctx);
         assert!(delegate_amount(self) == self.metadata.next_epoch_delegation, 0);
     }
 

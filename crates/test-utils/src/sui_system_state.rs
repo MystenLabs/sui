@@ -36,16 +36,15 @@ pub fn test_validatdor_metadata(
     }
 }
 
-pub fn test_staking_pool(sui_address: SuiAddress, epoch_starting_sui_balance: u64) -> StakingPool {
+pub fn test_staking_pool(sui_address: SuiAddress, sui_balance: u64) -> StakingPool {
     StakingPool {
         validator_address: sui_address.into(),
         starting_epoch: 0,
-        epoch_starting_sui_balance,
-        epoch_starting_delegation_token_supply: 0,
-        sui_balance: 999,
+        sui_balance,
         rewards_pool: Balance::new(0),
         delegation_token_supply: Supply { value: 0 },
         pending_delegations: vec![],
+        pending_withdraws: vec![],
     }
 }
 
@@ -76,6 +75,7 @@ pub fn test_sui_system_state(epoch: EpochId, validators: Vec<Validator>) -> SuiS
         pending_validators: vec![],
         pending_removals: vec![],
         next_epoch_validators: vec![],
+        pending_delegation_switches: VecMap { contents: vec![] },
     };
     SuiSystemState {
         info: UID::new(SUI_SYSTEM_STATE_OBJECT_ID),

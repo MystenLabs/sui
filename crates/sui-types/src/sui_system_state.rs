@@ -83,7 +83,7 @@ impl Validator {
             // TODO: Make sure we are actually verifying this on-chain.
             AuthorityPublicKeyBytes::from_bytes(self.metadata.pubkey_bytes.as_ref())
                 .expect("Validity of public key bytes should be verified on-chain"),
-            self.stake_amount + self.delegation_staking_pool.epoch_starting_sui_balance,
+            self.stake_amount + self.delegation_staking_pool.sui_balance,
             self.metadata.net_address.clone(),
         )
     }
@@ -96,17 +96,31 @@ pub struct PendingDelegationEntry {
     pub sui_amount: u64,
 }
 
+/// Rust version of the Move sui::staking_pool::PendingWithdrawEntry type.
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+pub struct PendingWithdrawEntry {
+    delegator: AccountAddress,
+    principal_withdraw_amount: u64,
+    withdrawn_pool_tokens: Balance,
+}
+
 /// Rust version of the Move sui::staking_pool::StakingPool type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct StakingPool {
     pub validator_address: AccountAddress,
     pub starting_epoch: u64,
-    pub epoch_starting_sui_balance: u64,
-    pub epoch_starting_delegation_token_supply: u64,
     pub sui_balance: u64,
     pub rewards_pool: Balance,
     pub delegation_token_supply: Supply,
     pub pending_delegations: Vec<PendingDelegationEntry>,
+    pub pending_withdraws: Vec<PendingWithdrawEntry>,
+}
+
+/// Rust version of the Move sui::validator_set::ValidatorPair type
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+pub struct ValidatorPair {
+    from: AccountAddress,
+    to: AccountAddress,
 }
 
 /// Rust version of the Move sui::validator_set::ValidatorSet type
@@ -119,6 +133,7 @@ pub struct ValidatorSet {
     pub pending_validators: Vec<Validator>,
     pub pending_removals: Vec<u64>,
     pub next_epoch_validators: Vec<ValidatorMetadata>,
+    pub pending_delegation_switches: VecMap<ValidatorPair, Vec<PendingWithdrawEntry>>,
 }
 
 /// Rust version of the Move sui::sui_system::SuiSystemState type
